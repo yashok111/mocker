@@ -1762,8 +1762,11 @@ smoke job 332 s → 227 s).** CI builds `mocker:local` once per job through
 buildx with a cross-run layer cache (`cache-from/to: type=gha`) and hands it
 to the script under `SMOKE_PREBUILT=1`, which skips `docker compose build`
 and insists the image is loaded; the Dockerfile's `--mount=type=cache`
-directories are not layers, so `go mod download` and `go build` (≈ 40 s)
-still run every time while yarn install and the SPA build hit. Inside the
+directories are not layers, so `buildkit-cache-dance` carries the Go
+module and build caches in and out of the builder's mounts under a
+go.sum-keyed `actions/cache` (warm: `go build` 32 s → 0.5 s, the whole
+image step 59 s → 37 s; what remains is the SPA build, which reruns even
+with every layer above it a hit — unexplained, 17 s). Inside the
 script, 120 of its 328 s were one `curl -X HEAD` waiting for a body that a
 HEAD never sends — `--head` now — and what is left (~85 s of its 155) is
 real time the checks are ABOUT: the 30 s `WriteTimeout` a stream must
