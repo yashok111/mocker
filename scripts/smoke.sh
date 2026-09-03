@@ -770,7 +770,10 @@ else
 	# /dev/null instead, and the curl exit code itself is discarded
 	# (`|| true`) since THIS non-zero exit is the expected shape of a
 	# spec-correct HEAD answer, not a real transfer failure.
-	head_out=$(curl -s -o /dev/null -w '%{http_code} %{size_download}' -X HEAD -H "Host: ${workspace_host}" "${BASE_URL}/widgets") || true
+	# --head, never `-X HEAD`: the latter sends HEAD but leaves curl expecting
+	# the body the Content-Length announces, and it sat there until the
+	# connection timed out — 120 s of every smoke, found in CI's timeline.
+	head_out=$(curl -s -o /dev/null -w '%{http_code} %{size_download}' --head -H "Host: ${workspace_host}" "${BASE_URL}/widgets") || true
 	head_status=${head_out%% *}
 	head_size=${head_out#* }
 	if [[ "$head_status" != "200" ]]; then
