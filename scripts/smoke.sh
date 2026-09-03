@@ -170,8 +170,22 @@ for a6_var in MOCKER_MAX_ASSET MOCKER_MAX_ASSETS_TOTAL; do
 done
 printf 'MOCKER_MAX_ASSET=4kb\nMOCKER_MAX_ASSETS_TOTAL=6kb\n' >>"$ENV_FILE"
 
-echo "== building the image =="
-docker compose build
+# SMOKE_PREBUILT=1 skips the build and uses a mocker:local that is already
+# loaded — CI builds it once per job through buildx with a cross-run layer
+# cache (.github/workflows/ci.yml), which `docker compose build` on the
+# default builder cannot read; the image must then really be there, since a
+# missing one would otherwise be pulled from nowhere and fail later with a
+# less telling error.
+if [[ "${SMOKE_PREBUILT:-}" == 1 ]]; then
+	echo "== using the prebuilt mocker:local image =="
+	docker image inspect mocker:local >/dev/null 2>&1 || {
+		echo "SMOKE_PREBUILT=1 but no mocker:local image is loaded" >&2
+		exit 1
+	}
+else
+	echo "== building the image =="
+	docker compose build
+fi
 
 echo "== generating a throwaway password hash =="
 HASH=$(docker compose run --rm -T mocker hash-password "$SMOKE_PASSWORD")

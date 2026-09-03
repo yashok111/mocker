@@ -217,8 +217,27 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
+      - name: build mocker:local with the cross-run layer cache
+        # The smoke's own `docker compose build` runs on dockerd's default
+        # builder, which cannot import a GitHub Actions cache; this step
+        # builds the same Dockerfile through buildx, restores every layer the
+        # last run exported (yarn install, the Go module download, the SPA
+        # build when web/ is unchanged), loads the result as mocker:local,
+        # and the smoke takes it as is (SMOKE_PREBUILT=1). The Dockerfile's
+        # --mount=type=cache directories are not part of a layer and are not
+        # exported, so `go build` itself still runs on every change.
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        with:
+          context: .
+          load: true
+          tags: mocker:local
+          cache-from: type=gha,scope=mocker-image
+          cache-to: type=gha,scope=mocker-image,mode=max
       - name: make smoke
         run: make smoke
+        env:
+          SMOKE_PREBUILT: "1"
       - name: teardown
         if: always()
         run: docker compose down -v --remove-orphans 2>/dev/null || true
@@ -229,8 +248,27 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
+      - name: build mocker:local with the cross-run layer cache
+        # The smoke's own `docker compose build` runs on dockerd's default
+        # builder, which cannot import a GitHub Actions cache; this step
+        # builds the same Dockerfile through buildx, restores every layer the
+        # last run exported (yarn install, the Go module download, the SPA
+        # build when web/ is unchanged), loads the result as mocker:local,
+        # and the smoke takes it as is (SMOKE_PREBUILT=1). The Dockerfile's
+        # --mount=type=cache directories are not part of a layer and are not
+        # exported, so `go build` itself still runs on every change.
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        with:
+          context: .
+          load: true
+          tags: mocker:local
+          cache-from: type=gha,scope=mocker-image
+          cache-to: type=gha,scope=mocker-image,mode=max
       - name: make smoke-tls
         run: make smoke-tls
+        env:
+          SMOKE_PREBUILT: "1"
       - name: teardown
         if: always()
         run: scripts/compose-tls.sh down -v --remove-orphans 2>/dev/null || docker compose down -v --remove-orphans 2>/dev/null || true
