@@ -1,6 +1,6 @@
 {
   "name": "@yashok111/mocker-test",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Own a mocker workspace from a test suite: scenarios, forced statuses, fail-next, delays and pauses over the mock plane's control routes. Playwright fixture and Cypress commands included.",
   "license": "MIT",
   "type": "module",

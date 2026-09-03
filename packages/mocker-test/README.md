@@ -133,8 +133,8 @@ npm Trusted Publishing; there is no npm token anywhere in the repository.
 A tarball still works where a registry is out of reach:
 
 ```sh
-make plugin-pack          # packages/mocker-test/yashok111-mocker-test-0.1.0.tgz
-npm i -D ./yashok111-mocker-test-0.1.0.tgz
+make plugin-pack          # packages/mocker-test/yashok111-mocker-test-0.1.1.tgz
+npm i -D ./yashok111-mocker-test-0.1.1.tgz
 ```
 
 `npm pack` runs the build itself (the `prepack` script), so the tarball
