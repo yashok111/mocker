@@ -6,9 +6,9 @@
 # USER manager (`systemd-run --user --scope`), and degrades to nothing where
 # the user slice has no delegated memory controller — which is the case on a
 # hosted CI runner. This wrapper takes the other door: a SYSTEM scope through
-# passwordless sudo, then drops straight back to the calling user (`-E` keeps
-# the environment setup-go/setup-node prepared; an `ALL` sudoers entry
-# implies SETENV, so `-E` is allowed; PATH and HOME are re-applied
+# passwordless sudo, then drops straight back to the calling user (`-E` on
+# both sudos keeps the environment setup-go/setup-node prepared; an `ALL`
+# sudoers entry implies SETENV, so `-E` is allowed; PATH and HOME are re-applied
 # explicitly: sudo's secure_path resets PATH even under `-E`, and the OUTER
 # sudo already set HOME=/root, which `-E` then faithfully preserves — the
 # first run had go writing its build cache to /root/.cache and failing). Where any of that is
@@ -32,7 +32,13 @@ cpu="${CI_CAP_CPU:-300%}"
 if command -v systemd-run >/dev/null 2>&1 &&
 	[ -f /sys/fs/cgroup/cgroup.controllers ] &&
 	sudo -n true 2>/dev/null; then
-	exec sudo -n systemd-run --scope --quiet --collect \
+	# Both sudos carry -E: the OUTER one is what hands the job's environment
+	# (GOMAXPROCS, GOMEMLIMIT, NODE_OPTIONS, and the ACTIONS_ID_TOKEN_REQUEST_*
+	# pair npm's trusted publishing exchanges for a token) to systemd-run and
+	# so to the inner sudo — without it the inner -E faithfully preserved
+	# root's reset environment, the scope applied and every soft limit
+	# silently did not, and the first tag release failed ENEEDAUTH.
+	exec sudo -n -E systemd-run --scope --quiet --collect \
 		-p MemoryMax="$mem" -p MemorySwapMax=0 -p CPUQuota="$cpu" -- \
 		sudo -n -E -u "$(id -un)" -- env PATH="$PATH" HOME="$HOME" "$@"
 fi

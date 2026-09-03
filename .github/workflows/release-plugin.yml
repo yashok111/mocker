@@ -70,8 +70,19 @@ jobs:
           path: ~/.yarn/berry/cache
           key: yarn-plugin-${{ runner.os }}-${{ hashFiles('packages/mocker-test/yarn.lock') }}
           restore-keys: yarn-plugin-${{ runner.os }}-
+      - name: prove the cap and the environment
+        run: |
+          # shellcheck disable=SC2016 # the single-quoted script is expanded by the INNER sh, inside the scope
+          scripts/ci-cap.sh sh -c '
+            cg=$(cut -d: -f3 /proc/self/cgroup)
+            echo "cgroup=$cg memory.max=$(cat /sys/fs/cgroup$cg/memory.max) cpu.max=$(cat /sys/fs/cgroup$cg/cpu.max)"
+            [ "$(cat /sys/fs/cgroup$cg/memory.max)" != max ] || { echo "::error::ci-cap: memory cap did not apply" >&2; exit 1; }
+            [ "$GITHUB_ACTIONS" = true ] || { echo "::error::ci-cap: the job environment did not reach the scope" >&2; exit 1; }
+          '
       - name: make plugin-test
         run: scripts/ci-cap.sh make plugin-test CAP=
       - name: npm publish
-        # prepack runs the tsdown build, so the tarball is never a stale dist.
-        run: scripts/ci-cap.sh sh -c 'cd packages/mocker-test && npm publish --provenance --access public'
+        # Outside the cap on purpose: it is not heavy, and the OIDC exchange
+        # is one more thing a wrapper can get in the way of. prepack runs the
+        # tsdown build, so the tarball is never a stale dist.
+        run: cd packages/mocker-test && npm publish --provenance --access public

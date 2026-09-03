@@ -80,6 +80,7 @@ jobs:
             echo "user=$(id -un) home=$HOME go=$(command -v go || true) node=$(command -v node || true)"
             [ "$(cat /sys/fs/cgroup$cg/memory.max)" != max ] || { echo "::error::ci-cap: memory cap did not apply" >&2; exit 1; }
             [ "$(cut -d" " -f1 /sys/fs/cgroup$cg/cpu.max)" != max ] || { echo "::error::ci-cap: cpu cap did not apply" >&2; exit 1; }
+            [ "$GITHUB_ACTIONS" = true ] || { echo "::error::ci-cap: the job environment did not reach the scope" >&2; exit 1; }
           '
       - name: make lint
         run: scripts/ci-cap.sh make lint CAP=
@@ -125,6 +126,7 @@ jobs:
             echo "user=$(id -un) home=$HOME go=$(command -v go || true) node=$(command -v node || true)"
             [ "$(cat /sys/fs/cgroup$cg/memory.max)" != max ] || { echo "::error::ci-cap: memory cap did not apply" >&2; exit 1; }
             [ "$(cut -d" " -f1 /sys/fs/cgroup$cg/cpu.max)" != max ] || { echo "::error::ci-cap: cpu cap did not apply" >&2; exit 1; }
+            [ "$GITHUB_ACTIONS" = true ] || { echo "::error::ci-cap: the job environment did not reach the scope" >&2; exit 1; }
           '
       - name: install and generate
         run: scripts/ci-cap.sh sh -c 'cd web && corepack yarn install --immutable && corepack yarn gen'
@@ -176,6 +178,7 @@ jobs:
             echo "user=$(id -un) home=$HOME go=$(command -v go || true) node=$(command -v node || true)"
             [ "$(cat /sys/fs/cgroup$cg/memory.max)" != max ] || { echo "::error::ci-cap: memory cap did not apply" >&2; exit 1; }
             [ "$(cut -d" " -f1 /sys/fs/cgroup$cg/cpu.max)" != max ] || { echo "::error::ci-cap: cpu cap did not apply" >&2; exit 1; }
+            [ "$GITHUB_ACTIONS" = true ] || { echo "::error::ci-cap: the job environment did not reach the scope" >&2; exit 1; }
           '
       - name: make plugin-test
         run: scripts/ci-cap.sh make plugin-test CAP=
