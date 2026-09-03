@@ -218,15 +218,41 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
+        id: setup-buildx
+      - name: Go caches for the Dockerfile's cache mounts
+        # The Dockerfile's --mount=type=cache directories (the module cache
+        # and the build cache of the builder stage) are not image layers, so
+        # the layer cache below never carries them and `go mod download` +
+        # `go build` ran cold on every run (~40 s). actions/cache keeps them
+        # keyed by go.sum — deps and their compiled objects are the bulk, and
+        # a key that only moves with go.sum means one saved cache serves
+        # every commit until a dependency changes — and cache-dance injects
+        # them into the builder's mounts before the build and pulls them
+        # back out after it.
+        id: cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            go-mod-cache
+            go-build-cache
+          key: docker-go-${{ runner.os }}-${{ hashFiles('go.sum') }}
+      - uses: reproducible-containers/buildkit-cache-dance@5422eac04292c961a382e0f584ea0f03ad9da723 # v3.4.0
+        with:
+          builder: ${{ steps.setup-buildx.outputs.name }}
+          cache-map: |
+            {
+              "go-mod-cache": "/go/pkg/mod",
+              "go-build-cache": "/root/.cache/go-build"
+            }
+          skip-extraction: ${{ steps.cache.outputs.cache-hit }}
       - name: build mocker:local with the cross-run layer cache
         # The smoke's own `docker compose build` runs on dockerd's default
         # builder, which cannot import a GitHub Actions cache; this step
         # builds the same Dockerfile through buildx, restores every layer the
         # last run exported (yarn install, the Go module download, the SPA
         # build when web/ is unchanged), loads the result as mocker:local,
-        # and the smoke takes it as is (SMOKE_PREBUILT=1). The Dockerfile's
-        # --mount=type=cache directories are not part of a layer and are not
-        # exported, so `go build` itself still runs on every change.
+        # and the smoke takes it as is (SMOKE_PREBUILT=1). The Go module and
+        # build caches ride in through the cache-dance step above.
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
         with:
           context: .
@@ -249,15 +275,41 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
+        id: setup-buildx
+      - name: Go caches for the Dockerfile's cache mounts
+        # The Dockerfile's --mount=type=cache directories (the module cache
+        # and the build cache of the builder stage) are not image layers, so
+        # the layer cache below never carries them and `go mod download` +
+        # `go build` ran cold on every run (~40 s). actions/cache keeps them
+        # keyed by go.sum — deps and their compiled objects are the bulk, and
+        # a key that only moves with go.sum means one saved cache serves
+        # every commit until a dependency changes — and cache-dance injects
+        # them into the builder's mounts before the build and pulls them
+        # back out after it.
+        id: cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            go-mod-cache
+            go-build-cache
+          key: docker-go-${{ runner.os }}-${{ hashFiles('go.sum') }}
+      - uses: reproducible-containers/buildkit-cache-dance@5422eac04292c961a382e0f584ea0f03ad9da723 # v3.4.0
+        with:
+          builder: ${{ steps.setup-buildx.outputs.name }}
+          cache-map: |
+            {
+              "go-mod-cache": "/go/pkg/mod",
+              "go-build-cache": "/root/.cache/go-build"
+            }
+          skip-extraction: ${{ steps.cache.outputs.cache-hit }}
       - name: build mocker:local with the cross-run layer cache
         # The smoke's own `docker compose build` runs on dockerd's default
         # builder, which cannot import a GitHub Actions cache; this step
         # builds the same Dockerfile through buildx, restores every layer the
         # last run exported (yarn install, the Go module download, the SPA
         # build when web/ is unchanged), loads the result as mocker:local,
-        # and the smoke takes it as is (SMOKE_PREBUILT=1). The Dockerfile's
-        # --mount=type=cache directories are not part of a layer and are not
-        # exported, so `go build` itself still runs on every change.
+        # and the smoke takes it as is (SMOKE_PREBUILT=1). The Go module and
+        # build caches ride in through the cache-dance step above.
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
         with:
           context: .
