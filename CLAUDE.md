@@ -1757,6 +1757,21 @@ code knows. And `TEST_P` (`-p`, 2 on the dev box, 4 in CI where the cap is
 10G) is what lets the linker and the small packages fill the cores the
 big ones leave idle.
 
+**The two smokes are the critical path now (measured 2026-09-03: the http
+smoke job 332 s → 227 s).** CI builds `mocker:local` once per job through
+buildx with a cross-run layer cache (`cache-from/to: type=gha`) and hands it
+to the script under `SMOKE_PREBUILT=1`, which skips `docker compose build`
+and insists the image is loaded; the Dockerfile's `--mount=type=cache`
+directories are not layers, so `go mod download` and `go build` (≈ 40 s)
+still run every time while yarn install and the SPA build hit. Inside the
+script, 120 of its 328 s were one `curl -X HEAD` waiting for a body that a
+HEAD never sends — `--head` now — and what is left (~85 s of its 155) is
+real time the checks are ABOUT: the 30 s `WriteTimeout` a stream must
+outlive, `MOCKER_STREAM_MAX_LIFETIME=20` closing a tick stream, the ping
+and debounce windows. When a smoke section looks slow, take the CI log's
+timeline between consecutive `==`/`PASS` lines first: that is how both of
+these were found.
+
 The development cycle:
 
 ```bash
