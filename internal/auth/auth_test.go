@@ -13,10 +13,11 @@ import (
 	"github.com/yashok111/mocker/internal/auth"
 	"github.com/yashok111/mocker/internal/config"
 	"github.com/yashok111/mocker/internal/store"
+	"github.com/yashok111/mocker/internal/testauth"
 )
 
 // testPassword is the shared password every test manager is configured with.
-const testPassword = "correct horse battery staple"
+const testPassword = testauth.Password
 
 // newTestDB opens a fresh, migrated SQLite file under t.TempDir() and closes
 // it on cleanup.
@@ -44,10 +45,9 @@ func newTestDB(t *testing.T) *store.DB {
 // Dev:false would set a Secure cookie a plain-http test client drops.
 func newTestManager(t *testing.T) (*auth.Manager, *store.DB) {
 	t.Helper()
-	hash, err := auth.HashPassword(testPassword)
-	if err != nil {
-		t.Fatalf("HashPassword(): %v", err)
-	}
+	// A pre-minted hash (internal/testauth): under -race auth.HashPassword
+	// is ~110 ms per fixture, and this file builds one per test.
+	hash := testauth.Hash
 	cfg := &config.Config{
 		BaseDomain:         "mock.local",
 		AdminHost:          "mocker.local",

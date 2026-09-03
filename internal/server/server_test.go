@@ -19,12 +19,13 @@ import (
 	"github.com/yashok111/mocker/internal/mockplane"
 	"github.com/yashok111/mocker/internal/server"
 	"github.com/yashok111/mocker/internal/store"
+	"github.com/yashok111/mocker/internal/testauth"
 	"github.com/yashok111/mocker/internal/workspaces"
 )
 
 // testPassword is the shared password every full-stack test server below is
 // configured with.
-const testPassword = "correct horse battery staple"
+const testPassword = testauth.Password
 
 // adminOrigin is the Origin every state-changing admin request in this file
 // carries: it must equal cfg.AdminHost for [admin.Server]'s CSRF check to
@@ -40,10 +41,9 @@ const adminOrigin = "http://mocker.local"
 // checkpoints to expect the default retention to prune them).
 func testConfig(t *testing.T) *config.Config {
 	t.Helper()
-	hash, err := auth.HashPassword(testPassword)
-	if err != nil {
-		t.Fatalf("HashPassword(): %v", err)
-	}
+	// A pre-minted hash (internal/testauth): under -race auth.HashPassword
+	// is ~110 ms per fixture, and this file builds one per test.
+	hash := testauth.Hash
 	return &config.Config{
 		BaseDomain:          "mock.local",
 		AdminHost:           "mocker.local",

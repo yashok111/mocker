@@ -27,6 +27,7 @@ import (
 	"github.com/yashok111/mocker/internal/domain"
 	"github.com/yashok111/mocker/internal/specs"
 	"github.com/yashok111/mocker/internal/store"
+	"github.com/yashok111/mocker/internal/testauth"
 	"github.com/yashok111/mocker/internal/workspaces"
 )
 
@@ -80,10 +81,9 @@ const resourcesFixtureDoc = `{
 // cannot reach into.
 func resourcesTestConfig(t *testing.T) *config.Config {
 	t.Helper()
-	hash, err := auth.HashPassword("correct horse battery staple")
-	if err != nil {
-		t.Fatalf("HashPassword(): %v", err)
-	}
+	// A pre-minted hash (internal/testauth): under -race auth.HashPassword
+	// is ~110 ms per fixture, and this file builds one per test.
+	hash := testauth.Hash
 	return &config.Config{
 		BaseDomain:          "mock.local",
 		AdminHost:           "mocker.local",

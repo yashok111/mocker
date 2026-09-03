@@ -11,6 +11,7 @@ import (
 	"github.com/yashok111/mocker/internal/auth"
 	"github.com/yashok111/mocker/internal/config"
 	"github.com/yashok111/mocker/internal/store"
+	"github.com/yashok111/mocker/internal/testauth"
 	"github.com/yashok111/mocker/internal/workspaces"
 )
 
@@ -62,10 +63,9 @@ func customConfigServer(t *testing.T, cfg *config.Config) *testServer {
 // reuses them rather than inventing a third way to build a request.
 func customCfg(t *testing.T, reservedPrefix, baseDomain string, routing config.Routing) *config.Config {
 	t.Helper()
-	hash, err := auth.HashPassword(testPassword)
-	if err != nil {
-		t.Fatalf("HashPassword(): %v", err)
-	}
+	// A pre-minted hash (internal/testauth): under -race auth.HashPassword
+	// is ~110 ms per fixture, and this file builds one per test.
+	hash := testauth.Hash
 	return &config.Config{
 		BaseDomain:         baseDomain,
 		AdminHost:          "mocker.local",

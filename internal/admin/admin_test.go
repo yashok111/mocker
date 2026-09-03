@@ -15,11 +15,12 @@ import (
 	"github.com/yashok111/mocker/internal/auth"
 	"github.com/yashok111/mocker/internal/config"
 	"github.com/yashok111/mocker/internal/store"
+	"github.com/yashok111/mocker/internal/testauth"
 	"github.com/yashok111/mocker/internal/workspaces"
 )
 
 // testPassword is the shared password every test server is configured with.
-const testPassword = "correct horse battery staple"
+const testPassword = testauth.Password
 
 // adminOrigin is the Origin/Referer value every properly-formed
 // state-changing test request carries: it must equal cfg.AdminHost for
@@ -49,10 +50,9 @@ const adminOrigin = "http://mocker.local"
 // one out from under every other test in the package.
 func testConfig(t *testing.T) *config.Config {
 	t.Helper()
-	hash, err := auth.HashPassword(testPassword)
-	if err != nil {
-		t.Fatalf("HashPassword(): %v", err)
-	}
+	// A pre-minted hash (internal/testauth): under -race auth.HashPassword
+	// is ~110 ms per fixture, and this file builds one per test.
+	hash := testauth.Hash
 	return &config.Config{
 		BaseDomain:          "mock.local",
 		AdminHost:           "mocker.local",

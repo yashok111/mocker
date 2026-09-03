@@ -130,8 +130,24 @@ plugin-pack: ## Tarball of @yashok111/mocker-test for hand distribution: package
 # that hasn't committed yet leaves its new .go files untracked, and a
 # file-list form is blind to those — measured, and it means an unformatted
 # new file would pass the bar.
+# TEST_P is `go test -p`: how many package test binaries build and run at
+# once. 2 is the dev box's number (see CAP above: ~650 MB per package under
+# -race); CI passes 4, its cap is 10G and the suite is CPU-bound there.
+#
+# The -gcflags leaves modernc.org/... (sqlite and its libc) UNINSTRUMENTED
+# by the race detector. That package is C translated to Go, so every C
+# memory access becomes an instrumented Go read, and a CPU profile of
+# internal/admin under -race put 72% of all samples inside the race
+# runtime, most of it there — measured 2026-09-03, the whole suite went
+# 127 s → 91 s wall and CPU −30% with the flag. Our own concurrency around
+# sqlite (internal/store's single writer and reader pool, every repository)
+# stays fully instrumented; a data race inside sqlite's own translated
+# code is upstream's to find. Do NOT extend the pattern to
+# golang.org/x/crypto/argon2: tried, the detector then reports FALSE races
+# on the hash goroutines' results in three packages.
+TEST_P ?= 2
 test: ## Test suite scoped to ./cmd ./internal, race detector, memory-capped (see CAP above and the comment above)
-	$(CAP) go test ./cmd/... ./internal/... -race -count=1 -p 2
+	$(CAP) go test ./cmd/... ./internal/... -race -count=1 -p $(TEST_P) -gcflags='modernc.org/...=-race=false'
 
 lint: ## go vet, gofmt and golangci-lint, scoped to ./cmd ./internal, memory-capped (see CAP above and the comment above test)
 	$(CAP) go vet ./cmd/... ./internal/...

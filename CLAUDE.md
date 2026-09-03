@@ -1736,10 +1736,26 @@ make plugin-test # @yashok111/mocker-test (packages/mocker-test): install, tsc, 
 ```
 
 All seven run on every push and pull request as `.github/workflows/ci.yml`
-(`A17`, "Architecture"): five jobs, the non-docker ones inside a memory- and
+(`A17`, "Architecture"): six jobs (lint and the race suite are two — the
+suite is the critical path), the non-docker ones inside a memory- and
 CPU-capped systemd scope through `scripts/ci-cap.sh` — pass `CAP=` to make
 there so the Makefile's own cap does not nest. A release of the plugin is a
 tag `plugin-v<version>` (`.github/workflows/release-plugin.yml`).
+
+**`make test` is CPU-bound under `-race`, and three things keep it at ~1
+minute instead of two (measured 2026-09-03: 127 s → 57 s wall, 552 → 100
+CPU-seconds locally; CI's step went from 278 s).** `-gcflags='modernc.org/
+...=-race=false'` leaves sqlite's C-translated code uninstrumented — 72% of
+the admin package's samples were the race runtime, mostly there — while
+`internal/store` and every repository stay instrumented (the Makefile's
+comment says why the pattern must NOT grow to `argon2`: false positives).
+`internal/testauth` is the one owner of the fixture password and a
+PRE-MINTED argon2id hash at m=4 MiB: hashing at fixture time cost ~110 ms
+per test server under `-race`, and the PHC string is self-describing, so
+`VerifyPassword` reads the cheaper parameters from it and no production
+code knows. And `TEST_P` (`-p`, 2 on the dev box, 4 in CI where the cap is
+10G) is what lets the linker and the small packages fill the cores the
+big ones leave idle.
 
 The development cycle:
 

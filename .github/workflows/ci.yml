@@ -1,7 +1,9 @@
 # CI — the same bars `make` runs on a developer box, on a hosted runner.
 #
-# Five independent jobs, so a red one names its own bar and the others still
-# report: Go (vet, gofmt, golangci-lint, the -race suite), the SPA (generated
+# Six independent jobs, so a red one names its own bar and the others still
+# report: Go lint (vet, gofmt, golangci-lint) and the Go -race suite as two
+# jobs — the suite is the critical path and the linter's minute was on it
+# for nothing — the SPA (generated
 # client, typecheck, vitest, oxlint/oxfmt), the test plugin against the real
 # binary, and the two docker smokes (plain http, and the HTTPS overlay with
 # Caddy in front). Every job has a hard timeout, and every non-docker job runs
@@ -41,19 +43,14 @@ env:
   COREPACK_ENABLE_DOWNLOAD_PROMPT: "0"
 
 jobs:
-  go:
-    name: go — lint and race suite
+  lint:
+    name: go — vet, gofmt, golangci-lint
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 15
     env:
-      # Three cores are what the scope's CPUQuota grants (scripts/ci-cap.sh),
-      # so the Go tool, the test binaries and golangci-lint plan for three
-      # rather than discovering four and contending for the quota.
       GOMAXPROCS: "3"
-      # A soft ceiling per Go process: `make test` runs two package binaries
-      # at once (-p 2) plus the go tool, under a 10G hard cap on the scope.
-      GOMEMLIMIT: 3GiB
-      CI_CAP_MEM: 10G
+      GOMEMLIMIT: 4GiB
+      CI_CAP_MEM: 8G
       CI_CAP_CPU: 300%
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -65,6 +62,39 @@ jobs:
         with:
           version: v2.13.2
           install-only: true
+      - name: prove the cap
+        run: |
+          # shellcheck disable=SC2016 # the single-quoted script is expanded by the INNER sh, inside the scope
+          scripts/ci-cap.sh sh -c '
+            cg=$(cut -d: -f3 /proc/self/cgroup)
+            echo "cgroup=$cg memory.max=$(cat /sys/fs/cgroup$cg/memory.max) cpu.max=$(cat /sys/fs/cgroup$cg/cpu.max)"
+            [ "$(cat /sys/fs/cgroup$cg/memory.max)" != max ] || { echo "::error::ci-cap: memory cap did not apply" >&2; exit 1; }
+            [ "$GITHUB_ACTIONS" = true ] || { echo "::error::ci-cap: the job environment did not reach the scope" >&2; exit 1; }
+          '
+      - name: make lint
+        run: scripts/ci-cap.sh make lint CAP=
+
+  test:
+    name: go — race suite
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      # The suite is CPU-bound under -race (measured: 552 CPU-seconds for a
+      # 127 s local run), so the scope gets all four of the runner's cores
+      # and the Go tool plans for four; memory is the cap that matters, and
+      # four package binaries at once (TEST_P=4) fit a 10G scope with room —
+      # ~650 MB each under -race on the dev box's measurement. GOMEMLIMIT is
+      # a soft per-process ceiling below that: four of them plus the go tool.
+      GOMAXPROCS: "4"
+      GOMEMLIMIT: 2GiB
+      CI_CAP_MEM: 10G
+      CI_CAP_CPU: 400%
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
       - name: prove the cap
         # Fails the job if the scope did not take: a hosted runner has sudo,
         # systemd and cgroup v2, so "uncapped" here is a broken wrapper, not
@@ -82,10 +112,8 @@ jobs:
             [ "$(cut -d" " -f1 /sys/fs/cgroup$cg/cpu.max)" != max ] || { echo "::error::ci-cap: cpu cap did not apply" >&2; exit 1; }
             [ "$GITHUB_ACTIONS" = true ] || { echo "::error::ci-cap: the job environment did not reach the scope" >&2; exit 1; }
           '
-      - name: make lint
-        run: scripts/ci-cap.sh make lint CAP=
       - name: make test
-        run: scripts/ci-cap.sh make test CAP=
+        run: scripts/ci-cap.sh make test CAP= TEST_P=4
 
   web:
     name: web — generated client, typecheck, vitest, oxlint
