@@ -1,0 +1,77 @@
+# Publishes @yashok111/mocker-test (packages/mocker-test) to npm on a tag
+# `plugin-v<version>`, where <version> must equal package.json's — a guard
+# step refuses anything else, so a tag cannot publish a version the tree
+# does not declare.
+#
+# No npm token lives in this repository: the publish authenticates through
+# npm Trusted Publishing (OIDC — `permissions: id-token: write` below, and on
+# npmjs.com the package's "Trusted publisher" set to this repository and this
+# workflow file name). `--provenance` attaches the build's attestation to the
+# release. The first version of a package cannot be published this way — it
+# is published once by hand (`npm login && npm publish --access public`),
+# which is also when the trusted publisher gets configured.
+#
+# The bars run first, exactly as CI runs them (the plugin's suite spawns
+# ./bin/mocker, hence the Go build), under the same capped scope.
+name: release-plugin
+
+on:
+  push:
+    tags: ["plugin-v*"]
+
+permissions:
+  contents: read
+  id-token: write
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  COREPACK_ENABLE_DOWNLOAD_PROMPT: "0"
+
+jobs:
+  publish:
+    name: publish @yashok111/mocker-test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      GOMAXPROCS: "3"
+      CI_CAP_MEM: 8G
+      CI_CAP_CPU: 300%
+      NODE_OPTIONS: --max-old-space-size=4096
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: the tag names package.json's version
+        run: |
+          want="${GITHUB_REF_NAME#plugin-v}"
+          have="$(jq -r .version packages/mocker-test/package.json)"
+          if [ "$want" != "$have" ]; then
+            echo "::error::tag plugin-v$want does not match package.json version $have"
+            exit 1
+          fi
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24"
+          registry-url: https://registry.npmjs.org
+      - name: corepack, and an npm new enough for trusted publishing (>= 11.5.1)
+        run: |
+          command -v corepack >/dev/null || npm install -g corepack
+          corepack enable
+          npm install -g npm@latest
+          npm --version
+      - name: yarn cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.yarn/berry/cache
+          key: yarn-plugin-${{ runner.os }}-${{ hashFiles('packages/mocker-test/yarn.lock') }}
+          restore-keys: yarn-plugin-${{ runner.os }}-
+      - name: make plugin-test
+        run: scripts/ci-cap.sh make plugin-test CAP=
+      - name: npm publish
+        # prepack runs the tsdown build, so the tarball is never a stale dist.
+        run: scripts/ci-cap.sh sh -c 'cd packages/mocker-test && npm publish --provenance --access public'

@@ -1,0 +1,53 @@
+{
+  "name": "@yashok111/mocker-test",
+  "version": "0.1.0",
+  "description": "Own a mocker workspace from a test suite: scenarios, forced statuses, fail-next, delays and pauses over the mock plane's control routes. Playwright fixture and Cypress commands included.",
+  "license": "MIT",
+  "type": "module",
+  "packageManager": "yarn@4.18.0",
+  "engines": {
+    "node": ">=24"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./playwright": {
+      "types": "./dist/playwright.d.ts",
+      "default": "./dist/playwright.js"
+    },
+    "./cypress": {
+      "types": "./dist/cypress.d.ts",
+      "default": "./dist/cypress.js"
+    }
+  },
+  "scripts": {
+    "build": "tsdown",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run",
+    "lint": "oxlint src test && oxfmt --check src test",
+    "format": "oxfmt src test",
+    "prepack": "tsdown"
+  },
+  "devDependencies": {
+    "@types/node": "26.2.0",
+    "oxfmt": "0.64.0",
+    "oxlint": "1.79.0",
+    "tsdown": "0.22.14",
+    "typescript": "7.0.2",
+    "vitest": "4.1.11"
+  },
+  "sideEffects": false,
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yashok111/mocker.git",
+    "directory": "packages/mocker-test"
+  }
+}

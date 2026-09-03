@@ -1,0 +1,4 @@
+{
+  "plugins": ["oxc", "typescript", "unicorn"],
+  "rules": {}
+}

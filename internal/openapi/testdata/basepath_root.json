@@ -1,0 +1,9 @@
+{
+  "openapi": "3.0.3",
+  "info": { "title": "RootServers", "version": "1.0.0" },
+  "servers": [
+    { "url": "https://api.example.com/api/v1" },
+    { "url": "https://other.example.com/other" }
+  ],
+  "paths": {}
+}

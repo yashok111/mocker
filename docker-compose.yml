@@ -1,0 +1,46 @@
+# Local / single-host stack for P0. One service, one process, one volume —
+# matches DESIGN §16 ("один образ, один процесс, том /data"). Bring it up
+# with `make docker` or `docker compose up -d`, then run the Host-header
+# checks in README.md (or `make smoke`) against 127.0.0.1:8080.
+services:
+  mocker:
+    build: .
+    image: mocker:local
+    # `format: raw` disables compose's variable interpolation for this file,
+    # and it is mandatory here rather than cosmetic. MOCKER_SHARED_PASSWORD_HASH
+    # is an argon2id PHC string — `$argon2id$v=19$m=65536,t=3,p=4$<salt>$<hash>`
+    # — and under the default (interpolated) mode compose expands every `$name`
+    # in it against the environment, so the container receives the shredded
+    # remains (measured: `=19=65536,t=3,p=4`) and every login fails with no
+    # hint as to why. Raw mode also makes this file mean exactly the same thing
+    # under `docker run --env-file`, which never interpolates — so a hash is
+    # pasted in verbatim, never escaped, whichever way the image is started.
+    # Needs Docker Compose >= 2.30; on an older one this key is rejected
+    # loudly at parse time (see README for the fallback).
+    env_file:
+      - path: .env
+        format: raw
+    ports:
+      # Bind to loopback only: this is a dev/smoke stack, not a public
+      # listener. Every verification curl in README.md/scripts/smoke.sh
+      # targets 127.0.0.1:8080 with an explicit Host header — no DNS needed.
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - mocker-data:/data
+    restart: unless-stopped
+    # The image is gcr.io/distroless/static — no shell, no curl — so the
+    # probe is the binary's own `healthcheck` subcommand (cmd/mocker/
+    # healthcheck.go): it reads the same MOCKER_* environment the server
+    # did and dials its own /readyz with MOCKER_ADMIN_HOST as the Host
+    # header. "healthy" therefore means the database answers, not merely
+    # that the process is up; docker-compose.tls.yml's Caddy waits on it
+    # (service_healthy) before it takes a single request.
+    healthcheck:
+      test: ["CMD", "/mocker", "healthcheck"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  mocker-data:

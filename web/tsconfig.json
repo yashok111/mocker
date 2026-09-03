@@ -1,0 +1,32 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "useDefineForClassFields": true,
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "skipLibCheck": true,
+    "allowImportingTsExtensions": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "moduleDetection": "force",
+    "noEmit": true,
+    "jsx": "react-jsx",
+    "verbatimModuleSyntax": true,
+
+    /* strict is a floor, not a ceiling: noUncheckedIndexedAccess and the no-unused
+       pair catch the two things `strict` alone lets through — an array/record read
+       that TS treats as always-present, and a stray import left after a refactor. */
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+
+    "paths": {
+      "@/*": ["./src/*"]
+    },
+    "types": ["vite/client", "vitest/globals", "@testing-library/jest-dom"]
+  },
+  "include": ["src", "vite.config.ts", "orval.config.ts"]
+}

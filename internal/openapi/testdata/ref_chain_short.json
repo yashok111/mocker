@@ -1,0 +1,15 @@
+{
+  "openapi": "3.0.3",
+  "info": { "title": "Chain", "version": "1.0.0" },
+  "paths": {},
+  "components": {
+    "schemas": {
+      "Step0": { "$ref": "#/components/schemas/Step1" },
+      "Step1": { "$ref": "#/components/schemas/Step2" },
+      "Step2": { "$ref": "#/components/schemas/Step3" },
+      "Step3": { "$ref": "#/components/schemas/Step4" },
+      "Step4": { "$ref": "#/components/schemas/Step5" },
+      "Step5": { "type": "object", "description": "terminal" }
+    }
+  }
+}

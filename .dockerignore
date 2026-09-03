@@ -1,0 +1,49 @@
+# Keep the build context small and out of the image; go.mod/go.sum/source are
+# copied explicitly by the Dockerfile.
+.git/
+.claude/
+.agents/
+DESIGN.md
+CLAUDE.md
+README.md
+*.md
+# ...except the one the SPA build imports (see the Dockerfile's webbuilder stage).
+!docs/USER-GUIDE.md
+
+# build/test artefacts
+/bin/
+/dist/
+mocker
+*.test
+*.out
+
+# local data volume (SQLite + WAL) — never bake data into an image
+/data/
+*.db
+*.db-wal
+*.db-shm
+
+# UI build artefacts. /web/node_modules/ and /web/.yarn/ are just context
+# bloat (300 MB nobody needs — the webbuilder stage runs its own
+# `yarn install --immutable`). Excluding
+# /internal/webui/dist/ entirely is the load-bearing rule, not a tidiness
+# one: it is the guard that a developer's own local `make ui` output cannot
+# ride into the image on a plain COPY and quietly stand in for a real build.
+# With no dist/ in the context at all, //go:embed all:dist in
+# internal/webui/webui.go fails the Go stage outright unless the Dockerfile's
+# webbuilder stage actually ran and its COPY --from landed — see that
+# stage's comment. web/ itself (source, package.json, yarn.lock, .yarnrc.yml)
+# is deliberately NOT excluded — the webbuilder stage needs it in the context,
+# and neither is api/openapi.json, which that stage generates the client from.
+/web/node_modules/
+/web/.yarn/
+/internal/webui/dist/
+
+# local env — must never end up in an image layer
+.env
+.env.local
+
+# editors / OS
+.DS_Store
+.idea/
+.vscode/

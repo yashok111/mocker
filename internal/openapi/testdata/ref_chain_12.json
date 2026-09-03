@@ -1,0 +1,22 @@
+{
+  "openapi": "3.0.3",
+  "info": { "title": "Chain12", "version": "1.0.0" },
+  "paths": {},
+  "components": {
+    "schemas": {
+      "Hop0": { "$ref": "#/components/schemas/Hop1" },
+      "Hop1": { "$ref": "#/components/schemas/Hop2" },
+      "Hop2": { "$ref": "#/components/schemas/Hop3" },
+      "Hop3": { "$ref": "#/components/schemas/Hop4" },
+      "Hop4": { "$ref": "#/components/schemas/Hop5" },
+      "Hop5": { "$ref": "#/components/schemas/Hop6" },
+      "Hop6": { "$ref": "#/components/schemas/Hop7" },
+      "Hop7": { "$ref": "#/components/schemas/Hop8" },
+      "Hop8": { "$ref": "#/components/schemas/Hop9" },
+      "Hop9": { "$ref": "#/components/schemas/Hop10" },
+      "Hop10": { "$ref": "#/components/schemas/Hop11" },
+      "Hop11": { "$ref": "#/components/schemas/Hop12" },
+      "Hop12": { "type": "object", "description": "terminal" }
+    }
+  }
+}

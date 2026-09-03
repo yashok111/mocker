@@ -1,0 +1,8 @@
+{
+  "plugins": ["oxc", "typescript", "unicorn", "react", "jsx-a11y"],
+  "ignorePatterns": ["src/routeTree.gen.ts", "src/api/generated/**"],
+  "rules": {
+    "react/rules-of-hooks": "error",
+    "react/exhaustive-deps": "error"
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "openapi": "3.0.3",
+  "info": { "title": "EmptyServers", "version": "1.0.0" },
+  "servers": [],
+  "paths": {
+    "/a": {
+      "get": {
+        "operationId": "getA",
+        "responses": { "200": { "description": "ok" } }
+      }
+    }
+  }
+}

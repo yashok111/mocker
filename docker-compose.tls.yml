@@ -1,0 +1,77 @@
+# HTTPS overlay for docker-compose.yml — never used on its own. Run it
+# through scripts/compose-tls.sh (`make up-tls`, `make down-tls`,
+# `make tls-root`, `make smoke-tls`), which reads MOCKER_BASE_DOMAIN and
+# MOCKER_ADMIN_HOST out of .env and exports them for the `${…}` below —
+# .env itself is loaded raw as mocker's env_file, never interpolated, so
+# compose cannot see those two names any other way, and giving Caddy the
+# whole .env would hand the password hash to a second container for no
+# reason.
+#
+# What it changes: a Caddy sidecar terminates TLS for `*.<MOCKER_BASE_DOMAIN>`
+# and `<MOCKER_ADMIN_HOST>` with its own local CA (deploy/Caddyfile, `tls
+# internal` — no ACME, nothing on :80), mocker's own :8080 stops being
+# published (Caddy is the only door), MOCKER_DEV is forced to 0 (the Secure
+# cookie a real deployment needs) and MOCKER_TRUST_PROXY names this compose
+# network's subnet so mocker believes Caddy's X-Forwarded-Proto/For —
+# DESIGN §15/§16's whole reverse-proxy contract, exercised by
+# scripts/smoke-tls.sh instead of merely illustrated.
+#
+# The network subnet is FIXED (MOCKER_TLS_SUBNET, default 172.30.10.0/24)
+# and Caddy gets a STATIC address on it (MOCKER_TLS_CADDY_IP, the subnet's
+# .254 — dynamic addresses are handed out from the low end and mocker, up
+# first, takes .2; the gateway is pinned to .1), because MOCKER_TRUST_PROXY takes an
+# address or CIDR and nothing else — a docker service name is not
+# something mocker can compare a peer against. It is set to Caddy's one
+# address, not the subnet: the subnet's .1 is the docker HOST, and mocker's
+# unpublished :8080 is still reachable from the host on the bridge, so a
+# subnet-wide trust would let any process on the box forge X-Forwarded-For
+# into the traffic log and rotate the login limiter's key per attempt (the
+# security review's one major finding). Pick another subnet with
+# `MOCKER_TLS_SUBNET=… make up-tls` if this one collides with a network
+# already on the box; compose refuses loudly ("Pool overlaps") rather than
+# silently sharing one.
+services:
+  mocker:
+    # `!reset` empties the list docker-compose.yml declared (compose >= 2.24;
+    # this stack already needs 2.30 for env_file format: raw). Without it
+    # the overlay would APPEND, and the plain-http door would stay open
+    # beside the TLS one with a Secure cookie nobody could log in over.
+    ports: !reset []
+    environment:
+      MOCKER_DEV: "0"
+      MOCKER_TRUST_PROXY: ${MOCKER_TLS_CADDY_IP:?run this file through scripts/compose-tls.sh}
+
+  caddy:
+    image: caddy:2.11-alpine
+    depends_on:
+      mocker:
+        condition: service_healthy
+    environment:
+      MOCKER_BASE_DOMAIN: ${MOCKER_BASE_DOMAIN:?run this file through scripts/compose-tls.sh}
+      MOCKER_ADMIN_HOST: ${MOCKER_ADMIN_HOST:?run this file through scripts/compose-tls.sh}
+    networks:
+      default:
+        ipv4_address: ${MOCKER_TLS_CADDY_IP:?run this file through scripts/compose-tls.sh}
+    ports:
+      # Loopback only, like mocker's own port in docker-compose.yml: a dev
+      # stack with a self-signed root is not a public listener.
+      - "127.0.0.1:${MOCKER_TLS_PORT:-8443}:443"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      # /data holds the local CA (root.crt is what `make tls-root` exports
+      # and what a browser has to trust); /config is Caddy's autosave. Both
+      # named so `down` without -v keeps the root a browser already trusts.
+      - caddy-data:/data
+      - caddy-config:/config
+    restart: unless-stopped
+
+networks:
+  default:
+    ipam:
+      config:
+        - subnet: ${MOCKER_TLS_SUBNET:?run this file through scripts/compose-tls.sh}
+          gateway: ${MOCKER_TLS_GATEWAY:?run this file through scripts/compose-tls.sh}
+
+volumes:
+  caddy-data:
+  caddy-config:

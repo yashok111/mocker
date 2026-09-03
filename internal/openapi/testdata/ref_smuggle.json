@@ -1,0 +1,12 @@
+{
+  "openapi": "3.0.3",
+  "info": { "title": "Smuggle", "version": "1.0.0" },
+  "paths": {},
+  "components": {
+    "schemas": {
+      "Entry": { "$ref": "#/components/schemas/Mid" },
+      "Mid": { "$ref": "#/components/schemas/Terminal" },
+      "Terminal": { "type": "string" }
+    }
+  }
+}

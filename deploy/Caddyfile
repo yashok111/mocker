@@ -1,0 +1,57 @@
+# The reverse proxy in front of mocker — mounted by docker-compose.tls.yml
+# and exercised end to end by scripts/smoke-tls.sh (`make smoke-tls`), so
+# unlike the illustrative template this file replaced, what is written here
+# is what runs. Two site blocks, the pair DESIGN §16 asks a wildcard
+# certificate for: every workspace host and the admin host. Both names come
+# from .env through scripts/compose-tls.sh ({$VAR} is substituted when the
+# file is parsed).
+#
+# For a real contour keep the shape and swap the certificate source: replace
+# `tls internal` with the contour's own wildcard certificate (`tls
+# /certs/wildcard.crt /certs/wildcard.key`) or terminate TLS at the
+# balancer in front and drop the line — and set MOCKER_TRUST_PROXY to
+# whatever fronts mocker, because mocker believes X-Forwarded-Proto/For ONLY
+# from a peer named there (DESIGN §15): left off, the session cookie never
+# turns Secure for a client that really is on https, and the traffic log
+# records the proxy's own address for every request, which defeats the one
+# compensating control an open mock plane has.
+{
+	# No ACME anywhere below, so nothing needs :80: no HTTP→HTTPS redirect
+	# listener, no challenge endpoint. The local CA's root is exported by
+	# `make tls-root` and trusted by hand; Caddy's own attempt to install it
+	# into the container's trust store would only log a warning.
+	auto_https disable_redirects
+	skip_install_trust
+	# Caddy's admin API (:2019) would otherwise listen inside the container.
+	# Nothing here reloads it at runtime; the file is the whole config.
+	admin off
+}
+
+# Every workspace host: <slug>.<MOCKER_BASE_DOMAIN>. `tls internal` issues
+# the wildcard from Caddy's own CA at startup, no DNS involved.
+*.{$MOCKER_BASE_DOMAIN} {
+	tls internal
+	# reverse_proxy passes the client's Host through unchanged (the
+	# dispatcher routes by it); WebSocket upgrades and text/event-stream
+	# flushing need no extra directive — the smoke checks both through this
+	# block. The two header_up lines PIN what mocker is told about the
+	# client rather than relying on Caddy's default (which appends the
+	# client's own X-Forwarded-For unless trusted_proxies says otherwise):
+	# mocker believes these headers from this proxy, and a hop count in
+	# MOCKER_TRUST_PROXY would walk back into a client-supplied prefix.
+	reverse_proxy mocker:8080 {
+		header_up X-Forwarded-For {remote_host}
+		header_up X-Forwarded-Proto {scheme}
+	}
+}
+
+# The admin plane. No HSTS on purpose: it is keyed by host name, not port,
+# and a browser that once saw it on mocker.local:8443 would refuse the
+# plain-http quick start on mocker.local:8080 for a year (CARVE-OUTS.md).
+{$MOCKER_ADMIN_HOST} {
+	tls internal
+	reverse_proxy mocker:8080 {
+		header_up X-Forwarded-For {remote_host}
+		header_up X-Forwarded-Proto {scheme}
+	}
+}

@@ -1,0 +1,11 @@
+{
+  "openapi": "3.0.3",
+  "info": { "title": "PointerEdge", "version": "1.0.0" },
+  "paths": {},
+  "components": {
+    "schemas": {
+      "weird/name": { "type": "string", "description": "slash in key" },
+      "weird~name": { "type": "integer", "description": "tilde in key" }
+    }
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "openapi": "3.0.3",
+  "info": { "title": "VariableServer", "version": "1.0.0" },
+  "servers": [
+    {
+      "url": "https://{host}/api/{version}",
+      "variables": {
+        "host": { "default": "api.example.com" },
+        "version": { "default": "v1" }
+      }
+    }
+  ],
+  "paths": {}
+}

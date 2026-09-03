@@ -1,0 +1,20 @@
+{
+  "openapi": "3.0.3",
+  "info": { "title": "PathDisagree", "version": "1.0.0" },
+  "paths": {
+    "/a": {
+      "servers": [{ "url": "https://api.example.com/api/v1" }],
+      "get": {
+        "operationId": "getA",
+        "responses": { "200": { "description": "ok" } }
+      }
+    },
+    "/b": {
+      "servers": [{ "url": "https://api.example.com/api/v2" }],
+      "get": {
+        "operationId": "getB",
+        "responses": { "200": { "description": "ok" } }
+      }
+    }
+  }
+}

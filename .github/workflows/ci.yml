@@ -1,0 +1,205 @@
+# CI — the same bars `make` runs on a developer box, on a hosted runner.
+#
+# Five independent jobs, so a red one names its own bar and the others still
+# report: Go (vet, gofmt, golangci-lint, the -race suite), the SPA (generated
+# client, typecheck, vitest, oxlint/oxfmt), the test plugin against the real
+# binary, and the two docker smokes (plain http, and the HTTPS overlay with
+# Caddy in front). Every job has a hard timeout, and every non-docker job runs
+# its heavy commands under scripts/ci-cap.sh — a memory- and CPU-capped
+# systemd scope — with the Makefile's own user-scope CAP disabled (`CAP=`),
+# so an overrun kills the step and never the runner. The docker jobs spend
+# their memory inside dockerd, a system service the client cannot cap; their
+# guard is the timeout and an unconditional teardown.
+#
+# Every action is pinned to a commit SHA (the tag beside it is the human
+# name), Go comes from go.mod and Node from the same major the Dockerfile
+# builds with. Yarn is yarn 4 through corepack, exactly as the Makefile runs
+# it; its global cache is restored by lockfile hash.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  # Node 24 ships corepack but marks it deprecated; installing it explicitly
+  # keeps the `corepack yarn` recipe in the Makefile working on the runner
+  # image's node too, whichever build lands there next.
+  COREPACK_ENABLE_DOWNLOAD_PROMPT: "0"
+
+jobs:
+  go:
+    name: go — lint and race suite
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      # Three cores are what the scope's CPUQuota grants (scripts/ci-cap.sh),
+      # so the Go tool, the test binaries and golangci-lint plan for three
+      # rather than discovering four and contending for the quota.
+      GOMAXPROCS: "3"
+      # A soft ceiling per Go process: `make test` runs two package binaries
+      # at once (-p 2) plus the go tool, under a 10G hard cap on the scope.
+      GOMEMLIMIT: 3GiB
+      CI_CAP_MEM: 10G
+      CI_CAP_CPU: 300%
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+      - uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
+        with:
+          version: v2.13.2
+          install-only: true
+      - name: prove the cap
+        # Fails the job if the scope did not take: a hosted runner has sudo,
+        # systemd and cgroup v2, so "uncapped" here is a broken wrapper, not
+        # a platform limit. Prints memory.max / cpu.max for the log.
+        run: |
+          # shellcheck disable=SC2016 # the single-quoted script is expanded by the INNER sh, inside the scope
+          scripts/ci-cap.sh sh -c '
+            cg=$(cut -d: -f3 /proc/self/cgroup)
+            echo "cgroup=$cg"
+            echo "memory.max=$(cat /sys/fs/cgroup$cg/memory.max)"
+            echo "memory.swap.max=$(cat /sys/fs/cgroup$cg/memory.swap.max)"
+            echo "cpu.max=$(cat /sys/fs/cgroup$cg/cpu.max)"
+            echo "user=$(id -un) home=$HOME go=$(command -v go || true) node=$(command -v node || true)"
+            [ "$(cat /sys/fs/cgroup$cg/memory.max)" != max ] || { echo "::error::ci-cap: memory cap did not apply" >&2; exit 1; }
+            [ "$(cut -d" " -f1 /sys/fs/cgroup$cg/cpu.max)" != max ] || { echo "::error::ci-cap: cpu cap did not apply" >&2; exit 1; }
+          '
+      - name: make lint
+        run: scripts/ci-cap.sh make lint CAP=
+      - name: make test
+        run: scripts/ci-cap.sh make test CAP=
+
+  web:
+    name: web — generated client, typecheck, vitest, oxlint
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CI_CAP_MEM: 8G
+      CI_CAP_CPU: 300%
+      NODE_OPTIONS: --max-old-space-size=4096
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24"
+      - name: corepack
+        run: |
+          command -v corepack >/dev/null || npm install -g corepack
+          corepack enable
+          cd web && corepack yarn --version
+      - name: yarn cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.yarn/berry/cache
+          key: yarn-web-${{ runner.os }}-${{ hashFiles('web/yarn.lock') }}
+          restore-keys: yarn-web-${{ runner.os }}-
+      - name: prove the cap
+        # Fails the job if the scope did not take: a hosted runner has sudo,
+        # systemd and cgroup v2, so "uncapped" here is a broken wrapper, not
+        # a platform limit. Prints memory.max / cpu.max for the log.
+        run: |
+          # shellcheck disable=SC2016 # the single-quoted script is expanded by the INNER sh, inside the scope
+          scripts/ci-cap.sh sh -c '
+            cg=$(cut -d: -f3 /proc/self/cgroup)
+            echo "cgroup=$cg"
+            echo "memory.max=$(cat /sys/fs/cgroup$cg/memory.max)"
+            echo "memory.swap.max=$(cat /sys/fs/cgroup$cg/memory.swap.max)"
+            echo "cpu.max=$(cat /sys/fs/cgroup$cg/cpu.max)"
+            echo "user=$(id -un) home=$HOME go=$(command -v go || true) node=$(command -v node || true)"
+            [ "$(cat /sys/fs/cgroup$cg/memory.max)" != max ] || { echo "::error::ci-cap: memory cap did not apply" >&2; exit 1; }
+            [ "$(cut -d" " -f1 /sys/fs/cgroup$cg/cpu.max)" != max ] || { echo "::error::ci-cap: cpu cap did not apply" >&2; exit 1; }
+          '
+      - name: install and generate
+        run: scripts/ci-cap.sh sh -c 'cd web && corepack yarn install --immutable && corepack yarn gen'
+      - name: make ui-lint
+        run: scripts/ci-cap.sh make ui-lint CAP=
+      - name: make ui-test
+        run: scripts/ci-cap.sh make ui-test CAP=
+
+  plugin:
+    name: plugin — @yashok111/mocker-test against bin/mocker
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      GOMAXPROCS: "3"
+      CI_CAP_MEM: 8G
+      CI_CAP_CPU: 300%
+      NODE_OPTIONS: --max-old-space-size=4096
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24"
+      - name: corepack
+        run: |
+          command -v corepack >/dev/null || npm install -g corepack
+          corepack enable
+      - name: yarn cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.yarn/berry/cache
+          key: yarn-plugin-${{ runner.os }}-${{ hashFiles('packages/mocker-test/yarn.lock') }}
+          restore-keys: yarn-plugin-${{ runner.os }}-
+      - name: prove the cap
+        # Fails the job if the scope did not take: a hosted runner has sudo,
+        # systemd and cgroup v2, so "uncapped" here is a broken wrapper, not
+        # a platform limit. Prints memory.max / cpu.max for the log.
+        run: |
+          # shellcheck disable=SC2016 # the single-quoted script is expanded by the INNER sh, inside the scope
+          scripts/ci-cap.sh sh -c '
+            cg=$(cut -d: -f3 /proc/self/cgroup)
+            echo "cgroup=$cg"
+            echo "memory.max=$(cat /sys/fs/cgroup$cg/memory.max)"
+            echo "memory.swap.max=$(cat /sys/fs/cgroup$cg/memory.swap.max)"
+            echo "cpu.max=$(cat /sys/fs/cgroup$cg/cpu.max)"
+            echo "user=$(id -un) home=$HOME go=$(command -v go || true) node=$(command -v node || true)"
+            [ "$(cat /sys/fs/cgroup$cg/memory.max)" != max ] || { echo "::error::ci-cap: memory cap did not apply" >&2; exit 1; }
+            [ "$(cut -d" " -f1 /sys/fs/cgroup$cg/cpu.max)" != max ] || { echo "::error::ci-cap: cpu cap did not apply" >&2; exit 1; }
+          '
+      - name: make plugin-test
+        run: scripts/ci-cap.sh make plugin-test CAP=
+
+  smoke:
+    name: smoke — docker stack, http
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: make smoke
+        run: make smoke
+      - name: teardown
+        if: always()
+        run: docker compose down -v --remove-orphans 2>/dev/null || true
+
+  smoke-tls:
+    name: smoke — HTTPS overlay through Caddy
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: make smoke-tls
+        run: make smoke-tls
+      - name: teardown
+        if: always()
+        run: scripts/compose-tls.sh down -v --remove-orphans 2>/dev/null || docker compose down -v --remove-orphans 2>/dev/null || true

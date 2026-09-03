@@ -1,0 +1,12 @@
+{
+  "openapi": "3.0.3",
+  "info": { "title": "Branch", "version": "1.0.0" },
+  "paths": {},
+  "components": {
+    "schemas": {
+      "Common": { "type": "string", "description": "shared by two branches" },
+      "BranchA": { "$ref": "#/components/schemas/Common" },
+      "BranchB": { "$ref": "#/components/schemas/Common" }
+    }
+  }
+}

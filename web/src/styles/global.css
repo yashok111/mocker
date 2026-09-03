@@ -1,0 +1,16 @@
+/* Everything visual comes from Mantine's own stylesheets (imported in
+   main.tsx) plus the theme object. This file exists for the two things a
+   component library cannot own: the page background behind the app shell,
+   and making the root element actually fill the viewport so a short screen
+   still paints the full height. */
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background-color: var(--mantine-color-gray-0);
+}
