@@ -1405,10 +1405,11 @@ loopback port (`MOCKER_ADMIN_HOST=localhost`; Node's `fetch` cannot set
 is built by **tsdown** (`tsdown.config.ts`: three entries, ESM only with
 declarations, target node24, `engines.node >= 24` — the owner's call,
 Node 24 `require()`s ESM natively so a CJS twin would only double the
-files) and distributed as a
-tarball — `make plugin-pack` runs `npm pack`, whose `prepack` script IS
-the build, so a tarball never ships a stale `dist/`; `package.json`'s
-`exports` name the tsdown file names, not tsc's. `reset()` is the only
+files) and published on npm as `@yashok111/mocker-test` (`A17`, below;
+`make plugin-pack` still cuts a tarball for a registry-less contour —
+`npm pack`'s `prepack` script IS the build, so neither the tarball nor the
+published tarball ever ships a stale `dist/`); `package.json`'s `exports`
+name the tsdown file names, not tsc's. `reset()` is the only
 clear and clears everything; `fail` collapses the server's `once`/`n` to
 one `times`.
 
@@ -1658,6 +1659,70 @@ test: none of "patch", "recipe", "matcher", "schemaPatch" renders. The
 smoke's path-mode block checks the deep link reloads (`B7`); no route, no
 tool, no migration, no variable.
 
+**`A17` (2026-09-03) is publication: the repository public on GitHub, the
+bars on GitHub Actions, the plugin on npm — no product change at all.**
+Four things about it cannot be guessed from the tree. **The history is one
+commit and the origin is GitHub** (`git@github.com:yashok111/mocker.git`,
+the private Gitea forge deleted the same day; "Hard rules" below): the
+144-commit pre-publication history was written against a private forge
+and a private document, and lives on as a bundle on the owner's machine
+only. It was squashed and force-pushed several times during the day — and
+**from the first release tag on it is never rewritten again**: a tag
+points at a commit, and a squash after it leaves the tag on an orphan.
+**The acceptance corpus is embedded** (`internal/testspec/testdata/
+acceptance.json`, "Hard rules") because the alternative — a gitignored
+private document every acceptance test skipped without and the golden
+guard refused to run without — made `make test` red on every fresh clone,
+which is the one thing a public repository cannot have. **CI is
+`.github/workflows/ci.yml`: the make bars as five jobs** (go: lint + the
+race suite; web; the plugin against the real binary; `smoke`;
+`smoke-tls`), every action pinned by commit SHA, Go from `go.mod`, Node 24
+with yarn 4 through corepack and a lockfile-keyed cache, a hard
+`timeout-minutes` on each, `concurrency` cancelling a superseded run. The
+non-docker jobs run every heavy command through `scripts/ci-cap.sh` — a
+transient SYSTEM scope (`sudo -E systemd-run --scope`, `MemoryMax`,
+`MemorySwapMax=0` so an overrun is a kill and not thrashing into the
+timeout, `CPUQuota=300%` of the runner's four cores) with the Makefile's
+own user-scope `CAP` passed empty so the two never nest, `GOMAXPROCS`,
+`GOMEMLIMIT` and `NODE_OPTIONS` set to match, and a "prove the cap" step
+that reads `memory.max`/`cpu.max` from INSIDE the scope and asserts
+`GITHUB_ACTIONS` is visible there, failing the job otherwise — three
+runs paid for that step: the first left `HOME=/root` through the sudo
+chain (go wrote its cache under `/root`), the second proved the cap but
+the OUTER sudo lacked `-E`, so every soft limit and npm's OIDC pair
+silently never arrived while `memory.max` read exactly right. The docker
+jobs are not capped from the client (their memory is dockerd's, as the
+Makefile's `CAP` comment says) and get a timeout and an unconditional
+teardown. CI also found one real smoke defect: `scripts/wsclient.py`
+sent its whole 6 MB burst, THEN slept, THEN read, so on a slow runner the
+server's echo write sat blocked past `MOCKER_STREAM_FRAME_TIMEOUT` (4 s
+in the smoke) and P6d A3(f) saw a 1001 with zero echoes; the burst now
+runs on a thread with the reader starting at `--read-after-ms` while it
+is still going, every socket write through one locked `send()`, and
+`--idle-ms` ending the read once the burst is out. **The plugin is
+`@yashok111/mocker-test` on npm** (the `@mocker` scope was not ours;
+`@yashok111` is an npm ORG the owner created for it — the account itself
+is `yashok1111`, renamed to free the name — and the org owns the scope):
+the first version went up by hand (`npm login` and `npm publish --access
+public --otp=…` — 2FA is mandatory on publish now, and npm answers a WRONG
+otp with a 404, not a 401), every later one goes up by a tag —
+`.github/workflows/release-plugin.yml` on `plugin-v<version>` refuses a
+tag that does not equal `package.json`'s version, runs `make plugin-test`
+under the cap, and publishes with `--provenance` through npm Trusted
+Publishing (`id-token: write`; the package's "Trusted publisher" on
+npmjs.com names this repository and this workflow file, with "Allow npm
+publish" ticked so the release goes live without a manual stage step);
+there is no npm token anywhere in the repository, and the publish step
+runs OUTSIDE the cap because the OIDC exchange is one more thing a
+wrapper can get in the way of. The registry's read side lags a publish by
+several minutes (404 on `npm view` twice today, 7 minutes each) — wait,
+do not republish. The release recipe is in `packages/mocker-test/README.md`
+("Installing"): bump `version`, `corepack yarn install` (the workspace's
+own name and version live in `yarn.lock`, `--immutable` refuses the
+mismatch), commit, tag, push both. On the dev Mac every npm command needs
+`env -u HTTPS_PROXY`: the session's egress proxy breaks TLS to the
+registry's login and publish endpoints.
+
 ## Bars
 
 ```bash
@@ -1669,6 +1734,12 @@ make smoke   # docker image + end-to-end curl checks
 make smoke-tls # the HTTPS overlay end to end: TLS, the proxy contract, SSE and WS through Caddy
 make plugin-test # @yashok111/mocker-test (packages/mocker-test): install, tsc, oxlint, vitest against ./bin/mocker
 ```
+
+All seven run on every push and pull request as `.github/workflows/ci.yml`
+(`A17`, "Architecture"): five jobs, the non-docker ones inside a memory- and
+CPU-capped systemd scope through `scripts/ci-cap.sh` — pass `CAP=` to make
+there so the Makefile's own cap does not nest. A release of the plugin is a
+tag `plugin-v<version>` (`.github/workflows/release-plugin.yml`).
 
 The development cycle:
 
@@ -2197,7 +2268,10 @@ client-side from the two editor routes, «Открыть в редакторе»
 those editors through search params, «Скачать» from the fetched document;
 `hasSchemaPatch` on the operations list's per-status summary is the one
 server change; `EXEMPT` 11 → 10 — no route, no tool, no migration, no
-variable).
+variable) → `A17` (publication: origin GitHub and one commit, the
+acceptance corpus embedded, `.github/workflows/ci.yml` with the capped
+scope, `@yashok111/mocker-test` 0.1.0 by hand and 0.1.1 by tag through
+Trusted Publishing — no product change).
 What each of them SHIPPED is in "Architecture"
 above; HOW each arrived — gates, fleet runs, the lessons paid for — is
 `HISTORY.md`.
