@@ -293,6 +293,19 @@ func (p *Plane) Preview(ctx context.Context, ws *workspaces.Workspace, req domai
 	}
 	delayMs := effectiveDelayMs(0, rowDelayMs, rt.settings.DelayMs)
 
+	// A18 (D7): a draft's function runs through the SAME runner a request
+	// would use, at the same position the serving branch takes — after the
+	// status precedence, instead of assembleResponse. The host is nil, the
+	// identical refusal Preview already makes for live state, the ref
+	// resolver and the asset lookup: a draft must not read real entity rows.
+	// luafn's own nil-Host contract turns that into "no_host" INSIDE Lua, so
+	// a function written against a live workspace still runs here and reports
+	// why its helper declined, rather than being answered by a Go-side
+	// refusal the author cannot see the shape of.
+	if source, ok := functionSource(rv.Override); ok {
+		return p.previewFunction(ctx, req, rv, delayMs, shadowedBy, source, route), nil
+	}
+
 	// Rows 8, 10, 11: assembleResponse is the ONE place recipes are
 	// assembled, the patched schema is looked up, headers are computed and
 	// the body is generated or pinned — sharing it with serveGenerated is

@@ -481,7 +481,8 @@ guide topic untouched, `CLAUDE.md` Architecture + `HISTORY.md` — the standing
 slice-end set.
 
 **`CARVE-OUTS.md` carries TWELVE named items.** The count moved three times —
-six, then eight, then nine, then twelve — and the shape of the moves is the
+six, then eight, then nine, then twelve, then fourteen during the BUILD — and
+the shape of the moves is the
 finding rather than the number: each fix closed the case it was handed and not
 the question behind it, which is round 3's own lesson stated about itself. The
 class is: **every decision in this document that gives something up — a
@@ -534,11 +535,38 @@ than by reading it.
     shape-only, so a body that has drifted from the contract it publishes is
     reported by nothing. This is the price of D5's "the function REPLACES
     response assembly", and it is invisible from the contract side.
+13. `[GIVES-UP]` **A custom endpoint's HTTP draft cannot be previewed at all
+    (D7).** D7 promises "Custom-endpoint preview: same", and there is no such
+    surface to extend: `POST /api/workspaces/{id}/endpoints/preview` refuses
+    `kind: "http"` by name (`internal/admin/endpoint_preview_handlers.go`) and
+    answers `domain.StreamPreview`, which has no `Notes` field for a failure to
+    land in — so clause 32's own type reference, `PreviewResult.Notes`, points
+    at the OPERATION preview only and the custom half of that clause was
+    assumed rather than checked. Building it is a new capability — a request
+    shape, a response view and contract work — and D8 says this slice adds no
+    route and no tool. An author drafting a function on a custom endpoint saves
+    it and calls it; an author drafting one on a spec operation previews it.
+    **Found by building A18-2, not by the gate**, which is the same way items
+    9-12 were found one round later than the four before them.
+14. `[GIVES-UP]` **`mock.entities` reads through `EntityStore.List`, not
+    `resources.Repo.ListFiltered` (D3).** D3 names `ListFiltered` by name; the
+    branch calls `List`, and the three things D3's own criterion asks for —
+    real filtering, the tuple encoded by `resources.EncodeScope`, and
+    `nil, "bad_scope"` on a wrong arity — are all satisfied by it, because a
+    full ancestor tuple is an EXACT (base, scope) key and that pair is exactly
+    what `List` takes. What is given up is `ListFiltered`'s wildcards, its
+    cursor and its limit, none of which this call wants: a function asks for
+    one family under one scope. The cost of the alternative is the reason —
+    `ListFiltered` is not on the `EntityStore` interface, and widening a
+    four-method seam whose implementations exist only to keep
+    `internal/mockplane` off `internal/store` is a bigger change than the
+    reading it would buy. If a later slice wants a paged `mock.entities`, this
+    is the entry that says where the page would come from.
 
 **The class was re-derived INDEPENDENTLY in round 4** — a reviewer walked
 D1–D10, D8b and §A for withdrawn guarantees, refused capabilities, broken
 compatibilities and accepted residuals WITHOUT reading this list first, and
-converged on exactly these twelve, excluding four borderline candidates by
+converged on exactly the first twelve, excluding four borderline candidates by
 name (the `io`/`package`/`debug` refusal, folded into the allowlist mechanism
 rather than argued separately; `mock.entities` being read-only, which is the
 intended surface rather than a cost; the inbound repeated-header join, which
@@ -703,6 +731,37 @@ baseline, which is the defect this table exists to prevent.
    `-race` is recorded beside the baseline. *Fails if the number is not taken at
    all* — D1 defers the `-race` delta to the slice on purpose, so not taking it
    leaves D1 unclosed.
+
+**Measured in-tree, 2026-09-04, during A18-2.** D1's own figures came from a
+throwaway module and this is the tree's answer to the same three questions:
+
+- **Module graph: `go list -m all` is 56, up 4 from the baseline's 52 — and
+  `go.mod` gained exactly ONE line, `github.com/yuin/gopher-lua v1.1.2`.** The
+  other three (`chzyer/logex`, `chzyer/readline`, `chzyer/test`) are in the
+  GRAPH because gopher-lua's own `go.mod` requires them for its REPL, and in
+  nothing else: they appear in no require block of ours, and
+  `go list -deps ./cmd/mocker | grep -c chzyer` is **0**. `go list -deps
+  ./internal/luafn` links four packages, all gopher-lua's own
+  (`ast`, `parse`, `pm`, the root). This is the divergence clause 1 asks to
+  have written down rather than glossed: §30.9's "zero transitive modules"
+  holds for what is LINKED and for what this repository requires, and does not
+  hold for the module graph `go list -m all` walks, which includes a
+  dependency's own test and tool requirements.
+- **Binary size: +1 007 664 bytes (+0.96 MiB)**, measured
+  `a6ae6ee` → `d8561ad`, both `CGO_ENABLED=0 go build ./cmd/mocker` in a git
+  WORKTREE. The worktree is the load-bearing detail and the reason the
+  baseline table's own 27 564 281 cannot be subtracted from a later
+  main-tree number: `internal/webui/dist` is gitignored, so a worktree
+  checkout embeds no SPA and builds about 1.4 MB smaller. Two builds of the
+  same KIND are what the delta needs, and these are.
+- **`-race` suite: no regression.** `make test` is 36 packages ok / 0 FAIL /
+  0 SKIP; `internal/luafn` runs in ~1.3 s and `internal/mockplane` in ~7 s,
+  both inside the ordinary spread of the packages around them. The suite's
+  wall time is unchanged against the baseline's 77.6 s within run-to-run
+  noise on this box, which is what D1's deferred question was actually
+  asking — gopher-lua is an interpreter over its own opcode array, so
+  `-race` has no C-translated code to instrument here the way modernc
+  sqlite gave it.
 
 ### A.2 — The sandbox is what D3 says it is (D2, D3)
 
@@ -983,16 +1042,21 @@ baseline, which is the defect this table exists to prevent.
     `docs/USER-GUIDE.md`, all four `skills/mocker/` references, `CLAUDE.md` and
     `HISTORY.md` carry the slice. *Fails if the guide's embedded copy and its
     source disagree.*
-47a. `CARVE-OUTS.md` carries all TWELVE items D9 enumerates — the determinism
+47a. `CARVE-OUTS.md` carries all FOURTEEN items D9 enumerates — the determinism
     carve-out, the memory residual, the absent rate limit on a Lua auth check,
     the `coroutine` refusal, the const timeout, the UTC pin, the RNG override,
     the `mock.entities`-versus-`$ref` asymmetry, the v4 refusal, the absent
-    opt-out, the single-valued response headers, and the unvalidated function
-    output — each as its own entry naming what it gives up, and each MATCHED BY
-    NAME rather than counted. *Fails if any one of the twelve is absent*, which
+    opt-out, the single-valued response headers, the unvalidated function
+    output, the absent custom-endpoint HTTP preview, and the `List`-not-
+    `ListFiltered` narrowing — each as its own entry naming what it gives up,
+    and each MATCHED BY NAME rather than counted. The last two were added
+    DURING A18-2 rather than by a gate round, and the list's own history
+    paragraph above says so: this class has grown at every look, which is why
+    the clause counts by command and matches by name instead of trusting a
+    number. *Fails if any one of the fourteen is absent*, which
     is a different check from the one this clause first carried: "fewer than
-    eight entries" is a floor, and a floor passes over twelve entries of which
-    one is the wrong twelve. *And fails if
+    eight entries" is a floor, and a floor passes over fourteen entries of
+    which one is the wrong one. *And fails if
     `grep -cE '^[0-9]+\. .\[GIVES-UP\]'` over this document does not return the
     same number as the count of items D9 lists and the count of matching entries
     in `CARVE-OUTS.md`* — three numbers, one

@@ -88,14 +88,25 @@ type Response struct {
 // interface rather than an import because this package is a leaf: a nil Host
 // is legal and makes both helpers answer their own error, which is what a
 // preview with no live workspace behind it needs.
+//
+// Both methods take a context, and it is the INVOCATION's — the same value
+// [Run] hands [lua.LState.SetContext], threaded through installMock rather
+// than captured when the Host was built (D6). Without it the two-second budget
+// would bound Lua bytecode and nothing else: mock.entities reads through the
+// store and can queue behind a checkpoint restore or a reset-data holding the
+// single writer connection, and a helper that outlived the budget would answer
+// long after the plane had given up on the request.
 type Host interface {
 	// JWT signs with the workspace's own settings.auth. It answers
 	// ("", error) when the workspace carries alg "none" or no key: an unsigned
 	// token pretending to be signed is worse than an error (D3).
-	JWT(claims map[string]any) (string, error)
-	// Entities reads a confirmed family's rows. An empty scope means the
-	// serving request's own; a non-empty one is an explicit ancestor tuple.
-	Entities(family string, scope []string) ([]map[string]any, error)
+	JWT(ctx context.Context, claims map[string]any) (string, error)
+	// Entities reads a confirmed family's rows. A nil scope means the serving
+	// request's own; a non-nil one is an explicit ancestor tuple, whose values
+	// arrive RAW — the host encodes them, because resources.EncodeScope is the
+	// one owner of that join and a second one here is an encoding a UNIQUE
+	// index could disagree with (D3).
+	Entities(ctx context.Context, family string, scope []string) ([]map[string]any, error)
 }
 
 // Validate compiles the source and nothing else. Both writers run it before
@@ -146,7 +157,7 @@ func Run(ctx context.Context, source string, req Request, host Host) (Response, 
 	l := newState()
 	defer l.Close()
 	l.SetContext(runCtx)
-	installMock(l, host)
+	installMock(l, runCtx, host)
 
 	fn, err := l.LoadString(wrap(source))
 	if err != nil {

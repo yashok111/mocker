@@ -35,6 +35,7 @@ import (
 	"github.com/yashok111/mocker/internal/httpx"
 	"github.com/yashok111/mocker/internal/livestate"
 	"github.com/yashok111/mocker/internal/overrides"
+	"github.com/yashok111/mocker/internal/resources"
 	"github.com/yashok111/mocker/internal/router"
 	"github.com/yashok111/mocker/internal/workspaces"
 )
@@ -126,7 +127,7 @@ func (rt *runtime) lookupCustom(id int64) (*customep.Row, bool) {
 //  8. the body, enveloped exactly like a spec route's generated one
 //     (settings.Envelope applies uniformly — DESIGN never scopes it to
 //     spec-only operations), Content-Type/Content-Length set once.
-func (p *Plane) serveCustom(w http.ResponseWriter, r *http.Request, ws *workspaces.Workspace, rt *runtime, m *router.Match) { //nolint:gocyclo // the custom-route serving path end to end: resolve, match, live state, variant, write
+func (p *Plane) serveCustom(w http.ResponseWriter, r *http.Request, ws *workspaces.Workspace, rt *runtime, m *router.Match, base resources.ScopeKey) { //nolint:gocyclo // the custom-route serving path end to end: resolve, match, live state, variant, write
 	route := m.Route
 
 	row, ok := rt.lookupCustom(route.CustomRowID)
@@ -196,6 +197,23 @@ func (p *Plane) serveCustom(w http.ResponseWriter, r *http.Request, ws *workspac
 
 	variant, found := row.Responses[strconv.Itoa(status)]
 	pinned := found && variant.Mode == "pinned"
+
+	// A18 (D7): the function branch, at the same logical position it takes on
+	// a spec operation — after route_off, the session layer, the pause, the
+	// delay and the stream branches — and BEFORE the 406 gate, which is the
+	// one place the two matrices differ. A spec operation negotiates against
+	// the type its DOCUMENT declares, which exists before anything runs; a
+	// custom endpoint's only declared type belongs to a PINNED variant, and a
+	// function variant is not pinned, so there is nothing here to negotiate
+	// against until the function has run and said what it produced.
+	//
+	// No resource takeover to order against either: a custom endpoint is
+	// never a resource (routes.go). base is still the request's own base
+	// scope, because mock.entities reads rows that are partitioned by it.
+	if source, ok := functionSource(variantPtr(row.Responses, strconv.Itoa(status))); ok {
+		p.serveFunction(w, r, ws, rt, route, m, base, source)
+		return
+	}
 
 	// P7a (DESIGN §34.3): a generated variant WITH a schema leaves this
 	// function for the one seam every generated response goes through —
@@ -349,6 +367,19 @@ func (p *Plane) serveCustom(w http.ResponseWriter, r *http.Request, ws *workspac
 	if _, werr := w.Write(body); werr != nil {
 		p.log.Debug("write custom response", "workspace", ws.Slug, "err", werr)
 	}
+}
+
+// variantPtr addresses a row's variant so [functionSource] can ask its one
+// question of a custom endpoint's variant and a spec operation's through the
+// same signature — resolved.Override is already a pointer on that path, and a
+// map index is not addressable here. It returns nil for a missing key, which
+// functionSource reads as "no function", so the caller needs no second check.
+func variantPtr(responses map[string]overrides.Variant, status string) *overrides.Variant {
+	v, ok := responses[status]
+	if !ok {
+		return nil
+	}
+	return &v
 }
 
 // serveCustomGenerated is P7a's branch out of serveCustom: a custom

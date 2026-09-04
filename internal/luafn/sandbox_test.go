@@ -34,7 +34,7 @@ var frozenGlobals = []string{
 func TestSandbox_globalsMatchTheFrozenAllowlist(t *testing.T) {
 	l := newState()
 	defer l.Close()
-	installMock(l, nil)
+	installMock(l, t.Context(), nil)
 
 	got := globalNames(l)
 	want := append([]string(nil), frozenGlobals...)
@@ -176,7 +176,7 @@ func TestSandbox_dateIsUTCUnderANonDefaultTimezone(t *testing.T) {
 func TestSandbox_mockTableHoldsExactlyThreeKeys(t *testing.T) {
 	l := newState()
 	defer l.Close()
-	installMock(l, nil)
+	installMock(l, t.Context(), nil)
 
 	tbl, ok := l.GetGlobal("mock").(*lua.LTable)
 	if !ok {

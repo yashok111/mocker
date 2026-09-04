@@ -195,6 +195,23 @@ func (p *Plane) serveGenerated(w http.ResponseWriter, r *http.Request, ws *works
 		return
 	}
 
+	// A18 (D7): the function branch sits at the SAME logical position the
+	// resource branch does — after route_off, livestate.Apply, the pause, the
+	// delay and the 406 gate — and BEFORE it, because a function WINS over a
+	// confirmed resource on the same 2xx operation: a function is the
+	// Workspace layer's explicit operator statement and a resource is
+	// generated convenience. The resource branch takes the operation only
+	// when no function variant applies, which is what this ordering says and
+	// is the whole of the precedence D7 states.
+	//
+	// It replaces assembleResponse rather than feeding it: everything below —
+	// the ref resolver, the asset lookup, the seam — belongs to a response
+	// this branch does not assemble (D5).
+	if source, ok := functionSource(rv.Override); ok {
+		p.serveFunction(w, r, ws, rt, route, m, base, source)
+		return
+	}
+
 	// P3a (D6 R19): the resource branch sits HERE — after route_off,
 	// livestate.Apply, the pause, the delay and the 406 gate above (a POST
 	// that would have answered 406 must never create a row first), and

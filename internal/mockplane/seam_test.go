@@ -41,6 +41,14 @@ func TestAssembleResponseIsTheOnlySeam(t *testing.T) {
 	// the THIRD caller — a custom endpoint's schema enters the seam
 	// instead of opening a third gen.Body site, which is what the body
 	// assertion below still refuses.
+	//
+	// A18 (D7) adds no fourth: the endpoint-function branch (function.go) is
+	// a SIBLING of this seam, not a caller of it. It produces the bytes
+	// assembleResponse would have produced — from Lua rather than from a
+	// schema — and writes them through its own tail, so nothing it does can
+	// be expressed as recipes, a patched schema, a pinned body or an
+	// envelope. That is also why it opens no gen.Body site: it never
+	// generates from a schema at all.
 	wantCallers := map[string]bool{"serveGenerated": true, "Preview": true, "serveCustomGenerated": true}
 	if len(callers) != len(wantCallers) {
 		t.Fatalf("assembleResponse call sites: got callers %v, want exactly %v", setKeys(callers), setKeys(wantCallers))

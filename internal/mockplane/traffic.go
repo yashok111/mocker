@@ -129,6 +129,15 @@ type trafficMatch struct {
 	// D10): the response carried the variant's status and an EMPTY body,
 	// and this note is the only place an operator sees why.
 	assetMissing bool
+
+	// function is A18's note (D7), and it is a STRING rather than a bool
+	// because the branch has four outcomes an operator has to tell apart —
+	// it ran, it timed out, it failed, it returned too much — and they are
+	// mutually exclusive by construction: markFunctionNote is called exactly
+	// once per request, on the one path that decided the answer. A bool per
+	// outcome would let two of them be set at once, which no code path can
+	// produce and every reader would then have to rank.
+	function string
 }
 
 // notePauseRefused and noteRefUnresolved are [traffic.Event.Notes] tokens
@@ -142,6 +151,16 @@ const (
 	notePauseRefused  = "pause_refused"
 	noteRefUnresolved = "ref_unresolved"
 	noteAssetMissing  = "asset_missing" // A6 D10, the third; joined like the two before it
+
+	// A18 (D6, D7): the endpoint-function branch's four outcomes. They are
+	// values of ONE field rather than four flags (see trafficMatch.function),
+	// and they join the list above like every other token — a function-served
+	// request can also be pause_refused, and HasNote's whole-entry match needs
+	// each as a complete token.
+	noteFunction         = "function"
+	noteFunctionTimeout  = "function_timeout"
+	noteFunctionFailed   = "function_failed"
+	noteFunctionTooLarge = "function_too_large"
 )
 
 // attachTrafficMatch stores a fresh, "none"-initialized [trafficMatch] on
@@ -205,6 +224,22 @@ func markPauseRefused(r *http.Request) {
 // A no-op when no [TrafficSink] is wired, the same contract markTrafficMatch
 // and markPauseRefused already establish: [attachTrafficMatch] never ran,
 // so the context holds nothing to find.
+// markFunctionNote records how the endpoint-function branch ended (A18 D7) —
+// called from function.go on each of its four terminal paths, and on none
+// other: a client that disconnected mid-function is deliberately unclassified,
+// because it is not a server error and an operator chasing it would be chasing
+// a closed connection (D6).
+//
+// A no-op when no [TrafficSink] is wired, the same contract markTrafficMatch,
+// markPauseRefused and markRefUnresolved already establish.
+func markFunctionNote(r *http.Request, note string) {
+	tm, ok := r.Context().Value(trafficMatchCtxKey{}).(*trafficMatch)
+	if !ok {
+		return
+	}
+	tm.function = note
+}
+
 // markStream records that a stream handshake succeeded on this request.
 func markStream(r *http.Request, kind string) {
 	tm, ok := r.Context().Value(trafficMatchCtxKey{}).(*trafficMatch)
@@ -525,6 +560,9 @@ func (p *Plane) captureTraffic(w http.ResponseWriter, r *http.Request, ws *works
 	}
 	if tm.assetMissing {
 		notes = append(notes, noteAssetMissing)
+	}
+	if tm.function != "" {
+		notes = append(notes, tm.function)
 	}
 	if tm.stream != "" {
 		// P6b (D11): one row per connection. The writer's own capture is

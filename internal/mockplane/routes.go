@@ -229,10 +229,6 @@ func (p *Plane) serveRoute(w http.ResponseWriter, r *http.Request, ws *workspace
 	// its own (route_off) — see markTrafficMatch's own doc comment
 	// (traffic.go) for why that 404 must still count as a match, not "none".
 	markTrafficMatch(r, match.Route)
-	if match.Route.Custom {
-		p.serveCustom(w, r, ws, rt, match)
-		return
-	}
 
 	// D7.1/D7.2: the base scope is computed HERE, once, next to the Match
 	// that produced it — POSITIONALLY, off the segments the match already
@@ -242,10 +238,22 @@ func (p *Plane) serveRoute(w http.ResponseWriter, r *http.Request, ws *workspace
 	// when segments is shorter than basePath's own segment count, a state
 	// Match having just succeeded makes impossible, so the false branch is
 	// an unreachable-in-practice guard against an index panic, not a real
-	// case to serve differently. serveCustom above does not receive one: a
-	// custom endpoint is never a resource.
+	// case to serve differently.
+	//
+	// A18 moved this ABOVE the custom branch and gave serveCustom the value
+	// too. Its own comment used to say "serveCustom does not receive one: a
+	// custom endpoint is never a resource", which is still true and is no
+	// longer the whole question: a custom endpoint's function can READ a
+	// confirmed family's rows through mock.entities, and those rows are
+	// partitioned by base scope (P3h). A custom endpoint still never BECOMES
+	// a resource — the takeover branch remains spec-operations-only.
 	values, _ := router.BaseValues(ws.Settings.BasePath, segments)
 	base := resources.EncodeScope(values)
+
+	if match.Route.Custom {
+		p.serveCustom(w, r, ws, rt, match, base)
+		return
+	}
 	p.serveGenerated(w, r, ws, rt, match, base)
 }
 
