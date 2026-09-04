@@ -254,21 +254,48 @@ that boundary (round 1 GREEN made mandatory).
   reads it. The invariant bought in exchange is the simple one — each version
   reads exactly the version before it — and it is what stops `minVersion`
   being re-argued at every bump.
-  **Four existing tests feed a v4 document and every one of them goes red on
-  this change** — enumerated by command rather than sampled
-  (`awk '/^func Test/{fn=$2} /mockerBundle": *4/{print FILENAME":"NR" "fn}'
-  internal/bundle/*_test.go`, run 2026-09-04): `TestDecode_readsV4`
-  (`internal/bundle/version_compat_test.go:15`),
-  `TestDecode_rejectsBasePathDisagreement`, `TestValidate_acceptsResourcesAnd`
-  `StillRejectsNonNullEntities` (twice) and `TestDecode_documentWithNoDecisionsKey`
-  (all `internal/bundle/bundle_test.go`). Three of them use v4 only as a
-  convenient fixture and their literal moves to 5. **`TestDecode_readsV4` is
-  the one that must be INVERTED, not renumbered**: it is P7a's own promise
-  test, its doc comment argues the opposite of this decision ("A refusal here
-  would strand that history with no migration path"), and bumping its literal
-  to 5 leaves a green suite that has silently stopped testing anything about
-  v4. It becomes a refusal test, keeping its fixture bytes and its comment
-  rewritten to say which decision retired the promise.
+  **TEN fixture sites across FOUR files feed a v4 document, and every one of
+  them goes red on this change.** The enumeration below replaces a shorter one,
+  and how it was short is worth more than the list: the first pass ran a
+  correct command over a GUESSED scope (`internal/bundle/*_test.go`) and used
+  `NR` where a multi-file glob needs `FNR`, so it both missed three files and
+  misprinted its one cross-file line number. A command is only an enumeration
+  when its scope is the whole population. Run 2026-09-04 over `cmd` and
+  `internal`:
+
+  ```
+  grep -rnoE '"mockerBundle": *[0-9]+' --include='*.go' cmd internal
+  ```
+
+  - `internal/bundle/bundle_test.go:187` `TestDecode_rejectsBasePathDisagreement`,
+    `:245` and `:272` `TestValidate_acceptsResourcesAndStillRejectsNonNullEntities`,
+    `:352` `TestDecode_documentWithNoDecisionsKey` — v4 as a convenient
+    fixture; the literal moves to 5.
+  - `internal/bundle/version_compat_test.go:15` `TestDecode_readsV4` — the one
+    that must be **INVERTED, not renumbered**: it is P7a's own promise test,
+    its doc comment argues the opposite of this decision ("A refusal here would
+    strand that history with no migration path"), and bumping its literal to 5
+    leaves a green suite that has silently stopped testing anything about v4.
+    It becomes a refusal test, keeping its fixture bytes and its comment
+    rewritten to say which decision retired the promise.
+  - `internal/checkpoints/repo_test.go:1151` — a v4 document written straight
+    into `config_snap` by an `UPDATE`; the literal moves to 5.
+  - `internal/mcp/tools_transfer_test.go:18`, `:33`, `:46`, `:69` — four sites
+    in the MCP transfer tests, the file the first sweep missed entirely; the
+    literals move to 5.
+
+  **And one site is not a v4 fixture at all and still breaks:**
+  `internal/bundle/bundle_test.go:205`, `TestDecode_rejectsUnknownVersion`,
+  feeds version **6** as the "future" version a build must refuse — and this
+  slice makes 6 current. Its own doc comment says P7a already re-aimed it once
+  for the same reason ("this build reads 4..5, so the unknown version … is one
+  ABOVE the current"). It re-aims to 7. Neither reviewer named it; it came out
+  of reading the whole `mockerBundle` population rather than the v4 half of it,
+  which is the same lesson as the paragraph above.
+
+  Two sites need nothing: `internal/admin/transfer_handlers_test.go:191` and
+  `internal/bundle/bundle_test.go:644` feed v3, which is already refused and
+  stays refused.
 
 ## D6 — Execution guards
 
@@ -411,24 +438,44 @@ four references + `internal/guide` resync (`make guide-sync`), the `design`
 guide topic untouched, `CLAUDE.md` Architecture + `HISTORY.md` — the standing
 slice-end set.
 
-**`CARVE-OUTS.md` carries NINE named items, and the count is here so a
-missing one is visible** (round 1 MINOR: D9 named six and only one of them
-had a clause naming its content; round 2 BLOCKER: the count made the ninth's
-absence observable, which is what a count is for): the determinism carve-out
+**`CARVE-OUTS.md` carries TWELVE named items, and the count is here so a
+missing one is visible.** The count has now moved three times, and the shape
+of each move is the finding rather than the number: round 1 said six and only
+one had a clause naming its content; round 2 pinned eight and the pin made a
+ninth's absence observable; round 3 swept the CLASS instead of the instance
+and found three more — which is the failure a fix makes when it closes the
+case it was handed and not the question behind it. The class is: **every
+decision in this document that gives something up is an entry.** The twelve:
+the determinism carve-out
 (D4), the memory residual (D6), the absent rate limit on a Lua auth check
 (D6), the `coroutine` refusal (D3), the const timeout (D6), the UTC pin (D3),
 the RNG override (D3), the `mock.entities`-versus-`$ref` asymmetry — a family
 name is a runtime Lua string, so it can never be checked at write time the
 way P7a checks a `$ref` ("never STORED dangling"), and a function broken by a
 later decline, a spec rebind or a config-only rollback has no host-side
-signal at all — and **the v4 refusal (D5)**: `minVersion` moves to 5, so a
-bundle a colleague exported or a checkpoint they took before this slice no
-longer imports, and their route is to re-export from a build that still reads
-it. That last one is not a new KIND of entry: this file already carries one
-per bundle bump, "bundle v3 is NOT read" (`CARVE-OUTS.md:919`, P6b) and
-"Bundle v5 reads v4 but not v3" (`:1402`, P7a), each stating its own cost.
-Leaving the third out would have been the first bump in this tree whose cost
-lived only in a gate document.
+signal at all — **the v4 refusal (D5)**: `minVersion` moves to 5, so a bundle
+a colleague exported or a checkpoint they took before this slice no longer
+imports, and their route is to re-export from a build that still reads it,
+which is not a new KIND of entry (this file already carries one per bundle
+bump, "bundle v3 is NOT read" at `CARVE-OUTS.md:919` for P6b and "Bundle v5
+reads v4 but not v3" at `:1402` for P7a, each stating its own cost) — and the
+three round 3 found by sweeping the class rather than the instance:
+
+- **No opt-out (D2).** There is no `MOCKER_FUNCTIONS` and no gate, so every
+  deployment executes operator-authored Lua, a shared contour as much as a
+  laptop. It follows from the owner's overruling and it is a residual, not a
+  design flourish: an operator who wants a mocker that runs no Lua has no
+  switch and must not deploy this build.
+- **No two same-named response headers (D3).** A function's `headers` is a
+  `string→string` table, so two `Set-Cookie` lines cannot be emitted — in the
+  sign-in shape D1's own example describes. The escape is a pinned variant on
+  another status.
+- **A function's output is never validated against its own declared schema
+  (D8).** `export_openapi` exports the declared response schema and the drift
+  report stays shape-only, so a function whose body has drifted from the
+  contract it publishes is reported by nothing. This is the price of D5's
+  "the function REPLACES response assembly" and it is invisible from the
+  contract side.
 
 **The two matrices D7 promises are a DELIVERABLE of this section**, not a
 sentence in passing (round 1 MINOR): spec operation versus custom endpoint,
@@ -570,7 +617,11 @@ baseline, which is the defect this table exists to prevent.
    and the divergence is not written down beside the `go list -deps` evidence
    that the REPL subpackage is unlinked.*
 2. `CGO_ENABLED=0 go build ./cmd/...` exits 0 and the binary-size delta over
-   the recorded 27 564 281 bytes is recorded. *Fails if the build needs cgo.*
+   the recorded 27 564 281 bytes is recorded. *Fails if the build needs cgo*,
+   and *fails if the delta is not taken at all* — the same defeat clause 5
+   states for the `-race` number, for the same reason: an unrecorded
+   measurement leaves D1's §30.9 admission resting on a figure from a
+   throwaway module.
 3. `internal/luafn/boundary_test.go` fails the build on a second importer,
    OBSERVED by adding an import of `github.com/yuin/gopher-lua` to a file outside
    `internal/luafn`, watching `go test ./internal/luafn/` go red, and reverting.
@@ -621,7 +672,10 @@ baseline, which is the defect this table exists to prevent.
     family returns `nil, "unknown_family"`. Scope values are passed RAW and the
     host encodes them. *Fails if a scope value is escaped twice*, and *fails if a
     family belonging to another workspace resolves* — the roster lookup is
-    per-workspace and this plane is unauthenticated by design. And on a NESTED
+    per-workspace and this plane is unauthenticated by design — and *fails if
+    the rows differ from that endpoint's own output in count, order or field
+    values*, which is the headline claim and had no defeat of its own until
+    round 3. And on a NESTED
     family of depth 2, `mock.entities(family, {"7", "5"})` returns the rows under
     that ancestor tuple and not under the serving request's own, while a tuple of
     the wrong arity returns `nil, "bad_scope"`. *Fails if the two-argument call
@@ -661,7 +715,10 @@ baseline, which is the defect this table exists to prevent.
     (the operation override and the custom endpoint), and the refusal names the
     conflicting field. *Fails if the refusal is at the ROW grain* — a
     function-200 with a pinned-401 sibling on one row is legal, and the test
-    asserts both statuses serve.
+    asserts both statuses serve — and *fails if the pair is ACCEPTED*, the
+    defeat clause 18 already states for the stream case: a variant that stores
+    both and then silently runs one of them is the failure this refusal exists
+    to prevent.
 17. `when[]` on a function variant is accepted and selects the variant; the
     function runs only when its variant is selected. *Fails if a function-bearing
     row runs its function for a request that selected another variant.*
@@ -688,8 +745,11 @@ baseline, which is the defect this table exists to prevent.
     field*, and *fails if a v4 document still imports* — the owner took that call
     on 2026-09-04 against this document's own recommendation (D5), so an
     implementation that quietly leaves the floor at 4 passes a clause written the
-    other way and ships the opposite decision. The v4 fixture is the one P7a's
-    own v4 test already uses.
+    other way and ships the opposite decision — and *fails if a v5 document is
+    refused, or if any field of it is altered on import*, which is the half of
+    the clause that says the bump is additive and had no defeat of its own.
+    The v4 fixture is the one P7a's own v4 test already uses; D5 enumerates
+    every site that feeds one.
 
 ### A.5 — Execution guards (D6)
 
@@ -805,9 +865,10 @@ baseline, which is the defect this table exists to prevent.
     skip is counted in the existing `frames_skipped:M` note — the size half
     observed with `MOCKER_MAX_RESPONSE` at a NON-DEFAULT value, exactly as clause
     25 observes its own twin. *Fails if the frame is written and breaks SSE
-    framing*, *fails if the connection closes*, and *fails if the observation
-    uses the default* — a hard-coded 4 MiB and a config-reading implementation
-    emit identical bytes there.
+    framing*, *fails if the connection closes*, *fails if the observation uses
+    the default* — a hard-coded 4 MiB and a config-reading implementation emit
+    identical bytes there — and *fails if the skip is not counted, or is
+    counted twice*, the defeat clause 41 already states for its own twin.
 41. A Lua tick returning `nil` skips the firing with the connection open and
     nothing counted as an error. *Fails if a nil return is counted as both a skip
     and an error* — they are different outcomes.
@@ -848,16 +909,19 @@ baseline, which is the defect this table exists to prevent.
     `docs/USER-GUIDE.md`, all four `skills/mocker/` references, `CLAUDE.md` and
     `HISTORY.md` carry the slice. *Fails if the guide's embedded copy and its
     source disagree.*
-47a. `CARVE-OUTS.md` carries all NINE items D9 enumerates — the determinism
+47a. `CARVE-OUTS.md` carries all TWELVE items D9 enumerates — the determinism
     carve-out, the memory residual, the absent rate limit on a Lua auth check,
     the `coroutine` refusal, the const timeout, the UTC pin, the RNG override,
-    the `mock.entities`-versus-`$ref` asymmetry, and the v4 refusal — each as
-    its own entry naming what it gives up, and each MATCHED BY NAME rather than
-    counted. *Fails if any one of the nine is absent*, which is a different
-    check from the one this clause first carried: "fewer than eight entries" is
-    a floor, and a floor passes over nine entries of which one is the wrong
-    nine. Round 2's own blocker was exactly that shape — the count was pinned
-    and the item it was missing was invisible to the pin.
+    the `mock.entities`-versus-`$ref` asymmetry, the v4 refusal, the absent
+    opt-out, the single-valued response headers, and the unvalidated function
+    output — each as its own entry naming what it gives up, and each MATCHED BY
+    NAME rather than counted. *Fails if any one of the twelve is absent*, which
+    is a different check from the one this clause first carried: "fewer than
+    eight entries" is a floor, and a floor passes over twelve entries of which
+    one is the wrong twelve. *And fails if a decision this document takes gives
+    something up and appears in neither list* — the count moved three times
+    across three rounds because each fix closed the instance it was handed, and
+    the standing question is the CLASS, not the number.
 47b. The two matrices D7 promises — spec operation versus custom endpoint, where
     the function branch sits against the 406 gate and against media negotiation —
     are present in `skills/mocker/` and in `docs/USER-GUIDE.md`. *Fails if the
@@ -933,13 +997,15 @@ the clause instead.
     semantics are "unchanged", and an unobserved claim of sameness is where a
     second code path hides.
 59. **(D5, the v4 refusal's blast radius.)** After the change,
-    `TestDecode_readsV4` asserts a REFUSAL naming version 4, and its doc comment
-    says which decision retired P7a's promise; the other three tests D5
-    enumerates carry a v5 or v6 fixture; and no test anywhere in the tree still
-    asserts that a v4 document decodes. *Fails if `TestDecode_readsV4` merely
-    has its fixture literal bumped* — the suite is then green and the one
-    regression check about v4 tests nothing, which is the cheap fix this clause
-    exists to refuse.
+    `TestDecode_readsV4` asserts a REFUSAL naming version 4 and its doc comment
+    says which decision retired P7a's promise; `TestDecode_rejectsUnknownVersion`
+    feeds 7, not 6; the nine other v4 fixture sites D5 enumerates carry 5; and
+    `grep -rnoE '"mockerBundle": *[0-9]+' --include='*.go' cmd internal` returns
+    no `4` anywhere in the tree. *Fails if `TestDecode_readsV4` merely has its
+    fixture literal bumped* — the suite is then green and the one regression
+    check about v4 tests nothing — and *fails if the grep still finds a 4*,
+    which is the clause stated as a command rather than as a list, because this
+    slice's own enumeration of that list was short twice.
 58. **(D3, the sandbox's deliberate residue.)** `rawget`, `rawset`, `rawequal`
     and `rawlen` are PRESENT in the frozen `_G` allowlist of clause 6. *Fails if
     the allowlist literal is silent about them* — round 1's RED named five
