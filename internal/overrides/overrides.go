@@ -1,11 +1,13 @@
 // Package overrides owns the op_overrides table: one row per operation an
 // operator has touched (turned off, pinned a status, bound a recipe to a
 // data path). It is a LEAF over storage: it imports internal/store,
-// internal/recipes, internal/domain and the stdlib only — never
-// internal/gen, internal/openapi or internal/specs, and NEVER
-// internal/workspaces (HARD RULE 5: workspaces.Repo.Update opens its own
-// write transaction on the one-connection writer pool, and calling it from
-// inside another db.Write callback deadlocks the whole process).
+// internal/recipes, internal/domain, internal/assets, internal/jsonpatch,
+// internal/luafn (A18: the shared validator compiles a variant's Lua at
+// write time) and the stdlib only — never internal/gen, internal/openapi or
+// internal/specs, and NEVER internal/workspaces (HARD RULE 5:
+// workspaces.Repo.Update opens its own write transaction on the
+// one-connection writer pool, and calling it from inside another db.Write
+// callback deadlocks the whole process).
 //
 // A Row is user input twice over: once when an admin handler decodes a
 // request body into one, and again every time the mock plane reads it back
@@ -23,6 +25,7 @@ import (
 	"github.com/yashok111/mocker/internal/assets"
 	"github.com/yashok111/mocker/internal/jsonpatch"
 	"github.com/yashok111/mocker/internal/jsonx"
+	"github.com/yashok111/mocker/internal/luafn"
 
 	"github.com/yashok111/mocker/internal/recipes"
 )
@@ -104,6 +107,21 @@ type Variant struct {
 	// `$ref` in it resolves is customep.ValidateSchemaDoc's job, run by the
 	// admin plane against the bound spec at write time.
 	Schema jsonx.RawMessage `json:"schema,omitempty"`
+	// Function is A18's (docs/A18-endpoint-functions.md D5): the Lua source
+	// that PRODUCES this variant's response instead of it being assembled.
+	// It lives on the shared type for the reason Schema does — one response
+	// shape across the contract, the bundle and the MCP inputs — but unlike
+	// Schema it is legal on BOTH writers: a spec operation's override and a
+	// custom endpoint alike, because logic is what the Workspace layer is
+	// for and a spec operation has none of its own to conflict with.
+	//
+	// Exclusivity is PER VARIANT and not per row (D5, correcting the gate's
+	// own first draft): a variant carrying a function refuses body, bodyRef,
+	// recipes and schemaPatch, while the OTHER statuses of the same row are
+	// untouched — a function-200 beside a pinned-401 is the sign-in shape
+	// this feature exists for. `when[]` is allowed: selection is unchanged
+	// and the function runs only when its variant is selected.
+	Function string `json:"function,omitempty"`
 }
 
 // Condition is one entry of Variant.When: one simple predicate over the
@@ -252,6 +270,43 @@ const maxPinnedBodyBytes = 4 << 20
 // attack size actually measured.
 const maxRecipesPerVariant = 1000
 
+// validateFunctionVariant is A18 D5's exclusivity, extracted so
+// ValidateVariant stays under the complexity bar rather than carrying a
+// thirteenth gocyclo suppression. It has one subject — a variant that produces
+// its response by running Lua carries no second producer — and the caller
+// reads as one line.
+func validateFunctionVariant(v Variant) error {
+	// A18 D5. One producer per variant, so there is no precedence to
+	// document and no order for a later reader to get wrong: a variant
+	// either has a function or has a body, and every other shape is
+	// refused by name. mediaType is NOT in this list — a function
+	// chooses its own type by returning a table or a string, and a
+	// variant that also declares one is refused for the same reason a
+	// bodyRef's is, one line down: the two could disagree and nothing
+	// at write time can say which wins.
+	switch {
+	case len(v.Body) > 0 || v.BodyEncoding != "":
+		return fmt.Errorf("%w: function and body are exclusive: one producer per variant", ErrInvalidRow)
+	case v.BodyRef != "":
+		return fmt.Errorf("%w: function and bodyRef are exclusive: one producer per variant", ErrInvalidRow)
+	case len(v.Recipes) > 0:
+		return fmt.Errorf("%w: function and recipes are exclusive: a function builds its own body", ErrInvalidRow)
+	case len(v.SchemaPatch) > 0:
+		return fmt.Errorf("%w: function and schemaPatch are exclusive: a function's body is not walked from a schema", ErrInvalidRow)
+	case v.MediaType != "":
+		return fmt.Errorf("%w: function takes no mediaType: a table return is JSON and a string return is the function's own bytes", ErrInvalidRow)
+	}
+	// Compiled at WRITE time so a syntax error is a 400 carrying the
+	// parser's own words, never a 500 on the first anonymous request
+	// (D8). This is the shared validator, so both writers and every
+	// other door into this package — the bundle, a checkpoint restore,
+	// an import — get the check without repeating it.
+	if err := luafn.Validate(v.Function); err != nil {
+		return fmt.Errorf("%w: function does not compile: %w", ErrInvalidRow, err)
+	}
+	return nil
+}
+
 // ValidateVariant rejects an unknown Mode or BodyEncoding, proves a base64
 // body actually decodes, bounds a pinned body's size and a variant's recipe
 // count, runs every bound recipe through [recipes.Recipe.Validate], and
@@ -271,6 +326,13 @@ const maxRecipesPerVariant = 1000
 // itself stays total over any condition shape regardless — an
 // unrecognised In or Op never matches, never errors, never panics — it is
 // only the STORED shape of a FRESH write that this function refuses.
+// function sat exactly ON the bar before A18: the one call it gained took it
+// to 21. The function-exclusivity block is already extracted
+// (validateFunctionVariant above); extracting the bodyRef block too would be a
+// pure move through code this slice does not otherwise touch, which is a wider
+// diff than the subject warrants.
+//
+//nolint:gocyclo // a branch per refusal IS the specification here, and this
 func ValidateVariant(v Variant) error {
 	switch v.Mode {
 	case "", "generated", "pinned":
@@ -283,6 +345,11 @@ func ValidateVariant(v Variant) error {
 		// ok
 	default:
 		return fmt.Errorf("%w: unknown bodyEncoding %q", ErrInvalidRow, v.BodyEncoding)
+	}
+	if v.Function != "" {
+		if err := validateFunctionVariant(v); err != nil {
+			return err
+		}
 	}
 	if v.BodyRef != "" {
 		// A6 (D5): a reference is a pinned body of a different origin, and

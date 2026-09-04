@@ -15,7 +15,7 @@ const workspaceViewJSON = `{"id":9,"slug":"copy","name":"Src (копия)","url"
 
 func TestExportWorkspace_buildsTheQueryAndReturnsTheDocumentVerbatim(t *testing.T) {
 	t.Parallel()
-	calls := &recordingCaller{status: http.StatusOK, body: []byte(`{"mockerBundle":4,"workspace":{"name":"Src"},"data":{"mockerData":2,"families":[]}}`)}
+	calls := &recordingCaller{status: http.StatusOK, body: []byte(`{"mockerBundle":5,"workspace":{"name":"Src"},"data":{"mockerData":2,"families":[]}}`)}
 	out, errMsg := callTool(t, calls, "export_workspace", `{"workspaceId":4,"includeData":true,"includeSpec":true}`)
 	if errMsg != "" {
 		t.Fatalf("tool error: %s", errMsg)
@@ -26,11 +26,11 @@ func TestExportWorkspace_buildsTheQueryAndReturnsTheDocumentVerbatim(t *testing.
 	var got struct {
 		Document map[string]any `json:"document"`
 	}
-	if err := json.Unmarshal(out, &got); err != nil || got.Document["mockerBundle"] != float64(4) || got.Document["data"] == nil {
+	if err := json.Unmarshal(out, &got); err != nil || got.Document["mockerBundle"] != float64(5) || got.Document["data"] == nil {
 		t.Errorf("out = %s (err %v); want the document under document", out, err)
 	}
 
-	calls = &recordingCaller{status: http.StatusOK, body: []byte(`{"mockerBundle":4}`)}
+	calls = &recordingCaller{status: http.StatusOK, body: []byte(`{"mockerBundle":5}`)}
 	if _, errMsg := callTool(t, calls, "export_workspace", `{"workspaceId":4}`); errMsg != "" || calls.path != "/api/workspaces/4/export" {
 		t.Errorf("plain export: err %q path %s; want no query at all", errMsg, calls.path)
 	}
@@ -43,7 +43,7 @@ func TestImportWorkspace_postsTheBundleAndProjectsTheView(t *testing.T) {
 		body:   []byte(`{"workspace":` + workspaceViewJSON + `,"specId":3,"specCreated":true,"entitiesRestored":2}`),
 	}
 	out, errMsg := callTool(t, calls, "import_workspace",
-		`{"bundle":{"mockerBundle":4,"workspace":{"name":"Src","settings":{}}},"name":"Imported","slug":"imp","specId":3}`)
+		`{"bundle":{"mockerBundle":5,"workspace":{"name":"Src","settings":{}}},"name":"Imported","slug":"imp","specId":3}`)
 	if errMsg != "" {
 		t.Fatalf("tool error: %s", errMsg)
 	}
@@ -56,7 +56,7 @@ func TestImportWorkspace_postsTheBundleAndProjectsTheView(t *testing.T) {
 		Slug   string         `json:"slug"`
 		SpecID *int64         `json:"specId"`
 	}
-	if err := json.Unmarshal(calls.sent, &sent); err != nil || sent.Bundle["mockerBundle"] != float64(4) || sent.Name != "Imported" || sent.Slug != "imp" || sent.SpecID == nil || *sent.SpecID != 3 {
+	if err := json.Unmarshal(calls.sent, &sent); err != nil || sent.Bundle["mockerBundle"] != float64(5) || sent.Name != "Imported" || sent.Slug != "imp" || sent.SpecID == nil || *sent.SpecID != 3 {
 		t.Errorf("sent = %s (err %v)", calls.sent, err)
 	}
 	var got ImportWorkspaceOutput
@@ -66,7 +66,7 @@ func TestImportWorkspace_postsTheBundleAndProjectsTheView(t *testing.T) {
 
 	// A 409 spec_not_found reaches the agent with the route's own sentence.
 	calls = &recordingCaller{status: http.StatusConflict, body: []byte(`{"error":{"code":"spec_not_found","message":"the document names a spec this installation does not hold","details":{"hash":"abc"}}}`)}
-	if _, errMsg := callTool(t, calls, "import_workspace", `{"bundle":{"mockerBundle":4}}`); !strings.Contains(errMsg, "409") || !strings.Contains(errMsg, "does not hold") {
+	if _, errMsg := callTool(t, calls, "import_workspace", `{"bundle":{"mockerBundle":5}}`); !strings.Contains(errMsg, "409") || !strings.Contains(errMsg, "does not hold") {
 		t.Errorf("409 error = %q; want the status and the message", errMsg)
 	}
 	// No bundle: refused before any call.

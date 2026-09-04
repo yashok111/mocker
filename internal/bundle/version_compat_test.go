@@ -7,11 +7,21 @@ import (
 	"github.com/yashok111/mocker/internal/bundle"
 )
 
-// TestDecode_readsV4 is P7a D9's own promise, in the shape the decision
-// names: A16 shipped an installer the day before this slice, so a v4
-// checkpoint or scenario written by a colleague's build must still decode
-// — with a nil Operation and no schema, which is exactly what those rows
-// hold. A refusal here would strand that history with no migration path.
+// TestDecode_readsV4 was P7a D9's own promise and is now its REFUSAL, and the
+// name is kept on purpose so anybody reading `git log` on this file finds the
+// reversal rather than a test that quietly changed subject.
+//
+// P7a read v4 because A16 had shipped an installer the day before, making a
+// colleague's v4 checkpoint plausible. A18's owner weighed that against the
+// invariant — each version reads exactly the version before it — and chose the
+// invariant (docs/A18-endpoint-functions.md D5, where this document's own
+// recommendation was the opposite and is recorded as overruled). The operator's
+// route for such a document is to re-export it from a build that still reads
+// it, and the cost is a named entry in CARVE-OUTS.md.
+//
+// The fixture is UNCHANGED, which is the point: bumping its literal to 5 would
+// have left a green suite that had stopped testing anything about v4 at all,
+// and that cheap fix is what acceptance clause 59 exists to refuse.
 func TestDecode_readsV4(t *testing.T) {
 	raw := []byte(`{
 		"mockerBundle": 4,
@@ -22,15 +32,15 @@ func TestDecode_readsV4(t *testing.T) {
 			"activeStatus":200,"responses":{},"sourceOrder":1,"kind":"http","stream":null}],
 		"resources": [], "decisions": [], "entities": null
 	}`)
-	b, err := bundle.Decode(raw)
-	if err != nil {
-		t.Fatalf("Decode a v4 document: %v", err)
+	_, err := bundle.Decode(raw)
+	if err == nil {
+		t.Fatal("Decode accepted a v4 document; A18 D5 moved minVersion to 5 and it must be refused")
 	}
-	if len(b.Endpoints) != 1 {
-		t.Fatalf("endpoints = %d, want 1", len(b.Endpoints))
-	}
-	if len(b.Endpoints[0].Operation) != 0 {
-		t.Errorf("operation = %q, want absent on a v4 document", b.Endpoints[0].Operation)
+	// BY NAME, not merely refused: an operator meeting this error has to be
+	// able to tell "too old" from a malformed document, and the version is the
+	// one thing that tells them.
+	if !strings.Contains(err.Error(), "mockerBundle 4") {
+		t.Fatalf("Decode(v4) = %v, want the refusal to name the version it read", err)
 	}
 }
 

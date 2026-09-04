@@ -317,6 +317,29 @@ func ValidateDraft(row *Row, maxFrameBytes int64) error {
 	return normalizeAndValidate(row, maxFrameBytes)
 }
 
+// refuseFunctionOnStream is A18 D8b(1), and the ORDER is the whole of it.
+//
+// Both stream arms below refuse a non-empty Responses map with "kind %q takes
+// no responses", and a variant's `function` lives INSIDE that map — so on the
+// unchanged code a stream row carrying a function answered the generic
+// refusal and D5's own `function_on_stream` could never be the answer. The
+// acceptance clause that observes it would have gone red against an
+// implementation nobody could call wrong, which is the false-failure
+// direction §D of the gate checklist names as the worse one.
+//
+// It is one function and not two inlined checks because the sse and ws arms
+// have drifted before: a refusal stated twice is a refusal that can disagree
+// with itself.
+func refuseFunctionOnStream(row *Row, kind string) error {
+	for status, v := range row.Responses {
+		if v.Function != "" {
+			return fmt.Errorf("%w: kind %q takes no function (responses[%s]): a stream is not a request/response, and its Lua goes in stream.tick.lua or stream.onFrame instead",
+				ErrInvalidRow, kind, status)
+		}
+	}
+	return nil
+}
+
 // validateKind is the D6 half of normalizeAndValidate: the row's kind
 // decides which of its ordinary fields may carry a value.
 func validateKind(row *Row, maxFrameBytes int64) error {
@@ -333,6 +356,10 @@ func validateKind(row *Row, maxFrameBytes int64) error {
 		if row.Method != http.MethodGet {
 			return fmt.Errorf("%w: kind %q requires method GET (an SSE handshake is a GET), got %s", ErrInvalidRow, KindSSE, row.Method)
 		}
+		// BEFORE the response-map refusal below, never after it (D8b(1)).
+		if err := refuseFunctionOnStream(row, KindSSE); err != nil {
+			return err
+		}
 		if len(row.Responses) != 0 {
 			return fmt.Errorf("%w: kind %q takes no responses — a response map on a stream would quietly never fire", ErrInvalidRow, KindSSE)
 		}
@@ -347,6 +374,10 @@ func validateKind(row *Row, maxFrameBytes int64) error {
 		// 101 and activeStatus stays the default.
 		if row.Method != http.MethodGet {
 			return fmt.Errorf("%w: kind %q requires method GET (a WebSocket handshake is a GET), got %s", ErrInvalidRow, KindWS, row.Method)
+		}
+		// BEFORE the response-map refusal below, never after it (D8b(1)).
+		if err := refuseFunctionOnStream(row, KindWS); err != nil {
+			return err
 		}
 		if len(row.Responses) != 0 {
 			return fmt.Errorf("%w: kind %q takes no responses — a response map on a stream would quietly never fire", ErrInvalidRow, KindWS)

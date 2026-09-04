@@ -31,33 +31,37 @@ import (
 	"github.com/yashok111/mocker/internal/recipes"
 )
 
-// CurrentVersion is the mockerBundle value this package writes and the only
-// one [Decode] accepts. DESIGN §17 fixes the top-level field's NAME
-// ("mockerBundle") but not that it must always be 3 forever — an earlier
-// draft of this comment (A16) expected P2c to need a v4, reasoning that an
-// absent overrides key would need to mean two different things (P2b's
-// composition overlays a missing key; P2c's restore deletes on it). P2c's
-// own decision gate (C2) found that reasoning does not hold: composition
-// and restore are two different CONSUMERS reading the identical bytes under
-// different rules, which is not a wire-format disagreement — nothing about
-// the SHAPE changed, only which code reads it and why. So the version stays
-// 3, and a checkpoint's config_snap is this same v3 document, gzipped as a
-// container encoding on top (see internal/checkpoints, C18) rather than a
-// new version underneath. Gating Decode on exact equality still means a
-// genuinely future document (a real v4, whenever one is actually needed)
-// fails with a clear "unsupported version" error instead of this package
-// silently reinterpreting fields it was never built against.
-const CurrentVersion = 5
+// CurrentVersion is the mockerBundle value this package WRITES. DESIGN §17
+// fixes the top-level field's NAME ("mockerBundle") but not its value, and
+// the history of that value is the useful part of this comment: 3 through
+// P2c, 4 at P6b (a custom endpoint's kind and stream), 5 at P7a (an
+// endpoint's operation, and Variant.Schema riding inside Responses), and 6
+// here at A18, for Variant.Function — the Lua source a variant's response is
+// produced BY rather than assembled from.
+//
+// The A18 field is additive, so nothing about the shape forces the floor to
+// move with it. That the floor moves anyway is the OWNER's call, taken
+// 2026-09-04 against the gate document's own recommendation, and what it
+// costs is in minVersion's comment below rather than hidden here.
+const CurrentVersion = 6
 
-// minVersion is the OLDEST document [Decode] accepts. P7a moves the format
-// to 5 (EndpointEntry.Operation, and Variant.Schema riding inside
-// Responses) and — unlike P6b, which refused v3 outright on the owner's
-// word that no deployment existed — READS v4: A16 shipped an installer the
-// day before this slice, so a v4 checkpoint or scenario on a colleague's
-// machine is now plausible, and refusing it would strand their history with
-// no migration path. A v4 document decodes with a nil Operation and no
-// schema, which is exactly what those rows hold.
-const minVersion = 4
+// minVersion is the OLDEST document [Decode] accepts, and A18 moves it to 5:
+// v6 reads v5 and NOTHING older.
+//
+// This REVERSES what P7a decided one slice earlier, deliberately and at a
+// named price. P7a set the floor at 4 because A16 had shipped the install
+// wizard the day before, so a v4 checkpoint or export on a colleague's
+// machine was plausible and refusing it would strand their history with no
+// migration path. That reasoning still holds; the owner weighed it against
+// the invariant — each version reads exactly the version before it, and
+// nothing else — and chose the invariant (docs/A18-endpoint-functions.md D5,
+// where the recommendation was the opposite and is recorded as overruled).
+//
+// So a v4 document that imported yesterday is refused BY NAME today, and the
+// operator's route is to re-export it from a build that still reads it. That
+// cost is one of the twelve entries in CARVE-OUTS.md rather than a surprise
+// somebody meets at an import.
+const minVersion = 5
 
 // ErrInvalid wraps every reason a Bundle is rejected: an unsupported
 // mockerBundle version, a basePath disagreement (A14), a non-null entities

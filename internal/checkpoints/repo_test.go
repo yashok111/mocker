@@ -1148,7 +1148,7 @@ func TestSnapshot_refusesABlobThatIsNotGzip(t *testing.T) {
 	point := f.create(t, "точка")
 
 	if _, err := f.db.W.ExecContext(t.Context(),
-		"UPDATE checkpoints SET config_snap = ? WHERE id = ?", []byte(`{"mockerBundle":4}`), point.ID); err != nil {
+		"UPDATE checkpoints SET config_snap = ? WHERE id = ?", []byte(`{"mockerBundle":5}`), point.ID); err != nil {
 		t.Fatalf("overwrite config_snap: %v", err)
 	}
 	if _, err := f.repo.Get(t.Context(), f.wsID, point.ID); !errors.Is(err, ErrCorruptSnapshot) {

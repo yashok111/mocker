@@ -80,8 +80,8 @@ func TestHandler_exportWorkspace_carriesEveryLayerAndOptionalHalves(t *testing.T
 	cookie, _, _, wsID := ts.configuredWorkspace(t, "Export Me")
 
 	_, _, plain := ts.exportWorkspace(t, cookie, wsID, "")
-	if plain.MockerBundle != 5 {
-		t.Errorf("mockerBundle = %d, want 5", plain.MockerBundle)
+	if plain.MockerBundle != 6 {
+		t.Errorf("mockerBundle = %d, want 6", plain.MockerBundle)
 	}
 	if len(plain.Overrides) != 1 || len(plain.Endpoints) != 1 || len(plain.Resources) != 1 || len(plain.Decisions) != 1 {
 		t.Errorf("layers = overrides %d, endpoints %d, resources %d, decisions %d; want 1 each",

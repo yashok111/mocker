@@ -4027,7 +4027,7 @@
       "WorkspaceExportDocument": {
         "type": "object",
         "additionalProperties": true,
-        "description": "The mockerBundle v4 document (DESIGN §17) with two optional additions: `data` (a mockerData document of entity rows, present only with includeData=true on a workspace that confirmed a family) and `spec.inline` (the spec's bytes as uploaded, as one JSON string, present only with includeSpec=true). `entities` stays null (P3d: rows live in `data`). Keys are sorted, so the document diffs cleanly in git.",
+        "description": "The mockerBundle v6 document (DESIGN §17) with two optional additions: `data` (a mockerData document of entity rows, present only with includeData=true on a workspace that confirmed a family) and `spec.inline` (the spec's bytes as uploaded, as one JSON string, present only with includeSpec=true). `entities` stays null (P3d: rows live in `data`). Keys are sorted, so the document diffs cleanly in git.",
         "required": [
           "mockerBundle",
           "workspace",
@@ -4042,7 +4042,7 @@
         "properties": {
           "mockerBundle": {
             "type": "integer",
-            "const": 4
+            "const": 6
           },
           "workspace": {
             "type": "object",
@@ -7824,7 +7824,7 @@
         ],
         "operationId": "exportWorkspace",
         "summary": "Export a workspace as a portable bundle (P4b)",
-        "description": "Answers the workspace's whole configuration layer as the mockerBundle v4 document a checkpoint's config_snap holds (settings, overrides, custom endpoints, resources, decisions), decoded and key-sorted. `includeData=true` adds the entity rows of every confirmed family under `data` (the same document a checkpoint's data_snap holds); `includeSpec=true` inlines the bound spec's bytes AS UPLOADED under `spec.inline` as one JSON string, so the document imports on an installation that has never seen the spec. Assets are never carried (DESIGN §32.4). Content-Disposition names the download `<slug>.mocker.json`. Agent-only: export_workspace.",
+        "description": "Answers the workspace's whole configuration layer as the mockerBundle v6 document a checkpoint's config_snap holds (settings, overrides, custom endpoints, resources, decisions), decoded and key-sorted. `includeData=true` adds the entity rows of every confirmed family under `data` (the same document a checkpoint's data_snap holds); `includeSpec=true` inlines the bound spec's bytes AS UPLOADED under `spec.inline` as one JSON string, so the document imports on an installation that has never seen the spec. Assets are never carried (DESIGN §32.4). Content-Disposition names the download `<slug>.mocker.json`. Agent-only: export_workspace.",
         "security": [
           {
             "sessionCookie": []
@@ -7966,7 +7966,7 @@
         ],
         "operationId": "importWorkspace",
         "summary": "Create a workspace from a bundle (P4b)",
-        "description": "Creates a NEW workspace from an export document (or any mockerBundle v4 document) in one transaction — the row, its configuration layer, the entity rows under `data` (for families the document also confirms), and a baseline checkpoint of kind manual labelled «импорт». The spec is resolved in order: `specId` when given (404 if unknown); the document's `spec.hash` when a spec of the same bytes is already imported; the document's `spec.inline`, imported now and deduplicated by hash; none when the document names no spec. A document naming a hash this installation lacks, with no inline copy, answers 409 `spec_not_found` with `{hash, name}` in details. `name` overrides the document's workspace name; `slug` is uniquified from the name when omitted, exactly as on create. Not idempotent. Agent-only: import_workspace.",
+        "description": "Creates a NEW workspace from an export document (or any mockerBundle v6 document) in one transaction — the row, its configuration layer, the entity rows under `data` (for families the document also confirms), and a baseline checkpoint of kind manual labelled «импорт». The spec is resolved in order: `specId` when given (404 if unknown); the document's `spec.hash` when a spec of the same bytes is already imported; the document's `spec.inline`, imported now and deduplicated by hash; none when the document names no spec. A document naming a hash this installation lacks, with no inline copy, answers 409 `spec_not_found` with `{hash, name}` in details. `name` overrides the document's workspace name; `slug` is uniquified from the name when omitted, exactly as on create. Not idempotent. Agent-only: import_workspace.",
         "security": [
           {
             "sessionCookie": [],

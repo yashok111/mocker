@@ -184,7 +184,7 @@ func TestBundle_resourcesEndpointsEntities_presentAndEmpty(t *testing.T) {
 // itself, not just New, enforces it.
 func TestDecode_rejectsBasePathDisagreement(t *testing.T) {
 	raw := []byte(`{
-		"mockerBundle": 4,
+		"mockerBundle": 5,
 		"workspace": {"name": "x", "settings": {"basePath": "/a"}},
 		"basePath": "/b",
 		"spec": {"hash": "", "name": "", "inline": null},
@@ -196,13 +196,15 @@ func TestDecode_rejectsBasePathDisagreement(t *testing.T) {
 	}
 }
 
-// TestDecode_rejectsUnknownVersion is A16's other half, re-aimed by P7a:
-// this build reads 4..5, so the unknown version a document must be
-// refused for is one ABOVE the current — a future v6 — rather than the v5
-// this slice now writes.
+// TestDecode_rejectsUnknownVersion is A16's other half, re-aimed by P7a and
+// again by A18: this build reads 5..6, so the unknown version a document must
+// be refused for is one ABOVE the current — a future v7 — rather than the v6
+// this slice now writes. The re-aim is mechanical and the comment records that
+// it has happened twice, because a "future version" fixture goes stale on
+// every bump by construction.
 func TestDecode_rejectsUnknownVersion(t *testing.T) {
 	raw := []byte(`{
-		"mockerBundle": 6,
+		"mockerBundle": 7,
 		"workspace": {"name": "x", "settings": {}},
 		"basePath": "", "spec": {"hash":"","name":"","inline":null},
 		"overrides": [], "endpoints": [], "resources": [], "entities": null
@@ -242,7 +244,7 @@ func TestDecode_rejectsUnknownVersion(t *testing.T) {
 // have defended a population of zero (R21).
 func TestValidate_acceptsResourcesAndStillRejectsNonNullEntities(t *testing.T) {
 	const withResources = `{
-		"mockerBundle": 4,
+		"mockerBundle": 5,
 		"workspace": {"name": "ws", "settings": {"basePath": ""}},
 		"basePath": "",
 		"spec": {"hash": "", "name": "", "inline": null},
@@ -269,7 +271,7 @@ func TestValidate_acceptsResourcesAndStillRejectsNonNullEntities(t *testing.T) {
 	}
 
 	const withEntities = `{
-		"mockerBundle": 4,
+		"mockerBundle": 5,
 		"workspace": {"name": "ws", "settings": {"basePath": ""}},
 		"basePath": "",
 		"spec": {"hash": "", "name": "", "inline": null},
@@ -343,22 +345,23 @@ func TestEncode_resourcesAndDecisionsAreOrderIndependent(t *testing.T) {
 // TestDecode_documentWithNoDecisionsKey was D10 clause 31 of P3b: a snapshot
 // with `"resources":[]` present and no `decisions` key at all still decodes.
 // Until P6b it also pinned mockerBundle at 3 on the ground that "a bump
-// orphans every stored snapshot"; P6b (decisions.md mocker-p6b-sse-mock D12)
-// took that bump, to 4, on the owner's own statement that no deployment of
-// mocker exists and nothing needs a port-back — so the literal below is a v4
-// document, the tolerance for a missing `decisions` key is what this test
-// still guards, and [TestDecode_refusesV3] pins the OTHER side of D12.
+// orphans every stored snapshot"; P6b took that bump on the owner's own
+// statement that no deployment existed, and the literal has followed the
+// floor ever since — 4 at P6b, 5 at A18, which is where minVersion now sits.
+// The VERSION is incidental here and always was: what this test guards is the
+// tolerance for a missing `decisions` key, and [TestDecode_refusesV3] pins the
+// other side of P6b's D12.
 func TestDecode_documentWithNoDecisionsKey(t *testing.T) {
-	const stored = `{"mockerBundle":4,"workspace":{"name":"ws-a","settings":{"basePath":"/api"}},` +
+	const stored = `{"mockerBundle":5,"workspace":{"name":"ws-a","settings":{"basePath":"/api"}},` +
 		`"basePath":"/api","spec":{"hash":"a1b2","name":"platform","inline":null},` +
 		`"overrides":[],"endpoints":[],"resources":[],"entities":null}`
 
 	b, err := bundle.Decode([]byte(stored))
 	if err != nil {
-		t.Fatalf("Decode(a v4 document without a decisions key): %v", err)
+		t.Fatalf("Decode(a document without a decisions key): %v", err)
 	}
-	if b.MockerBundle != 4 {
-		t.Fatalf("mockerBundle = %d, want 4", b.MockerBundle)
+	if b.MockerBundle != 5 {
+		t.Fatalf("mockerBundle = %d, want 5", b.MockerBundle)
 	}
 	if b.Decisions != nil {
 		t.Fatalf("decisions = %+v, want nil: the key is absent from the stored bytes", b.Decisions)

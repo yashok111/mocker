@@ -20,7 +20,7 @@ func addTransferTools(s *sdk.Server, lb *loopback) {
 	sdk.AddTool(s, &sdk.Tool{
 		Name: "export_workspace",
 		Description: "Exports a workspace's whole configuration as one portable JSON document (the " +
-			"mockerBundle v4 format): settings, operation overrides, custom endpoints (streams " +
+			"mockerBundle v6 format): settings, operation overrides, custom endpoints (streams " +
 			"included), confirmed resources and decisions. includeData:true adds the entity rows of " +
 			"every confirmed family under `data`; includeSpec:true inlines the bound spec's bytes " +
 			"under spec.inline so the document imports on an installation that has never seen the " +
@@ -35,7 +35,7 @@ func addTransferTools(s *sdk.Server, lb *loopback) {
 	sdk.AddTool(s, &sdk.Tool{
 		Name: "import_workspace",
 		Description: "Creates a NEW workspace from an export_workspace document (or any mockerBundle " +
-			"v4 document), in one transaction, with a baseline checkpoint of the imported state. The " +
+			"v6 document), in one transaction, with a baseline checkpoint of the imported state. The " +
 			"spec is resolved in this order: specId if you pass one; the document's spec.hash if a " +
 			"spec of the same bytes is already imported here; the document's spec.inline, imported " +
 			"now (deduplicated by hash); none if the document names no spec. A document naming a " +
@@ -103,7 +103,7 @@ func handleExportWorkspace(lb *loopback) sdk.ToolHandlerFor[ExportWorkspaceInput
 
 // ImportWorkspaceInput is import_workspace's input.
 type ImportWorkspaceInput struct {
-	Bundle map[string]any `json:"bundle" jsonschema:"the export document as a JSON object (mockerBundle v4, optionally with data and spec.inline)"`
+	Bundle map[string]any `json:"bundle" jsonschema:"the export document as a JSON object (mockerBundle v6, optionally with data and spec.inline)"`
 	Name   string         `json:"name,omitempty" jsonschema:"the new workspace's name; defaults to the document's workspace.name"`
 	Slug   string         `json:"slug,omitempty" jsonschema:"optional slug; uniquified from the name when omitted"`
 	SpecID *int64         `json:"specId,omitempty" jsonschema:"bind to this already-imported spec regardless of what the document names"`
