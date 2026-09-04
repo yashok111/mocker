@@ -303,7 +303,7 @@ type CreateEndpointInput struct {
 	// Status defaults to 200 when omitted — defaultCreateEndpointStatus
 	// (endpoint_handlers.go:116).
 	Status    int    `json:"status,omitempty"`
-	Body      any    `json:"body,omitempty"`
+	Body      any    `json:"body,omitempty" jsonschema:"the pinned response body: any JSON value (object, array, string, number, boolean or null); omit to serve a generated body."`
 	MediaType string `json:"mediaType,omitempty"`
 	// BodyRef is A6's (DESIGN §32.3): the endpoint's pinned response is the
 	// named uploaded asset, served verbatim under its stored type.
@@ -325,7 +325,7 @@ type CreateEndpointInput struct {
 	// reactive/echo are refused by name on kind "sse". A ws row needs at
 	// least one behaviour of the four.
 	Kind   string `json:"kind,omitempty"`
-	Stream any    `json:"stream,omitempty"`
+	Stream any    `json:"stream,omitempty" jsonschema:"the stream document (kind sse or ws): {timeline: {frames: [{delayMs, event, data}], loop}, tick: {intervalMs, event, schema}, closeWhenDone}, plus reactive/echo for ws — see create_endpoint's stream field."`
 	// Schema, ReqSchema and Operation are P7a's (DESIGN §34.3). Schema is
 	// an inline JSON Schema the response is GENERATED from — with no body
 	// beside it the endpoint answers a generated body under the workspace
@@ -430,7 +430,7 @@ type UpdateEndpointInput struct {
 	// document when editing a stream, or the write is refused for carrying
 	// a stream with kind http (never silently downgraded).
 	Kind   string `json:"kind,omitempty"`
-	Stream any    `json:"stream,omitempty"`
+	Stream any    `json:"stream,omitempty" jsonschema:"the stream document (kind sse or ws), resent whole on every edit — see create_endpoint's stream field."`
 	// ReqSchema and Operation are P7a's (DESIGN §34.3); the response
 	// schema rides inside responses[status].schema on VariantInput. A
 	// full replacement carries them like every other field — omitted

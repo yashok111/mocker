@@ -244,9 +244,11 @@ type ResourceEntityRowOutput struct {
 	EntityKey    string `json:"entityKey"`
 	ScopeKey     string `json:"scopeKey"`
 	BaseScopeKey string `json:"baseScopeKey"`
-	Data         any    `json:"data"`
-	CreatedAt    string `json:"createdAt"`
-	UpdatedAt    string `json:"updatedAt"`
+	// Data is any JSON value — the row's body; its id field is overwritten
+	// with the key (see Set's own doc comment).
+	Data      any    `json:"data" jsonschema:"the entity row's body as a JSON object; its id field is overwritten with the key."`
+	CreatedAt string `json:"createdAt"`
+	UpdatedAt string `json:"updatedAt"`
 }
 
 // SetResourceEntityOutput is set_resource_entity's declared output.

@@ -228,12 +228,18 @@ func addEditTools(s *sdk.Server, lb *loopback) {
 // not jsonx.RawMessage, is this package's rule for arbitrary-shaped INPUT
 // fields specifically.
 type RecipeInput struct {
-	Kind   string `json:"kind"`
-	Value  any    `json:"value,omitempty"`
+	Kind string `json:"kind"`
+	// Value and Claims are `any` for the same reason as above; the
+	// jsonschema tags are load-bearing beyond documentation: without a tag
+	// jsonschema-go infers the empty schema and marshals it as the boolean
+	// literal `true`, which at least one MCP host (opencode) fails the
+	// whole tools/list on. {"description": ...} stays an open schema that
+	// validates any JSON. The same applies to every tagged `any` below.
+	Value  any    `json:"value,omitempty" jsonschema:"the recipe's payload as a JSON value; the expected shape depends on kind (see get_guide topic shapes)."`
 	Field  string `json:"field,omitempty"`
 	Offset string `json:"offset,omitempty"`
 	Format string `json:"format,omitempty"`
-	Claims any    `json:"claims,omitempty"`
+	Claims any    `json:"claims,omitempty" jsonschema:"claims map for a claims recipe: claim name to a JSON value (a literal or a nested recipe)."`
 	TTLSec int    `json:"ttlSec,omitempty"`
 }
 
@@ -255,10 +261,13 @@ type VariantCondition struct {
 // (overrides.ValidateVariant's own switch accepts "", "generated" and
 // "pinned" alike), not a footgun the way an omitted overrideOn is.
 type VariantInput struct {
-	Mode         string             `json:"mode,omitempty"`
-	When         []VariantCondition `json:"when,omitempty"`
-	Body         any                `json:"body,omitempty"`
-	BodyEncoding string             `json:"bodyEncoding,omitempty"`
+	Mode string             `json:"mode,omitempty"`
+	When []VariantCondition `json:"when,omitempty"`
+	// Body is `any` (see this file's header comment) and tagged for the
+	// same reason RecipeInput.Value is: an untagged `any` marshals its
+	// schema as the boolean literal `true`, which opencode refuses.
+	Body         any    `json:"body,omitempty" jsonschema:"the pinned response body: any JSON value (object, array, string, number, boolean or null); used when mode is pinned."`
+	BodyEncoding string `json:"bodyEncoding,omitempty"`
 	// BodyRef is A6's "asset:<name>" (DESIGN §32.3): on a pinned variant,
 	// the body IS that uploaded asset, served verbatim under the asset's
 	// own type — exclusive with body, bodyEncoding and mediaType, refused
@@ -266,7 +275,7 @@ type VariantInput struct {
 	BodyRef     string                 `json:"bodyRef,omitempty" jsonschema:"asset:<name> — the pinned body is this workspace's uploaded asset (upload_asset), served verbatim under its stored media type. Exclusive with body, bodyEncoding and mediaType."`
 	MediaType   string                 `json:"mediaType,omitempty"`
 	Headers     map[string]string      `json:"headers,omitempty"`
-	SchemaPatch any                    `json:"schemaPatch,omitempty"`
+	SchemaPatch any                    `json:"schemaPatch,omitempty" jsonschema:"a JSON Patch (RFC 6902) array applied to the spec's response schema before serving."`
 	Recipes     map[string]RecipeInput `json:"recipes,omitempty"`
 	// Schema is P7a's (DESIGN §34.3): a CUSTOM endpoint's inline response
 	// schema, generated from when no body is pinned. Refused by name on a
@@ -301,7 +310,7 @@ type OverrideDocumentInput struct {
 	Responses     map[string]VariantInput `json:"responses,omitempty"`
 	ListSize      *ListSizeView           `json:"listSize,omitempty"`
 	DelayMs       *int                    `json:"delayMs,omitempty"`
-	FailDirective any                     `json:"failDirective,omitempty"`
+	FailDirective any                     `json:"failDirective,omitempty" jsonschema:"arbitrary JSON, preserved verbatim — the serving path does not interpret it (api/openapi.json's own words for this field)."`
 	ValidateReq   *bool                   `json:"validateReq,omitempty"`
 }
 
@@ -311,7 +320,7 @@ type OverrideDocumentInput struct {
 // 61-65). ID is `any` — domain.Org.ID is itself untyped (real specs use
 // both integers and UUIDs, per that field's own doc comment).
 type OrgInput struct {
-	ID   any    `json:"id"`
+	ID   any    `json:"id" jsonschema:"the org id exactly as the spec under mock names it: an integer or a string uuid."`
 	Name string `json:"name"`
 	Type string `json:"type"`
 }
@@ -319,7 +328,7 @@ type OrgInput struct {
 // IdentityInput mirrors domain.Identity's wire shape (internal/domain/
 // settings.go:48-56).
 type IdentityInput struct {
-	ID    any       `json:"id"`
+	ID    any       `json:"id" jsonschema:"the identity id exactly as the spec under mock names it: an integer or a string uuid."`
 	Name  string    `json:"name"`
 	Email string    `json:"email"`
 	Roles []string  `json:"roles"`
@@ -374,7 +383,7 @@ type SettingsInput struct {
 	CORS             CORSSettingsInput `json:"cors"`
 	ValidateRequests bool              `json:"validateRequests"`
 	DelayMs          int               `json:"delayMs"`
-	NotFoundBody     any               `json:"notFoundBody,omitempty"`
+	NotFoundBody     any               `json:"notFoundBody,omitempty" jsonschema:"the JSON body served for unmatched routes: any JSON value, usually an object."`
 }
 
 // UpdateWorkspaceSettingsInput is update_workspace_settings' input. Name and
@@ -782,7 +791,7 @@ type PreviewOperationInput struct {
 	Status      string                `json:"status,omitempty"`
 	Query       string                `json:"query,omitempty"`
 	Headers     map[string]string     `json:"headers,omitempty"`
-	Body        any                   `json:"body,omitempty"`
+	Body        any                   `json:"body,omitempty" jsonschema:"the request body to send to the operation: any JSON value."`
 	PathParams  map[string]string     `json:"pathParams,omitempty"`
 }
 

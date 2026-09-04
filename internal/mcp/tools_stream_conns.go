@@ -165,7 +165,7 @@ type PushStreamFrameInput struct {
 	ConnectionID int64  `json:"connectionId"`
 	Event        string `json:"event,omitempty"`
 	// Data is any JSON value — the frame's payload.
-	Data any `json:"data"`
+	Data any `json:"data" jsonschema:"the frame's payload: any JSON value; delivered as one text frame."`
 }
 
 // PushStreamFrameOutput is push_stream_frame's declared output schema,

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -354,5 +355,127 @@ func TestToolErr_4xxCarriesAdminMessage(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "unexpected trailing data after JSON body") {
 		t.Errorf("error = %q, want the admin plane's own message", err.Error())
+	}
+}
+
+// TestTools_noBooleanTrueSchemas walks every tool's inputSchema and
+// outputSchema and refuses any JSON-Schema TRUE literal ("x": true)
+// anywhere in them. The SDK's jsonschema-go marshals the schema inferred
+// from an untagged `any` Go field (an interface) as the empty schema, and
+// its MarshalJSON collapses the empty schema to the boolean literal `true`
+// (jsonschema-go@v0.4.3 schema.go: "Marshal {} as true"). That is valid
+// JSON Schema, but at least one MCP host (opencode, its json-schema→zod
+// conversion) fails the whole tools/list on it — the user-visible symptom
+// is "mocker: Failed to get tools" for the server as a whole, not one
+// malformed tool. The boolean FALSE literal is deliberately allowed: it is
+// how jsonschema-go renders a struct's closed additionalProperties, every
+// MCP client parses it, and it is a meaningful schema ("nothing
+// validates"), not an omitted type. The fix this test guards is the
+// package's own style: an `any` field carries a jsonschema description
+// tag, and {"description":...} is an open schema that still validates any
+// JSON while marshaling as an object. The walk covers every keyword
+// holding a sub-schema (properties, items, anyOf and friends, $defs, not,
+// if/then/else), not just the top-level properties, because the collapse
+// happens wherever an empty schema is emitted.
+//
+// ONE position is deliberately exempt: a boolean `true` DIRECTLY under the
+// key "additionalProperties". That is how jsonschema-go renders a
+// map[string]any field's VALUE schema (a map's values are any JSON, so the
+// inferred value schema is the empty schema), and no jsonschema tag can
+// change it — the tag becomes the map property's own description, not its
+// value schema's. The trade was measured, not guessed: opencode connected
+// with all 63 tools served through a proxy that replaced every top-level
+// properties-position `true` while leaving those additionalPositions
+// untouched, so the two remaining sites (import_workspace's bundle,
+// set_resource_entity's data) are tolerated. A `true` anywhere else still
+// fails this test.
+func TestTools_noBooleanTrueSchemas(t *testing.T) {
+	t.Parallel()
+	h := newTestEndpoint(t).Handler()
+
+	rec := doMCP(t, h, `{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}`,
+		map[string]string{"Authorization": "Bearer " + testKey})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200; body=%s", rec.Code, rec.Body.String())
+	}
+	var env struct {
+		Result *struct {
+			Tools []json.RawMessage `json:"tools"`
+		} `json:"result"`
+		Error *struct {
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &env); err != nil {
+		t.Fatalf("decode response: %v; body=%s", err, rec.Body.String())
+	}
+	if env.Error != nil {
+		t.Fatalf("tools/list returned a JSON-RPC error: %s", env.Error.Message)
+	}
+	if len(env.Result.Tools) == 0 {
+		t.Fatal("tools/list returned no tools")
+	}
+
+	// schemaKeywords are the JSON-Schema keywords whose value (or, for the
+	// arrays, whose ELEMENTS) is itself a schema.
+	arraySchemaKeywords := map[string]bool{"allOf": true, "anyOf": true, "oneOf": true, "prefixItems": true}
+	valueSchemaKeywords := map[string]bool{"items": true, "additionalProperties": true, "contains": true,
+		"propertyNames": true, "if": true, "then": true, "else": true, "not": true}
+	mapSchemaKeywords := map[string]bool{"properties": true, "patternProperties": true,
+		"dependentSchemas": true, "$defs": true, "definitions": true}
+
+	// walk carries the key the node sits under so the boolean case can
+	// apply the additionalProperties exemption; key is "" at a schema root
+	// and the property/definition name under the map keywords.
+	var walk func(tool, key, pointer string, node any) []string
+	walk = func(tool, key, pointer string, node any) []string {
+		switch v := node.(type) {
+		case bool:
+			if v && key != "additionalProperties" {
+				return []string{fmt.Sprintf("%s: boolean schema `true` at %s", tool, pointer)}
+			}
+			return nil
+		case map[string]any:
+			var bad []string
+			for k := range arraySchemaKeywords {
+				if arr, ok := v[k].([]any); ok {
+					for i, e := range arr {
+						bad = append(bad, walk(tool, k, fmt.Sprintf("%s/%s/%d", pointer, k, i), e)...)
+					}
+				}
+			}
+			for k := range valueSchemaKeywords {
+				if sub, ok := v[k]; ok && sub != nil {
+					bad = append(bad, walk(tool, k, pointer+"/"+k, sub)...)
+				}
+			}
+			for k := range mapSchemaKeywords {
+				if m, ok := v[k].(map[string]any); ok {
+					for name, sub := range m {
+						bad = append(bad, walk(tool, name, pointer+"/"+k+"/"+name, sub)...)
+					}
+				}
+			}
+			return bad
+		default:
+			return nil
+		}
+	}
+
+	for _, raw := range env.Result.Tools {
+		var tool struct {
+			Name         string `json:"name"`
+			InputSchema  any    `json:"inputSchema"`
+			OutputSchema any    `json:"outputSchema"`
+		}
+		if err := json.Unmarshal(raw, &tool); err != nil {
+			t.Fatalf("decode tool %s: %v", raw, err)
+		}
+		for _, bad := range walk(tool.Name, "", "", tool.InputSchema) {
+			t.Errorf("inputSchema: %s", bad)
+		}
+		for _, bad := range walk(tool.Name, "", "", tool.OutputSchema) {
+			t.Errorf("outputSchema: %s", bad)
+		}
 	}
 }

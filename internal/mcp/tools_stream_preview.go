@@ -48,14 +48,14 @@ type PreviewEndpointInput struct {
 	// Stream is the stream document (see create_endpoint's stream field):
 	// {timeline: {frames: [{delayMs, event, data}], loop}, tick: {intervalMs,
 	// event, schema}, closeWhenDone}.
-	Stream any `json:"stream"`
+	Stream any `json:"stream" jsonschema:"the stream document (see create_endpoint's stream field): {timeline: {frames: [{delayMs, event, data}], loop}, tick: {intervalMs, event, schema}, closeWhenDone}."`
 }
 
 // StreamPreviewFrame is one frame of PreviewEndpointOutput.
 type StreamPreviewFrame struct {
 	AtMs  int    `json:"atMs"`
 	Event string `json:"event,omitempty"`
-	Data  any    `json:"data"`
+	Data  any    `json:"data" jsonschema:"the frame's payload as a JSON value, generated for a tick schema or taken from the timeline."`
 }
 
 // PreviewEndpointOutput is preview_endpoint's declared output schema,

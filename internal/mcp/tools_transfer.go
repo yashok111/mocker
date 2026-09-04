@@ -74,7 +74,7 @@ type ExportWorkspaceInput struct {
 // ExportWorkspaceOutput is export_workspace's declared output: the document
 // itself, as the route answers it.
 type ExportWorkspaceOutput struct {
-	Document any `json:"document"`
+	Document any `json:"document" jsonschema:"the exported workspace document — the v5 bundle plus data/spec sections; pass it verbatim to import_workspace."`
 }
 
 func handleExportWorkspace(lb *loopback) sdk.ToolHandlerFor[ExportWorkspaceInput, ExportWorkspaceOutput] {

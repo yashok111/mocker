@@ -279,7 +279,7 @@ type EndpointLine struct {
 	// {timeline: {frames: [{delayMs, event, data}], loop}, tick:
 	// {intervalMs, event, schema}, closeWhenDone} — and absent otherwise.
 	Kind      string `json:"kind"`
-	Stream    any    `json:"stream,omitempty"`
+	Stream    any    `json:"stream,omitempty" jsonschema:"the stream document of an sse/ws row — see create_endpoint's stream field; absent on an http row."`
 	CreatedAt int64  `json:"createdAt"`
 	UpdatedAt int64  `json:"updatedAt"`
 	// EditVersion is A3's per-row compare-and-swap token (mocker-a3-cas
@@ -314,7 +314,7 @@ type endpointWire struct {
 	ListSize      *ListSizeView                `json:"listSize,omitempty"`
 	DelayMs       *int                         `json:"delayMs,omitempty"`
 	Kind          string                       `json:"kind"`
-	Stream        any                          `json:"stream,omitempty"`
+	Stream        any                          `json:"stream,omitempty" jsonschema:"the stream document of an sse/ws row — see create_endpoint's stream field; absent on an http row."`
 	CreatedAt     int64                        `json:"createdAt"`
 	UpdatedAt     int64                        `json:"updatedAt"`
 	EditVersion   int64                        `json:"editVersion"`
