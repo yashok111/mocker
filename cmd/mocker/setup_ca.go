@@ -36,8 +36,7 @@ const (
 // exactly as they are, so re-running the wizard never rotates the root
 // behind an installed trust.
 func ensureLocalCA(dir string) ([]byte, error) {
-	certPath := filepath.Join(dir, "root.crt")
-	if pemBytes, err := os.ReadFile(certPath); err == nil {
+	if pemBytes, err := os.ReadFile(filepath.Join(dir, "root.crt")); err == nil { //nolint:gosec // G304: the path is the const caDir (or a test's TempDir) joined with a literal name — never request data
 		return pemBytes, nil
 	}
 
@@ -75,7 +74,7 @@ func ensureLocalCA(dir string) ([]byte, error) {
 	if err := os.WriteFile(filepath.Join(dir, "root.key"), pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: keyDER}), 0o600); err != nil {
 		return nil, err
 	}
-	if err := os.WriteFile(certPath, certPEM, 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "root.crt"), certPEM, 0o644); err != nil { //nolint:gosec // G306: a PUBLIC certificate — 0644 is the point (see root.key above for the actual secret)
 		return nil, err
 	}
 	return certPEM, nil

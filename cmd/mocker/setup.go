@@ -168,7 +168,7 @@ func (w *setupRun) up() error {
 	// The trust step and the summary want the root under its historical
 	// name; it is the same bytes the bind mount gave Caddy — no container
 	// copy, the root lives on the host now.
-	if err := os.WriteFile(rootCertName, caPEM, 0o644); err != nil {
+	if err := os.WriteFile(rootCertName, caPEM, 0o644); err != nil { //nolint:gosec // G306: a PUBLIC certificate a colleague imports into a trust store — 0644 is the point; the secret is root.key, and that one is 0600
 		return err
 	}
 	// Absolute for the trust commands and the summary: a colleague pastes
