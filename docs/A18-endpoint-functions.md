@@ -254,48 +254,77 @@ that boundary (round 1 GREEN made mandatory).
   reads it. The invariant bought in exchange is the simple one — each version
   reads exactly the version before it — and it is what stops `minVersion`
   being re-argued at every bump.
-  **TEN fixture sites across FOUR files feed a v4 document, and every one of
-  them goes red on this change.** The enumeration below replaces a shorter one,
-  and how it was short is worth more than the list: the first pass ran a
-  correct command over a GUESSED scope (`internal/bundle/*_test.go`) and used
-  `NR` where a multi-file glob needs `FNR`, so it both missed three files and
-  misprinted its one cross-file line number. A command is only an enumeration
-  when its scope is the whole population. Run 2026-09-04 over `cmd` and
-  `internal`:
+  **The version literal lives in SIX SHAPES across the tree, and no single
+  pattern reaches them.** This paragraph has been rewritten three times and
+  each rewrite was short for a different reason, which is the reusable half:
+  the first ran a correct command over a GUESSED SCOPE
+  (`internal/bundle/*_test.go`) and used `NR` where a multi-file glob needs
+  `FNR`; the second widened the scope to `cmd internal` and kept a PATTERN
+  (`"mockerBundle": N`) that only matches the JSON-text form, missing a Go
+  comparison, three prose strings, a JSON contract and two markdown guides. A
+  command is an enumeration only when its scope AND its pattern cover the
+  population. The population is what this returns, reviewed hit by hit:
 
   ```
-  grep -rnoE '"mockerBundle": *[0-9]+' --include='*.go' cmd internal
+  grep -rniI mockerbundle --exclude-dir=node_modules --exclude-dir=.git \
+    --exclude-dir=generated .
   ```
 
-  - `internal/bundle/bundle_test.go:187` `TestDecode_rejectsBasePathDisagreement`,
-    `:245` and `:272` `TestValidate_acceptsResourcesAndStillRejectsNonNullEntities`,
-    `:352` `TestDecode_documentWithNoDecisionsKey` — v4 as a convenient
-    fixture; the literal moves to 5.
-  - `internal/bundle/version_compat_test.go:15` `TestDecode_readsV4` — the one
-    that must be **INVERTED, not renumbered**: it is P7a's own promise test,
-    its doc comment argues the opposite of this decision ("A refusal here would
-    strand that history with no migration path"), and bumping its literal to 5
-    leaves a green suite that has silently stopped testing anything about v4.
-    It becomes a refusal test, keeping its fixture bytes and its comment
-    rewritten to say which decision retired the promise.
-  - `internal/checkpoints/repo_test.go:1151` — a v4 document written straight
-    into `config_snap` by an `UPDATE`; the literal moves to 5.
-  - `internal/mcp/tools_transfer_test.go:18`, `:33`, `:46`, `:69` — four sites
-    in the MCP transfer tests, the file the first sweep missed entirely; the
-    literals move to 5.
+  Run 2026-09-04, the six shapes and what each needs:
 
-  **And one site is not a v4 fixture at all and still breaks:**
-  `internal/bundle/bundle_test.go:205`, `TestDecode_rejectsUnknownVersion`,
-  feeds version **6** as the "future" version a build must refuse — and this
-  slice makes 6 current. Its own doc comment says P7a already re-aimed it once
-  for the same reason ("this build reads 4..5, so the unknown version … is one
-  ABOVE the current"). It re-aims to 7. Neither reviewer named it; it came out
-  of reading the whole `mockerBundle` population rather than the v4 half of it,
-  which is the same lesson as the paragraph above.
+  1. **JSON text in a Go string** — `internal/bundle/bundle_test.go:187`
+     (`TestDecode_rejectsBasePathDisagreement`), `:245` and `:272`
+     (`TestValidate_acceptsResourcesAndStillRejectsNonNullEntities`), `:352`
+     (`TestDecode_documentWithNoDecisionsKey`),
+     `internal/mcp/tools_transfer_test.go:18`, `:33`, `:46`, `:69`. v4 as a
+     convenient fixture; each literal moves to 5.
+  2. **The promise test** — `internal/bundle/version_compat_test.go:17`
+     (`TestDecode_readsV4`, whose `func` line is `:15`). **INVERTED, not
+     renumbered**: it is P7a's own promise test, its doc comment argues the
+     opposite of this decision ("A refusal here would strand that history with
+     no migration path"), and bumping its literal to 5 leaves a green suite
+     that has silently stopped testing anything about v4. It becomes a refusal
+     test, keeping its fixture bytes and its comment rewritten to say which
+     decision retired the promise.
+  3. **A Go field comparison, which no JSON-text pattern reaches** —
+     `internal/bundle/bundle_test.go:360-361` (`b.MockerBundle != 4` and its
+     message) and `internal/admin/transfer_handlers_test.go:83-84`
+     (`plain.MockerBundle != 5`, which moves to 6, not to 5 like the fixtures).
+  4. **The "future version" test, which is not a v4 site at all and still
+     breaks** — `internal/bundle/bundle_test.go:205`,
+     `TestDecode_rejectsUnknownVersion`, feeds **6** as the version a build
+     must refuse, and this slice makes 6 current. Its own doc comment records
+     that P7a re-aimed it once for exactly this reason. It re-aims to **7**.
+  5. **Prose that names the version to a reader** —
+     `internal/mcp/tools_transfer.go:23` and `:37` (two tool descriptions) and
+     `:106` (a `jsonschema` tag), all saying "mockerBundle v4"; `api/openapi.json`
+     `:4030`, `:7827`, `:7969` (three descriptions saying "v4") and `:4043`
+     (`WorkspaceExportDocument.mockerBundle`, `"const": 4`);
+     `internal/guide/tools.md:42` and its source
+     `skills/mocker/references/tools.md:42` ("mockerBundle v5; v4 still
+     imports"). **Six of these are ALREADY STALE today, before this slice
+     touches anything**: P7a moved `CurrentVersion` to 5 and left every "v4" in
+     `tools_transfer.go` and `api/openapi.json` behind, and the `const: 4` is
+     wrong against the current build. Nothing caught it — the contract test
+     reads routes and `csrfToken`, never a schema; there is no runtime schema
+     validator; and no test asserts on an MCP description string. This slice
+     repairs them on the way past.
+  6. **A golden fixture** — `internal/bundle/testdata/golden_bundle.json:1`,
+     currently 5, moves to 6 with `CurrentVersion`.
 
-  Two sites need nothing: `internal/admin/transfer_handlers_test.go:191` and
-  `internal/bundle/bundle_test.go:644` feed v3, which is already refused and
-  stays refused.
+  **One site is version-INSENSITIVE and is listed only so the grep comes back
+  clean**: `internal/checkpoints/repo_test.go:1151` is
+  `TestSnapshot_refusesABlobThatIsNotGzip`, which writes a raw non-gzip blob to
+  assert `ErrCorruptSnapshot`; the failure fires at `gzip.NewReader`'s header
+  check before any version is read, so the number is incidental. Its literal
+  moves to 5 to satisfy the sweep and for no other reason.
+
+  **Two sites need nothing**: `internal/admin/transfer_handlers_test.go:191`
+  and `internal/bundle/bundle_test.go:644` feed v3, already refused and staying
+  refused. And every mention in `CARVE-OUTS.md`, `DESIGN.md` and the comments
+  at `internal/bundle/bundle.go:36` and `bundle_test.go:345` is a HISTORICAL
+  statement about v3 and must NOT move — a sweep that "fixes" those has
+  rewritten the record of what earlier slices decided.
 
 ## D6 — Execution guards
 
@@ -438,44 +467,72 @@ four references + `internal/guide` resync (`make guide-sync`), the `design`
 guide topic untouched, `CLAUDE.md` Architecture + `HISTORY.md` — the standing
 slice-end set.
 
-**`CARVE-OUTS.md` carries TWELVE named items, and the count is here so a
-missing one is visible.** The count has now moved three times, and the shape
-of each move is the finding rather than the number: round 1 said six and only
-one had a clause naming its content; round 2 pinned eight and the pin made a
-ninth's absence observable; round 3 swept the CLASS instead of the instance
-and found three more — which is the failure a fix makes when it closes the
-case it was handed and not the question behind it. The class is: **every
-decision in this document that gives something up is an entry.** The twelve:
-the determinism carve-out
-(D4), the memory residual (D6), the absent rate limit on a Lua auth check
-(D6), the `coroutine` refusal (D3), the const timeout (D6), the UTC pin (D3),
-the RNG override (D3), the `mock.entities`-versus-`$ref` asymmetry — a family
-name is a runtime Lua string, so it can never be checked at write time the
-way P7a checks a `$ref` ("never STORED dangling"), and a function broken by a
-later decline, a spec rebind or a config-only rollback has no host-side
-signal at all — **the v4 refusal (D5)**: `minVersion` moves to 5, so a bundle
-a colleague exported or a checkpoint they took before this slice no longer
-imports, and their route is to re-export from a build that still reads it,
-which is not a new KIND of entry (this file already carries one per bundle
-bump, "bundle v3 is NOT read" at `CARVE-OUTS.md:919` for P6b and "Bundle v5
-reads v4 but not v3" at `:1402` for P7a, each stating its own cost) — and the
-three round 3 found by sweeping the class rather than the instance:
+**`CARVE-OUTS.md` carries TWELVE named items.** The count moved three times —
+six, then eight, then nine, then twelve — and the shape of the moves is the
+finding rather than the number: each fix closed the case it was handed and not
+the question behind it, which is round 3's own lesson stated about itself. The
+class is: **every decision in this document that gives something up — a
+guarantee withdrawn, a capability refused, a compatibility broken, a residual
+accepted — is an entry.**
 
-- **No opt-out (D2).** There is no `MOCKER_FUNCTIONS` and no gate, so every
-  deployment executes operator-authored Lua, a shared contour as much as a
-  laptop. It follows from the owner's overruling and it is a residual, not a
-  design flourish: an operator who wants a mocker that runs no Lua has no
-  switch and must not deploy this build.
-- **No two same-named response headers (D3).** A function's `headers` is a
-  `string→string` table, so two `Set-Cookie` lines cannot be emitted — in the
-  sign-in shape D1's own example describes. The escape is a pinned variant on
-  another status.
-- **A function's output is never validated against its own declared schema
-  (D8).** `export_openapi` exports the declared response schema and the drift
-  report stays shape-only, so a function whose body has drifted from the
-  contract it publishes is reported by nothing. This is the price of D5's
-  "the function REPLACES response assembly" and it is invisible from the
-  contract side.
+Each item below carries the literal tag `[GIVES-UP]` and names the section
+that DECIDES it, so the list is countable by command and each entry is one
+pointer to walk rather than a sweep to redo. The command is ANCHORED to the
+numbered lines below — `grep -cE '^[0-9]+\. .\[GIVES-UP\]'` — because the
+unanchored form was written first and returned 13 against a list of twelve: it
+counted this very sentence. A guard that counts its own prose is the shape this
+document has now produced twice, and it was found by running the command rather
+than by reading it.
+
+1. `[GIVES-UP]` **Determinism (D4).** One seed and one spec no longer imply
+   byte-identical bodies on a function-bearing endpoint.
+2. `[GIVES-UP]` **Memory uncapped (D6).** The context check fires between VM
+   instructions; a single native call allocates before any check.
+3. `[GIVES-UP]` **No rate limit on a Lua auth check (D6).** On an
+   unauthenticated plane, always on, while the admin plane runs a two-bucket
+   limiter.
+4. `[GIVES-UP]` **The `coroutine` library is never opened (D3).** A thread
+   could launder an infinite loop past a single `SetContext`.
+5. `[GIVES-UP]` **The timeout is a fixed 2 s const (D6).** No env knob; a
+   deployment that needs another number has none.
+6. `[GIVES-UP]` **`os.date` is pinned to UTC (D3).** The process timezone
+   cannot reach a function's output.
+7. `[GIVES-UP]` **The RNG is per-VM host entropy (D3).** `math.randomseed` is
+   removed and nothing substitutes the workspace seed.
+8. `[GIVES-UP]` **`mock.entities` has no write-time check (D3).** A family
+   name is a runtime Lua string, so it can never be checked the way P7a checks
+   a `$ref` ("never STORED dangling"), and a function broken by a later
+   decline, a spec rebind or a config-only rollback has no host-side signal.
+9. `[GIVES-UP]` **The v4 refusal (D5).** `minVersion` moves to 5, so a bundle
+   a colleague exported or a checkpoint they took before this slice no longer
+   imports; their route is to re-export from a build that still reads it. Not
+   a new KIND of entry — this file already carries one per bundle bump,
+   `CARVE-OUTS.md:919` (P6b) and `:1402` (P7a), each stating its own cost.
+10. `[GIVES-UP]` **No opt-out (D2).** No `MOCKER_FUNCTIONS`, no gate: every
+    deployment executes operator-authored Lua, a shared contour as much as a
+    laptop. An operator who wants a mocker that runs no Lua has no switch and
+    must not deploy this build.
+11. `[GIVES-UP]` **No two same-named response headers (D3).** `headers` is a
+    `string→string` table, so two `Set-Cookie` lines cannot be emitted — in
+    the sign-in shape D1's own example describes. The escape is a pinned
+    variant on another status.
+12. `[GIVES-UP]` **A function's output is never validated against its own
+    declared schema (D8).** The schema is exported and the drift report stays
+    shape-only, so a body that has drifted from the contract it publishes is
+    reported by nothing. This is the price of D5's "the function REPLACES
+    response assembly", and it is invisible from the contract side.
+
+**The class was re-derived INDEPENDENTLY in round 4** — a reviewer walked
+D1–D10, D8b and §A for withdrawn guarantees, refused capabilities, broken
+compatibilities and accepted residuals WITHOUT reading this list first, and
+converged on exactly these twelve, excluding four borderline candidates by
+name (the `io`/`package`/`debug` refusal, folded into the allowlist mechanism
+rather than argued separately; `mock.entities` being read-only, which is the
+intended surface rather than a cost; the inbound repeated-header join, which
+D3 explicitly does not call a limitation; and D9's own closing paragraph on
+the Lua contract's missing version marker, which is an obligation on future
+slices). That derivation is the evidence the count is complete, and it is
+recorded because a thirteenth can only ever be found by another one.
 
 **The two matrices D7 promises are a DELIVERABLE of this section**, not a
 sentence in passing (round 1 MINOR): spec operation versus custom endpoint,
@@ -868,7 +925,11 @@ baseline, which is the defect this table exists to prevent.
     framing*, *fails if the connection closes*, *fails if the observation uses
     the default* — a hard-coded 4 MiB and a config-reading implementation emit
     identical bytes there — and *fails if the skip is not counted, or is
-    counted twice*, the defeat clause 41 already states for its own twin.
+    counted twice*: an implementation that checks the CR/LF and the size
+    conditions independently, with no early return, increments
+    `frames_skipped` twice for one frame. (Clause 41 defeats a different thing
+    — a nil return counted as a skip AND an error — and this clause used to
+    cite it as though the two were the same claim.)
 41. A Lua tick returning `nil` skips the firing with the connection open and
     nothing counted as an error. *Fails if a nil return is counted as both a skip
     and an error* — they are different outcomes.
@@ -918,10 +979,17 @@ baseline, which is the defect this table exists to prevent.
     NAME rather than counted. *Fails if any one of the twelve is absent*, which
     is a different check from the one this clause first carried: "fewer than
     eight entries" is a floor, and a floor passes over twelve entries of which
-    one is the wrong twelve. *And fails if a decision this document takes gives
-    something up and appears in neither list* — the count moved three times
-    across three rounds because each fix closed the instance it was handed, and
-    the standing question is the CLASS, not the number.
+    one is the wrong twelve. *And fails if
+    `grep -cE '^[0-9]+\. .\[GIVES-UP\]'` over this document does not return the
+    same number as the count of items D9 lists and the count of matching entries
+    in `CARVE-OUTS.md`* — three numbers, one
+    command each, which is what round 4 replaced the previous wording with: that
+    wording asked a reader to re-derive the class, and a defeat a reader must
+    re-derive is a judgement, not an observation, which is the one thing §D of
+    the gate's own checklist refuses. The class question itself — is there a
+    thirteenth — is irreducible to a command, and what settles it is a fresh
+    independent derivation; round 4 ran one and it converged, which is recorded
+    in D9 rather than asserted here.
 47b. The two matrices D7 promises — spec operation versus custom endpoint, where
     the function branch sits against the 406 gate and against media negotiation —
     are present in `skills/mocker/` and in `docs/USER-GUIDE.md`. *Fails if the
@@ -999,13 +1067,21 @@ the clause instead.
 59. **(D5, the v4 refusal's blast radius.)** After the change,
     `TestDecode_readsV4` asserts a REFUSAL naming version 4 and its doc comment
     says which decision retired P7a's promise; `TestDecode_rejectsUnknownVersion`
-    feeds 7, not 6; the nine other v4 fixture sites D5 enumerates carry 5; and
-    `grep -rnoE '"mockerBundle": *[0-9]+' --include='*.go' cmd internal` returns
-    no `4` anywhere in the tree. *Fails if `TestDecode_readsV4` merely has its
-    fixture literal bumped* — the suite is then green and the one regression
-    check about v4 tests nothing — and *fails if the grep still finds a 4*,
-    which is the clause stated as a command rather than as a list, because this
-    slice's own enumeration of that list was short twice.
+    feeds 7; `internal/admin/transfer_handlers_test.go:83` expects 6; the
+    fixture sites of D5 shape 1 carry 5; `internal/bundle/testdata/`
+    `golden_bundle.json` carries 6; and the prose sites of D5 shape 5 name the
+    current version rather than v4. The observation is the OUTPUT of
+    `grep -rniI mockerbundle --exclude-dir=node_modules --exclude-dir=.git
+    --exclude-dir=generated .`, read hit by hit against D5's six shapes — not
+    an empty result, because the population is not empty and never will be.
+    *Fails if `TestDecode_readsV4` merely has its fixture literal bumped* — the
+    suite is then green and the one regression check about v4 tests nothing.
+    *Fails if any hit outside D5's historical set still names a version below
+    the current one.* *And fails if the check is run as a pattern over one
+    shape*, which is how this slice's own enumeration came back short twice: a
+    Go field comparison, three prose strings, a JSON `const` and two markdown
+    guides all live in this population and none of them matches
+    `"mockerBundle": N`.
 58. **(D3, the sandbox's deliberate residue.)** `rawget`, `rawset`, `rawequal`
     and `rawlen` are PRESENT in the frozen `_G` allowlist of clause 6. *Fails if
     the allowlist literal is silent about them* — round 1's RED named five
