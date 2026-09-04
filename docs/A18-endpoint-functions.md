@@ -142,7 +142,11 @@ silent coercion.
   family → nil, "unknown_family". Read-only: there is no `mock.write` — the
   anonymous mock plane's own POST/DELETE verbs remain the only writers.
 
-**Determinism**: honest and OUT of the guarantee —
+## D4 — Determinism: honest, out of the guarantee
+
+Written as a section 2026-09-04: the decision was always here, as a paragraph
+inside D3, while D10 and the review notes cite it as `(D4)` — a citation that
+resolved to nothing. The text below is unchanged; only its heading is new.
 
 > «Честный вне гарантий»
 
@@ -350,6 +354,308 @@ Both hooks ride the stream document inside `custom_endpoints`' JSON column —
 no migration; bundle v6 (D5) already covers the stream's shape. The MCP
 writers and `preview_endpoint`'s stream schemas grow the two fields in place;
 the contract count stays 70.
+
+## A — Acceptance
+
+Written 2026-09-04, after D1–D10 and before a line of code. Two rules govern
+this section and nothing else does.
+
+**Every number in A.0 was produced by RUNNING the command beside it**, on the
+untouched tree at `a6ae6ee`, at the moment this section was written. A clause
+below compares against the recorded number and never against the word "green":
+what a codebase does today is not what its own documentation says it does, and a
+clause resting on a documented figure can go red against a correct
+implementation.
+
+**Every clause states an OBSERVATION and names its defeat as `Fails if …`** —
+the implementation it exists to reject, written as a condition somebody can go
+and observe. A clause with no named defeat has no floor. Each was also read the
+other way, against a CORRECT implementation: a criterion that goes red on
+correct code stalls the run at the one step where changing production code is
+forbidden, which is the worse direction.
+
+### A.0 — Baseline on the untouched tree (`a6ae6ee`, 2026-09-04)
+
+| bar | command | recorded |
+|---|---|---|
+| `make test` | `make test` | 35 packages ok, 0 FAIL, 3 with no test files, 0 SKIP; 77.6 s wall, maxrss 2.04 GiB |
+| `make lint` | `make lint` | 0 issues, 60.5 s wall, maxrss 1.89 GiB |
+| `make ui-test` | `make ui-test` | 32 test files, 378 tests, all passed |
+| `make ui-lint` | `make ui-lint` | clean over 100 files |
+| `make smoke` | `make smoke` | 358 PASS, 0 FAIL, 0 SKIP, 213.4 s wall |
+| contract operations | `jq '[.paths[] \| keys[] \| select(IN("get","post","put","patch","delete","head","options"))] \| length' api/openapi.json` | 70 |
+| contract paths | `jq '.paths \| length' api/openapi.json` | 51 |
+| coverage population | `web/src/api/coverage.test.ts:208` | `toHaveLength(70)` |
+| MCP tools | `internal/mcp/mcp_resources_test.go:344` | 63 |
+| `MOCKER_*` variables | `grep -rhoE '"MOCKER_[A-Z_]+"' internal/config/*.go \| sort -u \| wc -l` | 36 |
+| migrations | `ls internal/store/migrations/` | 8, newest `0008_custom_endpoints_operation.sql` |
+| bundle version | `internal/bundle/bundle.go:50,60` | `CurrentVersion = 5`, `minVersion = 4` |
+| `//nolint` | `grep -rho '//nolint' cmd internal \| wc -l` | 36 |
+| goleak harnesses | `grep -rl testleak.VerifyTestMain --include=main_test.go cmd internal \| wc -l` | 35 |
+| module graph | `go list -m all \| wc -l` | 52 (8 direct) |
+| binary size | `CGO_ENABLED=0 go build -o /tmp/m ./cmd/mocker && stat -c%s /tmp/m` | 27 564 281 bytes (26.29 MiB) |
+
+Every cell above was produced by running its own command on this box on
+2026-09-04, at `a6ae6ee` plus this section. No cell is derived from a document,
+and none carries a placeholder: a clause resting on a placeholder has no
+baseline, which is the defect this table exists to prevent.
+
+### A.1 — The library is admitted on the §30.9 terms (D1)
+
+1. `go mod tidy` runs FIRST, then `go list -m all` is re-taken; the delta over
+   the recorded 52 is written into `HISTORY.md` verbatim, whatever it is.
+   *Fails if the tidied graph carries a module beyond `github.com/yuin/gopher-lua`
+   and the divergence is not written down beside the `go list -deps` evidence
+   that the REPL subpackage is unlinked.*
+2. `CGO_ENABLED=0 go build ./cmd/...` exits 0 and the binary-size delta over
+   the recorded 27 564 281 bytes is recorded. *Fails if the build needs cgo.*
+3. `internal/luafn/boundary_test.go` fails the build on a second importer,
+   OBSERVED by adding an import of `github.com/yuin/gopher-lua` to a file outside
+   `internal/luafn`, watching `go test ./internal/luafn/` go red, and reverting.
+   *Fails if that mutation leaves the test green* — which is what a boundary test
+   that walks only its own package does.
+4. `internal/luafn/main_test.go` exists and the goleak count is 36 (was 35).
+   *Fails if a VM's goroutine outlives its package's tests and nothing says so.*
+5. `make test` is no worse than the recorded 35/0/3/0 and its wall time under
+   `-race` is recorded beside the baseline. *Fails if the number is not taken at
+   all* — D1 defers the `-race` delta to the slice on purpose, so not taking it
+   leaves D1 unclosed.
+
+### A.2 — The sandbox is what D3 says it is (D2, D3)
+
+6. A test pins the SURVIVING `_G` key set against a frozen literal allowlist,
+   and the same test pins `os`'s surviving key set (`time`, `clock`, `date`
+   only). *Fails if the assertion is over a SUBSET — "these names are absent" —
+   rather than over the whole set*: a gopher-lua upgrade that adds a global must
+   go red here, and an absence list cannot see a name nobody thought of.
+7. From inside a function, each of `load`, `loadstring`, `loadfile`, `dofile`,
+   `print`, `module`, `require`, `newproxy`, `collectgarbage`, `io`, `package`,
+   `debug`, `coroutine`, `string.dump`, `math.randomseed`, `os.execute`,
+   `os.exit`, `os.getenv`, `os.remove`, `os.rename`, `os.setlocale`,
+   `os.tmpname` evaluates to `nil`. The list in the test is the list in this
+   clause — enumerated, not sampled. *Fails if one name is reachable*, and the
+   defeat it exists to catch is `OpenBase` re-registering `loadstring`/`module`/
+   `newproxy` (gopher-lua baselib.go:35–55), which a strip-list of four names
+   misses.
+8. A Lua call to `math.random` does NOT advance Go's package-global
+   `math/rand`: seed the global to a fixed value, read `rand.Int63()`, run a
+   function that draws from `math.random`, read `rand.Int63()` again, and compare
+   against the same pair taken with no function run. *Fails if the two differ* —
+   which is exactly what gopher-lua's own `math.random` does (mathlib.go:186–205),
+   and it is the observation a "seed per VM" implementation cannot pass.
+9. `os.date("%Y-%m-%dT%H:%M:%S")` inside a function returns UTC while the
+   process runs under `TZ=Asia/Tokyo`. *Fails if the value follows the process
+   timezone* — the test sets a NON-DEFAULT `TZ`, because under this box's own UTC
+   a pinned implementation and a process-following one emit identical bytes.
+10. `mock.jwt` on a workspace whose `settings.auth` carries `alg: none`, or no
+    key, returns `nil, "auth_not_configured"`. On a configured workspace the
+    returned token VERIFIES with the workspace's own key — decoded and checked,
+    never measured for length. *Fails if an unsigned token is returned in either
+    case*, and *fails if the signing key is reachable from Lua*: a function that
+    walks `mock`'s own keys returns a set that does not contain it.
+11. `mock.entities(family)` returns exactly the rows
+    `GET /api/workspaces/{id}/resources/{family}/entities` returns for the same
+    family under the serving request's own base scope; an unconfirmed or unknown
+    family returns `nil, "unknown_family"`. Scope values are passed RAW and the
+    host encodes them. *Fails if a scope value is escaped twice*, and *fails if a
+    family belonging to another workspace resolves* — the roster lookup is
+    per-workspace and this plane is unauthenticated by design.
+12. There is no writer: a grep over `internal/luafn` for a `mock.write`-shaped
+    name prints nothing, and the grep is named in the finding. *Fails if a
+    function can create or delete an entity row.*
+13. `MOCKER_FUNCTIONS` appears nowhere in `internal/config` or `cmd`, and the
+    `MOCKER_*` count stays at 36. *Fails if the feature ships behind a flag* —
+    D2 is «Всегда вкл», and a flag would make every clause here conditional on a
+    setting no clause names.
+
+### A.3 — Determinism, honestly bounded (D4)
+
+14. `TestGoldenP1bBodyHashes` and `TestP1cAcceptance_NoRecipesMatchesGolden` are
+    green and unchanged, and the golden corpus contains no function-bearing
+    endpoint. *Fails if a function enters the corpus* — the corpus IS the
+    seed-plus-spec guarantee, and a non-deterministic member destroys it
+    silently rather than loudly.
+15. A negative test pins the boundary from both sides: two requests to a
+    function-bearing endpoint under one seed MAY differ, and two requests to a
+    function-FREE endpoint under the same seed are byte-identical. *Fails if the
+    second half is not asserted* — without it the clause passes on an
+    implementation that made the whole plane non-deterministic.
+
+### A.4 — The variant field and everything it rides (D5)
+
+16. A variant carrying `function` together with any of `body`, `bodyRef`,
+    `recipes`, `schemaPatch` is refused `400 function_and_body` on BOTH writers
+    (the operation override and the custom endpoint), and the refusal names the
+    conflicting field. *Fails if the refusal is at the ROW grain* — a
+    function-200 with a pinned-401 sibling on one row is legal, and the test
+    asserts both statuses serve.
+17. `when[]` on a function variant is accepted and selects the variant; the
+    function runs only when its variant is selected. *Fails if a function-bearing
+    row runs its function for a request that selected another variant.*
+18. A variant-level `function` on a row of `kind: "sse"` or `kind: "ws"` is
+    refused `400 function_on_stream`. *Fails if it is accepted and then silently
+    never fires.*
+19. The `function` string survives byte-identical through each round trip its
+    carrier already makes: checkpoint capture → `rollback`, `export_workspace` →
+    `import_workspace`, `fork_workspace`, and a CAS conflict document. One test
+    per trip. *Fails if any trip drops or re-encodes it.*
+20. A scenario snapshot carries a function set on a SPEC OPERATION's override and
+    does NOT carry one set on a custom endpoint. *Fails if the asymmetry is
+    "fixed" here* — it is DESIGN §12's, inherited (`capture.go:127`,
+    `bundle.go:143`, both read and confirmed 2026-09-04), and changing it would
+    be a scenario-layer decision this slice never took.
+21. `bundle.CurrentVersion` is 6; a v5 document imports unchanged; a v6 document
+    presented to a binary built at `a6ae6ee` is refused BY NAME rather than
+    field-dropped. *Fails if an old binary silently ignores the field.*
+    **The `minVersion` half is OPEN — see (i) below.**
+
+### A.5 — Execution guards (D6)
+
+22. A function whose body is `while true do end` answers `503 function_timeout`
+    within the 2 s budget plus measurement noise, and the traffic row carries the
+    note `function_timeout`. *Fails if the request outlives the budget*, and
+    *fails if the status is 500* — the two classes are separate on purpose.
+23. A function returning `Content-Type: text/html` answers `500 function_failed`
+    and no `text/html` byte reaches the wire. *Fails if a body reaches the client
+    under any media type `httpx.BrowserExecutableMediaType` refuses* — the same
+    rule both planes already apply on write.
+24. A function returning a header value containing CR or LF, or an empty header
+    name, answers `500 function_failed` and writes no header. *Fails if the value
+    is written after being sanitized* — the plane refuses such headers, it does
+    not repair them.
+25. A function returning a body over `MOCKER_MAX_RESPONSE` answers
+    `500 function_too_large` with NO partial body, observed with
+    `MOCKER_MAX_RESPONSE` set to a NON-DEFAULT value (the default is `4mb`).
+    *Fails if the status line was already committed when the cap was found*, and
+    *fails if the observation uses the default* — a hard-coded 4 MiB and a
+    config-reading implementation emit identical bytes there.
+26. A Lua runtime error answers `500 function_failed`; the traffic note carries
+    at most 200 bytes of the error's FIRST line and no Go stack. Observed with an
+    error message deliberately longer than 200 bytes that contains a token-shaped
+    string. *Fails if the note carries the whole message*, and *fails if the
+    observation uses a message shorter than the cap* — then the cap is never
+    exercised.
+27. A client that disconnects mid-function produces neither a `function_failed`
+    nor a `function_timeout` classification. *Fails if a cancelled request is
+    recorded as a server error.*
+28. `CARVE-OUTS.md` carries, in its own words, that function memory is UNCAPPED
+    and why: the context check fires between VM instructions, so a single native
+    call such as `string.rep("x", 1e9)` allocates before any check. *Fails if the
+    residual lives only in this gate document* — a gate document stops existing
+    when its directory does, which is exactly why this one was committed.
+
+### A.6 — Serving order (D7)
+
+29. Each of the four session-layer directives is observed against a
+    function-bearing operation, one assertion each: a forced status answers
+    without the function running (the traffic note lacks `function`); `fail_next`
+    consumes and answers before it; a pause parks the request BEFORE the VM is
+    created; a delay delays the run. *Fails if any one of the four runs the
+    function first* — the branch sits where `resourceBranch` sits
+    (`respond.go:207`), after all four and after the 406 gate.
+30. On one 2xx operation carrying BOTH a function variant and a confirmed
+    resource family, the FUNCTION serves; with the function variant removed and
+    nothing else changed, the RESOURCE serves. Both directions asserted. *Fails
+    if only the first direction is asserted* — that half passes on an
+    implementation that disabled the resource branch outright.
+31. `TestAssembleResponseIsTheOnlySeam` (`internal/mockplane/seam_test.go:37`) is
+    green with its `wantCallers` literal unchanged: the function branch is a
+    SIBLING that produces the bytes `assembleResponse` would have, not a fourth
+    caller of it. *Fails if that literal grows.*
+32. Operation preview and custom-endpoint preview run a DRAFT's function through
+    the same runner, and a failure lands in `PreviewResult.Notes` rather than in a
+    status. *Fails if a failing draft function makes the preview route answer
+    non-200.*
+33. Traffic records a function-served request normally, with the note token
+    `function`; the auth-check request's recording stays suppressed. *Fails if a
+    function-served request writes no traffic row.*
+
+### A.7 — Surface (D8)
+
+34. Contract operations stay at 70 and `coverage.test.ts:208` stays
+    `toHaveLength(70)`; MCP tools stay at 63; migrations stay at 8. *Fails if any
+    of the three moves* — D8 is "no new routes, no new tools", and a moved count
+    is the cheapest possible signal that something else was built.
+35. `api/openapi.json` carries `function` in the create and update requests, the
+    shared Variant view, the conflict payload and the endpoint conflict details,
+    and `tick.lua`/`onFrame` in the stream shapes; the contract test
+    (`internal/admin/openapi_contract_test.go`) is green. *Fails if the field
+    reaches the wire without reaching the contract* — the contract has drifted in
+    SCHEMAS twice before with no bar noticing, and both times a screen found it.
+36. `make ui-gen`, then `make ui-test` and `make ui-lint`, are no worse than the
+    recorded 32/378 and clean-over-100. *Fails if the regenerated client does not
+    compile* — the local generated client has been stale in both directions
+    before.
+37. Unparseable Lua at write time is refused `400 bad_function` carrying the
+    parser's own words. *Fails if the source is stored and the parse deferred to
+    the first request* — this plane always answers, so a deferred parse is a 500
+    nobody asked for.
+38. The document `export_openapi` returns for a workspace whose endpoint carries
+    a function contains no byte of that function's source, checked by grepping the
+    exported document for a distinctive literal placed inside the Lua; the finding
+    names that grep. *Fails if the source leaks into the OpenAPI document.*
+
+### A.8 — Streams (D10)
+
+39. Four refusals, four assertions, each BY NAME: `tick.lua` with `tick.schema`
+    → `400 tick_lua_and_schema`; `onFrame` with `reactive` →
+    `400 on_frame_and_reactive`; `onFrame` with `echo` → `400 on_frame_and_echo`;
+    `onFrame` on `kind: "sse"` → `400 on_frame_on_sse`. *Fails if one is clamped
+    or silently ignored.*
+40. A Lua tick returning a string containing CR or LF, or a body over
+    `MOCKER_MAX_RESPONSE`, SKIPS that firing, leaves the connection open, and the
+    skip is counted in the existing `frames_skipped:M` note. *Fails if the frame
+    is written and breaks SSE framing*, and *fails if the connection closes.*
+41. A Lua tick returning `nil` skips the firing with the connection open and
+    nothing counted as an error. *Fails if a nil return is counted as both a skip
+    and an error* — they are different outcomes.
+42. `onFrame` returning `"reply", data` produces exactly one text frame;
+    returning `"close", code` performs the closing handshake FROM THE WRITER
+    LOOP, after which the reader keeps draining the peer's half while `onFrame`
+    is no longer called. *Fails if the reader writes the close itself* — P6d's
+    discipline, verbatim.
+43. A Lua error inside `onFrame` drops that reply, counts it in a NEW
+    `on_frame_errors:K` note token, leaves `replies_dropped:K` unchanged, and
+    `onFrame` is still called for the NEXT inbound frame. *Fails if the error is
+    counted in `replies_dropped`* — that token means budget drops, and
+    overloading it hides broken code behind a full budget.
+44. A benchmark records the cost of `NewState` + sandbox open + one call at the
+    100 ms tick floor. The number is RECORDED, not thresholded. *Fails if no
+    number is taken* — D10 makes fresh-VM-per-firing conditional on it, and a
+    missing measurement leaves the pooling question unanswerable rather than
+    answered.
+45. Stream preview runs a draft's tick Lua under an AGGREGATE 10 s budget; past
+    it the remaining frames are laid out and LABELLED "not run", and
+    `maxBytesPerSec` is labelled NOMINAL whenever `tick.lua` is present. *Fails
+    if the preview can run 50 × 2 s*, and *fails if the label is absent* — an
+    unlabelled nominal number is read as a bound.
+
+### A.9 — Through the deployed artifact, and the documents
+
+46. `make smoke` is no worse than the recorded 358 PASS / 0 FAIL / 0 SKIP and
+    gains a sign-in section
+    through the CONTAINER: wrong password → 401, right password → a JWT that
+    verifies with the workspace's key; plus one timeout observation and one
+    `function_on_stream` refusal. *Fails if the feature is proven only by the test
+    runner* — "a green `go test` ≠ the phase is done" has caught a dead feature in
+    this tree twice, and both times the wiring nobody tested was
+    `cmd/mocker/main.go`.
+47. `make guide-sync` leaves no drift and `internal/guide`'s own test is green;
+    `docs/USER-GUIDE.md`, all four `skills/mocker/` references, `CLAUDE.md`,
+    `HISTORY.md` and `CARVE-OUTS.md` carry the slice. *Fails if the guide's
+    embedded copy and its source disagree.*
+48. The run reports every SKIP its suites print. *Fails if a skip is printed and
+    not read* — one shipped in this tree already, a relative path that did not
+    resolve from the test's own working directory.
+
+**(i) OPEN, for the owner — the one question A.4(21) defers.** D5 says "bundle
+v6 reads v5" and, in the same bullet, "the decode chain already accepts older".
+Today `minVersion = 4` (`bundle.go:60`), and P7a put it there deliberately: A16
+shipped an installer the day before, so a colleague's v4 checkpoint is plausible
+and must keep importing. Moving `minVersion` to 5 breaks exactly that, and the
+field is additive, so nothing forces the move. **Recommendation:
+`CurrentVersion = 6` and `minVersion` STAYS 4** — v6 reads v5 and v4 alike. Not
+decided here.
 
 ## DESIGN.md — on the owner's word only
 
