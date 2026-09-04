@@ -254,6 +254,21 @@ that boundary (round 1 GREEN made mandatory).
   reads it. The invariant bought in exchange is the simple one — each version
   reads exactly the version before it — and it is what stops `minVersion`
   being re-argued at every bump.
+  **Four existing tests feed a v4 document and every one of them goes red on
+  this change** — enumerated by command rather than sampled
+  (`awk '/^func Test/{fn=$2} /mockerBundle": *4/{print FILENAME":"NR" "fn}'
+  internal/bundle/*_test.go`, run 2026-09-04): `TestDecode_readsV4`
+  (`internal/bundle/version_compat_test.go:15`),
+  `TestDecode_rejectsBasePathDisagreement`, `TestValidate_acceptsResourcesAnd`
+  `StillRejectsNonNullEntities` (twice) and `TestDecode_documentWithNoDecisionsKey`
+  (all `internal/bundle/bundle_test.go`). Three of them use v4 only as a
+  convenient fixture and their literal moves to 5. **`TestDecode_readsV4` is
+  the one that must be INVERTED, not renumbered**: it is P7a's own promise
+  test, its doc comment argues the opposite of this decision ("A refusal here
+  would strand that history with no migration path"), and bumping its literal
+  to 5 leaves a green suite that has silently stopped testing anything about
+  v4. It becomes a refusal test, keeping its fixture bytes and its comment
+  rewritten to say which decision retired the promise.
 
 ## D6 — Execution guards
 
@@ -374,11 +389,14 @@ acceptance clauses while looking correct.
    answer. The function-bearing-variant check runs FIRST; the generic
    response-map refusal keeps its wording for every other case.
 2. **`tick_lua_and_schema` needs exclusivity checked BEFORE `schema` is
-   required.** `internal/customep/stream.go:246` `validateTick` opens with
-   `if len(t.Schema) == 0` → "stream.tick.schema is required", so a Lua-only
-   tick is refused as schema-missing and a `lua`+`schema` tick never reaches
-   D10's own refusal. Order: exclusivity first, then require and validate
-   `schema` only when `lua` is absent.
+   required.** `internal/customep/stream.go:253` — inside `validateTick`,
+   which begins at `:246` and runs the interval floor and the event-name
+   check first — is an unconditional `if len(t.Schema) == 0` →
+   "stream.tick.schema is required", so a Lua-only tick is refused as
+   schema-missing and a `lua`+`schema` tick never reaches D10's own refusal.
+   Order: exclusivity first, then require and validate `schema` only when
+   `lua` is absent. The two checks that precede `:253` are unaffected and
+   keep their place.
 3. **`onFrame` has no site at all.** `internal/customep/stream.go:152-163`
    refuses `Reactive` and `Echo` on a non-ws kind and knows nothing of a
    third inbound-side field, so D10's `on_frame_on_sse`,
@@ -393,16 +411,24 @@ four references + `internal/guide` resync (`make guide-sync`), the `design`
 guide topic untouched, `CLAUDE.md` Architecture + `HISTORY.md` — the standing
 slice-end set.
 
-**`CARVE-OUTS.md` carries EIGHT named items, and the count is here so a
+**`CARVE-OUTS.md` carries NINE named items, and the count is here so a
 missing one is visible** (round 1 MINOR: D9 named six and only one of them
-had a clause naming its content): the determinism carve-out (D4), the memory
-residual (D6), the absent rate limit on a Lua auth check (D6), the
-`coroutine` refusal (D3), the const timeout (D6), the UTC pin (D3), the RNG
-override (D3), and the `mock.entities`-versus-`$ref` asymmetry — a family
+had a clause naming its content; round 2 BLOCKER: the count made the ninth's
+absence observable, which is what a count is for): the determinism carve-out
+(D4), the memory residual (D6), the absent rate limit on a Lua auth check
+(D6), the `coroutine` refusal (D3), the const timeout (D6), the UTC pin (D3),
+the RNG override (D3), the `mock.entities`-versus-`$ref` asymmetry — a family
 name is a runtime Lua string, so it can never be checked at write time the
 way P7a checks a `$ref` ("never STORED dangling"), and a function broken by a
 later decline, a spec rebind or a config-only rollback has no host-side
-signal at all.
+signal at all — and **the v4 refusal (D5)**: `minVersion` moves to 5, so a
+bundle a colleague exported or a checkpoint they took before this slice no
+longer imports, and their route is to re-export from a build that still reads
+it. That last one is not a new KIND of entry: this file already carries one
+per bundle bump, "bundle v3 is NOT read" (`CARVE-OUTS.md:919`, P6b) and
+"Bundle v5 reads v4 but not v3" (`:1402`, P7a), each stating its own cost.
+Leaving the third out would have been the first bump in this tree whose cost
+lived only in a gate document.
 
 **The two matrices D7 promises are a DELIVERABLE of this section**, not a
 sentence in passing (round 1 MINOR): spec operation versus custom endpoint,
@@ -601,7 +627,10 @@ baseline, which is the defect this table exists to prevent.
     the wrong arity returns `nil, "bad_scope"`. *Fails if the two-argument call
     returns an empty array rather than rows* — which is what inheriting `ref`'s
     empty-route-scope behaviour (`CARVE-OUTS.md:574`) produces, silently, and it
-    is the reason D3 withdrew the word "verbatim".
+    is the reason D3 withdrew the word "verbatim". And *fails if a wrong-arity
+    tuple returns rows, or is silently padded or truncated to the family's
+    depth, instead of `nil, "bad_scope"`* — a refusal that degrades into a
+    best-effort match is how a scope becomes decorative a second time.
 12. The `mock` table's key set is exactly `jwt`, `now`, `entities` — pinned
     against a frozen literal, the way clause 6 pins the surviving `_G` set, not
     sampled and not grepped for one name. *Fails if any other key is reachable* —
@@ -768,7 +797,7 @@ baseline, which is the defect this table exists to prevent.
     the ordering rather than the refusal: a tick carrying `lua` and NO `schema`
     is ACCEPTED. *Fails if one refusal is clamped or silently ignored*, and
     *fails if a Lua-only tick is refused as `stream.tick.schema is required`* —
-    which is what `internal/customep/stream.go:246` gives today, because it
+    which is what `internal/customep/stream.go:253` gives today, because it
     requires `schema` before it could ever check exclusivity; D8b(2) and D8b(3)
     state the orders this clause observes.
 40. A Lua tick returning a string containing CR or LF, or a body over
@@ -819,14 +848,16 @@ baseline, which is the defect this table exists to prevent.
     `docs/USER-GUIDE.md`, all four `skills/mocker/` references, `CLAUDE.md` and
     `HISTORY.md` carry the slice. *Fails if the guide's embedded copy and its
     source disagree.*
-47a. `CARVE-OUTS.md` carries all EIGHT items D9 enumerates — the determinism
+47a. `CARVE-OUTS.md` carries all NINE items D9 enumerates — the determinism
     carve-out, the memory residual, the absent rate limit on a Lua auth check,
     the `coroutine` refusal, the const timeout, the UTC pin, the RNG override,
-    and the `mock.entities`-versus-`$ref` asymmetry — each as its own entry
-    naming what it gives up. *Fails if the file gained fewer than eight entries*:
-    clause 47's own `Fails if` is about guide-source sync and would pass over a
-    document that says nothing, which is how five of these went uncovered until
-    round 1 counted them.
+    the `mock.entities`-versus-`$ref` asymmetry, and the v4 refusal — each as
+    its own entry naming what it gives up, and each MATCHED BY NAME rather than
+    counted. *Fails if any one of the nine is absent*, which is a different
+    check from the one this clause first carried: "fewer than eight entries" is
+    a floor, and a floor passes over nine entries of which one is the wrong
+    nine. Round 2's own blocker was exactly that shape — the count was pinned
+    and the item it was missing was invisible to the pin.
 47b. The two matrices D7 promises — spec operation versus custom endpoint, where
     the function branch sits against the 406 gate and against media negotiation —
     are present in `skills/mocker/` and in `docs/USER-GUIDE.md`. *Fails if the
@@ -838,14 +869,18 @@ baseline, which is the defect this table exists to prevent.
 
 ### A.10 — What round 1 found uncovered
 
-Ten clauses, numbered from 49 so that no number above moves: D8b, D3, D6 and
-this section all cite clauses by number, and renumbering to keep each group in
-ascending order would silently re-aim every one of those citations. The group a
-clause belongs to is named in the clause.
+Ten clauses, numbered from 49 so that no number above moves. The citations that
+would break run in two directions and neither is a D-section — a grep for
+`clause N` and `#A.n(m)` across D1–D10 and D8b returns nothing: §A's own clauses
+18 and 39 cite `D8b(1)`–`D8b(3)`, and the clauses below cite clauses 6, 22, 24,
+25 and 34 by number. Renumbering to keep each group in ascending order would
+silently re-aim every one of those. The group a clause belongs to is named in
+the clause instead.
 
 49. **(D3, the `req` block.)** A function on a route with a `{}` segment,
-    called with a repeated query key, a mixed-case request header and a body that
-    is not JSON, sees: `req.pathParams` holding the segment's value,
+    called with a repeated query key, a mixed-case request header, the SAME
+    header name sent TWICE with different values, and a body that is not JSON,
+    sees: `req.pathParams` holding the segment's value,
     `req.query` holding an ARRAY for the repeated key, `req.headers` keyed in
     lower case with a repeated header's values joined by `", "`, and `req.body`
     as the RAW STRING. The same function called with a JSON body sees a table.
@@ -897,12 +932,24 @@ clause belongs to is named in the clause.
     and *fails if they are recorded under a different token* — D10 claims the
     semantics are "unchanged", and an unobserved claim of sameness is where a
     second code path hides.
+59. **(D5, the v4 refusal's blast radius.)** After the change,
+    `TestDecode_readsV4` asserts a REFUSAL naming version 4, and its doc comment
+    says which decision retired P7a's promise; the other three tests D5
+    enumerates carry a v5 or v6 fixture; and no test anywhere in the tree still
+    asserts that a v4 document decodes. *Fails if `TestDecode_readsV4` merely
+    has its fixture literal bumped* — the suite is then green and the one
+    regression check about v4 tests nothing, which is the cheap fix this clause
+    exists to refuse.
 58. **(D3, the sandbox's deliberate residue.)** `rawget`, `rawset`, `rawequal`
-    and `rawlen` are PRESENT in the frozen `_G` allowlist of clause 6, and
-    `rawget(_G, "io")` from inside a function returns `nil`. *Fails if the
-    allowlist literal is silent about them* — round 1's RED named five things
-    `OpenBase` registers and four were removed, so their presence has to be a
-    recorded decision (D3 step 3a) rather than a leftover.
+    and `rawlen` are PRESENT in the frozen `_G` allowlist of clause 6. *Fails if
+    the allowlist literal is silent about them* — round 1's RED named five
+    things `OpenBase` registers and four were removed, so their presence has to
+    be a recorded decision (D3 step 3a) rather than a leftover. And
+    `rawget(_G, "load")` from inside a function returns `nil`. *Fails if it
+    returns a function* — `load` is a name `OpenBase` DID register and step 3
+    removed, which is the only case that discriminates: `io` is never opened at
+    all, so a `rawget` for it returns nil under every implementation, correct or
+    not.
 
 ## DESIGN.md — on the owner's word only
 
@@ -931,7 +978,10 @@ Not adopted as-is: review-2's "4 graph deps violate §30.9" — resolved by the
 tidy-first remeasure (expected to meet the bar literally; divergence
 recorded if not). Review-1's GREEN findings (no bytecode ingress; metatables
 cannot resurrect removed globals without a retained reference) are kept as
-design facts the boundary test will pin.
+design facts the FROZEN-`_G` ALLOWLIST TEST of D3 step 6 will pin, observed by
+clauses 6 and 58 — not the boundary test, which is
+`internal/luafn/boundary_test.go` and checks single-importer isolation and
+nothing else (round 1 finding 23, half-closed there and finished in round 2).
 
 ## Review round 2 — the acceptance section's first read, 2026-09-04
 

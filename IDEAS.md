@@ -40,9 +40,13 @@ gate: library
 `wsmock`/`yamlx`); allowlist-only sandbox (`SkipOpenLibs`, a frozen-`_G`
 test, host-closure RNG replacing the library's package-global
 `math.random` — mathlib.go:186, `mock.jwt` refusing `alg: none`);
-`mock.jwt`/`mock.now`/`mock.entities` (read-only, the `ref` recipe's
-resolution); a `Function` field on the VARIANT — per-status exclusivity,
-no migration, bundle v6 reading v5; serving as `resourceBranch`'s mirror,
+`mock.jwt`/`mock.now`/`mock.entities` (read-only; NOT the `ref` recipe's
+resolution — round 2 withdrew that word, because `ref` passes the empty
+route scope for every family, so a nested one would read nothing: real
+filtering by an explicit ancestor tuple through
+`resources.Repo.ListFiltered`); a `Function` field on the VARIANT —
+per-status exclusivity, no migration, bundle v6 reading v5 AND NOT v4,
+the owner's call against the gate's own recommendation; serving as `resourceBranch`'s mirror,
 the FUNCTION beating a confirmed resource; the output through the shared
 safety tail (`BrowserExecutableMediaType`, CR/LF, cap before
 `WriteHeader`); Lua omitted from `export_openapi`; contract stays 70.
