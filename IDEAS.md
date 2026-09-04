@@ -14,7 +14,37 @@ items 2 and 3) shipped together as `P4b` the same night, the test-suite
 plugin (once item 6, then 4) as `A12` right after, and
 `MOCKER_STREAM_TRAFFIC_FRAMES=all` (once item 5, then 3) as `A14`. On
 2026-09-03 the owner refused fetch-by-URL, the drift screen and Swagger
-2.0, and deferred the last two.
+2.0, and deferred the last two. On 2026-09-04 endpoint functions (`A18`,
+below) were decided and gated.
+
+## Decided and gated, not yet cut: endpoint functions (`A18`)
+
+The owner asked for endpoint LOGIC on 2026-09-04 — a sign-in that behaves
+approximately like prod, not a hardcoded body —
+
+> «хочу такую фичу для локального инструмента на все эти угрозы пофигу»
+
+— then chose by four direct questions: Lua (gopher-lua) as the runtime,
+always on (no flag), the full helper set, honest out-of-guarantee
+non-determinism; the two stream hooks (`tick.lua`, `onFrame`) on his word
+the same day («добвляй 1 и 2 в гейт»). The full gate — decisions D1–D10,
+the §30.9-style measurement (cgo 0, +1.55 MiB, `SetContext` interrupt
+verified on an infinite loop) and a three-reviewer Codex round (luna/high,
+all verdicts folded back in) — lives OUTSIDE this repository at
+`../mocker-a18-functions/DECISIONS.md` beside the three review files; it
+survives only while that directory does, so the essence is here: library
+#3 behind ONE importing package (`internal/luafn`, boundary-tested like
+`wsmock`/`yamlx`); allowlist-only sandbox (`SkipOpenLibs`, a frozen-`_G`
+test, host-closure RNG replacing the library's package-global
+`math.random` — mathlib.go:186, `mock.jwt` refusing `alg: none`);
+`mock.jwt`/`mock.now`/`mock.entities` (read-only, the `ref` recipe's
+resolution); a `Function` field on the VARIANT — per-status exclusivity,
+no migration, bundle v6 reading v5; serving as `resourceBranch`'s mirror,
+the FUNCTION beating a confirmed resource; the output through the shared
+safety tail (`BrowserExecutableMediaType`, CR/LF, cap before
+`WriteHeader`); Lua omitted from `export_openapi`; contract stays 70.
+Estimated two days. Awaiting the owner's «режь»; DESIGN v13 §35 is written
+on his word only.
 
 ## Deferred (the owner's call, 2026-09-03: «отложим на потом»)
 
@@ -66,5 +96,7 @@ on 2026-09-03 — `CARVE-OUTS.md`, "Ideas refused".
 
 ## Recommendation
 
-§34 is closed (`P7a`, `P7b`). Record-proxy is next if the owner lifts the
-deferral; its open questions are listed above.
+§34 is closed (`P7a`, `P7b`). `A18` (endpoint functions) is decided, gated
+and reviewed — the one backlog item that needs no decisions before cutting,
+only the owner's word. Record-proxy is next after that if the owner lifts
+the deferral; its open questions are listed above.
