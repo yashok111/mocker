@@ -1174,6 +1174,62 @@ recorded above as his: bundle `minVersion` moves to 5 (v4 refused by name,
 against this document's own recommendation), and `mock.entities` gets REAL
 scope filtering rather than `ref`'s behaviour.
 
+## The gate's record, and what stands UNREVIEWED
+
+Closed 2026-09-04 after four rounds in workspace `mocker-a18-functions`, on the
+owner's word, with the stop rule **deliberately not satisfied** — the rule ends
+a gate on a reviewer round that files no BLOCKER, and round 4 filed three.
+Recorded as a decision rather than as a clean close, because a gate that stops
+looking like one that finished is the one thing this record exists to prevent.
+
+| round | findings | blockers | lenses |
+|---|---|---|---|
+| 1 (full) | 34 | 3 | criterion, closure, other (sonnet); external `gpt-5.6-luna` high |
+| 2 (delta) | 17 | 1 | closure2, fix-induced, ripple (sonnet) |
+| 3 (delta) | 14 | 2 | sweep (sonnet); external `gpt-5.6-luna` high |
+| 4 (delta) | 10 | 3 | class, delta4 (sonnet) |
+| total | **75** | **9** | |
+
+Findings descended; blockers did not, and the reason is the whole of what this
+gate learned. **From round 2 on, every blocker was about the acceptance
+section's own machinery and not about the design**: a count that was short, a
+command whose scope was guessed, a pattern that reached one shape of six, a
+defeat that asked a reader to re-derive a judgement, a guard that counted its
+own prose. Read against the SUBJECT question the corpus asks from the round
+where the count stops descending — would a fleet BUILD the wrong thing, or
+merely be told something stale about a file it is about to open anyway — all
+nine are the second kind. That is the ground the owner closed on.
+
+**What no reviewer has read**, listed so nobody mistakes it for reviewed text:
+
+- Round 4's own fixes — the `[GIVES-UP]` tagging of D9's twelve, the rewritten
+  47a defeat, D5's six-shape enumeration, clause 59's tree-wide command, and
+  the four smaller corrections. They closed round 4's findings and were filed
+  by nobody afterwards.
+- The withdrawal that followed the round: D5's `file:line` list demoted from a
+  checklist to illustrations, with clause 59 owning the enumeration. That edit
+  answered a SIGNAL (one section, three consecutive rounds, three blockers)
+  rather than a finding, and no round has judged whether it was the right
+  answer.
+- This section.
+
+**Six defects in the tree that this gate found and that are NOT A18's**, listed
+because they exist today and nothing else is watching them: `api/openapi.json`
+carries `WorkspaceExportDocument.mockerBundle` as `"const": 4` and three
+descriptions saying "mockerBundle v4", and `internal/mcp/tools_transfer.go`
+carries two tool descriptions and one `jsonschema` tag saying the same — all
+six left behind when P7a moved `CurrentVersion` to 5. No bar sees them: the
+contract test reads routes and `csrfToken` and never a schema, the runtime
+validator was removed with `ajv`, and no test asserts on an MCP description
+string. This slice repairs them on the way past; a slice that does not ship
+should repair them anyway.
+
+**The rule for what happens next.** Anything edited from here is unreviewed
+code by this corpus's own measure — a fix is the largest single source of
+blockers — so a change to a DECISION re-opens a round, and a change to prose
+goes into the implementing run's own diff review. "Cosmetic" is not a category
+that survives contact with a checker.
+
 ## Estimate
 
 The slice: `internal/luafn` (runner + allowlist sandbox + boundary test +
