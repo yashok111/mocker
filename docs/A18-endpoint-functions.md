@@ -1,7 +1,8 @@
 # A18 — endpoint functions (Lua) — gate decisions
 
-Date: 2026-09-04. Status: decided, reviewed (round 1 below), awaiting the
-owner's word to cut the slice.
+Date: 2026-09-04. Status: decided; reviewed in TWO rounds (both recorded near
+the end of this file); the acceptance section §A is written and measured;
+awaiting the owner's word to cut the slice.
 The owner asked for the feature and then answered four direct questions; his
 answers are quoted verbatim below as data, in the language they were given in.
 
@@ -70,6 +71,13 @@ response, closes the VM. **Stateless by construction**: no global, no closure,
 no variable survives between two calls; the only persistence a function can
 see is `mock.entities` (read-only).
 
+The owner's own phrasing in D1 — "issue a token that expires in an hour and
+remember it" — is satisfied by the TOKEN, not by state: a JWT carries its own
+expiry and verifies without anything on the server remembering it. No session
+store was promised and none is built. Said here because the two sentences sit
+one section apart and a reader six months from now would otherwise wonder
+which one lost (round 1 NOTE).
+
 **Sandbox — built ALLOWLIST-ONLY, not by stripping** (round 1 RED: `OpenBase`
 also registers `loadstring`, `module`, `newproxy`, `require`, `raw*` —
 baselib.go:35–55; a strip-list of four names is not airtight). Construction:
@@ -80,6 +88,16 @@ baselib.go:35–55; a strip-list of four names is not airtight). Construction:
    `dofile`, `print`, `module`, `require`, `newproxy`, `collectgarbage`
    (gopher-lua's implementation calls process-wide `runtime.GC()` — one
    function must not impose GC latency on unrelated work).
+3a. `raw*` — `rawget`, `rawset`, `rawequal`, `rawlen` — STAY, deliberately,
+   and this sentence exists because round 1's RED named five things
+   `OpenBase` registers and the list above closes four. They bypass
+   METATABLES and reach nothing outside the VM: a global this construction
+   removed is gone from the table, not hidden behind a metatable, so
+   `rawget(_G, "io")` returns the same nil an ordinary index does — which is
+   round 1's own GREEN finding ("metatables cannot resurrect removed globals
+   without a retained reference") read from the other side. The frozen-`_G`
+   test of step 6 pins their PRESENCE, so this decision is observed rather
+   than assumed, and a later slice that wants them gone changes one literal.
 4. From `os` keep ONLY `time`, `clock`, `date` — remove `execute`, `exit`,
    `getenv`, `remove`, `rename`, `setlocale`, `tmpname`.
 5. NEVER OPEN: `io`, `package`, `debug`, `coroutine` (a coroutine/thread
@@ -120,6 +138,18 @@ A nil body is an empty body. Anything else the function returns — a
 non-number status, a boolean body — is a `function_failed` 500 (D6), not a
 silent coercion.
 
+**Two header edges, decided rather than left silent** (round 1 MINOR, both
+directions). INBOUND: `req.headers` lowercases the key and joins a repeated
+header's values with `", "`, the form `net/http` itself round-trips — it does
+NOT become an array, because unlike a query string a repeated header is
+already defined by RFC 9110 as equivalent to that join, and one shape per
+field is worth more here than symmetry with `req.query`. OUTBOUND: a
+`string→string` table cannot express two `Set-Cookie` lines, and that is a
+STATED limitation of this slice rather than an oversight — the sign-in shape
+D1 describes needs one cookie or a token in the body. A function that needs
+two same-named response headers is out of scope; the escape is a pinned
+variant on another status, which carries a header map of its own.
+
 **Helpers** — the full set, the owner's explicit pick:
 
 > «Полный набор (Рекомендую)»
@@ -134,13 +164,33 @@ silent coercion.
   SIGNING KEY never enters the Lua state.
 - `mock.now(offsetSec?)` → number, unix seconds, REAL clock.
 - `mock.entities(family[, scopeArray])` → array of row tables | nil, err.
-  Resolution is the `ref` recipe's, verbatim (`internal/mockplane/ref.go`):
-  the family is looked up in THIS workspace's runtime `route_family`-keyed
-  roster, rows are read through the filtered list read under the SERVING
-  request's own base scope, scope values arrive RAW and are encoded by the
-  HOST (never double-escaped by the function); an unconfirmed or unknown
-  family → nil, "unknown_family". Read-only: there is no `mock.write` — the
-  anonymous mock plane's own POST/DELETE verbs remain the only writers.
+  The family is looked up in THIS workspace's runtime `route_family`-keyed
+  roster — the same lookup `ref` makes (`internal/mockplane/ref.go`), and the
+  reason is the same one: `EntityStore.List` is not workspace-scoped, so
+  anything else turning a family name into a `resource_id` would be one
+  forgotten check away from serving another workspace's rows on a plane that
+  is unauthenticated by design. Rows are read under the SERVING request's own
+  base scope, scope values arrive RAW and are encoded by the HOST (never
+  double-escaped by the function); an unconfirmed or unknown family → nil,
+  "unknown_family". Read-only: there is no `mock.write` — the anonymous mock
+  plane's own POST/DELETE verbs remain the only writers, and the `mock` table
+  holds exactly `jwt`, `now`, `entities` and nothing else, pinned the way
+  step 6 pins `_G`.
+  **`scopeArray` is NOT the `ref` recipe's behaviour and the word "verbatim"
+  is withdrawn** (round 1 MAJOR). `ref` passes the EMPTY ROUTE scope to
+  `EntityStore.List` for every family — `CARVE-OUTS.md:574`, with the `P3c`
+  entry at `:440`; `P3h` closed the BASE half only — so a `ref` at a nested
+  family finds nothing, deliberately. Inheriting that would make `scopeArray`
+  decorative: a nested family would return an empty array, not an error,
+  forever. The owner's call, 2026-09-04: **implement real filtering.**
+  `mock.entities(family, {"7", "5"})` reads the rows under that ancestor
+  tuple through `resources.Repo.ListFiltered`, the tuple encoded by
+  `resources.EncodeScope` — the ONE owner of that join, never a second
+  `strings.Join` at this call site — and an arity that does not match the
+  family's depth is `nil, "bad_scope"`. Omitting the argument keeps the
+  request's own scope. This is NEW WORK, not a reuse, and it is named as such
+  so the estimate carries it; it also leaves `ref`'s own carve-out exactly
+  where it is, since nothing here changes what a recipe does.
 
 ## D4 — Determinism: honest, out of the guarantee
 
@@ -189,10 +239,21 @@ that boundary (round 1 GREEN made mandatory).
   §12, `capture.go:127`) — so a scenario switches a function on a spec
   operation's override and cannot touch a custom endpoint's. Stated, not
   changed.
-- **Bundle v6 reads v5** (and the decode chain already accepts older): the
-  field is additive; a v5 document without functions imports unchanged. An
-  OLD (v5) binary meeting a v6 document REFUSES it by name — the P6b
-  precedent, no silent field-dropping.
+- **Bundle v6 reads v5 AND NOTHING OLDER: `CurrentVersion = 6`,
+  `minVersion = 5`** (`internal/bundle/bundle.go:50,60`, today 5 and 4). The
+  field is additive, so a v5 document without functions imports unchanged; a
+  v4 document is REFUSED BY NAME, and an OLD (v5) binary meeting a v6
+  document refuses it by name too — the P6b precedent, no silent
+  field-dropping in either direction. **This was round 1's open question and
+  it is the owner's call, taken 2026-09-04**, against this document's own
+  recommendation, which was to leave the floor at 4. What it costs is named
+  rather than hidden: P7a set `minVersion = 4` deliberately because A16 had
+  shipped the install wizard the day before, so a colleague's v4 checkpoint
+  or export was plausible; after this slice such a document no longer
+  imports, and the operator's route is to re-export from a build that still
+  reads it. The invariant bought in exchange is the simple one — each version
+  reads exactly the version before it — and it is what stops `minVersion`
+  being re-argued at every bump.
 
 ## D6 — Execution guards
 
@@ -221,6 +282,25 @@ that boundary (round 1 GREEN made mandatory).
   error's first line CAPPED (≤ 200 bytes) — Lua error text can embed request
   data (tokens, headers) and notes are not a disclosure channel. No raw
   error objects, no Go stacks.
+- **The host helpers run under the SAME deadline, and it is threaded, not
+  assumed** (round 1 MAJOR): `mock.entities` reads through the store and can
+  therefore queue behind a checkpoint restore or a `reset-data` holding the
+  single writer connection, and `mock.jwt` signs. Both take the invocation's
+  `context.Context` — the one `SetContext` already carries — and a helper
+  that returns because that context expired is the `503 function_timeout`
+  path, not `500 function_failed`. Without this the 2 s budget bounds Lua
+  bytecode and nothing else, which is the half `string.rep` above already
+  says the check cannot reach.
+- **No rate limit on a Lua auth check, accepted and recorded** (round 1
+  MAJOR). The feature's own motivating example is a password check, it runs
+  on the unauthenticated mock plane, and D2 makes it always-on on a shared
+  contour as well as a laptop — while the ADMIN plane runs a two-bucket login
+  limiter (A15) precisely because one shared password is guessable. A mock's
+  Lua sign-in has no host-side brute-force protection of any kind, and adding
+  one would be a policy this product does not have. It follows from the
+  owner's overruling at the head of this document, and it goes into
+  `CARVE-OUTS.md` in these words, beside the memory residual, rather than
+  being left to be discovered.
 - **Memory: uncapped, accepted** — see above; the residual is recorded in
   `CARVE-OUTS.md`, not hidden.
 
@@ -278,14 +358,65 @@ function's dynamic output is not schema-validated (there is no schema to
 validate against beyond the declared one), and the drift report stays
 shape-only: a function-bearing row is not drift by itself.
 
+## D8b — The three orderings `internal/customep`'s validator does not have
+
+Round 1's external lens read the tree and found that three refusals D5 and
+D10 require cannot fire where the validator checks things today. Each was
+verified by reading the file. They are written here because an implementer
+following D5/D10 alone would produce a build that fails this document's own
+acceptance clauses while looking correct.
+
+1. **`function_on_stream` needs its check BEFORE the response-map refusal.**
+   `internal/customep/stream.go:336` (sse) and `:351` (ws) refuse
+   `len(row.Responses) != 0` with "kind takes no responses" before anything
+   inspects a variant — and a `function` lives inside a variant, inside
+   `Responses`. As it stands D5's `400 function_on_stream` can never be the
+   answer. The function-bearing-variant check runs FIRST; the generic
+   response-map refusal keeps its wording for every other case.
+2. **`tick_lua_and_schema` needs exclusivity checked BEFORE `schema` is
+   required.** `internal/customep/stream.go:246` `validateTick` opens with
+   `if len(t.Schema) == 0` → "stream.tick.schema is required", so a Lua-only
+   tick is refused as schema-missing and a `lua`+`schema` tick never reaches
+   D10's own refusal. Order: exclusivity first, then require and validate
+   `schema` only when `lua` is absent.
+3. **`onFrame` has no site at all.** `internal/customep/stream.go:152-163`
+   refuses `Reactive` and `Echo` on a non-ws kind and knows nothing of a
+   third inbound-side field, so D10's `on_frame_on_sse`,
+   `on_frame_and_reactive` and `on_frame_and_echo` need both a site and an
+   order: the kind check first (`on_frame_on_sse`), then the two conflicts,
+   beside the existing Reactive/Echo refusals rather than after them.
+
 ## D9 — Documentation at slice end
 
 `docs/USER-GUIDE.md` (the operator's copy, Russian), `skills/mocker/` all
 four references + `internal/guide` resync (`make guide-sync`), the `design`
-guide topic untouched, `CLAUDE.md` Architecture + `HISTORY.md` +
-`CARVE-OUTS.md` (determinism carve-out, memory residual, `coroutine`
-refusal, the const timeout, the UTC pin, the RNG override) — the standing
+guide topic untouched, `CLAUDE.md` Architecture + `HISTORY.md` — the standing
 slice-end set.
+
+**`CARVE-OUTS.md` carries EIGHT named items, and the count is here so a
+missing one is visible** (round 1 MINOR: D9 named six and only one of them
+had a clause naming its content): the determinism carve-out (D4), the memory
+residual (D6), the absent rate limit on a Lua auth check (D6), the
+`coroutine` refusal (D3), the const timeout (D6), the UTC pin (D3), the RNG
+override (D3), and the `mock.entities`-versus-`$ref` asymmetry — a family
+name is a runtime Lua string, so it can never be checked at write time the
+way P7a checks a `$ref` ("never STORED dangling"), and a function broken by a
+later decline, a spec rebind or a config-only rollback has no host-side
+signal at all.
+
+**The two matrices D7 promises are a DELIVERABLE of this section**, not a
+sentence in passing (round 1 MINOR): spec operation versus custom endpoint,
+where the function branch sits against the 406 gate and against media
+negotiation, written into `skills/mocker/` and into `docs/USER-GUIDE.md`.
+
+**The Lua CONTRACT changes by the same refuse-by-name discipline the bundle
+uses** (round 1 NOTE). The `req`/`out` shape and D3's allowlist carry no
+version marker of their own, and a function travels byte-for-byte through
+export, import, fork and every checkpoint — so a later tightening of the
+allowlist breaks a persisted function silently at runtime, because an
+undefined global reads `nil` in Lua and D8's write-time compile check cannot
+see it. Any future slice that narrows either must refuse by name at some
+door, the way a bundle version does; this one records the obligation.
 
 ## D10 — Streams: two Lua hooks (added on the owner's word)
 
@@ -317,7 +448,12 @@ connection's frames and pings up to the 2 s timeout — per connection, never
 process-wide. **VM cost is measured in-slice**: a benchmark at the 100 ms
 floor (10 Hz × connections) of fresh `NewState`+open per firing; fresh VMs
 stay unless the number forces a carve-out — pooling would violate
-stateless-by-construction. **Preview runs a draft's tick Lua for the ≤ 50
+stateless-by-construction. **What "forces" means is named, because a hedge
+with no number is a decision nobody can take** (round 1 MINOR): the benchmark
+reports per-firing overhead against the 100 ms floor, there is no automatic
+gate, and the OWNER reads the raw number and decides. A slice that pools VMs
+on its own reading of a benchmark has changed D3's statelessness guarantee
+without anybody saying so. **Preview runs a draft's tick Lua for the ≤ 50
 laid-out frames on the honest clock, under an AGGREGATE 10 s budget**
 (round 1 YELLOW: 50 × 2 s is 100 s otherwise) — past the budget the
 remaining timeline is laid out labelled "not run". `maxBytesPerSec` is
@@ -459,10 +595,18 @@ baseline, which is the defect this table exists to prevent.
     family returns `nil, "unknown_family"`. Scope values are passed RAW and the
     host encodes them. *Fails if a scope value is escaped twice*, and *fails if a
     family belonging to another workspace resolves* — the roster lookup is
-    per-workspace and this plane is unauthenticated by design.
-12. There is no writer: a grep over `internal/luafn` for a `mock.write`-shaped
-    name prints nothing, and the grep is named in the finding. *Fails if a
-    function can create or delete an entity row.*
+    per-workspace and this plane is unauthenticated by design. And on a NESTED
+    family of depth 2, `mock.entities(family, {"7", "5"})` returns the rows under
+    that ancestor tuple and not under the serving request's own, while a tuple of
+    the wrong arity returns `nil, "bad_scope"`. *Fails if the two-argument call
+    returns an empty array rather than rows* — which is what inheriting `ref`'s
+    empty-route-scope behaviour (`CARVE-OUTS.md:574`) produces, silently, and it
+    is the reason D3 withdrew the word "verbatim".
+12. The `mock` table's key set is exactly `jwt`, `now`, `entities` — pinned
+    against a frozen literal, the way clause 6 pins the surviving `_G` set, not
+    sampled and not grepped for one name. *Fails if any other key is reachable* —
+    a writer named `mock.upsert`, or a write folded into `mock.entities`, passes
+    a grep for a `mock.write`-shaped name and is still the wrong implementation.
 13. `MOCKER_FUNCTIONS` appears nowhere in `internal/config` or `cmd`, and the
     `MOCKER_*` count stays at 36. *Fails if the feature ships behind a flag* —
     D2 is «Всегда вкл», and a flag would make every clause here conditional on a
@@ -493,8 +637,12 @@ baseline, which is the defect this table exists to prevent.
     function runs only when its variant is selected. *Fails if a function-bearing
     row runs its function for a request that selected another variant.*
 18. A variant-level `function` on a row of `kind: "sse"` or `kind: "ws"` is
-    refused `400 function_on_stream`. *Fails if it is accepted and then silently
-    never fires.*
+    refused `400 function_on_stream` — that refusal and not another. *Fails if it
+    is accepted and then silently never fires*, and *fails if the answer is
+    `kind %q takes no responses`*, which is what
+    `internal/customep/stream.go:336` gives today because it refuses a non-empty
+    `Responses` map before anything inspects a variant: D8b(1) states the order
+    this clause observes.
 19. The `function` string survives byte-identical through each round trip its
     carrier already makes: checkpoint capture → `rollback`, `export_workspace` →
     `import_workspace`, `fork_workspace`, and a CAS conflict document. One test
@@ -504,10 +652,15 @@ baseline, which is the defect this table exists to prevent.
     "fixed" here* — it is DESIGN §12's, inherited (`capture.go:127`,
     `bundle.go:143`, both read and confirmed 2026-09-04), and changing it would
     be a scenario-layer decision this slice never took.
-21. `bundle.CurrentVersion` is 6; a v5 document imports unchanged; a v6 document
-    presented to a binary built at `a6ae6ee` is refused BY NAME rather than
-    field-dropped. *Fails if an old binary silently ignores the field.*
-    **The `minVersion` half is OPEN — see (i) below.**
+21. `bundle.CurrentVersion` is 6 and `minVersion` is 5. A v5 document imports
+    unchanged; a **v4 document is refused BY NAME**, with the version in the
+    message; a v6 document presented to a binary built at `a6ae6ee` is refused by
+    name rather than field-dropped. *Fails if an old binary silently ignores the
+    field*, and *fails if a v4 document still imports* — the owner took that call
+    on 2026-09-04 against this document's own recommendation (D5), so an
+    implementation that quietly leaves the floor at 4 passes a clause written the
+    other way and ships the opposite decision. The v4 fixture is the one P7a's
+    own v4 test already uses.
 
 ### A.5 — Execution guards (D6)
 
@@ -516,13 +669,23 @@ baseline, which is the defect this table exists to prevent.
     note `function_timeout`. *Fails if the request outlives the budget*, and
     *fails if the status is 500* — the two classes are separate on purpose.
 23. A function returning `Content-Type: text/html` answers `500 function_failed`
-    and no `text/html` byte reaches the wire. *Fails if a body reaches the client
-    under any media type `httpx.BrowserExecutableMediaType` refuses* — the same
-    rule both planes already apply on write.
-24. A function returning a header value containing CR or LF, or an empty header
-    name, answers `500 function_failed` and writes no header. *Fails if the value
-    is written after being sanitized* — the plane refuses such headers, it does
-    not repair them.
+    and no `text/html` byte reaches the wire; so does one returning
+    `image/svg+xml`, and so does one returning a value `mime.ParseMediaType`
+    cannot parse. Three cases, because the table at
+    `internal/httpx/mediatype.go:20-24` holds more than one entry and an
+    unparseable value is refused by a different branch. *Fails if a body reaches
+    the client under any media type `httpx.BrowserExecutableMediaType` refuses*,
+    and the three cases are what stops an implementation that special-cases the
+    literal `text/html` from passing — nothing in the tree pins that function to
+    a single call site, unlike an isolated library.
+24. A function returning a header value containing CR or LF, an empty header
+    name, a value past the sane-length bound D6 names, or a NON-STRING value (a
+    Lua number or table) answers `500 function_failed` and writes no header —
+    four cases for the three properties D6 states plus the empty name. *Fails if
+    the value is written after being sanitized* — the plane refuses such headers,
+    it does not repair them — and *fails if a non-string value is coerced*, which
+    is the same silent-coercion refusal D3's `Out` block already makes for the
+    status and the body.
 25. A function returning a body over `MOCKER_MAX_RESPONSE` answers
     `500 function_too_large` with NO partial body, observed with
     `MOCKER_MAX_RESPONSE` set to a NON-DEFAULT value (the default is `4mb`).
@@ -601,12 +764,21 @@ baseline, which is the defect this table exists to prevent.
 39. Four refusals, four assertions, each BY NAME: `tick.lua` with `tick.schema`
     → `400 tick_lua_and_schema`; `onFrame` with `reactive` →
     `400 on_frame_and_reactive`; `onFrame` with `echo` → `400 on_frame_and_echo`;
-    `onFrame` on `kind: "sse"` → `400 on_frame_on_sse`. *Fails if one is clamped
-    or silently ignored.*
+    `onFrame` on `kind: "sse"` → `400 on_frame_on_sse`. And one more, which is
+    the ordering rather than the refusal: a tick carrying `lua` and NO `schema`
+    is ACCEPTED. *Fails if one refusal is clamped or silently ignored*, and
+    *fails if a Lua-only tick is refused as `stream.tick.schema is required`* —
+    which is what `internal/customep/stream.go:246` gives today, because it
+    requires `schema` before it could ever check exclusivity; D8b(2) and D8b(3)
+    state the orders this clause observes.
 40. A Lua tick returning a string containing CR or LF, or a body over
     `MOCKER_MAX_RESPONSE`, SKIPS that firing, leaves the connection open, and the
-    skip is counted in the existing `frames_skipped:M` note. *Fails if the frame
-    is written and breaks SSE framing*, and *fails if the connection closes.*
+    skip is counted in the existing `frames_skipped:M` note — the size half
+    observed with `MOCKER_MAX_RESPONSE` at a NON-DEFAULT value, exactly as clause
+    25 observes its own twin. *Fails if the frame is written and breaks SSE
+    framing*, *fails if the connection closes*, and *fails if the observation
+    uses the default* — a hard-coded 4 MiB and a config-reading implementation
+    emit identical bytes there.
 41. A Lua tick returning `nil` skips the firing with the connection open and
     nothing counted as an error. *Fails if a nil return is counted as both a skip
     and an error* — they are different outcomes.
@@ -620,11 +792,13 @@ baseline, which is the defect this table exists to prevent.
     `onFrame` is still called for the NEXT inbound frame. *Fails if the error is
     counted in `replies_dropped`* — that token means budget drops, and
     overloading it hides broken code behind a full budget.
-44. A benchmark records the cost of `NewState` + sandbox open + one call at the
-    100 ms tick floor. The number is RECORDED, not thresholded. *Fails if no
+44. A benchmark records the per-firing cost of `NewState` + sandbox open + one
+    call against the 100 ms tick floor. The number is RECORDED, not thresholded,
+    and D10 names who reads it: the owner, with no automatic gate. *Fails if no
     number is taken* — D10 makes fresh-VM-per-firing conditional on it, and a
     missing measurement leaves the pooling question unanswerable rather than
-    answered.
+    answered — and *fails if the slice pools VMs on its own reading of the
+    number*, which changes D3's statelessness guarantee with nobody saying so.
 45. Stream preview runs a draft's tick Lua under an AGGREGATE 10 s budget; past
     it the remaining frames are laid out and LABELLED "not run", and
     `maxBytesPerSec` is labelled NOMINAL whenever `tick.lua` is present. *Fails
@@ -642,21 +816,93 @@ baseline, which is the defect this table exists to prevent.
     this tree twice, and both times the wiring nobody tested was
     `cmd/mocker/main.go`.
 47. `make guide-sync` leaves no drift and `internal/guide`'s own test is green;
-    `docs/USER-GUIDE.md`, all four `skills/mocker/` references, `CLAUDE.md`,
-    `HISTORY.md` and `CARVE-OUTS.md` carry the slice. *Fails if the guide's
-    embedded copy and its source disagree.*
+    `docs/USER-GUIDE.md`, all four `skills/mocker/` references, `CLAUDE.md` and
+    `HISTORY.md` carry the slice. *Fails if the guide's embedded copy and its
+    source disagree.*
+47a. `CARVE-OUTS.md` carries all EIGHT items D9 enumerates — the determinism
+    carve-out, the memory residual, the absent rate limit on a Lua auth check,
+    the `coroutine` refusal, the const timeout, the UTC pin, the RNG override,
+    and the `mock.entities`-versus-`$ref` asymmetry — each as its own entry
+    naming what it gives up. *Fails if the file gained fewer than eight entries*:
+    clause 47's own `Fails if` is about guide-source sync and would pass over a
+    document that says nothing, which is how five of these went uncovered until
+    round 1 counted them.
+47b. The two matrices D7 promises — spec operation versus custom endpoint, where
+    the function branch sits against the 406 gate and against media negotiation —
+    are present in `skills/mocker/` and in `docs/USER-GUIDE.md`. *Fails if the
+    word "matrix" appears in this document's D7 and in no shipped guide*, which
+    is where round 1 found it.
 48. The run reports every SKIP its suites print. *Fails if a skip is printed and
     not read* — one shipped in this tree already, a relative path that did not
     resolve from the test's own working directory.
 
-**(i) OPEN, for the owner — the one question A.4(21) defers.** D5 says "bundle
-v6 reads v5" and, in the same bullet, "the decode chain already accepts older".
-Today `minVersion = 4` (`bundle.go:60`), and P7a put it there deliberately: A16
-shipped an installer the day before, so a colleague's v4 checkpoint is plausible
-and must keep importing. Moving `minVersion` to 5 breaks exactly that, and the
-field is additive, so nothing forces the move. **Recommendation:
-`CurrentVersion = 6` and `minVersion` STAYS 4** — v6 reads v5 and v4 alike. Not
-decided here.
+### A.10 — What round 1 found uncovered
+
+Ten clauses, numbered from 49 so that no number above moves: D8b, D3, D6 and
+this section all cite clauses by number, and renumbering to keep each group in
+ascending order would silently re-aim every one of those citations. The group a
+clause belongs to is named in the clause.
+
+49. **(D3, the `req` block.)** A function on a route with a `{}` segment,
+    called with a repeated query key, a mixed-case request header and a body that
+    is not JSON, sees: `req.pathParams` holding the segment's value,
+    `req.query` holding an ARRAY for the repeated key, `req.headers` keyed in
+    lower case with a repeated header's values joined by `", "`, and `req.body`
+    as the RAW STRING. The same function called with a JSON body sees a table.
+    *Fails if any of the five is shaped otherwise* — nothing downstream refuses a
+    runner that hands Lua a differently shaped table, and until round 1 no clause
+    observed the input contract at all.
+50. **(D3, the `Out` block.)** Three returns, three answers: a non-number status
+    → `500 function_failed`; a boolean body → `500 function_failed`, not coerced
+    to `"true"`; `return 200, nil` → a 200 with an EMPTY body. *Fails if any is
+    silently coerced* — D3 says "not a silent coercion" and A.5 tested only the
+    guard paths.
+51. **(D3, stateless by construction.)** A function that sets a global runs; a
+    second, unrelated invocation of the same function reads that global and gets
+    `nil`. And the runner creates a fresh `*lua.LState` per invocation rather
+    than checking one out of a pool. *Fails if the global survives*, and *fails
+    if the second half is not observed* — D10 refuses VM pooling on this
+    guarantee's account, so an unobserved guarantee is load-bearing twice.
+52. **(D3, `mock.now`.)** `mock.now()` is within a second of the host clock and
+    `mock.now(60)` is exactly sixty greater than `mock.now()` taken in the same
+    invocation. *Fails if the offset is ignored*, and *fails if the clock is the
+    workspace seed's* — D4 puts the real clock out of the determinism guarantee
+    on purpose.
+53. **(D6, the host helpers' deadline.)** A `mock.entities` call made while a
+    checkpoint restore holds the single writer connection ends the invocation
+    with `503 function_timeout` at the 2 s budget, not later and not as
+    `500 function_failed`. *Fails if the request outlives the budget* — clause 22
+    times out pure Lua bytecode only, and D6's own `string.rep` note says the
+    context check does not reach a single native call.
+54. **(D6, a header on the success path.)** A function returning
+    `{["X-Mock-Case"] = "signed-in"}` alongside a 200 puts that header on the
+    wire, with that value. *Fails if function-set headers are dropped* — clause
+    24 observes only the refusals, so an implementation that writes no
+    function-set header at all passes every header clause.
+55. **(D8, D10 — the MCP input schemas.)** The published input schema of
+    `set_operation_variant` declares `function`, and the stream writer's declares
+    `tick.lua` and `onFrame`. *Fails if a field reaches the Go types and not the
+    tool schema* — clause 34 pins the tool COUNT at 63, which does not move when
+    a schema silently lacks a field, and D8 makes an agent through MCP the
+    PRIMARY authoring path in the owner's own words, so this is the one gap that
+    blocks the intended user while every other clause passes.
+56. **(D8, the drift report.)** A workspace whose only distinguishing feature is
+    a function-bearing operation reports `hasDrift: false` through
+    `GET /api/workspaces/{id}/drift`. *Fails if a function is reported as drift*
+    — D8 keeps the report shape-only, and nothing else observes that.
+57. **(D10, the A14 recorder.)** A Lua tick connection under
+    `MOCKER_STREAM_TRAFFIC_FRAMES=all` produces the same `frames_recorded`
+    accounting and the same truncation behaviour a generated-tick connection
+    produces under the same budgets. *Fails if Lua frames bypass the recorder*,
+    and *fails if they are recorded under a different token* — D10 claims the
+    semantics are "unchanged", and an unobserved claim of sameness is where a
+    second code path hides.
+58. **(D3, the sandbox's deliberate residue.)** `rawget`, `rawset`, `rawequal`
+    and `rawlen` are PRESENT in the frozen `_G` allowlist of clause 6, and
+    `rawget(_G, "io")` from inside a function returns `nil`. *Fails if the
+    allowlist literal is silent about them* — round 1's RED named five things
+    `OpenBase` registers and four were removed, so their presence has to be a
+    recorded decision (D3 step 3a) rather than a leftover.
 
 ## DESIGN.md — on the owner's word only
 
@@ -687,6 +933,37 @@ recorded if not). Review-1's GREEN findings (no bytecode ingress; metatables
 cannot resurrect removed globals without a retained reference) are kept as
 design facts the boundary test will pin.
 
+## Review round 2 — the acceptance section's first read, 2026-09-04
+
+Workspace `mocker-a18-functions` (`wf`), round 1 of that workspace and the
+document's second: four lenses against one frozen snapshot — `criterion`
+(sonnet, §A only), `closure` (sonnet, whether round 1's REDs are really
+closed), `other` (sonnet, deliberately unaimed) and an external
+`gpt-5.6-luna` at effort `high` reading the document against the repository.
+**34 findings, 3 blockers, 8 of them NOTE rows asserting no failure.**
+
+What each lens was for, and what it actually bought:
+
+- The EXTERNAL lens found what only a tree-reader could, and all three were
+  verified by hand before adoption: the three orderings in
+  `internal/customep/stream.go` that make D5's and D10's refusals
+  unreachable where the validator checks things today. They are now D8b, and
+  they were invisible to three reviewers of round 1, who read the design.
+- `criterion` found the two holes nothing downstream catches: D3's request
+  table and D3's statelessness had no clause at all, and the second is
+  load-bearing twice because D10 refuses VM pooling on its account.
+- `closure` found that round 1's own quoted RED named FIVE things `OpenBase`
+  registers and this document closed four, `raw*` disappearing in silence —
+  now D3 step 3a, a decision rather than a leftover.
+- `other`, whose brief named no target, found that "resolution is the `ref`
+  recipe's, verbatim" makes `scopeArray` inert, because `ref` passes the
+  empty ROUTE scope for every family (`CARVE-OUTS.md:574`).
+
+Two questions went to the owner because no reviewer owns them, and both are
+recorded above as his: bundle `minVersion` moves to 5 (v4 refused by name,
+against this document's own recommendation), and `mock.entities` gets REAL
+scope filtering rather than `ref`'s behaviour.
+
 ## Estimate
 
 The slice: `internal/luafn` (runner + allowlist sandbox + boundary test +
@@ -697,3 +974,11 @@ tests, the safety-tail tests (browser-executable media, CR/LF, caps,
 classification), acceptance-style sign-in e2e (wrong password → 401, right →
 JWT verifiable with the workspace key), a ws onFrame reply/close check, the
 VM-cost benchmark, smoke check, the D9 set. A focused two days.
+
+**What round 2 added to that estimate**, named rather than absorbed: real
+`scopeArray` filtering in `mock.entities` (`resources.Repo.ListFiltered` plus
+an arity refusal — the owner's call, and NOT a reuse of `ref`); threading the
+invocation context through both host helpers; the three validator reorderings
+of D8b; and ten more acceptance clauses (§A.10), of which 49, 51 and 55 carry
+their own fixtures. Half a day on top of the two, most of it the scope
+filtering.
