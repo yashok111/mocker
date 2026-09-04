@@ -1882,10 +1882,10 @@ untracked files.
 **The linter is golangci-lint v2**, `.golangci.yml` carried over from another backend of the owner's,
 so that the set is one across two repositories. Keep it at zero. Exceptions are only
 pinpoint `//nolint:<linter> // reason` at the site of the trigger, not widening the
-config. There are **34** of them now (`rg -c '//nolint' cmd internal`, summed), and each
+config. There are **36** of them now (`rg -c '//nolint' cmd internal`, summed), and each
 carries the reason right in the line: twelve `gocyclo` on functions where the branching is the
 specification (a branch per schema keyword, per recipe kind, per refusal
-reason, plus P3d's own `rollbackTx` — a branch per D7 refusal); eleven `gosec` — cookie `Secure`
+reason, plus P3d's own `rollbackTx` — a branch per D7 refusal); fourteen `gosec` — cookie `Secure`
 being a parameter for the sake of `MOCKER_DEV`, serving
 a body by the mock plane (its media types are already filtered out on write), reading a fixture in
 a test helper, an intentionally oversized test write, P3c's `ref` recipe's modulo-by-length
