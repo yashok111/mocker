@@ -30,9 +30,12 @@ non-determinism; the two stream hooks (`tick.lua`, `onFrame`) on his word
 the same day («добвляй 1 и 2 в гейт»). The full gate — decisions D1–D10,
 the §30.9-style measurement (cgo 0, +1.55 MiB, `SetContext` interrupt
 verified on an infinite loop) and a three-reviewer Codex round (luna/high,
-all verdicts folded back in) — lives OUTSIDE this repository at
-`../mocker-a18-functions/DECISIONS.md` beside the three review files; it
-survives only while that directory does, so the essence is here: library
+all verdicts folded back in) — is committed at
+`docs/A18-endpoint-functions.md` (moved into the repository on the owner's
+word, 2026-09-04: a gate outside the checkout survives only while its
+directory does); the three raw review logs stay outside, in
+`../mocker-a18-functions/`. The essence, for a reader who will not open the
+gate: library
 #3 behind ONE importing package (`internal/luafn`, boundary-tested like
 `wsmock`/`yamlx`); allowlist-only sandbox (`SkipOpenLibs`, a frozen-`_G`
 test, host-closure RNG replacing the library's package-global
