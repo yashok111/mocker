@@ -58,9 +58,16 @@ services:
       - "127.0.0.1:${MOCKER_TLS_PORT:-8443}:443"
     volumes:
       - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
-      # /data holds the local CA (root.crt is what `make tls-root` exports
-      # and what a browser has to trust); /config is Caddy's autosave. Both
-      # named so `down` without -v keeps the root a browser already trusts.
+      # The STABLE CA root comes from the HOST (.tls-ca, gitignored, created
+      # once by scripts/tls-ca.sh and provisioned as the `tls internal` CA
+      # root by the `pki` block in deploy/Caddyfile): a lost caddy-data
+      # volume no longer mints a new root, so the trust a browser, a
+      # keychain or NODE_EXTRA_CA_CERTS already holds never goes stale.
+      - ./.tls-ca:/tls-ca:ro
+      # /data holds what is still Caddy-managed — the intermediate and the
+      # leaf cache (all signed by the stable root, so re-issuing them is
+      # invisible to any client); /config is Caddy's autosave. Both named
+      # so `down` without -v keeps them.
       - caddy-data:/data
       - caddy-config:/config
     restart: unless-stopped

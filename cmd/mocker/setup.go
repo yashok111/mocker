@@ -54,13 +54,13 @@ type setupOptions struct {
 	noBuild   bool
 }
 
-// setupTimeouts bound the two waits: the CA root appears once Caddy has
-// started (it depends on mocker's healthcheck, which itself waits on the
-// image build having finished), and readiness follows.
+// setupTimeouts bound the one remaining wait: readiness, which follows the
+// image build and mocker's healthcheck. The CA root is no longer waited
+// for at all — it is created on the HOST before the stack starts
+// (ensureLocalCA), so there is nothing to export from a container.
 const (
-	rootExportWait = 3 * time.Minute
-	readinessWait  = 3 * time.Minute
-	pollEvery      = 2 * time.Second
+	readinessWait = 3 * time.Minute
+	pollEvery     = 2 * time.Second
 )
 
 func runSetup(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
@@ -146,6 +146,16 @@ func (w *setupRun) up() error {
 		return err
 	}
 
+	// The stable CA root must exist BEFORE the stack starts: the compose
+	// overlay bind-mounts ./.tls-ca into Caddy, and a missing source would
+	// become an empty directory Caddy refuses to read. The root is
+	// generated once per checkout and never rotated by the wizard.
+	w.step("ensuring the stable local CA root (" + caDir + ")")
+	caPEM, err := ensureLocalCA(caDir)
+	if err != nil {
+		return err
+	}
+
 	w.step("starting the stack (mocker + Caddy with a local CA)")
 	upArgs := composeArgs("up", "-d")
 	if !w.o.noBuild {
@@ -155,9 +165,10 @@ func (w *setupRun) up() error {
 		return fmt.Errorf("docker compose up: %w", err)
 	}
 
-	w.step("exporting the CA root")
-	rootPEM, err := w.exportRoot()
-	if err != nil {
+	// The trust step and the summary want the root under its historical
+	// name; it is the same bytes the bind mount gave Caddy — no container
+	// copy, the root lives on the host now.
+	if err := os.WriteFile(rootCertName, caPEM, 0o644); err != nil {
 		return err
 	}
 	// Absolute for the trust commands and the summary: a colleague pastes
@@ -168,7 +179,7 @@ func (w *setupRun) up() error {
 	}
 
 	w.step("waiting for https://" + adminHost + ":" + strconv.Itoa(w.o.port) + "/readyz")
-	if err := w.waitReady(adminHost, rootPEM); err != nil {
+	if err := w.waitReady(adminHost, caPEM); err != nil {
 		return err
 	}
 
@@ -302,22 +313,9 @@ func (w *setupRun) ensureEnv() (generated string, err error) {
 	return generated, nil
 }
 
-// exportRoot copies Caddy's root.crt out of the container, retrying while
-// Caddy is still starting (it waits for mocker's healthcheck, which waits
-// for the build), and returns the PEM.
-func (w *setupRun) exportRoot() ([]byte, error) {
-	deadline := time.Now().Add(rootExportWait)
-	for {
-		if _, err := w.dockerOutput(composeArgs("cp", caddyRootInContainer, rootCertName)...); err == nil {
-			return os.ReadFile(rootCertName)
-		}
-		if time.Now().After(deadline) {
-			return nil, fmt.Errorf("caddy did not start within %s — `docker compose -f docker-compose.yml -f docker-compose.tls.yml logs caddy mocker` says why", rootExportWait)
-		}
-		time.Sleep(pollEvery)
-	}
-}
-
+// readyURL is the loopback readiness probe the wizard dials directly: the
+// image is distroless and has no curl, and the Host (adminHost) is what the
+// dispatcher routes by.
 func (w *setupRun) readyURL() string {
 	return "https://" + net.JoinHostPort("127.0.0.1", strconv.Itoa(w.o.port)) + "/readyz"
 }

@@ -320,8 +320,8 @@ stack keeping data and CA, `setup status` checks it. The panel is then
 
 ```bash
 make up-tls     # the same stack behind Caddy, https://127.0.0.1:8443
-make tls-root   # export Caddy's local CA root as ./mocker-root.crt
-make down-tls   # stop it (add -v by hand to drop the data AND the CA)
+make tls-root   # copy the stable local CA root as ./mocker-root.crt
+make down-tls   # stop it (the CA root lives on the host and survives anything)
 make smoke-tls  # the end-to-end check of everything below
 ```
 
@@ -352,9 +352,8 @@ client, not the proxy.
 
 To use it from a browser: `make tls-root`, import `mocker-root.crt` into the
 BROWSER's own trust store (a profile-level import, not the OS store: the
-root has no name constraints and its key sits unprotected in the
-`caddy-data` volume, so trusting it OS-wide trusts whoever can read that
-volume with every site the machine visits), and point `mocker.local` and `*.mock.local` (the
+root has no name constraints, so trusting it OS-wide trusts whoever holds
+its key with every site the machine visits), and point `mocker.local` and `*.mock.local` (the
 names in `.env`) at `127.0.0.1` in `/etc/hosts` — a wildcard is not an
 `/etc/hosts` feature, so list each workspace host you use. From `curl`:
 
@@ -366,9 +365,17 @@ Two knobs, both taken from the shell: `MOCKER_TLS_PORT` (8443) and
 `MOCKER_TLS_SUBNET` (`172.30.10.0/24`, an IPv4 `/24` ending in `.0` —
 Caddy's static `.254` is what `MOCKER_TRUST_PROXY` is set to, so the subnet
 has to be fixed; change it if compose reports `Pool overlaps` with a
-network already on the box). The CA lives in the `caddy-data`
-volume: `make down-tls` keeps it, so a root a browser already trusts
-survives a restart; `down -v` mints a new one next time.
+network already on the box). The CA root does NOT live in a volume:
+`scripts/tls-ca.sh` (`make tls-init`, run automatically by `up-tls`) creates
+`./.tls-ca/root.crt` + `root.key` on the host once — gitignored, ten years —
+and the Caddyfile's `pki` block provisions it as the CA root; only the
+intermediate and the leaves stay Caddy-managed in `caddy-data`, and
+re-issuing those is invisible to any client. `down -v`, `docker volume
+prune`, a lost checkout copy — none of it rotates the root a trust store
+already holds; deleting `.tls-ca/` is the one way, and every client then
+re-trusts by hand. `mocker setup` creates the same pair on Go
+(`ensureLocalCA`, `cmd/mocker/setup_ca.go`) because the wizard cannot
+assume bash, and writes the same `mocker-root.crt` from it.
 
 For a real contour, keep the shape and swap the certificate source in
 `deploy/Caddyfile` (the contour's wildcard certificate, or TLS terminated at

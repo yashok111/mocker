@@ -43,6 +43,12 @@ mocker
 .env
 .env.local
 
+# the STABLE local CA root (scripts/tls-ca.sh): same class of secret as
+# .env — whoever holds root.key can sign for every host of the contour, and
+# the bind mount docker-compose.tls.yml gives Caddy reads it from the host,
+# never from the build context or an image layer
+/.tls-ca/
+
 # editors / OS
 .DS_Store
 .idea/

@@ -9,8 +9,9 @@
 # taken from the shell with defaults (the gateway and Caddy's static
 # address are derived from the subnet here, the one place that arithmetic
 # is written). Everything after the script name goes
-# to compose verbatim: `scripts/compose-tls.sh up -d --build`, `… down -v`,
-# `… cp caddy:/data/caddy/pki/authorities/local/root.crt mocker-root.crt`.
+# to compose verbatim: `scripts/compose-tls.sh up -d --build`, `… down -v`.
+# An `up` first ensures the stable CA root exists (./.tls-ca — the Caddyfile
+# provisions it; a fresh caddy-data volume no longer mints a new root).
 set -euo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
@@ -63,5 +64,15 @@ fi
 export MOCKER_TLS_GATEWAY="${BASH_REMATCH[1]}.1"
 export MOCKER_TLS_CADDY_IP="${BASH_REMATCH[1]}.254"
 export MOCKER_TLS_PORT="${MOCKER_TLS_PORT:-8443}"
+
+# The stable CA root must exist BEFORE any `up`: docker-compose.tls.yml
+# bind-mounts ./.tls-ca into Caddy, and for a missing source compose would
+# create an empty directory on the host, which Caddy's pki block refuses to
+# read — a crash loop instead of a fresh root, and that is the point: the
+# root never regenerates behind the trust a browser already holds.
+# `down`, `cp`, `logs`, `ps` … do not need it.
+if [[ "${1:-}" == "up" ]]; then
+	./scripts/tls-ca.sh
+fi
 
 exec docker compose -f docker-compose.yml -f docker-compose.tls.yml "$@"

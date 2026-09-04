@@ -25,6 +25,23 @@
 	# Caddy's admin API (:2019) would otherwise listen inside the container.
 	# Nothing here reloads it at runtime; the file is the whole config.
 	admin off
+	# The root of the `local` CA is PROVISIONED from the host bind
+	# (.tls-ca, read-only) instead of Caddy minting one into the
+	# caddy-data volume: a lost volume would otherwise produce a NEW
+	# root and invalidate every trust decision made for the old one —
+	# the browser/keychain entries pile up and every client starts
+	# answering "unable to get local issuer certificate". scripts/tls-ca.sh
+	# (`make tls-init`) creates the pair once per checkout; only the
+	# ROOT is pinned, the intermediate and leaves stay Caddy-managed
+	# in the volume, where re-issuing them costs nothing.
+	pki {
+		ca local {
+			root {
+				cert /tls-ca/root.crt
+				key /tls-ca/root.key
+			}
+		}
+	}
 }
 
 # Every workspace host: <slug>.<MOCKER_BASE_DOMAIN>. `tls internal` issues

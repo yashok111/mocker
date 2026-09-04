@@ -13,6 +13,14 @@ BINARY := bin/mocker
 # password-mangling bug it is not.
 export COMPOSE_ENV_FILES := /dev/null
 
+# Node and Bun (by default, and Bun 1.3.0/1.3.1 by regression) trust only their
+# bundled Mozilla CA list — not the macOS keychain where `make tls-root` and
+# `mocker setup` install Caddy's local CA root. This flag makes every runtime
+# spawned by make (ui-dev, ui-test, plugin-test) read the system trust store,
+# so https://<MOCKER_ADMIN_HOST> works without a NODE_EXTRA_CA_CERTS path.
+# On Linux/CI it degrades to the OpenSSL system store — a safe no-op.
+export NODE_USE_SYSTEM_CA := 1
+
 # CAP runs a heavy target inside its own memory-capped systemd user scope, so
 # that when something has to die under memory pressure the kernel takes THIS
 # command and not the login session around it.
@@ -46,7 +54,7 @@ CAP := $(shell command -v systemd-run >/dev/null 2>&1 && \
 	grep -qw memory /sys/fs/cgroup/user.slice/user-$$(id -u).slice/cgroup.controllers 2>/dev/null && \
 	echo systemd-run --user --scope --quiet -p MemoryMax=$(CAP_MEM) -p MemorySwapMax=$(CAP_SWAP) --)
 
-.PHONY: build run release dist ui ui-dev ui-gen ui-lint ui-test plugin-test plugin-build plugin-pack guide-sync test lint fmt docker init up down up-tls down-tls tls-root smoke smoke-tls hash-password clean
+.PHONY: build run release dist ui ui-dev ui-gen ui-lint ui-test plugin-test plugin-build plugin-pack guide-sync test lint fmt docker init up down up-tls down-tls tls-init tls-root smoke smoke-tls hash-password clean
 
 build: ## Build the mocker binary into ./bin
 	mkdir -p bin
@@ -215,15 +223,19 @@ down: ## Stop the stack, keeping the data volume (add -v by hand to drop it)
 # reused silently — Caddy would then sit on a subnet MOCKER_TRUST_PROXY
 # does not name. In the base project `--remove-orphans` is what takes the
 # overlay's caddy container down too.
-up-tls: .env ## Bring the stack up behind Caddy on https://127.0.0.1:8443 (creates .env first if missing; stops a plain stack first)
+up-tls: tls-init .env ## Bring the stack up behind Caddy on https://127.0.0.1:8443 (creates .env first if missing; stops a plain stack first)
 	docker compose down --remove-orphans
 	./scripts/compose-tls.sh up -d --build
 
 down-tls: ## Stop the HTTPS stack, keeping the data and CA volumes (add -v by hand to drop them)
 	./scripts/compose-tls.sh down
 
-tls-root: ## Export Caddy's local CA root as ./mocker-root.crt, the file to trust in a browser or OS (stack must be up)
-	./scripts/compose-tls.sh cp caddy:/data/caddy/pki/authorities/local/root.crt mocker-root.crt
+tls-init: ## Ensure the stable local CA root exists (./.tls-ca); created once, reused forever
+	./scripts/tls-ca.sh
+	@echo "CA root: ./.tls-ca/root.crt ($$(openssl x509 -in .tls-ca/root.crt -noout -subject | sed 's/subject=//'))"
+
+tls-root: ## Copy the stable CA root as ./mocker-root.crt, the file to trust in a browser or OS (no stack needed — the root lives on the host now)
+	cp .tls-ca/root.crt mocker-root.crt
 	@echo "wrote mocker-root.crt — import it into the browser/OS trust store, and point $$(sed -n 's/^MOCKER_ADMIN_HOST=//p' .env) and *.$$(sed -n 's/^MOCKER_BASE_DOMAIN=//p' .env) at 127.0.0.1 in /etc/hosts"
 
 smoke: ## Bring up the compose stack, run every acceptance check, tear down

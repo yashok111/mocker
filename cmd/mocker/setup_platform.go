@@ -9,13 +9,10 @@ import (
 // function answers a PLAN (argv lists plus the manual instruction), never
 // runs anything, so the plan for every OS is testable on this one.
 
-// caddyRootInContainer is where Caddy keeps the root of the CA `tls
-// internal` issues from (deploy/Caddyfile); `make tls-root` copies the
-// same path.
-const caddyRootInContainer = "caddy:/data/caddy/pki/authorities/local/root.crt"
-
 // rootCertName is the file the wizard writes next to .env and the name
-// under which the root lands in a trust store.
+// under which the root lands in a trust store. Its bytes are the stable
+// root from .tls-ca (ensureLocalCA) — the wizard no longer copies anything
+// out of a container.
 const rootCertName = "mocker-root.crt"
 
 // hostsPath is the hosts file for goos.

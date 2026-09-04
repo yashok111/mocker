@@ -133,17 +133,18 @@ printf 'MOCKER_SHARED_PASSWORD_HASH=%s\n' "$HASH" >>"$ENV_FILE"
 echo "== bringing up the HTTPS stack =="
 $COMPOSE up -d
 
-echo "== waiting for Caddy's local root =="
-tries=0
-until $COMPOSE cp caddy:/data/caddy/pki/authorities/local/root.crt "$ROOT_CRT" >/dev/null 2>&1 && [[ -s "$ROOT_CRT" ]]; do
-	tries=$((tries + 1))
-	if ((tries >= 60)); then
-		echo "FAIL  Caddy never wrote its local CA root in 60 s"
-		exit 1
-	fi
-	sleep 1
-done
-ok "root.crt exported after ${tries} s"
+echo "== the stable CA root =="
+# The root lives on the HOST (.tls-ca, created before `up` — compose-tls.sh
+# runs scripts/tls-ca.sh on that path, and the Caddyfile provisions it as
+# the CA root instead of letting Caddy mint one into the volume): a fresh
+# caddy-data volume no longer changes the root, and this file is what the
+# checks below verify the chain against.
+if [[ ! -s .tls-ca/root.crt ]]; then
+	echo "FAIL  .tls-ca/root.crt missing — scripts/tls-ca.sh did not run"
+	exit 1
+fi
+cp .tls-ca/root.crt "$ROOT_CRT"
+ok "stable root copied from .tls-ca"
 
 # Every request below resolves the stack's names to loopback the way curl
 # --resolve does, and verifies the chain against the exported root: a
