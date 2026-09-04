@@ -552,7 +552,8 @@ baseline, which is the defect this table exists to prevent.
     consumes and answers before it; a pause parks the request BEFORE the VM is
     created; a delay delays the run. *Fails if any one of the four runs the
     function first* — the branch sits where `resourceBranch` sits
-    (`respond.go:207`), after all four and after the 406 gate.
+    (`internal/mockplane/respond.go:207`), after all four and after the 406
+    gate.
 30. On one 2xx operation carrying BOTH a function variant and a confirmed
     resource family, the FUNCTION serves; with the function variant removed and
     nothing else changed, the RESOURCE serves. Both directions asserted. *Fails
