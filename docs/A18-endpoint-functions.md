@@ -270,6 +270,19 @@ that boundary (round 1 GREEN made mandatory).
     --exclude-dir=generated .
   ```
 
+  **The line numbers below are WITHDRAWN as a checklist and kept only as
+  examples of each shape.** This paragraph produced a blocker in rounds 2, 3
+  and 4 — a directory scope that was guessed, then a pattern that reached one
+  shape, then two line numbers that were wrong — and three consecutive rounds
+  on one artifact section is the signal that the guard is asking the wrong KIND
+  of question, not that it needs a fourth correction. A list of file:line sites
+  in a document that is read before the code is written goes stale on the first
+  edit anybody makes, and this one went stale twice inside the gate itself. What
+  is DURABLE is the shape list: the version lives in six forms and one command
+  over one form reaches none of the others. The implementing run re-derives the
+  sites from the command in clause 59; the sites named here are illustrations of
+  the shapes and are not a thing to tick off.
+
   Run 2026-09-04, the six shapes and what each needs:
 
   1. **JSON text in a Go string** — `internal/bundle/bundle_test.go:187`
@@ -1081,7 +1094,12 @@ the clause instead.
     shape*, which is how this slice's own enumeration came back short twice: a
     Go field comparison, three prose strings, a JSON `const` and two markdown
     guides all live in this population and none of them matches
-    `"mockerBundle": N`.
+    `"mockerBundle": N`. **This clause, not D5's list, is where the enumeration
+    lives** — D5 names the six SHAPES so a reader knows what to look for, and
+    the sites it prints are illustrations whose line numbers were wrong twice
+    inside this gate. A run that ticks off D5's list instead of running this
+    command has satisfied a stale copy of an answer rather than asking the
+    question.
 58. **(D3, the sandbox's deliberate residue.)** `rawget`, `rawset`, `rawequal`
     and `rawlen` are PRESENT in the frozen `_G` allowlist of clause 6. *Fails if
     the allowlist literal is silent about them* — round 1's RED named five
