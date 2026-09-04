@@ -3,6 +3,16 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- Icons live in web/public/, which Vite copies verbatim into the build
+         output internal/webui/dist — so they are embedded in the binary and
+         served by internal/webui's static handler like any other asset. They
+         are deliberately NOT imported from src/: an asset under assets/ gets
+         a content hash and a href only the bundle knows, while a browser asks
+         for /favicon.ico at a fixed path with no markup at all. -->
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="alternate icon" type="image/x-icon" href="/favicon.ico" sizes="48x48 32x32 16x16" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <meta name="theme-color" content="#228be6" />
     <title>mocker</title>
   </head>
   <body>
