@@ -151,33 +151,18 @@ func wrap(source string) string { return "local req = ...; " + source }
 // went away and is answered by nobody, while this package's own deadline is
 // the 503 the operator asked for.
 func Run(ctx context.Context, source string, req Request, host Host) (Response, error) {
-	runCtx, cancel := context.WithTimeout(ctx, Timeout)
-	defer cancel()
-
-	l := newState()
-	defer l.Close()
-	l.SetContext(runCtx)
-	installMock(l, runCtx, host)
-
-	fn, err := l.LoadString(wrap(source))
+	// D10 gave this package two more contracts, and [call] (hooks.go) is
+	// what they share with this one: the fresh VM, the sandbox, the mock
+	// table, the deadline on top of the caller's, and the caller-context
+	// -before-deadline classification at the exit. Run keeps only what is
+	// its own — the argument it builds and the return it reads.
+	l, done, err := call(ctx, argRequest, source, func(st *lua.LState) lua.LValue {
+		return requestTable(st, req)
+	}, host)
 	if err != nil {
-		return Response{}, fmt.Errorf("%w: %s", ErrFailed, err.Error())
+		return Response{}, err
 	}
-	l.Push(fn)
-	l.Push(requestTable(l, req))
-
-	if err := l.PCall(1, lua.MultRet, nil); err != nil {
-		switch {
-		case ctx.Err() != nil:
-			// The CALLER's context, checked first: a client that
-			// disconnected is not a server error and is answered by nobody.
-			return Response{}, ErrCanceled
-		case runCtx.Err() != nil:
-			return Response{}, ErrTimeout
-		default:
-			return Response{}, fmt.Errorf("%w: %s", ErrFailed, firstLine(err.Error()))
-		}
-	}
+	defer done()
 	return readReturn(l)
 }
 
@@ -285,7 +270,7 @@ func readReturn(l *lua.LState) (Response, error) {
 		case lua.LString:
 			resp.Body = []byte(body)
 		case *lua.LTable:
-			encoded, err := jsonx.Marshal(luaToGo(body))
+			encoded, err := marshalLua(body)
 			if err != nil {
 				return Response{}, fmt.Errorf("%w: the body could not be encoded as JSON: %s", ErrFailed, err.Error())
 			}

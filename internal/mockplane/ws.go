@@ -30,7 +30,9 @@ import (
 	"github.com/yashok111/mocker/internal/customep"
 	"github.com/yashok111/mocker/internal/httpx"
 	"github.com/yashok111/mocker/internal/jsonx"
+	"github.com/yashok111/mocker/internal/luafn"
 	"github.com/yashok111/mocker/internal/overrides"
+	"github.com/yashok111/mocker/internal/resources"
 	"github.com/yashok111/mocker/internal/stream"
 	"github.com/yashok111/mocker/internal/workspaces"
 	"github.com/yashok111/mocker/internal/wsmock"
@@ -79,7 +81,7 @@ func originAllowed(origin string, allowed []string) bool {
 
 // serveWS is D7's branch: everything before it (route_off, the live effect,
 // the pause, the delay, the status) already ran in serveCustom.
-func (p *Plane) serveWS(w http.ResponseWriter, r *http.Request, ws *workspaces.Workspace, rt *runtime, row *customep.Row) {
+func (p *Plane) serveWS(w http.ResponseWriter, r *http.Request, ws *workspaces.Workspace, rt *runtime, row *customep.Row, base resources.ScopeKey) {
 	if p.streams == nil {
 		httpx.Err(w, http.StatusServiceUnavailable, "service_unavailable", "no stream registry is wired in this deployment")
 		return
@@ -142,7 +144,7 @@ func (p *Plane) serveWS(w http.ResponseWriter, r *http.Request, ws *workspaces.W
 	// A14: one frame log each way, one text frame per line — a WebSocket
 	// payload has no delimiter of its own.
 	attachStreamLogs(r, p.newFrameLog([]byte("\n")), p.newFrameLog([]byte("\n")))
-	loop := newStreamLoop(def, p.tickSource(rt, row), p.streamOpts)
+	loop := newStreamLoop(def, p.tickSource(rt, row, p.newLuaHost(rt, ws, base, nil)), p.streamOpts)
 	loop.hooks = streamHooks{
 		onFrame: func(frame []byte) {
 			noteStreamFrame(r, frame)
@@ -171,6 +173,15 @@ func (p *Plane) serveWS(w http.ResponseWriter, r *http.Request, ws *workspaces.W
 			noteStreamFrameIn(r, typ, payload)
 		},
 		onDropped: func(n int) { noteStreamRepliesDropped(r, n) },
+		// A18 D10.2. The host is built once per connection from the same
+		// runtime the tick's is — a hook and a tick on one endpoint reach
+		// the same workspace's rows under the same base scope.
+		onFrame: def.OnFrame,
+		host:    p.newLuaHost(rt, ws, base, nil),
+		onHookErr: func(err error) {
+			noteOnFrameError(r)
+			p.log.Debug("ws: onFrame hook", "workspace", ws.Slug, "endpoint", row.ID, "err", luafn.Note(err))
+		},
 	}
 	code := wl.run(conn.Context()) //nolint:contextcheck // conn.Context() is Registry.Open's child of r.Context(); the registry's cancel (shutdown, an operator's close) is what must end the loop, and a context derived from r.Context() alone would not carry it
 	noteStreamClose(r, int(code))
@@ -273,6 +284,14 @@ type wsLoop struct {
 	queue     *replyQueue
 	onFrameIn func(wsmock.MessageType, []byte)
 	onDropped func(int)
+	// A18 D10.2: onFrame is the Lua hook that REPLACES reactive and echo,
+	// host is what its mock.* helpers reach, and onHookErr counts a hook
+	// that failed. The counter is its OWN note token (on_frame_errors:K) and
+	// deliberately not replies_dropped: that one means "the send budget was
+	// full", and overloading it would hide broken code behind a full budget.
+	onFrame   string
+	host      luafn.Host
+	onHookErr func(error)
 
 	readerDone chan error // one slot: the reader's terminal error
 	readerExit chan struct{}
@@ -512,8 +531,14 @@ func (l *wsLoop) writeTickFrame(wsCtx context.Context) bool {
 		return false
 	}
 	l.tickN++
-	body, err := l.tick(l.tickN)
-	if err != nil {
+	body, err := l.tick(wsCtx, l.tickN)
+	switch {
+	case errors.Is(err, errTickDeclined):
+		// A18 D10.1 / clause 41, the same reading streamLoop.writeTick
+		// makes: a Lua tick that returned nil sent nothing and is neither a
+		// skip nor an error.
+		return true
+	case err != nil:
 		l.hooks.onSkip()
 		l.hooks.onErr(err)
 		return true
@@ -561,16 +586,66 @@ func (l *wsLoop) read(readCtx context.Context, cancel context.CancelFunc) {
 			// A rule already closed the connection (D7): nothing after it
 			// is MATCHED, but the reader keeps draining, because the
 			// peer's half of the closing handshake arrives on this same
-			// read and nobody else reads it.
+			// read and nobody else reads it. A18 D10.2 puts the Lua hook
+			// under exactly this rule: after a close, onFrame stops being
+			// called and the draining continues.
 			continue
 		}
-		terminal = l.react(typ, payload)
+		terminal = l.react(readCtx, typ, payload)
+	}
+}
+
+// reactLua is D10.2: the hook answers one inbound frame, and it REPLACES the
+// reactive/echo path rather than running beside it — two producers for one
+// frame is the precedence question D5 refuses to document.
+//
+// It runs on the READER goroutine, which is what makes reply ORDER follow
+// frame order; a slow hook blocks only this connection's reads, up to the
+// per-call timeout. Nothing here writes: the reply is ENQUEUED and the writer
+// loop performs every write, the close included — P6d's discipline verbatim,
+// and the reason D10.2 spells it out is that "the reader returns close" reads
+// otherwise.
+func (l *wsLoop) reactLua(ctx context.Context, typ wsmock.MessageType, payload []byte) bool {
+	// Whether the frame is an OBJECT is decided the same way the reactive
+	// matcher decides it, on the same bytes: a TEXT frame that decodes as a
+	// JSON object. Two answers to that question would be two contracts for
+	// one wire.
+	isObject := false
+	if typ == wsmock.Text {
+		var obj map[string]any
+		if err := jsonx.Unmarshal(payload, &obj); err == nil && obj != nil {
+			isObject = true
+		}
+	}
+
+	act, err := luafn.RunOnFrame(ctx, l.onFrame, payload, isObject, l.host)
+	if err != nil {
+		// D10.2: the reply is dropped, counted in on_frame_errors, and the
+		// hook KEEPS being called for later frames — a broken hook must not
+		// silently turn the connection into a sink.
+		l.onHookErr(err)
+		return false
+	}
+	switch act.Verb {
+	case luafn.FrameReply:
+		l.queue.offer(replyItem{typ: wsmock.Text, payload: act.Data})
+		return false
+	case luafn.FrameClose:
+		// Terminal, outside the send budget, exactly as a reactive rule's
+		// own close is: offer never drops it and the reader stops matching.
+		l.queue.offer(replyItem{close: &customep.RuleClose{Code: act.Code, Reason: act.Reason}})
+		return true
+	default:
+		return false
 	}
 }
 
 // react matches one inbound frame (D4) and queues the answer; it returns
 // true when the matched rule closes the connection.
-func (l *wsLoop) react(typ wsmock.MessageType, payload []byte) bool {
+func (l *wsLoop) react(ctx context.Context, typ wsmock.MessageType, payload []byte) bool {
+	if l.onFrame != "" {
+		return l.reactLua(ctx, typ, payload)
+	}
 	in := l.handshake
 	if typ == wsmock.Text {
 		var obj map[string]any

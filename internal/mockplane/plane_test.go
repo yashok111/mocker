@@ -52,6 +52,21 @@ func testLogger() *slog.Logger {
 	return slog.New(slog.NewTextHandler(io.Discard, nil))
 }
 
+// newPlaneWithMaxResponse is newPlane with MOCKER_MAX_RESPONSE set to a
+// caller-chosen value. A18's clauses 25 and 40 both refuse an observation
+// taken at the 4 MiB default, for the same reason: a hard-coded ceiling and a
+// config-reading one emit identical bytes there, so the observation would not
+// tell the two implementations apart.
+func newPlaneWithMaxResponse(maxResponse int64, wss ...*workspaces.Workspace) *mockplane.Plane {
+	src := &fakeSource{bySlug: make(map[string]*workspaces.Workspace, len(wss))}
+	for _, ws := range wss {
+		src.bySlug[ws.Slug] = ws
+	}
+	cfg := testConfig()
+	cfg.MaxResponse = maxResponse
+	return mockplane.New(cfg, src, nil, testLogger())
+}
+
 func newPlane(wss ...*workspaces.Workspace) *mockplane.Plane {
 	src := &fakeSource{bySlug: make(map[string]*workspaces.Workspace, len(wss))}
 	for _, ws := range wss {

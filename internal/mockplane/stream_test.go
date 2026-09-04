@@ -80,8 +80,21 @@ type streamFixture struct {
 
 func newStreamFixture(t *testing.T, opts mockplane.StreamOptions, perWorkspaceCap int, rows ...*customep.Row) *streamFixture {
 	t.Helper()
+	return newStreamFixtureMaxResponse(t, opts, perWorkspaceCap, 0, rows...)
+}
+
+// newStreamFixtureMaxResponse is newStreamFixture with MOCKER_MAX_RESPONSE
+// chosen by the caller; 0 means the fixture default. A18 clause 40 needs a
+// non-default one — see newPlaneWithMaxResponse for why.
+func newStreamFixtureMaxResponse(t *testing.T, opts mockplane.StreamOptions, perWorkspaceCap int, maxResponse int64, rows ...*customep.Row) *streamFixture {
+	t.Helper()
 	ws := sseWorkspace(1, "alex")
-	p := newPlane(ws, sseWorkspace(2, "bob"))
+	var p *mockplane.Plane
+	if maxResponse > 0 {
+		p = newPlaneWithMaxResponse(maxResponse, ws, sseWorkspace(2, "bob"))
+	} else {
+		p = newPlane(ws, sseWorkspace(2, "bob"))
+	}
 	custom := &fakeCustomSource{rows: map[int64][]*customep.Row{1: rows, 2: rows}}
 	p.SetCustomEndpoints(custom)
 	reg := stream.NewWorkspaceRegistry(perWorkspaceCap)

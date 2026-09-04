@@ -325,7 +325,7 @@ type CreateEndpointInput struct {
 	// reactive/echo are refused by name on kind "sse". A ws row needs at
 	// least one behaviour of the four.
 	Kind   string `json:"kind,omitempty"`
-	Stream any    `json:"stream,omitempty" jsonschema:"the stream document (kind sse or ws): {timeline: {frames: [{delayMs, event, data}], loop}, tick: {intervalMs, event, schema}, closeWhenDone}, plus reactive/echo for ws — see create_endpoint's stream field."`
+	Stream any    `json:"stream,omitempty" jsonschema:"the stream document (kind sse or ws): {timeline: {frames: [{delayMs, event, data}], loop}, tick: {intervalMs, event, schema}, closeWhenDone}, plus reactive/echo for ws — see create_endpoint's stream field A18 adds two Lua hooks: tick.lua (the tick's producer, exclusive with tick.schema — the function body over one argument named ordinal, returning a table, a string, or nil to skip that firing) and onFrame (ws only, REPLACES reactive and echo — the function body over one argument named frame, returning nil, or the pair (reply, data), or (close, code, reason?))."`
 	// Schema, ReqSchema and Operation are P7a's (DESIGN §34.3). Schema is
 	// an inline JSON Schema the response is GENERATED from — with no body
 	// beside it the endpoint answers a generated body under the workspace
@@ -338,6 +338,11 @@ type CreateEndpointInput struct {
 	Schema    any `json:"schema,omitempty" jsonschema:"an inline JSON Schema; the response is generated from it when no body is pinned. A $ref must point into the bound spec (#/components/...)."`
 	ReqSchema any `json:"reqSchema,omitempty" jsonschema:"the request body's JSON Schema; exported as requestBody, never enforced on a request."`
 	Operation any `json:"operation,omitempty" jsonschema:"the OpenAPI operation fields: summary, description, tags, operationId, deprecated, parameters."`
+	// Function is A18's (D5, D8): the Lua that produces this endpoint's
+	// response. It needs a field of its own on the CREATE input for the
+	// same reason BodyRef does — create builds one variant from flat
+	// fields, while update_endpoint carries it inside responses[].
+	Function string `json:"function,omitempty" jsonschema:"Lua that PRODUCES this response instead of one being assembled for it. The string is the function BODY over one argument req (req.method, req.path, req.pathParams, req.query, req.headers, req.body) and returns status, body, headers — e.g. \"if req.body.password == 'x' then return 200, {token = mock.jwt({sub = 1})} end return 401, {error = 'bad credentials'}\". Helpers: mock.jwt(claims), mock.now(offsetSec), mock.entities(family, scopeArray). Exclusive with body, bodyEncoding, bodyRef, recipes, schemaPatch and mediaType; refused on a stream row; compiled at write time, so a syntax error is a 400 carrying the parser's words."`
 }
 
 // CreateEndpointOutput is create_endpoint's declared output schema.
@@ -430,7 +435,7 @@ type UpdateEndpointInput struct {
 	// document when editing a stream, or the write is refused for carrying
 	// a stream with kind http (never silently downgraded).
 	Kind   string `json:"kind,omitempty"`
-	Stream any    `json:"stream,omitempty" jsonschema:"the stream document (kind sse or ws), resent whole on every edit — see create_endpoint's stream field."`
+	Stream any    `json:"stream,omitempty" jsonschema:"the stream document (kind sse or ws), resent whole on every edit — see create_endpoint's stream field A18 adds two Lua hooks: tick.lua (the tick's producer, exclusive with tick.schema — the function body over one argument named ordinal, returning a table, a string, or nil to skip that firing) and onFrame (ws only, REPLACES reactive and echo — the function body over one argument named frame, returning nil, or the pair (reply, data), or (close, code, reason?))."`
 	// ReqSchema and Operation are P7a's (DESIGN §34.3); the response
 	// schema rides inside responses[status].schema on VariantInput. A
 	// full replacement carries them like every other field — omitted

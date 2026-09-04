@@ -126,3 +126,13 @@ func tableToGo(t *lua.LTable) any {
 	})
 	return obj
 }
+
+// marshalLua encodes a Lua value as JSON through this package's own
+// converter. It is one function rather than three call sites writing
+// jsonx.Marshal(luaToGo(v)) because the three contracts (a response body, a
+// tick frame, an onFrame reply) must agree byte for byte about what a Lua
+// table becomes — including the sorted object keys luaToGo already imposes,
+// which is what keeps two encodings of one table identical.
+func marshalLua(v lua.LValue) ([]byte, error) {
+	return jsonx.Marshal(luaToGo(v))
+}

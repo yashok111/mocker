@@ -282,6 +282,13 @@ type VariantInput struct {
 	// spec operation's override (400 schema_on_override) — that operation
 	// already has a schema, and schemaPatch is how it changes.
 	Schema any `json:"schema,omitempty" jsonschema:"a custom endpoint's inline response JSON Schema; refused on a spec operation's override, where schemaPatch is the way to change the schema."`
+	// Function is A18's (D5): the Lua that produces this variant's response.
+	// It is a plain string and not `any` — unlike Body and SchemaPatch it is
+	// not arbitrary JSON, so jsonschema-go infers a string schema with no
+	// help. Exclusivity is per VARIANT and refused by name at write time, so
+	// a caller that sends both a function and a body is told which two
+	// fields fought rather than having one silently win.
+	Function string `json:"function,omitempty" jsonschema:"Lua that PRODUCES this response instead of one being assembled for it. The string is the function BODY over one argument req (req.method, req.path, req.pathParams, req.query, req.headers, req.body) and returns status, body, headers — e.g. \"if req.body.password == 'x' then return 200, {token = mock.jwt({sub = 1})} end return 401, {error = 'bad credentials'}\". Helpers: mock.jwt(claims), mock.now(offsetSec), mock.entities(family, scopeArray). Exclusive with body, bodyEncoding, bodyRef, recipes, schemaPatch and mediaType; refused on a stream row; compiled at write time, so a syntax error is a 400 carrying the parser's words."`
 }
 
 // OverrideDocumentInput mirrors overrideMutableFields (internal/admin/

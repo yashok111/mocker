@@ -46,6 +46,12 @@ type streamPreviewFrameView struct {
 	AtMs  int              `json:"atMs"`
 	Event string           `json:"event,omitempty"`
 	Data  jsonx.RawMessage `json:"data"`
+	// NotRun is A18 D10.1: the frame's PLACE is real, its body was not
+	// produced because the preview's aggregate Lua budget ran out. Data is
+	// null on such a frame — a caller that renders the body must read this
+	// flag, and the omitempty is deliberate so a schema-tick preview's
+	// document does not grow a field that is false on every frame.
+	NotRun bool `json:"notRun,omitempty"`
 }
 
 // streamPreviewView is D13's response document.
@@ -60,14 +66,21 @@ type streamPreviewView struct {
 	// and whether it echoes, beside the frames its timeline/tick would send.
 	Rules int  `json:"rules"`
 	Echo  bool `json:"echo"`
+	// NominalRate is A18 D10.1's label on maxBytesPerSec: with a `tick.lua`
+	// producer the number is a SAMPLE of what ran, never a bound, because
+	// the next firing may return anything. It is the one thing that stops
+	// the amplifier estimate §30.12 wants shown from being read as a
+	// guarantee it is not.
+	NominalRate bool `json:"nominalRate"`
 }
 
 func newStreamPreviewView(p domain.StreamPreview) streamPreviewView {
 	frames := make([]streamPreviewFrameView, 0, len(p.Frames))
 	for _, f := range p.Frames {
-		frames = append(frames, streamPreviewFrameView{AtMs: f.AtMs, Event: f.Event, Data: jsonx.RawMessage(f.Data)})
+		frames = append(frames, streamPreviewFrameView{AtMs: f.AtMs, Event: f.Event, Data: jsonx.RawMessage(f.Data), NotRun: f.NotRun})
 	}
-	return streamPreviewView{Kind: p.Kind, Frames: frames, Truncated: p.Truncated, MaxBytesPerSec: p.MaxBytesPerSec, Rules: p.Rules, Echo: p.Echo}
+	return streamPreviewView{Kind: p.Kind, Frames: frames, Truncated: p.Truncated, MaxBytesPerSec: p.MaxBytesPerSec,
+		Rules: p.Rules, Echo: p.Echo, NominalRate: p.NominalRate}
 }
 
 // handlePreviewEndpoint answers POST /api/workspaces/{id}/endpoints/preview.

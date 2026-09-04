@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	"github.com/yashok111/mocker/internal/jsonx"
+	"github.com/yashok111/mocker/internal/luafn"
 	"github.com/yashok111/mocker/internal/overrides"
 )
 
@@ -68,6 +69,19 @@ type Stream struct {
 	// back as-is when Echo is true and is consumed when it is false.
 	Reactive []Rule `json:"reactive,omitempty"`
 	Echo     bool   `json:"echo,omitempty"`
+
+	// OnFrame is A18's second hook (D10.2), legal on kind ws only and
+	// mutually exclusive with BOTH Reactive and Echo: present, it REPLACES
+	// them entirely rather than layering over them, because two producers
+	// for one inbound frame is exactly the precedence question D5 refuses to
+	// document for a variant.
+	//
+	// The source is a Lua function body over one argument, `frame`, with the
+	// verb-first return convention D10.2 fixes: nil, ("reply", data) or
+	// ("close", code, reason?). It is compiled at write time like every other
+	// Lua in this tree — this plane always answers, and a deferred parse is a
+	// 500 nobody asked for (D8).
+	OnFrame string `json:"onFrame,omitempty"`
 }
 
 // Rule is one reactive rule: when[] over the frame (body) and the
@@ -119,6 +133,15 @@ type Tick struct {
 	IntervalMs int              `json:"intervalMs"`
 	Event      string           `json:"event,omitempty"`
 	Schema     jsonx.RawMessage `json:"schema"`
+	// Lua is A18's first hook (D10.1): the tick's producer, exclusive with
+	// Schema by name. Per firing the runner calls it with the ordinal — the
+	// same number the generated body is seeded by — and takes `return data`.
+	//
+	// CONSEQUENCE, stated where the field is: P6b's guarantee "the same body
+	// at the same ordinal on every connection" does NOT hold for a Lua tick.
+	// D4 put functions out of the determinism guarantee and this is where
+	// that reaches a stream.
+	Lua string `json:"lua,omitempty"`
 }
 
 // ClosesWhenDone reads CloseWhenDone with its nil-is-true default.
@@ -149,18 +172,8 @@ func ValidateStreamFor(kind string, s *Stream, maxFrameBytes int64) error {
 	if maxFrameBytes <= 0 {
 		maxFrameBytes = DefaultMaxFrameBytes
 	}
-	if kind != KindWS {
-		if len(s.Reactive) > 0 {
-			return fmt.Errorf("%w: stream.reactive has no meaning on kind %q: an SSE connection carries no inbound frame", ErrInvalidRow, kind)
-		}
-		if s.Echo {
-			return fmt.Errorf("%w: stream.echo has no meaning on kind %q: an SSE connection carries no inbound frame", ErrInvalidRow, kind)
-		}
-		if s.Timeline == nil && s.Tick == nil {
-			return fmt.Errorf("%w: stream needs a timeline or a tick — a stream that sends nothing is a mistake", ErrInvalidRow)
-		}
-	} else if s.Timeline == nil && s.Tick == nil && len(s.Reactive) == 0 && !s.Echo {
-		return fmt.Errorf("%w: stream needs a timeline, a tick, a reactive rule or echo — a stream that neither sends nor answers is a mistake", ErrInvalidRow)
+	if err := validateInbound(kind, s); err != nil {
+		return err
 	}
 	if s.Timeline != nil {
 		if err := validateTimeline(s.Timeline, maxFrameBytes); err != nil {
@@ -173,6 +186,52 @@ func ValidateStreamFor(kind string, s *Stream, maxFrameBytes int64) error {
 		}
 	}
 	return validateReactive(s.Reactive, maxFrameBytes)
+}
+
+// validateInbound is the kind-gated half of ValidateStreamFor: which inbound
+// producer a document may carry, and whether it carries any behaviour at all.
+// Split out at A18 because adding the third producer (onFrame) took the
+// parent over the cyclomatic bound — and the split is where it is because
+// this block is the one part of that function whose every branch turns on
+// the same question, "does this kind have an inbound half".
+//
+// A18 D8b(3): onFrame had no site at all, so both its KIND check and its two
+// conflicts needed a place AND an order. The kind check goes first and BESIDE
+// the existing Reactive/Echo refusals rather than after them, so a document
+// that is wrong about the kind is told that before it is told anything about
+// which inbound producer it may have — the same reason the ws arm refuses the
+// conflicts only once the kind is known to admit an inbound half at all.
+func validateInbound(kind string, s *Stream) error {
+	if kind != KindWS {
+		if len(s.Reactive) > 0 {
+			return fmt.Errorf("%w: stream.reactive has no meaning on kind %q: an SSE connection carries no inbound frame", ErrInvalidRow, kind)
+		}
+		if s.Echo {
+			return fmt.Errorf("%w: stream.echo has no meaning on kind %q: an SSE connection carries no inbound frame", ErrInvalidRow, kind)
+		}
+		if s.OnFrame != "" {
+			return fmt.Errorf("%w: stream.onFrame has no meaning on kind %q: an SSE connection carries no inbound frame", ErrInvalidRow, kind)
+		}
+		if s.Timeline == nil && s.Tick == nil {
+			return fmt.Errorf("%w: stream needs a timeline or a tick — a stream that sends nothing is a mistake", ErrInvalidRow)
+		}
+		return nil
+	}
+	if s.OnFrame != "" {
+		if len(s.Reactive) > 0 {
+			return fmt.Errorf("%w: stream takes onFrame or reactive, not both — onFrame replaces them entirely", ErrInvalidRow)
+		}
+		if s.Echo {
+			return fmt.Errorf("%w: stream takes onFrame or echo, not both — onFrame replaces them entirely", ErrInvalidRow)
+		}
+		if err := luafn.Validate(s.OnFrame); err != nil {
+			return fmt.Errorf("%w: stream.onFrame does not compile: %w", ErrInvalidRow, err)
+		}
+	}
+	if s.Timeline == nil && s.Tick == nil && len(s.Reactive) == 0 && !s.Echo && s.OnFrame == "" {
+		return fmt.Errorf("%w: stream needs a timeline, a tick, a reactive rule, echo or onFrame — a stream that neither sends nor answers is a mistake", ErrInvalidRow)
+	}
+	return nil
 }
 
 // validateReactive is D2/D3's rule check: the count, the conditions
@@ -250,6 +309,25 @@ func validateTick(t *Tick) error {
 	if err := validateEventName("stream.tick.event", t.Event); err != nil {
 		return err
 	}
+
+	// A18 D8b(2): the ORDER is load-bearing and is why this decision was
+	// written down separately from D10. The `schema is required` refusal
+	// below is UNCONDITIONAL on the unchanged code, so a Lua-only tick was
+	// refused as schema-missing and a lua+schema tick never reached its own
+	// refusal at all. Exclusivity first, then require and validate `schema`
+	// only when `lua` is absent. The two checks above this block are
+	// unaffected and keep their place — they are about the interval and the
+	// event name, neither of which either producer changes.
+	if t.Lua != "" {
+		if len(t.Schema) > 0 {
+			return fmt.Errorf("%w: stream.tick takes lua or schema, not both — one producer per tick", ErrInvalidRow)
+		}
+		if err := luafn.Validate(t.Lua); err != nil {
+			return fmt.Errorf("%w: stream.tick.lua does not compile: %w", ErrInvalidRow, err)
+		}
+		return nil
+	}
+
 	if len(t.Schema) == 0 {
 		return fmt.Errorf("%w: stream.tick.schema is required", ErrInvalidRow)
 	}

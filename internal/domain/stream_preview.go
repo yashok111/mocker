@@ -22,6 +22,12 @@ type StreamPreview struct {
 	// the preview reports their count and the echo flag beside the frames.
 	Rules int
 	Echo  bool
+	// NominalRate is A18 D10.1's label: with a `tick.lua` producer,
+	// MaxBytesPerSec is a SAMPLE of what actually ran, not a bound — the
+	// next firing may return anything the function feels like, where a
+	// schema-generated body is bounded by the schema. An unlabelled nominal
+	// number is read as a bound, which is the one reading it must not have.
+	NominalRate bool
 }
 
 // StreamPreviewFrame is one frame of a StreamPreview. AtMs is the offset
@@ -31,4 +37,11 @@ type StreamPreviewFrame struct {
 	AtMs  int
 	Event string
 	Data  []byte
+	// NotRun is A18 D10.1's own label: the frame's PLACE on the time axis
+	// is real, its body was never produced because the preview's aggregate
+	// Lua budget ran out. Fifty firings at the two-second per-call timeout
+	// is a hundred seconds, which is not a preview, so the budget is real
+	// and what it costs is one honest word per frame rather than a shorter
+	// list that silently claims the stream ends there.
+	NotRun bool
 }

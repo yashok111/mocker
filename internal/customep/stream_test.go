@@ -72,7 +72,13 @@ func TestValidateDraft_refusesEveryLimitByName(t *testing.T) {
 		{"http with a document", &customep.Row{Method: http.MethodGet, Path: "/e", Kind: customep.KindHTTP, Stream: timelineOf(customep.Frame{Data: one})}, `only allowed with kind "sse"`},
 		// P6d (decisions.md mocker-p6d-websocket D2, D3): kind ws is served;
 		// its own refusals, by name, on both writers.
-		{"ws with nothing", &customep.Row{Method: http.MethodGet, Path: "/e", Kind: customep.KindWS, Stream: &customep.Stream{}}, "a reactive rule or echo"},
+		// A18 D10.2 added a FIFTH inbound producer, so the sentence this
+		// case matches on grew: "a reactive rule, echo or onFrame". The
+		// substring moved with it rather than being loosened to something
+		// shorter — the point of the case is that the refusal ENUMERATES
+		// what a ws stream may carry, and a shorter needle would keep
+		// passing once the enumeration went stale again.
+		{"ws with nothing", &customep.Row{Method: http.MethodGet, Path: "/e", Kind: customep.KindWS, Stream: &customep.Stream{}}, "a reactive rule, echo or onFrame"},
 		{"ws with POST", &customep.Row{Method: http.MethodPost, Path: "/e", Kind: customep.KindWS, Stream: &customep.Stream{Echo: true}}, "requires method GET"},
 		{"reactive on sse", sseRow(&customep.Stream{Tick: &customep.Tick{IntervalMs: 100, Schema: jsonx.RawMessage(`{"type":"object"}`)}, Reactive: []customep.Rule{{When: whenA, Data: one}}}), "reactive has no meaning on kind"},
 		{"echo on sse", sseRow(&customep.Stream{Tick: &customep.Tick{IntervalMs: 100, Schema: jsonx.RawMessage(`{"type":"object"}`)}, Echo: true}), "echo has no meaning on kind"},

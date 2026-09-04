@@ -1411,6 +1411,10 @@
             "type": "object",
             "additionalProperties": true,
             "description": "P7a (DESIGN §34.3): an inline JSON Schema a CUSTOM endpoint's generated response is walked from — a `$ref` into the bound spec's components is allowed and must resolve at write time (400 schema_ref_unresolved otherwise; with no spec bound any $ref is refused). Refused BY NAME on a spec operation's override (400 schema_on_override): that operation already has a schema — change it with schemaPatch. With a pinned body beside it the pinned body serves (§8's mode rule) and the schema only declares the exported shape."
+          },
+          "function": {
+            "type": "string",
+            "description": "Lua source that PRODUCES this response instead of one being assembled for it (A18). The stored string IS the function body over one argument `req`; it returns `status, body, headers`. Exclusive per variant with body, bodyEncoding, bodyRef, recipes, schemaPatch and mediaType — a variant carrying two of them is refused by name at write time, so there is no precedence to document. `when[]` is allowed: selection is unchanged and the function runs only when its variant is selected. Refused by name on a spec-operation override row (400 schema_on_override's sibling, 400 function_and_body for the pairs) and on a stream row (400 function_on_stream); a stream's Lua goes in stream.tick.lua or stream.onFrame instead. Compiled at write time: unparseable source is 400 and carries the parser's own words."
           }
         }
       },
@@ -2625,6 +2629,10 @@
             "type": "object",
             "additionalProperties": true,
             "description": "P7a: the created response variant's inline schema. With no body beside it the response is GENERATED from this schema."
+          },
+          "function": {
+            "type": "string",
+            "description": "Lua that PRODUCES this endpoint's response instead of one being assembled for it (A18). It has a field of its own here, as bodyRef does, because this request builds ONE variant from flat fields where the PUT editor takes the variant whole through responses[]. Exclusive with body, bodyRef, mediaType, recipes and schemaPatch; refused by name on kind \"sse\"/\"ws\" (a stream's Lua goes in stream.tick.lua or stream.onFrame); compiled at write time, so unparseable source is a 400 carrying the parser's own words."
           }
         }
       },
@@ -3611,8 +3619,7 @@
       "StreamTick": {
         "type": "object",
         "required": [
-          "intervalMs",
-          "schema"
+          "intervalMs"
         ],
         "properties": {
           "intervalMs": {
@@ -3624,7 +3631,11 @@
           },
           "schema": {
             "type": "object",
-            "description": "An inline JSON Schema object; every tick's body is generated from it with the workspace's own seed, deterministic per (seed, endpoint id, tick ordinal). No $ref — there is no document to resolve one against."
+            "description": "An inline JSON Schema object; every tick's body is generated from it with the workspace's own seed, deterministic per (seed, endpoint id, tick ordinal). No $ref — there is no document to resolve one against. Required unless `lua` is set, and refused together with it."
+          },
+          "lua": {
+            "type": "string",
+            "description": "Lua that produces each frame's body (A18 D10.1), exclusive with `schema` by name: exactly one of the two is required and a document carrying both is 400 tick_lua_and_schema. The source is the function body over one argument `ordinal` — the same number a generated body is seeded by — and returns the data: a table is JSON-encoded by the server, a string is the raw bytes of the `data:` line, and nil skips that firing with the connection left open. A body carrying a CR or LF, or one over MOCKER_MAX_RESPONSE, is a SKIPPED firing counted in the row's frames_skipped note. Unlike a generated tick, a Lua tick is NOT byte-identical at the same ordinal across connections."
           }
         }
       },
@@ -3653,6 +3664,10 @@
           "echo": {
             "type": "boolean",
             "description": "kind \"ws\" only. An inbound frame no rule matched comes back as-is (same opcode); echo is the fallback, never a parallel producer."
+          },
+          "onFrame": {
+            "type": "string",
+            "description": "Lua run for every inbound frame while the connection is live (A18 D10.2), kind \"ws\" only (400 on_frame_on_sse). Present, it REPLACES reactive and echo entirely — both must be absent (400 on_frame_and_reactive, 400 on_frame_and_echo). The source is the function body over one argument `frame`: a TEXT frame that parses as a JSON object arrives as a table, anything else as the raw string. Verb-first return: nil for no reply, (\"reply\", data) for one text frame, (\"close\", code, reason?) for the closing handshake with code 1000 or 4000..4999. A reply enters the same per-connection send budget a reactive reply does; a Lua error or a malformed return drops that reply, counts it in the row's on_frame_errors note, and leaves the hook called for later frames."
           }
         }
       },
@@ -3670,7 +3685,11 @@
           "event": {
             "type": "string"
           },
-          "data": {}
+          "data": {},
+          "notRun": {
+            "type": "boolean",
+            "description": "True when the frame's PLACE on the time axis is real but its body was never produced: a `tick.lua` preview shares one 10-second budget across every frame it lays out, and past it the rest are labelled rather than dropped, since a shorter list would read as \"the stream ends here\". `data` is null on such a frame."
+          }
         }
       },
       "StreamPreviewView": {
@@ -3710,6 +3729,10 @@
           "echo": {
             "type": "boolean",
             "description": "P6d: whether the draft echoes unmatched frames."
+          },
+          "nominalRate": {
+            "type": "boolean",
+            "description": "True when `maxBytesPerSec` is a SAMPLE of what actually ran rather than a bound — always the case with a `tick.lua` producer, whose next firing may return anything. An unlabelled nominal number reads as a guarantee it is not."
           }
         }
       },

@@ -23,6 +23,7 @@
 package mockplane
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"net/http"
@@ -34,6 +35,8 @@ import (
 	"github.com/yashok111/mocker/internal/gen"
 	"github.com/yashok111/mocker/internal/httpx"
 	"github.com/yashok111/mocker/internal/jsonx"
+	"github.com/yashok111/mocker/internal/luafn"
+	"github.com/yashok111/mocker/internal/resources"
 	"github.com/yashok111/mocker/internal/stream"
 	"github.com/yashok111/mocker/internal/workspaces"
 )
@@ -97,7 +100,7 @@ func (p *Plane) SetStreams(reg *stream.Registry, opts StreamOptions) {
 
 // serveStream is D7's branch: everything before it (route_off, the live
 // effect, the pause, the delay, the status) already ran in serveCustom.
-func (p *Plane) serveStream(w http.ResponseWriter, r *http.Request, ws *workspaces.Workspace, rt *runtime, row *customep.Row) {
+func (p *Plane) serveStream(w http.ResponseWriter, r *http.Request, ws *workspaces.Workspace, rt *runtime, row *customep.Row, base resources.ScopeKey) {
 	if p.streams == nil {
 		httpx.Err(w, http.StatusServiceUnavailable, "service_unavailable", "no stream registry is wired in this deployment")
 		return
@@ -156,7 +159,7 @@ func (p *Plane) serveStream(w http.ResponseWriter, r *http.Request, ws *workspac
 	// completion on what it opened with" costs, never the megabytes of a
 	// compiled spec. The tick's generator is built here, once per
 	// connection, over the workspace settings the runtime was built with.
-	loop := newStreamLoop(def, p.tickSource(rt, row), p.streamOpts)
+	loop := newStreamLoop(def, p.tickSource(rt, row, p.newLuaHost(rt, ws, base, nil)), p.streamOpts)
 	// The first frame is copied for the traffic row ONLY under "first",
 	// and only up to MOCKER_TRAFFIC_MAX_BODY — the recorder would cut it
 	// there anyway, and a 4 MiB frame held per connection under "off" is
@@ -211,9 +214,17 @@ type streamHooks struct {
 // (D4) so that internal/gen's own SeedList folds them the way it folds a
 // detail route's id — deterministic across connections, distinct across
 // endpoints and across ticks, and no new field on gen.Request.
-func (p *Plane) tickSource(rt *runtime, row *customep.Row) func(n int) ([]byte, error) {
+func (p *Plane) tickSource(rt *runtime, row *customep.Row, host luafn.Host) func(ctx context.Context, n int) ([]byte, error) {
 	if row.Stream == nil || row.Stream.Tick == nil {
 		return nil
+	}
+	if row.Stream.Tick.Lua != "" {
+		// A18 D10.1. Exclusive with Schema at write time (D8b(2)), so this
+		// branch and the schema one below can never both be right for one
+		// document — the check is here rather than a fallthrough because a
+		// row that somehow carried both (a hand-run UPDATE) must serve ONE
+		// producer, and the operator's Lua is the more explicit statement.
+		return newLuaTickGenerator(row.Stream.Tick.Lua, host, p.cfg.MaxResponse)
 	}
 	var schema map[string]any
 	if err := jsonx.Unmarshal(row.Stream.Tick.Schema, &schema); err != nil || schema == nil {
@@ -224,7 +235,7 @@ func (p *Plane) tickSource(rt *runtime, row *customep.Row) func(n int) ([]byte, 
 		if err == nil {
 			err = errors.New("stream: tick schema is null")
 		}
-		return func(int) ([]byte, error) { return nil, err }
+		return func(context.Context, int) ([]byte, error) { return nil, err }
 	}
 	g := gen.New(nil, gen.Options{
 		Seed:     rt.settings.Seed,
@@ -240,9 +251,15 @@ func (p *Plane) tickSource(rt *runtime, row *customep.Row) func(n int) ([]byte, 
 // newTickGenerator builds the per-tick body function over one generator
 // and one decoded schema. Exposed as a function of its inputs (not a Plane
 // method) so PreviewStream can build one over a DRAFT row with id 0.
-func newTickGenerator(g *gen.Generator, schema map[string]any, canonicalPath string, endpointID int64, maxBytes int64) func(n int) ([]byte, error) {
+func newTickGenerator(g *gen.Generator, schema map[string]any, canonicalPath string, endpointID int64, maxBytes int64) func(ctx context.Context, n int) ([]byte, error) {
 	variant := gen.ResponseVariant{SchemaPtr: "#/stream/tick/schema", HTTPStatus: http.StatusOK, MediaType: "application/json"}
-	return func(n int) ([]byte, error) {
+	// The context is accepted and unused: internal/gen walks a decoded schema
+	// with no store read and no network, so there is nothing here for a
+	// deadline to cut. It is in the signature because the SIBLING producer
+	// (newLuaTickGenerator, below) genuinely needs one, and two closure types
+	// for one ticker case would be a branch in the loop rather than in the
+	// factory that already knows which producer it built.
+	return func(_ context.Context, n int) ([]byte, error) {
 		req := gen.Request{
 			Method:        http.MethodGet,
 			CanonicalPath: canonicalPath,
@@ -264,15 +281,70 @@ func newTickGenerator(g *gen.Generator, schema map[string]any, canonicalPath str
 	}
 }
 
+// previewLuaBudget is D10.1's aggregate ceiling on a stream preview's Lua:
+// the whole lay-out shares it, so a hook that takes the full per-call timeout
+// cannot multiply by the fifty frames previewFrameLimit allows. Past it the
+// remaining frames keep their place on the axis and are labelled NotRun.
+//
+// A package var and not a const for exactly the reason maxStreamLifetime and
+// luafn.Timeout are: this package's own test shortens it, because the
+// alternative is a ten-second sleep in the suite to prove a ceiling exists —
+// and a ceiling nothing observes is a number, not a guard. Nothing outside a
+// test writes it.
+var previewLuaBudget = 10 * time.Second
+
 // errFrameTooLarge is a tick body over MOCKER_MAX_RESPONSE (D4): skipped
 // and counted, never written.
 var errFrameTooLarge = errors.New("stream: generated frame exceeds MOCKER_MAX_RESPONSE")
+
+// errFrameBreaksFraming is A18 D10.1's own refusal, and it exists because a
+// Lua tick may return a STRING: a generated body is JSON and carries no raw
+// CR or LF by construction, while `return "a\nb"` would put a second `data:`
+// boundary inside one frame and desynchronise every frame after it on that
+// connection. Skipped and counted exactly like an oversize body — the two are
+// twins, and clause 40 pins that they are counted ONCE between them.
+var errFrameBreaksFraming = errors.New("stream: a tick body must not contain a CR or LF")
+
+// errTickDeclined is the `return nil` of D10.1: not an error condition, and
+// carried as one only so the single closure type can express "no frame this
+// firing". [streamLoop.writeTick] tells it apart from a real error before it
+// counts anything, which is acceptance clause 41: a nil return counted as
+// both a skip and an error is two outcomes reported for one.
+var errTickDeclined = errors.New("stream: the tick declined this firing")
+
+// newLuaTickGenerator is D10.1's producer: the same per-firing signature the
+// generated one has, so the loop cannot tell them apart, with the frame
+// checks the generated body passes by construction applied here explicitly.
+//
+// The ordinal is the SAME number the generated body is seeded by, which is
+// what makes the two producers substitutable for an author: "frame 7" means
+// frame 7 either way. What does NOT carry over is P6b's guarantee that frame
+// 7 is byte-identical on every connection — D4 put functions out of the
+// determinism guarantee and Tick.Lua's own field comment says so.
+func newLuaTickGenerator(source string, host luafn.Host, maxBytes int64) func(ctx context.Context, n int) ([]byte, error) {
+	return func(ctx context.Context, n int) ([]byte, error) {
+		body, send, err := luafn.RunTick(ctx, source, n, host)
+		if err != nil {
+			return nil, err
+		}
+		if !send {
+			return nil, errTickDeclined
+		}
+		if bytes.ContainsAny(body, "\r\n") {
+			return nil, errFrameBreaksFraming
+		}
+		if maxBytes > 0 && int64(len(body)) > maxBytes {
+			return nil, errFrameTooLarge
+		}
+		return body, nil
+	}
+}
 
 // streamLoop is the state one connection carries: the definition, where
 // the timeline stands, the tick ordinal, the frame ordinal for `id:`.
 type streamLoop struct {
 	def   *customep.Stream
-	tick  func(n int) ([]byte, error)
+	tick  func(ctx context.Context, n int) ([]byte, error)
 	opts  StreamOptions
 	hooks streamHooks
 	next  int   // index of the next timeline frame to write
@@ -290,7 +362,7 @@ type streamLoop struct {
 	stopped func() bool
 }
 
-func newStreamLoop(def *customep.Stream, tick func(n int) ([]byte, error), opts StreamOptions) *streamLoop {
+func newStreamLoop(def *customep.Stream, tick func(ctx context.Context, n int) ([]byte, error), opts StreamOptions) *streamLoop {
 	return &streamLoop{def: def, tick: tick, opts: opts}
 }
 
@@ -348,13 +420,19 @@ func (l *streamLoop) writeTimelineFrame(wr *stream.Writer, tickActive bool) bool
 // writeTick generates and writes one tick frame; a body the generator
 // refuses is skipped and counted, never written. false means the peer is
 // gone.
-func (l *streamLoop) writeTick(wr *stream.Writer) bool {
+func (l *streamLoop) writeTick(ctx context.Context, wr *stream.Writer) bool {
 	if l.stopped() {
 		return false
 	}
 	l.tickN++
-	body, err := l.tick(l.tickN)
-	if err != nil {
+	body, err := l.tick(ctx, l.tickN)
+	switch {
+	case errors.Is(err, errTickDeclined):
+		// A18 D10.1 / clause 41: a Lua tick that returned nil chose not to
+		// send. The connection stays open and NOTHING is counted — not a
+		// skip, which means "a frame the plane refused", and not an error.
+		return true
+	case err != nil:
 		l.hooks.onSkip()
 		l.hooks.onErr(err)
 		return true
@@ -446,7 +524,7 @@ func (l *streamLoop) run(ctx context.Context, cancelled <-chan struct{}, inbox <
 				return
 			}
 		case <-tickC:
-			if !l.writeTick(wr) {
+			if !l.writeTick(ctx, wr) {
 				return
 			}
 		case req := <-inbox:
@@ -484,30 +562,55 @@ func (p *Plane) PreviewStream(ctx context.Context, ws *workspaces.Workspace, dra
 	if err != nil {
 		return domain.StreamPreview{}, err
 	}
-	var tick func(int) ([]byte, error)
+	var tick func(ctx context.Context, n int) ([]byte, error)
+	nominal := false
+	tickCtx := ctx
 	if draft.Stream != nil && draft.Stream.Tick != nil {
-		var schema map[string]any
-		if err := jsonx.Unmarshal(draft.Stream.Tick.Schema, &schema); err != nil {
-			return domain.StreamPreview{}, err
+		switch {
+		case draft.Stream.Tick.Lua != "":
+			// A18 D10.1: a draft's Lua really runs, on the honest clock,
+			// with a nil host — the same refusal Preview makes for live
+			// state, the ref resolver and the asset lookup, and for the same
+			// reason: a draft must not read real entity rows. The AGGREGATE
+			// budget is here rather than inside the cursor's own calls
+			// because fifty firings at the per-call timeout is a hundred
+			// seconds, and a preview route that can block for that long is
+			// a denial of service an authenticated operator does not need
+			// to be able to cause by accident.
+			var cancel context.CancelFunc
+			tickCtx, cancel = context.WithTimeout(ctx, previewLuaBudget)
+			defer cancel()
+			tick = newLuaTickGenerator(draft.Stream.Tick.Lua, nil, p.cfg.MaxResponse)
+			nominal = true
+		default:
+			var schema map[string]any
+			if err := jsonx.Unmarshal(draft.Stream.Tick.Schema, &schema); err != nil {
+				return domain.StreamPreview{}, err
+			}
+			g := gen.New(nil, gen.Options{
+				Seed:     rt.settings.Seed,
+				ListSize: rt.settings.ListSize,
+				NullRate: rt.settings.NullRate,
+				MaxBytes: p.cfg.MaxResponse,
+				Identity: rt.settings.Identity,
+				Auth:     rt.settings.Auth,
+			})
+			tick = newTickGenerator(g, schema, draft.CanonicalPath, 0, p.cfg.MaxResponse)
 		}
-		g := gen.New(nil, gen.Options{
-			Seed:     rt.settings.Seed,
-			ListSize: rt.settings.ListSize,
-			NullRate: rt.settings.NullRate,
-			MaxBytes: p.cfg.MaxResponse,
-			Identity: rt.settings.Identity,
-			Auth:     rt.settings.Auth,
-		})
-		tick = newTickGenerator(g, schema, draft.CanonicalPath, 0, p.cfg.MaxResponse)
 	}
-	return expandStream(draft.Kind, draft.Stream, tick, previewFrameLimit)
+	out, err := expandStream(tickCtx, draft.Kind, draft.Stream, tick, previewFrameLimit)
+	if err != nil {
+		return domain.StreamPreview{}, err
+	}
+	out.NominalRate = nominal
+	return out, nil
 }
 
 // expandStream lays the timeline and the tick out on one time axis, up to
 // limit frames, in the order a connection would write them (ties: the
 // timeline first, as the loop's select would usually pick the timer armed
 // first). Pure apart from the tick function.
-func expandStream(kind string, def *customep.Stream, tick func(int) ([]byte, error), limit int) (domain.StreamPreview, error) {
+func expandStream(ctx context.Context, kind string, def *customep.Stream, tick func(ctx context.Context, n int) ([]byte, error), limit int) (domain.StreamPreview, error) {
 	out := domain.StreamPreview{Kind: kind, Frames: []domain.StreamPreviewFrame{}}
 	if def == nil {
 		return out, nil
@@ -515,7 +618,7 @@ func expandStream(kind string, def *customep.Stream, tick func(int) ([]byte, err
 	// P6d (D12): the inbound half is reported, not laid out.
 	out.Rules, out.Echo = len(def.Reactive), def.Echo
 	tl := &timelineCursor{def: def.Timeline}
-	tk := &tickCursor{def: def.Tick, gen: tick}
+	tk := &tickCursor{def: def.Tick, gen: tick, ctx: ctx}
 	// Bounded in STEPS, not only in frames laid out: a tick whose every body
 	// exceeds the frame cap lays out nothing and would otherwise never
 	// reach the frame limit (second-reader finding, triaged as real).
@@ -598,8 +701,13 @@ func (c *timelineCursor) rate() int64 {
 
 // tickCursor walks a tick for expandStream.
 type tickCursor struct {
-	def   *customep.Tick
-	gen   func(int) ([]byte, error)
+	def *customep.Tick
+	gen func(ctx context.Context, n int) ([]byte, error)
+	// ctx carries the AGGREGATE Lua budget of D10.1 (previewLuaBudget), and
+	// it is the cursor's rather than a parameter of next() because the
+	// budget is a property of the WHOLE lay-out: fifty firings share ten
+	// seconds, they do not each get them.
+	ctx   context.Context
 	n     int
 	at    int
 	first int64
@@ -624,10 +732,24 @@ func (c *tickCursor) next() (domain.StreamPreviewFrame, bool, error) {
 	c.n++
 	at := c.at
 	c.at += c.def.IntervalMs
-	body, err := c.gen(c.n)
+	body, err := c.gen(c.ctx, c.n)
 	if err != nil {
-		if errors.Is(err, errFrameTooLarge) {
+		switch {
+		case errors.Is(err, errFrameTooLarge), errors.Is(err, errFrameBreaksFraming):
+			// The connection would skip these too, and the preview says so
+			// the same way: time advances, nothing is laid out.
 			return domain.StreamPreviewFrame{}, true, nil
+		case errors.Is(err, errTickDeclined):
+			// A18 D10.1: `return nil` is a firing that sends nothing. Same
+			// shape as a skip on the time axis, and it is not an error.
+			return domain.StreamPreviewFrame{}, true, nil
+		case errors.Is(err, luafn.ErrTimeout), errors.Is(err, luafn.ErrCanceled):
+			// The AGGREGATE budget ran out (or the admin request went away).
+			// The frame keeps its place and says it was not run — clause 45's
+			// own label, and the reason the preview does not simply stop: a
+			// shorter list reads as "the stream ends here", which is a
+			// different and wrong statement about the definition.
+			return domain.StreamPreviewFrame{AtMs: at, Event: c.def.Event, NotRun: true}, false, nil
 		}
 		return domain.StreamPreviewFrame{}, false, err
 	}

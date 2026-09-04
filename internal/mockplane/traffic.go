@@ -111,8 +111,13 @@ type trafficMatch struct {
 	// carrying a JSON object, already redacted by field name; otherwise
 	// streamFirstInKind says what it was ("binary" or "text") and nothing
 	// is kept.
-	streamFramesIn    int
-	streamDropped     int
+	streamFramesIn int
+	streamDropped  int
+	// onFrameErrors is A18 D10.2's own counter, and it is NOT streamDropped:
+	// that token means the send budget was full, and a broken Lua hook
+	// counted there would hide behind it. A connection can legitimately have
+	// both.
+	onFrameErrors     int
 	streamCloseCode   int
 	streamFirstInKind string
 	streamFirstInSeen bool
@@ -238,6 +243,17 @@ func markFunctionNote(r *http.Request, note string) {
 		return
 	}
 	tm.function = note
+}
+
+// noteOnFrameError counts one inbound frame whose Lua hook failed or returned
+// a shape the contract does not have (A18 D10.2). The reply is dropped and
+// the hook keeps being called, so this counter can reach the frame count.
+func noteOnFrameError(r *http.Request) {
+	tm, ok := r.Context().Value(trafficMatchCtxKey{}).(*trafficMatch)
+	if !ok {
+		return
+	}
+	tm.onFrameErrors++
 }
 
 // markStream records that a stream handshake succeeded on this request.
@@ -392,6 +408,9 @@ func (p *Plane) wsTrafficNotes(tm *trafficMatch, ev *traffic.Event, notes []stri
 	notes = append(notes, "frames_in:"+strconv.Itoa(tm.streamFramesIn))
 	if tm.streamDropped > 0 {
 		notes = append(notes, "replies_dropped:"+strconv.Itoa(tm.streamDropped))
+	}
+	if tm.onFrameErrors > 0 {
+		notes = append(notes, "on_frame_errors:"+strconv.Itoa(tm.onFrameErrors))
 	}
 	notes = append(notes, wsCloseNote(tm.streamCloseCode))
 	if tm.streamFirstInSeen && tm.streamFirstInKind != "json" {

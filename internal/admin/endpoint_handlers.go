@@ -153,6 +153,15 @@ type createEndpointRequest struct {
 	Schema    jsonx.RawMessage    `json:"schema,omitempty"`
 	ReqSchema jsonx.RawMessage    `json:"reqSchema,omitempty"`
 	Operation *customep.Operation `json:"operation,omitempty"`
+	// Function is A18's (D5, D8): the Lua that PRODUCES this endpoint's
+	// response instead of one being assembled for it. It needs a field of
+	// its own here for the same reason BodyRef does — this request builds
+	// ONE variant from flat fields, where the PUT editor takes the variant
+	// whole through responses[] and gets the field off overrides.Variant.
+	// Every refusal is the variant validator's: exclusive with body,
+	// bodyRef, mediaType, recipes and schemaPatch, refused by name on a
+	// stream row, and compiled at write time.
+	Function string `json:"function,omitempty"`
 }
 
 // codeOperationIDTaken is P7a's 409 (decisions.md D3): the submitted
@@ -177,6 +186,14 @@ func endpointRowFromCreate(body *createEndpointRequest, status int, maxFrameByte
 	if body.Status != 0 || len(body.Body) > 0 || body.MediaType != "" || len(body.Schema) > 0 || len(body.ReqSchema) > 0 {
 		return nil, fmt.Errorf("kind %q takes no status, body or mediaType — nor a schema or reqSchema — a stream's frames come from its stream document", body.Kind)
 	}
+	if body.Function != "" {
+		// A18 D5, refused HERE and not left to the variant validator: this
+		// branch never builds a Responses map at all, so customep's own
+		// function_on_stream check (which walks that map) would find
+		// nothing and the field would be silently dropped. A stream's Lua
+		// goes in the stream document, and the message says which field.
+		return nil, fmt.Errorf("kind %q takes no function — a stream is not a request/response, and its Lua goes in stream.tick.lua or stream.onFrame instead", body.Kind)
+	}
 	draft, err := endpointRowFromDraft(body.Method, body.Path, body.Kind, body.Stream, maxFrameBytes)
 	if err != nil {
 		return nil, err
@@ -197,8 +214,19 @@ func httpEndpointRowFromCreate(body *createEndpointRequest, status int) (*custom
 	if err != nil {
 		return nil, err
 	}
-	variant := overrides.Variant{Body: body.Body, MediaType: body.MediaType, BodyRef: body.BodyRef, Schema: body.Schema}
-	if len(body.Body) > 0 || body.BodyRef != "" || len(body.Schema) == 0 {
+	variant := overrides.Variant{
+		Body: body.Body, MediaType: body.MediaType, BodyRef: body.BodyRef,
+		Schema: body.Schema, Function: body.Function,
+	}
+	// A18: a function variant is NEITHER pinned nor generated — the function
+	// replaces response assembly entirely (D5), and marking it "pinned"
+	// would send the serve path looking for a body to pin. The mode stays
+	// empty and the exclusivity checks below refuse every field that would
+	// have made the old condition true, so this branch can only be reached
+	// with a lone function.
+	switch {
+	case body.Function != "":
+	case len(body.Body) > 0 || body.BodyRef != "" || len(body.Schema) == 0:
 		variant.Mode = "pinned"
 	}
 	return &customep.Row{
