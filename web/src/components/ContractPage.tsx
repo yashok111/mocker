@@ -9,8 +9,8 @@
 //
 // Read-only on purpose (the owner's call): the editors are the agent and the
 // existing screens, so an operation that was added, changed or removed
-// carries a link to the editor that owns it — «Кастомные» with the row
-// opened, or «Endpoint'ы» with the operation selected — never an editor of
+// carries a link to the editor that owns it — «Свои эндпоинты» with the row
+// opened, or «Операции спеки» with the operation selected — never an editor of
 // its own. §14's word rule holds here as on every screen: «контракт»,
 // «операция», «схема», «запрос», «ответ», «параметр».
 
@@ -85,11 +85,11 @@ export function ContractPage({ id }: { id: number }): ReactElement {
           основы — «изменено», предложение убрать операцию — «удалено»; остальное — «база». Документ
           только для чтения: править операции — на вкладках{" "}
           <TabLink id={id} tab="endpoints" testId="contract-endpoints-link">
-            «Кастомные»
+            «Свои эндпоинты»
           </TabLink>{" "}
           и{" "}
           <TabLink id={id} tab="operations" testId="contract-operations-link">
-            «Endpoint&apos;ы»
+            «Операции спеки»
           </TabLink>
           .
         </Text>
@@ -214,7 +214,7 @@ function ContractView({
         <Text size="sm" c="dimmed" data-testid="contract-empty">
           Пока ни одной операции: документ — пустой каркас OpenAPI 3.1. Добавьте эндпоинт на вкладке{" "}
           <TabLink id={id} tab="endpoints">
-            «Кастомные»
+            «Свои эндпоинты»
           </TabLink>{" "}
           или{" "}
           <TabLink id={id} tab="overview">

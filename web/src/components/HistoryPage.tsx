@@ -627,6 +627,11 @@ function CheckpointList({
   const [rollbackNote, setRollbackNote] = useState<string | null>(null);
   const rollback = useRollbackWorkspace({
     mutation: {
+      onMutate: () => {
+        // A previous rollback's green line must not stand beside this one's
+        // error (the second reader of A21).
+        setRollbackNote(null);
+      },
       onSuccess: (res) => {
         setActionError(null);
         if (res.status === 200) {
@@ -634,7 +639,7 @@ function CheckpointList({
             `Откат выполнен, ревизия ${res.data.revision}: ${
               res.data.dataRestored
                 ? "данные ресурсов восстановлены из точки"
-                : "данные ресурсов не трогались (точка их не содержала или галочка не стояла)"
+                : "данные ресурсов не трогались (галочка не стояла, точка их не содержала, или семейство из точки больше не подтверждено)"
             }${res.data.scenarioActive ? "; активный сценарий по-прежнему маскирует часть слоя" : ""}`,
           );
         }

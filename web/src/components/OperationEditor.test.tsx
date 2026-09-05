@@ -556,4 +556,81 @@ describe("OperationEditor", () => {
     await userEvent.selectOptions(screen.getByTestId("operation-status-mode-200"), "pinned");
     expect(await screen.findByTestId("operation-status-body-200")).toBeInTheDocument();
   });
+
+  // A21 (G11): a status the spec never declared, one status removed alone,
+  // and a preview that carries headers and a body.
+  it("adds a status the spec does not declare and removes one status without touching the rest", async () => {
+    let sent: { responses?: Record<string, unknown> } | undefined;
+    route({
+      [GET]: () => json(200, fullDoc()),
+      [PUT]: () => json(200, { ...fullDoc(), revision: 9 }),
+    });
+    const original = globalThis.fetch;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        if (init?.method === "PUT" && init.body) {
+          sent = JSON.parse(String(init.body)) as typeof sent;
+        }
+        return original(input, init);
+      }),
+    );
+    renderInRouter(<OperationEditor workspaceId={WS} opKey={OPKEY} statuses={STATUSES} />);
+    await screen.findByTestId("operation-status-mode-200");
+    const add = screen.getByTestId("operation-status-add");
+    expect(add).toBeDisabled();
+    await userEvent.type(screen.getByTestId("operation-status-add-code"), "429");
+    await userEvent.click(add);
+    expect(await screen.findByTestId("operation-status-tab-429")).toBeInTheDocument();
+    // Remove the 404 the document carried; 200 and the new 429 stay.
+    await userEvent.click(screen.getByTestId("operation-status-tab-404"));
+    await userEvent.click(await screen.findByTestId("operation-status-remove-404"));
+    await userEvent.click(screen.getByTestId("operation-save"));
+    await screen.findByTestId("operation-editor-saved");
+    expect(Object.keys(sent?.responses ?? {}).sort()).toEqual(["200", "429"]);
+  });
+
+  it("sends preview headers and a JSON body, and refuses a malformed body before the request", async () => {
+    let sent: { headers?: unknown; body?: unknown } | undefined;
+    route({
+      [GET]: () => json(200, fullDoc()),
+      [`POST /api/workspaces/${WS}/preview`]: () =>
+        json(200, {
+          status: 200,
+          mediaType: "application/json",
+          encoding: "utf-8",
+          body: "{}",
+          routeOff: false,
+          refused: null,
+          noBody: false,
+          schemaPatchApplied: false,
+          recipesBound: 0,
+          scenarioActive: false,
+          headers: {},
+        }),
+    });
+    const original = globalThis.fetch;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        if (init?.method === "POST" && init.body) {
+          sent = JSON.parse(String(init.body)) as typeof sent;
+        }
+        return original(input, init);
+      }),
+    );
+    renderInRouter(<OperationEditor workspaceId={WS} opKey={OPKEY} statuses={STATUSES} />);
+    await screen.findByTestId("operation-status-mode-200");
+    await userEvent.type(screen.getByTestId("operation-preview-body-input"), "{{oops");
+    await userEvent.click(screen.getByTestId("operation-preview-run"));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Тело запроса: JSON невалиден");
+    expect(sent).toBeUndefined();
+
+    await userEvent.clear(screen.getByTestId("operation-preview-body-input"));
+    await userEvent.type(screen.getByTestId("operation-preview-body-input"), '{{"cmd": "x"}');
+    await userEvent.type(screen.getByTestId("operation-preview-headers"), "X-Debug: 1");
+    await userEvent.click(screen.getByTestId("operation-preview-run"));
+    await waitFor(() => expect(sent).toBeDefined());
+    expect(sent).toMatchObject({ headers: { "X-Debug": "1" }, body: { cmd: "x" } });
+  });
 });

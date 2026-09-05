@@ -105,8 +105,8 @@ describe("WorkspaceLayout", () => {
     // route tree, in routes.test.tsx.
     expect(screen.getAllByRole("tab")).toHaveLength(10);
     expect(screen.getByRole("tab", { name: "Обзор" })).toHaveAttribute("aria-selected", "true");
-    expect(screen.getByRole("tab", { name: "Endpoint'ы" })).toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: "Кастомные" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Операции спеки" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Свои эндпоинты" })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "Трафик" })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "Сценарии" })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "История" })).toBeInTheDocument();

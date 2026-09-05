@@ -63,7 +63,7 @@ import { arktypeResolver } from "@/validation/resolver";
 // The save button says «сохранить настройки и правки операций», never
 // «сохранить текущее состояние»: DESIGN §14:905 wrote the latter before the
 // bundle format had a shape, and a scenario does not carry the custom
-// endpoints the «Кастомные» tab shows (§0 — endpoints have no place in a
+// endpoints the «Свои эндпоинты» tab shows (§0 — endpoints have no place in a
 // snapshot keyed by op_overrides rows) — a button promising «состояние»
 // would promise those too.
 //
@@ -86,7 +86,7 @@ export function ScenariosPage({ id }: { id: number }): ReactElement {
           возвращает всё как было. Кастомные endpoint&apos;ы сценарий не захватывает — редактируются
           они, как обычно, на вкладке{" "}
           <TabLink id={id} tab="endpoints" testId="scenarios-endpoints-link">
-            «Кастомные»
+            «Свои эндпоинты»
           </TabLink>
           .
         </Text>
@@ -304,7 +304,7 @@ function ScenarioList({
   // and none of them remembers on its own WHICH scenario it was acting on.
   const [actionError, setActionError] = useState<{ label: string; message: string } | null>(null);
   // A21 (G2, four of five readers): what a scenario holds was visible only
-  // AFTER activating it, through the mask banner on «Endpoint'ы».
+  // AFTER activating it, through the mask banner on «Операции спеки».
   const [openId, setOpenId] = useState<number | null>(null);
 
   function invalidateAfterWrite(): void {
@@ -751,7 +751,7 @@ function RenameScenarioForm({
 }
 
 // ScenarioDetails reads the snapshot (GET .../scenarios/{sid}, the same
-// route the mask banner on «Endpoint'ы» reads) and lists what activating it
+// route the mask banner on «Операции спеки» reads) and lists what activating it
 // would change: the operations it overrides and the settings it carries.
 // A viewer only — CARVE-OUTS.md refuses the EDITOR (a scenario's contents
 // come from snapshotting the workspace), not a look inside.

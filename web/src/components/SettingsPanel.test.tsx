@@ -329,6 +329,8 @@ describe("SettingsPanel", () => {
 
     const basePath = await screen.findByTestId("settings-base-path");
     expect(basePath).toHaveValue("/distinctive-base-path");
+    // The fixture stores "list", a value the server reads as "reflect"; the
+    // select keeps it (resent byte-for-byte when untouched) and says so.
     expect(screen.getByTestId("settings-cors-mode")).toHaveValue("list");
     expect(screen.getByTestId("settings-not-found-body")).toHaveValue(
       JSON.stringify({ distinctive: "not-found-marker" }, null, 2),

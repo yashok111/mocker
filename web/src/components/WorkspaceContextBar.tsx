@@ -11,7 +11,7 @@ import { TabLink } from "./TabLink";
 // before A21 lived on four different tabs — every reader of the 2026-09-05
 // UI review named this (U1). The bound spec BY NAME (the list and the
 // settings panel said «спека #3», a database id); the active scenario, whose
-// mask only «Endpoint'ы» warned about while edits on any other tab were
+// mask only «Операции спеки» warned about while edits on any other tab were
 // silently shadowed; the number of session directives in force, which no
 // screen showed at all; and «ревизия N» with the one-line gloss the guide
 // gives it. Each item is its own query and degrades on its own: a failed

@@ -1,5 +1,5 @@
 import type { ReactElement } from "react";
-import { Alert, Button, Group, Loader, Stack, Text } from "@mantine/core";
+import { Alert, Anchor, Button, Group, Loader, Stack, Text } from "@mantine/core";
 import { IconAlertTriangle } from "@tabler/icons-react";
 import { useGetWorkspace } from "@/api/generated/workspaces/workspaces.ts";
 import { describeApiFailure } from "@/api/errors";
@@ -62,6 +62,17 @@ export function WorkspaceOverview({
         </Alert>
       ) : (
         <Stack gap="md">
+          {workspace.data.data.specId === null ? (
+            // A21 (U7): the one thing a fresh workspace needs was the last
+            // divider of the third panel down.
+            <Alert color="blue" data-testid="overview-no-spec">
+              Спека не привязана: воркспейс отвечает только на свои эндпоинты. Привязать её —{" "}
+              <Anchor href="#settings-spec" data-testid="overview-no-spec-link">
+                в настройках ниже
+              </Anchor>
+              , или создайте воркспейс заново с выбранной спекой.
+            </Alert>
+          ) : null}
           <ConnectPanel workspace={workspace.data.data} config={config} />
           <AuthPresetPanel id={id} />
           <SettingsPanel workspace={workspace.data.data} />

@@ -229,7 +229,7 @@ describe("route tree", () => {
     expect(screen.getByTestId("session-controls")).toBeInTheDocument();
     // The active tab is derived from the real, nested pathname here — not
     // the always-"/" memory route WorkspaceLayout.test.tsx mounts against.
-    expect(screen.getByRole("tab", { name: "Endpoint'ы" })).toHaveAttribute(
+    expect(screen.getByRole("tab", { name: "Операции спеки" })).toHaveAttribute(
       "aria-selected",
       "true",
     );
@@ -348,7 +348,7 @@ describe("route tree", () => {
     const links = await screen.findAllByTestId("contract-op-link");
     expect(links).toHaveLength(2);
 
-    // The «добавлено» row (the custom /things) opens «Кастомные» with its id.
+    // The «добавлено» row (the custom /things) opens «Свои эндпоинты» with its id.
     const ops = screen.getAllByTestId("contract-op");
     const added = ops.find((el) => el.getAttribute("data-badge") === "added");
     if (added === undefined) {
@@ -438,10 +438,10 @@ describe("route tree", () => {
       expect(routerInstance.state.location.pathname).toBe("/workspaces/7/traffic"),
     );
 
-    await userEvent.click(screen.getByRole("tab", { name: "Кастомные" }));
+    await userEvent.click(screen.getByRole("tab", { name: "Свои эндпоинты" }));
     expect(await screen.findByTestId("custom-endpoints-page")).toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole("tab", { name: "Endpoint'ы" }));
+    await userEvent.click(screen.getByRole("tab", { name: "Операции спеки" }));
     expect(await screen.findByTestId("operations-page")).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole("tab", { name: "Сценарии" }));

@@ -131,8 +131,8 @@ export function WorkspaceLayout({
           <Tabs value={activeTab} onChange={handleTabChange}>
             <Tabs.List>
               <Tabs.Tab value="overview">Обзор</Tabs.Tab>
-              <Tabs.Tab value="operations">Endpoint&apos;ы</Tabs.Tab>
-              <Tabs.Tab value="endpoints">Кастомные</Tabs.Tab>
+              <Tabs.Tab value="operations">Операции спеки</Tabs.Tab>
+              <Tabs.Tab value="endpoints">Свои эндпоинты</Tabs.Tab>
               <Tabs.Tab value="traffic">Трафик</Tabs.Tab>
               <Tabs.Tab value="scenarios">Сценарии</Tabs.Tab>
               <Tabs.Tab value="history">История</Tabs.Tab>

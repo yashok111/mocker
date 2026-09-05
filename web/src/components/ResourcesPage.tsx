@@ -267,6 +267,9 @@ function ResourceList({
                     <Stack gap={2} mt={4}>
                       <Text size="xs" c="dimmed" data-testid="resource-entity-count">
                         Записей: {family.entityCount}
+                        {family.byBaseScope !== null && family.byBaseScope.length > 0
+                          ? ` (${family.byBaseScope.map((b) => `${b.baseScope}: ${b.entityCount}`).join(", ")})`
+                          : ""}
                       </Text>
                       <Text
                         size="xs"

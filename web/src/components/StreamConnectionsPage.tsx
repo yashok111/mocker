@@ -202,7 +202,7 @@ function ConnectionsTable({
           Сейчас ни одного соединения. Откройте потоковый endpoint из браузера (кнопка «Проверить»
           на вкладке{" "}
           <TabLink id={id} tab="endpoints" testId="connections-endpoints-link">
-            «Кастомные»
+            «Свои эндпоинты»
           </TabLink>
           ) или подключите клиент — строка появится здесь.
         </Text>

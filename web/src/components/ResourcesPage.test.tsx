@@ -426,4 +426,31 @@ describe("ResourcesPage", () => {
 
     expect(await screen.findByText(/кнопка «Записи», по 50 на страницу/)).toBeInTheDocument();
   });
+
+  it("shows the per-base-scope counts beside the total (A21, G6)", async () => {
+    route({
+      [WORKSPACE]: () => json(200, workspaceFixture({ id: WS, specId: 3 })),
+      [SUGGESTIONS]: () => json(200, { suggestions: [] }),
+      [RESOURCES]: () =>
+        json(200, {
+          families: [
+            familyFixture({
+              decision: "confirmed",
+              resourceId: 1,
+              idField: "id",
+              writeForm: "bare",
+              entityCount: 5,
+              byBaseScope: [
+                { baseScope: "acme", entityCount: 3 },
+                { baseScope: "globex", entityCount: 2 },
+              ],
+            }),
+          ],
+        }),
+    });
+    renderInRouter(<ResourcesPage id={WS} />);
+    expect(await screen.findByTestId("resource-entity-count")).toHaveTextContent(
+      "Записей: 5 (acme: 3, globex: 2)",
+    );
+  });
 });

@@ -140,6 +140,15 @@ function toFormValues(workspace: Pick<WorkspaceView, "name" | "settings">): Sett
 // instances. Spreading `current`, then `current.identity`, then
 // `current.auth` before overriding only the edited leaves is what keeps
 // every field this panel does not render byte-identical on the way out.
+function parseScalar(text: string): unknown {
+  try {
+    const v: unknown = JSON.parse(text);
+    return typeof v === "number" || typeof v === "boolean" ? v : text;
+  } catch {
+    return text;
+  }
+}
+
 function buildSettings(current: Settings, values: SettingsForm): Settings {
   const roles = values.identityRoles
     .split(",")
@@ -150,11 +159,19 @@ function buildSettings(current: Settings, values: SettingsForm): Settings {
     .map((v) => v.trim())
     .filter((v) => v !== "");
   const notFoundBodyText = values.notFoundBodyText.trim();
-  // identity.id is "any JSON scalar" on the wire: a numeric text goes back
-  // as a number so a spec that types the id as an integer keeps matching,
-  // anything else as the string typed; empty means unset.
+  // identity.id is "any JSON scalar" on the wire. An UNCHANGED text keeps the
+  // stored value byte-for-byte (a number stays a number, "00123" stays the
+  // string it was — the second reader of A21 caught the coercion); a changed
+  // text is read as a JSON scalar when it is one (42, true) and as the
+  // string typed otherwise; empty means unset.
   const idText = values.identityId.trim();
-  const identityId = idText === "" ? undefined : /^-?\d+$/.test(idText) ? Number(idText) : idText;
+  const storedId = current.identity.id;
+  const identityId =
+    idText === ""
+      ? undefined
+      : storedId !== undefined && storedId !== null && idText === String(storedId)
+        ? storedId
+        : parseScalar(idText);
   return {
     ...current,
     seed: values.seed,
@@ -491,8 +508,17 @@ export function SettingsPanel({ workspace }: { workspace: WorkspaceView }): Reac
           <Group grow align="flex-end">
             <NativeSelect label="CORS" data-testid="settings-cors-mode" {...register("corsMode")}>
               <option value="reflect">отражать Origin запроса (любой источник)</option>
-              <option value="list">только источники из списка</option>
               <option value="off">не отвечать CORS-заголовками</option>
+              {/* The server knows two modes and reads anything but "off" as
+                  "reflect" (internal/domain/settings.go); a stored value
+                  outside the two stays selectable so an untouched form
+                  resends it byte-for-byte (the wholesale-PATCH invariant),
+                  labelled with what the mock plane actually does with it. */}
+              {watch("corsMode") !== "reflect" && watch("corsMode") !== "off" ? (
+                <option value={watch("corsMode")}>
+                  {watch("corsMode")} — сервер читает как «отражать»
+                </option>
+              ) : null}
             </NativeSelect>
             <Controller
               control={control}
@@ -570,7 +596,7 @@ export function SettingsPanel({ workspace }: { workspace: WorkspaceView }): Reac
         </Stack>
       </form>
 
-      <Divider label="Спека" labelPosition="left" mt="md" />
+      <Divider label="Спека" labelPosition="left" mt="md" id="settings-spec" />
       <Stack gap="xs" mt="xs">
         <Text size="sm" c="dimmed">
           {workspace.specId === null

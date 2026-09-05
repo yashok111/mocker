@@ -72,7 +72,7 @@ const OP_OPTIONS: { value: Condition["op"]; label: string }[] = [
   { value: "exists", label: "присутствует" },
 ];
 
-function jsonLocation(text: string, err: unknown): string {
+export function jsonLocation(text: string, err: unknown): string {
   const message = err instanceof Error ? err.message : String(err);
   const match = /position (\d+)/.exec(message);
   if (!match) {

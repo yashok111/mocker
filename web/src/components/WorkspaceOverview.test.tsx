@@ -81,4 +81,14 @@ describe("WorkspaceOverview", () => {
     // The page did NOT collapse into its own error branch.
     expect(screen.queryByTestId("overview-error")).not.toBeInTheDocument();
   });
+
+  it("says the spec is missing first, with a link to the settings' spec section (A21, U7)", async () => {
+    route({
+      "GET /api/workspaces/7": () => json(200, workspaceFixture({ id: 7, specId: null })),
+      "GET /api/workspaces/7/traffic": () => json(200, { rows: [], rate1m: 0, dropped: 0 }),
+    });
+    renderInRouter(<WorkspaceOverview id={7} config={config} />);
+    expect(await screen.findByTestId("overview-no-spec")).toBeInTheDocument();
+    expect(screen.getByTestId("overview-no-spec-link")).toHaveAttribute("href", "#settings-spec");
+  });
 });

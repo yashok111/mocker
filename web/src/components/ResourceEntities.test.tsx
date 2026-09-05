@@ -146,4 +146,53 @@ describe("ResourceEntities", () => {
       `/api/workspaces/${WS}/resources/%2Fusers/entities?limit=50&after=50`,
     );
   });
+
+  // A21 (G6): a row can be CREATED, and a nested or base-scoped family is
+  // filtered by scope — both were agent-only.
+  it("creates a row by key through PUT, with the scope prefilled from the filter", async () => {
+    const nested: ResourceFamilyView = {
+      ...users,
+      routeFamily: "/orgs/{}/users",
+      name: "orgs.users",
+    };
+    const seg = "%2Forgs%2F%7B%7D%2Fusers";
+    const fetchMock = route({
+      [`GET /api/workspaces/${WS}/resources/${seg}/entities?limit=50`]: () =>
+        json(200, { rows: [], lastId: 0 }),
+      [`GET /api/workspaces/${WS}/resources/${seg}/entities?limit=50&scopeKey=7`]: () =>
+        json(200, { rows: [], lastId: 0 }),
+      [`PUT /api/workspaces/${WS}/resources/${seg}/entities/5`]: () =>
+        json(200, { created: true, row: entity({ entityKey: "5", scopeKey: "7" }) }),
+    });
+    renderWithProviders(<ResourceEntities id={WS} family={nested} />);
+    await userEvent.type(await screen.findByTestId("resource-entities-scope"), "7");
+    await waitFor(() =>
+      expect(fetchMock.mock.calls.map(([u]) => String(u))).toContain(
+        `/api/workspaces/${WS}/resources/${seg}/entities?limit=50&scopeKey=7`,
+      ),
+    );
+    await userEvent.click(screen.getByTestId("resource-entities-add"));
+    expect(screen.getByTestId("entity-new-scope")).toHaveValue("7");
+    await userEvent.type(screen.getByTestId("entity-new-key"), "5");
+    const data = screen.getByTestId("entity-new-data");
+    await userEvent.clear(data);
+    await userEvent.type(data, '{{"name": "Eve"}');
+    await userEvent.click(screen.getByTestId("entity-new-submit"));
+    await waitFor(() => {
+      const put = fetchMock.mock.calls.find(([, init]) => init?.method === "PUT");
+      expect(String(put?.[0])).toBe(`/api/workspaces/${WS}/resources/${seg}/entities/5`);
+      expect(JSON.parse(String(put?.[1]?.body))).toEqual({ data: { name: "Eve" }, scopeKey: "7" });
+    });
+    await waitFor(() => expect(screen.queryByTestId("entity-new-form")).toBeNull());
+  });
+
+  it("refuses a bad key or a non-object before any request", async () => {
+    const fetchMock = route({ [LIST]: () => json(200, { rows: [], lastId: 0 }) });
+    renderWithProviders(<ResourceEntities id={WS} family={users} />);
+    await userEvent.click(await screen.findByTestId("resource-entities-add"));
+    await userEvent.type(screen.getByTestId("entity-new-key"), "no spaces");
+    await userEvent.click(screen.getByTestId("entity-new-submit"));
+    expect(screen.getByText(/Ключ — от 1 до 128/)).toBeInTheDocument();
+    expect(fetchMock.mock.calls.filter(([, init]) => init?.method === "PUT")).toHaveLength(0);
+  });
 });

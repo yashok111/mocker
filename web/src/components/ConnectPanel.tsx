@@ -454,8 +454,9 @@ export function ConnectPanel({
                 value={apiAddress(workspace)}
               />
               <Text size="xs" c="dimmed">
-                Базовый путь {workspace.settings.basePath} — из спеки; фронтенд, который добавляет
-                его сам, настраивают на «Адрес» выше.
+                Базовый путь воркспейса {workspace.settings.basePath} (при привязке берётся из
+                спеки, меняется в настройках); фронтенд, который добавляет его сам, настраивают на
+                «Адрес» выше.
                 {workspace.settings.basePath.includes("{")
                   ? " Параметр в фигурных скобках подставляет клиент; допустимые значения — в настройках."
                   : ""}

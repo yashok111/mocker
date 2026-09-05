@@ -14,6 +14,7 @@ import {
   Switch,
   Tabs,
   Text,
+  Textarea,
   TextInput,
   Title,
 } from "@mantine/core";
@@ -43,7 +44,7 @@ import {
   describePreviewRefusalReason,
   isGoneTombstone,
 } from "@/api/errors";
-import { VariantEditor } from "./VariantEditor";
+import { VariantEditor, jsonLocation } from "./VariantEditor";
 
 // OperationEditor is the right-hand pane of DESIGN §14 screen 5. It is built
 // around ONE invariant, spelled out in the phase brief (§3.3 of the phase
@@ -162,6 +163,17 @@ export function OperationEditor({
   const previewParamNames = declaredPathParams(basePath, path);
   const [previewQuery, setPreviewQuery] = useState("");
   const [previewPathParams, setPreviewPathParams] = useState<Record<string, string>>({});
+  // A21 (G11): when[] can gate on a header or a body key, and the preview
+  // could send neither — a header- or body-gated variant could be written
+  // and never exercised. Headers as "Name: value" lines, the body as JSON.
+  const [previewHeadersText, setPreviewHeadersText] = useState("");
+  const [previewBodyText, setPreviewBodyText] = useState("");
+  const [previewInputError, setPreviewInputError] = useState<string | null>(null);
+  // A21 (G11): a status the spec does not declare (429, 418) could be
+  // pinned only by the agent or from traffic; a single unwanted variant
+  // could be removed only by «Сбросить к спеке», which destroys the whole
+  // document.
+  const [newStatusText, setNewStatusText] = useState("");
   const preview = usePreviewOperation();
 
   useEffect(() => {
@@ -377,6 +389,31 @@ export function OperationEditor({
     if (fields === null) {
       return;
     }
+    const headers: Record<string, string> = {};
+    for (const line of previewHeadersText.split("\n")) {
+      const trimmed = line.trim();
+      if (trimmed === "") {
+        continue;
+      }
+      const colon = trimmed.indexOf(":");
+      if (colon <= 0) {
+        setPreviewInputError(`Заголовок без «:» — ${trimmed}`);
+        return;
+      }
+      headers[trimmed.slice(0, colon).trim()] = trimmed.slice(colon + 1).trim();
+    }
+    let body: unknown;
+    if (previewBodyText.trim() !== "") {
+      try {
+        body = JSON.parse(previewBodyText);
+      } catch (err) {
+        setPreviewInputError(
+          `Тело запроса: JSON невалиден (${jsonLocation(previewBodyText, err)})`,
+        );
+        return;
+      }
+    }
+    setPreviewInputError(null);
     preview.mutate({
       id: workspaceId,
       data: {
@@ -385,7 +422,34 @@ export function OperationEditor({
         status: currentTab !== null && /^\d{3}$/.test(currentTab) ? currentTab : undefined,
         query: previewQuery === "" ? undefined : previewQuery,
         pathParams: previewPathParams,
+        headers: Object.keys(headers).length === 0 ? undefined : headers,
+        body,
       },
+    });
+  }
+
+  function addStatus(): void {
+    const code = newStatusText.trim();
+    if (!/^[1-5]\d{2}$/.test(code)) {
+      return;
+    }
+    setFields((prev) =>
+      prev === null || prev.responses[code] !== undefined
+        ? prev
+        : { ...prev, responses: { ...prev.responses, [code]: { mode: "generated" } } },
+    );
+    setNewStatusText("");
+    setActiveTab(code);
+  }
+
+  function removeStatus(selector: string): void {
+    setFields((prev) => {
+      if (prev === null) {
+        return prev;
+      }
+      const responses = { ...prev.responses };
+      delete responses[selector];
+      return { ...prev, responses };
     });
   }
 
@@ -605,10 +669,42 @@ export function OperationEditor({
                       )
                     }
                   />
+                  {fields.responses[selector] !== undefined ? (
+                    <Button
+                      variant="subtle"
+                      color="red"
+                      size="xs"
+                      mt="sm"
+                      onClick={() => removeStatus(selector)}
+                      data-testid={`operation-status-remove-${selector}`}
+                    >
+                      Убрать правку этого статуса
+                    </Button>
+                  ) : null}
                 </Tabs.Panel>
               ))}
             </Tabs>
           )}
+          <Group gap="xs" align="flex-end">
+            <TextInput
+              size="xs"
+              label="Добавить статус, которого нет в спеке"
+              placeholder="429"
+              w={200}
+              value={newStatusText}
+              onChange={(e) => setNewStatusText(e.currentTarget.value)}
+              data-testid="operation-status-add-code"
+            />
+            <Button
+              variant="default"
+              size="xs"
+              onClick={addStatus}
+              disabled={!/^[1-5]\d{2}$/.test(newStatusText.trim())}
+              data-testid="operation-status-add"
+            >
+              Добавить
+            </Button>
+          </Group>
 
           <Group>
             <Button
@@ -657,6 +753,20 @@ export function OperationEditor({
               onChange={(e) => setPreviewQuery(e.currentTarget.value)}
               data-testid="operation-preview-query"
             />
+            <Textarea
+              label="Заголовки запроса — «Имя: значение», по одному на строку"
+              rows={2}
+              value={previewHeadersText}
+              onChange={(e) => setPreviewHeadersText(e.currentTarget.value)}
+              data-testid="operation-preview-headers"
+            />
+            <Textarea
+              label="Тело запроса, JSON (для условий по телу)"
+              rows={2}
+              value={previewBodyText}
+              onChange={(e) => setPreviewBodyText(e.currentTarget.value)}
+              data-testid="operation-preview-body-input"
+            />
             <Button
               variant="light"
               loading={preview.isPending}
@@ -667,6 +777,11 @@ export function OperationEditor({
             </Button>
           </Group>
 
+          {previewInputError !== null ? (
+            <Alert color="red" icon={<IconAlertTriangle size={18} />} role="alert">
+              {previewInputError}
+            </Alert>
+          ) : null}
           {preview.isError ? (
             <Alert color="red" icon={<IconAlertTriangle size={18} />} role="alert">
               {describeApiFailureDetailed(preview.error)}

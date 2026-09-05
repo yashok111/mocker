@@ -3,7 +3,12 @@ import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { TrafficPage } from "./TrafficPage";
 import { makeQueryClient, renderInRouter } from "@/test/render";
-import { trafficListViewFixture, trafficPollViewFixture, trafficRowFixture } from "@/test/fixtures";
+import {
+  trafficListViewFixture,
+  trafficPollViewFixture,
+  trafficRowFixture,
+  workspaceFixture,
+} from "@/test/fixtures";
 import { json, route } from "@/test/http";
 import { getGetWorkspaceQueryKey } from "@/api/generated/workspaces/workspaces.ts";
 import {
@@ -679,5 +684,56 @@ describe("TrafficPage", () => {
       [`/workspaces/${WS}/operations?opId=5`, `/workspaces/${WS}/endpoints?endpointId=9`].sort(),
     );
     expect(links.some((a) => a.textContent === "операция #5")).toBe(true);
+    // The click goes through the router (the memory router's catch-all
+    // renders for the operations route); the ?opId= resolution itself is
+    // OperationsPage's test.
+    await userEvent.click(links.find((a) => a.textContent === "операция #5")!);
+    expect(await screen.findByTestId("test-router-elsewhere")).toBeInTheDocument();
+  });
+
+  // A21 (U5): the empty state names the mock's address and the overview; the
+  // filters narrow the rows already held.
+  it("names the address in the empty state and filters rows by path, method and status class", async () => {
+    route({
+      ...baseRoutes({
+        tail: () =>
+          json(
+            200,
+            trafficListViewFixture({
+              rows: [
+                trafficRowFixture({ id: 1, method: "GET", path: "/pets/1", status: 200 }),
+                trafficRowFixture({ id: 2, method: "POST", path: "/orders", status: 500 }),
+              ],
+            }),
+          ),
+      }),
+      [`GET /api/workspaces/${WS}/traffic/poll?since=2&limit=200`]: () =>
+        json(200, trafficPollViewFixture({ rows: [], lastId: 2 })),
+    });
+    renderInRouter(<TrafficPage id={WS} />);
+    await screen.findByText("/orders");
+    expect(screen.getAllByTestId("traffic-row")).toHaveLength(2);
+    await userEvent.selectOptions(screen.getByTestId("traffic-filter-status"), "5");
+    expect(screen.getAllByTestId("traffic-row")).toHaveLength(1);
+    expect(screen.getByTestId("traffic-filter-count")).toHaveTextContent("показано 1 из 2");
+    await userEvent.selectOptions(screen.getByTestId("traffic-filter-status"), "");
+    await userEvent.type(screen.getByTestId("traffic-filter-path"), "pets");
+    expect(screen.getAllByTestId("traffic-row")).toHaveLength(1);
+    expect(screen.getByText("/pets/1")).toBeInTheDocument();
+  });
+
+  it("points the empty state at the workspace address and the overview", async () => {
+    route({
+      ...baseRoutes(),
+      [`GET /api/workspaces/${WS}`]: () =>
+        json(200, workspaceFixture({ id: WS, url: "http://alex.mock.local" })),
+    });
+    renderInRouter(<TrafficPage id={WS} />);
+    const empty = await screen.findByTestId("traffic-empty");
+    await waitFor(() => expect(empty).toHaveTextContent("http://alex.mock.local"));
+    expect(screen.getByTestId("traffic-empty-overview-link")).toHaveAttribute(
+      "href",
+      `/workspaces/${WS}`,
+    );
   });
 });

@@ -244,15 +244,6 @@ const editForm = type({
 });
 type EditForm = typeof editForm.infer;
 
-// The variant currently served at an endpoint's activeStatus, or undefined
-// when the map has no entry there — a legitimate shape (a custom endpoint
-// whose activeStatus was aimed at a variant that was never filled in).
-function activeVariant(
-  ep: Pick<EndpointView, "activeStatus" | "responses">,
-): EndpointView["responses"][string] | undefined {
-  return ep.responses[String(ep.activeStatus)];
-}
-
 // Pick, not the full EndpointView: this also seeds the form from a 409's
 // EndpointConflictDetails (A3/D6), which shares exactly these four fields
 // with EndpointView and none of the server-owned ones (id, canonicalPath,
@@ -337,9 +328,9 @@ export function CustomEndpointsPage({
           : там виден уже готовый ответ, и достаточно поправить нужную цифру. Форма ниже — запасной
           путь для случая, когда подходящего запроса в трафике ещё не было. Маршрут, который
           канонически совпадает со спековым, здесь заводить не нужно — это «переопределить операцию»
-          на экране{" "}
+          на вкладке{" "}
           <TabLink id={id} tab="operations" testId="endpoints-operations-link">
-            Endpoint&apos;ов
+            «Операции спеки»
           </TabLink>
           . Уже созданный endpoint можно поправить прямо в списке ниже — кнопка «Изменить» открывает
           форму с текущими значениями.
@@ -862,15 +853,6 @@ function EditEndpointForm({
     resolver: arktypeResolver(editForm),
     defaultValues: defaultsFromEndpoint(endpoint),
   });
-  // The variant under edit: the active status's, as stored, mutated only
-  // through VariantEditor's updaters (each spreads first, so recipes,
-  // schemaPatch, schema and anything else the editor does not show survive).
-  const [variant, setVariant] = useState<Variant>(
-    () => activeVariant(endpoint) ?? { mode: "generated" },
-  );
-  const [variantError, setVariantError] = useState(false);
-  const statusText = watch("status").trim();
-
   // A3: the fields a full-replacement PUT resends unchanged (overrideOn,
   // routeOff, listSize, delayMs, the rest of `responses`) and the
   // editVersion expectation itself both start from THIS row's own preceding
@@ -881,6 +863,27 @@ function EditEndpointForm({
   // than the stale prop, so this adopts it directly instead of a second GET.
   const [conflictBase, setConflictBase] = useState<EndpointConflictDetails | null>(null);
   const base = conflictBase ?? endpoint;
+
+  // One draft PER STATUS, keyed by the status text: the editor always edits
+  // the variant of the status currently typed in «Активный статус» — a draft
+  // begun on 200 must not land under 201 when the operator retypes the
+  // status (the second reader of A21 caught exactly that). A status with no
+  // draft yet starts from the stored variant, or from a fresh generated one;
+  // every updater spreads first, so recipes, schemaPatch, schema and
+  // anything else the editor does not show survive.
+  const [drafts, setDrafts] = useState<Record<string, Variant>>({});
+  const [variantError, setVariantError] = useState(false);
+  const statusText = watch("status").trim();
+  const variant: Variant = drafts[statusText] ??
+    base.responses[statusText] ?? { mode: "generated" };
+  function updateVariant(updater: (v: Variant) => Variant): void {
+    setDrafts((prev) => ({
+      ...prev,
+      [statusText]: updater(
+        prev[statusText] ?? base.responses[statusText] ?? { mode: "generated" },
+      ),
+    }));
+  }
 
   const updateEndpoint = useUpdateEndpoint({
     mutation: {
@@ -952,7 +955,9 @@ function EditEndpointForm({
     }
     setConflictBase(details);
     reset(defaultsFromEndpoint(details));
-    setVariant(activeVariant(details) ?? { mode: "generated" });
+    // The conflict's document is the new base; drafts begun on the stale one
+    // are dropped rather than replayed over rows that may have changed.
+    setDrafts({});
   }
 
   return (
@@ -1020,7 +1025,9 @@ function EditEndpointForm({
         label="Активный статус"
         description={
           statusText !== "" && statusText !== String(base.activeStatus)
-            ? `Ответ ниже будет записан в статус ${statusText}; статус ${base.activeStatus} останется как есть`
+            ? base.responses[statusText] !== undefined
+              ? `Ниже — ответ статуса ${statusText}, как он сохранён; ${base.activeStatus} останется как есть`
+              : `Статуса ${statusText} у endpoint'а ещё нет: ниже — его новый ответ; ${base.activeStatus} останется как есть`
             : undefined
         }
         data-testid="endpoint-edit-status"
@@ -1041,9 +1048,10 @@ function EditEndpointForm({
         />
       </Group>
       <VariantEditor
+        key={statusText}
         workspaceId={id}
         variant={variant}
-        updateVariant={(updater) => setVariant((prev) => updater(prev))}
+        updateVariant={updateVariant}
         onErrorChange={setVariantError}
         testId={(name) => `endpoint-edit-${name}`}
         whenTestId={(name, index) => `endpoint-edit-when-${name}-${index}`}

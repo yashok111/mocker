@@ -1,8 +1,18 @@
 import { useState } from "react";
 import type { ReactElement } from "react";
-import { Alert, Button, Code, Group, Loader, Stack, Text, Textarea } from "@mantine/core";
+import {
+  Alert,
+  Button,
+  Code,
+  Group,
+  Loader,
+  Stack,
+  Text,
+  Textarea,
+  TextInput,
+} from "@mantine/core";
 import { modals } from "@mantine/modals";
-import { IconAlertTriangle, IconPencil, IconTrash } from "@tabler/icons-react";
+import { IconAlertTriangle, IconPencil, IconPlus, IconTrash } from "@tabler/icons-react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   getListResourceEntitiesQueryKey,
@@ -42,6 +52,16 @@ export function familySegment(family: Pick<ResourceFamilyView, "routeFamily">): 
   return encodeURIComponent(family.routeFamily);
 }
 
+// Scope is the two filter axes the read route takes (A4): a nested family's
+// outer parameter tuple (scopeKey) and a parameterised basePath's value
+// tuple (baseScopeKey), both encoded as the rows carry them. The boxes show
+// only when the family has that axis — a top-level family under a plain
+// basePath has neither and sees no filter.
+export interface Scope {
+  scopeKey: string;
+  baseScopeKey: string;
+}
+
 export function ResourceEntities({
   id,
   family,
@@ -50,19 +70,206 @@ export function ResourceEntities({
   family: ResourceFamilyView;
 }): ReactElement {
   const [cursors, setCursors] = useState<number[]>([0]);
+  const [scope, setScope] = useState<Scope>({ scopeKey: "", baseScopeKey: "" });
+  const [adding, setAdding] = useState(false);
+  const nested = family.routeFamily.includes("{}");
+  const baseScoped = family.byBaseScope !== null;
+
+  function patchScope(patch: Partial<Scope>): void {
+    setScope((prev) => ({ ...prev, ...patch }));
+    // A different scope is a different list: pages start over.
+    setCursors([0]);
+  }
+
   return (
     <Stack gap="xs" data-testid="resource-entities">
+      {nested || baseScoped ? (
+        <Group gap="xs" align="flex-end">
+          {nested ? (
+            <TextInput
+              size="xs"
+              label="Родитель (scopeKey)"
+              description="Пусто — все родители"
+              value={scope.scopeKey}
+              onChange={(e) => patchScope({ scopeKey: e.currentTarget.value })}
+              data-testid="resource-entities-scope"
+            />
+          ) : null}
+          {baseScoped ? (
+            <TextInput
+              size="xs"
+              label="Значение базового пути (baseScopeKey)"
+              description="Пусто — все значения"
+              value={scope.baseScopeKey}
+              onChange={(e) => patchScope({ baseScopeKey: e.currentTarget.value })}
+              data-testid="resource-entities-base-scope"
+            />
+          ) : null}
+        </Group>
+      ) : null}
       {cursors.map((after, index) => (
         <EntityPage
-          key={after}
+          key={`${after}:${scope.scopeKey}:${scope.baseScopeKey}`}
           id={id}
           family={family}
           after={after}
+          scope={scope}
           isLast={index === cursors.length - 1}
           onMore={(lastId) => setCursors((prev) => [...prev, lastId])}
           onWrite={() => setCursors([0])}
         />
       ))}
+      {adding ? (
+        <NewEntityForm
+          id={id}
+          family={family}
+          scope={scope}
+          onDone={() => {
+            setAdding(false);
+            setCursors([0]);
+          }}
+          onCancel={() => setAdding(false)}
+        />
+      ) : (
+        <Button
+          variant="default"
+          size="xs"
+          w="fit-content"
+          leftSection={<IconPlus size={16} />}
+          onClick={() => setAdding(true)}
+          data-testid="resource-entities-add"
+        >
+          Добавить запись
+        </Button>
+      )}
+    </Stack>
+  );
+}
+
+// NewEntityForm is A11's PUT used as what it is documented to be — "create
+// or replace" — from the screen (A21, G6, three readers): before it a family
+// seeded empty by «Очистить» could not be repopulated from the UI at all.
+// The scope fields are prefilled from the filter above, because a row
+// added while looking at one parent almost always belongs to that parent.
+function NewEntityForm({
+  id,
+  family,
+  scope,
+  onDone,
+  onCancel,
+}: {
+  id: number;
+  family: ResourceFamilyView;
+  scope: Scope;
+  onDone: () => void;
+  onCancel: () => void;
+}): ReactElement {
+  const queryClient = useQueryClient();
+  const segment = familySegment(family);
+  const [key, setKey] = useState("");
+  const [text, setText] = useState("{\n  \n}");
+  const [rowScope, setRowScope] = useState<Scope>(scope);
+  const [error, setError] = useState<string | null>(null);
+  const setEntity = useSetResourceEntity({
+    mutation: {
+      onSuccess: (res) => {
+        if (res.status === 200) {
+          void queryClient.invalidateQueries({
+            queryKey: getListResourceEntitiesQueryKey(id, segment),
+          });
+          void queryClient.invalidateQueries({ queryKey: getListWorkspaceResourcesQueryKey(id) });
+          onDone();
+        }
+      },
+    },
+  });
+
+  function save(): void {
+    const k = key.trim();
+    if (!/^[A-Za-z0-9._~-]{1,128}$/.test(k) || k === "." || k === "..") {
+      setError("Ключ — от 1 до 128 символов: буквы, цифры, «.», «_», «~», «-»");
+      return;
+    }
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(text);
+    } catch (err) {
+      setError(`JSON невалиден: ${err instanceof Error ? err.message : String(err)}`);
+      return;
+    }
+    if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+      setError("Запись — JSON-объект");
+      return;
+    }
+    setError(null);
+    setEntity.mutate({
+      id,
+      family: segment,
+      key: k,
+      data: {
+        data: parsed as Record<string, unknown>,
+        scopeKey: rowScope.scopeKey === "" ? undefined : rowScope.scopeKey,
+        baseScopeKey: rowScope.baseScopeKey === "" ? undefined : rowScope.baseScopeKey,
+      },
+    });
+  }
+
+  return (
+    <Stack gap="xs" px="sm" py="xs" data-testid="entity-new-form">
+      {setEntity.isError ? (
+        <Alert color="red" icon={<IconAlertTriangle size={18} />} role="alert">
+          {describeApiFailureDetailed(setEntity.error)}
+        </Alert>
+      ) : null}
+      <Group gap="xs" align="flex-end">
+        <TextInput
+          size="xs"
+          label={`Ключ (${family.idField ?? "id"})`}
+          value={key}
+          onChange={(e) => setKey(e.currentTarget.value)}
+          data-testid="entity-new-key"
+        />
+        {family.routeFamily.includes("{}") ? (
+          <TextInput
+            size="xs"
+            label="Родитель (scopeKey)"
+            value={rowScope.scopeKey}
+            onChange={(e) => setRowScope({ ...rowScope, scopeKey: e.currentTarget.value })}
+            data-testid="entity-new-scope"
+          />
+        ) : null}
+        {family.byBaseScope !== null ? (
+          <TextInput
+            size="xs"
+            label="Значение базового пути"
+            value={rowScope.baseScopeKey}
+            onChange={(e) => setRowScope({ ...rowScope, baseScopeKey: e.currentTarget.value })}
+            data-testid="entity-new-base-scope"
+          />
+        ) : null}
+      </Group>
+      <Textarea
+        label={`Запись, JSON — поле ${family.idField ?? "id"} перезапишется ключом`}
+        rows={5}
+        value={text}
+        onChange={(e) => setText(e.currentTarget.value)}
+        error={error}
+        styles={{ input: { fontFamily: "var(--mantine-font-family-monospace)" } }}
+        data-testid="entity-new-data"
+      />
+      <Group gap="xs">
+        <Button
+          size="xs"
+          loading={setEntity.isPending}
+          onClick={save}
+          data-testid="entity-new-submit"
+        >
+          Создать
+        </Button>
+        <Button variant="default" size="xs" onClick={onCancel} data-testid="entity-new-cancel">
+          Отмена
+        </Button>
+      </Group>
     </Stack>
   );
 }
@@ -71,6 +278,7 @@ function EntityPage({
   id,
   family,
   after,
+  scope,
   isLast,
   onMore,
   onWrite,
@@ -78,6 +286,7 @@ function EntityPage({
   id: number;
   family: ResourceFamilyView;
   after: number;
+  scope: Scope;
   isLast: boolean;
   onMore: (lastId: number) => void;
   onWrite: () => void;
@@ -86,6 +295,8 @@ function EntityPage({
   const page = useListResourceEntities(id, segment, {
     limit: PAGE,
     after: after === 0 ? undefined : after,
+    scopeKey: scope.scopeKey === "" ? undefined : scope.scopeKey,
+    baseScopeKey: scope.baseScopeKey === "" ? undefined : scope.baseScopeKey,
   });
 
   if (page.isPending) {

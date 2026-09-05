@@ -7,6 +7,8 @@ import {
   Code,
   Group,
   Loader,
+  TextInput,
+  NativeSelect,
   ScrollArea,
   Stack,
   Table,
@@ -27,7 +29,7 @@ import {
   useTrafficToEndpoint,
   useTrafficToOverride,
 } from "@/api/generated/traffic/traffic.ts";
-import { getGetWorkspaceQueryKey } from "@/api/generated/workspaces/workspaces.ts";
+import { getGetWorkspaceQueryKey, useGetWorkspace } from "@/api/generated/workspaces/workspaces.ts";
 import {
   getGetOperationOverrideQueryKey,
   getListWorkspaceOperationsQueryKey,
@@ -35,6 +37,7 @@ import {
 import { getListEndpointsQueryKey } from "@/api/generated/endpoints/endpoints.ts";
 import type { TrafficPollView, TrafficRow } from "@/api/generated/schemas";
 import { describeApiFailure } from "@/api/errors";
+import { TabLink } from "./TabLink";
 import { openTrafficStream, probeStreamRefusal } from "@/api/stream";
 
 // TrafficPage is DESIGN §14 screen 8. Since P6a (decisions.md mocker-p6a-sse
@@ -361,6 +364,30 @@ export function TrafficPage({
   }, [id, seeded, generation, streamRetryMs]);
 
   const sortedRows = useMemo(() => Object.values(rows).sort((a, b) => b.id - a.id), [rows]);
+  // A21 (U5): the screen the guide sends people to first when the mock
+  // answers wrongly had no filter at all. Client-side over the rows already
+  // held (at most MAX_ROWS_KEPT), never a request.
+  const [filterPath, setFilterPath] = useState("");
+  const [filterMethod, setFilterMethod] = useState("");
+  const [filterStatus, setFilterStatus] = useState("");
+  const visibleRows = useMemo(
+    () =>
+      sortedRows.filter(
+        (row) =>
+          (filterPath === "" || row.path.includes(filterPath)) &&
+          (filterMethod === "" || row.method === filterMethod) &&
+          (filterStatus === "" || String(row.status).startsWith(filterStatus)),
+      ),
+    [sortedRows, filterPath, filterMethod, filterStatus],
+  );
+  const methodsSeen = useMemo(
+    () => Array.from(new Set(sortedRows.map((r) => r.method))).sort(),
+    [sortedRows],
+  );
+  // The mock's address for the empty state — the moment the person asks
+  // «дошёл ли запрос?» is the moment the screen used to say one bare sentence.
+  const workspace = useGetWorkspace(id);
+  const workspaceUrl = workspace.data?.status === 200 ? workspace.data.data.url : null;
 
   // dropped is on all three producers (§3.5 fact 1; the stream frame carries
   // the poll view, D6); take it from whichever answer is freshest — the
@@ -589,9 +616,66 @@ export function TrafficPage({
           {describeApiFailure(null)}
         </Alert>
       ) : sortedRows.length === 0 ? (
-        <Text data-testid="traffic-empty">Пока ничего не записано</Text>
+        <Stack gap={4} data-testid="traffic-empty">
+          <Text>Пока ничего не записано.</Text>
+          <Text size="sm" c="dimmed">
+            Запросы появятся здесь, как только фронтенд сходит на мок
+            {workspaceUrl !== null ? (
+              <>
+                {" "}
+                по адресу <Code>{workspaceUrl}</Code>
+              </>
+            ) : null}
+            . Рецепты подключения и кнопка «Проверить» — на вкладке{" "}
+            <TabLink id={id} tab="overview" testId="traffic-empty-overview-link">
+              «Обзор»
+            </TabLink>
+            .
+          </Text>
+        </Stack>
       ) : (
         <ScrollArea>
+          <Group gap="xs" align="flex-end" mb="xs" data-testid="traffic-filters">
+            <TextInput
+              size="xs"
+              label="Путь содержит"
+              value={filterPath}
+              onChange={(e) => setFilterPath(e.currentTarget.value)}
+              data-testid="traffic-filter-path"
+            />
+            <NativeSelect
+              size="xs"
+              label="Метод"
+              value={filterMethod}
+              onChange={(e) => setFilterMethod(e.currentTarget.value)}
+              data-testid="traffic-filter-method"
+            >
+              <option value="">все</option>
+              {methodsSeen.map((m) => (
+                <option key={m} value={m}>
+                  {m}
+                </option>
+              ))}
+            </NativeSelect>
+            <NativeSelect
+              size="xs"
+              label="Статус"
+              value={filterStatus}
+              onChange={(e) => setFilterStatus(e.currentTarget.value)}
+              data-testid="traffic-filter-status"
+            >
+              <option value="">все</option>
+              <option value="2">2xx</option>
+              <option value="3">3xx</option>
+              <option value="4">4xx</option>
+              <option value="5">5xx</option>
+            </NativeSelect>
+            {visibleRows.length !== sortedRows.length ? (
+              <Text size="xs" c="dimmed" data-testid="traffic-filter-count">
+                показано {visibleRows.length} из {sortedRows.length}
+              </Text>
+            ) : null}
+          </Group>
           <Table striped highlightOnHover data-testid="traffic-table">
             <Table.Thead>
               <Table.Tr>
@@ -606,7 +690,7 @@ export function TrafficPage({
               </Table.Tr>
             </Table.Thead>
             <Table.Tbody>
-              {sortedRows.map((row) => {
+              {visibleRows.map((row) => {
                 const overrideReason = overrideDisabledReason(row);
                 const endpointReason = endpointDisabledReason(row);
                 const droppedNote = droppedNoteCount(row.notes);
