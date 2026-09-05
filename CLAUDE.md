@@ -64,6 +64,7 @@ an approach that was tried and reverted.
 | `docs/agent/jsonx.md` | why `encoding/json` stays and what sonic broke |
 | `docs/agent/contract-frontend.md` | `api/openapi.json`, `coverage.test.ts`, the `EXEMPT` roster, `web/` conventions |
 | `docs/agent/where-we-are.md` | the full shipped list, what is NEXT with its argument, where each slice's decisions live |
+| `docs/agent/ui-review-2026-09-05.md` | any UI change: the six-reader review after `A20` — the ranked bugs, gaps and usability items, the `VariantEditor` reading, the suggested `A21` order |
 
 ## Architecture
 
@@ -277,16 +278,19 @@ Routes live as one list in `Server.routes()`; `Handler()` only registers them.
 and that is a test, not a promise**: `web/src/api/coverage.test.ts`
 enumerates the committed contract, pins the count (70) and scans `web/src`
 for a caller; a screenless route earns an `EXEMPT` entry naming its MCP
-tool as the only required caller (10 today); reachability itself is
+tool as the only required caller (none today — the map emptied with `A20`); reachability itself is
 `web/src/routes/routes.test.tsx` over the real route tree. **The agent is
 PRIMARY: since `A4` (2026-09-01) a new route ships with its MCP tool and an
 `EXEMPT` entry, never a screen**, on the owner's own words («UI вообще не
 нужен делай только MCP», a Russian string quoted as data); the reverse cut —
 a verb with a screen and no tool — has been forbidden since `P3a`. The owner
 lifted the rule by name, in his own words each time, for `/guide` (`A7`),
-the streaming screens (`P6e`), the «Файлы» tab (`A10`) and the «Контракт»
-tab (`P7b`); an exemption and its withdrawal are both decisions on the
-record, in the map's own comment.
+the streaming screens (`P6e`), the «Файлы» tab (`A10`), the «Контракт»
+tab (`P7b`) and, on 2026-09-05 (`A20`), everything that was left — first
+the entity rows and the export/import/fork trio, then, on «добей последние
+4 гэпа» (a Russian string quoted as data), drift, stream stats and the two
+probes; the map is empty and the mechanism stays. An exemption and its
+withdrawal are both decisions on the record, in the map's own comment.
 
 The contract describes what the server **actually** does, not how it would
 be pretty: `PATCH /api/workspaces/{id}` cannot unbind a spec, the directive

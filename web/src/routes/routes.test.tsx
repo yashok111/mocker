@@ -190,10 +190,14 @@ describe("route tree", () => {
 
     expect(await screen.findByTestId("guide-page")).toBeInTheDocument();
     // The manual is compiled into the bundle: the only call the mount makes
-    // is the guard's own /api/me. A second call would mean the screen grew
-    // an API dependency the contract does not know about.
+    // is the guard's own /api/me — plus, since A20, the SHELL's two probes
+    // (/readyz and /healthz, the header's server status), which every
+    // authenticated screen shares and which are not this screen's. A call
+    // outside those three would mean the screen grew an API dependency the
+    // contract does not know about.
+    const shell = ["/api/me", "/readyz", "/healthz"];
     const calls = fetchMock.mock.calls.map(([input]) => String(input));
-    expect(calls.filter((url) => !url.endsWith("/api/me"))).toEqual([]);
+    expect(calls.filter((url) => !shell.some((s) => url.endsWith(s)))).toEqual([]);
   });
 
   it("mounts /workspaces/$id with the overview, the auth preset panel and settings", async () => {

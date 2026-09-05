@@ -6,6 +6,8 @@ import { describeApiFailure } from "@/api/errors";
 import { ConnectPanel } from "./ConnectPanel";
 import { AuthPresetPanel } from "./AuthPresetPanel";
 import { SettingsPanel } from "./SettingsPanel";
+import { TransferPanel } from "./TransferPanel";
+import { DriftPanel } from "./DriftPanel";
 import type { ServerConfigView } from "@/api/generated/schemas";
 
 // WorkspaceOverview is the index child of /workspaces/$id — DESIGN §14
@@ -63,6 +65,8 @@ export function WorkspaceOverview({
           <ConnectPanel workspace={workspace.data.data} config={config} />
           <AuthPresetPanel id={id} />
           <SettingsPanel workspace={workspace.data.data} />
+          <TransferPanel workspace={workspace.data.data} />
+          <DriftPanel id={id} />
         </Stack>
       )}
     </div>

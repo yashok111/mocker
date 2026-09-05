@@ -140,6 +140,13 @@ describe("ResourcesPage", () => {
 
     const row = await screen.findByTestId("resource-row");
     expect(row).toHaveTextContent("Записей: 5");
+    // «Записи» opens the entity browser (ResourceEntities.tsx) under the row
+    // and toggles back; its own requests are its own test's business.
+    expect(screen.queryByTestId("resource-entities")).toBeNull();
+    await userEvent.click(within(row).getByTestId("resource-entities-toggle"));
+    expect(await screen.findByTestId("resource-entities")).toBeInTheDocument();
+    await userEvent.click(within(row).getByTestId("resource-entities-toggle"));
+    expect(screen.queryByTestId("resource-entities")).toBeNull();
     expect(row).toHaveTextContent("GET http://alex.mock.corp.internal:8080/users");
     expect(within(row).queryByTestId("resource-confirm")).not.toBeInTheDocument();
     expect(within(row).getByTestId("resource-decline")).toBeInTheDocument();

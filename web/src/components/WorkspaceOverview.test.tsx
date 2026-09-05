@@ -52,7 +52,7 @@ describe("WorkspaceOverview", () => {
     expect(await screen.findByTestId("connect-panel")).toBeInTheDocument();
   });
 
-  it("mounts the connect panel, the auth preset panel and the settings panel", async () => {
+  it("mounts the connect panel, the auth preset panel, the settings panel and the transfer panel", async () => {
     route({
       "GET /api/workspaces/7": () => json(200, workspaceFixture({ id: 7 })),
       "GET /api/workspaces/7/traffic": () => json(200, { rows: [], rate1m: 0, dropped: 0 }),
@@ -62,6 +62,8 @@ describe("WorkspaceOverview", () => {
     expect(await screen.findByTestId("connect-panel")).toBeInTheDocument();
     expect(screen.getByTestId("auth-preset-panel")).toBeInTheDocument();
     expect(screen.getByTestId("settings-panel")).toBeInTheDocument();
+    expect(screen.getByTestId("transfer-panel")).toBeInTheDocument();
+    expect(screen.getByTestId("drift-panel")).toBeInTheDocument();
   });
 
   it("keeps a failing traffic poll inside the connect panel", async () => {

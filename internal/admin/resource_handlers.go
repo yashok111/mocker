@@ -822,9 +822,10 @@ type resourceEntitiesView struct {
 // /api/workspaces/{id}/resources/{family}/entities (D4): a confirmed
 // family's entity rows, structured, paginated and scope-filtered — the read
 // [resources.Repo.List] cannot serve on its own, which is why
-// [resources.Repo.ListFiltered] (D12) exists. Agent-only by policy (no
-// screen calls this route — coverage.test.ts's EXEMPT map names it, the
-// same policy GET .../drift already carries).
+// [resources.Repo.ListFiltered] (D12) exists. Agent-only by policy from A4
+// to A20 (2026-09-05), when the owner lifted the rule for it: «Записи» on
+// the resources screen (ResourceEntities.tsx) pages it now, and the EXEMPT
+// entry is withdrawn; GET .../drift keeps the policy.
 func (s *Server) handleListResourceEntities(w http.ResponseWriter, r *http.Request) {
 	if _, ok := s.requireUser(w, r); !ok {
 		return

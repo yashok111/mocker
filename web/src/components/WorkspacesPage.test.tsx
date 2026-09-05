@@ -225,4 +225,69 @@ describe("WorkspacesPage", () => {
     // a bare error would leave the reader guessing.
     expect(await screen.findByRole("alert")).toHaveTextContent("Не удалось удалить «Alex»");
   });
+
+  // P4b's import half (2026-09-05): the chosen file's JSON goes on the wire
+  // as `bundle`, the three overrides are omitted when blank, and the page
+  // goes to the workspace the server created.
+  it("imports a bundle file through POST /api/workspaces/import and goes to the new workspace", async () => {
+    const doc = { mockerBundle: 6, workspace: { name: "Alex" } };
+    const fetchMock = route({
+      "GET /api/workspaces": () => json(200, []),
+      "GET /api/specs": specsPresent,
+      "POST /api/workspaces/import": () =>
+        json(201, {
+          workspace: workspaceFixture({ id: 9, slug: "alex" }),
+          specId: null,
+          specCreated: false,
+          entitiesRestored: 0,
+        }),
+    });
+    renderInRouter(<WorkspacesPage />);
+
+    await userEvent.click(await screen.findByTestId("workspace-import"));
+    const form = await screen.findByTestId("workspace-import-form");
+    await userEvent.click(within(form).getByTestId("workspace-import-submit"));
+    expect(within(form).getByText("Выберите файл экспорта")).toBeInTheDocument();
+
+    const file = new File([JSON.stringify(doc)], "mocker-alex.json", { type: "application/json" });
+    await userEvent.upload(within(form).getByTestId("workspace-import-file"), file);
+    await userEvent.type(within(form).getByTestId("workspace-import-slug"), "alex-copy");
+    await userEvent.click(within(form).getByTestId("workspace-import-submit"));
+
+    await waitFor(() => {
+      const post = fetchMock.mock.calls.find(([, init]) => init?.method === "POST");
+      expect(post).toBeDefined();
+      expect(JSON.parse(String(post?.[1]?.body))).toEqual({ bundle: doc, slug: "alex-copy" });
+    });
+    expect(await screen.findByTestId("test-router-elsewhere")).toBeInTheDocument();
+  });
+
+  it("refuses a file that is not a JSON object before any request, and names a server refusal", async () => {
+    const fetchMock = route({
+      "GET /api/workspaces": () => json(200, []),
+      "GET /api/specs": specsPresent,
+      "POST /api/workspaces/import": () =>
+        json(400, {
+          error: { code: "bad_request", message: "mockerBundle 3: this build reads 5..6" },
+        }),
+    });
+    renderInRouter(<WorkspacesPage />);
+    await userEvent.click(await screen.findByTestId("workspace-import"));
+    const form = await screen.findByTestId("workspace-import-form");
+
+    await userEvent.upload(
+      within(form).getByTestId("workspace-import-file"),
+      new File(["[1, 2]"], "list.json", { type: "application/json" }),
+    );
+    await userEvent.click(within(form).getByTestId("workspace-import-submit"));
+    expect(await within(form).findByText(/должен быть JSON-объект/)).toBeInTheDocument();
+    expect(fetchMock.mock.calls.filter(([, init]) => init?.method === "POST")).toHaveLength(0);
+
+    await userEvent.upload(
+      within(form).getByTestId("workspace-import-file"),
+      new File(['{"mockerBundle": 3}'], "old.json", { type: "application/json" }),
+    );
+    await userEvent.click(within(form).getByTestId("workspace-import-submit"));
+    expect(await within(form).findByRole("alert")).toHaveTextContent("this build reads 5..6");
+  });
 });

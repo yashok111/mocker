@@ -4,9 +4,10 @@
 // plane's live SSE connections of one workspace, close one, push one frame
 // into one. None of them writes a row, bumps revision or takes an auto
 // checkpoint: a connection is RAM the registry holds, and so is a pushed
-// frame (D3). Agent-only: list_stream_connections, close_stream_connection
-// and push_stream_frame (internal/mcp) are their callers and
-// web/src/api/coverage.test.ts's EXEMPT map says so.
+// frame (D3). Agent-only from P6c to P6e (2026-09-02), when the «Соединения»
+// screen (StreamConnectionsPage.tsx) took all three beside
+// list_stream_connections, close_stream_connection and push_stream_frame
+// (internal/mcp); the EXEMPT entries were withdrawn then.
 //
 // The registry these read is s.mockStreams — the mock plane's own,
 // per-workspace-capped instance P6b wired for GET /api/stream/stats to

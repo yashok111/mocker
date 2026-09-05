@@ -119,7 +119,16 @@ calling it, `mock.jwt`/`mock.now`/`mock.entities` with real `scopeArray`
 filtering, bundle v6 reading v5 and nothing older, and D10's two stream
 hooks `tick.lua` and `stream.onFrame`; a seventh `get_guide` topic,
 fourteen carve-outs, `//nolint` 36 → 39 — no route, no tool, no
-migration, no variable, no screen).
+migration, no variable, no screen) → `A20` (the screens the A4 rule had
+deferred, 2026-09-05, on the owner's pick: «Записи» under a confirmed
+family over the three entity routes, «Скачать бандл»/«Копировать» on the
+overview and «Импорт из файла» on the workspaces list over the three P4b
+routes; the stream form learned `tick.lua`/`onFrame` and the endpoint form
+the `function` field, both of which an edit from the screen had silently
+dropped; then, the same day on «добей последние 4 гэпа», «Проверить спеку»
+on the overview, the stats strip on «Соединения» and the header's server
+status over the two probes — `EXEMPT` 10 → 0, no route, no tool, no
+migration, no variable).
 What each of them SHIPPED is in "Architecture"
 above; HOW each arrived — gates, fleet runs, the lessons paid for — is
 `HISTORY.md`.

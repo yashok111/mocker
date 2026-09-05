@@ -158,7 +158,7 @@ describe("customFetch", () => {
     expect(onUnauthorized).toHaveBeenCalledTimes(1);
   });
 
-  it.each(["/api/me", "/api/auth/login", "/api/auth/logout"])(
+  it.each(["/api/me", "/api/auth/login", "/api/auth/logout", "/readyz", "/healthz"])(
     "does NOT bounce on a 401 from %s",
     async (path) => {
       const onUnauthorized = vi.fn();

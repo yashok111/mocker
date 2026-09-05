@@ -5,8 +5,9 @@
 // confirmed resource family's entity ROWS, structured, paginated and
 // scope-filtered, which today are readable only as their COUNT
 // (list_resources' own EntityCount/ByBaseScope) or incidentally as bodies
-// inside traffic log rows. Read-only, agent-only: no screen calls the route
-// it wraps (coverage.test.ts's own EXEMPT entry names the policy), and this
+// inside traffic log rows. Read-only, and agent-only until A20 (2026-09-05:
+// «Записи» on the resources screen, ResourceEntities.tsx, calls the same
+// route now — the EXEMPT entry was withdrawn); this
 // tool never writes — a confirmed resource has no editor at all (D4's own
 // "no write verb over entity rows"), a rule this tool changes nothing
 // about.

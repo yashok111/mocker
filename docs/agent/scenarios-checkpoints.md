@@ -191,8 +191,12 @@ third job for the one format and §19's `P4` "team scenarios":
 `GET /api/workspaces/{id}/export`, `POST /api/workspaces/import`,
 `POST /api/workspaces/{id}/fork` (contract 66 → 69, `EXEMPT` 7 → 10) with
 `export_workspace`, `import_workspace`, `fork_workspace` (tools 59 → 62);
-no screen, no migration, no variable.** Six things about it cannot be
-guessed from the code. **The three live in `internal/checkpoints`
+no screen, no migration, no variable — the screen came with `A20`,
+2026-09-05: `TransferPanel.tsx` on the overview («Скачать бандл», assembled
+client-side from the JSON body since the route sets no
+`Content-Disposition`; «Копировать воркспейс») and the import modal on
+`WorkspacesPage.tsx`, the three `EXEMPT` entries withdrawn.** Six things
+about it cannot be guessed from the code. **The three live in `internal/checkpoints`
 (`transfer.go`), not in a package of their own**: an export is
 `captureSnapshot`'s read half without the gzip (`readBundle`, split out
 for it, as `readDataBundleTx` was from `captureEntitiesTx`), an import is

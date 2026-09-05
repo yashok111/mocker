@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import type { ReactElement } from "react";
 import {
   Alert,
   Badge,
+  Box,
   Button,
   Card,
   Group,
@@ -13,7 +14,7 @@ import {
   Title,
 } from "@mantine/core";
 import { modals } from "@mantine/modals";
-import { IconAlertTriangle, IconCheck, IconX } from "@tabler/icons-react";
+import { IconAlertTriangle, IconCheck, IconList, IconX } from "@tabler/icons-react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   getListWorkspaceResourcesQueryKey,
@@ -24,13 +25,16 @@ import {
 import { useGetWorkspace } from "@/api/generated/workspaces/workspaces.ts";
 import type { ResourceFamilyView } from "@/api/generated/schemas";
 import { describeApiFailure, describeApiFailureDetailed } from "@/api/errors";
+import { ResourceEntities } from "./ResourceEntities";
 
 // ResourcesPage is DESIGN §14 screen 7, P3a: the operator's window onto the
 // slice's whole point — "created it - saw it in the list". D10 cut the route
-// table down to three: this screen has no entity browser (there is no route
+// table down to three: this screen had no entity browser (there was no route
 // left to feed one, D10's own cut of GET .../resources/{rid}/entities at
-// round 6), so a confirmed row's proof is its entityCount plus a pointer at
-// GET X on the mock plane, not a table of rows rendered here.
+// round 6), so a confirmed row's proof was its entityCount plus a pointer at
+// GET X on the mock plane. A4 brought the read back by family name and A11
+// the write pair, agent-only; since 2026-09-05 «Записи» under a confirmed
+// row opens ResourceEntities.tsx over exactly those three routes.
 //
 // D11: the first load fires GET .../resource-suggestions (below, via
 // useListResourceSuggestions) purely for its side effect — it is what runs
@@ -157,6 +161,9 @@ function ResourceList({
   // decision mutation, and it does not remember on its own which row it was
   // acting on — the same shape ScenariosPage's own actionError uses.
   const [actionError, setActionError] = useState<{ label: string; message: string } | null>(null);
+  // At most one family's rows open at a time, keyed by routeFamily (the
+  // family's stable address — never the row id, per CLAUDE.md's rule).
+  const [openFamily, setOpenFamily] = useState<string | null>(null);
 
   function invalidateAfterWrite(): void {
     setActionError(null);
@@ -220,81 +227,104 @@ function ResourceList({
       <Card withBorder p={0} data-testid="resource-list">
         <Stack gap={0}>
           {families.map((family) => (
-            <Group
-              key={family.routeFamily}
-              justify="space-between"
-              wrap="nowrap"
-              px="md"
-              py="sm"
-              data-testid="resource-row"
-              style={{ borderTop: "1px solid var(--mantine-color-gray-3)" }}
-            >
-              <div>
-                <Group gap="xs">
-                  <Text size="sm" fw={500}>
-                    {family.name}
-                  </Text>
-                  <Text size="xs" c="dimmed" ff="monospace">
-                    {family.routeFamily}
-                  </Text>
-                  {family.decision === "confirmed" ? (
-                    <Badge color="green" size="sm" data-testid="resource-confirmed-badge">
-                      подтверждён
-                    </Badge>
-                  ) : family.decision === "declined" ? (
-                    <Badge color="gray" size="sm" data-testid="resource-declined-badge">
-                      отклонён
-                    </Badge>
-                  ) : null}
-                </Group>
-                {family.decision === "confirmed" ? (
-                  <Stack gap={2} mt={4}>
-                    <Text size="xs" c="dimmed" data-testid="resource-entity-count">
-                      Записей: {family.entityCount}
+            <Fragment key={family.routeFamily}>
+              <Group
+                justify="space-between"
+                wrap="nowrap"
+                px="md"
+                py="sm"
+                data-testid="resource-row"
+                style={{ borderTop: "1px solid var(--mantine-color-gray-3)" }}
+              >
+                <div>
+                  <Group gap="xs">
+                    <Text size="sm" fw={500}>
+                      {family.name}
                     </Text>
-                    <Text size="xs" c="dimmed" ff="monospace" data-testid="resource-collection-url">
-                      GET {workspaceUrl}
+                    <Text size="xs" c="dimmed" ff="monospace">
                       {family.routeFamily}
                     </Text>
-                    {nestedHint(family.routeFamily) !== null ? (
-                      <Text size="xs" c="dimmed" data-testid="resource-nested-hint">
-                        {nestedHint(family.routeFamily)}
-                      </Text>
+                    {family.decision === "confirmed" ? (
+                      <Badge color="green" size="sm" data-testid="resource-confirmed-badge">
+                        подтверждён
+                      </Badge>
+                    ) : family.decision === "declined" ? (
+                      <Badge color="gray" size="sm" data-testid="resource-declined-badge">
+                        отклонён
+                      </Badge>
                     ) : null}
-                    {family.writeForm === null ? (
-                      <Text size="xs" c="dimmed" data-testid="resource-no-write-form">
-                        форма создания не распознана — POST идёт как раньше, из генератора
+                  </Group>
+                  {family.decision === "confirmed" ? (
+                    <Stack gap={2} mt={4}>
+                      <Text size="xs" c="dimmed" data-testid="resource-entity-count">
+                        Записей: {family.entityCount}
                       </Text>
-                    ) : null}
-                  </Stack>
-                ) : null}
-              </div>
-              <Group gap="xs" wrap="nowrap">
-                {family.decision !== "confirmed" ? (
+                      <Text
+                        size="xs"
+                        c="dimmed"
+                        ff="monospace"
+                        data-testid="resource-collection-url"
+                      >
+                        GET {workspaceUrl}
+                        {family.routeFamily}
+                      </Text>
+                      {nestedHint(family.routeFamily) !== null ? (
+                        <Text size="xs" c="dimmed" data-testid="resource-nested-hint">
+                          {nestedHint(family.routeFamily)}
+                        </Text>
+                      ) : null}
+                      {family.writeForm === null ? (
+                        <Text size="xs" c="dimmed" data-testid="resource-no-write-form">
+                          форма создания не распознана — POST идёт как раньше, из генератора
+                        </Text>
+                      ) : null}
+                    </Stack>
+                  ) : null}
+                </div>
+                <Group gap="xs" wrap="nowrap">
+                  {family.decision === "confirmed" ? (
+                    <Button
+                      variant="default"
+                      size="xs"
+                      leftSection={<IconList size={16} />}
+                      onClick={() =>
+                        setOpenFamily(openFamily === family.routeFamily ? null : family.routeFamily)
+                      }
+                      data-testid="resource-entities-toggle"
+                    >
+                      {openFamily === family.routeFamily ? "Свернуть" : "Записи"}
+                    </Button>
+                  ) : (
+                    <Button
+                      variant="default"
+                      size="xs"
+                      leftSection={<IconCheck size={16} />}
+                      onClick={() => handleConfirm(family)}
+                      loading={decideResource.isPending}
+                      data-testid="resource-confirm"
+                    >
+                      Подтвердить
+                    </Button>
+                  )}
                   <Button
                     variant="default"
                     size="xs"
-                    leftSection={<IconCheck size={16} />}
-                    onClick={() => handleConfirm(family)}
+                    color="red"
+                    leftSection={<IconX size={16} />}
+                    onClick={() => handleDecline(family)}
                     loading={decideResource.isPending}
-                    data-testid="resource-confirm"
+                    data-testid="resource-decline"
                   >
-                    Подтвердить
+                    Отклонить
                   </Button>
-                ) : null}
-                <Button
-                  variant="default"
-                  size="xs"
-                  color="red"
-                  leftSection={<IconX size={16} />}
-                  onClick={() => handleDecline(family)}
-                  loading={decideResource.isPending}
-                  data-testid="resource-decline"
-                >
-                  Отклонить
-                </Button>
+                </Group>
               </Group>
-            </Group>
+              {openFamily === family.routeFamily && family.decision === "confirmed" ? (
+                <Box px="md" pb="sm">
+                  <ResourceEntities id={id} family={family} />
+                </Box>
+              ) : null}
+            </Fragment>
           ))}
         </Stack>
       </Card>
@@ -311,14 +341,17 @@ function ResourceList({
 // server compares for exact equality, there is no local shape to validate
 // beyond "non-empty", and the refusal that matters (confirm_slug_mismatch) can
 // only ever come from the server.
-function DeclineConfirmedForm({
+// Exported since A20 for DriftPanel.tsx, whose orphaned-resource row is the
+// same verb over the same slug; the prop is a Pick so a drift row (name and
+// routeFamily, no decision state) can be handed in as is.
+export function DeclineConfirmedForm({
   id,
   family,
   onCancel,
   onDeclined,
 }: {
   id: number;
-  family: ResourceFamilyView;
+  family: Pick<ResourceFamilyView, "name" | "routeFamily">;
   onCancel: () => void;
   onDeclined: () => void;
 }): ReactElement {

@@ -458,5 +458,11 @@ row, the same thing the anonymous mock-plane `DELETE` does; the field
 guards verbs that destroy MANY rows). The key is a URL segment
 (`[A-Za-z0-9._~-]{1,128}`, never `.`/`..`), refused `400
 invalid_entity_key`; the family arrives `url.PathEscape`d exactly as A4's
-read takes it. No screen, no migration, no variable.
+read takes it. No screen, no migration, no variable. **The screen came
+with `A20` (2026-09-05)**: «Записи» under a confirmed family on the
+resources tab (`web/src/components/ResourceEntities.tsx`) pages the read by
+its `after`/`lastId` cursor and calls both writes, sending a row's own
+`scopeKey`/`baseScopeKey` back as read; the three `EXEMPT` entries are
+withdrawn. The family segment is `encodeURIComponent(routeFamily)` on the
+client — orval substitutes path parameters as is, and the route unescapes.
 

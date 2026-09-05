@@ -6440,7 +6440,7 @@
         ],
         "operationId": "previewEndpoint",
         "summary": "The first frames a stream endpoint draft would send",
-        "description": "P6b (decisions.md mocker-p6b-sse-mock D13). Read-only in effect, agent-only (no screen calls this route — see web/src/api/coverage.test.ts's EXEMPT entry; preview_endpoint is its MCP tool): takes a draft in the create-request shape, runs the SAME write-time validation POST .../endpoints runs (a refused draft is refused here with the same message), writes no row, bumps no revision, takes no auto checkpoint, and lays the first at most 50 frames out on one time axis — timeline frames as authored, tick frames generated from the inline schema with the workspace's own seed and endpoint id 0. Only kind \"sse\" previews.",
+        "description": "P6b (decisions.md mocker-p6b-sse-mock D13). Read-only in effect, agent-only until P6e (2026-09-02), when the screens took it beside the tool: takes a draft in the create-request shape, runs the SAME write-time validation POST .../endpoints runs (a refused draft is refused here with the same message), writes no row, bumps no revision, takes no auto checkpoint, and lays the first at most 50 frames out on one time axis — timeline frames as authored, tick frames generated from the inline schema with the workspace's own seed and endpoint id 0. Only kind \"sse\" previews.",
         "security": [
           {
             "csrfToken": []
@@ -7227,7 +7227,7 @@
         ],
         "operationId": "getWorkspaceDrift",
         "summary": "The three silent-drift signals for one workspace, against its currently bound spec",
-        "description": "Read-only, agent-only (no screen calls this route — see web/src/api/coverage.test.ts's EXEMPT entry): an orphaned operation override, an orphaned confirmed resource family, and a custom endpoint shadowing a spec operation. Measured against the workspace's currently bound spec and nothing else — there is no baseline column recording what it was configured against, so a re-bind to a different spec and a rederive minting a narrower generation over the same spec are not distinguished. Reading this CAN derive: it calls the same lazy-backfill entry point GET /api/specs/{id}/resource-suggestions does, so it may be the first route to pay the derivation cost on a spec that has never had its suggestions computed. A workspace with no spec bound answers 200 with hasDrift false and three empty arrays. Carries no remedy field: every repair already has its own verb — DELETE /api/workspaces/{id}/operations/{opKey}, DELETE /api/workspaces/{id}/endpoints/{eid}, POST /api/workspaces/{id}/resource-decisions with state \"declined\".",
+        "description": "Read-only (agent-only from P4a to A20, 2026-09-05, when «Проверить спеку» on the overview started calling it): an orphaned operation override, an orphaned confirmed resource family, and a custom endpoint shadowing a spec operation. Measured against the workspace's currently bound spec and nothing else — there is no baseline column recording what it was configured against, so a re-bind to a different spec and a rederive minting a narrower generation over the same spec are not distinguished. Reading this CAN derive: it calls the same lazy-backfill entry point GET /api/specs/{id}/resource-suggestions does, so it may be the first route to pay the derivation cost on a spec that has never had its suggestions computed. A workspace with no spec bound answers 200 with hasDrift false and three empty arrays. Carries no remedy field: every repair already has its own verb — DELETE /api/workspaces/{id}/operations/{opKey}, DELETE /api/workspaces/{id}/endpoints/{eid}, POST /api/workspaces/{id}/resource-decisions with state \"declined\".",
         "responses": {
           "200": {
             "description": "OK.",
@@ -7275,7 +7275,7 @@
         ],
         "operationId": "listResourceEntities",
         "summary": "A confirmed resource family's entity rows, paginated and scope-filtered",
-        "description": "Read-only, agent-only (no screen calls this route — see web/src/api/coverage.test.ts's EXEMPT entry; decisions.md mocker-a4-mcp-reach D4). limit defaults to 100 and clamps silently to 500 — it never answers 400. after is an id cursor: pass the previous answer's lastId back to continue. scopeKey and baseScopeKey are both optional filters; omitted, either axis is unfiltered. 404 unknown_family whenever routeFamily does not resolve to a confirmed resources row of this workspace, for every reason (never suggested, declined, or the workspace has no spec bound) — one code for all three, the same taxonomy POST .../resource-decisions already answers with.",
+        "description": "Read-only (decisions.md mocker-a4-mcp-reach D4; agent-only until A20, 2026-09-05, when the resources screen's «Записи» started paging it). limit defaults to 100 and clamps silently to 500 — it never answers 400. after is an id cursor: pass the previous answer's lastId back to continue. scopeKey and baseScopeKey are both optional filters; omitted, either axis is unfiltered. 404 unknown_family whenever routeFamily does not resolve to a confirmed resources row of this workspace, for every reason (never suggested, declined, or the workspace has no spec bound) — one code for all three, the same taxonomy POST .../resource-decisions already answers with.",
         "parameters": [
           {
             "name": "limit",
@@ -7464,7 +7464,7 @@
         ],
         "operationId": "getStreamStats",
         "summary": "Process-wide health of the SSE traffic feed",
-        "description": "Read-only, agent-only (no screen calls this route — see web/src/api/coverage.test.ts's EXEMPT entry; get_stream_stats is its MCP tool). Not workspace-scoped, because the connection cap is not: `open` counts live stream connections across every workspace, `cap` is the fixed process-wide ceiling, `refusedCap` and `refusedUnsupported` are the two refusal counters since the process started (kept apart because they are different failures with different repairs), `coalescedNudges` counts wake-ups dropped because a connection was already reading (no row is lost by that), and `byWorkspace` lists only workspaces holding at least one live connection. 503 service_unavailable when no stream registry is wired in this deployment.",
+        "description": "Read-only (agent-only from P6a to A20, 2026-09-05, when the «Соединения» screen's strip started polling it; get_stream_stats is its MCP tool). Not workspace-scoped, because the connection cap is not: `open` counts live stream connections across every workspace, `cap` is the fixed process-wide ceiling, `refusedCap` and `refusedUnsupported` are the two refusal counters since the process started (kept apart because they are different failures with different repairs), `coalescedNudges` counts wake-ups dropped because a connection was already reading (no row is lost by that), and `byWorkspace` lists only workspaces holding at least one live connection. 503 service_unavailable when no stream registry is wired in this deployment.",
         "responses": {
           "200": {
             "description": "OK.",
@@ -7497,7 +7497,7 @@
         ],
         "operationId": "listStreamConnections",
         "summary": "Live SSE connections of the workspace's mock endpoints",
-        "description": "P6c (decisions.md mocker-p6c-live-conns D1, D8). Read-only, agent-only (no screen calls this route — see web/src/api/coverage.test.ts's EXEMPT entry; list_stream_connections is its MCP tool). Lists the MOCK plane's live connections of this workspace — one row per connection with its id, endpoint, peer, open time and three live counters — beside the per-workspace cap. The admin plane's own traffic-feed connections are not listed. Optional endpointId narrows the rows; open stays the workspace's whole count. 503 service_unavailable when no mock stream registry is wired.",
+        "description": "P6c (decisions.md mocker-p6c-live-conns D1, D8). Read-only, agent-only until P6e (2026-09-02), when the screens took it beside the tool. Lists the MOCK plane's live connections of this workspace — one row per connection with its id, endpoint, peer, open time and three live counters — beside the per-workspace cap. The admin plane's own traffic-feed connections are not listed. Optional endpointId narrows the rows; open stays the workspace's whole count. 503 service_unavailable when no mock stream registry is wired.",
         "parameters": [
           {
             "name": "endpointId",

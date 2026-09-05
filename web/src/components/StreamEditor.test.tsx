@@ -62,7 +62,8 @@ describe("draftToDefinition", () => {
       error: "Включите хотя бы одно поведение: расписание или интервал",
     });
     expect(draftToDefinition("ws", draft)).toEqual({
-      error: "Включите хотя бы одно поведение: расписание, интервал, ответы или эхо",
+      error:
+        "Включите хотя бы одно поведение: расписание, интервал, ответы, эхо или обработку входящих функцией",
     });
   });
 
@@ -137,6 +138,50 @@ describe("draftToDefinition", () => {
       },
     });
   });
+
+  // A18 D10: a stream the agent authored with a Lua tick and an inbound hook
+  // used to lose BOTH on the first edit from this screen — the draft never
+  // read them and the PUT is a full replacement. The round trip is the
+  // regression test; the source select is what a person sees.
+  it("round-trips a Lua tick and an onFrame hook, and sends no schema beside the Lua", () => {
+    const def: StreamDefinition = {
+      tick: { intervalMs: 500, lua: "return { n = ordinal }" },
+      onFrame: 'return "reply", frame',
+    };
+    const draft = draftFromDefinition(def);
+    expect(draft.tickSource).toBe("lua");
+    expect(draft.onFrameOn).toBe(true);
+    expect(draftToDefinition("ws", draft)).toEqual({
+      stream: {
+        tick: { intervalMs: 500, event: undefined, lua: "return { n = ordinal }" },
+        onFrame: 'return "reply", frame',
+      },
+    });
+  });
+
+  it("refuses an inbound hook beside reply rules or echo by name, and an empty function", () => {
+    const draft: StreamDraft = {
+      ...emptyStreamDraft(),
+      scheduleOn: false,
+      onFrameOn: true,
+      onFrameText: "return nil",
+      repliesOn: true,
+      rules: [emptyRule()],
+    };
+    expect(draftToDefinition("ws", draft)).toEqual({
+      error: "Обработка входящих функцией исключает правила ответов: выключите одно",
+    });
+    expect(draftToDefinition("ws", { ...draft, repliesOn: false, rules: [], echo: true })).toEqual({
+      error: "Обработка входящих функцией исключает эхо: выключите одно",
+    });
+    expect(
+      draftToDefinition("ws", { ...draft, repliesOn: false, rules: [], onFrameText: "  " }),
+    ).toEqual({ error: "Обработка входящих функцией: функция пуста" });
+    // sse never sends the hook, whatever the draft says (the form hides it).
+    expect(draftToDefinition("sse", { ...draft, repliesOn: false, rules: [] })).toEqual({
+      error: "Включите хотя бы одно поведение: расписание или интервал",
+    });
+  });
 });
 
 function Harness({ kind }: { kind: "sse" | "ws" }) {
@@ -151,6 +196,7 @@ describe("StreamEditor", () => {
     expect(screen.getByTestId("t-interval-on")).toBeInTheDocument();
     expect(screen.queryByTestId("t-replies-on")).toBeNull();
     expect(screen.queryByTestId("t-echo")).toBeNull();
+    expect(screen.queryByTestId("t-on-frame-on")).toBeNull();
   });
 
   it("names no wire word in the interface", () => {
@@ -173,6 +219,17 @@ describe("StreamEditor", () => {
     expect(screen.getByTestId("t-rule-when-name-0-0")).toBeInTheDocument();
     await userEvent.click(screen.getByTestId("t-rule-when-add-0"));
     expect(screen.getByTestId("t-rule-when-name-0-1")).toBeInTheDocument();
+  });
+
+  it("swaps the schema box for a Lua box when the tick's source is the function, ws only for the hook", async () => {
+    renderWithProviders(<Harness kind="ws" />);
+    await userEvent.click(screen.getByTestId("t-interval-on"));
+    expect(screen.getByTestId("t-interval-schema")).toBeInTheDocument();
+    await userEvent.selectOptions(screen.getByTestId("t-interval-source"), "lua");
+    expect(screen.queryByTestId("t-interval-schema")).toBeNull();
+    expect(screen.getByTestId("t-interval-lua")).toBeInTheDocument();
+    await userEvent.click(screen.getByTestId("t-on-frame-on"));
+    expect(screen.getByTestId("t-on-frame-lua")).toBeInTheDocument();
   });
 });
 

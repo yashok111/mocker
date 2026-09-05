@@ -323,6 +323,88 @@ describe("CustomEndpointsPage", () => {
     expect(sentBody.responses["200"]?.bodyEncoding).toBe("base64");
   });
 
+  // A18 on the screen (2026-09-05): a function variant is visible as a badge
+  // and its Lua is shown back in the edit form; saving sends the function
+  // with no body and the neutral mode; a body typed beside it is refused
+  // before any request, in the form's own words.
+  it("shows a function variant's Lua in the edit form and saves it with no body", async () => {
+    const ep = endpointViewFixture({
+      id: 5,
+      activeStatus: 200,
+      responses: {
+        "200": variantFixture({
+          mode: "generated",
+          body: undefined,
+          mediaType: undefined,
+          function: "return 200, { ok = true }",
+          // Left over from before the function; the server refuses them
+          // beside one (function_and_body), so a save from here drops them.
+          recipes: { "$.id": { kind: "sequence" } },
+          schemaPatch: [{ op: "add", path: "/x", value: 1 }],
+          when: [{ in: "header", name: "x-test", op: "exists" }],
+        }),
+      },
+    });
+    const fetchMock = route({
+      [LIST]: () => json(200, endpointListViewFixture({ endpoints: [ep] })),
+      [`PUT /api/workspaces/${WS}/endpoints/5`]: () => json(200, ep),
+    });
+    renderInRouter(<CustomEndpointsPage id={WS} />);
+
+    expect(await screen.findByTestId("endpoint-function")).toHaveTextContent("функция Lua");
+    await userEvent.click(screen.getByTestId("endpoint-edit-toggle"));
+    const form = await screen.findByTestId("endpoint-edit-form");
+    const lua = within(form).getByTestId("endpoint-edit-function");
+    expect(lua).toHaveValue("return 200, { ok = true }");
+    expect(within(form).getByTestId("endpoint-edit-body")).toHaveValue("");
+
+    await userEvent.type(within(form).getByTestId("endpoint-edit-body"), "{{}");
+    await userEvent.click(within(form).getByTestId("endpoint-edit-submit"));
+    expect(within(form).getByText(/Функция и тело ответа взаимоисключающие/)).toBeInTheDocument();
+    expect(fetchMock.mock.calls.filter(([, init]) => init?.method === "PUT")).toHaveLength(0);
+
+    await userEvent.clear(within(form).getByTestId("endpoint-edit-body"));
+    await userEvent.clear(lua);
+    await userEvent.type(lua, "return 404, {{ gone = true }");
+    await userEvent.click(within(form).getByTestId("endpoint-edit-submit"));
+    await waitFor(() => {
+      expect(fetchMock.mock.calls.filter(([, init]) => init?.method === "PUT")).toHaveLength(1);
+    });
+    const put = fetchMock.mock.calls.find(([, init]) => init?.method === "PUT");
+    const sent = JSON.parse(String(put?.[1]?.body)) as {
+      responses: Record<string, { mode: string; body?: unknown; function?: string }>;
+    };
+    expect(sent.responses["200"]).toMatchObject({
+      mode: "generated",
+      function: "return 404, { gone = true }",
+      when: [{ in: "header", name: "x-test", op: "exists" }],
+    });
+    for (const gone of ["body", "mediaType", "bodyRef", "recipes", "schemaPatch"]) {
+      expect(sent.responses["200"]).not.toHaveProperty(gone);
+    }
+  });
+
+  it("creates an endpoint with a function and no body", async () => {
+    const fetchMock = route({
+      [LIST]: () => json(200, endpointListViewFixture({ endpoints: [] })),
+      [CREATE]: () => json(201, endpointViewFixture({ method: "POST", path: "/login" })),
+    });
+    renderInRouter(<CustomEndpointsPage id={WS} />);
+    await screen.findByTestId("endpoint-create-form");
+    await userEvent.type(screen.getByTestId("endpoint-create-path"), "/login");
+    await userEvent.type(screen.getByTestId("endpoint-create-function"), "return 200, {{}");
+    await userEvent.click(screen.getByTestId("endpoint-create-submit"));
+    await waitFor(() => {
+      expect(fetchMock.mock.calls.filter(([, init]) => init?.method === "POST")).toHaveLength(1);
+    });
+    const post = fetchMock.mock.calls.find(([, init]) => init?.method === "POST");
+    expect(JSON.parse(String(post?.[1]?.body))).toEqual({
+      method: "GET",
+      path: "/login",
+      function: "return 200, {}",
+    });
+  });
+
   it("refuses malformed JSON in the body field without calling the server", async () => {
     const fetchMock = route({
       [LIST]: () => json(200, endpointListViewFixture({ endpoints: [] })),
@@ -612,6 +694,10 @@ describe("CustomEndpointsPage", () => {
         activeStatus: 200,
         overrideOn: true,
         routeOff: false,
+        // A20: the fields a stream never uses still ride along — a full
+        // replacement that omitted them would reset the row's defaults.
+        listSize: { min: 1, max: 5 },
+        delayMs: 0,
         editVersion: 3,
       });
     });

@@ -78,10 +78,25 @@ export interface StreamDraft {
   intervalOn: boolean;
   intervalMs: string;
   tickEvent: string;
+  // A18 D10.1: a tick's body comes from exactly one of a JSON Schema
+  // (generated, byte-identical per ordinal) or a Lua function; the draft
+  // keeps BOTH texts so switching the source back does not lose what was
+  // typed, and draftToDefinition sends only the selected one.
+  tickSource: "schema" | "lua";
   schemaText: string;
+  luaText: string;
   repliesOn: boolean;
   rules: RuleDraft[];
   echo: boolean;
+  // A18 D10.2: a Lua hook over every inbound ws frame. It REPLACES the reply
+  // rules and echo on the wire (400 on_frame_and_reactive / on_frame_and_echo),
+  // which draftToDefinition mirrors by refusing the combination by name
+  // before a round trip. Before this field existed (2026-09-05) an edit
+  // from this screen of a stream the agent had given tick.lua or onFrame
+  // silently dropped both: draftFromDefinition never read them and a
+  // full-replacement PUT resent the definition without them.
+  onFrameOn: boolean;
+  onFrameText: string;
 }
 
 const DEFAULT_CONDITION: Condition = { in: "body", name: "", op: "equals", value: "" };
@@ -121,10 +136,14 @@ export function emptyStreamDraft(): StreamDraft {
     intervalOn: false,
     intervalMs: "1000",
     tickEvent: "",
+    tickSource: "schema",
     schemaText: '{\n  "type": "object",\n  "properties": {}\n}',
+    luaText: "",
     repliesOn: false,
     rules: [],
     echo: false,
+    onFrameOn: false,
+    onFrameText: "",
   };
 }
 
@@ -154,7 +173,19 @@ export function draftFromDefinition(def: StreamDefinition | undefined): StreamDr
   if (def.tick) {
     draft.intervalMs = String(def.tick.intervalMs);
     draft.tickEvent = def.tick.event ?? "";
-    draft.schemaText = pretty(def.tick.schema);
+    // A Lua tick has no schema (the two are exclusive by name on the
+    // server): keep the default schema text for the OTHER source rather
+    // than "null", so switching back offers a valid starting document.
+    if (def.tick.lua !== undefined) {
+      draft.tickSource = "lua";
+      draft.luaText = def.tick.lua;
+    } else {
+      draft.schemaText = pretty(def.tick.schema);
+    }
+  }
+  if (def.onFrame !== undefined) {
+    draft.onFrameOn = true;
+    draft.onFrameText = def.onFrame;
   }
   draft.repliesOn = (def.reactive?.length ?? 0) > 0;
   draft.rules = (def.reactive ?? []).map((r) => ({
@@ -254,18 +285,47 @@ export function draftToDefinition(
     if (eventError) {
       return { error: eventError };
     }
-    const schema = parseJSON(draft.schemaText, "Схема кадра");
-    if ("error" in schema) {
-      return { error: schema.error };
+    if (draft.tickSource === "lua") {
+      if (draft.luaText.trim() === "") {
+        return { error: "Кадр по интервалу: функция пуста" };
+      }
+      stream.tick = {
+        intervalMs,
+        event: draft.tickEvent === "" ? undefined : draft.tickEvent,
+        lua: draft.luaText,
+      };
+    } else {
+      const schema = parseJSON(draft.schemaText, "Схема кадра");
+      if ("error" in schema) {
+        return { error: schema.error };
+      }
+      if (
+        schema.value === null ||
+        typeof schema.value !== "object" ||
+        Array.isArray(schema.value)
+      ) {
+        return { error: "Схема кадра: нужен JSON-объект (JSON Schema)" };
+      }
+      stream.tick = {
+        intervalMs,
+        event: draft.tickEvent === "" ? undefined : draft.tickEvent,
+        schema: schema.value as Record<string, unknown>,
+      };
     }
-    if (schema.value === null || typeof schema.value !== "object" || Array.isArray(schema.value)) {
-      return { error: "Схема кадра: нужен JSON-объект (JSON Schema)" };
+  }
+  if (kind === "ws" && draft.onFrameOn) {
+    if (draft.onFrameText.trim() === "") {
+      return { error: "Обработка входящих функцией: функция пуста" };
     }
-    stream.tick = {
-      intervalMs,
-      event: draft.tickEvent === "" ? undefined : draft.tickEvent,
-      schema: schema.value as Record<string, unknown>,
-    };
+    // The server's own exclusivity (on_frame_and_reactive, on_frame_and_echo)
+    // said in the form's words, before a round trip.
+    if (draft.repliesOn) {
+      return { error: "Обработка входящих функцией исключает правила ответов: выключите одно" };
+    }
+    if (draft.echo) {
+      return { error: "Обработка входящих функцией исключает эхо: выключите одно" };
+    }
+    stream.onFrame = draft.onFrameText;
   }
   if (kind === "ws" && draft.repliesOn) {
     if (draft.rules.length === 0) {
@@ -334,12 +394,13 @@ export function draftToDefinition(
     stream.timeline !== undefined ||
     stream.tick !== undefined ||
     (stream.reactive?.length ?? 0) > 0 ||
-    stream.echo === true;
+    stream.echo === true ||
+    stream.onFrame !== undefined;
   if (!hasBehaviour) {
     return {
       error:
         kind === "ws"
-          ? "Включите хотя бы одно поведение: расписание, интервал, ответы или эхо"
+          ? "Включите хотя бы одно поведение: расписание, интервал, ответы, эхо или обработку входящих функцией"
           : "Включите хотя бы одно поведение: расписание или интервал",
     };
   }
@@ -467,13 +528,35 @@ export function StreamEditor({
               data-testid={t("interval-event")}
             />
           </Group>
-          <Textarea
-            label="Схема кадра (JSON Schema) — тело генерируется по ней, как обычный ответ"
-            rows={4}
-            value={draft.schemaText}
-            onChange={(e) => patch({ schemaText: e.currentTarget.value })}
-            data-testid={t("interval-schema")}
-          />
+          <NativeSelect
+            label="Откуда брать тело кадра"
+            value={draft.tickSource}
+            onChange={(e) =>
+              patch({ tickSource: e.currentTarget.value === "lua" ? "lua" : "schema" })
+            }
+            data-testid={t("interval-source")}
+          >
+            <option value="schema">по схеме — генерируется, как обычный ответ</option>
+            <option value="lua">функцией на Lua — раздел «Функции» в руководстве</option>
+          </NativeSelect>
+          {draft.tickSource === "lua" ? (
+            <Textarea
+              label="Функция (Lua): тело над аргументом ordinal, возвращает таблицу, строку или nil"
+              rows={6}
+              value={draft.luaText}
+              onChange={(e) => patch({ luaText: e.currentTarget.value })}
+              styles={{ input: { fontFamily: "var(--mantine-font-family-monospace)" } }}
+              data-testid={t("interval-lua")}
+            />
+          ) : (
+            <Textarea
+              label="Схема кадра (JSON Schema)"
+              rows={4}
+              value={draft.schemaText}
+              onChange={(e) => patch({ schemaText: e.currentTarget.value })}
+              data-testid={t("interval-schema")}
+            />
+          )}
         </Stack>
       ) : null}
 
@@ -634,6 +717,24 @@ export function StreamEditor({
             onChange={(e) => patch({ echo: e.currentTarget.checked })}
             data-testid={t("echo")}
           />
+
+          <Divider label="Обрабатывать входящие сообщения функцией" labelPosition="left" />
+          <Checkbox
+            label="Включить (вместо правил и эха — вместе они не сохраняются)"
+            checked={draft.onFrameOn}
+            onChange={(e) => patch({ onFrameOn: e.currentTarget.checked })}
+            data-testid={t("on-frame-on")}
+          />
+          {draft.onFrameOn ? (
+            <Textarea
+              label="Функция (Lua): тело над аргументом frame; вернуть nil, («reply», данные) или («close», код, причина)"
+              rows={6}
+              value={draft.onFrameText}
+              onChange={(e) => patch({ onFrameText: e.currentTarget.value })}
+              styles={{ input: { fontFamily: "var(--mantine-font-family-monospace)" } }}
+              data-testid={t("on-frame-lua")}
+            />
+          ) : null}
         </>
       ) : null}
     </Stack>

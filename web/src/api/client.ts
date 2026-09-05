@@ -107,7 +107,12 @@ function parseJSON(text: string): unknown {
 // on it loops before the login screen ever renders), and login/logout show
 // their own error in place. Matched on a boundary — exact path or path+query
 // — so a future sibling like /api/metrics can never be mistaken for the probe.
-const authFlowPaths = ["/api/auth/login", "/api/auth/logout", "/api/me"];
+// /readyz and /healthz joined with A20 (the header's server status): both
+// are unauthenticated by design, so a 401 there can only be a proxy or a
+// misplaced middleware in front of mocker, never this session dying — and
+// bouncing every tab to /login on it would hide exactly the outage the
+// status word exists to show.
+const authFlowPaths = ["/api/auth/login", "/api/auth/logout", "/api/me", "/readyz", "/healthz"];
 
 // customFetch is the mutator every generated endpoint calls. orval hands it a
 // fully-built URL and RequestInit; everything below is what the admin plane

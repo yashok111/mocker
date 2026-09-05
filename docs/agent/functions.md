@@ -135,7 +135,11 @@ floor. Fresh VMs stay; a slice that pools them on its own reading has
 changed D3's statelessness with nobody saying so.
 
 No new route and no new tool: contract stays at 70 operations, tools at
-63, migrations at 8, `EXEMPT` at 10. What DID move: `Variant.function` on
+63, migrations at 8, `EXEMPT` at 10 (`A20` brought it to 4 for reasons of
+its own, and gave the stream editor a tick source of "schema or Lua" plus
+an inbound-hook box, and the endpoint forms a `function` box — before that
+an edit from either screen dropped the Lua unseen; `CARVE-OUTS.md`, A18's
+last entry). What DID move: `Variant.function` on
 the contract (inherited by the update request, the endpoint view and both
 conflict payloads, which all `$ref` it) plus its own flat field on
 `CreateEndpointRequest`; `StreamTick.lua` with `schema` out of `required`;

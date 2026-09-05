@@ -5,8 +5,10 @@
 // joins the "never touches a layer" group). It takes the draft in the
 // create-request shape and runs the SAME write-time validation
 // customep.Repo.Create runs — one owner — so a draft that previews is a
-// draft that saves. Agent-only: preview_endpoint (internal/mcp) is its one
-// caller and web/src/api/coverage.test.ts's EXEMPT map says so.
+// draft that saves. Agent-only from P6b to P6e (2026-09-02), when the
+// stream editor's «Рассчитать кадры» (StreamEditor.tsx) joined
+// preview_endpoint (internal/mcp) as a caller and the EXEMPT entry was
+// withdrawn.
 package admin
 
 import (

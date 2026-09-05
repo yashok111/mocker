@@ -147,7 +147,9 @@ func (s *Server) routes() []route {
 		// mutating population by construction (D6.1) and joins neither
 		// autoCheckpointLabels nor either exclusion group below; drift_handlers.go
 		// owns it and writes nothing but [specs.Repo.EnsureSuggestions]'s own
-		// lazy backfill of resource_suggestions (D4.4).
+		// lazy backfill of resource_suggestions (D4.4). Agent-only from P4a
+		// to A20 (2026-09-05), when «Проверить спеку» on the overview
+		// (DriftPanel.tsx) started calling it on the button.
 		{"GET /api/workspaces/{id}/drift", s.handleGetWorkspaceDrift},
 
 		// A4 (decisions.md mocker-a4-mcp-reach D4): the read corner of
@@ -156,14 +158,15 @@ func (s *Server) routes() []route {
 		// that design line (recorded in CARVE-OUTS.md, an amendment to
 		// P3a's own entry): the write half stays refused by the same rule
 		// that makes a confirmed resource uneditable. Agent-only by policy
-		// exactly like GET .../drift above — coverage.test.ts's EXEMPT map
-		// carries the second entry. A GET, so it joins neither
+		// from A4 to A20 (2026-09-05, the resources screen's «Записи»
+		// reads it now; the EXEMPT entry withdrawn). A GET, so it joins neither
 		// autoCheckpointLabels nor either exclusion group below (D10): it
 		// bumps no revision, takes no checkpoint, writes no row.
 		{"GET /api/workspaces/{id}/resources/{family}/entities", s.handleListResourceEntities},
 		// A11: the read's two write siblings — create-or-replace one row by
-		// key, delete one row by key. Agent-only like the read (EXEMPT
-		// carries both). They change ONLY entities, so they join
+		// key, delete one row by key. Agent-only like the read until A20
+		// (the same screen edits and deletes a row). They change ONLY
+		// entities, so they join
 		// autoCheckpointExcludedNeverTouchesLayer beside reset-data, not
 		// autoCheckpointLabels: config_snap does not carry rows, a label
 		// would promise an undo a config rollback cannot perform, and the

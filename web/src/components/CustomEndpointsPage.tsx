@@ -174,6 +174,7 @@ const createForm = type({
   status: statusField,
   bodyText: bodyField,
   mediaType: "string",
+  functionText: "string",
 });
 type CreateForm = typeof createForm.infer;
 
@@ -184,7 +185,31 @@ const EMPTY_FORM: CreateForm = {
   status: "",
   bodyText: "",
   mediaType: "",
+  functionText: "",
 };
+
+// producerConflict is A18 D5's "one producer per variant" said before a
+// round trip: a variant either runs a function or serves a body, and a
+// function chooses its own media type. The server refuses the pair by name
+// (400 function_and_body); this form says the same thing next to the fields
+// so the operator does not read it off an alert. Null when the shape is
+// legal. Exported for the test.
+export function producerConflict(fields: {
+  functionText: string;
+  bodyText: string;
+  mediaType: string;
+}): string | null {
+  if (fields.functionText.trim() === "") {
+    return null;
+  }
+  if (fields.bodyText.trim() !== "") {
+    return "Функция и тело ответа взаимоисключающие: у варианта один источник ответа — очистите одно из полей";
+  }
+  if (fields.mediaType.trim() !== "") {
+    return "Функция сама выбирает media type (таблица — JSON, строка — как есть): очистите поле Media type";
+  }
+  return null;
+}
 
 // activeStatusField differs from statusField (used by create) in exactly one
 // way: UpdateEndpointRequest.activeStatus is REQUIRED on the wire (it is a
@@ -208,6 +233,7 @@ const editForm = type({
   status: activeStatusField,
   bodyText: bodyField,
   mediaType: "string",
+  functionText: "string",
 });
 type EditForm = typeof editForm.infer;
 
@@ -240,7 +266,18 @@ function defaultsFromEndpoint(
         ? JSON.stringify(variant.body, null, 2)
         : "",
     mediaType: variant?.mediaType ?? "",
+    // A18: the Lua the agent wrote is shown back, so an edit of this row
+    // is never blind to it — before this field (2026-09-05) the form showed
+    // an empty body for a function variant and gave no hint one existed.
+    functionText: variant?.function ?? "",
   };
+}
+
+// hasFunction answers the row badge: any variant of the endpoint, not only
+// the active one, runs Lua — a 500 the agent scripted is worth knowing
+// about while the 200 is what serves.
+function hasFunction(ep: Pick<EndpointView, "responses">): boolean {
+  return Object.values(ep.responses).some((v) => v.function !== undefined && v.function !== "");
 }
 
 // createdAt/updatedAt arrive as Unix seconds (internal/admin/endpoint_handlers.go
@@ -381,6 +418,11 @@ function CreateEndpointForm({
   });
   const kind = watch("kind") as "http" | StreamKind;
   const path = watch("path");
+  const producerError = producerConflict({
+    functionText: watch("functionText"),
+    bodyText: watch("bodyText"),
+    mediaType: watch("mediaType"),
+  });
   const [streamDraft, setStreamDraft] = useState<StreamDraft>(emptyStreamDraft);
   const [streamError, setStreamError] = useState<string | null>(null);
   // A stream handshake is a GET and the server refuses anything else by
@@ -430,6 +472,10 @@ function CreateEndpointForm({
       );
       return;
     }
+    if (producerError !== null) {
+      return;
+    }
+    const functionText = values.functionText.trim() === "" ? "" : values.functionText;
     createEndpoint.mutate({
       id,
       data: {
@@ -444,6 +490,9 @@ function CreateEndpointForm({
         // again here rather than caching that result so the request always
         // reflects whatever is currently in the textarea.
         body: bodyText === "" ? undefined : (JSON.parse(bodyText) as unknown),
+        // A18: sent untrimmed — Lua source is the operator's bytes, and a
+        // leading newline is not the form's to remove.
+        function: functionText === "" ? undefined : functionText,
       },
     });
   }
@@ -554,6 +603,16 @@ function CreateEndpointForm({
           data-testid="endpoint-create-body"
           error={errors.bodyText?.message}
           {...register("bodyText")}
+        />
+        <Textarea
+          hidden={kind !== "http"}
+          label="Функция (Lua, необязательно) — вместо тела: над аргументом req, возвращает status, body, headers"
+          description="Раздел «Функции» в руководстве. Компилируется при сохранении: синтаксическая ошибка — отказ со словами парсера."
+          rows={4}
+          styles={{ input: { fontFamily: "var(--mantine-font-family-monospace)" } }}
+          data-testid="endpoint-create-function"
+          error={producerError ?? undefined}
+          {...register("functionText")}
         />
         <Button
           type="submit"
@@ -707,6 +766,11 @@ function EndpointList({
                           маршрут выключен
                         </Badge>
                       ) : null}
+                      {hasFunction(ep) ? (
+                        <Badge color="grape" size="sm" data-testid="endpoint-function">
+                          функция Lua
+                        </Badge>
+                      ) : null}
                     </Group>
                     <Text size="xs" c="dimmed">
                       канонический путь {ep.canonicalPath} · активный статус {ep.activeStatus} ·
@@ -789,10 +853,16 @@ function EditEndpointForm({
     register,
     handleSubmit,
     reset,
+    watch,
     formState: { errors },
   } = useForm<EditForm>({
     resolver: arktypeResolver(editForm),
     defaultValues: defaultsFromEndpoint(endpoint),
+  });
+  const producerError = producerConflict({
+    functionText: watch("functionText"),
+    bodyText: watch("bodyText"),
+    mediaType: watch("mediaType"),
   });
 
   // A3: the fields a full-replacement PUT resends unchanged (overrideOn,
@@ -838,12 +908,42 @@ function EditEndpointForm({
     // recipes/schemaPatch) the endpoint already carried at this status, the
     // instant an operator edited an unrelated field like path or mediaType.
     const responses: UpdateEndpointRequestResponses = { ...base.responses };
-    responses[status] = {
-      ...responses[status],
-      mode: "pinned",
-      body: bodyText === "" ? undefined : (JSON.parse(bodyText) as unknown),
-      mediaType: mediaType === "" ? undefined : mediaType,
-    };
+    const functionText = values.functionText.trim() === "" ? "" : values.functionText;
+    if (producerError !== null) {
+      return;
+    }
+    responses[status] =
+      functionText !== ""
+        ? {
+            // A18 D5: a function is the variant's ONE producer, so every
+            // other producer goes — body, encoding, media type, and also
+            // bodyRef, recipes and schemaPatch, which are not this form's
+            // fields but which the server refuses beside a function by name
+            // (function_and_body). Leaving them would make an asset- or
+            // recipe-backed variant impossible to convert from this screen:
+            // the 400 would name a field the form cannot clear. The label
+            // says what is replaced; `when[]` and `headers` survive (a
+            // function keeps its selection and its headers). Mode is the
+            // neutral one — A18's own rows leave it unset.
+            ...responses[status],
+            mode: "generated",
+            body: undefined,
+            bodyEncoding: undefined,
+            bodyRef: undefined,
+            mediaType: undefined,
+            recipes: undefined,
+            schemaPatch: undefined,
+            function: functionText,
+          }
+        : {
+            ...responses[status],
+            mode: "pinned",
+            body: bodyText === "" ? undefined : (JSON.parse(bodyText) as unknown),
+            mediaType: mediaType === "" ? undefined : mediaType,
+            // A cleared Lua box removes the function: the operator saw it in
+            // the box and emptied it, so nothing is dropped unseen.
+            function: undefined,
+          };
     updateEndpoint.mutate({
       id,
       eid: endpoint.id,
@@ -966,6 +1066,15 @@ function EditEndpointForm({
         error={errors.bodyText?.message}
         {...register("bodyText")}
       />
+      <Textarea
+        label="Функция (Lua, необязательно) — вместо тела: над аргументом req, возвращает status, body, headers"
+        description="Функция заменяет тело, файл, рецепты и правки схемы этого статуса; условия when и заголовки остаются. Пустое поле у варианта с функцией — удаление функции."
+        rows={4}
+        styles={{ input: { fontFamily: "var(--mantine-font-family-monospace)" } }}
+        data-testid="endpoint-edit-function"
+        error={producerError ?? undefined}
+        {...register("functionText")}
+      />
       <Group gap="xs">
         <Button
           type="submit"
@@ -1053,6 +1162,14 @@ function EditStreamForm({
         activeStatus: 200,
         overrideOn: base.overrideOn,
         routeOff: base.routeOff,
+        // A20's second reader: a stream row still carries listSize, delayMs
+        // and reqSchema (an agent may have written them; a stream ignores
+        // the first two but a full-replacement PUT that omits them resets
+        // the row to the defaults), so they ride along exactly as
+        // EditEndpointForm sends them.
+        listSize: base.listSize,
+        delayMs: base.delayMs,
+        reqSchema: base.reqSchema,
         // P7a: the operation fields survive a stream edit the same way.
         operation: base.operation,
         editVersion: conflictBase?.editVersion ?? endpoint.editVersion,

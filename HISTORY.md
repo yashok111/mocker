@@ -2816,3 +2816,106 @@ refusal returned a word, a non-canonical key was `not_found` where `bad_key`
 was the truth, and the determinism claim was wrong (the schema is not in
 the seed; deadline-shaped leaves are clock-anchored). All fixed with a test
 each, in one `fix(a19)` commit.
+
+## `A20` — the screens the A4 rule had deferred (2026-09-05)
+
+**What the owner asked for.** «посмотри гэпы в интерфейсе. надо бы доделать
+страницы» (a Russian string quoted as data). The survey found six gaps,
+two of them bugs rather than policy: the stream editor's draft never read
+`tick.lua` or `onFrame`, so an edit from the screen of a stream the agent
+had scripted resent the definition without them (a full-replacement PUT),
+and a Lua tick could not be saved from the form at all; the endpoint form
+showed a function variant as an empty pinned body with no hint. The other
+four were `EXEMPT` entries — the entity rows (A4/A11), the export/import/
+fork trio (P4b), stream stats (P6a) and drift (P4a, refused by name on
+2026-09-03). Asked which to build, the owner picked the entity rows and the
+transfer trio; drift and stats stay agent-only, offered and not taken, which
+the `EXEMPT` map's own comment records.
+
+**What shipped.** No route, no tool, no migration, no variable; contract
+stays 70, tools 63, `EXEMPT` 10 → 4. Five screens' worth of change:
+
+- `StreamEditor.tsx`: a tick source select (schema or Lua) and an
+  «Обрабатывать входящие сообщения функцией» section for ws, with the
+  server's three exclusivities (`tick_lua_and_schema`,
+  `on_frame_and_reactive`, `on_frame_and_echo`) said in the form's words
+  before a round trip. The round trip of a Lua definition is the regression
+  test.
+- `CustomEndpointsPage.tsx`: a `function` box on create and edit, a «функция
+  Lua» badge on the row, and A18 D5's one-producer rule as an inline error
+  (`producerConflict`, exported and tested). Saving a function clears only
+  the form's OWN fields (body, media type); recipes/schemaPatch/bodyRef are
+  left for the server to refuse by name, so the form never decides which of
+  the agent's two writes wins.
+- `TransferPanel.tsx` on the overview: «Скачать бандл» through the generated
+  client and a Blob URL (the route sets no `Content-Disposition`; a bare
+  anchor would skip the error envelope), «Копировать воркспейс» in a modal.
+  `WorkspacesPage.tsx`: «Импорт из файла» — a plain file input, name/slug/
+  spec overrides, the file validated only as "a JSON object" because the
+  server is the one reader of a bundle.
+- `ResourceEntities.tsx` under «Записи» on the resources tab: one query per
+  cursor page (no rows copied into state, so an invalidation refreshes every
+  open page), inline JSON edit through A11's PUT, delete by key with the
+  row's own scope sent back.
+
+**Two things learned by building.** A modal's content renders under
+`ModalsProvider`, which sits OUTSIDE `RouterProvider` in `main.tsx`: a
+`useNavigate` inside a modal form has no router. Both new modals hand the
+created workspace back to the page through a callback and the page
+navigates — the first navigate-after-modal in this tree, so nothing had
+hit it before. And `sd` reads `$` in a replacement as a group reference:
+one template literal lost its `${…}` to it and was restored by hand.
+
+**The second reader (vcodex, `gpt-5.6-luna`, effort high over the 2159-line
+diff) returned six findings, two of them already fixed while it ran** (the
+download anchor detached and its URL revoked on the same tick; the cursor
+pages not collapsing after a write). The four taken from it: a function
+saved from the form now clears `bodyRef`/`recipes`/`schemaPatch` too, or an
+asset- or recipe-backed variant could not be converted from the screen at
+all (the 400 would name a field the form cannot clear); the fork checkbox
+is checked by default and always sends an explicit boolean, because the
+SERVER's default for an omitted `includeData` is true and an unticked box
+that sent nothing would copy the rows it promised not to; an entity draft
+refuses to save over a row whose `updatedAt` moved underneath it (A11's PUT
+has no version check, so this is the one thing the form can do); the
+import modal reads the specs query itself instead of a snapshot taken when
+it opened. Each has a test.
+
+**The second step, the same day.** «добей последние 4 гэпа» (a Russian
+string quoted as data) — the four entries the first step had left, drift
+among them, which the owner had refused by name two days earlier; a refusal
+and its reversal are both his, and `CARVE-OUTS.md` "Ideas refused" carries
+both. Shipped: «Проверить спеку» on the overview (`DriftPanel.tsx` — the
+report on the button, never on mount, because the route can derive; the
+three repair verbs inline, the override delete with `opKey` verbatim and
+the resource decline through the resources screen's own slug modal, now
+exported), a one-line process-wide strip under the «Соединения» heading
+(`StreamStatsStrip`, on the list's poll; a failing poll is a dimmed line,
+not an alert), and the header's server status (`ServerStatus` in
+`AppShell.tsx`: `/readyz` and `/healthz` every 30 s — «готов», «жив, база
+данных не готова», «недоступен»; the pair the container's own HEALTHCHECK
+reads). `EXEMPT` is EMPTY; the mechanism stays. The routes test that
+asserted `/guide` makes no call past the session now excludes the shell's
+two probes by name. The two contract descriptions P6e had left saying "no
+screen calls this route" (preview, connections) were corrected in passing.
+
+**The second reader over step two** (vcodex, `gpt-5.6-luna`, xhigh over
+the drift/stats/status diff) returned five findings; four taken, each with
+a test. The one that mattered: the stats strip read the TOP-LEVEL counters
+of `GET /api/stream/stats`, which are the ADMIN feed's registry (the traffic
+screen's live stream, one process-wide cap), while the page it sits on
+lists the MOCK plane's connections — the `mock` member, capped per
+workspace. The strip reads `mock` now and names the other plane in one
+clause. The other three: the header's status word came off `data`, which
+TanStack Query keeps after a failed refetch, so it said «готов» for a whole
+poll interval after the server went away (gated on `!isError` now, and a
+503 is the only error read as "database not ready"); a 401 on either probe
+would have bounced every tab to `/login` (both joined `authFlowPaths` in
+`client.ts`); and the drift copy said the check "changes nothing", when
+the route may populate the suggestion cache. Declined: a shared cross-tab
+poller for the probes — hidden tabs do not poll (TanStack's default), and
+two GETs a minute per visible tab is not a load.
+
+**Bars.** `make ui-test` 404 tests in 36 files, `make ui-lint` clean (three
+pre-existing warnings), the Go contract tests green after the comment
+edits; no Go behaviour changed.

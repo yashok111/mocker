@@ -733,7 +733,12 @@ scope" list, stated so each reads as a decision rather than a gap.
   three failures stay exactly as silent for them as before it. The signals
   become readable for the agent holding `MOCKER_MCP_KEY` and for nobody
   else — the coverage invariant's own trade, accepted here rather than
-  overlooked.
+  overlooked. **Closed by `A20` (2026-09-05)**: «Проверить спеку» on the
+  overview (`DriftPanel.tsx`) fetches the report on the button (the route
+  can derive, so never on mount) and offers the three repair verbs inline —
+  the override delete with `opKey` verbatim, the endpoint delete, the
+  resource decline through the resources screen's own slug modal; the
+  entry withdrawn.
 - **A fourth signal for a `resource_decisions` row with no `resources` row
   behind it.** A DECLINED family with no confirmed row serves nothing and
   stores nothing, so nothing about it has silently stopped working — an
@@ -792,7 +797,14 @@ scope" list, stated so each reads as a decision rather than a gap.
   non-probe `EXEMPT` entry (the first is `GET .../drift`, `P4a`): no screen
   calls it, its only caller is the `list_resource_entities` MCP tool
   (`internal/mcp/tools_entities.go`), by the same "agent is primary, a screen
-  is optional" policy `drift` already established.
+  is optional" policy `drift` already established. **The screen half closed
+  by `A20` (2026-09-05)**: «Записи» under a confirmed family
+  (`ResourceEntities.tsx`) pages the rows by the route's own `after`/`lastId`
+  cursor, edits one as the JSON object it is (`A11`'s PUT) and deletes one
+  by key (`A11`'s DELETE), sending a nested row's `scopeKey`/`baseScopeKey`
+  back exactly as read; the three `EXEMPT` entries withdrawn. The write
+  half's "a confirmed resource has no editor" rule is untouched: the screen
+  edits ROWS, never the family.
 - **`A4`: the route's error taxonomy collapses three causes into one 404.**
   `unknown_family` answers a route family the bound spec never suggested, one
   that was declined, and a workspace with no spec bound alike — distinguishing
@@ -849,6 +861,10 @@ scope" list, stated so each reads as a decision rather than a gap.
   repair is the operator's, not the server's.
 - **`P6a`: no stats screen.** `GET /api/stream/stats` is agent-only by policy
   (`get_stream_stats`; `coverage.test.ts`'s third non-probe `EXEMPT` entry).
+  **Closed by `A20` (2026-09-05)**: a one-line strip under the «Соединения»
+  heading, on the list's own poll — the process-wide open/cap, this
+  workspace's share, how many other workspaces hold connections, the two
+  refusal counters; the entry withdrawn.
 - **`P6a`: the screen's 60-second retry is a client constant**, not
   configuration. A proxy that cuts streams at a shorter interval than that
   leaves the screen a minute in fallback after every cut; the poll runs the
@@ -1255,7 +1271,15 @@ scope" list, stated so each reads as a decision rather than a gap.
   `fork_workspace` and three `EXEMPT` entries, under the A4 rule. A
   «Скачать»/«Импорт» pair on the workspaces list and a «Копировать» on the
   overview are the obvious screens; they wait on the owner's word, like the
-  drift screen (`IDEAS.md`).
+  drift screen (`IDEAS.md`). **Closed by `A20` (2026-09-05)**: «Скачать
+  бандл» and «Копировать воркспейс» on the overview (`TransferPanel.tsx`),
+  «Импорт из файла» on the workspaces list; the three entries withdrawn.
+  Two things the screens do NOT do, by measurement of what the route gives:
+  the download is assembled client-side from the JSON body (the route sets
+  no `Content-Disposition`, an agent reads it as a body), and the import
+  validates nothing beyond "a JSON object" — the server is the one reader
+  of a bundle and refuses by name; a second partial check here would only
+  ever disagree with it.
 - **Assets are not in the export**, by DESIGN §32.4's own decision ("the
   bundle does not carry assets in v11"). An imported workspace has its
   `bodyRef`s and `asset_url`s intact and its assets absent until
@@ -1590,6 +1614,20 @@ because an undefined global reads `nil` in Lua and D8's write-time compile
 check cannot see it. Any future slice that narrows either must refuse by name
 at some door, the way a bundle version does.
 
+- **The screens did not know A18 existed — closed by `A20` (2026-09-05).**
+  Not a `[GIVES-UP]` item: the gate document's "no screen" clause was read
+  as "no new screen", and the EXISTING forms were not re-read against the
+  new fields. The stream editor's draft never carried `tick.lua` or
+  `onFrame`, so an edit from the screen of a stream the agent had scripted
+  resent the definition without them (a full-replacement PUT), and a Lua
+  tick could not even be saved from the form (the schema box was required);
+  the endpoint form showed a function variant as an empty pinned body with
+  no hint. `A20` gives the stream draft a tick source (schema or Lua) and an
+  inbound-hook section, and the endpoint create/edit forms a `function`
+  box, with A18 D5's exclusivity said in the form's own words before a
+  round trip. Found by reading the forms, not by a test: no test of either
+  form used a fixture with the A18 fields.
+
 ## A19 — `mock.generate` and the entity writers (2026-09-05)
 
 - **`mock.entities.update` cannot remove a field.** A Lua `nil` in a table
@@ -1664,7 +1702,10 @@ so nobody re-prices them from scratch.
   all three are MCP tools; a spec change is triaged by the agent that
   made it. A screen would serve only an operator with no agent, which is
   the case the A4 rule already decided against. `GET .../drift` stays
-  agent-only in `EXEMPT`.
+  agent-only in `EXEMPT`. **Reversed by the owner on 2026-09-05** («добей
+  последние 4 гэпа», a Russian string quoted as data), two days later, in
+  `A20`: `DriftPanel.tsx`, the `P4a` entry above has the shape. A refusal
+  and its reversal are both his, on the record here.
 - **Swagger 2.0** (a 2→3 converter before `internal/openapi`), refused the
   same day («пункт 2 выкидываем не нужно», a Russian string quoted as
   data): the specs this product is pointed at are OpenAPI 3, and an old

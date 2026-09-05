@@ -1,11 +1,14 @@
 import { useState } from "react";
+import type { ChangeEvent, ReactElement } from "react";
 import {
   Alert,
   Anchor,
   Button,
   Card,
   Group,
+  Input,
   Loader,
+  NativeSelect,
   Stack,
   Text,
   TextInput,
@@ -13,7 +16,7 @@ import {
   UnstyledButton,
 } from "@mantine/core";
 import { modals } from "@mantine/modals";
-import { IconAlertTriangle, IconPlus, IconTrash } from "@tabler/icons-react";
+import { IconAlertTriangle, IconFileImport, IconPlus, IconTrash } from "@tabler/icons-react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
@@ -22,11 +25,17 @@ import {
   getListWorkspacesQueryKey,
   useCreateWorkspace,
   useDeleteWorkspace,
+  useImportWorkspace,
   useListWorkspaces,
 } from "@/api/generated/workspaces/workspaces.ts";
 import { useListSpecs } from "@/api/generated/specs/specs.ts";
-import type { WorkspaceView } from "@/api/generated/schemas";
-import { describeApiFailure } from "@/api/errors";
+import type {
+  ImportWorkspaceView,
+  SpecView,
+  WorkspaceExportDocument,
+  WorkspaceView,
+} from "@/api/generated/schemas";
+import { describeApiFailure, describeApiFailureDetailed } from "@/api/errors";
 import { arktypeResolver } from "@/validation/resolver";
 import { userName } from "@/validation/name";
 
@@ -39,6 +48,8 @@ type CreateForm = typeof createForm.infer;
 
 export function WorkspacesPage() {
   const workspaces = useListWorkspaces();
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
   // Second query, used only to pick the empty-state copy (DESIGN §14 screen
   // 2: "если спеки в базе нет вообще — не пустой список, а «спеки ещё нет»
   // со ссылкой на /specs"). It never gates this screen's own four states —
@@ -87,9 +98,42 @@ export function WorkspacesPage() {
   // /specs to import a document that already exists.
   const specsEmpty = specs.data?.status === 200 && specs.data.data.length === 0;
 
+  // P4b's import half (2026-09-05, the A4 rule lifted for it — TransferPanel.tsx
+  // has the record). The modal's content renders under ModalsProvider, which
+  // is OUTSIDE RouterProvider in main.tsx, so the navigation to the new
+  // workspace happens here on the page and not inside the form.
+  function openImport(): void {
+    const modalId = "workspace-import";
+    modals.open({
+      modalId,
+      title: "Импорт воркспейса из файла",
+      children: (
+        <ImportWorkspaceForm
+          onCancel={() => modals.close(modalId)}
+          onImported={(view) => {
+            modals.close(modalId);
+            void queryClient.invalidateQueries({ queryKey: getListWorkspacesQueryKey() });
+            void navigate({ to: "/workspaces/$id", params: { id: view.workspace.id } });
+          }}
+        />
+      ),
+    });
+  }
+
   return (
     <Stack gap="md">
-      <Title order={1}>Воркспейсы</Title>
+      <Group justify="space-between" align="center">
+        <Title order={1}>Воркспейсы</Title>
+        <Button
+          variant="default"
+          size="xs"
+          leftSection={<IconFileImport size={16} />}
+          onClick={openImport}
+          data-testid="workspace-import"
+        >
+          Импорт из файла
+        </Button>
+      </Group>
       {isEmpty ? <Text data-testid="workspaces-empty">У вас пока нет воркспейсов</Text> : null}
       {/* Same position regardless of isEmpty, so this form never unmounts the
           instant the list it just populated stops being empty — losing that
@@ -276,6 +320,157 @@ function WorkspaceList({ workspaces }: { workspaces: WorkspaceView[] }) {
           ))}
         </Stack>
       </Card>
+    </Stack>
+  );
+}
+
+// readBundle parses the chosen file as the export document. The shape is not
+// validated here beyond "a JSON object" — the server is the one reader of a
+// mockerBundle document (it refuses a wrong version or a malformed section
+// by name, 400 with a sentence), and a second, partial check here would
+// only ever disagree with it.
+async function readBundle(
+  file: File,
+): Promise<{ bundle: WorkspaceExportDocument } | { error: string }> {
+  let text: string;
+  try {
+    text = await file.text();
+  } catch {
+    return { error: "Не удалось прочитать файл" };
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    return { error: "Файл — не JSON" };
+  }
+  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+    return { error: "В файле должен быть JSON-объект — документ экспорта" };
+  }
+  return { bundle: parsed as WorkspaceExportDocument };
+}
+
+// ImportWorkspaceForm is POST /api/workspaces/import's caller: the file, and
+// the three things the operator may override — the name, the slug and the
+// spec to bind instead of what the document names. It is its own component
+// so the modal owns its mutation (the same reason ForkWorkspaceForm and
+// DeclineConfirmedForm are), and a plain <input type="file"> rather than
+// Dropzone: one JSON document, chosen, not dragged. The spec list is this
+// form's OWN query, not a snapshot passed in: QueryClientProvider wraps
+// ModalsProvider (main.tsx), so the hook works here, and a modal opened
+// while the page's specs were still loading would otherwise offer nothing.
+function ImportWorkspaceForm({
+  onCancel,
+  onImported,
+}: {
+  onCancel: () => void;
+  onImported: (view: ImportWorkspaceView) => void;
+}): ReactElement {
+  const specsQuery = useListSpecs();
+  const specs: SpecView[] = specsQuery.data?.status === 200 ? specsQuery.data.data : [];
+  const [file, setFile] = useState<File | null>(null);
+  const [name, setName] = useState("");
+  const [slug, setSlug] = useState("");
+  const [specId, setSpecId] = useState("");
+  const [fileError, setFileError] = useState<string | null>(null);
+
+  const importWorkspace = useImportWorkspace({
+    mutation: {
+      onSuccess: (res) => {
+        if (res.status === 201) {
+          onImported(res.data);
+        }
+      },
+    },
+  });
+
+  async function handleSubmit(): Promise<void> {
+    if (file === null) {
+      setFileError("Выберите файл экспорта");
+      return;
+    }
+    const read = await readBundle(file);
+    if ("error" in read) {
+      setFileError(read.error);
+      return;
+    }
+    setFileError(null);
+    importWorkspace.mutate({
+      data: {
+        bundle: read.bundle,
+        // Omitted, not sent empty: the server defaults the name to the
+        // document's and uniquifies the slug from it.
+        name: name.trim() === "" ? undefined : name.trim(),
+        slug: slug.trim() === "" ? undefined : slug.trim(),
+        specId: specId === "" ? undefined : Number(specId),
+      },
+    });
+  }
+
+  return (
+    <Stack gap="sm" data-testid="workspace-import-form">
+      <Text size="sm">
+        Файл — то, что даёт «Скачать бандл» на обзоре воркспейса (или экспорт агентом). Из него
+        создаётся новый воркспейс; спека берётся из файла, если она там есть, иначе — из уже
+        загруженных по имени и версии, либо та, что выбрана ниже.
+      </Text>
+      {importWorkspace.isError ? (
+        <Alert color="red" icon={<IconAlertTriangle size={18} />} role="alert">
+          {describeApiFailureDetailed(importWorkspace.error)}
+        </Alert>
+      ) : null}
+      <Input.Wrapper label="Файл экспорта (JSON)" error={fileError}>
+        <Input
+          component="input"
+          type="file"
+          accept="application/json,.json"
+          onChange={(e: ChangeEvent<HTMLInputElement>) => {
+            setFile(e.currentTarget.files?.[0] ?? null);
+            setFileError(null);
+          }}
+          data-testid="workspace-import-file"
+        />
+      </Input.Wrapper>
+      <TextInput
+        label="Название (необязательно)"
+        placeholder="как в файле"
+        value={name}
+        onChange={(e) => setName(e.currentTarget.value)}
+        data-testid="workspace-import-name"
+      />
+      <TextInput
+        label="Слаг (необязательно)"
+        placeholder="выберет сервер"
+        value={slug}
+        onChange={(e) => setSlug(e.currentTarget.value)}
+        data-testid="workspace-import-slug"
+      />
+      <NativeSelect
+        label="Привязать спеку (необязательно)"
+        value={specId}
+        onChange={(e) => setSpecId(e.currentTarget.value)}
+        data-testid="workspace-import-spec"
+      >
+        <option value="">как в файле</option>
+        {specs.map((spec) => (
+          <option key={spec.id} value={String(spec.id)}>
+            {spec.name} (v{spec.version})
+          </option>
+        ))}
+      </NativeSelect>
+      <Group justify="flex-end">
+        <Button type="button" variant="default" onClick={onCancel}>
+          Отмена
+        </Button>
+        <Button
+          type="button"
+          loading={importWorkspace.isPending}
+          onClick={() => void handleSubmit()}
+          data-testid="workspace-import-submit"
+        >
+          Импортировать
+        </Button>
+      </Group>
     </Stack>
   );
 }

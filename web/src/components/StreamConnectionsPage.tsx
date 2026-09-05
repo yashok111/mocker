@@ -23,6 +23,7 @@ import {
   useListStreamConnections,
   usePushStreamFrame,
 } from "@/api/generated/stream/stream.ts";
+import { useGetStreamStats } from "@/api/generated/stream/stream.ts";
 import type { StreamConnectionView } from "@/api/generated/schemas";
 import { describeApiFailure, describeApiFailureDetailed } from "@/api/errors";
 
@@ -62,6 +63,7 @@ export function StreamConnectionsPage({ id }: { id: number }): ReactElement {
           обновляется каждые {POLL_MS / 1000} с. Соединение можно закрыть или отправить в него один
           кадр — он уйдёт только в это соединение и нигде не сохраняется.
         </Text>
+        <StreamStatsStrip id={id} />
         {connections.isPending ? (
           <Group gap="xs">
             <Loader size="sm" />
@@ -302,5 +304,55 @@ function ConnectionsTable({
         </Card>
       )}
     </Stack>
+  );
+}
+
+// StreamStatsStrip is P6a's screen half (A20, 2026-09-05 — «добей последние
+// 4 гэпа», a Russian string quoted as data): GET /api/stream/stats on the
+// same poll as the list above. The route answers TWO registries, and this
+// page lists the MOCK plane's (the SSE/WS endpoints of a workspace), which
+// is the `mock` member — capped PER WORKSPACE by MOCKER_STREAM_MAX_CONNS,
+// the same cap the list's own «Открыто N из M» shows. The top-level
+// counters are the ADMIN feed's registry (the traffic screen's live
+// stream, one process-wide cap of 64) and would be the wrong plane here —
+// the second reader of A20 caught the strip reading exactly those. So the
+// strip's job is what the list cannot see: the other workspaces' share of
+// the mock plane and its refusal counter, plus the admin feed in one
+// clause. A failing poll degrades to one dimmed line rather than an alert:
+// the list is the screen, this is a footnote to it.
+function StreamStatsStrip({ id }: { id: number }): ReactElement {
+  const stats = useGetStreamStats({ query: { refetchInterval: POLL_MS } });
+  if (stats.isPending) {
+    return (
+      <Text size="xs" c="dimmed" component="output" data-testid="stream-stats">
+        Статистика сервера: загрузка…
+      </Text>
+    );
+  }
+  if (stats.isError || stats.data.status !== 200) {
+    return (
+      <Text size="xs" c="dimmed" data-testid="stream-stats">
+        Статистика сервера недоступна: {describeApiFailure(stats.isError ? stats.error : null)}
+      </Text>
+    );
+  }
+  const v = stats.data.data;
+  const mock = v.mock;
+  if (!mock) {
+    return (
+      <Text size="xs" c="dimmed" data-testid="stream-stats">
+        Статистика потоков мока в этой сборке сервера не отдаётся.
+      </Text>
+    );
+  }
+  const mine = mock.byWorkspace.find((row) => row.workspaceId === id)?.open ?? 0;
+  const others = mock.byWorkspace.filter((row) => row.workspaceId !== id).length;
+  return (
+    <Text size="xs" c="dimmed" data-testid="stream-stats">
+      Потоки мока по всему серверу: открыто {mock.open}, из них этого воркспейса {mine}
+      {others > 0 ? `, ещё ${others} воркспейс(а/ов) с соединениями` : ""}; лимит {mock.cap} на
+      воркспейс, отказов по лимиту с запуска {mock.refusedCap} · живой трафик панели: открыто{" "}
+      {v.open} из {v.cap}
+    </Text>
   );
 }

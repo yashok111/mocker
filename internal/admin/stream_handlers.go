@@ -285,8 +285,9 @@ func (s *Server) streamWorkspaceIdentityFunc(ws *workspaces.Workspace) stream.Re
 // the two refusal counters kept apart because D8 and D9 are different
 // failures with different repairs, D5's coalesced-nudge total, and one row
 // per workspace that currently holds at least one live connection. No
-// screen calls it (D16); get_stream_stats is its only caller and
-// web/src/api/coverage.test.ts's EXEMPT entry says so.
+// screen called it from P6a (D16) to A20 (2026-09-05), when the strip under
+// the «Соединения» heading (StreamConnectionsPage.tsx) started polling it
+// beside get_stream_stats; the EXEMPT entry is withdrawn.
 func (s *Server) handleStreamStats(w http.ResponseWriter, r *http.Request) {
 	if _, ok := s.requireUser(w, r); !ok {
 		return

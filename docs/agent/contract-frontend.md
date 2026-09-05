@@ -99,7 +99,17 @@ its own MCP tool (`get_workspace_drift`, `list_resource_entities`,
 `push_stream_frame`, `upload_asset`, …) as the only caller the coverage
 invariant requires. `P6e` WITHDREW four of them — the preview and the three
 connection operations — and `A10` the three asset operations, because
-screens call them now; an exemption is a
+screens call them now; `A20` (2026-09-05) withdrew six more in one slice —
+the entity read and its two `A11` write siblings (`ResourceEntities.tsx`,
+«Записи» under a confirmed family) and `P4b`'s export, import and fork
+(`TransferPanel.tsx` on the overview, the import modal on the workspaces
+list) — on the owner's pick from a list that also offered drift and stream
+stats, which he did not take that morning — and took the same day («добей
+последние 4 гэпа», a Russian string quoted as data): `DriftPanel.tsx` on
+the overview, the stats strip on `StreamConnectionsPage.tsx`, and the
+header's server status (`AppShell.tsx`) over `/readyz` and `/healthz`, so
+`EXEMPT` is EMPTY and the mechanism stays for the next agent-only route.
+An exemption is a
 decision on the record and so is its withdrawal, in the map's own comment. Reachability is not visible to the
 static guard, it is checked by `web/src/routes/routes.test.tsx`, which mounts
 the real route tree; screens are found by a root `data-testid` that is

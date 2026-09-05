@@ -99,7 +99,8 @@ document (`mocker-p7-api-design`, D12). §34 is complete.
 Deeper nesting (a fourth level), the Monaco/schema-tree editor and the
 recipe editor are `CARVE-OUTS.md` entries with measurements, not ideas.
 Fetch-by-URL, the drift screen and Swagger 2.0 were refused by the owner
-on 2026-09-03 — `CARVE-OUTS.md`, "Ideas refused".
+on 2026-09-03 — `CARVE-OUTS.md`, "Ideas refused"; the drift screen was
+un-refused by him on 2026-09-05 and shipped in `A20`.
 
 ## Recommendation
 

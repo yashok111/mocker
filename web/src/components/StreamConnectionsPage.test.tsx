@@ -8,6 +8,31 @@ import type { StreamConnectionView } from "@/api/generated/schemas";
 
 const WS = 7;
 const LIST = `GET /api/workspaces/${WS}/connections`;
+// A20: the page polls GET /api/stream/stats beside the list; every stub
+// below answers it so the strip renders rather than reporting an unrouted 500.
+const STATS = "GET /api/stream/stats";
+// The top level is the ADMIN feed's registry; `mock` is the plane this page
+// lists, and the strip must read THAT one (the numbers differ on purpose).
+const statsView = () =>
+  json(200, {
+    open: 5,
+    cap: 64,
+    refusedCap: 9,
+    refusedUnsupported: 0,
+    coalescedNudges: 0,
+    byWorkspace: [{ workspaceId: WS, open: 5 }],
+    mock: {
+      open: 3,
+      cap: 200,
+      refusedCap: 1,
+      refusedUnsupported: 0,
+      coalescedNudges: 0,
+      byWorkspace: [
+        { workspaceId: WS, open: 2 },
+        { workspaceId: 99, open: 1 },
+      ],
+    },
+  });
 
 function conn(overrides: Partial<StreamConnectionView> = {}): StreamConnectionView {
   return {
@@ -32,15 +57,22 @@ afterEach(() => {
 
 describe("StreamConnectionsPage", () => {
   it("renders its outer marker in every state and the empty state with the cap", async () => {
-    route({ [LIST]: () => json(200, { open: 0, cap: 200, connections: [] }) });
+    route({ [LIST]: () => json(200, { open: 0, cap: 200, connections: [] }), [STATS]: statsView });
     renderWithProviders(<StreamConnectionsPage id={WS} />);
     expect(screen.getByTestId("connections-page")).toBeInTheDocument();
     expect(await screen.findByTestId("connections-empty")).toBeInTheDocument();
     expect(screen.getByTestId("connections-open")).toHaveTextContent("Открыто 0 из 200");
+    // A20: the process-wide strip beside the workspace's own list.
+    const strip = await screen.findByTestId("stream-stats");
+    await waitFor(() => expect(strip).toHaveTextContent("открыто 3, из них этого воркспейса 2"));
+    expect(strip).toHaveTextContent("ещё 1 воркспейс");
+    expect(strip).toHaveTextContent("лимит 200 на воркспейс, отказов по лимиту с запуска 1");
+    expect(strip).toHaveTextContent("живой трафик панели: открыто 5 из 64");
   });
 
   it("lists connections and says when the cap is reached", async () => {
     route({
+      [STATS]: statsView,
       [LIST]: () =>
         json(200, {
           open: 2,
@@ -62,6 +94,7 @@ describe("StreamConnectionsPage", () => {
   it("closes a connection through DELETE and refetches the list", async () => {
     let listed = 0;
     const fetchMock = route({
+      [STATS]: statsView,
       [LIST]: () => {
         listed += 1;
         return json(200, { open: 1, cap: 200, connections: [conn()] });
@@ -79,6 +112,7 @@ describe("StreamConnectionsPage", () => {
 
   it("pushes a frame with an event name on sse and shows the frame id", async () => {
     const fetchMock = route({
+      [STATS]: statsView,
       [LIST]: () => json(200, { open: 1, cap: 200, connections: [conn()] }),
       [`POST /api/workspaces/${WS}/connections/3/frames`]: () =>
         json(200, { connectionId: 3, frameId: 5 }),
@@ -96,6 +130,7 @@ describe("StreamConnectionsPage", () => {
 
   it("shows the server's own words on a 504 push_timeout and never resends on its own", async () => {
     const fetchMock = route({
+      [STATS]: statsView,
       [LIST]: () => json(200, { open: 1, cap: 200, connections: [conn({ kind: "ws" })] }),
       [`POST /api/workspaces/${WS}/connections/3/frames`]: () =>
         json(504, {
@@ -120,6 +155,7 @@ describe("StreamConnectionsPage", () => {
 
   it("refuses malformed JSON in the frame without a request", async () => {
     const fetchMock = route({
+      [STATS]: statsView,
       [LIST]: () => json(200, { open: 1, cap: 200, connections: [conn()] }),
     });
     renderWithProviders(<StreamConnectionsPage id={WS} />);

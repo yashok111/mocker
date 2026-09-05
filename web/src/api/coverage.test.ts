@@ -70,38 +70,24 @@ function loadRoutes(): RouteInfo[] {
 // (useListStreamConnections, useCloseStreamConnection, usePushStreamFrame).
 // An exemption is a decision on the record; so is its withdrawal. A10
 // withdrew the three asset operations the same way (AssetsPage.tsx).
-const EXEMPT: Record<string, string> = {
-  "GET /healthz": "infrastructure liveness probe, not a route any screen shows",
-  "GET /readyz": "infrastructure readiness probe, not a route any screen shows",
-  "GET /api/workspaces/{id}/drift":
-    "agent-only by policy (CLAUDE.md's coverage invariant): a verb may ship with its MCP tool " +
-    "(get_workspace_drift) and no screen; see decisions.md mocker-p4a-triage D6.3",
-  "GET /api/workspaces/{id}/resources/{family}/entities":
-    "agent-only by policy (CLAUDE.md's coverage invariant): a verb may ship with its MCP tool " +
-    "(list_resource_entities) and no screen; see decisions.md mocker-a4-mcp-reach D4",
-  "PUT /api/workspaces/{id}/resources/{family}/entities/{key}":
-    "agent-only by policy (CLAUDE.md's coverage invariant): a verb may ship with its MCP tool " +
-    "(set_resource_entity) and no screen; A11, the read's write sibling",
-  "DELETE /api/workspaces/{id}/resources/{family}/entities/{key}":
-    "agent-only by policy (CLAUDE.md's coverage invariant): a verb may ship with its MCP tool " +
-    "(delete_resource_entity) and no screen; A11, the read's write sibling",
-  "GET /api/stream/stats":
-    "agent-only by policy (CLAUDE.md's coverage invariant): a verb may ship with its MCP tool " +
-    "(get_stream_stats) and no screen; see decisions.md mocker-p6a-sse D16",
-  "GET /api/workspaces/{id}/export":
-    "agent-only by policy (CLAUDE.md's coverage invariant): a verb may ship with its MCP tool " +
-    "(export_workspace) and no screen; P4b, the bundle over HTTP",
-  "POST /api/workspaces/import":
-    "agent-only by policy (CLAUDE.md's coverage invariant): a verb may ship with its MCP tool " +
-    "(import_workspace) and no screen; P4b, the bundle over HTTP",
-  "POST /api/workspaces/{id}/fork":
-    "agent-only by policy (CLAUDE.md's coverage invariant): a verb may ship with its MCP tool " +
-    "(fork_workspace) and no screen; P4b, export-then-import inside one installation",
-  // P7b (2026-09-03) WITHDREW "GET /api/workspaces/{id}/openapi.json": P7a
-  // shipped it agent-only (export_openapi), and the «Контракт» tab
-  // (ContractPage.tsx) renders exactly this route now — a withdrawal is a
-  // decision on the record like the entry was.
-};
+// A20 (2026-09-05) WITHDREW the last ten entries in two steps, each on the
+// owner's word. First six, on «надо бы доделать страницы» and his pick of
+// which (a Russian string quoted as data): the three entity routes of
+// A4/A11 (ResourceEntities.tsx, under «Записи» on the resources screen)
+// and the three P4b transfer routes (TransferPanel.tsx on the overview,
+// the import modal on WorkspacesPage.tsx). Then, on «добей последние 4
+// гэпа» the same day, the four that were left: GET .../drift (DriftPanel.tsx
+// on the overview — the screen he had refused on 2026-09-03 and asked for
+// by name here, CARVE-OUTS.md "Ideas refused" records both), GET
+// /api/stream/stats (the strip on StreamConnectionsPage.tsx) and the two
+// probes /healthz and /readyz (the header's server status in AppShell.tsx,
+// the pair the container's own HEALTHCHECK reads). P7b (2026-09-03) had
+// withdrawn GET .../openapi.json before that. The map is empty, the
+// mechanism stays: a future route that ships agent-only earns an entry
+// here naming its tool, and the test keeps checking that every other route
+// has a caller. An exemption is a decision on the record and so is its
+// withdrawal, in this comment.
+const EXEMPT: Record<string, string> = {};
 
 function walk(dir: string, out: string[]): void {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
