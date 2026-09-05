@@ -25,7 +25,7 @@ import (
 )
 
 // Topic names, in the order get_guide reports them. "overview" is
-// SKILL.md's body; the other five are its references.
+// SKILL.md's body; the other six are its references.
 const (
 	TopicOverview = "overview"
 	TopicTools    = "tools"
@@ -35,9 +35,16 @@ const (
 	// TopicDesign is P7a's (DESIGN §34.5): designing an API on top of a
 	// workspace, from a brief to a contract and back as the next base.
 	TopicDesign = "design"
+	// TopicFunctions is A18's: endpoint functions and the two stream hooks
+	// — the contract, the sandbox, the guards and the two serving matrices.
+	// It is its own topic rather than a section of shapes.md because it is
+	// the one feature whose text a caller reads BEFORE writing anything,
+	// and a caller who has already found the shape is not the reader it is
+	// for.
+	TopicFunctions = "functions"
 )
 
-//go:embed instructions.md overview.md tools.md shapes.md cookbook.md http.md design.md
+//go:embed instructions.md overview.md tools.md shapes.md cookbook.md http.md design.md functions.md
 var files embed.FS
 
 // topicFiles maps a topic to its embedded file. overview.md is SKILL.md
@@ -45,17 +52,18 @@ var files embed.FS
 // tool result is not a skill file and the YAML block would be noise to the
 // model reading it.
 var topicFiles = map[string]string{
-	TopicOverview: "overview.md",
-	TopicTools:    "tools.md",
-	TopicShapes:   "shapes.md",
-	TopicCookbook: "cookbook.md",
-	TopicHTTP:     "http.md",
-	TopicDesign:   "design.md",
+	TopicOverview:  "overview.md",
+	TopicTools:     "tools.md",
+	TopicShapes:    "shapes.md",
+	TopicCookbook:  "cookbook.md",
+	TopicHTTP:      "http.md",
+	TopicDesign:    "design.md",
+	TopicFunctions: "functions.md",
 }
 
 // Topics is the ordered list of topic names get_guide accepts.
 func Topics() []string {
-	return []string{TopicOverview, TopicTools, TopicShapes, TopicCookbook, TopicHTTP, TopicDesign}
+	return []string{TopicOverview, TopicTools, TopicShapes, TopicCookbook, TopicHTTP, TopicDesign, TopicFunctions}
 }
 
 // Instructions is the orientation text initialize returns to every MCP

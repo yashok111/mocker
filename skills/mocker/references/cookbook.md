@@ -25,6 +25,37 @@ the HTTP routes (`http.md`).
 3. `apply_auth_preset {bindings, editVersions}`.
 4. The token fields now carry a real JWT signed with `settings.auth.signingKey`, and `settings.identity` is who it says logged in. Set `settings.auth.requireHeader: true` (via `update_workspace_settings`, resending the WHOLE settings object) to get 401 on missing `Authorization`.
 
+## 2a. Login that actually CHECKS the password (Lua)
+
+The preset above makes login answer a real token to everyone. When a test
+needs the wrong password to fail, put the branch in the endpoint itself:
+
+1. `get_operation {opKey}` for the login route — take its `editVersion`.
+2. `set_operation_variant` with the whole document and ONE function variant:
+
+```jsonc
+{
+  "overrideOn": true, "routeOff": false, "activeStatus": 200,
+  "responses": {
+    "200": {
+      "function": "if req.body.password == \"hunter2\" then\n  return 200, { token = mock.jwt({ sub = 42, role = \"admin\" }) }\nend\nreturn 401, { error = \"bad credentials\" }"
+    }
+  },
+  "editVersion": 3
+}
+```
+
+3. `preview_operation {opKey, draft, body: {"password": "hunter2"}}` before
+   saving if you want to see it run — a failing draft comes back with
+   `notes: function_failed`, not an error.
+4. Verify on the mock plane and read `list_traffic`: the row's note says
+   `function` when it ran, `function_failed` with the error's first line when
+   it did not.
+
+`mock.jwt` signs with the workspace's own `settings.auth` and answers
+`nil, "auth_not_configured"` when the workspace has `alg: "none"` or no key.
+The whole contract, the sandbox and the guards: `functions.md`.
+
 ## 3. Force an error state for one test
 
 Cheapest, RAM-only, no config change:
@@ -100,6 +131,12 @@ A scenario carries overrides and settings, not custom endpoints, not `basePath`/
 2. `create_endpoint {method: "GET", path: "/events", kind: "sse", stream}` (or `kind: "ws"` with `reactive`/`echo`).
 3. While a client is connected: `list_stream_connections` → `push_stream_frame {connectionId, data}` to inject one event, `close_stream_connection` to drop it.
 4. The traffic row (one per connection, written at close) says `stream:sse,frames:N`.
+
+For frames a schema cannot express, swap `tick.schema` for `tick.lua`
+(`return { price = 100 + ordinal }`) — exclusive with it by name. For a
+WebSocket that must branch on what the client sent, use `onFrame` instead of
+`reactive`/`echo`: `return "reply", data`, `return "close", code`, or `nil`
+for silence. `functions.md` §7 has both.
 
 ## 10. After a spec changed
 

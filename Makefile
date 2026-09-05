@@ -114,7 +114,7 @@ ui-lint: ## oxlint + oxfmt --check over web/
 
 guide-sync: ## Copy skills/mocker/ (the one owner of the agent guide) into internal/guide/ for go:embed; internal/guide's test fails on drift
 	cp skills/mocker/SKILL.md internal/guide/overview.md
-	for f in tools shapes cookbook http design; do cp skills/mocker/references/$$f.md internal/guide/$$f.md; done
+	for f in tools shapes cookbook http design functions; do cp skills/mocker/references/$$f.md internal/guide/$$f.md; done
 
 ui-test: ## vitest + tsc --noEmit over web/
 	$(CAP) sh -c 'cd web && corepack yarn typecheck && corepack yarn test'

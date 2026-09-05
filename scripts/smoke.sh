@@ -7878,6 +7878,175 @@ fi
 # way every check above it does: no teardown of its own, the existing trap
 # already restores .env and brings the stack down on exit.
 # --------------------------------------------------------------------------
+# A18: endpoint functions (Lua) — the deployed artefact.
+#
+# Seven observations, all through the IMAGE and over the real mock host, on
+# the one question a unit test cannot answer: does the binary that ships
+# actually carry the VM and reach the workspace's own settings with it. The
+# sign-in shape is the feature's own motivating example (D1), so it leads.
+# --------------------------------------------------------------------------
+echo "== A18: endpoint functions — sign-in, guards, and a Lua tick =="
+
+a18_checks=0
+
+a18_ws_status=$(http_json POST "$ADMIN_HOST" /api/workspaces \
+	'{"name":"a18 functions"}' -H "X-CSRF-Token: ${csrf}")
+a18_ws_id=$(jq -r '.id' "$BODY_FILE")
+a18_slug=$(jq -r '.slug' "$BODY_FILE")
+a18_host="${a18_slug}.${WORKSPACE_HOST_BASE}"
+if [[ "$a18_ws_status" != "201" ]]; then
+	echo "FAIL  A18: create workspace: want 201, got ${a18_ws_status}: $(cat "$BODY_FILE")"
+	fail_count=$((fail_count + 1))
+else
+	# The workspace needs a signing key for mock.jwt to answer at all — the
+	# refusal on an unconfigured one is observation (c) below, and this is
+	# the settings write that makes (a) possible. PATCH takes the WHOLE
+	# settings object, so it is read first.
+	http_json GET "$ADMIN_HOST" "/api/workspaces/${a18_ws_id}" >/dev/null
+	a18_ev=$(jq -r '.editVersion' "$BODY_FILE")
+	a18_settings=$(jq -c '.settings | .auth = {"alg":"HS256","signingKey":"smoke-secret","jwtTtlSec":3600}' "$BODY_FILE")
+	http_json PATCH "$ADMIN_HOST" "/api/workspaces/${a18_ws_id}" \
+		"{\"settings\":${a18_settings},\"editVersion\":${a18_ev}}" -H "X-CSRF-Token: ${csrf}" >/dev/null
+
+	# (a) The sign-in shape of D1: one function variant that BRANCHES on the
+	# request body and mints a token with the workspace's own key, beside a
+	# pinned sibling on another status — the mixed row D5 makes legal.
+	a18_fn='if req.body.password == "hunter2" then return 200, { token = mock.jwt({ sub = 42 }) } end return 401, { error = "bad credentials" }'
+	a18_body=$(jq -n --arg fn "$a18_fn" \
+		'{method:"POST", path:"/sign-in", status:200, function:$fn}')
+	a18_create=$(http_json POST "$ADMIN_HOST" "/api/workspaces/${a18_ws_id}/endpoints" \
+		"$a18_body" -H "X-CSRF-Token: ${csrf}")
+	if [[ "$a18_create" != "201" ]]; then
+		echo "FAIL  A18(a): create a function endpoint: want 201, got ${a18_create}: $(cat "$BODY_FILE")"
+		fail_count=$((fail_count + 1))
+	else
+		a18_ok=$(curl -s -o "$BODY_FILE" -w '%{http_code}' -H "Host: ${a18_host}" \
+			-H 'Content-Type: application/json' --data '{"password":"hunter2"}' \
+			"${BASE_URL}/sign-in")
+		# Three segments with a real signature: the token came from the
+		# workspace's own settings.auth through the same signer the jwt
+		# recipe uses, not from a placeholder.
+		a18_tok=$(jq -r '.token // ""' "$BODY_FILE")
+		if [[ "$a18_ok" == "200" && "$(awk -F. '{print NF}' <<<"$a18_tok")" == "3" && -n "$(awk -F. '{print $3}' <<<"$a18_tok")" ]]; then
+			echo "PASS  A18(a): the right password answers 200 with a signed token"
+			a18_checks=$((a18_checks + 1))
+		else
+			echo "FAIL  A18(a): want 200 and a three-segment signed token, got ${a18_ok}: $(cat "$BODY_FILE")"
+			fail_count=$((fail_count + 1))
+		fi
+
+		a18_bad=$(curl -s -o "$BODY_FILE" -w '%{http_code}' -H "Host: ${a18_host}" \
+			-H 'Content-Type: application/json' --data '{"password":"nope"}' \
+			"${BASE_URL}/sign-in")
+		if [[ "$a18_bad" == "401" ]] && grep -qF 'bad credentials' "$BODY_FILE"; then
+			echo "PASS  A18(b): the wrong password answers the function's own 401"
+			a18_checks=$((a18_checks + 1))
+		else
+			echo "FAIL  A18(b): want 401 from the function, got ${a18_bad}: $(cat "$BODY_FILE")"
+			fail_count=$((fail_count + 1))
+		fi
+	fi
+
+	# (c) Unparseable Lua is refused at WRITE time with the parser's own
+	# words — this plane always answers, so a deferred parse would be a 500
+	# on the first request instead (D8).
+	a18_badsrc=$(jq -n '{method:"POST", path:"/broken", status:200, function:"return 200, }"}')
+	a18_refused=$(http_json POST "$ADMIN_HOST" "/api/workspaces/${a18_ws_id}/endpoints" \
+		"$a18_badsrc" -H "X-CSRF-Token: ${csrf}")
+	if [[ "$a18_refused" == "400" ]] && grep -qF 'near' "$BODY_FILE"; then
+		echo "PASS  A18(c): unparseable Lua is a 400 carrying the parser's own words"
+		a18_checks=$((a18_checks + 1))
+	else
+		echo "FAIL  A18(c): want 400 naming the token, got ${a18_refused}: $(cat "$BODY_FILE")"
+		fail_count=$((fail_count + 1))
+	fi
+
+	# (d) A variant carrying two producers is refused BY NAME — one producer
+	# per variant, so there is no precedence to document (D5).
+	a18_both=$(jq -n '{method:"POST", path:"/both", status:200, body:{a:1}, function:"return 200, {}"}')
+	a18_both_status=$(http_json POST "$ADMIN_HOST" "/api/workspaces/${a18_ws_id}/endpoints" \
+		"$a18_both" -H "X-CSRF-Token: ${csrf}")
+	if [[ "$a18_both_status" == "400" ]] && grep -qF 'exclusive' "$BODY_FILE"; then
+		echo "PASS  A18(d): a function beside a body is refused by name"
+		a18_checks=$((a18_checks + 1))
+	else
+		echo "FAIL  A18(d): want 400 naming the exclusivity, got ${a18_both_status}: $(cat "$BODY_FILE")"
+		fail_count=$((fail_count + 1))
+	fi
+
+	# (e) The browser-executable Content-Type refusal, applied to a type the
+	# function computes per request — the one rule both planes share, and
+	# the one no write-time check can see here.
+	a18_html=$(jq -n '{method:"GET", path:"/xss", status:200, function:"return 200, \"<script>x</script>\", {[\"Content-Type\"] = \"text/html\"}"}')
+	http_json POST "$ADMIN_HOST" "/api/workspaces/${a18_ws_id}/endpoints" \
+		"$a18_html" -H "X-CSRF-Token: ${csrf}" >/dev/null
+	a18_xss=$(curl -s -o "$BODY_FILE" -w '%{http_code}' -H "Host: ${a18_host}" "${BASE_URL}/xss")
+	if [[ "$a18_xss" == "500" ]] && ! grep -qF '<script>' "$BODY_FILE"; then
+		echo "PASS  A18(e): a browser-executable Content-Type refuses the whole response"
+		a18_checks=$((a18_checks + 1))
+	else
+		echo "FAIL  A18(e): want 500 and no script byte, got ${a18_xss}: $(cat "$BODY_FILE")"
+		fail_count=$((fail_count + 1))
+	fi
+
+	# (f) The 2 s budget is real in the shipped binary: SetContext interrupts
+	# the VM between instructions, and the answer is a 503 and not a 500 —
+	# the two classes are separate on purpose (D6).
+	a18_loop=$(jq -n '{method:"GET", path:"/spin", status:200, function:"while true do end"}')
+	http_json POST "$ADMIN_HOST" "/api/workspaces/${a18_ws_id}/endpoints" \
+		"$a18_loop" -H "X-CSRF-Token: ${csrf}" >/dev/null
+	a18_spin_started=$(date +%s)
+	a18_spin=$(curl -s -o "$BODY_FILE" -w '%{http_code}' --max-time 20 -H "Host: ${a18_host}" "${BASE_URL}/spin")
+	a18_spin_took=$(($(date +%s) - a18_spin_started))
+	if [[ "$a18_spin" == "503" && "$a18_spin_took" -le 10 ]]; then
+		echo "PASS  A18(f): an infinite loop is cut at the budget and answers 503 (${a18_spin_took}s)"
+		a18_checks=$((a18_checks + 1))
+	else
+		echo "FAIL  A18(f): want 503 within the budget, got ${a18_spin} after ${a18_spin_took}s: $(cat "$BODY_FILE")"
+		fail_count=$((fail_count + 1))
+	fi
+
+	# (g) D10.1's tick.lua over a real SSE connection: the frame bodies come
+	# from the hook, and `schema` is not required beside it (D8b(2)).
+	a18_tick=$(jq -n '{method:"GET", path:"/lua-events", kind:"sse",
+		stream:{tick:{intervalMs:100, event:"n", lua:"return { n = ordinal }"}}}')
+	a18_tick_status=$(http_json POST "$ADMIN_HOST" "/api/workspaces/${a18_ws_id}/endpoints" \
+		"$a18_tick" -H "X-CSRF-Token: ${csrf}")
+	if [[ "$a18_tick_status" != "201" ]]; then
+		echo "FAIL  A18(g): create a tick.lua stream: want 201, got ${a18_tick_status}: $(cat "$BODY_FILE")"
+		fail_count=$((fail_count + 1))
+	else
+		a18_frames=$(curl -s --max-time 3 -H "Host: ${a18_host}" "${BASE_URL}/lua-events" || true)
+		if grep -qF 'data: {"n":1}' <<<"$a18_frames" && grep -qF 'data: {"n":2}' <<<"$a18_frames"; then
+			echo "PASS  A18(g): a tick.lua stream sends the hook's own frames"
+			a18_checks=$((a18_checks + 1))
+		else
+			echo "FAIL  A18(g): want the hook's frames, got: ${a18_frames}"
+			fail_count=$((fail_count + 1))
+		fi
+	fi
+
+	# (h) The traffic row says which of the four outcomes happened — the only
+	# place an operator sees a function ran at all.
+	http_json GET "$ADMIN_HOST" "/api/workspaces/${a18_ws_id}/traffic?limit=100" >/dev/null
+	# The notes JOIN — a request can be both redacted and function-served, and
+	# the sign-in row IS both, because its body carried a password field. So
+	# each token is matched as a whole COMMA ENTRY (traffic.Row.HasNote's own
+	# rule) and never as the whole string: the first draft of this check
+	# compared `.notes` to "function" and went red against a correct build.
+	if jq -e '[.rows[] | select(.path == "/sign-in") | .notes | split(",")] | any(index("function"))' "$BODY_FILE" >/dev/null &&
+		jq -e '[.rows[] | select(.path == "/spin") | .notes | split(",")] | any(index("function_timeout"))' "$BODY_FILE" >/dev/null; then
+		echo "PASS  A18(h): the traffic rows carry function and function_timeout"
+		a18_checks=$((a18_checks + 1))
+	else
+		echo "FAIL  A18(h): want function and function_timeout notes: $(jq -c '[.rows[] | {path, notes}]' "$BODY_FILE")"
+		fail_count=$((fail_count + 1))
+	fi
+fi
+
+echo "      A18: ${a18_checks}/8 observations passed"
+
+# --------------------------------------------------------------------------
 echo "== P1e: MOCKER_ROUTING=path — the admin UI is also reachable there =="
 
 grep -v '^MOCKER_ROUTING=' "$ENV_FILE" >"${ENV_FILE}.tmp"

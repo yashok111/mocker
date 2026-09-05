@@ -2612,3 +2612,128 @@ on the operations and endpoints routes with `initialOpKey` /
 comment, USER-GUIDE §7a rewritten for the screen, `scripts/smoke.sh`'s
 path-mode block checking the deep link reloads (B7). `make ui-test`
 366 → 378. No route, no tool, no migration, no variable.
+
+## `A17` and after: the gate document moved INTO the repository
+
+Every slice from `A1` to `P7b` was designed in a gate workspace outside this
+tree — seventeen of them — and each held the decisions document that was the
+authority on WHY that slice is the way it is. They survive only while those
+directories do, which is why anything that had to outlive them was copied into
+`CLAUDE.md` or here. `A18` is the first slice whose gate document is COMMITTED:
+`docs/A18-endpoint-functions.md`, 1250 lines, D1–D10 plus D8b, a §A acceptance
+section of 59 numbered clauses, the fourteen `[GIVES-UP]` items and the gate's
+own four-round record. The entry below is the narrative; that file is the
+authority, and it is in `git log` rather than in a directory somebody may
+delete.
+
+## `A18` — endpoint functions (Lua) (2026-09-04 / 05)
+
+**What the owner asked for, and what he gave up to get it.** The ask was
+logic on an endpoint — «проверь пароль и разветвись», «выдай токен на час».
+The objection is obvious and was written down before anything else: an
+unauthenticated mock plane executing operator-supplied code that any
+anonymous caller can trigger. The owner overruled it in his own words —
+«хочу такую фичу для локального инструмента на все эти угрозы пофигу» — and
+the document records it as ACCEPTED, not argued away. Four more of his
+answers fixed the shape: gopher-lua because «это все равно будет писать агент
+через mcp так что без разницы на каком языке. пусть lua будет чтобы быстро
+было»; «Всегда вкл» (no flag); «Полный набор (Рекомендую)» for the helpers;
+«добвляй 1 и 2 в гейт» for the two stream hooks. All Russian strings, quoted
+as data.
+
+**The gate ran four rounds and the blockers did not descend.** 34 findings /
+3 blockers, then 17/1, then 14/2, then 10/3 — 75 findings and 9 blockers
+total. The findings fell by two thirds; the blockers did not fall at all, and
+that is the interesting number. Round 2's single blocker was FIX-INDUCED
+(`fix-induced 9 (1 of 1 blocker)`): the round-1 fix introduced it. Rounds 3
+and 4 exposed the shape behind that: **a fix closed the INSTANCE it was
+handed and not the CLASS.** The `[GIVES-UP]` count moved 6 → 8 → 9 → 12
+across the four rounds, each round finding items the previous round's fix had
+walked past; and the v4-enumeration paragraph was short TWICE for two
+different reasons — first a correct command over a GUESSED SCOPE
+(`internal/bundle/*_test.go`, with `NR` where a multi-file glob needs `FNR`),
+then a widened scope with a PATTERN that reached one of six shapes. Three
+consecutive rounds on one artifact section is the signal the gate's own
+manual names: the guard was asking the wrong KIND of question. The fix was to
+WITHDRAW the file:line checklist and keep the SHAPE list — a list of sites in
+a document read before the code is written goes stale on the first edit, and
+this one went stale twice inside the gate itself.
+
+**The gate found six live defects that had nothing to do with A18.**
+`api/openapi.json`'s `"const": 4` on `WorkspaceExportDocument.mockerBundle`
+plus three descriptions saying "mockerBundle v4", and
+`internal/mcp/tools_transfer.go`'s two tool descriptions and one `jsonschema`
+tag — all stale since P7a moved `CurrentVersion` to 5, and seen by no bar:
+the contract test reads routes and `csrfToken` and never a schema, there is
+no runtime schema validator, and nothing asserts on an MCP description
+string. The slice repaired them on the way past.
+
+**Reading the library's source found five divergences from the document's own
+D3**, each caught before a line of code: `getfenv`/`setfenv` were unnamed in
+the removal list; `os.setenv` (a process-environment WRITER) was unnamed;
+`rawlen` does not exist in gopher-lua (it is a Lua 5.2 name); `string.dump`
+is REGISTERED and raises rather than being absent, so the acceptance clause
+as written would have gone red against correct code; and `rand.Seed` is a
+no-op on Go 1.27, which makes "seed the RNG per VM" unimplementable as first
+drafted. The last two are the useful pair — one would have failed a correct
+implementation, the other would have shipped a guarantee that does nothing.
+
+**Built in three commits, inline, no fleet.** A18-1 was the sandboxed runtime
+behind one importing package; A18-2 the `Function` field with its refusals
+and bundle v6, then the serving branch; A18-3 the two stream hooks and the
+contract. The build found TWO more `[GIVES-UP]` items the four gate rounds
+had not — 12 → 14 — and both are the same shape as the rounds' own misses: a
+promise stated in the document with no surface behind it. D7's
+"Custom-endpoint preview: same" names a preview that does not exist (the
+route refuses `kind: "http"` and answers a type with no `Notes` field, so
+clause 32's own type reference points at the operation preview only), and D3
+names `resources.Repo.ListFiltered` where `EntityStore.List` is what the call
+actually wants (a full ancestor tuple is an exact key; `ListFiltered`'s
+wildcards, cursor and limit are the three things `mock.entities` does not
+need, and reaching for it would widen a four-method seam for nothing).
+
+**Three numbers the document deferred to the slice, measured in-tree.** The
+module graph is 56, up 4 — but `go.mod` gained exactly ONE line and
+`go list -deps ./cmd/mocker | grep -c chzyer` is 0, so §30.9's "zero
+transitive modules" holds for what is LINKED and not for the graph
+`go list -m all` walks; that divergence is written down rather than glossed.
+The binary grows **+1 007 664 bytes (+0.96 MiB)**, measured
+`a6ae6ee` → `d8561ad` in a git WORKTREE both times — the worktree is
+load-bearing and cost a wrong number first: `internal/webui/dist` is
+gitignored, so a worktree checkout embeds no SPA and builds about 1.4 MB
+smaller, which makes the baseline table's main-tree figure unsubtractable
+from any later worktree one. The `-race` suite shows no regression, which is
+what an interpreter over its own opcode array should do: unlike modernc
+sqlite it gives the race runtime no C-translated code to instrument.
+
+**The per-firing benchmark D10.1 makes the pooling decision rest on**:
+`BenchmarkLuaTickFiring` — `142127 ns/op, 185351 B/op, 612 allocs/op` for
+`lua.NewState` + the sandbox open + the mock table + one call. Against the
+100 ms tick floor that is 0.14% of one connection's budget at 10 Hz, and
+about 28% of one core with all 200 connections at the floor. Recorded, NOT
+thresholded: D10.1 says the owner reads it and decides, and a slice that
+pooled VMs on its own reading would have changed D3's statelessness
+guarantee with nobody saying so. Fresh VMs stay.
+
+**Two orderings that no amount of following D5/D10 would have produced**, and
+they are their own section (D8b) because of it. `internal/customep`'s tick
+validator required `schema` UNCONDITIONALLY, so a Lua-only tick was refused
+as schema-missing and a `lua`+`schema` tick never met its own refusal — the
+acceptance clause for it would have gone red against an implementation
+nobody could call wrong. And `onFrame` had no site at all: its kind check and
+its two conflicts each needed a place AND an order. A third, found the same
+way, is `function_on_stream`: both stream arms refuse a non-empty `Responses`
+map before anything looks inside a variant, and a `function` lives inside
+that map, so D5's own refusal could never have been the answer.
+
+**Shape.** `internal/luafn` (sandbox, runner, hooks, converters, the boundary
+test, a frozen `_G` allowlist), `internal/mockplane/function.go` and its two
+test files, `hooks.go`, `hooks_test.go`, `hooks_internal_test.go`,
+`internal/customep`'s two new document fields and `validateInbound`, bundle
+v6 with `minVersion = 5` and `TestDecode_readsV4` INVERTED rather than
+renumbered, four traffic tokens plus `on_frame_errors:K`, the contract's five
+new fields, `skills/mocker/references/functions.md` as a seventh `get_guide`
+topic, the two serving matrices in that file and in `docs/USER-GUIDE.md` §4,
+fourteen `CARVE-OUTS.md` entries, and eight smoke observations against the
+image. `//nolint` 36 → 39. No route, no tool, no migration, no variable, no
+screen; contract 70, tools 63, `EXEMPT` 10.

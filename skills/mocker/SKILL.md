@@ -31,14 +31,20 @@ under `/__mocker`: `health`, `state`, `assets/{name}`.
    pause (`set_session_directive`, or `POST {url}/__mocker/state` from a
    test with no auth). Lost on restart, never versioned.
 
-Plus one thing outside the layers: a confirmed RESOURCE family
+Plus two things outside the layers. A confirmed RESOURCE family
 (`decide_resource`) makes `GET/POST/DELETE` on `/things` and `/things/{id}`
 read and write real rows instead of generating; `set_resource_entity` and
-`delete_resource_entity` write those rows from your side.
+`delete_resource_entity` write those rows from your side. And an endpoint
+FUNCTION — Lua on one variant of layer 2 — PRODUCES the response by running
+code instead of having one assembled, which is how "check the password and
+branch" or "mint a token that expires in an hour" is expressed
+(`references/functions.md`). A function beats a confirmed resource on the
+same operation.
 
 **Determinism.** Same spec + same `settings.seed` + same request =
 the same body, every run — except fields anchored to the clock (deadlines,
-`now`/`jwt` recipes) and a confirmed resource's rows. Change the seed to get different data; change `listSize` for
+`now`/`jwt` recipes), a confirmed resource's rows, and any endpoint carrying
+a Lua function, which is out of the guarantee entirely. Change the seed to get different data; change `listSize` for
 longer lists; recipes (`faker`, `enum`, `now`, `jwt`, `ref`, …) make single
 fields realistic without pinning the whole body.
 
@@ -80,6 +86,10 @@ fields realistic without pinning the whole body.
   traffic, scenarios, assets and directives are not in any checkpoint.
   `reset_resource_data` writes no pre-destructive checkpoint: `create_checkpoint` first.
 - **Not idempotent:** `create_workspace`, `create_checkpoint`. List before retrying after a timeout. `import_spec` IS safe to retry: the same bytes answer `duplicate: true`.
+- **A Lua function is compiled when you store it** — a syntax error is a 400
+  with the parser's own line, never a 500 on the first request — and it
+  REPLACES assembly for its variant: recipes, `schemaPatch`, the envelope and
+  `bodyRef` do not run beside it, and the variant refuses to carry them.
 - **Errors carry the server's own words** (`admin API returned 400: …`). Read them; they name the field.
 
 ## When to open which reference
@@ -89,5 +99,6 @@ fields realistic without pinning the whole body.
 - `references/cookbook.md` — twelve ordered recipes.
 - `references/http.md` — the same thing with curl: login/CSRF, spec import, raw asset upload, the `/__mocker/state` calls a test suite makes, MCP client config.
 - `references/design.md` — designing an API on top of a workspace: a response schema on a custom endpoint, `$ref` into the base, `export_openapi`, and the accept step (re-import as the next base, then delete the delta).
+- `references/functions.md` — endpoint functions: the `req`/return contract, the `mock` helpers, the sandbox, the guards, where the branch sits on each plane, and the two stream hooks (`tick.lua`, `stream.onFrame`).
 
-The running server serves these same texts: `get_guide {topic: "overview" | "tools" | "shapes" | "cookbook" | "http" | "design"}`.
+The running server serves these same texts: `get_guide {topic: "overview" | "tools" | "shapes" | "cookbook" | "http" | "design" | "functions"}`.

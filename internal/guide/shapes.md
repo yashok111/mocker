@@ -28,7 +28,8 @@ named in `tools.md`.
       ],
       "recipes": {                      // data-path pattern -> recipe (section 2)
         "items[*].status": { "kind": "enum", "value": ["new", "done"] }
-      }
+      },
+      "function": "return 200, { ok = true }"  // Lua that PRODUCES this response; see functions.md
     }
   },
   "listSize": { "min": 3, "max": 7 },  // optional; min == max for a fixed length
@@ -43,6 +44,7 @@ Rules:
 - `mediaType` that a browser executes (`text/html`, `image/svg+xml`, …) is refused on every write, whatever the mode.
 - `bodyRef` = `asset:` + an asset name (`[A-Za-z0-9._-]{1,128}`). Existence is not checked at write time; a missing asset serves an empty body and marks the traffic row `asset_missing`.
 - `recipes`: at most 1000 bindings per variant. `schemaPatch`: at most 64 ops, 64 KiB, root target refused.
+- `function` is exclusive PER VARIANT with `body`, `bodyEncoding`, `bodyRef`, `recipes`, `schemaPatch` and `mediaType` — one producer per status, refused by name, so there is no precedence. `when[]` is allowed. Other statuses on the same row are untouched: a function-200 beside a pinned-401 is the sign-in shape. It is compiled at write time (a syntax error is a 400 with the parser's own line) and refused on a stream row. The whole contract, the `mock` helpers and the guards: `functions.md`.
 - Status selection at serve time, in order: `routeOff` → session directive → `when[]` (candidates tried in ascending status, first full match wins; a variant with no `when[]` is never a candidate) → `activeStatus` → the spec's default (lowest 2xx, else lowest).
 - The PUT answers the stored document plus `method`, `path`, `opKey`, `updatedAt`, `editVersion` and the workspace `revision`.
 
@@ -104,6 +106,7 @@ index; `""` is the response root. `items[*].status`, `user.profile.avatarUrl`,
   "body": { "ok": true },        // becomes responses["201"] with mode "pinned"
   "mediaType": "application/json",
   "bodyRef": "asset:sample.pdf", // optional, exclusive with body + mediaType
+  "function": "…",               // Lua producing the response; exclusive with body/bodyRef/mediaType, refused on sse/ws
   "kind": "http",                // "http" (default) | "sse" | "ws"
   "stream": { ... },             // required for sse/ws, forbidden for http (section 4)
   "schema": {                    // P7a: inline JSON Schema; with no body the response is GENERATED from it
@@ -151,7 +154,8 @@ endpoint is in checkpoints but NOT in scenarios.
   },
   "tick": {                                       // generated frames on an interval
     "intervalMs": 1000, "event": "update",
-    "schema": { "type": "object", "properties": { "price": { "type": "number" } } }
+    "schema": { "type": "object", "properties": { "price": { "type": "number" } } },
+    "lua": "return { price = 100 + ordinal }"     // OR lua, never both (functions.md)
   },
   "closeWhenDone": true,                          // default true: close after the timeline (sse)
   "reactive": [                                   // ws only: reply to an inbound JSON object frame
@@ -159,15 +163,17 @@ endpoint is in checkpoints but NOT in scenarios.
       "data": { "pong": true },
       "close": { "code": 4000, "reason": "done" } }
   ],
-  "echo": false                                   // ws only: mirror unmatched frames
+  "echo": false,                                  // ws only: mirror unmatched frames
+  "onFrame": "return \"reply\", { pong = true }"   // ws only: Lua per inbound frame; REPLACES reactive + echo
 }
 ```
 
-- `sse`/`ws` require method `GET`, no `responses`/`status`/`body`, and at least one of `timeline`/`tick` (`ws`: or `reactive`/`echo`).
+- `sse`/`ws` require method `GET`, no `responses`/`status`/`body`, and at least one of `timeline`/`tick` (`ws`: or `reactive`/`echo`/`onFrame`). A variant-level `function` is refused on both (`400 function_on_stream`) — a stream is not a request/response, and its Lua goes in `tick.lua` or `onFrame`.
+- `tick.lua` and `tick.schema` are exclusive by name (`400 tick_lua_and_schema`); exactly one is required. `onFrame` is `ws` only (`400 on_frame_on_sse`) and refuses `reactive`/`echo` beside it (`400 on_frame_and_reactive`, `400 on_frame_and_echo`). Both are compiled at write time. `functions.md` has the argument, the return convention and what a bad frame costs.
 - Limits: ≤ 500 frames; frame `delayMs` 0..30000; tick `intervalMs` ≥ 100; `event` ≤ 64 bytes, no newline; `data` required (`null` for empty) and ≤ `MOCKER_MAX_RESPONSE`; ≤ 100 reactive rules; `close.code` 1000 or 4000..4999; `tick.schema` an object with no `$ref`.
-- Frames carry `id: <ordinal>`; `Last-Event-ID` is ignored — a connection copies its definition at the handshake and runs to completion on it. A tick body is deterministic per (seed, endpoint id, ordinal).
+- Frames carry `id: <ordinal>`; `Last-Event-ID` is ignored — a connection copies its definition at the handshake and runs to completion on it. A SCHEMA tick body is deterministic per (seed, endpoint id, ordinal); a `lua` one is not, and a body it returns carrying a CR/LF or over `MOCKER_MAX_RESPONSE` is a skipped firing on an open connection.
 - The session layer applies to the HANDSHAKE only: a forced status answers that status with no stream, a delay delays the first byte, a pause parks it.
-- One traffic row per connection, written when it closes: `stream:sse,frames:N` / `stream:ws,frames_in:M,close:<code>`, plus `pushed:M`, `closed:admin`, `replies_dropped:K` when they apply.
+- One traffic row per connection, written when it closes: `stream:sse,frames:N` / `stream:ws,frames_in:M,close:<code>`, plus `pushed:M`, `closed:admin`, `replies_dropped:K` and `on_frame_errors:K` when they apply.
 
 ## 5. Session directive — `POST /api/workspaces/{id}/session` (`set_session_directive`) and `POST {prefix}/state`
 

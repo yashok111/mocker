@@ -1443,6 +1443,147 @@ confirmed by the build; each is a hole an operator or an agent can hit.
   route a second time only to inherit its header would be the second
   fetch the test forbids.
 
+## A18 — endpoint functions (Lua)
+
+The gate document (`docs/A18-endpoint-functions.md`) tags every item of this
+class with the literal `[GIVES-UP]` and the list is countable by command:
+`grep -cE '^[0-9]+\. .\[GIVES-UP\]' docs/A18-endpoint-functions.md` returns
+fourteen, and so does the count of entries below. The class GREW at every
+look — six, then eight, then nine, then twelve across four gate rounds, then
+fourteen while the code was being written — which is why the two documents
+match BY NAME rather than by a number either of them asserts.
+
+The head of that document records the whole feature's own premise, in the
+owner's words and not paraphrased: «хочу такую фичу для локального
+инструмента на все эти угрозы пофигу» (a Russian string quoted as data). An
+unauthenticated mock plane executing operator-supplied code that an anonymous
+caller can trigger is not an oversight here — it is the decision, taken
+knowingly, and several entries below are consequences of it rather than
+independent choices.
+
+- **Determinism is withdrawn on a function-bearing endpoint (D4).** One seed
+  and one spec no longer imply byte-identical bodies there: the RNG is per-VM
+  host entropy, `os.time`/`mock.now` are the real clock, and nothing
+  substitutes the workspace seed. Endpoints WITHOUT a function keep the
+  guarantee untouched, and the golden corpus never exercises functions. The
+  same withdrawal reaches a stream through `tick.lua`: P6b's "the same body at
+  the same ordinal on every connection" does not hold for a Lua tick, and
+  `Tick.Lua`'s own field comment says so where a reader meets the field.
+- **Function memory is UNCAPPED (D6).** The 2 s budget is `SetContext`, and
+  gopher-lua checks it BETWEEN VM instructions — a single native call such as
+  `string.rep("x", 1e9)` allocates about a gigabyte before any check runs, and
+  several concurrent calls can pressure a 7.8 GB box inside the budget. There
+  is no memory ceiling and this slice does not build one; the timeout is not a
+  memory guard and does not pretend to be.
+- **There is no rate limit on a Lua auth check (D6).** The feature's own
+  motivating example is a password check, it runs on the unauthenticated mock
+  plane, and D2 makes it always-on on a shared contour as much as a laptop —
+  while the ADMIN plane runs a two-bucket login limiter (A15) precisely because
+  one shared password is guessable. A mock's Lua sign-in has no host-side
+  brute-force protection of any kind, and adding one would be a policy this
+  product does not have.
+- **The `coroutine` library is never opened (D3).** A thread could launder an
+  infinite loop and attacker-controlled scheduling past a single `SetContext`
+  — child threads were verified to inherit the context, and refusing the
+  library outright is the cheap airtight cut. A function that wants a
+  generator writes a closure over an upvalue instead, and one that wants
+  concurrency has none.
+- **The timeout is a fixed 2 s const (D6).** No `MOCKER_*` knob: a deployment
+  that needs another number has none, and the only route is a carve-out and a
+  variable in a later slice. `luafn.Timeout` is a package var, but only so the
+  package's own tests can shorten it — nothing outside a test writes it.
+- **`os.date` is pinned to UTC (D3).** The process timezone cannot reach a
+  function's output, so the same function gives the same rendering on a
+  colleague's laptop and in a contour. What that costs is a function that
+  wants local time: it has none, and must format from `mock.now()` itself.
+  The pin wraps gopher-lua's own `osDate` with a forced `!` prefix rather than
+  reimplementing strftime, which is why the format directives are the
+  library's exactly.
+- **The RNG is per-VM host entropy and `math.randomseed` is removed (D3).**
+  gopher-lua's `math.random` calls Go's PACKAGE-GLOBAL `math/rand` and its
+  `math.randomseed` the global `rand.Seed`, so "seed per VM" is
+  unimplementable as the first draft wrote it; the runner replaces
+  `math.random` with a host closure over a per-VM `*rand.Rand` seeded from
+  `crypto/rand`. A function that wants a reproducible sequence cannot ask for
+  one — and `rand.Seed` is a no-op on Go 1.27 anyway, which the slice measured
+  rather than assumed.
+- **`mock.entities` has no write-time check (D3).** A family name is a runtime
+  Lua string, so it can never be checked the way P7a checks a `$ref` ("never
+  STORED dangling"): a function broken by a later decline, a spec rebind or a
+  config-only rollback has no host-side signal at all, and the only thing that
+  reports it is the function's own `nil, "unknown_family"` at request time.
+  The drift report does not read Lua and will not learn to.
+- **A v4 bundle no longer imports (D5).** `minVersion` moves to 5, reversing
+  what P7a decided one slice earlier: a checkpoint a colleague took or an
+  export they made before this slice is refused BY NAME, and their route is to
+  re-export from a build that still reads it. P7a's own reason (A16 had
+  shipped the install wizard the day before, so a v4 document was plausible)
+  still holds; the owner weighed it against the invariant — each version reads
+  exactly the version before it — and chose the invariant. Not a new KIND of
+  entry: this file already carries one per bundle bump, `:919` (P6b) and
+  `:1402` (P7a).
+- **There is no opt-out (D2).** No `MOCKER_FUNCTIONS`, no gate, no flag: every
+  deployment executes operator-authored Lua. An operator who wants a mocker
+  that runs no Lua has no switch and must not deploy this build.
+- **A function cannot emit two same-named response headers (D3).** `headers`
+  is a `string→string` table, so two `Set-Cookie` lines cannot be expressed —
+  in the sign-in shape D1's own example describes. The escape is a pinned
+  variant on another status, which carries a header map of its own. The
+  INBOUND direction is deliberately not symmetric and is not a carve-out:
+  `req.headers` joins a repeated header's values with `", "`, the form
+  RFC 9110 already defines as equivalent and `net/http` itself round-trips.
+- **A function's output is never validated against its own declared schema
+  (D8).** `export_openapi` writes the endpoint's declared response schema and
+  the drift report stays shape-only, so a body that has drifted from the
+  contract it publishes is reported by nothing. This is the price of D5's "the
+  function REPLACES response assembly", and it is invisible from the contract
+  side — the document says one thing and the endpoint may answer another, with
+  no bar between them.
+- **A custom endpoint's HTTP draft cannot be previewed at all (D7).** D7
+  promises "Custom-endpoint preview: same", and there is no such surface to
+  extend: `POST /api/workspaces/{id}/endpoints/preview` refuses `kind: "http"`
+  by name and answers `domain.StreamPreview`, which has no `Notes` field for a
+  failure to land in — so clause 32's own type reference,
+  `PreviewResult.Notes`, points at the OPERATION preview only, and the custom
+  half of that clause was assumed rather than checked. Building it is a new
+  capability (a request shape, a response view, contract work) and D8 says
+  this slice adds no route and no tool. An author drafting a function on a
+  custom endpoint saves it and calls it; an author drafting one on a spec
+  operation previews it. Found by BUILDING A18-2, not by a gate round.
+- **`mock.entities` reads through `EntityStore.List`, not
+  `resources.Repo.ListFiltered` (D3).** D3 names `ListFiltered`; the branch
+  calls `List`, and the three things D3's own criterion asks for — real
+  filtering, the tuple encoded by `resources.EncodeScope`, and
+  `nil, "bad_scope"` on a wrong arity — are all satisfied by it, because a
+  full ancestor tuple is an EXACT `(base, scope)` key and that pair is exactly
+  what `List` takes. What is given up is `ListFiltered`'s wildcards, its
+  cursor and its limit, none of which this call wants: a function asks for one
+  family under one scope, and gets every row of it (bounded by
+  `MOCKER_MAX_ENTITIES`) with no page. Widening a four-method seam whose
+  implementations exist only to keep `internal/mockplane` off `internal/store`
+  is a bigger change than the reading it would buy; if a later slice wants a
+  paged `mock.entities`, this is the entry that says where the page comes
+  from. Found by BUILDING A18-2.
+
+**Two things about A18 that are NOT carve-outs, recorded because a reader
+looking for the class will otherwise wonder.** The `io`/`package`/`debug`
+refusal is the allowlist MECHANISM (`lua.Options{SkipOpenLibs: true}` opens
+five libraries by name and nothing else), not a decision taken about those
+three in particular; and `mock.entities` being read-only is the intended
+surface rather than a cost — the anonymous mock plane's own `POST`/`DELETE`
+verbs remain the only writers of an entity row, and `mock.write` was never
+promised. Both were considered and excluded by the round-4 independent
+re-derivation, by name.
+
+**The Lua contract carries no version marker, and that is an obligation on
+future slices rather than a hole in this one (D9).** The `req`/out shape and
+D3's allowlist have no version of their own, and a function travels
+byte-for-byte through export, import, fork and every checkpoint — so a later
+tightening of the allowlist breaks a persisted function SILENTLY at runtime,
+because an undefined global reads `nil` in Lua and D8's write-time compile
+check cannot see it. Any future slice that narrows either must refuse by name
+at some door, the way a bundle version does.
+
 ## Ideas refused — 2026-09-03
 
 Two `IDEAS.md` entries the owner turned down in his own words («1 - мне
