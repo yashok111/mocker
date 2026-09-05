@@ -14,10 +14,12 @@ import { vi } from "vitest";
 // Library's much better error message.
 configure({ asyncUtilTimeout: 5000 });
 
-// jsdom implements neither of these, and Mantine uses both: matchMedia for
-// its responsive props and colour scheme, ResizeObserver inside ScrollArea and
-// anything that measures itself. Without the stubs every Mantine render throws
-// before a single assertion runs.
+// The DOM is happy-dom (vitest 5, 2026-09-05; jsdom before). Mantine uses
+// both of these — matchMedia for its responsive props and colour scheme,
+// ResizeObserver inside ScrollArea and anything that measures itself — and
+// the guards below install a stub only where the environment has none, so
+// the file is honest under either implementation. Without the stubs every
+// Mantine render would throw before a single assertion runs.
 if (typeof window !== "undefined" && !window.matchMedia) {
   Object.defineProperty(window, "matchMedia", {
     writable: true,
@@ -35,7 +37,7 @@ if (typeof window !== "undefined" && !window.matchMedia) {
 }
 
 if (typeof window !== "undefined" && !("ResizeObserver" in window)) {
-  // @ts-expect-error – jsdom polyfill
+  // @ts-expect-error – a DOM-environment polyfill
   window.ResizeObserver = class {
     observe(): void {}
     unobserve(): void {}
@@ -43,8 +45,25 @@ if (typeof window !== "undefined" && !("ResizeObserver" in window)) {
   };
 }
 
-// Mantine's Transition components schedule through rAF; jsdom has it, but
-// scrollIntoView (used when a Select opens) is missing and throws.
+// Mantine's Transition components schedule through rAF; scrollIntoView (used
+// when a Select opens) is stubbed where the environment lacks it.
 if (typeof Element !== "undefined" && !Element.prototype.scrollIntoView) {
   Element.prototype.scrollIntoView = vi.fn();
+}
+
+// No network from a test, ever. happy-dom ships a REAL fetch that resolves a
+// relative URL against its origin (http://localhost:3000) and connects —
+// jsdom had no fetch of its own, so a stray call failed on the URL and
+// nobody noticed. The stray call exists: React Query's refetchInterval can
+// fire once more after a test's afterEach has run vi.unstubAllGlobals(),
+// and that poll then reached for 127.0.0.1:3000 (ECONNREFUSED as an
+// unhandled error, found on the move to happy-dom, 2026-09-05). This
+// baseline is what unstubAllGlobals restores to: a rejection with a
+// sentence, never a socket. A test that wants a fetch installs one with
+// route() from src/test/http.ts.
+const noNetwork = (): Promise<Response> =>
+  Promise.reject(new Error("no network in tests: stub fetch with route() from src/test/http.ts"));
+globalThis.fetch = noNetwork;
+if (typeof window !== "undefined") {
+  window.fetch = noNetwork;
 }

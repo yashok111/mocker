@@ -13,19 +13,19 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-// jsdom has no URL.createObjectURL; the stub returns the Blob it was handed
-// through a side channel so the test can read the bytes the browser would
-// have saved. HTMLAnchorElement.click on a download link is a no-op there.
+// The two Blob-URL statics are spied, never the URL class replaced: happy-dom
+// navigates on the anchor's click through `new URL(...)`, and a plain object
+// in URL's place broke that with "URL is not a constructor" (the config shuts
+// navigation off, so the click itself is a no-op). The stub returns the Blob
+// it was handed through a side channel so the test can read the bytes the
+// browser would have saved.
 function stubDownload(): { blobs: Blob[] } {
   const blobs: Blob[] = [];
-  vi.stubGlobal("URL", {
-    ...URL,
-    createObjectURL: (b: Blob) => {
-      blobs.push(b);
-      return "blob:mock";
-    },
-    revokeObjectURL: () => {},
+  vi.spyOn(URL, "createObjectURL").mockImplementation((b: Blob | MediaSource) => {
+    blobs.push(b as Blob);
+    return "blob:mock";
   });
+  vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {});
   return { blobs };
 }
 

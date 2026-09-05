@@ -138,7 +138,8 @@ Sentry, dayjs. Styling is PostCSS with `postcss-preset-mantine`. **There is no T
 The stack is taken from another project of the owner's so that the toolchain is one across two repositories — but VTable and
 the three `ajv` packages from there are **removed**: not a single file imported them (validation
 went to arktype, and the traffic feed is a plain Mantine table, because VTable
-does not measure itself under jsdom and the tests would assert nothing).
+does not measure itself under a DOM emulation — jsdom then, happy-dom now —
+and the tests would assert nothing).
 
 Screens: `/` (workspaces), `/specs`, `/guide` (the operator's manual,
 `docs/USER-GUIDE.md` compiled in through a `?raw` import and rendered with
@@ -149,6 +150,21 @@ is gone**: in path mode `/w/{slug}` belongs to the mock plane, and one
 URL layout working in both modes is better than two that depend on a server
 setting.
 
+- **The test runner is vitest 5 on happy-dom** (2026-09-05; vitest 4 on
+  jsdom before — the vitest 5 migration was uneventful for this tree: no
+  `vi.mock` outside module scope, no `bench`, no unawaited `.resolves`,
+  and `clearMocks` defaulting to true changed nothing). happy-dom differs
+  from jsdom in two ways the tests met at once: it NAVIGATES on an anchor
+  click and loads what a page links (shut off in `vite.config.ts`'s
+  `environmentOptions.happyDOM.settings`, and `TransferPanel.test.tsx` spies
+  `URL.createObjectURL` instead of replacing the `URL` class the navigation
+  needs), and it ships a REAL `fetch` that resolves a relative URL against
+  `http://localhost:3000` and connects — a React Query poll firing once more
+  after a test's `vi.unstubAllGlobals()` reached the network as an
+  unhandled `ECONNREFUSED`. `src/test/setup.ts` installs a no-network
+  `fetch` baseline that rejects with a sentence; a test that wants a fetch
+  installs one with `route()` from `src/test/http.ts`, and that baseline is
+  what `unstubAllGlobals` restores to.
 - **The package manager is yarn 4 via corepack**, not npm. `corepack yarn …`
   (yarn 4 does not know `--prefix`/`--cwd`, in the Makefile it is `cd web && …`).
 - Generated and not in git: `web/src/api/generated/`, `web/src/routeTree.gen.ts`.

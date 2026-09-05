@@ -108,7 +108,24 @@ export default defineConfig(({ mode }) => {
       },
     },
     test: {
-      environment: "jsdom",
+      // happy-dom since vitest 5 (2026-09-05; jsdom before). Unlike jsdom it
+      // actually NAVIGATES on an anchor click and loads what a page links —
+      // a `download` anchor or a `<Link>` would reach for the network from a
+      // test. Every such door is shut here; a test that needs the network
+      // stubs fetch (src/test/http.ts), never the other way round.
+      environment: "happy-dom",
+      environmentOptions: {
+        happyDOM: {
+          settings: {
+            navigation: {
+              disableMainFrameNavigation: true,
+              disableChildFrameNavigation: true,
+            },
+            disableJavaScriptFileLoading: true,
+            disableCSSFileLoading: true,
+          },
+        },
+      },
       globals: true,
       setupFiles: ["./src/test/setup.ts"],
       // Scoped to src/ rather than left at the default (**/*.{test,spec}.*):
