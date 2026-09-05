@@ -42,6 +42,7 @@ import type {
   ScenarioSummaryView,
 } from "@/api/generated/schemas";
 import { ApiFailure } from "@/api/client";
+import { TabLink } from "./TabLink";
 import { describeApiFailure, describeApiFailureDetailed, isGoneTombstone } from "@/api/errors";
 import { arktypeResolver } from "@/validation/resolver";
 
@@ -81,7 +82,11 @@ export function ScenariosPage({ id }: { id: number }): ReactElement {
           Сценарий — именованный снимок настроек и правок операций воркспейса, который подставляется
           поверх собственного слоя воркспейса при каждом запросе, а не переписывает его: деактивация
           возвращает всё как было. Кастомные endpoint&apos;ы сценарий не захватывает — редактируются
-          они, как обычно, на вкладке «Кастомные».
+          они, как обычно, на вкладке{" "}
+          <TabLink id={id} tab="endpoints" testId="scenarios-endpoints-link">
+            «Кастомные»
+          </TabLink>
+          .
         </Text>
         <CreateScenarioForm id={id} activeScenario={activeScenario} />
         {scenarios.isPending ? (

@@ -1,6 +1,16 @@
 import { useState } from "react";
 import type { ReactElement } from "react";
-import { Alert, Button, Checkbox, Group, Stack, Text, TextInput, Title } from "@mantine/core";
+import {
+  Alert,
+  Anchor,
+  Button,
+  Checkbox,
+  Group,
+  Stack,
+  Text,
+  TextInput,
+  Title,
+} from "@mantine/core";
 import { modals } from "@mantine/modals";
 import { IconAlertTriangle, IconCopy, IconDownload } from "@tabler/icons-react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -96,9 +106,20 @@ export function TransferPanel({ workspace }: { workspace: WorkspaceView }): Reac
         <Text size="sm" c="dimmed">
           Бандл — конфигурация воркспейса одним JSON-файлом: настройки, правки операций, кастомные
           endpoint&apos;ы, решения по ресурсам. Из него на этой или другой установке создаётся новый
-          воркспейс («Импорт из файла» в списке воркспейсов). Сценарии и файлы (вкладка «Файлы») в
-          бандл не входят: сценарий экспортируют, активировав его; файлы после импорта загружают
-          заново. Копия внутри этой установки (кнопка справа) сценарии и файлы переносит.
+          воркспейс (
+          <Anchor
+            href="/"
+            onClick={(e) => {
+              e.preventDefault();
+              void navigate({ to: "/" });
+            }}
+            data-testid="transfer-import-link"
+          >
+            «Импорт из файла» в списке воркспейсов
+          </Anchor>
+          ). Сценарии и файлы (вкладка «Файлы») в бандл не входят: сценарий экспортируют,
+          активировав его; файлы после импорта загружают заново. Копия внутри этой установки (кнопка
+          справа) сценарии и файлы переносит.
         </Text>
         {downloadError !== null ? (
           <Alert

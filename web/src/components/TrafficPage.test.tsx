@@ -637,4 +637,47 @@ describe("TrafficPage", () => {
       expect(ES.instances[1]!.url).toBe(`/api/workspaces/${WS}/traffic/stream?since=0`);
     });
   });
+
+  // A21 (U4): the «Совпадение» cell is a link into the editor that answered.
+  it("links an operation row to the operations tab by opId and an endpoint row by endpointId", async () => {
+    route({
+      ...baseRoutes({
+        tail: () =>
+          json(
+            200,
+            trafficListViewFixture({
+              rows: [
+                trafficRowFixture({
+                  id: 1,
+                  path: "/pets/1",
+                  matchedKind: "operation",
+                  matchedId: 5,
+                }),
+                trafficRowFixture({
+                  id: 2,
+                  path: "/custom",
+                  matchedKind: "endpoint",
+                  matchedId: 9,
+                }),
+                trafficRowFixture({
+                  id: 3,
+                  path: "/nowhere",
+                  matchedKind: "none",
+                  matchedId: null,
+                }),
+              ],
+            }),
+          ),
+      }),
+      [`GET /api/workspaces/${WS}/traffic/poll?since=3&limit=200`]: () =>
+        json(200, trafficPollViewFixture({ rows: [], lastId: 3 })),
+    });
+    renderInRouter(<TrafficPage id={WS} />);
+    const links = await screen.findAllByTestId("traffic-match-link");
+    // Newest first on screen; the set is what matters here.
+    expect(links.map((a) => a.getAttribute("href")).sort()).toEqual(
+      [`/workspaces/${WS}/operations?opId=5`, `/workspaces/${WS}/endpoints?endpointId=9`].sort(),
+    );
+    expect(links.some((a) => a.textContent === "операция #5")).toBe(true);
+  });
 });

@@ -4,6 +4,7 @@ import { IconAlertTriangle } from "@tabler/icons-react";
 import { useLocation, useNavigate } from "@tanstack/react-router";
 import { useGetWorkspace } from "@/api/generated/workspaces/workspaces.ts";
 import { describeApiFailure } from "@/api/errors";
+import { WorkspaceContextBar } from "./WorkspaceContextBar";
 
 // WorkspaceLayout is the frame every /workspaces/$id/* screen renders inside:
 // the workspace's own identity (name, slug, revision — what WorkspacePage.tsx
@@ -125,9 +126,7 @@ export function WorkspaceLayout({
             <Title order={1} data-testid="workspace-detail-name">
               {workspace.data.data.name}
             </Title>
-            <Text size="sm" c="dimmed" data-testid="workspace-detail-meta">
-              {workspace.data.data.slug} · ревизия {workspace.data.data.revision}
-            </Text>
+            <WorkspaceContextBar workspace={workspace.data.data} />
           </div>
           <Tabs value={activeTab} onChange={handleTabChange}>
             <Tabs.List>

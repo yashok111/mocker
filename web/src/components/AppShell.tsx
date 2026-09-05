@@ -1,9 +1,17 @@
 import type { ReactNode } from "react";
-import { AppShell as MantineAppShell, Button, Group, Text, UnstyledButton } from "@mantine/core";
+import {
+  AppShell as MantineAppShell,
+  Button,
+  Group,
+  NativeSelect,
+  Text,
+  UnstyledButton,
+} from "@mantine/core";
 import { IconLogout } from "@tabler/icons-react";
-import { useNavigate } from "@tanstack/react-router";
+import { useLocation, useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { useLogout } from "@/api/generated/auth/auth.ts";
+import { useListWorkspaces } from "@/api/generated/workspaces/workspaces.ts";
 import { useGetHealthz, useGetReadyz } from "@/api/generated/health/health.ts";
 import { ApiFailure } from "@/api/client";
 import { forgetSession } from "@/auth/session";
@@ -39,6 +47,12 @@ export function AppShell({ user, children }: { user: UserView; children: ReactNo
                 mocker
               </Text>
             </UnstyledButton>
+            {/* A21 (U2): the list was reachable only through the wordmark,
+                which nothing marked as a link. */}
+            <UnstyledButton onClick={() => void navigate({ to: "/" })} data-testid="nav-workspaces">
+              <Text size="sm">Воркспейсы</Text>
+            </UnstyledButton>
+            <WorkspaceSwitcher />
             {/* Without this link /specs is reachable only by typing the URL
                 by hand — a route nobody can reach is not shipped. */}
             <UnstyledButton onClick={() => void navigate({ to: "/specs" })} data-testid="nav-specs">
@@ -116,5 +130,44 @@ function ServerStatus() {
     >
       {label}
     </Text>
+  );
+}
+
+// WorkspaceSwitcher is the header's way from one workspace to another (A21,
+// U2): before it, switching meant the wordmark, the list, a row. Rendered
+// only on a /workspaces/{id} route, and the list is fetched only then — the
+// specs and guide screens have no workspace to switch from. A NativeSelect
+// rather than Mantine's Select: one click, keyboard-navigable, and the same
+// control every other screen in this tree uses for a pick.
+// `pathname` is a test seam: renderInRouter mounts a component at "/" only,
+// so the switcher's own test hands it the path a workspace route would have.
+export function WorkspaceSwitcher({ pathname }: { pathname?: string } = {}) {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const match = /^\/workspaces\/(\d+)(?:\/|$)/.exec(pathname ?? location.pathname);
+  const current = match ? match[1] : null;
+  const workspaces = useListWorkspaces(undefined, { query: { enabled: current !== null } });
+  if (current === null || workspaces.data?.status !== 200) {
+    return null;
+  }
+  return (
+    <NativeSelect
+      size="xs"
+      aria-label="Перейти к воркспейсу"
+      value={current}
+      onChange={(e) =>
+        void navigate({ to: "/workspaces/$id", params: { id: Number(e.currentTarget.value) } })
+      }
+      data-testid="workspace-switcher"
+    >
+      {workspaces.data.data.map((ws) => (
+        <option key={ws.id} value={String(ws.id)}>
+          {ws.name}
+        </option>
+      ))}
+      {workspaces.data.data.some((ws) => String(ws.id) === current) ? null : (
+        <option value={current}>#{current}</option>
+      )}
+    </NativeSelect>
   );
 }

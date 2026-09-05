@@ -38,6 +38,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { useListEndpoints } from "@/api/generated/endpoints/endpoints.ts";
 import { useListWorkspaceOperations } from "@/api/generated/operations/operations.ts";
 import { useExportOpenAPI } from "@/api/generated/workspaces/workspaces.ts";
+import { TabLink } from "./TabLink";
 import { describeApiFailure } from "@/api/errors";
 import {
   BADGE_COLOR,
@@ -82,7 +83,15 @@ export function ContractPage({ id }: { id: number }): ReactElement {
           Воркспейс как один документ OpenAPI: основа — привязанная спека, поверх неё — всё, что
           спроектировано здесь. Новая операция помечена «добавлено», изменённый ответ операции
           основы — «изменено», предложение убрать операцию — «удалено»; остальное — «база». Документ
-          только для чтения: править операции — на вкладках «Кастомные» и «Endpoint&apos;ы».
+          только для чтения: править операции — на вкладках{" "}
+          <TabLink id={id} tab="endpoints" testId="contract-endpoints-link">
+            «Кастомные»
+          </TabLink>{" "}
+          и{" "}
+          <TabLink id={id} tab="operations" testId="contract-operations-link">
+            «Endpoint&apos;ы»
+          </TabLink>
+          .
         </Text>
         {pending ? (
           <Group gap="xs">
@@ -203,8 +212,15 @@ function ContractView({
       </Group>
       {ops.length === 0 ? (
         <Text size="sm" c="dimmed" data-testid="contract-empty">
-          Пока ни одной операции: документ — пустой каркас OpenAPI 3.1. Добавьте эндпоинт на вкладке
-          «Кастомные» или привяжите спеку.
+          Пока ни одной операции: документ — пустой каркас OpenAPI 3.1. Добавьте эндпоинт на вкладке{" "}
+          <TabLink id={id} tab="endpoints">
+            «Кастомные»
+          </TabLink>{" "}
+          или{" "}
+          <TabLink id={id} tab="overview">
+            привяжите спеку
+          </TabLink>
+          .
         </Text>
       ) : (
         <Stack gap="sm" data-testid="contract-paths">

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
+  Anchor,
   Badge,
   Button,
   Code,
@@ -16,6 +17,7 @@ import { modals } from "@mantine/modals";
 import { notifications } from "@mantine/notifications";
 import { IconAlertTriangle } from "@tabler/icons-react";
 import { useQueryClient } from "@tanstack/react-query";
+import { useNavigate } from "@tanstack/react-router";
 import {
   getListTrafficQueryKey,
   getPollTrafficQueryKey,
@@ -185,6 +187,7 @@ export function TrafficPage({
   streamRetryMs?: number;
 }) {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
 
   // Local merged feed. `generation` is bumped by a successful clear and folded
   // into every query key below: an in-flight request dispatched under the OLD
@@ -433,9 +436,33 @@ export function TrafficPage({
         void queryClient.invalidateQueries({
           queryKey: getGetOperationOverrideQueryKey(id, res.data.opKey),
         });
+        // A21 (U4): the toast used to end here; the result lives on another
+        // tab and the operator had to find it. navigate is the page's own
+        // closure, so it works from inside the notification's portal.
+        const opKey = res.data.opKey;
         notifications.show({
           color: "green",
-          message: `Правка создана: ${decodeURIComponent(res.data.opKey)}, статус ${res.data.status}`,
+          message: (
+            <Group gap="xs" justify="space-between" wrap="nowrap">
+              <span>
+                Правка создана: {decodeURIComponent(opKey)}, статус {res.data.status}
+              </span>
+              <Button
+                size="compact-xs"
+                variant="light"
+                data-testid="traffic-open-override"
+                onClick={() =>
+                  void navigate({
+                    to: "/workspaces/$id/operations",
+                    params: { id },
+                    search: { opKey },
+                  })
+                }
+              >
+                Открыть
+              </Button>
+            </Group>
+          ),
         });
       },
       onError: (err, vars) => {
@@ -457,9 +484,30 @@ export function TrafficPage({
         });
         void queryClient.invalidateQueries({ queryKey: getGetWorkspaceQueryKey(id) });
         void queryClient.invalidateQueries({ queryKey: getListEndpointsQueryKey(id) });
+        const endpointId = String(res.data.id);
         notifications.show({
           color: "green",
-          message: `Создан endpoint: ${res.data.method} ${res.data.path}`,
+          message: (
+            <Group gap="xs" justify="space-between" wrap="nowrap">
+              <span>
+                Создан endpoint: {res.data.method} {res.data.path}
+              </span>
+              <Button
+                size="compact-xs"
+                variant="light"
+                data-testid="traffic-open-endpoint"
+                onClick={() =>
+                  void navigate({
+                    to: "/workspaces/$id/endpoints",
+                    params: { id },
+                    search: { endpointId },
+                  })
+                }
+              >
+                Открыть
+              </Button>
+            </Group>
+          ),
         });
       },
       onError: (err, vars) => {
@@ -566,6 +614,7 @@ export function TrafficPage({
                 return (
                   <TrafficRowGroup
                     key={row.id}
+                    workspaceId={id}
                     row={row}
                     isExpanded={isExpanded}
                     onToggle={() => setExpanded((prev) => (prev === row.id ? null : row.id))}
@@ -589,6 +638,7 @@ export function TrafficPage({
 }
 
 function TrafficRowGroup({
+  workspaceId,
   row,
   isExpanded,
   onToggle,
@@ -601,6 +651,7 @@ function TrafficRowGroup({
   overridePending,
   endpointPending,
 }: {
+  workspaceId: number;
   row: TrafficRow;
   isExpanded: boolean;
   onToggle: () => void;
@@ -628,9 +679,8 @@ function TrafficRowGroup({
         </Table.Td>
         <Table.Td>{row.status}</Table.Td>
         <Table.Td>{row.durationMs} мс</Table.Td>
-        <Table.Td>
-          {row.matchedKind}
-          {row.matchedId != null ? ` #${row.matchedId}` : ""}
+        <Table.Td onClick={(e) => e.stopPropagation()}>
+          <MatchCell workspaceId={workspaceId} row={row} />
         </Table.Td>
         <Table.Td>{formatSource(row)}</Table.Td>
         <Table.Td onClick={(e) => e.stopPropagation()}>
@@ -721,4 +771,55 @@ function TrafficRowGroup({
       ) : null}
     </>
   );
+}
+
+// MatchCell is the «Совпадение» column (A21, U4): what answered the request,
+// as a LINK into its editor when there is one — the operations tab by the
+// spec operation's id (`?opId=`, resolved there), the custom-endpoints tab
+// by the row id (`?endpointId=`, the P7b deep link). Before this the cell
+// printed `operation #12` as text and the most natural move on the screen —
+// "this answer is wrong, open it" — was four clicks and a search.
+function MatchCell({ workspaceId, row }: { workspaceId: number; row: TrafficRow }) {
+  const navigate = useNavigate();
+  if (row.matchedKind === "operation" && row.matchedId != null) {
+    const opId = String(row.matchedId);
+    return (
+      <Anchor
+        size="sm"
+        href={`/workspaces/${workspaceId}/operations?opId=${opId}`}
+        data-testid="traffic-match-link"
+        onClick={(e) => {
+          e.preventDefault();
+          void navigate({
+            to: "/workspaces/$id/operations",
+            params: { id: workspaceId },
+            search: { opId },
+          });
+        }}
+      >
+        операция #{row.matchedId}
+      </Anchor>
+    );
+  }
+  if (row.matchedKind === "endpoint" && row.matchedId != null) {
+    const endpointId = String(row.matchedId);
+    return (
+      <Anchor
+        size="sm"
+        href={`/workspaces/${workspaceId}/endpoints?endpointId=${endpointId}`}
+        data-testid="traffic-match-link"
+        onClick={(e) => {
+          e.preventDefault();
+          void navigate({
+            to: "/workspaces/$id/endpoints",
+            params: { id: workspaceId },
+            search: { endpointId },
+          });
+        }}
+      >
+        endpoint #{row.matchedId}
+      </Anchor>
+    );
+  }
+  return <>{row.matchedKind === "none" ? "—" : row.matchedKind}</>;
 }

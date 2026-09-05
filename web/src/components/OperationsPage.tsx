@@ -21,6 +21,7 @@ import { useListWorkspaceOperations } from "@/api/generated/operations/operation
 import { useListSpecOperations } from "@/api/generated/specs/specs.ts";
 import { useGetScenario } from "@/api/generated/scenarios/scenarios.ts";
 import type { MergedOperationView, MergedStatusView, OperationView } from "@/api/generated/schemas";
+import { TabLink } from "./TabLink";
 import { describeApiFailure } from "@/api/errors";
 import { OperationEditor } from "./OperationEditor";
 import { SessionControls } from "./SessionControls";
@@ -86,11 +87,16 @@ function signature(op: MergedOperationView): string {
 export function OperationsPage({
   id,
   initialOpKey,
+  initialOpId,
 }: {
   id: number;
   /** P7b: the opKey the «Контракт» tab linked here with; selected once the
    * list has loaded, and only while nothing else is selected yet. */
   initialOpKey?: string;
+  /** A21 (U4): the spec operation id a traffic row linked here with
+   * (TrafficRow.matchedId for kind "operation"); resolved to an opKey
+   * through the spec operations list, then selected the same way. */
+  initialOpId?: number;
 }): ReactElement {
   const workspace = useGetWorkspace(id);
   // specId is only known once the workspace itself loaded; null both before
@@ -145,10 +151,25 @@ export function OperationsPage({
   // per-render array nor re-selects after the operator moved on.
   const initialApplied = useRef(false);
   useEffect(() => {
-    if (initialOpKey === undefined || initialApplied.current || mergedOps.data?.status !== 200) {
+    if (
+      (initialOpKey === undefined && initialOpId === undefined) ||
+      initialApplied.current ||
+      mergedOps.data?.status !== 200
+    ) {
       return;
     }
-    const linked = mergedOps.data.data.find((op) => op.opKey === initialOpKey);
+    // An id resolves through the spec operations (method + path) to the
+    // merged row; the spec list may still be loading, in which case the
+    // effect runs again when it lands (it is in the deps below).
+    const byId =
+      initialOpId !== undefined && specOps.data?.status === 200
+        ? specOps.data.data.find((op) => op.id === initialOpId)
+        : undefined;
+    const linked = mergedOps.data.data.find((op) =>
+      initialOpKey !== undefined
+        ? op.opKey === initialOpKey
+        : byId !== undefined && op.method === byId.method && op.path === byId.path,
+    );
     if (linked !== undefined) {
       initialApplied.current = true;
       setSelected({
@@ -158,7 +179,7 @@ export function OperationsPage({
         statuses: linked.statuses,
       });
     }
-  }, [initialOpKey, mergedOps.data]);
+  }, [initialOpKey, initialOpId, mergedOps.data, specOps.data]);
   const needle = search.trim().toLowerCase();
   const filtered =
     needle === ""
@@ -382,8 +403,11 @@ function ScenarioMaskBanner({
       <Text size="sm">
         Активен сценарий «{sc.name}». Правки на этой странице по-прежнему сохраняются в слой
         воркспейса, но пока сценарий активен, следующие операции отвечают ТАК, КАК ИХ ЗАДАЁТ
-        СЦЕНАРИЙ, а не так, как задано здесь — деактивируйте сценарий на вкладке «Сценарии», чтобы
-        увидеть эффект правки:
+        СЦЕНАРИЙ, а не так, как задано здесь — деактивируйте сценарий на вкладке{" "}
+        <TabLink id={workspaceId} tab="scenarios" testId="scenario-mask-link">
+          «Сценарии»
+        </TabLink>
+        , чтобы увидеть эффект правки:
       </Text>
       {maskedKeys.length === 0 ? (
         <Text size="xs" c="dimmed">

@@ -1,8 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { screen, waitFor } from "@testing-library/react";
-import { AppShell } from "./AppShell";
+import userEvent from "@testing-library/user-event";
+import { AppShell, WorkspaceSwitcher } from "./AppShell";
 import { renderInRouter } from "@/test/render";
-import { userFixture } from "@/test/fixtures";
+import { userFixture, workspaceFixture } from "@/test/fixtures";
 import { json, route } from "@/test/http";
 
 afterEach(() => {
@@ -59,5 +60,35 @@ describe("AppShell server status", () => {
     await waitFor(() =>
       expect(screen.getByTestId("server-status")).toHaveTextContent("сервер: недоступен"),
     );
+  });
+
+  describe("AppShell navigation (A21, U2)", () => {
+    it("has a «Воркспейсы» item and no switcher outside a workspace route", async () => {
+      route({
+        "GET /readyz": () => json(200, { ok: true }),
+        "GET /healthz": () => json(200, { ok: true }),
+      });
+      renderInRouter(<AppShell user={userFixture()}>x</AppShell>);
+      expect(await screen.findByTestId("nav-workspaces")).toBeInTheDocument();
+      expect(screen.queryByTestId("workspace-switcher")).toBeNull();
+    });
+
+    it("offers a switcher on a workspace route, current workspace selected, and navigates on change", async () => {
+      route({
+        "GET /readyz": () => json(200, { ok: true }),
+        "GET /healthz": () => json(200, { ok: true }),
+        "GET /api/workspaces": () =>
+          json(200, [
+            workspaceFixture({ id: 7, name: "Alex" }),
+            workspaceFixture({ id: 8, name: "Bob" }),
+          ]),
+      });
+      renderInRouter(<WorkspaceSwitcher pathname="/workspaces/7/traffic" />);
+      const switcher = await screen.findByTestId("workspace-switcher");
+      expect(switcher).toHaveValue("7");
+      await userEvent.selectOptions(switcher, "8");
+      // The memory router's catch-all renders for /workspaces/8.
+      expect(await screen.findByTestId("test-router-elsewhere")).toBeInTheDocument();
+    });
   });
 });

@@ -341,4 +341,20 @@ describe("OperationsPage", () => {
     expect(screen.queryByTestId("scenario-active-banner")).not.toBeInTheDocument();
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
+
+  // A21 (U4): a traffic row links here with the spec operation's id, which
+  // resolves through the spec operations list to the merged row.
+  it("selects the operation a traffic row linked by opId", async () => {
+    route({
+      [WORKSPACE]: () => json(200, workspaceFixture({ id: WS, specId: 1 })),
+      [MERGED_OPS]: () => json(200, [PETS_OP, ORDERS_OP]),
+      [SPEC_OPS_LIMIT(1)]: () => json(200, [PETS_SPEC_OP, ORDERS_SPEC_OP]),
+      [SESSION]: () => json(200, sessionListViewFixture({ directives: [] })),
+      [`GET /api/workspaces/${WS}/operations/POST%20%2Forders`]: () =>
+        json(404, { error: { code: "not_found", message: "no override" } }),
+    });
+    renderInRouter(<OperationsPage id={WS} initialOpId={2} />);
+    expect(await screen.findByTestId("operation-editor")).toBeInTheDocument();
+    expect(screen.getByTestId("operation-editor")).toHaveTextContent("POST /orders");
+  });
 });

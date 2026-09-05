@@ -25,6 +25,7 @@ import {
 } from "@/api/generated/stream/stream.ts";
 import { useGetStreamStats } from "@/api/generated/stream/stream.ts";
 import type { StreamConnectionView } from "@/api/generated/schemas";
+import { TabLink } from "./TabLink";
 import { describeApiFailure, describeApiFailureDetailed } from "@/api/errors";
 
 // StreamConnectionsPage is §30.14's connections panel (P6e) over the P6c
@@ -199,7 +200,11 @@ function ConnectionsTable({
       {rows.length === 0 ? (
         <Text data-testid="connections-empty">
           Сейчас ни одного соединения. Откройте потоковый endpoint из браузера (кнопка «Проверить»
-          на вкладке «Кастомные») или подключите клиент — строка появится здесь.
+          на вкладке{" "}
+          <TabLink id={id} tab="endpoints" testId="connections-endpoints-link">
+            «Кастомные»
+          </TabLink>
+          ) или подключите клиент — строка появится здесь.
         </Text>
       ) : (
         <Card withBorder p={0} data-testid="connections-table">

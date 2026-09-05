@@ -55,6 +55,7 @@ import {
   type StreamKind,
 } from "./StreamEditor";
 import { StreamTestClient } from "./StreamTestClient";
+import { TabLink } from "./TabLink";
 import { ApiFailure } from "@/api/client";
 import { describeApiFailure, describeApiFailureDetailed, isGoneTombstone } from "@/api/errors";
 import { arktypeResolver } from "@/validation/resolver";
@@ -373,8 +374,12 @@ export function CustomEndpointsPage({
           : там виден уже готовый ответ, и достаточно поправить нужную цифру. Форма ниже — запасной
           путь для случая, когда подходящего запроса в трафике ещё не было. Маршрут, который
           канонически совпадает со спековым, здесь заводить не нужно — это «переопределить операцию»
-          на экране Endpoint&apos;ов. Уже созданный endpoint можно поправить прямо в списке ниже —
-          кнопка «Изменить» открывает форму с текущими значениями.
+          на экране{" "}
+          <TabLink id={id} tab="operations" testId="endpoints-operations-link">
+            Endpoint&apos;ов
+          </TabLink>
+          . Уже созданный endpoint можно поправить прямо в списке ниже — кнопка «Изменить» открывает
+          форму с текущими значениями.
         </Text>
         <CreateEndpointForm id={id} limits={limits} />
         {endpoints.isPending ? (
