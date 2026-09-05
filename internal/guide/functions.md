@@ -88,8 +88,16 @@ Returning nothing at all fails the request: a function must decide a status.
     key, not a value; delete and create the row to drop a field.
   - **`mock.entities.delete(family, key[, scopeArray])` → true | false.**
     `true` when a row went, `false` when there was none.
-  - Every writer takes the family and scope exactly as the reader does, and
-    `nil, "bad_data"` when `data`/`patch` is not a table. Writes are data,
+  - Every writer takes the family and scope exactly as the reader does —
+    `nil, "bad_family"` for a family that is not a string, `nil, "bad_scope"`
+    for a scope that is not a table of strings/numbers — and
+    `nil, "bad_data"` when `data`/`patch` is not a table. `update` is atomic:
+    the merge is read and written inside one transaction, so two concurrent
+    updates of one row both land. A write does NOT check what the mock
+    plane's own POST checks about the ROUTE: the family's `writeForm` and,
+    for a nested family, that a live ancestor row anchors the scope — a
+    function has said what it means, and a row under an unanchored scope is
+    simply unreachable until an ancestor exists. Writes are data,
     not configuration: they bump no revision, appear in no checkpoint's
     config, and are reset by `reset-data` like any other row.
 - **`mock.generate(schema)` → value, or nil + err.** A body generated the way
@@ -103,10 +111,16 @@ Returning nothing at all fails the request: a function must decide a status.
   - `nil, "unresolved_ref: <pointer>"` when a `$ref`, root or nested, names
     nothing in the bound spec, or no spec is bound. Never a silently empty
     object: a function asked a question and gets the answer.
-  - The value is deterministic per (workspace seed, request, schema) exactly
-    as a generated response is: two calls with the same schema in one
-    function return the same table. A function that wants two different
-    users asks for an array of two.
+  - The value is deterministic per (workspace seed, request) exactly as a
+    generated response is; the schema is not in the seed, so two calls in one
+    function draw from the same stream and two calls over the same schema
+    return the same table. Deadline-shaped fields (`exp`, `*_expires_at`,
+    `*_valid_until`) are anchored to the clock per call and are the one
+    exception. A function that wants two different users asks for an array
+    of two.
+  - Cost: each call may produce up to `MOCKER_MAX_RESPONSE` bytes and is not
+    bounded by the 2 s budget while it runs (a native call, like
+    `string.rep`). Do not call it in a loop.
 
 ## 3. The sandbox
 

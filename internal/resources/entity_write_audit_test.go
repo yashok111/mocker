@@ -1,7 +1,9 @@
 package resources
 
 import (
+	"encoding/json"
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/yashok111/mocker/internal/domain"
@@ -88,5 +90,72 @@ func TestCanonicalEntityKey(t *testing.T) {
 		if got := CanonicalEntityKey(c.key, c.idType); got != c.want {
 			t.Errorf("CanonicalEntityKey(%q, %q) = %v, want %v", c.key, c.idType, got, c.want)
 		}
+	}
+}
+
+// TestPatch_mergesInsideOneWriteAndRefusesWhatSetRefuses is A19's
+// `mock.entities.update` against the REAL store: the merge keeps every key
+// the patch does not name, the id field is the row's own whatever the patch
+// says, a missing row is found == false with nothing written, and a
+// non-canonical key is Set's own refusal.
+func TestPatch_mergesInsideOneWriteAndRefusesWhatSetRefuses(t *testing.T) {
+	dir := t.TempDir()
+	db := newTestDB(t, dir+"/mocker.db")
+	specID := importSpecDoc(t, db, []byte(nestedFixtureDoc))
+	wsID := insertWorkspace(t, db, "acme", &specID, domain.Settings{
+		Seed: 1, ListSize: 2, BasePath: "/tenants/{tenantId}", BasePathValues: []string{"7", "8"},
+	})
+	repo := newTestRepo(t, db, 4<<20, 64<<10)
+
+	org, err := repo.Confirm(t.Context(), wsID, familyOrgs)
+	if err != nil {
+		t.Fatalf("confirm %q: %v", familyOrgs, err)
+	}
+	rows, err := repo.List(t.Context(), org.ID, ScopeKey("7"), "")
+	if err != nil || len(rows) == 0 {
+		t.Fatalf("List under base 7: %v (%d rows)", err, len(rows))
+	}
+	key := rows[0].EntityKey
+	var before map[string]any
+	if err := json.Unmarshal(rows[0].Data, &before); err != nil {
+		t.Fatal(err)
+	}
+
+	patched, found, err := repo.Patch(t.Context(), org.ID, ScopeKey("7"), "", key, org.IDField, org.Wrapper.IDType,
+		map[string]any{"name": "patched", org.IDField: "not-the-key", "extra": true})
+	if err != nil || !found {
+		t.Fatalf("Patch(existing) = found %v, err %v", found, err)
+	}
+	var after map[string]any
+	if err := json.Unmarshal(patched.Data, &after); err != nil {
+		t.Fatal(err)
+	}
+	if after["name"] != "patched" || after["extra"] != true {
+		t.Errorf("patched row = %v; the patch's keys must win", after)
+	}
+	if after[org.IDField] != before[org.IDField] {
+		t.Errorf("id = %v after a patch that said %q; the id field is the row's own", after[org.IDField], "not-the-key")
+	}
+	for k, v := range before {
+		if k == "name" || k == org.IDField {
+			continue
+		}
+		if fmt.Sprint(after[k]) != fmt.Sprint(v) {
+			t.Errorf("key %q = %v after the patch, was %v; keys the patch does not name must stay", k, after[k], v)
+		}
+	}
+
+	if _, found, err := repo.Patch(t.Context(), org.ID, ScopeKey("7"), "", "999999", org.IDField, org.Wrapper.IDType, map[string]any{"name": "x"}); err != nil || found {
+		t.Fatalf("Patch(missing) = found %v, err %v; want found false and no error", found, err)
+	}
+	if got, _, _ := repo.Get(t.Context(), org.ID, ScopeKey("7"), "", "999999"); got.ID != 0 {
+		t.Fatalf("Patch(missing) wrote a row: %+v — a patch never inserts", got)
+	}
+
+	// "007" matches no stored key, so the store answers not found before
+	// its canonical check can run; the Lua host checks canonical form first
+	// and answers bad_key. What must not happen here is a write.
+	if _, found, err := repo.Patch(t.Context(), org.ID, ScopeKey("7"), "", "007", org.IDField, org.Wrapper.IDType, map[string]any{}); err != nil || found {
+		t.Fatalf("Patch(\"007\") = found %v, err %v", found, err)
 	}
 }

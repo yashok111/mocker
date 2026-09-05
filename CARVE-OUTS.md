@@ -1605,14 +1605,39 @@ at some door, the way a bundle version does.
 - **No traffic token for a Lua write.** The row carries `function` as before;
   which helpers the function called is not recorded. A `function_wrote`
   token was considered and deferred until someone reads traffic for it.
-- **`mock.generate` is deterministic per (seed, request, schema).** Two calls
-  with the same schema in one function return the same value, because the
-  generator seeds by the request tuple and the schema and nothing else. A
-  per-call nonce would make a function's two `generate` calls differ and
-  its response non-repeatable across identical requests — the guarantee D4
-  already withdrew for functions, but withdrawing it further for the one
-  helper meant to pull a function back toward the spec is backwards. A
-  function that wants two users asks for an array of two.
+- **`mock.generate` is deterministic per (seed, request), not per schema.**
+  The generator seeds by the request tuple (`SeedList(opts, req)`) and the
+  schema is not in the seed, so two calls in one function draw from the same
+  stream, and two calls over the same schema return the same value — except
+  deadline-shaped leaves (`exp`, `*_expires_at`, `*_valid_until`), which the
+  generator anchors to its clock per `Body` call. A per-call nonce would make
+  a function's two `generate` calls differ and its response non-repeatable
+  across identical requests — the guarantee D4 already withdrew for
+  functions, but withdrawing it further for the one helper meant to pull a
+  function back toward the spec is backwards. A function that wants two
+  users asks for an array of two. (The first draft of this entry said "per
+  schema"; the A19 review read the seeding and corrected it.)
+- **A loop of `mock.generate` is a memory amplifier nothing bounds but the
+  wall clock.** Each call may produce `MOCKER_MAX_RESPONSE` bytes and
+  materialise them as Lua tables, and the 2 s budget is checked between
+  bytecode instructions, not inside a native call — the same residual the
+  A18 `string.rep` entry above records, larger per call. A per-invocation
+  cumulative budget on the host was considered and not built: the host is
+  per CONNECTION on a stream, so a budget there would exhaust after N
+  firings of a legal tick. Recorded; the guide says "do not call it in a
+  loop".
+- **The writers share the store's caps with the mock plane's POST/DELETE,
+  not the route's gates.** `writeForm` is not consulted (it says whether a
+  POST on the collection route takes over; a function calling `create` has
+  said what it means) and the D6.2 ancestor walk is not run for a nested
+  family, so a function may place a row under a scope no live ancestor
+  anchors — unreachable until one does, counted against the caps, the same
+  observable-orphan rule the admin entity route (`Repo.Set`) already accepts
+  for its own writes. The scope's length is checked against the family's
+  depth; its values are the function's word. Running the anchor walk here
+  means lifting it out of `resourceBranch`, where it is written against a
+  live request, into a shape a hook with no request could call; deferred
+  until a nested family is written from Lua in anger.
 - **`mock.generate` needs a host; the preview has none.** The stream preview
   runs with a nil host, so a `tick.lua` calling `generate` previews as
   `nil, "no_host"` — the same answer `entities` gives there, recorded once

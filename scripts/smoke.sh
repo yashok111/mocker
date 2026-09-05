@@ -8050,7 +8050,7 @@ echo "      A18: ${a18_checks}/8 observations passed"
 # helper reaches a real generator in the image, and the function's own edit
 # sits on top of the generated value. No resource family is confirmed in this
 # workspace, so the writers are covered by the unit tests, not here.
-if [[ -n "${a18_ws_id:-}" ]]; then
+if [[ -n "${a18_ws_id:-}" && "${a18_ws_id}" != "null" ]]; then
 	a19_gen=$(jq -n '{method:"GET", path:"/generated", status:200,
 		function:"local t = mock.generate({type = \"object\", required = {\"n\", \"name\"}, properties = {n = {type = \"integer\"}, name = {type = \"string\"}}}); t.name = \"edited\"; return 200, t"}')
 	a19_status=$(http_json POST "$ADMIN_HOST" "/api/workspaces/${a18_ws_id}/endpoints" \

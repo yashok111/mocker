@@ -130,6 +130,8 @@ var (
 	errBadSchema = errors.New("bad_schema")
 	errBadData   = errors.New("bad_data")
 	errBadKey    = errors.New("bad_key")
+	errBadFamily = errors.New("bad_family")
+	errBadScope  = errors.New("bad_scope")
 )
 
 // Validate compiles the source and nothing else. Both writers run it before

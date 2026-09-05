@@ -107,8 +107,18 @@ func TestServeCustom_functionGeneratesFromTheBoundSpec(t *testing.T) {
 		return 200, t`}
 	badRow := customRow(3, http.MethodGet, "/bad", 3)
 	badRow.Responses["200"] = overrides.Variant{Function: `return 200, {err = select(2, mock.generate("#/components/schemas/Nope"))}`}
+	nestedBadRow := customRow(4, http.MethodGet, "/nested-bad", 4)
+	nestedBadRow.Responses["200"] = overrides.Variant{Function: `return 200, {err = select(2, mock.generate({
+		type = "object", properties = {a = {type = "string"}, b = {["$ref"] = "#/components/schemas/Nope"}}}))}`}
+	wholeDocRow := customRow(5, http.MethodGet, "/whole", 5)
+	wholeDocRow.Responses["200"] = overrides.Variant{Function: `return 200, {err = select(2, mock.generate({["$ref"] = "#"}))}`}
+	twiceRow := customRow(6, http.MethodGet, "/twice", 6)
+	twiceRow.Responses["200"] = overrides.Variant{Function: `
+		local a = mock.generate({type = "object", required = {"n"}, properties = {n = {type = "integer", minimum = 0, maximum = 1000000}}})
+		local b = mock.generate({type = "object", required = {"n"}, properties = {n = {type = "integer", minimum = 0, maximum = 1000000}}})
+		return 200, {a = a.n, b = b.n}`}
 	p := newPlaneWithSpec(spec, specWorkspace("alex", 1, 1))
-	p.SetCustomEndpoints(&fakeCustomSource{rows: map[int64][]*customep.Row{1: {refRow, inlineRow, badRow}}})
+	p.SetCustomEndpoints(&fakeCustomSource{rows: map[int64][]*customep.Row{1: {refRow, inlineRow, badRow, nestedBadRow, wholeDocRow, twiceRow}}})
 
 	get := func(path string) (int, map[string]any) {
 		rec := httptest.NewRecorder()
@@ -148,6 +158,30 @@ func TestServeCustom_functionGeneratesFromTheBoundSpec(t *testing.T) {
 	}
 	if msg, _ := body["err"].(string); msg != "unresolved_ref: #/components/schemas/Nope" {
 		t.Errorf("/bad: err = %v, want unresolved_ref naming the pointer", body["err"])
+	}
+
+	// checkRefs's own branch: a dead $ref NESTED in an inline schema is the
+	// same refusal by pointer, never a silently empty object in the body.
+	_, body = get("/nested-bad")
+	if msg, _ := body["err"].(string); msg != "unresolved_ref: #/components/schemas/Nope" {
+		t.Errorf("/nested-bad: err = %v, want unresolved_ref naming the nested pointer", body["err"])
+	}
+	// The #/ rule on the table form: "#" alone would be the whole document.
+	_, body = get("/whole")
+	if msg, _ := body["err"].(string); !strings.HasPrefix(msg, "bad_schema") {
+		t.Errorf("/whole: err = %v, want bad_schema for a $ref that is not a #/ pointer", body["err"])
+	}
+	// Two calls in one request are the FIRST and SECOND draw, not the same
+	// draw twice (A19 review: a tick calling generate emitted one frame
+	// forever before the per-call ordinal).
+	_, body = get("/twice")
+	if body["a"] == body["b"] {
+		t.Errorf("/twice: a = b = %v; consecutive generate calls must draw consecutive values", body["a"])
+	}
+	// And the whole request is still deterministic: the same two draws.
+	_, again := get("/twice")
+	if again["a"] != body["a"] || again["b"] != body["b"] {
+		t.Errorf("/twice: second request drew %v/%v, first %v/%v — a request's generate calls must repeat", again["a"], again["b"], body["a"], body["b"])
 	}
 }
 

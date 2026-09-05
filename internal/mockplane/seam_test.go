@@ -79,7 +79,7 @@ func TestAssembleResponseIsTheOnlySeam(t *testing.T) {
 	// Generate is A19's mock.generate: a function asks for a BODY and not a
 	// response, so it is a gen.Body site of its own and not a fourth
 	// assembleResponse caller — the method's own comment says why.
-	wantBodySites := map[string]bool{"assembleResponse": true, "newTickGenerator": true, "Generate": true}
+	wantBodySites := map[string]bool{"Plane.assembleResponse": true, "newTickGenerator": true, "luaHost.Generate": true}
 	if len(bodySites) != len(wantBodySites) {
 		t.Fatalf("gen.Body call sites in production code: got %d (%v), want exactly %v", len(bodySites), bodySites, setKeys(wantBodySites))
 	}
@@ -96,6 +96,18 @@ func TestAssembleResponseIsTheOnlySeam(t *testing.T) {
 //     selector is named "assembleResponse"
 //   - bodySites: the enclosing FuncDecl name for each call whose selector is
 //     named "Body" (gen.Body's method name) — one entry per call site
+//
+// receiverName is the bare type name of a method receiver, pointer or not.
+func receiverName(expr ast.Expr) string {
+	if star, ok := expr.(*ast.StarExpr); ok {
+		expr = star.X
+	}
+	if ident, ok := expr.(*ast.Ident); ok {
+		return ident.Name
+	}
+	return "?"
+}
+
 func scanSeam(t *testing.T, dir string) (map[string]bool, []string) {
 	t.Helper()
 
@@ -136,7 +148,14 @@ func scanSeam(t *testing.T, dir string) (map[string]bool, []string) {
 				case "assembleResponse":
 					callers[fn.Name.Name] = true
 				case "Body":
-					bodySites = append(bodySites, fn.Name.Name)
+					// Qualified by receiver, because a bare method name is not
+					// unique: Generate is luafn.Host's name for the Lua site
+					// and any future type could carry one too (A19 review).
+					site := fn.Name.Name
+					if fn.Recv != nil && len(fn.Recv.List) > 0 {
+						site = receiverName(fn.Recv.List[0].Type) + "." + site
+					}
+					bodySites = append(bodySites, site)
 				}
 				return true
 			})

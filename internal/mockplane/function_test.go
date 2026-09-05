@@ -880,38 +880,32 @@ func TestLuaHost_entityWriters(t *testing.T) {
 		}
 	})
 
-	t.Run("update is Get, a shallow merge, then Set by the same key", func(t *testing.T) {
-		var setKey string
+	t.Run("update is the store's Patch under the request's scope and the family's id field", func(t *testing.T) {
+		var seenKey, seenIDField string
+		var seenScope resources.ScopeKey
 		store := &fakeEntityStore{
-			getFn: func(context.Context, int64, resources.ScopeKey, resources.ScopeKey, string) (resources.Entity, bool, error) {
-				return entityRow(7, "7", `{"id":7,"a":1,"keep":"yes"}`), true, nil
-			},
-			setFn: func(_ context.Context, _ int64, _, _ resources.ScopeKey, key, _, _ string, data map[string]any) (resources.Entity, bool, error) {
-				setKey = key
-				b, _ := json.Marshal(data)
-				return entityRow(7, key, string(b)), false, nil
+			patchFn: func(_ context.Context, _ int64, _, scope resources.ScopeKey, key, idField, _ string, patch map[string]any) (resources.Entity, bool, error) {
+				seenKey, seenIDField, seenScope = key, idField, scope
+				b, _ := json.Marshal(map[string]any{"id": 7, "a": patch["a"], "keep": "yes"})
+				return entityRow(7, key, string(b)), true, nil
 			},
 		}
-		row, err := newHost(store).EntityUpdate(t.Context(), "/msgs", []string{"42"}, "7", map[string]any{"a": 2, "b": true})
+		row, err := newHost(store).EntityUpdate(t.Context(), "/msgs", []string{"42"}, "7", map[string]any{"a": 2})
 		if err != nil {
 			t.Fatal(err)
 		}
-		if setKey != "7" {
-			t.Errorf("Set key = %q, want 7", setKey)
+		if seenKey != "7" || seenIDField != "id" || seenScope != wantScope {
+			t.Errorf("Patch got key=%q idField=%q scope=%q", seenKey, seenIDField, seenScope)
 		}
-		if row["a"] != float64(2) || row["b"] != true || row["keep"] != "yes" || row["id"] != float64(7) {
-			t.Errorf("merged row = %v; patch keys win, the rest stays", row)
+		if row["a"] != float64(2) || row["keep"] != "yes" {
+			t.Errorf("row = %v", row)
 		}
 	})
 
-	t.Run("update of a missing row is not_found and writes nothing", func(t *testing.T) {
-		store := &fakeEntityStore{}
-		_, err := newHost(store).EntityUpdate(t.Context(), "/msgs", nil, "9", map[string]any{"a": 1})
+	t.Run("update of a missing row is not_found", func(t *testing.T) {
+		_, err := newHost(&fakeEntityStore{}).EntityUpdate(t.Context(), "/msgs", nil, "9", map[string]any{"a": 1})
 		if err == nil || err.Error() != "not_found" {
 			t.Fatalf("err = %v, want not_found", err)
-		}
-		if store.setCalls != 0 {
-			t.Errorf("Set was called %d times on a missing row", store.setCalls)
 		}
 	})
 

@@ -2779,8 +2779,9 @@ a numeric key is its decimal text. `mockplane`: `luaHost` carries a
 `gen.Request` seed tuple and the runtime keeps its `resolver`; `Generate` is
 the tree's third named `gen.Body` site and chases/checks `$ref`s itself,
 refusing an unresolvable one by pointer; the writers go through the same
-store and caps as the plane's POST/DELETE, update is Get → shallow merge →
-`Repo.Set`, and `EntityStore` gained `Set`. Nothing on the contract, the
+store and caps as the plane's POST/DELETE, update is `Repo.Patch` — a
+shallow merge inside one write transaction — and `EntityStore` gained
+`Patch`. Nothing on the contract, the
 tools, the schema or the routes; the guide's §2 and its skills copy carry
 the four helpers; five `CARVE-OUTS.md` entries. Tests: the Lua argument
 contract through a recording host, the host half through the store fake,
@@ -2795,3 +2796,23 @@ STRING for `mock.generate("#/components/schemas/Thing")`. The host now
 resolves the root and checks nested refs per call, and unlike the stored
 path (which must keep serving and empties a dead node with a warning) it
 refuses by pointer: a function asked a question and gets the answer.
+
+**The review, same day.** Three readers over the slice — two Opus agents
+(sandbox/safety, correctness) and `vcodex` — agreed on two things and found
+one more each. Agreed: `update` as Get → merge → `Set` at the host was a
+read-modify-write outside the writer (a lost update between two concurrent
+requests; a row deleted in between resurrected by `Set`'s upsert), fixed by
+moving the merge into `resources.Repo.Patch` inside one `db.Write`; and the
+writers' "same gates as POST" claim was false — `writeForm` and the D6.2
+ancestor walk are not applied, a decision the code comment now states and
+`CARVE-OUTS.md` records with the admin route's precedent. Found once each:
+a `tick.lua` calling `mock.generate` emitted the SAME frame for the life of
+the connection (the host is per connection; a per-call ordinal now seeds
+each draw), the `#/` rule was enforced on the string form and not the table
+form (`{["$ref"] = "#"}` handed the whole document to the generator), a
+non-table scope silently fell back to the request's and a `nil` element
+became the text "nil", `l.CheckString` raised a 500 where every sibling
+refusal returned a word, a non-canonical key was `not_found` where `bad_key`
+was the truth, and the determinism claim was wrong (the schema is not in
+the seed; deadline-shaped leaves are clock-anchored). All fixed with a test
+each, in one `fix(a19)` commit.

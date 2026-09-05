@@ -53,7 +53,8 @@ type ResourceSource interface {
 	ForWorkspace(ctx context.Context, workspaceID int64) ([]*resources.Resource, error)
 }
 
-// EntityStore is *resources.Repo's OTHER four methods — the ones a request
+// EntityStore is *resources.Repo's OTHER five methods (four through A18; Patch
+// joined for A19) — the ones a request
 // reads and writes through directly, never via the cached runtime (D6 R34).
 // The types are the other package's, matching every other source this
 // package already holds behind an interface (CustomSource's *customep.Row,
@@ -68,13 +69,14 @@ type EntityStore interface {
 	Get(ctx context.Context, resourceID int64, base, scope resources.ScopeKey, entityKey string) (resources.Entity, bool, error)
 	Create(ctx context.Context, resourceID int64, base, scope resources.ScopeKey, idField, idType string, data map[string]any) (resources.Entity, error)
 	Delete(ctx context.Context, resourceID int64, base, scope resources.ScopeKey, entityKey string) (bool, error)
-	// Set is *resources.Repo's fifth method, admitted for A19: a Lua
-	// function's `mock.entities.update` is Get → shallow merge → Set, the
-	// same replace-by-key write the admin entity route performs. The mock
-	// plane's own HTTP verbs still do not call it (a mock has no PUT on an
-	// entity; CARVE-OUTS), so this seam has exactly one caller here, the
-	// Lua host.
-	Set(ctx context.Context, resourceID int64, base, scope resources.ScopeKey, entityKey, idField, idType string, data map[string]any) (resources.Entity, bool, error)
+	// Patch is *resources.Repo's fifth method, admitted for A19: a Lua
+	// function's `mock.entities.update`, a shallow merge read and written
+	// inside one write transaction (the Repo method's comment says why it
+	// is not Get-then-Set here). The mock plane's own HTTP verbs do not call
+	// it — a mock has no PATCH on an entity; CARVE-OUTS — so this seam has
+	// exactly one caller here, the Lua host. found is false when there is no
+	// such row, and nothing was written.
+	Patch(ctx context.Context, resourceID int64, base, scope resources.ScopeKey, entityKey, idField, idType string, patch map[string]any) (resources.Entity, bool, error)
 }
 
 // The real store: *resources.Repo has to satisfy BOTH seams above, since
@@ -84,7 +86,7 @@ type EntityStore interface {
 // test that only exercises a hand-rolled fake would otherwise ever catch —
 // the package compiled green under exactly that gap once already: nothing
 // short of a build-time assertion notices that *resources.Repo grew the
-// four EntityStore methods but never a ForWorkspace of its own, because
+// five EntityStore methods but never a ForWorkspace of its own, because
 // nothing in this tree assigns the concrete type to either interface-typed
 // variable.
 var (

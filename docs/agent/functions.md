@@ -233,21 +233,37 @@ than as new top-level keys — `mock.entities(family)` still reads through
   a stored inline schema must keep SERVING when its `$ref` stops resolving
   and so empties the node with a warning; a function is being asked a
   question and gets `unresolved_ref: <pointer>`.
-- **The seed tuple is the request's** (`luaHost.req`, a `gen.Request` of
-  method, canonical path and path params; on a stream, the row's), so
-  `mock.generate` on `GET /users/{id}` draws what that route's generated
-  200 would. Query is left out: a function reads `req.query` itself.
+- **The seed tuple is the request's plus a per-call ordinal** (`luaHost.req`,
+  a `gen.Request` of method, canonical path and path params; on a stream,
+  the row's; `__generate: n` mixed into a COPY of the params on each call,
+  the way `newTickGenerator` mixes `__tick`). The ordinal is the review's
+  one real bug: the host is built once per stream connection, so a
+  `tick.lua` calling `generate` emitted the same frame for the life of the
+  connection. The n-th call of one request or connection is deterministic;
+  consecutive calls draw consecutive values. It is a body seeded like a
+  generated response, not a copy of the detail route's own 200 (no
+  `ListFamily`/`IDParam`, so no id write-back from the URL — the function
+  does that). A root that rolls `null` is `nil, "null"`, so the
+  `if not t then` guard sees a reason and not an empty error. Query is
+  left out: a function reads `req.query` itself.
 - **The writers are the mock plane's own POST/DELETE through the same
-  store and caps**, plus `Repo.Set` for update — `EntityStore` gained `Set`
-  (its fifth method; the mock plane's HTTP verbs still do not call it, a
-  mock has no PUT on an entity). Update is Get → shallow merge → Set by the
-  same key; `not_found` when there is none; `Set`'s own
-  `ErrEntityKeyNotCanonical` is `bad_key`. `WriteForm` is NOT consulted —
-  it says whether a POST on the collection route takes over, and a
-  function calling create has said what it means. The family/scope
-  resolution is one function (`resolveFamily`) shared by the read and the
-  three writers, and the store's refusals map to words in one place
-  (`storeErr`).
+  store and caps**, plus `Repo.Patch` for update — `EntityStore` gained
+  `Patch` (its fifth method; the mock plane's HTTP verbs do not call it, a
+  mock has no PATCH on an entity). `Patch` reads, merges and writes inside
+  ONE write transaction: the first draft was Get → merge → `Set` at the
+  host, and the review (two of three readers) named it a read-modify-write
+  outside the writer — a lost update between two concurrent requests, and a
+  row deleted between the Get and the Set RESURRECTED by Set's upsert.
+  `not_found` when there is none, nothing written; a non-canonical key is
+  `bad_key` at the host BEFORE the store (the store would say not found).
+  `WriteForm` is NOT consulted and the D6.2 ancestor walk is NOT run — both
+  recorded in `CARVE-OUTS.md` (the admin entity route's own precedent). The
+  family/scope resolution is one function (`resolveFamily`) shared by the
+  read and the three writers; the store's refusals map to words in one
+  place (`storeErr`); every argument refusal is a returned word
+  (`bad_family`, `bad_scope`, `bad_data`, `bad_key`), never a raised Lua
+  error — `l.CheckString` raised, which was 500 where its siblings were
+  nil-plus-reason.
 - **A19 reverses A18 D3's "no writer"** and the guide's "there is no
   `mock.write`" paragraph is gone; the entry in `CARVE-OUTS.md` records
   what is still absent (a field cannot be removed through update; no

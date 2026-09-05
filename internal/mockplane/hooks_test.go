@@ -374,7 +374,7 @@ func (s *scopeEntityStore) Create(_ context.Context, _ int64, _, scope resources
 	return resources.Entity{ID: 1, EntityKey: "1", Data: jsonx.RawMessage(b)}, nil
 }
 
-func (s *scopeEntityStore) Set(context.Context, int64, resources.ScopeKey, resources.ScopeKey, string, string, string, map[string]any) (resources.Entity, bool, error) {
+func (s *scopeEntityStore) Patch(context.Context, int64, resources.ScopeKey, resources.ScopeKey, string, string, string, map[string]any) (resources.Entity, bool, error) {
 	return resources.Entity{}, false, nil
 }
 

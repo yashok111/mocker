@@ -35,8 +35,10 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"sort"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 	"unicode/utf8"
 
@@ -356,17 +358,28 @@ type luaHost struct {
 	outer []string
 	// req is what mock.generate seeds a body by — the method, canonical
 	// path and path params of the request (or, on a stream, of the
-	// connection's row), the same tuple a generated variant's walker is
-	// seeded by, so `mock.generate` on GET /users/{id} draws what
-	// GET /users/{id}'s generated 200 would. Query is left out on purpose:
-	// a function reads req.query itself and decides what varies.
+	// connection's row), plus a per-call ordinal (calls, below): the n-th
+	// generate call of one request, or of one stream connection, draws the
+	// n-th value, deterministic per (seed, request, n). Without the ordinal
+	// a tick.lua calling generate emitted the SAME frame for the life of
+	// the connection, because the host is built once per connection (A19
+	// review). It is a body seeded like a generated response, not a copy
+	// of one: the detail route's own 200 additionally runs detailBody's id
+	// write-back from the path parameter (ListFamily/IDParam), which a
+	// function that wants the URL's id does itself. Query is left out on
+	// purpose: a function reads req.query itself and decides what varies.
 	req gen.Request
+	// calls counts generate calls on this host. Atomic because a ws row's
+	// host is shared by the tick (writer goroutine) and onFrame (reader
+	// goroutine).
+	calls atomic.Int64
 }
 
-// newLuaHost returns nil when there is nothing behind the helpers to reach —
-// which luafn reads as "no host" and answers from inside Lua, so a function
-// written against a live workspace still runs and reports why (mock.go's own
-// nil-Host contract).
+// newLuaHost is the product half of every mock.* helper for one request or
+// one stream connection. It never returns nil; the nil Host luafn reads as
+// "no host" and answers from inside Lua is the PREVIEW's literal nil
+// (previewFunction and PreviewStream), where there is no live workspace
+// behind the helpers to reach.
 func (p *Plane) newLuaHost(rt *runtime, ws *workspaces.Workspace, base resources.ScopeKey, outer []string, req gen.Request) luafn.Host {
 	return &luaHost{p: p, rt: rt, ws: ws, base: base, outer: outer, req: req}
 }
@@ -541,6 +554,15 @@ func (h *luaHost) Generate(_ context.Context, schema map[string]any) (any, error
 	}
 	req := h.req
 	req.PatchedSchema = root
+	// A COPY of the params with the call ordinal mixed in, the way
+	// newTickGenerator mixes __tick: the host's own map is shared across
+	// calls and, on a ws row, across two goroutines.
+	params := make(map[string]string, len(h.req.PathParams)+1)
+	for k, v := range h.req.PathParams {
+		params[k] = v
+	}
+	params["__generate"] = strconv.FormatInt(h.calls.Add(1), 10)
+	req.PathParams = params
 	body, err := h.rt.gen.Body(gen.ResponseVariant{
 		SchemaPtr: customSchemaPtr, HTTPStatus: http.StatusOK, MediaType: "application/json",
 	}, req)
@@ -550,11 +572,18 @@ func (h *luaHost) Generate(_ context.Context, schema map[string]any) (any, error
 		return nil, fmt.Errorf("generate_failed: %s", err.Error())
 	}
 	if len(body) == 0 {
-		return nil, nil
+		return nil, errors.New("generate_failed: the generator produced no body")
 	}
 	var value any
 	if err := jsonx.Unmarshal(body, &value); err != nil {
 		return nil, errors.New("generate_failed: the generated body is not JSON")
+	}
+	if value == nil {
+		// A root that rolled null under NullRate is the generator's honest
+		// answer, but in Lua a bare nil with no reason is what the guard
+		// `local t, err = mock.generate(…); if not t then …` reads as a
+		// failure with an EMPTY error. The reason says what happened.
+		return nil, errors.New("null")
 	}
 	return value, nil
 }
@@ -565,8 +594,13 @@ func (h *luaHost) resolveSchema(schema map[string]any) (map[string]any, error) {
 	root := schema
 	if raw, ok := schema["$ref"]; ok {
 		ptr, isString := raw.(string)
-		if !isString {
-			return nil, errors.New("bad_schema")
+		if !isString || !localSchemaPointer(ptr) {
+			// The `#/` rule the Lua string form already applies, applied to
+			// the table form too: `{["$ref"] = "#"}` would resolve to the
+			// WHOLE document and hand it to the generator as a schema, and
+			// `""` would pass the resolver's own empty-string test. A19
+			// review.
+			return nil, errors.New("bad_schema: a $ref must be a #/… pointer into the bound spec")
 		}
 		if h.rt.resolver == nil {
 			return nil, errors.New("unresolved_ref: no spec is bound, " + ptr + " names nothing")
@@ -587,6 +621,11 @@ func (h *luaHost) resolveSchema(schema map[string]any) (map[string]any, error) {
 	return root, nil
 }
 
+// localSchemaPointer is the `#/` rule: a JSON pointer into THIS document,
+// with at least one segment. `#` alone names the whole document and “ the
+// resolver would also take; neither is a schema.
+func localSchemaPointer(ptr string) bool { return len(ptr) > 2 && strings.HasPrefix(ptr, "#/") }
+
 // checkRefs is sanitizeRefs's refusing sibling: the first nested $ref the
 // resolver cannot follow is the error, and nothing is rewritten.
 func checkRefs(node any, resolver *openapi.Resolver) error {
@@ -594,8 +633,8 @@ func checkRefs(node any, resolver *openapi.Resolver) error {
 	case map[string]any:
 		if raw, ok := n["$ref"]; ok {
 			ptr, isString := raw.(string)
-			if !isString {
-				return errors.New("bad_schema: $ref is not a string")
+			if !isString || !localSchemaPointer(ptr) {
+				return errors.New("bad_schema: a $ref must be a #/… pointer into the bound spec")
 			}
 			if resolver == nil {
 				return errors.New("unresolved_ref: no spec is bound, " + ptr + " names nothing")
@@ -605,11 +644,21 @@ func checkRefs(node any, resolver *openapi.Resolver) error {
 			}
 			// A resolvable $ref is left to the generator, which follows it
 			// under its own budget; walking into it here would re-check the
-			// spec's own document, which the resolver already validated.
+			// spec's own document, whose refs the import already checked,
+			// and a dangling one THERE surfaces as the generator's own
+			// generate_failed rather than this unresolved_ref — a spec's
+			// own defect is not the function's.
 			return nil
 		}
-		for _, child := range n {
-			if err := checkRefs(child, resolver); err != nil {
+		// Sorted, so which of two dead pointers is named does not depend on
+		// Go's map order: the whole point of this error is the pointer.
+		keys := make([]string, 0, len(n))
+		for k := range n {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		for _, k := range keys {
+			if err := checkRefs(n[k], resolver); err != nil {
 				return err
 			}
 		}
@@ -623,11 +672,18 @@ func checkRefs(node any, resolver *openapi.Resolver) error {
 	return nil
 }
 
-// EntityCreate is the mock plane's anonymous POST through the same store:
-// the family's own id field and strategy, the same caps, the same refusals
-// by name. WriteForm is NOT consulted — that field says whether a POST on the
-// collection route takes over, and a function calling create has said what
-// it means.
+// EntityCreate is the mock plane's anonymous POST through the same STORE:
+// the family's own id field and strategy, the same row and byte caps, the
+// same refusals by name. It is not the same GATE, and the two differences
+// are decisions recorded in CARVE-OUTS (A19): WriteForm is not consulted —
+// that field says whether a POST on the collection route takes over, and a
+// function calling create has said what it means — and the D6.2 ancestor
+// walk resourceBranch runs for a nested family is not run, so a function may
+// place a row under a scope no live ancestor anchors; the row is then
+// unreachable until one does and counts against the caps, the same
+// observable-orphan rule the admin entity route already accepts for its own
+// writes (Repo.Set's comment). The scope's LENGTH is checked; its values are
+// the function's word, as they are the admin's.
 func (h *luaHost) EntityCreate(ctx context.Context, family string, scope []string, data map[string]any) (map[string]any, error) {
 	res, scopeKey, err := h.resolveFamily(family, scope)
 	if err != nil {
@@ -640,32 +696,32 @@ func (h *luaHost) EntityCreate(ctx context.Context, family string, scope []strin
 	return entityObject(row)
 }
 
-// EntityUpdate is Get → shallow merge → Set: patch's keys win, every other
-// key of the stored row stays, and the id field is the row's own whatever
-// patch says (Set keys the body by entityKey). `not_found` when there is no
-// row — a function that means "create if absent" calls create on that.
+// EntityUpdate is the store's Patch: a shallow merge of patch over the
+// stored row inside one write transaction — patch's keys win, every other
+// key stays, and the id field is the row's own whatever patch says (the
+// store keys the body by entityKey). `not_found` when there is no row, with
+// nothing written — a function that means "create if absent" calls create
+// on that. The first draft was Get → merge → Set at this layer; the A19
+// review named it a read-modify-write outside the writer (a lost update
+// between two concurrent requests, a deleted row resurrected by Set), which
+// is why the merge moved into resources.Repo.
 func (h *luaHost) EntityUpdate(ctx context.Context, family string, scope []string, key string, patch map[string]any) (map[string]any, error) {
 	res, scopeKey, err := h.resolveFamily(family, scope)
 	if err != nil {
 		return nil, err
 	}
-	current, found, err := h.p.entities.Get(ctx, res.ID, h.base, scopeKey, key)
+	if !resources.CanonicalEntityKey(key, res.Wrapper.IDType) {
+		// Before the store, not through it: a non-canonical key ("007" for
+		// an integer id) matches no row, so the store would answer
+		// not_found where bad_key is the truth. A19 review.
+		return nil, errors.New("bad_key")
+	}
+	row, found, err := h.p.entities.Patch(ctx, res.ID, h.base, scopeKey, key, res.IDField, res.Wrapper.IDType, patch)
 	if err != nil {
 		return nil, storeErr(err)
 	}
 	if !found {
 		return nil, errors.New("not_found")
-	}
-	merged, err := entityObject(current)
-	if err != nil {
-		return nil, err
-	}
-	for k, v := range patch {
-		merged[k] = v
-	}
-	row, _, err := h.p.entities.Set(ctx, res.ID, h.base, scopeKey, key, res.IDField, res.Wrapper.IDType, merged)
-	if err != nil {
-		return nil, storeErr(err)
 	}
 	return entityObject(row)
 }
@@ -675,6 +731,9 @@ func (h *luaHost) EntityDelete(ctx context.Context, family string, scope []strin
 	res, scopeKey, err := h.resolveFamily(family, scope)
 	if err != nil {
 		return false, err
+	}
+	if !resources.CanonicalEntityKey(key, res.Wrapper.IDType) {
+		return false, errors.New("bad_key")
 	}
 	deleted, err := h.p.entities.Delete(ctx, res.ID, h.base, scopeKey, key)
 	if err != nil {

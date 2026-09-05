@@ -142,6 +142,100 @@ func (r *Repo) Set(ctx context.Context, resourceID int64, base, scope ScopeKey, 
 // compare-and-swap semantics — it is a pure counter). ErrResourceGone when
 // resourceID no longer names a row (0 rows updated): a family declined out
 // from under an in-flight POST.
+// Patch is A19's `mock.entities.update`: a SHALLOW merge of patch over the
+// stored row, read, merged and written inside ONE write transaction. It is
+// its own method and not Get-then-Set at the caller because that pair is a
+// read-modify-write with the read outside the writer: two concurrent
+// requests both read the old row and the second Set discards the first's
+// patch, and a row deleted between the two is RESURRECTED by Set's
+// create-or-replace — `update` is exactly the "flip a status, bump a
+// counter" primitive, and a primitive that loses one of two increments is
+// not one. Here the row is read under the single writer connection, so the
+// merge sees the latest data and a vanished row is `found == false`, never a
+// new row.
+//
+// What it shares with Set: keyedBody (the canonical-key check, the id
+// field pinned to entityKey whatever patch says, the per-entity byte cap)
+// and the family-wide byte total computed against the row being REPLACED.
+// What it does not do: insert (not found is the answer), raise seq (the key
+// already exists), validate against entity_schema (neither door does, R23).
+func (r *Repo) Patch(ctx context.Context, resourceID int64, base, scope ScopeKey, entityKey, idField, idType string, patch map[string]any) (Entity, bool, error) {
+	totalCap := r.entityByteCap()
+
+	callerCtx := ctx
+	wctx, cancel := context.WithTimeout(ctx, writeDeadline)
+	defer cancel()
+
+	now := time.Now().UTC()
+	var out Entity
+	var found bool
+	writeErr := r.db.Write(wctx, func(tx *sql.Tx) error {
+		exists, err := r.resourceRowExists(wctx, tx, resourceID)
+		if err != nil {
+			return err
+		}
+		if !exists {
+			return ErrResourceGone
+		}
+
+		var (
+			id         int64
+			oldData    string
+			oldCreated int64
+		)
+		err = tx.QueryRowContext(wctx,
+			"SELECT id, data, created_at FROM entities WHERE resource_id = ? AND base_scope_key = ? AND scope_key = ? AND entity_key = ?",
+			resourceID, string(base), string(scope), entityKey,
+		).Scan(&id, &oldData, &oldCreated)
+		switch {
+		case errors.Is(err, sql.ErrNoRows):
+			return nil // found stays false
+		case err != nil:
+			return fmt.Errorf("read entity %q on resource %d: %w", entityKey, resourceID, err)
+		}
+		found = true
+
+		merged := map[string]any{}
+		if err := jsonx.Unmarshal([]byte(oldData), &merged); err != nil {
+			return fmt.Errorf("decode entity %q on resource %d: %w", entityKey, resourceID, err)
+		}
+		for k, v := range patch {
+			merged[k] = v
+		}
+		body, merr := r.keyedBody(resourceID, entityKey, idField, idType, merged)
+		if merr != nil {
+			return merr
+		}
+
+		var total sql.NullInt64
+		if err := tx.QueryRowContext(wctx,
+			"SELECT SUM(LENGTH(data)) FROM entities WHERE resource_id = ?", resourceID,
+		).Scan(&total); err != nil {
+			return fmt.Errorf("read entity totals for resource %d: %w", resourceID, err)
+		}
+		if total.Int64-int64(len(oldData))+int64(len(body)) > totalCap {
+			return ErrEntityLimit
+		}
+		if _, err := tx.ExecContext(wctx,
+			"UPDATE entities SET data = ?, updated_at = ? WHERE id = ?",
+			string(body), now.Unix(), id); err != nil {
+			return fmt.Errorf("patch entity %q on resource %d: %w", entityKey, resourceID, err)
+		}
+		out = Entity{
+			ID: id, ResourceID: resourceID, BaseScopeKey: string(base), ScopeKey: string(scope), EntityKey: entityKey,
+			Data: jsonx.RawMessage(body), CreatedAt: time.Unix(oldCreated, 0).UTC(), UpdatedAt: now,
+		}
+		return nil
+	})
+	if writeErr != nil {
+		if writeBusyIfOurDeadline(callerCtx, writeErr) {
+			return Entity{}, false, fmt.Errorf("patch entity %q on resource %d: %w", entityKey, resourceID, ErrWriteBusy)
+		}
+		return Entity{}, false, writeErr
+	}
+	return out, found, nil
+}
+
 func allocateSeq(ctx context.Context, tx *sql.Tx, resourceID int64) (int64, error) {
 	var seq int64
 	err := tx.QueryRowContext(ctx, "UPDATE resources SET seq = seq + 1 WHERE id = ? RETURNING seq", resourceID).Scan(&seq)

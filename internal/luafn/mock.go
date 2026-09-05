@@ -2,6 +2,7 @@ package luafn
 
 import (
 	"context"
+	"math"
 	"strconv"
 	"time"
 
@@ -134,11 +135,14 @@ func mockJWT(ctx context.Context, host Host) lua.LGFunction {
 // is `bad_schema`; a pointer that does not start with `#/` is too, because
 // there is no document a bare word could name.
 //
-// The value is deterministic per (workspace seed, request, schema) exactly as
-// a generated response is — two calls with the same schema in one function
-// return the same table, and a function that wants two different users asks
-// for an array of two. This is the generator's own contract, not this
-// package's addition, and it is written in the guide.
+// The value is deterministic per (workspace seed, request) exactly as a
+// generated response is — the SCHEMA is not in the seed, so two calls in one
+// function draw from the same stream and two calls over the same schema
+// return the same table (deadline-shaped fields such as `exp` or
+// `*_expires_at` excepted: the generator anchors those to its clock per
+// call); a function that wants two different users asks for an array of two.
+// This is the generator's own contract, not this package's addition, and it
+// is written in the guide.
 func mockGenerate(ctx context.Context, host Host) lua.LGFunction {
 	return func(l *lua.LState) int {
 		if host == nil {
@@ -186,17 +190,45 @@ func mockGenerate(ctx context.Context, host Host) lua.LGFunction {
 // could hand the host its values shuffled. Len/RawGetInt is the array
 // part, positionally, which is the only reading that carries the
 // meaning.
-func scopeArg(l *lua.LState, i int) []string {
-	t, ok := l.Get(i).(*lua.LTable)
-	if !ok {
-		return nil
+//
+// Absent (nil) is "the request's own scope"; anything else that is not a
+// table, and any element that is not a string or a number, is a REFUSAL —
+// `bad_scope`, the same word a wrong arity gets — because the first draft
+// fell back to the request's scope for a non-table argument and
+// stringified any element (`nil` became the text "nil", a table its
+// address), so a mistyped tuple wrote or deleted under a garbage scope key
+// instead of being told. A19 review.
+func scopeArg(l *lua.LState, i int) ([]string, bool) {
+	switch arg := l.Get(i).(type) {
+	case *lua.LNilType:
+		return nil, true
+	case *lua.LTable:
+		n := arg.Len()
+		scope := make([]string, 0, n)
+		for j := 1; j <= n; j++ {
+			switch v := arg.RawGetInt(j).(type) {
+			case lua.LString:
+				scope = append(scope, string(v))
+			case lua.LNumber:
+				scope = append(scope, v.String())
+			default:
+				return nil, false
+			}
+		}
+		return scope, true
+	default:
+		return nil, false
 	}
-	n := t.Len()
-	scope := make([]string, 0, n)
-	for j := 1; j <= n; j++ {
-		scope = append(scope, t.RawGetInt(j).String())
-	}
-	return scope
+}
+
+// familyArg reads the family name at stack index i as a refusal, never a
+// raised Lua error: the first draft used l.CheckString, which RAISES and so
+// turned a mistyped family into 500 function_failed while every sibling
+// refusal in this file returns nil plus a word — and, reached through
+// __call, reported "bad argument #2" for what the author wrote first.
+func familyArg(l *lua.LState, i int) (string, bool) {
+	s, ok := l.Get(i).(lua.LString)
+	return string(s), ok && s != ""
 }
 
 // keyArg reads an entity key at stack index i: a string as is, a whole
@@ -210,7 +242,11 @@ func keyArg(l *lua.LState, i int) (string, bool) {
 		return string(v), v != ""
 	case lua.LNumber:
 		f := float64(v)
-		if f != float64(int64(f)) {
+		// The range check comes FIRST: float64→int64 out of range is
+		// implementation-defined in Go (wraps on amd64, saturates on
+		// arm64), so `f != float64(int64(f))` alone would let 2^63 through
+		// as "9223372036854775807" on a saturating target. A19 review.
+		if f < -(1<<63) || f >= (1<<63) || f != math.Trunc(f) {
 			return "", false
 		}
 		return strconv.FormatInt(int64(f), 10), true
@@ -226,8 +262,15 @@ func mockEntitiesCall(ctx context.Context, host Host) lua.LGFunction {
 		if host == nil {
 			return failNoHost(l)
 		}
-		family := l.CheckString(2)
-		rows, err := host.Entities(ctx, family, scopeArg(l, 3))
+		family, ok := familyArg(l, 2)
+		if !ok {
+			return fail(l, errBadFamily)
+		}
+		scope, ok := scopeArg(l, 3)
+		if !ok {
+			return fail(l, errBadScope)
+		}
+		rows, err := host.Entities(ctx, family, scope)
 		if err != nil {
 			return fail(l, err)
 		}
@@ -249,7 +292,10 @@ func mockEntityCreate(ctx context.Context, host Host) lua.LGFunction {
 		if host == nil {
 			return failNoHost(l)
 		}
-		family := l.CheckString(1)
+		family, ok := familyArg(l, 1)
+		if !ok {
+			return fail(l, errBadFamily)
+		}
 		data, ok, err := tableArg(l, 2)
 		if err != nil {
 			return fail(l, err)
@@ -257,7 +303,11 @@ func mockEntityCreate(ctx context.Context, host Host) lua.LGFunction {
 		if !ok {
 			return fail(l, errBadData)
 		}
-		row, err := host.EntityCreate(ctx, family, scopeArg(l, 3), data)
+		scope, ok := scopeArg(l, 3)
+		if !ok {
+			return fail(l, errBadScope)
+		}
+		row, err := host.EntityCreate(ctx, family, scope, data)
 		if err != nil {
 			return fail(l, err)
 		}
@@ -277,7 +327,10 @@ func mockEntityUpdate(ctx context.Context, host Host) lua.LGFunction {
 		if host == nil {
 			return failNoHost(l)
 		}
-		family := l.CheckString(1)
+		family, ok := familyArg(l, 1)
+		if !ok {
+			return fail(l, errBadFamily)
+		}
 		key, ok := keyArg(l, 2)
 		if !ok {
 			return fail(l, errBadKey)
@@ -289,7 +342,11 @@ func mockEntityUpdate(ctx context.Context, host Host) lua.LGFunction {
 		if !isTable {
 			return fail(l, errBadData)
 		}
-		row, err := host.EntityUpdate(ctx, family, scopeArg(l, 4), key, patch)
+		scope, ok := scopeArg(l, 4)
+		if !ok {
+			return fail(l, errBadScope)
+		}
+		row, err := host.EntityUpdate(ctx, family, scope, key, patch)
 		if err != nil {
 			return fail(l, err)
 		}
@@ -306,12 +363,19 @@ func mockEntityDelete(ctx context.Context, host Host) lua.LGFunction {
 		if host == nil {
 			return failNoHost(l)
 		}
-		family := l.CheckString(1)
+		family, ok := familyArg(l, 1)
+		if !ok {
+			return fail(l, errBadFamily)
+		}
 		key, ok := keyArg(l, 2)
 		if !ok {
 			return fail(l, errBadKey)
 		}
-		deleted, err := host.EntityDelete(ctx, family, scopeArg(l, 3), key)
+		scope, ok := scopeArg(l, 3)
+		if !ok {
+			return fail(l, errBadScope)
+		}
+		deleted, err := host.EntityDelete(ctx, family, scope, key)
 		if err != nil {
 			return fail(l, err)
 		}
