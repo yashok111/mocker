@@ -1,11 +1,9 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import type { ReactElement } from "react";
 import {
-  ActionIcon,
   Alert,
   Badge,
   Button,
-  Card,
   Code,
   Divider,
   Group,
@@ -16,18 +14,11 @@ import {
   Switch,
   Tabs,
   Text,
-  Textarea,
   TextInput,
   Title,
 } from "@mantine/core";
 import { modals } from "@mantine/modals";
-import {
-  IconAlertTriangle,
-  IconDeviceFloppy,
-  IconPlus,
-  IconRestore,
-  IconTrash,
-} from "@tabler/icons-react";
+import { IconAlertTriangle, IconDeviceFloppy, IconRestore } from "@tabler/icons-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { ApiFailure } from "@/api/client";
 import {
@@ -40,7 +31,6 @@ import {
 } from "@/api/generated/operations/operations.ts";
 import { getGetWorkspaceQueryKey } from "@/api/generated/workspaces/workspaces.ts";
 import type {
-  Condition,
   EditConflictTombstone,
   MergedStatusView,
   OverrideConflictDetails,
@@ -53,6 +43,7 @@ import {
   describePreviewRefusalReason,
   isGoneTombstone,
 } from "@/api/errors";
+import { VariantEditor } from "./VariantEditor";
 
 // OperationEditor is the right-hand pane of DESIGN §14 screen 5. It is built
 // around ONE invariant, spelled out in the phase brief (§3.3 of the phase
@@ -71,24 +62,6 @@ import {
 // control mutates it through `updateVariant`/`setFields`, which always
 // spread the previous value first. Nothing in this file ever constructs a
 // Variant or OverrideMutableFields from scratch out of the fields it shows.
-
-// jsonLocation turns JSON.parse's own SyntaxError into "строка N, столбец M"
-// — a byte offset into a multi-line textarea is not something a person can
-// use without counting characters by hand. Small enough, and specific enough
-// to this file's Textarea, that it is not worth promoting into a shared
-// module across the three files this phase's "operations" slice owns.
-function jsonLocation(text: string, err: unknown): string {
-  const message = err instanceof Error ? err.message : String(err);
-  const match = /position (\d+)/.exec(message);
-  if (!match) {
-    return message;
-  }
-  const pos = Number(match[1]);
-  const before = text.slice(0, pos);
-  const line = before.split("\n").length;
-  const column = pos - before.lastIndexOf("\n");
-  return `строка ${line}, столбец ${column}`;
-}
 
 function emptyDocument(): OverrideMutableFields {
   // The baseline for "nothing overridden yet" (§3.3: a 404 on the GET is the
@@ -131,20 +104,6 @@ function declaredPathParams(basePath: string, operationPath: string): string[] {
   }
   return Array.from(names);
 }
-
-const DEFAULT_CONDITION: Condition = { in: "query", name: "", op: "equals", value: "" };
-
-const IN_OPTIONS: { value: Condition["in"]; label: string }[] = [
-  { value: "query", label: "query-параметр" },
-  { value: "header", label: "заголовок" },
-  { value: "body", label: "тело" },
-];
-
-const OP_OPTIONS: { value: Condition["op"]; label: string }[] = [
-  { value: "equals", label: "равно" },
-  { value: "contains", label: "содержит" },
-  { value: "exists", label: "присутствует" },
-];
 
 export function OperationEditor({
   workspaceId,
@@ -636,6 +595,7 @@ export function OperationEditor({
               {allSelectors.map((selector) => (
                 <Tabs.Panel key={selector} value={selector} pt="sm">
                   <StatusPanel
+                    workspaceId={workspaceId}
                     selector={selector}
                     variant={fields.responses[selector]}
                     updateVariant={(updater) => updateVariant(selector, updater)}
@@ -801,308 +761,35 @@ function PreviewPanel({ result }: { result: PreviewResultView }): ReactElement {
   );
 }
 
+// StatusPanel is the per-status mount of VariantEditor.tsx — the one editor
+// of a response variant since A21 step 5. It keeps this screen's test ids
+// (`operation-status-<field>-<selector>`, `operation-when-<field>-<selector>-<i>`)
+// and reports the variant's validity up to the «Сохранить» button through
+// onBodyErrorChange, as before; everything about the variant itself —
+// producer, body, file, function, headers, conditions — lives in the shared
+// editor, so a field added there reaches both screens or neither.
 function StatusPanel({
+  workspaceId,
   selector,
   variant,
   updateVariant,
   onBodyErrorChange,
 }: {
+  workspaceId: number;
   selector: string;
   variant: Variant | undefined;
   updateVariant: (updater: (v: Variant) => Variant) => void;
   onBodyErrorChange: (hasError: boolean) => void;
 }): ReactElement {
-  // The select shows THREE producers, the wire has two modes plus a
-  // function (A18: legal on a spec-operation override too, "both writers"):
-  // a variant carrying `function` reads as «функция» whatever its mode
-  // says. A20 gave the custom-endpoint forms this box and left this one
-  // showing a function-bearing 200 as «сгенерированный» with «Тело
-  // строится по схеме спеки» — false; the 2026-09-05 UI review found it.
-  // `function` present — even as "" right after the select, before a
-  // keystroke — IS the function producer: a stored row never carries "" (Go
-  // omits it), so the empty string only ever means "chosen, not typed yet",
-  // and functionEmpty below keeps that from being saved.
-  const mode = variant?.function !== undefined ? "function" : (variant?.mode ?? "generated");
-  const functionText = variant?.function ?? "";
-  const functionEmpty = mode === "function" && functionText.trim() === "";
-  const when = variant?.when ?? [];
-  const recipes = variant?.recipes ?? {};
-  const recipeEntries = Object.entries(recipes);
-
-  // The body textarea keeps its own draft text so a JSON parse error mid-edit
-  // never overwrites the last VALID body sitting in `fields` — only a
-  // successful parse ever calls updateVariant.
-  const [bodyDraft, setBodyDraft] = useState<string | null>(null);
-  const [bodyError, setBodyError] = useState<string | null>(null);
-  const serverBodyText = JSON.stringify(variant?.body ?? {}, null, 2);
-  const bodyText = bodyDraft ?? serverBodyText;
-
-  // lastCommittedBodyRef holds the serverBodyText we expect to see NEXT, as a
-  // result of our OWN most recent successful edit — initialised from the
-  // variant's body at mount, so the first render never looks like an
-  // external change. Whenever serverBodyText disagrees with it, the variant's
-  // body changed from OUTSIDE this panel (a save/GET round trip that altered
-  // formatting is not the case that matters here — it is "Сбросить к спеке",
-  // which sets body back to undefined without ever unmounting this panel,
-  // since Tabs.Panel keeps every status keyed by the same `selector` for the
-  // life of the tab list). The stale draft from before the reset would
-  // otherwise sit in the textarea forever, and a save from that state would
-  // submit no body at all while the screen shows the old one.
-  const lastCommittedBodyRef = useRef<string>(serverBodyText);
-  useEffect(() => {
-    if (serverBodyText !== lastCommittedBodyRef.current) {
-      lastCommittedBodyRef.current = serverBodyText;
-      setBodyDraft(null);
-      setBodyError(null);
-    }
-  }, [serverBodyText]);
-
-  // Report this panel's body-validity up to the parent, which owns the
-  // «Сохранить» button — see the comment on `bodyErrors` in OperationEditor.
-  // Read the callback through a ref rather than depending on it directly:
-  // the parent passes a fresh closure every render, and depending on it
-  // would re-fire (and re-clean-up) this effect on every keystroke elsewhere
-  // in the document, not just when this panel's own error state changes.
-  const onBodyErrorChangeRef = useRef(onBodyErrorChange);
-  // Refreshed in an effect rather than during render: a render can be thrown
-  // away and re-run, so assigning there mutates state React has not committed
-  // to. No dependency array, so it runs after EVERY render; declared before
-  // the two effects below that read the ref, and effects fire in declaration
-  // order, so those always see the callback from the render that queued them.
-  useEffect(() => {
-    onBodyErrorChangeRef.current = onBodyErrorChange;
-  });
-  useEffect(() => {
-    // An empty Lua box counts as a body error: the wire reads "" as no
-    // function, and a save would silently land a generated variant.
-    onBodyErrorChangeRef.current(bodyError !== null || functionEmpty);
-  }, [bodyError, functionEmpty]);
-  useEffect(() => {
-    return () => onBodyErrorChangeRef.current(false);
-  }, []);
-
-  function handleModeChange(next: string): void {
-    if (next === "function") {
-      // A18 D5: one producer per variant — body, encoding, file, media
-      // type, recipes and schemaPatch all go; when[] and headers stay (a
-      // function keeps its selection and its headers). The Lua box starts
-      // empty rather than seeded with anything, and the empty box blocks
-      // «Сохранить» (functionEmpty above) until something is typed. Mode is
-      // the neutral one, as A18's own rows leave it.
-      updateVariant((v) => ({
-        ...v,
-        mode: "generated",
-        body: undefined,
-        bodyEncoding: undefined,
-        bodyRef: undefined,
-        mediaType: undefined,
-        recipes: undefined,
-        schemaPatch: undefined,
-        function: v.function ?? "",
-      }));
-      return;
-    }
-    updateVariant((v) => ({
-      ...v,
-      mode: next === "pinned" ? "pinned" : "generated",
-      function: undefined,
-    }));
-  }
-
-  function handleFunctionChange(text: string): void {
-    updateVariant((v) => ({ ...v, function: text }));
-  }
-
-  // A6: a bodyRef variant serves the uploaded file verbatim; the body box
-  // must not render for it — its `{}` fallback was the first keystroke's
-  // `body` beside `bodyRef`, a 400 naming a field the form never showed.
-  function clearBodyRef(): void {
-    updateVariant((v) => ({ ...v, bodyRef: undefined }));
-  }
-
-  function handleBodyChange(text: string): void {
-    setBodyDraft(text);
-    try {
-      const parsed: unknown = JSON.parse(text);
-      setBodyError(null);
-      // What serverBodyText will read as once this commit round-trips back
-      // down through `fields` — matching it here (rather than leaving the
-      // ref at its old value) is what lets the reconciliation effect above
-      // tell "this is my own edit landing" apart from a genuine external
-      // change, so it does not stomp the operator's own raw text/formatting.
-      lastCommittedBodyRef.current = JSON.stringify(parsed, null, 2);
-      updateVariant((v) => ({ ...v, body: parsed }));
-    } catch (err) {
-      setBodyError(`JSON невалиден (${jsonLocation(text, err)})`);
-    }
-  }
-
-  function handleMediaTypeChange(mediaType: string): void {
-    updateVariant((v) => ({ ...v, mediaType }));
-  }
-
-  function addCondition(): void {
-    updateVariant((v) => ({ ...v, when: [...(v.when ?? []), DEFAULT_CONDITION] }));
-  }
-
-  function patchCondition(index: number, patch: Partial<Condition>): void {
-    updateVariant((v) => ({
-      ...v,
-      when: (v.when ?? []).map((c, i) => (i === index ? { ...c, ...patch } : c)),
-    }));
-  }
-
-  function removeCondition(index: number): void {
-    updateVariant((v) => ({ ...v, when: (v.when ?? []).filter((_, i) => i !== index) }));
-  }
-
   return (
-    <Stack gap="sm">
-      <NativeSelect
-        label="Режим"
-        data-testid={`operation-status-mode-${selector}`}
-        value={mode}
-        onChange={(e) => handleModeChange(e.currentTarget.value)}
-      >
-        <option value="generated">сгенерированный</option>
-        <option value="pinned">закреплённый</option>
-        <option value="function">функция (Lua)</option>
-      </NativeSelect>
-
-      {mode === "function" ? (
-        <Textarea
-          label="Функция (Lua) — над аргументом req, возвращает status, body, headers"
-          description="Раздел «Функции» в руководстве. Компилируется при сохранении: синтаксическая ошибка — отказ со словами парсера. Заменяет тело, файл и подстановки этого статуса; условия ниже остаются."
-          rows={6}
-          styles={{ input: { fontFamily: "var(--mantine-font-family-monospace)" } }}
-          data-testid={`operation-status-function-${selector}`}
-          error={functionEmpty ? "Функция пуста" : undefined}
-          value={functionText}
-          onChange={(e) => handleFunctionChange(e.currentTarget.value)}
-        />
-      ) : mode === "pinned" && variant?.bodyRef !== undefined ? (
-        <Group gap="xs" data-testid={`operation-status-body-ref-${selector}`}>
-          <Text size="sm">
-            Ответ — файл «{variant.bodyRef.replace(/^asset:/, "")}» (вкладка «Файлы»), со своим
-            media type.
-          </Text>
-          <Button variant="default" size="xs" onClick={clearBodyRef}>
-            Убрать файл и задать тело
-          </Button>
-        </Group>
-      ) : mode === "pinned" ? (
-        <>
-          <TextInput
-            label="Media type"
-            placeholder="application/json"
-            data-testid={`operation-status-media-type-${selector}`}
-            value={variant?.mediaType ?? ""}
-            onChange={(e) => handleMediaTypeChange(e.currentTarget.value)}
-          />
-          <Textarea
-            label="Тело ответа, JSON"
-            rows={6}
-            data-testid={`operation-status-body-${selector}`}
-            error={bodyError}
-            value={bodyText}
-            onChange={(e) => handleBodyChange(e.currentTarget.value)}
-          />
-        </>
-      ) : (
-        <Text size="sm" c="dimmed">
-          Тело строится по схеме спеки — переключите на «закреплённый», чтобы задать его вручную
-        </Text>
-      )}
-
-      {recipeEntries.length > 0 ? (
-        <Card withBorder p="xs" data-testid={`operation-status-recipes-${selector}`}>
-          <Text size="xs" fw={600} c="dimmed">
-            Автоматические значения на этом статусе ({recipeEntries.length}) — редактирование
-            появится позже, здесь только показ, чтобы было видно, откуда взялось тело
-          </Text>
-          <Group gap={4} mt={4}>
-            {recipeEntries.map(([path, recipe]) => (
-              <Badge key={path} size="sm" variant="light">
-                {path}: {recipe.kind}
-              </Badge>
-            ))}
-          </Group>
-        </Card>
-      ) : null}
-
-      <Divider label="Когда отвечать так" labelPosition="left" />
-      <Text size="xs" c="dimmed">
-        Все условия ниже должны совпасть, иначе используется обычная генерация
-      </Text>
-      <Stack gap="xs" data-testid={`operation-status-when-${selector}`}>
-        {when.map((cond, index) => (
-          // Index-keyed on purpose: conditions carry no id of their own and
-          // this list is edited in place, never reordered.
-          // eslint-disable-next-line react/no-array-index-key
-          <Group key={index} gap="xs" wrap="nowrap" align="flex-end">
-            <NativeSelect
-              label="Где"
-              data-testid={`operation-when-in-${selector}-${index}`}
-              value={cond.in}
-              onChange={(e) =>
-                patchCondition(index, { in: e.currentTarget.value as Condition["in"] })
-              }
-            >
-              {IN_OPTIONS.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </NativeSelect>
-            <TextInput
-              label="Имя"
-              data-testid={`operation-when-name-${selector}-${index}`}
-              value={cond.name}
-              onChange={(e) => patchCondition(index, { name: e.currentTarget.value })}
-            />
-            <NativeSelect
-              label="Условие"
-              data-testid={`operation-when-op-${selector}-${index}`}
-              value={cond.op}
-              onChange={(e) =>
-                patchCondition(index, { op: e.currentTarget.value as Condition["op"] })
-              }
-            >
-              {OP_OPTIONS.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </NativeSelect>
-            <TextInput
-              label="Значение"
-              disabled={cond.op === "exists"}
-              data-testid={`operation-when-value-${selector}-${index}`}
-              value={cond.value ?? ""}
-              onChange={(e) => patchCondition(index, { value: e.currentTarget.value })}
-            />
-            <ActionIcon
-              variant="default"
-              color="red"
-              onClick={() => removeCondition(index)}
-              data-testid={`operation-when-remove-${selector}-${index}`}
-              aria-label="Удалить условие"
-            >
-              <IconTrash size={16} />
-            </ActionIcon>
-          </Group>
-        ))}
-        <Button
-          variant="default"
-          size="xs"
-          w="fit-content"
-          leftSection={<IconPlus size={14} />}
-          onClick={addCondition}
-          data-testid={`operation-when-add-${selector}`}
-        >
-          Добавить условие
-        </Button>
-      </Stack>
-    </Stack>
+    <VariantEditor
+      workspaceId={workspaceId}
+      variant={variant}
+      updateVariant={updateVariant}
+      onErrorChange={onBodyErrorChange}
+      testId={(name) => `operation-status-${name}-${selector}`}
+      whenTestId={(name, index) => `operation-when-${name}-${selector}-${index}`}
+      hasSchema
+    />
   );
 }

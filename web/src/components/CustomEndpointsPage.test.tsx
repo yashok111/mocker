@@ -337,10 +337,8 @@ describe("CustomEndpointsPage", () => {
           body: undefined,
           mediaType: undefined,
           function: "return 200, { ok = true }",
-          // Left over from before the function; the server refuses them
-          // beside one (function_and_body), so a save from here drops them.
-          recipes: { "$.id": { kind: "sequence" } },
-          schemaPatch: [{ op: "add", path: "/x", value: 1 }],
+          // A stored function row never carries recipes/schemaPatch (the
+          // server refuses the pair at write time); when[] survives an edit.
           when: [{ in: "header", name: "x-test", op: "exists" }],
         }),
       },
@@ -354,17 +352,18 @@ describe("CustomEndpointsPage", () => {
     expect(await screen.findByTestId("endpoint-function")).toHaveTextContent("функция Lua");
     await userEvent.click(screen.getByTestId("endpoint-edit-toggle"));
     const form = await screen.findByTestId("endpoint-edit-form");
+    expect(within(form).getByTestId("endpoint-edit-mode")).toHaveValue("function");
     const lua = within(form).getByTestId("endpoint-edit-function");
     expect(lua).toHaveValue("return 200, { ok = true }");
-    expect(within(form).getByTestId("endpoint-edit-body")).toHaveValue("");
+    // One producer at a time: no body box beside a function (A21 step 5 —
+    // the exclusivity is an unreachable state, not an inline error).
+    expect(within(form).queryByTestId("endpoint-edit-body")).toBeNull();
 
-    await userEvent.type(within(form).getByTestId("endpoint-edit-body"), "{{}");
-    await userEvent.click(within(form).getByTestId("endpoint-edit-submit"));
-    expect(within(form).getByText(/Функция и тело ответа взаимоисключающие/)).toBeInTheDocument();
+    // An emptied Lua box blocks the save rather than landing a generated variant.
+    await userEvent.clear(lua);
+    expect(within(form).getByTestId("endpoint-edit-submit")).toBeDisabled();
     expect(fetchMock.mock.calls.filter(([, init]) => init?.method === "PUT")).toHaveLength(0);
 
-    await userEvent.clear(within(form).getByTestId("endpoint-edit-body"));
-    await userEvent.clear(lua);
     await userEvent.type(lua, "return 404, {{ gone = true }");
     await userEvent.click(within(form).getByTestId("endpoint-edit-submit"));
     await waitFor(() => {
@@ -379,7 +378,7 @@ describe("CustomEndpointsPage", () => {
       function: "return 404, { gone = true }",
       when: [{ in: "header", name: "x-test", op: "exists" }],
     });
-    for (const gone of ["body", "mediaType", "bodyRef", "recipes", "schemaPatch"]) {
+    for (const gone of ["body", "mediaType", "bodyRef"]) {
       expect(sent.responses["200"]).not.toHaveProperty(gone);
     }
   });
@@ -723,7 +722,8 @@ describe("CustomEndpointsPage", () => {
     renderInRouter(<CustomEndpointsPage id={WS} />);
     await userEvent.click(await screen.findByTestId("endpoint-edit-toggle"));
     const form = await screen.findByTestId("endpoint-edit-form");
-    expect(within(form).getByTestId("endpoint-edit-producer-note")).toHaveTextContent(
+    expect(within(form).getByTestId("endpoint-edit-mode")).toHaveValue("generated");
+    expect(within(form).getByTestId("endpoint-edit-generated-note")).toHaveTextContent(
       "строится по схеме",
     );
     const pathField = within(form).getByTestId("endpoint-edit-path");
@@ -741,7 +741,7 @@ describe("CustomEndpointsPage", () => {
     expect(sent.responses["200"]).not.toHaveProperty("body");
   });
 
-  it("keeps a file-backed variant on an empty box and replaces the file when a body is typed", async () => {
+  it("shows a file-backed variant as its file and replaces the file when the producer becomes a body", async () => {
     const ep = endpointViewFixture({
       id: 5,
       activeStatus: 200,
@@ -761,8 +761,12 @@ describe("CustomEndpointsPage", () => {
     renderInRouter(<CustomEndpointsPage id={WS} />);
     await userEvent.click(await screen.findByTestId("endpoint-edit-toggle"));
     const form = await screen.findByTestId("endpoint-edit-form");
-    expect(within(form).getByTestId("endpoint-edit-producer-note")).toHaveTextContent("logo.png");
-    await userEvent.type(within(form).getByTestId("endpoint-edit-body"), '{{"ok": true}');
+    expect(within(form).getByTestId("endpoint-edit-mode")).toHaveValue("file");
+    expect(within(form).getByTestId("endpoint-edit-file")).toHaveValue("logo.png");
+    await userEvent.selectOptions(within(form).getByTestId("endpoint-edit-mode"), "pinned");
+    const body = within(form).getByTestId("endpoint-edit-body");
+    await userEvent.clear(body);
+    await userEvent.type(body, '{{"ok": true}');
     await userEvent.click(within(form).getByTestId("endpoint-edit-submit"));
     await waitFor(() => {
       expect(fetchMock.mock.calls.filter(([, init]) => init?.method === "PUT")).toHaveLength(1);

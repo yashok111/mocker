@@ -549,10 +549,11 @@ describe("OperationEditor", () => {
     doc.responses["200"] = { mode: "pinned", bodyRef: "asset:logo.png" };
     route({ [GET]: () => json(200, doc) });
     renderInRouter(<OperationEditor workspaceId={WS} opKey={OPKEY} statuses={STATUSES} />);
-    const ref = await screen.findByTestId("operation-status-body-ref-200");
-    expect(ref).toHaveTextContent("logo.png");
+    await screen.findByTestId("operation-status-body-ref-200");
+    expect(screen.getByTestId("operation-status-mode-200")).toHaveValue("file");
+    expect(screen.getByTestId("operation-status-file-200")).toHaveValue("logo.png");
     expect(screen.queryByTestId("operation-status-body-200")).toBeNull();
-    await userEvent.click(within(ref).getByRole("button"));
+    await userEvent.selectOptions(screen.getByTestId("operation-status-mode-200"), "pinned");
     expect(await screen.findByTestId("operation-status-body-200")).toBeInTheDocument();
   });
 });

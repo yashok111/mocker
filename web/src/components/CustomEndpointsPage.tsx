@@ -45,6 +45,7 @@ import type {
   ServerConfigViewLimits,
   StreamDefinition,
   UpdateEndpointRequestResponses,
+  Variant,
 } from "@/api/generated/schemas";
 import {
   StreamCapsStrip,
@@ -57,6 +58,7 @@ import {
 } from "./StreamEditor";
 import { StreamTestClient } from "./StreamTestClient";
 import { TabLink } from "./TabLink";
+import { VariantEditor } from "./VariantEditor";
 import { ApiFailure } from "@/api/client";
 import { describeApiFailure, describeApiFailureDetailed, isGoneTombstone } from "@/api/errors";
 import { arktypeResolver } from "@/validation/resolver";
@@ -190,13 +192,11 @@ const EMPTY_FORM: CreateForm = {
   functionText: "",
 };
 
-// producerConflict is A18 D5's "one producer per variant" said before a
-// round trip: a variant either runs a function or serves a body, and a
-// function chooses its own media type. The server refuses the pair by name
-// (400 function_and_body); this form says the same thing next to the fields
-// so the operator does not read it off an alert. Null when the shape is
-// legal. Exported for the test.
-export function producerConflict(fields: {
+// createProducerConflict is A18 D5's "one producer per variant" for the
+// CREATE card, which keeps its flat fields (a new endpoint is one status and
+// one body, the common case; the edit form mounts VariantEditor over the
+// whole variant). Exported for the test.
+export function createProducerConflict(fields: {
   functionText: string;
   bodyText: string;
   mediaType: string;
@@ -229,13 +229,13 @@ const activeStatusField = type("string").narrow((value, ctx) => {
   return true;
 });
 
+// A21 step 5: the variant itself — body, media type, file, function,
+// headers, conditions — is VariantEditor.tsx's, held in local state beside
+// this form; the form owns only the row's own fields.
 const editForm = type({
   method: "string",
   path: pathTemplate,
   status: activeStatusField,
-  bodyText: bodyField,
-  mediaType: "string",
-  functionText: "string",
   // A21 (G9): the two switches the operation editor always had — the row
   // showed «маршрут выключен» as a badge with no way to flip it, so
   // disabling a custom endpoint meant deleting it.
@@ -263,61 +263,13 @@ function defaultsFromEndpoint(
     "method" | "path" | "activeStatus" | "responses" | "overrideOn" | "routeOff"
   >,
 ): EditForm {
-  const variant = activeVariant(ep);
   return {
     method: ep.method,
     path: ep.path,
     status: String(ep.activeStatus),
     overrideOn: ep.overrideOn,
     routeOff: ep.routeOff,
-    // Only a "pinned" variant has a literal body to show back; "generated"
-    // (the fixture default, and possible on a row this form never touched)
-    // has none — pre-filling from it would fabricate JSON nobody wrote.
-    bodyText:
-      variant?.mode === "pinned" && variant.body !== undefined
-        ? JSON.stringify(variant.body, null, 2)
-        : "",
-    mediaType: variant?.mediaType ?? "",
-    // A18: the Lua the agent wrote is shown back, so an edit of this row
-    // is never blind to it — before this field (2026-09-05) the form showed
-    // an empty body for a function variant and gave no hint one existed.
-    functionText: variant?.function ?? "",
   };
-}
-
-// keepsOtherProducer says whether an empty body box means "leave the stored
-// producer alone" — true for a schema-backed generated variant (P7a) and a
-// file-backed one (A6). A pinned literal body with an emptied box is the
-// one case where empty MEANS empty (an empty pinned body, as before).
-export function keepsOtherProducer(
-  variant: EndpointView["responses"][string] | undefined,
-  bodyText: string,
-): boolean {
-  if (variant === undefined || bodyText !== "") {
-    return false;
-  }
-  if (variant.bodyRef !== undefined && variant.bodyRef !== "") {
-    return true;
-  }
-  return variant.mode !== "pinned" && variant.schema !== undefined;
-}
-
-// producerNote is the line above the body box that says what the variant
-// serves from when it is not a literal body — before A21 the form showed an
-// empty box for both cases and nothing else.
-export function producerNote(
-  variant: EndpointView["responses"][string] | undefined,
-): string | null {
-  if (variant === undefined || (variant.function !== undefined && variant.function !== "")) {
-    return null;
-  }
-  if (variant.bodyRef !== undefined && variant.bodyRef !== "") {
-    return `Сейчас ответ — файл «${variant.bodyRef.replace(/^asset:/, "")}» (вкладка «Файлы»). Введите тело, чтобы заменить файл телом; пустое поле оставит файл.`;
-  }
-  if (variant.mode !== "pinned" && variant.schema !== undefined) {
-    return "Сейчас тело строится по схеме (вкладка «Контракт»). Введите тело, чтобы закрепить его; пустое поле оставит схему.";
-  }
-  return null;
 }
 
 // hasFunction answers the row badge: any variant of the endpoint, not only
@@ -469,7 +421,7 @@ function CreateEndpointForm({
   });
   const kind = watch("kind") as "http" | StreamKind;
   const path = watch("path");
-  const producerError = producerConflict({
+  const producerError = createProducerConflict({
     functionText: watch("functionText"),
     bodyText: watch("bodyText"),
     mediaType: watch("mediaType"),
@@ -910,11 +862,14 @@ function EditEndpointForm({
     resolver: arktypeResolver(editForm),
     defaultValues: defaultsFromEndpoint(endpoint),
   });
-  const producerError = producerConflict({
-    functionText: watch("functionText"),
-    bodyText: watch("bodyText"),
-    mediaType: watch("mediaType"),
-  });
+  // The variant under edit: the active status's, as stored, mutated only
+  // through VariantEditor's updaters (each spreads first, so recipes,
+  // schemaPatch, schema and anything else the editor does not show survive).
+  const [variant, setVariant] = useState<Variant>(
+    () => activeVariant(endpoint) ?? { mode: "generated" },
+  );
+  const [variantError, setVariantError] = useState(false);
+  const statusText = watch("status").trim();
 
   // A3: the fields a full-replacement PUT resends unchanged (overrideOn,
   // routeOff, listSize, delayMs, the rest of `responses`) and the
@@ -945,70 +900,19 @@ function EditEndpointForm({
 
   function onSubmit(values: EditForm): void {
     const status = values.status.trim();
-    const mediaType = values.mediaType.trim();
-    const bodyText = values.bodyText.trim();
+    if (variantError) {
+      return;
+    }
     // A full-replacement PUT still only touches the ONE variant this form
     // edits — every other status this endpoint already serves is resent
     // byte-for-byte from `base` (endpoint, or the conflict's own current
-    // document once one has landed).
-    //
-    // The edited status itself is MUTATED from the variant it already had,
-    // not replaced with a fresh literal — the same anti-pattern
-    // from_traffic.go's pinObservedBody names by comment: a struct literal
-    // here would silently discard bodyEncoding (and any when/headers/
-    // recipes/schemaPatch) the endpoint already carried at this status, the
-    // instant an operator edited an unrelated field like path or mediaType.
+    // document once one has landed). The edited variant is the stored one
+    // MUTATED through the editor's spreading updaters, never a fresh
+    // literal — the anti-pattern from_traffic.go's pinObservedBody names by
+    // comment. A "chosen, not typed" state cannot reach here: the editor
+    // reports it through variantError and the button is disabled.
     const responses: UpdateEndpointRequestResponses = { ...base.responses };
-    const functionText = values.functionText.trim() === "" ? "" : values.functionText;
-    if (producerError !== null) {
-      return;
-    }
-    responses[status] =
-      functionText !== ""
-        ? {
-            // A18 D5: a function is the variant's ONE producer, so every
-            // other producer goes — body, encoding, media type, and also
-            // bodyRef, recipes and schemaPatch, which are not this form's
-            // fields but which the server refuses beside a function by name
-            // (function_and_body). Leaving them would make an asset- or
-            // recipe-backed variant impossible to convert from this screen:
-            // the 400 would name a field the form cannot clear. The label
-            // says what is replaced; `when[]` and `headers` survive (a
-            // function keeps its selection and its headers). Mode is the
-            // neutral one — A18's own rows leave it unset.
-            ...responses[status],
-            mode: "generated",
-            body: undefined,
-            bodyEncoding: undefined,
-            bodyRef: undefined,
-            mediaType: undefined,
-            recipes: undefined,
-            schemaPatch: undefined,
-            function: functionText,
-          }
-        : keepsOtherProducer(responses[status], bodyText)
-          ? {
-              // The variant serves from a schema (P7a, generated) or from a
-              // file (A6, bodyRef) and the body box is empty: the operator
-              // edited something else, and forcing `mode: pinned, body:
-              // undefined` here would turn the schema into an empty pinned
-              // body (the review's B2) — so the producer stays as stored.
-              // mediaType is left alone too: a bodyRef refuses one.
-              ...responses[status],
-              mode: responses[status]?.mode ?? "generated",
-              function: undefined,
-            }
-          : {
-              ...responses[status],
-              mode: "pinned",
-              body: bodyText === "" ? undefined : (JSON.parse(bodyText) as unknown),
-              mediaType: mediaType === "" ? undefined : mediaType,
-              // A typed body replaces a file: the form said so above the box.
-              bodyRef: undefined,
-              // A cleared Lua box removes the function: the operator saw it in
-              // the box and emptied it, so nothing is dropped unseen.
-              function: undefined,
-            };
+    responses[status] = variant;
     updateEndpoint.mutate({
       id,
       eid: endpoint.id,
@@ -1048,6 +952,7 @@ function EditEndpointForm({
     }
     setConflictBase(details);
     reset(defaultsFromEndpoint(details));
+    setVariant(activeVariant(details) ?? { mode: "generated" });
   }
 
   return (
@@ -1111,19 +1016,17 @@ function EditEndpointForm({
           {...register("path")}
         />
       </Group>
-      <Group grow align="flex-start">
-        <TextInput
-          label="Активный статус"
-          data-testid="endpoint-edit-status"
-          error={errors.status?.message}
-          {...register("status")}
-        />
-        <TextInput
-          label="Media type (необязательно)"
-          data-testid="endpoint-edit-media-type"
-          {...register("mediaType")}
-        />
-      </Group>
+      <TextInput
+        label="Активный статус"
+        description={
+          statusText !== "" && statusText !== String(base.activeStatus)
+            ? `Ответ ниже будет записан в статус ${statusText}; статус ${base.activeStatus} останется как есть`
+            : undefined
+        }
+        data-testid="endpoint-edit-status"
+        error={errors.status?.message}
+        {...register("status")}
+      />
       <Group gap="md">
         <Switch
           label="Перекрывает операцию спеки с таким же путём"
@@ -1137,32 +1040,21 @@ function EditEndpointForm({
           {...register("routeOff")}
         />
       </Group>
-      {producerNote(activeVariant(base)) !== null ? (
-        <Text size="xs" c="dimmed" data-testid="endpoint-edit-producer-note">
-          {producerNote(activeVariant(base))}
-        </Text>
-      ) : null}
-      <Textarea
-        label="Тело ответа, JSON (необязательно)"
-        rows={4}
-        data-testid="endpoint-edit-body"
-        error={errors.bodyText?.message}
-        {...register("bodyText")}
-      />
-      <Textarea
-        label="Функция (Lua, необязательно) — вместо тела: над аргументом req, возвращает status, body, headers"
-        description="Функция заменяет тело, файл, рецепты и правки схемы этого статуса; условия when и заголовки остаются. Пустое поле у варианта с функцией — удаление функции."
-        rows={4}
-        styles={{ input: { fontFamily: "var(--mantine-font-family-monospace)" } }}
-        data-testid="endpoint-edit-function"
-        error={producerError ?? undefined}
-        {...register("functionText")}
+      <VariantEditor
+        workspaceId={id}
+        variant={variant}
+        updateVariant={(updater) => setVariant((prev) => updater(prev))}
+        onErrorChange={setVariantError}
+        testId={(name) => `endpoint-edit-${name}`}
+        whenTestId={(name, index) => `endpoint-edit-when-${name}-${index}`}
+        hasSchema={variant.schema !== undefined}
       />
       <Group gap="xs">
         <Button
           type="submit"
           size="xs"
           loading={updateEndpoint.isPending}
+          disabled={variantError}
           data-testid="endpoint-edit-submit"
         >
           {updateEndpoint.isPending ? "Сохраняем…" : "Сохранить"}
