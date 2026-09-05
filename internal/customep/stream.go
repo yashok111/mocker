@@ -104,8 +104,11 @@ const (
 	// MaxReactiveRules caps stream.reactive.
 	MaxReactiveRules = 100
 	// MaxCloseReasonBytes is a close frame's 125-byte payload minus the
-	// two bytes of the status code.
-	MaxCloseReasonBytes = 123
+	// two bytes of the status code. Since the A18 review it is luafn's
+	// number re-exported, so the write-time cap on a reactive rule's reason
+	// and the per-frame cap on an onFrame hook's are one constant (this
+	// package imports luafn; the reverse would be a cycle).
+	MaxCloseReasonBytes = luafn.MaxCloseReasonBytes
 )
 
 // Timeline is the scripted behaviour: frames in order, each waiting DelayMs
@@ -130,9 +133,16 @@ type Frame struct {
 // object; a `$ref` anywhere in it is refused at write time because there is
 // no document to resolve it against.
 type Tick struct {
-	IntervalMs int              `json:"intervalMs"`
-	Event      string           `json:"event,omitempty"`
-	Schema     jsonx.RawMessage `json:"schema"`
+	IntervalMs int    `json:"intervalMs"`
+	Event      string `json:"event,omitempty"`
+	// omitempty since the A18 review: a nil RawMessage marshals as the
+	// four-byte literal `null`, and a stored Lua tick read back had
+	// len(Schema) == 4, which validateTick took for a second producer —
+	// every re-validation of a stored Lua tick (Update, a rollback, a
+	// scenario apply, a bundle import) refused it as "lua or schema, not
+	// both". validateTick also reads a literal null as absent, for rows
+	// written before this tag. Review finding 3.
+	Schema jsonx.RawMessage `json:"schema,omitempty"`
 	// Lua is A18's first hook (D10.1): the tick's producer, exclusive with
 	// Schema by name. Per firing the runner calls it with the ordinal — the
 	// same number the generated body is seeded by — and takes `return data`.
@@ -224,7 +234,7 @@ func validateInbound(kind string, s *Stream) error {
 		if s.Echo {
 			return fmt.Errorf("%w: stream takes onFrame or echo, not both — onFrame replaces them entirely", ErrInvalidRow)
 		}
-		if err := luafn.Validate(s.OnFrame); err != nil {
+		if err := luafn.ValidateHook(luafn.HookOnFrame, s.OnFrame); err != nil {
 			return fmt.Errorf("%w: stream.onFrame does not compile: %w", ErrInvalidRow, err)
 		}
 	}
@@ -319,10 +329,15 @@ func validateTick(t *Tick) error {
 	// unaffected and keep their place — they are about the interval and the
 	// event name, neither of which either producer changes.
 	if t.Lua != "" {
-		if len(t.Schema) > 0 {
+		// A literal null is an ABSENT schema and not a second producer: it
+		// is what a nil RawMessage marshalled to before the field carried
+		// omitempty, so it is in every Lua tick stored by the A18 build and
+		// in every checkpoint taken of one.
+		if len(t.Schema) > 0 && string(t.Schema) != "null" {
 			return fmt.Errorf("%w: stream.tick takes lua or schema, not both — one producer per tick", ErrInvalidRow)
 		}
-		if err := luafn.Validate(t.Lua); err != nil {
+		t.Schema = nil
+		if err := luafn.ValidateHook(luafn.HookTick, t.Lua); err != nil {
 			return fmt.Errorf("%w: stream.tick.lua does not compile: %w", ErrInvalidRow, err)
 		}
 		return nil

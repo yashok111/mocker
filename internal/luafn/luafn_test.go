@@ -4,6 +4,7 @@ import (
 	"context"
 	stdjson "encoding/json"
 	"errors"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -203,5 +204,92 @@ func TestRun_timeoutIsClassifiedApartFromAFailure(t *testing.T) {
 	_, err := run(t, `while true do end`, Request{}, nil)
 	if !errors.Is(err, ErrTimeout) {
 		t.Fatalf("err = %v, want ErrTimeout", err)
+	}
+}
+
+// --- review findings 1 and 7: the converter's guards ------------------------
+
+// TestReturn_aSelfReferencingTableIsARefusalNotACrash is review finding 1:
+// the converter is Go recursion over a structure the function built, and
+// before the guard `t.self = t` recursed until the runtime's stack ceiling —
+// `fatal error: stack overflow`, unrecoverable, the whole process gone. The
+// three contracts share one converter, so the request path stands for all
+// three; the tick and onFrame paths are exercised through the same marshalLua.
+func TestReturn_aSelfReferencingTableIsARefusalNotACrash(t *testing.T) {
+	for name, src := range map[string]string{
+		"direct":   `local t = {}; t.self = t; return 200, t`,
+		"indirect": `local a, b = {}, {}; a.b = b; b.a = a; return 200, {a}`,
+		"in-array": `local t = {1, 2}; t[3] = t; return 200, t`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			_, err := run(t, src, Request{}, nil)
+			if !errors.Is(err, ErrFailed) {
+				t.Fatalf("err = %v, want ErrFailed", err)
+			}
+			if !strings.Contains(err.Error(), "refers to itself") {
+				t.Errorf("err = %v; the author must be told it is a cycle", err)
+			}
+		})
+	}
+}
+
+// TestReturn_aTooDeepTableIsRefusedAndASharedOneIsNot pins the two edges of
+// the guard: depth is bounded by maxTableDepth, and the guard tracks the
+// PATH and not every table seen — `{a = u, b = u}` is a legal shape that
+// encodes as two copies.
+func TestReturn_aTooDeepTableIsRefusedAndASharedOneIsNot(t *testing.T) {
+	deep := `local t = {}; local cur = t; for i = 1, 200 do cur.n = {}; cur = cur.n end; return 200, t`
+	_, err := run(t, deep, Request{}, nil)
+	if !errors.Is(err, ErrFailed) || !strings.Contains(err.Error(), "nests deeper") {
+		t.Fatalf("200 levels: err = %v, want ErrFailed naming the depth", err)
+	}
+
+	shared := `local u = {x = 1}; return 200, {a = u, b = u}`
+	resp, err := run(t, shared, Request{}, nil)
+	if err != nil {
+		t.Fatalf("a table referenced twice is not a cycle: %v", err)
+	}
+	if got := string(resp.Body); got != `{"a":{"x":1},"b":{"x":1}}` {
+		t.Errorf("body = %s", got)
+	}
+}
+
+// TestRequest_aNullInsideAnArrayKeepsItsPlace is review finding 7: gopher-lua's
+// Append is a no-op for LNil, so `[1, null, 3]` used to arrive as `{1, 3}`
+// with the third element at index 2. RawSetInt keeps the hole where JSON put
+// it.
+func TestRequest_aNullInsideAnArrayKeepsItsPlace(t *testing.T) {
+	resp, err := run(t, `return 200, {third = req.body.ids[3], second = req.body.ids[2] == nil}`, Request{
+		Body: []byte(`{"ids":[1,null,3]}`),
+	}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := string(resp.Body); got != `{"second":true,"third":3}` {
+		t.Errorf("body = %s; the null must hold index 2 and 3 must stay at index 3", got)
+	}
+}
+
+// --- review finding 9: the hook's close reason ------------------------------
+
+// TestOnFrame_closeReasonIsCappedLikeAReactiveRules pins MaxCloseReasonBytes
+// on the per-frame path: a reason coder/websocket cannot put in a close frame
+// is refused by the hook — its own sentinel, the shape ErrBadClose has, and the
+// plane counts it under on_frame_errors — instead of reaching Close and
+// turning into a 1006.
+func TestOnFrame_closeReasonIsCappedLikeAReactiveRules(t *testing.T) {
+	long := `return "close", 4001, string.rep("x", ` + strconv.Itoa(MaxCloseReasonBytes+1) + `)`
+	_, err := RunOnFrame(context.Background(), long, []byte(`"ping"`), false, nil)
+	if !errors.Is(err, ErrLongCloseReason) {
+		t.Fatalf("err = %v, want ErrLongCloseReason", err)
+	}
+
+	exact := `return "close", 4001, string.rep("x", ` + strconv.Itoa(MaxCloseReasonBytes) + `)`
+	act, err := RunOnFrame(context.Background(), exact, []byte(`"ping"`), false, nil)
+	if err != nil {
+		t.Fatalf("a reason of exactly the cap is legal: %v", err)
+	}
+	if act.Verb != FrameClose || act.Code != 4001 || len(act.Reason) != MaxCloseReasonBytes {
+		t.Errorf("action = %+v", act)
 	}
 }

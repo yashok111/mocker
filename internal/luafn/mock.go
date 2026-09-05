@@ -53,7 +53,16 @@ func mockJWT(ctx context.Context, host Host) lua.LGFunction {
 		}
 		claims := map[string]any{}
 		if t, ok := l.Get(1).(*lua.LTable); ok {
-			if obj, ok := tableToGo(t).(map[string]any); ok {
+			converted, err := tableToGo(t)
+			if err != nil {
+				// A cyclic or too-deep claims table is answered like any
+				// other host refusal — nil plus a reason — and not by
+				// signing whatever prefix survived.
+				l.Push(lua.LNil)
+				l.Push(lua.LString(Note(err)))
+				return 2
+			}
+			if obj, ok := converted.(map[string]any); ok {
 				claims = obj
 			}
 		}

@@ -1,6 +1,7 @@
 package luafn
 
 import (
+	"errors"
 	"math"
 	"sort"
 	"strconv"
@@ -39,8 +40,15 @@ func goToLua(l *lua.LState, v any) lua.LValue {
 		return lua.LString(value)
 	case []any:
 		t := l.NewTable()
-		for _, item := range value {
-			t.Append(goToLua(l, item))
+		// RawSetInt and not Append: gopher-lua's Append is a documented
+		// no-op for LNil (table.go, `if value == LNil { return }`), so
+		// `[1, null, 3]` appended would arrive as `{1, 3}` — the null gone
+		// and the third element moved to index 2, which a function that
+		// pairs arrays positionally computes on without an error. A nil at
+		// a numeric index is a HOLE, and Lua's `#` on a table with holes
+		// is any border; the request-body doc says so. Review finding 7.
+		for i, item := range value {
+			t.RawSetInt(i+1, goToLua(l, item))
 		}
 		return t
 	case map[string]any:
@@ -63,6 +71,25 @@ func goToLua(l *lua.LState, v any) lua.LValue {
 	}
 }
 
+// maxTableDepth bounds how deep a Lua table may nest before the converter
+// refuses it. The converter is Go recursion over a structure the FUNCTION
+// built, so the depth is the one resource the sandbox's other bounds do not
+// reach: the instruction-level context check cannot interrupt a Go frame, and
+// a Go stack that hits its 1 GB ceiling is `fatal error: stack overflow` —
+// unrecoverable, outside every recover, the whole process gone with both
+// planes and every open stream. Sixty-four is deeper than any response a
+// mock has a reason to build and shallower than anything that could matter
+// to the stack. Review finding 1.
+const maxTableDepth = 64
+
+// The two refusals the converter can make, wrapped by every caller into
+// ErrFailed with the caller's own contract named ("the body …", "the tick
+// body …").
+var (
+	errTableCycle = errors.New("a table refers to itself")
+	errTableDepth = errors.New("a table nests deeper than " + strconv.Itoa(maxTableDepth) + " levels")
+)
+
 // luaToGo turns a Lua value into something jsonx can marshal.
 //
 // A table is an ARRAY when its keys are exactly 1..n and an OBJECT otherwise,
@@ -70,31 +97,56 @@ func goToLua(l *lua.LState, v any) lua.LValue {
 // expect. A mixed table — array part plus string keys — becomes an object with
 // the numeric keys rendered as strings, because dropping half the data
 // silently is worse than a shape the author can see in the response.
-func luaToGo(v lua.LValue) any {
+//
+// It refuses a table that contains itself and a table nested past
+// maxTableDepth; see that constant for why both are refusals and not
+// truncations. The guard is the set of tables on the CURRENT PATH and not a
+// visited set, because the same table referenced twice from two siblings is a
+// legal shape (`local u = {…}; return 200, {a = u, b = u}`) and encodes as two
+// copies, exactly as JSON has to render it.
+func luaToGo(v lua.LValue) (any, error) {
+	c := converter{active: map[*lua.LTable]bool{}}
+	return c.value(v, 0)
+}
+
+type converter struct {
+	active map[*lua.LTable]bool
+}
+
+func (c *converter) value(v lua.LValue, depth int) (any, error) {
 	switch value := v.(type) {
 	case *lua.LNilType:
-		return nil
+		return nil, nil
 	case lua.LBool:
-		return bool(value)
+		return bool(value), nil
 	case lua.LNumber:
 		f := float64(value)
 		if f == math.Trunc(f) && !math.IsInf(f, 0) && math.Abs(f) < 1<<53 {
-			return int64(f)
+			return int64(f), nil
 		}
-		return f
+		return f, nil
 	case lua.LString:
-		return string(value)
+		return string(value), nil
 	case *lua.LTable:
-		return tableToGo(value)
+		return c.table(value, depth)
 	default:
 		// A function, a userdata or a thread has no JSON rendering. Nil is
 		// the honest answer and `readReturn` has already refused the shapes
 		// where it would be a surprise.
-		return nil
+		return nil, nil
 	}
 }
 
-func tableToGo(t *lua.LTable) any {
+func (c *converter) table(t *lua.LTable, depth int) (any, error) {
+	if depth >= maxTableDepth {
+		return nil, errTableDepth
+	}
+	if c.active[t] {
+		return nil, errTableCycle
+	}
+	c.active[t] = true
+	defer delete(c.active, t)
+
 	maxIndex, count, stringKeys := 0, 0, false
 	t.ForEach(func(k, _ lua.LValue) {
 		count++
@@ -110,22 +162,46 @@ func tableToGo(t *lua.LTable) any {
 	if !stringKeys && maxIndex == count && count > 0 {
 		arr := make([]any, 0, count)
 		for i := 1; i <= count; i++ {
-			arr = append(arr, luaToGo(t.RawGetInt(i)))
+			item, err := c.value(t.RawGetInt(i), depth+1)
+			if err != nil {
+				return nil, err
+			}
+			arr = append(arr, item)
 		}
-		return arr
+		return arr, nil
 	}
 
 	obj := map[string]any{}
+	var failed error
 	t.ForEach(func(k, v lua.LValue) {
+		if failed != nil {
+			return
+		}
+		var name string
 		switch key := k.(type) {
 		case lua.LString:
-			obj[string(key)] = luaToGo(v)
+			name = string(key)
 		case lua.LNumber:
-			obj[strconv.FormatFloat(float64(key), 'f', -1, 64)] = luaToGo(v)
+			name = strconv.FormatFloat(float64(key), 'f', -1, 64)
+		default:
+			return
 		}
+		item, err := c.value(v, depth+1)
+		if err != nil {
+			failed = err
+			return
+		}
+		obj[name] = item
 	})
-	return obj
+	if failed != nil {
+		return nil, failed
+	}
+	return obj, nil
 }
+
+// tableToGo is luaToGo for a value already known to be a table; mock.jwt's
+// claims argument is its one caller.
+func tableToGo(t *lua.LTable) (any, error) { return luaToGo(t) }
 
 // marshalLua encodes a Lua value as JSON through this package's own
 // converter. It is one function rather than three call sites writing
@@ -134,5 +210,9 @@ func tableToGo(t *lua.LTable) any {
 // table becomes — including the sorted object keys luaToGo already imposes,
 // which is what keeps two encodings of one table identical.
 func marshalLua(v lua.LValue) ([]byte, error) {
-	return jsonx.Marshal(luaToGo(v))
+	converted, err := luaToGo(v)
+	if err != nil {
+		return nil, err
+	}
+	return jsonx.Marshal(converted)
 }

@@ -168,6 +168,20 @@ const (
 // and a caller that wanted to tell it apart could, without parsing a string.
 var ErrBadClose = errors.New("luafn: a close code must be 1000 or 4000..4999")
 
+// MaxCloseReasonBytes is a WebSocket close frame's 125-byte payload minus the
+// two bytes of the status code. It is defined HERE and re-exported by
+// customep (which imports this package; the reverse import would be a cycle)
+// so the write-time cap on a reactive rule's reason and the per-frame cap on a
+// hook's are one number. Before the hook had a cap, a 200-byte reason made
+// coder/websocket's Close fail before it wrote any frame ("reason string max
+// is 123"), the plane fell back to CloseNow, and the peer saw an abnormal
+// 1006 with no reason while the traffic row recorded the code the hook
+// asked for. Review finding 9.
+const MaxCloseReasonBytes = 123
+
+// ErrLongCloseReason is the refusal for a close reason over MaxCloseReasonBytes.
+var ErrLongCloseReason = fmt.Errorf("luafn: a close reason must be at most %d bytes", MaxCloseReasonBytes)
+
 // RunOnFrame is D10.2: one inbound frame through the hook.
 //
 // frameIsObject says whether the caller decoded the frame as a JSON OBJECT.
@@ -241,6 +255,9 @@ func frameClose(l *lua.LState) (FrameAction, error) {
 	}
 	act := FrameAction{Verb: FrameClose, Code: c}
 	if reason, ok := l.Get(3).(lua.LString); ok {
+		if len(reason) > MaxCloseReasonBytes {
+			return FrameAction{}, fmt.Errorf("%w: got %d", ErrLongCloseReason, len(reason))
+		}
 		act.Reason = string(reason)
 	}
 	return act, nil

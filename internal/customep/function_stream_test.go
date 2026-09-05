@@ -67,3 +67,50 @@ func TestValidateDraft_anHTTPRowStillTakesAFunction(t *testing.T) {
 		t.Fatalf("an http row with a function-200 and a pinned-401 was refused: %v", err)
 	}
 }
+
+// TestRepo_aStoredLuaTickSurvivesReloadAndUpdate is review finding 3. Before
+// the fix a Lua-only tick was stored as `"schema":null`, read back as a
+// four-byte RawMessage, and every re-validation of the STORED row — Update
+// here, and the same path under a checkpoint rollback, a scenario apply and
+// a bundle import — refused it as "lua or schema, not both". The update
+// touches nothing about the tick on purpose: the row must pass its own
+// validation unchanged.
+func TestRepo_aStoredLuaTickSurvivesReloadAndUpdate(t *testing.T) {
+	t.Parallel()
+	db := newTestDB(t)
+	repo := customep.NewRepo(db)
+	wsID := insertWorkspace(t, db, "alex")
+
+	created, err := repo.Create(t.Context(), wsID, &customep.Row{
+		Method: http.MethodGet, Path: "/ticks", Kind: customep.KindSSE, ActiveStatus: 200,
+		Stream: &customep.Stream{Tick: &customep.Tick{IntervalMs: 100, Lua: `return {n = ordinal}`}},
+	})
+	if err != nil {
+		t.Fatalf("Create(): %v", err)
+	}
+	got, err := repo.Get(t.Context(), wsID, created.ID)
+	if err != nil {
+		t.Fatalf("Get(): %v", err)
+	}
+	if len(got.Stream.Tick.Schema) != 0 {
+		t.Errorf("Schema read back as %q, want nothing: a Lua tick has no schema", got.Stream.Tick.Schema)
+	}
+	if _, err := repo.Update(t.Context(), wsID, created.ID, func(cur *customep.Row) error {
+		cur.OverrideOn = false
+		return nil
+	}); err != nil {
+		t.Fatalf("Update() of an untouched Lua tick: %v", err)
+	}
+
+	// The pre-fix bytes, as a checkpoint or an older DB still holds them:
+	// a literal null beside lua must read as absent.
+	var legacy customep.Stream
+	if err := jsonx.Unmarshal([]byte(`{"tick":{"intervalMs":100,"schema":null,"lua":"return {n = ordinal}"}}`), &legacy); err != nil {
+		t.Fatal(err)
+	}
+	if err := customep.ValidateDraft(&customep.Row{
+		Method: http.MethodGet, Path: "/legacy", Kind: customep.KindSSE, ActiveStatus: 200, Stream: &legacy,
+	}, 0); err != nil {
+		t.Fatalf("a stored `\"schema\":null` beside lua was refused: %v", err)
+	}
+}
