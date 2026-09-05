@@ -367,6 +367,11 @@ type createEndpointBody struct {
 	Schema    any    `json:"schema,omitempty"`
 	ReqSchema any    `json:"reqSchema,omitempty"`
 	Operation any    `json:"operation,omitempty"`
+	// Function was declared on CreateEndpointInput and absent here, so the
+	// PRIMARY surface silently dropped the Lua on create: the admin route saw
+	// no body, bodyRef or schema and stored a pinned variant with an empty
+	// body, 201. Review finding 4.
+	Function string `json:"function,omitempty"`
 }
 
 func handleCreateEndpoint(lb *loopback) sdk.ToolHandlerFor[CreateEndpointInput, CreateEndpointOutput] {
@@ -374,7 +379,7 @@ func handleCreateEndpoint(lb *loopback) sdk.ToolHandlerFor[CreateEndpointInput, 
 		body, err := jsonx.Marshal(createEndpointBody{
 			Method: in.Method, Path: in.Path, Status: in.Status, Body: in.Body, MediaType: in.MediaType,
 			BodyRef: in.BodyRef, Kind: in.Kind, Stream: in.Stream,
-			Schema: in.Schema, ReqSchema: in.ReqSchema, Operation: in.Operation,
+			Schema: in.Schema, ReqSchema: in.ReqSchema, Operation: in.Operation, Function: in.Function,
 		})
 		if err != nil {
 			return nil, CreateEndpointOutput{}, fmt.Errorf("mcp: encode create_endpoint request: %w", err)

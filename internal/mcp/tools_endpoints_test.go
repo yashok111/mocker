@@ -586,3 +586,24 @@ func TestListEndpoints_carriesKindAndStream(t *testing.T) {
 		t.Fatalf("list_endpoints dropped kind/stream: %s", body)
 	}
 }
+
+// TestCreateEndpoint_functionReachesTheWire is review finding 4: the input
+// declared `function` and the wire body did not carry it, so create_endpoint
+// with a function stored a pinned variant with an empty body and answered
+// 201 — the PRIMARY surface, dropping the feature it was for, with no error.
+func TestCreateEndpoint_functionReachesTheWire(t *testing.T) {
+	t.Parallel()
+	fc := &scriptedCaller{t: t, responses: []cannedResponse{{status: http.StatusCreated, body: createEndpointRespFixture}}}
+	lb := newLoopback(fc)
+
+	const src = "return 401, {error = 'bad credentials'}"
+	if _, _, err := handleCreateEndpoint(lb)(opsTestCtx(), nil, CreateEndpointInput{
+		WorkspaceID: 7, Method: "POST", Path: "/sign-in", Function: src,
+	}); err != nil {
+		t.Fatalf("handleCreateEndpoint: %v", err)
+	}
+	sent := decodeBody(t, fc.calls[0].body)
+	if sent["function"] != src {
+		t.Fatalf("sent = %+v, want function=%q on the wire", sent, src)
+	}
+}

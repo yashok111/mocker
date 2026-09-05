@@ -343,6 +343,7 @@ func responseShapes(w map[string]variantDetailWire) map[string]ResponseShape {
 			MediaType:   v.MediaType,
 			HasBody:     len(v.Body) > 0,
 			RecipeCount: len(v.Recipes),
+			Function:    v.Function,
 		}
 	}
 	return out

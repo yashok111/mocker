@@ -485,6 +485,14 @@ type ResponseShape struct {
 	MediaType   string `json:"mediaType,omitempty"`
 	HasBody     bool   `json:"hasBody"`
 	RecipeCount int    `json:"recipeCount"`
+	// Function is the variant's Lua source, verbatim — the one field of a
+	// variant this projection carries in full rather than as a shape. The
+	// compaction rule (§C) keeps a pinned BODY out because a body is data of
+	// any size; a function is the contract the agent itself authored, and
+	// the guide's prescribed flow is read-then-write-the-whole-document, so
+	// a read that hid it made every such write DELETE the Lua with nothing in
+	// any tool output saying a function had existed. Review finding 5.
+	Function string `json:"function,omitempty"`
 }
 
 // OverrideDetail is the stored override document's shape, projected from
@@ -536,6 +544,7 @@ type variantDetailWire struct {
 	MediaType string                      `json:"mediaType,omitempty"`
 	Body      jsonx.RawMessage            `json:"body,omitempty"`
 	Recipes   map[string]jsonx.RawMessage `json:"recipes,omitempty"`
+	Function  string                      `json:"function,omitempty"`
 }
 
 // overrideDetailWire decodes overrideDocView's overrideMutableFields
@@ -575,6 +584,7 @@ func newOverrideDetail(w overrideDetailWire) *OverrideDetail {
 			MediaType:   v.MediaType,
 			HasBody:     len(v.Body) > 0,
 			RecipeCount: len(v.Recipes),
+			Function:    v.Function,
 		}
 	}
 	return &OverrideDetail{

@@ -617,7 +617,8 @@ const overrideDetailFixture = `{
   "activeStatus": 200,
   "responses": {
     "200": {"mode": "pinned", "mediaType": "application/json", "body": {"id":1,"name":"gizmo"}, "recipes": {"id": {"kind":"uuid"}}},
-    "404": {}
+    "404": {},
+    "401": {"function": "return 401, {error = 'bad'}"}
   },
   "listSize": {"min": 1, "max": 5},
   "delayMs": 250,
@@ -696,6 +697,13 @@ func TestGetOperation_happyPath_withOverride(t *testing.T) {
 	}
 	if rs200.Mode != "pinned" || rs200.MediaType != "application/json" || !rs200.HasBody || rs200.RecipeCount != 1 {
 		t.Errorf("Responses[200] = %+v, want mode=pinned mediaType=application/json hasBody=true recipeCount=1", rs200)
+	}
+	// Review finding 5: a function variant used to project as
+	// {mode:"generated", hasBody:false} — indistinguishable from an empty
+	// one — and the guide's read-then-write-whole-document flow deleted
+	// the Lua. The source comes back verbatim.
+	if rs401 := ov.Responses["401"]; rs401.Function != "return 401, {error = 'bad'}" {
+		t.Errorf("Responses[401] = %+v, want the function source verbatim", rs401)
 	}
 	rs404, ok := ov.Responses["404"]
 	if !ok {
