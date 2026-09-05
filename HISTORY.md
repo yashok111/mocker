@@ -2919,3 +2919,54 @@ two GETs a minute per visible tab is not a load.
 **Bars.** `make ui-test` 404 tests in 36 files, `make ui-lint` clean (three
 pre-existing warnings), the Go contract tests green after the comment
 edits; no Go behaviour changed.
+
+## `A21` — the UI review built out (2026-09-05)
+
+**What the owner asked for.** «запусти три Опуса + 3 vcodex luna high на
+ревью всего ui. пусть поищут гэпы ято мы могли забыть вывести. и в целом
+посмотрят как сделать его более понятным для использования», then «коммить
+А20 и стартуй А21» (Russian strings quoted as data). Six readers, three
+angles (contract vs screen, forms and edit paths, navigation and first
+run); the vcodex read of angle 1 burned its window spawning sub-audits and
+was relaunched with a hard budget. The deduplicated, ranked record is
+`docs/agent/ui-review-2026-09-05.md`; «readers» there counts how many of
+the five independent reports named the same thing.
+
+**What shipped, seven commits in the review document's suggested order.**
+(1) the bugs, B1–B9, one test each; (2) `WorkspaceContextBar.tsx`,
+«Воркспейсы» and a switcher in the header, `TabLink.tsx` for the seven
+prose tab references, the traffic match links with a new `?opId=` search
+param resolved through the spec operations; (3) the small gaps and the
+copy: slug and spec on the create card with `?specId=` from the specs
+screen, checkpoint id and «с данными», the rollback's own result, any
+forced status and `n` and a ✕ per directive, the custom endpoint's two
+switches, the import summary, a confirm on a spec re-bind, the wire words
+off the screen; (4) «Маршрут и доступ» on the settings panel and «что
+внутри» on a scenario row; (5) `VariantEditor.tsx` — the refactor all three
+Opus readers named independently — mounted by the operation editor's
+per-status panel and the custom-endpoint edit form; (6) entity create and
+scope filters, status add/remove and a preview with headers and a body,
+traffic filters and an empty state with the address, the tabs renamed
+«Операции спеки»/«Свои эндпоинты», the overview's no-spec alert; (7) the
+unsaved-draft guard, the assets replace warning and digest, and the rest.
+
+**Two second readers, fourteen findings, all taken.** Over steps 1–4: the
+CORS select offered a `list` mode the server does not have (anything but
+`off` reads as `reflect`); `identity.id` was coerced ("00123" → 123); the
+custom-endpoint edit form wrote a draft begun on one status under another
+when the status was retyped (one draft per status now); three copy and
+test items. Over steps 5–7: in the review document once it returns.
+
+**What was learned by building.** Reading the event inside a setState
+updater — `setX((prev) => ({ ...prev, a: e.currentTarget.checked }))` —
+is a deferred read: React 19 runs updaters lazily, when `currentTarget` is
+already null. Four such sites in `OperationEditor.tsx` predate A21 and
+had no test that clicked them; the dirty-guard test found the first, and
+`VariantEditor` captures every event value before its updaters. And the
+wholesale-PATCH invariant cuts both ways: a stray stored value (`cors.mode:
+"list"`) must be resent byte-for-byte when the form was not touched, so the
+select keeps it selectable and labels it with what the server does, rather
+than normalising it on the way in.
+
+**Bars.** `make ui-test` 448 tests in 39 files, `make ui-lint` clean (three
+pre-existing warnings); no Go behaviour changed in any of the seven commits.

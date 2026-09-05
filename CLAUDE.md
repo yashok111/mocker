@@ -378,8 +378,12 @@ route guard with `fetchQuery`, a root `data-testid` in all four states,
 ## Where we are
 
 Shipped, one slice per commit, `P0` (2026-08-16) through `A19` (2026-09-05,
-`mock.generate` and the entity writers, on top of `A18`,
-endpoint functions) — nearly fifty slices. The full list with one line
+`mock.generate` and the entity writers, on top of `A18`, endpoint
+functions), then `A20` (every admin route has a screen; `EXEMPT` is empty)
+and `A21` (the six-reader UI review built out in seven commits —
+`docs/agent/ui-review-2026-09-05.md` is the ranked record and
+`VariantEditor.tsx` the one editor of a response variant both screens
+mount) — fifty-odd slices. The full list with one line
 each, the ranked argument for what is NEXT and where each slice's
 decisions live: `docs/agent/where-we-are.md` and `HISTORY.md`. Streaming
 (§30), `P4` (drift, the bundle over HTTP, the fork) and §34 (API design)

@@ -128,7 +128,20 @@ the `function` field, both of which an edit from the screen had silently
 dropped; then, the same day on «добей последние 4 гэпа», «Проверить спеку»
 on the overview, the stats strip on «Соединения» and the header's server
 status over the two probes — `EXEMPT` 10 → 0, no route, no tool, no
-migration, no variable).
+migration, no variable). → `A21` (the six-reader UI review built out, 2026-09-05, seven
+commits: the review's bugs (the connect address with `basePath`, the
+edit forms that lost a schema or a file producer, the settings retry on
+the conflict's document, the function producer in the operation editor),
+the context bar under the workspace's name and «Воркспейсы»/a switcher in
+the header, `TabLink` and the traffic match links (`?opId=`), the create
+card's slug and spec, checkpoint id/`hasData`/`dataRestored`, directives
+with any status/`n`/one ✕, the settings' «Маршрут и доступ» and the
+scenario viewer, `VariantEditor.tsx` over the whole variant (producer,
+file, function, headers, conditions) mounted by both editors, entity
+create and scope filters, status add/remove and a preview with headers
+and a body, traffic filters, the tabs renamed «Операции спеки»/«Свои
+эндпоинты», the unsaved-draft guard, and the rest of `docs/agent/
+ui-review-2026-09-05.md` — no route, no tool, no migration, no variable).
 What each of them SHIPPED is in "Architecture"
 above; HOW each arrived — gates, fleet runs, the lessons paid for — is
 `HISTORY.md`.
