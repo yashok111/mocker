@@ -226,7 +226,7 @@ describe("HistoryPage", () => {
 
     await userEvent.click(await screen.findByTestId("reset-overrides-button"));
     const dialog = await screen.findByRole("dialog");
-    expect(dialog).toHaveTextContent("кастомные endpoint");
+    expect(dialog).toHaveTextContent("свои эндпоинт");
     expect(dialog).toHaveTextContent("пресет авторизации");
     expect(dialog).toHaveTextContent("перестанет логиниться");
     expect(screen.queryByTestId("reset-scenario-warning")).not.toBeInTheDocument();
@@ -627,7 +627,7 @@ describe("HistoryPage", () => {
     renderInRouter(<HistoryPage id={WS} />);
 
     expect(await screen.findByTestId("history-intro")).toHaveTextContent(
-      "Чекпойнт — снимок слоя воркспейса: настройки, правки операций, кастомные endpoint'ы и " +
+      "Чекпойнт — снимок слоя воркспейса: настройки, правки операций, свои эндпоинты и " +
         "подтверждённые ресурсы. При откате можно вернуть и сами записи ресурсов — флажком «вернуть " +
         "и данные ресурсов», если эта точка их сохранила. Откат и сброс правок сохраняют свою " +
         "собственную точку прямо перед тем, как что-то стереть, так что их можно отменить откатом " +

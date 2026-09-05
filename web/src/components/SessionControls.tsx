@@ -282,7 +282,7 @@ export function SessionControls({
                   color="red"
                   onClick={() => handleClearOne(d)}
                   loading={clearDirectives.isPending}
-                  data-testid="session-directive-clear"
+                  data-testid={`session-directive-clear-${d.action}-${directiveTargetLabel(d.target)}`}
                 >
                   снять
                 </Button>

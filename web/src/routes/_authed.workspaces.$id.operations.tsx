@@ -10,7 +10,10 @@ import { OperationsPage } from "@/components/OperationsPage";
 // against the spec operations it already loads.
 const operationsSearch = type({
   "opKey?": "string",
-  "opId?": "string",
+  // string | number: our own navigate stringifies, but TanStack's default
+  // parseSearch JSON-parses a pasted `?opId=12` into a number, and a
+  // string-only schema would throw the route into its error fallback.
+  "opId?": "string | number",
 });
 
 export const Route = createFileRoute("/_authed/workspaces/$id/operations")({

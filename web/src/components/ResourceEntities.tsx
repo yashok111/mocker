@@ -86,23 +86,21 @@ export function ResourceEntities({
       {nested || baseScoped ? (
         <Group gap="xs" align="flex-end">
           {nested ? (
-            <TextInput
-              size="xs"
-              label="Родитель (scopeKey)"
-              description="Пусто — все родители"
+            <ScopeInput
+              label="Родитель"
+              description="Пусто — все родители; применяется по Enter или когда поле покинуто"
               value={scope.scopeKey}
-              onChange={(e) => patchScope({ scopeKey: e.currentTarget.value })}
-              data-testid="resource-entities-scope"
+              onCommit={(v) => patchScope({ scopeKey: v })}
+              testId="resource-entities-scope"
             />
           ) : null}
           {baseScoped ? (
-            <TextInput
-              size="xs"
-              label="Значение базового пути (baseScopeKey)"
-              description="Пусто — все значения"
+            <ScopeInput
+              label="Значение базового пути"
+              description="Пусто — все значения; применяется по Enter или когда поле покинуто"
               value={scope.baseScopeKey}
-              onChange={(e) => patchScope({ baseScopeKey: e.currentTarget.value })}
-              data-testid="resource-entities-base-scope"
+              onCommit={(v) => patchScope({ baseScopeKey: v })}
+              testId="resource-entities-base-scope"
             />
           ) : null}
         </Group>
@@ -232,7 +230,7 @@ function NewEntityForm({
         {family.routeFamily.includes("{}") ? (
           <TextInput
             size="xs"
-            label="Родитель (scopeKey)"
+            label="Родитель"
             value={rowScope.scopeKey}
             onChange={(e) => setRowScope({ ...rowScope, scopeKey: e.currentTarget.value })}
             data-testid="entity-new-scope"
@@ -582,5 +580,43 @@ function EntityRow({
         </Code>
       )}
     </Stack>
+  );
+}
+
+// ScopeInput commits on Enter or blur, not per keystroke: the committed
+// value is a query key and a page key, and one request per character was
+// the alternative (a reader of A21).
+function ScopeInput({
+  label,
+  description,
+  value,
+  onCommit,
+  testId,
+}: {
+  label: string;
+  description: string;
+  value: string;
+  onCommit: (value: string) => void;
+  testId: string;
+}): ReactElement {
+  const [text, setText] = useState(value);
+  return (
+    <TextInput
+      size="xs"
+      label={label}
+      description={description}
+      value={text}
+      onChange={(e) => setText(e.currentTarget.value)}
+      onBlur={() => text !== value && onCommit(text)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          if (text !== value) {
+            onCommit(text);
+          }
+        }
+      }}
+      data-testid={testId}
+    />
   );
 }

@@ -549,7 +549,7 @@ describe("route tree", () => {
       await userEvent.click(await screen.findByTestId("reset-overrides-button"));
 
       const dialog = await screen.findByRole("dialog");
-      expect(dialog).toHaveTextContent("кастомные endpoint");
+      expect(dialog).toHaveTextContent("свои эндпоинт");
       expect(dialog).toHaveTextContent("пресет авторизации");
       expect(dialog).toHaveTextContent("перестанет логиниться");
       // Named BEFORE the request: cancelling must not have fired it.

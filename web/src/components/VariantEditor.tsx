@@ -14,6 +14,7 @@ import {
   Textarea,
   TextInput,
 } from "@mantine/core";
+import { modals } from "@mantine/modals";
 import { IconPlus, IconTrash } from "@tabler/icons-react";
 import { useListAssets } from "@/api/generated/assets/assets.ts";
 import type { Condition, Variant } from "@/api/generated/schemas";
@@ -90,6 +91,14 @@ export function jsonLocation(text: string, err: unknown): string {
   return `строка ${line}, столбец ${column}`;
 }
 
+// Whether a stored "" is possible: never — Go omits it — so the empty
+// string only ever means "chosen, not typed yet" and blocks the save.
+export function conditionsInvalid(when: Condition[] | undefined): boolean {
+  return (when ?? []).some(
+    (c) => c.name.trim() === "" || (c.op !== "exists" && (c.value ?? "") === ""),
+  );
+}
+
 export function VariantEditor({
   workspaceId,
   variant,
@@ -98,6 +107,7 @@ export function VariantEditor({
   testId,
   whenTestId,
   hasSchema,
+  headersAppliedOn,
 }: {
   workspaceId: number;
   variant: Variant | undefined;
@@ -112,13 +122,29 @@ export function VariantEditor({
   /** Whether "generated" has a schema to generate from: a spec operation
    * always does; a custom endpoint only when the agent gave it one (P7a). */
   hasSchema: boolean;
+  /** The producers under which the mock plane actually SERVES the stored
+   * headers: a spec operation's override headers are layered only under a
+   * pinned variant (internal/mockplane/respond.go), a custom endpoint's
+   * under generated and pinned (custom.go), and a function's headers come
+   * from the Lua return alone. The editor hides the list elsewhere rather
+   * than store what would never be sent — a reader of A21 found headers
+   * typed on a generated override stored and never served. */
+  headersAppliedOn: ProducerMode[];
 }): ReactElement {
   const producer = producerOf(variant);
   const functionText = variant?.function ?? "";
   const functionEmpty = producer === "function" && functionText.trim() === "";
   const fileEmpty = producer === "file" && (variant?.bodyRef ?? "") === "asset:";
   const when = variant?.when ?? [];
-  const headers = Object.entries(variant?.headers ?? {});
+  const whenInvalid = conditionsInvalid(when);
+  const headersApply = headersAppliedOn.includes(producer);
+  // Header rows live as an ARRAY here and are written through as the wire's
+  // map: two rows may share a name while one is being typed (the map would
+  // collapse them and lose a row under the operator's cursor), and the
+  // empty-name placeholder a new row starts with is never written.
+  const [headerRows, setHeaderRows] = useState<[string, string][]>(() =>
+    Object.entries(variant?.headers ?? {}),
+  );
   const recipeEntries = Object.entries(variant?.recipes ?? {});
   const schemaPatchCount = Array.isArray(variant?.schemaPatch) ? variant.schemaPatch.length : 0;
 
@@ -159,26 +185,50 @@ export function VariantEditor({
     onErrorChangeRef.current = onErrorChange;
   });
   useEffect(() => {
-    onErrorChangeRef.current(bodyError !== null || functionEmpty || fileEmpty);
-  }, [bodyError, functionEmpty, fileEmpty]);
+    onErrorChangeRef.current(bodyError !== null || functionEmpty || fileEmpty || whenInvalid);
+  }, [bodyError, functionEmpty, fileEmpty, whenInvalid]);
   useEffect(() => {
     return () => onErrorChangeRef.current(false);
   }, []);
 
+  function switchToFunction(): void {
+    updateVariant((v) => ({
+      ...v,
+      mode: "generated",
+      body: undefined,
+      bodyEncoding: undefined,
+      bodyRef: undefined,
+      mediaType: undefined,
+      recipes: undefined,
+      schemaPatch: undefined,
+      function: v.function ?? "",
+    }));
+  }
+
   function handleProducerChange(next: string): void {
     switch (next) {
       case "function":
-        updateVariant((v) => ({
-          ...v,
-          mode: "generated",
-          body: undefined,
-          bodyEncoding: undefined,
-          bodyRef: undefined,
-          mediaType: undefined,
-          recipes: undefined,
-          schemaPatch: undefined,
-          function: v.function ?? "",
-        }));
+        // The agent's recipes and schemaPatch cannot live beside a function
+        // (the server refuses the pair), so the switch drops them — after
+        // asking, because an exploratory select change must not destroy
+        // agent-written work in silence.
+        if (recipeEntries.length > 0 || schemaPatchCount > 0) {
+          modals.openConfirmModal({
+            title: "Перейти на функцию",
+            children: (
+              <Text size="sm">
+                У этого статуса есть автоматические значения ({recipeEntries.length}) и правки схемы
+                ({schemaPatchCount}), записанные агентом. Функция несовместима с ними — при переходе
+                они будут удалены. Продолжить?
+              </Text>
+            ),
+            labels: { confirm: "Перейти", cancel: "Отмена" },
+            confirmProps: { color: "red", "data-testid": testId("function-confirm") },
+            onConfirm: switchToFunction,
+          });
+          return;
+        }
+        switchToFunction();
         return;
       case "file":
         // "asset:" with no name is the "chosen, not picked yet" state; fileEmpty
@@ -195,7 +245,16 @@ export function VariantEditor({
         }));
         return;
       case "pinned":
-        updateVariant((v) => ({ ...v, mode: "pinned", bodyRef: undefined, function: undefined }));
+        // The box shows `{}` for a variant with no body; the wire would carry
+        // none, and the mock would serve an EMPTY body while the screen showed
+        // `{}` — so the switch seeds what the screen shows.
+        updateVariant((v) => ({
+          ...v,
+          mode: "pinned",
+          bodyRef: undefined,
+          function: undefined,
+          body: v.body === undefined ? {} : v.body,
+        }));
         return;
       default:
         updateVariant((v) => ({
@@ -219,19 +278,24 @@ export function VariantEditor({
     }
   }
 
+  function writeHeaders(rows: [string, string][]): void {
+    setHeaderRows(rows);
+    const named = rows.filter(([k]) => k.trim() !== "");
+    updateVariant((v) => ({
+      ...v,
+      headers:
+        named.length === 0
+          ? undefined
+          : Object.fromEntries(named.map(([k, val]) => [k.trim(), val])),
+    }));
+  }
+
   function setHeader(index: number, key: string, value: string): void {
-    updateVariant((v) => {
-      const entries = Object.entries(v.headers ?? {});
-      entries[index] = [key, value];
-      return { ...v, headers: Object.fromEntries(entries) };
-    });
+    writeHeaders(headerRows.map((row, i) => (i === index ? [key, value] : row)));
   }
 
   function removeHeader(index: number): void {
-    updateVariant((v) => {
-      const entries = Object.entries(v.headers ?? {}).filter((_, i) => i !== index);
-      return { ...v, headers: entries.length === 0 ? undefined : Object.fromEntries(entries) };
-    });
+    writeHeaders(headerRows.filter((_, i) => i !== index));
   }
 
   function patchCondition(index: number, patch: Partial<Condition>): void {
@@ -262,7 +326,7 @@ export function VariantEditor({
           label="Функция (Lua) — над аргументом req, возвращает status, body, headers"
           description={
             <>
-              <Anchor href={GUIDE_FUNCTIONS} size="xs">
+              <Anchor href={GUIDE_FUNCTIONS} size="xs" target="_blank" rel="noreferrer">
                 Раздел «Функция эндпоинта» в руководстве
               </Anchor>
               . Компилируется при сохранении: синтаксическая ошибка — отказ со словами парсера.
@@ -318,7 +382,7 @@ export function VariantEditor({
       ) : producer === "pinned" ? (
         <>
           <TextInput
-            label="Media type"
+            label="Тип содержимого (media type)"
             placeholder="application/json"
             data-testid={testId("media-type")}
             value={variant?.mediaType ?? ""}
@@ -373,9 +437,17 @@ export function VariantEditor({
         </Card>
       ) : null}
 
-      <Divider label="Заголовки ответа" labelPosition="left" />
-      <Stack gap="xs" data-testid={testId("headers")}>
-        {headers.map(([key, value], index) => (
+      {headersApply ? (
+        <Divider label="Заголовки ответа" labelPosition="left" />
+      ) : (
+        <Text size="xs" c="dimmed" data-testid={testId("headers-note")}>
+          {producer === "function"
+            ? "Заголовки ответа задаёт сама функция (третье возвращаемое значение)."
+            : "Заголовки ответа отдаются только у закреплённого тела или файла."}
+        </Text>
+      )}
+      <Stack gap="xs" data-testid={testId("headers")} hidden={!headersApply}>
+        {headerRows.map(([key, value], index) => (
           // Index-keyed: entries are edited in place, never reordered.
           // eslint-disable-next-line react/no-array-index-key
           <Group key={index} gap="xs" wrap="nowrap" align="flex-end">
@@ -408,9 +480,7 @@ export function VariantEditor({
           size="xs"
           w="fit-content"
           leftSection={<IconPlus size={14} />}
-          onClick={() =>
-            updateVariant((v) => ({ ...v, headers: { ...v.headers, "": "" } }))
-          }
+          onClick={() => writeHeaders([...headerRows, ["", ""]])}
           data-testid={testId("header-add")}
         >
           Добавить заголовок
@@ -419,7 +489,7 @@ export function VariantEditor({
 
       <Divider label="Когда отвечать так" labelPosition="left" />
       <Text size="xs" c="dimmed">
-        Все условия ниже должны совпасть, иначе используется обычная генерация
+        Все условия ниже должны совпасть, иначе отвечает вариант активного статуса
       </Text>
       <Stack gap="xs" data-testid={testId("when")}>
         {when.map((cond, index) => (
@@ -444,6 +514,7 @@ export function VariantEditor({
             <TextInput
               label="Имя"
               data-testid={whenTestId("name", index)}
+              error={cond.name.trim() === "" ? "заполните" : undefined}
               value={cond.name}
               onChange={(e) => patchCondition(index, { name: e.currentTarget.value })}
             />
@@ -464,6 +535,7 @@ export function VariantEditor({
             <TextInput
               label="Значение"
               disabled={cond.op === "exists"}
+              error={cond.op !== "exists" && (cond.value ?? "") === "" ? "заполните" : undefined}
               data-testid={whenTestId("value", index)}
               value={cond.value ?? ""}
               onChange={(e) => patchCondition(index, { value: e.currentTarget.value })}

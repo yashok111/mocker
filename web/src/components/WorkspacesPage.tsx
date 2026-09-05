@@ -21,7 +21,7 @@ import { notifications } from "@mantine/notifications";
 import { IconAlertTriangle, IconFileImport, IconPlus, IconTrash } from "@tabler/icons-react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
-import { useForm } from "react-hook-form";
+import { Controller, useForm } from "react-hook-form";
 import { type } from "arktype";
 import {
   getListWorkspacesQueryKey,
@@ -31,6 +31,7 @@ import {
   useListWorkspaces,
 } from "@/api/generated/workspaces/workspaces.ts";
 import { useListSpecs } from "@/api/generated/specs/specs.ts";
+import { useGetMe } from "@/api/generated/auth/auth.ts";
 import type {
   ImportWorkspaceView,
   SpecView,
@@ -67,6 +68,8 @@ export function WorkspacesPage({ initialSpecId }: { initialSpecId?: number } = {
   // failed specs probe degrades to the generic hint rather than blocking the
   // page a person came here to see.
   const specs = useListSpecs();
+  // Who is looking: the delete button hides on a colleague's row.
+  const me = useGetMe();
 
   if (workspaces.isPending) {
     return (
@@ -145,7 +148,7 @@ export function WorkspacesPage({ initialSpecId }: { initialSpecId?: number } = {
                   : view.specId === null
                     ? "спека не привязана"
                     : `привязана спека #${view.specId}`
-              }, строк ресурсов восстановлено в семействах: ${view.entitiesRestored}`,
+              }, семейств ресурсов со строками из файла: ${view.entitiesRestored}`,
             });
             void navigate({ to: "/workspaces/$id", params: { id: view.workspace.id } });
           }}
@@ -201,7 +204,12 @@ export function WorkspacesPage({ initialSpecId }: { initialSpecId?: number } = {
           </Text>
         )
       ) : (
-        <WorkspaceList workspaces={list} showOwner={showAll} />
+        <WorkspaceList
+          workspaces={list}
+          showOwner={showAll}
+          specs={specs.data?.status === 200 ? specs.data.data : []}
+          currentUserId={me.data?.status === 200 ? me.data.data.user.id : null}
+        />
       )}
     </Stack>
   );
@@ -220,6 +228,7 @@ function CreateWorkspaceForm({
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const {
+    control,
     register,
     handleSubmit,
     reset,
@@ -308,18 +317,29 @@ function CreateWorkspaceForm({
             data-testid="workspace-create-slug"
             {...register("slug")}
           />
-          <NativeSelect
-            label="Спека (необязательно)"
-            data-testid="workspace-create-spec"
-            {...register("specId")}
-          >
-            <option value="">без спеки — только кастомные endpoint&apos;ы</option>
-            {specs.map((spec) => (
-              <option key={spec.id} value={String(spec.id)}>
-                {spec.name} (v{spec.version})
-              </option>
-            ))}
-          </NativeSelect>
+          <Controller
+            control={control}
+            name="specId"
+            render={({ field }) => (
+              // Controlled, not register(): the option list arrives from its
+              // own query, and an uncontrolled <select> whose default option
+              // was not yet rendered snaps to «без спеки» while the form
+              // still holds the id (a reader of A21).
+              <NativeSelect
+                label="Спека (необязательно)"
+                data-testid="workspace-create-spec"
+                value={field.value}
+                onChange={(e) => field.onChange(e.currentTarget.value)}
+              >
+                <option value="">без спеки — только свои эндпоинты</option>
+                {specs.map((spec) => (
+                  <option key={spec.id} value={String(spec.id)}>
+                    {spec.name} (v{spec.version})
+                  </option>
+                ))}
+              </NativeSelect>
+            )}
+          />
         </Group>
         <Button
           type="submit"
@@ -335,16 +355,25 @@ function CreateWorkspaceForm({
   );
 }
 
-function specStatus(specId: number | null): string {
-  return specId === null ? "спека не привязана" : `спека #${specId}`;
+function specStatus(specId: number | null, specs: SpecView[]): string {
+  if (specId === null) {
+    return "спека не привязана";
+  }
+  const spec = specs.find((s) => s.id === specId);
+  return spec ? `спека: ${spec.name} (v${spec.version})` : `спека #${specId}`;
 }
 
 function WorkspaceList({
   workspaces,
   showOwner,
+  specs,
+  currentUserId,
 }: {
   workspaces: WorkspaceView[];
   showOwner: boolean;
+  specs: SpecView[];
+  /** null while the session is unknown — then nothing is hidden. */
+  currentUserId: number | null;
 }) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -405,7 +434,7 @@ function WorkspaceList({
                   {ws.name}
                 </Text>
                 <Text size="xs" c="dimmed">
-                  {ws.slug} · ревизия {ws.revision} · {specStatus(ws.specId)}
+                  {ws.slug} · ревизия {ws.revision} · {specStatus(ws.specId, specs)}
                   {ws.forkedFrom !== null ? ` · копия воркспейса #${ws.forkedFrom}` : ""}
                   {showOwner ? ` · владелец #${ws.ownerId}` : ""}
                   {ws.updatedAt > 0
@@ -413,17 +442,27 @@ function WorkspaceList({
                     : ""}
                 </Text>
               </UnstyledButton>
-              <Button
-                variant="default"
-                size="xs"
-                color="red"
-                leftSection={<IconTrash size={16} />}
-                onClick={() => handleDelete(ws)}
-                loading={deleteWorkspace.isPending}
-                data-testid="workspace-delete"
-              >
-                Удалить
-              </Button>
+              {/* The route checks no ownership (internal/admin, the shared
+                  password is the whole model); the SCREEN does, so a
+                  colleague's row shown by «показать чужие» carries no red
+                  button one click from destroying their work. */}
+              {currentUserId === null || ws.ownerId === currentUserId ? (
+                <Button
+                  variant="default"
+                  size="xs"
+                  color="red"
+                  leftSection={<IconTrash size={16} />}
+                  onClick={() => handleDelete(ws)}
+                  loading={deleteWorkspace.isPending}
+                  data-testid="workspace-delete"
+                >
+                  Удалить
+                </Button>
+              ) : (
+                <Text size="xs" c="dimmed" data-testid="workspace-not-mine">
+                  чужой
+                </Text>
+              )}
             </Group>
           ))}
         </Stack>

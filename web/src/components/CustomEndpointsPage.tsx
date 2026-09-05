@@ -305,9 +305,9 @@ export function CustomEndpointsPage({
   return (
     <div data-testid="custom-endpoints-page">
       <Stack gap="md">
-        <Title order={1}>Кастомные endpoint&apos;ы</Title>
+        <Title order={1}>Свои эндпоинты</Title>
         <Text size="sm" c="dimmed">
-          Кастомный endpoint — это маршрут, которого нет в спеке. Основной способ его завести —{" "}
+          Свой эндпоинт — это маршрут, которого нет в спеке. Основной способ его завести —{" "}
           <Anchor
             href={`/workspaces/${id}/traffic`}
             onClick={(e) => {
@@ -373,8 +373,8 @@ export function CustomEndpointsPage({
           // custom endpoint is FOR rather than leaving a blank card, per the
           // phase brief.
           <Text data-testid="endpoints-empty">
-            Кастомных endpoint&apos;ов пока нет. Сервер сейчас отвечает только на то, что описано в
-            спеке — заведите первый через форму выше или через трафик.
+            Своих эндпоинтов пока нет. Сервер сейчас отвечает только на то, что описано в спеке —
+            заведите первый через форму выше или через трафик.
           </Text>
         ) : (
           <EndpointList
@@ -869,7 +869,13 @@ function EditEndpointForm({
   // list's own refetch: D6's `details` already carries a fresher endpoint
   // than the stale prop, so this adopts it directly instead of a second GET.
   const [conflictBase, setConflictBase] = useState<EndpointConflictDetails | null>(null);
-  const base = conflictBase ?? endpoint;
+  // FROZEN at mount, not the live prop: the list refetches under an open
+  // form, and a base that followed it would pair drafts begun on the old
+  // document with the new editVersion — a full-replacement PUT that
+  // overwrites another writer's change without a 409 (a reader of A21).
+  // The only way a fresher document enters is the conflict reload above.
+  const [mountedEndpoint] = useState(endpoint);
+  const base = conflictBase ?? mountedEndpoint;
 
   // One draft PER STATUS, keyed by the status text: the editor always edits
   // the variant of the status currently typed in «Активный статус» — a draft
@@ -940,7 +946,7 @@ function EditEndpointForm({
         // edit from this screen would silently clear them.
         reqSchema: base.reqSchema,
         operation: base.operation,
-        editVersion: conflictBase?.editVersion ?? endpoint.editVersion,
+        editVersion: base.editVersion,
       },
     });
   }
@@ -1055,7 +1061,7 @@ function EditEndpointForm({
         />
       </Group>
       <VariantEditor
-        key={statusText}
+        key={`${statusText}:${base.editVersion}`}
         workspaceId={id}
         variant={variant}
         updateVariant={updateVariant}
@@ -1063,6 +1069,9 @@ function EditEndpointForm({
         testId={(name) => `endpoint-edit-${name}`}
         whenTestId={(name, index) => `endpoint-edit-when-${name}-${index}`}
         hasSchema={variant.schema !== undefined}
+        // A custom endpoint serves its stored headers under a generated and
+        // a pinned variant (custom.go); a function's come from the Lua return.
+        headersAppliedOn={["generated", "pinned", "file"]}
       />
       <Group gap="xs">
         <Button

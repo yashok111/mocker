@@ -159,6 +159,14 @@ function buildSettings(current: Settings, values: SettingsForm): Settings {
     .map((v) => v.trim())
     .filter((v) => v !== "");
   const notFoundBodyText = values.notFoundBodyText.trim();
+  // The same normalisation the server applies (domain.NormalizeBasePath):
+  // a leading slash, no trailing one, "" for "/" — so the connect panel's
+  // origin + basePath never reads "…:8080api/v1".
+  const rawBase = values.basePath.trim();
+  const basePath =
+    rawBase === "" || rawBase === "/"
+      ? ""
+      : (rawBase.startsWith("/") ? rawBase : `/${rawBase}`).replace(/\/+$/, "");
   // identity.id is "any JSON scalar" on the wire. An UNCHANGED text keeps the
   // stored value byte-for-byte (a number stays a number, "00123" stays the
   // string it was — the second reader of A21 caught the coercion); a changed
@@ -179,11 +187,13 @@ function buildSettings(current: Settings, values: SettingsForm): Settings {
     nullRate: values.nullRate,
     delayMs: values.delayMs,
     envelope: values.envelope.trim() === "" ? null : values.envelope.trim(),
-    basePath: values.basePath.trim(),
-    // Omitted, not sent empty, when there are none: the server reads an
-    // absent list as "nothing declared", and an empty array as the same.
-    basePathValues: basePathValues.length === 0 ? undefined : basePathValues,
-    cors: { mode: values.corsMode, credentials: values.corsCredentials },
+    basePath,
+    // Omitted when there are none, and omitted when the path carries no
+    // {param}: the box is hidden then, but react-hook-form keeps its value,
+    // and the server refuses values beside a param-free path by name.
+    basePathValues:
+      !basePath.includes("{") || basePathValues.length === 0 ? undefined : basePathValues,
+    cors: { ...current.cors, mode: values.corsMode, credentials: values.corsCredentials },
     notFoundBody: notFoundBodyText === "" ? undefined : (JSON.parse(notFoundBodyText) as unknown),
     identity: {
       ...current.identity,
@@ -601,7 +611,7 @@ export function SettingsPanel({ workspace }: { workspace: WorkspaceView }): Reac
         <Text size="sm" c="dimmed">
           {workspace.specId === null
             ? "Спека не привязана"
-            : `Привязана спека #${workspace.specId}`}
+            : `Привязана спека: ${specOptions.find((o) => o.value === String(workspace.specId))?.label ?? `#${workspace.specId}`}`}
         </Text>
         <Group align="flex-end">
           <Select

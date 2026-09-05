@@ -144,8 +144,12 @@ function ServerStatus() {
 export function WorkspaceSwitcher({ pathname }: { pathname?: string } = {}) {
   const navigate = useNavigate();
   const location = useLocation();
-  const match = /^\/workspaces\/(\d+)(?:\/|$)/.exec(pathname ?? location.pathname);
+  const path = pathname ?? location.pathname;
+  const match = /^\/workspaces\/(\d+)(\/[a-z]+)?/.exec(path);
   const current = match ? match[1] : null;
+  // The tab the person is on travels with the switch (a reader of A21):
+  // switching from «Трафик» lands on the other workspace's «Трафик».
+  const tab = match?.[2] ?? "";
   const workspaces = useListWorkspaces(undefined, { query: { enabled: current !== null } });
   if (current === null || workspaces.data?.status !== 200) {
     return null;
@@ -156,7 +160,10 @@ export function WorkspaceSwitcher({ pathname }: { pathname?: string } = {}) {
       aria-label="Перейти к воркспейсу"
       value={current}
       onChange={(e) =>
-        void navigate({ to: "/workspaces/$id", params: { id: Number(e.currentTarget.value) } })
+        void navigate({
+          to: `/workspaces/$id${tab}`,
+          params: { id: Number(e.currentTarget.value) },
+        })
       }
       data-testid="workspace-switcher"
     >

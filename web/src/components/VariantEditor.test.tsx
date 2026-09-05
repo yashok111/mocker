@@ -32,6 +32,7 @@ function Harness({ initial, onChange }: { initial: Variant; onChange?: (v: Varia
         testId={(n) => `v-${n}`}
         whenTestId={(n, i) => `v-when-${n}-${i}`}
         hasSchema
+        headersAppliedOn={["generated", "pinned", "file"]}
       />
       <output data-testid="v-error">{String(error)}</output>
     </>
@@ -88,6 +89,9 @@ describe("VariantEditor", () => {
     expect(mode).toHaveValue("pinned");
 
     await userEvent.selectOptions(mode, "function");
+    // The initial variant carries recipes: the switch asks before dropping them.
+    expect(last).toBeUndefined();
+    await userEvent.click(await screen.findByTestId("v-function-confirm"));
     expect(last).toMatchObject({ mode: "generated", function: "", headers: { "x-a": "1" } });
     // On the wire an undefined field is absent — compare the JSON form.
     const wire = () => JSON.parse(JSON.stringify(last)) as Record<string, unknown>;
@@ -159,5 +163,44 @@ describe("VariantEditor", () => {
     expect(await screen.findByTestId("v-recipes")).toHaveTextContent(
       "Правок схемы на этом статусе: 1",
     );
+  });
+
+  it("seeds an empty body on the switch to a pinned body, so the wire carries what the box shows", async () => {
+    let last: Variant | undefined;
+    renderInRouter(
+      <Harness
+        initial={{ mode: "generated" }}
+        onChange={(v) => {
+          last = v;
+        }}
+      />,
+    );
+    await userEvent.selectOptions(await screen.findByTestId("v-mode"), "pinned");
+    expect(last?.body).toEqual({});
+  });
+
+  it("keeps two header rows apart while one is being renamed, and never writes an unnamed one", async () => {
+    let last: Variant | undefined;
+    renderInRouter(
+      <Harness
+        initial={{ mode: "pinned", body: {}, headers: { "x-a": "1" } }}
+        onChange={(v) => {
+          last = v;
+        }}
+      />,
+    );
+    await userEvent.click(await screen.findByTestId("v-header-add"));
+    await userEvent.click(screen.getByTestId("v-header-add"));
+    expect(screen.getAllByTestId(/^v-header-name-/)).toHaveLength(3);
+    await userEvent.type(screen.getByTestId("v-header-name-1"), "x-a");
+    // Two rows named x-a on screen; the wire map has the later value.
+    expect(screen.getAllByTestId(/^v-header-name-/)).toHaveLength(3);
+    expect(last?.headers).toEqual({ "x-a": "" });
+  });
+
+  it("hides the headers list under a function and says the function sets them", async () => {
+    renderInRouter(<Harness initial={{ mode: "generated", function: "return 200, {}" }} />);
+    expect(await screen.findByTestId("v-headers-note")).toHaveTextContent("задаёт сама функция");
+    expect(screen.queryByTestId("v-header-add")).not.toBeVisible();
   });
 });

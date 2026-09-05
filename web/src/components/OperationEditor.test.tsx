@@ -527,6 +527,9 @@ describe("OperationEditor", () => {
       await screen.findByTestId("operation-status-mode-200"),
       "function",
     );
+    // fullDoc's 200 carries recipes and a schemaPatch: the switch asks first
+    // (agent-written work is dropped), then lands.
+    await userEvent.click(await screen.findByTestId("operation-status-function-confirm-200"));
     // An empty box blocks the save.
     expect(screen.getByTestId("operation-save")).toBeDisabled();
     await userEvent.type(screen.getByTestId("operation-status-function-200"), "return 200, {{}");
@@ -637,14 +640,90 @@ describe("OperationEditor", () => {
   // A21 (U9): the draft is compared with the server's document; the parent
   // reads the flag and the button names it.
   it("says there are unsaved changes once the draft differs, and not after a save", async () => {
+    // After the PUT the GET answers the SAVED document re-serialised the way
+    // a real refetch has it: the 200's keys in another order, and the
+    // producer switch's `function: undefined`/`bodyRef: undefined` dropped —
+    // the shape a raw JSON.stringify comparison tripped on.
+    let saved = false;
+    const savedDoc = () => {
+      const doc = fullDoc();
+      const v = doc.responses["200"]!;
+      doc.responses["200"] = {
+        when: v.when,
+        mode: "generated",
+        headers: v.headers,
+        schemaPatch: v.schemaPatch,
+        recipes: v.recipes,
+        mediaType: v.mediaType,
+        bodyEncoding: v.bodyEncoding,
+        body: v.body,
+      };
+      return { ...doc, revision: 9, editVersion: 2 };
+    };
     route({
-      [GET]: () => json(200, fullDoc()),
-      [PUT]: () => json(200, { ...fullDoc(), delayMs: 999, revision: 9 }),
+      [GET]: () => json(200, saved ? savedDoc() : fullDoc()),
+      [PUT]: () => {
+        saved = true;
+        return json(200, savedDoc());
+      },
     });
     renderInRouter(<OperationEditor workspaceId={WS} opKey={OPKEY} statuses={STATUSES} />);
     await screen.findByTestId("operation-status-mode-200");
     expect(screen.queryByTestId("operation-dirty")).toBeNull();
     await userEvent.selectOptions(screen.getByTestId("operation-status-mode-200"), "generated");
     expect(await screen.findByTestId("operation-dirty")).toBeInTheDocument();
+    await userEvent.click(screen.getByTestId("operation-save"));
+    await screen.findByTestId("operation-editor-saved");
+    await waitFor(() => expect(screen.queryByTestId("operation-dirty")).toBeNull());
+  });
+
+  // The three readers of A21: a wildcard selector is a tab the form can show
+  // but not write; an added status has no schema; an invalid when[] row
+  // blocks the save; removing the active status's variant clears activeStatus.
+  it("shows a spec wildcard as read-only, an added status as schema-less, and blocks an empty condition", async () => {
+    let sent: { activeStatus?: number; responses?: Record<string, unknown> } | undefined;
+    route({
+      [GET]: () => json(200, { ...fullDoc(), activeStatus: 404 }),
+      [PUT]: () => json(200, { ...fullDoc(), revision: 9 }),
+    });
+    const original = globalThis.fetch;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        if (init?.method === "PUT" && init.body) {
+          sent = JSON.parse(String(init.body)) as typeof sent;
+        }
+        return original(input, init);
+      }),
+    );
+    const statuses = [
+      ...STATUSES,
+      mergedStatusViewFixture({ selector: "2XX", httpStatus: 200, isDefault: false }),
+    ];
+    renderInRouter(<OperationEditor workspaceId={WS} opKey={OPKEY} statuses={statuses} />);
+    await screen.findByTestId("operation-status-mode-200");
+    await userEvent.click(screen.getByTestId("operation-status-tab-2XX"));
+    expect(await screen.findByTestId("operation-status-readonly-2XX")).toHaveTextContent("шаблон");
+    expect(screen.queryByTestId("operation-status-mode-2XX")).toBeNull();
+
+    await userEvent.type(screen.getByTestId("operation-status-add-code"), "418");
+    await userEvent.click(screen.getByTestId("operation-status-add"));
+    expect(await screen.findByTestId("operation-status-generated-note-418")).toHaveTextContent(
+      "Схемы у этого статуса нет",
+    );
+
+    // An empty condition row is a guaranteed 400 — the save waits for it.
+    await userEvent.click(screen.getByTestId("operation-status-when-add-418"));
+    expect(screen.getByTestId("operation-save")).toBeDisabled();
+    await userEvent.click(screen.getByTestId("operation-when-remove-418-0"));
+    expect(screen.getByTestId("operation-save")).toBeEnabled();
+
+    // Removing the ACTIVE status's variant clears activeStatus.
+    await userEvent.click(screen.getByTestId("operation-status-tab-404"));
+    await userEvent.click(await screen.findByTestId("operation-status-remove-404"));
+    await userEvent.click(screen.getByTestId("operation-save"));
+    await screen.findByTestId("operation-editor-saved");
+    expect(sent?.activeStatus).toBeUndefined();
+    expect(Object.keys(sent?.responses ?? {}).sort()).toEqual(["200", "418"]);
   });
 });

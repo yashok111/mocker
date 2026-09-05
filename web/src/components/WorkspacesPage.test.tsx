@@ -347,4 +347,30 @@ describe("WorkspacesPage", () => {
     expect(bob).toHaveTextContent("копия воркспейса #1");
     expect(bob).toHaveTextContent("владелец #5");
   });
+
+  it("names the spec on a row and hides «Удалить» on a colleague's workspace (A21 reviews)", async () => {
+    route({
+      "GET /api/workspaces": () => json(200, [workspaceFixture({ id: 1, ownerId: 1, specId: 4 })]),
+      "GET /api/workspaces?all=1": () =>
+        json(200, [
+          workspaceFixture({ id: 1, ownerId: 1, specId: 4 }),
+          workspaceFixture({ id: 2, name: "Bob", slug: "bob", ownerId: 5 }),
+        ]),
+      "GET /api/specs": () =>
+        json(200, [specViewFixture({ id: 4, name: "Petstore", version: "2" })]),
+      "GET /api/me": () =>
+        json(200, {
+          user: { id: 1, name: "alex", role: "user", createdAt: 0 },
+          csrfToken: "t",
+          config: {},
+        }),
+    });
+    renderInRouter(<WorkspacesPage />);
+    const row = await screen.findByTestId("workspace-row");
+    await waitFor(() => expect(row).toHaveTextContent("спека: Petstore (v2)"));
+    await userEvent.click(screen.getByTestId("workspaces-show-all"));
+    await waitFor(() => expect(screen.getAllByTestId("workspace-row")).toHaveLength(2));
+    expect(screen.getAllByTestId("workspace-delete")).toHaveLength(1);
+    expect(screen.getByTestId("workspace-not-mine")).toBeInTheDocument();
+  });
 });

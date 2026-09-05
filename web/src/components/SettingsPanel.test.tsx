@@ -352,4 +352,37 @@ describe("SettingsPanel", () => {
       identity: { id: "distinctive-identity-id", org: workspace.settings.identity.org },
     });
   });
+
+  // The readers of A21: a hidden values box must not travel; the base path
+  // is normalised as the server does; an unchanged identity.id keeps its
+  // stored scalar; the spec is named, not numbered.
+  it("drops basePathValues once the base path loses its parameter, normalises the path, and keeps identity.id as stored", async () => {
+    const user = userEvent.setup();
+    const workspace = distinctiveWorkspace();
+    workspace.settings.basePath = "/tenants/{t}";
+    workspace.settings.basePathValues = ["acme"];
+    workspace.settings.identity.id = 42;
+    let body: { settings?: Settings } | undefined;
+    route({
+      "GET /api/specs": () =>
+        json(200, [specViewFixture({ id: 1, name: "Petstore", version: "3" })]),
+      "PATCH /api/workspaces/1": () => json(200, workspace),
+    });
+    captureBody((b) => {
+      body = b as { settings?: Settings };
+    });
+    renderWithProviders(<SettingsPanel workspace={{ ...workspace, specId: 1 }} />);
+    expect(await screen.findByText(/Привязана спека: Petstore \(v3\)/)).toBeInTheDocument();
+    expect(screen.getByTestId("settings-identity-id")).toHaveValue("42");
+    const basePath = screen.getByTestId("settings-base-path");
+    expect(await screen.findByTestId("settings-base-path-values")).toHaveValue("acme");
+    await user.clear(basePath);
+    await user.type(basePath, "api/v2/");
+    expect(screen.queryByTestId("settings-base-path-values")).toBeNull();
+    await user.click(screen.getByTestId("settings-submit"));
+    await screen.findByTestId("settings-saved");
+    expect(body?.settings?.basePath).toBe("/api/v2");
+    expect(body?.settings).not.toHaveProperty("basePathValues");
+    expect(body?.settings?.identity.id).toBe(42);
+  });
 });

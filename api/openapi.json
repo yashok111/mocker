@@ -821,7 +821,7 @@
         "properties": {
           "mode": {
             "type": "string",
-            "description": "reflect | off | list"
+            "description": "reflect | off — anything else is read as reflect (internal/domain/settings.go)"
           },
           "credentials": {
             "type": "boolean"

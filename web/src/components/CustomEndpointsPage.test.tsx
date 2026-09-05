@@ -61,7 +61,7 @@ describe("CustomEndpointsPage", () => {
     route({ [LIST]: () => json(200, endpointListViewFixture({ endpoints: [] })) });
     renderInRouter(<CustomEndpointsPage id={WS} />);
 
-    expect(await screen.findByTestId("endpoints-empty")).toHaveTextContent("Кастомных endpoint");
+    expect(await screen.findByTestId("endpoints-empty")).toHaveTextContent("Своих эндпоинтов");
   });
 
   it("points to the traffic screen as the primary way to create one", async () => {

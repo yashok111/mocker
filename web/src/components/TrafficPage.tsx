@@ -626,7 +626,7 @@ export function TrafficPage({
                 по адресу <Code>{workspaceUrl}</Code>
               </>
             ) : null}
-            . Рецепты подключения и кнопка «Проверить» — на вкладке{" "}
+            . «Как подключить фронтенд» и кнопка «Проверить» — на вкладке{" "}
             <TabLink id={id} tab="overview" testId="traffic-empty-overview-link">
               «Обзор»
             </TabLink>

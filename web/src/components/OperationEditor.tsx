@@ -72,6 +72,30 @@ function emptyDocument(): OverrideMutableFields {
   return { overrideOn: false, routeOff: false, responses: {} };
 }
 
+// canonicalJSON is JSON with object keys sorted at every depth and undefined
+// members dropped — the form a document has on the wire, whatever order the
+// draft or the server happened to build it in.
+export function canonicalJSON(value: unknown): string {
+  return JSON.stringify(value, (_key, v: unknown) => {
+    if (v !== null && typeof v === "object" && !Array.isArray(v)) {
+      return Object.fromEntries(
+        Object.entries(v as Record<string, unknown>)
+          .filter(([, x]) => x !== undefined)
+          .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)),
+      );
+    }
+    return v;
+  });
+}
+
+// A response key on the wire is a 3-digit status; the spec's wildcard and
+// default selectors ("2XX", "default") are tabs the form can SHOW but a
+// variant it cannot write — the PUT refuses the key. Such a tab is read-only
+// with a pointer at «Добавить статус».
+function isWritableSelector(selector: string): boolean {
+  return /^[1-5]\d{2}$/.test(selector);
+}
+
 // selectorSort puts numeric statuses in ascending order first (200, 201, 404,
 // 500…), then wildcard/default selectors ("2XX", "default") alphabetically
 // after them — the order an operator scans a status list in.
@@ -149,6 +173,10 @@ export function OperationEditor({
   // no room for it — it travels beside the PUT body, not inside it.
   const [editVersion, setEditVersion] = useState<number | null>(null);
   const [savedNote, setSavedNote] = useState<string | null>(null);
+  // Bumped on a conflict reload: the variant editors keep a local body text
+  // and error of their own, and a reload that leaves the stored body
+  // unchanged would otherwise keep a stale invalid draft in the box.
+  const [reloadKey, setReloadKey] = useState(0);
   // A21 (U9): the draft compared with what the server holds — DERIVED, so
   // there is no flag to forget to set. The parent (OperationsPage) reads it
   // through onDirtyChange and asks before remounting this editor on another
@@ -168,10 +196,15 @@ export function OperationEditor({
       : is404
         ? emptyDocument()
         : null;
+  // Compared through a key-sorted, undefined-free serialisation: `fields`
+  // is frozen at first load in the draft's own key order while the server
+  // re-serialises in Go's struct order on every refetch, and a raw
+  // JSON.stringify read every saved document as dirty forever (a reader of
+  // A21 found it).
   const dirty =
     fields !== null &&
     serverFields !== null &&
-    JSON.stringify(fields) !== JSON.stringify(serverFields);
+    canonicalJSON(fields) !== canonicalJSON(serverFields);
   const onDirtyChangeRef = useRef(onDirtyChange);
   useEffect(() => {
     onDirtyChangeRef.current = onDirtyChange;
@@ -365,6 +398,7 @@ export function OperationEditor({
     });
     setEditVersion(details.editVersion);
     setSavedNote(null);
+    setReloadKey((k) => k + 1);
   }
 
   function handleReset(): void {
@@ -485,7 +519,13 @@ export function OperationEditor({
       }
       const responses = { ...prev.responses };
       delete responses[selector];
-      return { ...prev, responses };
+      // An activeStatus left pointing at the removed variant would have the
+      // mock serve that status with a synthetic empty body.
+      const activeStatus =
+        prev.activeStatus !== undefined && String(prev.activeStatus) === selector
+          ? undefined
+          : prev.activeStatus;
+      return { ...prev, responses, activeStatus };
     });
   }
 
@@ -689,18 +729,31 @@ export function OperationEditor({
               </Tabs.List>
               {allSelectors.map((selector) => (
                 <Tabs.Panel key={selector} value={selector} pt="sm">
-                  <StatusPanel
-                    workspaceId={workspaceId}
-                    selector={selector}
-                    variant={fields.responses[selector]}
-                    updateVariant={(updater) => updateVariant(selector, updater)}
-                    onBodyErrorChange={(hasError) =>
-                      setBodyErrors((prev) =>
-                        prev[selector] === hasError ? prev : { ...prev, [selector]: hasError },
-                      )
-                    }
-                  />
-                  {fields.responses[selector] !== undefined ? (
+                  {!isWritableSelector(selector) ? (
+                    <Text
+                      size="sm"
+                      c="dimmed"
+                      data-testid={`operation-status-readonly-${selector}`}
+                    >
+                      «{selector}» — шаблон из спеки, а не статус: правка пишется на конкретный код.
+                      Добавьте нужный статус ниже — он и будет отвечать.
+                    </Text>
+                  ) : (
+                    <StatusPanel
+                      key={reloadKey}
+                      workspaceId={workspaceId}
+                      selector={selector}
+                      hasSchema={statuses.some((s) => s.selector === selector)}
+                      variant={fields.responses[selector]}
+                      updateVariant={(updater) => updateVariant(selector, updater)}
+                      onBodyErrorChange={(hasError) =>
+                        setBodyErrors((prev) =>
+                          prev[selector] === hasError ? prev : { ...prev, [selector]: hasError },
+                        )
+                      }
+                    />
+                  )}
+                  {isWritableSelector(selector) && fields.responses[selector] !== undefined ? (
                     <Button
                       variant="subtle"
                       color="red"
@@ -926,12 +979,16 @@ function StatusPanel({
   variant,
   updateVariant,
   onBodyErrorChange,
+  hasSchema,
 }: {
   workspaceId: number;
   selector: string;
   variant: Variant | undefined;
   updateVariant: (updater: (v: Variant) => Variant) => void;
   onBodyErrorChange: (hasError: boolean) => void;
+  /** Whether the spec declares this status (a code added by hand has no
+   * schema to generate from). */
+  hasSchema: boolean;
 }): ReactElement {
   return (
     <VariantEditor
@@ -941,7 +998,10 @@ function StatusPanel({
       onErrorChange={onBodyErrorChange}
       testId={(name) => `operation-status-${name}-${selector}`}
       whenTestId={(name, index) => `operation-when-${name}-${selector}-${index}`}
-      hasSchema
+      hasSchema={hasSchema}
+      // A spec operation's override headers are layered only under a pinned
+      // variant (respond.go); a file is pinned on the wire.
+      headersAppliedOn={["pinned", "file"]}
     />
   );
 }

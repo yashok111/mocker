@@ -290,7 +290,7 @@ describe("SessionControls", () => {
     await userEvent.clear(force);
     await userEvent.type(force, "418");
     await userEvent.click(screen.getByTestId("session-force-503"));
-    await userEvent.click(screen.getByTestId("session-directive-clear"));
+    await userEvent.click(screen.getByTestId("session-directive-clear-delay-GET /pets"));
 
     await waitFor(() => {
       const posts = fetchMock.mock.calls

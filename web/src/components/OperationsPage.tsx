@@ -245,7 +245,7 @@ export function OperationsPage({
 
   return (
     <Stack gap="md" data-testid="operations-page">
-      <Title order={1}>Endpoint&apos;ы воркспейса #{id}</Title>
+      <Title order={1}>Операции спеки</Title>
       {activeScenarioId !== null ? (
         <ScenarioMaskBanner workspaceId={id} scenarioId={activeScenarioId} />
       ) : null}

@@ -165,7 +165,8 @@ describe("ResourceEntities", () => {
         json(200, { created: true, row: entity({ entityKey: "5", scopeKey: "7" }) }),
     });
     renderWithProviders(<ResourceEntities id={WS} family={nested} />);
-    await userEvent.type(await screen.findByTestId("resource-entities-scope"), "7");
+    // The filter commits on Enter (or blur), not per keystroke.
+    await userEvent.type(await screen.findByTestId("resource-entities-scope"), "7{enter}");
     await waitFor(() =>
       expect(fetchMock.mock.calls.map(([u]) => String(u))).toContain(
         `/api/workspaces/${WS}/resources/${seg}/entities?limit=50&scopeKey=7`,

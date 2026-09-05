@@ -245,7 +245,7 @@ function DriftReport({ id, report }: { id: number; report: DriftReportView }): R
       {report.shadowedEndpoints.length > 0 ? (
         <Stack gap={4}>
           <Text size="sm" fw={500}>
-            Кастомные endpoint&apos;ы, затеняющие операции спеки
+            Свои эндпоинты, затеняющие операции спеки
           </Text>
           {report.shadowedEndpoints.map((row) => (
             <Group key={row.endpointId} justify="space-between" data-testid="drift-endpoint">
