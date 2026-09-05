@@ -175,7 +175,7 @@ func (s *Server) handleToOverride(w http.ResponseWriter, r *http.Request) {
 	case errors.Is(err, overrides.ErrWorkspaceNotFound):
 		httpx.Err(w, http.StatusNotFound, httpx.CodeNotFound, "workspace not found")
 	case errors.Is(err, overrides.ErrInvalidRow):
-		httpx.Err(w, http.StatusBadRequest, httpx.CodeBadRequest, err.Error())
+		httpx.Err(w, http.StatusBadRequest, refusalCode(err), err.Error())
 	default:
 		s.log.Error("to-override: put override", "err", err)
 		httpx.Err(w, http.StatusInternalServerError, httpx.CodeInternal, "failed to save override")
