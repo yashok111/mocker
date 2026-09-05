@@ -210,4 +210,21 @@ describe("ConnectPanel", () => {
     const serverResult = await screen.findByTestId("connect-server-probe-result");
     expect(serverResult).toHaveAttribute("data-probe-kind", "call-error");
   });
+
+  it("shows the address WITH the base path beside the origin only when the workspace has one (A21, B1)", async () => {
+    route({});
+    const { unmount } = renderWithProviders(<ConnectPanel workspace={workspace} config={config} />);
+    expect(screen.queryByTestId("connect-api-address")).toBeNull();
+    unmount();
+    renderWithProviders(
+      <ConnectPanel
+        workspace={{ ...workspace, settings: { ...workspace.settings, basePath: "/api/v1" } }}
+        config={config}
+      />,
+    );
+    expect(screen.getByTestId("connect-api-address-copy-input")).toHaveValue(
+      `${workspace.url}/api/v1`,
+    );
+    expect(screen.getByTestId("connect-address-copy-input")).toHaveValue(workspace.url);
+  });
 });

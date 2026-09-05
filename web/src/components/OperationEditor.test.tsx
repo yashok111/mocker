@@ -501,4 +501,58 @@ describe("OperationEditor", () => {
 
     expect(screen.getByTestId("operation-delay-ms")).toHaveValue("999");
   });
+
+  // A21 (review B4/B5): A18 made `function` legal on a spec-operation
+  // override too, and this editor showed one as «сгенерированный» with «Тело
+  // строится по схеме спеки». The select has the third producer now, and a
+  // file-backed pinned variant shows its file instead of an empty body box.
+  it("offers «функция (Lua)» as a producer and saves it with no body, recipes or schemaPatch", async () => {
+    let sent: { responses?: Record<string, Record<string, unknown>> } | undefined;
+    route({
+      [GET]: () => json(200, fullDoc()),
+      [PUT]: () => json(200, { ...fullDoc(), revision: 9 }),
+    });
+    const original = globalThis.fetch;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        if (init?.method === "PUT" && init.body) {
+          sent = JSON.parse(String(init.body)) as typeof sent;
+        }
+        return original(input, init);
+      }),
+    );
+    renderInRouter(<OperationEditor workspaceId={WS} opKey={OPKEY} statuses={STATUSES} />);
+    await userEvent.selectOptions(
+      await screen.findByTestId("operation-status-mode-200"),
+      "function",
+    );
+    // An empty box blocks the save.
+    expect(screen.getByTestId("operation-save")).toBeDisabled();
+    await userEvent.type(screen.getByTestId("operation-status-function-200"), "return 200, {{}");
+    await userEvent.click(screen.getByTestId("operation-save"));
+    await screen.findByTestId("operation-editor-saved");
+    const v = sent?.responses?.["200"];
+    expect(v).toMatchObject({
+      mode: "generated",
+      function: "return 200, {}",
+      when: [{ in: "query", name: "debug", op: "equals", value: "1" }],
+      headers: { "x-trace-id": "abc123" },
+    });
+    for (const gone of ["body", "mediaType", "recipes", "schemaPatch", "bodyEncoding"]) {
+      expect(v).not.toHaveProperty(gone);
+    }
+  });
+
+  it("shows a file-backed variant as its file and offers to drop the file, never an empty body box", async () => {
+    const doc = fullDoc();
+    doc.responses["200"] = { mode: "pinned", bodyRef: "asset:logo.png" };
+    route({ [GET]: () => json(200, doc) });
+    renderInRouter(<OperationEditor workspaceId={WS} opKey={OPKEY} statuses={STATUSES} />);
+    const ref = await screen.findByTestId("operation-status-body-ref-200");
+    expect(ref).toHaveTextContent("logo.png");
+    expect(screen.queryByTestId("operation-status-body-200")).toBeNull();
+    await userEvent.click(within(ref).getByRole("button"));
+    expect(await screen.findByTestId("operation-status-body-200")).toBeInTheDocument();
+  });
 });

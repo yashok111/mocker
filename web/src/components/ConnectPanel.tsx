@@ -14,7 +14,7 @@ import {
 import { IconCheck, IconCopy, IconPlayerPlay } from "@tabler/icons-react";
 import { useListTraffic } from "@/api/generated/traffic/traffic.ts";
 import { useProbeWorkspace } from "@/api/generated/workspaces/workspaces.ts";
-import { buildRecipes, type Recipe } from "@/connect/recipes";
+import { apiAddress, buildRecipes, type Recipe } from "@/connect/recipes";
 import { runProbe, type ProbeResult } from "@/connect/probe";
 import { describeApiFailure } from "@/api/errors";
 import type { ServerConfigView, ServerProbeView, WorkspaceView } from "@/api/generated/schemas";
@@ -442,6 +442,26 @@ export function ConnectPanel({
               sitting under the base domain, and the port comes from the request
               the server already saw. */}
           <CopyField testId="connect-address-copy" label="Адрес" value={workspace.url} />
+          {workspace.settings.basePath !== "" ? (
+            // The address a FRONTEND needs is origin + basePath (apiAddress);
+            // the origin alone 404s on every route of a workspace whose spec
+            // declared a servers[] prefix. Shown only when there is a base
+            // path, so the common case stays one field.
+            <Stack gap={4} mt="xs" data-testid="connect-api-address">
+              <CopyField
+                testId="connect-api-address-copy"
+                label="Адрес API (с базовым путём)"
+                value={apiAddress(workspace)}
+              />
+              <Text size="xs" c="dimmed">
+                Базовый путь {workspace.settings.basePath} — из спеки; фронтенд, который добавляет
+                его сам, настраивают на «Адрес» выше.
+                {workspace.settings.basePath.includes("{")
+                  ? " Параметр в фигурных скобках подставляет клиент; допустимые значения — в настройках."
+                  : ""}
+              </Text>
+            </Stack>
+          ) : null}
         </div>
 
         <Stack gap="sm">

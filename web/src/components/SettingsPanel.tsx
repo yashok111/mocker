@@ -156,6 +156,13 @@ export function SettingsPanel({ workspace }: { workspace: WorkspaceView }): Reac
   // false edit_conflict against their own just-completed write.
   const [pendingEditVersion, setPendingEditVersion] = useState<number | null>(null);
   const editVersion = pendingEditVersion ?? workspace.editVersion;
+  // The settings document the NEXT write is built on. buildSettings spreads
+  // the fields this form has no control for (basePath, basePathValues,
+  // cors, notFoundBody, identity.id/org) from its base; after a 409 that
+  // base must be the conflict's own `details.settings`, or the retry would
+  // resend the pre-conflict values of exactly the fields A3 exists to
+  // protect — a reader of the 2026-09-05 UI review found it.
+  const [conflictSettings, setConflictSettings] = useState<Settings | null>(null);
 
   // One mutation instance backs both this form's submit AND the spec-attach
   // control below: the branching on `variables.data.specId` in onSuccess is
@@ -169,6 +176,7 @@ export function SettingsPanel({ workspace }: { workspace: WorkspaceView }): Reac
           return;
         }
         setPendingEditVersion(res.data.editVersion);
+        setConflictSettings(null);
         void queryClient.invalidateQueries({ queryKey: getGetWorkspaceQueryKey(workspace.id) });
         if (variables.data.specId !== undefined) {
           void queryClient.invalidateQueries({
@@ -183,7 +191,7 @@ export function SettingsPanel({ workspace }: { workspace: WorkspaceView }): Reac
   });
 
   function onSubmit(values: SettingsForm): void {
-    const settings = buildSettings(workspace.settings, values);
+    const settings = buildSettings(conflictSettings ?? workspace.settings, values);
     patchWorkspace.mutate({
       id: workspace.id,
       data: { name: values.name.trim(), settings, editVersion },
@@ -216,6 +224,7 @@ export function SettingsPanel({ workspace }: { workspace: WorkspaceView }): Reac
     }
     reset(toFormValues(details));
     setPendingEditVersion(details.editVersion);
+    setConflictSettings(details.settings);
   }
 
   const specOptions =

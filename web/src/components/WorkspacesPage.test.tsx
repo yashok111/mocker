@@ -290,4 +290,11 @@ describe("WorkspacesPage", () => {
     await userEvent.click(within(form).getByTestId("workspace-import-submit"));
     expect(await within(form).findByRole("alert")).toHaveTextContent("this build reads 5..6");
   });
+
+  it("renders the error state, not an empty list, when the list answers a status the contract does not declare (A21, B9)", async () => {
+    route({ "GET /api/workspaces": () => json(201, []), "GET /api/specs": specsPresent });
+    renderInRouter(<WorkspacesPage />);
+    expect(await screen.findByTestId("workspaces-error")).toBeInTheDocument();
+    expect(screen.queryByTestId("workspaces-empty")).toBeNull();
+  });
 });

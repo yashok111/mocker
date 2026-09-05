@@ -702,4 +702,76 @@ describe("CustomEndpointsPage", () => {
       });
     });
   });
+
+  // A21 (review B2/B5): the edit form used to force `mode: pinned, body:
+  // undefined` on whatever the active status served from — a P7a schema
+  // became an empty pinned body on a path edit, and a file (bodyRef) showed
+  // an empty box whose first keystroke was a 400. Now an empty box leaves
+  // the stored producer alone and the line above the box says what it is.
+  it("keeps a schema-backed generated variant when only the path is edited, and says so", async () => {
+    const ep = endpointViewFixture({
+      id: 5,
+      activeStatus: 200,
+      responses: {
+        "200": variantFixture({ mode: "generated", body: undefined, schema: { type: "object" } }),
+      },
+    });
+    const fetchMock = route({
+      [LIST]: () => json(200, endpointListViewFixture({ endpoints: [ep] })),
+      [`PUT /api/workspaces/${WS}/endpoints/5`]: () => json(200, ep),
+    });
+    renderInRouter(<CustomEndpointsPage id={WS} />);
+    await userEvent.click(await screen.findByTestId("endpoint-edit-toggle"));
+    const form = await screen.findByTestId("endpoint-edit-form");
+    expect(within(form).getByTestId("endpoint-edit-producer-note")).toHaveTextContent(
+      "строится по схеме",
+    );
+    const pathField = within(form).getByTestId("endpoint-edit-path");
+    await userEvent.clear(pathField);
+    await userEvent.type(pathField, "/custom/renamed");
+    await userEvent.click(within(form).getByTestId("endpoint-edit-submit"));
+    await waitFor(() => {
+      expect(fetchMock.mock.calls.filter(([, init]) => init?.method === "PUT")).toHaveLength(1);
+    });
+    const put = fetchMock.mock.calls.find(([, init]) => init?.method === "PUT");
+    const sent = JSON.parse(String(put?.[1]?.body)) as {
+      responses: Record<string, { mode: string; schema?: unknown; body?: unknown }>;
+    };
+    expect(sent.responses["200"]).toMatchObject({ mode: "generated", schema: { type: "object" } });
+    expect(sent.responses["200"]).not.toHaveProperty("body");
+  });
+
+  it("keeps a file-backed variant on an empty box and replaces the file when a body is typed", async () => {
+    const ep = endpointViewFixture({
+      id: 5,
+      activeStatus: 200,
+      responses: {
+        "200": variantFixture({
+          mode: "pinned",
+          body: undefined,
+          mediaType: undefined,
+          bodyRef: "asset:logo.png",
+        }),
+      },
+    });
+    const fetchMock = route({
+      [LIST]: () => json(200, endpointListViewFixture({ endpoints: [ep] })),
+      [`PUT /api/workspaces/${WS}/endpoints/5`]: () => json(200, ep),
+    });
+    renderInRouter(<CustomEndpointsPage id={WS} />);
+    await userEvent.click(await screen.findByTestId("endpoint-edit-toggle"));
+    const form = await screen.findByTestId("endpoint-edit-form");
+    expect(within(form).getByTestId("endpoint-edit-producer-note")).toHaveTextContent("logo.png");
+    await userEvent.type(within(form).getByTestId("endpoint-edit-body"), '{{"ok": true}');
+    await userEvent.click(within(form).getByTestId("endpoint-edit-submit"));
+    await waitFor(() => {
+      expect(fetchMock.mock.calls.filter(([, init]) => init?.method === "PUT")).toHaveLength(1);
+    });
+    const put = fetchMock.mock.calls.find(([, init]) => init?.method === "PUT");
+    const sent = JSON.parse(String(put?.[1]?.body)) as {
+      responses: Record<string, { mode: string; bodyRef?: string; body?: unknown }>;
+    };
+    expect(sent.responses["200"]).toMatchObject({ mode: "pinned", body: { ok: true } });
+    expect(sent.responses["200"]).not.toHaveProperty("bodyRef");
+  });
 });

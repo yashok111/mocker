@@ -35,4 +35,18 @@ describe("buildRecipes", () => {
     expect(apiBase?.note).toContain("только если");
     expect(env?.note).not.toContain("только если");
   });
+
+  it("carries the workspace's basePath on the API recipes and never on the health curl (A21, B1)", () => {
+    const ws = workspace({ settings: { ...workspace().settings, basePath: "/api/v1" } });
+    const recipes = buildRecipes(ws, config);
+    expect(recipes.find((r) => r.id === "env")?.snippet).toBe(
+      "API_BASE_URL=http://alex.mock.corp.internal:8080/api/v1",
+    );
+    expect(recipes.find((r) => r.id === "devtools")?.snippet).toBe(
+      "http://alex.mock.corp.internal:8080/api/v1",
+    );
+    expect(recipes.find((r) => r.id === "curl")?.snippet).toBe(
+      "curl http://alex.mock.corp.internal:8080/__test-prefix/health",
+    );
+  });
 });

@@ -221,7 +221,7 @@ describe("SettingsPanel", () => {
     const user = userEvent.setup();
     const workspace = distinctiveWorkspace();
     let patchCount = 0;
-    let lastBody: { editVersion?: number } | undefined;
+    let lastBody: { editVersion?: number; settings?: { basePath?: string } } | undefined;
     route({
       "GET /api/specs": () => json(200, []),
       "PATCH /api/workspaces/1": () => {
@@ -231,7 +231,14 @@ describe("SettingsPanel", () => {
             error: {
               code: "edit_conflict",
               message: "stale",
-              details: { name: "Renamed elsewhere", settings: workspace.settings, editVersion: 42 },
+              details: {
+                name: "Renamed elsewhere",
+                // A21 (review B3): a field this form has no control for changed
+                // elsewhere; the retry must carry the conflict's value, not the
+                // stale prop's.
+                settings: { ...workspace.settings, basePath: "/changed-elsewhere" },
+                editVersion: 42,
+              },
             },
           });
         }
@@ -243,7 +250,10 @@ describe("SettingsPanel", () => {
       "fetch",
       vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
         if (init?.method === "PATCH" && init.body) {
-          lastBody = JSON.parse(String(init.body)) as { editVersion?: number };
+          lastBody = JSON.parse(String(init.body)) as {
+            editVersion?: number;
+            settings?: { basePath?: string };
+          };
         }
         return original(input, init);
       }),
@@ -264,6 +274,7 @@ describe("SettingsPanel", () => {
     await screen.findByTestId("settings-saved");
 
     expect(lastBody?.editVersion).toBe(42);
+    expect(lastBody?.settings?.basePath).toBe("/changed-elsewhere");
     expect(patchCount).toBe(2);
   });
 

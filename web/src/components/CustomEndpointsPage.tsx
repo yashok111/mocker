@@ -273,6 +273,41 @@ function defaultsFromEndpoint(
   };
 }
 
+// keepsOtherProducer says whether an empty body box means "leave the stored
+// producer alone" — true for a schema-backed generated variant (P7a) and a
+// file-backed one (A6). A pinned literal body with an emptied box is the
+// one case where empty MEANS empty (an empty pinned body, as before).
+export function keepsOtherProducer(
+  variant: EndpointView["responses"][string] | undefined,
+  bodyText: string,
+): boolean {
+  if (variant === undefined || bodyText !== "") {
+    return false;
+  }
+  if (variant.bodyRef !== undefined && variant.bodyRef !== "") {
+    return true;
+  }
+  return variant.mode !== "pinned" && variant.schema !== undefined;
+}
+
+// producerNote is the line above the body box that says what the variant
+// serves from when it is not a literal body — before A21 the form showed an
+// empty box for both cases and nothing else.
+export function producerNote(
+  variant: EndpointView["responses"][string] | undefined,
+): string | null {
+  if (variant === undefined || (variant.function !== undefined && variant.function !== "")) {
+    return null;
+  }
+  if (variant.bodyRef !== undefined && variant.bodyRef !== "") {
+    return `Сейчас ответ — файл «${variant.bodyRef.replace(/^asset:/, "")}» (вкладка «Файлы»). Введите тело, чтобы заменить файл телом; пустое поле оставит файл.`;
+  }
+  if (variant.mode !== "pinned" && variant.schema !== undefined) {
+    return "Сейчас тело строится по схеме (вкладка «Контракт»). Введите тело, чтобы закрепить его; пустое поле оставит схему.";
+  }
+  return null;
+}
+
 // hasFunction answers the row badge: any variant of the endpoint, not only
 // the active one, runs Lua — a 500 the agent scripted is worth knowing
 // about while the 200 is what serves.
@@ -935,15 +970,29 @@ function EditEndpointForm({
             schemaPatch: undefined,
             function: functionText,
           }
-        : {
-            ...responses[status],
-            mode: "pinned",
-            body: bodyText === "" ? undefined : (JSON.parse(bodyText) as unknown),
-            mediaType: mediaType === "" ? undefined : mediaType,
-            // A cleared Lua box removes the function: the operator saw it in
-            // the box and emptied it, so nothing is dropped unseen.
-            function: undefined,
-          };
+        : keepsOtherProducer(responses[status], bodyText)
+          ? {
+              // The variant serves from a schema (P7a, generated) or from a
+              // file (A6, bodyRef) and the body box is empty: the operator
+              // edited something else, and forcing `mode: pinned, body:
+              // undefined` here would turn the schema into an empty pinned
+              // body (the review's B2) — so the producer stays as stored.
+              // mediaType is left alone too: a bodyRef refuses one.
+              ...responses[status],
+              mode: responses[status]?.mode ?? "generated",
+              function: undefined,
+            }
+          : {
+              ...responses[status],
+              mode: "pinned",
+              body: bodyText === "" ? undefined : (JSON.parse(bodyText) as unknown),
+              mediaType: mediaType === "" ? undefined : mediaType,
+              // A typed body replaces a file: the form said so above the box.
+              bodyRef: undefined,
+              // A cleared Lua box removes the function: the operator saw it in
+              // the box and emptied it, so nothing is dropped unseen.
+              function: undefined,
+            };
     updateEndpoint.mutate({
       id,
       eid: endpoint.id,
@@ -1059,6 +1108,11 @@ function EditEndpointForm({
           {...register("mediaType")}
         />
       </Group>
+      {producerNote(activeVariant(base)) !== null ? (
+        <Text size="xs" c="dimmed" data-testid="endpoint-edit-producer-note">
+          {producerNote(activeVariant(base))}
+        </Text>
+      ) : null}
       <Textarea
         label="Тело ответа, JSON (необязательно)"
         rows={4}

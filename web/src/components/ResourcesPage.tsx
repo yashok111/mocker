@@ -15,6 +15,7 @@ import {
 } from "@mantine/core";
 import { modals } from "@mantine/modals";
 import { IconAlertTriangle, IconCheck, IconList, IconX } from "@tabler/icons-react";
+import { TabLink } from "./TabLink";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   getListWorkspaceResourcesQueryKey,
@@ -77,13 +78,17 @@ export function ResourcesPage({ id }: { id: number }): ReactElement {
           Ресурс — семейство маршрутов (коллекция и её элемент), которое можно подтвердить и дальше
           обслуживать из хранилища вместо генератора: то, что записано через POST, переживает
           рестарт и видно в следующем GET. Ресурс, который подтвердили неправильно, не редактируется
-          — его отклоняют и подтверждают заново. Фильтры, сортировка и постраничность — следующий
-          слайс.
+          — его отклоняют и подтверждают заново. Строки подтверждённого семейства — кнопка «Записи»,
+          по 50 на страницу.
         </Text>
         {workspace.data?.status === 200 && specId === null ? (
           <Alert color="gray" data-testid="resources-no-spec">
-            К воркспейсу не привязана спека — новых предложений нет. Ниже показаны только ресурсы,
-            подтверждённые раньше, если они остались от другой спеки.
+            К воркспейсу не привязана спека — новых предложений нет. Привязать её можно на вкладке{" "}
+            <TabLink id={id} tab="overview" testId="resources-no-spec-link">
+              «Обзор»
+            </TabLink>
+            . Ниже показаны только ресурсы, подтверждённые раньше, если они остались от другой
+            спеки.
           </Alert>
         ) : null}
         {resources.isPending ? (
@@ -119,9 +124,13 @@ export function ResourcesPage({ id }: { id: number }): ReactElement {
             {describeApiFailure(null)}
           </Alert>
         ) : families.length === 0 ? (
-          <Text data-testid="resources-empty">
-            В привязанной спеке не нашлось ни одного семейства маршрутов, подходящего под ресурс.
-          </Text>
+          // With no spec bound the alert above already said why the list is
+          // empty; a second sentence about «привязанная спека» contradicted it.
+          specId === null ? null : (
+            <Text data-testid="resources-empty">
+              В привязанной спеке не нашлось ни одного семейства маршрутов, подходящего под ресурс.
+            </Text>
+          )
         ) : (
           <ResourceList id={id} workspaceUrl={workspaceUrl} families={families} />
         )}

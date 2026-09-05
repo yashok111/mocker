@@ -835,7 +835,9 @@ export function StreamCapsStrip({
           </Button>
           {result ? (
             <Text size="sm" data-testid={t("preview-rate")}>
-              Максимум на одно соединение:{" "}
+              {result.nominalRate
+                ? "Оценка по одному запуску функции, не потолок: "
+                : "Максимум на одно соединение: "}
               <strong>{formatBytesPerSec(result.maxBytesPerSec)}</strong>
               {result.truncated ? " · показаны первые кадры, поток длиннее" : ""}
               {kind === "ws" ? ` · правил: ${result.rules}${result.echo ? ", эхо" : ""}` : ""}
@@ -869,7 +871,13 @@ export function StreamCapsStrip({
                     <Table.Td>{f.atMs}</Table.Td>
                     <Table.Td>{f.event ?? "—"}</Table.Td>
                     <Table.Td>
-                      <code>{JSON.stringify(f.data)}</code>
+                      {f.notRun ? (
+                        <Text size="xs" c="dimmed" component="span">
+                          тело не вычислялось
+                        </Text>
+                      ) : (
+                        <code>{JSON.stringify(f.data)}</code>
+                      )}
                     </Table.Td>
                   </Table.Tr>
                 ))}

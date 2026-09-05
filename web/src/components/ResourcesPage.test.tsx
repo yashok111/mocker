@@ -106,6 +106,14 @@ describe("ResourcesPage", () => {
     expect(await screen.findByTestId("resources-no-spec")).toBeInTheDocument();
     const urls = fetchMock.mock.calls.map(([url]) => String(url));
     expect(urls.some((u) => u.includes("resource-suggestions"))).toBe(false);
+    // A21 (review B7): the no-spec alert links to the overview and the
+    // «в привязанной спеке не нашлось…» sentence — which contradicted it —
+    // is not rendered beside it.
+    expect(screen.getByTestId("resources-no-spec-link")).toHaveAttribute(
+      "href",
+      `/workspaces/${WS}`,
+    );
+    expect(screen.queryByTestId("resources-empty")).toBeNull();
   });
 
   it("shows entityCount and the GET pointer for a confirmed family, and offers only «отклонить»", async () => {
@@ -408,7 +416,7 @@ describe("ResourcesPage", () => {
     expect(alert).toHaveTextContent("already confirmed");
   });
 
-  it("mentions the carve-out for filters, sorting and pagination", async () => {
+  it("says where the rows of a confirmed family are, not that paging is a later slice", async () => {
     route({
       [WORKSPACE]: () => json(200, workspaceFixture({ id: WS, name: "Alex", specId: 3 })),
       [SUGGESTIONS]: () => json(200, { suggestions: [] }),
@@ -416,6 +424,6 @@ describe("ResourcesPage", () => {
     });
     renderInRouter(<ResourcesPage id={WS} />);
 
-    expect(await screen.findByText(/следующий слайс/)).toBeInTheDocument();
+    expect(await screen.findByText(/кнопка «Записи», по 50 на страницу/)).toBeInTheDocument();
   });
 });

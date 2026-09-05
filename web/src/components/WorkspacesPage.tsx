@@ -89,7 +89,19 @@ export function WorkspacesPage() {
     );
   }
 
-  const list = workspaces.data.status === 200 ? workspaces.data.data : [];
+  if (workspaces.data.status !== 200) {
+    return (
+      <Alert
+        color="red"
+        icon={<IconAlertTriangle size={18} />}
+        role="alert"
+        data-testid="workspaces-error"
+      >
+        {describeApiFailure(null)}
+      </Alert>
+    );
+  }
+  const list = workspaces.data.data;
   const isEmpty = list.length === 0;
   // A missing/failed/still-loading specs probe falls through to `false`
   // (specsEmpty), not to the "спеки ещё нет" copy — that message asserts a

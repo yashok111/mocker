@@ -267,6 +267,35 @@ describe("StreamCapsStrip", () => {
     });
   });
 
+  it("labels a Lua tick's rate as a sample and a not-run frame as such (A21, B6)", async () => {
+    route({
+      "POST /api/workspaces/7/endpoints/preview": () =>
+        json(200, {
+          kind: "sse",
+          frames: [{ atMs: 500, data: null, notRun: true }],
+          truncated: false,
+          maxBytesPerSec: 100,
+          rules: 0,
+          echo: false,
+          nominalRate: true,
+        }),
+    });
+    renderWithProviders(
+      <StreamCapsStrip
+        workspaceId={7}
+        path="/events"
+        kind="sse"
+        draft={emptyStreamDraft()}
+        testIdPrefix="t"
+      />,
+    );
+    await userEvent.click(screen.getByTestId("t-preview-run"));
+    expect(await screen.findByTestId("t-preview-rate")).toHaveTextContent(
+      "Оценка по одному запуску",
+    );
+    expect(screen.getByTestId("t-preview-frames")).toHaveTextContent("тело не вычислялось");
+  });
+
   it("shows the server's effective limits when the session config is given (A9)", () => {
     route({});
     renderWithProviders(

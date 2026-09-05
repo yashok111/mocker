@@ -812,7 +812,19 @@ function StatusPanel({
   updateVariant: (updater: (v: Variant) => Variant) => void;
   onBodyErrorChange: (hasError: boolean) => void;
 }): ReactElement {
-  const mode = variant?.mode ?? "generated";
+  // The select shows THREE producers, the wire has two modes plus a
+  // function (A18: legal on a spec-operation override too, "both writers"):
+  // a variant carrying `function` reads as «функция» whatever its mode
+  // says. A20 gave the custom-endpoint forms this box and left this one
+  // showing a function-bearing 200 as «сгенерированный» with «Тело
+  // строится по схеме спеки» — false; the 2026-09-05 UI review found it.
+  // `function` present — even as "" right after the select, before a
+  // keystroke — IS the function producer: a stored row never carries "" (Go
+  // omits it), so the empty string only ever means "chosen, not typed yet",
+  // and functionEmpty below keeps that from being saved.
+  const mode = variant?.function !== undefined ? "function" : (variant?.mode ?? "generated");
+  const functionText = variant?.function ?? "";
+  const functionEmpty = mode === "function" && functionText.trim() === "";
   const when = variant?.when ?? [];
   const recipes = variant?.recipes ?? {};
   const recipeEntries = Object.entries(recipes);
@@ -861,14 +873,51 @@ function StatusPanel({
     onBodyErrorChangeRef.current = onBodyErrorChange;
   });
   useEffect(() => {
-    onBodyErrorChangeRef.current(bodyError !== null);
-  }, [bodyError]);
+    // An empty Lua box counts as a body error: the wire reads "" as no
+    // function, and a save would silently land a generated variant.
+    onBodyErrorChangeRef.current(bodyError !== null || functionEmpty);
+  }, [bodyError, functionEmpty]);
   useEffect(() => {
     return () => onBodyErrorChangeRef.current(false);
   }, []);
 
   function handleModeChange(next: string): void {
-    updateVariant((v) => ({ ...v, mode: next === "pinned" ? "pinned" : "generated" }));
+    if (next === "function") {
+      // A18 D5: one producer per variant — body, encoding, file, media
+      // type, recipes and schemaPatch all go; when[] and headers stay (a
+      // function keeps its selection and its headers). The Lua box starts
+      // empty rather than seeded with anything, and the empty box blocks
+      // «Сохранить» (functionEmpty above) until something is typed. Mode is
+      // the neutral one, as A18's own rows leave it.
+      updateVariant((v) => ({
+        ...v,
+        mode: "generated",
+        body: undefined,
+        bodyEncoding: undefined,
+        bodyRef: undefined,
+        mediaType: undefined,
+        recipes: undefined,
+        schemaPatch: undefined,
+        function: v.function ?? "",
+      }));
+      return;
+    }
+    updateVariant((v) => ({
+      ...v,
+      mode: next === "pinned" ? "pinned" : "generated",
+      function: undefined,
+    }));
+  }
+
+  function handleFunctionChange(text: string): void {
+    updateVariant((v) => ({ ...v, function: text }));
+  }
+
+  // A6: a bodyRef variant serves the uploaded file verbatim; the body box
+  // must not render for it — its `{}` fallback was the first keystroke's
+  // `body` beside `bodyRef`, a 400 naming a field the form never showed.
+  function clearBodyRef(): void {
+    updateVariant((v) => ({ ...v, bodyRef: undefined }));
   }
 
   function handleBodyChange(text: string): void {
@@ -917,9 +966,31 @@ function StatusPanel({
       >
         <option value="generated">сгенерированный</option>
         <option value="pinned">закреплённый</option>
+        <option value="function">функция (Lua)</option>
       </NativeSelect>
 
-      {mode === "pinned" ? (
+      {mode === "function" ? (
+        <Textarea
+          label="Функция (Lua) — над аргументом req, возвращает status, body, headers"
+          description="Раздел «Функции» в руководстве. Компилируется при сохранении: синтаксическая ошибка — отказ со словами парсера. Заменяет тело, файл и подстановки этого статуса; условия ниже остаются."
+          rows={6}
+          styles={{ input: { fontFamily: "var(--mantine-font-family-monospace)" } }}
+          data-testid={`operation-status-function-${selector}`}
+          error={functionEmpty ? "Функция пуста" : undefined}
+          value={functionText}
+          onChange={(e) => handleFunctionChange(e.currentTarget.value)}
+        />
+      ) : mode === "pinned" && variant?.bodyRef !== undefined ? (
+        <Group gap="xs" data-testid={`operation-status-body-ref-${selector}`}>
+          <Text size="sm">
+            Ответ — файл «{variant.bodyRef.replace(/^asset:/, "")}» (вкладка «Файлы»), со своим
+            media type.
+          </Text>
+          <Button variant="default" size="xs" onClick={clearBodyRef}>
+            Убрать файл и задать тело
+          </Button>
+        </Group>
+      ) : mode === "pinned" ? (
         <>
           <TextInput
             label="Media type"
