@@ -160,6 +160,21 @@ var ErrWorkspaceNotFound = errors.New("overrides: workspace not found")
 // operation, or an inverted/negative ListSize or DelayMs.
 var ErrInvalidRow = errors.New("overrides: invalid row")
 
+// A18's two named refusals of a variant's function, wrapped TOGETHER with
+// ErrInvalidRow so every existing errors.Is(ErrInvalidRow) site keeps its
+// 400 and the admin plane can also put the NAME in the envelope's code —
+// which the gate document, the embedded guide and api/openapi.json all
+// promised (`400 bad_function`, `400 function_and_body`) and the server did
+// not deliver until the A18 review: it answered `bad_request` with prose,
+// so an agent branching on the code never matched. The sentinel's text IS
+// the code; internal/admin's refusalCode reads it through errors.Is and
+// never by string. customep reuses ErrBadFunction for the two stream hooks,
+// since a compile error is one refusal wherever the Lua lives.
+var (
+	ErrBadFunction     = errors.New("bad_function")
+	ErrFunctionAndBody = errors.New("function_and_body")
+)
+
 // normalizeAndValidate upper-cases Method, requires a leading-slash Path,
 // defaults a nil Responses to an empty map (so it marshals to "{}" — the
 // column's own DEFAULT — rather than the JSON literal "null"), and then
@@ -286,15 +301,15 @@ func validateFunctionVariant(v Variant) error {
 	// at write time can say which wins.
 	switch {
 	case len(v.Body) > 0 || v.BodyEncoding != "":
-		return fmt.Errorf("%w: function and body are exclusive: one producer per variant", ErrInvalidRow)
+		return fmt.Errorf("%w: %w: function and body are exclusive: one producer per variant", ErrInvalidRow, ErrFunctionAndBody)
 	case v.BodyRef != "":
-		return fmt.Errorf("%w: function and bodyRef are exclusive: one producer per variant", ErrInvalidRow)
+		return fmt.Errorf("%w: %w: function and bodyRef are exclusive: one producer per variant", ErrInvalidRow, ErrFunctionAndBody)
 	case len(v.Recipes) > 0:
-		return fmt.Errorf("%w: function and recipes are exclusive: a function builds its own body", ErrInvalidRow)
+		return fmt.Errorf("%w: %w: function and recipes are exclusive: a function builds its own body", ErrInvalidRow, ErrFunctionAndBody)
 	case len(v.SchemaPatch) > 0:
-		return fmt.Errorf("%w: function and schemaPatch are exclusive: a function's body is not walked from a schema", ErrInvalidRow)
+		return fmt.Errorf("%w: %w: function and schemaPatch are exclusive: a function's body is not walked from a schema", ErrInvalidRow, ErrFunctionAndBody)
 	case v.MediaType != "":
-		return fmt.Errorf("%w: function takes no mediaType: a table return is JSON and a string return is the function's own bytes", ErrInvalidRow)
+		return fmt.Errorf("%w: %w: function takes no mediaType: a table return is JSON and a string return is the function's own bytes", ErrInvalidRow, ErrFunctionAndBody)
 	}
 	// Compiled at WRITE time so a syntax error is a 400 carrying the
 	// parser's own words, never a 500 on the first anonymous request
@@ -302,7 +317,7 @@ func validateFunctionVariant(v Variant) error {
 	// other door into this package — the bundle, a checkpoint restore,
 	// an import — get the check without repeating it.
 	if err := luafn.Validate(v.Function); err != nil {
-		return fmt.Errorf("%w: function does not compile: %w", ErrInvalidRow, err)
+		return fmt.Errorf("%w: %w: function does not compile: %w", ErrInvalidRow, ErrBadFunction, err)
 	}
 	return nil
 }

@@ -633,7 +633,7 @@ func (s *Server) handlePutOperation(w http.ResponseWriter, r *http.Request) {
 		// is the same 404 that lookup would give a request arriving now.
 		httpx.Err(w, http.StatusNotFound, httpx.CodeNotFound, "workspace not found")
 	case errors.Is(err, overrides.ErrInvalidRow):
-		httpx.Err(w, http.StatusBadRequest, httpx.CodeBadRequest, err.Error())
+		httpx.Err(w, http.StatusBadRequest, refusalCode(err), err.Error())
 	default:
 		s.log.Error("put override", "err", err)
 		httpx.Err(w, http.StatusInternalServerError, httpx.CodeInternal, "failed to save override")

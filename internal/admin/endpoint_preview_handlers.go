@@ -109,7 +109,7 @@ func (s *Server) handlePreviewEndpoint(w http.ResponseWriter, r *http.Request) {
 	}
 	row, err := endpointRowFromDraft(body.Method, body.Path, body.Kind, body.Stream, s.customepRepo.MaxFrameBytes)
 	if err != nil {
-		httpx.Err(w, http.StatusBadRequest, httpx.CodeBadRequest, err.Error())
+		httpx.Err(w, http.StatusBadRequest, refusalCode(err), err.Error())
 		return
 	}
 	if row.Kind != customep.KindSSE && row.Kind != customep.KindWS {

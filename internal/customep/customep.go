@@ -115,6 +115,21 @@ var ErrConflict = errors.New("customep: an endpoint already exists for this meth
 // status, or a Variant that fails overrides.ValidateVariant.
 var ErrInvalidRow = errors.New("customep: invalid endpoint")
 
+// A18's named refusals of a stream row, each wrapped together with
+// ErrInvalidRow (the same shape overrides.ErrBadFunction and
+// overrides.ErrFunctionAndBody have, and for the same reason: the documents
+// promised the name in the envelope's code and the server answered
+// bad_request). The text of each IS its code. A hook that does not compile
+// is overrides.ErrBadFunction, not a sixth sentinel — one refusal wherever
+// the Lua lives.
+var (
+	ErrFunctionOnStream   = errors.New("function_on_stream")
+	ErrTickLuaAndSchema   = errors.New("tick_lua_and_schema")
+	ErrOnFrameOnSSE       = errors.New("on_frame_on_sse")
+	ErrOnFrameAndReactive = errors.New("on_frame_and_reactive")
+	ErrOnFrameAndEcho     = errors.New("on_frame_and_echo")
+)
+
 // ErrWorkspaceNotFound is returned by Create/Delete when the target
 // workspace does not exist.
 var ErrWorkspaceNotFound = errors.New("customep: workspace not found")

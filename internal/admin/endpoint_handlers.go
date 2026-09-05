@@ -192,7 +192,11 @@ func endpointRowFromCreate(body *createEndpointRequest, status int, maxFrameByte
 		// function_on_stream check (which walks that map) would find
 		// nothing and the field would be silently dropped. A stream's Lua
 		// goes in the stream document, and the message says which field.
-		return nil, fmt.Errorf("kind %q takes no function — a stream is not a request/response, and its Lua goes in stream.tick.lua or stream.onFrame instead", body.Kind)
+		// Refused under the same name the row validator gives
+		// responses[].function on a stream (customep's
+		// refuseFunctionOnStream), so both doors answer function_on_stream.
+		return nil, fmt.Errorf("%w: %w: kind %q takes no function — a stream is not a request/response, and its Lua goes in stream.tick.lua or stream.onFrame instead",
+			customep.ErrInvalidRow, customep.ErrFunctionOnStream, body.Kind)
 	}
 	draft, err := endpointRowFromDraft(body.Method, body.Path, body.Kind, body.Stream, maxFrameBytes)
 	if err != nil {
@@ -310,7 +314,10 @@ func (s *Server) handleCreateEndpoint(w http.ResponseWriter, r *http.Request) {
 
 	row, derr := endpointRowFromCreate(&body, status, s.customepRepo.MaxFrameBytes)
 	if derr != nil {
-		httpx.Err(w, http.StatusBadRequest, httpx.CodeBadRequest, derr.Error())
+		// refusalCode: a stream draft's named refusals (on_frame_and_echo,
+		// tick_lua_and_schema, …) surface HERE, before the repo, and must
+		// carry the same code the repo's own mapper gives them.
+		httpx.Err(w, http.StatusBadRequest, refusalCode(derr), derr.Error())
 		return
 	}
 	// P7a (D6): a `$ref` is never STORED dangling — checked against the
@@ -343,7 +350,7 @@ func (s *Server) answerCreateEndpointError(w http.ResponseWriter, err error) {
 		// loadWorkspace already confirmed existence moments earlier.
 		httpx.Err(w, http.StatusNotFound, httpx.CodeNotFound, "workspace not found")
 	case errors.Is(err, customep.ErrInvalidRow):
-		httpx.Err(w, http.StatusBadRequest, httpx.CodeBadRequest, err.Error())
+		httpx.Err(w, http.StatusBadRequest, refusalCode(err), err.Error())
 	default:
 		s.log.Error("create endpoint", "err", err)
 		httpx.Err(w, http.StatusInternalServerError, httpx.CodeInternal, "failed to create endpoint")
@@ -624,7 +631,7 @@ func (s *Server) handleUpdateEndpoint(w http.ResponseWriter, r *http.Request) {
 	case errors.Is(err, customep.ErrWorkspaceNotFound):
 		httpx.Err(w, http.StatusNotFound, httpx.CodeNotFound, "workspace not found")
 	case errors.Is(err, customep.ErrInvalidRow):
-		httpx.Err(w, http.StatusBadRequest, httpx.CodeBadRequest, err.Error())
+		httpx.Err(w, http.StatusBadRequest, refusalCode(err), err.Error())
 	default:
 		s.log.Error("update endpoint", "err", err)
 		httpx.Err(w, http.StatusInternalServerError, httpx.CodeInternal, "failed to update endpoint")

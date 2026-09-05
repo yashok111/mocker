@@ -220,7 +220,7 @@ func validateInbound(kind string, s *Stream) error {
 			return fmt.Errorf("%w: stream.echo has no meaning on kind %q: an SSE connection carries no inbound frame", ErrInvalidRow, kind)
 		}
 		if s.OnFrame != "" {
-			return fmt.Errorf("%w: stream.onFrame has no meaning on kind %q: an SSE connection carries no inbound frame", ErrInvalidRow, kind)
+			return fmt.Errorf("%w: %w: stream.onFrame has no meaning on kind %q: an SSE connection carries no inbound frame", ErrInvalidRow, ErrOnFrameOnSSE, kind)
 		}
 		if s.Timeline == nil && s.Tick == nil {
 			return fmt.Errorf("%w: stream needs a timeline or a tick — a stream that sends nothing is a mistake", ErrInvalidRow)
@@ -229,13 +229,13 @@ func validateInbound(kind string, s *Stream) error {
 	}
 	if s.OnFrame != "" {
 		if len(s.Reactive) > 0 {
-			return fmt.Errorf("%w: stream takes onFrame or reactive, not both — onFrame replaces them entirely", ErrInvalidRow)
+			return fmt.Errorf("%w: %w: stream takes onFrame or reactive, not both — onFrame replaces them entirely", ErrInvalidRow, ErrOnFrameAndReactive)
 		}
 		if s.Echo {
-			return fmt.Errorf("%w: stream takes onFrame or echo, not both — onFrame replaces them entirely", ErrInvalidRow)
+			return fmt.Errorf("%w: %w: stream takes onFrame or echo, not both — onFrame replaces them entirely", ErrInvalidRow, ErrOnFrameAndEcho)
 		}
 		if err := luafn.ValidateHook(luafn.HookOnFrame, s.OnFrame); err != nil {
-			return fmt.Errorf("%w: stream.onFrame does not compile: %w", ErrInvalidRow, err)
+			return fmt.Errorf("%w: %w: stream.onFrame does not compile: %w", ErrInvalidRow, overrides.ErrBadFunction, err)
 		}
 	}
 	if s.Timeline == nil && s.Tick == nil && len(s.Reactive) == 0 && !s.Echo && s.OnFrame == "" {
@@ -334,11 +334,11 @@ func validateTick(t *Tick) error {
 		// omitempty, so it is in every Lua tick stored by the A18 build and
 		// in every checkpoint taken of one.
 		if len(t.Schema) > 0 && string(t.Schema) != "null" {
-			return fmt.Errorf("%w: stream.tick takes lua or schema, not both — one producer per tick", ErrInvalidRow)
+			return fmt.Errorf("%w: %w: stream.tick takes lua or schema, not both — one producer per tick", ErrInvalidRow, ErrTickLuaAndSchema)
 		}
 		t.Schema = nil
 		if err := luafn.ValidateHook(luafn.HookTick, t.Lua); err != nil {
-			return fmt.Errorf("%w: stream.tick.lua does not compile: %w", ErrInvalidRow, err)
+			return fmt.Errorf("%w: %w: stream.tick.lua does not compile: %w", ErrInvalidRow, overrides.ErrBadFunction, err)
 		}
 		return nil
 	}
@@ -426,8 +426,8 @@ func ValidateDraft(row *Row, maxFrameBytes int64) error {
 func refuseFunctionOnStream(row *Row, kind string) error {
 	for status, v := range row.Responses {
 		if v.Function != "" {
-			return fmt.Errorf("%w: kind %q takes no function (responses[%s]): a stream is not a request/response, and its Lua goes in stream.tick.lua or stream.onFrame instead",
-				ErrInvalidRow, kind, status)
+			return fmt.Errorf("%w: %w: kind %q takes no function (responses[%s]): a stream is not a request/response, and its Lua goes in stream.tick.lua or stream.onFrame instead",
+				ErrInvalidRow, ErrFunctionOnStream, kind, status)
 		}
 	}
 	return nil

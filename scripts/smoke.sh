@@ -7953,8 +7953,8 @@ else
 	a18_badsrc=$(jq -n '{method:"POST", path:"/broken", status:200, function:"return 200, }"}')
 	a18_refused=$(http_json POST "$ADMIN_HOST" "/api/workspaces/${a18_ws_id}/endpoints" \
 		"$a18_badsrc" -H "X-CSRF-Token: ${csrf}")
-	if [[ "$a18_refused" == "400" ]] && grep -qF 'near' "$BODY_FILE"; then
-		echo "PASS  A18(c): unparseable Lua is a 400 carrying the parser's own words"
+	if [[ "$a18_refused" == "400" ]] && grep -qF 'near' "$BODY_FILE" && grep -qF '"bad_function"' "$BODY_FILE"; then
+		echo "PASS  A18(c): unparseable Lua is a 400 bad_function carrying the parser's own words"
 		a18_checks=$((a18_checks + 1))
 	else
 		echo "FAIL  A18(c): want 400 naming the token, got ${a18_refused}: $(cat "$BODY_FILE")"
@@ -7966,8 +7966,8 @@ else
 	a18_both=$(jq -n '{method:"POST", path:"/both", status:200, body:{a:1}, function:"return 200, {}"}')
 	a18_both_status=$(http_json POST "$ADMIN_HOST" "/api/workspaces/${a18_ws_id}/endpoints" \
 		"$a18_both" -H "X-CSRF-Token: ${csrf}")
-	if [[ "$a18_both_status" == "400" ]] && grep -qF 'exclusive' "$BODY_FILE"; then
-		echo "PASS  A18(d): a function beside a body is refused by name"
+	if [[ "$a18_both_status" == "400" ]] && grep -qF '"function_and_body"' "$BODY_FILE"; then
+		echo "PASS  A18(d): a function beside a body is refused by name (function_and_body)"
 		a18_checks=$((a18_checks + 1))
 	else
 		echo "FAIL  A18(d): want 400 naming the exclusivity, got ${a18_both_status}: $(cat "$BODY_FILE")"
