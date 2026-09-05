@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { fill } from "@/test/user";
 import { HistoryPage } from "./HistoryPage";
 import { makeQueryClient, renderInRouter } from "@/test/render";
 import { json, route } from "@/test/http";
@@ -157,7 +158,7 @@ describe("HistoryPage", () => {
     // rune cap would agree and this test would prove nothing about which one
     // the client actually applies.
     const tooLong = "п".repeat(201);
-    await userEvent.type(screen.getByTestId("checkpoint-create-label"), tooLong);
+    await fill(screen.getByTestId("checkpoint-create-label"), tooLong);
     await userEvent.click(screen.getByTestId("checkpoint-create-submit"));
 
     expect(await screen.findByText("Не длиннее 200 символов")).toBeInTheDocument();
@@ -176,7 +177,7 @@ describe("HistoryPage", () => {
     renderInRouter(<HistoryPage id={WS} />, { queryClient });
 
     await screen.findByTestId("checkpoint-create-form");
-    await userEvent.type(screen.getByTestId("checkpoint-create-label"), "перед экспериментом");
+    await fill(screen.getByTestId("checkpoint-create-label"), "перед экспериментом");
     await userEvent.click(screen.getByTestId("checkpoint-create-submit"));
 
     expect(await screen.findByTestId("checkpoint-created")).toHaveTextContent(

@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { fill } from "@/test/user";
 import { CustomEndpointsPage } from "./CustomEndpointsPage";
 import { makeQueryClient, renderInRouter } from "@/test/render";
 import { json, route } from "@/test/http";
@@ -170,7 +171,7 @@ describe("CustomEndpointsPage", () => {
     const form = await screen.findByTestId("endpoint-edit-form");
     const pathField = within(form).getByTestId("endpoint-edit-path");
     await userEvent.clear(pathField);
-    await userEvent.type(pathField, "/custom/pong");
+    await fill(pathField, "/custom/pong");
     await userEvent.click(within(form).getByTestId("endpoint-edit-submit"));
 
     await waitFor(() => {
@@ -308,7 +309,7 @@ describe("CustomEndpointsPage", () => {
     const form = await screen.findByTestId("endpoint-edit-form");
     const pathField = within(form).getByTestId("endpoint-edit-path");
     await userEvent.clear(pathField);
-    await userEvent.type(pathField, "/custom/blob2");
+    await fill(pathField, "/custom/blob2");
     await userEvent.click(within(form).getByTestId("endpoint-edit-submit"));
 
     await waitFor(() => {
@@ -364,7 +365,7 @@ describe("CustomEndpointsPage", () => {
     expect(within(form).getByTestId("endpoint-edit-submit")).toBeDisabled();
     expect(fetchMock.mock.calls.filter(([, init]) => init?.method === "PUT")).toHaveLength(0);
 
-    await userEvent.type(lua, "return 404, {{ gone = true }");
+    await fill(lua, "return 404, { gone = true }");
     await userEvent.click(within(form).getByTestId("endpoint-edit-submit"));
     await waitFor(() => {
       expect(fetchMock.mock.calls.filter(([, init]) => init?.method === "PUT")).toHaveLength(1);
@@ -390,8 +391,8 @@ describe("CustomEndpointsPage", () => {
     });
     renderInRouter(<CustomEndpointsPage id={WS} />);
     await screen.findByTestId("endpoint-create-form");
-    await userEvent.type(screen.getByTestId("endpoint-create-path"), "/login");
-    await userEvent.type(screen.getByTestId("endpoint-create-function"), "return 200, {{}");
+    await fill(screen.getByTestId("endpoint-create-path"), "/login");
+    await fill(screen.getByTestId("endpoint-create-function"), "return 200, {}");
     await userEvent.click(screen.getByTestId("endpoint-create-submit"));
     await waitFor(() => {
       expect(fetchMock.mock.calls.filter(([, init]) => init?.method === "POST")).toHaveLength(1);
@@ -411,11 +412,11 @@ describe("CustomEndpointsPage", () => {
     renderInRouter(<CustomEndpointsPage id={WS} />);
 
     await screen.findByTestId("endpoint-create-form");
-    await userEvent.type(screen.getByTestId("endpoint-create-path"), "/custom/ping");
+    await fill(screen.getByTestId("endpoint-create-path"), "/custom/ping");
     // user-event v14 treats { as the start of a special-key sequence, so a
     // literal brace is typed as {{ — this is still just "{not json" landing
     // in the field.
-    await userEvent.type(screen.getByTestId("endpoint-create-body"), "{{not json");
+    await fill(screen.getByTestId("endpoint-create-body"), "{not json");
     await userEvent.click(screen.getByTestId("endpoint-create-submit"));
 
     // Shows WHERE the JSON is broken, not just that it is broken.
@@ -449,7 +450,7 @@ describe("CustomEndpointsPage", () => {
     renderInRouter(<CustomEndpointsPage id={WS} />, { queryClient });
 
     await screen.findByTestId("endpoint-create-form");
-    await userEvent.type(screen.getByTestId("endpoint-create-path"), "/custom/ping");
+    await fill(screen.getByTestId("endpoint-create-path"), "/custom/ping");
     await userEvent.click(screen.getByTestId("endpoint-create-submit"));
 
     expect(await screen.findByTestId("endpoint-created")).toHaveTextContent("GET /custom/ping");
@@ -477,13 +478,13 @@ describe("CustomEndpointsPage", () => {
     renderInRouter(<CustomEndpointsPage id={WS} />);
 
     await screen.findByTestId("endpoint-create-form");
-    await userEvent.type(screen.getByTestId("endpoint-create-path"), "/custom/x");
+    await fill(screen.getByTestId("endpoint-create-path"), "/custom/x");
     await userEvent.type(screen.getByTestId("endpoint-create-status"), "404");
-    await userEvent.type(screen.getByTestId("endpoint-create-media-type"), "text/plain");
+    await fill(screen.getByTestId("endpoint-create-media-type"), "text/plain");
     // user-event v14: only "{" needs escaping (as "{{"); a bare "}" outside
     // an open {keyword} sequence is already literal, so doubling it would
     // type two closing braces instead of one.
-    await userEvent.type(screen.getByTestId("endpoint-create-body"), '{{"ok":true}');
+    await fill(screen.getByTestId("endpoint-create-body"), '{"ok":true}');
     await userEvent.click(screen.getByTestId("endpoint-create-submit"));
 
     await screen.findByTestId("endpoint-created");
@@ -509,7 +510,7 @@ describe("CustomEndpointsPage", () => {
     renderInRouter(<CustomEndpointsPage id={WS} />);
 
     await screen.findByTestId("endpoint-create-form");
-    await userEvent.type(screen.getByTestId("endpoint-create-path"), "/custom/ping");
+    await fill(screen.getByTestId("endpoint-create-path"), "/custom/ping");
     await userEvent.click(screen.getByTestId("endpoint-create-submit"));
 
     const alert = await screen.findByRole("alert");
@@ -608,9 +609,9 @@ describe("CustomEndpointsPage", () => {
     expect(screen.getByTestId("endpoint-create-method")).toBeDisabled();
     expect(screen.getByTestId("endpoint-create-stream-editor")).toBeInTheDocument();
     expect(screen.getByTestId("endpoint-create-body")).not.toBeVisible();
-    await userEvent.type(screen.getByTestId("endpoint-create-path"), "/events");
+    await fill(screen.getByTestId("endpoint-create-path"), "/events");
     await userEvent.clear(screen.getByTestId("endpoint-create-frame-event-0"));
-    await userEvent.type(screen.getByTestId("endpoint-create-frame-event-0"), "tick");
+    await fill(screen.getByTestId("endpoint-create-frame-event-0"), "tick");
     await userEvent.click(screen.getByTestId("endpoint-create-submit"));
 
     expect(await screen.findByTestId("endpoint-created")).toHaveTextContent("GET /events");
@@ -631,7 +632,7 @@ describe("CustomEndpointsPage", () => {
     renderInRouter(<CustomEndpointsPage id={WS} />);
     await screen.findByTestId("endpoint-create-form");
     await userEvent.selectOptions(screen.getByTestId("endpoint-create-kind"), "ws");
-    await userEvent.type(screen.getByTestId("endpoint-create-path"), "/chat");
+    await fill(screen.getByTestId("endpoint-create-path"), "/chat");
     await userEvent.click(screen.getByTestId("endpoint-create-schedule-on"));
     await userEvent.click(screen.getByTestId("endpoint-create-submit"));
     expect(await screen.findByTestId("endpoint-create-stream-error")).toHaveTextContent(
@@ -679,7 +680,7 @@ describe("CustomEndpointsPage", () => {
     expect(screen.getByTestId("endpoint-edit-stream-form")).toBeInTheDocument();
     expect(screen.getByTestId("endpoint-edit-frame-event-0")).toHaveValue("tick");
     await userEvent.clear(screen.getByTestId("endpoint-edit-path"));
-    await userEvent.type(screen.getByTestId("endpoint-edit-path"), "/events2");
+    await fill(screen.getByTestId("endpoint-edit-path"), "/events2");
     await userEvent.click(screen.getByTestId("endpoint-edit-submit"));
 
     await waitFor(() => {
@@ -728,7 +729,7 @@ describe("CustomEndpointsPage", () => {
     );
     const pathField = within(form).getByTestId("endpoint-edit-path");
     await userEvent.clear(pathField);
-    await userEvent.type(pathField, "/custom/renamed");
+    await fill(pathField, "/custom/renamed");
     await userEvent.click(within(form).getByTestId("endpoint-edit-submit"));
     await waitFor(() => {
       expect(fetchMock.mock.calls.filter(([, init]) => init?.method === "PUT")).toHaveLength(1);
@@ -766,7 +767,7 @@ describe("CustomEndpointsPage", () => {
     await userEvent.selectOptions(within(form).getByTestId("endpoint-edit-mode"), "pinned");
     const body = within(form).getByTestId("endpoint-edit-body");
     await userEvent.clear(body);
-    await userEvent.type(body, '{{"ok": true}');
+    await fill(body, '{"ok": true}');
     await userEvent.click(within(form).getByTestId("endpoint-edit-submit"));
     await waitFor(() => {
       expect(fetchMock.mock.calls.filter(([, init]) => init?.method === "PUT")).toHaveLength(1);

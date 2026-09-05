@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { fill } from "@/test/user";
 import { ResourceEntities, familySegment } from "./ResourceEntities";
 import { renderWithProviders } from "@/test/render";
 import { json, route } from "@/test/http";
@@ -66,13 +67,13 @@ describe("ResourceEntities", () => {
     expect(box).toHaveValue(JSON.stringify({ id: 42, name: "Alex" }, null, 2));
 
     await userEvent.clear(box);
-    await userEvent.type(box, "[[1]");
+    await fill(box, "[1]");
     await userEvent.click(within(row).getByTestId("entity-edit-submit"));
     expect(within(row).getByText("Запись — JSON-объект")).toBeInTheDocument();
     expect(fetchMock.mock.calls.filter(([, init]) => init?.method === "PUT")).toHaveLength(0);
 
     await userEvent.clear(box);
-    await userEvent.type(box, '{{"id": 42, "name": "Bob"}');
+    await fill(box, '{"id": 42, "name": "Bob"}');
     await userEvent.click(within(row).getByTestId("entity-edit-submit"));
     await waitFor(() => {
       const put = fetchMock.mock.calls.find(([, init]) => init?.method === "PUT");
@@ -177,7 +178,7 @@ describe("ResourceEntities", () => {
     await userEvent.type(screen.getByTestId("entity-new-key"), "5");
     const data = screen.getByTestId("entity-new-data");
     await userEvent.clear(data);
-    await userEvent.type(data, '{{"name": "Eve"}');
+    await fill(data, '{"name": "Eve"}');
     await userEvent.click(screen.getByTestId("entity-new-submit"));
     await waitFor(() => {
       const put = fetchMock.mock.calls.find(([, init]) => init?.method === "PUT");

@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { fill } from "@/test/user";
 import { StreamConnectionsPage } from "./StreamConnectionsPage";
 import { renderWithProviders } from "@/test/render";
 import { json, route } from "@/test/http";
@@ -119,9 +120,9 @@ describe("StreamConnectionsPage", () => {
     });
     renderWithProviders(<StreamConnectionsPage id={WS} />);
     await userEvent.click(await screen.findByTestId("connection-push-toggle"));
-    await userEvent.type(screen.getByTestId("connection-push-event"), "alert");
+    await fill(screen.getByTestId("connection-push-event"), "alert");
     await userEvent.clear(screen.getByTestId("connection-push-data"));
-    await userEvent.type(screen.getByTestId("connection-push-data"), '{{"level":"red"}');
+    await fill(screen.getByTestId("connection-push-data"), '{"level":"red"}');
     await userEvent.click(screen.getByTestId("connection-push-submit"));
     expect(await screen.findByTestId("connection-pushed")).toHaveTextContent("id кадра 5");
     const post = fetchMock.mock.calls.find(([, init]) => init?.method === "POST");
@@ -161,7 +162,7 @@ describe("StreamConnectionsPage", () => {
     renderWithProviders(<StreamConnectionsPage id={WS} />);
     await userEvent.click(await screen.findByTestId("connection-push-toggle"));
     await userEvent.clear(screen.getByTestId("connection-push-data"));
-    await userEvent.type(screen.getByTestId("connection-push-data"), "{{nope");
+    await fill(screen.getByTestId("connection-push-data"), "{nope");
     await userEvent.click(screen.getByTestId("connection-push-submit"));
     expect(await screen.findByText(/JSON невалиден/)).toBeInTheDocument();
     expect(fetchMock.mock.calls.filter(([, init]) => init?.method === "POST")).toHaveLength(0);

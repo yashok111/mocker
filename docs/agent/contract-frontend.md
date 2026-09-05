@@ -165,6 +165,21 @@ setting.
   `fetch` baseline that rejects with a sentence; a test that wants a fetch
   installs one with `route()` from `src/test/http.ts`, and that baseline is
   what `unstubAllGlobals` restores to.
+- **Bulk text goes into a field with `fill()` from `src/test/user.ts`, not
+  `userEvent.type()`.** `type()` sends one event per character and React
+  re-renders the screen after each; on the big editors that was the whole
+  cost of a test — 25 characters into the operation editor's preview form
+  took 1.4 s, a 201-rune label 0.6 s, 65 emoji into the login form 0.7 s
+  (measured 2026-09-05). `fill()` is a click and one paste: those three
+  came down to 0.65 s, 0.1 s and 0.1 s, `OperationEditor.test.tsx` from 9 s
+  to 6 s and `CustomEndpointsPage.test.tsx` from 8 s to 5 s. `type()` stays
+  where the test is about what happens per keystroke (a search filter, a
+  `{enter}`, a validator that runs as you type) and in the small forms,
+  where it costs nothing. The suite runs in worker threads (`pool:
+  "threads"` — 44 s against 48 s with forked processes on the 4-core box;
+  `isolate` stays on, because Testing Library's auto-cleanup registers its
+  `afterEach` on first import and a shared module graph runs it for one
+  file only, measured as 219 «Found multiple elements» failures).
 - **The package manager is yarn 4 via corepack**, not npm. `corepack yarn …`
   (yarn 4 does not know `--prefix`/`--cwd`, in the Makefile it is `cd web && …`).
 - Generated and not in git: `web/src/api/generated/`, `web/src/routeTree.gen.ts`.

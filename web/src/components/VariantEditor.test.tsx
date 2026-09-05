@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { fill } from "@/test/user";
 import { useState } from "react";
 import { VariantEditor, producerOf } from "./VariantEditor";
 import { renderInRouter } from "@/test/render";
@@ -126,8 +127,8 @@ describe("VariantEditor", () => {
       />,
     );
     await userEvent.click(await screen.findByTestId("v-header-add"));
-    await userEvent.type(screen.getByTestId("v-header-name-0"), "Location");
-    await userEvent.type(screen.getByTestId("v-header-value-0"), "/users/1");
+    await fill(screen.getByTestId("v-header-name-0"), "Location");
+    await fill(screen.getByTestId("v-header-value-0"), "/users/1");
     expect(last?.headers).toEqual({ Location: "/users/1" });
     await userEvent.click(screen.getByTestId("v-header-remove-0"));
     expect(JSON.parse(JSON.stringify(last)) as object).not.toHaveProperty("headers");
@@ -145,11 +146,11 @@ describe("VariantEditor", () => {
     );
     const body = await screen.findByTestId("v-body");
     await userEvent.clear(body);
-    await userEvent.type(body, "{{oops");
+    await fill(body, "{oops");
     expect(screen.getByTestId("v-error")).toHaveTextContent("true");
     expect(last).toBeUndefined();
     await userEvent.clear(body);
-    await userEvent.type(body, '{{"n": 2}');
+    await fill(body, '{"n": 2}');
     expect(screen.getByTestId("v-error")).toHaveTextContent("false");
     expect(last?.body).toEqual({ n: 2 });
   });
@@ -192,7 +193,7 @@ describe("VariantEditor", () => {
     await userEvent.click(await screen.findByTestId("v-header-add"));
     await userEvent.click(screen.getByTestId("v-header-add"));
     expect(screen.getAllByTestId(/^v-header-name-/)).toHaveLength(3);
-    await userEvent.type(screen.getByTestId("v-header-name-1"), "x-a");
+    await fill(screen.getByTestId("v-header-name-1"), "x-a");
     // Two rows named x-a on screen; the wire map has the later value.
     expect(screen.getAllByTestId(/^v-header-name-/)).toHaveLength(3);
     expect(last?.headers).toEqual({ "x-a": "" });

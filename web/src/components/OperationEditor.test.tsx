@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { fill } from "@/test/user";
 import { OperationEditor } from "./OperationEditor";
 import { makeQueryClient, renderInRouter } from "@/test/render";
 import { json, route } from "@/test/http";
@@ -422,7 +423,7 @@ describe("OperationEditor", () => {
     const saveButton = screen.getByTestId("operation-save");
     expect(saveButton).toBeEnabled();
 
-    await userEvent.type(bodyInput, "not valid json");
+    await fill(bodyInput, "not valid json");
 
     expect(await screen.findByText(/JSON невалиден/)).toBeInTheDocument();
     expect(saveButton).toBeDisabled();
@@ -532,7 +533,7 @@ describe("OperationEditor", () => {
     await userEvent.click(await screen.findByTestId("operation-status-function-confirm-200"));
     // An empty box blocks the save.
     expect(screen.getByTestId("operation-save")).toBeDisabled();
-    await userEvent.type(screen.getByTestId("operation-status-function-200"), "return 200, {{}");
+    await fill(screen.getByTestId("operation-status-function-200"), "return 200, {}");
     await userEvent.click(screen.getByTestId("operation-save"));
     await screen.findByTestId("operation-editor-saved");
     const v = sent?.responses?.["200"];
@@ -624,14 +625,14 @@ describe("OperationEditor", () => {
     );
     renderInRouter(<OperationEditor workspaceId={WS} opKey={OPKEY} statuses={STATUSES} />);
     await screen.findByTestId("operation-status-mode-200");
-    await userEvent.type(screen.getByTestId("operation-preview-body-input"), "{{oops");
+    await fill(screen.getByTestId("operation-preview-body-input"), "{oops");
     await userEvent.click(screen.getByTestId("operation-preview-run"));
     expect(await screen.findByRole("alert")).toHaveTextContent("Тело запроса: JSON невалиден");
     expect(sent).toBeUndefined();
 
     await userEvent.clear(screen.getByTestId("operation-preview-body-input"));
-    await userEvent.type(screen.getByTestId("operation-preview-body-input"), '{{"cmd": "x"}');
-    await userEvent.type(screen.getByTestId("operation-preview-headers"), "X-Debug: 1");
+    await fill(screen.getByTestId("operation-preview-body-input"), '{"cmd": "x"}');
+    await fill(screen.getByTestId("operation-preview-headers"), "X-Debug: 1");
     await userEvent.click(screen.getByTestId("operation-preview-run"));
     await waitFor(() => expect(sent).toBeDefined());
     expect(sent).toMatchObject({ headers: { "X-Debug": "1" }, body: { cmd: "x" } });

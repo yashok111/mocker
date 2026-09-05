@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { fill } from "@/test/user";
 import { LoginPage } from "./LoginPage";
 import { renderWithProviders } from "@/test/render";
 import { authResponseFixture } from "@/test/fixtures";
@@ -124,7 +125,7 @@ describe("LoginPage", () => {
 
     // 65 emoji is 65 runes — over the cap — but 130 UTF-16 units, so a length
     // check would have flagged it far earlier and for the wrong reason.
-    await userEvent.type(screen.getByTestId("login-name"), "🙂".repeat(65));
+    await fill(screen.getByTestId("login-name"), "🙂".repeat(65));
     await userEvent.type(screen.getByTestId("login-password"), "hunter2");
     await userEvent.click(screen.getByTestId("login-submit"));
 

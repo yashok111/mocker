@@ -50,6 +50,12 @@ export default defineConfig(({ mode }) => {
         autoCodeSplitting: true,
         routesDirectory: "./src/routes",
         generatedRouteTree: "./src/routeTree.gen.ts",
+        // routes.test.tsx lives beside the routes it walks (it imports the
+        // generated tree, so that is where it belongs). Without this the
+        // plugin warns on every vitest run that the file exports no Route —
+        // the one line of noise in an otherwise green run, and the sort a
+        // reader learns to skip right before a real warning lands there.
+        routeFileIgnorePattern: "\\.test\\.tsx?$",
       }),
       react(),
       // Must come last. Uploads sourcemaps to Sentry, then deletes the emitted
@@ -114,6 +120,14 @@ export default defineConfig(({ mode }) => {
       // test. Every such door is shut here; a test that needs the network
       // stubs fetch (src/test/http.ts), never the other way round.
       environment: "happy-dom",
+      // Worker threads instead of the default forked processes: 44 s against
+      // 48 s for the whole suite on the 4-core dev box (2026-09-05), the
+      // difference being process start-up paid once per test file. Nothing
+      // here needs a process boundary — no native module, no process-wide
+      // state a test mutates; `isolate` stays on (each file its own module
+      // graph and DOM), because Testing Library's auto-cleanup registers its
+      // afterEach on first import and a shared graph runs it for one file only.
+      pool: "threads",
       environmentOptions: {
         happyDOM: {
           settings: {
