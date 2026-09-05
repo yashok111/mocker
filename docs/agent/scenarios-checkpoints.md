@@ -248,3 +248,12 @@ import takes the document's `workspace.name`, a fork appends « (копия)»;
 the slug is uniquified from the name as on create, so neither verb is
 idempotent.
 
+
+**A stored snapshot this build cannot decode is `409 snapshot_unreadable`**
+(2026-09-05, the A18 review): on GET/activate of a scenario and GET/rollback
+of a checkpoint, `bundle.ErrInvalid` is answered by name with the codec's own
+message (`mockerBundle 4, this build reads versions 5..6`), and
+`scenarios.SetActive` decodes the snapshot (`decodeSnapshot`, shared with
+the scan) before it activates — a scenario no read path can decode must not
+become the active one, because the mock plane's `scenarioSnapshot` fallback
+would then serve the workspace layer under a switch that looked taken.

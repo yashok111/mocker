@@ -149,3 +149,65 @@ no `Notes` field), and `mock.entities` reads through `EntityStore.List`
 rather than the `ListFiltered` D3 names, which satisfies every one of D3's
 own criteria because a full tuple is an exact key.
 
+
+**The review after the gate (2026-09-05) found fourteen things the four
+rounds had not, and each is fixed with a test.** Three readers — the
+session's own pass, `/code-review` at high effort, `vcodex` (`gpt-5.6-luna`)
+— over `64f591f..39f4fc9`; the fixes are the six `fix(a18)` commits after
+`7617c4b`, one finding group each. What a later slice must know, because the
+code alone does not say why:
+
+- **The converter is guarded by the tables on the CURRENT PATH, not a visited
+  set, and by depth 64** (`internal/luafn/convert.go`). `t.self = t` used to
+  recurse in Go until `fatal error: stack overflow` — unrecoverable, outside
+  the Lua deadline and every `recover`, the whole process gone. A path set
+  and not a visited set because `{a = u, b = u}` is a legal shape that
+  encodes as two copies. `LTable.Append` is a no-op for `LNil` in gopher-lua,
+  so arrays are built with `RawSetInt` and a JSON `null` keeps its index.
+- **An untyped string body is `text/plain; charset=utf-8` and every function
+  response carries `nosniff`** (`function.go`). Written with no type, a
+  string body was SNIFFED by `net/http` — `return 200, "<script>…"` went to
+  the wire as `text/html` — and the clause-23 test was green because
+  `httptest.ResponseRecorder` does not sniff after an explicit `WriteHeader`
+  while a real server does. The test for it runs `httptest.NewServer`; any
+  future test of a Content-Type on the wire must too. The header SET is
+  capped (64 fields, 64 KiB together) beside the 8 KiB per value, and a
+  declared type stays on an empty body.
+- **`MaxCloseReasonBytes` lives in `luafn` and customep re-exports it**: a
+  hook's `close` reason over 123 bytes made `coder/websocket` refuse to write
+  the frame and the peer saw a 1006 while traffic recorded the hook's code.
+  `luafn.ValidateHook` is what customep's two hook sites call now; it existed
+  unused.
+- **`Tick.Schema` carries `omitempty` and `validateTick` reads a literal
+  `null` beside `lua` as absent.** A Lua-only tick was stored as
+  `"schema":null`, decoded as a four-byte `RawMessage`, and every
+  re-validation of the STORED row (`Update`, a rollback, a scenario apply, a
+  bundle import through `ReplaceAllTx`) refused it as two producers. The
+  null-as-absent rule stays for rows and checkpoints the A18 build wrote.
+- **Stream hosts carry the connection's route tuple** (`serveStream` and
+  `serveWS` take `outer`, from `routeOuterValues` on the matched row). With
+  nil, `mock.entities` on a nested family from a hook was `bad_scope` with no
+  way around it — a hook has no request table. A failing `tick.lua` firing in
+  the PREVIEW is a skipped frame, as it is on a live connection, not the
+  route's 500.
+- **`ResponseShape` carries `function` verbatim** — the one variant field the
+  MCP projection returns in full. §C's compaction rule keeps a pinned body
+  out because a body is data of any size; a function is the contract the
+  agent itself authored, and the guide's read-then-write-whole-document flow
+  DELETED it when the read hid it. `create_endpoint`'s wire body carries
+  `function` too; it was declared on the input and dropped.
+- **A stored snapshot this build cannot read is `409 snapshot_unreadable`**
+  on GET, activate and rollback, with the codec's own words — and
+  `scenarios.SetActive` decodes before it activates (`decodeSnapshot`, shared
+  with the scan). D5's "refused BY NAME" held for import only: a v4 scenario
+  activated with 200 and the mock plane served the workspace layer under it.
+- **The seven named refusal codes exist** (`internal/admin/refusal_codes.go`):
+  `bad_function`, `function_and_body`, `function_on_stream`,
+  `tick_lua_and_schema`, `on_frame_on_sse`, `on_frame_and_reactive`,
+  `on_frame_and_echo`. Each refusal wraps its sentinel ALONGSIDE
+  `ErrInvalidRow` (two in `overrides`, five in `customep`; a hook that does
+  not compile is `overrides.ErrBadFunction`), so every existing
+  `errors.Is(ErrInvalidRow)` keeps its 400 and `refusalCode` reads the name
+  at the five answering sites. The documents had promised the codes since the
+  gate; the server answered `bad_request`, and the smoke could only grep for
+  words. It asserts the code now.

@@ -2737,3 +2737,25 @@ topic, the two serving matrices in that file and in `docs/USER-GUIDE.md` §4,
 fourteen `CARVE-OUTS.md` entries, and eight smoke observations against the
 image. `//nolint` 36 → 39. No route, no tool, no migration, no variable, no
 screen; contract 70, tools 63, `EXEMPT` 10.
+
+**The review after the gate (2026-09-05).** Three readers over the shipped
+range — the session's own pass, `/code-review` at high effort and `vcodex`
+(`gpt-5.6-luna`, `xhigh`) — found fourteen things four gate rounds had not,
+five of which mattered: a self-referencing Lua table crashed the PROCESS
+(`fatal error: stack overflow` is outside every recover), an untyped string
+body was sniffed to `text/html` on the unauthenticated plane while the test
+stayed green because `httptest.ResponseRecorder` does not sniff after an
+explicit `WriteHeader`, a stored Lua tick could not be re-validated
+(`"schema":null` read as a second producer) so no checkpoint holding one
+could be restored, `create_endpoint` dropped `function` on the wire and every
+MCP read hid it so the guide's own read-then-write flow deleted it, and a v4
+scenario activated with 200 while the mock ignored it. The rest: null in an
+array shifted the elements, a failing tick 500'd the preview, a long close
+reason became a 1006, stream hooks could not scope a nested family, the seven
+refusal codes the documents promised were never emitted, a dead
+`ValidateHook`, no cap on the header SET, a declared type lost on an empty
+body. Six `fix(a18)` commits, one group each, a test per finding; the
+decisions the code cannot show are in `docs/agent/functions.md`. Two lessons
+paid for: a gate reads the DOCUMENT against the code and misses what neither
+says (nobody wrote "the converter recurses"), and a recorder is not a server
+— a test of anything that reaches the wire runs `httptest.NewServer`.

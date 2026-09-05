@@ -41,10 +41,14 @@ return 401, { error = "bad credentials" }
 **Out** — `return status, body, headers`:
 
 - `status` — a number, 100..599. Anything else fails the request.
-- `body` — a table (JSON-encoded for you), a string (raw bytes), or nil
-  (empty body). A boolean or a number is a FAILURE, not a coercion.
+- `body` — a table (JSON-encoded for you, served as `application/json`), a
+  string (raw bytes, served as `text/plain; charset=utf-8` unless you set
+  `Content-Type` yourself), or nil (empty body). A boolean or a number is a
+  FAILURE, not a coercion. A table that contains itself, or nests deeper than
+  64 levels, fails the request instead of encoding.
 - `headers` — an optional table of string→string. Omit it entirely, or return
-  nil for it.
+  nil for it. Every function response also carries
+  `X-Content-Type-Options: nosniff`.
 
 Returning nothing at all fails the request: a function must decide a status.
 
@@ -66,7 +70,8 @@ Returning nothing at all fails the request: a function must decide a status.
     `mock.entities("/orgs/{}/teams", {"7"})`. The host encodes it; do not
     escape anything yourself.
   - Omit `scopeArray` and the request's own outer path values are used, taken
-    as a prefix at the family's depth.
+    as a prefix at the family's depth. In a stream hook (`tick.lua`,
+    `onFrame`) those are the CONNECTION's own URL values.
   - `nil, "unknown_family"` — never suggested, declined, or no spec bound.
   - `nil, "bad_scope"` — the tuple's length does not match the family's depth,
     or the request is too shallow to imply one.
@@ -110,11 +115,14 @@ between instructions — one enormous native call (`string.rep("x", 1e9)`) can
 allocate before any check fires, and memory is UNCAPPED. Do not write one.
 
 Headers are REFUSED, never repaired: a CR or LF in a value, an empty or
-non-token name, a value over 8 KiB, or a non-string value fails the whole
+non-token name, a value over 8 KiB, more than 64 headers or more than 64 KiB
+of names and values together, or a non-string value fails the whole
 response. `Content-Length` and `Transfer-Encoding` may not be set. A
 `Content-Type` the browser would execute (`text/html`, `image/svg+xml`, an
-unparseable value) fails the response. ONE `Set-Cookie` is allowed and is the
-sign-in shape this feature is for; two are not expressible.
+unparseable value) fails the response; a string body with NO `Content-Type`
+is `text/plain`, never sniffed. A `Content-Type` you declare stays on an
+empty body too. ONE `Set-Cookie` is allowed and is the sign-in shape this
+feature is for; two are not expressible.
 
 The error's first line, capped at 200 bytes, reaches both the traffic note and
 the 500's own message — so `curl` shows you what broke.
@@ -221,7 +229,8 @@ table, anything else as the raw string. Verb-first return:
 - `return nil` — no reply.
 - `return "reply", data` — one text frame (a table is JSON-encoded).
 - `return "close", code, reason?` — the closing handshake; `code` is 1000 or
-  4000..4999.
+  4000..4999, `reason` at most 123 bytes (a close frame's payload). A longer
+  reason is a hook error, not a truncated close.
 
 A reply enters the same per-connection send budget a reactive reply does. A
 Lua error or a return the contract does not have drops that reply, counts it

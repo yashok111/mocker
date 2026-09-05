@@ -1521,7 +1521,13 @@ independent choices.
   still holds; the owner weighed it against the invariant — each version reads
   exactly the version before it — and chose the invariant. Not a new KIND of
   entry: this file already carries one per bundle bump, `:919` (P6b) and
-  `:1402` (P7a).
+  `:1402` (P7a). **The wire shape of "by name", fixed by the 2026-09-05
+  review:** a v4 scenario or checkpoint already in the database is
+  `409 snapshot_unreadable` on GET, activate and rollback, carrying the
+  codec's own words (`mockerBundle 4, this build reads versions 5..6`), and
+  `SetActive` decodes before it activates. Before that fix the refusal held
+  for import only — a stored v4 scenario activated with 200 and the mock
+  plane served the un-overlaid workspace layer under it, and GET was a 500.
 - **There is no opt-out (D2).** No `MOCKER_FUNCTIONS`, no gate, no flag: every
   deployment executes operator-authored Lua. An operator who wants a mocker
   that runs no Lua has no switch and must not deploy this build.
