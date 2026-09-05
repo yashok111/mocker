@@ -537,7 +537,7 @@ export function StreamEditor({
             data-testid={t("interval-source")}
           >
             <option value="schema">по схеме — генерируется, как обычный ответ</option>
-            <option value="lua">функцией на Lua — раздел «Функции» в руководстве</option>
+            <option value="lua">функцией на Lua — раздел «Функция эндпоинта» в руководстве</option>
           </NativeSelect>
           {draft.tickSource === "lua" ? (
             <Textarea

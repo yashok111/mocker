@@ -761,7 +761,21 @@ function TrafficRowGroup({
         <Table.Td>
           <Code>{row.path}</Code>
         </Table.Td>
-        <Table.Td>{row.status}</Table.Td>
+        <Table.Td>
+          {row.status}
+          {row.truncated ? (
+            <Badge
+              size="xs"
+              color="yellow"
+              variant="light"
+              ml={4}
+              title="Тело обрезано при записи — показанное короче того, что реально ушло по сети"
+              data-testid="traffic-truncated"
+            >
+              обрезано
+            </Badge>
+          ) : null}
+        </Table.Td>
         <Table.Td>{row.durationMs} мс</Table.Td>
         <Table.Td onClick={(e) => e.stopPropagation()}>
           <MatchCell workspaceId={workspaceId} row={row} />

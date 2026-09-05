@@ -99,7 +99,7 @@ export function HistoryPage({ id }: { id: number }): ReactElement {
         </Text>
         <CreateCheckpointForm id={id} scenarioActive={scenarioActive} />
         <ResetOverridesCard id={id} scenarioActive={scenarioActive} />
-        <ResetDataCard id={id} />
+        <ResetDataCard id={id} workspaceSlug={workspaceSlug} />
         {checkpoints.isPending ? (
           // role on the Text, not the Group: the live region should be the
           // sentence a screen reader announces, not the flex box around it.
@@ -391,7 +391,7 @@ const SKIP_REASON_TEXT: Record<string, string> = {
 // row, so there is nothing this route's own effect could be rolled back
 // from (D3, D8). The warning body says exactly that, and it is rendered
 // with the card, not gated behind a click.
-function ResetDataCard({ id }: { id: number }): ReactElement {
+function ResetDataCard({ id, workspaceSlug }: { id: number; workspaceSlug: string }): ReactElement {
   const [mode, setMode] = useState<ResetMode>(ResetMode.reseed);
   const [slug, setSlug] = useState("");
   const [result, setResult] = useState<ResetDataResult | null>(null);
@@ -477,6 +477,9 @@ function ResetDataCard({ id }: { id: number }): ReactElement {
             leftSection={<IconAlertTriangle size={16} />}
             onClick={handleReset}
             loading={resetData.isPending}
+            // A21 (U10): the same local check the rollback modal makes —
+            // an empty or wrong slug was a round trip to a 409 here.
+            disabled={workspaceSlug !== "" && slug.trim() !== workspaceSlug}
             data-testid="reset-data-submit"
           >
             Сбросить

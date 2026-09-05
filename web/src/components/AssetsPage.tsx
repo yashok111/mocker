@@ -80,7 +80,12 @@ export function AssetsPage({ id }: { id: number }): ReactElement {
           <code>asset_url</code>. Загрузка под уже занятым именем заменяет файл; ссылки на удалённый
           файл продолжают работать и отдают пустое тело с пометкой в трафике.
         </Text>
-        <UploadCard id={id} />
+        <UploadCard
+          id={id}
+          existingNames={
+            assets.data?.status === 200 ? assets.data.data.assets.map((a) => a.name) : []
+          }
+        />
         {assets.isPending ? (
           <Group gap="xs">
             <Loader size="sm" />
@@ -125,7 +130,7 @@ export function AssetsPage({ id }: { id: number }): ReactElement {
   );
 }
 
-function UploadCard({ id }: { id: number }): ReactElement {
+function UploadCard({ id, existingNames }: { id: number; existingNames: string[] }): ReactElement {
   const queryClient = useQueryClient();
   const [file, setFile] = useState<File | null>(null);
   const [name, setName] = useState("");
@@ -159,6 +164,9 @@ function UploadCard({ id }: { id: number }): ReactElement {
 
   const nameError =
     name !== "" && !ASSET_NAME_RE.test(name) ? "Только латиница, цифры, . _ -" : null;
+  // A21 (G13): an upload under an existing name replaces the bytes with no
+  // checkpoint to come back to — the form knows the list and says so.
+  const replaces = name !== "" && existingNames.includes(name);
 
   function submit(): void {
     if (!file || nameError || name === "") {
@@ -186,6 +194,12 @@ function UploadCard({ id }: { id: number }): ReactElement {
         {upload.isError ? (
           <Alert color="red" icon={<IconAlertTriangle size={18} />} role="alert">
             {describeApiFailureDetailed(upload.error)}
+          </Alert>
+        ) : null}
+        {replaces ? (
+          <Alert color="yellow" data-testid="asset-replace-warning">
+            Файл «{name}» уже есть — загрузка заменит его содержимое; вернуть прежние байты будет
+            нечем.
           </Alert>
         ) : null}
         {uploaded ? (
@@ -302,6 +316,7 @@ function AssetList({
                 <Table.Th>тип</Table.Th>
                 <Table.Th>размер</Table.Th>
                 <Table.Th>обновлён</Table.Th>
+                <Table.Th>sha256</Table.Th>
                 <Table.Th>адрес</Table.Th>
                 <Table.Th />
               </Table.Tr>
@@ -317,6 +332,11 @@ function AssetList({
                   <Table.Td>{asset.mediaType}</Table.Td>
                   <Table.Td>{formatBytes(asset.sizeBytes)}</Table.Td>
                   <Table.Td>{dayjs.unix(asset.updatedAt).format("DD.MM.YYYY HH:mm")}</Table.Td>
+                  <Table.Td>
+                    <Text size="xs" ff="monospace" title={asset.sha256} data-testid="asset-sha">
+                      {asset.sha256.slice(0, 12)}…
+                    </Text>
+                  </Table.Td>
                   <Table.Td>
                     <Anchor href={asset.url} target="_blank" rel="noreferrer" size="sm">
                       {asset.url}

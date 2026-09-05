@@ -326,4 +326,25 @@ describe("WorkspacesPage", () => {
       "/workspaces/12",
     );
   });
+
+  // A21 (G14): every workspace, not only the caller's, with its owner.
+  it("lists other people's workspaces with their owner on «показать чужие»", async () => {
+    const fetchMock = route({
+      "GET /api/workspaces": () => json(200, [workspaceFixture({ id: 1, ownerId: 1 })]),
+      "GET /api/workspaces?all=1": () =>
+        json(200, [
+          workspaceFixture({ id: 1, ownerId: 1 }),
+          workspaceFixture({ id: 2, name: "Bob", slug: "bob", ownerId: 5, forkedFrom: 1 }),
+        ]),
+      "GET /api/specs": specsPresent,
+    });
+    renderInRouter(<WorkspacesPage />);
+    expect(await screen.findAllByTestId("workspace-row")).toHaveLength(1);
+    await userEvent.click(screen.getByTestId("workspaces-show-all"));
+    await waitFor(() => expect(screen.getAllByTestId("workspace-row")).toHaveLength(2));
+    expect(fetchMock.mock.calls.map(([u]) => String(u))).toContain("/api/workspaces?all=1");
+    const bob = screen.getAllByTestId("workspace-row").find((r) => r.textContent?.includes("bob"));
+    expect(bob).toHaveTextContent("копия воркспейса #1");
+    expect(bob).toHaveTextContent("владелец #5");
+  });
 });

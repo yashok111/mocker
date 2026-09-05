@@ -10,6 +10,7 @@ import {
   Loader,
   NativeSelect,
   Stack,
+  Switch,
   Text,
   TextInput,
   Title,
@@ -53,7 +54,10 @@ const createForm = type({ name: userName, slug: "string", specId: "string" });
 type CreateForm = typeof createForm.infer;
 
 export function WorkspacesPage({ initialSpecId }: { initialSpecId?: number } = {}) {
-  const workspaces = useListWorkspaces();
+  // A21 (G14): GET /api/workspaces?all=1 lists every workspace, not only
+  // the caller's — on a shared install a colleague's was invisible.
+  const [showAll, setShowAll] = useState(false);
+  const workspaces = useListWorkspaces(showAll ? { all: "1" } : undefined);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   // Second query, used only to pick the empty-state copy (DESIGN §14 screen
@@ -154,6 +158,13 @@ export function WorkspacesPage({ initialSpecId }: { initialSpecId?: number } = {
     <Stack gap="md">
       <Group justify="space-between" align="center">
         <Title order={1}>Воркспейсы</Title>
+        <Switch
+          size="xs"
+          label="показать чужие"
+          checked={showAll}
+          onChange={(e) => setShowAll(e.currentTarget.checked)}
+          data-testid="workspaces-show-all"
+        />
         <Button
           variant="default"
           size="xs"
@@ -190,7 +201,7 @@ export function WorkspacesPage({ initialSpecId }: { initialSpecId?: number } = {
           </Text>
         )
       ) : (
-        <WorkspaceList workspaces={list} />
+        <WorkspaceList workspaces={list} showOwner={showAll} />
       )}
     </Stack>
   );
@@ -328,7 +339,13 @@ function specStatus(specId: number | null): string {
   return specId === null ? "спека не привязана" : `спека #${specId}`;
 }
 
-function WorkspaceList({ workspaces }: { workspaces: WorkspaceView[] }) {
+function WorkspaceList({
+  workspaces,
+  showOwner,
+}: {
+  workspaces: WorkspaceView[];
+  showOwner: boolean;
+}) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   // Named per-row rather than read off deleteWorkspace.error directly: the
@@ -389,6 +406,11 @@ function WorkspaceList({ workspaces }: { workspaces: WorkspaceView[] }) {
                 </Text>
                 <Text size="xs" c="dimmed">
                   {ws.slug} · ревизия {ws.revision} · {specStatus(ws.specId)}
+                  {ws.forkedFrom !== null ? ` · копия воркспейса #${ws.forkedFrom}` : ""}
+                  {showOwner ? ` · владелец #${ws.ownerId}` : ""}
+                  {ws.updatedAt > 0
+                    ? ` · изменён ${new Date(ws.updatedAt * 1000).toLocaleString("ru-RU")}`
+                    : ""}
                 </Text>
               </UnstyledButton>
               <Button

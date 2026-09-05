@@ -58,7 +58,7 @@ import {
 } from "./StreamEditor";
 import { StreamTestClient } from "./StreamTestClient";
 import { TabLink } from "./TabLink";
-import { VariantEditor } from "./VariantEditor";
+import { GUIDE_FUNCTIONS, VariantEditor } from "./VariantEditor";
 import { ApiFailure } from "@/api/client";
 import { describeApiFailure, describeApiFailureDetailed, isGoneTombstone } from "@/api/errors";
 import { arktypeResolver } from "@/validation/resolver";
@@ -601,7 +601,14 @@ function CreateEndpointForm({
         <Textarea
           hidden={kind !== "http"}
           label="Функция (Lua, необязательно) — вместо тела: над аргументом req, возвращает status, body, headers"
-          description="Раздел «Функции» в руководстве. Компилируется при сохранении: синтаксическая ошибка — отказ со словами парсера."
+          description={
+            <>
+              <Anchor href={GUIDE_FUNCTIONS} size="xs">
+                Раздел «Функция эндпоинта» в руководстве
+              </Anchor>
+              . Компилируется при сохранении: синтаксическая ошибка — отказ со словами парсера.
+            </>
+          }
           rows={4}
           styles={{ input: { fontFamily: "var(--mantine-font-family-monospace)" } }}
           data-testid="endpoint-create-function"

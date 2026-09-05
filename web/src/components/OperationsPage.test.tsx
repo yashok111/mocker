@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { screen } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { OperationsPage } from "./OperationsPage";
 import { renderInRouter } from "@/test/render";
@@ -356,5 +356,31 @@ describe("OperationsPage", () => {
     renderInRouter(<OperationsPage id={WS} initialOpId={2} />);
     expect(await screen.findByTestId("operation-editor")).toBeInTheDocument();
     expect(screen.getByTestId("operation-editor")).toHaveTextContent("POST /orders");
+  });
+
+  // A21 (U9): switching operations remounts the editor; an unsaved draft asks first.
+  it("asks before switching away from an operation with unsaved changes", async () => {
+    route({
+      [WORKSPACE]: () => json(200, workspaceFixture({ id: WS, specId: 1 })),
+      [MERGED_OPS]: () => json(200, [PETS_OP, ORDERS_OP]),
+      [SPEC_OPS_LIMIT(1)]: () => json(200, [PETS_SPEC_OP, ORDERS_SPEC_OP]),
+      [SESSION]: () => json(200, sessionListViewFixture({ directives: [] })),
+      [`GET /api/workspaces/${WS}/operations/GET%20%2Fpets%2F%7BpetId%7D`]: () =>
+        json(404, { error: { code: "not_found", message: "no override" } }),
+      [`GET /api/workspaces/${WS}/operations/POST%20%2Forders`]: () =>
+        json(404, { error: { code: "not_found", message: "no override" } }),
+    });
+    renderInRouter(<OperationsPage id={WS} initialOpKey="GET%20%2Fpets%2F%7BpetId%7D" />);
+    await screen.findByTestId("operation-editor");
+    await userEvent.click(await screen.findByTestId("operation-route-off"));
+    expect(await screen.findByTestId("operation-dirty")).toBeInTheDocument();
+    const rows = screen.getAllByTestId("operation-row");
+    await userEvent.click(rows.find((r) => r.textContent?.includes("/orders"))!);
+    const dialog = await screen.findByRole("dialog");
+    expect(dialog).toHaveTextContent("несохранённые изменения");
+    await userEvent.click(within(dialog).getByTestId("operations-discard-confirm"));
+    await waitFor(() =>
+      expect(screen.getByTestId("operation-editor")).toHaveTextContent("POST /orders"),
+    );
   });
 });

@@ -21,6 +21,7 @@ import { useListWorkspaceOperations } from "@/api/generated/operations/operation
 import { useListSpecOperations } from "@/api/generated/specs/specs.ts";
 import { useGetScenario } from "@/api/generated/scenarios/scenarios.ts";
 import type { MergedOperationView, MergedStatusView, OperationView } from "@/api/generated/schemas";
+import { modals } from "@mantine/modals";
 import { TabLink } from "./TabLink";
 import { describeApiFailure } from "@/api/errors";
 import { OperationEditor } from "./OperationEditor";
@@ -116,6 +117,27 @@ export function OperationsPage({
 
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<SelectedOperation | null>(null);
+  // A21 (U9): the editor reports an unsaved draft; switching operations
+  // remounts it (key={opKey}), so the switch asks first.
+  const [editorDirty, setEditorDirty] = useState(false);
+  function select(next: SelectedOperation): void {
+    if (!editorDirty || next.opKey === selected?.opKey) {
+      setSelected(next);
+      return;
+    }
+    modals.openConfirmModal({
+      title: "Несохранённые изменения",
+      children: (
+        <Text size="sm">
+          У операции {selected?.method} {selected?.path} есть несохранённые изменения. Перейти к
+          другой и потерять их?
+        </Text>
+      ),
+      labels: { confirm: "Перейти", cancel: "Остаться" },
+      confirmProps: { color: "red", "data-testid": "operations-discard-confirm" },
+      onConfirm: () => setSelected(next),
+    });
+  }
 
   // Each query is only "pending"/"errored" for real when it is actually in
   // play — specOps stays technically isPending forever while disabled
@@ -296,7 +318,7 @@ export function OperationsPage({
                             key={op.opKey}
                             data-testid="operation-row"
                             onClick={() =>
-                              setSelected({
+                              select({
                                 method: op.method,
                                 path: op.path,
                                 opKey: op.opKey,
@@ -337,6 +359,7 @@ export function OperationsPage({
             {selected ? (
               <OperationEditor
                 key={selected.opKey}
+                onDirtyChange={setEditorDirty}
                 workspaceId={id}
                 opKey={selected.opKey}
                 statuses={selected.statuses}

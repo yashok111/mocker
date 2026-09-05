@@ -110,6 +110,14 @@ export function WorkspaceLayout({
           >
             Повторить
           </Button>
+          <Button
+            variant="subtle"
+            w="fit-content"
+            onClick={() => void navigate({ to: "/" })}
+            data-testid="workspace-to-list"
+          >
+            К списку воркспейсов
+          </Button>
         </Stack>
       ) : workspace.data.status !== 200 ? (
         <Alert

@@ -117,4 +117,21 @@ describe("WorkspaceLayout", () => {
     // P7b adds the tenth (Контракт).
     expect(screen.getByRole("tab", { name: "Контракт" })).toBeInTheDocument();
   });
+
+  it("offers the list beside «Повторить» on a failed workspace (A21, U10)", async () => {
+    route({
+      "GET /api/workspaces/7": () =>
+        json(404, { error: { code: "not_found", message: "workspace not found" } }),
+    });
+    renderInRouter(
+      <WorkspaceLayout id={7}>
+        <div />
+      </WorkspaceLayout>,
+    );
+    // The button is beside «Повторить»; where it goes ("/") is the memory
+    // router's own index in this harness, so the click is not observable
+    // here — the AppShell test covers the same navigate.
+    await screen.findByTestId("workspace-layout-retry");
+    expect(screen.getByTestId("workspace-to-list")).toHaveTextContent("К списку воркспейсов");
+  });
 });

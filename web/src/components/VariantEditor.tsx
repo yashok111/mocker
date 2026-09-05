@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { ReactElement } from "react";
 import {
   ActionIcon,
+  Anchor,
   Badge,
   Button,
   Card,
@@ -47,6 +48,10 @@ import { TabLink } from "./TabLink";
 // block the save.
 
 export type ProducerMode = "generated" | "pinned" | "file" | "function";
+
+// The guide's own heading id (GuidePage slugifies headings); a plain href,
+// because /guide is a full page and its anchor scroll is the browser's.
+export const GUIDE_FUNCTIONS = "/guide#функция-эндпоинта";
 
 export function producerOf(variant: Variant | undefined): ProducerMode {
   if (variant?.function !== undefined) {
@@ -255,7 +260,14 @@ export function VariantEditor({
       {producer === "function" ? (
         <Textarea
           label="Функция (Lua) — над аргументом req, возвращает status, body, headers"
-          description="Раздел «Функции» в руководстве. Компилируется при сохранении: синтаксическая ошибка — отказ со словами парсера."
+          description={
+            <>
+              <Anchor href={GUIDE_FUNCTIONS} size="xs">
+                Раздел «Функция эндпоинта» в руководстве
+              </Anchor>
+              . Компилируется при сохранении: синтаксическая ошибка — отказ со словами парсера.
+            </>
+          }
           rows={6}
           styles={{ input: { fontFamily: "var(--mantine-font-family-monospace)" } }}
           data-testid={testId("function")}
@@ -397,7 +409,7 @@ export function VariantEditor({
           w="fit-content"
           leftSection={<IconPlus size={14} />}
           onClick={() =>
-            updateVariant((v) => ({ ...v, headers: { ...(v.headers ?? {}), "": "" } }))
+            updateVariant((v) => ({ ...v, headers: { ...v.headers, "": "" } }))
           }
           data-testid={testId("header-add")}
         >

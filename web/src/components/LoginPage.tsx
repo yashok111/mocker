@@ -1,4 +1,14 @@
-import { Alert, Box, Button, Card, PasswordInput, Stack, TextInput, Title } from "@mantine/core";
+import {
+  Alert,
+  Box,
+  Button,
+  Card,
+  PasswordInput,
+  Stack,
+  TextInput,
+  Title,
+  Text,
+} from "@mantine/core";
 import { IconAlertTriangle } from "@tabler/icons-react";
 import { useForm } from "react-hook-form";
 import { type } from "arktype";
@@ -112,6 +122,10 @@ export function LoginPage({ onSuccess }: { onSuccess: () => void }) {
             error={errors.password?.message}
             {...register("password")}
           />
+          <Text size="xs" c="dimmed" data-testid="login-hint">
+            Имя — любое: оно подписывает ваши правки в истории и создаётся при первом входе. Пароль
+            один на всю установку; его выдаёт тот, кто её поднял.
+          </Text>
           <Button type="submit" fullWidth loading={login.isPending} data-testid="login-submit">
             {login.isPending ? "Входим…" : "Войти"}
           </Button>

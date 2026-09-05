@@ -633,4 +633,18 @@ describe("OperationEditor", () => {
     await waitFor(() => expect(sent).toBeDefined());
     expect(sent).toMatchObject({ headers: { "X-Debug": "1" }, body: { cmd: "x" } });
   });
+
+  // A21 (U9): the draft is compared with the server's document; the parent
+  // reads the flag and the button names it.
+  it("says there are unsaved changes once the draft differs, and not after a save", async () => {
+    route({
+      [GET]: () => json(200, fullDoc()),
+      [PUT]: () => json(200, { ...fullDoc(), delayMs: 999, revision: 9 }),
+    });
+    renderInRouter(<OperationEditor workspaceId={WS} opKey={OPKEY} statuses={STATUSES} />);
+    await screen.findByTestId("operation-status-mode-200");
+    expect(screen.queryByTestId("operation-dirty")).toBeNull();
+    await userEvent.selectOptions(screen.getByTestId("operation-status-mode-200"), "generated");
+    expect(await screen.findByTestId("operation-dirty")).toBeInTheDocument();
+  });
 });

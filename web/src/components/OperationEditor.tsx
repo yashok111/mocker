@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ReactElement } from "react";
 import {
   Alert,
@@ -112,6 +112,7 @@ export function OperationEditor({
   statuses,
   path = "",
   basePath = "",
+  onDirtyChange,
 }: {
   workspaceId: number;
   opKey: string;
@@ -128,6 +129,8 @@ export function OperationEditor({
   // renders the panel with zero required inputs either way.
   path?: string;
   basePath?: string;
+  /** A21 (U9): whether the draft differs from what the server holds. */
+  onDirtyChange?: (dirty: boolean) => void;
 }): ReactElement {
   // retry: false (§3.3/§3.1): a 404 here means "nothing is overridden yet",
   // the normal answer, not worth a second automatic round trip.
@@ -146,6 +149,39 @@ export function OperationEditor({
   // no room for it — it travels beside the PUT body, not inside it.
   const [editVersion, setEditVersion] = useState<number | null>(null);
   const [savedNote, setSavedNote] = useState<string | null>(null);
+  // A21 (U9): the draft compared with what the server holds — DERIVED, so
+  // there is no flag to forget to set. The parent (OperationsPage) reads it
+  // through onDirtyChange and asks before remounting this editor on another
+  // operation, which used to drop an unsaved body in silence.
+  const serverFields: OverrideMutableFields | null =
+    override.isSuccess && override.data.status === 200
+      ? {
+          overrideOn: override.data.data.overrideOn,
+          routeOff: override.data.data.routeOff,
+          activeStatus: override.data.data.activeStatus,
+          responses: override.data.data.responses,
+          listSize: override.data.data.listSize,
+          delayMs: override.data.data.delayMs,
+          failDirective: override.data.data.failDirective,
+          validateReq: override.data.data.validateReq,
+        }
+      : is404
+        ? emptyDocument()
+        : null;
+  const dirty =
+    fields !== null &&
+    serverFields !== null &&
+    JSON.stringify(fields) !== JSON.stringify(serverFields);
+  const onDirtyChangeRef = useRef(onDirtyChange);
+  useEffect(() => {
+    onDirtyChangeRef.current = onDirtyChange;
+  });
+  useEffect(() => {
+    onDirtyChangeRef.current?.(dirty);
+  }, [dirty]);
+  useEffect(() => {
+    return () => onDirtyChangeRef.current?.(false);
+  }, []);
   // Per-selector "this status's body textarea currently holds invalid JSON".
   // StatusPanel keeps the actual error text local (it needs it for its own
   // Textarea `error` prop), but the SAVE BUTTON lives here, in the parent —
@@ -548,22 +584,20 @@ export function OperationEditor({
             <Switch
               label="Переопределение включено"
               checked={fields.overrideOn}
-              onChange={(e) =>
-                setFields((prev) =>
-                  prev === null ? prev : { ...prev, overrideOn: e.currentTarget.checked },
-                )
-              }
+              onChange={(e) => {
+                const checked = e.currentTarget.checked;
+                setFields((prev) => (prev === null ? prev : { ...prev, overrideOn: checked }));
+              }}
               data-testid="operation-override-on"
             />
             <Switch
               label="Операция выключена — мок перестаёт на неё отвечать"
               color="red"
               checked={fields.routeOff}
-              onChange={(e) =>
-                setFields((prev) =>
-                  prev === null ? prev : { ...prev, routeOff: e.currentTarget.checked },
-                )
-              }
+              onChange={(e) => {
+                const checked = e.currentTarget.checked;
+                setFields((prev) => (prev === null ? prev : { ...prev, routeOff: checked }));
+              }}
               data-testid="operation-route-off"
             />
           </Group>
@@ -574,17 +608,14 @@ export function OperationEditor({
               description="Какой статус реально отдавать"
               data-testid="operation-active-status"
               value={fields.activeStatus?.toString() ?? ""}
-              onChange={(e) =>
+              onChange={(e) => {
+                const value = e.currentTarget.value;
                 setFields((prev) =>
                   prev === null
                     ? prev
-                    : {
-                        ...prev,
-                        activeStatus:
-                          e.currentTarget.value === "" ? undefined : Number(e.currentTarget.value),
-                      },
-                )
-              }
+                    : { ...prev, activeStatus: value === "" ? undefined : Number(value) },
+                );
+              }}
             >
               <option value="">не задан — выбирает спека</option>
               {numericStatuses.map((s) => (
@@ -716,6 +747,11 @@ export function OperationEditor({
             >
               Сохранить
             </Button>
+            {dirty ? (
+              <Text size="xs" c="orange" data-testid="operation-dirty">
+                есть несохранённые изменения
+              </Text>
+            ) : null}
             <Button
               variant="default"
               color="red"
@@ -740,9 +776,10 @@ export function OperationEditor({
                 label={`Параметр пути: ${name}`}
                 required
                 value={previewPathParams[name] ?? ""}
-                onChange={(e) =>
-                  setPreviewPathParams((prev) => ({ ...prev, [name]: e.currentTarget.value }))
-                }
+                onChange={(e) => {
+                  const value = e.currentTarget.value;
+                  setPreviewPathParams((prev) => ({ ...prev, [name]: value }));
+                }}
                 data-testid={`operation-preview-path-param-${name}`}
               />
             ))}

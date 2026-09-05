@@ -736,4 +736,22 @@ describe("TrafficPage", () => {
       `/workspaces/${WS}`,
     );
   });
+
+  it("marks a truncated row (A21, G14)", async () => {
+    route({
+      ...baseRoutes({
+        tail: () =>
+          json(
+            200,
+            trafficListViewFixture({
+              rows: [trafficRowFixture({ id: 1, path: "/big", truncated: true })],
+            }),
+          ),
+      }),
+      [`GET /api/workspaces/${WS}/traffic/poll?since=1&limit=200`]: () =>
+        json(200, trafficPollViewFixture({ rows: [], lastId: 1 })),
+    });
+    renderInRouter(<TrafficPage id={WS} />);
+    expect(await screen.findByTestId("traffic-truncated")).toHaveTextContent("обрезано");
+  });
 });

@@ -230,7 +230,12 @@ function ConnectionsTable({
                       {row.kind === "ws" ? "WebSocket" : "SSE"}
                     </Badge>
                   </Table.Td>
-                  <Table.Td>{row.path}</Table.Td>
+                  <Table.Td>
+                    {row.path}{" "}
+                    <Text span size="xs" c="dimmed">
+                      #{row.endpointId}
+                    </Text>
+                  </Table.Td>
                   <Table.Td>{row.remoteAddr}</Table.Td>
                   <Table.Td>{formatOpened(row.openedAt)}</Table.Td>
                   <Table.Td>

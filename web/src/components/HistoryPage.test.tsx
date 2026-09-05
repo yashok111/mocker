@@ -743,8 +743,15 @@ describe("HistoryPage", () => {
       });
       renderInRouter(<HistoryPage id={WS} />);
 
+      // A21 (U10): a slug that does not match what the screen knows never
+      // reaches the server — the button is disabled until it does. The
+      // server can still refuse (a slug changed elsewhere), and its own
+      // words are what the screen shows then.
       await userEvent.type(await screen.findByTestId("reset-data-slug"), "wrong");
-      await userEvent.click(await screen.findByTestId("reset-data-submit"));
+      expect(screen.getByTestId("reset-data-submit")).toBeDisabled();
+      await userEvent.clear(screen.getByTestId("reset-data-slug"));
+      await userEvent.type(screen.getByTestId("reset-data-slug"), "alex");
+      await userEvent.click(screen.getByTestId("reset-data-submit"));
 
       expect(await screen.findByRole("alert")).toHaveTextContent("confirmSlug does not match");
     });

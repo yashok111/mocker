@@ -131,4 +131,15 @@ describe("LoginPage", () => {
     expect(await screen.findByText(/Имя слишком длинное/)).toBeInTheDocument();
     expect(fetchMock).not.toHaveBeenCalled();
   });
+
+  it("says what the name and the password are (A21, U10)", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => new Promise<Response>(() => {})),
+    );
+    renderWithProviders(<LoginPage onSuccess={vi.fn()} />);
+    expect(await screen.findByTestId("login-hint")).toHaveTextContent(
+      "Пароль один на всю установку",
+    );
+  });
 });

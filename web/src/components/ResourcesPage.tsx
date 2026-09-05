@@ -2,8 +2,10 @@ import { Fragment, useState } from "react";
 import type { ReactElement } from "react";
 import {
   Alert,
+  Anchor,
   Badge,
   Box,
+  CopyButton,
   Button,
   Card,
   Group,
@@ -79,7 +81,12 @@ export function ResourcesPage({ id }: { id: number }): ReactElement {
           обслуживать из хранилища вместо генератора: то, что записано через POST, переживает
           рестарт и видно в следующем GET. Ресурс, который подтвердили неправильно, не редактируется
           — его отклоняют и подтверждают заново. Строки подтверждённого семейства — кнопка «Записи»,
-          по 50 на страницу.
+          по 50 на страницу. Сбросить данные всех семейств разом (заполнить заново или очистить) —
+          на вкладке{" "}
+          <TabLink id={id} tab="history" testId="resources-reset-data-link">
+            «История»
+          </TabLink>
+          .
         </Text>
         {workspace.data?.status === 200 && specId === null ? (
           <Alert color="gray" data-testid="resources-no-spec">
@@ -278,7 +285,20 @@ function ResourceList({
                         data-testid="resource-collection-url"
                       >
                         GET {workspaceUrl}
-                        {family.routeFamily}
+                        {family.routeFamily}{" "}
+                        <CopyButton value={`${workspaceUrl}${family.routeFamily}`}>
+                          {({ copied, copy }) => (
+                            <Anchor
+                              size="xs"
+                              component="button"
+                              type="button"
+                              onClick={copy}
+                              data-testid="resource-collection-url-copy"
+                            >
+                              {copied ? "скопировано" : "копировать"}
+                            </Anchor>
+                          )}
+                        </CopyButton>
                       </Text>
                       {nestedHint(family.routeFamily) !== null ? (
                         <Text size="xs" c="dimmed" data-testid="resource-nested-hint">

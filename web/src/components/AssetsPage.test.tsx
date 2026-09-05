@@ -131,4 +131,16 @@ describe("AssetsPage", () => {
     await userEvent.click(screen.getByTestId("asset-delete-confirm"));
     expect(await screen.findByRole("alert")).toHaveTextContent("photo.jpg");
   });
+
+  // A21 (G13): a replacement is said before the button; the digest is a column.
+  it("warns that an upload under an existing name replaces it, and shows the digest", async () => {
+    route({ [LIST]: () => json(200, listView([asset({ sha256: "abcdef0123456789" })])) });
+    renderWithProviders(<AssetsPage id={WS} />);
+    expect(await screen.findByTestId("asset-sha")).toHaveTextContent("abcdef012345…");
+    await userEvent.upload(
+      screen.getByTestId("asset-file-input"),
+      new File(["x"], "photo.jpg", { type: "image/jpeg" }),
+    );
+    expect(await screen.findByTestId("asset-replace-warning")).toHaveTextContent("photo.jpg");
+  });
 });

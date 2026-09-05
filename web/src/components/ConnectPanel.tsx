@@ -442,6 +442,11 @@ export function ConnectPanel({
               sitting under the base domain, and the port comes from the request
               the server already saw. */}
           <CopyField testId="connect-address-copy" label="Адрес" value={workspace.url} />
+          <Text size="xs" c="dimmed" data-testid="connect-routing">
+            {config.routing === "path"
+              ? "Маршрутизация по пути: каждый воркспейс живёт под /w/{slug} одного хоста."
+              : `Маршрутизация по хосту: каждый воркспейс — свой поддомен под ${config.baseDomain}.`}
+          </Text>
           {workspace.settings.basePath !== "" ? (
             // The address a FRONTEND needs is origin + basePath (apiAddress);
             // the origin alone 404s on every route of a workspace whose spec

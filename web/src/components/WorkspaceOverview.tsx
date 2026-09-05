@@ -1,6 +1,7 @@
 import type { ReactElement } from "react";
 import { Alert, Anchor, Button, Group, Loader, Stack, Text } from "@mantine/core";
 import { IconAlertTriangle } from "@tabler/icons-react";
+import { useNavigate } from "@tanstack/react-router";
 import { useGetWorkspace } from "@/api/generated/workspaces/workspaces.ts";
 import { describeApiFailure } from "@/api/errors";
 import { ConnectPanel } from "./ConnectPanel";
@@ -25,6 +26,7 @@ export function WorkspaceOverview({
   config: ServerConfigView;
 }): ReactElement {
   const workspace = useGetWorkspace(id);
+  const navigate = useNavigate();
 
   return (
     <div data-testid="overview-page">
@@ -49,6 +51,14 @@ export function WorkspaceOverview({
             data-testid="overview-retry"
           >
             Повторить
+          </Button>
+          <Button
+            variant="subtle"
+            w="fit-content"
+            onClick={() => void navigate({ to: "/" })}
+            data-testid="overview-to-list"
+          >
+            К списку воркспейсов
           </Button>
         </Stack>
       ) : workspace.data.status !== 200 ? (
