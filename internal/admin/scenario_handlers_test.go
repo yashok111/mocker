@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/yashok111/mocker/internal/httpx"
@@ -550,5 +551,53 @@ func TestScenarios_renameEditConflictMismatch(t *testing.T) {
 	}
 	if conflict.Error.Details.EditVersion != int64(first["editVersion"].(float64)) {
 		t.Errorf("conflict details.editVersion = %d, want %v (the version the server actually holds)", conflict.Error.Details.EditVersion, first["editVersion"])
+	}
+}
+
+// TestScenarios_v4SnapshotIsRefusedByNameNot500 is review finding 6. A18
+// moved bundle's minVersion to 5 (CARVE-OUTS D5: a v4 document is refused BY
+// NAME), but a v4 scenario already in the database met that refusal as a
+// 500 on GET and as a 200 on activate — after which the mock plane, unable to
+// decode it either, served the un-overlaid workspace layer while the switch
+// looked taken. Both reads now answer 409 snapshot_unreadable carrying the
+// codec's own words, and the scenario does not become active.
+func TestScenarios_v4SnapshotIsRefusedByNameNot500(t *testing.T) {
+	t.Parallel()
+	ts := newTestServer(t)
+	cookie, csrfToken, wsFloat, _ := ts.createWorkspace(t, "Alex", "Demo")
+	wsID := int64(wsFloat)
+
+	v4 := `{"mockerBundle":4,"workspace":{"name":"old","settings":{"basePath":"/api"}},"basePath":"/api",` +
+		`"spec":{"hash":"","name":"","inline":null},"overrides":[],"endpoints":[],"resources":[],"decisions":[],"entities":null}`
+	res, err := ts.db.W.ExecContext(t.Context(),
+		`INSERT INTO scenarios (workspace_id, name, snapshot, created_at) VALUES (?, ?, ?, unixepoch())`,
+		wsID, "from-p7a", []byte(v4))
+	if err != nil {
+		t.Fatalf("insert v4 scenario row: %v", err)
+	}
+	sid, _ := res.LastInsertId()
+
+	rec := scenarioTestGet(t, ts, cookie, scenarioTestURL(wsID, fmt.Sprintf("/%d", sid)))
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("GET v4 scenario: status = %d, want 409; body = %s", rec.Code, rec.Body.String())
+	}
+	body := scenarioTestDecode(t, rec)
+	if code := scenarioTestErrorCode(t, body); code != "snapshot_unreadable" {
+		t.Errorf("GET code = %q, want snapshot_unreadable", code)
+	}
+	if msg, _ := body["error"].(map[string]any)["message"].(string); !strings.Contains(msg, "mockerBundle 4") {
+		t.Errorf("GET message = %q, want the version named — BY NAME is the carve-out's own promise", msg)
+	}
+
+	activated := scenarioTestActivate(t, ts, cookie, csrfToken, wsID, sid, http.StatusConflict)
+	if code := scenarioTestErrorCode(t, activated); code != "snapshot_unreadable" {
+		t.Errorf("activate code = %q, want snapshot_unreadable", code)
+	}
+	var active *int64
+	if err := ts.db.W.QueryRowContext(t.Context(), "SELECT scenario_id FROM workspaces WHERE id = ?", wsID).Scan(&active); err != nil {
+		t.Fatal(err)
+	}
+	if active != nil {
+		t.Errorf("workspace.scenario_id = %d after a refused activation, want NULL", *active)
 	}
 }

@@ -785,15 +785,20 @@ func (r *Repo) Delete(ctx context.Context, workspaceID, scenarioID int64) error 
 func (r *Repo) SetActive(ctx context.Context, workspaceID int64, scenarioID *int64) (revision int64, err error) {
 	err = r.db.Write(ctx, func(tx *sql.Tx) error {
 		if scenarioID != nil {
-			var one int
+			// The snapshot and not a bare `SELECT 1`: a scenario this build
+			// cannot read must not become the active one (decodeSnapshot).
+			var snapshot []byte
 			switch qerr := tx.QueryRowContext(ctx,
-				"SELECT 1 FROM scenarios WHERE id = ? AND workspace_id = ?", *scenarioID, workspaceID,
-			).Scan(&one); {
+				"SELECT snapshot FROM scenarios WHERE id = ? AND workspace_id = ?", *scenarioID, workspaceID,
+			).Scan(&snapshot); {
 			case qerr == nil:
 			case errors.Is(qerr, sql.ErrNoRows):
 				return fmt.Errorf("%w: scenario %d in workspace %d", ErrNotFound, *scenarioID, workspaceID)
 			default:
 				return fmt.Errorf("check scenario %d ownership: %w", *scenarioID, qerr)
+			}
+			if _, derr := decodeSnapshot(*scenarioID, snapshot); derr != nil {
+				return fmt.Errorf("activate: %w", derr)
 			}
 		}
 
@@ -945,6 +950,45 @@ func isUniqueViolation(err error) bool {
 
 const selectScenario = "SELECT id, workspace_id, name, snapshot, created_at, edit_version FROM scenarios"
 
+// decodeSnapshot is the one reading of a stored scenario blob, shared by the
+// scan every Get/ByName/List goes through and by SetActive. A blob this build
+// cannot read — a mockerBundle version below bundle's minVersion since A18
+// moved it to 5, or a document that fails Validate — comes back wrapping
+// bundle.ErrInvalid with the codec's own words ("mockerBundle 4, this build
+// reads versions 5..6"), so the admin plane can refuse it BY NAME. Before
+// SetActive shared this reading, activation checked only that the row
+// existed: a v4 scenario activated with 200 and the mock plane, which cannot
+// decode it either, logged and served the un-overlaid workspace layer. The
+// operator saw the switch take and the mock ignore it. Review finding 6.
+//
+// The endpoints check, with its history:
+// A scenario cannot carry a custom endpoint (§0, package doc comment):
+// runtime.custom is keyed by a custom_endpoints DB row id, and a row
+// living inside a BLOB has no id to be keyed by. This used to be
+// bundle.Validate's job — P2c's gate (C2) moved it HERE deliberately,
+// because P2c reuses this identical v3 format for checkpoints, which
+// DO legitimately carry endpoints, so the format itself can no longer
+// refuse a non-empty Endpoints array outright. scanScenario is every
+// scenario read path (Get, ByName, and — through them — the runtime
+// composition and the admin detail route), so one check here is one
+// check for all of them; there is deliberately NO matching write-side
+// guard (C2): [bundle.New]'s signature is unchanged and still
+// hard-codes an empty Endpoints slice, so this package's own write
+// path (CreateFromCurrentState) can never produce a row that would
+// reach this branch at all — only a row this package did not itself
+// write (a hand-run UPDATE, or a future bug) could.
+func decodeSnapshot(id int64, snapshot []byte) (bundle.Bundle, error) {
+	b, err := bundle.Decode(snapshot)
+	if err != nil {
+		return bundle.Bundle{}, fmt.Errorf("scenario %d: decode snapshot: %w", id, err)
+	}
+	if len(b.Endpoints) != 0 {
+		return bundle.Bundle{}, fmt.Errorf("scenario %d: %w: endpoints must be empty (a scenario cannot carry a custom endpoint)",
+			id, bundle.ErrInvalid)
+	}
+	return b, nil
+}
+
 func scanScenario(row *sql.Row) (*Scenario, error) {
 	var (
 		s         Scenario
@@ -963,28 +1007,9 @@ func scanScenario(row *sql.Row) (*Scenario, error) {
 	// unauthenticated mock-plane request — a snapshot that got into
 	// storage some other way fails HERE with a returned error, never as a
 	// panic further up in internal/mockplane's runtime build.
-	b, err := bundle.Decode(snapshot)
+	b, err := decodeSnapshot(s.ID, snapshot)
 	if err != nil {
-		return nil, fmt.Errorf("scenario %d: decode snapshot: %w", s.ID, err)
-	}
-	// A scenario cannot carry a custom endpoint (§0, package doc comment):
-	// runtime.custom is keyed by a custom_endpoints DB row id, and a row
-	// living inside a BLOB has no id to be keyed by. This used to be
-	// bundle.Validate's job — P2c's gate (C2) moved it HERE deliberately,
-	// because P2c reuses this identical v3 format for checkpoints, which
-	// DO legitimately carry endpoints, so the format itself can no longer
-	// refuse a non-empty Endpoints array outright. scanScenario is every
-	// scenario read path (Get, ByName, and — through them — the runtime
-	// composition and the admin detail route), so one check here is one
-	// check for all of them; there is deliberately NO matching write-side
-	// guard (C2): [bundle.New]'s signature is unchanged and still
-	// hard-codes an empty Endpoints slice, so this package's own write
-	// path (CreateFromCurrentState) can never produce a row that would
-	// reach this branch at all — only a row this package did not itself
-	// write (a hand-run UPDATE, or a future bug) could.
-	if len(b.Endpoints) != 0 {
-		return nil, fmt.Errorf("scenario %d: %w: endpoints must be empty (a scenario cannot carry a custom endpoint)",
-			s.ID, bundle.ErrInvalid)
+		return nil, err
 	}
 	s.Bundle = b
 	s.CreatedAt = time.Unix(createdAt, 0).UTC()

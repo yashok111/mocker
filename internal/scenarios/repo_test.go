@@ -560,6 +560,12 @@ func TestScanScenario_rejectsNonEmptyEndpoints(t *testing.T) {
 	if _, err := repo.ByName(t.Context(), ws, "bad-snap"); !errors.Is(err, bundle.ErrInvalid) {
 		t.Errorf("ByName: got %v, want an error wrapping bundle.ErrInvalid", err)
 	}
+	// Review finding 6: activation used to check only that the row existed,
+	// so a snapshot no read path could decode became the ACTIVE scenario and
+	// the mock plane silently served the workspace layer under it.
+	if _, err := repo.SetActive(t.Context(), ws, &scenarioID); !errors.Is(err, bundle.ErrInvalid) {
+		t.Errorf("SetActive: got %v, want an error wrapping bundle.ErrInvalid — an unreadable scenario must not activate", err)
+	}
 }
 
 // TestCloneFrom_succeedsWhileAnotherScenarioIsActive is SIG-CLONE's central

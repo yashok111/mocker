@@ -458,6 +458,12 @@ func (s *Server) handleDeactivateScenario(w http.ResponseWriter, r *http.Request
 // sentinel's doc comment in internal/scenarios/repo.go) — §I requires a
 // 409/404 name what it refuses, and duplicating that text here would be a
 // second copy to drift from the sentinel's own wrapping.
+// codeSnapshotUnreadable is the envelope code for a stored scenario or
+// checkpoint snapshot this build cannot decode — see the bundle.ErrInvalid
+// case in answerScenarioError; answerCheckpointError uses the same code for
+// the same reason.
+const codeSnapshotUnreadable = "snapshot_unreadable"
+
 func (s *Server) answerScenarioError(w http.ResponseWriter, err error) {
 	var conflict *store.EditConflictError
 	switch {
@@ -491,6 +497,14 @@ func (s *Server) answerScenarioError(w http.ResponseWriter, err error) {
 		// operator to try the save again, not a 500: nothing is broken,
 		// the workspace just kept changing under the coherent read.
 		httpx.Err(w, http.StatusConflict, httpx.CodeConflict, err.Error())
+	case errors.Is(err, bundle.ErrInvalid):
+		// A stored snapshot this build cannot read — since A18 a
+		// mockerBundle:4 scenario, which bundle refuses BY NAME (CARVE-OUTS
+		// D5) — on GET, activate or any other read of it. It is the row's
+		// state and not the request, so 409 and not 400, and not the 500
+		// it used to be: the message carries the codec's own words, which
+		// name the version and the range this build reads.
+		httpx.Err(w, http.StatusConflict, codeSnapshotUnreadable, err.Error())
 	default:
 		s.log.Error("scenario operation failed", "err", err)
 		httpx.Err(w, http.StatusInternalServerError, httpx.CodeInternal, "internal error")

@@ -18,6 +18,7 @@ import (
 	"io"
 	"net/http"
 
+	"github.com/yashok111/mocker/internal/bundle"
 	"github.com/yashok111/mocker/internal/checkpoints"
 	"github.com/yashok111/mocker/internal/httpx"
 )
@@ -396,6 +397,11 @@ func (s *Server) answerCheckpointError(w http.ResponseWriter, err error) {
 		httpx.Err(w, http.StatusNotFound, httpx.CodeNotFound, "workspace not found")
 	case errors.Is(err, checkpoints.ErrInvalidLabel):
 		httpx.Err(w, http.StatusBadRequest, httpx.CodeBadRequest, err.Error())
+	case errors.Is(err, bundle.ErrInvalid):
+		// A stored checkpoint blob this build cannot decode (a mockerBundle:4
+		// snapshot since A18) on GET or rollback — the same 409 by name
+		// answerScenarioError gives a scenario's, for the same reason.
+		httpx.Err(w, http.StatusConflict, codeSnapshotUnreadable, err.Error())
 	case errors.Is(err, checkpoints.ErrConcurrentEdit):
 		// C5 step 7's bounded fence exhausted — the same 409 and the same
 		// reasoning internal/scenarios' own ErrConcurrentEdit gets: nothing
