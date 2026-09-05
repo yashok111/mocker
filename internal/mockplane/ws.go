@@ -81,7 +81,10 @@ func originAllowed(origin string, allowed []string) bool {
 
 // serveWS is D7's branch: everything before it (route_off, the live effect,
 // the pause, the delay, the status) already ran in serveCustom.
-func (p *Plane) serveWS(w http.ResponseWriter, r *http.Request, ws *workspaces.Workspace, rt *runtime, row *customep.Row, base resources.ScopeKey) {
+// outer is the connection's route tuple, for the same reason serveStream
+// takes it: both hosts on a ws row (the tick's and onFrame's) resolve a nested
+// family's scope from it.
+func (p *Plane) serveWS(w http.ResponseWriter, r *http.Request, ws *workspaces.Workspace, rt *runtime, row *customep.Row, base resources.ScopeKey, outer []string) {
 	if p.streams == nil {
 		httpx.Err(w, http.StatusServiceUnavailable, "service_unavailable", "no stream registry is wired in this deployment")
 		return
@@ -144,7 +147,7 @@ func (p *Plane) serveWS(w http.ResponseWriter, r *http.Request, ws *workspaces.W
 	// A14: one frame log each way, one text frame per line — a WebSocket
 	// payload has no delimiter of its own.
 	attachStreamLogs(r, p.newFrameLog([]byte("\n")), p.newFrameLog([]byte("\n")))
-	loop := newStreamLoop(def, p.tickSource(rt, row, p.newLuaHost(rt, ws, base, nil)), p.streamOpts)
+	loop := newStreamLoop(def, p.tickSource(rt, row, p.newLuaHost(rt, ws, base, outer)), p.streamOpts)
 	loop.hooks = streamHooks{
 		onFrame: func(frame []byte) {
 			noteStreamFrame(r, frame)
@@ -177,7 +180,7 @@ func (p *Plane) serveWS(w http.ResponseWriter, r *http.Request, ws *workspaces.W
 		// runtime the tick's is — a hook and a tick on one endpoint reach
 		// the same workspace's rows under the same base scope.
 		onFrame: def.OnFrame,
-		host:    p.newLuaHost(rt, ws, base, nil),
+		host:    p.newLuaHost(rt, ws, base, outer),
 		onHookErr: func(err error) {
 			noteOnFrameError(r)
 			p.log.Debug("ws: onFrame hook", "workspace", ws.Slug, "endpoint", row.ID, "err", luafn.Note(err))

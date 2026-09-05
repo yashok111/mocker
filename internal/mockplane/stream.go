@@ -100,7 +100,13 @@ func (p *Plane) SetStreams(reg *stream.Registry, opts StreamOptions) {
 
 // serveStream is D7's branch: everything before it (route_off, the live
 // effect, the pause, the delay, the status) already ran in serveCustom.
-func (p *Plane) serveStream(w http.ResponseWriter, r *http.Request, ws *workspaces.Workspace, rt *runtime, row *customep.Row, base resources.ScopeKey) {
+// outer is the connection's own route tuple (routeOuterValues on the matched
+// custom row), handed to the tick's Lua host so `mock.entities` on a nested
+// family resolves its scope exactly as the request/response branch does. It
+// was nil until the A18 review: a tick on `/rooms/{id}/events` could not read
+// `/rooms/{id}/messages` at all, since a hook has no request table to take
+// the id from and the host answered bad_scope. Review finding 12.
+func (p *Plane) serveStream(w http.ResponseWriter, r *http.Request, ws *workspaces.Workspace, rt *runtime, row *customep.Row, base resources.ScopeKey, outer []string) {
 	if p.streams == nil {
 		httpx.Err(w, http.StatusServiceUnavailable, "service_unavailable", "no stream registry is wired in this deployment")
 		return
@@ -159,7 +165,7 @@ func (p *Plane) serveStream(w http.ResponseWriter, r *http.Request, ws *workspac
 	// completion on what it opened with" costs, never the megabytes of a
 	// compiled spec. The tick's generator is built here, once per
 	// connection, over the workspace settings the runtime was built with.
-	loop := newStreamLoop(def, p.tickSource(rt, row, p.newLuaHost(rt, ws, base, nil)), p.streamOpts)
+	loop := newStreamLoop(def, p.tickSource(rt, row, p.newLuaHost(rt, ws, base, outer)), p.streamOpts)
 	// The first frame is copied for the traffic row ONLY under "first",
 	// and only up to MOCKER_TRAFFIC_MAX_BODY — the recorder would cut it
 	// there anyway, and a 4 MiB frame held per connection under "off" is
@@ -742,6 +748,14 @@ func (c *tickCursor) next() (domain.StreamPreviewFrame, bool, error) {
 		case errors.Is(err, errTickDeclined):
 			// A18 D10.1: `return nil` is a firing that sends nothing. Same
 			// shape as a skip on the time axis, and it is not an error.
+			return domain.StreamPreviewFrame{}, true, nil
+		case errors.Is(err, luafn.ErrFailed):
+			// A tick.lua that raised or returned a refused shape. On a LIVE
+			// connection writeTick counts this as one skipped firing and
+			// keeps the connection open, and the preview says the same
+			// thing the same way — time advances, nothing is laid out. It
+			// used to fall through to the route's 500, so a draft that
+			// STORED fine could not be previewed. Review finding 8.
 			return domain.StreamPreviewFrame{}, true, nil
 		case errors.Is(err, luafn.ErrTimeout), errors.Is(err, luafn.ErrCanceled):
 			// The AGGREGATE budget ran out (or the admin request went away).

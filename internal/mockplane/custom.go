@@ -184,14 +184,14 @@ func (p *Plane) serveCustom(w http.ResponseWriter, r *http.Request, ws *workspac
 	// carries no responses, so status is its activeStatus (200) whenever
 	// nothing forced it.
 	if row.Kind == customep.KindSSE && liveEffect.Status == 0 {
-		p.serveStream(w, r, ws, rt, row, base)
+		p.serveStream(w, r, ws, rt, row, base, routeOuterValues(route, m))
 		return
 	}
 	// P6d (D7): the WebSocket row branches at the same point, under the
 	// same rule — a forced status falls through and aborts the handshake
 	// with that status (§30.4), never a 101.
 	if row.Kind == customep.KindWS && liveEffect.Status == 0 {
-		p.serveWS(w, r, ws, rt, row, base)
+		p.serveWS(w, r, ws, rt, row, base, routeOuterValues(route, m))
 		return
 	}
 

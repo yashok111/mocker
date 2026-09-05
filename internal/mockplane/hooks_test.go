@@ -9,12 +9,14 @@ import (
 	"context"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/yashok111/mocker/internal/customep"
 	"github.com/yashok111/mocker/internal/jsonx"
 	"github.com/yashok111/mocker/internal/luafn"
+	"github.com/yashok111/mocker/internal/resources"
 	"github.com/yashok111/mocker/internal/wsmock"
 )
 
@@ -331,5 +333,99 @@ func TestPreviewStream_luaTickRunsAndIsLabelledNominal(t *testing.T) {
 		if fr.NotRun {
 			t.Fatalf("frame %d is NotRun; a hook this cheap cannot exhaust the aggregate budget", i)
 		}
+	}
+}
+
+// --- review finding 12: a stream hook's host carries the connection's scope --
+
+// scopeResourceSource and scopeEntityStore are the two seams a tick needs to
+// reach a NESTED family: a roster with one depth-1 family and a store that
+// records the scope it was asked for.
+type scopeResourceSource struct{ res *resources.Resource }
+
+func (s scopeResourceSource) ForWorkspace(context.Context, int64) ([]*resources.Resource, error) {
+	return []*resources.Resource{s.res}, nil
+}
+
+type scopeEntityStore struct {
+	mu   sync.Mutex
+	seen []resources.ScopeKey
+}
+
+func (s *scopeEntityStore) List(_ context.Context, _ int64, _, scope resources.ScopeKey) ([]resources.Entity, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.seen = append(s.seen, scope)
+	return []resources.Entity{{ID: 1, EntityKey: "1", Data: jsonx.RawMessage(`{"id":1,"text":"hi"}`)}}, nil
+}
+
+func (s *scopeEntityStore) Get(context.Context, int64, resources.ScopeKey, resources.ScopeKey, string) (resources.Entity, bool, error) {
+	return resources.Entity{}, false, nil
+}
+
+func (s *scopeEntityStore) Create(context.Context, int64, resources.ScopeKey, resources.ScopeKey, string, string, map[string]any) (resources.Entity, error) {
+	return resources.Entity{}, nil
+}
+
+func (s *scopeEntityStore) Delete(context.Context, int64, resources.ScopeKey, resources.ScopeKey, string) (bool, error) {
+	return false, nil
+}
+
+// TestLuaTick_hostCarriesTheConnectionsRouteScope is review finding 12. The
+// tick's host was built with a nil outer tuple, so `mock.entities` on a nested
+// family from a tick on `/rooms/{roomId}/events` answered bad_scope — a hook
+// has no request table to take the id from, and the host had nothing else.
+// The connection's own route tuple now reaches both stream hosts, and the
+// store is asked for exactly the scope the URL names.
+func TestLuaTick_hostCarriesTheConnectionsRouteScope(t *testing.T) {
+	row := sseRow(1, "/rooms/{roomId}/events", luaTick(60,
+		`local rows, err = mock.entities("/messages"); if not rows then return {err = err} end; return {first = rows[1].text}`))
+	f := newStreamFixture(t, fastOpts(), 4, row)
+	store := &scopeEntityStore{}
+	f.plane.SetResources(scopeResourceSource{res: &resources.Resource{
+		ID: 5, WorkspaceID: 1, RouteFamily: "/messages", ScopeParams: []string{"roomId"},
+	}})
+	f.plane.SetEntities(store)
+
+	resp := f.open(t, "alex.mock.local", "/rooms/42/events")
+	frames := readFrames(t, resp.Body, 1, 4*time.Second)
+	resp.Body.Close()
+	if len(frames) == 0 {
+		t.Fatal("no frame")
+	}
+	if !strings.Contains(frames[0].data, `"first":"hi"`) {
+		t.Fatalf("frame = %q, want the nested family's row — bad_scope here is the nil outer tuple", frames[0].data)
+	}
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	if want := resources.EncodeScope([]string{"42"}); len(store.seen) == 0 || store.seen[0] != want {
+		t.Fatalf("store asked for scope %v, want %q — the URL's own room id", store.seen, want)
+	}
+}
+
+// TestPreviewStream_aFailingTickIsASkipNotA500 is review finding 8: a
+// tick.lua that raises at one firing stores fine and, on a live connection,
+// is one skipped firing; the preview used to fall through to the route's 500
+// for the same source. It now lays the frame out as skipped — time advances,
+// nothing is drawn — exactly as it does for a frame over the byte cap.
+func TestPreviewStream_aFailingTickIsASkipNotA500(t *testing.T) {
+	f := newStreamFixture(t, fastOpts(), 4)
+	draft := sseRow(0, "/events", luaTick(100, `if ordinal == 3 then error("boom") end return {n = ordinal}`))
+
+	pv, err := f.plane.PreviewStream(context.Background(), sseWorkspace(1, "alex"), draft)
+	if err != nil {
+		t.Fatalf("PreviewStream: %v — a firing's own failure is a label on the frame, never an error on the route", err)
+	}
+	seen := map[string]bool{}
+	for _, fr := range pv.Frames {
+		seen[string(fr.Data)] = true
+	}
+	for _, want := range []string{`{"n":1}`, `{"n":2}`, `{"n":4}`} {
+		if !seen[want] {
+			t.Errorf("frames lack %s", want)
+		}
+	}
+	if seen[`{"n":3}`] {
+		t.Error("the frames carry the firing that raised")
 	}
 }
