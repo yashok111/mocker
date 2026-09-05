@@ -107,7 +107,30 @@ type Host interface {
 	// one owner of that join and a second one here is an encoding a UNIQUE
 	// index could disagree with (D3).
 	Entities(ctx context.Context, family string, scope []string) ([]map[string]any, error)
+
+	// A19's four. Generate returns a body generated from schema — an inline
+	// JSON Schema object, or {"$ref": ptr} into the bound spec — as a decoded
+	// JSON value, through the same generator a generated variant uses; the
+	// error's text is what the function sees as its second return. The
+	// three entity writers are the mock plane's own POST, PUT-as-merge and
+	// DELETE through the same store and caps; scope has the meaning
+	// Entities gives it, key is the entity's own id as text, and
+	// EntityUpdate is a SHALLOW merge of patch over the stored row
+	// (`not_found` when there is none). A nil Host answers every one of
+	// these with `no_host` before it is called.
+	Generate(ctx context.Context, schema map[string]any) (any, error)
+	EntityCreate(ctx context.Context, family string, scope []string, data map[string]any) (map[string]any, error)
+	EntityUpdate(ctx context.Context, family string, scope []string, key string, patch map[string]any) (map[string]any, error)
+	EntityDelete(ctx context.Context, family string, scope []string, key string) (bool, error)
 }
+
+// The argument refusals the helpers make before a host is asked: the text of
+// each is what the function reads.
+var (
+	errBadSchema = errors.New("bad_schema")
+	errBadData   = errors.New("bad_data")
+	errBadKey    = errors.New("bad_key")
+)
 
 // Validate compiles the source and nothing else. Both writers run it before
 // storing a function, so a syntax error is a 400 carrying the parser's own

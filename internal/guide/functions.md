@@ -54,7 +54,7 @@ Returning nothing at all fails the request: a function must decide a status.
 
 ## 2. Helpers — the `mock` table
 
-`mock` holds exactly three things and nothing else.
+`mock` holds exactly four things and nothing else.
 
 - **`mock.jwt(claims)` → token, or nil + err.** Signs with the WORKSPACE's own
   `settings.auth`, the same signer the `jwt` recipe uses. Answers
@@ -75,8 +75,38 @@ Returning nothing at all fails the request: a function must decide a status.
   - `nil, "unknown_family"` — never suggested, declined, or no spec bound.
   - `nil, "bad_scope"` — the tuple's length does not match the family's depth,
     or the request is too shallow to imply one.
-  - Read-only. There is no `mock.write`: the mock plane's own `POST X` and
-    `DELETE X/{}` remain the only writers of an entity row.
+  - **`mock.entities.create(family, data[, scopeArray])` → row, or nil + err.**
+    The same write the mock plane's `POST X` performs: the family's own id
+    field and strategy assign the id, the same row and byte caps apply
+    (`nil, "entity_limit"`), and the stored row comes back with its id.
+  - **`mock.entities.update(family, key, patch[, scopeArray])` → row, or
+    nil + err.** A SHALLOW merge of `patch` over the stored row: keys in
+    `patch` win, every other key stays. `key` is the row's id as a string or
+    a whole number. `nil, "not_found"` when there is no such row; a key that
+    is not the canonical form of the family's id type is `nil, "bad_key"`.
+    A key cannot be removed this way — a Lua `nil` in a table is an absent
+    key, not a value; delete and create the row to drop a field.
+  - **`mock.entities.delete(family, key[, scopeArray])` → true | false.**
+    `true` when a row went, `false` when there was none.
+  - Every writer takes the family and scope exactly as the reader does, and
+    `nil, "bad_data"` when `data`/`patch` is not a table. Writes are data,
+    not configuration: they bump no revision, appear in no checkpoint's
+    config, and are reset by `reset-data` like any other row.
+- **`mock.generate(schema)` → value, or nil + err.** A body generated the way
+  a generated response is, handed back as a table to edit. Two forms:
+  - a string that is a JSON pointer into the bound spec —
+    `mock.generate("#/components/schemas/User")`;
+  - a table that is an inline JSON Schema —
+    `mock.generate({type = "object", properties = {n = {type = "integer"}}})`.
+    `$ref`s inside it resolve into the bound spec.
+  - `nil, "bad_schema"` for anything else (a bare word, a number, an array).
+  - `nil, "unresolved_ref: <pointer>"` when a `$ref`, root or nested, names
+    nothing in the bound spec, or no spec is bound. Never a silently empty
+    object: a function asked a question and gets the answer.
+  - The value is deterministic per (workspace seed, request, schema) exactly
+    as a generated response is: two calls with the same schema in one
+    function return the same table. A function that wants two different
+    users asks for an array of two.
 
 ## 3. The sandbox
 

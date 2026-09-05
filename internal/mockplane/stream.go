@@ -165,7 +165,7 @@ func (p *Plane) serveStream(w http.ResponseWriter, r *http.Request, ws *workspac
 	// completion on what it opened with" costs, never the megabytes of a
 	// compiled spec. The tick's generator is built here, once per
 	// connection, over the workspace settings the runtime was built with.
-	loop := newStreamLoop(def, p.tickSource(rt, row, p.newLuaHost(rt, ws, base, outer)), p.streamOpts)
+	loop := newStreamLoop(def, p.tickSource(rt, row, p.newLuaHost(rt, ws, base, outer, genRequestFor(row.Method, row.CanonicalPath, nil))), p.streamOpts)
 	// The first frame is copied for the traffic row ONLY under "first",
 	// and only up to MOCKER_TRAFFIC_MAX_BODY — the recorder would cut it
 	// there anyway, and a 4 MiB frame held per connection under "off" is

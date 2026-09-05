@@ -8046,6 +8046,29 @@ fi
 
 echo "      A18: ${a18_checks}/8 observations passed"
 
+# A19: mock.generate over an inline schema through a function endpoint — the
+# helper reaches a real generator in the image, and the function's own edit
+# sits on top of the generated value. No resource family is confirmed in this
+# workspace, so the writers are covered by the unit tests, not here.
+if [[ -n "${a18_ws_id:-}" ]]; then
+	a19_gen=$(jq -n '{method:"GET", path:"/generated", status:200,
+		function:"local t = mock.generate({type = \"object\", required = {\"n\", \"name\"}, properties = {n = {type = \"integer\"}, name = {type = \"string\"}}}); t.name = \"edited\"; return 200, t"}')
+	a19_status=$(http_json POST "$ADMIN_HOST" "/api/workspaces/${a18_ws_id}/endpoints" \
+		"$a19_gen" -H "X-CSRF-Token: ${csrf}")
+	if [[ "$a19_status" != "201" ]]; then
+		echo "FAIL  A19: create a mock.generate endpoint: want 201, got ${a19_status}: $(cat "$BODY_FILE")"
+		fail_count=$((fail_count + 1))
+	else
+		a19_code=$(curl -s -o "$BODY_FILE" -w '%{http_code}' -H "Host: ${a18_host}" "${BASE_URL}/generated")
+		if [[ "$a19_code" == "200" ]] && jq -e '(.n | type) == "number" and .name == "edited"' "$BODY_FILE" >/dev/null; then
+			echo "PASS  A19: mock.generate draws from the generator and the function edits the result"
+		else
+			echo "FAIL  A19: want 200 with a generated n and name=edited, got ${a19_code}: $(cat "$BODY_FILE")"
+			fail_count=$((fail_count + 1))
+		fi
+	fi
+fi
+
 # --------------------------------------------------------------------------
 echo "== P1e: MOCKER_ROUTING=path — the admin UI is also reachable there =="
 

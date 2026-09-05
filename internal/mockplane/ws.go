@@ -147,7 +147,8 @@ func (p *Plane) serveWS(w http.ResponseWriter, r *http.Request, ws *workspaces.W
 	// A14: one frame log each way, one text frame per line — a WebSocket
 	// payload has no delimiter of its own.
 	attachStreamLogs(r, p.newFrameLog([]byte("\n")), p.newFrameLog([]byte("\n")))
-	loop := newStreamLoop(def, p.tickSource(rt, row, p.newLuaHost(rt, ws, base, outer)), p.streamOpts)
+	host := p.newLuaHost(rt, ws, base, outer, genRequestFor(row.Method, row.CanonicalPath, nil))
+	loop := newStreamLoop(def, p.tickSource(rt, row, host), p.streamOpts)
 	loop.hooks = streamHooks{
 		onFrame: func(frame []byte) {
 			noteStreamFrame(r, frame)
@@ -180,7 +181,7 @@ func (p *Plane) serveWS(w http.ResponseWriter, r *http.Request, ws *workspaces.W
 		// runtime the tick's is — a hook and a tick on one endpoint reach
 		// the same workspace's rows under the same base scope.
 		onFrame: def.OnFrame,
-		host:    p.newLuaHost(rt, ws, base, outer),
+		host:    host,
 		onHookErr: func(err error) {
 			noteOnFrameError(r)
 			p.log.Debug("ws: onFrame hook", "workspace", ws.Slug, "endpoint", row.ID, "err", luafn.Note(err))

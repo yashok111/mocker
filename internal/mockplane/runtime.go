@@ -51,6 +51,12 @@ type runtime struct {
 	gen      *gen.Generator
 	variants map[int64][]gen.ResponseVariant
 	settings domain.Settings
+	// resolver is the one the generator walks nested $refs through (the
+	// spec's, or the skeleton's when no spec is bound). Kept on the runtime
+	// since A19 because mock.generate must chase a ROOT $ref and check the
+	// nested ones per call, the way buildCustomInline does once at build for
+	// a stored inline schema — gen.Body takes Request.PatchedSchema verbatim.
+	resolver *openapi.Resolver
 
 	// overrides is the COMPOSED op_overrides map for this (workspace,
 	// revision), keyed EXACTLY as [OverrideSource.ForWorkspace]'s own doc
@@ -476,6 +482,7 @@ func (p *Plane) buildRuntime(ctx context.Context, ws *workspaces.Workspace, draf
 	return &runtime{
 		table:          table,
 		gen:            generator,
+		resolver:       resolver,
 		variants:       variants,
 		settings:       settings,
 		overrides:      overrideRows,

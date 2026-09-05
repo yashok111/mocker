@@ -109,7 +109,9 @@ server change; `EXEMPT` 11 → 10 — no route, no tool, no migration, no
 variable) → `A17` (publication: origin GitHub and one commit, the
 acceptance corpus embedded, `.github/workflows/ci.yml` with the capped
 scope, `@yashok111/mocker-test` 0.1.0 by hand and 0.1.1 by tag through
-Trusted Publishing — no product change) → `A18` (endpoint functions:
+Trusted Publishing — no product change) → `A19` (`mock.generate` and the
+entity writers, 2026-09-05; the same day's review of A18 is seven `fix(a18)`
+commits, recorded in `docs/agent/functions.md`) ← `A18` (endpoint functions:
 Lua that PRODUCES a response, `internal/luafn` as the third isolated
 library behind one importing package, a serving branch on both planes
 that beats a confirmed resource and replaces `assembleResponse` without

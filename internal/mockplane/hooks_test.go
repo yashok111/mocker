@@ -7,6 +7,7 @@ package mockplane_test
 
 import (
 	"context"
+	"encoding/json"
 	"strconv"
 	"strings"
 	"sync"
@@ -348,8 +349,9 @@ func (s scopeResourceSource) ForWorkspace(context.Context, int64) ([]*resources.
 }
 
 type scopeEntityStore struct {
-	mu   sync.Mutex
-	seen []resources.ScopeKey
+	mu      sync.Mutex
+	seen    []resources.ScopeKey
+	created []resources.ScopeKey
 }
 
 func (s *scopeEntityStore) List(_ context.Context, _ int64, _, scope resources.ScopeKey) ([]resources.Entity, error) {
@@ -363,8 +365,17 @@ func (s *scopeEntityStore) Get(context.Context, int64, resources.ScopeKey, resou
 	return resources.Entity{}, false, nil
 }
 
-func (s *scopeEntityStore) Create(context.Context, int64, resources.ScopeKey, resources.ScopeKey, string, string, map[string]any) (resources.Entity, error) {
-	return resources.Entity{}, nil
+func (s *scopeEntityStore) Create(_ context.Context, _ int64, _, scope resources.ScopeKey, _, _ string, data map[string]any) (resources.Entity, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.created = append(s.created, scope)
+	b, _ := json.Marshal(data)
+	b = append([]byte(`{"id":1,`), b[1:]...)
+	return resources.Entity{ID: 1, EntityKey: "1", Data: jsonx.RawMessage(b)}, nil
+}
+
+func (s *scopeEntityStore) Set(context.Context, int64, resources.ScopeKey, resources.ScopeKey, string, string, string, map[string]any) (resources.Entity, bool, error) {
+	return resources.Entity{}, false, nil
 }
 
 func (s *scopeEntityStore) Delete(context.Context, int64, resources.ScopeKey, resources.ScopeKey, string) (bool, error) {

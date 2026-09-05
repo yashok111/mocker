@@ -293,3 +293,174 @@ func TestOnFrame_closeReasonIsCappedLikeAReactiveRules(t *testing.T) {
 		t.Errorf("action = %+v", act)
 	}
 }
+
+// --- A19: mock.generate and the entity writers, the Lua side ---------------
+
+// recordingHost is a Host that records what the helpers hand it and answers
+// canned values, so these tests pin the ARGUMENT contract (what reaches the
+// host for each Lua spelling) apart from what internal/mockplane does with it.
+type recordingHost struct {
+	schema  map[string]any
+	family  string
+	scope   []string
+	key     string
+	data    map[string]any
+	created bool
+}
+
+func (h *recordingHost) JWT(context.Context, map[string]any) (string, error) { return "t", nil }
+func (h *recordingHost) Entities(_ context.Context, family string, scope []string) ([]map[string]any, error) {
+	h.family, h.scope = family, scope
+	return []map[string]any{{"id": 1}}, nil
+}
+func (h *recordingHost) Generate(_ context.Context, schema map[string]any) (any, error) {
+	h.schema = schema
+	return map[string]any{"generated": true}, nil
+}
+func (h *recordingHost) EntityCreate(_ context.Context, family string, scope []string, data map[string]any) (map[string]any, error) {
+	h.family, h.scope, h.data, h.created = family, scope, data, true
+	return map[string]any{"id": 9, "text": data["text"]}, nil
+}
+func (h *recordingHost) EntityUpdate(_ context.Context, family string, scope []string, key string, patch map[string]any) (map[string]any, error) {
+	h.family, h.scope, h.key, h.data = family, scope, key, patch
+	return map[string]any{"id": key, "patched": true}, nil
+}
+func (h *recordingHost) EntityDelete(_ context.Context, family string, scope []string, key string) (bool, error) {
+	h.family, h.scope, h.key = family, scope, key
+	return true, nil
+}
+
+func TestMockGenerate_argumentShapes(t *testing.T) {
+	t.Run("a #/ pointer becomes a $ref document", func(t *testing.T) {
+		h := &recordingHost{}
+		resp, err := run(t, `return 200, mock.generate("#/components/schemas/User")`, Request{}, h)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if h.schema["$ref"] != "#/components/schemas/User" {
+			t.Errorf("host schema = %v, want {$ref: #/components/schemas/User}", h.schema)
+		}
+		if string(resp.Body) != `{"generated":true}` {
+			t.Errorf("body = %s", resp.Body)
+		}
+	})
+	t.Run("a table is the inline schema", func(t *testing.T) {
+		h := &recordingHost{}
+		if _, err := run(t, `return 200, mock.generate({type = "object", properties = {n = {type = "integer"}}})`, Request{}, h); err != nil {
+			t.Fatal(err)
+		}
+		if h.schema["type"] != "object" {
+			t.Errorf("host schema = %v, want the inline document", h.schema)
+		}
+	})
+	for name, src := range map[string]string{
+		"a bare word": `return 200, {r = select(2, mock.generate("User"))}`,
+		"a number":    `return 200, {r = select(2, mock.generate(7))}`,
+		"an array":    `return 200, {r = select(2, mock.generate({1, 2}))}`,
+		"no argument": `return 200, {r = select(2, mock.generate())}`,
+	} {
+		t.Run(name+" is bad_schema", func(t *testing.T) {
+			resp, err := run(t, src, Request{}, &recordingHost{})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if string(resp.Body) != `{"r":"bad_schema"}` {
+				t.Errorf("body = %s", resp.Body)
+			}
+		})
+	}
+	t.Run("no host is no_host, as for entities", func(t *testing.T) {
+		resp, err := run(t, `return 200, {r = select(2, mock.generate("#/x"))}`, Request{}, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if string(resp.Body) != `{"r":"no_host"}` {
+			t.Errorf("body = %s", resp.Body)
+		}
+	})
+}
+
+func TestMockEntities_isCallableAndCarriesThreeWriters(t *testing.T) {
+	t.Run("the A18 spelling still reads", func(t *testing.T) {
+		h := &recordingHost{}
+		resp, err := run(t, `local rows = mock.entities("/teams", {"7"}); return 200, {n = #rows}`, Request{}, h)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if h.family != "/teams" || len(h.scope) != 1 || h.scope[0] != "7" {
+			t.Errorf("host got family=%q scope=%v", h.family, h.scope)
+		}
+		if string(resp.Body) != `{"n":1}` {
+			t.Errorf("body = %s", resp.Body)
+		}
+	})
+	t.Run("create hands the family, scope and data to the host", func(t *testing.T) {
+		h := &recordingHost{}
+		resp, err := run(t, `return 201, mock.entities.create("/msgs", {text = "hi"}, {"42"})`, Request{}, h)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !h.created || h.family != "/msgs" || h.data["text"] != "hi" || len(h.scope) != 1 || h.scope[0] != "42" {
+			t.Errorf("host got created=%v family=%q data=%v scope=%v", h.created, h.family, h.data, h.scope)
+		}
+		if resp.Status != 201 || string(resp.Body) != `{"id":9,"text":"hi"}` {
+			t.Errorf("status=%d body=%s", resp.Status, resp.Body)
+		}
+	})
+	t.Run("create without a table is bad_data", func(t *testing.T) {
+		resp, err := run(t, `return 200, {r = select(2, mock.entities.create("/msgs", "hi"))}`, Request{}, &recordingHost{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if string(resp.Body) != `{"r":"bad_data"}` {
+			t.Errorf("body = %s", resp.Body)
+		}
+	})
+	t.Run("update takes a numeric key as its decimal text", func(t *testing.T) {
+		h := &recordingHost{}
+		if _, err := run(t, `return 200, mock.entities.update("/msgs", 7, {read = true})`, Request{}, h); err != nil {
+			t.Fatal(err)
+		}
+		if h.key != "7" || h.data["read"] != true {
+			t.Errorf("host got key=%q patch=%v", h.key, h.data)
+		}
+	})
+	t.Run("a fractional or empty key is bad_key", func(t *testing.T) {
+		for _, src := range []string{
+			`return 200, {r = select(2, mock.entities.update("/msgs", 1.5, {}))}`,
+			`return 200, {r = select(2, mock.entities.delete("/msgs", ""))}`,
+			`return 200, {r = select(2, mock.entities.delete("/msgs", {}))}`,
+		} {
+			resp, err := run(t, src, Request{}, &recordingHost{})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if string(resp.Body) != `{"r":"bad_key"}` {
+				t.Errorf("%s: body = %s", src, resp.Body)
+			}
+		}
+	})
+	t.Run("delete answers the host's boolean", func(t *testing.T) {
+		h := &recordingHost{}
+		resp, err := run(t, `return 200, {gone = mock.entities.delete("/msgs", "k1")}`, Request{}, h)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if h.key != "k1" || string(resp.Body) != `{"gone":true}` {
+			t.Errorf("key=%q body=%s", h.key, resp.Body)
+		}
+	})
+	t.Run("every writer is no_host in a preview", func(t *testing.T) {
+		resp, err := run(t, `return 200, {
+			c = select(2, mock.entities.create("/x", {})),
+			u = select(2, mock.entities.update("/x", "1", {})),
+			d = select(2, mock.entities.delete("/x", "1")),
+		}`, Request{}, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if string(resp.Body) != `{"c":"no_host","d":"no_host","u":"no_host"}` {
+			t.Errorf("body = %s", resp.Body)
+		}
+	})
+}

@@ -173,7 +173,7 @@ func TestSandbox_dateIsUTCUnderANonDefaultTimezone(t *testing.T) {
 	}
 }
 
-func TestSandbox_mockTableHoldsExactlyThreeKeys(t *testing.T) {
+func TestSandbox_mockTableHoldsExactlyTheNamedKeys(t *testing.T) {
 	l := newState()
 	defer l.Close()
 	installMock(l, t.Context(), nil)
@@ -231,5 +231,33 @@ func TestSandbox_timeoutInterruptsAnInfiniteLoop(t *testing.T) {
 	}
 	if elapsed := time.Since(start); elapsed > time.Second {
 		t.Fatalf("the loop ran for %v after its context expired", elapsed)
+	}
+}
+
+// TestSandbox_entitiesTableHoldsExactlyTheThreeWriters is the A19 sibling of
+// the mock-table pin: `mock.entities` is a callable table, and what hangs off
+// it is pinned the same way, for the same reason.
+func TestSandbox_entitiesTableHoldsExactlyTheThreeWriters(t *testing.T) {
+	l := newState()
+	defer l.Close()
+	installMock(l, t.Context(), nil)
+
+	mock := l.GetGlobal("mock").(*lua.LTable)
+	entities, ok := mock.RawGetString("entities").(*lua.LTable)
+	if !ok {
+		t.Fatal("mock.entities is not a table")
+	}
+	var got []string
+	entities.ForEach(func(k, _ lua.LValue) {
+		if name, ok := k.(lua.LString); ok {
+			got = append(got, string(name))
+		}
+	})
+	sort.Strings(got)
+	if !reflect.DeepEqual(got, entitiesTableKeys) {
+		t.Fatalf("mock.entities keys = %v, want %v", got, entitiesTableKeys)
+	}
+	if l.GetMetatable(entities).(*lua.LTable).RawGetString("__call") == lua.LNil {
+		t.Fatal("mock.entities has no __call: the A18 spelling mock.entities(family) must still read")
 	}
 }

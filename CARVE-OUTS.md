@@ -1590,6 +1590,34 @@ because an undefined global reads `nil` in Lua and D8's write-time compile
 check cannot see it. Any future slice that narrows either must refuse by name
 at some door, the way a bundle version does.
 
+## A19 — `mock.generate` and the entity writers (2026-09-05)
+
+- **`mock.entities.update` cannot remove a field.** A Lua `nil` in a table
+  constructor is an absent key, so a patch cannot say "drop this"; the merge
+  is shallow and additive. The escape is delete-then-create with the whole
+  row, and the guide says so. A `mock.entities.replace` would be a fourth
+  writer for one case nobody has asked for.
+- **No validation against `entity_schema` on a Lua write.** The mock plane's
+  own POST takes the body as given (R23) and a function's create/update does
+  the same through the same store; a function that wants a shape checks it
+  itself. Adding a validator to one door and not the other would make the
+  two doors disagree.
+- **No traffic token for a Lua write.** The row carries `function` as before;
+  which helpers the function called is not recorded. A `function_wrote`
+  token was considered and deferred until someone reads traffic for it.
+- **`mock.generate` is deterministic per (seed, request, schema).** Two calls
+  with the same schema in one function return the same value, because the
+  generator seeds by the request tuple and the schema and nothing else. A
+  per-call nonce would make a function's two `generate` calls differ and
+  its response non-repeatable across identical requests — the guarantee D4
+  already withdrew for functions, but withdrawing it further for the one
+  helper meant to pull a function back toward the spec is backwards. A
+  function that wants two users asks for an array of two.
+- **`mock.generate` needs a host; the preview has none.** The stream preview
+  runs with a nil host, so a `tick.lua` calling `generate` previews as
+  `nil, "no_host"` — the same answer `entities` gives there, recorded once
+  for A18 and unchanged.
+
 ## Ideas refused — 2026-09-03
 
 Two `IDEAS.md` entries the owner turned down in his own words («1 - мне

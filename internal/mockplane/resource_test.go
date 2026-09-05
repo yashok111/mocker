@@ -105,10 +105,13 @@ type fakeEntityStore struct {
 	getFn    func(ctx context.Context, resourceID int64, base, scope resources.ScopeKey, entityKey string) (resources.Entity, bool, error)
 	createFn func(ctx context.Context, resourceID int64, base, scope resources.ScopeKey, idField, idType string, data map[string]any) (resources.Entity, error)
 	deleteFn func(ctx context.Context, resourceID int64, base, scope resources.ScopeKey, entityKey string) (bool, error)
+	setFn    func(ctx context.Context, resourceID int64, base, scope resources.ScopeKey, entityKey, idField, idType string, data map[string]any) (resources.Entity, bool, error)
 
 	createCalls int
 	deleteCalls int
+	setCalls    int
 	createArgs  []map[string]any
+	setArgs     []map[string]any
 }
 
 func (f *fakeEntityStore) List(ctx context.Context, resourceID int64, base, scope resources.ScopeKey) ([]resources.Entity, error) {
@@ -134,6 +137,17 @@ func (f *fakeEntityStore) Create(ctx context.Context, resourceID int64, base, sc
 		return f.createFn(ctx, resourceID, base, scope, idField, idType, data)
 	}
 	return resources.Entity{}, errors.New("fakeEntityStore: createFn not set")
+}
+
+func (f *fakeEntityStore) Set(ctx context.Context, resourceID int64, base, scope resources.ScopeKey, entityKey, idField, idType string, data map[string]any) (resources.Entity, bool, error) {
+	f.mu.Lock()
+	f.setCalls++
+	f.setArgs = append(f.setArgs, data)
+	f.mu.Unlock()
+	if f.setFn != nil {
+		return f.setFn(ctx, resourceID, base, scope, entityKey, idField, idType, data)
+	}
+	return resources.Entity{}, false, errors.New("fakeEntityStore: setFn not set")
 }
 
 func (f *fakeEntityStore) Delete(ctx context.Context, resourceID int64, base, scope resources.ScopeKey, entityKey string) (bool, error) {

@@ -77,7 +77,7 @@ is corruption and not disagreement. Every refusal is decided BEFORE
 exclusive by construction; a client that walked away is deliberately
 unclassified.
 
-`mock` holds exactly three helpers and a test pins the key set the way
+`mock` held exactly three helpers through A18 (four since A19, below) and a test pins the key set the way
 `_G`'s is pinned. `mock.jwt` signs through `recipes.MintJWT` — the same
 signer the `jwt` recipe uses — and refuses `auth_not_configured` on
 `alg: "none"` or no key. `mock.now` is the real clock. **`mock.entities`
@@ -211,3 +211,47 @@ code alone does not say why:
   at the five answering sites. The documents had promised the codes since the
   gate; the server answered `bad_request`, and the smoke could only grep for
   words. It asserts the code now.
+
+**`A19` (2026-09-05) is the fourth helper and the writer: `mock.generate` and
+`mock.entities.create/update/delete`.** The owner chose both from a ranked
+assessment («давай сделаем 1 и 2», a Russian string quoted as data) and
+answered two design questions: `generate` takes a `#/` pointer OR an inline
+table, and the writers hang off `mock.entities` as a CALLABLE table rather
+than as new top-level keys — `mock.entities(family)` still reads through
+`__call`, and `entitiesTableKeys` pins the three sub-keys the way
+`mockTableKeys` pins the four. What a later slice must know:
+
+- **`Generate` is the tree's THIRD `gen.Body` call site and the seam test
+  names it** (`wantBodySites`). It is not a fourth `assembleResponse` caller
+  on purpose: a function asks for a BODY, not a response — no envelope, no
+  recipes, no negotiation, no byte-cap refusal of its own (the function's
+  whole return meets `MOCKER_MAX_RESPONSE` at the writer). `gen.Body` takes
+  `Request.PatchedSchema` as the root VERBATIM, so the host chases a root
+  `$ref` and checks every nested one against the runtime's resolver (now a
+  field on `runtime`) BEFORE the call — `resolveSchema`/`checkRefs`, the
+  refusing sibling of `buildCustomInline`'s `chaseRootRef`/`sanitizeRefs`:
+  a stored inline schema must keep SERVING when its `$ref` stops resolving
+  and so empties the node with a warning; a function is being asked a
+  question and gets `unresolved_ref: <pointer>`.
+- **The seed tuple is the request's** (`luaHost.req`, a `gen.Request` of
+  method, canonical path and path params; on a stream, the row's), so
+  `mock.generate` on `GET /users/{id}` draws what that route's generated
+  200 would. Query is left out: a function reads `req.query` itself.
+- **The writers are the mock plane's own POST/DELETE through the same
+  store and caps**, plus `Repo.Set` for update — `EntityStore` gained `Set`
+  (its fifth method; the mock plane's HTTP verbs still do not call it, a
+  mock has no PUT on an entity). Update is Get → shallow merge → Set by the
+  same key; `not_found` when there is none; `Set`'s own
+  `ErrEntityKeyNotCanonical` is `bad_key`. `WriteForm` is NOT consulted —
+  it says whether a POST on the collection route takes over, and a
+  function calling create has said what it means. The family/scope
+  resolution is one function (`resolveFamily`) shared by the read and the
+  three writers, and the store's refusals map to words in one place
+  (`storeErr`).
+- **A19 reverses A18 D3's "no writer"** and the guide's "there is no
+  `mock.write`" paragraph is gone; the entry in `CARVE-OUTS.md` records
+  what is still absent (a field cannot be removed through update; no
+  validation against `entity_schema`, as the plane's own POST has none; no
+  traffic token for a Lua write; `generate` is deterministic per schema
+  within a request). `goToLua` learned Go `int`/`int64` because a host
+  built in Go may hand it one; decoded JSON never does.

@@ -31,6 +31,14 @@ func goToLua(l *lua.LState, v any) lua.LValue {
 		return lua.LBool(value)
 	case float64:
 		return lua.LNumber(value)
+	case int:
+		// Decoded JSON never produces these two — every number is a float64
+		// or a jsonx.Number — but a host built in Go may (a count, a row id
+		// typed int64), and dropping such a value as "no JSON rendering"
+		// would silently lose a key. A19.
+		return lua.LNumber(value)
+	case int64:
+		return lua.LNumber(value)
 	case jsonx.Number:
 		if f, err := value.Float64(); err == nil {
 			return lua.LNumber(f)

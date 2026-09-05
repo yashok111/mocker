@@ -373,7 +373,8 @@ route guard with `fetchQuery`, a root `data-testid` in all four states,
 
 ## Where we are
 
-Shipped, one slice per commit, `P0` (2026-08-16) through `A18` (2026-09-05,
+Shipped, one slice per commit, `P0` (2026-08-16) through `A19` (2026-09-05,
+`mock.generate` and the entity writers, on top of `A18`,
 endpoint functions) — nearly fifty slices. The full list with one line
 each, the ranked argument for what is NEXT and where each slice's
 decisions live: `docs/agent/where-we-are.md` and `HISTORY.md`. Streaming

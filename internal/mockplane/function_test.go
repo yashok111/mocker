@@ -12,6 +12,7 @@ package mockplane
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -838,4 +839,105 @@ func TestServeFunction_emptyBodyKeepsItsDeclaredType(t *testing.T) {
 	if got := rec.Header().Get("Content-Type"); got != "application/problem+json" {
 		t.Errorf("Content-Type = %q, want the declared type kept on an empty body", got)
 	}
+}
+
+// --- A19: the entity writers' host half ------------------------------------
+
+// TestLuaHost_entityWriters pins what reaches the store for each writer: the
+// family resolved through THIS runtime's roster, the scope encoded once by the
+// host, the family's own id field and type, a shallow merge on update, and the
+// store's refusals mapped to the words the guide lists.
+func TestLuaHost_entityWriters(t *testing.T) {
+	newHost := func(store *fakeEntityStore) *luaHost {
+		p := respondTestPlane()
+		p.SetEntities(store)
+		return &luaHost{
+			p: p,
+			rt: &runtime{resources: map[string]*resources.Resource{"/msgs": {
+				ID: 5, RouteFamily: "/msgs", IDField: "id", ScopeParams: []string{"roomId"},
+			}}},
+			ws: &workspaces.Workspace{Slug: "alex"}, outer: []string{"42"},
+		}
+	}
+	wantScope := resources.EncodeScope([]string{"42"})
+
+	t.Run("create goes through Create with the family's id field and the request's scope", func(t *testing.T) {
+		var seenScope resources.ScopeKey
+		var seenIDField string
+		store := &fakeEntityStore{createFn: func(_ context.Context, _ int64, _, scope resources.ScopeKey, idField, _ string, data map[string]any) (resources.Entity, error) {
+			seenScope, seenIDField = scope, idField
+			return entityRow(1, "1", `{"id":1,"text":"`+data["text"].(string)+`"}`), nil
+		}}
+		row, err := newHost(store).EntityCreate(t.Context(), "/msgs", nil, map[string]any{"text": "hi"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if seenScope != wantScope || seenIDField != "id" {
+			t.Errorf("Create got scope=%q idField=%q, want %q and id", seenScope, seenIDField, wantScope)
+		}
+		if row["text"] != "hi" || row["id"] != float64(1) {
+			t.Errorf("row = %v", row)
+		}
+	})
+
+	t.Run("update is Get, a shallow merge, then Set by the same key", func(t *testing.T) {
+		var setKey string
+		store := &fakeEntityStore{
+			getFn: func(context.Context, int64, resources.ScopeKey, resources.ScopeKey, string) (resources.Entity, bool, error) {
+				return entityRow(7, "7", `{"id":7,"a":1,"keep":"yes"}`), true, nil
+			},
+			setFn: func(_ context.Context, _ int64, _, _ resources.ScopeKey, key, _, _ string, data map[string]any) (resources.Entity, bool, error) {
+				setKey = key
+				b, _ := json.Marshal(data)
+				return entityRow(7, key, string(b)), false, nil
+			},
+		}
+		row, err := newHost(store).EntityUpdate(t.Context(), "/msgs", []string{"42"}, "7", map[string]any{"a": 2, "b": true})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if setKey != "7" {
+			t.Errorf("Set key = %q, want 7", setKey)
+		}
+		if row["a"] != float64(2) || row["b"] != true || row["keep"] != "yes" || row["id"] != float64(7) {
+			t.Errorf("merged row = %v; patch keys win, the rest stays", row)
+		}
+	})
+
+	t.Run("update of a missing row is not_found and writes nothing", func(t *testing.T) {
+		store := &fakeEntityStore{}
+		_, err := newHost(store).EntityUpdate(t.Context(), "/msgs", nil, "9", map[string]any{"a": 1})
+		if err == nil || err.Error() != "not_found" {
+			t.Fatalf("err = %v, want not_found", err)
+		}
+		if store.setCalls != 0 {
+			t.Errorf("Set was called %d times on a missing row", store.setCalls)
+		}
+	})
+
+	t.Run("delete answers the store's boolean", func(t *testing.T) {
+		store := &fakeEntityStore{deleteFn: func(context.Context, int64, resources.ScopeKey, resources.ScopeKey, string) (bool, error) {
+			return true, nil
+		}}
+		gone, err := newHost(store).EntityDelete(t.Context(), "/msgs", nil, "7")
+		if err != nil || !gone {
+			t.Fatalf("gone=%v err=%v", gone, err)
+		}
+	})
+
+	t.Run("the store's refusals arrive by name", func(t *testing.T) {
+		store := &fakeEntityStore{createFn: func(context.Context, int64, resources.ScopeKey, resources.ScopeKey, string, string, map[string]any) (resources.Entity, error) {
+			return resources.Entity{}, resources.ErrEntityLimit
+		}}
+		_, err := newHost(store).EntityCreate(t.Context(), "/msgs", nil, map[string]any{})
+		if err == nil || err.Error() != "entity_limit" {
+			t.Fatalf("err = %v, want entity_limit", err)
+		}
+		if _, err := newHost(&fakeEntityStore{}).EntityCreate(t.Context(), "/nope", nil, map[string]any{}); err == nil || err.Error() != "unknown_family" {
+			t.Fatalf("err = %v, want unknown_family", err)
+		}
+		if _, err := newHost(&fakeEntityStore{}).EntityCreate(t.Context(), "/msgs", []string{"1", "2"}, map[string]any{}); err == nil || err.Error() != "bad_scope" {
+			t.Fatalf("err = %v, want bad_scope", err)
+		}
+	})
 }

@@ -76,14 +76,17 @@ func TestAssembleResponseIsTheOnlySeam(t *testing.T) {
 	// synthetic variant so that the assembly it does not need could skip
 	// itself. What this guard still refuses is a THIRD site: any new body
 	// producer that is a response must go through assembleResponse.
-	wantBodySites := map[string]bool{"assembleResponse": true, "newTickGenerator": true}
+	// Generate is A19's mock.generate: a function asks for a BODY and not a
+	// response, so it is a gen.Body site of its own and not a fourth
+	// assembleResponse caller — the method's own comment says why.
+	wantBodySites := map[string]bool{"assembleResponse": true, "newTickGenerator": true, "Generate": true}
 	if len(bodySites) != len(wantBodySites) {
 		t.Fatalf("gen.Body call sites in production code: got %d (%v), want exactly %v", len(bodySites), bodySites, setKeys(wantBodySites))
 	}
 	for _, site := range bodySites {
 		if !wantBodySites[site] {
-			t.Errorf("gen.Body is called inside %s, which is neither assembleResponse (a response's one seam) "+
-				"nor newTickGenerator (a stream tick's, P6b D4) — a response body must be produced in exactly one place", site)
+			t.Errorf("gen.Body is called inside %s, which is none of assembleResponse (a response's one seam), "+
+				"newTickGenerator (a stream tick's, P6b D4) and Generate (a Lua function's body, A19) — a response body must be produced in exactly one place", site)
 		}
 	}
 }

@@ -2759,3 +2759,39 @@ decisions the code cannot show are in `docs/agent/functions.md`. Two lessons
 paid for: a gate reads the DOCUMENT against the code and misses what neither
 says (nobody wrote "the converter recurses"), and a recorder is not a server
 — a test of anything that reaches the wire runs `httptest.NewServer`.
+
+## `A19` — `mock.generate` and the entity writers (2026-09-05)
+
+**What the owner asked for.** After the A18 review he asked what a function
+could reach («какие у агента есть возможности? … api для доступа например к
+базе?») and, given a ranked assessment — a body generated from the spec's
+own schema first, entity writes second, KV state and outgoing HTTP refused —
+took the first two in his own words («давай сделаем 1 и 2»). Two design
+questions settled the shape: `generate` takes a `#/` pointer into the bound
+spec OR an inline table, and the writers hang off `mock.entities` as a
+callable table so the A18 spelling keeps reading and `mock` gains one key,
+not three.
+
+**What was built.** `luafn`: `Host` grows `Generate`, `EntityCreate`,
+`EntityUpdate`, `EntityDelete`; `mock.entities` becomes a table with
+`__call`; argument refusals by name (`bad_schema`, `bad_data`, `bad_key`);
+a numeric key is its decimal text. `mockplane`: `luaHost` carries a
+`gen.Request` seed tuple and the runtime keeps its `resolver`; `Generate` is
+the tree's third named `gen.Body` site and chases/checks `$ref`s itself,
+refusing an unresolvable one by pointer; the writers go through the same
+store and caps as the plane's POST/DELETE, update is Get → shallow merge →
+`Repo.Set`, and `EntityStore` gained `Set`. Nothing on the contract, the
+tools, the schema or the routes; the guide's §2 and its skills copy carry
+the four helpers; five `CARVE-OUTS.md` entries. Tests: the Lua argument
+contract through a recording host, the host half through the store fake,
+`$ref`/inline/unresolved end to end through a real generator, a create
+through a function endpoint under the URL's own scope, the seam test's
+third name, and the two key pins.
+
+**The one thing found by building.** `gen.Body` takes `PatchedSchema` as the
+root verbatim — a root `{"$ref": …}` is chased by `buildCustomInline` once
+at build for a stored schema, and the first end-to-end test returned a
+STRING for `mock.generate("#/components/schemas/Thing")`. The host now
+resolves the root and checks nested refs per call, and unlike the stored
+path (which must keep serving and empties a dead node with a warning) it
+refuses by pointer: a function asked a question and gets the answer.

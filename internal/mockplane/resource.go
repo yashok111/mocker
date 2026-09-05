@@ -68,6 +68,13 @@ type EntityStore interface {
 	Get(ctx context.Context, resourceID int64, base, scope resources.ScopeKey, entityKey string) (resources.Entity, bool, error)
 	Create(ctx context.Context, resourceID int64, base, scope resources.ScopeKey, idField, idType string, data map[string]any) (resources.Entity, error)
 	Delete(ctx context.Context, resourceID int64, base, scope resources.ScopeKey, entityKey string) (bool, error)
+	// Set is *resources.Repo's fifth method, admitted for A19: a Lua
+	// function's `mock.entities.update` is Get → shallow merge → Set, the
+	// same replace-by-key write the admin entity route performs. The mock
+	// plane's own HTTP verbs still do not call it (a mock has no PUT on an
+	// entity; CARVE-OUTS), so this seam has exactly one caller here, the
+	// Lua host.
+	Set(ctx context.Context, resourceID int64, base, scope resources.ScopeKey, entityKey, idField, idType string, data map[string]any) (resources.Entity, bool, error)
 }
 
 // The real store: *resources.Repo has to satisfy BOTH seams above, since
