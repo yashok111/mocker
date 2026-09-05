@@ -10,6 +10,7 @@
 | [`../skills/mocker/references/http.md`](../skills/mocker/references/http.md) | the same over curl: login and CSRF, spec import, raw asset upload, the `/__mocker/state` calls a test suite makes, MCP client config. `get_guide {topic: "http"}` | English |
 | [`../README.md`](../README.md) | running it: docker, HTTPS, environment variables, tests | English |
 | [`../DESIGN.md`](../DESIGN.md), [`../CLAUDE.md`](../CLAUDE.md), [`../HISTORY.md`](../HISTORY.md), [`../CARVE-OUTS.md`](../CARVE-OUTS.md) | changing mocker itself: the intent, the state as built, how each slice arrived, what is deliberately absent | English |
+| [`agent/`](agent/) | the per-subsystem context an agent reads on demand — the paragraphs cut out of `CLAUDE.md` on 2026-09-05 (resources, streaming, checkpoints, MCP, ops, …); `CLAUDE.md` holds the index saying which file to open for which task | English |
 
 ## Installing the skill into another project
 
