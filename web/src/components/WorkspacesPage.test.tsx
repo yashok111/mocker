@@ -297,4 +297,33 @@ describe("WorkspacesPage", () => {
     expect(await screen.findByTestId("workspaces-error")).toBeInTheDocument();
     expect(screen.queryByTestId("workspaces-empty")).toBeNull();
   });
+
+  // A21 (G3): slug and spec on the create card; the created line opens the
+  // workspace; the specs screen's ?specId= preselects.
+  it("creates with the typed slug and the chosen spec, omitting both when blank, and links to the result", async () => {
+    const fetchMock = route({
+      "GET /api/workspaces": () => json(200, []),
+      "GET /api/specs": () =>
+        json(200, [specViewFixture({ id: 4, name: "Petstore", version: "2" })]),
+      "POST /api/workspaces": () => json(201, workspaceFixture({ id: 12, slug: "shop" })),
+    });
+    renderInRouter(<WorkspacesPage initialSpecId={4} />);
+    await screen.findByTestId("workspace-create-form");
+    await waitFor(() => expect(screen.getByTestId("workspace-create-spec")).toHaveValue("4"));
+    await userEvent.type(screen.getByTestId("workspace-create-name"), "Shop");
+    await userEvent.type(screen.getByTestId("workspace-create-slug"), "shop");
+    await userEvent.click(screen.getByTestId("workspace-create-submit"));
+    await waitFor(() => {
+      const post = fetchMock.mock.calls.find(([, init]) => init?.method === "POST");
+      expect(JSON.parse(String(post?.[1]?.body))).toEqual({
+        name: "Shop",
+        slug: "shop",
+        specId: 4,
+      });
+    });
+    expect(await screen.findByTestId("workspace-created-open")).toHaveAttribute(
+      "href",
+      "/workspaces/12",
+    );
+  });
 });

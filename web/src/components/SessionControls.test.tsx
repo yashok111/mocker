@@ -259,4 +259,52 @@ describe("SessionControls", () => {
       expect(deletes).toHaveLength(0);
     });
   });
+
+  // A21 (G8): any status, N requests, one ✕ per directive.
+  it("sends n for a count above one, any forced status, and clears one directive by target+action", async () => {
+    const fetchMock = route({
+      [LIST]: () =>
+        json(
+          200,
+          sessionListViewFixture({
+            directives: [
+              directiveFixture({
+                target: { method: "GET", path: "/pets" },
+                action: "delay",
+                ms: 300,
+              }),
+            ],
+          }),
+        ),
+      [SET]: () => json(200, sessionListViewFixture({ directives: [] })),
+      [CLEAR]: () => json(200, { cleared: 1 }),
+    });
+    renderInRouter(<SessionControls id={WS} target={null} />);
+    await screen.findByTestId("session-directives-list");
+
+    const count = screen.getByTestId("session-fail-count");
+    await userEvent.clear(count);
+    await userEvent.type(count, "3");
+    await userEvent.click(screen.getByTestId("session-fail-next"));
+    const force = screen.getByTestId("session-force-status");
+    await userEvent.clear(force);
+    await userEvent.type(force, "418");
+    await userEvent.click(screen.getByTestId("session-force-503"));
+    await userEvent.click(screen.getByTestId("session-directive-clear"));
+
+    await waitFor(() => {
+      const posts = fetchMock.mock.calls
+        .filter(([, init]) => init?.method === "POST")
+        .map(([, init]) => JSON.parse(String(init?.body)) as unknown);
+      expect(posts).toEqual([
+        { target: "*", action: "fail", status: 500, n: 3 },
+        { target: "*", action: "status", status: 418 },
+      ]);
+      const del = fetchMock.mock.calls.find(([, init]) => init?.method === "DELETE");
+      expect(JSON.parse(String(del?.[1]?.body))).toEqual({
+        target: { method: "GET", path: "/pets" },
+        action: "delay",
+      });
+    });
+  });
 });

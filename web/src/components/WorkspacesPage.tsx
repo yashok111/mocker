@@ -16,6 +16,7 @@ import {
   UnstyledButton,
 } from "@mantine/core";
 import { modals } from "@mantine/modals";
+import { notifications } from "@mantine/notifications";
 import { IconAlertTriangle, IconFileImport, IconPlus, IconTrash } from "@tabler/icons-react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
@@ -43,10 +44,15 @@ import { userName } from "@/validation/name";
 // MOCKER_DEFAULT_SPEC handling here). It lists the caller's own workspaces,
 // offers to create one, and lets one be deleted.
 
-const createForm = type({ name: userName });
+// A21 (G3): slug and spec joined the create card — CreateWorkspaceRequest
+// took both all along, the import modal and the fork form offered both,
+// and creation was the odd one out. The slug is the workspace's public
+// address and cannot be changed afterwards, so a bad derived one was
+// permanent; a workspace created without a spec had a hidden second step.
+const createForm = type({ name: userName, slug: "string", specId: "string" });
 type CreateForm = typeof createForm.infer;
 
-export function WorkspacesPage() {
+export function WorkspacesPage({ initialSpecId }: { initialSpecId?: number } = {}) {
   const workspaces = useListWorkspaces();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -125,6 +131,18 @@ export function WorkspacesPage() {
           onImported={(view) => {
             modals.close(modalId);
             void queryClient.invalidateQueries({ queryKey: getListWorkspacesQueryKey() });
+            // A21 (G10): the two facts that tell a full restore from an
+            // empty shell used to be discarded on navigate.
+            notifications.show({
+              color: "green",
+              message: `Импортирован воркспейс «${view.workspace.slug}»: ${
+                view.specCreated
+                  ? "спека создана из файла"
+                  : view.specId === null
+                    ? "спека не привязана"
+                    : `привязана спека #${view.specId}`
+              }, строк ресурсов восстановлено в семействах: ${view.entitiesRestored}`,
+            });
             void navigate({ to: "/workspaces/$id", params: { id: view.workspace.id } });
           }}
         />
@@ -151,7 +169,11 @@ export function WorkspacesPage() {
           instant the list it just populated stops being empty — losing that
           instance would also lose the "created: <slug>" message the moment the
           create it just reported succeeds. */}
-      <CreateWorkspaceForm autoFocusName={isEmpty} />
+      <CreateWorkspaceForm
+        autoFocusName={isEmpty}
+        specs={specs.data?.status === 200 ? specs.data.data : []}
+        initialSpecId={initialSpecId}
+      />
       {isEmpty ? (
         specsEmpty ? (
           <Text size="xs" c="dimmed" data-testid="workspaces-empty-hint">
@@ -174,9 +196,18 @@ export function WorkspacesPage() {
   );
 }
 
-function CreateWorkspaceForm({ autoFocusName }: { autoFocusName: boolean }) {
-  const [createdSlug, setCreatedSlug] = useState<string | null>(null);
+function CreateWorkspaceForm({
+  autoFocusName,
+  specs,
+  initialSpecId,
+}: {
+  autoFocusName: boolean;
+  specs: SpecView[];
+  initialSpecId?: number;
+}) {
+  const [created, setCreated] = useState<{ id: number; slug: string } | null>(null);
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const {
     register,
     handleSubmit,
@@ -184,7 +215,11 @@ function CreateWorkspaceForm({ autoFocusName }: { autoFocusName: boolean }) {
     formState: { errors },
   } = useForm<CreateForm>({
     resolver: arktypeResolver(createForm),
-    defaultValues: { name: "" },
+    defaultValues: {
+      name: "",
+      slug: "",
+      specId: initialSpecId === undefined ? "" : String(initialSpecId),
+    },
   });
 
   const createWorkspace = useCreateWorkspace({
@@ -196,8 +231,8 @@ function CreateWorkspaceForm({ autoFocusName }: { autoFocusName: boolean }) {
         // The server derives the slug (and resolves a collision with a
         // deterministic suffix, alex / alex-2) — showing it is the whole point
         // per DESIGN §14 screen 2, never left silent.
-        setCreatedSlug(res.data.slug);
-        reset({ name: "" });
+        setCreated({ id: res.data.id, slug: res.data.slug });
+        reset({ name: "", slug: "", specId: "" });
         void queryClient.invalidateQueries({ queryKey: getListWorkspacesQueryKey() });
       },
     },
@@ -210,7 +245,15 @@ function CreateWorkspaceForm({ autoFocusName }: { autoFocusName: boolean }) {
       p="md"
       data-testid="workspace-create-form"
       onSubmit={handleSubmit((values) =>
-        createWorkspace.mutate({ data: { name: values.name.trim() } }),
+        createWorkspace.mutate({
+          data: {
+            name: values.name.trim(),
+            // Omitted, not sent empty: the server derives the slug from the
+            // name and a workspace without a spec is a real state.
+            slug: values.slug.trim() === "" ? undefined : values.slug.trim(),
+            specId: values.specId === "" ? undefined : Number(values.specId),
+          },
+        }),
       )}
     >
       <Stack gap="sm">
@@ -219,9 +262,19 @@ function CreateWorkspaceForm({ autoFocusName }: { autoFocusName: boolean }) {
             {describeApiFailure(createWorkspace.error)}
           </Alert>
         ) : null}
-        {createdSlug !== null ? (
+        {created !== null ? (
           <Text size="sm" data-testid="workspace-created-slug">
-            Создан воркспейс со slug&apos;ом «<strong>{createdSlug}</strong>»
+            Создан воркспейс со slug&apos;ом «<strong>{created.slug}</strong>» —{" "}
+            <Anchor
+              href={`/workspaces/${created.id}`}
+              data-testid="workspace-created-open"
+              onClick={(e) => {
+                e.preventDefault();
+                void navigate({ to: "/workspaces/$id", params: { id: created.id } });
+              }}
+            >
+              открыть
+            </Anchor>
           </Text>
         ) : null}
         <TextInput
@@ -236,6 +289,27 @@ function CreateWorkspaceForm({ autoFocusName }: { autoFocusName: boolean }) {
           error={errors.name?.message}
           {...register("name")}
         />
+        <Group grow align="flex-start">
+          <TextInput
+            label="Слаг (необязательно)"
+            placeholder="выведется из названия"
+            description="Адрес мока; после создания не меняется"
+            data-testid="workspace-create-slug"
+            {...register("slug")}
+          />
+          <NativeSelect
+            label="Спека (необязательно)"
+            data-testid="workspace-create-spec"
+            {...register("specId")}
+          >
+            <option value="">без спеки — только кастомные endpoint&apos;ы</option>
+            {specs.map((spec) => (
+              <option key={spec.id} value={String(spec.id)}>
+                {spec.name} (v{spec.version})
+              </option>
+            ))}
+          </NativeSelect>
+        </Group>
         <Button
           type="submit"
           w="fit-content"

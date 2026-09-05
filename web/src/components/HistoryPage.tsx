@@ -621,10 +621,23 @@ function CheckpointList({
   // uses for its own three shared per-row mutations.
   const [actionError, setActionError] = useState<{ label: string; message: string } | null>(null);
 
+  // A21 (G7): RollbackResponseView.dataRestored — P3d's explicit "the data
+  // half restored nothing" signal — was never read; the operator ticked
+  // «вернуть и данные», the call 200'd and the screen said nothing.
+  const [rollbackNote, setRollbackNote] = useState<string | null>(null);
   const rollback = useRollbackWorkspace({
     mutation: {
-      onSuccess: () => {
+      onSuccess: (res) => {
         setActionError(null);
+        if (res.status === 200) {
+          setRollbackNote(
+            `Откат выполнен, ревизия ${res.data.revision}: ${
+              res.data.dataRestored
+                ? "данные ресурсов восстановлены из точки"
+                : "данные ресурсов не трогались (точка их не содержала или галочка не стояла)"
+            }${res.data.scenarioActive ? "; активный сценарий по-прежнему маскирует часть слоя" : ""}`,
+          );
+        }
         void queryClient.invalidateQueries({ queryKey: getListCheckpointsQueryKey(id) });
         void queryClient.invalidateQueries({ queryKey: getGetWorkspaceQueryKey(id) });
       },
@@ -709,6 +722,11 @@ function CheckpointList({
           «{actionError.label}»: {actionError.message}
         </Alert>
       ) : null}
+      {rollbackNote !== null ? (
+        <Alert color="teal" data-testid="rollback-result">
+          {rollbackNote}
+        </Alert>
+      ) : null}
       <Card withBorder p={0} data-testid="checkpoint-list">
         <Stack gap={0}>
           {checkpoints.map((cp) => (
@@ -752,8 +770,9 @@ function CheckpointList({
                   </Text>
                 </Group>
                 <Text size="xs" c="dimmed">
-                  {formatTimestamp(cp.createdAt)}
+                  #{cp.id} · {formatTimestamp(cp.createdAt)}
                   {cp.createdBy !== null ? ` · пользователь #${cp.createdBy}` : ""}
+                  {cp.hasData ? " · с данными ресурсов" : ""}
                 </Text>
               </div>
               <Group gap="xs" wrap="nowrap">

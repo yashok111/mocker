@@ -21,6 +21,7 @@ import { modals } from "@mantine/modals";
 import { notifications } from "@mantine/notifications";
 import { IconAlertTriangle, IconRefresh, IconTrash, IconUpload } from "@tabler/icons-react";
 import { useQueryClient } from "@tanstack/react-query";
+import { useNavigate } from "@tanstack/react-router";
 import { useForm } from "react-hook-form";
 import { type } from "arktype";
 import dayjs from "dayjs";
@@ -140,6 +141,7 @@ function ImportSpecForm(): ReactElement {
   // the name field must stay editable per the phase brief.
   const [droppedDocument, setDroppedDocument] = useState<string | null>(null);
   const [imported, setImported] = useState<{
+    id: number;
     duplicate: boolean;
     report: ReportView | null;
   } | null>(null);
@@ -160,7 +162,7 @@ function ImportSpecForm(): ReactElement {
         if (res.status !== 200 && res.status !== 201) {
           return;
         }
-        setImported({ duplicate: res.status === 200, report: res.data.report });
+        setImported({ id: res.data.id, duplicate: res.status === 200, report: res.data.report });
         setDroppedDocument(null);
         reset({ name: "" });
         void queryClient.invalidateQueries({ queryKey: getListSpecsQueryKey() });
@@ -235,9 +237,14 @@ function ImportSpecForm(): ReactElement {
         ) : null}
         {imported !== null ? (
           <Alert color={imported.duplicate ? "blue" : "green"} data-testid="spec-import-result">
-            {imported.duplicate
-              ? "Такой документ уже был импортирован раньше — используется существующая спека, вторая не добавлена"
-              : "Спека импортирована"}
+            <Group justify="space-between" wrap="wrap">
+              <span>
+                {imported.duplicate
+                  ? "Такой документ уже был импортирован раньше — используется существующая спека, вторая не добавлена"
+                  : "Спека импортирована"}
+              </span>
+              <CreateWorkspaceWithSpec specId={imported.id} testId="spec-import-create-workspace" />
+            </Group>
           </Alert>
         ) : null}
         {imported?.report ? <ReportSummary report={imported.report} /> : null}
@@ -515,6 +522,7 @@ function SpecDetail({ id, onDeleted }: { id: number; onDeleted: () => void }): R
                   <Text size="xs" c="dimmed">
                     {view.version} · {view.format} · базовый путь {specStatus(view.basePath)}
                   </Text>
+                  <CreateWorkspaceWithSpec specId={view.id} testId="spec-detail-create-workspace" />
                 </div>
                 <Button
                   variant="default"
@@ -611,5 +619,23 @@ function SpecDetail({ id, onDeleted }: { id: number; onDeleted: () => void }): R
         })()
       )}
     </Card>
+  );
+}
+
+// CreateWorkspaceWithSpec is the next step after an import (A21, G3): the
+// workspaces list with this spec preselected in the create card. Before it
+// the trail died at «Спека импортирована» — no link, no hint that a
+// workspace has to be created and bound.
+function CreateWorkspaceWithSpec({ specId, testId }: { specId: number; testId: string }) {
+  const navigate = useNavigate();
+  return (
+    <Button
+      size="xs"
+      variant="light"
+      onClick={() => void navigate({ to: "/", search: { specId: String(specId) } })}
+      data-testid={testId}
+    >
+      Создать воркспейс с этой спекой
+    </Button>
   );
 }

@@ -10,6 +10,7 @@ import {
   Loader,
   NativeSelect,
   Stack,
+  Switch,
   Text,
   Textarea,
   TextInput,
@@ -235,6 +236,11 @@ const editForm = type({
   bodyText: bodyField,
   mediaType: "string",
   functionText: "string",
+  // A21 (G9): the two switches the operation editor always had — the row
+  // showed «маршрут выключен» as a badge with no way to flip it, so
+  // disabling a custom endpoint meant deleting it.
+  overrideOn: "boolean",
+  routeOff: "boolean",
 });
 type EditForm = typeof editForm.infer;
 
@@ -252,13 +258,18 @@ function activeVariant(
 // with EndpointView and none of the server-owned ones (id, canonicalPath,
 // createdAt, updatedAt) this form never renders.
 function defaultsFromEndpoint(
-  ep: Pick<EndpointView, "method" | "path" | "activeStatus" | "responses">,
+  ep: Pick<
+    EndpointView,
+    "method" | "path" | "activeStatus" | "responses" | "overrideOn" | "routeOff"
+  >,
 ): EditForm {
   const variant = activeVariant(ep);
   return {
     method: ep.method,
     path: ep.path,
     status: String(ep.activeStatus),
+    overrideOn: ep.overrideOn,
+    routeOff: ep.routeOff,
     // Only a "pinned" variant has a literal body to show back; "generated"
     // (the fixture default, and possible on a row this form never touched)
     // has none — pre-filling from it would fabricate JSON nobody wrote.
@@ -1006,8 +1017,8 @@ function EditEndpointForm({
         path: values.path.trim(),
         activeStatus: Number(status),
         responses,
-        overrideOn: base.overrideOn,
-        routeOff: base.routeOff,
+        overrideOn: values.overrideOn,
+        routeOff: values.routeOff,
         listSize: base.listSize,
         delayMs: base.delayMs,
         // P7a: a PUT is a full replacement and the form has no field for
@@ -1111,6 +1122,19 @@ function EditEndpointForm({
           label="Media type (необязательно)"
           data-testid="endpoint-edit-media-type"
           {...register("mediaType")}
+        />
+      </Group>
+      <Group gap="md">
+        <Switch
+          label="Перекрывает операцию спеки с таким же путём"
+          data-testid="endpoint-edit-override-on"
+          {...register("overrideOn")}
+        />
+        <Switch
+          label="Маршрут выключен — мок перестаёт на него отвечать"
+          color="red"
+          data-testid="endpoint-edit-route-off"
+          {...register("routeOff")}
         />
       </Group>
       {producerNote(activeVariant(base)) !== null ? (

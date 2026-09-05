@@ -774,4 +774,25 @@ describe("CustomEndpointsPage", () => {
     expect(sent.responses["200"]).toMatchObject({ mode: "pinned", body: { ok: true } });
     expect(sent.responses["200"]).not.toHaveProperty("bodyRef");
   });
+
+  // A21 (G9): the two switches the badge had no control for.
+  it("turns a custom route off from the edit form", async () => {
+    const ep = endpointViewFixture({ id: 5, routeOff: false, overrideOn: true });
+    const fetchMock = route({
+      [LIST]: () => json(200, endpointListViewFixture({ endpoints: [ep] })),
+      [`PUT /api/workspaces/${WS}/endpoints/5`]: () => json(200, { ...ep, routeOff: true }),
+    });
+    renderInRouter(<CustomEndpointsPage id={WS} />);
+    await userEvent.click(await screen.findByTestId("endpoint-edit-toggle"));
+    const form = await screen.findByTestId("endpoint-edit-form");
+    await userEvent.click(within(form).getByTestId("endpoint-edit-route-off"));
+    await userEvent.click(within(form).getByTestId("endpoint-edit-submit"));
+    await waitFor(() => {
+      const put = fetchMock.mock.calls.find(([, init]) => init?.method === "PUT");
+      expect(JSON.parse(String(put?.[1]?.body))).toMatchObject({
+        routeOff: true,
+        overrideOn: true,
+      });
+    });
+  });
 });

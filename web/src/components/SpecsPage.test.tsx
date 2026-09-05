@@ -130,6 +130,8 @@ describe("SpecsPage", () => {
     await userEvent.click(screen.getByTestId("spec-import-submit"));
 
     expect(await screen.findByTestId("spec-import-result")).toHaveTextContent("импортирована");
+    // A21 (G3): the next step is on the result itself.
+    expect(screen.getByTestId("spec-import-create-workspace")).toBeInTheDocument();
     expect(await screen.findByTestId("spec-report")).toHaveTextContent("операций: 3");
 
     const posts = fetchMock.mock.calls.filter(([, init]) => init?.method === "POST");

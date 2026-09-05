@@ -17,6 +17,7 @@ import {
 import { IconAlertTriangle, IconDeviceFloppy } from "@tabler/icons-react";
 import { Controller, useForm } from "react-hook-form";
 import { type } from "arktype";
+import { modals } from "@mantine/modals";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   getGetWorkspaceQueryKey,
@@ -206,7 +207,27 @@ export function SettingsPanel({ workspace }: { workspace: WorkspaceView }): Reac
     if (!Number.isInteger(specId)) {
       return;
     }
-    patchWorkspace.mutate({ id: workspace.id, data: { specId, editVersion } });
+    // A21 (G12): a FIRST bind needs no ceremony; a RE-bind swaps the
+    // ground every override and confirmed resource stands on, so it asks —
+    // and the success line below points at «Проверить спеку», which is
+    // where the consequences show.
+    if (workspace.specId === null || workspace.specId === specId) {
+      patchWorkspace.mutate({ id: workspace.id, data: { specId, editVersion } });
+      return;
+    }
+    modals.openConfirmModal({
+      title: "Сменить спеку",
+      children: (
+        <Text size="sm">
+          Правки операций, которых в новой спеке нет, и подтверждённые ресурсы без семейства
+          перестанут действовать, но не удалятся: после смены нажмите «Проверить спеку» на этой же
+          странице — там видно, что осталось без основания, и как это починить.
+        </Text>
+      ),
+      labels: { confirm: "Сменить", cancel: "Отмена" },
+      confirmProps: { "data-testid": "settings-spec-rebind-confirm" },
+      onConfirm: () => patchWorkspace.mutate({ id: workspace.id, data: { specId, editVersion } }),
+    });
   }
 
   // handleConflictReload is D10's per-screen affordance: adopt what the 409
@@ -459,7 +480,7 @@ export function SettingsPanel({ workspace }: { workspace: WorkspaceView }): Reac
         </Group>
         {patchWorkspace.isSuccess && patchWorkspace.variables?.data.specId !== undefined ? (
           <Text size="sm" c="teal" data-testid="settings-spec-attached">
-            Спека привязана
+            Спека привязана — проверьте соответствие кнопкой «Проверить спеку» ниже
           </Text>
         ) : null}
         {/* Отвязать нельзя: PatchWorkspaceRequest.specId decodes into a *int64,

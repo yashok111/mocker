@@ -43,7 +43,7 @@ export function AuthPresetPanel({ id }: { id: number }): ReactElement {
 
   return (
     <div data-testid="auth-preset-panel">
-      <Title order={2}>Auth preset</Title>
+      <Title order={2}>Пресет авторизации</Title>
       {proposal.isPending ? (
         <Group gap="xs">
           <Loader size="sm" />
@@ -302,7 +302,7 @@ function AuthPresetBindings({
               <Table.Th>Метод и путь</Table.Th>
               <Table.Th>Статус</Table.Th>
               <Table.Th>Путь в теле</Table.Th>
-              <Table.Th>Рецепт</Table.Th>
+              <Table.Th>Что подставляем</Table.Th>
               <Table.Th>Почему</Table.Th>
             </Table.Tr>
           </Table.Thead>

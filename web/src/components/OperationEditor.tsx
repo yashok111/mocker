@@ -758,7 +758,7 @@ function PreviewPanel({ result }: { result: PreviewResultView }): ReactElement {
 
       {result.routeOff ? (
         <Text size="sm" c="dimmed" data-testid="operation-preview-route-off">
-          Операция выключена (`routeOff`) — мок ответил бы отказом маршрута, а не телом.
+          Операция выключена — мок ответил бы отказом маршрута, а не телом.
         </Text>
       ) : result.refused !== null ? (
         <Alert
@@ -788,10 +788,10 @@ function PreviewPanel({ result }: { result: PreviewResultView }): ReactElement {
 
       <Group gap="md">
         <Text size="xs" c="dimmed">
-          schemaPatch: {result.schemaPatchApplied ? "применён" : "нет"}
+          правки схемы: {result.schemaPatchApplied ? "применены" : "нет"}
         </Text>
         <Text size="xs" c="dimmed">
-          рецептов: {result.recipesBound}
+          автоматических значений: {result.recipesBound}
         </Text>
         <Text size="xs" c="dimmed">
           задержка: {result.delayMs} мс

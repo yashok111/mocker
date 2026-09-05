@@ -286,4 +286,30 @@ describe("SettingsPanel", () => {
     expect(screen.getByText(/Отвязать спеку через этот экран пока нельзя/)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /отвяз/i })).not.toBeInTheDocument();
   });
+
+  // A21 (G12): a RE-bind asks; the first bind (the test above) does not.
+  it("asks before replacing an already bound spec, and patches on confirm", async () => {
+    const user = userEvent.setup();
+    const workspace = { ...distinctiveWorkspace(), specId: 1 };
+    let body: unknown;
+    route({
+      "GET /api/specs": () =>
+        json(200, [
+          specViewFixture({ id: 1, name: "Old", version: "1" }),
+          specViewFixture({ id: 9, name: "Petstore", version: "2.0.0" }),
+        ]),
+      "PATCH /api/workspaces/1": () => json(200, { ...workspace, specId: 9 }),
+    });
+    captureBody((b) => {
+      body = b;
+    });
+    renderWithProviders(<SettingsPanel workspace={workspace} />);
+    const select = await screen.findByRole("combobox", { name: "Привязать спеку" });
+    await user.click(select);
+    await user.click(await screen.findByText("Petstore (v2.0.0)"));
+    expect(body).toBeUndefined();
+    await user.click(await screen.findByTestId("settings-spec-rebind-confirm"));
+    await screen.findByTestId("settings-spec-attached");
+    expect(body).toEqual({ specId: 9, editVersion: workspace.editVersion });
+  });
 });

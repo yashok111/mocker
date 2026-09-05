@@ -768,4 +768,26 @@ describe("HistoryPage", () => {
       expect(screen.getByTestId("reset-data-slug")).toHaveValue("");
     });
   });
+
+  // A21 (G7): the id and the data flag on the row, the rollback's own result.
+  it("shows the checkpoint id and «с данными ресурсов» on the row, and reports what a rollback restored", async () => {
+    route({
+      [WORKSPACE]: () => json(200, workspaceFixture({ id: WS, name: "Alex", slug: "alex" })),
+      [LIST]: () =>
+        json(200, { checkpoints: [checkpointFixture({ id: 1, label: "точка A", hasData: true })] }),
+      [ROLLBACK]: () => json(200, { revision: 9, scenarioActive: false, dataRestored: false }),
+    });
+    renderInRouter(<HistoryPage id={WS} />);
+    const row = await screen.findByTestId("checkpoint-row");
+    expect(row).toHaveTextContent("#1 ·");
+    expect(row).toHaveTextContent("с данными ресурсов");
+
+    await userEvent.click(within(row).getByTestId("checkpoint-rollback"));
+    const dialog = await screen.findByRole("dialog");
+    await userEvent.click(within(dialog).getByTestId("rollback-restore-data"));
+    await userEvent.type(within(dialog).getByTestId("rollback-confirm-slug"), "alex");
+    await userEvent.click(within(dialog).getByTestId("checkpoint-rollback-confirm"));
+    expect(await screen.findByTestId("rollback-result")).toHaveTextContent("ревизия 9");
+    expect(screen.getByTestId("rollback-result")).toHaveTextContent("данные ресурсов не трогались");
+  });
 });

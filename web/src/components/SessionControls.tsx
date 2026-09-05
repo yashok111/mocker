@@ -50,6 +50,11 @@ export function SessionControls({
   const directives = useListSessionDirectives(id);
   const queryClient = useQueryClient();
   const [failStatus, setFailStatus] = useState<number | "">(500);
+  // A21 (G8): the wire always had these — Directive.n ("fail the next N"),
+  // any status for `status`, and a per-{target, action} clear — and the
+  // strip offered fail-once, 503 and clear-all.
+  const [failCount, setFailCount] = useState<number | "">(1);
+  const [forceStatus, setForceStatus] = useState<number | "">(503);
   const [delayMs, setDelayMs] = useState<number | "">(300);
 
   const wireTarget: DirectiveTarget = target === null ? "*" : target;
@@ -68,13 +73,24 @@ export function SessionControls({
 
   function handleFailNext(): void {
     const status = failStatus === "" ? 500 : failStatus;
-    const directive: Directive = { target: wireTarget, action: "fail", status, once: true };
+    const n = failCount === "" ? 1 : failCount;
+    // once is the contract's own spelling of n = 1; a count above one goes
+    // as n, never as both.
+    const directive: Directive =
+      n <= 1
+        ? { target: wireTarget, action: "fail", status, once: true }
+        : { target: wireTarget, action: "fail", status, n };
     setDirective.mutate({ id, data: directive });
   }
 
-  function handleForce503(): void {
-    const directive: Directive = { target: wireTarget, action: "status", status: 503 };
+  function handleForceStatus(): void {
+    const status = forceStatus === "" ? 503 : forceStatus;
+    const directive: Directive = { target: wireTarget, action: "status", status };
     setDirective.mutate({ id, data: directive });
+  }
+
+  function handleClearOne(d: Directive): void {
+    clearDirectives.mutate({ id, data: { target: d.target, action: d.action } });
   }
 
   function handleDelay(): void {
@@ -108,7 +124,7 @@ export function SessionControls({
       <Stack gap="sm">
         <Group justify="space-between">
           <Text fw={600} size="sm">
-            Session — цель: {targetLabel}
+            Сессия — цель: {targetLabel}
           </Text>
         </Group>
         <Text size="xs" c="dimmed">
@@ -129,13 +145,22 @@ export function SessionControls({
 
         <Group align="flex-end" wrap="wrap">
           <NumberInput
-            label="Статус для «сломать следующий запрос»"
+            label="Сломать: статус"
             min={100}
             max={599}
-            w={220}
+            w={140}
             data-testid="session-fail-status"
             value={failStatus}
             onChange={(v) => setFailStatus(typeof v === "number" ? v : v === "" ? "" : Number(v))}
+          />
+          <NumberInput
+            label="сколько запросов"
+            min={1}
+            max={10000}
+            w={140}
+            data-testid="session-fail-count"
+            value={failCount}
+            onChange={(v) => setFailCount(typeof v === "number" ? v : v === "" ? "" : Number(v))}
           />
           <Button
             variant="default"
@@ -144,16 +169,25 @@ export function SessionControls({
             onClick={handleFailNext}
             data-testid="session-fail-next"
           >
-            Сломать следующий запрос
+            Сломать следующие запросы
           </Button>
+          <NumberInput
+            label="Отвечать статусом до очистки"
+            min={100}
+            max={599}
+            w={140}
+            data-testid="session-force-status"
+            value={forceStatus}
+            onChange={(v) => setForceStatus(typeof v === "number" ? v : v === "" ? "" : Number(v))}
+          />
           <Button
             variant="default"
             leftSection={<IconBan size={16} />}
             loading={setDirective.isPending}
-            onClick={handleForce503}
+            onClick={handleForceStatus}
             data-testid="session-force-503"
           >
-            Отвечать 503
+            Отвечать статусом
           </Button>
           <Button
             variant="default"
@@ -240,7 +274,18 @@ export function SessionControls({
                       : d.action === "delay"
                         ? `задержка ${d.ms} мс`
                         : `пауза до очистки`}
+                  {d.setAt ? ` · с ${formatSetAt(d.setAt)}` : ""}
                 </Text>
+                <Button
+                  size="compact-xs"
+                  variant="subtle"
+                  color="red"
+                  onClick={() => handleClearOne(d)}
+                  loading={clearDirectives.isPending}
+                  data-testid="session-directive-clear"
+                >
+                  снять
+                </Button>
               </Group>
             ))}
           </Stack>
@@ -252,4 +297,14 @@ export function SessionControls({
 
 function directiveTargetLabel(target: DirectiveTarget): string {
   return target === "*" ? "*" : `${target.method} ${target.path}`;
+}
+
+// formatSetAt shows when a directive was set, as a clock time: a stale
+// «пауза до очистки» from an hour ago used to be indistinguishable from one
+// set a second ago (A21, G8).
+function formatSetAt(iso: string): string {
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime())
+    ? iso
+    : d.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
 }
