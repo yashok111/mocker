@@ -14,6 +14,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -754,5 +755,87 @@ func TestServeFunction_concurrentRequestsShareNoVM(t *testing.T) {
 	wg.Wait()
 	if got := len(sink.all()); got != 8 {
 		t.Errorf("traffic events = %d, want 8", got)
+	}
+}
+
+// --- review findings 2, 13, 14: the writer's last line ----------------------
+
+// TestServeFunction_untypedStringBodyIsNotSniffedIntoHTML is review finding 2
+// and runs a REAL http.Server on purpose: httptest.ResponseRecorder does not
+// sniff after an explicit WriteHeader, which is how the clause-23 test above
+// stayed green while the wire said `text/html; charset=utf-8` for an untyped
+// `<script>` string. The type is defaulted to text/plain and the response
+// carries nosniff, so neither the server nor the browser guesses.
+func TestServeFunction_untypedStringBodyIsNotSniffedIntoHTML(t *testing.T) {
+	p, _, _ := functionPlane(t, `return 200, "<html><script>alert(1)</script></html>"`, 4<<20)
+	srv := httptest.NewServer(p)
+	defer srv.Close()
+
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, srv.URL+"/order", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Host = "alex.mock.local"
+	res, err := srv.Client().Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200", res.StatusCode)
+	}
+	if got := res.Header.Get("Content-Type"); got != functionDefaultTextType {
+		t.Errorf("Content-Type on the wire = %q, want %q: an untyped string body must not be sniffed", got, functionDefaultTextType)
+	}
+	if got := res.Header.Get("X-Content-Type-Options"); got != "nosniff" {
+		t.Errorf("X-Content-Type-Options = %q, want nosniff", got)
+	}
+}
+
+// TestServeFunction_aTableBodyStaysJSON guards the default from over-reach:
+// only an UNTYPED STRING gets text/plain; a table return is typed by luafn.
+func TestServeFunction_aTableBodyStaysJSON(t *testing.T) {
+	p, sink, _ := functionPlane(t, `return 200, {ok = true}`, 4<<20)
+	rec, _ := serveOrder(t, p, sink)
+	if got := rec.Header().Get("Content-Type"); got != "application/json" {
+		t.Errorf("Content-Type = %q, want application/json", got)
+	}
+}
+
+// TestServeFunction_refusesTooManyHeaders is review finding 13: the per-value
+// cap left the SET unbounded, and a Lua loop can return a table of thousands
+// of headers — the one output MOCKER_MAX_RESPONSE does not reach.
+func TestServeFunction_refusesTooManyHeaders(t *testing.T) {
+	src := `local h = {}; for i = 1, ` + strconv.Itoa(maxFunctionHeaders+1) + ` do h["X-H-" .. i] = "v" end; return 200, {ok = true}, h`
+	p, sink, _ := functionPlane(t, src, 4<<20)
+	rec, ev := serveOrder(t, p, sink)
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want 500", rec.Code)
+	}
+	if ev.Notes != noteFunctionFailed {
+		t.Errorf("Notes = %q, want %q", ev.Notes, noteFunctionFailed)
+	}
+
+	// Under the count cap but over the byte cap: sixteen values at the
+	// per-value limit are 128 KiB together.
+	src = `local h = {}; for i = 1, 16 do h["X-H-" .. i] = string.rep("v", ` + strconv.Itoa(maxFunctionHeaderValue) + `) end; return 200, {ok = true}, h`
+	p, sink, _ = functionPlane(t, src, 4<<20)
+	rec, _ = serveOrder(t, p, sink)
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want 500 for %d headers totalling over %d bytes", rec.Code, 16, maxFunctionHeaderBytes)
+	}
+}
+
+// TestServeFunction_emptyBodyKeepsItsDeclaredType is review finding 14: the
+// type was set after the empty-body return, so `204, nil, {Content-Type}` lost
+// the header the function declared.
+func TestServeFunction_emptyBodyKeepsItsDeclaredType(t *testing.T) {
+	p, sink, _ := functionPlane(t, `return 204, nil, {["Content-Type"] = "application/problem+json"}`, 4<<20)
+	rec, _ := serveOrder(t, p, sink)
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("status = %d, want 204", rec.Code)
+	}
+	if got := rec.Header().Get("Content-Type"); got != "application/problem+json" {
+		t.Errorf("Content-Type = %q, want the declared type kept on an empty body", got)
 	}
 }

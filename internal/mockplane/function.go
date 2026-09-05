@@ -58,6 +58,32 @@ import (
 // wants to move more than that has a body to put it in.
 const maxFunctionHeaderValue = 8 << 10
 
+// maxFunctionHeaders and maxFunctionHeaderBytes bound the header SET where
+// maxFunctionHeaderValue bounds one value: a Lua loop can return a table of a
+// hundred thousand 8 KiB headers, and with no cap on the set the response
+// header block is the one output MOCKER_MAX_RESPONSE does not reach. Sixty-four
+// fields and 64 KiB of names plus values — the same figure as the inbound
+// MaxHeaderBytes — is more than any response a mock has a reason to build.
+// Review finding 13.
+const (
+	maxFunctionHeaders     = 64
+	maxFunctionHeaderBytes = 64 << 10
+)
+
+// functionDefaultTextType is the Content-Type an untyped STRING body is served
+// under. Before it existed the branch wrote such a body with no Content-Type
+// at all, and net/http then sniffs the first 512 bytes: `return 200,
+// "<script>…"` went to the wire as `text/html; charset=utf-8` — the one
+// browser-executable rule both planes enforce, bypassed by leaving the field
+// empty, on the unauthenticated plane. The pinned path never had the hole
+// because custom.go defaults an empty type to application/json; a function's
+// string return is the author's own bytes, so text/plain is the honest
+// default and an author who means JSON returns a table or says so in a
+// header. httptest.ResponseRecorder does NOT reproduce the sniff after an
+// explicit WriteHeader, which is why the test for this runs a real server.
+// Review finding 2.
+const functionDefaultTextType = "text/plain; charset=utf-8"
+
 // functionFramingHeader is the whole of what a function may not set: the two
 // fields the writer computes for itself, where a second value is not a policy
 // disagreement but a corrupted response. Content-Type is absent on purpose —
@@ -189,12 +215,20 @@ func (p *Plane) writeFunctionResponse(
 	for name, value := range headers {
 		w.Header().Set(name, value)
 	}
+	// nosniff on every function response, typed or not: the type was checked
+	// against the browser-executable rule a moment ago, and the header tells
+	// the browser to believe it rather than the bytes. The asset path in
+	// custom.go sets the same header for the same reason.
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	// The type goes on BEFORE the empty-body return: a function that answers
+	// `204, nil, {["Content-Type"] = …}` declared it, and dropping it because
+	// there is no body to describe was review finding 14.
+	if mediaType != "" {
+		w.Header().Set("Content-Type", mediaType)
+	}
 	if len(resp.Body) == 0 {
 		w.WriteHeader(resp.Status)
 		return
-	}
-	if mediaType != "" {
-		w.Header().Set("Content-Type", mediaType)
 	}
 	w.Header().Set("Content-Length", strconv.Itoa(len(resp.Body)))
 	w.WriteHeader(resp.Status)
@@ -215,9 +249,18 @@ func (p *Plane) writeFunctionResponse(
 // would mean answering an author's mistake with a response that looks right and
 // is not, which is the coercion D3 already refuses for the status and the body.
 func functionHeaders(resp luafn.Response) (map[string]string, string, error) {
+	if len(resp.Headers) > maxFunctionHeaders {
+		return nil, "", fmt.Errorf("the function returned %d headers, over the %d-field limit",
+			len(resp.Headers), maxFunctionHeaders)
+	}
 	out := make(map[string]string, len(resp.Headers))
 	mediaType := resp.MediaType
+	total := 0
 	for name, value := range resp.Headers {
+		total += len(name) + len(value)
+		if total > maxFunctionHeaderBytes {
+			return nil, "", fmt.Errorf("the function's headers exceed the %d-byte limit together", maxFunctionHeaderBytes)
+		}
 		if !validHeaderName(name) {
 			return nil, "", fmt.Errorf("header name %q is not a valid HTTP field name", name)
 		}
@@ -240,6 +283,11 @@ func functionHeaders(resp luafn.Response) (map[string]string, string, error) {
 			continue
 		}
 		out[name] = value
+	}
+	if mediaType == "" && len(resp.Body) > 0 {
+		// Only a STRING body gets here: a table return arrives typed as
+		// application/json from luafn, and an empty body needs no type.
+		mediaType = functionDefaultTextType
 	}
 	if httpx.BrowserExecutableMediaType(mediaType) {
 		// The one rule both planes share, applied here at the last line
