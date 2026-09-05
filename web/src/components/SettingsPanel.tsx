@@ -5,12 +5,14 @@ import {
   Button,
   Divider,
   Group,
+  NativeSelect,
   NumberInput,
   PasswordInput,
   Select,
   Stack,
   Switch,
   Text,
+  Textarea,
   TextInput,
   Title,
 } from "@mantine/core";
@@ -39,14 +41,34 @@ import { describeApiFailure, describeApiFailureDetailed, isGoneTombstone } from 
 import { arktypeResolver } from "@/validation/resolver";
 import { userName } from "@/validation/name";
 
-// SettingsPanel renders ONLY the fields the serving path actually reads
-// (verified by grep against internal/mockplane, §3.8): seed, listSize,
-// nullRate, delayMs, envelope and identity (name/email/roles) feed
-// generation directly; auth feeds the JWT recipes the auth preset writes
-// into. settings.validateRequests is declared in internal/domain/settings.go
-// but read NOWHERE in internal/mockplane — a control for it would be a lie
-// about what the server does, so it is preserved (never dropped) but never
-// shown.
+// SettingsPanel renders the fields the serving path actually reads (verified
+// by grep against internal/mockplane, §3.8): seed, listSize, nullRate,
+// delayMs, envelope and identity feed generation directly; auth feeds the
+// JWT recipes the auth preset writes into. A21 (G1, four of five readers of
+// the 2026-09-05 UI review) added the four the panel had preserved and never
+// shown, which decide where and to whom the mock serves at all: basePath
+// (every route lives under it), basePathValues (a {param} basePath serves
+// NOTHING until its values are declared, and the screen could not say why),
+// cors (the mock plane exists to be called from a browser), notFoundBody
+// (what every unmatched route answers), plus identity.id (org is an object
+// — id, name, type — and stays the agent's, preserved by the spread).
+// settings.validateRequests is declared in internal/domain/settings.go but
+// read NOWHERE in internal/mockplane — a control for it would be a lie about
+// what the server does, so it is preserved (never dropped) but never shown.
+const notFoundBodyField = type("string").narrow((value, ctx) => {
+  if (value.trim() === "") {
+    return true;
+  }
+  try {
+    JSON.parse(value);
+    return true;
+  } catch (err) {
+    return ctx.reject({
+      problem: `JSON невалиден (${err instanceof Error ? err.message : String(err)})`,
+    });
+  }
+});
+
 const settingsForm = type({
   name: userName,
   seed: "number.integer",
@@ -60,10 +82,18 @@ const settingsForm = type({
   // arktype validates the raw text field here; splitting/trimming happens at
   // submit time, same shape as WorkspacesPage's name.trim().
   identityRoles: "string",
+  identityId: "string",
   jwtTtlSec: "number.integer>0",
   alg: "string>0",
   signingKey: "string",
   requireHeader: "boolean",
+  basePath: "string",
+  // One base tuple per line on screen; Settings.basePathValues on the wire.
+  basePathValuesText: "string",
+  corsMode: "string",
+  corsCredentials: "boolean",
+  // JSON text, or empty for "unset" — the server serves its own 404 then.
+  notFoundBodyText: notFoundBodyField,
 });
 type SettingsForm = typeof settingsForm.infer;
 
@@ -83,10 +113,19 @@ function toFormValues(workspace: Pick<WorkspaceView, "name" | "settings">): Sett
     identityName: s.identity.name,
     identityEmail: s.identity.email,
     identityRoles: s.identity.roles.join(", "),
+    identityId: s.identity.id === undefined || s.identity.id === null ? "" : String(s.identity.id),
     jwtTtlSec: s.auth.jwtTtlSec,
     alg: s.auth.alg,
     signingKey: s.auth.signingKey,
     requireHeader: s.auth.requireHeader,
+    basePath: s.basePath,
+    basePathValuesText: (s.basePathValues ?? []).join("\n"),
+    corsMode: s.cors.mode,
+    corsCredentials: s.cors.credentials,
+    notFoundBodyText:
+      s.notFoundBody === undefined || s.notFoundBody === null
+        ? ""
+        : JSON.stringify(s.notFoundBody, null, 2),
   };
 }
 
@@ -106,6 +145,16 @@ function buildSettings(current: Settings, values: SettingsForm): Settings {
     .split(",")
     .map((r) => r.trim())
     .filter((r) => r !== "");
+  const basePathValues = values.basePathValuesText
+    .split("\n")
+    .map((v) => v.trim())
+    .filter((v) => v !== "");
+  const notFoundBodyText = values.notFoundBodyText.trim();
+  // identity.id is "any JSON scalar" on the wire: a numeric text goes back
+  // as a number so a spec that types the id as an integer keeps matching,
+  // anything else as the string typed; empty means unset.
+  const idText = values.identityId.trim();
+  const identityId = idText === "" ? undefined : /^-?\d+$/.test(idText) ? Number(idText) : idText;
   return {
     ...current,
     seed: values.seed,
@@ -113,11 +162,18 @@ function buildSettings(current: Settings, values: SettingsForm): Settings {
     nullRate: values.nullRate,
     delayMs: values.delayMs,
     envelope: values.envelope.trim() === "" ? null : values.envelope.trim(),
+    basePath: values.basePath.trim(),
+    // Omitted, not sent empty, when there are none: the server reads an
+    // absent list as "nothing declared", and an empty array as the same.
+    basePathValues: basePathValues.length === 0 ? undefined : basePathValues,
+    cors: { mode: values.corsMode, credentials: values.corsCredentials },
+    notFoundBody: notFoundBodyText === "" ? undefined : (JSON.parse(notFoundBodyText) as unknown),
     identity: {
       ...current.identity,
       name: values.identityName.trim(),
       email: values.identityEmail.trim(),
       roles,
+      id: identityId,
     },
     auth: {
       ...current.auth,
@@ -137,11 +193,13 @@ export function SettingsPanel({ workspace }: { workspace: WorkspaceView }): Reac
     register,
     handleSubmit,
     reset,
+    watch,
     formState: { errors },
   } = useForm<SettingsForm>({
     resolver: arktypeResolver(settingsForm),
     defaultValues: toFormValues(workspace),
   });
+  const basePathHasParam = watch("basePath").includes("{");
 
   // editVersion (A3): the value to SEND is the one sitting beside the
   // document this screen is looking at right now. `pendingEditVersion`
@@ -404,6 +462,58 @@ export function SettingsPanel({ workspace }: { workspace: WorkspaceView }): Reac
             data-testid="settings-identity-roles"
             error={errors.identityRoles?.message}
             {...register("identityRoles")}
+          />
+          <TextInput
+            label="Идентификатор (необязательно)"
+            description="Число или строка — как в спеке. Организация (identity.org) — объект, правится агентом и сохраняется как есть"
+            data-testid="settings-identity-id"
+            {...register("identityId")}
+          />
+
+          <Divider label="Маршрут и доступ" labelPosition="left" />
+          <TextInput
+            label="Базовый путь"
+            description="Префикс всех маршрутов; из спеки при привязке. Может содержать параметр вида /tenants/{t}"
+            placeholder="/api/v1"
+            data-testid="settings-base-path"
+            error={errors.basePath?.message}
+            {...register("basePath")}
+          />
+          {basePathHasParam ? (
+            <Textarea
+              label="Значения параметров базового пути — по одному на строку"
+              description="Без них маршрут с параметром не обслуживается. Для нескольких параметров — значения через «/» в порядке появления"
+              rows={3}
+              data-testid="settings-base-path-values"
+              {...register("basePathValuesText")}
+            />
+          ) : null}
+          <Group grow align="flex-end">
+            <NativeSelect label="CORS" data-testid="settings-cors-mode" {...register("corsMode")}>
+              <option value="reflect">отражать Origin запроса (любой источник)</option>
+              <option value="list">только источники из списка</option>
+              <option value="off">не отвечать CORS-заголовками</option>
+            </NativeSelect>
+            <Controller
+              control={control}
+              name="corsCredentials"
+              render={({ field }) => (
+                <Switch
+                  label="Разрешить credentials (cookie, Authorization из браузера)"
+                  checked={field.value}
+                  onChange={(e) => field.onChange(e.currentTarget.checked)}
+                  data-testid="settings-cors-credentials"
+                />
+              )}
+            />
+          </Group>
+          <Textarea
+            label="Тело ответа 404 (JSON, необязательно)"
+            description="Пусто — ответ 404 сервера по умолчанию"
+            rows={3}
+            data-testid="settings-not-found-body"
+            error={errors.notFoundBodyText?.message}
+            {...register("notFoundBodyText")}
           />
 
           <Divider label="Авторизация" labelPosition="left" />

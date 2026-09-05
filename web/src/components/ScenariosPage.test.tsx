@@ -556,4 +556,37 @@ describe("ScenariosPage", () => {
     const mutating = fetchMock.mock.calls.filter(([, init]) => (init?.method ?? "GET") !== "GET");
     expect(mutating).toHaveLength(0);
   });
+
+  // A21 (G2): what a scenario holds, before activating it.
+  it("opens a row into the snapshot's overrides and settings on «что внутри»", async () => {
+    route({
+      [LIST]: () =>
+        json(200, {
+          scenarios: [scenarioSummaryFixture({ id: 1, name: "baseline", isActive: false })],
+        }),
+      [`GET /api/workspaces/${WS}/scenarios/1`]: () =>
+        json(
+          200,
+          scenarioDetailFixture({
+            overrides: [
+              {
+                method: "GET",
+                path: "/pets",
+                overrideOn: true,
+                routeOff: true,
+                activeStatus: 500,
+                responses: { "500": { mode: "pinned", body: {} } },
+              },
+            ],
+          }),
+        ),
+    });
+    renderInRouter(<ScenariosPage id={WS} />);
+    await userEvent.click(await screen.findByTestId("scenario-details-toggle"));
+    const details = await screen.findByTestId("scenario-details");
+    expect(details).toHaveTextContent("seed 1");
+    expect(within(details).getByTestId("scenario-details-override")).toHaveTextContent(
+      "GET /pets → 500 (статусы: 500) · маршрут выключен",
+    );
+  });
 });

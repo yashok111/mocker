@@ -312,4 +312,42 @@ describe("SettingsPanel", () => {
     await screen.findByTestId("settings-spec-attached");
     expect(body).toEqual({ specId: 9, editVersion: workspace.editVersion });
   });
+
+  // A21 (G1): the four settings the panel preserved and never showed.
+  it("shows and edits basePath, its values, CORS and the 404 body, and sends them on the wire", async () => {
+    const user = userEvent.setup();
+    const workspace = distinctiveWorkspace();
+    let body: { settings?: Settings } | undefined;
+    route({
+      "GET /api/specs": () => json(200, []),
+      "PATCH /api/workspaces/1": () => json(200, workspace),
+    });
+    captureBody((b) => {
+      body = b as { settings?: Settings };
+    });
+    renderWithProviders(<SettingsPanel workspace={workspace} />);
+
+    const basePath = await screen.findByTestId("settings-base-path");
+    expect(basePath).toHaveValue("/distinctive-base-path");
+    expect(screen.getByTestId("settings-cors-mode")).toHaveValue("list");
+    expect(screen.getByTestId("settings-not-found-body")).toHaveValue(
+      JSON.stringify({ distinctive: "not-found-marker" }, null, 2),
+    );
+    // The values box appears only once the base path carries a {param}.
+    expect(screen.queryByTestId("settings-base-path-values")).toBeNull();
+    await user.clear(basePath);
+    await user.type(basePath, "/tenants/{{t}");
+    await user.type(await screen.findByTestId("settings-base-path-values"), "acme\nglobex");
+    await user.selectOptions(screen.getByTestId("settings-cors-mode"), "off");
+    await user.click(screen.getByTestId("settings-submit"));
+    await screen.findByTestId("settings-saved");
+
+    expect(body?.settings).toMatchObject({
+      basePath: "/tenants/{t}",
+      basePathValues: ["acme", "globex"],
+      cors: { mode: "off", credentials: false },
+      notFoundBody: { distinctive: "not-found-marker" },
+      identity: { id: "distinctive-identity-id", org: workspace.settings.identity.org },
+    });
+  });
 });
