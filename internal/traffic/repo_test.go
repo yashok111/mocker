@@ -7,13 +7,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/yashok111/mocker/internal/testkit"
 	"github.com/yashok111/mocker/internal/traffic"
 )
 
 // TestRepo_List_newestFirst covers List's documented order.
 func TestRepo_List_newestFirst(t *testing.T) {
 	t.Parallel()
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	wsID := insertWorkspace(t, db, "alex")
 	rec := traffic.NewRecorder(db, nil, traffic.Options{})
 	repo := traffic.NewRepo(db)
@@ -43,7 +44,7 @@ func TestRepo_List_newestFirst(t *testing.T) {
 // TestRepo_List_limitHonoured proves List never returns more than limit.
 func TestRepo_List_limitHonoured(t *testing.T) {
 	t.Parallel()
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	wsID := insertWorkspace(t, db, "alex")
 	rec := traffic.NewRecorder(db, nil, traffic.Options{})
 	repo := traffic.NewRepo(db)
@@ -68,7 +69,7 @@ func TestRepo_List_limitHonoured(t *testing.T) {
 // cursor, oldest first, limit honoured.
 func TestRepo_Since_strictlyGreaterOldestFirstLimitHonoured(t *testing.T) {
 	t.Parallel()
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	wsID := insertWorkspace(t, db, "alex")
 	rec := traffic.NewRecorder(db, nil, traffic.Options{})
 	repo := traffic.NewRepo(db)
@@ -119,7 +120,7 @@ func TestRepo_Since_strictlyGreaterOldestFirstLimitHonoured(t *testing.T) {
 // sql.ErrNoRows or a panic.
 func TestRepo_Get_missing(t *testing.T) {
 	t.Parallel()
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	wsID := insertWorkspace(t, db, "alex")
 	repo := traffic.NewRepo(db)
 
@@ -132,7 +133,7 @@ func TestRepo_Get_missing(t *testing.T) {
 // TestRepo_Get_found round-trips one row's fields.
 func TestRepo_Get_found(t *testing.T) {
 	t.Parallel()
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	wsID := insertWorkspace(t, db, "alex")
 	rec := traffic.NewRecorder(db, nil, traffic.Options{})
 	repo := traffic.NewRepo(db)
@@ -159,7 +160,7 @@ func TestRepo_Get_found(t *testing.T) {
 // count and never removes another workspace's rows.
 func TestRepo_Clear_touchesOnlyItsWorkspace(t *testing.T) {
 	t.Parallel()
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	wsA := insertWorkspace(t, db, "workspace-a")
 	wsB := insertWorkspace(t, db, "workspace-b")
 	rec := traffic.NewRecorder(db, nil, traffic.Options{})
@@ -203,7 +204,7 @@ func TestRepo_Clear_touchesOnlyItsWorkspace(t *testing.T) {
 // now is what keeps this test from being flaky under load.
 func TestRepo_Rate1m_injectedNow(t *testing.T) {
 	t.Parallel()
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	wsID := insertWorkspace(t, db, "alex")
 	rec := traffic.NewRecorder(db, nil, traffic.Options{})
 	repo := traffic.NewRepo(db)
@@ -243,7 +244,7 @@ func TestRepo_Rate1m_injectedNow(t *testing.T) {
 // admin API.
 func TestRepo_scan_malformedReqHeadersIsAnErrorNotAPanic(t *testing.T) {
 	t.Parallel()
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	wsID := insertWorkspace(t, db, "alex")
 	repo := traffic.NewRepo(db)
 

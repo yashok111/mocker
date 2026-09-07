@@ -3035,9 +3035,9 @@ two `formatBytes` that disagreed, «8.0 МБ» vs «8 МБ», now one),
 `formatTimestamp` (the fifth copy crossed the threshold `HistoryPage`'s own
 comment reasoned about — reversed on the owner's word), `validation/json.ts`,
 `dialog-cancel` on eighteen cancel buttons; then the page bundles —
-`CustomEndpointsPage` 1274 → 126, `HistoryPage` 815 → 110, `ScenariosPage`
-813 → 83, `TrafficPage` 923 → 353 over `traffic/{model,useTrafficFeed,
-TrafficTable}`, `StreamEditor` 891 → 388, `VariantEditor` 574 → 433 — and
+`CustomEndpointsPage` 1274 → 126, `HistoryPage` 815 → 116, `ScenariosPage`
+813 → 83, `TrafficPage` 923 → 345 over `traffic/{model,useTrafficFeed,
+TrafficTable}`, `StreamEditor` 891 → 388, `VariantEditor` 574 → 422 — and
 one `QueryState` for the four-state ladder, eleven screens migrated, six
 left on their own ladder for a named reason each. `test(web)`: the
 coverage guard finds a caller by AST through `typescript/unstable/sync`,

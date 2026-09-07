@@ -194,7 +194,11 @@ function isUnder(target: string, dir: string): boolean {
  *     none of them count. That last one is PARITY with the substring
  *     scanner, which required a `(` after the name for the same reason.
  *
- * KNOWN LIMITATIONS, both deliberate:
+ * KNOWN LIMITATIONS, all deliberate:
+ *   * the by-reference rule above cuts the OTHER way too: a route whose only
+ *     caller is `queryFn: listFoo` would read as UNCOVERED (a false red, not
+ *     a false green). No such site exists today; the day one appears, the
+ *     guard fails loudly and the rule is widened here, not worked around.
  *   * a call inside a function nothing ever calls still counts. Proving a
  *     call site is REACHABLE is a different question with a different owner
  *     — web/src/routes/routes.test.tsx mounts the real route tree — and

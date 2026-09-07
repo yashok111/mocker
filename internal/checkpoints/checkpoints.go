@@ -96,8 +96,9 @@
 // the same copy overrides, customep, scenarios, resources and assets each
 // carried too. On 2026-09-07 the owner reversed the "no package imports
 // another for a four-line helper" reasoning that justified all six copies:
-// every one of them already imports internal/store for
-// [store.AllocateEditVersion], so store — not any of the six — is the
+// every one of them already imports internal/store (five for
+// [store.AllocateEditVersion], assets for the *DB type alone), so store —
+// not any of the six — is the
 // legal shared home, and the duplication stopped being a real one.
 package checkpoints
 

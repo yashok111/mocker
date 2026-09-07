@@ -14,29 +14,11 @@ import (
 	"github.com/yashok111/mocker/internal/config"
 	"github.com/yashok111/mocker/internal/store"
 	"github.com/yashok111/mocker/internal/testauth"
+	"github.com/yashok111/mocker/internal/testkit"
 )
 
 // testPassword is the shared password every test manager is configured with.
 const testPassword = testauth.Password
-
-// newTestDB opens a fresh, migrated SQLite file under t.TempDir() and closes
-// it on cleanup.
-func newTestDB(t *testing.T) *store.DB {
-	t.Helper()
-	db, err := store.Open(t.Context(), t.TempDir()+"/mocker.db")
-	if err != nil {
-		t.Fatalf("open db: %v", err)
-	}
-	t.Cleanup(func() {
-		if err := db.Close(); err != nil {
-			t.Errorf("close db: %v", err)
-		}
-	})
-	if err := db.Migrate(t.Context(), nil); err != nil {
-		t.Fatalf("migrate: %v", err)
-	}
-	return db
-}
 
 // newTestManager builds a Manager over a fresh DB, wired to a SharedPassword
 // provider configured with testPassword. See the config literal comment in
@@ -61,7 +43,7 @@ func newTestManager(t *testing.T) (*auth.Manager, *store.DB) {
 		RuntimeCache:       32,
 		Dev:                true,
 	}
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	provider := auth.NewSharedPassword(cfg)
 	return auth.NewManager(db, cfg, provider), db
 }

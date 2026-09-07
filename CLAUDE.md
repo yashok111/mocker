@@ -262,7 +262,7 @@ measurement — the numbers and the two traps: `docs/agent/jsonx.md`.
 ## Style
 
 **Comments explain "why", not "what", and there are many of them: 41% of the
-non-blank lines of Go production code (25608 of 62309, `tokei cmd internal
+non-blank lines of Go production code (25666 of 62378, `tokei cmd internal
 --exclude '*_test.go'`, 2026-09-07) are comments.** This is not decoration but the project's working format:
 almost every non-obvious decision carries a measured reason next to it ("measured against a
 live `net/http.ServeMux`…", "round-1 review finding 2…"), and what is deferred is

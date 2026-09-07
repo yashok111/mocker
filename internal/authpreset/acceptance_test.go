@@ -160,14 +160,14 @@ func acceptanceOperations(t *testing.T, doc *openapi.Document, res *openapi.Reso
 			if !ok {
 				continue
 			}
-			opPointer := "#/paths/" + escapePointerToken(path) + "/" + method
+			opPointer := "#/paths/" + openapi.EscapePointerToken(path) + "/" + method
 			responses, _ := opObj["responses"].(map[string]any)
 			for sel, respRaw := range responses {
 				status, ok := classifySelector(sel)
 				if !ok {
 					continue
 				}
-				respPointer := opPointer + "/responses/" + escapePointerToken(sel)
+				respPointer := opPointer + "/responses/" + openapi.EscapePointerToken(sel)
 				schemaPtr := schemaPointerFor(res, respRaw, respPointer)
 				ops = append(ops, Operation{
 					Method:    strings.ToUpper(method),
@@ -226,13 +226,4 @@ func schemaPointerFor(res *openapi.Resolver, respRaw any, pointer string) string
 		return ""
 	}
 	return basePointer + "/content/application~1json/schema"
-}
-
-// escapePointerToken applies RFC 6901's two escapes ("~" -> "~0" first,
-// then "/" -> "~1") to one JSON-pointer path segment — the same rule
-// internal/specs applies when it builds operations.pointer.
-func escapePointerToken(tok string) string {
-	tok = strings.ReplaceAll(tok, "~", "~0")
-	tok = strings.ReplaceAll(tok, "/", "~1")
-	return tok
 }

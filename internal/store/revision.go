@@ -19,9 +19,10 @@ import (
 // packages — overrides, customep, resources, checkpoints, scenarios, assets.
 // Every copy's own comment gave the same reason: "no package may import
 // another purely for a four-line SQL helper". That reason stopped applying
-// the day all six started importing internal/store anyway, for
-// [AllocateEditVersion] — store is the one dependency none of them import
-// FROM each other, so it is the legal shared home the six comments were
+// the day all six started importing internal/store anyway — five of them
+// for [AllocateEditVersion], assets for the *DB type alone — store is the
+// one dependency none of them import FROM each other, so it is the legal
+// shared home the six comments were
 // each explaining the absence of. CLAUDE.md's "a package bumps revision
 // with its own bumpRevisionTx" is superseded by this file; the sentence is
 // updated alongside it.

@@ -12,28 +12,9 @@ import (
 	"time"
 
 	"github.com/yashok111/mocker/internal/store"
+	"github.com/yashok111/mocker/internal/testkit"
 	"github.com/yashok111/mocker/internal/traffic"
 )
-
-// newTestDB opens a fresh, migrated SQLite file under t.TempDir(), mirroring
-// internal/overrides/repo_test.go's harness — this package's own copy, per
-// that package's convention of not sharing test helpers across packages.
-func newTestDB(t *testing.T) *store.DB {
-	t.Helper()
-	db, err := store.Open(t.Context(), t.TempDir()+"/mocker.db")
-	if err != nil {
-		t.Fatalf("open db: %v", err)
-	}
-	t.Cleanup(func() {
-		if err := db.Close(); err != nil {
-			t.Errorf("close db: %v", err)
-		}
-	})
-	if err := db.Migrate(t.Context(), nil); err != nil {
-		t.Fatalf("migrate: %v", err)
-	}
-	return db
-}
 
 // insertWorkspace writes a minimal workspaces row directly, the FK target
 // traffic rows require.
@@ -74,7 +55,7 @@ func testEvent(workspaceID int64, path string) traffic.Event {
 // blocks" guarantee holds independent of anything reading the other end.
 func TestRecorder_Record_neverBlocks(t *testing.T) {
 	t.Parallel()
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	wsID := insertWorkspace(t, db, "alex")
 	rec := traffic.NewRecorder(db, nil, traffic.Options{Queue: 4})
 
@@ -103,7 +84,7 @@ func TestRecorder_Record_neverBlocks(t *testing.T) {
 // rows after a single Flush.
 func TestRecorder_Flush_oneBatchOneFlush(t *testing.T) {
 	t.Parallel()
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	wsID := insertWorkspace(t, db, "alex")
 	rec := traffic.NewRecorder(db, nil, traffic.Options{})
 	repo := traffic.NewRepo(db)
@@ -132,7 +113,7 @@ func TestRecorder_Flush_oneBatchOneFlush(t *testing.T) {
 // periodic every-N-events counter, so this holds after a single call.
 func TestRecorder_Retention_keepsNewestOnly(t *testing.T) {
 	t.Parallel()
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	wsID := insertWorkspace(t, db, "alex")
 	const retention = 50 // smaller than DefaultRetention so the test is fast
 	rec := traffic.NewRecorder(db, nil, traffic.Options{Retention: retention, Batch: 16})
@@ -169,7 +150,7 @@ func TestRecorder_Retention_keepsNewestOnly(t *testing.T) {
 // contract: SuppressBodies stores no body at all, not a redacted one.
 func TestRecorder_SuppressBodies_storesNeitherBody(t *testing.T) {
 	t.Parallel()
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	wsID := insertWorkspace(t, db, "alex")
 	rec := traffic.NewRecorder(db, nil, traffic.Options{})
 	repo := traffic.NewRepo(db)
@@ -211,7 +192,7 @@ func TestRecorder_SuppressBodies_storesNeitherBody(t *testing.T) {
 // that it sets Truncated with the matching per-body note.
 func TestRecorder_MaxBody_cutsAndStillRedacts(t *testing.T) {
 	t.Parallel()
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	wsID := insertWorkspace(t, db, "alex")
 	rec := traffic.NewRecorder(db, nil, traffic.Options{MaxBody: 32})
 	repo := traffic.NewRepo(db)
@@ -269,7 +250,7 @@ func TestRecorder_MaxBody_cutsAndStillRedacts(t *testing.T) {
 // cleartext and handed it back through GET .../traffic/poll.
 func TestRecorder_FormAndTextBodies_RedactedByFieldName(t *testing.T) {
 	t.Parallel()
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	wsID := insertWorkspace(t, db, "alex")
 	rec := traffic.NewRecorder(db, nil, traffic.Options{})
 	repo := traffic.NewRepo(db)
@@ -320,7 +301,7 @@ func TestRecorder_FormAndTextBodies_RedactedByFieldName(t *testing.T) {
 // the cut happened.
 func TestRecorder_UpstreamTruncatedJSONBody_doesNotLeakSecret(t *testing.T) {
 	t.Parallel()
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	wsID := insertWorkspace(t, db, "alex")
 	rec := traffic.NewRecorder(db, nil, traffic.Options{}) // default MaxBody: far above this body's size
 	repo := traffic.NewRepo(db)
@@ -366,7 +347,7 @@ func TestRecorder_UpstreamTruncatedJSONBody_doesNotLeakSecret(t *testing.T) {
 // can attribute a cut to one side.
 func TestRecorder_EventTruncated_foldsIntoColumnButNoPerBodyNote(t *testing.T) {
 	t.Parallel()
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	wsID := insertWorkspace(t, db, "alex")
 	rec := traffic.NewRecorder(db, nil, traffic.Options{}) // ample MaxBody, no cut of its own
 	repo := traffic.NewRepo(db)
@@ -399,7 +380,7 @@ func TestRecorder_EventTruncated_foldsIntoColumnButNoPerBodyNote(t *testing.T) {
 // tokens rather than merged with them.
 func TestRecorder_Notes_droppedTokenAndCallerFreeTextOrder(t *testing.T) {
 	t.Parallel()
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	wsID := insertWorkspace(t, db, "alex")
 	rec := traffic.NewRecorder(db, nil, traffic.Options{Queue: 1})
 	repo := traffic.NewRepo(db)
@@ -451,7 +432,7 @@ func TestRecorder_Notes_droppedTokenAndCallerFreeTextOrder(t *testing.T) {
 // written".
 func TestRecorder_CtxCancellationFlushesTail(t *testing.T) {
 	t.Parallel()
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	wsID := insertWorkspace(t, db, "alex")
 	// A long FlushEvery so the ticker cannot be what saves this test — only
 	// the ctx-cancellation drain path can.
@@ -502,7 +483,7 @@ func TestRecorder_CtxCancellationFlushesTail(t *testing.T) {
 // writer traffic to check, and proves no event is lost: final row count
 // equals the number of successful (non-dropped) Records.
 func TestRecorder_Flush_safeConcurrentWithRunAndRecord(t *testing.T) {
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	wsID := insertWorkspace(t, db, "alex")
 	rec := traffic.NewRecorder(db, nil, traffic.Options{Queue: 2000, Batch: 32, FlushEvery: 20 * time.Millisecond})
 	repo := traffic.NewRepo(db)
@@ -552,7 +533,7 @@ func TestRecorder_Flush_safeConcurrentWithRunAndRecord(t *testing.T) {
 // wired up: an Authorization header must never reach the stored row.
 func TestRecorder_HeadersRedactedBeforeStorage(t *testing.T) {
 	t.Parallel()
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	wsID := insertWorkspace(t, db, "alex")
 	rec := traffic.NewRecorder(db, nil, traffic.Options{})
 	repo := traffic.NewRepo(db)
@@ -585,7 +566,7 @@ func TestRecorder_HeadersRedactedBeforeStorage(t *testing.T) {
 // still-live workspace.
 func TestRecorder_WriteBatch_isolatesFailedRowFromWorkspaceDeletion(t *testing.T) {
 	t.Parallel()
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	doomed := insertWorkspace(t, db, "doomed")
 	survivor := insertWorkspace(t, db, "survivor")
 	rec := traffic.NewRecorder(db, nil, traffic.Options{})
@@ -674,7 +655,7 @@ func (n *recordingNotifier) snapshot() [][]int64 {
 // Repo.Since when it is told — which is what lets a subscriber wake, read,
 // and see them.
 func TestRecorder_notifiesTouchedWorkspacesAfterCommit(t *testing.T) {
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	wsA := insertWorkspace(t, db, "notify-a")
 	wsB := insertWorkspace(t, db, "notify-b")
 	rec := traffic.NewRecorder(db, nil, traffic.Options{})
@@ -736,7 +717,7 @@ func TestRecorder_notifiesTouchedWorkspacesAfterCommit(t *testing.T) {
 // (cut JSON would be unparsable) and the row says so.
 func TestRecorder_HeadersOverTheBodyCapAreDroppedAndNoted(t *testing.T) {
 	t.Parallel()
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	wsID := insertWorkspace(t, db, "alex")
 	rec := traffic.NewRecorder(db, nil, traffic.Options{MaxBody: 256})
 	repo := traffic.NewRepo(db)
