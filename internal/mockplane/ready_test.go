@@ -66,7 +66,7 @@ func TestPlaneReadyReportsEverySetterUntilItRuns(t *testing.T) {
 
 	p := mockplane.New(testConfig(), &fakeSource{}, readySpecs{}, testLogger())
 
-	var want []string
+	want := make([]string, 0, len(readySteps))
 	for _, s := range readySteps {
 		want = append(want, s.name)
 	}

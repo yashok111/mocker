@@ -70,7 +70,7 @@ func TestServerReadyReportsEverySetterUntilItRuns(t *testing.T) {
 
 	srv := newReadyServer(t)
 
-	var want []string
+	want := make([]string, 0, len(steps))
 	for _, s := range steps {
 		want = append(want, s.name)
 	}

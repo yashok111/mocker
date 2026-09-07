@@ -119,7 +119,7 @@ var (
 	parseOnce      sync.Once
 	parsedNames    []string
 	parsedMessages map[string]string
-	parseErr       error
+	errParse       error
 )
 
 // packageSentinelNames returns every package-level `var ErrX = errors.New(...)`
@@ -141,7 +141,7 @@ func parsePackageSentinels(t *testing.T) {
 	parseOnce.Do(func() {
 		entries, err := os.ReadDir(".")
 		if err != nil {
-			parseErr = fmt.Errorf("read package directory: %w", err)
+			errParse = fmt.Errorf("read package directory: %w", err)
 			return
 		}
 		fset := token.NewFileSet()
@@ -154,7 +154,7 @@ func parsePackageSentinels(t *testing.T) {
 			}
 			file, perr := parser.ParseFile(fset, name, nil, 0)
 			if perr != nil {
-				parseErr = fmt.Errorf("parse %s: %w", name, perr)
+				errParse = fmt.Errorf("parse %s: %w", name, perr)
 				return
 			}
 			for _, decl := range file.Decls {
@@ -182,13 +182,13 @@ func parsePackageSentinels(t *testing.T) {
 			}
 		}
 		if len(names) == 0 {
-			parseErr = errors.New("found no Err* sentinels: the AST walk stopped matching, which would make this test vacuous")
+			errParse = errors.New("found no Err* sentinels: the AST walk stopped matching, which would make this test vacuous")
 			return
 		}
 		parsedNames, parsedMessages = names, messages
 	})
-	if parseErr != nil {
-		t.Fatal(parseErr)
+	if errParse != nil {
+		t.Fatal(errParse)
 	}
 }
 

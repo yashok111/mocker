@@ -572,7 +572,11 @@ func (a *app) startAndDrain(ctx context.Context, stop context.CancelFunc) error 
 	// listener-error path, where Shutdown is never called at all. Without
 	// the second call, a listener error would hang <-recorderDone forever,
 	// waiting for a goroutine nothing had told to stop.
-	recorderCtx, recorderCancel := context.WithCancel(context.Background())
+	// WithoutCancel rather than Background: the recorder must outlive the
+	// signal ctx (that is the whole point above), and this is the form that
+	// says so while keeping ctx's lineage — contextcheck flags a Background
+	// inside a function that already holds a ctx.
+	recorderCtx, recorderCancel := context.WithCancel(context.WithoutCancel(ctx))
 	recorderDone := make(chan struct{})
 	go func() {
 		defer close(recorderDone)
@@ -623,7 +627,12 @@ func (a *app) startAndDrain(ctx context.Context, stop context.CancelFunc) error 
 		// cancel before the drain ends would discard.
 		a.streamRegistry.Close()
 		a.mockStreams.Close() // the mock plane's streams, same step, same reason
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownDrain)
+		// ctx is the signal context and is already cancelled by the time
+		// the drain runs, so the drain needs a context that outlives it:
+		// WithoutCancel keeps ctx's values and lineage (contextcheck
+		// accepts it as inherited; a bare Background here is the finding
+		// it raised the day run() was split into phases).
+		shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), shutdownDrain)
 		if err := httpServer.Shutdown(shutdownCtx); err != nil {
 			runErr = fmt.Errorf("graceful shutdown: %w", err)
 		}
