@@ -142,8 +142,58 @@ func runHashPassword(args []string, stdin io.Reader, stdout, stderr io.Writer) e
 	return nil
 }
 
+// app holds the instances run's phases build and hand to one another. It is
+// a struct rather than a pile of locals for one reason: run used to be 363
+// lines of construction with fourteen post-construction setter calls buried
+// in the middle of it, and the only way to see whether a source built in the
+// wiring block actually reached BOTH planes was to read all of them. Naming
+// the shared instances once, in one place, is also what makes the
+// completeness check below ([app.checkWiring]) expressible at all.
+//
+// Every field is written by exactly one phase and read only by later ones,
+// and none is written after the listener opens — which is the startup-only
+// calling contract every setter on both planes documents.
+type app struct {
+	cfg *config.Config
+	log *slog.Logger
+
+	db       *store.DB
+	sessions *auth.Manager
+
+	adminSrv  *admin.Server
+	mockPlane *mockplane.Plane
+
+	// specRepo is held rather than rebuilt because two phases need the SAME
+	// instance: buildPlanes hands it to the mock plane and answers the
+	// MOCKER_DEFAULT_SPEC preflight with it, and wireMockPlane's
+	// *resources.Repo reads specs through it. A specs.Repo holds nothing
+	// but the *store.DB and the config, so a second one would behave
+	// identically — which is exactly why sharing one is worth spelling out
+	// rather than leaving to chance.
+	specRepo *specs.Repo
+
+	// liveState and trafficRec are the two instances BOTH planes hold (see
+	// [app.wireMockPlane] for why they must be the same ones) and the two
+	// the background goroutines in [app.startAndDrain] drive: the janitor
+	// sweeps the first, a dedicated goroutine runs the second.
+	liveState  *livestate.Store
+	trafficRec *traffic.Recorder
+
+	// streamRegistry is the admin feed's registry — also the traffic
+	// recorder's notifier — and mockStreams is the mock plane's separate,
+	// per-workspace-capped one. Both are Closed on both shutdown paths.
+	streamRegistry *stream.Registry
+	mockStreams    *stream.Registry
+}
+
 // run wires every package together and serves until a shutdown signal or a
 // fatal error, in either case returning once the drain is complete.
+//
+// It is a skeleton on purpose. Each phase below owns one subject and the
+// comments that explain it, so the shutdown ordering at the bottom of
+// [app.startAndDrain] — the part a reader is usually here for, and the part
+// an incident was actually paid for — is not buried under three hundred
+// lines of construction.
 func run(cfg *config.Config) error {
 	log := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: logLevel(cfg.LogLevel)}))
 
@@ -155,22 +205,58 @@ func run(cfg *config.Config) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	db, err := store.Open(ctx, cfg.DBPath())
+	a := &app{cfg: cfg, log: log}
+
+	if err := a.openStore(ctx); err != nil {
+		return err
+	}
+	defer func() { _ = a.db.Close() }()
+
+	if err := a.buildPlanes(ctx); err != nil {
+		return err
+	}
+	a.wireMockPlane()
+	a.wireStreaming()
+	a.wireMCP()
+
+	// Before the listener opens, never after: see [app.checkWiring].
+	if err := a.checkWiring(); err != nil {
+		return err
+	}
+
+	return a.startAndDrain(ctx, stop)
+}
+
+// openStore opens and migrates the database. On success the CALLER owns the
+// handle and registers its Close; on failure here the handle is closed
+// before returning, because there is no caller-side defer yet to do it —
+// which is exactly what the single `defer db.Close()` covered when all of
+// this was one function.
+func (a *app) openStore(ctx context.Context) error {
+	db, err := store.Open(ctx, a.cfg.DBPath())
 	if err != nil {
 		return fmt.Errorf("open database: %w", err)
 	}
-	defer func() { _ = db.Close() }()
-
-	if err := db.Migrate(ctx, log); err != nil {
+	if err := db.Migrate(ctx, a.log); err != nil {
+		_ = db.Close()
 		return fmt.Errorf("migrate database: %w", err)
 	}
+	a.db = db
+	return nil
+}
 
-	provider := auth.NewSharedPassword(cfg)
-	sessions := auth.NewManager(db, cfg, provider)
-	ws := workspaces.NewRepo(db)
+// buildPlanes constructs everything that needs no wiring afterwards: the
+// session manager, both planes, and the one preflight that needs an open
+// database to answer. No setter runs here — [app.wireMockPlane] and its two
+// siblings own those, so "what does main hand this plane" has exactly one
+// place to look.
+func (a *app) buildPlanes(ctx context.Context) error {
+	provider := auth.NewSharedPassword(a.cfg)
+	a.sessions = auth.NewManager(a.db, a.cfg, provider)
+	ws := workspaces.NewRepo(a.db)
 
-	adminSrv := admin.New(cfg, sessions, ws, db, log)
-	specRepo := specs.NewRepo(db, cfg)
+	a.adminSrv = admin.New(a.cfg, a.sessions, ws, a.db, a.log)
+	a.specRepo = specs.NewRepo(a.db, a.cfg)
 
 	// MOCKER_DEFAULT_SPEC names a spec by id, and only config.Load's syntax
 	// check (positive integer) ran before the database existed — whether
@@ -181,13 +267,27 @@ func run(cfg *config.Config) error {
 	// DEBT this auto-create feature was written to close in the first
 	// place — "a documented environment variable that silently does
 	// nothing is worse than an absent one").
-	if cfg.DefaultSpecID != 0 {
-		if _, err := specRepo.ByID(ctx, cfg.DefaultSpecID); err != nil {
-			return fmt.Errorf("MOCKER_DEFAULT_SPEC=%d: %w", cfg.DefaultSpecID, err)
+	if a.cfg.DefaultSpecID != 0 {
+		if _, err := a.specRepo.ByID(ctx, a.cfg.DefaultSpecID); err != nil {
+			return fmt.Errorf("MOCKER_DEFAULT_SPEC=%d: %w", a.cfg.DefaultSpecID, err)
 		}
 	}
 
-	mockPlane := mockplane.New(cfg, ws, specRepo, log)
+	a.mockPlane = mockplane.New(a.cfg, ws, a.specRepo, a.log)
+	return nil
+}
+
+// wireMockPlane hands both planes every source they do not build for
+// themselves. Nothing here can fail; what it CAN do is silently omit a
+// line, which is the whole reason [app.checkWiring] exists.
+//
+// The order the setters run in is irrelevant — each is a plain field write
+// on an object that has not served a request yet, which is what every
+// setter's own doc comment means by "startup only" — so they are grouped by
+// subject here rather than kept in the order eleven slices happened to add
+// them. The one ordering that matters at all is between PHASES: the traffic
+// recorder is built here and handed a notifier in [app.wireStreaming].
+func (a *app) wireMockPlane() {
 	// Wired here, at startup, before the server begins serving: skip this and
 	// mockPlane keeps the nil OverrideSource [mockplane.Plane.New] gives it,
 	// and every op_overrides row an operator ever writes silently misses in
@@ -203,8 +303,8 @@ func run(cfg *config.Config) error {
 	// would behave identically today, and that is exactly why sharing one
 	// is worth spelling out: it is a property nothing would go red over if
 	// it silently stopped holding.
-	overridesRepo := overrides.NewRepo(db)
-	mockPlane.SetOverrides(overridesRepo)
+	overridesRepo := overrides.NewRepo(a.db)
+	a.mockPlane.SetOverrides(overridesRepo)
 
 	// The SLICE 2 sources: live-state directives (RAM, never SQLite — see
 	// internal/livestate's own doc comment), traffic recording, and custom
@@ -212,13 +312,13 @@ func run(cfg *config.Config) error {
 	// nil left here ships a fully green test suite with the feature dead in
 	// production, because every Go test wires these explicitly and only
 	// main.go can forget to.
-	liveState := livestate.NewStore(livestate.DefaultTTL, nil)
-	trafficRec := traffic.NewRecorder(db, log, traffic.Options{
-		MaxBody:   cfg.TrafficMaxBody,
-		Retention: cfg.TrafficRetention,
+	a.liveState = livestate.NewStore(livestate.DefaultTTL, nil)
+	a.trafficRec = traffic.NewRecorder(a.db, a.log, traffic.Options{
+		MaxBody:   a.cfg.TrafficMaxBody,
+		Retention: a.cfg.TrafficRetention,
 	})
-	customRepo := customep.NewRepo(db)
-	customRepo.MaxFrameBytes = cfg.MaxResponse // P6b D5: the mock plane's reader never writes, set anyway so one number governs both
+	customRepo := customep.NewRepo(a.db)
+	customRepo.MaxFrameBytes = a.cfg.MaxResponse // P6b D5: the mock plane's reader never writes, set anyway so one number governs both
 
 	// liveState and trafficRec are handed to BOTH planes as the SAME
 	// instance on purpose: the live-state store is RAM shared between the
@@ -227,9 +327,9 @@ func run(cfg *config.Config) error {
 	// admin UI shows directives the router never sees. Likewise one
 	// Recorder — two would mean the admin DELETE flushes a queue that is
 	// not the one filling up.
-	mockPlane.SetLiveState(liveState)
-	mockPlane.SetTraffic(trafficRec)
-	mockPlane.SetCustomEndpoints(customRepo)
+	a.mockPlane.SetLiveState(a.liveState)
+	a.mockPlane.SetTraffic(a.trafficRec)
+	a.mockPlane.SetCustomEndpoints(customRepo)
 
 	// The P3a source: resources and entities (D13 clause 23's "a
 	// ResourceSource that is never wired into buildRuntime" — the exact
@@ -242,62 +342,19 @@ func run(cfg *config.Config) error {
 	// resourcesRepo: two *resources.Repo over the same *store.DB behave
 	// identically (the package holds no state of its own beyond the DB
 	// handle and the two byte caps, both process-level config read once),
-	// same reasoning as SetScenarios above — sharing one across the planes
+	// same reasoning as SetScenarios below — sharing one across the planes
 	// would only avoid an allocation, not a behavior.
-	resourcesRepo := resources.NewRepo(db, specRepo, cfg.MaxResponse, cfg.TrafficMaxBody, int64(cfg.MaxEntities))
-	mockPlane.SetResources(resourcesRepo)
-	mockPlane.SetEntities(resourcesRepo)
+	resourcesRepo := resources.NewRepo(a.db, a.specRepo, a.cfg.MaxResponse, a.cfg.TrafficMaxBody, int64(a.cfg.MaxEntities))
+	a.mockPlane.SetResources(resourcesRepo)
+	a.mockPlane.SetEntities(resourcesRepo)
 	// A6 (DESIGN §32): the mock plane's read-only view of uploaded assets —
 	// its own *assets.Repo over the one *store.DB, the same two caps
 	// internal/admin's instance enforces on write. Left unwired, the asset
 	// route 404s and every bodyRef answers asset_missing with every test
 	// still green — scripts/smoke.sh's A6 block is what proves this line.
-	mockPlane.SetAssets(assets.NewRepo(db, cfg.MaxAsset, cfg.MaxAssetsTotal))
-	adminSrv.SetLiveState(liveState)
-	adminSrv.SetTraffic(trafficRec)
-
-	// P6a (decisions.md mocker-p6a-sse D4, D5, D12): the ONE stream
-	// registry of the process, handed to two owners — the admin plane
-	// serves connections through it, and the traffic recorder nudges it
-	// after every committed batch. Two registries would mean nudges that
-	// reach nobody and a cap that is a fiction, which is the same
-	// same-instance rule liveState and trafficRec above already follow.
-	// D12's three variables are converted from integer seconds to durations
-	// HERE, at the package boundary: internal/config parses no Go duration
-	// strings, and internal/stream never reads the environment. The same
-	// near-miss risk as every setter above: skip SetStream and both routes
-	// answer 503 service_unavailable in production while every Go test,
-	// which wires it explicitly, stays green; skip SetNotifier and the
-	// stream opens, pings, and never delivers a row.
-	streamRegistry := stream.NewRegistry()
-	trafficRec.SetNotifier(streamRegistry)
-	// P6b (decisions.md mocker-p6b-sse-mock D8, D9): the mock plane's OWN
-	// registry, capped per workspace by MOCKER_STREAM_MAX_CONNS — a second
-	// instance on purpose, so an unauthenticated plane cannot exhaust the
-	// admin feed's 64 by sharing a counter. The admin plane holds it only
-	// to report it (GET /api/stream/stats's "mock" object, D10). The ping
-	// and frame deadline are P6a's two, shared by both planes as D12 said
-	// they would be; the lifetime is the mock plane's own variable.
-	mockStreams := stream.NewWorkspaceRegistry(cfg.StreamMaxConns)
-	mockPlane.SetStreams(mockStreams, mockplane.StreamOptions{
-		Ping:          time.Duration(cfg.StreamPing) * time.Second,
-		FrameTimeout:  time.Duration(cfg.StreamFrameTimeout) * time.Second,
-		Lifetime:      time.Duration(cfg.StreamMaxLifetime) * time.Second,
-		TrafficFrames: cfg.StreamTrafficFrames,
-		// A14: "all"'s per-row budget, read nowhere else.
-		TrafficMaxFrames: cfg.StreamTrafficMaxFrames,
-		TrafficMaxBytes:  cfg.StreamTrafficMaxBytes,
-		// P6d (decisions.md mocker-p6d-websocket D5): WebSocket's three,
-		// converted here and read nowhere else.
-		MaxFrame:   cfg.StreamMaxFrame,
-		SendBudget: cfg.StreamSendBudget,
-		Origins:    cfg.StreamOrigins,
-	})
-	adminSrv.SetStream(streamRegistry, mockStreams, admin.StreamOptions{
-		Ping:           time.Duration(cfg.StreamPing) * time.Second,
-		FrameTimeout:   time.Duration(cfg.StreamFrameTimeout) * time.Second,
-		SessionRecheck: time.Duration(cfg.StreamSessionRecheck) * time.Second,
-	})
+	a.mockPlane.SetAssets(assets.NewRepo(a.db, a.cfg.MaxAsset, a.cfg.MaxAssetsTotal))
+	a.adminSrv.SetLiveState(a.liveState)
+	a.adminSrv.SetTraffic(a.trafficRec)
 
 	// P2f: adminSrv's POST .../preview route renders through the SAME
 	// runtime-building code real traffic does, so it takes the SAME
@@ -307,7 +364,7 @@ func run(cfg *config.Config) error {
 	// near-miss risk is identical to every setter above: skip this line
 	// and the route ships wired to nothing, answering 503 forever, while
 	// every Go test (which wires it explicitly) keeps passing.
-	adminSrv.SetPreviewer(mockPlane)
+	a.adminSrv.SetPreviewer(a.mockPlane)
 
 	// The SLICE P2b source: scenarios. Same near-miss risk as every setter
 	// above — and a sharper one, because the feature is INVISIBLE without
@@ -323,55 +380,157 @@ func run(cfg *config.Config) error {
 	// which are RAM/queue singletons that MUST be the same instance on both
 	// planes. A scenarios repo holds no state of its own: it is a thin
 	// reader/writer over *store.DB, and two of them see the same rows.
-	mockPlane.SetScenarios(scenarios.NewRepo(db, overridesRepo))
+	a.mockPlane.SetScenarios(scenarios.NewRepo(a.db, overridesRepo))
+}
 
+// wireStreaming builds the process's two stream registries and hands them
+// to their owners. It runs after [app.wireMockPlane] because the traffic
+// recorder it gives a notifier to is built there.
+func (a *app) wireStreaming() {
+	// P6a (decisions.md mocker-p6a-sse D4, D5, D12): the ONE stream
+	// registry of the process, handed to two owners — the admin plane
+	// serves connections through it, and the traffic recorder nudges it
+	// after every committed batch. Two registries would mean nudges that
+	// reach nobody and a cap that is a fiction, which is the same
+	// same-instance rule liveState and trafficRec already follow.
+	// D12's three variables are converted from integer seconds to durations
+	// HERE, at the package boundary: internal/config parses no Go duration
+	// strings, and internal/stream never reads the environment. The same
+	// near-miss risk as every setter in wireMockPlane: skip SetStream and
+	// both routes answer 503 service_unavailable in production while every
+	// Go test, which wires it explicitly, stays green; skip SetNotifier and
+	// the stream opens, pings, and never delivers a row.
+	a.streamRegistry = stream.NewRegistry()
+	a.trafficRec.SetNotifier(a.streamRegistry)
+	// P6b (decisions.md mocker-p6b-sse-mock D8, D9): the mock plane's OWN
+	// registry, capped per workspace by MOCKER_STREAM_MAX_CONNS — a second
+	// instance on purpose, so an unauthenticated plane cannot exhaust the
+	// admin feed's 64 by sharing a counter. The admin plane holds it only
+	// to report it (GET /api/stream/stats's "mock" object, D10). The ping
+	// and frame deadline are P6a's two, shared by both planes as D12 said
+	// they would be; the lifetime is the mock plane's own variable.
+	a.mockStreams = stream.NewWorkspaceRegistry(a.cfg.StreamMaxConns)
+	a.mockPlane.SetStreams(a.mockStreams, mockplane.StreamOptions{
+		Ping:          time.Duration(a.cfg.StreamPing) * time.Second,
+		FrameTimeout:  time.Duration(a.cfg.StreamFrameTimeout) * time.Second,
+		Lifetime:      time.Duration(a.cfg.StreamMaxLifetime) * time.Second,
+		TrafficFrames: a.cfg.StreamTrafficFrames,
+		// A14: "all"'s per-row budget, read nowhere else.
+		TrafficMaxFrames: a.cfg.StreamTrafficMaxFrames,
+		TrafficMaxBytes:  a.cfg.StreamTrafficMaxBytes,
+		// P6d (decisions.md mocker-p6d-websocket D5): WebSocket's three,
+		// converted here and read nowhere else.
+		MaxFrame:   a.cfg.StreamMaxFrame,
+		SendBudget: a.cfg.StreamSendBudget,
+		Origins:    a.cfg.StreamOrigins,
+	})
+	a.adminSrv.SetStream(a.streamRegistry, a.mockStreams, admin.StreamOptions{
+		Ping:           time.Duration(a.cfg.StreamPing) * time.Second,
+		FrameTimeout:   time.Duration(a.cfg.StreamFrameTimeout) * time.Second,
+		SessionRecheck: time.Duration(a.cfg.StreamSessionRecheck) * time.Second,
+	})
+}
+
+// wireMCP mounts the MCP endpoint, or — the point of the branch — very
+// deliberately does not.
+func (a *app) wireMCP() {
 	// MOCKER_MCP_KEY unset (config.Load's own default) means nothing in this
 	// block runs at all and SetMCP is never called — the "no surface"
 	// state the MCP slice's context document (§A2) requires: an operator
 	// who never sets the key gets no /mcp route to attack, not a route
 	// guarded by an empty lock. A non-empty key already cleared
 	// config.Load's own 32-byte floor, so there is nothing left to
-	// validate here.
+	// validate here. It is also why [admin.Server.Ready] leaves SetMCP out
+	// of the completeness check: a nil MCP handler is a decision, not a
+	// forgotten line, and this branch is where the decision lives.
 	//
 	// mcp.New takes adminSrv itself as its Caller: admin.Server.CallAsMCP
 	// is the ONLY way the MCP tools reach the domain (§A6), so — unlike
-	// liveState/trafficRec/customRepo above — this needs no repository of
-	// its own wired in from here.
+	// liveState/trafficRec/customRepo in wireMockPlane — this needs no
+	// repository of its own wired in from here.
 	//
-	// SetMCP sits here, right after SetLiveState/SetTraffic and before
-	// adminSrv.Handler() is ever called (inside server.New below): the
-	// same near-miss risk as those two setters, wired at the same point
-	// for the same reason. Order relative to Handler() does not actually
-	// matter — internal/admin/server.go's own Handler doc comment is
-	// explicit that s.mcp is read PER REQUEST, never captured at build
-	// time — but this is where a reader already looks for "did main wire
-	// this dependency", so it is where this one lives too.
+	// SetMCP sits in the wiring phases, alongside SetLiveState/SetTraffic
+	// and before adminSrv.Handler() is ever called (inside server.New, from
+	// [app.startAndDrain]): the same near-miss risk as those two setters,
+	// wired at the same point for the same reason. Order relative to
+	// Handler() does not actually matter — internal/admin/server.go's own
+	// Handler doc comment is explicit that s.mcp is read PER REQUEST, never
+	// captured at build time — but this is where a reader already looks for
+	// "did main wire this dependency", so it is where this one lives too.
 	//
-	// Nothing here needs a Close/Shutdown call on either exit path below
-	// (contrast liveState.Close(), called on both): the Endpoint the SDK
-	// builds is stateless by construction (StreamableHTTPOptions.Stateless
-	// — no session map, no per-request goroutine of its own) and starts
-	// none of its own background work, so there is nothing for either exit
-	// path to release.
-	if cfg.MCPKey != "" {
-		mcpEndpoint := mcp.New(adminSrv, cfg.MCPKey, cfg, log)
-		adminSrv.SetMCP(mcpEndpoint.Handler())
+	// Nothing here needs a Close/Shutdown call on either exit path of
+	// [app.startAndDrain] (contrast liveState.Close(), called on both): the
+	// Endpoint the SDK builds is stateless by construction
+	// (StreamableHTTPOptions.Stateless — no session map, no per-request
+	// goroutine of its own) and starts none of its own background work, so
+	// there is nothing for either exit path to release.
+	if a.cfg.MCPKey != "" {
+		mcpEndpoint := mcp.New(a.adminSrv, a.cfg.MCPKey, a.cfg, a.log)
+		a.adminSrv.SetMCP(mcpEndpoint.Handler())
 		// Never the key, never its length — this line is an operator's
 		// ONLY way to know the key was picked up at all, and printing
 		// either would defeat the point of having a secret.
-		log.Info("mcp endpoint mounted", "path", "/mcp")
+		a.log.Info("mcp endpoint mounted", "path", "/mcp")
 	}
+}
 
-	dispatcher := server.New(cfg, adminSrv.Handler(), mockPlane, log)
+// checkWiring refuses to start a process that is missing a source. It is the
+// bar the wiring phases above cannot enforce for themselves.
+//
+// Both planes take their dependencies through setters, and every one of
+// those setters is documented as survivable: a nil field compiles, and each
+// degrades gracefully — a 503 on a route, a 404 on another, a layer that is
+// simply never composed and a request answered as if the feature had never
+// been built. That forgiveness is what lets every test in those packages
+// wire only what it exercises, and it is also precisely how this project
+// twice shipped a fully green `go test` with a feature dead in production:
+// the tests wire their dependency explicitly, and only THIS file can forget
+// a line. Nothing in the type system catches that. A constructor with
+// options would not have caught it either — a nil interface handed to a
+// constructor compiles exactly as happily as a setter never called — which
+// is why the check is a runtime one, run once, here, before the listener
+// opens.
+//
+// Refusing rather than logging is deliberate: a mock server that starts and
+// then answers 404 to a feature an operator configured is worse than one
+// that does not start and names the line somebody has to add. The message
+// says "bug in this file" because that is what it always is — every name
+// [mockplane.Plane.Ready] and [admin.Server.Ready] can return is a call
+// only cmd/mocker makes.
+func (a *app) checkWiring() error {
+	var problems []string
+	if missing := a.mockPlane.Ready(); len(missing) > 0 {
+		problems = append(problems, "mock plane is missing "+strings.Join(missing, ", "))
+	}
+	if missing := a.adminSrv.Ready(); len(missing) > 0 {
+		problems = append(problems, "admin plane is missing "+strings.Join(missing, ", "))
+	}
+	if len(problems) == 0 {
+		return nil
+	}
+	return fmt.Errorf("incomplete wiring (a bug in cmd/mocker, not a misconfiguration): %s", strings.Join(problems, "; "))
+}
+
+// startAndDrain opens the listener, runs the two background goroutines, and
+// blocks until a shutdown signal or a listener error — returning only once
+// everything it started has stopped. stop is [signal.NotifyContext]'s own
+// cancel: the listener-error path below needs it, and there is no other way
+// to reach ctx from here.
+//
+// The shutdown ordering at the bottom is the load-bearing part of this
+// file. Read the comments before changing it: they cite the incident where
+// the recorder lost the last traffic records.
+func (a *app) startAndDrain(ctx context.Context, stop context.CancelFunc) error {
+	dispatcher := server.New(a.cfg, a.adminSrv.Handler(), a.mockPlane, a.log)
 	// Recover, RequestLog and MaxBody wrap the WHOLE dispatcher exactly once
 	// here — both planes build their own handler with only what is specific
 	// to them (see internal/admin.Server.Handler's doc comment), because
 	// adding these again per-plane would double every log line and enforce
 	// the body limit twice for no benefit.
-	handler := httpx.Chain(dispatcher, httpx.Recover(log), httpx.RequestLog(log), httpx.MaxBody(cfg.MaxBody))
+	handler := httpx.Chain(dispatcher, httpx.Recover(a.log), httpx.RequestLog(a.log), httpx.MaxBody(a.cfg.MaxBody))
 
 	httpServer := &http.Server{
-		Addr:    cfg.Addr,
+		Addr:    a.cfg.Addr,
 		Handler: handler,
 		// ReadHeaderTimeout bounds a slow-headers client (accidental or not)
 		// from parking a connection indefinitely before the request even
@@ -399,7 +558,7 @@ func run(cfg *config.Config) error {
 	janitorDone := make(chan struct{})
 	go func() {
 		defer close(janitorDone)
-		runJanitor(ctx, sessions, liveState, log)
+		newJanitor(a.sessions, a.liveState, a.log, janitorInterval).Run(ctx)
 	}()
 
 	// The recorder gets its OWN cancellation, deliberately not ctx: ctx is
@@ -417,7 +576,7 @@ func run(cfg *config.Config) error {
 	recorderDone := make(chan struct{})
 	go func() {
 		defer close(recorderDone)
-		trafficRec.Run(recorderCtx)
+		a.trafficRec.Run(recorderCtx)
 	}()
 
 	serveErr := make(chan error, 1)
@@ -429,17 +588,17 @@ func run(cfg *config.Config) error {
 		serveErr <- nil
 	}()
 
-	log.Info("mocker starting",
-		"addr", cfg.Addr,
-		"admin_host", cfg.AdminHost,
-		"workspace_host_pattern", workspaceHostPattern(cfg),
-		"routing", string(cfg.Routing),
+	a.log.Info("mocker starting",
+		"addr", a.cfg.Addr,
+		"admin_host", a.cfg.AdminHost,
+		"workspace_host_pattern", workspaceHostPattern(a.cfg),
+		"routing", string(a.cfg.Routing),
 	)
 
 	var runErr error
 	select {
 	case <-ctx.Done():
-		log.Info("shutdown signal received, draining", "timeout", shutdownDrain)
+		a.log.Info("shutdown signal received, draining", "timeout", shutdownDrain)
 		// BEFORE the drain, not after it: a request parked on a live-state
 		// pause directive (§14's "pause") is holding its connection open
 		// waiting for an operator who is never going to come now, and
@@ -449,7 +608,7 @@ func run(cfg *config.Config) error {
 		// finite to wait for. Skip it and shutdown takes the full
 		// livestate.MaxPauseHold per parked request instead — under the
 		// 15s drain, so the process still exits and no bar ever says so.
-		liveState.Close()
+		a.liveState.Close()
 		// AFTER the live state and BEFORE the drain, on both exit paths
 		// (P6a D13, DESIGN §30.7): Shutdown waits for every live SSE
 		// connection for the whole drain window, because to it a stream
@@ -462,8 +621,8 @@ func run(cfg *config.Config) error {
 		// cancelled; recorder last (below) because a mock request answered
 		// during the drain leaves an event in the recorder's queue that a
 		// cancel before the drain ends would discard.
-		streamRegistry.Close()
-		mockStreams.Close() // the mock plane's streams, same step, same reason
+		a.streamRegistry.Close()
+		a.mockStreams.Close() // the mock plane's streams, same step, same reason
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownDrain)
 		if err := httpServer.Shutdown(shutdownCtx); err != nil {
 			runErr = fmt.Errorf("graceful shutdown: %w", err)
@@ -477,7 +636,7 @@ func run(cfg *config.Config) error {
 	case err := <-serveErr:
 		// The server stopped on its own (e.g. the listener failed) with no
 		// signal received, so ctx is not Done yet. stop() cancels it
-		// explicitly — it is the same context runJanitor waits on, and
+		// explicitly — it is the same context the janitor waits on, and
 		// leaving it live here would make the <-janitorDone below block
 		// forever instead of letting this process exit on its own error.
 		stop()
@@ -491,11 +650,11 @@ func run(cfg *config.Config) error {
 		// would ever release a request parked on a pause. It would hold
 		// its connection (and its goroutine) until livestate.MaxPauseHold
 		// expired, past the error this function is trying to return.
-		liveState.Close()
+		a.liveState.Close()
 		// The registries' own Close joins their connection goroutines; there
 		// is no drain on this path, so this is the only thing that does.
-		streamRegistry.Close()
-		mockStreams.Close()
+		a.streamRegistry.Close()
+		a.mockStreams.Close()
 		// No Shutdown was called and nothing is draining, so there is no
 		// reason to keep the recorder waiting either — cancel it here too,
 		// or <-recorderDone below blocks forever on this path.
@@ -515,37 +674,6 @@ func workspaceHostPattern(cfg *config.Config) string {
 		return "/w/{slug}/... (MOCKER_ROUTING=path)"
 	}
 	return "<slug>." + cfg.BaseDomain
-}
-
-// runJanitor purges expired sessions and sweeps abandoned live-state
-// directives on janitorInterval until ctx is done. It runs on its own
-// goroutine and never returns an error to main: a failed purge just means
-// expired rows (or stale directives) linger a bit longer, not a reason to
-// bring the server down.
-func runJanitor(ctx context.Context, sessions *auth.Manager, liveState *livestate.Store, log *slog.Logger) {
-	ticker := time.NewTicker(janitorInterval)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-			n, err := sessions.PurgeExpired(ctx)
-			if err != nil {
-				log.Error("purge expired sessions", "err", err)
-			} else if n > 0 {
-				log.Info("purged expired sessions", "count", n)
-			}
-
-			// livestate.Store is pure RAM (see its own doc comment: it must
-			// never reach SQLite), so an abandoned workspace's directives
-			// would otherwise live for the lifetime of the process instead
-			// of just DefaultTTL past their last Set.
-			if dropped := liveState.Sweep(time.Now()); dropped > 0 {
-				log.Info("swept expired live-state directives", "count", dropped)
-			}
-		}
-	}
 }
 
 // logLevel maps a config.Config.LogLevel string, already validated by
