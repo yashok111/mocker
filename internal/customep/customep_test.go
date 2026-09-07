@@ -9,6 +9,7 @@ import (
 	"github.com/yashok111/mocker/internal/customep"
 	"github.com/yashok111/mocker/internal/overrides"
 	"github.com/yashok111/mocker/internal/recipes"
+	"github.com/yashok111/mocker/internal/testkit"
 )
 
 func raw(s string) json.RawMessage { return json.RawMessage(s) }
@@ -20,7 +21,7 @@ func raw(s string) json.RawMessage { return json.RawMessage(s) }
 // workspace rather than a bare unit call.
 func TestRepo_Create_invalidRow(t *testing.T) {
 	t.Parallel()
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	repo := customep.NewRepo(db)
 	wsID := insertWorkspace(t, db, "alex")
 
@@ -79,7 +80,7 @@ func TestRepo_Create_invalidRow(t *testing.T) {
 // or out.
 func TestRepo_Create_responsesRoundTripUnchanged(t *testing.T) {
 	t.Parallel()
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	repo := customep.NewRepo(db)
 	wsID := insertWorkspace(t, db, "alex")
 
@@ -133,7 +134,7 @@ func TestRepo_Create_responsesRoundTripUnchanged(t *testing.T) {
 // keeps insignificant whitespace from being silently reformatted.
 func TestRepo_Create_reqSchemaAndFailDirectiveRoundTripAsRawBytes(t *testing.T) {
 	t.Parallel()
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	repo := customep.NewRepo(db)
 	wsID := insertWorkspace(t, db, "alex")
 
@@ -172,7 +173,7 @@ func TestRepo_Create_reqSchemaAndFailDirectiveRoundTripAsRawBytes(t *testing.T) 
 // rather than reimplemented.
 func TestRepo_Create_pinnedBase64BodyRoundTrips(t *testing.T) {
 	t.Parallel()
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	repo := customep.NewRepo(db)
 	wsID := insertWorkspace(t, db, "alex")
 

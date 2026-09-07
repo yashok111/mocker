@@ -11,26 +11,8 @@ import (
 	"github.com/yashok111/mocker/internal/customep"
 	"github.com/yashok111/mocker/internal/overrides"
 	"github.com/yashok111/mocker/internal/store"
+	"github.com/yashok111/mocker/internal/testkit"
 )
-
-// newTestDB opens a fresh, migrated SQLite file under t.TempDir(), mirroring
-// internal/overrides/repo_test.go's harness.
-func newTestDB(t *testing.T) *store.DB {
-	t.Helper()
-	db, err := store.Open(t.Context(), t.TempDir()+"/mocker.db")
-	if err != nil {
-		t.Fatalf("open db: %v", err)
-	}
-	t.Cleanup(func() {
-		if err := db.Close(); err != nil {
-			t.Errorf("close db: %v", err)
-		}
-	})
-	if err := db.Migrate(t.Context(), nil); err != nil {
-		t.Fatalf("migrate: %v", err)
-	}
-	return db
-}
 
 // insertWorkspace writes a minimal workspaces row directly, exactly as
 // internal/overrides/repo_test.go does — this package owns no workspace
@@ -63,7 +45,7 @@ func workspaceRevision(t *testing.T, db *store.DB, id int64) int64 {
 
 func TestRepo_Create_insertThenReadBack(t *testing.T) {
 	t.Parallel()
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	repo := customep.NewRepo(db)
 	wsID := insertWorkspace(t, db, "alex")
 
@@ -110,7 +92,7 @@ func TestRepo_Create_insertThenReadBack(t *testing.T) {
 
 func TestRepo_Create_defaultActiveStatus(t *testing.T) {
 	t.Parallel()
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	repo := customep.NewRepo(db)
 	wsID := insertWorkspace(t, db, "alex")
 
@@ -133,7 +115,7 @@ func TestRepo_Create_defaultActiveStatus(t *testing.T) {
 // asserts on Create's own result rather than on any handler.
 func TestRepo_Create_defaultsOverrideOn(t *testing.T) {
 	t.Parallel()
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	repo := customep.NewRepo(db)
 	wsID := insertWorkspace(t, db, "alex")
 
@@ -160,7 +142,7 @@ func TestRepo_Create_defaultsOverrideOn(t *testing.T) {
 // order, and ForWorkspace must not silently reorder them by, say, path.
 func TestRepo_ForWorkspace_orderedBySourceOrderThenID(t *testing.T) {
 	t.Parallel()
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	repo := customep.NewRepo(db)
 	wsID := insertWorkspace(t, db, "alex")
 
@@ -193,7 +175,7 @@ func TestRepo_ForWorkspace_orderedBySourceOrderThenID(t *testing.T) {
 
 func TestRepo_Create_bumpsRevisionByExactlyOne(t *testing.T) {
 	t.Parallel()
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	repo := customep.NewRepo(db)
 	wsID := insertWorkspace(t, db, "alex")
 
@@ -212,7 +194,7 @@ func TestRepo_Create_bumpsRevisionByExactlyOne(t *testing.T) {
 // revision is the same bug as a missed bump on Create.
 func TestRepo_Delete_bumpsRevision(t *testing.T) {
 	t.Parallel()
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	repo := customep.NewRepo(db)
 	wsID := insertWorkspace(t, db, "alex")
 
@@ -237,7 +219,7 @@ func TestRepo_Delete_bumpsRevision(t *testing.T) {
 
 func TestRepo_Delete_missingIsErrNotFound(t *testing.T) {
 	t.Parallel()
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	repo := customep.NewRepo(db)
 	wsID := insertWorkspace(t, db, "alex")
 
@@ -253,7 +235,7 @@ func TestRepo_Delete_missingIsErrNotFound(t *testing.T) {
 
 func TestRepo_Get_missing(t *testing.T) {
 	t.Parallel()
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	repo := customep.NewRepo(db)
 	wsID := insertWorkspace(t, db, "alex")
 
@@ -264,7 +246,7 @@ func TestRepo_Get_missing(t *testing.T) {
 
 func TestRepo_Create_workspaceNotFound(t *testing.T) {
 	t.Parallel()
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	repo := customep.NewRepo(db)
 
 	_, err := repo.Create(t.Context(), 9999, &customep.Row{Method: "GET", Path: "/a"})
@@ -275,7 +257,7 @@ func TestRepo_Create_workspaceNotFound(t *testing.T) {
 
 func TestRepo_Delete_workspaceNotFound(t *testing.T) {
 	t.Parallel()
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	repo := customep.NewRepo(db)
 
 	err := repo.Delete(t.Context(), 9999, 1)
@@ -291,7 +273,7 @@ func TestRepo_Delete_workspaceNotFound(t *testing.T) {
 // custom endpoints.
 func TestRepo_Create_conflict(t *testing.T) {
 	t.Parallel()
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	repo := customep.NewRepo(db)
 	wsID := insertWorkspace(t, db, "alex")
 
@@ -322,7 +304,7 @@ func TestRepo_Create_conflict(t *testing.T) {
 // independent endpoints, never a clash.
 func TestRepo_Create_sameCanonicalPathDifferentMethodAllowed(t *testing.T) {
 	t.Parallel()
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	repo := customep.NewRepo(db)
 	wsID := insertWorkspace(t, db, "alex")
 
@@ -339,7 +321,7 @@ func TestRepo_Create_sameCanonicalPathDifferentMethodAllowed(t *testing.T) {
 // proves no source_order is lost or duplicated: n concurrent Creates on
 // distinct paths must land on n distinct, contiguous source_order values.
 func TestRepo_ConcurrentCreates(t *testing.T) {
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	repo := customep.NewRepo(db)
 	wsID := insertWorkspace(t, db, "alex")
 
@@ -391,7 +373,7 @@ func TestRepo_ConcurrentCreates(t *testing.T) {
 // the one the row was created with.
 func TestRepo_Update_changesFieldsAndRecomputesCanonicalPath(t *testing.T) {
 	t.Parallel()
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	repo := customep.NewRepo(db)
 	wsID := insertWorkspace(t, db, "alex")
 
@@ -454,7 +436,7 @@ func TestRepo_Update_changesFieldsAndRecomputesCanonicalPath(t *testing.T) {
 // serving the pre-edit endpoint.
 func TestRepo_Update_bumpsRevisionByExactlyOne(t *testing.T) {
 	t.Parallel()
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	repo := customep.NewRepo(db)
 	wsID := insertWorkspace(t, db, "alex")
 
@@ -483,7 +465,7 @@ func TestRepo_Update_bumpsRevisionByExactlyOne(t *testing.T) {
 // catch Update() being implemented on top of upsertTx by mistake.
 func TestRepo_Update_preservesIDAcrossPathChange(t *testing.T) {
 	t.Parallel()
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	repo := customep.NewRepo(db)
 	wsID := insertWorkspace(t, db, "alex")
 
@@ -519,7 +501,7 @@ func TestRepo_Update_preservesIDAcrossPathChange(t *testing.T) {
 // mutate rather than starting from a zero Row.
 func TestRepo_Update_preservesFieldsNotTouchedByMutate(t *testing.T) {
 	t.Parallel()
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	repo := customep.NewRepo(db)
 	wsID := insertWorkspace(t, db, "alex")
 
@@ -549,7 +531,7 @@ func TestRepo_Update_preservesFieldsNotTouchedByMutate(t *testing.T) {
 // TestRepo_Update_missingIsErrNotFound mirrors TestRepo_Delete_missingIsErrNotFound.
 func TestRepo_Update_missingIsErrNotFound(t *testing.T) {
 	t.Parallel()
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	repo := customep.NewRepo(db)
 	wsID := insertWorkspace(t, db, "alex")
 
@@ -566,7 +548,7 @@ func TestRepo_Update_missingIsErrNotFound(t *testing.T) {
 // TestRepo_Update_workspaceNotFound mirrors TestRepo_Delete_workspaceNotFound.
 func TestRepo_Update_workspaceNotFound(t *testing.T) {
 	t.Parallel()
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	repo := customep.NewRepo(db)
 
 	_, err := repo.Update(t.Context(), 9999, 1, func(cur *customep.Row) error { return nil })
@@ -581,7 +563,7 @@ func TestRepo_Update_workspaceNotFound(t *testing.T) {
 // answer ErrConflict, not a raw driver error or an id-unstable overwrite.
 func TestRepo_Update_conflictNaturalKey(t *testing.T) {
 	t.Parallel()
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	repo := customep.NewRepo(db)
 	wsID := insertWorkspace(t, db, "alex")
 
@@ -609,7 +591,7 @@ func TestRepo_Update_conflictNaturalKey(t *testing.T) {
 // key never collides.
 func TestRepo_Update_conflictCanonicalKey(t *testing.T) {
 	t.Parallel()
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	repo := customep.NewRepo(db)
 	wsID := insertWorkspace(t, db, "alex")
 
@@ -678,7 +660,7 @@ func replaceAllTx(t *testing.T, db *store.DB, workspaceID int64, rows []*custome
 // first clears it, so this restore must succeed.
 func TestReplaceAllTx_canonicalPathCollision_deleteBeforeUpsertSucceeds(t *testing.T) {
 	t.Parallel()
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	repo := customep.NewRepo(db)
 	wsID := insertWorkspace(t, db, "primary")
 
@@ -720,7 +702,7 @@ func TestReplaceAllTx_canonicalPathCollision_deleteBeforeUpsertSucceeds(t *testi
 // against a live upper-case row of the same operation.
 func TestReplaceAllTx_methodCasing_idIsUnchanged(t *testing.T) {
 	t.Parallel()
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	repo := customep.NewRepo(db)
 	wsID := insertWorkspace(t, db, "primary")
 

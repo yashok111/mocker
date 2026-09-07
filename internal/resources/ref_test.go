@@ -27,6 +27,7 @@ import (
 	"testing"
 
 	"github.com/yashok111/mocker/internal/domain"
+	"github.com/yashok111/mocker/internal/testkit"
 )
 
 // confirmedEntityBytes imports fixtureDoc into a FRESH db, confirms family
@@ -34,7 +35,7 @@ import (
 // entity it stored, in id order (List's own "ORDER BY id ASC").
 func confirmedEntityBytes(t *testing.T, family string, settings domain.Settings) [][]byte {
 	t.Helper()
-	db := newTestDB(t, t.TempDir()+"/mocker.db")
+	db := testkit.NewDBAt(t, t.TempDir()+"/mocker.db")
 	specID := importFixtureSpec(t, db)
 	wsID := insertWorkspace(t, db, "alpha", &specID, settings)
 	repo := newTestRepo(t, db, 4<<20, 64<<10)
@@ -85,7 +86,7 @@ func TestConfirm_ReadsNothingFromAnotherAlreadyConfirmedFamily(t *testing.T) {
 	// workspace+db, then /users confirmed second in that SAME workspace —
 	// so if Confirm ever read another family's rows, /widgets' rows would
 	// be sitting right there to read.
-	db := newTestDB(t, t.TempDir()+"/mocker.db")
+	db := testkit.NewDBAt(t, t.TempDir()+"/mocker.db")
 	specID := importFixtureSpec(t, db)
 	wsID := insertWorkspace(t, db, "alpha", &specID, settings)
 	repo := newTestRepo(t, db, 4<<20, 64<<10)
@@ -122,7 +123,7 @@ func TestResetData_ReseedReadsNothingFromAnotherConfirmedFamily(t *testing.T) {
 	settings := domain.Settings{Seed: 9, ListSize: 3}
 
 	// Alone: a workspace with only /users ever confirmed, reseeded once.
-	aloneDB := newTestDB(t, t.TempDir()+"/mocker.db")
+	aloneDB := testkit.NewDBAt(t, t.TempDir()+"/mocker.db")
 	aloneSpecID := importFixtureSpec(t, aloneDB)
 	aloneWsID := insertWorkspace(t, aloneDB, "alpha", &aloneSpecID, settings)
 	aloneRepo := newTestRepo(t, aloneDB, 4<<20, 64<<10)
@@ -148,7 +149,7 @@ func TestResetData_ReseedReadsNothingFromAnotherConfirmedFamily(t *testing.T) {
 	// families, /widgets' freshly (re)generated rows would be sitting
 	// right there while /users' own population runs in the same
 	// transaction.
-	db := newTestDB(t, t.TempDir()+"/mocker.db")
+	db := testkit.NewDBAt(t, t.TempDir()+"/mocker.db")
 	specID := importFixtureSpec(t, db)
 	wsID := insertWorkspace(t, db, "alpha", &specID, settings)
 	repo := newTestRepo(t, db, 4<<20, 64<<10)

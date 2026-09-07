@@ -6,13 +6,14 @@ import (
 	"testing"
 
 	"github.com/yashok111/mocker/internal/store"
+	"github.com/yashok111/mocker/internal/testkit"
 )
 
 // TestMigrate_reachesSchemaVersion5 asserts a fresh database ends up on the
 // version 0005_custom_endpoints_stream.sql declares (P6b D2; 4 after P6a's
 // 0004, 3 through P3h's 0003).
 func TestMigrate_reachesSchemaVersion5(t *testing.T) {
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 
 	v, err := db.SchemaVersion(t.Context())
 	if err != nil {
@@ -29,7 +30,7 @@ func TestMigrate_reachesSchemaVersion5(t *testing.T) {
 // poll client holding a cursor past them went permanently deaf. After the
 // rebuild the next id continues above the highest ever used, deleted or not.
 func TestMigrate_trafficIdsAreNeverReissued(t *testing.T) {
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	ctx := t.Context()
 
 	var ddl string
@@ -84,7 +85,7 @@ func TestMigrate_trafficIdsAreNeverReissued(t *testing.T) {
 // describes, and asserts the second run does not succeed silently.
 func TestApplyBaseScopeMigrationTwice_failsLoudly(t *testing.T) {
 	ctx := t.Context()
-	db := newTestDB(t) // already at version 3 -- 0003 has run once already
+	db := testkit.NewDB(t) // already at version 3 -- 0003 has run once already
 
 	migrationSQL, err := os.ReadFile("migrations/0003_base_scope.sql")
 	if err != nil {
@@ -186,7 +187,7 @@ func TestMigrate_backfillsEmptyBaseScopeAndServes(t *testing.T) {
 // entities_parent (parent_entity_id stays NULL, unmoved by this slice) was
 // left untouched.
 func TestMigrate_entitiesListIndexCoversBaseScope(t *testing.T) {
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 
 	cols := indexColumns(t, db, "entities_list")
 	want := []string{"resource_id", "base_scope_key", "scope_key", "id"}

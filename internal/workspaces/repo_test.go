@@ -9,27 +9,9 @@ import (
 
 	"github.com/yashok111/mocker/internal/domain"
 	"github.com/yashok111/mocker/internal/store"
+	"github.com/yashok111/mocker/internal/testkit"
 	"github.com/yashok111/mocker/internal/workspaces"
 )
-
-// newTestDB opens a fresh, migrated SQLite file under t.TempDir() and closes
-// it on cleanup.
-func newTestDB(t *testing.T) *store.DB {
-	t.Helper()
-	db, err := store.Open(t.Context(), t.TempDir()+"/mocker.db")
-	if err != nil {
-		t.Fatalf("open db: %v", err)
-	}
-	t.Cleanup(func() {
-		if err := db.Close(); err != nil {
-			t.Errorf("close db: %v", err)
-		}
-	})
-	if err := db.Migrate(t.Context(), nil); err != nil {
-		t.Fatalf("migrate: %v", err)
-	}
-	return db
-}
 
 // insertUser writes a minimal users row directly. The workspaces package
 // owns no user logic, but owner_id is a foreign key and foreign_keys=ON, so
@@ -80,7 +62,7 @@ func TestRepo_Create(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			db := newTestDB(t)
+			db := testkit.NewDB(t)
 			repo := workspaces.NewRepo(db)
 
 			ws, err := repo.Create(t.Context(), tt.in)
@@ -126,7 +108,7 @@ func TestRepo_Create(t *testing.T) {
 
 func TestRepo_Create_duplicateSlug(t *testing.T) {
 	t.Parallel()
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	repo := workspaces.NewRepo(db)
 
 	if _, err := repo.Create(t.Context(), workspaces.CreateInput{Name: "Alex", Slug: "alex"}); err != nil {
@@ -145,7 +127,7 @@ func TestRepo_Create_duplicateSlug(t *testing.T) {
 // to the workspace.
 func TestRepo_Create_settingsTooLarge(t *testing.T) {
 	t.Parallel()
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	repo := workspaces.NewRepo(db)
 
 	big := domain.DefaultSettings()
@@ -163,7 +145,7 @@ func TestRepo_Create_settingsTooLarge(t *testing.T) {
 // or silently colliding.
 func TestRepo_Create_concurrentSlugDerivation(t *testing.T) {
 	t.Parallel()
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	repo := workspaces.NewRepo(db)
 
 	const n = 6
@@ -200,7 +182,7 @@ func TestRepo_Create_concurrentSlugDerivation(t *testing.T) {
 
 func TestRepo_ByID(t *testing.T) {
 	t.Parallel()
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	repo := workspaces.NewRepo(db)
 
 	created, err := repo.Create(t.Context(), workspaces.CreateInput{Name: "Alex", Slug: "alex"})
@@ -228,7 +210,7 @@ func TestRepo_ByID(t *testing.T) {
 
 func TestRepo_BySlug(t *testing.T) {
 	t.Parallel()
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	repo := workspaces.NewRepo(db)
 
 	if _, err := repo.Create(t.Context(), workspaces.CreateInput{Name: "Alex", Slug: "alex"}); err != nil {
@@ -255,7 +237,7 @@ func TestRepo_BySlug(t *testing.T) {
 
 func TestRepo_Update(t *testing.T) {
 	t.Parallel()
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	repo := workspaces.NewRepo(db)
 
 	created, err := repo.Create(t.Context(), workspaces.CreateInput{Name: "Alex", Slug: "alex"})
@@ -379,7 +361,7 @@ func TestRepo_Update(t *testing.T) {
 // allocator's UPDATE has no row to update until the INSERT has run.
 func TestRepo_Create_bootstrapsEditVersion(t *testing.T) {
 	t.Parallel()
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	repo := workspaces.NewRepo(db)
 
 	created, err := repo.Create(t.Context(), workspaces.CreateInput{Name: "Alex", Slug: "alex"})
@@ -406,7 +388,7 @@ func TestRepo_Create_bootstrapsEditVersion(t *testing.T) {
 // workspaces table's own CAS sibling.
 func TestRepo_UpdateExpecting(t *testing.T) {
 	t.Parallel()
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	repo := workspaces.NewRepo(db)
 
 	noop := func(ws *workspaces.Workspace) error { return nil }
@@ -586,7 +568,7 @@ func TestRepo_UpdateExpecting(t *testing.T) {
 
 func TestRepo_Delete(t *testing.T) {
 	t.Parallel()
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	repo := workspaces.NewRepo(db)
 
 	created, err := repo.Create(t.Context(), workspaces.CreateInput{Name: "Alex", Slug: "alex"})
@@ -609,7 +591,7 @@ func TestRepo_Delete(t *testing.T) {
 
 func TestRepo_List(t *testing.T) {
 	t.Parallel()
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	repo := workspaces.NewRepo(db)
 
 	owner1 := insertUser(t, db, "owner-one")
@@ -695,7 +677,7 @@ func insertSpec(t *testing.T, db *store.DB, name string) int64 {
 // back on the Workspace so the caller can show it.
 func TestRepo_EnsureDefault(t *testing.T) {
 	t.Parallel()
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	repo := workspaces.NewRepo(db)
 	specID := insertSpec(t, db, "Widgets API")
 
@@ -765,7 +747,7 @@ func TestRepo_EnsureDefault(t *testing.T) {
 // races on distinct slugs) rather than re-deriving the mechanism.
 func TestRepo_EnsureDefault_concurrentFirstLogin(t *testing.T) {
 	t.Parallel()
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	repo := workspaces.NewRepo(db)
 	specID := insertSpec(t, db, "Widgets API Concurrent")
 	owner := insertUser(t, db, "alex-ensure-race")
@@ -809,7 +791,7 @@ func TestRepo_EnsureDefault_concurrentFirstLogin(t *testing.T) {
 
 func TestRepo_SlugTaken(t *testing.T) {
 	t.Parallel()
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	repo := workspaces.NewRepo(db)
 
 	if _, err := repo.Create(t.Context(), workspaces.CreateInput{Name: "Alex", Slug: "alex"}); err != nil {
@@ -844,7 +826,7 @@ func TestRepo_SlugTaken(t *testing.T) {
 // the schema ("FOREIGN KEY constraint failed" → a 500), not left dangling
 // as P4b's carve-out describes. Delete now detaches the copies first.
 func TestRepo_Delete_forkSourceDetachesItsCopies(t *testing.T) {
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	repo := workspaces.NewRepo(db)
 
 	src, err := repo.Create(t.Context(), workspaces.CreateInput{Name: "Source"})

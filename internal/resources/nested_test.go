@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/yashok111/mocker/internal/domain"
+	"github.com/yashok111/mocker/internal/testkit"
 )
 
 const (
@@ -98,7 +99,7 @@ const nestedFixtureDoc = `{
 func confirmNested(t *testing.T, listSize int) (repo *Repo, org, user *Resource, wsID int64) {
 	t.Helper()
 	dir := t.TempDir()
-	db := newTestDB(t, dir+"/mocker.db")
+	db := testkit.NewDBAt(t, dir+"/mocker.db")
 	specID := importSpecDoc(t, db, []byte(nestedFixtureDoc))
 	wsID = insertWorkspace(t, db, "acme", &specID, domain.Settings{Seed: 1, ListSize: listSize})
 	repo = newTestRepo(t, db, 4<<20, 64<<10)
@@ -191,7 +192,7 @@ func TestConfirm_NestedFamily_PopulatesPerScope(t *testing.T) {
 // keys ONLY, and likewise for base "8".
 func TestConfirm_NestedFamily_AncestorWalkWithinBaseValue(t *testing.T) {
 	dir := t.TempDir()
-	db := newTestDB(t, dir+"/mocker.db")
+	db := testkit.NewDBAt(t, dir+"/mocker.db")
 	specID := importSpecDoc(t, db, []byte(nestedFixtureDoc))
 	wsID := insertWorkspace(t, db, "acme", &specID, domain.Settings{
 		Seed: 1, ListSize: 2, BasePath: "/tenants/{tenantId}", BasePathValues: []string{"7", "8"},
@@ -273,7 +274,7 @@ func TestConfirm_NestedFamily_AncestorWalkWithinBaseValue(t *testing.T) {
 func TestConfirm_NestedFamily_ParentNotConfirmed(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
-	db := newTestDB(t, dir+"/mocker.db")
+	db := testkit.NewDBAt(t, dir+"/mocker.db")
 	specID := importSpecDoc(t, db, []byte(nestedFixtureDoc))
 	wsID := insertWorkspace(t, db, "acme", &specID, domain.Settings{Seed: 1, ListSize: 2})
 	repo := newTestRepo(t, db, 4<<20, 64<<10)
@@ -514,7 +515,7 @@ func TestResetData_Reseed_NestedGroup_ChildFollowsPostReseedParentKeys(t *testin
 func TestResetData_Reseed_NestedGroupAtomicity_ChildOverCaps(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
-	db := newTestDB(t, dir+"/mocker.db")
+	db := testkit.NewDBAt(t, dir+"/mocker.db")
 	specID := importSpecDoc(t, db, []byte(nestedFixtureDoc))
 	wsID := insertWorkspace(t, db, "acme", &specID, domain.Settings{Seed: 1, ListSize: 2})
 	generous := newTestRepo(t, db, 64<<20, 64<<10)
@@ -616,7 +617,7 @@ func TestEncodeScope_InjectiveOverOwnDelimiter(t *testing.T) {
 // not — the same shape [TestConfirm_StaleConfigViaHook] holds for D4/R36's
 // settings fence.
 func TestConfirm_ParentDeclinedBetweenTheReadAndTheWrite_CaughtInsideTheTransaction(t *testing.T) {
-	db := newTestDB(t, t.TempDir()+"/mocker.db")
+	db := testkit.NewDBAt(t, t.TempDir()+"/mocker.db")
 	specID := importSpecDoc(t, db, []byte(nestedFixtureDoc))
 	wsID := insertWorkspace(t, db, "acme", &specID, domain.Settings{Seed: 1, ListSize: 2})
 	repo := newTestRepo(t, db, 4<<20, 64<<10)

@@ -13,6 +13,7 @@ import (
 
 	"github.com/yashok111/mocker/internal/overrides"
 	"github.com/yashok111/mocker/internal/store"
+	"github.com/yashok111/mocker/internal/testkit"
 )
 
 func i64p(v int64) *int64 { return &v }
@@ -25,7 +26,7 @@ func noopMutate(*overrides.Row) error { return nil }
 // whether a check happened).
 func TestPutExpecting_nilIsUnchecked(t *testing.T) {
 	t.Parallel()
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	repo := overrides.NewRepo(db)
 	wsID := insertWorkspace(t, db, "nil-expect")
 	key := overrides.OpKey("GET", "/a")
@@ -59,7 +60,7 @@ func TestPutExpecting_nilIsUnchecked(t *testing.T) {
 // proceed, INSERT at a freshly allocated version" (D7).
 func TestPutExpecting_zeroAgainstNoRow(t *testing.T) {
 	t.Parallel()
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	repo := overrides.NewRepo(db)
 	wsID := insertWorkspace(t, db, "zero-no-row")
 	key := overrides.OpKey("GET", "/b")
@@ -78,7 +79,7 @@ func TestPutExpecting_zeroAgainstNoRow(t *testing.T) {
 // which this table refuses rather than ignores (D7).
 func TestPutExpecting_zeroAgainstLiveRow(t *testing.T) {
 	t.Parallel()
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	repo := overrides.NewRepo(db)
 	wsID := insertWorkspace(t, db, "zero-live-row")
 	key := overrides.OpKey("GET", "/c")
@@ -115,7 +116,7 @@ func TestPutExpecting_zeroAgainstLiveRow(t *testing.T) {
 // allocator directly (D7).
 func TestPutExpecting_matchingVersionAllocatesFresh(t *testing.T) {
 	t.Parallel()
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	repo := overrides.NewRepo(db)
 	wsID := insertWorkspace(t, db, "matching-version")
 	key := overrides.OpKey("GET", "/d")
@@ -144,7 +145,7 @@ func TestPutExpecting_matchingVersionAllocatesFresh(t *testing.T) {
 // present at M != N: conflict" (D7).
 func TestPutExpecting_mismatchedVersionConflicts(t *testing.T) {
 	t.Parallel()
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	repo := overrides.NewRepo(db)
 	wsID := insertWorkspace(t, db, "mismatched-version")
 	key := overrides.OpKey("GET", "/e")
@@ -178,7 +179,7 @@ func TestPutExpecting_mismatchedVersionConflicts(t *testing.T) {
 // override (Put has always seeded a blank row on absence).
 func TestPutExpecting_expectedVersionAgainstDeletedRow(t *testing.T) {
 	t.Parallel()
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	repo := overrides.NewRepo(db)
 	wsID := insertWorkspace(t, db, "deleted-row")
 	key := overrides.OpKey("GET", "/f")
@@ -210,7 +211,7 @@ func TestPutExpecting_expectedVersionAgainstDeletedRow(t *testing.T) {
 // and the row is absent for exactly that reason.
 func TestPutExpecting_workspaceNotFoundBeatsTheCheck(t *testing.T) {
 	t.Parallel()
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	repo := overrides.NewRepo(db)
 
 	_, _, err := repo.PutExpecting(t.Context(), 999999, overrides.OpKey("GET", "/g"), i64p(1), noopMutate)
@@ -231,7 +232,7 @@ func TestPutExpecting_workspaceNotFoundBeatsTheCheck(t *testing.T) {
 // natural key are unchanged.
 func TestReplaceAllTx_restoreOverAnExistingRowAllocatesFreshVersion(t *testing.T) {
 	t.Parallel()
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	repo := overrides.NewRepo(db)
 	wsID := insertWorkspace(t, db, "restore-fresh-version")
 	key := overrides.OpKey("GET", "/h")
@@ -288,7 +289,7 @@ func TestReplaceAllTx_restoreOverAnExistingRowAllocatesFreshVersion(t *testing.T
 // returned keyed by opKey.
 func TestPutManyExpecting_nilIsUnchecked(t *testing.T) {
 	t.Parallel()
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	repo := overrides.NewRepo(db)
 	wsID := insertWorkspace(t, db, "putmany-nil")
 
@@ -317,7 +318,7 @@ func TestPutManyExpecting_nilIsUnchecked(t *testing.T) {
 // write.
 func TestPutManyExpecting_perKeyFiveCaseCheck(t *testing.T) {
 	t.Parallel()
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	repo := overrides.NewRepo(db)
 	wsID := insertWorkspace(t, db, "putmany-five-case")
 	liveKey := overrides.OpKey("GET", "/live")

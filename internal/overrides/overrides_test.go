@@ -10,6 +10,7 @@ import (
 
 	"github.com/yashok111/mocker/internal/overrides"
 	"github.com/yashok111/mocker/internal/recipes"
+	"github.com/yashok111/mocker/internal/testkit"
 )
 
 func raw(s string) json.RawMessage { return json.RawMessage(s) }
@@ -95,7 +96,7 @@ func TestValidation_recipesAndModeAndStatus(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			db := newTestDB(t)
+			db := testkit.NewDB(t)
 			repo := overrides.NewRepo(db)
 			wsID := insertWorkspace(t, db, "alex")
 
@@ -115,7 +116,7 @@ func TestValidation_recipesAndModeAndStatus(t *testing.T) {
 // only to prove it decodes, then stored and read back unchanged.
 func TestValidation_validBase64Body(t *testing.T) {
 	t.Parallel()
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	repo := overrides.NewRepo(db)
 	wsID := insertWorkspace(t, db, "alex")
 
@@ -163,7 +164,7 @@ const maxPinnedBodyBytesForTest = 4 << 20 // mirrors overrides.maxPinnedBodyByte
 func TestValidation_pinnedBodyOverLimit(t *testing.T) {
 	t.Run("literal body, one byte over the limit", func(t *testing.T) {
 		t.Parallel()
-		db := newTestDB(t)
+		db := testkit.NewDB(t)
 		repo := overrides.NewRepo(db)
 		wsID := insertWorkspace(t, db, "alex")
 
@@ -179,7 +180,7 @@ func TestValidation_pinnedBodyOverLimit(t *testing.T) {
 
 	t.Run("base64 body, measured by its DECODED length", func(t *testing.T) {
 		t.Parallel()
-		db := newTestDB(t)
+		db := testkit.NewDB(t)
 		repo := overrides.NewRepo(db)
 		wsID := insertWorkspace(t, db, "alex")
 
@@ -203,7 +204,7 @@ func TestValidation_pinnedBodyOverLimit(t *testing.T) {
 
 	t.Run("at exactly the limit is accepted", func(t *testing.T) {
 		t.Parallel()
-		db := newTestDB(t)
+		db := testkit.NewDB(t)
 		repo := overrides.NewRepo(db)
 		wsID := insertWorkspace(t, db, "alex")
 
@@ -235,7 +236,7 @@ func TestValidation_tooManyRecipesInOneVariant(t *testing.T) {
 
 	t.Run("over the limit is rejected", func(t *testing.T) {
 		t.Parallel()
-		db := newTestDB(t)
+		db := testkit.NewDB(t)
 		repo := overrides.NewRepo(db)
 		wsID := insertWorkspace(t, db, "alex")
 
@@ -250,7 +251,7 @@ func TestValidation_tooManyRecipesInOneVariant(t *testing.T) {
 
 	t.Run("at exactly the limit is accepted", func(t *testing.T) {
 		t.Parallel()
-		db := newTestDB(t)
+		db := testkit.NewDB(t)
 		repo := overrides.NewRepo(db)
 		wsID := insertWorkspace(t, db, "alex")
 
@@ -269,7 +270,7 @@ func TestValidation_tooManyRecipesInOneVariant(t *testing.T) {
 // two rows.
 func TestValidation_pathAndMethod(t *testing.T) {
 	t.Parallel()
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	repo := overrides.NewRepo(db)
 	wsID := insertWorkspace(t, db, "alex")
 
@@ -311,7 +312,7 @@ func TestValidation_pathAndMethod(t *testing.T) {
 // slash requirement is what stands between a caller and an ambiguous Put.
 func TestPut_badOpKeyIsRejectedBeforeAnyDBWork(t *testing.T) {
 	t.Parallel()
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	repo := overrides.NewRepo(db)
 	wsID := insertWorkspace(t, db, "alex")
 

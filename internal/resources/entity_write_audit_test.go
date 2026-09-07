@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/yashok111/mocker/internal/domain"
+	"github.com/yashok111/mocker/internal/testkit"
 )
 
 // TestSet_sameKeyInAnotherBaseScopeIs409NotA500 pins the 2026-09-03 audit
@@ -17,7 +18,7 @@ import (
 // a typed conflict now.
 func TestSet_sameKeyInAnotherBaseScopeIs409NotA500(t *testing.T) {
 	dir := t.TempDir()
-	db := newTestDB(t, dir+"/mocker.db")
+	db := testkit.NewDBAt(t, dir+"/mocker.db")
 	specID := importSpecDoc(t, db, []byte(nestedFixtureDoc))
 	wsID := insertWorkspace(t, db, "acme", &specID, domain.Settings{
 		Seed: 1, ListSize: 2, BasePath: "/tenants/{tenantId}", BasePathValues: []string{"7", "8"},
@@ -53,7 +54,7 @@ func TestSet_sameKeyInAnotherBaseScopeIs409NotA500(t *testing.T) {
 // and id disagreed. The key must round-trip through the id type unchanged.
 func TestSet_keyMustBeCanonicalForTheIDType(t *testing.T) {
 	dir := t.TempDir()
-	db := newTestDB(t, dir+"/mocker.db")
+	db := testkit.NewDBAt(t, dir+"/mocker.db")
 	specID := importSpecDoc(t, db, []byte(nestedFixtureDoc))
 	wsID := insertWorkspace(t, db, "acme", &specID, domain.Settings{Seed: 1, ListSize: 2})
 	repo := newTestRepo(t, db, 4<<20, 64<<10)
@@ -100,7 +101,7 @@ func TestCanonicalEntityKey(t *testing.T) {
 // non-canonical key is Set's own refusal.
 func TestPatch_mergesInsideOneWriteAndRefusesWhatSetRefuses(t *testing.T) {
 	dir := t.TempDir()
-	db := newTestDB(t, dir+"/mocker.db")
+	db := testkit.NewDBAt(t, dir+"/mocker.db")
 	specID := importSpecDoc(t, db, []byte(nestedFixtureDoc))
 	wsID := insertWorkspace(t, db, "acme", &specID, domain.Settings{
 		Seed: 1, ListSize: 2, BasePath: "/tenants/{tenantId}", BasePathValues: []string{"7", "8"},

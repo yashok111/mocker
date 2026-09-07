@@ -16,8 +16,9 @@
 // phase's acceptance test (internal/gen's included) shares one copy instead
 // of growing a third near-duplicate.
 //
-// This file deliberately does NOT reuse repo_test.go's newTestDB/testConfig/
-// newRepo helpers, even though they would fit: this package's other files
+// This file deliberately does NOT reuse repo_test.go's testConfig/newRepo
+// helpers (nor internal/testkit's NewDBAt, which repo_test.go itself calls
+// directly), even though they would fit: this package's other files
 // are being written by a different agent in parallel with this one (see the
 // phase's HARD RULE 1), so a symbol this file depends on could be renamed or
 // removed out from under it mid-run. Its own acceptanceDB/acceptanceConfig

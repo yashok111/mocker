@@ -9,6 +9,7 @@ import (
 	"github.com/yashok111/mocker/internal/customep"
 	"github.com/yashok111/mocker/internal/jsonx"
 	"github.com/yashok111/mocker/internal/overrides"
+	"github.com/yashok111/mocker/internal/testkit"
 )
 
 // TestValidateDraft_functionOnAStreamIsRefusedByItsOwnName is acceptance
@@ -77,7 +78,7 @@ func TestValidateDraft_anHTTPRowStillTakesAFunction(t *testing.T) {
 // validation unchanged.
 func TestRepo_aStoredLuaTickSurvivesReloadAndUpdate(t *testing.T) {
 	t.Parallel()
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	repo := customep.NewRepo(db)
 	wsID := insertWorkspace(t, db, "alex")
 

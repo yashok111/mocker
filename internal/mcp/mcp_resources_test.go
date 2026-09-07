@@ -3,32 +3,30 @@
 // fakeCaller or scriptedCaller (mcp_test.go's own comment on why), and
 // neither one ever opens a database — so "its effect is observed in the
 // database" is unbuildable against either. This file builds ONE endpoint
-// over a REAL *admin.Server on a REAL, migrated SQLite database instead —
-// the same wiring internal/admin/loopback_test.go's own
-// loopbackTestServer uses, re-created here rather than reused because that
-// helper is unexported in a _test.go file this package cannot reach into.
+// over a REAL *admin.Server on a REAL, migrated SQLite database instead,
+// via internal/testkit/adminkit.NewAdminServer — the bootstrap this file
+// and internal/admin's own newTestServerCfg used to build independently,
+// identically, before that package existed.
 // internal/admin does not import internal/mcp in production (checked, not
 // assumed — routes_test.go's own comment makes the identical claim for the
-// same edge), so importing it here in the other direction opens no cycle.
+// same edge), so importing it here (via adminkit, which imports admin) in
+// the other direction opens no cycle.
 package mcp
 
 import (
 	"encoding/json"
-	"io"
-	"log/slog"
 	"slices"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/yashok111/mocker/internal/admin"
-	"github.com/yashok111/mocker/internal/auth"
 	"github.com/yashok111/mocker/internal/config"
 	"github.com/yashok111/mocker/internal/domain"
 	"github.com/yashok111/mocker/internal/specs"
 	"github.com/yashok111/mocker/internal/store"
 	"github.com/yashok111/mocker/internal/testauth"
-	"github.com/yashok111/mocker/internal/workspaces"
+	"github.com/yashok111/mocker/internal/testkit/adminkit"
 )
 
 // resourcesFixtureDoc is a small, hand-built OpenAPI document declaring one
@@ -103,26 +101,16 @@ func resourcesTestConfig(t *testing.T) *config.Config {
 }
 
 // newResourcesTestServer builds a fully wired *admin.Server over a fresh,
-// migrated SQLite database at cfg.DBPath(). It implements Caller, so it is
-// what every tool in this file's tests dispatches through — the SAME
-// resourcesRepo/specsRepo an equivalent real deployment would build,
-// pointed at the one database importResourcesFixtureSpec and
-// insertResourcesTestWorkspace also write to directly.
+// migrated SQLite database at cfg.DBPath() (adminkit.NewAdminServer). It
+// implements Caller, so it is what every tool in this file's tests
+// dispatches through — the SAME resourcesRepo/specsRepo an equivalent real
+// deployment would build, pointed at the one database
+// importResourcesFixtureSpec and insertResourcesTestWorkspace also write to
+// directly.
 func newResourcesTestServer(t *testing.T, cfg *config.Config) (*admin.Server, *store.DB) {
 	t.Helper()
-	db, err := store.Open(t.Context(), cfg.DBPath())
-	if err != nil {
-		t.Fatalf("open db: %v", err)
-	}
-	t.Cleanup(func() { _ = db.Close() })
-	if err := db.Migrate(t.Context(), nil); err != nil {
-		t.Fatalf("migrate: %v", err)
-	}
-	provider := auth.NewSharedPassword(cfg)
-	sessions := auth.NewManager(db, cfg, provider)
-	ws := workspaces.NewRepo(db)
-	log := slog.New(slog.NewTextHandler(io.Discard, nil))
-	return admin.New(cfg, sessions, ws, db, log), db
+	as := adminkit.NewAdminServer(t, cfg)
+	return as.Server, as.DB
 }
 
 // importResourcesFixtureSpec imports resourcesFixtureDoc, deriving its one

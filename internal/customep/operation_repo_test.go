@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/yashok111/mocker/internal/customep"
+	"github.com/yashok111/mocker/internal/testkit"
 )
 
 // TestRepo_operationIDIsUniqueAmongCustomRows is D3's transaction-side
@@ -17,7 +18,7 @@ import (
 // never collides.
 func TestRepo_operationIDIsUniqueAmongCustomRows(t *testing.T) {
 	t.Parallel()
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	wsID := insertWorkspace(t, db, "opids")
 	repo := customep.NewRepo(db)
 	ctx := context.Background()

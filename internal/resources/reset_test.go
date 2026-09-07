@@ -16,6 +16,7 @@ import (
 	"github.com/yashok111/mocker/internal/jsonx"
 	"github.com/yashok111/mocker/internal/specs"
 	"github.com/yashok111/mocker/internal/store"
+	"github.com/yashok111/mocker/internal/testkit"
 	"github.com/yashok111/mocker/internal/testspec"
 )
 
@@ -160,7 +161,7 @@ func activateScenario(t *testing.T, db *store.DB, workspaceID, scenarioID int64)
 
 func TestResetData_Clear_DeletesEntitiesKeepsResourcesRows(t *testing.T) {
 	t.Parallel()
-	db := newTestDB(t, t.TempDir()+"/mocker.db")
+	db := testkit.NewDBAt(t, t.TempDir()+"/mocker.db")
 	specID := importFixtureSpec(t, db)
 	wsID := insertWorkspace(t, db, "alpha", &specID, domain.Settings{Seed: 1, ListSize: 5})
 	repo := newTestRepo(t, db, 4<<20, 64<<10)
@@ -202,7 +203,7 @@ func TestResetData_Clear_DeletesEntitiesKeepsResourcesRows(t *testing.T) {
 
 func TestResetData_Reseed_Idempotent(t *testing.T) {
 	t.Parallel()
-	db := newTestDB(t, t.TempDir()+"/mocker.db")
+	db := testkit.NewDBAt(t, t.TempDir()+"/mocker.db")
 	specID := importFixtureSpec(t, db)
 	wsID := insertWorkspace(t, db, "alpha", &specID, domain.Settings{Seed: 42, ListSize: 3})
 	repo := newTestRepo(t, db, 4<<20, 64<<10)
@@ -250,7 +251,7 @@ func TestResetData_Reseed_Idempotent(t *testing.T) {
 
 func TestResetData_Reseed_ListSizeEditChangesDataNotRowCount(t *testing.T) {
 	t.Parallel()
-	db := newTestDB(t, t.TempDir()+"/mocker.db")
+	db := testkit.NewDBAt(t, t.TempDir()+"/mocker.db")
 	specID := importFixtureSpec(t, db)
 	wsID := insertWorkspace(t, db, "alpha", &specID, domain.Settings{Seed: 1, ListSize: 2})
 	repo := newTestRepo(t, db, 4<<20, 64<<10)
@@ -305,7 +306,7 @@ func TestResetData_Reseed_ListSizeEditChangesDataNotRowCount(t *testing.T) {
 
 func TestResetData_Reseed_ResetsSeqToSeedCountPlusOne(t *testing.T) {
 	t.Parallel()
-	db := newTestDB(t, t.TempDir()+"/mocker.db")
+	db := testkit.NewDBAt(t, t.TempDir()+"/mocker.db")
 	specID := importFixtureSpec(t, db)
 	wsID := insertWorkspace(t, db, "alpha", &specID, domain.Settings{Seed: 1, ListSize: 3})
 	repo := newTestRepo(t, db, 4<<20, 64<<10)
@@ -337,7 +338,7 @@ func TestResetData_Reseed_ResetsSeqToSeedCountPlusOne(t *testing.T) {
 
 func TestResetData_Clear_DoesNotRewindSeq(t *testing.T) {
 	t.Parallel()
-	db := newTestDB(t, t.TempDir()+"/mocker.db")
+	db := testkit.NewDBAt(t, t.TempDir()+"/mocker.db")
 	specID := importFixtureSpec(t, db)
 	wsID := insertWorkspace(t, db, "alpha", &specID, domain.Settings{Seed: 1, ListSize: 3})
 	repo := newTestRepo(t, db, 4<<20, 64<<10)
@@ -370,7 +371,7 @@ func TestResetData_NeitherModeBumpsRevision(t *testing.T) {
 	for _, mode := range []ResetMode{ResetModeReseed, ResetModeClear} {
 		t.Run(string(mode), func(t *testing.T) {
 			t.Parallel()
-			db := newTestDB(t, t.TempDir()+"/mocker.db")
+			db := testkit.NewDBAt(t, t.TempDir()+"/mocker.db")
 			specID := importFixtureSpec(t, db)
 			wsID := insertWorkspace(t, db, "alpha", &specID, domain.Settings{Seed: 1, ListSize: 3})
 			repo := newTestRepo(t, db, 4<<20, 64<<10)
@@ -398,7 +399,7 @@ func TestResetData_NeitherModeBumpsRevision(t *testing.T) {
 // one that silently stopped (the same reasoning TestConfirm_StaleConfigViaHook
 // applies to Confirm/fenceConfirmTx).
 func TestResetData_Reseed_StaleConfigOnSeedEdit_NoScenario(t *testing.T) {
-	db := newTestDB(t, t.TempDir()+"/mocker.db")
+	db := testkit.NewDBAt(t, t.TempDir()+"/mocker.db")
 	specID := importFixtureSpec(t, db)
 	wsID := insertWorkspace(t, db, "alpha", &specID, domain.Settings{Seed: 1, ListSize: 3})
 	repo := newTestRepo(t, db, 4<<20, 64<<10)
@@ -424,7 +425,7 @@ func TestResetData_Reseed_StaleConfigOnSeedEdit_NoScenario(t *testing.T) {
 // the identical race, but mode=clear, which does not fence seed/listSize at
 // all and must succeed.
 func TestResetData_Clear_SucceedsDespiteSeedEdit(t *testing.T) {
-	db := newTestDB(t, t.TempDir()+"/mocker.db")
+	db := testkit.NewDBAt(t, t.TempDir()+"/mocker.db")
 	specID := importFixtureSpec(t, db)
 	wsID := insertWorkspace(t, db, "alpha", &specID, domain.Settings{Seed: 1, ListSize: 3})
 	repo := newTestRepo(t, db, 4<<20, 64<<10)
@@ -450,7 +451,7 @@ func TestResetData_Clear_SucceedsDespiteSeedEdit(t *testing.T) {
 func TestResetData_BareRevisionBumpRefusesNeitherMode(t *testing.T) {
 	for _, mode := range []ResetMode{ResetModeReseed, ResetModeClear} {
 		t.Run(string(mode), func(t *testing.T) {
-			db := newTestDB(t, t.TempDir()+"/mocker.db")
+			db := testkit.NewDBAt(t, t.TempDir()+"/mocker.db")
 			specID := importFixtureSpec(t, db)
 			wsID := insertWorkspace(t, db, "alpha", &specID, domain.Settings{Seed: 1, ListSize: 3})
 			repo := newTestRepo(t, db, 4<<20, 64<<10)
@@ -475,7 +476,7 @@ func TestResetData_BareRevisionBumpRefusesNeitherMode(t *testing.T) {
 // --- clause 11: an active scenario supplies the seed, workspace edits don't
 
 func TestResetData_Reseed_ActiveScenarioSuppliesSeed(t *testing.T) {
-	db := newTestDB(t, t.TempDir()+"/mocker.db")
+	db := testkit.NewDBAt(t, t.TempDir()+"/mocker.db")
 	specID := importFixtureSpec(t, db)
 	wsID := insertWorkspace(t, db, "alpha", &specID, domain.Settings{Seed: 1, ListSize: 3})
 	repo := newTestRepo(t, db, 4<<20, 64<<10)
@@ -550,7 +551,7 @@ func TestResetData_Reseed_ActiveScenarioSuppliesSeed(t *testing.T) {
 // --- clause 12: the roster fence -------------------------------------------
 
 func TestResetData_Reseed_RosterFence(t *testing.T) {
-	db := newTestDB(t, t.TempDir()+"/mocker.db")
+	db := testkit.NewDBAt(t, t.TempDir()+"/mocker.db")
 	specID := importFixtureSpec(t, db)
 	wsID := insertWorkspace(t, db, "alpha", &specID, domain.Settings{Seed: 1, ListSize: 2})
 	repo := newTestRepo(t, db, 4<<20, 64<<10)
@@ -595,7 +596,7 @@ func TestResetData_Reseed_RosterFence(t *testing.T) {
 // --- clause 14: the no-op count is taken LIVE, inside the transaction -----
 
 func TestResetData_Clear_NoOpThenConcurrentInsertGetsDeletedAnyway(t *testing.T) {
-	db := newTestDB(t, t.TempDir()+"/mocker.db")
+	db := testkit.NewDBAt(t, t.TempDir()+"/mocker.db")
 	specID := importFixtureSpec(t, db)
 	wsID := insertWorkspace(t, db, "alpha", &specID, domain.Settings{Seed: 1, ListSize: 1})
 	repo := newTestRepo(t, db, 4<<20, 64<<10)
@@ -644,7 +645,7 @@ func TestResetData_Clear_NoOpThenConcurrentInsertGetsDeletedAnyway(t *testing.T)
 
 func TestResetData_Reseed_FromZeroRepopulates(t *testing.T) {
 	t.Parallel()
-	db := newTestDB(t, t.TempDir()+"/mocker.db")
+	db := testkit.NewDBAt(t, t.TempDir()+"/mocker.db")
 	specID := importFixtureSpec(t, db)
 	wsID := insertWorkspace(t, db, "alpha", &specID, domain.Settings{Seed: 1, ListSize: 4})
 	repo := newTestRepo(t, db, 4<<20, 64<<10)
@@ -702,7 +703,7 @@ func strandOneOfTwoFamilies(t *testing.T, db *store.DB, repo *Repo) (wsID int64,
 // family is stranded, so the call deletes and inserts nothing.
 func TestResetData_Reseed_AllFamiliesStranded(t *testing.T) {
 	t.Parallel()
-	db := newTestDB(t, t.TempDir()+"/mocker.db")
+	db := testkit.NewDBAt(t, t.TempDir()+"/mocker.db")
 	specA := importFixtureSpec(t, db)
 	wsID := insertWorkspace(t, db, "alpha", &specA, domain.Settings{Seed: 1, ListSize: 2})
 	repo := newTestRepo(t, db, 4<<20, 64<<10)
@@ -735,7 +736,7 @@ func TestResetData_Reseed_AllFamiliesStranded(t *testing.T) {
 // TestResetData_Reseed_OneStrandedOneRepopulated is clause 17.
 func TestResetData_Reseed_OneStrandedOneRepopulated(t *testing.T) {
 	t.Parallel()
-	db := newTestDB(t, t.TempDir()+"/mocker.db")
+	db := testkit.NewDBAt(t, t.TempDir()+"/mocker.db")
 	repo := newTestRepo(t, db, 4<<20, 64<<10)
 	wsID, widgets, users := strandOneOfTwoFamilies(t, db, repo)
 
@@ -762,7 +763,7 @@ func TestResetData_Reseed_OneStrandedOneRepopulated(t *testing.T) {
 // concept the DELETE-side of clear never consults.
 func TestResetData_Clear_IgnoresStrandingDeletesEverything(t *testing.T) {
 	t.Parallel()
-	db := newTestDB(t, t.TempDir()+"/mocker.db")
+	db := testkit.NewDBAt(t, t.TempDir()+"/mocker.db")
 	repo := newTestRepo(t, db, 4<<20, 64<<10)
 	wsID, widgets, users := strandOneOfTwoFamilies(t, db, repo)
 
@@ -782,7 +783,7 @@ func TestResetData_Clear_IgnoresStrandingDeletesEverything(t *testing.T) {
 
 func TestResetData_Reseed_OverCapsSkip(t *testing.T) {
 	t.Parallel()
-	db := newTestDB(t, t.TempDir()+"/mocker.db")
+	db := testkit.NewDBAt(t, t.TempDir()+"/mocker.db")
 	specID := importFixtureSpec(t, db)
 	wsID := insertWorkspace(t, db, "alpha", &specID, domain.Settings{Seed: 1, ListSize: 50})
 	generous := newTestRepo(t, db, 64<<20, 64<<10)
@@ -818,7 +819,7 @@ func TestResetData_Reseed_OverCapsSkip(t *testing.T) {
 
 func TestResetData_Reseed_PopulationFailedSkip(t *testing.T) {
 	t.Parallel()
-	db := newTestDB(t, t.TempDir()+"/mocker.db")
+	db := testkit.NewDBAt(t, t.TempDir()+"/mocker.db")
 	specID := importSpecDoc(t, db, []byte(brokenDoc))
 	wsID := insertWorkspace(t, db, "alpha", &specID, domain.Settings{Seed: 1, ListSize: 2})
 	repo := newTestRepo(t, db, 4<<20, 64<<10)
@@ -866,7 +867,7 @@ func TestResetData_EmptyRoster_NoSpecBound(t *testing.T) {
 	for _, mode := range []ResetMode{ResetModeReseed, ResetModeClear} {
 		t.Run(string(mode), func(t *testing.T) {
 			t.Parallel()
-			db := newTestDB(t, t.TempDir()+"/mocker.db")
+			db := testkit.NewDBAt(t, t.TempDir()+"/mocker.db")
 			wsID := insertWorkspace(t, db, "alpha", nil, domain.Settings{})
 			repo := newTestRepo(t, db, 4<<20, 64<<10)
 
@@ -912,7 +913,7 @@ func TestResetData_EmptyRoster_NoSpecBound(t *testing.T) {
 func TestResetData_RenameBetweenTheReadAndTheWrite_CaughtInsideTheTransaction(t *testing.T) {
 	for _, mode := range []ResetMode{ResetModeReseed, ResetModeClear} {
 		t.Run(string(mode), func(t *testing.T) {
-			db := newTestDB(t, t.TempDir()+"/mocker.db")
+			db := testkit.NewDBAt(t, t.TempDir()+"/mocker.db")
 			specID := importFixtureSpec(t, db)
 			wsID := insertWorkspace(t, db, "alpha", &specID, domain.Settings{Seed: 1, ListSize: 3})
 			repo := newTestRepo(t, db, 4<<20, 64<<10)
@@ -969,7 +970,7 @@ func mustRenameWorkspace(t *testing.T, db *store.DB, wsID int64, slug string) {
 func TestResetData_Reseed_DeepSubtreeGroup_LeafOverCaps_SkipsWholeGroup(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
-	db := newTestDB(t, dir+"/mocker.db")
+	db := testkit.NewDBAt(t, dir+"/mocker.db")
 	specID := importSpecDoc(t, db, testspec.DeepNestingDoc())
 	wsID := insertWorkspace(t, db, "acme", &specID, domain.Settings{Seed: 1, ListSize: 2})
 	generous := newTestRepo(t, db, 64<<20, 64<<10)
@@ -1150,7 +1151,7 @@ func TestResetData_Reseed_DeepSubtree_ReScopesBothHopsToPreparedKeys(t *testing.
 // learned about the declared set fails (it repopulates ONE base scope and
 // still reports changed:true).
 func TestResetData_Reseed_RepopulatesEveryDeclaredBaseScope(t *testing.T) {
-	db := newTestDB(t, t.TempDir()+"/mocker.db")
+	db := testkit.NewDBAt(t, t.TempDir()+"/mocker.db")
 	specID := importFixtureSpec(t, db)
 	wsID := insertWorkspace(t, db, "alpha", &specID, domain.Settings{
 		Seed: 1, ListSize: 3, BasePath: "/orgs/{orgId}", BasePathValues: []string{"7", "8"},
@@ -1207,7 +1208,7 @@ func TestResetData_Reseed_RepopulatesEveryDeclaredBaseScope(t *testing.T) {
 // settings name a DIFFERENT declared set, and asserts the rows land in the
 // WORKSPACE's own base scopes, not the scenario's.
 func TestResetData_Reseed_UsesWorkspaceDeclaredSetNotActiveScenarios(t *testing.T) {
-	db := newTestDB(t, t.TempDir()+"/mocker.db")
+	db := testkit.NewDBAt(t, t.TempDir()+"/mocker.db")
 	specID := importFixtureSpec(t, db)
 	wsSettings := domain.Settings{
 		Seed: 1, ListSize: 3, BasePath: "/orgs/{orgId}", BasePathValues: []string{"7", "8"},
@@ -1289,7 +1290,7 @@ func TestResetData_Reseed_UsesWorkspaceDeclaredSetNotActiveScenarios(t *testing.
 func TestResetData_Reseed_NestedGroup_MultipleBaseValues(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
-	db := newTestDB(t, dir+"/mocker.db")
+	db := testkit.NewDBAt(t, dir+"/mocker.db")
 	specID := importSpecDoc(t, db, testspec.DeepNestingDoc())
 	wsID := insertWorkspace(t, db, "acme", &specID, domain.Settings{
 		Seed: 1, ListSize: 2, BasePath: "/tenants/{tenantId}", BasePathValues: []string{"7", "8"},
@@ -1396,7 +1397,7 @@ func TestResetData_Reseed_NestedGroup_MultipleBaseValues(t *testing.T) {
 // the workspace no longer declares, and answers 200 changed:true while every
 // row it just wrote is unreachable behind D7.3's membership check.
 func TestResetData_Reseed_StaleBasePathValuesWithScenarioActive(t *testing.T) {
-	db := newTestDB(t, t.TempDir()+"/mocker.db")
+	db := testkit.NewDBAt(t, t.TempDir()+"/mocker.db")
 	specID := importFixtureSpec(t, db)
 	settings := domain.Settings{Seed: 1, ListSize: 3, BasePath: "/orgs/{orgId}", BasePathValues: []string{"7", "8"}}
 	wsID := insertWorkspace(t, db, "alpha", &specID, settings)

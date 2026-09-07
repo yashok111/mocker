@@ -7,6 +7,7 @@ import (
 	"github.com/yashok111/mocker/internal/domain"
 	"github.com/yashok111/mocker/internal/scenarios"
 	"github.com/yashok111/mocker/internal/store"
+	"github.com/yashok111/mocker/internal/testkit"
 )
 
 // TestCreateFromCurrentState_allocatesDistinctEditVersion covers D4/D9's
@@ -17,7 +18,7 @@ import (
 // workspace edit_seq exists to guarantee (D4's "no two LIVE rows of a
 // workspace share an edit_version").
 func TestCreateFromCurrentState_allocatesDistinctEditVersion(t *testing.T) {
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	repo, _ := newRepos(t, db)
 	ws := insertWorkspace(t, db, "ws", nil, domain.DefaultSettings())
 
@@ -70,7 +71,7 @@ func TestCreateFromCurrentState_allocatesDistinctEditVersion(t *testing.T) {
 // clone, which is exactly what copying the column instead of allocating a
 // fresh one would produce.
 func TestCloneFrom_allocatesItsOwnEditVersion(t *testing.T) {
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	repo, _ := newRepos(t, db)
 	ws := insertWorkspace(t, db, "ws", nil, domain.DefaultSettings())
 
@@ -101,7 +102,7 @@ func TestCloneFrom_allocatesItsOwnEditVersion(t *testing.T) {
 // current version proceeds, and the row is stamped with a NEW version
 // (never expect+1 in place — D4/D9).
 func TestRenameExpecting_matchingVersionSucceedsAndAllocatesFresh(t *testing.T) {
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	repo, _ := newRepos(t, db)
 	ws := insertWorkspace(t, db, "ws", nil, domain.DefaultSettings())
 
@@ -135,7 +136,7 @@ func TestRenameExpecting_matchingVersionSucceedsAndAllocatesFresh(t *testing.T) 
 // payload shape D8 requires: the conflict carries the row it lost to, not
 // merely a boolean.
 func TestRenameExpecting_staleVersionIsEditConflictCarryingCurrentRow(t *testing.T) {
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	repo, _ := newRepos(t, db)
 	ws := insertWorkspace(t, db, "ws", nil, domain.DefaultSettings())
 
@@ -183,7 +184,7 @@ func TestRenameExpecting_staleVersionIsEditConflictCarryingCurrentRow(t *testing
 // ErrEditConflict (with Gone:true), never ErrNotFound. ErrNotFound stays
 // reserved for the "no expectation at all" caller.
 func TestRenameExpecting_deletedRowIsEditConflictNotNotFound(t *testing.T) {
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	repo, _ := newRepos(t, db)
 	ws := insertWorkspace(t, db, "ws", nil, domain.DefaultSettings())
 
@@ -221,7 +222,7 @@ func TestRenameExpecting_deletedRowIsEditConflictNotNotFound(t *testing.T) {
 // tombstone. Zero rows here means "not yours", and that is ErrNotFound —
 // the target-row qualifier's whole point.
 func TestRenameExpecting_crossWorkspaceScenarioKeepsThe404(t *testing.T) {
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	repo, _ := newRepos(t, db)
 	wsA := insertWorkspace(t, db, "a", nil, domain.DefaultSettings())
 	wsB := insertWorkspace(t, db, "b", nil, domain.DefaultSettings())
@@ -257,7 +258,7 @@ func TestRenameExpecting_crossWorkspaceScenarioKeepsThe404(t *testing.T) {
 // CONFLICT (not silently proceed, and not ErrNotFound either — an
 // expectation was sent).
 func TestRenameExpecting_expectZeroOnLiveRowIsRefused(t *testing.T) {
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	repo, _ := newRepos(t, db)
 	ws := insertWorkspace(t, db, "ws", nil, domain.DefaultSettings())
 
@@ -291,7 +292,7 @@ func TestRenameExpecting_expectZeroOnLiveRowIsRefused(t *testing.T) {
 // particular, it must NOT reject a caller for any version mismatch, because
 // it makes no claim about one at all.
 func TestRename_delegatesWithNoExpectationAndPerformsNoCheck(t *testing.T) {
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	repo, _ := newRepos(t, db)
 	ws := insertWorkspace(t, db, "ws", nil, domain.DefaultSettings())
 

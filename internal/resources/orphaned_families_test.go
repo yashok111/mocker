@@ -10,6 +10,7 @@ import (
 
 	"github.com/yashok111/mocker/internal/domain"
 	"github.com/yashok111/mocker/internal/store"
+	"github.com/yashok111/mocker/internal/testkit"
 )
 
 // TestOrphanedFamilies_namesFamiliesTheNewestGenerationDoesNotSuggest is the
@@ -18,7 +19,7 @@ import (
 // because a re-bind moved the spec out from under it — reads true.
 func TestOrphanedFamilies_namesFamiliesTheNewestGenerationDoesNotSuggest(t *testing.T) {
 	t.Parallel()
-	db := newTestDB(t, t.TempDir()+"/mocker.db")
+	db := testkit.NewDBAt(t, t.TempDir()+"/mocker.db")
 	specA := importFixtureSpec(t, db)
 	repo := newTestRepo(t, db, 4<<20, 64<<10)
 
@@ -70,7 +71,7 @@ func TestOrphanedFamilies_nilSpecID_answersEmptyMapWithoutTouchingDB(t *testing.
 // an empty map without erroring, regardless of what the spec suggests.
 func TestOrphanedFamilies_emptyFamilies_answersEmptyMap(t *testing.T) {
 	t.Parallel()
-	db := newTestDB(t, t.TempDir()+"/mocker.db")
+	db := testkit.NewDBAt(t, t.TempDir()+"/mocker.db")
 	specA := importFixtureSpec(t, db)
 	repo := newTestRepo(t, db, 4<<20, 64<<10)
 
@@ -95,7 +96,7 @@ func TestOrphanedFamilies_emptyFamilies_answersEmptyMap(t *testing.T) {
 // to a second reader's.
 func TestResetData_Reseed_AgreesWithOrphanedFamiliesAfterRederive(t *testing.T) {
 	t.Parallel()
-	db := newTestDB(t, t.TempDir()+"/mocker.db")
+	db := testkit.NewDBAt(t, t.TempDir()+"/mocker.db")
 	specA := importFixtureSpec(t, db)
 	wsID := insertWorkspace(t, db, "alpha", &specA, domain.Settings{Seed: 1, ListSize: 2})
 	repo := newTestRepo(t, db, 4<<20, 64<<10)

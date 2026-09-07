@@ -11,26 +11,8 @@ import (
 	"github.com/yashok111/mocker/internal/overrides"
 	"github.com/yashok111/mocker/internal/recipes"
 	"github.com/yashok111/mocker/internal/store"
+	"github.com/yashok111/mocker/internal/testkit"
 )
-
-// newTestDB opens a fresh, migrated SQLite file under t.TempDir(), mirroring
-// internal/workspaces/repo_test.go's harness.
-func newTestDB(t *testing.T) *store.DB {
-	t.Helper()
-	db, err := store.Open(t.Context(), t.TempDir()+"/mocker.db")
-	if err != nil {
-		t.Fatalf("open db: %v", err)
-	}
-	t.Cleanup(func() {
-		if err := db.Close(); err != nil {
-			t.Errorf("close db: %v", err)
-		}
-	})
-	if err := db.Migrate(t.Context(), nil); err != nil {
-		t.Fatalf("migrate: %v", err)
-	}
-	return db
-}
 
 // insertWorkspace writes a minimal workspaces row directly. The overrides
 // package owns no workspace logic (and must not import internal/workspaces
@@ -150,7 +132,7 @@ func fullRow(workspaceID, opID int64, method, path string) *overrides.Row {
 // field populated" from the task's test list.
 func TestRepo_Put_insertThenReadBack(t *testing.T) {
 	t.Parallel()
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	repo := overrides.NewRepo(db)
 	wsID := insertWorkspace(t, db, "alex")
 	opID := insertOperation(t, db, "POST", "/orders/{id}")
@@ -185,7 +167,7 @@ func TestRepo_Put_insertThenReadBack(t *testing.T) {
 // BodyEncoding and FailDirective.
 func TestRepo_Put_updateOneFieldRoundTripsTheRest(t *testing.T) {
 	t.Parallel()
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	repo := overrides.NewRepo(db)
 	wsID := insertWorkspace(t, db, "alex")
 	opID := insertOperation(t, db, "GET", "/widgets/{id}")
@@ -260,7 +242,7 @@ func TestRepo_Put_updateOneFieldRoundTripsTheRest(t *testing.T) {
 // one call, and the bump must still be 1.
 func TestRepo_Put_revisionBumpedByExactlyOne(t *testing.T) {
 	t.Parallel()
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	repo := overrides.NewRepo(db)
 	wsID := insertWorkspace(t, db, "alex")
 
@@ -287,7 +269,7 @@ func TestRepo_Put_revisionBumpedByExactlyOne(t *testing.T) {
 // by exactly one per ... PutMany (NOT per row)".
 func TestRepo_PutMany_oneRevisionBumpForManyRows(t *testing.T) {
 	t.Parallel()
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	repo := overrides.NewRepo(db)
 	wsID := insertWorkspace(t, db, "alex")
 
@@ -336,7 +318,7 @@ func TestRepo_PutMany_oneRevisionBumpForManyRows(t *testing.T) {
 // future caller is added that forgets to read-merge first.
 func TestRepo_PutMany_ReplacesRowWholesale(t *testing.T) {
 	t.Parallel()
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	repo := overrides.NewRepo(db)
 	wsID := insertWorkspace(t, db, "alex")
 
@@ -390,7 +372,7 @@ func TestRepo_PutMany_ReplacesRowWholesale(t *testing.T) {
 // target workspace and none of another's in a single call.
 func TestRepo_ForWorkspace_isOneQuery(t *testing.T) {
 	t.Parallel()
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	repo := overrides.NewRepo(db)
 	wsA := insertWorkspace(t, db, "workspace-a")
 	wsB := insertWorkspace(t, db, "workspace-b")
@@ -424,7 +406,7 @@ func TestRepo_ForWorkspace_isOneQuery(t *testing.T) {
 // path.
 func TestRepo_Delete(t *testing.T) {
 	t.Parallel()
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	repo := overrides.NewRepo(db)
 	wsID := insertWorkspace(t, db, "alex")
 	key := overrides.OpKey("GET", "/gone")
@@ -472,7 +454,7 @@ func TestRepo_Delete(t *testing.T) {
 // sql.ErrNoRows or a panic.
 func TestRepo_Get_missing(t *testing.T) {
 	t.Parallel()
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	repo := overrides.NewRepo(db)
 	wsID := insertWorkspace(t, db, "alex")
 
@@ -486,7 +468,7 @@ func TestRepo_Get_missing(t *testing.T) {
 // not exist must fail cleanly, not create an orphan row".
 func TestRepo_Put_workspaceNotFound(t *testing.T) {
 	t.Parallel()
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	repo := overrides.NewRepo(db)
 
 	const missingWorkspace = 999999
@@ -508,7 +490,7 @@ func TestRepo_Put_workspaceNotFound(t *testing.T) {
 // guarantee.
 func TestRepo_PutMany_workspaceNotFound(t *testing.T) {
 	t.Parallel()
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	repo := overrides.NewRepo(db)
 
 	const missingWorkspace = 999999
@@ -525,7 +507,7 @@ func TestRepo_PutMany_workspaceNotFound(t *testing.T) {
 // -race has real concurrent writer-pool traffic to check, and proves every
 // Put's bump landed (final revision = start + n, none lost to a race).
 func TestRepo_ConcurrentPuts(t *testing.T) {
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	repo := overrides.NewRepo(db)
 	wsID := insertWorkspace(t, db, "alex")
 	before := workspaceRevision(t, db, wsID)
@@ -593,7 +575,7 @@ func TestRepo_scan_malformedResponsesIsAnErrorNotAPanic(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			db := newTestDB(t)
+			db := testkit.NewDB(t)
 			repo := overrides.NewRepo(db)
 			wsID := insertWorkspace(t, db, "alex")
 
@@ -755,7 +737,7 @@ func replaceAllTx(t *testing.T, db *store.DB, workspaceID int64, rows []*overrid
 // restore — C12).
 func TestReplaceAllTx_deleteThenUpsert_roundTrip(t *testing.T) {
 	t.Parallel()
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	repo := overrides.NewRepo(db)
 	wsID := insertWorkspace(t, db, "alex")
 
@@ -828,7 +810,7 @@ func TestReplaceAllTx_deleteThenUpsert_roundTrip(t *testing.T) {
 // it by definition and gets deleted.
 func TestReplaceAllTx_emptyRowsWipesTable(t *testing.T) {
 	t.Parallel()
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	repo := overrides.NewRepo(db)
 	wsID := insertWorkspace(t, db, "alex")
 
@@ -858,7 +840,7 @@ func TestReplaceAllTx_emptyRowsWipesTable(t *testing.T) {
 // trust — or require — whatever the caller left on the Go value.
 func TestReplaceAllTx_setsWorkspaceID(t *testing.T) {
 	t.Parallel()
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	repo := overrides.NewRepo(db)
 	wsID := insertWorkspace(t, db, "alex")
 

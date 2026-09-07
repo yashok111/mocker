@@ -4,20 +4,16 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"io"
-	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
-	"github.com/yashok111/mocker/internal/admin"
-	"github.com/yashok111/mocker/internal/auth"
 	"github.com/yashok111/mocker/internal/config"
 	"github.com/yashok111/mocker/internal/httpx"
 	"github.com/yashok111/mocker/internal/store"
 	"github.com/yashok111/mocker/internal/testauth"
-	"github.com/yashok111/mocker/internal/workspaces"
+	"github.com/yashok111/mocker/internal/testkit/adminkit"
 )
 
 // testPassword is the shared password every test server is configured with.
@@ -94,30 +90,20 @@ func newTestServer(t *testing.T) *testServer {
 // about a handler's behaviour — [config.Config.MaxEntities] is read at
 // admin.New and handed to resources.NewRepo, and a test that cannot move it
 // off its default cannot tell a wired field from an ignored one.
+//
+// The actual bootstrap — open+migrate, auth.NewSharedPassword,
+// auth.NewManager, workspaces.NewRepo, a discard logger, admin.New — lives
+// in adminkit.NewAdminServer now: this function and internal/mcp's own
+// newResourcesTestServer built the identical sequence independently before
+// that package existed.
 func newTestServerCfg(t *testing.T, mutate func(*config.Config)) *testServer {
 	t.Helper()
 	cfg := testConfig(t)
 	if mutate != nil {
 		mutate(cfg)
 	}
-	db, err := store.Open(t.Context(), cfg.DBPath())
-	if err != nil {
-		t.Fatalf("open db: %v", err)
-	}
-	t.Cleanup(func() {
-		_ = db.Close()
-	})
-	if err := db.Migrate(t.Context(), nil); err != nil {
-		t.Fatalf("migrate: %v", err)
-	}
-
-	provider := auth.NewSharedPassword(cfg)
-	sessions := auth.NewManager(db, cfg, provider)
-	ws := workspaces.NewRepo(db)
-	log := slog.New(slog.NewTextHandler(io.Discard, nil))
-
-	srv := admin.New(cfg, sessions, ws, db, log)
-	return &testServer{handler: srv.Handler(), db: db, cfg: cfg}
+	as := adminkit.NewAdminServer(t, cfg)
+	return &testServer{handler: as.Server.Handler(), db: as.DB, cfg: as.Cfg}
 }
 
 // do issues one request against the server in-process (no real listener) and

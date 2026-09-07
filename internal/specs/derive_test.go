@@ -11,9 +11,10 @@ import (
 )
 
 // newDeriveTestDB opens a fresh, migrated SQLite file under t.TempDir() —
-// duplicated from repo_test.go's own newTestDB rather than shared, because
-// that helper lives in package specs_test (external) and this file is
-// white-box (package specs), the only way to reach the unexported
+// duplicated from internal/testkit's NewDBAt rather than calling it
+// directly, kept local to avoid depending on a package this phase's other
+// agents could still be touching in parallel; this file is white-box
+// (package specs, not specs_test), the only way to reach the unexported
 // [newSpecResolver] hook clause 9 needs to instrument.
 func newDeriveTestDB(t *testing.T) *store.DB {
 	t.Helper()

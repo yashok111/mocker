@@ -16,6 +16,7 @@ import (
 	"github.com/yashok111/mocker/internal/customep"
 	"github.com/yashok111/mocker/internal/jsonx"
 	"github.com/yashok111/mocker/internal/overrides"
+	"github.com/yashok111/mocker/internal/testkit"
 )
 
 func sseRow(stream *customep.Stream) *customep.Row {
@@ -139,7 +140,7 @@ func TestValidateDraft_acceptsAndDefaults(t *testing.T) {
 // is refused rather than silently downgrading, and the CHECK constraint
 // refuses a stream on an http row at the SQL level too.
 func TestRepo_streamRowRoundTrips(t *testing.T) {
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	wsID := insertWorkspace(t, db, "stream-ws")
 	repo := customep.NewRepo(db)
 

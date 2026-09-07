@@ -8,25 +8,6 @@ import (
 	"github.com/yashok111/mocker/internal/store"
 )
 
-// newTestDB opens a fresh, migrated SQLite file under t.TempDir(), mirroring
-// the harness every other package's repo_test.go already uses.
-func newTestDB(t *testing.T) *store.DB {
-	t.Helper()
-	db, err := store.Open(t.Context(), t.TempDir()+"/mocker.db")
-	if err != nil {
-		t.Fatalf("open db: %v", err)
-	}
-	t.Cleanup(func() {
-		if err := db.Close(); err != nil {
-			t.Errorf("close db: %v", err)
-		}
-	})
-	if err := db.Migrate(t.Context(), nil); err != nil {
-		t.Fatalf("migrate: %v", err)
-	}
-	return db
-}
-
 // A fresh database reaching the newest migration's version is asserted by
 // TestMigrate_reachesSchemaVersion3 in store_test.go (P3h added
 // 0003_base_scope.sql; this file's own concern is the 0002 back-fill below,

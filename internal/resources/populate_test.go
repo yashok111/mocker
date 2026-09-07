@@ -12,6 +12,7 @@ import (
 	"github.com/yashok111/mocker/internal/openapi"
 	"github.com/yashok111/mocker/internal/router"
 	"github.com/yashok111/mocker/internal/specs"
+	"github.com/yashok111/mocker/internal/testkit"
 )
 
 // decodeNumberAware round-trips b through jsonx with UseNumber, the same
@@ -37,7 +38,7 @@ func decodeNumberAware(t *testing.T, b []byte) map[string]any {
 // generator is not being fed anything Confirm invented.
 func TestConfirm_IdentityForIDField_id(t *testing.T) {
 	t.Parallel()
-	db := newTestDB(t, t.TempDir()+"/mocker.db")
+	db := testkit.NewDBAt(t, t.TempDir()+"/mocker.db")
 	specID := importFixtureSpec(t, db)
 	wsID := insertWorkspace(t, db, "alpha", &specID, domain.Settings{Seed: 42, ListSize: 3})
 	repo := newTestRepo(t, db, 4<<20, 64<<10)
@@ -102,7 +103,7 @@ func TestConfirm_IdentityForIDField_id(t *testing.T) {
 
 func TestConfirm_NonIDFieldWorks(t *testing.T) {
 	t.Parallel()
-	db := newTestDB(t, t.TempDir()+"/mocker.db")
+	db := testkit.NewDBAt(t, t.TempDir()+"/mocker.db")
 	specID := importFixtureSpec(t, db)
 	wsID := insertWorkspace(t, db, "alpha", &specID, domain.Settings{Seed: 1, ListSize: 3})
 	repo := newTestRepo(t, db, 4<<20, 64<<10)
@@ -131,7 +132,7 @@ func TestConfirm_NonIDFieldWorks(t *testing.T) {
 // type assertion would silently pass either way.
 func TestConfirm_NonIDFieldWorks_IntegerShape(t *testing.T) {
 	t.Parallel()
-	db := newTestDB(t, t.TempDir()+"/mocker.db")
+	db := testkit.NewDBAt(t, t.TempDir()+"/mocker.db")
 	specID := importFixtureSpec(t, db)
 	wsID := insertWorkspace(t, db, "alpha", &specID, domain.Settings{Seed: 1, ListSize: 3})
 	repo := newTestRepo(t, db, 4<<20, 64<<10)
@@ -158,7 +159,7 @@ func TestConfirm_NonIDFieldWorks_IntegerShape(t *testing.T) {
 
 func TestConfirm_DeterminismAcrossWorkspaces(t *testing.T) {
 	t.Parallel()
-	db := newTestDB(t, t.TempDir()+"/mocker.db")
+	db := testkit.NewDBAt(t, t.TempDir()+"/mocker.db")
 	specID := importFixtureSpec(t, db)
 	ws1 := insertWorkspace(t, db, "alpha", &specID, domain.Settings{Seed: 9, ListSize: 4})
 	ws2 := insertWorkspace(t, db, "bravo", &specID, domain.Settings{Seed: 9, ListSize: 4})
@@ -193,7 +194,7 @@ func TestConfirm_DeterminismAcrossWorkspaces(t *testing.T) {
 
 func TestConfirm_DeterminismAcrossFamiliesDiffers(t *testing.T) {
 	t.Parallel()
-	db := newTestDB(t, t.TempDir()+"/mocker.db")
+	db := testkit.NewDBAt(t, t.TempDir()+"/mocker.db")
 	specID := importFixtureSpec(t, db)
 	wsID := insertWorkspace(t, db, "alpha", &specID, domain.Settings{Seed: 9, ListSize: 2})
 	repo := newTestRepo(t, db, 4<<20, 64<<10)
@@ -227,7 +228,7 @@ func TestConfirm_DeterminismAcrossFamiliesDiffers(t *testing.T) {
 
 func TestComputeWriteForm(t *testing.T) {
 	t.Parallel()
-	db := newTestDB(t, t.TempDir()+"/mocker.db")
+	db := testkit.NewDBAt(t, t.TempDir()+"/mocker.db")
 	specID := importFixtureSpec(t, db)
 	sr := specs.NewRepo(db, testSpecConfig(t))
 
@@ -398,7 +399,7 @@ func TestDefaultVariant200(t *testing.T) {
 
 func TestLocateFamilyOperations(t *testing.T) {
 	t.Parallel()
-	db := newTestDB(t, t.TempDir()+"/mocker.db")
+	db := testkit.NewDBAt(t, t.TempDir()+"/mocker.db")
 	specID := importFixtureSpec(t, db)
 	sr := specs.NewRepo(db, testSpecConfig(t))
 	routes, err := sr.Routes(t.Context(), specID)

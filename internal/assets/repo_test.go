@@ -11,26 +11,8 @@ import (
 
 	"github.com/yashok111/mocker/internal/assets"
 	"github.com/yashok111/mocker/internal/store"
+	"github.com/yashok111/mocker/internal/testkit"
 )
-
-// newTestDB opens a fresh, migrated SQLite file under t.TempDir(), the
-// harness every repository test in this tree uses.
-func newTestDB(t *testing.T) *store.DB {
-	t.Helper()
-	db, err := store.Open(t.Context(), t.TempDir()+"/mocker.db")
-	if err != nil {
-		t.Fatalf("open db: %v", err)
-	}
-	t.Cleanup(func() {
-		if err := db.Close(); err != nil {
-			t.Errorf("close db: %v", err)
-		}
-	})
-	if err := db.Migrate(t.Context(), nil); err != nil {
-		t.Fatalf("migrate: %v", err)
-	}
-	return db
-}
 
 // newWorkspace inserts one workspace row and returns its id, the same raw
 // INSERT the scenarios and customep tests use so this package does not
@@ -87,7 +69,7 @@ func TestValidName(t *testing.T) {
 // the write's own transaction (no deadlock — the call returns).
 func TestPut_createThenReplace(t *testing.T) {
 	t.Parallel()
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	ws := newWorkspace(t, db, "alex")
 	repo := assets.NewRepo(db, 1<<20, 4<<20)
 	ctx := t.Context()
@@ -133,7 +115,7 @@ func TestPut_createThenReplace(t *testing.T) {
 
 func TestPut_refusals(t *testing.T) {
 	t.Parallel()
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	ws := newWorkspace(t, db, "alex")
 	repo := assets.NewRepo(db, 16, 40)
 	ctx := t.Context()
@@ -158,7 +140,7 @@ func TestPut_refusals(t *testing.T) {
 // the sum), and a 9-byte addition must be refused.
 func TestPut_quotaExcludesTheReplacedRow(t *testing.T) {
 	t.Parallel()
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	ws := newWorkspace(t, db, "alex")
 	repo := assets.NewRepo(db, 16, 40)
 	ctx := t.Context()
@@ -186,7 +168,7 @@ func TestPut_quotaExcludesTheReplacedRow(t *testing.T) {
 // under a 24-byte quota) and not together leave exactly one row.
 func TestPut_concurrentQuotaIsAtomic(t *testing.T) {
 	t.Parallel()
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	ws := newWorkspace(t, db, "alex")
 	repo := assets.NewRepo(db, 16, 24)
 
@@ -221,7 +203,7 @@ func TestPut_concurrentQuotaIsAtomic(t *testing.T) {
 
 func TestDelete(t *testing.T) {
 	t.Parallel()
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	ws := newWorkspace(t, db, "alex")
 	repo := assets.NewRepo(db, 1<<20, 4<<20)
 	ctx := t.Context()

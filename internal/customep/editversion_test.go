@@ -13,6 +13,7 @@ import (
 
 	"github.com/yashok111/mocker/internal/customep"
 	"github.com/yashok111/mocker/internal/store"
+	"github.com/yashok111/mocker/internal/testkit"
 )
 
 // TestRepo_Create_allocatesDistinctEditVersion pins D4/D9's "creates
@@ -21,7 +22,7 @@ import (
 // DEFAULT of 0 (D4: "0 is never a live row's value").
 func TestRepo_Create_allocatesDistinctEditVersion(t *testing.T) {
 	t.Parallel()
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	repo := customep.NewRepo(db)
 	wsID := insertWorkspace(t, db, "alex")
 
@@ -50,7 +51,7 @@ func TestRepo_Create_allocatesDistinctEditVersion(t *testing.T) {
 // check, edit runs through regardless of the row's current edit_version.
 func TestRepo_UpdateExpecting_nilExpectationSkipsCheck(t *testing.T) {
 	t.Parallel()
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	repo := customep.NewRepo(db)
 	wsID := insertWorkspace(t, db, "alex")
 
@@ -76,7 +77,7 @@ func TestRepo_UpdateExpecting_nilExpectationSkipsCheck(t *testing.T) {
 // stamps a FRESH version, never expect+1 in place (D4/D9).
 func TestRepo_UpdateExpecting_matchProceedsAndAllocatesFresh(t *testing.T) {
 	t.Parallel()
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	repo := customep.NewRepo(db)
 	wsID := insertWorkspace(t, db, "alex")
 
@@ -108,7 +109,7 @@ func TestRepo_UpdateExpecting_matchProceedsAndAllocatesFresh(t *testing.T) {
 // payload from it.
 func TestRepo_UpdateExpecting_mismatchIsEditConflictWithCurrent(t *testing.T) {
 	t.Parallel()
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	repo := customep.NewRepo(db)
 	wsID := insertWorkspace(t, db, "alex")
 
@@ -155,7 +156,7 @@ func TestRepo_UpdateExpecting_mismatchIsEditConflictWithCurrent(t *testing.T) {
 // live row must conflict, not proceed as a stealth INSERT-style bypass.
 func TestRepo_UpdateExpecting_zeroIsRefusedOnALiveRow(t *testing.T) {
 	t.Parallel()
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	repo := customep.NewRepo(db)
 	wsID := insertWorkspace(t, db, "alex")
 
@@ -183,7 +184,7 @@ func TestRepo_UpdateExpecting_zeroIsRefusedOnALiveRow(t *testing.T) {
 // alone would give (proven by TestRepo_UpdateExpecting_nilNoExpectation_missingIsErrNotFound below).
 func TestRepo_UpdateExpecting_deletedRowIsEditConflictGone(t *testing.T) {
 	t.Parallel()
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	repo := customep.NewRepo(db)
 	wsID := insertWorkspace(t, db, "alex")
 
@@ -217,7 +218,7 @@ func TestRepo_UpdateExpecting_deletedRowIsEditConflictGone(t *testing.T) {
 // gave, not the new EditConflictError.
 func TestRepo_UpdateExpecting_nilNoExpectation_missingIsErrNotFound(t *testing.T) {
 	t.Parallel()
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	repo := customep.NewRepo(db)
 	wsID := insertWorkspace(t, db, "alex")
 
@@ -249,7 +250,7 @@ func TestRepo_UpdateExpecting_nilNoExpectation_missingIsErrNotFound(t *testing.T
 // endpoint was deleted and the retry is a create.
 func TestRepo_UpdateExpecting_crossWorkspaceIdKeepsErrNotFound(t *testing.T) {
 	t.Parallel()
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	repo := customep.NewRepo(db)
 	ownerWsID := insertWorkspace(t, db, "owner")
 	otherWsID := insertWorkspace(t, db, "other")
@@ -291,7 +292,7 @@ func TestRepo_UpdateExpecting_crossWorkspaceIdKeepsErrNotFound(t *testing.T) {
 // accepted against a row whose content the restore just replaced.
 func TestReplaceAllTx_reallocatesEditVersionOnRestore(t *testing.T) {
 	t.Parallel()
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	repo := customep.NewRepo(db)
 	wsID := insertWorkspace(t, db, "alex")
 
@@ -341,7 +342,7 @@ func TestReplaceAllTx_reallocatesEditVersionOnRestore(t *testing.T) {
 // workspace, not the column DEFAULT of 0.
 func TestReplaceAllTx_insertedRowsGetDistinctEditVersions(t *testing.T) {
 	t.Parallel()
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	repo := customep.NewRepo(db)
 	wsID := insertWorkspace(t, db, "alex")
 

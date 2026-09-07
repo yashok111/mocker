@@ -14,6 +14,7 @@ import (
 	"github.com/yashok111/mocker/internal/openapi"
 	"github.com/yashok111/mocker/internal/specs"
 	"github.com/yashok111/mocker/internal/store"
+	"github.com/yashok111/mocker/internal/testkit"
 )
 
 // minimalOAS30 is a valid, tiny OAS 3.0 document whose root servers[] give it
@@ -33,26 +34,6 @@ const swagger2Doc = `{
   "info": { "title": "Legacy", "version": "1.0.0" },
   "paths": {}
 }`
-
-// newTestDB opens a fresh, migrated SQLite file under t.TempDir() and closes
-// it on cleanup. Mirrors the identical helper in internal/workspaces —
-// there is no shared test-support package to reuse it from.
-func newTestDB(t *testing.T, path string) *store.DB {
-	t.Helper()
-	db, err := store.Open(t.Context(), path)
-	if err != nil {
-		t.Fatalf("open db: %v", err)
-	}
-	t.Cleanup(func() {
-		if err := db.Close(); err != nil {
-			t.Errorf("close db: %v", err)
-		}
-	})
-	if err := db.Migrate(t.Context(), nil); err != nil {
-		t.Fatalf("migrate: %v", err)
-	}
-	return db
-}
 
 // testConfig returns a Config with every field the TEST CONFIG trap list
 // warns about actually set: a zero MaxBody would reject every document
@@ -77,7 +58,7 @@ func testConfig(t *testing.T, maxBody int64) *config.Config {
 // MaxBody, for tests that are not themselves about the size limit.
 func newRepo(t *testing.T) (*specs.Repo, *store.DB) {
 	t.Helper()
-	db := newTestDB(t, t.TempDir()+"/mocker.db")
+	db := testkit.NewDBAt(t, t.TempDir()+"/mocker.db")
 	return specs.NewRepo(db, testConfig(t, 10<<20)), db
 }
 
@@ -209,7 +190,7 @@ func TestRepo_Import_basePathFromReport(t *testing.T) {
 }
 
 func TestRepo_Import_tooLarge(t *testing.T) {
-	db := newTestDB(t, t.TempDir()+"/mocker.db")
+	db := testkit.NewDBAt(t, t.TempDir()+"/mocker.db")
 	r := specs.NewRepo(db, testConfig(t, 16)) // smaller than minimalOAS30
 
 	_, err := r.Import(t.Context(), specs.ImportInput{
@@ -231,8 +212,9 @@ func TestRepo_Import_tooLarge(t *testing.T) {
 // manyPathsDoc builds a valid OAS 3.0 document with n trivial "GET" paths —
 // enough to drive Index's operation count past whatever ceiling a test
 // wants to probe. Mirrors internal/admin's manyOpsDoc helper, which this
-// package cannot import (different test package, no shared test-support
-// package to reuse it from — the same reason newTestDB is duplicated too).
+// package cannot import (different test package, and a fixture this
+// specific — one call site each — is not worth promoting into
+// internal/testkit the way the DB-bootstrap helpers were).
 func manyPathsDoc(t *testing.T, n int) []byte {
 	t.Helper()
 	paths := make(map[string]any, n)
@@ -603,7 +585,7 @@ func TestRepo_ReplaceOperations_batchedInsertOrder(t *testing.T) {
 
 func TestRepo_Report_survivesReopeningTheDatabase(t *testing.T) {
 	dbPath := t.TempDir() + "/mocker.db"
-	db := newTestDB(t, dbPath)
+	db := testkit.NewDBAt(t, dbPath)
 	r := specs.NewRepo(db, testConfig(t, 10<<20))
 
 	res, err := r.Import(t.Context(), specs.ImportInput{

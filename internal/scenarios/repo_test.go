@@ -11,26 +11,8 @@ import (
 	"github.com/yashok111/mocker/internal/overrides"
 	"github.com/yashok111/mocker/internal/scenarios"
 	"github.com/yashok111/mocker/internal/store"
+	"github.com/yashok111/mocker/internal/testkit"
 )
-
-// newTestDB opens a fresh, migrated SQLite file under t.TempDir(), mirroring
-// internal/overrides/repo_test.go's harness.
-func newTestDB(t *testing.T) *store.DB {
-	t.Helper()
-	db, err := store.Open(t.Context(), t.TempDir()+"/mocker.db")
-	if err != nil {
-		t.Fatalf("open db: %v", err)
-	}
-	t.Cleanup(func() {
-		if err := db.Close(); err != nil {
-			t.Errorf("close db: %v", err)
-		}
-	})
-	if err := db.Migrate(t.Context(), nil); err != nil {
-		t.Fatalf("migrate: %v", err)
-	}
-	return db
-}
 
 // insertSpec writes a minimal specs row directly (the scenarios package
 // owns no spec logic and must not import internal/specs — see repo.go's
@@ -121,7 +103,7 @@ func scenarioRowCount(t *testing.T, db *store.DB) int64 {
 // {id, name, createdAt, isActive} and IsActive is computed against the
 // workspace's OWN scenario_id, not stored on the scenario row.
 func TestList_returnsSummariesNeverSnapshots(t *testing.T) {
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	repo, _ := newRepos(t, db)
 	ws := insertWorkspace(t, db, "ws", nil, domain.DefaultSettings())
 
@@ -162,7 +144,7 @@ func TestList_returnsSummariesNeverSnapshots(t *testing.T) {
 
 // TestCreateFromCurrentState_refusedWhileActive is A10.
 func TestCreateFromCurrentState_refusedWhileActive(t *testing.T) {
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	repo, _ := newRepos(t, db)
 	ws := insertWorkspace(t, db, "ws", nil, domain.DefaultSettings())
 
@@ -195,7 +177,7 @@ func TestCreateFromCurrentState_refusedWhileActive(t *testing.T) {
 
 // TestSetActive_activatingAlreadyActiveIsANoOp is A7.
 func TestSetActive_activatingAlreadyActiveIsANoOp(t *testing.T) {
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	repo, _ := newRepos(t, db)
 	ws := insertWorkspace(t, db, "ws", nil, domain.DefaultSettings())
 
@@ -224,7 +206,7 @@ func TestSetActive_activatingAlreadyActiveIsANoOp(t *testing.T) {
 // (deactivate) direction — the same idempotence argument applies to
 // {"scenario": ""} being sent twice.
 func TestSetActive_deactivatingAlreadyInactiveIsANoOp(t *testing.T) {
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	repo, _ := newRepos(t, db)
 	ws := insertWorkspace(t, db, "ws", nil, domain.DefaultSettings())
 
@@ -240,7 +222,7 @@ func TestSetActive_deactivatingAlreadyInactiveIsANoOp(t *testing.T) {
 
 // TestDelete_activeScenarioBumpsRevision is A9.
 func TestDelete_activeScenarioBumpsRevision(t *testing.T) {
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	repo, _ := newRepos(t, db)
 	ws := insertWorkspace(t, db, "ws", nil, domain.DefaultSettings())
 
@@ -277,7 +259,7 @@ func TestDelete_activeScenarioBumpsRevision(t *testing.T) {
 // TestDelete_inactiveScenarioDoesNotBumpRevision is Delete's other half:
 // removing a scenario that ISN'T active must not cost a rebuild either.
 func TestDelete_inactiveScenarioDoesNotBumpRevision(t *testing.T) {
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	repo, _ := newRepos(t, db)
 	ws := insertWorkspace(t, db, "ws", nil, domain.DefaultSettings())
 
@@ -301,7 +283,7 @@ func TestDelete_inactiveScenarioDoesNotBumpRevision(t *testing.T) {
 // all — never activate, never delete, never leak the other workspace's
 // row.
 func TestOwnership_crossWorkspaceScenarioIdIs404(t *testing.T) {
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	repo, _ := newRepos(t, db)
 	wsA := insertWorkspace(t, db, "a", nil, domain.DefaultSettings())
 	wsB := insertWorkspace(t, db, "b", nil, domain.DefaultSettings())
@@ -335,7 +317,7 @@ func TestOwnership_crossWorkspaceScenarioIdIs404(t *testing.T) {
 // snapshot, and OverrideOn=false rows survive (A2) alongside OverrideOn=true
 // ones.
 func TestCreateFromCurrentState_snapshotsSettingsAndOverrides(t *testing.T) {
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	repo, overridesRepo := newRepos(t, db)
 	settings := domain.DefaultSettings()
 	settings.ListSize = 7
@@ -397,7 +379,7 @@ func TestCreateFromCurrentState_snapshotsSettingsAndOverrides(t *testing.T) {
 // call SetActive, and an unknown name must answer exactly like an unknown
 // id does.
 func TestByName_resolvesForTheMockPlanesDirective(t *testing.T) {
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	repo, _ := newRepos(t, db)
 	ws := insertWorkspace(t, db, "ws", nil, domain.DefaultSettings())
 
@@ -422,7 +404,7 @@ func TestByName_resolvesForTheMockPlanesDirective(t *testing.T) {
 // TestCreateFromCurrentState_duplicateNameIsRejected pins
 // UNIQUE (workspace_id, name).
 func TestCreateFromCurrentState_duplicateNameIsRejected(t *testing.T) {
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	repo, _ := newRepos(t, db)
 	ws := insertWorkspace(t, db, "ws", nil, domain.DefaultSettings())
 
@@ -437,7 +419,7 @@ func TestCreateFromCurrentState_duplicateNameIsRejected(t *testing.T) {
 // TestCreateFromCurrentState_emptyNameRejected covers ErrInvalidName
 // before any SQL runs.
 func TestCreateFromCurrentState_emptyNameRejected(t *testing.T) {
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	repo, _ := newRepos(t, db)
 	ws := insertWorkspace(t, db, "ws", nil, domain.DefaultSettings())
 
@@ -454,7 +436,7 @@ func TestCreateFromCurrentState_emptyNameRejected(t *testing.T) {
 // snapshot unchanged and unrefused — nothing in this package ever compares
 // a stored snapshot's Spec.Hash against "the current spec".
 func TestA15_snapshotSurvivesTheSpecItWasTakenAgainstChanging(t *testing.T) {
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	repo, overridesRepo := newRepos(t, db)
 	specA := insertSpec(t, db, "spec-a", "hash-a")
 	specB := insertSpec(t, db, "spec-b", "hash-b")
@@ -524,7 +506,7 @@ func TestA15_snapshotSurvivesTheSpecItWasTakenAgainstChanging(t *testing.T) {
 // hand-run UPDATE, or a future bug) — precisely the case scanScenario's own
 // decode step already exists to catch, one guard below this one.
 func TestScanScenario_rejectsNonEmptyEndpoints(t *testing.T) {
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	repo, _ := newRepos(t, db)
 	ws := insertWorkspace(t, db, "ws", nil, domain.DefaultSettings())
 
@@ -580,7 +562,7 @@ func TestScanScenario_rejectsNonEmptyEndpoints(t *testing.T) {
 // wrong connection (r.db.R instead of the open tx) cannot produce, per
 // SIG-CLONE's own comment.
 func TestCloneFrom_succeedsWhileAnotherScenarioIsActive(t *testing.T) {
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	repo, overridesRepo := newRepos(t, db)
 	settings := domain.DefaultSettings()
 	settings.ListSize = 9
@@ -629,7 +611,7 @@ func TestCloneFrom_succeedsWhileAnotherScenarioIsActive(t *testing.T) {
 // workspace's now-different current state, which CloneFrom never reads at
 // all (SIG-CLONE).
 func TestCloneFrom_afterWorkspaceOverridesChanged_matchesSource(t *testing.T) {
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	repo, overridesRepo := newRepos(t, db)
 	settings := domain.DefaultSettings()
 	settings.ListSize = 3
@@ -671,7 +653,7 @@ func TestCloneFrom_afterWorkspaceOverridesChanged_matchesSource(t *testing.T) {
 // exist at all, and must write NO row at all — the SELECT's own WHERE
 // clause makes the two indistinguishable by construction.
 func TestCloneFrom_crossWorkspaceSourceIsNotFound(t *testing.T) {
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	repo, _ := newRepos(t, db)
 	wsA := insertWorkspace(t, db, "a", nil, domain.DefaultSettings())
 	wsB := insertWorkspace(t, db, "b", nil, domain.DefaultSettings())
@@ -694,7 +676,7 @@ func TestCloneFrom_crossWorkspaceSourceIsNotFound(t *testing.T) {
 // UNIQUE (workspace_id, name) on the clone's target name, exactly as
 // CreateFromCurrentState's own duplicate-name test does for create.
 func TestCloneFrom_duplicateNameIsErrDuplicateName(t *testing.T) {
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	repo, _ := newRepos(t, db)
 	ws := insertWorkspace(t, db, "ws", nil, domain.DefaultSettings())
 
@@ -715,7 +697,7 @@ func TestCloneFrom_duplicateNameIsErrDuplicateName(t *testing.T) {
 // path the create side already uses (SIG-CLONE), checked BEFORE either the
 // ErrNotFound or ErrDuplicateName branch ever runs.
 func TestCloneFrom_blankNameIsErrInvalidName(t *testing.T) {
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	repo, _ := newRepos(t, db)
 	ws := insertWorkspace(t, db, "ws", nil, domain.DefaultSettings())
 
@@ -739,7 +721,7 @@ func TestCloneFrom_blankNameIsErrInvalidName(t *testing.T) {
 // would come back populated whether or not the re-read went through the
 // open transaction, and so would not catch a re-read through the wrong one.
 func TestRename_changesNameScopedToWorkspaceLeavesRevisionAndReturnsBundle(t *testing.T) {
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	repo, _ := newRepos(t, db)
 	settings := domain.DefaultSettings()
 	settings.ListSize = 5
@@ -799,7 +781,7 @@ func TestRename_changesNameScopedToWorkspaceLeavesRevisionAndReturnsBundle(t *te
 // name) on the rename target, the same way CreateFromCurrentState's own
 // test does for create.
 func TestRename_duplicateNameIsErrDuplicateName(t *testing.T) {
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	repo, _ := newRepos(t, db)
 	ws := insertWorkspace(t, db, "ws", nil, domain.DefaultSettings())
 
@@ -820,7 +802,7 @@ func TestRename_duplicateNameIsErrDuplicateName(t *testing.T) {
 // contract SIG-CLONE and SIG-RENAME share — Rename validates through the
 // SAME ErrInvalidName path before ever issuing its UPDATE.
 func TestRename_blankNameIsErrInvalidName(t *testing.T) {
-	db := newTestDB(t)
+	db := testkit.NewDB(t)
 	repo, _ := newRepos(t, db)
 	ws := insertWorkspace(t, db, "ws", nil, domain.DefaultSettings())
 

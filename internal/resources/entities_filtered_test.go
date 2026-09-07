@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	"github.com/yashok111/mocker/internal/domain"
+	"github.com/yashok111/mocker/internal/testkit"
 	"github.com/yashok111/mocker/internal/testspec"
 )
 
@@ -37,7 +38,7 @@ func scopePtr(s ScopeKey) *ScopeKey { return &s }
 func confirmDeepTeamsLarge(t *testing.T, teamsListSize int) (repo *Repo, org, teams *Resource, wsID int64) {
 	t.Helper()
 	dir := t.TempDir()
-	db := newTestDB(t, dir+"/mocker.db")
+	db := testkit.NewDBAt(t, dir+"/mocker.db")
 	specID := importSpecDoc(t, db, testspec.DeepNestingDoc())
 	wsID = insertWorkspace(t, db, "acme", &specID, domain.Settings{Seed: 1, ListSize: 2})
 	repo = newTestRepo(t, db, 64<<20, 64<<10)
@@ -235,7 +236,7 @@ func TestListFiltered_Limit_BoundsPageSize(t *testing.T) {
 func TestListFiltered_ResourceGone_ErrResourceGone(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
-	db := newTestDB(t, dir+"/mocker.db")
+	db := testkit.NewDBAt(t, dir+"/mocker.db")
 	specID := importFixtureSpec(t, db)
 	wsID := insertWorkspace(t, db, "acme", &specID, domain.Settings{Seed: 1, ListSize: 2})
 	repo := newTestRepo(t, db, 4<<20, 64<<10)
@@ -264,7 +265,7 @@ func TestListFiltered_ResourceGone_ErrResourceGone(t *testing.T) {
 func TestListFiltered_BaseFilter_ExcludesOtherBase(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
-	db := newTestDB(t, dir+"/mocker.db")
+	db := testkit.NewDBAt(t, dir+"/mocker.db")
 	specID := importFixtureSpec(t, db)
 	wsID := insertWorkspace(t, db, "alpha", &specID, domain.Settings{
 		Seed: 1, ListSize: 3, BasePath: "/orgs/{orgId}", BasePathValues: []string{declaredBaseA, declaredBaseB},
