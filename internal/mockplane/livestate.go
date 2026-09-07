@@ -107,7 +107,17 @@ func (p *Plane) serveLiveStateDelete(w http.ResponseWriter, r *http.Request, ws 
 	}
 	var body liveStateClearBody
 	if err := jsonx.Unmarshal(raw, &body); err != nil {
-		httpx.Err(w, http.StatusBadRequest, httpx.CodeBadRequest, fmt.Sprintf("decode clear request: %v", err))
+		// Flat message, not fmt.Sprintf("...: %v", err): this route is
+		// UNAUTHENTICATED (this file's own header comment), reachable by
+		// anyone who can name a workspace slug, so it owes the caller no
+		// more detail than the admin plane's decodeBody already settles for
+		// behind the session/CSRF chain (internal/admin/server.go,
+		// "invalid request body"). The underlying encoding/json error names
+		// Go struct/field types (livestate.Target, liveStateClearBody) that
+		// are this server's own internals, not the wire contract, and an
+		// anonymous caller has no business learning them from a decode
+		// failure.
+		httpx.Err(w, http.StatusBadRequest, httpx.CodeBadRequest, "invalid request body")
 		return
 	}
 	if body.Target == nil {
@@ -168,7 +178,16 @@ func (p *Plane) serveLiveStatePost(w http.ResponseWriter, r *http.Request, ws *w
 	r.Body = http.MaxBytesReader(w, r.Body, livestate.MaxDirectiveBodyBytes)
 	var d livestate.Directive
 	if err := jsonx.NewDecoder(r.Body).Decode(&d); err != nil {
-		httpx.Err(w, http.StatusBadRequest, httpx.CodeBadRequest, fmt.Sprintf("decode directive: %v", err))
+		// Flat message, not fmt.Sprintf("...: %v", err) — same reasoning as
+		// serveLiveStateDelete's identical choice above: this route is
+		// UNAUTHENTICATED, so the underlying encoding/json error (which names
+		// livestate.Directive's own Go field/type names, and would also spell
+		// out http.MaxBytesReader's own wording verbatim on the oversized
+		// case the cap above exists to catch) never reaches an anonymous
+		// caller. Still 400/CodeBadRequest either way — this route draws no
+		// distinction between "malformed" and "too big" today, and this
+		// change does not add one.
+		httpx.Err(w, http.StatusBadRequest, httpx.CodeBadRequest, "invalid request body")
 		return
 	}
 

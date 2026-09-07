@@ -238,7 +238,7 @@ type presetConflictDetails struct {
 // revision exactly once instead of once per binding (PutMany's own doc
 // comment) — applying it through the single-operation PUT this many times
 // would rebuild the mock plane's runtime that many times too.
-func (s *Server) handleApplyAuthPreset(w http.ResponseWriter, r *http.Request) { //nolint:gocyclo // one arm per refusal reason, and each names the reason it refuses
+func (s *Server) handleApplyAuthPreset(w http.ResponseWriter, r *http.Request) { //nolint:gocyclo // one arm per refusal reason (the guard checks, the zero-bindings short-circuit, and PutManyExpecting's result switch); 27 dropped to 14 once mergeAuthPresetBindings/validateAuthPresetBinding/buildAuthPresetExpect moved the row-shaping logic out, but the remaining shape is still one arm per reason the call is refused or accepted
 	if _, ok := s.requireUser(w, r); !ok {
 		return
 	}
@@ -270,104 +270,33 @@ func (s *Server) handleApplyAuthPreset(w http.ResponseWriter, r *http.Request) {
 	}
 
 	for i, b := range body.Bindings {
-		if b.Method == "" || b.Path == "" || b.Path[0] != '/' {
-			httpx.Err(w, http.StatusBadRequest, httpx.CodeBadRequest,
-				fmt.Sprintf("binding %d: method/path must name an operation", i))
-			return
-		}
-		if b.DataPath == "" {
-			httpx.Err(w, http.StatusBadRequest, httpx.CodeBadRequest,
-				fmt.Sprintf("binding %d (%s %s): dataPath is required", i, b.Method, b.Path))
-			return
-		}
-		if err := b.Recipe.Validate(); err != nil {
-			httpx.Err(w, http.StatusBadRequest, httpx.CodeBadRequest,
-				fmt.Sprintf("binding %d (%s %s %s): %v", i, b.Method, b.Path, b.DataPath, err))
+		if msg, ok := validateAuthPresetBinding(i, b); !ok {
+			httpx.Err(w, http.StatusBadRequest, httpx.CodeBadRequest, msg)
 			return
 		}
 	}
 
 	// Every opKey the submitted bindings resolve to must have its own entry
 	// in body.EditVersions (D5): a missing entry is a 400 naming the key,
-	// never a silently unguarded row. Computed from the bindings alone —
-	// this does not need the existing rows, only the keys they'd touch —
-	// and iterated in SORTED order so which key a request with several
-	// omissions is refused for is deterministic, not map-order flaky.
-	touched := make(map[string]struct{})
-	for _, b := range body.Bindings {
-		touched[overrides.OpKey(b.Method, b.Path)] = struct{}{}
-	}
-	touchedKeys := make([]string, 0, len(touched))
-	for k := range touched {
-		touchedKeys = append(touchedKeys, k)
-	}
-	sort.Strings(touchedKeys)
-	// Scoped to touchedKeys, not the caller's raw body.EditVersions: the GET
-	// response (D5) hands the operator a version for every binding in the
-	// derived proposal, and the UI naturally forwards that same map even
-	// after the operator filters the submitted bindings down to a subset.
-	// PutManyExpecting checks every key ITS expect map names, so passing the
-	// unfiltered map would refuse this call over a row it never intended to
-	// touch and that some OTHER write moved between the GET and this POST.
-	expect := make(map[string]int64, len(touchedKeys))
-	for _, key := range touchedKeys {
-		v, ok := body.EditVersions[key]
-		if !ok {
-			httpx.Err(w, http.StatusBadRequest, httpx.CodeBadRequest,
-				fmt.Sprintf("editVersions is required and must name opKey %q", key))
-			return
-		}
-		expect[key] = v
+	// never a silently unguarded row. See buildAuthPresetExpect's own doc
+	// comment for why it is scoped to the bindings' own opKeys rather than
+	// the caller's raw body.EditVersions.
+	expect, missingKey, ok := buildAuthPresetExpect(body.Bindings, body.EditVersions)
+	if !ok {
+		httpx.Err(w, http.StatusBadRequest, httpx.CodeBadRequest,
+			fmt.Sprintf("editVersions is required and must name opKey %q", missingKey))
+		return
 	}
 
-	// The merge below is handed to PutManyExpecting's callback UNCHANGED
-	// from what it always did — it just reads "current" from the argument
-	// PutManyExpecting supplies (drained inside its own transaction) instead
-	// of a ForWorkspace call this handler used to make itself. Read/check
-	// and write are now atomic (D8): two concurrent applies over the same
-	// row can no longer both pass the check and both commit.
+	// mergeAuthPresetBindings is handed to PutManyExpecting's callback
+	// UNCHANGED from what it always did — it just reads "current" from the
+	// argument PutManyExpecting supplies (drained inside its own
+	// transaction) instead of a ForWorkspace call this handler used to make
+	// itself. Read/check and write are now atomic (D8): two concurrent
+	// applies over the same row can no longer both pass the check and both
+	// commit.
 	merge := func(current map[string]*overrides.Row) ([]*overrides.Row, error) {
-		rowsByKey := make(map[string]*overrides.Row)
-		for _, b := range body.Bindings {
-			key := overrides.OpKey(b.Method, b.Path)
-			row, ok := rowsByKey[key]
-			if !ok {
-				if cur, present := current[key]; present {
-					row = cur
-				} else {
-					row = &overrides.Row{
-						Method:     b.Method,
-						Path:       b.Path,
-						OverrideOn: true,
-						Responses:  map[string]overrides.Variant{},
-					}
-				}
-				rowsByKey[key] = row
-			}
-
-			status := strconv.Itoa(b.Status)
-			variant := row.Responses[status] // zero Variant when this status has no entry yet
-			if variant.Recipes == nil {
-				variant.Recipes = map[string]recipes.Recipe{}
-			}
-			variant.Recipes[b.DataPath] = b.Recipe
-			row.Responses[status] = variant // Variant is a map value, not a pointer: write it back
-		}
-
-		// Sorted so PutMany's write order (and this handler's own behavior)
-		// is deterministic run to run — matters for tests, not for
-		// correctness, since each row is a distinct (workspace, method,
-		// path) key regardless of order.
-		keys := make([]string, 0, len(rowsByKey))
-		for k := range rowsByKey {
-			keys = append(keys, k)
-		}
-		sort.Strings(keys)
-		rows := make([]*overrides.Row, len(keys))
-		for i, k := range keys {
-			rows[i] = rowsByKey[k]
-		}
-		return rows, nil
+		return mergeAuthPresetBindings(body.Bindings, current)
 	}
 
 	newVersions, revision, err := s.overridesRepo.PutManyExpecting(r.Context(), ws.ID, expect, merge)
@@ -392,4 +321,118 @@ func (s *Server) handleApplyAuthPreset(w http.ResponseWriter, r *http.Request) {
 		s.log.Error("apply auth preset", "err", err)
 		httpx.Err(w, http.StatusInternalServerError, httpx.CodeInternal, "failed to apply auth preset")
 	}
+}
+
+// validateAuthPresetBinding checks one binding from an apply request for the
+// three ways it can be refused before anything is written: an operation that
+// doesn't parse (empty method, empty or non-absolute path), a required
+// dataPath left blank, or a recipe that fails [recipes.Recipe.Validate]. i is
+// the binding's own index in the request body, carried into the message so a
+// request with several bad bindings names the first one, not all of them.
+// Returns ok=false with the ready-to-send message on the first violation —
+// the wording is unchanged from when these checks lived inline in
+// handleApplyAuthPreset.
+func validateAuthPresetBinding(i int, b authpreset.Binding) (msg string, ok bool) {
+	if b.Method == "" || b.Path == "" || b.Path[0] != '/' {
+		return fmt.Sprintf("binding %d: method/path must name an operation", i), false
+	}
+	if b.DataPath == "" {
+		return fmt.Sprintf("binding %d (%s %s): dataPath is required", i, b.Method, b.Path), false
+	}
+	if err := b.Recipe.Validate(); err != nil {
+		return fmt.Sprintf("binding %d (%s %s %s): %v", i, b.Method, b.Path, b.DataPath, err), false
+	}
+	return "", true
+}
+
+// buildAuthPresetExpect computes PutManyExpecting's expectation map: one
+// entry per opKey the submitted bindings resolve to (never per binding — two
+// bindings on the same operation still collapse to the one op_overrides row
+// they'd both write, D5), reading each value out of editVersions. Scoped to
+// exactly those opKeys and never the caller's raw editVersions map: the GET
+// response (D5) hands the operator a version for every binding in the
+// derived proposal, and the UI naturally forwards that same map even after
+// the operator filters the submitted bindings down to a subset.
+// PutManyExpecting checks every key ITS expect map names, so passing the
+// unfiltered map would refuse this call over a row it never intended to
+// touch and that some OTHER write moved between the GET and this POST.
+//
+// ok=false means editVersions is missing an entry for missingKey — the
+// caller turns that into a 400 naming the key. touchedKeys (and so which
+// missing key a request with several omissions is refused for) is walked in
+// SORTED order, so the refusal is deterministic, not map-order flaky.
+func buildAuthPresetExpect(bindings []authpreset.Binding, editVersions map[string]int64) (expect map[string]int64, missingKey string, ok bool) {
+	touched := make(map[string]struct{})
+	for _, b := range bindings {
+		touched[overrides.OpKey(b.Method, b.Path)] = struct{}{}
+	}
+	touchedKeys := make([]string, 0, len(touched))
+	for k := range touched {
+		touchedKeys = append(touchedKeys, k)
+	}
+	sort.Strings(touchedKeys)
+
+	expect = make(map[string]int64, len(touchedKeys))
+	for _, key := range touchedKeys {
+		v, present := editVersions[key]
+		if !present {
+			return nil, key, false
+		}
+		expect[key] = v
+	}
+	return expect, "", true
+}
+
+// mergeAuthPresetBindings groups an apply request's (possibly edited)
+// bindings into [overrides.Row] values by opKey, merging into any row
+// already present in current rather than replacing it wholesale — so an
+// operator who already pinned, say, a 409 body on the same operation does
+// not lose it to an unrelated binding on a 200. A pure function of its two
+// inputs, which is exactly what lets handleApplyAuthPreset hand it to
+// PutManyExpecting's callback (current is drained inside PutManyExpecting's
+// own transaction, so read/check and write are atomic — D8: two concurrent
+// applies over the same row can no longer both pass the check and both
+// commit) and what lets it be unit-tested with no HTTP and no DB.
+func mergeAuthPresetBindings(bindings []authpreset.Binding, current map[string]*overrides.Row) ([]*overrides.Row, error) {
+	rowsByKey := make(map[string]*overrides.Row)
+	for _, b := range bindings {
+		key := overrides.OpKey(b.Method, b.Path)
+		row, ok := rowsByKey[key]
+		if !ok {
+			if cur, present := current[key]; present {
+				row = cur
+			} else {
+				row = &overrides.Row{
+					Method:     b.Method,
+					Path:       b.Path,
+					OverrideOn: true,
+					Responses:  map[string]overrides.Variant{},
+				}
+			}
+			rowsByKey[key] = row
+		}
+
+		status := strconv.Itoa(b.Status)
+		variant := row.Responses[status] // zero Variant when this status has no entry yet
+		if variant.Recipes == nil {
+			variant.Recipes = map[string]recipes.Recipe{}
+		}
+		variant.Recipes[b.DataPath] = b.Recipe
+		row.Responses[status] = variant // Variant is a map value, not a pointer: write it back
+	}
+
+	// Sorted so PutMany's write order (and this handler's own behavior) is
+	// deterministic run to run — matters for tests, not for correctness,
+	// since each row is a distinct (workspace, method, path) key regardless
+	// of order.
+	keys := make([]string, 0, len(rowsByKey))
+	for k := range rowsByKey {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	rows := make([]*overrides.Row, len(keys))
+	for i, k := range keys {
+		rows[i] = rowsByKey[k]
+	}
+	return rows, nil
 }
