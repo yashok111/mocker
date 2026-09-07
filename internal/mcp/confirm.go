@@ -6,6 +6,18 @@ import (
 	"strings"
 )
 
+// confirmSlugDocLead is the opening sentence every copy of this
+// description shares: the eight verbatim ones and rollback_workspace's
+// documented extension, which replaces the SECOND sentence and not this one
+// (tools_history.go's RollbackWorkspaceInput says why — with
+// restoreData:true a mismatch stands between a wrong-workspace call and
+// destroyed entity rows, which the shared wording does not say). Split out
+// so TestConfirmSlugTagsMatchConfirmSlugDoc (confirm_test.go) can hold that
+// extension to the same opening as the other eight instead of exempting it
+// outright.
+const confirmSlugDocLead = "The exact slug of the workspace this call is aimed at, as list_workspaces " +
+	"or get_workspace reports it."
+
 // confirmSlugDoc is the jsonschema description EVERY one of the eight tools
 // that require confirmSlug — D6 of the mocker-a-mcp gate document's
 // original six, plus D7 of mocker-p3b-resources' two more (decide_resource's
@@ -15,8 +27,13 @@ import (
 // single rule gets two hand copies: internal/httpx.BrowserExecutableMediaType
 // exists because the two copies that preceded it admitted the same bad
 // value.
-const confirmSlugDoc = "The exact slug of the workspace this call is aimed at, as list_workspaces " +
-	"or get_workspace reports it. It is checked against the live workspace before anything is " +
+//
+// "Verbatim" was a claim in eight comments and nothing checked it until
+// 2026-09-07: TestConfirmSlugTagsMatchConfirmSlugDoc reads the tags back
+// through reflect and compares them to this constant, which is the only way
+// the claim can be true rather than intended (a Go struct tag cannot
+// reference a constant — see [confirmSlugField]).
+const confirmSlugDoc = confirmSlugDocLead + " It is checked against the live workspace before anything is " +
 	"destroyed; a mismatch refuses the call and changes nothing."
 
 // confirmSlugField is the argument's name on the wire. The eight tools

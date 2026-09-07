@@ -39,177 +39,71 @@ const (
 )
 
 // mcpAllowedRoutes is the ALLOWLIST OF ROUTE TEMPLATES [CallAsMCP] may
-// dispatch to (§B2 rule 8 of the MCP slice's context document) — the
-// fifty-six admin routes the MCP tools compose between them. It held
-// twelve until slice A2 of the mocker-a-mcp gate document (D5, D6, D7) grew
-// it to forty; slice P3b of the mocker-p3b-resources gate document (D7)
-// grew it again, forty to forty-four, for the four resource tools that
-// slice's own internal/mcp/tools_resources.go adds; P3f's rederive and
-// P4a's drift added one route each, forty-four to forty-six; A4
-// (decisions.md mocker-a4-mcp-reach D9) grew it once more, forty-six to
-// forty-eight, for the pre-existing probe route (D5, newly allowed rather
-// than newly created) and the one new entities route (D4); P6a
-// (decisions.md mocker-p6a-sse D16) grew it to forty-nine for GET
-// /api/stream/stats, wrapped by get_stream_stats — the stream route itself
-// is NOT here: an in-process loopback response cannot take a write deadline
-// (D9's exact refusal), and a stream is not a call an MCP tool returns
-// from.
+// dispatch to (§B2 rule 8 of the MCP slice's context document), DERIVED
+// from [Server.routes] rather than retyped here.
 //
-// What may enter it is not a judgement made at a call site. That document
-// enumerates both the tools and the routes each one wraps, and — in D12 —
-// the routes deliberately kept OUT, each with its reason: POST
-// /api/auth/login (allowlisting it would hand an unthrottled credential
-// oracle to anything holding the bearer key), POST /api/auth/logout and GET
-// /api/me (this endpoint has no session and a fixed identity), POST
-// /api/specs and DELETE /api/specs/{id} (mocker-a4-mcp-reach D3: the
-// screen that imports a spec already works and stays the only way in), and
-// the two infrastructure probes GET /healthz and GET /readyz. POST
-// .../probe was on this list of exclusions before A4 (mocker-a-mcp D12)
-// and is not any more (mocker-a4-mcp-reach D5): a probe destroys nothing
-// and reaches exactly the hosts an operator's own «Проверить» click can
-// reach, so the reason the original six D12 exclusions exist does not
-// apply to it (A6 brought it to fifty-six). A tool that needs a fifty-seventh route is that document's
-// decision to make, not something this list grows to accommodate on its
-// own — CallAsMCP bypasses attachSession, enforceCSRF and rateLimitLogin
-// by construction, so this list is the whole of what stands between a
-// bearer key and the admin plane.
+// It used to be a hand-kept literal of fifty-odd "METHOD /path" strings, in
+// the same order as the route table by convention only — a second copy of a
+// security allowlist, keyed by the same pattern strings the table already
+// spells, and this file's own package comment calls that object the single
+// highest-risk one of its slice. It held twelve entries at first; A2 of the
+// mocker-a-mcp gate document (D5, D6, D7) grew it to forty, P3b
+// (mocker-p3b-resources D7) to forty-four, P3f's rederive and P4a's drift
+// to forty-six, A4 (mocker-a4-mcp-reach D9) to forty-eight for the
+// pre-existing probe route (D5, newly allowed rather than newly created)
+// and the one new entities route (D4), P6a (mocker-p6a-sse D16) to
+// forty-nine, and so on to sixty-three. Every one of those growths was two
+// edits that had to agree. Since 2026-09-07 it is one: a row in
+// [Server.routes] carrying [mcpAllow].
+//
+// What may enter it is still not a judgement made at a call site. The MCP
+// slice's gate document enumerates both the tools and the routes each one
+// wraps, and — in D12 — the routes deliberately kept OUT. Each of those
+// reasons now sits on the row it refuses, in route_table.go, where a reader
+// asking "may a tool call this?" is already looking; the derivation cannot
+// drift from the table, but the EXCLUSIONS can still be widened by mistake,
+// which is what TestMCPExclusionsAreExactlyTheDocumentedSeven
+// (loopback_test.go) pins. A tool that needs a sixty-fourth route is that
+// document's decision to make — CallAsMCP bypasses attachSession,
+// enforceCSRF and rateLimitLogin by construction, so this list is the whole
+// of what stands between a bearer key and the admin plane.
 //
 // [MCPAllowedRoutes] hands a copy of it to internal/mcp's own test, which
 // asserts in BOTH directions that this list and that package's
 // tool-to-route table describe the same set: a template here with no tool
 // behind it is reach nobody asked for, and a tool route missing from here
 // is a 404 that shows up only at run time.
-var mcpAllowedRoutes = []string{
-	"GET /api/workspaces",
-	"POST /api/workspaces",
-	"GET /api/workspaces/{id}",
-	"PATCH /api/workspaces/{id}",
-	"DELETE /api/workspaces/{id}",
-	// P4b: export_workspace, import_workspace, fork_workspace.
-	"GET /api/workspaces/{id}/export",
-	// P7a: export_openapi.
-	"GET /api/workspaces/{id}/openapi.json",
-	"POST /api/workspaces/import",
-	"POST /api/workspaces/{id}/fork",
-
-	"GET /api/specs",
-	// A8 (2026-09-02): POST /api/specs joins the list — mocker-a4-mcp-reach
-	// D3 kept it out because the /specs screen "already works and stays the
-	// only way in"; the owner reversed that so an agent holding the spec
-	// file in its own repository needs no human to paste it. DELETE
-	// /api/specs/{id} stays out: it cascades across every bound workspace.
-	"POST /api/specs",
-	"GET /api/specs/{id}",
-	"GET /api/specs/{id}/report",
-	"GET /api/specs/{id}/operations",
-
-	"GET /api/workspaces/{id}/operations",
-	"GET /api/workspaces/{id}/operations/{opKey}",
-	"PUT /api/workspaces/{id}/operations/{opKey}",
-	"DELETE /api/workspaces/{id}/operations/{opKey}",
-	"GET /api/workspaces/{id}/auth-preset",
-	"POST /api/workspaces/{id}/auth-preset",
-
-	"POST /api/workspaces/{id}/preview",
-
-	"GET /api/workspaces/{id}/session",
-	"POST /api/workspaces/{id}/session",
-	"DELETE /api/workspaces/{id}/session",
-
-	"GET /api/workspaces/{id}/traffic",
-	"GET /api/workspaces/{id}/traffic/poll",
-	"DELETE /api/workspaces/{id}/traffic",
-
-	"GET /api/workspaces/{id}/endpoints",
-	"POST /api/workspaces/{id}/endpoints",
-	"PUT /api/workspaces/{id}/endpoints/{eid}",
-	"DELETE /api/workspaces/{id}/endpoints/{eid}",
-
-	"POST /api/workspaces/{id}/traffic/{tid}/to-override",
-	"POST /api/workspaces/{id}/traffic/{tid}/to-endpoint",
-
-	"GET /api/workspaces/{id}/scenarios",
-	"POST /api/workspaces/{id}/scenarios",
-	"GET /api/workspaces/{id}/scenarios/{sid}",
-	"PUT /api/workspaces/{id}/scenarios/{sid}",
-	"DELETE /api/workspaces/{id}/scenarios/{sid}",
-	"POST /api/workspaces/{id}/scenarios/{sid}/activate",
-	"POST /api/workspaces/{id}/scenarios/deactivate",
-
-	"GET /api/workspaces/{id}/checkpoints",
-	"POST /api/workspaces/{id}/checkpoints",
-	"DELETE /api/workspaces/{id}/checkpoints/{cid}",
-	"POST /api/workspaces/{id}/rollback/{cid}",
-	"POST /api/workspaces/{id}/reset-overrides",
-
-	// P3b (mocker-p3b-resources D7): the three resource routes P3a shipped
-	// without an MCP tool (list_resource_suggestions, list_resources,
-	// decide_resource) plus the one route P3b itself adds
-	// (reset_resource_data) — forty-one through forty-four.
-	"GET /api/specs/{id}/resource-suggestions",
-	"GET /api/workspaces/{id}/resources",
-	"POST /api/workspaces/{id}/resource-decisions",
-	"POST /api/workspaces/{id}/reset-data",
-
-	// P3f (decisions.md mocker-p3f-rederive, D8.3): the new spec-scoped
-	// rederive verb, forty-fifth — rederive_suggestions.
-	"POST /api/specs/{id}/rederive",
-
-	// A6 (decisions.md mocker-a6-assets D8): the three asset routes —
-	// upload_asset, list_assets, delete_asset.
-	"PUT /api/workspaces/{id}/assets/{name}",
-	"GET /api/workspaces/{id}/assets",
-	"DELETE /api/workspaces/{id}/assets/{name}",
-
-	// P4a (decisions.md mocker-p4a-triage, D7): the one route this slice
-	// adds, wrapped by get_workspace_drift.
-	"GET /api/workspaces/{id}/drift",
-
-	// A4 (decisions.md mocker-a4-mcp-reach, D9): forty-seven and
-	// forty-eight. POST .../probe already existed (probe_handlers.go) and
-	// is newly allowed here (D5) — probe_workspace is its tool. GET
-	// .../resources/{family}/entities is the one route this slice adds
-	// (D4) — list_resource_entities is its tool.
-	"POST /api/workspaces/{id}/probe",
-	"GET /api/workspaces/{id}/resources/{family}/entities",
-	// A11: the read's two write siblings — set_resource_entity and
-	// delete_resource_entity are their tools.
-	"PUT /api/workspaces/{id}/resources/{family}/entities/{key}",
-	"DELETE /api/workspaces/{id}/resources/{family}/entities/{key}",
-
-	// P6a (decisions.md mocker-p6a-sse D15, D16): forty-ninth — the
-	// process-wide streaming health, wrapped by get_stream_stats.
-	"GET /api/stream/stats",
-
-	// P6b (decisions.md mocker-p6b-sse-mock D13): fiftieth — a stream
-	// draft's first frames, wrapped by preview_endpoint. Writes nothing.
-	"POST /api/workspaces/{id}/endpoints/preview",
-
-	// P6c (decisions.md mocker-p6c-live-conns D1, D9): fifty-first to
-	// fifty-third — the live-connection surface, wrapped by
-	// list_stream_connections, close_stream_connection and
-	// push_stream_frame. None writes a row; the push waits on a live
-	// connection's loop, which the loopback's in-process call can do
-	// because the STREAM is on the mock plane's own socket, not on this
-	// response.
-	"GET /api/workspaces/{id}/connections",
-	"DELETE /api/workspaces/{id}/connections/{cid}",
-	"POST /api/workspaces/{id}/connections/{cid}/frames",
-}
+//
+// sync.OnceValue, and built from a zero *Server, for the same reason
+// [Server.routeMux]'s own comment gives: routes() never touches its
+// receiver and depends on no request-time state, so there is exactly one
+// answer for the whole process and no failure mode worth a retry path.
+var mcpAllowedRoutes = sync.OnceValue(func() []string {
+	table := (&Server{}).routes()
+	out := make([]string, 0, len(table))
+	for _, rt := range table {
+		if rt.mcp.allowed {
+			out = append(out, rt.pattern)
+		}
+	}
+	return out
+})
 
 // MCPAllowedRoutes returns the route-template allowlist [CallAsMCP] enforces.
 //
 // It exists for exactly one caller: internal/mcp's test that its
 // tool-to-route table and this list agree in both directions. Without an
-// accessor that test would have to hand-copy forty-four templates, and a second
-// copy of a security allowlist is free to drift from the first — at which
-// point the test passes over a statement of the seam nobody enforces.
+// accessor that test would have to hand-copy sixty-three templates, and a
+// second copy of a security allowlist is free to drift from the first — at
+// which point the test passes over a statement of the seam nobody enforces.
 //
-// The returned slice is a COPY. Handing out the package var's own backing
+// The returned slice is a COPY. Handing out the derivation's own backing
 // array would let any caller rewrite the allowlist in place, which is the
-// one mutation this file exists to make impossible.
+// one mutation this file exists to make impossible — and the derivation is
+// computed ONCE, so that array is shared by every caller, exactly as the
+// package var it replaced was.
 func MCPAllowedRoutes() []string {
-	return slices.Clone(mcpAllowedRoutes)
+	return slices.Clone(mcpAllowedRoutes())
 }
 
 // mcpAllowlistMux matches a request against mcpAllowedRoutes using the SAME
@@ -218,6 +112,10 @@ func MCPAllowedRoutes() []string {
 // Built once and shared for the whole process via sync.OnceValue — the
 // template list above is static and carries no per-Server state, so there is
 // nothing here a second Server instance would ever need to see differently.
+//
+// Its SOURCE moved to the route table on 2026-09-07; the matching did not,
+// deliberately. Everything the paragraph below measures is a property of
+// asking http.ServeMux the question, not of where the templates came from.
 //
 // This exists because a prefix check on the raw path STRING is bypassable,
 // and was a blocker against an earlier revision of this slice: Go's
@@ -233,7 +131,7 @@ func MCPAllowedRoutes() []string {
 var mcpAllowlistMux = sync.OnceValue(func() *http.ServeMux {
 	mux := http.NewServeMux()
 	noop := http.HandlerFunc(func(http.ResponseWriter, *http.Request) {})
-	for _, pattern := range mcpAllowedRoutes {
+	for _, pattern := range mcpAllowedRoutes() {
 		mux.HandleFunc(pattern, noop)
 	}
 	return mux

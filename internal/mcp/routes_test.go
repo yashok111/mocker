@@ -17,6 +17,13 @@ import (
 // import internal/mcp — checked, not assumed — so this import edge exists in
 // one direction only and no cycle is possible.)
 //
+// Since 2026-09-07 that allowlist is DERIVED from admin's own route table
+// (the mcp column on each route{} row) rather than retyped beside it, which
+// removes one of the two copies this test used to have to reconcile. It
+// does not remove the need for the test: toolRoutes is still a hand-written
+// statement, in this package, of which routes each tool calls, and the
+// derivation says nothing about it.
+//
 // Both directions matter and they catch opposite defects:
 //
 //   - table ⊆ allowlist stops a tool shipping with a route CallAsMCP will
@@ -53,8 +60,15 @@ func TestToolRoutesAgreeWithAdminAllowlist(t *testing.T) {
 }
 
 // TestMCPAllowedRoutesIsACopy pins the one property the accessor exists to
-// have besides existing at all: it must not hand out the package var's own
+// have besides existing at all: it must not hand out the allowlist's own
 // backing array, or any caller could rewrite the allowlist in place.
+//
+// This got MORE load-bearing on 2026-09-07, not less. The allowlist stopped
+// being a package var and became a sync.OnceValue derivation over
+// admin.Server.routes(), so there is now exactly ONE slice for the whole
+// process and every caller of the accessor is handed a view of it — the
+// accessor's slices.Clone is the only thing between a caller's `first[0] = …`
+// and the allowlist every later CallAsMCP is matched against.
 func TestMCPAllowedRoutesIsACopy(t *testing.T) {
 	t.Parallel()
 

@@ -32,6 +32,24 @@ import (
 // this extra route: their own admin routes already check it against the
 // live workspace, so eight tools require confirmSlug in total, six of them
 // through this shared client-side read.
+// noRoute is the value of a toolRoutes row for a tool that calls NO admin
+// route at all — get_guide (A7, tools_guide.go) and get_server_config (A9,
+// tools_config.go), and nothing else today.
+//
+// It is one named sentinel because the fact it states was previously
+// documented in three places and written in none: two bare `{}` literals in
+// the table below, plus a paragraph in each of those two files explaining
+// that an empty row means "reaches no handler, so there is nothing for
+// admin's allowlist to carry and nothing for CallAsMCP to refuse". A bare
+// `{}` reads equally well as "nobody filled this in yet", which is the row
+// TestToolRoutesAgreeWithAdminAllowlist cannot tell apart from a deliberate
+// one. Named, it can be searched for, and the two files now point here
+// instead of restating it.
+//
+// Empty and not nil so the distinction stays visible to a reader; both
+// behave identically in every loop over a row, and nothing appends to a row.
+var noRoute = []string{}
+
 var toolRoutes = map[string][]string{
 	// Reads.
 	"list_workspaces":       {"GET /api/workspaces"},
@@ -141,14 +159,14 @@ var toolRoutes = map[string][]string{
 	"list_stream_connections": {"GET /api/workspaces/{id}/connections"},
 	"close_stream_connection": {"DELETE /api/workspaces/{id}/connections/{cid}"},
 	"push_stream_frame":       {"POST /api/workspaces/{id}/connections/{cid}/frames"},
-	// The guide (A7) calls nothing: an EMPTY row, so the population test
+	// The guide (A7) calls nothing: [noRoute], so the population test
 	// counts it and the allowlist test has nothing to check for it.
-	"get_guide": {},
+	"get_guide": noRoute,
 	// A8: the first admin route mocker-a4-mcp-reach D3 kept OUT of reach,
 	// let in on the owner's own word (tools_specs.go).
 	"import_spec": {"POST /api/specs"},
-	// A9: the process's own limits, read from *config.Config — no route.
-	"get_server_config": {},
+	// A9: the process's own limits, read from *config.Config — [noRoute].
+	"get_server_config": noRoute,
 	// A11: the entity read's two write siblings.
 	"set_resource_entity":    {"PUT /api/workspaces/{id}/resources/{family}/entities/{key}"},
 	"delete_resource_entity": {"DELETE /api/workspaces/{id}/resources/{family}/entities/{key}"},

@@ -12,11 +12,12 @@
 // guide does, in five topics an agent can pull one at a time instead of
 // paying for all of them at once.
 //
-// Its toolRoutes row is EMPTY (routes.go): the tool reaches no handler, so
-// there is nothing for admin.mcpAllowedRoutes to carry and nothing for
-// CallAsMCP to refuse. That makes it the one tool "an adapter over the
-// admin API" does not describe — recorded here rather than left for a
-// reader to reconcile with the package comment.
+// Its toolRoutes row is [noRoute] (routes.go), the sentinel whose own doc
+// comment states the rule once: the tool reaches no handler, so there is
+// nothing for admin's route allowlist to carry and nothing for CallAsMCP to
+// refuse. That makes it the one tool "an adapter over the admin API" does
+// not describe — recorded here rather than left for a reader to reconcile
+// with the package comment.
 package mcp
 
 import (

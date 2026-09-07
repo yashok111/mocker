@@ -537,3 +537,85 @@ func TestCallAsMCP_opKeyWithSlashRoundTripsThroughRealHandlers(t *testing.T) {
 		t.Errorf("stored override path = %q, want %q — the opKey did not survive CallAsMCP intact", doc.Path, "/widgets/sub")
 	}
 }
+
+// TestRouteMCPPolicyIsDecided is what replaced the old
+// "mcpAllowedRoutes is a hand-kept copy of routes()" problem with a
+// narrower one. Deriving the allowlist from [Server.routes] makes it
+// impossible for the two to disagree — a pattern cannot be in the allowlist
+// and absent from the table any more, in either direction — so the drift
+// that test class existed to catch is gone by construction.
+//
+// What a derivation cannot decide is whether a row MEANT to be reachable.
+// The zero [mcpPolicy] is "not allowed, and nobody said why", which is the
+// safe side of the fence but is also exactly what an author who never
+// thought about MCP reach leaves behind — a route that silently 404s for
+// every tool, discovered in production. So the zero value is a failure
+// here: allowed, or refused WITH a reason.
+func TestRouteMCPPolicyIsDecided(t *testing.T) {
+	t.Parallel()
+
+	for _, rt := range (&Server{}).routes() {
+		switch {
+		case rt.mcp.allowed && rt.mcp.reason != "":
+			t.Errorf("route %q is mcpAllow and also carries a refusal reason %q", rt.pattern, rt.mcp.reason)
+		case !rt.mcp.allowed && rt.mcp.reason == "":
+			t.Errorf("route %q carries the zero mcpPolicy — say mcpAllow, or mcpDeny with the reason", rt.pattern)
+		}
+	}
+}
+
+// TestMCPExclusionsAreExactlyTheDocumentedSeven is the half of the old
+// two-copy check that still means something. The allowlist is derived, so
+// it cannot drift from the route table; the EXCLUSIONS can still move — a
+// row losing mcpAllow by a careless edit silently removes reach a shipped
+// tool depends on, and a row gaining it silently widens what a bearer key
+// reaches past what the gate document decided.
+//
+// The seven are D12 of the mocker-a-mcp gate document, as amended twice:
+// POST .../probe LEFT this set with A4 (mocker-a4-mcp-reach D5) and POST
+// /api/specs left it with A8, on the owner's own word. Each row's reason
+// lives at the row (route_table.go); this test pins the SET, and the fact
+// that both changes to it were decisions on the record rather than edits
+// nobody reviewed.
+func TestMCPExclusionsAreExactlyTheDocumentedSeven(t *testing.T) {
+	t.Parallel()
+
+	want := map[string]bool{
+		// Not part of the admin surface a tool composes.
+		"GET /healthz": true,
+		"GET /readyz":  true,
+		// An unthrottled credential oracle for anything holding the key.
+		"POST " + loginPath: true,
+		// This endpoint has no session and a fixed identity.
+		"POST /api/auth/logout": true,
+		"GET /api/me":           true,
+		// It cascades across every bound workspace.
+		"DELETE /api/specs/{id}": true,
+		// A loopback response cannot take a write deadline (P6a D9).
+		"GET /api/workspaces/{id}/traffic/stream": true,
+	}
+
+	got := make(map[string]bool)
+	for _, rt := range (&Server{}).routes() {
+		if !rt.mcp.allowed {
+			got[rt.pattern] = true
+		}
+	}
+
+	for pattern := range want {
+		if !got[pattern] {
+			t.Errorf("route %q is now reachable over MCP; that is the gate document's decision to make, not an edit's", pattern)
+		}
+	}
+	for pattern := range got {
+		if !want[pattern] {
+			t.Errorf("route %q lost MCP reach; every tool wrapping it now fails with a loopback refusal", pattern)
+		}
+	}
+
+	// The derivation's own arithmetic: every row is either allowed or
+	// refused, so the allowlist is the table minus exactly these seven.
+	if n, table := len(MCPAllowedRoutes()), len((&Server{}).routes()); n != table-len(want) {
+		t.Errorf("MCPAllowedRoutes() has %d entries, want %d (%d rows minus %d exclusions)", n, table-len(want), table, len(want))
+	}
+}

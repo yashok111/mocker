@@ -672,8 +672,8 @@ func TestHandler_resetData_confirmSlug(t *testing.T) {
 }
 
 // TestHandler_resetData_writesNoCheckpoint is clause 8, VERIFIED BY
-// MUTATION (D10's own table: injecting an autoCheckpointLabels entry for
-// this route must turn this test red). The fixture MUST run with
+// MUTATION (D10's own table: replacing this route's cpNeverTouchesLayer
+// policy with a cpLabelled one must turn this test red). The fixture MUST run with
 // CheckpointDebounce > 0 — every other fixture in this file pins it to
 // zero, at which [Server.routeMux] does not install the auto-checkpoint
 // wrapper at all, and the assertion below would pass VACUOUSLY.

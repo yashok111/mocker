@@ -2,8 +2,8 @@
 // context document): the debounce ("auto") checkpoint trigger [Server]
 // installs at [Server.routeMux]'s mux.HandleFunc line. It is package admin
 // (white-box), like openapi_contract_test.go and loopback_test.go, and for
-// the same two reasons those files are: it needs [Server.routes] and
-// [autoCheckpointLabels] directly (both unexported), and it reuses
+// the same two reasons those files are: it needs [Server.routes] and the
+// [checkpointPolicy] column on its rows directly (both unexported), and it reuses
 // loopback_test.go's own loopbackTestServer/loopbackTestSrc helpers — the
 // admin_test.go equivalents live in package admin_test, a different Go
 // package this file cannot reach into.
@@ -130,8 +130,8 @@ func TestAutoCheckpointWrapper_labelledWritesOneAndExcludedWritesNone(t *testing
 
 	// POST .../session is one of §4's group-C exclusions: it never touches
 	// a workspace layer at all (DESIGN.md:1098 forbids session directives
-	// from touching SQLite), so it is not a key of autoCheckpointLabels and
-	// the wrapper was never attached to this pattern's handler. liveState
+	// from touching SQLite), so its row carries cpNeverTouchesLayer, not a
+	// label, and the wrapper was never attached to this pattern's handler. liveState
 	// is nil on this bare test server, so the handler itself answers a
 	// plain 503 — irrelevant here: this wrapper runs (or doesn't) before
 	// the handler is ever reached, so what the handler answers proves
@@ -170,9 +170,9 @@ func TestAutoCheckpointWrapper_labelledWritesOneAndExcludedWritesNone(t *testing
 	}
 
 	const pattern = "PUT /api/workspaces/{id}/operations/{opKey}"
-	wantLabel, ok := autoCheckpointLabels[pattern]
-	if !ok || wantLabel == "" {
-		t.Fatalf("test precondition broken: autoCheckpointLabels has no non-empty entry for %q", pattern)
+	wantLabel := checkpointLabelsFromTable()[pattern]
+	if wantLabel == "" {
+		t.Fatalf("test precondition broken: %q carries no cpLabelled policy in routes()", pattern)
 	}
 	if autos[0].Label != wantLabel {
 		t.Errorf("label = %q, want %q (§4's own text for %s)", autos[0].Label, wantLabel, pattern)
@@ -254,8 +254,8 @@ func (c *resourceCheckpointTestClient) do(method, target, jsonBody string) *http
 // TestAutoCheckpointWrapper_resourceDecisionRoute_noCheckpoint is D13's
 // clause 41 (D10): confirming and then declining a resource-derived family
 // each leave the auto checkpoint count UNCHANGED. POST
-// .../resource-decisions is a member of autoCheckpointExcludedRevisionOnly
-// above, not a key of autoCheckpointLabels — this test is what catches an
+// .../resource-decisions carries cpRevisionOnly on its row in
+// [Server.routes], not a label — this test is what catches an
 // implementation that reached for the default (labelling the route)
 // instead: since P3b (decisions.md mocker-p3b-resources, D3 R25),
 // config_snap DOES carry a resource's configuration (the resources and
@@ -344,173 +344,145 @@ func TestAutoCheckpointWrapper_resourceDecisionRoute_noCheckpoint(t *testing.T) 
 	}
 }
 
-// The four exclusion groups §4 names, each carrying its own reason, exactly
-// as the table in that section lists them. TestAutoCheckpointLabels_
-// pinsEveryMutatingRoute below builds its "decided" set from
-// autoCheckpointLabels plus the union of these four rather than from a bare
-// literal list, so a route that migrates between groups — or a group that
-// silently grows past what §4 states — shows up as a per-group size
-// mismatch, not just a passing total.
-
-// autoCheckpointExcludedRevisionOnly is §4's group of six: these bump
-// workspaces.revision but change nothing a snapshot HOLDS. Two of the six
-// (rollback, reset-overrides) already write their own pre-destructive row
-// for the same instant; a second, auto snapshot of the identical state
-// would be noise in the screen an operator reads to find a state worth
-// returning to. P3a's resource-decisions route joined this group rather
-// than starting a fifth one of its own (D10, D13 clause 41), and P3b
-// (decisions.md mocker-p3b-resources, D3 R25) rewrites the WARRANT below
-// without moving it: since P3b, config_snap DOES carry this route's two
-// tables (resources, resource_decisions) — the exclusion now rests on two
-// narrower facts instead. The auto-checkpoint wrapper snapshots BEFORE the
-// handler runs, so the row a CONFIRM leaves holds the PRE-confirm state,
-// and P3b's restore is UPSERT-only (it never deletes a resources row), so
-// rolling back to that row cannot undo the confirm it preceded — a label
-// would promise exactly the undo this shape cannot perform. The one case
-// where a label would genuinely help, a DECLINE, is the case
-// MOCKER_CHECKPOINT_DEBOUNCE already eats in the common sequence (confirm
-// then decline inside one window suppresses the decline's own row).
-var autoCheckpointExcludedRevisionOnly = map[string]bool{
-	"POST /api/workspaces/{id}/scenarios/{sid}/activate": true,
-	"POST /api/workspaces/{id}/scenarios/deactivate":     true,
-	"DELETE /api/workspaces/{id}/scenarios/{sid}":        true,
-	"POST /api/workspaces/{id}/rollback/{cid}":           true,
-	"POST /api/workspaces/{id}/reset-overrides":          true,
-	"POST /api/workspaces/{id}/resource-decisions":       true,
+// checkpointPolicyByPattern projects the route table's checkpoint column
+// into a pattern → policy map, the shape the four hand-kept exclusion maps
+// and the label map used to have. It is a PROJECTION now, not a second
+// declaration: the maps this replaces were keyed by the same pattern
+// strings [Server.routes] already spells, and a route could join a group
+// here while its row said nothing — or say one thing here and another
+// there. The reasons those maps carried moved to the rows themselves
+// (route_table.go), where a reader asking "why does this verb take no undo
+// point" is already looking.
+func checkpointPolicyByPattern(t *testing.T) map[string]checkpointPolicy {
+	t.Helper()
+	out := make(map[string]checkpointPolicy)
+	for _, rt := range (&Server{}).routes() {
+		if _, dup := out[rt.pattern]; dup {
+			t.Fatalf("route registered twice: %q", rt.pattern)
+		}
+		out[rt.pattern] = rt.checkpoint
+	}
+	return out
 }
 
-// autoCheckpointExcludedNoLayerYet is §4's group of two: no workspace
-// layer exists yet (create — the request IS what creates it) or none is
-// left (delete — nothing survives to restore into).
-var autoCheckpointExcludedNoLayerYet = map[string]bool{
-	"POST /api/workspaces":        true,
-	"DELETE /api/workspaces/{id}": true,
+// checkpointLabelsFromTable is the label half of the same projection — the
+// map [Server.routeMux] used to consult before the label moved onto the
+// row. Only the tests need it now, which is the point.
+func checkpointLabelsFromTable() map[string]string {
+	out := make(map[string]string)
+	for _, rt := range (&Server{}).routes() {
+		if rt.checkpoint.group == cpGroupLabelled {
+			out[rt.pattern] = rt.checkpoint.label
+		}
+	}
+	return out
 }
 
-// autoCheckpointExcludedNeverTouchesLayer is §4's group, TWELVE since P6b
-// (decisions.md mocker-p6b-sse-mock D13: POST .../endpoints/preview, a
-// stream draft's first frames, writes nothing), ELEVEN since P3f
-// (decisions.md mocker-p3f-rederive, D7.1/D7.3; was ten): these never touch
-// a workspace layer at all. POST /api/specs/{id}/rederive is P3f's own
-// addition — it resolves no workspace at all (it is spec-scoped, D4.1) and
-// writes only resource_suggestions, a table config_snap does not carry, so
-// there is nothing here for an auto checkpoint to snapshot or restore.
-// Session directives (POST/DELETE .../session)
-// are excluded categorically, under all circumstances — DESIGN.md:1098
-// forbids them from touching SQLite, so they can never gain a label later
-// without also violating that rule. POST .../preview joined this group in
-// P2f for the identical reason: it reads a workspace layer (to build its
-// own throwaway runtime) but never writes one, which is why it stays out
-// of this map's opposite (autoCheckpointLabels). It is no longer out of
-// mcpAllowedRoutes: A2 (mocker-a-mcp gate document, D7) allowlisted it as
-// preview_operation. Only the checkpoint half of the original note
-// survives, and it survives on its own argument — writing nothing is what
-// keeps it unlabelled, and that has not changed. POST .../reset-data is
-// P3b's own addition to this group — the exact precedent is
-// "DELETE /api/workspaces/{id}/traffic" right below it: a destructive verb
-// over a table the workspace layer does not hold. resources and
-// resource_decisions ARE configuration and reset-data touches neither; it
-// changes entities, which config_snap does not carry (D3 R12).
-var autoCheckpointExcludedNeverTouchesLayer = map[string]bool{
-	"POST " + loginPath:                                             true,
-	"POST /api/auth/logout":                                         true,
-	"POST /api/specs":                                               true,
-	"DELETE /api/specs/{id}":                                        true,
-	"POST /api/workspaces/{id}/probe":                               true,
-	"POST /api/workspaces/{id}/session":                             true,
-	"DELETE /api/workspaces/{id}/session":                           true,
-	"DELETE /api/workspaces/{id}/traffic":                           true,
-	"POST /api/workspaces/{id}/preview":                             true,
-	"POST /api/workspaces/{id}/reset-data":                          true,
-	"PUT /api/workspaces/{id}/resources/{family}/entities/{key}":    true,
-	"DELETE /api/workspaces/{id}/resources/{family}/entities/{key}": true,
-	// P4b (2026-09-02): an import creates a NEW workspace and a fork
-	// writes only the copy — neither touches a layer of the workspace
-	// the route names (import names none), and both write the new row's
-	// baseline checkpoint themselves, inside the creating transaction.
-	"POST /api/workspaces/import":    true,
-	"POST /api/workspaces/{id}/fork": true,
-	"POST /api/specs/{id}/rederive":  true,
-	// A6 (decisions.md mocker-a6-assets D3): an asset's bytes are not
-	// configuration — config_snap carries no asset (DESIGN §32.4) — so a
-	// checkpoint before an upload or a delete would capture nothing the
-	// verb changes. Both bump revision on their own (D11).
-	"PUT /api/workspaces/{id}/assets/{name}":    true,
-	"DELETE /api/workspaces/{id}/assets/{name}": true,
-	// P6b (decisions.md mocker-p6b-sse-mock D13): a stream draft's preview
-	// writes no row, bumps no revision — the same reasoning as
-	// POST .../preview above, one table over.
-	"POST /api/workspaces/{id}/endpoints/preview": true,
-	// P6c (decisions.md mocker-p6c-live-conns D9): a close cancels a
-	// connection's context and a push queues a frame into its RAM inbox —
-	// neither writes a row, bumps revision or touches a layer.
-	"DELETE /api/workspaces/{id}/connections/{cid}":      true,
-	"POST /api/workspaces/{id}/connections/{cid}/frames": true,
-}
-
-// autoCheckpointExcludedAnotherLayer is §4's group of four: these write a
-// row of a DIFFERENT layer — a scenario row (including the clone) or a
-// checkpoint row itself — not the workspace layer this trigger exists to
-// snapshot.
-var autoCheckpointExcludedAnotherLayer = map[string]bool{
-	"POST /api/workspaces/{id}/scenarios":           true,
-	"PUT /api/workspaces/{id}/scenarios/{sid}":      true,
-	"POST /api/workspaces/{id}/checkpoints":         true,
-	"DELETE /api/workspaces/{id}/checkpoints/{cid}": true,
-}
-
-// TestAutoCheckpointLabels_pinsEveryMutatingRoute is §4's requirement 4b,
+// TestAutoCheckpointPolicy_pinsEveryMutatingRoute is §4's requirement 4b,
 // and its shape is deliberate: it derives every MUTATING pattern from
-// [Server.routes] itself, not from a literal count or a copy of the map —
-// so a route added later without deciding its label is caught here, in
-// neither autoCheckpointLabels nor a named exclusion, rather than shipping
-// silently unlabelled. The weaker shape ("keys resolve, the set equals
-// these eight, the size is eight") is explicitly forbidden by §4: all three
-// of those assertions stay green when a route is added with no label,
-// which is the exact omission this test exists to catch.
+// [Server.routes] itself, not from a literal count or a copy of a map — so
+// a route added later without deciding its policy is caught here, carrying
+// the zero-value cpGroupUndecided, rather than shipping silently
+// unlabelled. The weaker shape ("keys resolve, the set equals these eight,
+// the size is eight") is explicitly forbidden by §4: all three of those
+// assertions stay green when a route is added with no label, which is the
+// exact omission this test exists to catch.
+//
+// Since the policy moved onto the row (2026-09-07) the "added without
+// deciding" case is caught TWICE over — the compiler cannot make a caller
+// supply a field, but the zero value is not a group, so the assertion below
+// fires on it. What the per-group counts still buy is the OTHER defect: a
+// route that quietly MIGRATES between groups, or a group that grows past
+// what §4 states, changes a count here even though every route still has
+// an opinion.
 //
 // Built from a zero *Server exactly like openapi_contract_test.go's own
 // route-table walk does: routes() never touches its receiver, so the
 // contract test — and this one — can build the table without a live
 // Server behind it.
-func TestAutoCheckpointLabels_pinsEveryMutatingRoute(t *testing.T) {
+func TestAutoCheckpointPolicy_pinsEveryMutatingRoute(t *testing.T) {
 	t.Parallel()
 
-	groups := []struct {
-		name string
-		set  map[string]bool
-		want int
-	}{
-		{"bumps revision only, changes nothing a snapshot holds", autoCheckpointExcludedRevisionOnly, 6},
-		{"no workspace layer to snapshot yet or anymore", autoCheckpointExcludedNoLayerYet, 2},
-		{"never touches a workspace layer at all", autoCheckpointExcludedNeverTouchesLayer, 20},
-		{"writes a row of another layer", autoCheckpointExcludedAnotherLayer, 4},
+	// §4's own counts, group by group. cpGroupRead is the population
+	// excluded by construction — a GET writes nothing — and is counted here
+	// only so a read that acquired a mutating policy (or a mutating route
+	// that acquired cpRead) shows up as two counts moving at once.
+	//
+	// The reason each group holds what it holds is at the ROWS, in
+	// route_table.go, not here: this test counts, the table argues.
+	want := map[checkpointGroup]int{
+		// The nine labelled routes: §4's eight plus A1's PUT editor
+		// (mocker-a-mcp gate document, D4 item 4).
+		cpGroupLabelled: 9,
+		// §4's group of six. P3a's resource-decisions joined it rather
+		// than starting a fifth group of its own (D10, D13 clause 41).
+		cpGroupRevisionOnly: 6,
+		// §4's group of two: create and delete of the workspace itself.
+		cpGroupNoLayerYet: 2,
+		// §4's group, grown one slice at a time and never by a route
+		// changing its mind: P3b's reset-data (D3 R12), P3f's rederive
+		// (D7.3), P6b's endpoint preview (D13), P6c's close and push
+		// (D9), A6's two asset writes (D3), A11's two entity writes,
+		// P4b's import and fork — twenty.
+		cpGroupNeverTouchesLayer: 20,
+		// §4's group of four: a scenario row (including the clone) or a
+		// checkpoint row itself.
+		cpGroupAnotherLayer: 4,
+		// Every GET in the table.
+		cpGroupRead: 29,
 	}
 
-	// decided maps every pattern this run has an opinion about back to
-	// WHICH opinion, so a pattern claimed twice (a copy-paste into the
-	// wrong group, say) is a fatal test-data error rather than a silently
-	// double-counted route.
-	decided := make(map[string]string, len(autoCheckpointLabels))
-	for pattern := range autoCheckpointLabels {
-		decided[pattern] = "labelled"
+	byPattern := checkpointPolicyByPattern(t)
+	got := make(map[checkpointGroup]int, len(want))
+	for _, policy := range byPattern {
+		got[policy.group]++
 	}
-	for _, g := range groups {
-		if len(g.set) != g.want {
-			t.Errorf("exclusion group %q has %d entries, want %d (§4's own count)", g.name, len(g.set), g.want)
+	for group, n := range want {
+		if got[group] != n {
+			t.Errorf("group %q holds %d routes, want %d (§4's own count)", group, got[group], n)
 		}
-		for pattern := range g.set {
-			if prior, ok := decided[pattern]; ok {
-				t.Fatalf("pattern %q is claimed by both %q and %q — that is a bug in this test's own data, not in the route table", pattern, prior, g.name)
-			}
-			decided[pattern] = g.name
+	}
+	if n := got[cpGroupUndecided]; n != 0 {
+		t.Errorf("%d route(s) carry the zero-value checkpoint policy; every row must decide", n)
+	}
+	if total, table := len(want), len(byPattern); sum(got) != table {
+		t.Errorf("the %d counted groups cover %d of %d rows — a group is missing from want", total, sum(got), table)
+	}
+
+	// A label is the ONE thing [Server.routeMux] reads off the policy, so a
+	// label outside cpGroupLabelled (or a labelled row with an empty label)
+	// would silently wrap — or silently fail to wrap — the wrong handlers.
+	for pattern, policy := range byPattern {
+		switch {
+		case policy.group == cpGroupLabelled && policy.label == "":
+			t.Errorf("route %q is cpLabelled with an empty label", pattern)
+		case policy.group != cpGroupLabelled && policy.label != "":
+			t.Errorf("route %q carries label %q outside cpGroupLabelled", pattern, policy.label)
 		}
 	}
 
-	if got := len(autoCheckpointLabels); got != 9 {
-		t.Errorf("len(autoCheckpointLabels) = %d, want 9", got)
-	}
-
+	// §4's own arithmetic, kept because the numbers are its argument and not
+	// this test's: 8 labelled + 5 + 2 + 9 + 4 excluded = 28, plus A1's
+	// PUT .../endpoints/{eid} (mocker-a-mcp gate document, D4 item 4) labelled
+	// as a ninth: 9 + 5 + 2 + 9 + 4 = 29. P3a adds one more mutating route,
+	// POST .../resource-decisions, into the revision-only group rather than
+	// as a labelled tenth (D10, D13 clause 41): 9 + 6 + 2 + 9 + 4 = 30. P3b
+	// (decisions.md mocker-p3b-resources, D3 R12) adds ONE more mutating
+	// route, POST .../reset-data, into the never-touches-a-layer group
+	// rather than a labelled tenth or a fifth exclusion group of its own:
+	// 9 + 6 + 2 + 10 + 4 = 31. P3f (decisions.md mocker-p3f-rederive, D7.3)
+	// adds ONE more mutating route, POST /api/specs/{id}/rederive, into the
+	// never-touches-a-layer group: 9 + 6 + 2 + 11 + 4 = 32. P6b (decisions.md
+	// mocker-p6b-sse-mock D13) adds ONE more, POST .../endpoints/preview,
+	// into the same group: 9 + 6 + 2 + 12 + 4 = 33. P6c (decisions.md
+	// mocker-p6c-live-conns D9) adds TWO more into the same group — DELETE
+	// .../connections/{cid} and POST .../connections/{cid}/frames, a cancel
+	// and a RAM inbox, no row either — 9 + 6 + 2 + 14 + 4 = 35; A6's PUT and
+	// DELETE on assets join the never-touches-the-layer group (bytes are
+	// not configuration), plus A11's two entity writes, plus P4b's import and
+	// fork — 41. A mismatch here means the route table changed shape in a way
+	// this test's data has not caught up with yet — a signal to look, not to
+	// bump the number blindly.
 	var mutating []string
 	for _, rt := range (&Server{}).routes() {
 		method, _, ok := strings.Cut(rt.pattern, " ")
@@ -522,36 +494,36 @@ func TestAutoCheckpointLabels_pinsEveryMutatingRoute(t *testing.T) {
 			mutating = append(mutating, rt.pattern)
 		}
 	}
-
-	// §4's own arithmetic: 8 labelled + 5 + 2 + 9 + 4 excluded = 28, plus A1's
-	// PUT .../endpoints/{eid} (mocker-a-mcp gate document, D4 item 4) labelled
-	// as a ninth: 9 + 5 + 2 + 9 + 4 = 29. P3a adds one more mutating route,
-	// POST .../resource-decisions, into the revision-only group rather than
-	// as a labelled tenth (D10, D13 clause 41): 9 + 6 + 2 + 9 + 4 = 30. P3b
-	// (decisions.md mocker-p3b-resources, D3 R12) adds ONE more mutating
-	// route, POST .../reset-data, into the never-touches-a-layer group
-	// rather than a labelled tenth or a fifth exclusion group of its own:
-	// 9 + 6 + 2 + 10 + 4 = 31. P3f (decisions.md mocker-p3f-rederive, D7.3)
-	// adds ONE more mutating route, POST /api/specs/{id}/rederive, into the
-	// never-touches-a-layer group rather than a labelled tenth or a fifth
-	// exclusion group of its own: 9 + 6 + 2 + 11 + 4 = 32. P6b (decisions.md
-	// mocker-p6b-sse-mock D13) adds ONE more, POST .../endpoints/preview,
-	// into the same group: 9 + 6 + 2 + 12 + 4 = 33. P6c (decisions.md
-	// mocker-p6c-live-conns D9) adds TWO more into the same group — DELETE
-	// .../connections/{cid} and POST .../connections/{cid}/frames, a cancel
-	// and a RAM inbox, no row either — 9 + 6 + 2 + 14 + 4 = 35; A6's PUT and
-	// DELETE on assets join the never-touches-the-layer group (bytes are
-	// not configuration), plus A11's two entity writes, plus P4b's import and fork — 41. A mismatch
-	// here means the route table changed shape in a way this test's data
-	// has not caught up with yet — a signal to look, not to bump the number
-	// blindly.
 	if len(mutating) != 41 {
 		t.Fatalf("routes() registers %d mutating patterns, want 41", len(mutating))
 	}
 
+	// The two halves the group counts alone cannot state: a mutating route
+	// must not claim cpRead (which would read as "excluded by construction"
+	// for a verb that writes), and a read must not carry anything else.
+	isMutating := make(map[string]bool, len(mutating))
 	for _, pattern := range mutating {
-		if _, ok := decided[pattern]; !ok {
-			t.Errorf("mutating route %q is neither a key of autoCheckpointLabels nor a member of a named exclusion group in this test — it needs one or the other", pattern)
+		isMutating[pattern] = true
+		switch byPattern[pattern].group {
+		case cpGroupUndecided:
+			t.Errorf("mutating route %q carries no checkpoint policy — it needs a label or one of the four exclusion groups", pattern)
+		case cpGroupRead:
+			t.Errorf("mutating route %q claims cpRead; a verb that writes is not excluded by construction", pattern)
 		}
 	}
+	for pattern, policy := range byPattern {
+		if !isMutating[pattern] && policy.group != cpGroupRead {
+			t.Errorf("read route %q carries %q; a GET writes nothing and must say cpRead", pattern, policy.group)
+		}
+	}
+}
+
+// sum adds the counts of a group histogram — a one-liner, named only so the
+// coverage assertion above reads as one sentence.
+func sum(counts map[checkpointGroup]int) int {
+	total := 0
+	for _, n := range counts {
+		total += n
+	}
+	return total
 }

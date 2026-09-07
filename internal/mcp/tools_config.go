@@ -1,6 +1,7 @@
 // tools_config.go registers A9's one tool: get_server_config, the effective
 // ceilings of the process the agent is talking to. Tool fifty-seven, and
-// the second after get_guide whose toolRoutes row is empty — it reaches no
+// the second after get_guide whose toolRoutes row is [noRoute] (routes.go,
+// where that sentinel's own comment states the rule once) — it reaches no
 // handler because there is nothing in the domain to reach: the numbers are
 // the process's own environment, already in the *config.Config New was
 // handed, and the SAME config.Limits projection the panel receives inside
