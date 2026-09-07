@@ -252,8 +252,7 @@ func (s *Server) handleApplyAuthPreset(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var body applyAuthPresetBody
-	if err := decodeJSON(r, &body); err != nil {
-		httpx.Err(w, http.StatusBadRequest, httpx.CodeBadRequest, "invalid request body")
+	if !decodeBody(w, r, &body) {
 		return
 	}
 	if len(body.Bindings) == 0 {
@@ -386,7 +385,7 @@ func (s *Server) handleApplyAuthPreset(w http.ResponseWriter, r *http.Request) {
 		httpx.ErrDetails(w, http.StatusConflict, codeEditConflict,
 			"one or more auth preset bindings were changed by another write", presetConflictDetails{StaleVersions: stale})
 	case errors.Is(err, overrides.ErrWorkspaceNotFound):
-		httpx.Err(w, http.StatusNotFound, httpx.CodeNotFound, "workspace not found")
+		answerWorkspaceGone(w)
 	case errors.Is(err, overrides.ErrInvalidRow):
 		httpx.Err(w, http.StatusBadRequest, refusalCode(err), err.Error())
 	default:

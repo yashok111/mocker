@@ -197,21 +197,13 @@ func (s *Server) handleDeleteTraffic(w http.ResponseWriter, r *http.Request) {
 }
 
 // parseTrafficLimit reads "limit" off r's query, defaulting to
-// trafficDefaultLimit and clamping to trafficMaxLimit. Anything that is not
-// a positive integer (missing, zero, negative, unparsable) falls back to the
-// default rather than answering 400 — DESIGN §18 wants this screen cheap to
-// poll, not a new way for a UI's stray query param to fail a request.
+// trafficDefaultLimit and clamping to trafficMaxLimit — parseClampedLimit's
+// (server.go) shape, shared with parseResourceEntitiesLimit
+// (resource_handlers.go). DESIGN §18 wants this screen cheap to poll, not a
+// new way for a UI's stray query param to fail a request, which is exactly
+// the "clamped silently, never a 400" rule parseClampedLimit follows.
 func parseTrafficLimit(r *http.Request) int {
-	limit := trafficDefaultLimit
-	if v := r.URL.Query().Get("limit"); v != "" {
-		if n, err := strconv.Atoi(v); err == nil && n > 0 {
-			limit = n
-		}
-	}
-	if limit > trafficMaxLimit {
-		limit = trafficMaxLimit
-	}
-	return limit
+	return parseClampedLimit(r, trafficDefaultLimit, trafficMaxLimit)
 }
 
 // parseTrafficSince reads "since" off r's query. A missing or negative value

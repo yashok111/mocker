@@ -105,8 +105,7 @@ func (s *Server) handlePreviewEndpoint(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var body endpointPreviewRequest
-	if err := decodeJSON(r, &body); err != nil {
-		httpx.Err(w, http.StatusBadRequest, httpx.CodeBadRequest, "invalid request body")
+	if !decodeBody(w, r, &body) {
 		return
 	}
 	row, err := endpointRowFromDraft(body.Method, body.Path, body.Kind, body.Stream, s.customepRepo.MaxFrameBytes)

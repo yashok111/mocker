@@ -58,6 +58,38 @@ type editConflictGone struct {
 	EditVersion *int64 `json:"editVersion"`
 }
 
+// answerEditConflict writes the 409 shared by the four single-object routes
+// that carry a compare-and-swap conflict (override, workspace, endpoint,
+// scenario — see each of their own answer*EditConflict wrappers below and in
+// workspace_handlers.go/endpoint_handlers.go/scenario_handlers.go):
+// conflict.Gone answers the shared [editConflictGone] tombstone; otherwise
+// conflict.Current — boxed by the repository's own *Expecting call as T — is
+// asserted and handed to toDetails to build the route's own wire shape. A
+// failed assertion means the repository package and this handler have
+// drifted on what T is; it is logged and answered 500 rather than trusted
+// blindly (the shape every one of the four routes already followed by hand).
+//
+// T is a plain value type for three of the four callers; scenarios.Scenario
+// is the pointer-typed exception (scenarios.Repo.RenameExpecting boxes
+// *scenarios.Scenario), and answerScenarioEditConflict — the one caller for
+// which a failed OR NIL assertion both mean "no usable row" — unboxes to a
+// value itself before calling in here, rather than this function trying to
+// special-case "T might be a pointer" generically.
+func answerEditConflict[T any](s *Server, w http.ResponseWriter, conflict *store.EditConflictError, noun string, toDetails func(T) any) {
+	if conflict.Gone {
+		httpx.ErrDetails(w, http.StatusConflict, codeEditConflict,
+			noun+" was deleted by another write", editConflictGone{Gone: true})
+		return
+	}
+	cur, ok := conflict.Current.(T)
+	if !ok {
+		s.log.Error(noun+" edit conflict: unexpected payload type", "type", fmt.Sprintf("%T", conflict.Current))
+		httpx.Err(w, http.StatusInternalServerError, httpx.CodeInternal, "failed to build conflict details")
+		return
+	}
+	httpx.ErrDetails(w, http.StatusConflict, codeEditConflict, noun+" was changed by another write", toDetails(cur))
+}
+
 // loadWorkspace resolves {id}, answering 404 for an id that parses but names
 // no workspace. Shared by every handler in this file and in
 // preset_handlers.go: both surfaces are scoped to one workspace exactly the
@@ -351,24 +383,13 @@ type overrideConflictDetails struct {
 // answerOverrideEditConflict writes PUT .../operations/{opKey}'s 409 for a
 // lost compare-and-swap. conflict.Current is boxed by
 // [overrides.Repo.PutExpecting] as a plain overrides.Row (never a pointer —
-// see that function's own doc comment), so the type assertion below is the
-// one place this handler translates the sentinel's untyped payload into the
-// route's declared wire shape.
+// see that function's own doc comment), so [answerEditConflict]'s type
+// assertion is the one place this handler translates the sentinel's untyped
+// payload into the route's declared wire shape.
 func (s *Server) answerOverrideEditConflict(w http.ResponseWriter, conflict *store.EditConflictError) {
-	if conflict.Gone {
-		httpx.ErrDetails(w, http.StatusConflict, codeEditConflict,
-			"operation override was deleted by another write", editConflictGone{Gone: true})
-		return
-	}
-	row, ok := conflict.Current.(overrides.Row)
-	if !ok {
-		s.log.Error("override edit conflict: unexpected payload type", "type", fmt.Sprintf("%T", conflict.Current))
-		httpx.Err(w, http.StatusInternalServerError, httpx.CodeInternal, "failed to build conflict details")
-		return
-	}
-	httpx.ErrDetails(w, http.StatusConflict, codeEditConflict,
-		"operation override was changed by another write",
-		overrideConflictDetails{overrideMutableFields: newOverrideMutableFields(&row), EditVersion: row.EditVersion})
+	answerEditConflict(s, w, conflict, "operation override", func(row overrides.Row) any {
+		return overrideConflictDetails{overrideMutableFields: newOverrideMutableFields(&row), EditVersion: row.EditVersion}
+	})
 }
 
 // handleGetOperation answers GET .../operations/{opKey}: the full stored
@@ -554,8 +575,7 @@ func (s *Server) handlePutOperation(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var body putOperationRequest
-	if err := decodeJSON(r, &body); err != nil {
-		httpx.Err(w, http.StatusBadRequest, httpx.CodeBadRequest, "invalid request body")
+	if !decodeBody(w, r, &body) {
 		return
 	}
 	// D10: required on all five routes. A nil pointer here is "the caller
@@ -631,7 +651,7 @@ func (s *Server) handlePutOperation(w http.ResponseWriter, r *http.Request) {
 		// A race with a concurrent workspace delete, not a client mistake —
 		// loadWorkspace already confirmed existence moments earlier, so this
 		// is the same 404 that lookup would give a request arriving now.
-		httpx.Err(w, http.StatusNotFound, httpx.CodeNotFound, "workspace not found")
+		answerWorkspaceGone(w)
 	case errors.Is(err, overrides.ErrInvalidRow):
 		httpx.Err(w, http.StatusBadRequest, refusalCode(err), err.Error())
 	default:
@@ -679,7 +699,7 @@ func (s *Server) handleDeleteOperation(w http.ResponseWriter, r *http.Request) {
 	case errors.Is(err, overrides.ErrInvalidOpKey):
 		httpx.Err(w, http.StatusBadRequest, httpx.CodeBadRequest, "invalid operation key")
 	case errors.Is(err, overrides.ErrWorkspaceNotFound):
-		httpx.Err(w, http.StatusNotFound, httpx.CodeNotFound, "workspace not found")
+		answerWorkspaceGone(w)
 	default:
 		s.log.Error("delete override", "err", err)
 		httpx.Err(w, http.StatusInternalServerError, httpx.CodeInternal, "failed to delete override")

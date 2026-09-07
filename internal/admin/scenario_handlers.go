@@ -183,23 +183,27 @@ type scenarioConflictDetails struct {
 // lost compare-and-swap. conflict.Current is boxed by
 // [scenarios.Repo.RenameExpecting] as a *scenarios.Scenario (a pointer, the
 // one payload type among the four single-object routes that is — see
-// renameZeroRowsErr's own re-read), so the type assertion below differs from
-// the other three routes' value assertions.
+// renameZeroRowsErr's own re-read). [answerEditConflict]'s type assertion
+// takes T by value, and asserting a NIL *scenarios.Scenario against T =
+// *scenarios.Scenario would report ok=true and hand its toDetails callback a
+// pointer it would then dereference — so this wrapper unboxes to a value
+// itself first, rejecting "wrong type" and "nil pointer" the same way
+// (identical log line and 500) before the shared path ever runs, rather than
+// growing the generic function a pointer special case only one of its four
+// callers needs.
 func (s *Server) answerScenarioEditConflict(w http.ResponseWriter, conflict *store.EditConflictError) {
-	if conflict.Gone {
-		httpx.ErrDetails(w, http.StatusConflict, codeEditConflict,
-			"scenario was deleted by another write", editConflictGone{Gone: true})
-		return
+	if !conflict.Gone {
+		sc, ok := conflict.Current.(*scenarios.Scenario)
+		if !ok || sc == nil {
+			s.log.Error("scenario edit conflict: unexpected payload type", "type", fmt.Sprintf("%T", conflict.Current))
+			httpx.Err(w, http.StatusInternalServerError, httpx.CodeInternal, "failed to build conflict details")
+			return
+		}
+		conflict = &store.EditConflictError{Current: *sc}
 	}
-	sc, ok := conflict.Current.(*scenarios.Scenario)
-	if !ok || sc == nil {
-		s.log.Error("scenario edit conflict: unexpected payload type", "type", fmt.Sprintf("%T", conflict.Current))
-		httpx.Err(w, http.StatusInternalServerError, httpx.CodeInternal, "failed to build conflict details")
-		return
-	}
-	httpx.ErrDetails(w, http.StatusConflict, codeEditConflict,
-		"scenario was changed by another write",
-		scenarioConflictDetails{Name: sc.Name, EditVersion: sc.EditVersion})
+	answerEditConflict(s, w, conflict, "scenario", func(sc scenarios.Scenario) any {
+		return scenarioConflictDetails{Name: sc.Name, EditVersion: sc.EditVersion}
+	})
 }
 
 // handleListScenarios answers GET /api/workspaces/{id}/scenarios: every
@@ -257,8 +261,7 @@ func (s *Server) handleCreateScenario(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var body createScenarioRequest
-	if err := decodeJSON(r, &body); err != nil {
-		httpx.Err(w, http.StatusBadRequest, httpx.CodeBadRequest, "invalid request body")
+	if !decodeBody(w, r, &body) {
 		return
 	}
 
@@ -340,8 +343,7 @@ func (s *Server) handleRenameScenario(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var body renameScenarioRequest
-	if err := decodeJSON(r, &body); err != nil {
-		httpx.Err(w, http.StatusBadRequest, httpx.CodeBadRequest, "invalid request body")
+	if !decodeBody(w, r, &body) {
 		return
 	}
 	if body.EditVersion == nil {
@@ -484,7 +486,7 @@ func (s *Server) answerScenarioError(w http.ResponseWriter, err error) {
 		// A race with a concurrent workspace delete, not a client mistake —
 		// loadWorkspace already confirmed existence moments earlier, exactly
 		// like answerCreateEndpointError's identical case.
-		httpx.Err(w, http.StatusNotFound, httpx.CodeNotFound, "workspace not found")
+		answerWorkspaceGone(w)
 	case errors.Is(err, scenarios.ErrInvalidName):
 		httpx.Err(w, http.StatusBadRequest, httpx.CodeBadRequest, err.Error())
 	case errors.Is(err, scenarios.ErrDuplicateName):

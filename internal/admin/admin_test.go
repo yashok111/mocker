@@ -14,6 +14,7 @@ import (
 	"github.com/yashok111/mocker/internal/admin"
 	"github.com/yashok111/mocker/internal/auth"
 	"github.com/yashok111/mocker/internal/config"
+	"github.com/yashok111/mocker/internal/httpx"
 	"github.com/yashok111/mocker/internal/store"
 	"github.com/yashok111/mocker/internal/testauth"
 	"github.com/yashok111/mocker/internal/workspaces"
@@ -670,5 +671,42 @@ func TestHandler_listWorkspaces(t *testing.T) {
 	}
 	if !found {
 		t.Errorf("GET /api/workspaces?all=1 = %v, want it to include Bob's workspace %q", all, bobSlug)
+	}
+}
+
+// TestHandler_decodeBody_bodyOverMaxBody proves decodeBody's own bug fix
+// (server.go): a body that trips MOCKER_MAX_BODY mid-decode must answer 413,
+// not the generic 400 every decode site answered before decodeBody existed.
+//
+// httpx.MaxBody wraps the WHOLE dispatcher exactly once in production
+// (cmd/mocker/main.go's own comment) — never [admin.Server.Handler] itself,
+// which is why [newTestServer]'s cfg.MaxBody (10<<20 here) never actually
+// caps anything in every OTHER test in this file. Wrapping ts.handler with
+// it for this one request, at a limit small enough to trip on an ordinary
+// JSON body, reproduces the exact production shape the bug lived in, rather
+// than asserting against a synthetic http.MaxBytesReader nobody would ever
+// see in front of this handler.
+func TestHandler_decodeBody_bodyOverMaxBody(t *testing.T) {
+	t.Parallel()
+	ts := newTestServer(t)
+	cookie, csrfToken := ts.login(t, "Alex")
+
+	const tinyLimit = 8 // smaller than the JSON body below by construction
+	handler := httpx.MaxBody(tinyLimit)(ts.handler)
+
+	req := jsonRequest(t, http.MethodPost, "http://mocker.local/api/workspaces",
+		map[string]string{"name": "a workspace name well over eight bytes"}, cookie, csrfToken)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("status = %d, want 413; body = %s", rec.Code, rec.Body.String())
+	}
+	var got httpx.ErrorBody
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatalf("decode error body: %v", err)
+	}
+	if got.Error.Code != httpx.CodeTooLarge {
+		t.Errorf("error.code = %q, want %q", got.Error.Code, httpx.CodeTooLarge)
 	}
 }

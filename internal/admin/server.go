@@ -8,6 +8,7 @@ package admin
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -406,6 +407,41 @@ func decodeStrict(r io.Reader, v any) error {
 	return nil
 }
 
+// decodeBody is decodeJSON plus the response every one of its ~17 identical
+// call sites used to write by hand: 400 (httpx.CodeBadRequest, "invalid
+// request body") for a malformed body, reported as false so the caller can
+// `return` in one line. It also closes a bug those hand-written sites shared:
+// the dispatcher wraps the whole request body in http.MaxBytesReader at
+// httpx.MaxBody(cfg.MOCKER_MAX_BODY) (cmd/mocker/main.go), so a body that
+// trips that cap mid-read surfaces here as an *http.MaxBytesError — a
+// perfectly valid JSON document the caller simply sent too much of — and
+// every site but asset_handlers.go's own upload path (which runs its own
+// http.MaxBytesReader at MOCKER_MAX_ASSET and already answers this
+// correctly) was reporting it as a generic 400 instead of the 413 it is.
+// errors.As, not a direct type assertion, because decodeJSON's error may
+// already be wrapped by the time it reaches here — decodeStrict itself never
+// wraps, but a caller of decodeJSON that folds it into a %w chain (there is
+// none today) must not silently defeat this branch.
+//
+// A caller that must tolerate a zero-byte body (io.EOF, e.g. an optional
+// request body) keeps calling decodeJSON directly — decodeBody always
+// answers on any error, io.EOF included, so it is only for the sites that
+// treat "no body" as "malformed body".
+func decodeBody(w http.ResponseWriter, r *http.Request, v any) bool {
+	err := decodeJSON(r, v)
+	if err == nil {
+		return true
+	}
+	var mbe *http.MaxBytesError
+	if errors.As(err, &mbe) {
+		httpx.Err(w, http.StatusRequestEntityTooLarge, httpx.CodeTooLarge,
+			fmt.Sprintf("request body exceeds MOCKER_MAX_BODY (%d bytes)", mbe.Limit))
+		return false
+	}
+	httpx.Err(w, http.StatusBadRequest, httpx.CodeBadRequest, "invalid request body")
+	return false
+}
+
 // cookieSecure decides the session cookie's Secure attribute for r: secure
 // when the client actually reached this request over TLS — directly or via a
 // trusted proxy's X-Forwarded-Proto — or when the deployment is not in dev
@@ -416,12 +452,52 @@ func (s *Server) cookieSecure(r *http.Request) bool {
 }
 
 // parseWorkspaceID extracts and validates the {id} path value, answering 400
-// and reporting failure on anything that is not a positive integer.
+// and reporting failure on anything that is not a positive integer. A thin
+// wrapper over parsePathInt64Value (endpoint_handlers.go) — see that
+// function's own doc comment for why it keeps its own message rather than
+// parsePathInt64's generic "invalid {name}".
 func parseWorkspaceID(w http.ResponseWriter, r *http.Request) (int64, bool) {
-	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
-	if err != nil || id <= 0 {
-		httpx.Err(w, http.StatusBadRequest, httpx.CodeBadRequest, "invalid workspace id")
-		return 0, false
+	return parsePathInt64Value(w, r, "id", "invalid workspace id")
+}
+
+// parseClampedLimit reads "limit" off r's query, defaulting to def and
+// clamping to limitMax (not named "max" — that shadows the builtin, and
+// .golangci.yml's predeclared linter is enabled). Anything that is not a
+// positive integer (missing, zero, negative, unparsable) falls back to def
+// rather than answering 400 — shared by parseResourceEntitiesLimit
+// (resource_handlers.go) and parseTrafficLimit (traffic_handlers.go), which
+// used to carry byte-identical bodies and cross-cite each other's comment
+// for the reason ("clamped silently, never a 400"). spec_handlers.go's own
+// limit parsing for GET .../operations is DELIBERATELY not folded in here:
+// it answers 400 on an invalid value instead of silently defaulting (see
+// that site's own comment on [specs.Repo.Operations]'s limit<=0 sentinel), a
+// different contract, not a third copy of this one.
+func parseClampedLimit(r *http.Request, def, limitMax int) int {
+	limit := def
+	if v := r.URL.Query().Get("limit"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			limit = n
+		}
 	}
-	return id, true
+	if limit > limitMax {
+		limit = limitMax
+	}
+	return limit
+}
+
+// answerWorkspaceGone writes the 404 this package answers for a workspace id
+// that does not, or no longer, resolve: a handler's own initial ByID lookup
+// (handleGetWorkspace and others each keep their own error-message-specific
+// `if err != nil` around it rather than calling loadWorkspace, so they never
+// shared that function's 404 in the first place), or a repository's own
+// ErrWorkspaceNotFound surfacing later, after an earlier loadWorkspace call
+// already found the row — a race with a concurrent delete, not a client
+// mistake. Distinct from loadWorkspace's OWN 404 (override_handlers.go),
+// which stays a direct httpx.Err call: that is the one call site every other
+// handler's loadWorkspace call funnels through already, so it would gain
+// nothing by also going through here. Collapses the ~20 other, identical
+// httpx.Err(w, http.StatusNotFound, httpx.CodeNotFound, "workspace not
+// found") sites this package used to spell out by hand.
+func answerWorkspaceGone(w http.ResponseWriter) {
+	httpx.Err(w, http.StatusNotFound, httpx.CodeNotFound, "workspace not found")
 }

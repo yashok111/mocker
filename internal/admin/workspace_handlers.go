@@ -181,8 +181,7 @@ func (s *Server) handleCreateWorkspace(w http.ResponseWriter, r *http.Request) {
 		Slug   string `json:"slug"`
 		SpecID *int64 `json:"specId"`
 	}
-	if err := decodeJSON(r, &body); err != nil {
-		httpx.Err(w, http.StatusBadRequest, httpx.CodeBadRequest, "invalid request body")
+	if !decodeBody(w, r, &body) {
 		return
 	}
 	name := strings.TrimSpace(body.Name)
@@ -239,7 +238,7 @@ func (s *Server) handleGetWorkspace(w http.ResponseWriter, r *http.Request) {
 	ws, err := s.ws.ByID(r.Context(), id)
 	if err != nil {
 		if errors.Is(err, workspaces.ErrNotFound) {
-			httpx.Err(w, http.StatusNotFound, httpx.CodeNotFound, "workspace not found")
+			answerWorkspaceGone(w)
 			return
 		}
 		s.log.Error("get workspace", "err", err)
@@ -266,24 +265,13 @@ type workspaceConflictDetails struct {
 // answerWorkspaceEditConflict writes PATCH /api/workspaces/{id}'s 409 for a
 // lost compare-and-swap. conflict.Current is boxed by
 // [workspaces.Repo.UpdateExpecting] as a plain workspaces.Workspace (never a
-// pointer), so the type assertion below is the one place this handler
-// translates the sentinel's untyped payload into the route's declared wire
-// shape.
+// pointer), so [answerEditConflict]'s type assertion is the one place this
+// handler translates the sentinel's untyped payload into the route's
+// declared wire shape.
 func (s *Server) answerWorkspaceEditConflict(w http.ResponseWriter, conflict *store.EditConflictError) {
-	if conflict.Gone {
-		httpx.ErrDetails(w, http.StatusConflict, codeEditConflict,
-			"workspace was deleted by another write", editConflictGone{Gone: true})
-		return
-	}
-	ws, ok := conflict.Current.(workspaces.Workspace)
-	if !ok {
-		s.log.Error("workspace edit conflict: unexpected payload type", "type", fmt.Sprintf("%T", conflict.Current))
-		httpx.Err(w, http.StatusInternalServerError, httpx.CodeInternal, "failed to build conflict details")
-		return
-	}
-	httpx.ErrDetails(w, http.StatusConflict, codeEditConflict,
-		"workspace was changed by another write",
-		workspaceConflictDetails{Name: ws.Name, Settings: ws.Settings, SpecID: ws.SpecID, EditVersion: ws.EditVersion})
+	answerEditConflict(s, w, conflict, "workspace", func(ws workspaces.Workspace) any {
+		return workspaceConflictDetails{Name: ws.Name, Settings: ws.Settings, SpecID: ws.SpecID, EditVersion: ws.EditVersion}
+	})
 }
 
 // handlePatchWorkspace updates name, settings and/or the attached spec. All
@@ -311,8 +299,7 @@ func (s *Server) handlePatchWorkspace(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var body patchWorkspaceRequest
-	if err := decodeJSON(r, &body); err != nil {
-		httpx.Err(w, http.StatusBadRequest, httpx.CodeBadRequest, "invalid request body")
+	if !decodeBody(w, r, &body) {
 		return
 	}
 	if body.EditVersion == nil {
@@ -375,7 +362,7 @@ func (s *Server) answerPatchWorkspaceError(w http.ResponseWriter, err error) {
 	case errors.As(err, &conflict):
 		s.answerWorkspaceEditConflict(w, conflict)
 	case errors.Is(err, workspaces.ErrNotFound):
-		httpx.Err(w, http.StatusNotFound, httpx.CodeNotFound, "workspace not found")
+		answerWorkspaceGone(w)
 	case errors.Is(err, errEmptyName):
 		httpx.Err(w, http.StatusBadRequest, httpx.CodeBadRequest, "name must not be empty")
 	case errors.Is(err, workspaces.ErrSettingsTooLarge):
@@ -399,8 +386,10 @@ func (s *Server) answerPatchWorkspaceError(w http.ResponseWriter, err error) {
 // validatePatchSettings is D4.3's both halves, pulled out of
 // handlePatchWorkspace itself so that function's own branch count stays
 // under gocyclo's ceiling (the specification is one refusal reason per
-// branch, the identical shape the ten existing //nolint gocyclo pinpoints
-// elsewhere in this tree already carry — extracting the validation costs
+// branch, the identical shape the fifteen existing //nolint gocyclo
+// pinpoints elsewhere in this tree already carry (`rg -c 'nolint:gocyclo'
+// cmd internal`, re-measured — this file carries none of its own) —
+// extracting the validation costs
 // nothing semantically, since it runs BEFORE the CAS transaction opens
 // either way): a settings write that carries basePath/basePathValues has
 // its shape validated here, never inside the import path
@@ -460,7 +449,7 @@ func (s *Server) validateBasePathAgainstBoundSpec(w http.ResponseWriter, r *http
 		cur, err := s.ws.ByID(r.Context(), workspaceID)
 		if err != nil {
 			if errors.Is(err, workspaces.ErrNotFound) {
-				httpx.Err(w, http.StatusNotFound, httpx.CodeNotFound, "workspace not found")
+				answerWorkspaceGone(w)
 				return false
 			}
 			s.log.Error("patch workspace: load current spec for base-path validation", "err", err)
@@ -514,7 +503,7 @@ func (s *Server) handleDeleteWorkspace(w http.ResponseWriter, r *http.Request) {
 
 	if err := s.ws.Delete(r.Context(), id); err != nil {
 		if errors.Is(err, workspaces.ErrNotFound) {
-			httpx.Err(w, http.StatusNotFound, httpx.CodeNotFound, "workspace not found")
+			answerWorkspaceGone(w)
 			return
 		}
 		s.log.Error("delete workspace", "err", err)

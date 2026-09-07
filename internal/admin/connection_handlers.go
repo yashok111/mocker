@@ -160,8 +160,7 @@ func (s *Server) handlePushFrame(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var body pushFrameRequest
-	if err := decodeJSON(r, &body); err != nil {
-		httpx.Err(w, http.StatusBadRequest, httpx.CodeBadRequest, "invalid request body")
+	if !decodeBody(w, r, &body) {
 		return
 	}
 	if err := customep.ValidatePushFrame(body.Event, body.Data, s.customepRepo.MaxFrameBytes); err != nil {

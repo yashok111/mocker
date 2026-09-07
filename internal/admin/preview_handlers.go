@@ -329,8 +329,7 @@ func (s *Server) handlePreviewOperation(w http.ResponseWriter, r *http.Request) 
 	}
 
 	var wire previewRequestWire
-	if err := decodeJSON(r, &wire); err != nil {
-		httpx.Err(w, http.StatusBadRequest, httpx.CodeBadRequest, "invalid request body")
+	if !decodeBody(w, r, &wire) {
 		return
 	}
 

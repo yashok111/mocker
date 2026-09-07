@@ -134,7 +134,7 @@ func (s *Server) handlePutAsset(w http.ResponseWriter, r *http.Request) {
 			fmt.Sprintf("the workspace's assets would exceed MOCKER_MAX_ASSETS_TOTAL (%d)", s.assetsRepo.MaxTotalBytes))
 		return
 	case errors.Is(err, assets.ErrWorkspaceNotFound):
-		httpx.Err(w, http.StatusNotFound, httpx.CodeNotFound, "workspace not found")
+		answerWorkspaceGone(w)
 		return
 	case errors.Is(err, assets.ErrInvalidName):
 		httpx.Err(w, http.StatusBadRequest, httpx.CodeBadRequest, err.Error())
@@ -215,8 +215,7 @@ func (s *Server) handleDeleteAsset(w http.ResponseWriter, r *http.Request) {
 	}
 	name := r.PathValue("name")
 	var body deleteAssetRequest
-	if err := decodeJSON(r, &body); err != nil {
-		httpx.Err(w, http.StatusBadRequest, httpx.CodeBadRequest, "invalid request body")
+	if !decodeBody(w, r, &body) {
 		return
 	}
 	if body.ConfirmSlug == "" {
@@ -233,7 +232,7 @@ func (s *Server) handleDeleteAsset(w http.ResponseWriter, r *http.Request) {
 	case errors.Is(err, assets.ErrNotFound):
 		httpx.Err(w, http.StatusNotFound, codeAssetNotFound, "no such asset: "+strconv.Quote(name))
 	case errors.Is(err, assets.ErrWorkspaceNotFound):
-		httpx.Err(w, http.StatusNotFound, httpx.CodeNotFound, "workspace not found")
+		answerWorkspaceGone(w)
 	default:
 		s.log.Error("delete asset", "workspace", ws.ID, "asset", name, "err", err)
 		httpx.Err(w, http.StatusInternalServerError, httpx.CodeInternal, "internal error")

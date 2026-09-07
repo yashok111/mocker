@@ -178,8 +178,7 @@ func (s *Server) handleCreateCheckpoint(w http.ResponseWriter, r *http.Request) 
 	}
 
 	var body createCheckpointRequest
-	if err := decodeJSON(r, &body); err != nil {
-		httpx.Err(w, http.StatusBadRequest, httpx.CodeBadRequest, "invalid request body")
+	if !decodeBody(w, r, &body) {
 		return
 	}
 
@@ -394,7 +393,7 @@ func (s *Server) answerCheckpointError(w http.ResponseWriter, err error) {
 		// A race with a concurrent workspace delete, not a client mistake
 		// — loadWorkspace already confirmed existence moments earlier,
 		// exactly like answerScenarioError's identical case.
-		httpx.Err(w, http.StatusNotFound, httpx.CodeNotFound, "workspace not found")
+		answerWorkspaceGone(w)
 	case errors.Is(err, checkpoints.ErrInvalidLabel):
 		httpx.Err(w, http.StatusBadRequest, httpx.CodeBadRequest, err.Error())
 	case errors.Is(err, bundle.ErrInvalid):

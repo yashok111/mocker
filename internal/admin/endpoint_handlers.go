@@ -269,8 +269,7 @@ func (s *Server) handleCreateEndpoint(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var body createEndpointRequest
-	if err := decodeJSON(r, &body); err != nil {
-		httpx.Err(w, http.StatusBadRequest, httpx.CodeBadRequest, "invalid request body")
+	if !decodeBody(w, r, &body) {
 		return
 	}
 	status := body.Status
@@ -348,7 +347,7 @@ func (s *Server) answerCreateEndpointError(w http.ResponseWriter, err error) {
 	case errors.Is(err, customep.ErrWorkspaceNotFound):
 		// A race with a concurrent workspace delete, not a client mistake —
 		// loadWorkspace already confirmed existence moments earlier.
-		httpx.Err(w, http.StatusNotFound, httpx.CodeNotFound, "workspace not found")
+		answerWorkspaceGone(w)
 	case errors.Is(err, customep.ErrInvalidRow):
 		httpx.Err(w, http.StatusBadRequest, refusalCode(err), err.Error())
 	default:
@@ -497,29 +496,19 @@ type endpointConflictDetails struct {
 // answerEndpointEditConflict writes PUT .../endpoints/{eid}'s 409 for a lost
 // compare-and-swap. conflict.Current is boxed by
 // [customep.Repo.UpdateExpecting] as a plain customep.Row (never a pointer),
-// so the type assertion below is the one place this handler translates the
-// sentinel's untyped payload into the route's declared wire shape.
+// so [answerEditConflict]'s type assertion is the one place this handler
+// translates the sentinel's untyped payload into the route's declared wire
+// shape.
 func (s *Server) answerEndpointEditConflict(w http.ResponseWriter, conflict *store.EditConflictError) {
-	if conflict.Gone {
-		httpx.ErrDetails(w, http.StatusConflict, codeEditConflict,
-			"custom endpoint was deleted by another write", editConflictGone{Gone: true})
-		return
-	}
-	row, ok := conflict.Current.(customep.Row)
-	if !ok {
-		s.log.Error("endpoint edit conflict: unexpected payload type", "type", fmt.Sprintf("%T", conflict.Current))
-		httpx.Err(w, http.StatusInternalServerError, httpx.CodeInternal, "failed to build conflict details")
-		return
-	}
-	httpx.ErrDetails(w, http.StatusConflict, codeEditConflict,
-		"custom endpoint was changed by another write",
-		endpointConflictDetails{
+	answerEditConflict(s, w, conflict, "custom endpoint", func(row customep.Row) any {
+		return endpointConflictDetails{
 			Method: row.Method, Path: row.Path, OverrideOn: row.OverrideOn, RouteOff: row.RouteOff,
 			ActiveStatus: row.ActiveStatus, Responses: row.Responses, ListSize: row.ListSize, DelayMs: row.DelayMs,
 			Kind: row.Kind, Stream: row.Stream,
 			ReqSchema: row.ReqSchema, Operation: row.Operation,
 			EditVersion: row.EditVersion,
-		})
+		}
+	})
 }
 
 // handleUpdateEndpoint answers PUT /api/workspaces/{id}/endpoints/{eid}: a
@@ -559,8 +548,7 @@ func (s *Server) handleUpdateEndpoint(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var body updateEndpointRequest
-	if err := decodeJSON(r, &body); err != nil {
-		httpx.Err(w, http.StatusBadRequest, httpx.CodeBadRequest, "invalid request body")
+	if !decodeBody(w, r, &body) {
 		return
 	}
 	if body.EditVersion == nil {
@@ -629,7 +617,7 @@ func (s *Server) handleUpdateEndpoint(w http.ResponseWriter, r *http.Request) {
 	case errors.Is(err, customep.ErrNotFound):
 		httpx.Err(w, http.StatusNotFound, httpx.CodeNotFound, "endpoint not found")
 	case errors.Is(err, customep.ErrWorkspaceNotFound):
-		httpx.Err(w, http.StatusNotFound, httpx.CodeNotFound, "workspace not found")
+		answerWorkspaceGone(w)
 	case errors.Is(err, customep.ErrInvalidRow):
 		httpx.Err(w, http.StatusBadRequest, refusalCode(err), err.Error())
 	default:
@@ -663,11 +651,26 @@ func (s *Server) handleDeleteEndpoint(w http.ResponseWriter, r *http.Request) {
 	case errors.Is(err, customep.ErrNotFound):
 		httpx.Err(w, http.StatusNotFound, httpx.CodeNotFound, "endpoint not found")
 	case errors.Is(err, customep.ErrWorkspaceNotFound):
-		httpx.Err(w, http.StatusNotFound, httpx.CodeNotFound, "workspace not found")
+		answerWorkspaceGone(w)
 	default:
 		s.log.Error("delete endpoint", "err", err)
 		httpx.Err(w, http.StatusInternalServerError, httpx.CodeInternal, "failed to delete endpoint")
 	}
+}
+
+// parsePathInt64Value is parsePathInt64's core, generalized once more so
+// parseWorkspaceID (server.go) and parseSpecID (spec_handlers.go) can share
+// it too: both parse the very same {id} shape but have carried their own
+// wording ("invalid workspace id", "invalid spec id") since before this
+// helper existed, and neither message is worth renaming to the generic
+// "invalid id" just to collapse onto parsePathInt64 itself.
+func parsePathInt64Value(w http.ResponseWriter, r *http.Request, name, msg string) (int64, bool) {
+	v, err := strconv.ParseInt(r.PathValue(name), 10, 64)
+	if err != nil || v <= 0 {
+		httpx.Err(w, http.StatusBadRequest, httpx.CodeBadRequest, msg)
+		return 0, false
+	}
+	return v, true
 }
 
 // parsePathInt64 extracts and validates the {name} path value as a positive
@@ -676,10 +679,5 @@ func (s *Server) handleDeleteEndpoint(w http.ResponseWriter, r *http.Request) {
 // by this file and from_traffic.go rather than duplicated, since both need
 // exactly this check and nothing route-specific.
 func parsePathInt64(w http.ResponseWriter, r *http.Request, name string) (int64, bool) {
-	v, err := strconv.ParseInt(r.PathValue(name), 10, 64)
-	if err != nil || v <= 0 {
-		httpx.Err(w, http.StatusBadRequest, httpx.CodeBadRequest, "invalid "+name)
-		return 0, false
-	}
-	return v, true
+	return parsePathInt64Value(w, r, name, "invalid "+name)
 }

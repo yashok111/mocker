@@ -566,8 +566,7 @@ func (s *Server) handleDecideResource(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req resourceDecisionRequest
-	if err := decodeJSON(r, &req); err != nil {
-		httpx.Err(w, http.StatusBadRequest, httpx.CodeBadRequest, "invalid request body")
+	if !decodeBody(w, r, &req) {
 		return
 	}
 	if req.RouteFamily == "" {
@@ -683,8 +682,7 @@ func (s *Server) handleResetData(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req resetDataRequest
-	if err := decodeJSON(r, &req); err != nil {
-		httpx.Err(w, http.StatusBadRequest, httpx.CodeBadRequest, "invalid request body")
+	if !decodeBody(w, r, &req) {
 		return
 	}
 
@@ -736,7 +734,7 @@ func (s *Server) answerResetDataError(w http.ResponseWriter, ws *workspaces.Work
 		// [Server.loadWorkspace] already proved the workspace existed a
 		// moment ago; a race where it vanishes between that read and this
 		// write answers the same 404 an ordinary lookup miss would.
-		httpx.Err(w, http.StatusNotFound, httpx.CodeNotFound, "workspace not found")
+		answerWorkspaceGone(w)
 	default:
 		s.log.Error("reset data", "workspace", ws.Slug, "err", err)
 		httpx.Err(w, http.StatusInternalServerError, httpx.CodeInternal, "failed to reset resource data")
@@ -776,7 +774,7 @@ func (s *Server) answerResourceDecisionError(w http.ResponseWriter, ws *workspac
 		// [Server.loadWorkspace] already proved the workspace existed a
 		// moment ago; a race where it vanishes between that read and this
 		// write answers the same 404 an ordinary lookup miss would.
-		httpx.Err(w, http.StatusNotFound, httpx.CodeNotFound, "workspace not found")
+		answerWorkspaceGone(w)
 	default:
 		s.log.Error("resource decision", "workspace", ws.Slug, "err", err)
 		httpx.Err(w, http.StatusInternalServerError, httpx.CodeInternal, "failed to record resource decision")
@@ -924,22 +922,12 @@ func (s *Server) confirmedResourceByFamily(ctx context.Context, workspaceID int6
 }
 
 // parseResourceEntitiesLimit reads "limit" off r's query, defaulting to
-// resourceEntitiesDefaultLimit and clamping to resourceEntitiesMaxLimit.
-// Anything that is not a positive integer (missing, zero, negative,
-// unparsable) falls back to the default rather than answering 400 — the
-// same rule parseTrafficLimit follows, for the same reason (D4's own Shape:
-// "clamped silently, never a 400").
+// resourceEntitiesDefaultLimit and clamping to resourceEntitiesMaxLimit —
+// parseClampedLimit's (server.go) shape, shared with parseTrafficLimit
+// (traffic_handlers.go) for the same reason (D4's own Shape: "clamped
+// silently, never a 400").
 func parseResourceEntitiesLimit(r *http.Request) int {
-	limit := resourceEntitiesDefaultLimit
-	if v := r.URL.Query().Get("limit"); v != "" {
-		if n, err := strconv.Atoi(v); err == nil && n > 0 {
-			limit = n
-		}
-	}
-	if limit > resourceEntitiesMaxLimit {
-		limit = resourceEntitiesMaxLimit
-	}
-	return limit
+	return parseClampedLimit(r, resourceEntitiesDefaultLimit, resourceEntitiesMaxLimit)
 }
 
 // parseResourceEntitiesAfter reads "after" off r's query: a missing,

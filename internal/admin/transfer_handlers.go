@@ -80,7 +80,7 @@ func (s *Server) handleExportWorkspace(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		switch {
 		case errors.Is(err, checkpoints.ErrWorkspaceNotFound):
-			httpx.Err(w, http.StatusNotFound, httpx.CodeNotFound, "workspace not found")
+			answerWorkspaceGone(w)
 		case errors.Is(err, checkpoints.ErrDataSnapshotTooLarge):
 			httpx.Err(w, http.StatusRequestEntityTooLarge, codeExportTooLarge,
 				"entity rows exceed the export budget; export without includeData")
@@ -152,8 +152,7 @@ func (s *Server) handleImportWorkspace(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var body importWorkspaceBody
-	if err := decodeJSON(r, &body); err != nil {
-		httpx.Err(w, http.StatusBadRequest, httpx.CodeBadRequest, "invalid request body")
+	if !decodeBody(w, r, &body) {
 		return
 	}
 	if len(body.Bundle) == 0 || string(body.Bundle) == "null" {
@@ -366,7 +365,7 @@ func (s *Server) writeTransferError(w http.ResponseWriter, op string, err error)
 	case errors.Is(err, workspaces.ErrSettingsTooLarge):
 		httpx.Err(w, http.StatusRequestEntityTooLarge, httpx.CodeTooLarge, "settings too large")
 	case errors.Is(err, checkpoints.ErrWorkspaceNotFound):
-		httpx.Err(w, http.StatusNotFound, httpx.CodeNotFound, "workspace not found")
+		answerWorkspaceGone(w)
 	case errors.Is(err, checkpoints.ErrSnapshotTooLarge):
 		httpx.Err(w, http.StatusRequestEntityTooLarge, httpx.CodeTooLarge, "the configuration exceeds the snapshot ceiling")
 	case errors.Is(err, checkpoints.ErrConcurrentEdit):

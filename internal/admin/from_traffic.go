@@ -173,7 +173,7 @@ func (s *Server) handleToOverride(w http.ResponseWriter, r *http.Request) {
 	case err == nil:
 		httpx.JSON(w, http.StatusOK, toOverrideView{OpKey: key, Status: row.Status, Revision: revision})
 	case errors.Is(err, overrides.ErrWorkspaceNotFound):
-		httpx.Err(w, http.StatusNotFound, httpx.CodeNotFound, "workspace not found")
+		answerWorkspaceGone(w)
 	case errors.Is(err, overrides.ErrInvalidRow):
 		httpx.Err(w, http.StatusBadRequest, refusalCode(err), err.Error())
 	default:

@@ -174,8 +174,7 @@ func (s *Server) handleImportSpec(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var body specImportBody
-	if err := decodeJSON(r, &body); err != nil {
-		httpx.Err(w, http.StatusBadRequest, httpx.CodeBadRequest, "invalid request body")
+	if !decodeBody(w, r, &body) {
 		return
 	}
 
@@ -400,13 +399,9 @@ func (s *Server) handleDeleteSpec(w http.ResponseWriter, r *http.Request) {
 }
 
 // parseSpecID extracts and validates the {id} path value, answering 400 and
-// reporting failure on anything that is not a positive integer. Mirrors
-// parseWorkspaceID in workspace_handlers.go.
+// reporting failure on anything that is not a positive integer. A thin
+// wrapper over parsePathInt64Value (endpoint_handlers.go), mirroring
+// parseWorkspaceID (server.go) — see that function's own doc comment.
 func parseSpecID(w http.ResponseWriter, r *http.Request) (int64, bool) {
-	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
-	if err != nil || id <= 0 {
-		httpx.Err(w, http.StatusBadRequest, httpx.CodeBadRequest, "invalid spec id")
-		return 0, false
-	}
-	return id, true
+	return parsePathInt64Value(w, r, "id", "invalid spec id")
 }
