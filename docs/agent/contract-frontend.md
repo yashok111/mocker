@@ -51,8 +51,24 @@ is a test, not a promise.**
 `web/src/api/coverage.test.ts` enumerates the routes from the **committed**
 contract (not from the generated client — that one is in `.gitignore`, and on a tree without
 `make ui-gen` an empty iteration would pass vacuously), pins the population at 70,
-accepts any of the four orval symbols with a mandatory `(` and scans
-`web/src` **minus tests, minus `src/test`, minus the generated code, minus itself**.
+and since `A22` (2026-09-07) finds a caller by AST rather than by substring:
+`coverageScanner.ts` parses every source under `web/src` **minus tests, minus
+`src/test`, minus the generated code, minus itself** (through
+`typescript/unstable/sync`, the only parser TypeScript 7 ships; the checker is
+never asked, so the guard does not need `api/generated/` to exist) and counts a
+route as covered only by a `CallExpression` whose callee resolves to a binding
+imported from the generated client — the fetcher `<operationId>`, `use<X>`,
+`get<X>QueryOptions`, `get<X>MutationOptions`; an alias resolves through its
+import specifier, a namespace import through member access. What no longer
+counts, each a false green the substring scan produced: a name inside a
+comment, an import never called, a `get<X>QueryKey(` (a cache address, not a
+request), a type-only import. Routes served by a native transport (the SSE
+`EventSource` in `api/stream.ts`) sit in `NATIVE_TRANSPORTS`, which names the
+route AND the file, and a test re-derives the URL from that file's AST.
+Measured on the day of the switch: all 70 routes had the same status under
+both rules. Known limits, recorded in the scanner: a call inside dead code
+counts (reachability is `routes.test.tsx`'s job), a local shadowing an import
+reads as the import, re-export barrels are not followed.
 **The agent is PRIMARY and a screen is OPTIONAL — decided 2026-08-31, and it
 changes what this test means.** A slice may ship a verb with its MCP tool and no
 screen at all; the reverse cut is still forbidden, and that half is older — a

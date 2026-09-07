@@ -15,7 +15,7 @@ JSON bytes there and nowhere else) and `github.com/yuin/gopher-lua` behind
 "one library, one importing package", not "a framework": there is no
 framework and there will not be one.
 
-The spec is `DESIGN.md` (v12, ~3200 lines, 50-odd headings; §34 is the API-design intent of 2026-09-03). **Do not read it
+The spec is `DESIGN.md` (v12, ~3200 lines, 82 headings; §34 is the API-design intent of 2026-09-03). **Do not read it
 whole**, only by line range: it is the single document that outranks the
 code. References of the form "§14" are its sections; to find one:
 `grep -nE '^#{1,3} ' DESIGN.md`, then `sed -n 'A,Bp'`. **§23 is the state as
@@ -65,6 +65,7 @@ an approach that was tried and reverted.
 | `docs/agent/contract-frontend.md` | `api/openapi.json`, `coverage.test.ts`, the `EXEMPT` roster, `web/` conventions |
 | `docs/agent/where-we-are.md` | the full shipped list, what is NEXT with its argument, where each slice's decisions live |
 | `docs/agent/ui-review-2026-09-05.md` | any UI change: the six-reader review after `A20` — the ranked bugs, gaps and usability items, the `VariantEditor` reading, the suggested `A21` order |
+| `docs/agent/refactor-review-2026-09-07.md` | a refactor, or a "why is this duplicated" question: the thirteen-vector scan behind `A22` — 49 ranked items, what shipped, what was refused and why (the generic keyed map, one `lifecycle`, the `walkObject` split, the MCP wire structs) |
 
 ## Architecture
 
@@ -134,16 +135,29 @@ API design, Lua functions — is described in `docs/agent/` (the index above),
 one file per subsystem. Five rules recur across all of them and are the ones
 a slice most often gets wrong on its first draft:
 
-- **A new admin route** is: `Server.routes()` + `api/openapi.json` +
+- **A new admin route** is ONE `route{}` row in `Server.routes()`
+  (`internal/admin/route_table.go`) + `api/openapi.json` +
   `coverage.test.ts`'s count + an MCP tool + a screen or an `EXEMPT` entry.
-  A mutating route that touches no configuration layer joins
-  `autoCheckpointExcludedNeverTouchesLayer` (`internal/admin/route_table.go`);
+  Since `A22` (2026-09-07) the row carries the two facts that used to live
+  in separate maps: `mcp` (`mcpAllow`, or `mcpDeny(reason)` — the allowlist
+  `CallAsMCP` enforces is DERIVED from the table, and a test pins the
+  excluded set at exactly seven) and `checkpoint` (`cpRead`,
+  `cpLabelled(text)`, `cpRevisionOnly`, `cpNoLayerYet`,
+  `cpNeverTouchesLayer`, `cpAnotherLayer`; a mutating route with the zero
+  value fails `TestAutoCheckpointPolicy_pinsEveryMutatingRoute`). A
+  mutating route that touches no configuration layer is `cpNeverTouchesLayer`;
   otherwise the auto-checkpoint wrapper snapshots before it, MCP calls
-  included, since `CallAsMCP` dispatches through the same mux.
+  included, since `CallAsMCP` dispatches through the same mux. Older
+  citations of `mcpAllowedRoutes`, `autoCheckpointLabels` and
+  `autoCheckpointExcludedNeverTouchesLayer` in `docs/agent/` and `HISTORY.md`
+  name the pre-`A22` maps and resolve to those two fields.
 - **Inside a `db.Write` callback never call `workspaces.Repo.Update`** — the
   single writer connection deadlocks, a hang and not a red test. A package
-  bumps `revision` with its own `bumpRevisionTx`; RAM-only state
-  (`internal/livestate`) never bumps it.
+  bumps `revision` through `store.BumpRevisionTx` (one copy since `A22`; the
+  six per-package copies that "no package imports another for a four-line
+  helper" justified were folded on the owner's word, because every repo
+  already imported `internal/store`); RAM-only state (`internal/livestate`)
+  never bumps it.
 - **`confirmSlug` guards verbs that destroy MANY workspace-created rows**
   (decline, `reset-data`, `restoreData: true`, asset delete), checked inside
   the same transaction as the delete; a verb that destroys one row or no data
@@ -215,7 +229,7 @@ backend of the owner's. Keep it at zero. Exceptions are only pinpoint
 config: 39 today; the counting command, the census and the reason behind
 each — `docs/agent/ops.md`.
 
-**goleak is in every package with tests** (36 packages, three lines each,
+**goleak is in every package with tests** (37 packages, three lines each,
 the ignore list once in `internal/testleak`). A goroutine that outlives a
 package's tests fails it. Do not extend the ignore list: it holds only what
 the runtime parks for the whole process (`database/sql` opener/resetter,
@@ -227,7 +241,12 @@ traffic records at shutdown.
 suite with a feature dead in prod: the tests wire the dependency explicitly, and
 `cmd/mocker/main.go` does not. The real check is `make smoke`: it builds the
 image and pokes a live stack. Verify with commands and their output, not with agents'
-reports.
+reports. Since `A22` the cheaper half of that check is a test:
+`mockplane.Plane.Ready()` and `admin.Server.Ready()` name every REQUIRED
+source still nil, `run()` refuses to start on a non-empty list, and
+`cmd/mocker/app_test.go` wires the app exactly as `run()` does and asserts
+the list is empty — deleting one setter call from `wireMockPlane` fails it.
+A new setter is added to `Ready()` in the same change, or it is not required.
 
 ## JSON — only through `internal/jsonx`
 
@@ -242,8 +261,9 @@ measurement — the numbers and the two traps: `docs/agent/jsonx.md`.
 
 ## Style
 
-**Comments explain "why", not "what", and there are many of them: 39.5% of the lines
-of Go production code (19336 of 48905) are comments.** This is not decoration but the project's working format:
+**Comments explain "why", not "what", and there are many of them: 41% of the
+non-blank lines of Go production code (25608 of 62309, `tokei cmd internal
+--exclude '*_test.go'`, 2026-09-07) are comments.** This is not decoration but the project's working format:
 almost every non-obvious decision carries a measured reason next to it ("measured against a
 live `net/http.ServeMux`…", "round-1 review finding 2…"), and what is deferred is
 marked as deferred. A change in this tree that explains only "what it
@@ -276,8 +296,12 @@ Routes live as one list in `Server.routes()`; `Handler()` only registers them.
 
 **Every route is called from a reachable screen or is declared agent-only,
 and that is a test, not a promise**: `web/src/api/coverage.test.ts`
-enumerates the committed contract, pins the count (70) and scans `web/src`
-for a caller; a screenless route earns an `EXEMPT` entry naming its MCP
+enumerates the committed contract, pins the count (70) and finds a caller
+by AST (`coverageScanner.ts`, since `A22`: a call whose callee resolves to
+a binding imported from the generated client — a mention in a comment, an
+import never called, or a `get…QueryKey(` no longer counts; native
+transports such as the SSE `EventSource` sit in an explicit manifest); a
+screenless route earns an `EXEMPT` entry naming its MCP
 tool as the only required caller (none today — the map emptied with `A20`); reachability itself is
 `web/src/routes/routes.test.tsx` over the real route tree. **The agent is
 PRIMARY: since `A4` (2026-09-01) a new route ships with its MCP tool and an
@@ -383,7 +407,13 @@ functions), then `A20` (every admin route has a screen; `EXEMPT` is empty)
 and `A21` (the six-reader UI review built out in seven commits —
 `docs/agent/ui-review-2026-09-05.md` is the ranked record and
 `VariantEditor.tsx` the one editor of a response variant both screens
-mount) — fifty-odd slices. The full list with one line
+mount) and `A22` (2026-09-07, the refactoring pass: ten Sonnet readers and
+one vcodex over thirteen vectors, eleven builder commits — one route table,
+`store.BumpRevisionTx`, `run()` as named phases with `Ready()`, the FE
+page bundles split with one `QueryState`, `internal/testkit`, the AST
+coverage scanner; two bugs fixed on the way, a 413 answered as 400 and a
+size gate that marshalled the 161 MB body it was measuring) — fifty-odd
+slices. The full list with one line
 each, the ranked argument for what is NEXT and where each slice's
 decisions live: `docs/agent/where-we-are.md` and `HISTORY.md`. Streaming
 (§30), `P4` (drift, the bundle over HTTP, the fork) and §34 (API design)

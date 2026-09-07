@@ -141,7 +141,23 @@ file, function, headers, conditions) mounted by both editors, entity
 create and scope filters, status add/remove and a preview with headers
 and a body, traffic filters, the tabs renamed «Операции спеки»/«Свои
 эндпоинты», the unsaved-draft guard, and the rest of `docs/agent/
-ui-review-2026-09-05.md` — no route, no tool, no migration, no variable).
+ui-review-2026-09-05.md` — no route, no tool, no migration, no variable)
+→ `A22` (the refactoring pass, 2026-09-07: ten Sonnet readers over ten
+vectors plus one vcodex read that survived the Codex usage limit,
+`docs/agent/refactor-review-2026-09-07.md` the ranked record; eleven
+builder commits in two waves of parallel worktrees — the admin decode/404/
+edit-conflict boilerplate, `store.BumpRevisionTx` and the other repo
+helpers folded on the owner's word, `openapi.EscapePointerToken`/
+`SelectMediaType`/`WalkRefNodes`, `gen.OptionsFrom`, one `route{}` row
+carrying MCP reach and checkpoint policy, `run()` as named phases with
+`Plane.Ready()`/`Server.Ready()` and a wiring test, `streamLoop.startClocks`,
+the resources refusal-code table, `internal/testkit` and the three biggest
+test files split, the five FE helpers (`cachePolicy`, `conflictOf`,
+`format.ts`, `validation/json.ts`, `dialog-cancel`), the page bundles
+split with one `QueryState`, the AST coverage scanner; two bugs fixed on
+the way — an oversized body answered 400 instead of 413, and the recipe
+post-pass size gate marshalling the very 161 MB body it was measuring — no
+route, no tool, no migration, no variable).
 What each of them SHIPPED is in "Architecture"
 above; HOW each arrived — gates, fleet runs, the lessons paid for — is
 `HISTORY.md`.

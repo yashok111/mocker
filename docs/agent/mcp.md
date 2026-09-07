@@ -29,6 +29,17 @@ The fifty-seventh, `get_server_config` (`A9`), reads `*config.Config`
 directly — `config.Limits`, the same projection `ServerConfigView.limits`
 carries to the panel through login and `GET /api/me`, so the two readers
 cannot disagree — and its `toolRoutes` row is empty like `get_guide`'s.
+**Since `A22` (2026-09-07) the allowlist is not a list anyone types.**
+`mcpAllowedRoutes` in `internal/admin/loopback.go` used to retype every
+pattern of `Server.routes()` a second time, in the same order by convention;
+now each `route{}` row carries `mcp: mcpAllow` or `mcp: mcpDeny(reason)` and
+the allowlist is `routes()` filtered, once, under `sync.OnceValue`.
+`mcpPathAllowed`'s matching (a `ServeMux` over the derived list) did not
+change. Two tests replace the copy-check: `TestRouteMCPPolicyIsDecided`
+(every row is allow, or deny WITH a reason) and
+`TestMCPExclusionsAreExactlyTheDocumentedSeven` — `/healthz`, `/readyz`,
+login, logout, `GET /api/me`, `DELETE /api/specs/{id}`,
+`GET .../traffic/stream` — plus the arithmetic `len(allowlist) == 70 − 7`.
 The fifty-sixth, `import_spec` (`A8`), is the reversal of the one exclusion
 `mcpAllowedRoutes` kept on a policy rather than a hazard — `POST /api/specs`,
 which mocker-a4-mcp-reach D3 left to the `/specs` screen; the owner let it

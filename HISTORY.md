@@ -2970,3 +2970,95 @@ than normalising it on the way in.
 
 **Bars.** `make ui-test` 448 tests in 39 files, `make ui-lint` clean (three
 pre-existing warnings); no Go behaviour changed in any of the seven commits.
+
+## `A22` — the refactoring pass (2026-09-07)
+
+**What the owner asked for.** «запусти 10 сабагентов соннет по разным
+векторам на поиск мест для рефакторинга Мокера», then «еще 3 vcodex
+sol-high тоже запусти на поиск», then, over the ranked list, «делай все что
+нашли. даю добро на те три» (Russian strings quoted as data) — the three
+being the items that reversed a recorded decision or touched a guarded
+object: `bumpRevisionTx`'s six blessed copies, the MCP allowlist typed a
+second time beside `Server.routes()`, and `run()` with its fourteen setters
+and no completeness check.
+
+**The scan.** Ten Sonnet readers, one vector each; three vcodex
+`gpt-5.6-sol`/high runs, two of which hit the Codex usage limit mid-read
+and never reached a verdict (the front-end one did, and added the AST
+scanner and the `TrafficPage` decomposition the Sonnet readers had ranked
+lower). Forty-nine items, `docs/agent/refactor-review-2026-09-07.md`; ★
+marks the fourteen that two or more vectors found independently. Three
+bugs surfaced on the way and none was the point: an `http.MaxBytesError`
+from `MOCKER_MAX_BODY` answered as a generic 400 everywhere but the assets
+route; the recipe post-pass size gate calling `jsonx.Marshal` to measure —
+materialising the very 161 MB body its own comment cites, a line after
+`jsonSize` was built to avoid that; and `coverage.test.ts` titled "exactly
+64 routes" over an assertion of 70.
+
+**How it was built.** Two waves of builder agents in parallel git
+worktrees on disjoint file sets — five, then five, then one — each running
+only its own packages' tests under a 1.5 GB scope, one cherry-pick each
+onto `main`, the four bars once at the end. What the worktree tool does
+not say and cost a round: a worktree branches from the commit the SESSION
+started on, not from the moving head, so the second wave built on a tree
+without the first wave's helpers; the FE split had to be rebased by the
+agent that made it, re-applying every helper site inside the code it had
+moved (verified by count against `main`: `dialog-cancel` 18 → 18,
+`conflictOf(` 6 → 6, no `getGetWorkspaceQueryKey` left in a component).
+The vitest symlink trap, for the record: a symlinked `web/src/api/generated`
+resolves `../client` into the MAIN tree, so `instanceof ApiFailure` sees a
+second class and every error path reads «Сервер не ответил» — copy the
+directory, never link it.
+
+**What shipped, eleven commits.** `refactor(openapi)`: one
+`EscapePointerToken`, one `SelectMediaType`, one `WalkRefNodes` visitor
+under three callbacks, `walkBudget` for the recipe post-pass, `jsonSize` at
+the gate. `refactor(admin)` ×2: `decodeBody` (17 sites, and the 413),
+`answerWorkspaceGone` (20), `answerEditConflict[T]` (4),
+`parseClampedLimit`; and ONE `route{}` row with `mcp` and `checkpoint` —
+the allowlist and the five checkpoint maps are projections of the table,
+and the tests now pin the seven exclusions and that no mutating route is
+undecided. `refactor(store)`: `BumpRevisionTx`, `WorkspaceRevisionTx`,
+`IsUniqueViolation`, `BoolToInt`, `RowScanner`, `MarshalNullable`/
+`UnmarshalNullable`, `DB.Read`. `refactor(mockplane)`: `gen.OptionsFrom`
+and `OverDocument`, `buildRuntime` as five named phases, `writeCustomBody`,
+`streamLoop.startClocks` shared by SSE and WS, and a two-column refusal
+table in `resources/codes.go` (the Lua words and the HTTP codes are BOTH
+published contracts, so they could not be one column) with a test that a
+new `Err*` sentinel without a row fails. `refactor(cmd)`: `run()` from
+363 lines to 39 over an `app` struct; `Plane.Ready()`/`Server.Ready()`
+name the required sources still nil, `checkWiring` refuses to start, and
+`app_test.go` proves a deleted setter call is caught — the test the two
+"green suite, dead feature" incidents never had. `refactor(web)` ×2:
+`cachePolicy` (nine named invalidations), `conflictOf`, `format.ts` (the
+two `formatBytes` that disagreed, «8.0 МБ» vs «8 МБ», now one),
+`formatTimestamp` (the fifth copy crossed the threshold `HistoryPage`'s own
+comment reasoned about — reversed on the owner's word), `validation/json.ts`,
+`dialog-cancel` on eighteen cancel buttons; then the page bundles —
+`CustomEndpointsPage` 1274 → 126, `HistoryPage` 815 → 110, `ScenariosPage`
+813 → 83, `TrafficPage` 923 → 353 over `traffic/{model,useTrafficFeed,
+TrafficTable}`, `StreamEditor` 891 → 388, `VariantEditor` 574 → 433 — and
+one `QueryState` for the four-state ladder, eleven screens migrated, six
+left on their own ladder for a named reason each. `test(web)`: the
+coverage guard finds a caller by AST through `typescript/unstable/sync`,
+never by substring; all 70 routes kept their status under the new rule.
+`test`: `internal/testkit` (`NewDB`, and `adminkit.NewAdminServer` in a
+sub-package because plain `testkit` importing `admin` cycled through
+`checkpoints` and `resources`), ten `newTestDB` copies gone, the three
+biggest test files split losslessly (63/63, 296/296, 104/104 tests). And
+the last small one: `mergeAuthPresetBindings` named and tested, the mock
+plane's decode error no longer echoing the raw Go error to an anonymous
+caller.
+
+**Left, with the reason on the record.** `store.CollectRows` (each site's
+own error context is worth more than the lines), a workspace index in
+`stream.Registry` (bounded by the cap), the five `handleConflictReload`s
+(same name, different side effects — sharing would hide that), the
+`WorkspacesPage`/`SpecsPage` splits (reviewability only). Refuted outright,
+with the argument in the review document: a generic keyed map, one
+`lifecycle`, the `walkObject` split, the MCP wire structs.
+
+**Bars.** `make test` green under the race detector, `make lint` zero,
+`make ui-test` and `make ui-lint` green; `//nolint` stays at 39 (none
+removed, none added — `serveCustom`'s reason text updated), goleak 37
+packages with `internal/testkit`.

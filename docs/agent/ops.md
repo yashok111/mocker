@@ -217,7 +217,7 @@ way: `gocyclo` does not count `_test.go` (table-driven acceptance reaches 74 and
 readable) and G115 does not count `internal/{gen,recipes,auth}` — there a uint64 truncation
 of a deterministic PRNG is the algorithm, and the 419-body golden guards it.
 
-**goleak is in every package with tests** (36 of them since `A18` added `internal/luafn`, after `P7a` added `internal/design`, after `A8` added `internal/yamlx`, after `A7` added `internal/guide`, after `A6` added `internal/assets`, after `A5` gave `cmd/mocker` its first test file beside `P6d`'s `internal/wsmock`, `internal/*/main_test.go` and `cmd/mocker/main_test.go`
+**goleak is in every package with tests** (37 of them since `A22` added `internal/testkit`, after `A18` added `internal/luafn`, after `P7a` added `internal/design`, after `A8` added `internal/yamlx`, after `A7` added `internal/guide`, after `A6` added `internal/assets`, after `A5` gave `cmd/mocker` its first test file beside `P6d`'s `internal/wsmock`, `internal/*/main_test.go` and `cmd/mocker/main_test.go`
 — three lines per package, the whole ignore list with reasons once in
 `internal/testleak`; `internal/store` — `store.go` since P0, but without a single test
 until A3, whose `AllocateEditVersion` gave it both its first file and its first harness
