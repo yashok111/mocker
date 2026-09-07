@@ -1,12 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import type { ReactElement } from "react";
 import {
-  ActionIcon,
   Anchor,
   Badge,
-  Button,
   Card,
-  Divider,
   Group,
   NativeSelect,
   Stack,
@@ -15,11 +12,12 @@ import {
   TextInput,
 } from "@mantine/core";
 import { modals } from "@mantine/modals";
-import { IconPlus, IconTrash } from "@tabler/icons-react";
 import { useListAssets } from "@/api/generated/assets/assets.ts";
 import type { Condition, Variant } from "@/api/generated/schemas";
 import { jsonLocation } from "@/validation/json";
 import { TabLink } from "./TabLink";
+import { HeadersKeyValueList } from "./variant-editor/HeadersKeyValueList";
+import { WhenConditionsList, conditionsInvalid } from "./variant-editor/WhenConditionsList";
 
 // VariantEditor is the ONE editor of a response variant — the object
 // `{mode, body, bodyEncoding, bodyRef, function, schema, schemaPatch,
@@ -63,28 +61,6 @@ export function producerOf(variant: Variant | undefined): ProducerMode {
     return "file";
   }
   return variant?.mode === "pinned" ? "pinned" : "generated";
-}
-
-const DEFAULT_CONDITION: Condition = { in: "query", name: "", op: "equals", value: "" };
-
-const IN_OPTIONS: { value: Condition["in"]; label: string }[] = [
-  { value: "query", label: "query-параметр" },
-  { value: "header", label: "заголовок" },
-  { value: "body", label: "тело" },
-];
-
-const OP_OPTIONS: { value: Condition["op"]; label: string }[] = [
-  { value: "equals", label: "равно" },
-  { value: "contains", label: "содержит" },
-  { value: "exists", label: "присутствует" },
-];
-
-// Whether a stored "" is possible: never — Go omits it — so the empty
-// string only ever means "chosen, not typed yet" and blocks the save.
-export function conditionsInvalid(when: Condition[] | undefined): boolean {
-  return (when ?? []).some(
-    (c) => c.name.trim() === "" || (c.op !== "exists" && (c.value ?? "") === ""),
-  );
 }
 
 export function VariantEditor({
@@ -279,14 +255,6 @@ export function VariantEditor({
     }));
   }
 
-  function setHeader(index: number, key: string, value: string): void {
-    writeHeaders(headerRows.map((row, i) => (i === index ? [key, value] : row)));
-  }
-
-  function removeHeader(index: number): void {
-    writeHeaders(headerRows.filter((_, i) => i !== index));
-  }
-
   function patchCondition(index: number, patch: Partial<Condition>): void {
     updateVariant((v) => ({
       ...v,
@@ -426,138 +394,29 @@ export function VariantEditor({
         </Card>
       ) : null}
 
-      {headersApply ? (
-        <Divider label="Заголовки ответа" labelPosition="left" />
-      ) : (
-        <Text size="xs" c="dimmed" data-testid={testId("headers-note")}>
-          {producer === "function"
-            ? "Заголовки ответа задаёт сама функция (третье возвращаемое значение)."
-            : "Заголовки ответа отдаются только у закреплённого тела или файла."}
-        </Text>
-      )}
-      <Stack gap="xs" data-testid={testId("headers")} hidden={!headersApply}>
-        {headerRows.map(([key, value], index) => (
-          // Index-keyed: entries are edited in place, never reordered.
-          // eslint-disable-next-line react/no-array-index-key
-          <Group key={index} gap="xs" wrap="nowrap" align="flex-end">
-            <TextInput
-              label="Заголовок"
-              placeholder="X-Request-Id"
-              data-testid={testId(`header-name-${index}`)}
-              value={key}
-              onChange={(e) => setHeader(index, e.currentTarget.value, value)}
-            />
-            <TextInput
-              label="Значение"
-              data-testid={testId(`header-value-${index}`)}
-              value={value}
-              onChange={(e) => setHeader(index, key, e.currentTarget.value)}
-            />
-            <ActionIcon
-              variant="default"
-              color="red"
-              onClick={() => removeHeader(index)}
-              data-testid={testId(`header-remove-${index}`)}
-              aria-label="Удалить заголовок"
-            >
-              <IconTrash size={16} />
-            </ActionIcon>
-          </Group>
-        ))}
-        <Button
-          variant="default"
-          size="xs"
-          w="fit-content"
-          leftSection={<IconPlus size={14} />}
-          onClick={() => writeHeaders([...headerRows, ["", ""]])}
-          data-testid={testId("header-add")}
-        >
-          Добавить заголовок
-        </Button>
-      </Stack>
+      <HeadersKeyValueList
+        applies={headersApply}
+        producer={producer}
+        rows={headerRows}
+        testId={testId}
+        onRowsChange={writeHeaders}
+      />
 
-      <Divider label="Когда отвечать так" labelPosition="left" />
-      <Text size="xs" c="dimmed">
-        Все условия ниже должны совпасть, иначе отвечает вариант активного статуса
-      </Text>
-      <Stack gap="xs" data-testid={testId("when")}>
-        {when.map((cond, index) => (
-          // Index-keyed on purpose: conditions carry no id of their own and
-          // this list is edited in place, never reordered.
-          // eslint-disable-next-line react/no-array-index-key
-          <Group key={index} gap="xs" wrap="nowrap" align="flex-end">
-            <NativeSelect
-              label="Где"
-              data-testid={whenTestId("in", index)}
-              value={cond.in}
-              onChange={(e) =>
-                patchCondition(index, { in: e.currentTarget.value as Condition["in"] })
-              }
-            >
-              {IN_OPTIONS.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </NativeSelect>
-            <TextInput
-              label="Имя"
-              data-testid={whenTestId("name", index)}
-              error={cond.name.trim() === "" ? "заполните" : undefined}
-              value={cond.name}
-              onChange={(e) => patchCondition(index, { name: e.currentTarget.value })}
-            />
-            <NativeSelect
-              label="Условие"
-              data-testid={whenTestId("op", index)}
-              value={cond.op}
-              onChange={(e) =>
-                patchCondition(index, { op: e.currentTarget.value as Condition["op"] })
-              }
-            >
-              {OP_OPTIONS.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </NativeSelect>
-            <TextInput
-              label="Значение"
-              disabled={cond.op === "exists"}
-              error={cond.op !== "exists" && (cond.value ?? "") === "" ? "заполните" : undefined}
-              data-testid={whenTestId("value", index)}
-              value={cond.value ?? ""}
-              onChange={(e) => patchCondition(index, { value: e.currentTarget.value })}
-            />
-            <ActionIcon
-              variant="default"
-              color="red"
-              onClick={() =>
-                updateVariant((v) => ({
-                  ...v,
-                  when: (v.when ?? []).filter((_, i) => i !== index),
-                }))
-              }
-              data-testid={whenTestId("remove", index)}
-              aria-label="Удалить условие"
-            >
-              <IconTrash size={16} />
-            </ActionIcon>
-          </Group>
-        ))}
-        <Button
-          variant="default"
-          size="xs"
-          w="fit-content"
-          leftSection={<IconPlus size={14} />}
-          onClick={() =>
-            updateVariant((v) => ({ ...v, when: [...(v.when ?? []), DEFAULT_CONDITION] }))
-          }
-          data-testid={testId("when-add")}
-        >
-          Добавить условие
-        </Button>
-      </Stack>
+      <WhenConditionsList
+        when={when}
+        testId={testId}
+        whenTestId={whenTestId}
+        onPatch={patchCondition}
+        onRemove={(index) =>
+          updateVariant((v) => ({
+            ...v,
+            when: (v.when ?? []).filter((_, i) => i !== index),
+          }))
+        }
+        onAdd={(condition) =>
+          updateVariant((v) => ({ ...v, when: [...(v.when ?? []), condition] }))
+        }
+      />
     </Stack>
   );
 }

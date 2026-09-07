@@ -6,7 +6,6 @@ import {
   Button,
   Card,
   Group,
-  Loader,
   Stack,
   Table,
   Text,
@@ -28,6 +27,7 @@ import type { StreamConnectionView } from "@/api/generated/schemas";
 import { TabLink } from "./TabLink";
 import { describeApiFailure, describeApiFailureDetailed } from "@/api/errors";
 import { jsonLocation } from "@/validation/json";
+import { QueryState } from "./QueryState";
 
 // StreamConnectionsPage is §30.14's connections panel (P6e) over the P6c
 // surface: the workspace's live SSE/WebSocket connections on the mock
@@ -66,44 +66,25 @@ export function StreamConnectionsPage({ id }: { id: number }): ReactElement {
           кадр — он уйдёт только в это соединение и нигде не сохраняется.
         </Text>
         <StreamStatsStrip id={id} />
-        {connections.isPending ? (
-          <Group gap="xs">
-            <Loader size="sm" />
-            <Text size="sm" component="output">
-              Загрузка…
-            </Text>
-          </Group>
-        ) : connections.isError ? (
-          <Stack gap="sm" data-testid="connections-error">
-            <Alert color="red" icon={<IconAlertTriangle size={18} />} role="alert">
-              {describeApiFailure(connections.error)}
-            </Alert>
-            <Button
-              variant="default"
-              w="fit-content"
-              onClick={() => void connections.refetch()}
-              data-testid="connections-retry"
+        <QueryState queries={[connections]} testIdPrefix="connections">
+          {connections.data?.status !== 200 ? (
+            <Alert
+              color="red"
+              icon={<IconAlertTriangle size={18} />}
+              role="alert"
+              data-testid="connections-error"
             >
-              Повторить
-            </Button>
-          </Stack>
-        ) : connections.data.status !== 200 ? (
-          <Alert
-            color="red"
-            icon={<IconAlertTriangle size={18} />}
-            role="alert"
-            data-testid="connections-error"
-          >
-            {describeApiFailure(null)}
-          </Alert>
-        ) : (
-          <ConnectionsTable
-            id={id}
-            open={connections.data.data.open}
-            cap={connections.data.data.cap}
-            rows={connections.data.data.connections}
-          />
-        )}
+              {describeApiFailure(null)}
+            </Alert>
+          ) : (
+            <ConnectionsTable
+              id={id}
+              open={connections.data.data.open}
+              cap={connections.data.data.cap}
+              rows={connections.data.data.connections}
+            />
+          )}
+        </QueryState>
       </Stack>
     </div>
   );

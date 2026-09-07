@@ -13,7 +13,7 @@ import {
 } from "@mantine/core";
 import { IconPlugConnected, IconPlugConnectedX, IconSend } from "@tabler/icons-react";
 import dayjs from "dayjs";
-import type { StreamKind } from "./StreamEditor";
+import type { StreamKind } from "./stream/streamDraft";
 
 // StreamTestClient is §30.14's "Try it": a BROWSER-side client, not a
 // server-side probe, and the distinction is the whole point. internal/probe

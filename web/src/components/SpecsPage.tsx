@@ -41,6 +41,7 @@ import type { ReportView, SpecView } from "@/api/generated/schemas";
 import { ApiFailure } from "@/api/client";
 import { describeApiFailure, describeApiFailureDetailed } from "@/api/errors";
 import { formatTimestamp } from "@/format";
+import { QueryState } from "./QueryState";
 import { arktypeResolver } from "@/validation/resolver";
 import { userName } from "@/validation/name";
 
@@ -81,45 +82,24 @@ export function SpecsPage(): ReactElement {
       <Stack gap="md">
         <Title order={1}>Спеки</Title>
         <ImportSpecForm />
-        {specs.isPending ? (
-          // role on the Text, not the Group: the live region should be the
-          // sentence a screen reader announces, not the flex box around it.
-          <Group gap="xs">
-            <Loader size="sm" />
-            <Text size="sm" component="output">
-              Загрузка…
-            </Text>
-          </Group>
-        ) : specs.isError ? (
-          <Stack gap="sm" data-testid="specs-error">
-            <Alert color="red" icon={<IconAlertTriangle size={18} />} role="alert">
-              {describeApiFailure(specs.error)}
-            </Alert>
-            <Button
-              variant="default"
-              w="fit-content"
-              onClick={() => void specs.refetch()}
-              data-testid="specs-retry"
+        <QueryState queries={[specs]} testIdPrefix="specs">
+          {specs.data?.status !== 200 ? (
+            <Alert
+              color="red"
+              icon={<IconAlertTriangle size={18} />}
+              role="alert"
+              data-testid="specs-error"
             >
-              Повторить
-            </Button>
-          </Stack>
-        ) : specs.data.status !== 200 ? (
-          <Alert
-            color="red"
-            icon={<IconAlertTriangle size={18} />}
-            role="alert"
-            data-testid="specs-error"
-          >
-            {describeApiFailure(null)}
-          </Alert>
-        ) : specs.data.data.length === 0 ? (
-          // An empty list is an empty state, not an error — nothing has gone
-          // wrong, nobody has imported a document yet.
-          <Text data-testid="specs-empty">Спек пока нет — импортируйте документ выше</Text>
-        ) : (
-          <SpecList specs={specs.data.data} selectedId={selectedId} onSelect={setSelectedId} />
-        )}
+              {describeApiFailure(null)}
+            </Alert>
+          ) : specs.data.data.length === 0 ? (
+            // An empty list is an empty state, not an error — nothing has gone
+            // wrong, nobody has imported a document yet.
+            <Text data-testid="specs-empty">Спек пока нет — импортируйте документ выше</Text>
+          ) : (
+            <SpecList specs={specs.data.data} selectedId={selectedId} onSelect={setSelectedId} />
+          )}
+        </QueryState>
         {selectedId !== null ? (
           <SpecDetail id={selectedId} onDeleted={() => setSelectedId(null)} />
         ) : null}
@@ -473,147 +453,131 @@ function SpecDetail({ id, onDeleted }: { id: number; onDeleted: () => void }): R
 
   return (
     <Card withBorder p="md" data-testid="spec-detail">
-      {spec.isPending ? (
-        <Group gap="xs">
-          <Loader size="sm" />
-          <Text size="sm" component="output">
-            Загрузка…
-          </Text>
-        </Group>
-      ) : spec.isError ? (
-        <Stack gap="sm">
+      <QueryState queries={[spec]} testIdPrefix="spec-detail">
+        {spec.data?.status !== 200 ? (
           <Alert color="red" icon={<IconAlertTriangle size={18} />} role="alert">
-            {describeApiFailure(spec.error)}
+            {describeApiFailure(null)}
           </Alert>
-          <Button
-            variant="default"
-            w="fit-content"
-            onClick={() => void spec.refetch()}
-            data-testid="spec-detail-retry"
-          >
-            Повторить
-          </Button>
-        </Stack>
-      ) : spec.data.status !== 200 ? (
-        <Alert color="red" icon={<IconAlertTriangle size={18} />} role="alert">
-          {describeApiFailure(null)}
-        </Alert>
-      ) : (
-        // An IIFE, not `spec.data.data` read again below: TypeScript's
-        // narrowing from `spec.data.status !== 200 ? … : …` does not survive
-        // into a nested closure like the delete button's onClick, so a
-        // second read there would widen `spec.data` back to the full
-        // response union. Binding it once, here, keeps the narrowing local
-        // to this branch without splitting the JSX into a separate component
-        // just to get a typed parameter.
-        (() => {
-          const view = spec.data.data;
-          return (
-            <Stack gap="sm">
-              <Group justify="space-between" wrap="nowrap">
-                <div>
-                  <Title order={3} data-testid="spec-detail-name">
-                    {view.name}
-                  </Title>
-                  <Text size="xs" c="dimmed">
-                    {view.version} · {view.format} · базовый путь {specStatus(view.basePath)}
-                  </Text>
-                  <CreateWorkspaceWithSpec specId={view.id} testId="spec-detail-create-workspace" />
-                </div>
-                <Button
-                  variant="default"
-                  color="red"
-                  size="xs"
-                  leftSection={<IconTrash size={16} />}
-                  onClick={() => handleDelete(view.name)}
-                  loading={deleteSpec.isPending}
-                  data-testid="spec-delete"
-                >
-                  Удалить
-                </Button>
-              </Group>
-              {deleteError !== null ? (
-                <Alert
-                  color="red"
-                  icon={<IconAlertTriangle size={18} />}
-                  role="alert"
-                  data-testid="spec-delete-error"
-                >
-                  {deleteError}
-                </Alert>
-              ) : null}
-
-              <Divider label="Отчёт об импорте" />
-              {report.isPending ? (
-                <Group gap="xs">
-                  <Loader size="sm" />
-                  <Text size="sm" component="output">
-                    Загрузка…
-                  </Text>
-                </Group>
-              ) : report.error instanceof ApiFailure && report.error.status === 404 ? (
-                <Text size="sm" c="dimmed" data-testid="spec-report-missing">
-                  нет отчёта
-                </Text>
-              ) : report.isError ? (
-                <Alert color="red" icon={<IconAlertTriangle size={18} />} role="alert">
-                  {describeApiFailure(report.error)}
-                </Alert>
-              ) : report.data.status !== 200 ? (
-                <Alert color="red" icon={<IconAlertTriangle size={18} />} role="alert">
-                  {describeApiFailure(null)}
-                </Alert>
-              ) : (
-                <ReportSummary report={report.data.data} />
-              )}
-
-              <Divider label="Операции" />
-              {!opsRequested ? (
-                <Button
-                  variant="default"
-                  w="fit-content"
-                  onClick={() => setOpsRequested(true)}
-                  data-testid="spec-load-operations"
-                >
-                  Показать операции
-                </Button>
-              ) : operations.isPending ? (
-                <Group gap="xs">
-                  <Loader size="sm" />
-                  <Text size="sm" component="output">
-                    Загрузка…
-                  </Text>
-                </Group>
-              ) : operations.isError ? (
-                <Alert color="red" icon={<IconAlertTriangle size={18} />} role="alert">
-                  {describeApiFailure(operations.error)}
-                </Alert>
-              ) : operations.data.status !== 200 ? (
-                <Alert color="red" icon={<IconAlertTriangle size={18} />} role="alert">
-                  {describeApiFailure(null)}
-                </Alert>
-              ) : (
-                <Stack gap="xs" data-testid="spec-operations-list">
-                  {operations.data.data.length === 500 ? (
-                    // The server clamps at 500 and never truncates silently
-                    // past that (§3.2) — this is the one place that limit is
-                    // visible, so it has to say so rather than stopping at
-                    // 500 rows unremarked.
-                    <Text size="xs" c="orange" data-testid="spec-operations-capped">
-                      Показаны первые 500 операций — их может быть больше
+        ) : (
+          // An IIFE, not `spec.data.data` read again below: TypeScript's
+          // narrowing from `spec.data.status !== 200 ? … : …` does not survive
+          // into a nested closure like the delete button's onClick, so a
+          // second read there would widen `spec.data` back to the full
+          // response union. Binding it once, here, keeps the narrowing local
+          // to this branch without splitting the JSX into a separate component
+          // just to get a typed parameter.
+          (() => {
+            const view = spec.data.data;
+            return (
+              <Stack gap="sm">
+                <Group justify="space-between" wrap="nowrap">
+                  <div>
+                    <Title order={3} data-testid="spec-detail-name">
+                      {view.name}
+                    </Title>
+                    <Text size="xs" c="dimmed">
+                      {view.version} · {view.format} · базовый путь {specStatus(view.basePath)}
                     </Text>
-                  ) : null}
-                  {operations.data.data.map((op) => (
-                    <Text size="xs" key={op.id} data-testid="spec-operation-row">
-                      {op.method} {op.path}
+                    <CreateWorkspaceWithSpec
+                      specId={view.id}
+                      testId="spec-detail-create-workspace"
+                    />
+                  </div>
+                  <Button
+                    variant="default"
+                    color="red"
+                    size="xs"
+                    leftSection={<IconTrash size={16} />}
+                    onClick={() => handleDelete(view.name)}
+                    loading={deleteSpec.isPending}
+                    data-testid="spec-delete"
+                  >
+                    Удалить
+                  </Button>
+                </Group>
+                {deleteError !== null ? (
+                  <Alert
+                    color="red"
+                    icon={<IconAlertTriangle size={18} />}
+                    role="alert"
+                    data-testid="spec-delete-error"
+                  >
+                    {deleteError}
+                  </Alert>
+                ) : null}
+
+                <Divider label="Отчёт об импорте" />
+                {report.isPending ? (
+                  <Group gap="xs">
+                    <Loader size="sm" />
+                    <Text size="sm" component="output">
+                      Загрузка…
                     </Text>
-                  ))}
-                </Stack>
-              )}
-            </Stack>
-          );
-        })()
-      )}
+                  </Group>
+                ) : report.error instanceof ApiFailure && report.error.status === 404 ? (
+                  <Text size="sm" c="dimmed" data-testid="spec-report-missing">
+                    нет отчёта
+                  </Text>
+                ) : report.isError ? (
+                  <Alert color="red" icon={<IconAlertTriangle size={18} />} role="alert">
+                    {describeApiFailure(report.error)}
+                  </Alert>
+                ) : report.data.status !== 200 ? (
+                  <Alert color="red" icon={<IconAlertTriangle size={18} />} role="alert">
+                    {describeApiFailure(null)}
+                  </Alert>
+                ) : (
+                  <ReportSummary report={report.data.data} />
+                )}
+
+                <Divider label="Операции" />
+                {!opsRequested ? (
+                  <Button
+                    variant="default"
+                    w="fit-content"
+                    onClick={() => setOpsRequested(true)}
+                    data-testid="spec-load-operations"
+                  >
+                    Показать операции
+                  </Button>
+                ) : operations.isPending ? (
+                  <Group gap="xs">
+                    <Loader size="sm" />
+                    <Text size="sm" component="output">
+                      Загрузка…
+                    </Text>
+                  </Group>
+                ) : operations.isError ? (
+                  <Alert color="red" icon={<IconAlertTriangle size={18} />} role="alert">
+                    {describeApiFailure(operations.error)}
+                  </Alert>
+                ) : operations.data.status !== 200 ? (
+                  <Alert color="red" icon={<IconAlertTriangle size={18} />} role="alert">
+                    {describeApiFailure(null)}
+                  </Alert>
+                ) : (
+                  <Stack gap="xs" data-testid="spec-operations-list">
+                    {operations.data.data.length === 500 ? (
+                      // The server clamps at 500 and never truncates silently
+                      // past that (§3.2) — this is the one place that limit is
+                      // visible, so it has to say so rather than stopping at
+                      // 500 rows unremarked.
+                      <Text size="xs" c="orange" data-testid="spec-operations-capped">
+                        Показаны первые 500 операций — их может быть больше
+                      </Text>
+                    ) : null}
+                    {operations.data.data.map((op) => (
+                      <Text size="xs" key={op.id} data-testid="spec-operation-row">
+                        {op.method} {op.path}
+                      </Text>
+                    ))}
+                  </Stack>
+                )}
+              </Stack>
+            );
+          })()
+        )}
+      </QueryState>
     </Card>
   );
 }

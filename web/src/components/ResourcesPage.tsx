@@ -9,7 +9,6 @@ import {
   Button,
   Card,
   Group,
-  Loader,
   Stack,
   Text,
   TextInput,
@@ -28,6 +27,7 @@ import {
 import { useGetWorkspace } from "@/api/generated/workspaces/workspaces.ts";
 import type { ResourceFamilyView } from "@/api/generated/schemas";
 import { describeApiFailure, describeApiFailureDetailed } from "@/api/errors";
+import { QueryState } from "./QueryState";
 import { ResourceEntities } from "./ResourceEntities";
 
 // ResourcesPage is DESIGN §14 screen 7, P3a: the operator's window onto the
@@ -98,49 +98,29 @@ export function ResourcesPage({ id }: { id: number }): ReactElement {
             спеки.
           </Alert>
         ) : null}
-        {resources.isPending ? (
-          // role on the Text, not the Group: the live region should be the
-          // sentence a screen reader announces, not the flex box around it.
-          <Group gap="xs">
-            <Loader size="sm" />
-            <Text size="sm" component="output">
-              Загрузка…
-            </Text>
-          </Group>
-        ) : resources.isError ? (
-          <Stack gap="sm" data-testid="resources-error">
-            <Alert color="red" icon={<IconAlertTriangle size={18} />} role="alert">
-              {describeApiFailure(resources.error)}
-            </Alert>
-            <Button
-              variant="default"
-              w="fit-content"
-              onClick={() => void resources.refetch()}
-              data-testid="resources-retry"
+        <QueryState queries={[resources]} testIdPrefix="resources">
+          {resources.data?.status !== 200 ? (
+            <Alert
+              color="red"
+              icon={<IconAlertTriangle size={18} />}
+              role="alert"
+              data-testid="resources-error"
             >
-              Повторить
-            </Button>
-          </Stack>
-        ) : resources.data.status !== 200 ? (
-          <Alert
-            color="red"
-            icon={<IconAlertTriangle size={18} />}
-            role="alert"
-            data-testid="resources-error"
-          >
-            {describeApiFailure(null)}
-          </Alert>
-        ) : families.length === 0 ? (
-          // With no spec bound the alert above already said why the list is
-          // empty; a second sentence about «привязанная спека» contradicted it.
-          specId === null ? null : (
-            <Text data-testid="resources-empty">
-              В привязанной спеке не нашлось ни одного семейства маршрутов, подходящего под ресурс.
-            </Text>
-          )
-        ) : (
-          <ResourceList id={id} workspaceUrl={workspaceUrl} families={families} />
-        )}
+              {describeApiFailure(null)}
+            </Alert>
+          ) : families.length === 0 ? (
+            // With no spec bound the alert above already said why the list is
+            // empty; a second sentence about «привязанная спека» contradicted it.
+            specId === null ? null : (
+              <Text data-testid="resources-empty">
+                В привязанной спеке не нашлось ни одного семейства маршрутов, подходящего под
+                ресурс.
+              </Text>
+            )
+          ) : (
+            <ResourceList id={id} workspaceUrl={workspaceUrl} families={families} />
+          )}
+        </QueryState>
       </Stack>
     </div>
   );

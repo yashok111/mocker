@@ -2,15 +2,15 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
+import { StreamEditor } from "./StreamEditor";
+import { StreamCapsStrip } from "./stream/StreamCapsStrip";
 import {
-  StreamCapsStrip,
-  StreamEditor,
   draftFromDefinition,
   draftToDefinition,
   emptyRule,
   emptyStreamDraft,
   type StreamDraft,
-} from "./StreamEditor";
+} from "./stream/streamDraft";
 import { renderWithProviders } from "@/test/render";
 import { json, route } from "@/test/http";
 import { serverConfigFixture } from "@/test/fixtures";

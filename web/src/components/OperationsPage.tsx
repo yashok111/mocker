@@ -4,9 +4,7 @@ import {
   Alert,
   Anchor,
   Badge,
-  Button,
   Group,
-  Loader,
   ScrollArea,
   Stack,
   Text,
@@ -25,6 +23,7 @@ import { modals } from "@mantine/modals";
 import { TabLink } from "./TabLink";
 import { describeApiFailure } from "@/api/errors";
 import { OperationEditor } from "./OperationEditor";
+import { QueryState } from "./QueryState";
 import { SessionControls } from "./SessionControls";
 
 // OperationsPage is DESIGN §14 screen 5, P1 subset: the merged operation
@@ -144,14 +143,9 @@ export function OperationsPage({
   // play — specOps stays technically isPending forever while disabled
   // (specId === null), so it is excluded from the combined check in that
   // case rather than blocking the page on a request that will never fire.
-  const isPending =
-    workspace.isPending || mergedOps.isPending || (specId !== null && specOps.isPending);
-  const isError = workspace.isError || mergedOps.isError || (specId !== null && specOps.isError);
-  const firstError: unknown = workspace.isError
-    ? workspace.error
-    : mergedOps.isError
-      ? mergedOps.error
-      : specOps.error;
+  // The ORDER matters: QueryState describes the FIRST failure it finds, and
+  // the workspace's own is the one worth naming when several fail together.
+  const stateQueries = specId !== null ? [workspace, mergedOps, specOps] : [workspace, mergedOps];
   const badStatus =
     (workspace.data !== undefined && workspace.data.status !== 200) ||
     (mergedOps.data !== undefined && mergedOps.data.status !== 200) ||
@@ -250,131 +244,117 @@ export function OperationsPage({
       {activeScenarioId !== null ? (
         <ScenarioMaskBanner workspaceId={id} scenarioId={activeScenarioId} />
       ) : null}
-      {isPending ? (
-        <Group gap="xs">
-          <Loader size="sm" />
-          <Text size="sm" component="output">
-            Загрузка…
-          </Text>
-        </Group>
-      ) : isError ? (
-        <Stack gap="sm" data-testid="operations-error">
-          <Alert color="red" icon={<IconAlertTriangle size={18} />} role="alert">
-            {describeApiFailure(firstError)}
+      <QueryState queries={stateQueries} testIdPrefix="operations" onRetry={retry}>
+        {badStatus ? (
+          <Alert
+            color="red"
+            icon={<IconAlertTriangle size={18} />}
+            role="alert"
+            data-testid="operations-error"
+          >
+            {describeApiFailure(null)}
           </Alert>
-          <Button variant="default" w="fit-content" onClick={retry} data-testid="operations-retry">
-            Повторить
-          </Button>
-        </Stack>
-      ) : badStatus ? (
-        <Alert
-          color="red"
-          icon={<IconAlertTriangle size={18} />}
-          role="alert"
-          data-testid="operations-error"
-        >
-          {describeApiFailure(null)}
-        </Alert>
-      ) : specId === null ? (
-        // A workspace with no spec has no operations to show — this is an
-        // ordinary, expected state (§3.3), not an error.
-        <Text data-testid="operations-empty" c="dimmed">
-          У воркспейса нет привязанной спеки — переопределять пока нечего.{" "}
-          <Anchor component={Link} to="/specs">
-            Загрузите спеку
-          </Anchor>{" "}
-          и привяжите её в настройках воркспейса.
-        </Text>
-      ) : (
-        <Group align="flex-start" gap="lg" wrap="nowrap">
-          <Stack w={340} gap="sm">
-            <TextInput
-              placeholder="Метод, путь, тег, описание…"
-              value={search}
-              onChange={(e) => setSearch(e.currentTarget.value)}
-              leftSection={<IconSearch size={14} />}
-              data-testid="operations-search"
-            />
-            {capped ? (
-              <Text size="xs" c="dimmed" data-testid="operations-capped-note">
-                Спека отдала первые {SPEC_OPERATIONS_LIMIT} операций: теги и описания для операций
-                за этой границей могут не подтянуться.
-              </Text>
-            ) : null}
-            <ScrollArea h={560} data-testid="operation-list">
-              <Stack gap="md">
-                {groups.size === 0 ? (
-                  <Text size="sm" c="dimmed">
-                    Ничего не найдено
-                  </Text>
-                ) : (
-                  [...groups.entries()].map(([tag, ops]) => (
-                    <div key={tag}>
-                      <Text fw={600} size="sm">
-                        {tag}
-                      </Text>
-                      <Stack gap={4} mt={4}>
-                        {ops.map((op) => (
-                          <UnstyledButton
-                            key={op.opKey}
-                            data-testid="operation-row"
-                            onClick={() =>
-                              select({
-                                method: op.method,
-                                path: op.path,
-                                opKey: op.opKey,
-                                statuses: op.statuses,
-                              })
-                            }
-                            px="xs"
-                            py={4}
-                            style={{
-                              borderRadius: 4,
-                              background:
-                                selected?.opKey === op.opKey
-                                  ? "var(--mantine-color-blue-light)"
-                                  : undefined,
-                            }}
-                          >
-                            <Group gap="xs" wrap="nowrap">
-                              <Badge size="sm" variant="light">
-                                {op.method}
-                              </Badge>
-                              <Text size="sm" fw={500} style={{ wordBreak: "break-all" }}>
-                                {op.path}
-                              </Text>
-                            </Group>
-                            <Text size="xs" c="dimmed">
-                              {signature(op)}
-                            </Text>
-                          </UnstyledButton>
-                        ))}
-                      </Stack>
-                    </div>
-                  ))
-                )}
-              </Stack>
-            </ScrollArea>
-          </Stack>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            {selected ? (
-              <OperationEditor
-                key={selected.opKey}
-                onDirtyChange={setEditorDirty}
-                workspaceId={id}
-                opKey={selected.opKey}
-                statuses={selected.statuses}
-                path={selected.path}
-                basePath={
-                  workspace.data?.status === 200 ? workspace.data.data.settings.basePath : ""
-                }
+        ) : specId === null ? (
+          // A workspace with no spec has no operations to show — this is an
+          // ordinary, expected state (§3.3), not an error.
+          <Text data-testid="operations-empty" c="dimmed">
+            У воркспейса нет привязанной спеки — переопределять пока нечего.{" "}
+            <Anchor component={Link} to="/specs">
+              Загрузите спеку
+            </Anchor>{" "}
+            и привяжите её в настройках воркспейса.
+          </Text>
+        ) : (
+          <Group align="flex-start" gap="lg" wrap="nowrap">
+            <Stack w={340} gap="sm">
+              <TextInput
+                placeholder="Метод, путь, тег, описание…"
+                value={search}
+                onChange={(e) => setSearch(e.currentTarget.value)}
+                leftSection={<IconSearch size={14} />}
+                data-testid="operations-search"
               />
-            ) : (
-              <Text c="dimmed">Выберите операцию слева</Text>
-            )}
-          </div>
-        </Group>
-      )}
+              {capped ? (
+                <Text size="xs" c="dimmed" data-testid="operations-capped-note">
+                  Спека отдала первые {SPEC_OPERATIONS_LIMIT} операций: теги и описания для операций
+                  за этой границей могут не подтянуться.
+                </Text>
+              ) : null}
+              <ScrollArea h={560} data-testid="operation-list">
+                <Stack gap="md">
+                  {groups.size === 0 ? (
+                    <Text size="sm" c="dimmed">
+                      Ничего не найдено
+                    </Text>
+                  ) : (
+                    [...groups.entries()].map(([tag, ops]) => (
+                      <div key={tag}>
+                        <Text fw={600} size="sm">
+                          {tag}
+                        </Text>
+                        <Stack gap={4} mt={4}>
+                          {ops.map((op) => (
+                            <UnstyledButton
+                              key={op.opKey}
+                              data-testid="operation-row"
+                              onClick={() =>
+                                select({
+                                  method: op.method,
+                                  path: op.path,
+                                  opKey: op.opKey,
+                                  statuses: op.statuses,
+                                })
+                              }
+                              px="xs"
+                              py={4}
+                              style={{
+                                borderRadius: 4,
+                                background:
+                                  selected?.opKey === op.opKey
+                                    ? "var(--mantine-color-blue-light)"
+                                    : undefined,
+                              }}
+                            >
+                              <Group gap="xs" wrap="nowrap">
+                                <Badge size="sm" variant="light">
+                                  {op.method}
+                                </Badge>
+                                <Text size="sm" fw={500} style={{ wordBreak: "break-all" }}>
+                                  {op.path}
+                                </Text>
+                              </Group>
+                              <Text size="xs" c="dimmed">
+                                {signature(op)}
+                              </Text>
+                            </UnstyledButton>
+                          ))}
+                        </Stack>
+                      </div>
+                    ))
+                  )}
+                </Stack>
+              </ScrollArea>
+            </Stack>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              {selected ? (
+                <OperationEditor
+                  key={selected.opKey}
+                  onDirtyChange={setEditorDirty}
+                  workspaceId={id}
+                  opKey={selected.opKey}
+                  statuses={selected.statuses}
+                  path={selected.path}
+                  basePath={
+                    workspace.data?.status === 200 ? workspace.data.data.settings.basePath : ""
+                  }
+                />
+              ) : (
+                <Text c="dimmed">Выберите операцию слева</Text>
+              )}
+            </div>
+          </Group>
+        )}
+      </QueryState>
       <SessionControls
         id={id}
         target={selected ? { method: selected.method, path: selected.path } : null}

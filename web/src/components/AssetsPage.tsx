@@ -6,7 +6,6 @@ import {
   Button,
   Card,
   Group,
-  Loader,
   Progress,
   Stack,
   Table,
@@ -23,6 +22,7 @@ import { useDeleteAsset, useListAssets, useUploadAsset } from "@/api/generated/a
 import type { AssetView } from "@/api/generated/schemas";
 import { describeApiFailure, describeApiFailureDetailed } from "@/api/errors";
 import { formatBytes, formatTimestamp } from "@/format";
+import { QueryState } from "./QueryState";
 
 // AssetsPage is the ninth workspace tab, «Файлы» (A10): the files a mock can
 // serve — DESIGN §32, shipped by A6 with three MCP tools and no screen under
@@ -71,45 +71,26 @@ export function AssetsPage({ id }: { id: number }): ReactElement {
             assets.data?.status === 200 ? assets.data.data.assets.map((a) => a.name) : []
           }
         />
-        {assets.isPending ? (
-          <Group gap="xs">
-            <Loader size="sm" />
-            <Text size="sm" component="output">
-              Загрузка…
-            </Text>
-          </Group>
-        ) : assets.isError ? (
-          <Stack gap="sm" data-testid="assets-error">
-            <Alert color="red" icon={<IconAlertTriangle size={18} />} role="alert">
-              {describeApiFailure(assets.error)}
-            </Alert>
-            <Button
-              variant="default"
-              w="fit-content"
-              onClick={() => void assets.refetch()}
-              data-testid="assets-retry"
+        <QueryState queries={[assets]} testIdPrefix="assets">
+          {assets.data?.status !== 200 ? (
+            <Alert
+              color="red"
+              icon={<IconAlertTriangle size={18} />}
+              role="alert"
+              data-testid="assets-error"
             >
-              Повторить
-            </Button>
-          </Stack>
-        ) : assets.data.status !== 200 ? (
-          <Alert
-            color="red"
-            icon={<IconAlertTriangle size={18} />}
-            role="alert"
-            data-testid="assets-error"
-          >
-            {describeApiFailure(null)}
-          </Alert>
-        ) : (
-          <AssetList
-            id={id}
-            rows={assets.data.data.assets}
-            totalBytes={assets.data.data.totalBytes}
-            maxAssetBytes={assets.data.data.maxAssetBytes}
-            maxTotalBytes={assets.data.data.maxTotalBytes}
-          />
-        )}
+              {describeApiFailure(null)}
+            </Alert>
+          ) : (
+            <AssetList
+              id={id}
+              rows={assets.data.data.assets}
+              totalBytes={assets.data.data.totalBytes}
+              maxAssetBytes={assets.data.data.maxAssetBytes}
+              maxTotalBytes={assets.data.data.maxTotalBytes}
+            />
+          )}
+        </QueryState>
       </Stack>
     </div>
   );

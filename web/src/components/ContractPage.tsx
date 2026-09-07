@@ -22,7 +22,6 @@ import {
   Button,
   Code,
   Group,
-  Loader,
   Stack,
   Text,
   Title,
@@ -38,6 +37,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { useListEndpoints } from "@/api/generated/endpoints/endpoints.ts";
 import { useListWorkspaceOperations } from "@/api/generated/operations/operations.ts";
 import { useExportOpenAPI } from "@/api/generated/workspaces/workspaces.ts";
+import { QueryState } from "./QueryState";
 import { TabLink } from "./TabLink";
 import { describeApiFailure } from "@/api/errors";
 import {
@@ -71,9 +71,10 @@ export function ContractPage({ id }: { id: number }): ReactElement {
   const operations = useListWorkspaceOperations(id);
   const endpoints = useListEndpoints(id);
 
-  const pending = contract.isPending || operations.isPending || endpoints.isPending;
-  const failed = contract.isError || operations.isError || endpoints.isError;
-  const error = contract.error ?? operations.error ?? endpoints.error;
+  // The order is the one the failure message follows: QueryState describes
+  // the FIRST failed query, and retrying refetches all three, which is what
+  // the hand-written button here always did.
+  const stateQueries = [contract, operations, endpoints];
 
   return (
     <div data-testid="contract-page">
@@ -93,49 +94,26 @@ export function ContractPage({ id }: { id: number }): ReactElement {
           </TabLink>
           .
         </Text>
-        {pending ? (
-          <Group gap="xs">
-            <Loader size="sm" />
-            <Text size="sm" component="output">
-              Загрузка…
-            </Text>
-          </Group>
-        ) : failed ? (
-          <Stack gap="sm" data-testid="contract-error">
-            <Alert color="red" icon={<IconAlertTriangle size={18} />} role="alert">
-              {describeApiFailure(error)}
-            </Alert>
-            <Button
-              variant="default"
-              w="fit-content"
-              onClick={() => {
-                void contract.refetch();
-                void operations.refetch();
-                void endpoints.refetch();
-              }}
-              data-testid="contract-retry"
+        <QueryState queries={stateQueries} testIdPrefix="contract">
+          {contract.data?.status !== 200 ||
+          operations.data?.status !== 200 ||
+          endpoints.data?.status !== 200 ? (
+            <Alert
+              color="red"
+              icon={<IconAlertTriangle size={18} />}
+              role="alert"
+              data-testid="contract-error"
             >
-              Повторить
-            </Button>
-          </Stack>
-        ) : contract.data.status !== 200 ||
-          operations.data.status !== 200 ||
-          endpoints.data.status !== 200 ? (
-          <Alert
-            color="red"
-            icon={<IconAlertTriangle size={18} />}
-            role="alert"
-            data-testid="contract-error"
-          >
-            {describeApiFailure(null)}
-          </Alert>
-        ) : (
-          <ContractView
-            id={id}
-            doc={contract.data.data}
-            badges={computeBadges(operations.data.data, endpoints.data.data.endpoints)}
-          />
-        )}
+              {describeApiFailure(null)}
+            </Alert>
+          ) : (
+            <ContractView
+              id={id}
+              doc={contract.data.data}
+              badges={computeBadges(operations.data.data, endpoints.data.data.endpoints)}
+            />
+          )}
+        </QueryState>
       </Stack>
     </div>
   );
