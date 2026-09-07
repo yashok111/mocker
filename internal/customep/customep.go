@@ -14,7 +14,10 @@
 // and validated through overrides.ValidateResponses/ValidateVariant rather
 // than a second implementation of the same JSON. The dependency is
 // deliberately one-way — internal/overrides must never import this package,
-// or the two would form a cycle.
+// or the two would form a cycle. Since 2026-09-07 it also imports
+// internal/openapi, but for its leaf helpers only (WalkRefNodes) and never
+// for a Resolver: what a bound spec must answer is still the local
+// RefResolver interface, so a test needs no document.
 package customep
 
 import (

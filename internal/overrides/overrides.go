@@ -104,7 +104,7 @@ type Variant struct {
 	// operation already has a schema — change it with schemaPatch), and
 	// ValidateVariant below checks only what is knowable without a
 	// document: an object, under the schemaPatch size cap. Whether every
-	// `$ref` in it resolves is customep.ValidateSchemaDoc's job, run by the
+	// `$ref` in it resolves is customep.ValidateRefs's job, run by the
 	// admin plane against the bound spec at write time.
 	Schema jsonx.RawMessage `json:"schema,omitempty"`
 	// Function is A18's (docs/A18-endpoint-functions.md D5): the Lua source
@@ -435,7 +435,7 @@ func ValidateVariant(v Variant) error {
 // the wire — DESIGN §34.3's "at most the size a schemaPatch may be", read
 // off the one constant rather than copied. An empty field is "no schema"
 // and passes. The `$ref` half needs the bound document and lives in
-// internal/customep (ValidateSchemaDoc), which this package must not
+// internal/customep (ValidateRefs), which this package must not
 // import — the dependency runs the other way.
 func ValidateSchemaShape(raw jsonx.RawMessage) error {
 	if len(raw) == 0 {

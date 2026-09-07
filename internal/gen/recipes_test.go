@@ -811,16 +811,83 @@ func TestRecipeCopyPostPassCappedByMaxBytes(t *testing.T) {
 	}
 }
 
-// TestDeepCloneValueChargesPostPassBudget proves deepCloneValue's own
-// recursion spends from the SAME postPassBudget applyDeferred's does (round-
+// TestRecipeCopyPostPassSizeGateIsByteExact is the sibling of the test above
+// for the OTHER half of the same gate: not "does it decline something far
+// too big" but "does it decline at exactly the byte it used to". The gate
+// stopped calling jsonx.Marshal to measure on 2026-09-07 — measuring by
+// materialising the oversized body is the one allocation the gate exists to
+// avoid — and now asks jsonSize instead. A sizer that disagreed with the
+// marshaller by a single byte would move the threshold silently, so this
+// pins it from both sides: at exactly the transformed body's own length the
+// transform is KEPT, one byte under it is DECLINED and the pristine walk
+// output comes back untouched.
+func TestRecipeCopyPostPassSizeGateIsByteExact(t *testing.T) {
+	// Small and copy-bound: the transform must be affordable at a realistic
+	// ceiling, so that the only thing separating the two runs below is the
+	// single byte of MaxBytes between them.
+	body := func() map[string]any {
+		return map[string]any{
+			"big":   []any{map[string]any{"a": "0123456789abcdef"}, map[string]any{"a": "fedcba9876543210"}},
+			"copy0": nil,
+			"copy1": nil,
+		}
+	}
+	set, err := recipes.Compile(map[string]recipes.Recipe{
+		"copy0": {Kind: recipes.KindCopy, Field: "$.big"},
+		"copy1": {Kind: recipes.KindCopy, Field: "$.big"},
+	})
+	if err != nil {
+		t.Fatalf("compile: %v", err)
+	}
+
+	run := func(maxBytes int64) any {
+		w := newTestWalker(Options{Seed: 1, MaxBytes: maxBytes}, nil)
+		w.req.Recipes = set
+		return w.applyRecipePostPass(body())
+	}
+
+	// The transformed size, established under a ceiling nothing could hit.
+	transformed := run(1 << 20)
+	want, err := json.Marshal(transformed)
+	if err != nil {
+		t.Fatalf("marshal transformed: %v", err)
+	}
+	pristine, err := json.Marshal(body())
+	if err != nil {
+		t.Fatalf("marshal pristine: %v", err)
+	}
+	if string(want) == string(pristine) {
+		t.Fatalf("fixture bug: the copy recipes changed nothing, so neither branch of the gate is under test")
+	}
+
+	// jsonSize is what the gate now measures with: it must agree with the
+	// marshaller exactly, or the two assertions below are testing a
+	// threshold nobody enforces.
+	if n, ok := jsonSize(transformed); !ok || n != len(want) {
+		t.Fatalf("jsonSize(post-pass result) = (%d, %v), want (%d, true) — the gate measures a size the marshaller does not produce", n, ok, len(want))
+	}
+
+	// Exactly at the ceiling: kept (the gate declines on > , never on ==).
+	if got, _ := json.Marshal(run(int64(len(want)))); string(got) != string(want) {
+		t.Fatalf("at MaxBytes == the transformed size (%d) the post-pass must be KEPT; got %s", len(want), got)
+	}
+	// One byte under: declined, and what comes back is the untouched walk
+	// output, never a partially applied transform.
+	if got, _ := json.Marshal(run(int64(len(want) - 1))); string(got) != string(pristine) {
+		t.Fatalf("at MaxBytes == the transformed size - 1 (%d) the post-pass must be DECLINED and return the pristine body; got %s", len(want)-1, got)
+	}
+}
+
+// TestDeepCloneValueChargesWalkBudget proves deepCloneValue's own
+// recursion spends from the SAME walkBudget applyDeferred's does (round-
 // 1 finding #6's other half): a clone that would run past the shared budget
 // declines outright (ok=false) rather than running the clone to completion
 // uncounted.
-func TestDeepCloneValueChargesPostPassBudget(t *testing.T) {
-	budget := &postPassBudget{nodes: maxPostPassNodes - 2}
+func TestDeepCloneValueChargesWalkBudget(t *testing.T) {
+	budget := &walkBudget{nodes: maxWalkNodes - 2}
 	v := map[string]any{"a": 1.0, "b": 2.0, "c": 3.0} // 1 (map) + 3 (scalars) = 4 nodes, budget has 2 left
 	if _, ok := deepCloneValue(v, budget); ok {
-		t.Fatalf("clone should have declined once the shared postPassBudget ran out mid-clone")
+		t.Fatalf("clone should have declined once the shared walkBudget ran out mid-clone")
 	}
 }
 
@@ -829,7 +896,7 @@ func TestDeepCloneValueChargesPostPassBudget(t *testing.T) {
 // still be a real, alias-free copy — mutating the source must never be
 // observable through the clone.
 func TestDeepCloneValueWithinBudgetIsAnIndependentCopy(t *testing.T) {
-	budget := &postPassBudget{}
+	budget := &walkBudget{}
 	v := map[string]any{"a": 1.0, "nested": []any{1.0, 2.0}}
 
 	got, ok := deepCloneValue(v, budget)

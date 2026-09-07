@@ -231,12 +231,19 @@ func (c *composer) applyOverrideResponse(row *overrides.Row, op map[string]any, 
 		return
 	}
 	content, _ := resp["content"].(map[string]any)
-	if content == nil {
+	// len, not nil: openapi.SelectMediaType panics on an EMPTY map by
+	// contract (its caller is required to guard emptiness), and a response
+	// object may legally carry `content: {}`. The local restatement this
+	// replaced defaulted to "application/json" there instead of panicking,
+	// which then failed the resolvedObject lookup two lines below and
+	// returned anyway — so bailing out here is the same outcome, reached
+	// without a fabricated media type.
+	if len(content) == 0 {
 		return
 	}
 	mediaType := v.MediaType
 	if mediaType == "" {
-		mediaType = selectMediaType(content)
+		mediaType = openapi.SelectMediaType(content)
 	}
 	mto, ok := c.resolvedObject(content, mediaType)
 	if !ok {
@@ -338,28 +345,6 @@ func (c *composer) resolvedObject(m map[string]any, key string) (map[string]any,
 	}
 	m[key] = copied
 	return copied, true
-}
-
-// selectMediaType is specs.SelectMediaType's rule, restated: the exact
-// `application/json` key when the response declares it, else the first
-// key in sorted order — so the export patches the SAME media-type object
-// the runtime serves (the indexer picks a variant's MediaType by that
-// rule). Restated rather than imported because internal/specs is a store
-// package and this one is a leaf; a divergence here would silently patch
-// `application/hal+json` while the mock serves `application/json`.
-func selectMediaType(content map[string]any) string {
-	if _, ok := content["application/json"]; ok {
-		return "application/json"
-	}
-	keys := make([]string, 0, len(content))
-	for k := range content {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-	if len(keys) > 0 {
-		return keys[0]
-	}
-	return "application/json"
 }
 
 // pinnedExample turns a pinned variant's body into an example value: a

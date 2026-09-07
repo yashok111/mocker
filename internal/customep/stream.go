@@ -9,12 +9,14 @@ package customep
 // clamped (§30.11), the same discipline the base-path validators keep.
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
 
 	"github.com/yashok111/mocker/internal/jsonx"
 	"github.com/yashok111/mocker/internal/luafn"
+	"github.com/yashok111/mocker/internal/openapi"
 	"github.com/yashok111/mocker/internal/overrides"
 )
 
@@ -376,26 +378,22 @@ func validateEventName(field, name string) error {
 	return nil
 }
 
-// containsRef walks a decoded schema for a "$ref" key at any depth.
+// errFoundRef is containsRef's early exit, never a failure: WalkRefNodes
+// stops at the first error its visitor returns and hands it back unchanged,
+// which is how a boolean question is asked of a walk whose contract is an
+// error.
+var errFoundRef = errors.New("customep: $ref found")
+
+// containsRef walks a decoded schema for a "$ref" key at any depth, on
+// openapi's one traversal rather than a fourth hand-written copy of it.
 func containsRef(v any) bool {
-	switch t := v.(type) {
-	case map[string]any:
-		for k, child := range t {
-			if k == "$ref" {
-				return true
-			}
-			if containsRef(child) {
-				return true
-			}
+	err := openapi.WalkRefNodes(v, func(obj map[string]any) error {
+		if _, ok := obj["$ref"]; ok {
+			return errFoundRef
 		}
-	case []any:
-		for _, child := range t {
-			if containsRef(child) {
-				return true
-			}
-		}
-	}
-	return false
+		return nil
+	})
+	return errors.Is(err, errFoundRef)
 }
 
 // ValidateDraft runs the SAME normalisation and validation Repo.Create and

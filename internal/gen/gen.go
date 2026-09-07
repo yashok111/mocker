@@ -511,7 +511,7 @@ func (w *walker) contentExample(v ResponseVariant) (any, bool) {
 	if v.MediaType == "" || v.OpPointer == "" {
 		return nil, false
 	}
-	ptr := v.OpPointer + "/responses/" + escapePointerToken(v.Selector) + "/content/" + escapePointerToken(v.MediaType)
+	ptr := v.OpPointer + "/responses/" + openapi.EscapePointerToken(v.Selector) + "/content/" + openapi.EscapePointerToken(v.MediaType)
 	resolved, err := w.res.Resolve(ptr)
 	if err != nil {
 		return nil, false
@@ -532,7 +532,7 @@ func (w *walker) contentExample(v ResponseVariant) (any, bool) {
 // "example", or a native named-examples map (each entry an Example Object
 // wrapping its payload under "value"). Map entries are chosen by the
 // lexicographically first name, purely for determinism — same reasoning as
-// specs.selectMediaType picking a stable media type out of an unordered
+// openapi.SelectMediaType picking a stable media type out of an unordered
 // decoded-JSON map.
 func firstExample(examples any) (any, bool) {
 	switch ex := examples.(type) {
@@ -579,7 +579,7 @@ func (g *Generator) Headers(v ResponseVariant, req Request) map[string]string {
 	if v.OpPointer == "" || v.Selector == "" {
 		return headers
 	}
-	ptr := v.OpPointer + "/responses/" + escapePointerToken(v.Selector)
+	ptr := v.OpPointer + "/responses/" + openapi.EscapePointerToken(v.Selector)
 	resolved, err := g.res.Resolve(ptr)
 	if err != nil {
 		return headers
@@ -654,15 +654,4 @@ func stringifyHeader(v any) string {
 		}
 		return string(b)
 	}
-}
-
-// escapePointerToken RFC-6901-escapes one JSON pointer segment: "~" first
-// (to "~0"), then "/" (to "~1"). Mirrors internal/specs' own helper of the
-// same name and behavior; duplicated rather than imported because gen is a
-// leaf package (HARD RULE: no dependency beyond internal/openapi and the
-// stdlib).
-func escapePointerToken(tok string) string {
-	tok = strings.ReplaceAll(tok, "~", "~0")
-	tok = strings.ReplaceAll(tok, "/", "~1")
-	return tok
 }

@@ -212,11 +212,13 @@ func unescapePointerToken(tok string) string {
 //
 // Exported (P3a) as the canonical home for this escape, for the item
 // schema pointer resource derivation (internal/specs) walks and stores as
-// entities' entity_schema. internal/gen and internal/specs already carry
-// their own unexported copies of this exact rule (gen.go's escapePointerToken,
-// index.go's own); this slice deliberately leaves both of those standing —
-// converting their seven call sites is a mechanical diff with no acceptance
-// clause behind it, deferred rather than folded in here.
+// entities' entity_schema. internal/gen and internal/specs each carried an
+// unexported copy of this exact rule until 2026-09-07, when the deferred
+// mechanical diff P3a left standing was finally taken: both copies are
+// gone and their call sites reach this one. There is now ONE
+// implementation of RFC 6901 escaping in the tree, which is what makes
+// unescapePointerToken's inverse-order argument above checkable in one
+// place rather than three.
 func EscapePointerToken(tok string) string {
 	tok = strings.ReplaceAll(tok, "~", "~0")
 	tok = strings.ReplaceAll(tok, "/", "~1")

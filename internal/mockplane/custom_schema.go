@@ -132,39 +132,42 @@ func chaseRootRef(log *slog.Logger, workspaceSlug string, rowID int64, status st
 // cannot resolve — the node keeps its map but loses every key, so the
 // generator walks `{}` there — logging each once. A resolvable `$ref` is
 // left in place for the walker to follow through the same resolver.
+//
+// The traversal is openapi.WalkRefNodes', shared with customep's two
+// `$ref` walks. It descends into a node's children AFTER the visitor runs,
+// which is why rewriting the map in place needs no "stop here" signal: the
+// walk then descends into the ONE key this leaves behind ("type": "object",
+// a string), reaching nothing.
 func sanitizeRefs(log *slog.Logger, workspaceSlug string, rowID int64, status string, node any, resolver *openapi.Resolver) {
-	switch n := node.(type) {
-	case map[string]any:
-		if raw, ok := n["$ref"]; ok {
-			ref, isString := raw.(string)
-			var err error
-			if !isString {
-				err = errNonStringRef
-			} else if resolver == nil {
-				err = errNoResolver
-			} else {
-				_, err = resolver.Resolve(ref)
-			}
-			if err != nil {
-				log.Warn("custom endpoint schema: $ref does not resolve against the bound spec; generating {} there",
-					"workspace", workspaceSlug, "endpoint", rowID, "status", status, "ref", raw, "err", err)
-				// An EMPTY schema map is untyped and the generator picks
-				// a string for it; `{}` in the served body means an empty
-				// OBJECT, which is what "type: object" and nothing else
-				// produces.
-				for k := range n {
-					delete(n, k)
-				}
-				n["type"] = "object"
-				return
-			}
+	// The visitor never fails — an unresolvable $ref is repaired in place,
+	// not reported — so the returned error is always nil.
+	_ = openapi.WalkRefNodes(node, func(n map[string]any) error {
+		raw, ok := n["$ref"]
+		if !ok {
+			return nil
 		}
-		for _, child := range n {
-			sanitizeRefs(log, workspaceSlug, rowID, status, child, resolver)
+		ref, isString := raw.(string)
+		var err error
+		if !isString {
+			err = errNonStringRef
+		} else if resolver == nil {
+			err = errNoResolver
+		} else {
+			_, err = resolver.Resolve(ref)
 		}
-	case []any:
-		for _, child := range n {
-			sanitizeRefs(log, workspaceSlug, rowID, status, child, resolver)
+		if err == nil {
+			return nil
 		}
-	}
+		log.Warn("custom endpoint schema: $ref does not resolve against the bound spec; generating {} there",
+			"workspace", workspaceSlug, "endpoint", rowID, "status", status, "ref", raw, "err", err)
+		// An EMPTY schema map is untyped and the generator picks
+		// a string for it; `{}` in the served body means an empty
+		// OBJECT, which is what "type: object" and nothing else
+		// produces.
+		for k := range n {
+			delete(n, k)
+		}
+		n["type"] = "object"
+		return nil
+	})
 }

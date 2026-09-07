@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/yashok111/mocker/internal/jsonx"
+	"github.com/yashok111/mocker/internal/openapi"
 	"github.com/yashok111/mocker/internal/overrides"
 )
 
@@ -134,8 +135,13 @@ func pathParamNames(path string) map[string]bool {
 func PathParamNames(path string) map[string]bool { return pathParamNames(path) }
 
 // RefResolver is what ValidateRefs needs of a bound spec: the one method
-// *openapi.Resolver already has. The interface lives here so this package
-// needs no import of internal/openapi and a test can hand in a stub.
+// *openapi.Resolver already has. The interface stays for the half of its
+// reason that still holds — a test hands in a stub, and no caller has to
+// build a whole Resolver to write a row. The other half ("so this package
+// needs no import of internal/openapi") lapsed on 2026-09-07, when
+// SchemaRefs and stream.go's containsRef were folded onto the one
+// openapi.WalkRefNodes traversal: internal/openapi imports nothing from
+// this module, so depending on it costs no cycle and no weight.
 type RefResolver interface {
 	Resolve(pointer string) (any, error)
 }
@@ -205,38 +211,27 @@ func validateRefsIn(raw jsonx.RawMessage, res RefResolver) error {
 
 // SchemaRefs lists every `$ref` string in a decoded schema document,
 // depth-first, refusing one that is not a string or not a local pointer.
-// Exported for the export composer, which resolves the same set.
+// Exported for the export composer, which resolves the same set. The
+// traversal is openapi.WalkRefNodes' — this function is only the decision
+// taken at each object.
 func SchemaRefs(doc any) ([]string, error) {
 	var out []string
-	var walk func(node any) error
-	walk = func(node any) error {
-		switch n := node.(type) {
-		case map[string]any:
-			if raw, ok := n["$ref"]; ok {
-				ref, isString := raw.(string)
-				if !isString {
-					return errors.New("$ref must be a string")
-				}
-				if !strings.HasPrefix(ref, "#/") {
-					return fmt.Errorf("$ref %q is not a local pointer (#/...)", ref)
-				}
-				out = append(out, ref)
-			}
-			for _, child := range n {
-				if err := walk(child); err != nil {
-					return err
-				}
-			}
-		case []any:
-			for _, child := range n {
-				if err := walk(child); err != nil {
-					return err
-				}
-			}
+	err := openapi.WalkRefNodes(doc, func(n map[string]any) error {
+		raw, ok := n["$ref"]
+		if !ok {
+			return nil
 		}
+		ref, isString := raw.(string)
+		if !isString {
+			return errors.New("$ref must be a string")
+		}
+		if !strings.HasPrefix(ref, "#/") {
+			return fmt.Errorf("$ref %q is not a local pointer (#/...)", ref)
+		}
+		out = append(out, ref)
 		return nil
-	}
-	if err := walk(doc); err != nil {
+	})
+	if err != nil {
 		return nil, err
 	}
 	return out, nil

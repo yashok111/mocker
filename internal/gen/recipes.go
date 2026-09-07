@@ -110,25 +110,20 @@ func pinnedListSize(lo, hi int, seedList uint64, dataPath string) int {
 // exactly that body to fail schema-conformance checking, and this is the
 // paper trail for why that is the recipe doing its job, not a defect here.
 
-// maxPostPassNodes bounds the post-pass the same way schema.go's own
-// maxWalkNodes bounds the generation walk: a hard ceiling independent of
-// body shape, so a pathological body paired with a pathological pattern set
-// cannot spin. Sharing the constant, not just the shape, keeps the two
-// ceilings from silently drifting apart under a future tuning pass to one
-// but not the other.
-const maxPostPassNodes = maxWalkNodes
-
-type postPassBudget struct{ nodes int }
-
-// visit reports whether the post-pass may still process one more node;
-// false means "stop transforming, return what's left untouched" — never a
-// panic, never a partial/corrupt tree, just fewer of the pattern's matches
-// actually applied once a body is large enough (or a pattern set hostile
-// enough) to exhaust the ceiling.
-func (b *postPassBudget) visit() bool {
-	b.nodes++
-	return b.nodes <= maxPostPassNodes
-}
+// The post-pass is bounded by schema.go's own walkBudget, node half only:
+// a hard ceiling independent of body shape, so a pathological body paired
+// with a pathological pattern set cannot spin. It used to be a separate
+// postPassBudget type over `const maxPostPassNodes = maxWalkNodes`, tied to
+// the walk's ceiling by that one line so the two could not drift; sharing
+// the TYPE (2026-09-07) is the same intent with nothing left to drift —
+// visitNode's "false means stop transforming, return what's left
+// untouched" contract is exactly what applyDeferred and deepCloneValue
+// already wanted, and it was a second copy of a four-line counter.
+//
+// Only the node counter is used here. The byte half (remaining/spend) stays
+// zero and untouched: the post-pass runs AFTER the walk has spent its whole
+// byte budget, and re-gates size once at the end of applyRecipePostPass
+// against effMaxBytes rather than incrementally.
 
 // applyRecipePostPass is the whole seam's entry point, called from gen.go's
 // Body on both the schema-walk value and the list-body value. It is a
@@ -151,7 +146,7 @@ func (w *walker) applyRecipePostPass(val any) any {
 	if set == nil || set.Len() == 0 || !bindingsHaveDeferred(set) {
 		return val
 	}
-	budget := &postPassBudget{}
+	budget := &walkBudget{}
 	out := applyDeferred(val, "", set, budget)
 
 	// The post-pass runs on the FINISHED body, after the schema walk's own
@@ -168,7 +163,22 @@ func (w *walker) applyRecipePostPass(val any) any {
 	// first place; this is the belt to that suspenders, catching the case
 	// where a handful of large-but-under-budget clones still add up to more
 	// bytes than the ceiling allows.)
-	if b, err := jsonx.Marshal(out); err == nil && int64(len(b)) > w.opts.effMaxBytes() {
+	//
+	// MEASURED WITHOUT MATERIALISING (2026-09-07): the gate used to be
+	// `jsonx.Marshal(out)` and a len() on the result, which allocated the
+	// very body the cite above says can reach 161MB purely in order to find
+	// out it was too big — the one allocation the whole gate exists to
+	// prevent. jsonSize (A15's sizer, jsonsize.go) answers the identical
+	// byte count without producing a byte, and is held to encoding/json to
+	// the byte by jsonsize_test, so the threshold does not move. It answers
+	// ok=false for any type it does not model, and only then is the real
+	// Marshal paid — a body the walkers cannot have produced, but the
+	// fallback keeps this gate's answer correct rather than optimistic.
+	if n, sized := jsonSize(out); sized {
+		if int64(n) > w.opts.effMaxBytes() {
+			return val
+		}
+	} else if b, err := jsonx.Marshal(out); err == nil && int64(len(b)) > w.opts.effMaxBytes() {
 		return val
 	}
 	return out
@@ -193,8 +203,8 @@ func bindingsHaveDeferred(set *recipes.Set) bool {
 // dataPath construction) — recipePrefix plays no part here, since this
 // walk starts fresh from the already-finished body's own root, not from a
 // mid-generation, possibly-restarted dataPath.
-func applyDeferred(val any, path string, set *recipes.Set, budget *postPassBudget) any {
-	if !budget.visit() {
+func applyDeferred(val any, path string, set *recipes.Set, budget *walkBudget) any {
+	if !budget.visitNode() {
 		return val
 	}
 	switch v := val.(type) {
@@ -257,7 +267,7 @@ func applyDeferred(val any, path string, set *recipes.Set, budget *postPassBudge
 // (string/bool/float64/int64/jsonx.Number/nil) are already immutable value
 // types in Go and pass through unchanged.
 //
-// budget is the SAME postPassBudget applyDeferred's own recursion spends
+// budget is the SAME walkBudget applyDeferred's own recursion spends
 // from, charged once per node visited here exactly as applyDeferred charges
 // itself — round-1 finding #6 measured what cloning WITHOUT that charge
 // costs: 200 copy bindings on one large sibling turned an 807KB body into
@@ -268,8 +278,8 @@ func applyDeferred(val any, path string, set *recipes.Set, budget *postPassBudge
 // built so far and decline the copy entirely (never splice in a partial
 // tree: half a clone is exactly the aliasing hazard this function exists to
 // avoid, not a smaller-but-safe one).
-func deepCloneValue(v any, budget *postPassBudget) (any, bool) {
-	if !budget.visit() {
+func deepCloneValue(v any, budget *walkBudget) (any, bool) {
+	if !budget.visitNode() {
 		return nil, false
 	}
 	switch t := v.(type) {

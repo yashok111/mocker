@@ -55,7 +55,7 @@ func Index(doc *openapi.Document, res *openapi.Resolver, rep *openapi.Report) ([
 	for _, p := range paths {
 		item, ok := pathsRaw[p].(map[string]any)
 		if !ok {
-			pointer := "#/paths/" + escapePointerToken(p)
+			pointer := "#/paths/" + openapi.EscapePointerToken(p)
 			rep.Add(pointer, "path-item-not-object", fmt.Sprintf("path item %q is not a JSON object", p))
 			continue
 		}
@@ -66,7 +66,7 @@ func Index(doc *openapi.Document, res *openapi.Resolver, rep *openapi.Report) ([
 				continue
 			}
 
-			pointer := "#/paths/" + escapePointerToken(p) + "/" + method
+			pointer := "#/paths/" + openapi.EscapePointerToken(p) + "/" + method
 			op := &Operation{
 				Method:        strings.ToUpper(method),
 				Path:          p,
@@ -156,7 +156,7 @@ func indexResponses(res *openapi.Resolver, rep *openapi.Report, opObj map[string
 		entries = append(entries, responseEntry{
 			selector: sel,
 			node:     node,
-			pointer:  opPointer + "/responses/" + escapePointerToken(sel),
+			pointer:  opPointer + "/responses/" + openapi.EscapePointerToken(sel),
 		})
 	}
 	// responsesRaw is a map[string]any: Go randomizes its range order on
@@ -321,48 +321,22 @@ func resolveResponseContent(res *openapi.Resolver, rep *openapi.Report, node any
 
 	if entry, ok := content[mt].(map[string]any); ok {
 		if _, hasSchema := entry["schema"]; hasSchema {
-			ptr := basePointer + "/content/" + escapePointerToken(mt) + "/schema"
+			ptr := basePointer + "/content/" + openapi.EscapePointerToken(mt) + "/schema"
 			schemaPtr = &ptr
 		}
 	}
 	return mediaType, schemaPtr
 }
 
-// SelectMediaType picks one media type out of a response's "content" map.
-// "application/json" wins outright when present (181 of the 232 media-typed
-// response entries in the acceptance document are exactly that); otherwise
-// the lexicographically first key wins, purely for determinism — content is
-// a decoded JSON object, and Go's map range order is randomized, not the
-// document's own order.
-//
-// content must be non-empty: this indexes keys[0] and PANICS on an empty
-// map. That is deliberate, not an oversight — the one existing call site
-// guards len(content) == 0 four lines above its own call, so an empty map
-// reaching here is that caller's bug, not something this function should
-// paper over with a fabricated "" result. Exported (P3a) so resource
-// derivation (this same package, deriveSuggestions) can pick a detail
-// variant's media type with the identical rule the indexer already applies
-// to every response — a second implementation would only be able to drift
-// from this one, never improve on it. A caller that does not want the
-// panic must keep guarding emptiness itself, exactly as this one does.
+// SelectMediaType is [openapi.SelectMediaType] under the name this package
+// exported it as in P3a — same rule, same PANIC on an empty content map,
+// which is why the two callers that reach it through this name
+// (deriveSuggestions here, resources.computeWriteForm, whose own comment
+// cites the panic by this name) need no change and its test keeps holding
+// the contract. The implementation moved to the leaf on 2026-09-07 because
+// internal/design had restated it rather than import a store package; a
+// forwarder is what lets a leaf own the rule without churning the callers
+// that already say "specs".
 func SelectMediaType(content map[string]any) string {
-	if _, ok := content["application/json"]; ok {
-		return "application/json"
-	}
-	keys := make([]string, 0, len(content))
-	for k := range content {
-		keys = append(keys, k)
-	}
-	slices.Sort(keys)
-	return keys[0]
-}
-
-// escapePointerToken RFC-6901-escapes one segment for embedding in a JSON
-// pointer: "~" first (to "~0"), then "/" (to "~1"). That order is the
-// reverse of unescaping on purpose — escaping "/" first would let the "~"
-// just inserted as part of "~1" get mangled by the very next replacement.
-func escapePointerToken(tok string) string {
-	tok = strings.ReplaceAll(tok, "~", "~0")
-	tok = strings.ReplaceAll(tok, "/", "~1")
-	return tok
+	return openapi.SelectMediaType(content)
 }
