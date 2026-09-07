@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { ApiFailure } from "./client";
 import {
   clientUnknownErrorCode,
+  conflictOf,
   describeApiFailure,
   describeApiFailureDetailed,
   describeErrorCode,
@@ -86,5 +87,28 @@ describe("isGoneTombstone", () => {
 
   it("rejects a non-object value without throwing", () => {
     expect(isGoneTombstone(null as unknown as { gone: true; editVersion: null })).toBe(false);
+  });
+});
+
+describe("conflictOf", () => {
+  const conflict = new ApiFailure("stale", 409, "edit_conflict");
+
+  it("returns the failure for an edit_conflict on the current attempt", () => {
+    expect(conflictOf({ isError: true, error: conflict })).toBe(conflict);
+  });
+
+  it("returns null while the mutation is not in an error state", () => {
+    // TanStack keeps the previous error object around while a retry is
+    // pending; without the isError clause the six screens that render this
+    // would keep the conflict banner up over a write already in flight.
+    expect(conflictOf({ isError: false, error: conflict })).toBeNull();
+  });
+
+  it("returns null for another code and for a non-ApiFailure rejection", () => {
+    expect(
+      conflictOf({ isError: true, error: new ApiFailure("nope", 409, "conflict") }),
+    ).toBeNull();
+    expect(conflictOf({ isError: true, error: new Error("offline") })).toBeNull();
+    expect(conflictOf({ isError: true, error: undefined })).toBeNull();
   });
 });

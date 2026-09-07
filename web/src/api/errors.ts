@@ -126,6 +126,28 @@ export function isGoneTombstone<T>(
 }
 
 /**
+ * conflictOf narrows a mutation's error to the one case six screens branch on:
+ * a 409 whose code is `edit_conflict` (A3/D6), the only failure that carries a
+ * `details` payload a screen can rebase on. Seven call sites spelled the same
+ * three-clause guard inline — `isError && error instanceof ApiFailure &&
+ * error.code === "edit_conflict"` — and a screen that dropped the middle clause
+ * would read `.code` off a plain fetch rejection. The argument is the whole
+ * mutation object rather than its `.error`, because `isError` is the flag that
+ * says the error belongs to the CURRENT attempt: TanStack keeps the previous
+ * error around while a retry is pending.
+ */
+export function conflictOf(mutation: { isError: boolean; error: unknown }): ApiFailure | null {
+  if (
+    mutation.isError &&
+    mutation.error instanceof ApiFailure &&
+    mutation.error.code === "edit_conflict"
+  ) {
+    return mutation.error;
+  }
+  return null;
+}
+
+/**
  * describeApiFailureDetailed exists alongside describeApiFailure, not instead
  * of it, because the two answer different questions. describeApiFailure
  * deliberately never shows err.message: that text is written for mocker's own

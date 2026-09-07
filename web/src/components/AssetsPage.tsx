@@ -18,16 +18,11 @@ import { modals } from "@mantine/modals";
 import { Dropzone, type FileWithPath } from "@mantine/dropzone";
 import { IconAlertTriangle, IconTrash, IconUpload } from "@tabler/icons-react";
 import { useQueryClient } from "@tanstack/react-query";
-import dayjs from "dayjs";
-import {
-  getListAssetsQueryKey,
-  useDeleteAsset,
-  useListAssets,
-  useUploadAsset,
-} from "@/api/generated/assets/assets.ts";
-import { getGetWorkspaceQueryKey } from "@/api/generated/workspaces/workspaces.ts";
+import { invalidateAssetChange } from "@/api/cachePolicy";
+import { useDeleteAsset, useListAssets, useUploadAsset } from "@/api/generated/assets/assets.ts";
 import type { AssetView } from "@/api/generated/schemas";
 import { describeApiFailure, describeApiFailureDetailed } from "@/api/errors";
+import { formatBytes, formatTimestamp } from "@/format";
 
 // AssetsPage is the ninth workspace tab, «Файлы» (A10): the files a mock can
 // serve — DESIGN §32, shipped by A6 with three MCP tools and no screen under
@@ -54,16 +49,6 @@ export function suggestName(fileName: string): string {
     .replace(/^-+|-+$/g, "")
     .slice(0, 128);
   return cleaned === "" || cleaned === "." || cleaned === ".." ? "file" : cleaned;
-}
-
-function formatBytes(n: number): string {
-  if (n >= 1024 * 1024) {
-    return `${(n / (1024 * 1024)).toFixed(1)} МБ`;
-  }
-  if (n >= 1024) {
-    return `${(n / 1024).toFixed(1)} КБ`;
-  }
-  return `${n} Б`;
 }
 
 export function AssetsPage({ id }: { id: number }): ReactElement {
@@ -145,9 +130,8 @@ function UploadCard({ id, existingNames }: { id: number; existingNames: string[]
         setUploaded(res.data);
         setFile(null);
         setName("");
-        void queryClient.invalidateQueries({ queryKey: getListAssetsQueryKey(id) });
         // An upload bumps the workspace revision (DESIGN §32.5).
-        void queryClient.invalidateQueries({ queryKey: getGetWorkspaceQueryKey(id) });
+        invalidateAssetChange(queryClient, id);
       },
     },
   });
@@ -258,8 +242,7 @@ function AssetList({
     mutation: {
       onSuccess: () => {
         setDeleteError(null);
-        void queryClient.invalidateQueries({ queryKey: getListAssetsQueryKey(id) });
-        void queryClient.invalidateQueries({ queryKey: getGetWorkspaceQueryKey(id) });
+        invalidateAssetChange(queryClient, id);
       },
     },
   });
@@ -331,7 +314,7 @@ function AssetList({
                   </Table.Td>
                   <Table.Td>{asset.mediaType}</Table.Td>
                   <Table.Td>{formatBytes(asset.sizeBytes)}</Table.Td>
-                  <Table.Td>{dayjs.unix(asset.updatedAt).format("DD.MM.YYYY HH:mm")}</Table.Td>
+                  <Table.Td>{formatTimestamp(asset.updatedAt)}</Table.Td>
                   <Table.Td>
                     <Text size="xs" ff="monospace" title={asset.sha256} data-testid="asset-sha">
                       {asset.sha256.slice(0, 12)}…

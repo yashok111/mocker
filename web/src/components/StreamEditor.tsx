@@ -24,6 +24,8 @@ import type {
   StreamPreviewView,
 } from "@/api/generated/schemas";
 import { describeApiFailureDetailed } from "@/api/errors";
+import { formatBytes, formatBytesPerSec } from "@/format";
+import { jsonLocation } from "@/validation/json";
 
 // StreamEditor is DESIGN §30.14's authoring half, P6e: on the custom-endpoints
 // screen a stream (kind "sse" or "ws") swaps the body editor for the four
@@ -203,8 +205,7 @@ function parseJSON(text: string, what: string): { value: unknown } | { error: st
   try {
     return { value: JSON.parse(text) as unknown };
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    return { error: `${what}: JSON невалиден (${message})` };
+    return { error: `${what}: JSON невалиден (${jsonLocation(text, err)})` };
   }
 }
 
@@ -741,32 +742,14 @@ export function StreamEditor({
   );
 }
 
-function formatBytesPerSec(n: number): string {
-  if (n >= 1024 * 1024) {
-    return `${(n / (1024 * 1024)).toFixed(1)} МБ/с`;
-  }
-  if (n >= 1024) {
-    return `${(n / 1024).toFixed(1)} КБ/с`;
-  }
-  return `${n} Б/с`;
-}
-
 /** StreamCapsStrip is §30.14's read-only strip: the server's effective caps
  * and, on request, the draft's own first frames and the maximum output one
  * connection would produce — POST .../endpoints/preview writes nothing, so
  * pressing the button is free. The number is the amplifier §30.12 wants
  * shown BEFORE a loop is saved: a 4 MiB frame every 100 ms is 40 MiB/s per
- * connection, and the cap on connections multiplies it. */
-function formatBytes(n: number): string {
-  if (n >= 1024 * 1024) {
-    return `${(n / (1024 * 1024)).toFixed(n % (1024 * 1024) === 0 ? 0 : 1)} МБ`;
-  }
-  if (n >= 1024) {
-    return `${(n / 1024).toFixed(n % 1024 === 0 ? 0 : 1)} КБ`;
-  }
-  return `${n} Б`;
-}
-
+ * connection, and the cap on connections multiplies it. Both formatters it
+ * renders with live in @/format now — this file's rule is the one that
+ * survived the merge with AssetsPage's. */
 export function StreamCapsStrip({
   workspaceId,
   path,

@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { WorkspacesPage } from "./WorkspacesPage";
 import { renderInRouter } from "@/test/render";
 import { specViewFixture, workspaceFixture } from "@/test/fixtures";
+import { cancelDialog } from "@/test/dialog";
 
 // Every route() below now stubs GET /api/specs too: WorkspacesPage added a
 // second query (useListSpecs) to pick its empty-state copy, so a stub that
@@ -196,7 +197,7 @@ describe("WorkspacesPage", () => {
     // The confirmation names the workspace, so a mis-click is visible before
     // it is irreversible.
     expect(dialog).toHaveTextContent("Alex");
-    await userEvent.click(within(dialog).getByText("Отмена"));
+    await cancelDialog(dialog);
 
     await waitFor(() => {
       const deletes = fetchMock.mock.calls.filter(([, init]) => init?.method === "DELETE");

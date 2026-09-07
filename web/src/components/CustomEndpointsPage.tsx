@@ -28,15 +28,14 @@ import { useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { type } from "arktype";
-import dayjs from "dayjs";
+import { invalidateEndpointChange } from "@/api/cachePolicy";
 import {
-  getListEndpointsQueryKey,
   useCreateEndpoint,
   useDeleteEndpoint,
   useListEndpoints,
   useUpdateEndpoint,
 } from "@/api/generated/endpoints/endpoints.ts";
-import { getGetWorkspaceQueryKey, useGetWorkspace } from "@/api/generated/workspaces/workspaces.ts";
+import { useGetWorkspace } from "@/api/generated/workspaces/workspaces.ts";
 import type {
   EditConflictTombstone,
   EndpointConflictDetails,
@@ -59,8 +58,14 @@ import {
 import { StreamTestClient } from "./StreamTestClient";
 import { TabLink } from "./TabLink";
 import { GUIDE_FUNCTIONS, VariantEditor } from "./VariantEditor";
-import { ApiFailure } from "@/api/client";
-import { describeApiFailure, describeApiFailureDetailed, isGoneTombstone } from "@/api/errors";
+import {
+  conflictOf,
+  describeApiFailure,
+  describeApiFailureDetailed,
+  isGoneTombstone,
+} from "@/api/errors";
+import { formatTimestamp } from "@/format";
+import { jsonLocation } from "@/validation/json";
 import { arktypeResolver } from "@/validation/resolver";
 
 // CustomEndpointsPage is DESIGN §14 screen 6, P1 subset: a custom endpoint is
@@ -118,41 +123,33 @@ const pathTemplate = type("string").narrow((value, ctx) => {
   return true;
 });
 
-// statusField stays a free-text string rather than a number input: the
-// field is OPTIONAL (the server defaults to 200 when it is omitted, per
-// api/openapi.json's own description on CreateEndpointRequest.status), and a
+// statusCodeField stays a free-text string rather than a number input: a
 // Mantine NumberInput has no clean way to express "empty" that survives a
 // round trip through react-hook-form's register() the way an empty string
-// does.
-const statusField = type("string").narrow((value, ctx) => {
-  const trimmed = value.trim();
-  if (trimmed === "") {
+// does. `required` is the ONE way the two forms that use it differ. Create's
+// status is OPTIONAL on the wire (the server defaults to 200 when it is
+// omitted, per api/openapi.json's own description on
+// CreateEndpointRequest.status), so an empty field there means "omit it";
+// UpdateEndpointRequest.activeStatus is required — it is a full-replacement
+// PUT, not create's status-defaults-to-200 POST — so an empty field there is a
+// rejection. The 100..599 range was spelled out twice until A21 folded the two
+// into this factory; a range that drifts apart between create and edit is a
+// form that accepts what the other refuses.
+function statusCodeField(required: boolean) {
+  return type("string").narrow((value, ctx) => {
+    const trimmed = value.trim();
+    if (trimmed === "") {
+      return required ? ctx.reject({ problem: "Укажите код статуса" }) : true;
+    }
+    const n = Number(trimmed);
+    if (!Number.isInteger(n) || n < 100 || n > 599) {
+      return ctx.reject({ problem: "Код статуса — целое число от 100 до 599" });
+    }
     return true;
-  }
-  const n = Number(trimmed);
-  if (!Number.isInteger(n) || n < 100 || n > 599) {
-    return ctx.reject({ problem: "Код статуса — целое число от 100 до 599" });
-  }
-  return true;
-});
-
-// jsonLocation turns JSON.parse's own SyntaxError ("Unexpected token j in
-// JSON at position 5") into "строка N, столбец M": the phase brief asks that
-// a malformed body be validated in the browser AND show WHERE it is broken,
-// and a byte offset into a multi-line textarea is not something a person can
-// use without counting characters by hand.
-function jsonLocation(text: string, err: unknown): string {
-  const message = err instanceof Error ? err.message : String(err);
-  const match = /position (\d+)/.exec(message);
-  if (!match) {
-    return message;
-  }
-  const pos = Number(match[1]);
-  const before = text.slice(0, pos);
-  const line = before.split("\n").length;
-  const column = pos - before.lastIndexOf("\n");
-  return `строка ${line}, столбец ${column}`;
+  });
 }
+
+const statusField = statusCodeField(false);
 
 // bodyField stays optional on purpose: CreateEndpointRequest.body is itself
 // optional, and an omitted body means an empty pinned body — the contract's
@@ -213,21 +210,7 @@ export function createProducerConflict(fields: {
   return null;
 }
 
-// activeStatusField differs from statusField (used by create) in exactly one
-// way: UpdateEndpointRequest.activeStatus is REQUIRED on the wire (it is a
-// full-replacement PUT, not create's status-defaults-to-200 POST), so an
-// empty field is rejected here instead of treated as "omit it".
-const activeStatusField = type("string").narrow((value, ctx) => {
-  const trimmed = value.trim();
-  if (trimmed === "") {
-    return ctx.reject({ problem: "Укажите код статуса" });
-  }
-  const n = Number(trimmed);
-  if (!Number.isInteger(n) || n < 100 || n > 599) {
-    return ctx.reject({ problem: "Код статуса — целое число от 100 до 599" });
-  }
-  return true;
-});
+const activeStatusField = statusCodeField(true);
 
 // A21 step 5: the variant itself — body, media type, file, function,
 // headers, conditions — is VariantEditor.tsx's, held in local state beside
@@ -268,14 +251,6 @@ function defaultsFromEndpoint(
 // about while the 200 is what serves.
 function hasFunction(ep: Pick<EndpointView, "responses">): boolean {
   return Object.values(ep.responses).some((v) => v.function !== undefined && v.function !== "");
-}
-
-// createdAt/updatedAt arrive as Unix seconds (internal/admin/endpoint_handlers.go
-// writes row.CreatedAt.Unix()/row.UpdatedAt.Unix()), same convention SpecsPage
-// already documents for SpecView — dayjs needs telling which, or it reads
-// 1970 for every row.
-function formatTimestamp(unixSeconds: number): string {
-  return dayjs.unix(unixSeconds).format("DD.MM.YYYY HH:mm");
 }
 
 export function CustomEndpointsPage({
@@ -438,8 +413,7 @@ function CreateEndpointForm({
         reset(EMPTY_FORM);
         // §3.9: useCreateEndpoint must invalidate the endpoints list AND the
         // workspace (a new endpoint can move the workspace's revision).
-        void queryClient.invalidateQueries({ queryKey: getListEndpointsQueryKey(id) });
-        void queryClient.invalidateQueries({ queryKey: getGetWorkspaceQueryKey(id) });
+        invalidateEndpointChange(queryClient, id);
       },
     },
   });
@@ -665,8 +639,7 @@ function EndpointList({
         setDeleteError(null);
         // §3.9: useDeleteEndpoint must invalidate the endpoints list AND the
         // workspace, same as create.
-        void queryClient.invalidateQueries({ queryKey: getListEndpointsQueryKey(id) });
-        void queryClient.invalidateQueries({ queryKey: getGetWorkspaceQueryKey(id) });
+        invalidateEndpointChange(queryClient, id);
       },
     },
   });
@@ -683,6 +656,7 @@ function EndpointList({
       ),
       labels: { confirm: "Удалить", cancel: "Отмена" },
       confirmProps: { color: "red", "data-testid": "endpoint-delete-confirm" },
+      cancelProps: { "data-testid": "dialog-cancel" },
       onConfirm: () => {
         deleteEndpoint.mutate(
           { id, eid: ep.id },
@@ -907,8 +881,7 @@ function EditEndpointForm({
         // §3.9, same as create/delete above: a PUT can move the endpoint's
         // (method, path) or its revision-bearing settings, so both queries
         // invalidate, not just the endpoints list.
-        void queryClient.invalidateQueries({ queryKey: getListEndpointsQueryKey(id) });
-        void queryClient.invalidateQueries({ queryKey: getGetWorkspaceQueryKey(id) });
+        invalidateEndpointChange(queryClient, id);
         onDone();
       },
     },
@@ -961,8 +934,7 @@ function EditEndpointForm({
   // pretend document.
   function handleConflictReload(details: EndpointConflictDetails | EditConflictTombstone): void {
     if (isGoneTombstone(details)) {
-      void queryClient.invalidateQueries({ queryKey: getListEndpointsQueryKey(id) });
-      void queryClient.invalidateQueries({ queryKey: getGetWorkspaceQueryKey(id) });
+      invalidateEndpointChange(queryClient, id);
       onCancel();
       return;
     }
@@ -982,12 +954,7 @@ function EditEndpointForm({
       onSubmit={handleSubmit(onSubmit)}
     >
       {(() => {
-        const conflict =
-          updateEndpoint.isError &&
-          updateEndpoint.error instanceof ApiFailure &&
-          updateEndpoint.error.code === "edit_conflict"
-            ? updateEndpoint.error
-            : null;
+        const conflict = conflictOf(updateEndpoint);
         if (conflict !== null) {
           return (
             <Alert
@@ -1131,8 +1098,7 @@ function EditStreamForm({
         if (res.status !== 200) {
           return;
         }
-        void queryClient.invalidateQueries({ queryKey: getListEndpointsQueryKey(id) });
-        void queryClient.invalidateQueries({ queryKey: getGetWorkspaceQueryKey(id) });
+        invalidateEndpointChange(queryClient, id);
         onDone();
       },
     },
@@ -1178,8 +1144,7 @@ function EditStreamForm({
 
   function handleConflictReload(details: EndpointConflictDetails | EditConflictTombstone): void {
     if (isGoneTombstone(details)) {
-      void queryClient.invalidateQueries({ queryKey: getListEndpointsQueryKey(id) });
-      void queryClient.invalidateQueries({ queryKey: getGetWorkspaceQueryKey(id) });
+      invalidateEndpointChange(queryClient, id);
       onCancel();
       return;
     }
@@ -1188,12 +1153,7 @@ function EditStreamForm({
     setDraft(draftFromDefinition(details.stream));
   }
 
-  const conflict =
-    updateEndpoint.isError &&
-    updateEndpoint.error instanceof ApiFailure &&
-    updateEndpoint.error.code === "edit_conflict"
-      ? updateEndpoint.error
-      : null;
+  const conflict = conflictOf(updateEndpoint);
 
   return (
     <Stack gap="sm" w="100%" data-testid="endpoint-edit-stream-form">

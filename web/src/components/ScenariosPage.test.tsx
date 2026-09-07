@@ -7,6 +7,7 @@ import { json, route } from "@/test/http";
 import { getListScenariosQueryKey } from "@/api/generated/scenarios/scenarios.ts";
 import { getGetWorkspaceQueryKey } from "@/api/generated/workspaces/workspaces.ts";
 import type { ScenarioDetailView, ScenarioSummaryView } from "@/api/generated/schemas";
+import { cancelDialog } from "@/test/dialog";
 
 // No shared fixture exists for the scenario wire types (they are new in this
 // slice, and test/fixtures.ts belongs to a different file-ownership lane —
@@ -282,7 +283,7 @@ describe("ScenariosPage", () => {
     const dialog = await screen.findByRole("dialog");
     expect(dialog).toHaveTextContent("old-run");
     expect(dialog).toHaveTextContent("необратимо");
-    await userEvent.click(within(dialog).getByText("Отмена"));
+    await cancelDialog(dialog);
 
     await waitFor(() => {
       const deletes = fetchMock.mock.calls.filter(([, init]) => init?.method === "DELETE");
@@ -545,12 +546,12 @@ describe("ScenariosPage", () => {
 
     await userEvent.click(await screen.findByTestId("scenario-rename"));
     let dialog = await screen.findByRole("dialog");
-    await userEvent.click(within(dialog).getByText("Отмена"));
+    await cancelDialog(dialog);
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
 
     await userEvent.click(await screen.findByTestId("scenario-clone"));
     dialog = await screen.findByRole("dialog");
-    await userEvent.click(within(dialog).getByText("Отмена"));
+    await cancelDialog(dialog);
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
 
     const mutating = fetchMock.mock.calls.filter(([, init]) => (init?.method ?? "GET") !== "GET");

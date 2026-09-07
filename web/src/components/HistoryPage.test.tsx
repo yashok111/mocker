@@ -9,6 +9,7 @@ import { getListCheckpointsQueryKey } from "@/api/generated/checkpoints/checkpoi
 import { getGetWorkspaceQueryKey } from "@/api/generated/workspaces/workspaces.ts";
 import { workspaceFixture } from "@/test/fixtures";
 import type { CheckpointSummaryView } from "@/api/generated/schemas";
+import { cancelDialog } from "@/test/dialog";
 
 // No shared fixture exists for CheckpointSummaryView (new in this slice, and
 // test/fixtures.ts belongs to a different file-ownership lane — the P2c
@@ -232,7 +233,7 @@ describe("HistoryPage", () => {
     expect(dialog).toHaveTextContent("перестанет логиниться");
     expect(screen.queryByTestId("reset-scenario-warning")).not.toBeInTheDocument();
 
-    await userEvent.click(within(dialog).getByText("Отмена"));
+    await cancelDialog(dialog);
     await waitFor(() => {
       const posts = fetchMock.mock.calls.filter(([, init]) => init?.method === "POST");
       expect(posts).toHaveLength(0);
@@ -306,7 +307,7 @@ describe("HistoryPage", () => {
     expect(dialog).toHaveTextContent("signingKey");
     expect(screen.queryByTestId("rollback-scenario-warning")).not.toBeInTheDocument();
 
-    await userEvent.click(within(dialog).getByText("Отмена"));
+    await cancelDialog(dialog);
     await waitFor(() => {
       const posts = fetchMock.mock.calls.filter(([, init]) => init?.method === "POST");
       expect(posts).toHaveLength(0);
@@ -566,7 +567,7 @@ describe("HistoryPage", () => {
     expect(dialog).toHaveTextContent("безвозвратно");
     expect(dialog).toHaveTextContent("нет отмены");
 
-    await userEvent.click(within(dialog).getByText("Отмена"));
+    await cancelDialog(dialog);
     await waitFor(() => {
       const deletes = fetchMock.mock.calls.filter(([, init]) => init?.method === "DELETE");
       expect(deletes).toHaveLength(0);

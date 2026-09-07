@@ -135,6 +135,7 @@ export function OperationsPage({
       ),
       labels: { confirm: "Перейти", cancel: "Остаться" },
       confirmProps: { color: "red", "data-testid": "operations-discard-confirm" },
+      cancelProps: { "data-testid": "dialog-cancel" },
       onConfirm: () => setSelected(next),
     });
   }

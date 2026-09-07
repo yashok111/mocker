@@ -26,7 +26,7 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { type } from "arktype";
-import dayjs from "dayjs";
+import { invalidateScenarioChange, invalidateWorkspace } from "@/api/cachePolicy";
 import {
   getListScenariosQueryKey,
   useActivateScenario,
@@ -37,7 +37,6 @@ import {
   useListScenarios,
   useRenameScenario,
 } from "@/api/generated/scenarios/scenarios.ts";
-import { getGetWorkspaceQueryKey } from "@/api/generated/workspaces/workspaces.ts";
 import type {
   EditConflictTombstone,
   ScenarioConflictDetails,
@@ -45,7 +44,13 @@ import type {
 } from "@/api/generated/schemas";
 import { ApiFailure } from "@/api/client";
 import { TabLink } from "./TabLink";
-import { describeApiFailure, describeApiFailureDetailed, isGoneTombstone } from "@/api/errors";
+import {
+  conflictOf,
+  describeApiFailure,
+  describeApiFailureDetailed,
+  isGoneTombstone,
+} from "@/api/errors";
+import { formatTimestamp } from "@/format";
 import { arktypeResolver } from "@/validation/resolver";
 
 // ScenariosPage is DESIGN §14 screen 9, P2b: a named snapshot of the
@@ -149,14 +154,6 @@ type CreateForm = typeof createForm.infer;
 
 const EMPTY_FORM: CreateForm = { name: "" };
 
-// createdAt arrives as Unix seconds (internal/admin/scenario_handlers.go's
-// newScenarioSummaryView writes sc.CreatedAt.Unix()), the same convention
-// every other screen in this app already documents for its own timestamps —
-// dayjs needs telling which, or it reads 1970 for every row.
-function formatTimestamp(unixSeconds: number): string {
-  return dayjs.unix(unixSeconds).format("DD.MM.YYYY HH:mm");
-}
-
 function CreateScenarioForm({
   id,
   activeScenario,
@@ -198,8 +195,10 @@ function CreateScenarioForm({
         // baking that composed view into a new snapshot is exactly the
         // "reading that lies" the gate rejected in favour of this route.
         // The workspace query carries scenario_id and revision, both of
-        // which this write just changed.
-        void queryClient.invalidateQueries({ queryKey: getGetWorkspaceQueryKey(id) });
+        // which this write just changed. The scenario LIST is untouched by a
+        // deactivate — no row appears, disappears or is renamed — so this is
+        // invalidateWorkspace and not invalidateScenarioChange.
+        invalidateWorkspace(queryClient, id);
       },
     },
   });
@@ -308,13 +307,12 @@ function ScenarioList({
   const [openId, setOpenId] = useState<number | null>(null);
 
   function invalidateAfterWrite(): void {
-    void queryClient.invalidateQueries({ queryKey: getListScenariosQueryKey(id) });
     // Activate, deactivate AND delete (when the deleted scenario was
     // active, A9) all move workspace.scenarioId and bump revision — the tab
     // bar's own "ревизия N" text and screen 5's A18 banner both read that
     // straight off the workspace query, so every write here has to
     // invalidate it too, not just the scenario list.
-    void queryClient.invalidateQueries({ queryKey: getGetWorkspaceQueryKey(id) });
+    invalidateScenarioChange(queryClient, id);
   }
 
   const activateScenario = useActivateScenario({
@@ -369,6 +367,7 @@ function ScenarioList({
       ),
       labels: { confirm: "Удалить", cancel: "Отмена" },
       confirmProps: { color: "red", "data-testid": "scenario-delete-confirm" },
+      cancelProps: { "data-testid": "dialog-cancel" },
       onConfirm: () => {
         deleteScenario.mutate(
           { id, sid: sc.id },
@@ -606,7 +605,7 @@ function CloneScenarioForm({
         {...register("name")}
       />
       <Group justify="flex-end">
-        <Button type="button" variant="default" onClick={onCancel}>
+        <Button type="button" variant="default" onClick={onCancel} data-testid="dialog-cancel">
           Отмена
         </Button>
         <Button type="submit" loading={cloneScenario.isPending} data-testid="scenario-clone-submit">
@@ -691,12 +690,7 @@ function RenameScenarioForm({
         {`Тестовый набор, который переключается на этот сценарий через {"scenario":"…"} на мок-плоскости, после переименования придётся поправить: старое имя эту запись больше не найдёт.`}
       </Text>
       {(() => {
-        const conflict =
-          renameScenario.isError &&
-          renameScenario.error instanceof ApiFailure &&
-          renameScenario.error.code === "edit_conflict"
-            ? renameScenario.error
-            : null;
+        const conflict = conflictOf(renameScenario);
         if (conflict !== null) {
           return (
             <Alert
@@ -735,7 +729,7 @@ function RenameScenarioForm({
         {...register("name")}
       />
       <Group justify="flex-end">
-        <Button type="button" variant="default" onClick={onCancel}>
+        <Button type="button" variant="default" onClick={onCancel} data-testid="dialog-cancel">
           Отмена
         </Button>
         <Button

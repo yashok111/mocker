@@ -22,15 +22,13 @@ import { modals } from "@mantine/modals";
 import { IconAlertTriangle, IconDeviceFloppy, IconRestore } from "@tabler/icons-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { ApiFailure } from "@/api/client";
+import { invalidateOperationChange } from "@/api/cachePolicy";
 import {
-  getGetOperationOverrideQueryKey,
-  getListWorkspaceOperationsQueryKey,
   useDeleteOperationOverride,
   useGetOperationOverride,
   usePreviewOperation,
   usePutOperationOverride,
 } from "@/api/generated/operations/operations.ts";
-import { getGetWorkspaceQueryKey } from "@/api/generated/workspaces/workspaces.ts";
 import type {
   EditConflictTombstone,
   MergedStatusView,
@@ -40,11 +38,13 @@ import type {
   Variant,
 } from "@/api/generated/schemas";
 import {
+  conflictOf,
   describeApiFailureDetailed,
   describePreviewRefusalReason,
   isGoneTombstone,
 } from "@/api/errors";
-import { VariantEditor, jsonLocation } from "./VariantEditor";
+import { jsonLocation } from "@/validation/json";
+import { VariantEditor } from "./VariantEditor";
 
 // OperationEditor is the right-hand pane of DESIGN §14 screen 5. It is built
 // around ONE invariant, spelled out in the phase brief (§3.3 of the phase
@@ -318,13 +318,7 @@ export function OperationEditor({
   function invalidateAfterWrite(): void {
     // §3.9: usePutOperationOverride/useDeleteOperationOverride must
     // invalidate the workspace, the operations list, and this override doc.
-    void queryClient.invalidateQueries({ queryKey: getGetWorkspaceQueryKey(workspaceId) });
-    void queryClient.invalidateQueries({
-      queryKey: getListWorkspaceOperationsQueryKey(workspaceId),
-    });
-    void queryClient.invalidateQueries({
-      queryKey: getGetOperationOverrideQueryKey(workspaceId, opKey),
-    });
+    invalidateOperationChange(queryClient, workspaceId, opKey);
   }
 
   const putOverride = usePutOperationOverride({
@@ -413,6 +407,7 @@ export function OperationEditor({
       ),
       labels: { confirm: "Сбросить", cancel: "Отмена" },
       confirmProps: { color: "red", "data-testid": "operation-reset-confirm" },
+      cancelProps: { "data-testid": "dialog-cancel" },
       onConfirm: () => {
         setSavedNote(null);
         deleteOverride.mutate({ id: workspaceId, opKey });
@@ -572,12 +567,7 @@ export function OperationEditor({
       ) : (
         <Stack gap="md">
           {(() => {
-            const conflict =
-              putOverride.isError &&
-              putOverride.error instanceof ApiFailure &&
-              putOverride.error.code === "edit_conflict"
-                ? putOverride.error
-                : null;
+            const conflict = conflictOf(putOverride);
             if (conflict !== null) {
               return (
                 <Alert

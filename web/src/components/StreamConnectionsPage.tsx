@@ -27,6 +27,7 @@ import { useGetStreamStats } from "@/api/generated/stream/stream.ts";
 import type { StreamConnectionView } from "@/api/generated/schemas";
 import { TabLink } from "./TabLink";
 import { describeApiFailure, describeApiFailureDetailed } from "@/api/errors";
+import { jsonLocation } from "@/validation/json";
 
 // StreamConnectionsPage is §30.14's connections panel (P6e) over the P6c
 // surface: the workspace's live SSE/WebSocket connections on the mock
@@ -157,7 +158,7 @@ function ConnectionsTable({
     try {
       data = JSON.parse(dataText) as unknown;
     } catch (err) {
-      setDataError(`JSON невалиден (${err instanceof Error ? err.message : String(err)})`);
+      setDataError(`JSON невалиден (${jsonLocation(dataText, err)})`);
       return;
     }
     setDataError(null);

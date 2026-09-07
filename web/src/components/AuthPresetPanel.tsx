@@ -16,16 +16,10 @@ import {
 } from "@mantine/core";
 import { IconAlertTriangle, IconCheck, IconCopy } from "@tabler/icons-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { getGetWorkspaceQueryKey } from "@/api/generated/workspaces/workspaces.ts";
-import {
-  getGetAuthPresetQueryKey,
-  getListWorkspaceOperationsQueryKey,
-  useApplyAuthPreset,
-  useGetAuthPreset,
-} from "@/api/generated/operations/operations.ts";
+import { invalidateAuthPresetApply } from "@/api/cachePolicy";
+import { useApplyAuthPreset, useGetAuthPreset } from "@/api/generated/operations/operations.ts";
 import type { AuthPresetProposal, PresetConflictDetails } from "@/api/generated/schemas";
-import { ApiFailure } from "@/api/client";
-import { describeApiFailureDetailed } from "@/api/errors";
+import { conflictOf, describeApiFailureDetailed } from "@/api/errors";
 
 // AuthPresetPanel implements DESIGN §10: the identity/token mapping must be
 // SHOWN and APPROVED before anything is written, which is why preview
@@ -153,24 +147,11 @@ function AuthPresetBindings({
         // from this same open panel would resend the pre-apply map and
         // conflict against the write that just succeeded.
         setEditVersions((prev) => ({ ...prev, ...res.data.editVersions }));
-        // §3.9: applying moves the revision (workspace) and can add recipes
-        // to operations already showing an override summary or an open
-        // override doc — invalidate the workspace, the operations list, and
-        // every currently cached override document for this workspace
-        // (their query keys all start with the operations-list key plus
-        // "/opKey" — the list key alone has no trailing segment). Also
-        // invalidate the auth-preset GET itself so a later remount/refetch
-        // does not seed a new proposal off a stale editVersions map.
-        void queryClient.invalidateQueries({ queryKey: getGetWorkspaceQueryKey(id) });
-        void queryClient.invalidateQueries({ queryKey: getGetAuthPresetQueryKey(id) });
-        void queryClient.invalidateQueries({ queryKey: getListWorkspaceOperationsQueryKey(id) });
-        const overrideDocPrefix = `${getListWorkspaceOperationsQueryKey(id)[0]}/`;
-        void queryClient.invalidateQueries({
-          predicate: (query) => {
-            const key = query.queryKey[0];
-            return typeof key === "string" && key.startsWith(overrideDocPrefix);
-          },
-        });
+        // §3.9: applying moves the revision and can add recipes to operations
+        // already showing an override summary or an open override doc — the
+        // full key set, and why the last of them needs a predicate, is
+        // documented on invalidateAuthPresetApply in @/api/cachePolicy.
+        invalidateAuthPresetApply(queryClient, id);
       },
     },
   });
@@ -346,12 +327,7 @@ function AuthPresetBindings({
       )}
 
       {(() => {
-        const conflict =
-          applyPreset.isError &&
-          applyPreset.error instanceof ApiFailure &&
-          applyPreset.error.code === "edit_conflict"
-            ? applyPreset.error
-            : null;
+        const conflict = conflictOf(applyPreset);
         if (conflict !== null) {
           // D10/D12's own distinction: the preset's conflict carries
           // staleVersions — IDENTITIES AND NUMBERS, deliberately not

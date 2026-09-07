@@ -19,7 +19,7 @@ import { IconAlertTriangle, IconDeviceFloppy, IconRestore, IconTrash } from "@ta
 import { useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { type } from "arktype";
-import dayjs from "dayjs";
+import { invalidateCheckpointChange } from "@/api/cachePolicy";
 import {
   getListCheckpointsQueryKey,
   useCreateCheckpoint,
@@ -29,7 +29,7 @@ import {
   useRollbackWorkspace,
 } from "@/api/generated/checkpoints/checkpoints.ts";
 import { useResetData } from "@/api/generated/resources/resources.ts";
-import { getGetWorkspaceQueryKey, useGetWorkspace } from "@/api/generated/workspaces/workspaces.ts";
+import { useGetWorkspace } from "@/api/generated/workspaces/workspaces.ts";
 import type {
   CheckpointSummaryView,
   ResetDataResult,
@@ -37,6 +37,7 @@ import type {
 } from "@/api/generated/schemas";
 import { ResetMode } from "@/api/generated/schemas";
 import { describeApiFailure, describeApiFailureDetailed } from "@/api/errors";
+import { formatTimestamp } from "@/format";
 import { arktypeResolver } from "@/validation/resolver";
 
 // HistoryPage is DESIGN §14 screen 10, P2c: the workspace's undo log. A
@@ -150,16 +151,10 @@ export function HistoryPage({ id }: { id: number }): ReactElement {
   );
 }
 
-// createdAt arrives as Unix seconds (internal/admin/checkpoint_handlers.go's
-// summary view), the same convention every other screen in this app already
-// documents for its own timestamps — dayjs needs telling which, or it reads
-// 1970 for every row. Kept local rather than shared: SpecsPage, ScenariosPage
-// and CustomEndpointsPage each keep their own three-line copy of exactly
-// this, and a fourth copy is cheaper than a shared util two of those three
-// would need to be retrofitted to use.
-function formatTimestamp(unixSeconds: number): string {
-  return dayjs.unix(unixSeconds).format("DD.MM.YYYY HH:mm");
-}
+// A21 REVERSES this file's own "a fourth copy is cheaper than a shared util"
+// note: a fifth, undocumented copy had appeared inline in AssetsPage.tsx,
+// which is exactly the threshold that argument was reasoning about, so
+// formatTimestamp moved to @/format and all five call sites now import it.
 
 const labelField = type("string").narrow((value, ctx) => {
   const trimmed = value.trim();
@@ -301,8 +296,7 @@ function ResetOverridesCard({
         // invalidating both unconditionally costs one idle GET on the no-op
         // path and is simpler than this component re-deriving C9's own
         // no-op rule just to decide whether to invalidate.
-        void queryClient.invalidateQueries({ queryKey: getListCheckpointsQueryKey(id) });
-        void queryClient.invalidateQueries({ queryKey: getGetWorkspaceQueryKey(id) });
+        invalidateCheckpointChange(queryClient, id);
       },
       onError: (err) => setFailure(describeApiFailure(err)),
     },
@@ -333,6 +327,7 @@ function ResetOverridesCard({
       ),
       labels: { confirm: "Сбросить", cancel: "Отмена" },
       confirmProps: { color: "red", "data-testid": "reset-confirm-submit" },
+      cancelProps: { "data-testid": "dialog-cancel" },
       onConfirm: () => {
         setFailure(null);
         resetOverrides.mutate({ id });
@@ -595,7 +590,10 @@ function RollbackModalBody({
         />
       ) : null}
       <Group justify="flex-end">
-        <Button variant="default" onClick={onClose}>
+        {/* The one hand-built dialog body in this tree: it carries the same
+            data-testid Mantine's own confirm-modal cancel gets from
+            cancelProps, so src/test/dialog.ts's cancelDialog works on it too. */}
+        <Button variant="default" onClick={onClose} data-testid="dialog-cancel">
           Отмена
         </Button>
         <Button color="red" onClick={handleConfirm} data-testid="checkpoint-rollback-confirm">
@@ -646,8 +644,7 @@ function CheckpointList({
             }${res.data.scenarioActive ? "; активный сценарий по-прежнему маскирует часть слоя" : ""}`,
           );
         }
-        void queryClient.invalidateQueries({ queryKey: getListCheckpointsQueryKey(id) });
-        void queryClient.invalidateQueries({ queryKey: getGetWorkspaceQueryKey(id) });
+        invalidateCheckpointChange(queryClient, id);
       },
     },
   });
@@ -712,6 +709,7 @@ function CheckpointList({
       ),
       labels: { confirm: "Удалить", cancel: "Отмена" },
       confirmProps: { color: "red", "data-testid": "checkpoint-delete-confirm" },
+      cancelProps: { "data-testid": "dialog-cancel" },
       onConfirm: () => {
         deleteCheckpoint.mutate(
           { id, cid: cp.id },

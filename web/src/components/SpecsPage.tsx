@@ -24,7 +24,6 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { useForm } from "react-hook-form";
 import { type } from "arktype";
-import dayjs from "dayjs";
 import {
   getListSpecsQueryKey,
   useDeleteSpec,
@@ -41,6 +40,7 @@ import {
 import type { ReportView, SpecView } from "@/api/generated/schemas";
 import { ApiFailure } from "@/api/client";
 import { describeApiFailure, describeApiFailureDetailed } from "@/api/errors";
+import { formatTimestamp } from "@/format";
 import { arktypeResolver } from "@/validation/resolver";
 import { userName } from "@/validation/name";
 
@@ -70,12 +70,6 @@ function baseName(fileName: string): string {
 // again?" without wrapping the row onto a second line.
 function abbreviateHash(hash: string): string {
   return hash.length <= 12 ? hash : `${hash.slice(0, 12)}…`;
-}
-
-// createdAt arrives as Unix seconds (internal/admin/spec_handlers.go writes
-// sp.CreatedAt.Unix()), not milliseconds — dayjs needs telling which.
-function formatTimestamp(unixSeconds: number): string {
-  return dayjs.unix(unixSeconds).format("DD.MM.YYYY HH:mm");
 }
 
 export function SpecsPage(): ReactElement {
@@ -371,6 +365,7 @@ function RederiveAction({ id }: { id: number }): ReactElement {
       ),
       labels: { confirm: "Пересобрать", cancel: "Отмена" },
       confirmProps: { "data-testid": "spec-rederive-confirm" },
+      cancelProps: { "data-testid": "dialog-cancel" },
       onConfirm: () => rederive.mutate({ id }),
     });
   }
@@ -463,6 +458,7 @@ function SpecDetail({ id, onDeleted }: { id: number; onDeleted: () => void }): R
       ),
       labels: { confirm: "Удалить", cancel: "Отмена" },
       confirmProps: { color: "red", "data-testid": "spec-delete-confirm" },
+      cancelProps: { "data-testid": "dialog-cancel" },
       onConfirm: () => {
         deleteSpec.mutate(
           { id },

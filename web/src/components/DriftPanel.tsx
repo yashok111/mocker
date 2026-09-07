@@ -4,7 +4,8 @@ import { Alert, Badge, Button, Group, Loader, Stack, Text, Title } from "@mantin
 import { modals } from "@mantine/modals";
 import { IconAlertTriangle, IconCheck, IconSearch, IconTrash, IconX } from "@tabler/icons-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { getGetWorkspaceDriftQueryKey, useGetWorkspaceDrift } from "@/api/generated/drift/drift.ts";
+import { invalidateDriftChange } from "@/api/cachePolicy";
+import { useGetWorkspaceDrift } from "@/api/generated/drift/drift.ts";
 import {
   getListWorkspaceOperationsQueryKey,
   useDeleteOperationOverride,
@@ -14,7 +15,6 @@ import {
   useDeleteEndpoint,
 } from "@/api/generated/endpoints/endpoints.ts";
 import { getListWorkspaceResourcesQueryKey } from "@/api/generated/resources/resources.ts";
-import { getGetWorkspaceQueryKey } from "@/api/generated/workspaces/workspaces.ts";
 import type { DriftReportView } from "@/api/generated/schemas";
 import { describeApiFailure, describeApiFailureDetailed } from "@/api/errors";
 import { DeclineConfirmedForm } from "./ResourcesPage";
@@ -103,6 +103,7 @@ function confirmThen(title: string, text: string, testId: string, run: () => voi
     children: <Text size="sm">{text}</Text>,
     labels: { confirm: "Удалить", cancel: "Отмена" },
     confirmProps: { color: "red", "data-testid": testId },
+    cancelProps: { "data-testid": "dialog-cancel" },
     onConfirm: run,
   });
 }
@@ -113,8 +114,7 @@ function DriftReport({ id, report }: { id: number; report: DriftReportView }): R
 
   function refresh(): void {
     setActionError(null);
-    void queryClient.invalidateQueries({ queryKey: getGetWorkspaceDriftQueryKey(id) });
-    void queryClient.invalidateQueries({ queryKey: getGetWorkspaceQueryKey(id) });
+    invalidateDriftChange(queryClient, id);
   }
 
   const deleteOverride = useDeleteOperationOverride({

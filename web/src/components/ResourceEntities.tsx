@@ -14,14 +14,12 @@ import {
 import { modals } from "@mantine/modals";
 import { IconAlertTriangle, IconPencil, IconPlus, IconTrash } from "@tabler/icons-react";
 import { useQueryClient } from "@tanstack/react-query";
-import {
-  getListResourceEntitiesQueryKey,
-  getListWorkspaceResourcesQueryKey,
-  useListResourceEntities,
-} from "@/api/generated/resources/resources.ts";
+import { invalidateResourceChange } from "@/api/cachePolicy";
+import { useListResourceEntities } from "@/api/generated/resources/resources.ts";
 import { useDeleteResourceEntity, useSetResourceEntity } from "@/api/generated/default/default.ts";
 import type { ResourceEntityView, ResourceFamilyView } from "@/api/generated/schemas";
 import { describeApiFailure, describeApiFailureDetailed } from "@/api/errors";
+import { jsonLocation } from "@/validation/json";
 
 // ResourceEntities is the entity browser ResourcesPage.tsx's own header
 // comment says it does not have (D10, P3a cut the read route at round 6).
@@ -172,10 +170,7 @@ function NewEntityForm({
     mutation: {
       onSuccess: (res) => {
         if (res.status === 200) {
-          void queryClient.invalidateQueries({
-            queryKey: getListResourceEntitiesQueryKey(id, segment),
-          });
-          void queryClient.invalidateQueries({ queryKey: getListWorkspaceResourcesQueryKey(id) });
+          invalidateResourceChange(queryClient, id, segment);
           onDone();
         }
       },
@@ -192,7 +187,7 @@ function NewEntityForm({
     try {
       parsed = JSON.parse(text);
     } catch (err) {
-      setError(`JSON невалиден: ${err instanceof Error ? err.message : String(err)}`);
+      setError(`JSON невалиден: ${jsonLocation(text, err)}`);
       return;
     }
     if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
@@ -390,8 +385,7 @@ function EntityRow({
     // Every open page (prefix match on the route path) and the family list
     // (entityCount is what the row above the table shows); then the pages
     // collapse to the first (the header comment says why).
-    void queryClient.invalidateQueries({ queryKey: getListResourceEntitiesQueryKey(id, segment) });
-    void queryClient.invalidateQueries({ queryKey: getListWorkspaceResourcesQueryKey(id) });
+    invalidateResourceChange(queryClient, id, segment);
     onWrite();
   }
 
@@ -437,7 +431,7 @@ function EntityRow({
     try {
       parsed = JSON.parse(text);
     } catch (err) {
-      setParseError(`JSON невалиден: ${err instanceof Error ? err.message : String(err)}`);
+      setParseError(`JSON невалиден: ${jsonLocation(text, err)}`);
       return;
     }
     if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
@@ -464,6 +458,7 @@ function EntityRow({
       ),
       labels: { confirm: "Удалить", cancel: "Отмена" },
       confirmProps: { color: "red", "data-testid": "entity-delete-confirm" },
+      cancelProps: { "data-testid": "dialog-cancel" },
       onConfirm: () => {
         deleteEntity.mutate(
           {

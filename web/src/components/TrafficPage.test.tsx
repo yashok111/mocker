@@ -17,6 +17,7 @@ import {
 } from "@/api/generated/operations/operations.ts";
 import { getListEndpointsQueryKey } from "@/api/generated/endpoints/endpoints.ts";
 import { setUnauthorizedHandler } from "@/api/client";
+import { cancelDialog } from "@/test/dialog";
 
 const WS = 7;
 
@@ -344,7 +345,7 @@ describe("TrafficPage", () => {
 
     await userEvent.click(await screen.findByTestId("traffic-clear"));
     const dialog = await screen.findByRole("dialog");
-    await userEvent.click(within(dialog).getByText("Отмена"));
+    await cancelDialog(dialog);
 
     await waitFor(() => {
       const deletes = fetchMock.mock.calls.filter(([, init]) => init?.method === "DELETE");

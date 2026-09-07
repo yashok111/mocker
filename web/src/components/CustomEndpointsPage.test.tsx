@@ -13,6 +13,7 @@ import {
 } from "@/test/fixtures";
 import { getListEndpointsQueryKey } from "@/api/generated/endpoints/endpoints.ts";
 import { getGetWorkspaceQueryKey } from "@/api/generated/workspaces/workspaces.ts";
+import { cancelDialog } from "@/test/dialog";
 
 const WS = 7;
 const LIST = `GET /api/workspaces/${WS}/endpoints`;
@@ -533,7 +534,7 @@ describe("CustomEndpointsPage", () => {
     // PUT route (and the "Изменить" button) exist now, so this is no longer
     // the delete-and-recreate-only sentence it used to be.
     expect(dialog).toHaveTextContent("Изменить»");
-    await userEvent.click(within(dialog).getByText("Отмена"));
+    await cancelDialog(dialog);
 
     await waitFor(() => {
       const deletes = fetchMock.mock.calls.filter(([, init]) => init?.method === "DELETE");

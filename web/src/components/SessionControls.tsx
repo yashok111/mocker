@@ -115,6 +115,7 @@ export function SessionControls({
       ),
       labels: { confirm: "Очистить", cancel: "Отмена" },
       confirmProps: { color: "red", "data-testid": "session-clear-confirm" },
+      cancelProps: { "data-testid": "dialog-cancel" },
       onConfirm: () => clearDirectives.mutate({ id }),
     });
   }

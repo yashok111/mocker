@@ -21,10 +21,8 @@ import { Controller, useForm } from "react-hook-form";
 import { type } from "arktype";
 import { modals } from "@mantine/modals";
 import { useQueryClient } from "@tanstack/react-query";
-import {
-  getGetWorkspaceQueryKey,
-  usePatchWorkspace,
-} from "@/api/generated/workspaces/workspaces.ts";
+import { invalidateWorkspace } from "@/api/cachePolicy";
+import { usePatchWorkspace } from "@/api/generated/workspaces/workspaces.ts";
 import {
   getGetAuthPresetQueryKey,
   getListWorkspaceOperationsQueryKey,
@@ -36,8 +34,13 @@ import type {
   WorkspaceConflictDetails,
   WorkspaceView,
 } from "@/api/generated/schemas";
-import { ApiFailure } from "@/api/client";
-import { describeApiFailure, describeApiFailureDetailed, isGoneTombstone } from "@/api/errors";
+import {
+  conflictOf,
+  describeApiFailure,
+  describeApiFailureDetailed,
+  isGoneTombstone,
+} from "@/api/errors";
+import { jsonLocation } from "@/validation/json";
 import { arktypeResolver } from "@/validation/resolver";
 import { userName } from "@/validation/name";
 
@@ -63,9 +66,7 @@ const notFoundBodyField = type("string").narrow((value, ctx) => {
     JSON.parse(value);
     return true;
   } catch (err) {
-    return ctx.reject({
-      problem: `JSON невалиден (${err instanceof Error ? err.message : String(err)})`,
-    });
+    return ctx.reject({ problem: `JSON невалиден (${jsonLocation(value, err)})` });
   }
 });
 
@@ -263,7 +264,7 @@ export function SettingsPanel({ workspace }: { workspace: WorkspaceView }): Reac
         }
         setPendingEditVersion(res.data.editVersion);
         setConflictSettings(null);
-        void queryClient.invalidateQueries({ queryKey: getGetWorkspaceQueryKey(workspace.id) });
+        invalidateWorkspace(queryClient, workspace.id);
         if (variables.data.specId !== undefined) {
           void queryClient.invalidateQueries({
             queryKey: getListWorkspaceOperationsQueryKey(workspace.id),
@@ -311,6 +312,7 @@ export function SettingsPanel({ workspace }: { workspace: WorkspaceView }): Reac
       ),
       labels: { confirm: "Сменить", cancel: "Отмена" },
       confirmProps: { "data-testid": "settings-spec-rebind-confirm" },
+      cancelProps: { "data-testid": "dialog-cancel" },
       onConfirm: () => patchWorkspace.mutate({ id: workspace.id, data: { specId, editVersion } }),
     });
   }
@@ -347,12 +349,7 @@ export function SettingsPanel({ workspace }: { workspace: WorkspaceView }): Reac
       <form onSubmit={handleSubmit(onSubmit)}>
         <Stack gap="sm" mt="sm">
           {(() => {
-            const conflict =
-              patchWorkspace.isError &&
-              patchWorkspace.error instanceof ApiFailure &&
-              patchWorkspace.error.code === "edit_conflict"
-                ? patchWorkspace.error
-                : null;
+            const conflict = conflictOf(patchWorkspace);
             if (conflict !== null) {
               return (
                 <Alert

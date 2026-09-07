@@ -16,6 +16,7 @@ import {
   workspaceFixture,
 } from "@/test/fixtures";
 import type { CheckpointSummaryView } from "@/api/generated/schemas";
+import { cancelDialog } from "@/test/dialog";
 
 // This file mounts the REAL route tree, guard and all. The component tests
 // beside it deliberately mount one screen at a time; nothing there would
@@ -553,7 +554,7 @@ describe("route tree", () => {
       expect(dialog).toHaveTextContent("пресет авторизации");
       expect(dialog).toHaveTextContent("перестанет логиниться");
       // Named BEFORE the request: cancelling must not have fired it.
-      await userEvent.click(within(dialog).getByText("Отмена"));
+      await cancelDialog(dialog);
     });
 
     it("names basePath and the signing key before the rollback request (C10)", async () => {
@@ -569,7 +570,7 @@ describe("route tree", () => {
       const dialog = await screen.findByRole("dialog");
       expect(dialog).toHaveTextContent("basePath");
       expect(dialog).toHaveTextContent("signingKey");
-      await userEvent.click(within(dialog).getByText("Отмена"));
+      await cancelDialog(dialog);
     });
 
     it("with a scenario active, warns before rollback that part of the layer is masked, and before checkpoint-create that the snapshot is workspace-only (C8)", async () => {
@@ -591,7 +592,7 @@ describe("route tree", () => {
       expect(within(rollbackDialog).getByTestId("rollback-scenario-warning")).toHaveTextContent(
         "замаскирована",
       );
-      await userEvent.click(within(rollbackDialog).getByText("Отмена"));
+      await cancelDialog(rollbackDialog);
 
       // The reset half of C8's flag (obs 13's UI counterpart): reset also
       // warns while a scenario is active.
@@ -600,7 +601,7 @@ describe("route tree", () => {
       expect(within(resetDialog).getByTestId("reset-scenario-warning")).toHaveTextContent(
         "замаскирована",
       );
-      await userEvent.click(within(resetDialog).getByText("Отмена"));
+      await cancelDialog(resetDialog);
     });
   });
 

@@ -29,13 +29,9 @@ import {
   useTrafficToEndpoint,
   useTrafficToOverride,
 } from "@/api/generated/traffic/traffic.ts";
-import { getGetWorkspaceQueryKey, useGetWorkspace } from "@/api/generated/workspaces/workspaces.ts";
-import {
-  getGetOperationOverrideQueryKey,
-  getListWorkspaceOperationsQueryKey,
-} from "@/api/generated/operations/operations.ts";
-import { getListEndpointsQueryKey } from "@/api/generated/endpoints/endpoints.ts";
+import { useGetWorkspace } from "@/api/generated/workspaces/workspaces.ts";
 import type { TrafficPollView, TrafficRow } from "@/api/generated/schemas";
+import { invalidateEndpointChange, invalidateOperationChange } from "@/api/cachePolicy";
 import { describeApiFailure } from "@/api/errors";
 import { TabLink } from "./TabLink";
 import { openTrafficStream, probeStreamRefusal } from "@/api/stream";
@@ -443,6 +439,7 @@ export function TrafficPage({
       ),
       labels: { confirm: "Очистить", cancel: "Отмена" },
       confirmProps: { color: "red", "data-testid": "traffic-clear-confirm" },
+      cancelProps: { "data-testid": "dialog-cancel" },
       onConfirm: () => clearTraffic.mutate({ id }),
     });
   }
@@ -458,11 +455,7 @@ export function TrafficPage({
           delete next[vars.tid];
           return next;
         });
-        void queryClient.invalidateQueries({ queryKey: getGetWorkspaceQueryKey(id) });
-        void queryClient.invalidateQueries({ queryKey: getListWorkspaceOperationsQueryKey(id) });
-        void queryClient.invalidateQueries({
-          queryKey: getGetOperationOverrideQueryKey(id, res.data.opKey),
-        });
+        invalidateOperationChange(queryClient, id, res.data.opKey);
         // A21 (U4): the toast used to end here; the result lives on another
         // tab and the operator had to find it. navigate is the page's own
         // closure, so it works from inside the notification's portal.
@@ -509,8 +502,7 @@ export function TrafficPage({
           delete next[vars.tid];
           return next;
         });
-        void queryClient.invalidateQueries({ queryKey: getGetWorkspaceQueryKey(id) });
-        void queryClient.invalidateQueries({ queryKey: getListEndpointsQueryKey(id) });
+        invalidateEndpointChange(queryClient, id);
         const endpointId = String(res.data.id);
         notifications.show({
           color: "green",

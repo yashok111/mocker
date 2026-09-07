@@ -398,6 +398,7 @@ function WorkspaceList({
       children: <Text size="sm">Удалить воркспейс «{ws.name}»? Это действие необратимо.</Text>,
       labels: { confirm: "Удалить", cancel: "Отмена" },
       confirmProps: { color: "red", "data-testid": "workspace-delete-confirm" },
+      cancelProps: { "data-testid": "dialog-cancel" },
       onConfirm: () => {
         deleteWorkspace.mutate(
           { id: ws.id },

@@ -7,6 +7,7 @@ import { json, route } from "@/test/http";
 import { directiveFixture, sessionListViewFixture } from "@/test/fixtures";
 import { getListSessionDirectivesQueryKey } from "@/api/generated/session/session.ts";
 import { getGetWorkspaceQueryKey } from "@/api/generated/workspaces/workspaces.ts";
+import { cancelDialog } from "@/test/dialog";
 
 const WS = 7;
 const LIST = `GET /api/workspaces/${WS}/session`;
@@ -252,7 +253,7 @@ describe("SessionControls", () => {
     await userEvent.click(screen.getByTestId("session-clear-all"));
 
     const dialog = await screen.findByRole("dialog");
-    await userEvent.click(within(dialog).getByText("Отмена"));
+    await cancelDialog(dialog);
 
     await waitFor(() => {
       const deletes = fetchMock.mock.calls.filter(([, init]) => init?.method === "DELETE");

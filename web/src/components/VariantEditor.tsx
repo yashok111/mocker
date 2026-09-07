@@ -18,6 +18,7 @@ import { modals } from "@mantine/modals";
 import { IconPlus, IconTrash } from "@tabler/icons-react";
 import { useListAssets } from "@/api/generated/assets/assets.ts";
 import type { Condition, Variant } from "@/api/generated/schemas";
+import { jsonLocation } from "@/validation/json";
 import { TabLink } from "./TabLink";
 
 // VariantEditor is the ONE editor of a response variant — the object
@@ -77,19 +78,6 @@ const OP_OPTIONS: { value: Condition["op"]; label: string }[] = [
   { value: "contains", label: "содержит" },
   { value: "exists", label: "присутствует" },
 ];
-
-export function jsonLocation(text: string, err: unknown): string {
-  const message = err instanceof Error ? err.message : String(err);
-  const match = /position (\d+)/.exec(message);
-  if (!match) {
-    return message;
-  }
-  const pos = Number(match[1]);
-  const before = text.slice(0, pos);
-  const line = before.split("\n").length;
-  const column = pos - before.lastIndexOf("\n");
-  return `строка ${line}, столбец ${column}`;
-}
 
 // Whether a stored "" is possible: never — Go omits it — so the empty
 // string only ever means "chosen, not typed yet" and blocks the save.
@@ -224,6 +212,7 @@ export function VariantEditor({
             ),
             labels: { confirm: "Перейти", cancel: "Отмена" },
             confirmProps: { color: "red", "data-testid": testId("function-confirm") },
+            cancelProps: { "data-testid": "dialog-cancel" },
             onConfirm: switchToFunction,
           });
           return;

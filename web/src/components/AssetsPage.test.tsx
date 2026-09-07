@@ -50,7 +50,10 @@ describe("AssetsPage", () => {
     renderWithProviders(<AssetsPage id={WS} />);
     expect(screen.getByTestId("assets-page")).toBeInTheDocument();
     expect(await screen.findByTestId("assets-empty")).toBeInTheDocument();
-    expect(screen.getByTestId("assets-usage")).toHaveTextContent("один файл до 8.0 МБ");
+    // A21: formatBytes moved to @/format and StreamEditor's rule won — an
+    // exact multiple loses the decimal, so this reads «8 МБ», not «8.0 МБ»
+    // (Russian product strings, quoted as data).
+    expect(screen.getByTestId("assets-usage")).toHaveTextContent("один файл до 8 МБ");
   });
 
   it("lists files with their public URL", async () => {
