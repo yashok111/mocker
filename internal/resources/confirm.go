@@ -21,6 +21,7 @@ import (
 	"github.com/yashok111/mocker/internal/openapi"
 	"github.com/yashok111/mocker/internal/router"
 	"github.com/yashok111/mocker/internal/specs"
+	"github.com/yashok111/mocker/internal/store"
 )
 
 // fenceConfirmTx is D4/R36's fence, run INSIDE Confirm's write transaction:
@@ -195,7 +196,7 @@ func (r *Repo) Confirm(ctx context.Context, workspaceID int64, routeFamily strin
 			}
 		}
 
-		if err := bumpRevisionTx(ctx, tx, workspaceID, now); err != nil {
+		if err := store.BumpRevisionTx(ctx, tx, workspaceID, now); err != nil {
 			return err
 		}
 

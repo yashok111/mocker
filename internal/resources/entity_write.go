@@ -6,11 +6,11 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/yashok111/mocker/internal/gen"
 	"github.com/yashok111/mocker/internal/jsonx"
+	"github.com/yashok111/mocker/internal/store"
 )
 
 // Set (A11, 2026-09-02) is the admin plane's own write into a confirmed
@@ -437,14 +437,6 @@ func CanonicalEntityKey(key, idType string) bool {
 	}
 }
 
-// isUniqueViolation reports whether err is a UNIQUE constraint failure —
-// the same substring check internal/workspaces and internal/customep keep,
-// copied rather than shared for the reason each gives: no package imports
-// another for a one-line helper over the driver's error text.
-func isUniqueViolation(err error) bool {
-	return err != nil && strings.Contains(err.Error(), "UNIQUE constraint failed")
-}
-
 // keyedBody is Set's pre-transaction half: the key must be the canonical
 // form of the family's id type (ErrEntityKeyNotCanonical), the id field is
 // overwritten from it, and the body is measured against the per-row cap.
@@ -474,7 +466,7 @@ func insertKeyedEntityTx(ctx context.Context, tx *sql.Tx, resourceID int64, base
 		INSERT INTO entities (resource_id, base_scope_key, scope_key, entity_key, data, created_at, updated_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?)`,
 		resourceID, string(base), string(scope), entityKey, string(body), now.Unix(), now.Unix()); err != nil {
-		if isUniqueViolation(err) {
+		if store.IsUniqueViolation(err) {
 			return ErrEntityKeyConflict
 		}
 		return fmt.Errorf("insert entity %q on resource %d: %w", entityKey, resourceID, err)

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/yashok111/mocker/internal/jsonx"
+	"github.com/yashok111/mocker/internal/store"
 )
 
 // CountEntities is the ADMIN side's own read: how many rows the family holds
@@ -70,7 +71,7 @@ type Entity struct {
 // --- the four-method entity store ------------------------------------
 
 // scanEntity scans one entities row.
-func scanEntity(row interface{ Scan(dest ...any) error }) (Entity, error) {
+func scanEntity(row store.RowScanner) (Entity, error) {
 	var (
 		e         Entity
 		parent    sql.NullInt64

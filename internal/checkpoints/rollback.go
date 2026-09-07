@@ -12,6 +12,7 @@ import (
 	"github.com/yashok111/mocker/internal/bundle"
 	"github.com/yashok111/mocker/internal/customep"
 	"github.com/yashok111/mocker/internal/overrides"
+	"github.com/yashok111/mocker/internal/store"
 )
 
 // Rollback restores workspaceID's whole workspace layer — settings,
@@ -228,7 +229,7 @@ func (r *Repo) rollbackTx(ctx context.Context, tx *sql.Tx, workspaceID, createdB
 		return Outcome{}, err
 	}
 
-	if err := bumpRevisionTx(ctx, tx, workspaceID, now); err != nil {
+	if err := store.BumpRevisionTx(ctx, tx, workspaceID, now); err != nil {
 		return Outcome{}, err
 	}
 	return Outcome{Revision: cur.revision + 1, ScenarioActive: cur.scenarioActive, Changed: true, DataRestored: dataRestored}, nil
@@ -328,7 +329,7 @@ func (r *Repo) resetTx(ctx context.Context, tx *sql.Tx, workspaceID, createdBy i
 	if err := pruneRetentionTx(ctx, tx, workspaceID, r.retention, keepNone); err != nil {
 		return Outcome{}, err
 	}
-	if err := bumpRevisionTx(ctx, tx, workspaceID, now); err != nil {
+	if err := store.BumpRevisionTx(ctx, tx, workspaceID, now); err != nil {
 		return Outcome{}, err
 	}
 	return Outcome{Revision: cur.revision + 1, ScenarioActive: cur.scenarioActive, Changed: true}, nil

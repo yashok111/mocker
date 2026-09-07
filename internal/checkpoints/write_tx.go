@@ -1,7 +1,9 @@
 // The transaction helpers every write of this package shares: the identity
-// fence, the row insert, retention, the revision bump (HARD RULE 5's copy)
-// and the bounded retry. Split out of repo.go 2026-09-03; the text is
-// unchanged.
+// fence, the row insert, retention and the bounded retry. Split out of
+// repo.go 2026-09-03; the text is unchanged except for the revision bump,
+// consolidated into internal/store on 2026-09-07 (see
+// [store.BumpRevisionTx]'s doc comment for why, and checkpoints.go's
+// package doc for this package's own share of the story).
 package checkpoints
 
 import (
@@ -199,29 +201,6 @@ func pruneRetentionTx(ctx context.Context, tx *sql.Tx, workspaceID int64, retent
 			ORDER BY id DESC LIMIT ?
 		)`, workspaceID, keepID, workspaceID, retention); err != nil {
 		return fmt.Errorf("prune checkpoints for workspace %d: %w", workspaceID, err)
-	}
-	return nil
-}
-
-// bumpRevisionTx is HARD RULE 5's direct UPDATE, the FOURTH private copy in
-// this tree (overrides/repo.go:283, customep/repo.go:212,
-// scenarios/repo.go:589). Copied rather than shared for the reason those
-// three already state: sharing would mean one of four sibling packages
-// importing another purely for a four-line SQL helper, which is a backwards
-// dependency for at least three of them. Never workspaces.Repo.Update,
-// which opens its own write transaction and deadlocks the
-// single-connection writer pool from inside a db.Write callback.
-//
-// It is called EXACTLY ONCE per rollback and per destructive reset, and NOT
-// AT ALL for a manual checkpoint (C12) — and neither ReplaceAllTx bumps, so
-// a caller that also bumped inside them would allocate two revisions for
-// one operation (§G obs 2 fails on precisely that double bump).
-func bumpRevisionTx(ctx context.Context, tx *sql.Tx, workspaceID int64, now time.Time) error {
-	if _, err := tx.ExecContext(ctx,
-		"UPDATE workspaces SET revision = revision + 1, updated_at = ? WHERE id = ?",
-		now.Unix(), workspaceID,
-	); err != nil {
-		return fmt.Errorf("bump revision for workspace %d: %w", workspaceID, err)
 	}
 	return nil
 }

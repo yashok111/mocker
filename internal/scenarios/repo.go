@@ -23,7 +23,7 @@
 // coherent read for CreateFromCurrentState (A11), or the scenario_id
 // column [SetActive] writes — talks to the `workspaces` table directly
 // with hand-written SQL, transaction-scoped exactly the way
-// internal/overrides/repo.go's own workspaceRevisionTx/bumpRevisionTx do.
+// [store.WorkspaceRevisionTx]/[store.BumpRevisionTx] do.
 package scenarios
 
 import (
@@ -252,7 +252,7 @@ func (r *Repo) ByName(ctx context.Context, workspaceID int64, name string) (*Sce
 // workspaces.revision again. workspaces.Repo.Update bumps revision by
 // exactly 1 on EVERY edit regardless of what changed (its own doc
 // comment), and internal/overrides' Put/PutMany/Delete all bump it too
-// (via bumpRevisionTx) — so if nothing committed against this workspace
+// (via [store.BumpRevisionTx]) — so if nothing committed against this workspace
 // between the two reads, the revision cannot have moved; if it moved,
 // something did, and this retries from the top rather than risking a
 // snapshot that mixes pre-edit settings with post-edit overrides or vice
@@ -367,7 +367,7 @@ func (r *Repo) tryCreateFromCurrentState(ctx context.Context, workspaceID int64,
 			workspaceID, name, data, now.Unix(), v,
 		)
 		if ierr != nil {
-			if isUniqueViolation(ierr) {
+			if store.IsUniqueViolation(ierr) {
 				return fmt.Errorf("%w: %q", ErrDuplicateName, name)
 			}
 			return fmt.Errorf("insert scenario: %w", ierr)
@@ -455,7 +455,7 @@ func (r *Repo) CloneFrom(ctx context.Context, workspaceID, sourceID int64, name 
 		// existing 404 for a bad workspace id. Same check-then-allocate
 		// ordering the sibling guarded verbs already use
 		// (overrides.PutExpecting, customep.UpdateExpecting via
-		// workspaceRevisionTx).
+		// [store.WorkspaceRevisionTx]).
 		var one int
 		switch werr := tx.QueryRowContext(ctx, "SELECT 1 FROM workspaces WHERE id = ?", workspaceID).Scan(&one); {
 		case werr == nil:
@@ -479,7 +479,7 @@ func (r *Repo) CloneFrom(ctx context.Context, workspaceID, sourceID int64, name 
 			name, now.Unix(), v, sourceID, workspaceID,
 		)
 		if ierr != nil {
-			if isUniqueViolation(ierr) {
+			if store.IsUniqueViolation(ierr) {
 				return fmt.Errorf("%w: %q", ErrDuplicateName, name)
 			}
 			return fmt.Errorf("clone scenario %d: %w", sourceID, ierr)
@@ -630,7 +630,7 @@ func (r *Repo) RenameExpecting(ctx context.Context, workspaceID, scenarioID int6
 		// that resolution, breaking this route's existing 404 for a bad
 		// workspace id. Same check-then-allocate ordering the sibling
 		// guarded verbs already use (overrides.PutExpecting,
-		// customep.UpdateExpecting via workspaceRevisionTx).
+		// customep.UpdateExpecting via [store.WorkspaceRevisionTx]).
 		var one int
 		switch werr := tx.QueryRowContext(ctx, "SELECT 1 FROM workspaces WHERE id = ?", workspaceID).Scan(&one); {
 		case werr == nil:
@@ -657,7 +657,7 @@ func (r *Repo) RenameExpecting(ctx context.Context, workspaceID, scenarioID int6
 		}
 		res, uerr := tx.ExecContext(ctx, query, args...)
 		if uerr != nil {
-			if isUniqueViolation(uerr) {
+			if store.IsUniqueViolation(uerr) {
 				return fmt.Errorf("%w: %q", ErrDuplicateName, name)
 			}
 			return fmt.Errorf("rename scenario %d: %w", scenarioID, uerr)
@@ -749,7 +749,7 @@ func (r *Repo) Delete(ctx context.Context, workspaceID, scenarioID int64) error 
 		}
 
 		if wasActive {
-			if berr := bumpRevisionTx(ctx, tx, workspaceID, time.Now().UTC()); berr != nil {
+			if berr := store.BumpRevisionTx(ctx, tx, workspaceID, time.Now().UTC()); berr != nil {
 				return berr
 			}
 		}
@@ -918,32 +918,6 @@ func (r *Repo) readSpecRef(ctx context.Context, specID int64) (bundle.SpecRef, e
 		return bundle.SpecRef{}, fmt.Errorf("read spec %d for scenario snapshot: %w", specID, err)
 	}
 	return bundle.SpecRef{Name: name, Hash: hash}, nil
-}
-
-// bumpRevisionTx mirrors internal/overrides/repo.go's helper of the same
-// name verbatim (HARD RULE 5: never workspaces.Repo.Update from inside a
-// db.Write callback — see this file's package doc comment). Copied rather
-// than shared because neither package may import the other for it: sharing
-// would mean one of internal/overrides/internal/customep/internal/scenarios
-// importing another purely for a four-line SQL helper, which is a
-// backwards dependency for at least two of the three.
-func bumpRevisionTx(ctx context.Context, tx *sql.Tx, workspaceID int64, now time.Time) error {
-	if _, err := tx.ExecContext(ctx,
-		"UPDATE workspaces SET revision = revision + 1, updated_at = ? WHERE id = ?",
-		now.Unix(), workspaceID,
-	); err != nil {
-		return fmt.Errorf("bump revision for workspace %d: %w", workspaceID, err)
-	}
-	return nil
-}
-
-// isUniqueViolation mirrors internal/workspaces/repo.go's helper of the
-// same name and reasoning: modernc.org/sqlite reports a UNIQUE failure as
-// a plain error whose message contains "UNIQUE constraint failed", matched
-// by substring so this package does not need to import the driver just to
-// compare an error code.
-func isUniqueViolation(err error) bool {
-	return err != nil && strings.Contains(err.Error(), "UNIQUE constraint failed")
 }
 
 // --- scanning ----------------------------------------------------------------

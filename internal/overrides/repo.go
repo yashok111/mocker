@@ -110,7 +110,7 @@ func (r *Repo) PutExpecting(ctx context.Context, workspaceID int64, key string, 
 		revision int64
 	)
 	err = r.db.Write(ctx, func(tx *sql.Tx) error {
-		wsRev, exists, werr := workspaceRevisionTx(ctx, tx, workspaceID)
+		wsRev, exists, werr := store.WorkspaceRevisionTx(ctx, tx, workspaceID)
 		if werr != nil {
 			return werr
 		}
@@ -172,7 +172,7 @@ func (r *Repo) PutExpecting(ctx context.Context, workspaceID int64, key string, 
 		}
 
 		newRev := wsRev + 1
-		if berr := bumpRevisionTx(ctx, tx, workspaceID, now); berr != nil {
+		if berr := store.BumpRevisionTx(ctx, tx, workspaceID, now); berr != nil {
 			return berr
 		}
 
@@ -282,7 +282,7 @@ func (r *Repo) PutManyExpecting(ctx context.Context, workspaceID int64, expect m
 		revision    int64
 	)
 	err := r.db.Write(ctx, func(tx *sql.Tx) error {
-		wsRev, exists, werr := workspaceRevisionTx(ctx, tx, workspaceID)
+		wsRev, exists, werr := store.WorkspaceRevisionTx(ctx, tx, workspaceID)
 		if werr != nil {
 			return werr
 		}
@@ -328,7 +328,7 @@ func (r *Repo) PutManyExpecting(ctx context.Context, workspaceID int64, expect m
 		}
 
 		newRev := wsRev + 1
-		if berr := bumpRevisionTx(ctx, tx, workspaceID, now); berr != nil {
+		if berr := store.BumpRevisionTx(ctx, tx, workspaceID, now); berr != nil {
 			return berr
 		}
 		revision = newRev
@@ -493,7 +493,7 @@ func (r *Repo) Delete(ctx context.Context, workspaceID int64, key string) (revis
 	}
 
 	err = r.db.Write(ctx, func(tx *sql.Tx) error {
-		wsRev, exists, werr := workspaceRevisionTx(ctx, tx, workspaceID)
+		wsRev, exists, werr := store.WorkspaceRevisionTx(ctx, tx, workspaceID)
 		if werr != nil {
 			return werr
 		}
@@ -522,7 +522,7 @@ func (r *Repo) Delete(ctx context.Context, workspaceID int64, key string) (revis
 
 		now := time.Now().UTC()
 		newRev := wsRev + 1
-		if berr := bumpRevisionTx(ctx, tx, workspaceID, now); berr != nil {
+		if berr := store.BumpRevisionTx(ctx, tx, workspaceID, now); berr != nil {
 			return berr
 		}
 		revision = newRev
@@ -537,41 +537,6 @@ func (r *Repo) Delete(ctx context.Context, workspaceID int64, key string) (revis
 
 // --- transaction-scoped helpers ---------------------------------------------
 
-// workspaceRevisionTx reads the target workspace's current revision inside
-// tx. Reading through tx rather than r.db.R matters here: Put/PutMany/Delete
-// need the revision as it stands INSIDE this transaction, immediately
-// before they bump it, not as of whatever the last committed read saw.
-func workspaceRevisionTx(ctx context.Context, tx *sql.Tx, workspaceID int64) (revision int64, exists bool, err error) {
-	err = tx.QueryRowContext(ctx, "SELECT revision FROM workspaces WHERE id = ?", workspaceID).Scan(&revision)
-	switch {
-	case err == nil:
-		return revision, true, nil
-	case errors.Is(err, sql.ErrNoRows):
-		return 0, false, nil
-	default:
-		return 0, false, fmt.Errorf("read workspace %d revision: %w", workspaceID, err)
-	}
-}
-
-// bumpRevisionTx is HARD RULE 5's direct UPDATE, verbatim: never
-// workspaces.Repo.Update, which opens its own write transaction and would
-// deadlock the single-connection writer pool when called from inside the
-// db.Write callback this runs in. The increment happens IN the UPDATE
-// (revision = revision + 1) rather than as a value computed in Go and sent
-// down — with BEGIN IMMEDIATE on a one-connection writer pool the two are
-// equivalent (nothing else can be mid-transaction against this row when this
-// runs), but writing it this way keeps this function correct even if that
-// invariant ever changes upstream, instead of depending on it silently.
-func bumpRevisionTx(ctx context.Context, tx *sql.Tx, workspaceID int64, now time.Time) error {
-	if _, err := tx.ExecContext(ctx,
-		"UPDATE workspaces SET revision = revision + 1, updated_at = ? WHERE id = ?",
-		now.Unix(), workspaceID,
-	); err != nil {
-		return fmt.Errorf("bump revision for workspace %d: %w", workspaceID, err)
-	}
-	return nil
-}
-
 // deleteAbsentTx deletes every op_overrides row for workspaceID whose
 // (method, path) natural key is not present in rows — ReplaceAllTx's duty 3,
 // C1's DELETE half, run before that function upserts what rows DOES hold.
@@ -581,7 +546,8 @@ func bumpRevisionTx(ctx context.Context, tx *sql.Tx, workspaceID int64, now time
 // a SELECT left half-drained while this same transaction then issues DELETEs
 // is exactly the kind of thing that is easy to get subtly wrong (and every
 // other read in this package already goes through the reader pool, never
-// through tx, for unrelated reasons — see workspaceRevisionTx's comment).
+// through tx, for unrelated reasons — see [store.WorkspaceRevisionTx]'s
+// comment).
 // One statement avoids the question entirely, and a workspace's override
 // count is bounded by its spec's operation count (the real customer spec
 // has 130), so this is nowhere near a query-planner concern.
@@ -623,7 +589,7 @@ func deleteAbsentTx(ctx context.Context, tx *sql.Tx, workspaceID int64, rows []*
 // by OpKey -- PutManyExpecting's compare-and-swap read (A3, D8/D12).
 //
 // Reading through tx rather than r.db.R is the exception this package makes
-// only where the transaction's OWN view is the point (workspaceRevisionTx's
+// only where the transaction's OWN view is the point ([store.WorkspaceRevisionTx]'s
 // comment states that rule; a compare-and-swap read is that class by
 // definition -- it must see this transaction's own uncommitted state, and
 // nothing a concurrent writer might commit after it started).
@@ -676,11 +642,11 @@ func upsertTx(ctx context.Context, tx *sql.Tx, row *Row, now time.Time) error {
 	if err != nil {
 		return fmt.Errorf("marshal responses for %s %s: %w", row.Method, row.Path, err)
 	}
-	listSizeJSON, err := marshalListSize(row.ListSize)
+	listSizeJSON, err := store.MarshalNullable(row.ListSize)
 	if err != nil {
 		return fmt.Errorf("marshal list_size for %s %s: %w", row.Method, row.Path, err)
 	}
-	delayMsJSON, err := marshalDelayMs(row.DelayMs)
+	delayMsJSON, err := store.MarshalNullable(row.DelayMs)
 	if err != nil {
 		return fmt.Errorf("marshal delay_ms for %s %s: %w", row.Method, row.Path, err)
 	}
@@ -695,7 +661,7 @@ func upsertTx(ctx context.Context, tx *sql.Tx, row *Row, now time.Time) error {
 	}
 	var validateReq any
 	if row.ValidateReq != nil {
-		validateReq = boolToInt(*row.ValidateReq)
+		validateReq = store.BoolToInt(*row.ValidateReq)
 	}
 	// FailDirective is copied as a plain string, not re-run through
 	// encoding/json — it is PRESERVED ONLY, and round-tripping it through a
@@ -724,7 +690,7 @@ func upsertTx(ctx context.Context, tx *sql.Tx, row *Row, now time.Time) error {
 			validate_req   = excluded.validate_req,
 			updated_at     = excluded.updated_at,
 			edit_version   = excluded.edit_version`,
-		row.WorkspaceID, row.Method, row.Path, operationID, boolToInt(row.OverrideOn), boolToInt(row.RouteOff),
+		row.WorkspaceID, row.Method, row.Path, operationID, store.BoolToInt(row.OverrideOn), store.BoolToInt(row.RouteOff),
 		activeStatus, responsesJSON, listSizeJSON, delayMsJSON, failDirective, validateReq, now.Unix(),
 		row.EditVersion,
 	); err != nil {
@@ -748,35 +714,6 @@ func marshalResponses(m map[string]Variant) (string, error) {
 	return string(b), nil
 }
 
-func marshalListSize(ls *ListSize) (sql.NullString, error) {
-	if ls == nil {
-		return sql.NullString{}, nil
-	}
-	b, err := jsonx.Marshal(ls)
-	if err != nil {
-		return sql.NullString{}, err
-	}
-	return sql.NullString{String: string(b), Valid: true}, nil
-}
-
-func marshalDelayMs(d *int) (sql.NullString, error) {
-	if d == nil {
-		return sql.NullString{}, nil
-	}
-	b, err := jsonx.Marshal(*d)
-	if err != nil {
-		return sql.NullString{}, err
-	}
-	return sql.NullString{String: string(b), Valid: true}, nil
-}
-
-func boolToInt(b bool) int {
-	if b {
-		return 1
-	}
-	return 0
-}
-
 // --- scanning ----------------------------------------------------------------
 
 const selectRow = `
@@ -785,12 +722,6 @@ const selectRow = `
 	       edit_version
 	FROM op_overrides`
 
-// rowScanner is satisfied by both *sql.Row and *sql.Rows, so scan logic is
-// written once (mirrors internal/workspaces' repo.go).
-type rowScanner interface {
-	Scan(dest ...any) error
-}
-
 // scan decodes one op_overrides row and validates it exactly as
 // normalizeAndValidate would a freshly-mutated one. This is the "decode
 // path" HARD RULE 4 and the recipes/base64/status-key validation exist for:
@@ -798,7 +729,7 @@ type rowScanner interface {
 // that got into the table some other way (a hand run UPDATE, a future
 // version writing a kind this build does not know) must fail as a returned
 // error here, never as a panic three calls up the stack.
-func scan(row rowScanner) (*Row, error) {
+func scan(row store.RowScanner) (*Row, error) {
 	var (
 		r             Row
 		operationID   sql.NullInt64
@@ -838,20 +769,16 @@ func scan(row rowScanner) (*Row, error) {
 		return nil, fmt.Errorf("override %d: %w", r.ID, err)
 	}
 
-	if listSizeJSON.Valid {
-		var ls ListSize
-		if err := jsonx.Unmarshal([]byte(listSizeJSON.String), &ls); err != nil {
-			return nil, fmt.Errorf("override %d: decode list_size: %w", r.ID, err)
-		}
-		r.ListSize = &ls
+	ls, err := store.UnmarshalNullable[ListSize](listSizeJSON, fmt.Sprintf("override %d: decode list_size", r.ID))
+	if err != nil {
+		return nil, err
 	}
-	if delayMsJSON.Valid {
-		var d int
-		if err := jsonx.Unmarshal([]byte(delayMsJSON.String), &d); err != nil {
-			return nil, fmt.Errorf("override %d: decode delay_ms: %w", r.ID, err)
-		}
-		r.DelayMs = &d
+	r.ListSize = ls
+	d, err := store.UnmarshalNullable[int](delayMsJSON, fmt.Sprintf("override %d: decode delay_ms", r.ID))
+	if err != nil {
+		return nil, err
 	}
+	r.DelayMs = d
 	if failDirective.Valid {
 		r.FailDirective = jsonx.RawMessage(failDirective.String)
 	}

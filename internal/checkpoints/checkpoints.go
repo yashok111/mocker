@@ -68,7 +68,7 @@
 //   - Chunking would trade atomic undo — the feature's entire point — for a
 //     bound the realistic workload is nowhere near.
 //
-// # The four duplications this package accepts
+// # The three duplications this package accepts
 //
 // A shared snapshot builder over internal/scenarios was proposed and
 // rejected (C13): the pre-destructive path cannot use that package's fence
@@ -85,15 +85,20 @@
 //     SEVENTH, separate read, [captureEntitiesTx], which runs inside the
 //     write transaction rather than on the reader pool (D5.1 of the P3d
 //     decision document) and lands in data_snap, not config_snap.
-//  2. [bumpRevisionTx] — THREE packages already carry a private copy
-//     (overrides/repo.go:283, customep/repo.go:212, scenarios/repo.go:589);
-//     this is the fourth, and the house style is a package-local tx helper
-//     rather than a cross-package export.
-//  3. The hand-written SQL against the workspaces table — HARD RULE 5,
+//  2. The hand-written SQL against the workspaces table — HARD RULE 5,
 //     above.
-//  4. The [bundle.OverrideEntry] → [overrides.Row] rebuild, whose
+//  3. The [bundle.OverrideEntry] → [overrides.Row] rebuild, whose
 //     unexported twin is mockplane/scenario.go:237-250, itself documented
 //     at :215-219 as living there "because it is this package's need".
+//
+// A fourth used to be listed here: [store.BumpRevisionTx] (write_tx.go) was
+// this package's own private copy of the four-line revision-UPDATE helper,
+// the same copy overrides, customep, scenarios, resources and assets each
+// carried too. On 2026-09-07 the owner reversed the "no package imports
+// another for a four-line helper" reasoning that justified all six copies:
+// every one of them already imports internal/store for
+// [store.AllocateEditVersion], so store — not any of the six — is the
+// legal shared home, and the duplication stopped being a real one.
 package checkpoints
 
 import (

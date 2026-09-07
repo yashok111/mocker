@@ -145,14 +145,13 @@ var resetPreWriteHook = resetPreWriteHookNoop
 
 func resetPreWriteHookNoop() {}
 
-// compareConfirmSlug is D3 R9's two-way refusal, shared by both the
-// pre-transaction vacuous check and the authoritative in-transaction one:
-// empty is ErrConfirmSlugRequired, present-but-wrong is
-// ErrConfirmSlugMismatch — the same split [Repo.Decline] already makes
-// inline for its own confirmSlug (repo.go's Decline), reproduced here as
-// its own function because ResetData compares it TWICE (D3's ordered
-// listing, step 3, plus the pre-check outside the transaction) and a
-// helper is cheaper than two hand-copies drifting apart.
+// compareConfirmSlug is D3 R9's two-way refusal: empty is
+// ErrConfirmSlugRequired, present-but-wrong is ErrConfirmSlugMismatch. It
+// has three call sites — ResetData's pre-transaction vacuous check, its
+// authoritative in-transaction one (D3's ordered listing, step 3), and
+// [Repo.Decline]'s own in-transaction check (decline.go), which used to
+// inline the identical two-way switch until 2026-09-07 — a helper is
+// cheaper than three hand-copies drifting apart.
 func compareConfirmSlug(confirmSlug, actualSlug string) error {
 	switch {
 	case confirmSlug == "":
@@ -788,7 +787,7 @@ func (r *Repo) resetTx(ctx context.Context, tx *sql.Tx, workspaceID int64, core 
 		}
 	}
 
-	// No bumpRevisionTx call, anywhere in this function (D3 R11):
+	// No [store.BumpRevisionTx] call, anywhere in this function (D3 R11):
 	// entities are never cached in the runtime, routeCache is keyed on
 	// configuration alone, and a bump would invalidate every runtime for a
 	// change no runtime holds.

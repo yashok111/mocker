@@ -118,20 +118,13 @@ func (r *Repo) Rate1m(ctx context.Context, workspaceID int64, now time.Time) (in
 	return n, nil
 }
 
-// rowScanner is satisfied by both *sql.Row and *sql.Rows (mirrors
-// internal/overrides/repo.go's helper of the same name), so scan logic is
-// written once.
-type rowScanner interface {
-	Scan(dest ...any) error
-}
-
 // scan decodes one traffic row. Every optional column comes back through a
 // sql.Null* type even though [insertEventTx] never writes a bare NULL for
 // peer_ip/fwd_ip/matched_kind today — a hand-inserted or future-written row
 // is not this package's to trust, and a NULL there must decode cleanly
 // rather than panic on a non-nullable Scan target (the same discipline
 // internal/overrides/repo.go's scan documents for its own frozen table).
-func scan(row rowScanner) (*Row, error) {
+func scan(row store.RowScanner) (*Row, error) {
 	var (
 		r                                             Row
 		ts                                            int64

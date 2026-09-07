@@ -14,10 +14,10 @@ import (
 
 // Repo is the assets table's one door. Shape mirrors internal/scenarios:
 // reads on db.R, every write inside ONE db.Write transaction, and the
-// revision bump made by this package's own copy of bumpRevisionTx (HARD
-// RULE 5 — never workspaces.Repo.Update from inside a write callback; it
-// opens its own transaction on the single writer connection and the two
-// deadlock rather than fail).
+// revision bump through [store.BumpRevisionTx] (HARD RULE 5 — never
+// workspaces.Repo.Update from inside a write callback; it opens its own
+// transaction on the single writer connection and the two deadlock rather
+// than fail).
 type Repo struct {
 	db *store.DB
 
@@ -116,7 +116,7 @@ func (r *Repo) Put(ctx context.Context, workspaceID int64, name, mediaType strin
 			Name: name, MediaType: mediaType, SizeBytes: int64(len(data)), SHA256: digest,
 			CreatedAt: time.Unix(createdAt, 0).UTC(), UpdatedAt: now,
 		}
-		return bumpRevisionTx(ctx, tx, workspaceID, now)
+		return store.BumpRevisionTx(ctx, tx, workspaceID, now)
 	})
 	if err != nil {
 		return Meta{}, false, err
@@ -128,7 +128,7 @@ func (r *Repo) Put(ctx context.Context, workspaceID int64, name, mediaType strin
 // route and the ETag path move no BLOB through the reader pool.
 const metaColumns = "name, media_type, size_bytes, sha256, created_at, updated_at"
 
-func scanMeta(row interface{ Scan(dest ...any) error }) (Meta, error) {
+func scanMeta(row store.RowScanner) (Meta, error) {
 	var (
 		m                  Meta
 		createdAt, updated int64
@@ -244,22 +244,6 @@ func (r *Repo) Delete(ctx context.Context, workspaceID int64, name, confirmSlug 
 		if n == 0 {
 			return ErrNotFound
 		}
-		return bumpRevisionTx(ctx, tx, workspaceID, time.Now().UTC())
+		return store.BumpRevisionTx(ctx, tx, workspaceID, time.Now().UTC())
 	})
-}
-
-// bumpRevisionTx mirrors internal/overrides/repo.go's helper of the same
-// name verbatim (HARD RULE 5: never workspaces.Repo.Update from inside a
-// db.Write callback — see Repo's doc). The sixth copy in the tree
-// (overrides, customep, checkpoints, resources, scenarios are the five),
-// copied rather than shared for the reason each of them gives: no package
-// may import another purely for a four-line SQL helper.
-func bumpRevisionTx(ctx context.Context, tx *sql.Tx, workspaceID int64, now time.Time) error {
-	if _, err := tx.ExecContext(ctx,
-		"UPDATE workspaces SET revision = revision + 1, updated_at = ? WHERE id = ?",
-		now.Unix(), workspaceID,
-	); err != nil {
-		return fmt.Errorf("bump revision for workspace %d: %w", workspaceID, err)
-	}
-	return nil
 }

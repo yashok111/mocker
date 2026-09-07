@@ -203,7 +203,7 @@ func insertTx(ctx context.Context, tx *sql.Tx, in CreateInput, settings domain.S
 		slug, in.Name, in.SpecID, in.OwnerID, in.ForkedFrom, string(settingsJSON), now.Unix(), now.Unix(),
 	)
 	if iErr != nil {
-		if isUniqueViolation(iErr) {
+		if store.IsUniqueViolation(iErr) {
 			return nil, fmt.Errorf("%w: %q", ErrSlugTaken, slug)
 		}
 		return nil, fmt.Errorf("insert workspace: %w", iErr)
@@ -437,7 +437,7 @@ func (r *Repo) UpdateExpecting(ctx context.Context, id int64, expect *int64, mut
 			current.EditVersion, id,
 		)
 		if err != nil {
-			if isUniqueViolation(err) {
+			if store.IsUniqueViolation(err) {
 				return fmt.Errorf("%w: %q", ErrSlugTaken, current.Slug)
 			}
 			return fmt.Errorf("update workspace %d: %w", id, err)
@@ -515,25 +515,11 @@ func slugTakenTx(ctx context.Context, tx *sql.Tx, slug string) (bool, error) {
 	}
 }
 
-// isUniqueViolation reports whether err is a UNIQUE constraint failure.
-// modernc.org/sqlite reports these as a plain error whose message contains
-// "UNIQUE constraint failed" — matched by substring so this package does not
-// need to import the driver just to compare an error code.
-func isUniqueViolation(err error) bool {
-	return err != nil && strings.Contains(err.Error(), "UNIQUE constraint failed")
-}
-
 const selectWorkspace = `
 	SELECT id, slug, name, spec_id, owner_id, forked_from, revision, scenario_id, settings, created_at, updated_at, edit_version, edit_seq
 	FROM workspaces`
 
-// rowScanner is satisfied by both *sql.Row and *sql.Rows, so scan logic is
-// written once.
-type rowScanner interface {
-	Scan(dest ...any) error
-}
-
-func scan(row rowScanner) (*Workspace, error) {
+func scan(row store.RowScanner) (*Workspace, error) {
 	var (
 		ws           Workspace
 		settingsJSON string

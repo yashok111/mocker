@@ -67,20 +67,23 @@ func (r *Repo) Export(ctx context.Context, workspaceID int64, withData bool) (bu
 		return out, nil
 	}
 
-	tx, err := r.db.R.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
-	if err != nil {
-		return bundle.Export{}, fmt.Errorf("export workspace %d: begin read: %w", workspaceID, err)
-	}
-	defer func() { _ = tx.Rollback() }()
-
-	over, err := entityDataProbeOverBudgetTx(ctx, tx, workspaceID)
-	if err != nil {
-		return bundle.Export{}, err
-	}
-	if over {
-		return bundle.Export{}, fmt.Errorf("%w: workspace %d", ErrDataSnapshotTooLarge, workspaceID)
-	}
-	d, err := readDataBundleTx(ctx, tx, workspaceID)
+	// [store.DB.Read] (BeginTx with ReadOnly: true under the hood) is what
+	// makes this a SNAPSHOT: the probe and the rows it bounds run through
+	// the SAME transaction, so the two see the same committed state rather
+	// than two round trips the mock plane could write between.
+	var d bundle.DataBundle
+	err = r.db.Read(ctx, func(tx *sql.Tx) error {
+		over, oerr := entityDataProbeOverBudgetTx(ctx, tx, workspaceID)
+		if oerr != nil {
+			return oerr
+		}
+		if over {
+			return fmt.Errorf("%w: workspace %d", ErrDataSnapshotTooLarge, workspaceID)
+		}
+		var derr error
+		d, derr = readDataBundleTx(ctx, tx, workspaceID)
+		return derr
+	})
 	if err != nil {
 		return bundle.Export{}, err
 	}

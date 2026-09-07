@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/yashok111/mocker/internal/router"
+	"github.com/yashok111/mocker/internal/store"
 )
 
 // childFamiliesTx returns every OTHER confirmed family of workspaceID whose
@@ -106,11 +107,13 @@ func (r *Repo) Decline(ctx context.Context, workspaceID int64, routeFamily, conf
 			if err := tx.QueryRowContext(ctx, "SELECT slug FROM workspaces WHERE id = ?", workspaceID).Scan(&slug); err != nil {
 				return fmt.Errorf("read workspace %d slug: %w", workspaceID, err)
 			}
-			switch {
-			case confirmSlug == "":
-				return ErrConfirmSlugRequired
-			case confirmSlug != slug:
-				return ErrConfirmSlugMismatch
+			// compareConfirmSlug is [Repo.ResetData]'s own helper (reset.go):
+			// this call site used to inline the identical two-way check —
+			// empty is ErrConfirmSlugRequired, present-but-wrong is
+			// ErrConfirmSlugMismatch — which is exactly the drift that
+			// helper's own doc comment exists to prevent.
+			if err := compareConfirmSlug(confirmSlug, slug); err != nil {
+				return err
 			}
 		}
 
@@ -127,7 +130,7 @@ func (r *Repo) Decline(ctx context.Context, workspaceID int64, routeFamily, conf
 			}
 		}
 
-		return bumpRevisionTx(ctx, tx, workspaceID, now)
+		return store.BumpRevisionTx(ctx, tx, workspaceID, now)
 	})
 	if writeErr != nil {
 		return fmt.Errorf("decline %q for workspace %d: %w", routeFamily, workspaceID, writeErr)

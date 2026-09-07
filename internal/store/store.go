@@ -142,6 +142,32 @@ func (db *DB) Write(ctx context.Context, fn func(tx *sql.Tx) error) error {
 	return nil
 }
 
+// Read runs fn inside a READ-ONLY transaction on the reader pool, mirroring
+// [DB.Write]'s shape exactly (BeginTx, a deferred Rollback that is a no-op
+// once committed, Commit on success). It exists for a caller that needs a
+// SNAPSHOT-CONSISTENT view across more than one query — [checkpoints.Repo.
+// Export]'s data half is the first (and, as of this writing, only) caller:
+// reading a probe query and the rows it bounds through the SAME transaction
+// is what keeps an export's data one snapshot rather than a family-by-family
+// walk over a table the mock plane can be writing into concurrently. A
+// plain, unwrapped db.R query — what every read elsewhere in this tree
+// uses — commits to no such guarantee across two calls.
+func (db *DB) Read(ctx context.Context, fn func(tx *sql.Tx) error) error {
+	tx, err := db.R.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
+	if err != nil {
+		return fmt.Errorf("begin: %w", err)
+	}
+	defer tx.Rollback() //nolint:errcheck // no-op once committed
+
+	if err := fn(tx); err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit: %w", err)
+	}
+	return nil
+}
+
 // Migrate applies every embedded migration whose number exceeds the file's
 // PRAGMA user_version, each in its own transaction.
 //

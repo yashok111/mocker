@@ -1,6 +1,8 @@
 // Workspace-level helpers every write transaction of this package shares:
-// the identity core it fences on, the revision bump (HARD RULE 5's copy) and
-// the writer deadline. Split out of repo.go 2026-09-03; the text is unchanged.
+// the identity core it fences on and the writer deadline. Split out of
+// repo.go 2026-09-03; the text is unchanged except for the revision bump,
+// consolidated into internal/store on 2026-09-07 (see
+// [store.BumpRevisionTx]'s doc comment for why).
 package resources
 
 import (
@@ -29,25 +31,6 @@ var writeDeadline = 5 * time.Second
 // cause").
 func writeBusyIfOurDeadline(callerCtx context.Context, err error) bool {
 	return errors.Is(err, context.DeadlineExceeded) && callerCtx.Err() == nil
-}
-
-// --- the shared revision bump (D4: this package's OWN copy) --------------
-
-// bumpRevisionTx is internal/overrides/repo.go:562#bumpRevisionTx's shape,
-// copied rather than shared: D4 is explicit that Confirm/Decline must NOT
-// go through workspaces.Repo.Update, which opens its own transaction and
-// also allocates a fresh edit_version — spuriously 409-ing every open
-// admin form for an edit this route never touched. Entity writes
-// (Create/Delete) do NOT call this (D13 clause 23: "revision moves on both
-// decision transitions and NOT on an entity write").
-func bumpRevisionTx(ctx context.Context, tx *sql.Tx, workspaceID int64, now time.Time) error {
-	if _, err := tx.ExecContext(ctx,
-		"UPDATE workspaces SET revision = revision + 1, updated_at = ? WHERE id = ?",
-		now.Unix(), workspaceID,
-	); err != nil {
-		return fmt.Errorf("bump revision for workspace %d: %w", workspaceID, err)
-	}
-	return nil
 }
 
 // --- workspace reads (mirrors internal/checkpoints' readWorkspaceCore/

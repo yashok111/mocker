@@ -221,7 +221,7 @@ const selectResource = `
 // backend-swap seam every production decode in this tree goes through
 // (internal/jsonx/boundary_test.go's AST walk forbids a direct
 // encoding/json import here).
-func scanResource(row interface{ Scan(dest ...any) error }) (*Resource, error) {
+func scanResource(row store.RowScanner) (*Resource, error) {
 	var (
 		res                         Resource
 		parentID                    sql.NullInt64

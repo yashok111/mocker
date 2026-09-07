@@ -66,10 +66,11 @@ func (e *EditConflictError) Unwrap() error { return ErrEditConflict }
 // internal/scenarios.Repo.Rename deliberately does not write the workspaces
 // row at all today, because CLAUDE.md holds that a rename must not bump
 // revision (the mock plane's routeCache keys on it, and a rename is meant to
-// be visible without a bump). An allocator built on the existing
-// bumpRevisionTx helper would break that documented invariant on the first
-// verb that reached for it, which is why this is its own statement instead
-// of a reuse of that one.
+// be visible without a bump). An allocator built on [BumpRevisionTx] would
+// break that documented invariant on the first verb that reached for it,
+// which is why this is its own statement instead of a reuse of that one —
+// true before revision.go's helpers moved into this same package on
+// 2026-09-07 and unchanged by the move.
 //
 // RETURNING, not a following SELECT: the read-back must not be able to see
 // another transaction's value, and with the writer pool pinned to a single

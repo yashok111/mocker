@@ -17,9 +17,9 @@ import (
 
 // Repo is the custom_endpoints table's data-access layer, the same shape as
 // internal/overrides/repo.go over op_overrides — copy that file's patterns
-// rather than inventing new ones here, especially bumpRevisionTx (HARD RULE
-// 5: never call workspaces.Repo.Update from inside a db.Write callback, it
-// deadlocks the one-connection writer pool).
+// rather than inventing new ones here, especially the [store.BumpRevisionTx]
+// call (HARD RULE 5: never call workspaces.Repo.Update from inside a
+// db.Write callback, it deadlocks the one-connection writer pool).
 type Repo struct {
 	db *store.DB
 
@@ -71,7 +71,7 @@ func (r *Repo) Get(ctx context.Context, workspaceID, id int64) (*Row, error) {
 }
 
 // Create inserts one custom endpoint and bumps workspaces.revision IN THE
-// SAME TRANSACTION as bumpRevisionTx does for op_overrides — without the
+// SAME TRANSACTION as [store.BumpRevisionTx] does for op_overrides — without the
 // bump the route cache, keyed (workspace_id, revision), never rebuilds and
 // the endpoint this call just wrote 404s until some unrelated edit happens
 // to bump it instead.
@@ -113,7 +113,7 @@ func (r *Repo) Create(ctx context.Context, workspaceID int64, row *Row) (*Row, e
 
 	var stored *Row
 	err := r.db.Write(ctx, func(tx *sql.Tx) error {
-		_, exists, werr := workspaceRevisionTx(ctx, tx, workspaceID)
+		_, exists, werr := store.WorkspaceRevisionTx(ctx, tx, workspaceID)
 		if werr != nil {
 			return werr
 		}
@@ -150,7 +150,7 @@ func (r *Repo) Create(ctx context.Context, workspaceID int64, row *Row) (*Row, e
 
 		id, ierr := insertTx(ctx, tx, &input, now)
 		if ierr != nil {
-			if isUniqueViolation(ierr) {
+			if store.IsUniqueViolation(ierr) {
 				return fmt.Errorf("create endpoint %s %s: %w", input.Method, input.Path, ErrConflict)
 			}
 			return fmt.Errorf("create endpoint %s %s: %w", input.Method, input.Path, ierr)
@@ -161,7 +161,7 @@ func (r *Repo) Create(ctx context.Context, workspaceID int64, row *Row) (*Row, e
 			return fmt.Errorf("reload endpoint after create: %w", gerr)
 		}
 
-		if berr := bumpRevisionTx(ctx, tx, workspaceID, now); berr != nil {
+		if berr := store.BumpRevisionTx(ctx, tx, workspaceID, now); berr != nil {
 			return berr
 		}
 
@@ -210,8 +210,8 @@ func (r *Repo) Create(ctx context.Context, workspaceID int64, row *Row) (*Row, e
 // natural key (workspace_id, method, path) and the canonical key
 // (workspace_id, method, canonical_path), migrations/0001_init.sql:210-211 —
 // by moving the row onto a key another row already holds. Both come back
-// through the SAME isUniqueViolation substring check Create already uses and
-// are reported as the SAME ErrConflict: SQLite's own error message does not
+// through the SAME [store.IsUniqueViolation] substring check Create already
+// uses and are reported as the SAME ErrConflict: SQLite's own error message does not
 // name which index fired, and a caller three layers up (the admin handler,
 // answering 409 either way) has no use for the distinction even if it were
 // available.
@@ -265,7 +265,7 @@ func (r *Repo) UpdateExpecting(ctx context.Context, workspaceID, id int64, expec
 
 	var stored *Row
 	err := r.db.Write(ctx, func(tx *sql.Tx) error {
-		_, exists, werr := workspaceRevisionTx(ctx, tx, workspaceID)
+		_, exists, werr := store.WorkspaceRevisionTx(ctx, tx, workspaceID)
 		if werr != nil {
 			return werr
 		}
@@ -327,7 +327,7 @@ func (r *Repo) UpdateExpecting(ctx context.Context, workspaceID, id int64, expec
 		current.EditVersion = newVersion
 
 		if uerr := updateTx(ctx, tx, current, now); uerr != nil {
-			if isUniqueViolation(uerr) {
+			if store.IsUniqueViolation(uerr) {
 				return fmt.Errorf("update endpoint %d to %s %s: %w", id, current.Method, current.Path, ErrConflict)
 			}
 			return fmt.Errorf("update endpoint %d: %w", id, uerr)
@@ -338,7 +338,7 @@ func (r *Repo) UpdateExpecting(ctx context.Context, workspaceID, id int64, expec
 			return fmt.Errorf("reload endpoint after update: %w", gerr2)
 		}
 
-		if berr := bumpRevisionTx(ctx, tx, workspaceID, now); berr != nil {
+		if berr := store.BumpRevisionTx(ctx, tx, workspaceID, now); berr != nil {
 			return berr
 		}
 
@@ -485,7 +485,7 @@ func ReplaceAllTx(ctx context.Context, tx *sql.Tx, workspaceID int64, rows []*Ro
 // untouched — nothing changed for the route table to need rebuilding over.
 func (r *Repo) Delete(ctx context.Context, workspaceID, id int64) error {
 	return r.db.Write(ctx, func(tx *sql.Tx) error {
-		_, exists, werr := workspaceRevisionTx(ctx, tx, workspaceID)
+		_, exists, werr := store.WorkspaceRevisionTx(ctx, tx, workspaceID)
 		if werr != nil {
 			return werr
 		}
@@ -506,42 +506,11 @@ func (r *Repo) Delete(ctx context.Context, workspaceID, id int64) error {
 			return fmt.Errorf("delete endpoint %d: %w", id, ErrNotFound)
 		}
 
-		return bumpRevisionTx(ctx, tx, workspaceID, time.Now().UTC())
+		return store.BumpRevisionTx(ctx, tx, workspaceID, time.Now().UTC())
 	})
 }
 
 // --- transaction-scoped helpers ---------------------------------------------
-
-// workspaceRevisionTx is overrides/repo.go's helper of the same name,
-// verbatim: reads the target workspace's current revision INSIDE tx, so
-// Create/Delete see the revision as it stands immediately before they bump
-// it, not as of the last committed read.
-func workspaceRevisionTx(ctx context.Context, tx *sql.Tx, workspaceID int64) (revision int64, exists bool, err error) {
-	err = tx.QueryRowContext(ctx, "SELECT revision FROM workspaces WHERE id = ?", workspaceID).Scan(&revision)
-	switch {
-	case err == nil:
-		return revision, true, nil
-	case errors.Is(err, sql.ErrNoRows):
-		return 0, false, nil
-	default:
-		return 0, false, fmt.Errorf("read workspace %d revision: %w", workspaceID, err)
-	}
-}
-
-// bumpRevisionTx is HARD RULE 5's direct UPDATE, copied from
-// internal/overrides/repo.go verbatim (see that file's comment on the same
-// name for the full deadlock rationale): never workspaces.Repo.Update, which
-// opens its own write transaction and would deadlock the single-connection
-// writer pool when called from inside the db.Write callback this runs in.
-func bumpRevisionTx(ctx context.Context, tx *sql.Tx, workspaceID int64, now time.Time) error {
-	if _, err := tx.ExecContext(ctx,
-		"UPDATE workspaces SET revision = revision + 1, updated_at = ? WHERE id = ?",
-		now.Unix(), workspaceID,
-	); err != nil {
-		return fmt.Errorf("bump revision for workspace %d: %w", workspaceID, err)
-	}
-	return nil
-}
 
 // nextSourceOrderTx reads max(source_order) for the workspace INSIDE tx and
 // returns one past it (or 0 for the workspace's first custom endpoint).
@@ -638,18 +607,18 @@ func insertTx(ctx context.Context, tx *sql.Tx, row *Row, now time.Time) (int64, 
 	if err != nil {
 		return 0, fmt.Errorf("marshal responses for %s %s: %w", row.Method, row.Path, err)
 	}
-	listSizeJSON, err := marshalListSize(row.ListSize)
+	listSizeJSON, err := store.MarshalNullable(row.ListSize)
 	if err != nil {
 		return 0, fmt.Errorf("marshal list_size for %s %s: %w", row.Method, row.Path, err)
 	}
-	delayMsJSON, err := marshalDelayMs(row.DelayMs)
+	delayMsJSON, err := store.MarshalNullable(row.DelayMs)
 	if err != nil {
 		return 0, fmt.Errorf("marshal delay_ms for %s %s: %w", row.Method, row.Path, err)
 	}
 
 	var validateReq any
 	if row.ValidateReq != nil {
-		validateReq = boolToInt(*row.ValidateReq)
+		validateReq = store.BoolToInt(*row.ValidateReq)
 	}
 	// ReqSchema and FailDirective are copied as plain strings, not re-run
 	// through encoding/json — both are PRESERVED ONLY (their field comments
@@ -681,7 +650,7 @@ func insertTx(ctx context.Context, tx *sql.Tx, row *Row, now time.Time) (int64, 
 			 created_at, updated_at, edit_version, kind, stream, operation)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		row.WorkspaceID, row.Method, row.Path, row.CanonicalPath, row.SourceOrder,
-		boolToInt(row.OverrideOn), boolToInt(row.RouteOff), row.ActiveStatus,
+		store.BoolToInt(row.OverrideOn), store.BoolToInt(row.RouteOff), row.ActiveStatus,
 		responsesJSON, reqSchema, listSizeJSON, delayMsJSON, failDirective, validateReq,
 		now.Unix(), now.Unix(), row.EditVersion, kindOrHTTP(row.Kind), streamJSON, operationJSON,
 	)
@@ -725,18 +694,18 @@ func upsertTx(ctx context.Context, tx *sql.Tx, row *Row, now time.Time) error {
 	if err != nil {
 		return fmt.Errorf("marshal responses for %s %s: %w", row.Method, row.Path, err)
 	}
-	listSizeJSON, err := marshalListSize(row.ListSize)
+	listSizeJSON, err := store.MarshalNullable(row.ListSize)
 	if err != nil {
 		return fmt.Errorf("marshal list_size for %s %s: %w", row.Method, row.Path, err)
 	}
-	delayMsJSON, err := marshalDelayMs(row.DelayMs)
+	delayMsJSON, err := store.MarshalNullable(row.DelayMs)
 	if err != nil {
 		return fmt.Errorf("marshal delay_ms for %s %s: %w", row.Method, row.Path, err)
 	}
 
 	var validateReq any
 	if row.ValidateReq != nil {
-		validateReq = boolToInt(*row.ValidateReq)
+		validateReq = store.BoolToInt(*row.ValidateReq)
 	}
 	// Same reasoning as insertTx above: ReqSchema and FailDirective are
 	// copied as plain strings, never re-run through encoding/json.
@@ -782,7 +751,7 @@ func upsertTx(ctx context.Context, tx *sql.Tx, row *Row, now time.Time) error {
 			stream         = excluded.stream,
 			operation      = excluded.operation`,
 		row.WorkspaceID, row.Method, row.Path, row.CanonicalPath, row.SourceOrder,
-		boolToInt(row.OverrideOn), boolToInt(row.RouteOff), row.ActiveStatus,
+		store.BoolToInt(row.OverrideOn), store.BoolToInt(row.RouteOff), row.ActiveStatus,
 		responsesJSON, reqSchema, listSizeJSON, delayMsJSON, failDirective, validateReq,
 		now.Unix(), now.Unix(), row.EditVersion, kindOrHTTP(row.Kind), streamJSON, operationJSON,
 	); err != nil {
@@ -809,18 +778,18 @@ func updateTx(ctx context.Context, tx *sql.Tx, row *Row, now time.Time) error {
 	if err != nil {
 		return fmt.Errorf("marshal responses for %s %s: %w", row.Method, row.Path, err)
 	}
-	listSizeJSON, err := marshalListSize(row.ListSize)
+	listSizeJSON, err := store.MarshalNullable(row.ListSize)
 	if err != nil {
 		return fmt.Errorf("marshal list_size for %s %s: %w", row.Method, row.Path, err)
 	}
-	delayMsJSON, err := marshalDelayMs(row.DelayMs)
+	delayMsJSON, err := store.MarshalNullable(row.DelayMs)
 	if err != nil {
 		return fmt.Errorf("marshal delay_ms for %s %s: %w", row.Method, row.Path, err)
 	}
 
 	var validateReq any
 	if row.ValidateReq != nil {
-		validateReq = boolToInt(*row.ValidateReq)
+		validateReq = store.BoolToInt(*row.ValidateReq)
 	}
 	// Same reasoning as insertTx/upsertTx above: ReqSchema and FailDirective
 	// are copied as plain strings, never re-run through encoding/json.
@@ -850,7 +819,7 @@ func updateTx(ctx context.Context, tx *sql.Tx, row *Row, now time.Time) error {
 			validate_req = ?, updated_at = ?, edit_version = ?, kind = ?, stream = ?, operation = ?
 		WHERE workspace_id = ? AND id = ?`,
 		row.Method, row.Path, row.CanonicalPath, row.SourceOrder,
-		boolToInt(row.OverrideOn), boolToInt(row.RouteOff), row.ActiveStatus,
+		store.BoolToInt(row.OverrideOn), store.BoolToInt(row.RouteOff), row.ActiveStatus,
 		responsesJSON, reqSchema, listSizeJSON, delayMsJSON, failDirective, validateReq,
 		now.Unix(), row.EditVersion, kindOrHTTP(row.Kind), streamJSON, operationJSON,
 		row.WorkspaceID, row.ID,
@@ -921,44 +890,6 @@ func kindOrHTTP(kind string) string {
 	return kind
 }
 
-func marshalListSize(ls *overrides.ListSize) (sql.NullString, error) {
-	if ls == nil {
-		return sql.NullString{}, nil
-	}
-	b, err := jsonx.Marshal(ls)
-	if err != nil {
-		return sql.NullString{}, err
-	}
-	return sql.NullString{String: string(b), Valid: true}, nil
-}
-
-func marshalDelayMs(d *int) (sql.NullString, error) {
-	if d == nil {
-		return sql.NullString{}, nil
-	}
-	b, err := jsonx.Marshal(*d)
-	if err != nil {
-		return sql.NullString{}, err
-	}
-	return sql.NullString{String: string(b), Valid: true}, nil
-}
-
-func boolToInt(b bool) int {
-	if b {
-		return 1
-	}
-	return 0
-}
-
-// isUniqueViolation reports whether err is a UNIQUE constraint failure.
-// Copied from internal/workspaces/repo.go's helper of the same name:
-// modernc.org/sqlite reports these as a plain error whose message contains
-// "UNIQUE constraint failed" — matched by substring so this package does not
-// need to import the driver just to compare an error code.
-func isUniqueViolation(err error) bool {
-	return err != nil && strings.Contains(err.Error(), "UNIQUE constraint failed")
-}
-
 // --- scanning ----------------------------------------------------------------
 
 const selectRow = `
@@ -967,19 +898,13 @@ const selectRow = `
 	       created_at, updated_at, edit_version, kind, stream, operation
 	FROM custom_endpoints`
 
-// rowScanner is satisfied by both *sql.Row and *sql.Rows, so scan logic is
-// written once — mirrors internal/overrides/repo.go's identical helper.
-type rowScanner interface {
-	Scan(dest ...any) error
-}
-
 // scan decodes one custom_endpoints row and validates its Responses exactly
 // as normalizeAndValidate would a freshly-written one. Like op_overrides'
 // own scan (repo.go, same package family), this is the DECODE path HARD
 // RULE 4 and the recipes/base64/status-key validation exist for: a row that
 // got into the table some other way must fail here as a returned error,
 // never as a panic partway through building the P2 route table.
-func scan(row rowScanner) (*Row, error) {
+func scan(row store.RowScanner) (*Row, error) {
 	var (
 		r             Row
 		sourceOrder   int64
@@ -1034,20 +959,16 @@ func scan(row rowScanner) (*Row, error) {
 	if reqSchema.Valid {
 		r.ReqSchema = jsonx.RawMessage(reqSchema.String)
 	}
-	if listSizeJSON.Valid {
-		var ls overrides.ListSize
-		if err := jsonx.Unmarshal([]byte(listSizeJSON.String), &ls); err != nil {
-			return nil, fmt.Errorf("endpoint %d: decode list_size: %w", r.ID, err)
-		}
-		r.ListSize = &ls
+	ls, err := store.UnmarshalNullable[overrides.ListSize](listSizeJSON, fmt.Sprintf("endpoint %d: decode list_size", r.ID))
+	if err != nil {
+		return nil, err
 	}
-	if delayMsJSON.Valid {
-		var d int
-		if err := jsonx.Unmarshal([]byte(delayMsJSON.String), &d); err != nil {
-			return nil, fmt.Errorf("endpoint %d: decode delay_ms: %w", r.ID, err)
-		}
-		r.DelayMs = &d
+	r.ListSize = ls
+	d, err := store.UnmarshalNullable[int](delayMsJSON, fmt.Sprintf("endpoint %d: decode delay_ms", r.ID))
+	if err != nil {
+		return nil, err
 	}
+	r.DelayMs = d
 	if failDirective.Valid {
 		r.FailDirective = jsonx.RawMessage(failDirective.String)
 	}

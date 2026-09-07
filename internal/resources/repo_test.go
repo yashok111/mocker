@@ -1275,7 +1275,7 @@ func TestFenceConfirmTx_IncarnationVsBareRevisionBump(t *testing.T) {
 	// A bare revision bump — a second family's confirm, or an anonymous
 	// POST {prefix}/state — must NOT refuse.
 	if err := db.Write(t.Context(), func(tx *sql.Tx) error {
-		return bumpRevisionTx(t.Context(), tx, wsID, time.Now())
+		return store.BumpRevisionTx(t.Context(), tx, wsID, time.Now())
 	}); err != nil {
 		t.Fatalf("bump revision: %v", err)
 	}

@@ -13,6 +13,7 @@ import (
 	"github.com/yashok111/mocker/internal/gen"
 	"github.com/yashok111/mocker/internal/openapi"
 	"github.com/yashok111/mocker/internal/router"
+	"github.com/yashok111/mocker/internal/store"
 )
 
 // ByID looks up a spec by primary key.
@@ -475,13 +476,7 @@ const selectSpec = `
 	SELECT id, name, version, format, source, source_ref, base_path, hash, created_at, created_by
 	FROM specs`
 
-// rowScanner is satisfied by both *sql.Row and *sql.Rows, so scan logic is
-// written once (the same pattern [workspaces.Repo] uses).
-type rowScanner interface {
-	Scan(dest ...any) error
-}
-
-func scanSpec(row rowScanner) (*Spec, error) {
+func scanSpec(row store.RowScanner) (*Spec, error) {
 	var (
 		s         Spec
 		version   sql.NullString
@@ -505,7 +500,7 @@ func scanSpec(row rowScanner) (*Spec, error) {
 	return &s, nil
 }
 
-func scanOperation(row rowScanner) (*Operation, error) {
+func scanOperation(row store.RowScanner) (*Operation, error) {
 	var (
 		op                                  Operation
 		operationID, summary, tag, parseErr sql.NullString
@@ -535,7 +530,7 @@ func scanOperation(row rowScanner) (*Operation, error) {
 	return &op, nil
 }
 
-func scanResponse(row rowScanner) (*Response, error) {
+func scanResponse(row store.RowScanner) (*Response, error) {
 	var (
 		resp                 Response
 		isDefault            int
