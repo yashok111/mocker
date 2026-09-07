@@ -333,25 +333,15 @@ func (l *wsLoop) run(connCtx context.Context) wsmock.StatusCode { //nolint:gocyc
 	go l.read(readCtx, wsCancel)
 
 	l.stopped = func() bool { return wsCtx.Err() != nil }
-	lifetime := time.NewTimer(l.opts.Lifetime)
-	defer lifetime.Stop()
-	ping := time.NewTicker(l.opts.Ping)
-	defer ping.Stop()
-	l.armTimeline()
-	defer func() {
-		if l.timeline != nil {
-			l.timeline.Stop()
-		}
-	}()
-	var tickC <-chan time.Time
-	tickActive := l.def.Tick != nil && l.tick != nil
-	if tickActive {
-		t := time.NewTicker(time.Duration(l.def.Tick.IntervalMs) * time.Millisecond)
-		defer t.Stop()
-		tickC = t.C
-	}
+	// The SAME scaffolding the SSE loop runs on, from the embedded
+	// *streamLoop rather than a second copy of it (P6d: wsLoop embeds
+	// streamLoop precisely so the frame machinery is one implementation).
+	// The stop is deferred here and not inside startClocks because it must
+	// run when THIS function returns, after the closing handshake below.
+	clocks, stopClocks := l.startClocks()
+	defer stopClocks()
 
-	end := l.loop(wsCtx, lifetime.C, ping.C, tickC, tickActive)
+	end := l.loop(wsCtx, clocks)
 
 	// Exit, in D7's order: the closing handshake (its peer half is read by
 	// the reader, still running), then the socket, then the reader's
@@ -411,7 +401,7 @@ func (l *wsLoop) writeFailed() closeReason {
 const closedByPeer wsmock.StatusCode = -2
 
 // loop is run's select; it returns how the connection ends.
-func (l *wsLoop) loop(wsCtx context.Context, lifetimeC, pingC, tickC <-chan time.Time, tickActive bool) closeReason { //nolint:gocyclo // one case per producer is the specification (D7)
+func (l *wsLoop) loop(wsCtx context.Context, clocks streamClocks) closeReason { //nolint:gocyclo // one case per producer is the specification (D7)
 	for {
 		select {
 		case <-wsCtx.Done():
@@ -426,20 +416,20 @@ func (l *wsLoop) loop(wsCtx context.Context, lifetimeC, pingC, tickC <-chan time
 			return closeReason{wsmock.StatusGoingAway, "shutting down"}
 		case err := <-l.readerDone:
 			return l.peerEnded(err)
-		case <-lifetimeC:
+		case <-clocks.lifetime:
 			return closeReason{wsmock.StatusNormalClosure, "lifetime"}
-		case <-pingC:
+		case <-clocks.ping:
 			if err := l.ping(wsCtx); err != nil {
 				return closeReason{wsmock.StatusGoingAway, "no pong"}
 			}
 		case <-l.timelineC:
-			if !l.writeTimeline(wsCtx, tickActive) {
-				if l.timelineDone() && !tickActive && l.def.ClosesWhenDone() && wsCtx.Err() == nil {
+			if !l.writeTimeline(wsCtx, clocks.tickActive) {
+				if l.timelineDone() && !clocks.tickActive && l.def.ClosesWhenDone() && wsCtx.Err() == nil {
 					return closeReason{wsmock.StatusNormalClosure, "done"}
 				}
 				return l.writeFailed()
 			}
-		case <-tickC:
+		case <-clocks.tick:
 			if !l.writeTickFrame(wsCtx) {
 				return l.writeFailed()
 			}

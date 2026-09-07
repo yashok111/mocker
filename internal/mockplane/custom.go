@@ -127,7 +127,7 @@ func (rt *runtime) lookupCustom(id int64) (*customep.Row, bool) {
 //  8. the body, enveloped exactly like a spec route's generated one
 //     (settings.Envelope applies uniformly — DESIGN never scopes it to
 //     spec-only operations), Content-Type/Content-Length set once.
-func (p *Plane) serveCustom(w http.ResponseWriter, r *http.Request, ws *workspaces.Workspace, rt *runtime, m *router.Match, base resources.ScopeKey) { //nolint:gocyclo // the custom-route serving path end to end: resolve, match, live state, variant, write
+func (p *Plane) serveCustom(w http.ResponseWriter, r *http.Request, ws *workspaces.Workspace, rt *runtime, m *router.Match, base resources.ScopeKey) { //nolint:gocyclo // the custom-route serving path: resolve, route_off, live state, pause, delay, status selection and five mutually exclusive branches (stream, ws, function, generated, pinned). Still 26 with the write phase extracted into writeCustomBody; what is left is the ORDER of those branches, which is the rule set this doc comment enumerates and does not decompose further
 	route := m.Route
 
 	row, ok := rt.lookupCustom(route.CustomRowID)
@@ -258,6 +258,28 @@ func (p *Plane) serveCustom(w http.ResponseWriter, r *http.Request, ws *workspac
 		return
 	}
 
+	p.writeCustomBody(w, r, ws, rt, route, variant, pinned, mediaType, status)
+}
+
+// writeCustomBody is serveCustom's write phase (rules 7-8 of its own list),
+// factored out of a function that had grown to 217 lines: everything from
+// "which bytes" to "they are on the wire" — the asset lookup, the pinned
+// body's decode and its MaxResponse re-check, the browser-executable gate,
+// the envelope and the Content-Type/Content-Length write.
+//
+// It is deliberately NOT unified with respond.go's write path, which looks
+// similar and is not: a custom endpoint has no operation and therefore no
+// document-declared headers to layer a pinned variant's under, so the two
+// build a DIFFERENT header set on purpose — see the comment at the header
+// loop in serveCustom, which is why that loop stayed there rather than
+// moving in here with the rest of the writing.
+//
+// Called only after the noBody statuses have already returned, so a body of
+// zero bytes here means "nothing to say", never 204/205.
+func (p *Plane) writeCustomBody(
+	w http.ResponseWriter, r *http.Request, ws *workspaces.Workspace, rt *runtime,
+	route *router.Route, variant overrides.Variant, pinned bool, mediaType string, status int,
+) {
 	var body []byte
 	var bodyErr error
 	// assetType is the asset's stored media type when a bodyRef served it —

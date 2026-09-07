@@ -243,14 +243,7 @@ func (p *Plane) tickSource(rt *runtime, row *customep.Row, host luafn.Host) func
 		}
 		return func(context.Context, int) ([]byte, error) { return nil, err }
 	}
-	g := gen.New(nil, gen.Options{
-		Seed:     rt.settings.Seed,
-		ListSize: rt.settings.ListSize,
-		NullRate: rt.settings.NullRate,
-		MaxBytes: p.cfg.MaxResponse,
-		Identity: rt.settings.Identity,
-		Auth:     rt.settings.Auth,
-	})
+	g := gen.New(nil, gen.OptionsFrom(rt.settings, p.cfg.MaxResponse))
 	return newTickGenerator(g, schema, row.CanonicalPath, row.ID, p.cfg.MaxResponse)
 }
 
@@ -395,6 +388,66 @@ func (l *streamLoop) armTimeline() {
 	l.timelineC = l.timeline.C
 }
 
+// streamClocks is the timer scaffolding a connection runs on: the lifetime
+// deadline, the keep-alive ping, and the tick — plus whether a tick exists
+// at all, which the timeline's own writer needs (writeTimelineFrame reads
+// it to decide what a drained timeline means).
+//
+// The timeline's timer is NOT here: it is armed and re-armed per frame by
+// [streamLoop.armTimeline] and read through l.timelineC, so the only thing
+// the clock scaffolding owes it is the Stop on the way out.
+type streamClocks struct {
+	lifetime   <-chan time.Time
+	ping       <-chan time.Time
+	tick       <-chan time.Time
+	tickActive bool
+}
+
+// startClocks builds every timer a connection's select reads and returns
+// one stop for all of them. It exists because the SSE loop
+// ([streamLoop.run]) and the WebSocket loop ([wsLoop.run]) had a
+// byte-for-byte copy of this block each — wsLoop embeds *streamLoop and
+// still re-derived the lifetime timer, the ping ticker, the armTimeline
+// call with its deferred Stop, and the tick ticker. A timer that survives
+// its handler is a goroutine the runtime parks forever, which is exactly
+// what the package's goleak TestMain fails on, so the two copies were the
+// kind of duplication where the SECOND one silently stops being maintained.
+//
+// The caller defers the returned stop. It is safe to call once and only
+// once, and stops what exists: a connection with no tick has no ticker to
+// stop, and a definition with no timeline never built the timer.
+func (l *streamLoop) startClocks() (streamClocks, func()) {
+	lifetime := time.NewTimer(l.opts.Lifetime)
+	ping := time.NewTicker(l.opts.Ping)
+	l.armTimeline()
+
+	clocks := streamClocks{
+		lifetime:   lifetime.C,
+		ping:       ping.C,
+		tickActive: l.def.Tick != nil && l.tick != nil,
+	}
+	var tick *time.Ticker
+	if clocks.tickActive {
+		tick = time.NewTicker(time.Duration(l.def.Tick.IntervalMs) * time.Millisecond)
+		clocks.tick = tick.C
+	}
+
+	return clocks, func() {
+		lifetime.Stop()
+		ping.Stop()
+		// l.timeline is read at STOP time, not captured above: armTimeline
+		// creates it lazily on the first frame and both loops re-arm it as
+		// they go, so a timer that did not exist when the clocks started
+		// can exist by the time they stop.
+		if l.timeline != nil {
+			l.timeline.Stop()
+		}
+		if tick != nil {
+			tick.Stop()
+		}
+	}
+}
+
 // writeTimelineFrame writes the next scripted frame and advances (looping
 // if the definition says so). false means the connection is over — a
 // write failure, or the timeline drained with nothing left to run.
@@ -490,25 +543,8 @@ func (l *streamLoop) run(ctx context.Context, cancelled <-chan struct{}, inbox <
 			return false
 		}
 	}
-	lifetime := time.NewTimer(l.opts.Lifetime)
-	defer lifetime.Stop()
-	ping := time.NewTicker(l.opts.Ping)
-	defer ping.Stop()
-
-	l.armTimeline()
-	defer func() {
-		if l.timeline != nil {
-			l.timeline.Stop()
-		}
-	}()
-
-	var tickC <-chan time.Time
-	tickActive := l.def.Tick != nil && l.tick != nil
-	if tickActive {
-		t := time.NewTicker(time.Duration(l.def.Tick.IntervalMs) * time.Millisecond)
-		defer t.Stop()
-		tickC = t.C
-	}
+	clocks, stopClocks := l.startClocks()
+	defer stopClocks()
 
 	for {
 		select {
@@ -516,9 +552,9 @@ func (l *streamLoop) run(ctx context.Context, cancelled <-chan struct{}, inbox <
 			return
 		case <-cancelled:
 			return
-		case <-lifetime.C:
+		case <-clocks.lifetime:
 			return
-		case <-ping.C:
+		case <-clocks.ping:
 			if l.stopped() {
 				return
 			}
@@ -526,10 +562,10 @@ func (l *streamLoop) run(ctx context.Context, cancelled <-chan struct{}, inbox <
 				return
 			}
 		case <-l.timelineC:
-			if !l.writeTimelineFrame(wr, tickActive) {
+			if !l.writeTimelineFrame(wr, clocks.tickActive) {
 				return
 			}
-		case <-tickC:
+		case <-clocks.tick:
 			if !l.writeTick(ctx, wr) {
 				return
 			}
@@ -593,14 +629,7 @@ func (p *Plane) PreviewStream(ctx context.Context, ws *workspaces.Workspace, dra
 			if err := jsonx.Unmarshal(draft.Stream.Tick.Schema, &schema); err != nil {
 				return domain.StreamPreview{}, err
 			}
-			g := gen.New(nil, gen.Options{
-				Seed:     rt.settings.Seed,
-				ListSize: rt.settings.ListSize,
-				NullRate: rt.settings.NullRate,
-				MaxBytes: p.cfg.MaxResponse,
-				Identity: rt.settings.Identity,
-				Auth:     rt.settings.Auth,
-			})
+			g := gen.New(nil, gen.OptionsFrom(rt.settings, p.cfg.MaxResponse))
 			tick = newTickGenerator(g, schema, draft.CanonicalPath, 0, p.cfg.MaxResponse)
 		}
 	}

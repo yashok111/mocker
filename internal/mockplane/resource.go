@@ -252,6 +252,24 @@ func writeEntityNotFound(w http.ResponseWriter, route *router.Route, key string)
 		"%s %s has no entity %q", route.Method, route.CanonicalPath, key))
 }
 
+// writeEntityRefusal answers a NAMED entity-write refusal. The code comes
+// from resources' own table — the same table the admin plane's mapping and
+// the Lua host's storeErr read, so the three cannot drift on the word — and
+// the status stays this plane's choice, because it is not the admin plane's:
+// ErrResourceGone is a 404 there and a silent fall-through to the generator
+// here (R37), so a shared status would have to be wrong for one of them.
+//
+// A sentinel the table does not name never reaches here: every caller
+// matched it with errors.Is first. The fallback exists so a future arm that
+// forgets to answers httpx.CodeInternal rather than an empty code.
+func writeEntityRefusal(w http.ResponseWriter, route *router.Route, err error, status int, detail string) {
+	code, ok := resources.WriteRefusalCode(err)
+	if !ok {
+		code = httpx.CodeInternal
+	}
+	httpx.Err(w, status, code, fmt.Sprintf("%s %s: %s", route.Method, route.CanonicalPath, detail))
+}
+
 // envelopeOverhead is D7's own arithmetic, not a second copy of
 // wrapEnvelope's rule: the exact number of bytes [wrapEnvelope] would ADD to
 // a collection body if this call let it reach assembleResponse —
@@ -643,12 +661,10 @@ func (p *Plane) resourceServePost(
 		case errors.Is(err, resources.ErrResourceGone):
 			return rv, false // R37: declined mid-request — answer from the generator
 		case errors.Is(err, resources.ErrEntityLimit):
-			httpx.Err(w, http.StatusConflict, "entity_limit", fmt.Sprintf(
-				"%s %s: resource is at its entity limit", route.Method, route.CanonicalPath))
+			writeEntityRefusal(w, route, err, http.StatusConflict, "resource is at its entity limit")
 			return rv, true
 		case errors.Is(err, resources.ErrWriteBusy):
-			httpx.Err(w, http.StatusServiceUnavailable, "write_busy", fmt.Sprintf(
-				"%s %s: writer busy, try again", route.Method, route.CanonicalPath))
+			writeEntityRefusal(w, route, err, http.StatusServiceUnavailable, "writer busy, try again")
 			return rv, true
 		default:
 			p.log.Warn("create resource entity", "workspace", ws.Slug, "routeFamily", res.RouteFamily, "err", err)
@@ -697,8 +713,7 @@ func (p *Plane) resourceServeDelete(
 	if err != nil {
 		switch {
 		case errors.Is(err, resources.ErrWriteBusy):
-			httpx.Err(w, http.StatusServiceUnavailable, "write_busy", fmt.Sprintf(
-				"%s %s: writer busy, try again", route.Method, route.CanonicalPath))
+			writeEntityRefusal(w, route, err, http.StatusServiceUnavailable, "writer busy, try again")
 			return rv, true
 		case errors.Is(err, resources.ErrResourceGone):
 			return rv, false // R37

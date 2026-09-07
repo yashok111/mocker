@@ -470,21 +470,24 @@ func (h *luaHost) resolveFamily(family string, scope []string) (*resources.Resou
 // route already answer by name. ErrResourceGone is `unknown_family`: the
 // family was declined between the runtime build and this call, and from the
 // function's side that is indistinguishable from never having been confirmed.
+//
+// This used to be a THIRD hand-written copy of the same five-way switch,
+// beside the mock plane's HTTP mapping (resource.go) and the admin plane's
+// (admin/entity_write_handlers.go) — so a sixth sentinel had to be
+// remembered in three files and the copy that forgot it silently answered
+// `store_failed`. The words now come from resources' own table, which is
+// where the sentinels are and where a completeness test can see them; the
+// Lua vocabulary differs from the HTTP one for two rows (`bad_key` and
+// `key_conflict` against `invalid_entity_key` and `entity_key_conflict`)
+// because both are published contracts — internal/guide/functions.md and
+// api/openapi.json respectively — and the table carries both columns rather
+// than renaming one into the other.
+//
+// The error is built here rather than in resources because what a function
+// reads is an ERROR VALUE whose message is the whole payload: the caller
+// puts err.Error() straight into the script's second return value.
 func storeErr(err error) error {
-	switch {
-	case errors.Is(err, resources.ErrResourceGone):
-		return errors.New("unknown_family")
-	case errors.Is(err, resources.ErrEntityLimit):
-		return errors.New("entity_limit")
-	case errors.Is(err, resources.ErrEntityKeyConflict):
-		return errors.New("key_conflict")
-	case errors.Is(err, resources.ErrEntityKeyNotCanonical):
-		return errors.New("bad_key")
-	case errors.Is(err, resources.ErrWriteBusy):
-		return errors.New("write_busy")
-	default:
-		return errors.New("store_failed")
-	}
+	return errors.New(resources.WriteRefusalLuaCode(err))
 }
 
 // entityObject decodes a stored row's data as the object the function sees.

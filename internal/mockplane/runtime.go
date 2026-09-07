@@ -277,12 +277,87 @@ func (p *Plane) runtimeFor(ctx context.Context, ws *workspaces.Workspace) (*runt
 // parameter existed — mergeDraftRows returns its base argument unchanged
 // when there is nothing to merge, so nil in means the same *map value* out,
 // not merely an equal one.
+// The body is five phases, each extracted below in the order it must run.
+// The order is the whole contract and is NOT an accident of layout: the
+// composed layer (phase 1) supplies the EFFECTIVE settings the generator is
+// built from (phase 2) and the override rows the patched schemas are read
+// out of, and the route table (phase 5) needs both halves of the route list
+// (phases 2 and 3). Splitting them into named functions is what makes that
+// order readable; it is not license to reorder them.
 func (p *Plane) buildRuntime(ctx context.Context, ws *workspaces.Workspace, draft map[string]*overrides.Row) (*runtime, error) {
-	// Steps 7, 7b and the recipe compilation run before the spec half:
-	// gen.New below reads the EFFECTIVE settings, and an active scenario
-	// replaces seven of their fields (see runtimeFor's own note on the
-	// order of execution, and [composeScenarioLayer]).
-	//
+	layer, err := p.loadComposedOverrides(ctx, ws, draft)
+	if err != nil {
+		return nil, err
+	}
+
+	spec, err := p.buildGeneratorForWorkspace(ctx, ws, layer)
+	if err != nil {
+		return nil, err
+	}
+
+	customRoutes, customRows, err := p.loadCustomRoutes(ctx, ws)
+	if err != nil {
+		return nil, err
+	}
+
+	resourcesByFamily, err := p.loadResourcesByFamily(ctx, ws)
+	if err != nil {
+		return nil, err
+	}
+
+	// Step 9: ONE sorted table, spec routes and custom routes together —
+	// see runtimeFor's own doc comment on step 9 for why that must be a
+	// single router.Build call and not two tables merged after the fact.
+	allRoutes := make([]router.Route, 0, len(spec.routes)+len(customRoutes))
+	allRoutes = append(allRoutes, spec.routes...)
+	allRoutes = append(allRoutes, customRoutes...)
+	// ws.Settings.BasePath, not settings.BasePath — the two are equal by
+	// construction (composeScenarioLayer restores the workspace's basePath
+	// on purpose, A3a), and spelling the workspace out here keeps the route
+	// table's dependence on the WORKSPACE's prefix visible at the one line
+	// that decides it, instead of resting on a property of another file.
+	table := router.Build(allRoutes, ws.Settings.BasePath)
+
+	// P7a: the custom rows' inline schemas, compiled against the SAME
+	// resolver the generator walks nested $refs through (the spec's, or
+	// the skeleton's) — see buildCustomInline for what an unresolvable
+	// $ref becomes.
+	customInline := buildCustomInline(p.log, ws.Slug, customRows, spec.resolver)
+
+	return &runtime{
+		table:          table,
+		gen:            spec.generator,
+		resolver:       spec.resolver,
+		variants:       spec.variants,
+		settings:       layer.settings,
+		overrides:      layer.overrides,
+		recipeSets:     layer.recipeSets,
+		patchedSchemas: spec.patchedSchemas,
+		custom:         customRows,
+		customInline:   customInline,
+		routes:         allRoutes,
+		resources:      resourcesByFamily,
+	}, nil
+}
+
+// composedLayer is phase 1's output: the workspace's own settings and
+// override rows with the preview draft spliced in and an active scenario
+// composed over both, plus the recipe sets compiled from the result. The
+// three travel together because every one of them is derived from the same
+// composition and reading any of them without the others is what the A4 trap
+// (compiling recipes from the PRE-composition map) looked like.
+type composedLayer struct {
+	settings   domain.Settings
+	overrides  map[string]*overrides.Row
+	recipeSets map[recipeSetKey]*recipes.Set
+}
+
+// loadComposedOverrides is phase 1 (steps 7, 7b and the recipe compilation).
+// It runs before the spec half because gen.New there reads the EFFECTIVE
+// settings, and an active scenario replaces seven of their fields (see
+// runtimeFor's own note on the order of execution, and
+// [composeScenarioLayer]).
+func (p *Plane) loadComposedOverrides(ctx context.Context, ws *workspaces.Workspace, draft map[string]*overrides.Row) (composedLayer, error) {
 	// The overrides half is skipped entirely, leaving the map nil, when the
 	// Plane was never given an OverrideSource — see [Plane.SetOverrides]'s
 	// doc comment for why that is the correct, permanent state for every
@@ -292,7 +367,7 @@ func (p *Plane) buildRuntime(ctx context.Context, ws *workspaces.Workspace, draf
 	if p.overrides != nil {
 		loaded, oerr := p.overrides.ForWorkspace(ctx, ws.ID)
 		if oerr != nil {
-			return nil, fmt.Errorf("load overrides for workspace %d: %w", ws.ID, oerr)
+			return composedLayer{}, fmt.Errorf("load overrides for workspace %d: %w", ws.ID, oerr)
 		}
 		overrideRows = loaded
 	}
@@ -321,178 +396,148 @@ func (p *Plane) buildRuntime(ctx context.Context, ws *workspaces.Workspace, draf
 		recipeSets = buildRecipeSets(p.log, ws.Slug, overrideRows)
 	}
 
-	hasSpec := p.specs != nil && ws.SpecID != nil
+	return composedLayer{settings: settings, overrides: overrideRows, recipeSets: recipeSets}, nil
+}
 
-	var (
-		generator      *gen.Generator
-		resolver       *openapi.Resolver
-		variants       map[int64][]gen.ResponseVariant
-		specRoutes     []router.Route
-		patchedSchemas map[patchedSchemaKey]map[string]any
-	)
-	if !hasSpec {
+// specLayer is phase 2's output: everything derived from the DOCUMENT the
+// workspace generates against — the spec's, or design.Skeleton's when it is
+// bound to none. generator and resolver are always set; the other three are
+// empty without a spec, which is the whole of the difference between the two
+// branches below.
+type specLayer struct {
+	generator      *gen.Generator
+	resolver       *openapi.Resolver
+	variants       map[int64][]gen.ResponseVariant
+	routes         []router.Route
+	patchedSchemas map[patchedSchemaKey]map[string]any
+}
+
+// buildGeneratorForWorkspace is phase 2: the document, its resolver, the
+// generator over it and — with a spec — the response variants, the spec
+// routes and the patched schemas.
+func (p *Plane) buildGeneratorForWorkspace(ctx context.Context, ws *workspaces.Workspace, layer composedLayer) (specLayer, error) {
+	opts := gen.OptionsFrom(layer.settings, p.cfg.MaxResponse)
+
+	if p.specs == nil || ws.SpecID == nil {
 		// P7a (decisions.md mocker-p7-api-design D5): the generator exists
 		// WITHOUT a spec, over the same skeleton document the export
 		// composes from (design.Skeleton — one definition, never two), so
 		// a custom endpoint's inline schema generates on a workspace bound
 		// to nothing — "a design from nothing" (DESIGN §34.4). variants,
-		// specRoutes and patchedSchemas keep their spec gate: there is
+		// routes and patchedSchemas keep their spec gate: there is
 		// nothing of theirs to build.
-		doc, _, err := openapi.Load(design.Skeleton(ws.Name))
+		generator, resolver, err := gen.OverDocument(design.Skeleton(ws.Name), opts)
 		if err != nil {
-			return nil, fmt.Errorf("load the skeleton document: %w", err)
+			return specLayer{}, fmt.Errorf("load the skeleton document: %w", err)
 		}
-		resolver = openapi.NewResolver(doc, openapi.DefaultRefBudget)
-		generator = gen.New(resolver, gen.Options{
-			Seed:     settings.Seed,
-			ListSize: settings.ListSize,
-			NullRate: settings.NullRate,
-			MaxBytes: p.cfg.MaxResponse,
-			Identity: settings.Identity,
-			Auth:     settings.Auth,
-		})
-	}
-	if hasSpec {
-		specID := *ws.SpecID
-
-		normalized, err := p.specs.Normalized(ctx, specID)
-		if err != nil {
-			return nil, fmt.Errorf("load normalized document for spec %d: %w", specID, err)
-		}
-
-		doc, _, err := openapi.Load(normalized)
-		if err != nil {
-			return nil, fmt.Errorf("re-load normalized document for spec %d: %w", specID, err)
-		}
-		resolver = openapi.NewResolver(doc, openapi.DefaultRefBudget)
-
-		generator = gen.New(resolver, gen.Options{
-			Seed:     settings.Seed,
-			ListSize: settings.ListSize,
-			NullRate: settings.NullRate,
-			MaxBytes: p.cfg.MaxResponse,
-			Identity: settings.Identity,
-			Auth:     settings.Auth,
-		})
-
-		variants, err = p.specs.Variants(ctx, specID)
-		if err != nil {
-			return nil, fmt.Errorf("load response variants for spec %d: %w", specID, err)
-		}
-
-		specRoutes, err = p.specs.Routes(ctx, specID)
-		if err != nil {
-			return nil, fmt.Errorf("load routes for spec %d: %w", specID, err)
-		}
-
-		// D1/D2(6): the patch is parsed AND APPLIED here — the TAIL of this
-		// block, after specRoutes is loaded and before the block closes —
-		// because this is the only point where p.log, the COMPOSED
-		// overrideRows, resolver, variants and specRoutes are all in scope
-		// at once. resolver is declared with := above, inside this same
-		// block, and does not outlive it: "after the spec block" is a place
-		// where it does not exist. overrideRows is already the
-		// post-composition map (an active scenario's rows, if any, were
-		// already overlaid above), never the pre-composition one — the
-		// identical A4 trap buildRecipeSets was written to avoid.
-		patchedSchemas = buildPatchedSchemas(p.log, ws.Slug, resolver, overrideRows, variants, specRoutes)
+		return specLayer{generator: generator, resolver: resolver}, nil
 	}
 
-	// Custom endpoints (step 8): skipped entirely, leaving both customRoutes
-	// and runtime.custom nil/empty, when the Plane has no CustomSource — the
-	// same "no source wired, no change" contract as overrides above. A row
-	// with OverrideOn=false is dropped right here rather than carried into
-	// the table and filtered at match time: customep.Row's own doc comment
-	// promises it is left out of the route table ENTIRELY, so a request
-	// against its path either 404s or falls through to the spec operation it
-	// would otherwise have shadowed (DESIGN §8 rule 3), exactly as if the
-	// row were never created.
-	var (
-		customRoutes []router.Route
-		customRows   map[int64]*customep.Row
-	)
-	if p.custom != nil {
-		rows, cerr := p.custom.ForWorkspace(ctx, ws.ID)
-		if cerr != nil {
-			return nil, fmt.Errorf("load custom endpoints for workspace %d: %w", ws.ID, cerr)
-		}
-		customRoutes = make([]router.Route, 0, len(rows))
-		customRows = make(map[int64]*customep.Row, len(rows))
-		for _, row := range rows {
-			if !row.OverrideOn {
-				continue
-			}
-			customRoutes = append(customRoutes, router.Route{
-				// OpRowID stays 0 (customep has no operations row); Custom
-				// and CustomRowID are what let router's comparator and
-				// respond.go's dispatch (routes.go) tell this apart from a
-				// spec route, and what let traffic's matched_id (traffic.go)
-				// record which custom row actually answered.
-				Method:        row.Method,
-				Path:          row.Path,
-				CanonicalPath: row.CanonicalPath,
-				Custom:        true,
-				SourceOrder:   row.SourceOrder,
-				CustomRowID:   row.ID,
-			})
-			customRows[row.ID] = row
-		}
+	specID := *ws.SpecID
+
+	normalized, err := p.specs.Normalized(ctx, specID)
+	if err != nil {
+		return specLayer{}, fmt.Errorf("load normalized document for spec %d: %w", specID, err)
 	}
 
-	// Resources (P3a, D6 R17): every CONFIRMED resource of this workspace,
-	// in one query, keyed by RouteFamily — the same "no source wired, no
-	// change" contract custom endpoints (above) already follow. Unlike
-	// custom endpoints this never touches allRoutes/table below: a resource
-	// adds no route of its own — it takes over verbs on routes the spec
-	// ALREADY declares — so this is purely a lookup table for
-	// [resourceBranch] (resource.go), built from the workspace, never from
-	// draft or scenario state, since D9 keeps resources out of every
-	// snapshot this runtime otherwise composes.
-	var resourcesByFamily map[string]*resources.Resource
-	if p.resources != nil {
-		rows, rerr := p.resources.ForWorkspace(ctx, ws.ID)
-		if rerr != nil {
-			return nil, fmt.Errorf("load resources for workspace %d: %w", ws.ID, rerr)
-		}
-		resourcesByFamily = make(map[string]*resources.Resource, len(rows))
-		for _, res := range rows {
-			resourcesByFamily[res.RouteFamily] = res
-		}
+	generator, resolver, err := gen.OverDocument(normalized, opts)
+	if err != nil {
+		return specLayer{}, fmt.Errorf("re-load normalized document for spec %d: %w", specID, err)
 	}
 
-	// Step 9: ONE sorted table, spec routes and custom routes together —
-	// see runtimeFor's own doc comment on step 9 for why that must be a
-	// single router.Build call and not two tables merged after the fact.
-	allRoutes := make([]router.Route, 0, len(specRoutes)+len(customRoutes))
-	allRoutes = append(allRoutes, specRoutes...)
-	allRoutes = append(allRoutes, customRoutes...)
-	// ws.Settings.BasePath, not settings.BasePath — the two are equal by
-	// construction (composeScenarioLayer restores the workspace's basePath
-	// on purpose, A3a), and spelling the workspace out here keeps the route
-	// table's dependence on the WORKSPACE's prefix visible at the one line
-	// that decides it, instead of resting on a property of another file.
-	table := router.Build(allRoutes, ws.Settings.BasePath)
+	variants, err := p.specs.Variants(ctx, specID)
+	if err != nil {
+		return specLayer{}, fmt.Errorf("load response variants for spec %d: %w", specID, err)
+	}
 
-	// P7a: the custom rows' inline schemas, compiled against the SAME
-	// resolver the generator walks nested $refs through (the spec's, or
-	// the skeleton's) — see buildCustomInline for what an unresolvable
-	// $ref becomes.
-	customInline := buildCustomInline(p.log, ws.Slug, customRows, resolver)
+	specRoutes, err := p.specs.Routes(ctx, specID)
+	if err != nil {
+		return specLayer{}, fmt.Errorf("load routes for spec %d: %w", specID, err)
+	}
 
-	return &runtime{
-		table:          table,
-		gen:            generator,
+	// D1/D2(6): the patch is parsed AND APPLIED here — the TAIL of this
+	// function, after specRoutes is loaded and before it returns — because
+	// this is the only point where p.log, the COMPOSED override rows,
+	// resolver, variants and specRoutes are all in scope at once.
+	// layer.overrides is already the post-composition map (an active
+	// scenario's rows, if any, were overlaid in phase 1), never the
+	// pre-composition one — the identical A4 trap buildRecipeSets was
+	// written to avoid.
+	patchedSchemas := buildPatchedSchemas(p.log, ws.Slug, resolver, layer.overrides, variants, specRoutes)
+
+	return specLayer{
+		generator:      generator,
 		resolver:       resolver,
 		variants:       variants,
-		settings:       settings,
-		overrides:      overrideRows,
-		recipeSets:     recipeSets,
+		routes:         specRoutes,
 		patchedSchemas: patchedSchemas,
-		custom:         customRows,
-		customInline:   customInline,
-		routes:         allRoutes,
-		resources:      resourcesByFamily,
 	}, nil
+}
+
+// loadCustomRoutes is phase 3 — custom endpoints (step 8): skipped entirely,
+// leaving both return values nil, when the Plane has no CustomSource — the
+// same "no source wired, no change" contract as overrides above. A row
+// with OverrideOn=false is dropped right here rather than carried into
+// the table and filtered at match time: customep.Row's own doc comment
+// promises it is left out of the route table ENTIRELY, so a request
+// against its path either 404s or falls through to the spec operation it
+// would otherwise have shadowed (DESIGN §8 rule 3), exactly as if the
+// row were never created.
+func (p *Plane) loadCustomRoutes(ctx context.Context, ws *workspaces.Workspace) ([]router.Route, map[int64]*customep.Row, error) {
+	if p.custom == nil {
+		return nil, nil, nil
+	}
+	rows, cerr := p.custom.ForWorkspace(ctx, ws.ID)
+	if cerr != nil {
+		return nil, nil, fmt.Errorf("load custom endpoints for workspace %d: %w", ws.ID, cerr)
+	}
+	customRoutes := make([]router.Route, 0, len(rows))
+	customRows := make(map[int64]*customep.Row, len(rows))
+	for _, row := range rows {
+		if !row.OverrideOn {
+			continue
+		}
+		customRoutes = append(customRoutes, router.Route{
+			// OpRowID stays 0 (customep has no operations row); Custom
+			// and CustomRowID are what let router's comparator and
+			// respond.go's dispatch (routes.go) tell this apart from a
+			// spec route, and what let traffic's matched_id (traffic.go)
+			// record which custom row actually answered.
+			Method:        row.Method,
+			Path:          row.Path,
+			CanonicalPath: row.CanonicalPath,
+			Custom:        true,
+			SourceOrder:   row.SourceOrder,
+			CustomRowID:   row.ID,
+		})
+		customRows[row.ID] = row
+	}
+	return customRoutes, customRows, nil
+}
+
+// loadResourcesByFamily is phase 4 — resources (P3a, D6 R17): every
+// CONFIRMED resource of this workspace, in one query, keyed by RouteFamily —
+// the same "no source wired, no change" contract custom endpoints (above)
+// already follow. Unlike custom endpoints this never touches allRoutes/table
+// in the caller: a resource adds no route of its own — it takes over verbs
+// on routes the spec ALREADY declares — so this is purely a lookup table for
+// [resourceBranch] (resource.go), built from the workspace, never from
+// draft or scenario state, since D9 keeps resources out of every snapshot
+// the runtime otherwise composes. That is also why it takes no
+// [composedLayer]: there is nothing of the composition for it to read.
+func (p *Plane) loadResourcesByFamily(ctx context.Context, ws *workspaces.Workspace) (map[string]*resources.Resource, error) {
+	if p.resources == nil {
+		return nil, nil
+	}
+	rows, rerr := p.resources.ForWorkspace(ctx, ws.ID)
+	if rerr != nil {
+		return nil, fmt.Errorf("load resources for workspace %d: %w", ws.ID, rerr)
+	}
+	resourcesByFamily := make(map[string]*resources.Resource, len(rows))
+	for _, res := range rows {
+		resourcesByFamily[res.RouteFamily] = res
+	}
+	return resourcesByFamily, nil
 }
 
 // mergeDraftRows overlays draft onto base by key — draft wins on a

@@ -29,18 +29,53 @@ import (
 
 const (
 	// codeEntityNotFound is DELETE's 404 for a key the family does not
-	// hold — the same code the mock plane's own detail route answers.
+	// hold — the same code the mock plane's own detail route answers. It is
+	// NOT a resources sentinel: "no such row" is a false return, not an
+	// error, so it has no row in resources' entity-write table.
 	codeEntityNotFound = "entity_not_found"
-	// codeEntityLimit is the 409 both routes answer over a cap, the same
-	// code and status the mock plane's POST gives.
-	codeEntityLimit = "entity_limit"
-	// codeEntityInvalidKey refuses a key outside the segment alphabet, or
-	// one that is not the canonical form of the family's id type.
-	codeEntityInvalidKey = "invalid_entity_key"
-	// codeEntityKeyConflict is PUT's 409 for a key that already exists in
-	// another base scope of the family (resources.ErrEntityKeyConflict).
-	codeEntityKeyConflict = "entity_key_conflict"
 )
+
+// entityWriteRefusal is the ONE place this plane turns a resources write
+// failure into an answer. The STATUS and the human message are the admin
+// plane's own choice — the mock plane deliberately answers differently for
+// the same sentinel (ErrResourceGone falls through to the generator there,
+// D13 clause 34/R37) — but the CODE comes from resources' entity-write
+// table, so the two planes and the Lua host cannot drift apart on the word
+// the way they used to: `write_busy` alone was a bare literal at four
+// sites in two packages, with no constant behind any of them.
+//
+// idType is only read by the one message that names it. ok is false for
+// anything the table does not name, which both callers answer as their own
+// 500 after logging — exactly what the default arm of each switch did.
+//
+// Delete returns only ErrResourceGone and ErrWriteBusy, so sharing this
+// with the DELETE handler adds arms it cannot reach rather than changing
+// any answer it can.
+func entityWriteRefusal(err error, idType string) (status int, code, message string, ok bool) {
+	code, ok = resources.WriteRefusalCode(err)
+	if !ok {
+		return 0, "", "", false
+	}
+	switch {
+	case errors.Is(err, resources.ErrResourceGone):
+		return http.StatusNotFound, code, "unknown route family", true
+	case errors.Is(err, resources.ErrEntityLimit):
+		return http.StatusConflict, code, "resource is at its entity limit (rows or bytes)", true
+	case errors.Is(err, resources.ErrEntityKeyConflict):
+		return http.StatusConflict, code, "an entity with this key already exists in another base scope of the family", true
+	case errors.Is(err, resources.ErrEntityKeyNotCanonical):
+		return http.StatusBadRequest, code,
+			"entity key must be the canonical form of the family's id type (" + idType + ")", true
+	case errors.Is(err, resources.ErrWriteBusy):
+		return http.StatusServiceUnavailable, code, "writer busy, try again", true
+	}
+	// The table named it and this switch did not: a row was added to
+	// resources without a status here. A 500 with the table's code is
+	// honest about both halves — the name is right, the status is not
+	// chosen — and the completeness test in resources is what stops it
+	// from ever shipping.
+	return http.StatusInternalServerError, code, "unhandled resource write refusal", true
+}
 
 // entityKeyRe is what a key may be: a URL segment's unreserved characters,
 // 1..128 of them. The mock plane's own keys are decimal integers; a family
@@ -73,7 +108,11 @@ type setResourceEntityView struct {
 func entityKeyFromPath(w http.ResponseWriter, r *http.Request) (string, bool) {
 	key := r.PathValue("key")
 	if key == "." || key == ".." || !entityKeyRe.MatchString(key) {
-		httpx.Err(w, http.StatusBadRequest, codeEntityInvalidKey,
+		// The same code the canonical-form refusal answers
+		// (resources.ErrEntityKeyNotCanonical): both say "this key cannot
+		// address a row", and a caller has no use for telling the segment
+		// alphabet apart from the id type.
+		httpx.Err(w, http.StatusBadRequest, resources.CodeEntityInvalidKey,
 			"entity key must be 1..128 characters of [A-Za-z0-9._~-] and not \".\" or \"..\"")
 		return "", false
 	}
@@ -124,22 +163,12 @@ func (s *Server) handleSetResourceEntity(w http.ResponseWriter, r *http.Request)
 		resources.ScopeKey(body.BaseScopeKey), resources.ScopeKey(body.ScopeKey),
 		key, res.IDField, res.Wrapper.IDType, body.Data)
 	if err != nil {
-		switch {
-		case errors.Is(err, resources.ErrResourceGone):
-			httpx.Err(w, http.StatusNotFound, codeResourceUnknownFamily, "unknown route family")
-		case errors.Is(err, resources.ErrEntityLimit):
-			httpx.Err(w, http.StatusConflict, codeEntityLimit, "resource is at its entity limit (rows or bytes)")
-		case errors.Is(err, resources.ErrEntityKeyConflict):
-			httpx.Err(w, http.StatusConflict, codeEntityKeyConflict, "an entity with this key already exists in another base scope of the family")
-		case errors.Is(err, resources.ErrEntityKeyNotCanonical):
-			httpx.Err(w, http.StatusBadRequest, codeEntityInvalidKey,
-				"entity key must be the canonical form of the family's id type ("+res.Wrapper.IDType+")")
-		case errors.Is(err, resources.ErrWriteBusy):
-			httpx.Err(w, http.StatusServiceUnavailable, "write_busy", "writer busy, try again")
-		default:
-			s.log.Error("set resource entity", "workspace", ws.Slug, "family", family, "key", key, "err", err)
-			httpx.Err(w, http.StatusInternalServerError, httpx.CodeInternal, "failed to write resource entity")
+		if status, code, message, named := entityWriteRefusal(err, res.Wrapper.IDType); named {
+			httpx.Err(w, status, code, message)
+			return
 		}
+		s.log.Error("set resource entity", "workspace", ws.Slug, "family", family, "key", key, "err", err)
+		httpx.Err(w, http.StatusInternalServerError, httpx.CodeInternal, "failed to write resource entity")
 		return
 	}
 	httpx.JSON(w, http.StatusOK, setResourceEntityView{
@@ -195,15 +224,12 @@ func (s *Server) handleDeleteResourceEntity(w http.ResponseWriter, r *http.Reque
 	deleted, err := s.resourcesRepo.Delete(r.Context(), res.ID,
 		resources.ScopeKey(body.BaseScopeKey), resources.ScopeKey(body.ScopeKey), key)
 	if err != nil {
-		switch {
-		case errors.Is(err, resources.ErrResourceGone):
-			httpx.Err(w, http.StatusNotFound, codeResourceUnknownFamily, "unknown route family")
-		case errors.Is(err, resources.ErrWriteBusy):
-			httpx.Err(w, http.StatusServiceUnavailable, "write_busy", "writer busy, try again")
-		default:
-			s.log.Error("delete resource entity", "workspace", ws.Slug, "family", family, "key", key, "err", err)
-			httpx.Err(w, http.StatusInternalServerError, httpx.CodeInternal, "failed to delete resource entity")
+		if status, code, message, named := entityWriteRefusal(err, res.Wrapper.IDType); named {
+			httpx.Err(w, status, code, message)
+			return
 		}
+		s.log.Error("delete resource entity", "workspace", ws.Slug, "family", family, "key", key, "err", err)
+		httpx.Err(w, http.StatusInternalServerError, httpx.CodeInternal, "failed to delete resource entity")
 		return
 	}
 	if !deleted {

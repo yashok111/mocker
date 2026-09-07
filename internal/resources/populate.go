@@ -25,31 +25,25 @@ import (
 )
 
 // buildGenerator builds a [gen.Generator] over specID's normalized document,
-// mirroring internal/mockplane/runtime.go's buildRuntime step 1-4 exactly:
-// Normalized -> Load -> NewResolver -> gen.New, with Seed/ListSize/NullRate/
-// Identity/Auth from settings (the caller's already-composed EFFECTIVE
-// settings — scenario overlay included, D5) and MaxBytes from this
-// package's own maxResponseBytes (cfg.MaxResponse). Returns the resolver
-// too: [computeWriteForm]'s two-hop $ref walk needs it directly, and
+// mirroring internal/mockplane/runtime.go's buildRuntime step 1-4 exactly —
+// which is now literal rather than a resemblance: both go through
+// [gen.OverDocument] (Load -> NewResolver -> gen.New at the default $ref
+// budget) and [gen.OptionsFrom], so the two cannot fall out of step on a
+// seventh Options field the way three hand-written literals could. settings
+// is the caller's already-composed EFFECTIVE settings (scenario overlay
+// included, D5) and MaxBytes comes from this package's own
+// maxResponseBytes (cfg.MaxResponse). Returns the resolver too:
+// [computeWriteForm]'s two-hop $ref walk needs it directly, and
 // [gen.Generator] does not expose the one it holds.
 func (r *Repo) buildGenerator(ctx context.Context, specID int64, settings domain.Settings) (*gen.Generator, *openapi.Resolver, error) {
 	normalized, err := r.specs.Normalized(ctx, specID)
 	if err != nil {
 		return nil, nil, fmt.Errorf("load normalized document for spec %d: %w", specID, err)
 	}
-	doc, _, err := openapi.Load(normalized)
+	generator, resolver, err := gen.OverDocument(normalized, gen.OptionsFrom(settings, r.maxResponseBytes))
 	if err != nil {
 		return nil, nil, fmt.Errorf("re-load normalized document for spec %d: %w", specID, err)
 	}
-	resolver := openapi.NewResolver(doc, openapi.DefaultRefBudget)
-	generator := gen.New(resolver, gen.Options{
-		Seed:     settings.Seed,
-		ListSize: settings.ListSize,
-		NullRate: settings.NullRate,
-		MaxBytes: r.maxResponseBytes,
-		Identity: settings.Identity,
-		Auth:     settings.Auth,
-	})
 	return generator, resolver, nil
 }
 
