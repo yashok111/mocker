@@ -166,10 +166,12 @@ export function OperationEditor({
   // no room for it — it travels beside the PUT body, not inside it.
   const [editVersion, setEditVersion] = useState<number | null>(null);
   const [savedNote, setSavedNote] = useState<string | null>(null);
-  // Bumped on a conflict reload: the variant editors keep a local body text
-  // and error of their own, and a reload that leaves the stored body
-  // unchanged would otherwise keep a stale invalid draft in the box.
+  // Bumped on reset or conflict reload: local body text, errors and header
+  // rows must be discarded even when the replacement has the same stored
+  // body/headers. Ordinary edits keep the mount and its duplicate/empty rows.
   const [reloadKey, setReloadKey] = useState(0);
+  const [statusReloadKeys, setStatusReloadKeys] = useState<Record<string, number>>({});
+  const [uncommittedBodies, setUncommittedBodies] = useState<Record<string, boolean>>({});
   // A21 (U9): the draft compared with what the server holds — DERIVED, so
   // there is no flag to forget to set. The parent (OperationsPage) reads it
   // through onDirtyChange and asks before remounting this editor on another
@@ -197,7 +199,8 @@ export function OperationEditor({
   const dirty =
     fields !== null &&
     serverFields !== null &&
-    canonicalJSON(fields) !== canonicalJSON(serverFields);
+    (canonicalJSON(fields) !== canonicalJSON(serverFields) ||
+      Object.values(uncommittedBodies).some(Boolean));
   const onDirtyChangeRef = useRef(onDirtyChange);
   useEffect(() => {
     onDirtyChangeRef.current = onDirtyChange;
@@ -344,6 +347,7 @@ export function OperationEditor({
             : "Сбрасывать было нечего — переопределения не было",
         );
         setFields(emptyDocument());
+        setReloadKey((k) => k + 1);
         // The row is gone either way (a real delete or "nothing to
         // remove"), so the next PUT from this screen expects no row — same
         // as the 404 seeding case above.
@@ -367,6 +371,7 @@ export function OperationEditor({
   // GET, since D6's whole point is that `details` already IS the retry
   // material the caller needs.
   function handleConflictReload(details: OverrideConflictDetails | EditConflictTombstone): void {
+    setReloadKey((k) => k + 1);
     if (isGoneTombstone(details)) {
       setFields(emptyDocument());
       setEditVersion(0);
@@ -385,7 +390,6 @@ export function OperationEditor({
     });
     setEditVersion(details.editVersion);
     setSavedNote(null);
-    setReloadKey((k) => k + 1);
   }
 
   function handleReset(): void {
@@ -501,6 +505,9 @@ export function OperationEditor({
   }
 
   function removeStatus(selector: string): void {
+    // Spec-declared tabs stay mounted after their override is removed.
+    // Reset only this editor: siblings may still hold incomplete JSON.
+    setStatusReloadKeys((prev) => ({ ...prev, [selector]: (prev[selector] ?? 0) + 1 }));
     setFields((prev) => {
       if (prev === null) {
         return prev;
@@ -723,7 +730,7 @@ export function OperationEditor({
                     </Text>
                   ) : (
                     <StatusPanel
-                      key={reloadKey}
+                      key={`${reloadKey}:${statusReloadKeys[selector] ?? 0}`}
                       workspaceId={workspaceId}
                       selector={selector}
                       hasSchema={statuses.some((s) => s.selector === selector)}
@@ -732,6 +739,11 @@ export function OperationEditor({
                       onBodyErrorChange={(hasError) =>
                         setBodyErrors((prev) =>
                           prev[selector] === hasError ? prev : { ...prev, [selector]: hasError },
+                        )
+                      }
+                      onUncommittedBodyChange={(hasDraft) =>
+                        setUncommittedBodies((prev) =>
+                          prev[selector] === hasDraft ? prev : { ...prev, [selector]: hasDraft },
                         )
                       }
                     />

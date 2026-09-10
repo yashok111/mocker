@@ -42,7 +42,13 @@ func NewRepo(db *store.DB) *Repo {
 // falls back to as its final tie-break, so a caller building a route table
 // from this slice already sees them in the order DESIGN §8 rule 4 wants.
 func (r *Repo) ForWorkspace(ctx context.Context, workspaceID int64) ([]*Row, error) {
-	rows, err := r.db.R.QueryContext(ctx,
+	return ForWorkspaceFrom(ctx, r.db.R, workspaceID)
+}
+
+// ForWorkspaceFrom reads and decodes the workspace rows using the caller's
+// connection or transaction, so multi-table snapshots share this decoder.
+func ForWorkspaceFrom(ctx context.Context, q store.Queryer, workspaceID int64) ([]*Row, error) {
+	rows, err := q.QueryContext(ctx,
 		selectRow+" WHERE workspace_id = ? ORDER BY source_order, id", workspaceID)
 	if err != nil {
 		return nil, fmt.Errorf("list endpoints for workspace %d: %w", workspaceID, err)

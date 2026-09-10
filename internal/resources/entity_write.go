@@ -73,7 +73,7 @@ func (r *Repo) Set(ctx context.Context, resourceID int64, base, scope ScopeKey, 
 		var count int64
 		var total sql.NullInt64
 		if err := tx.QueryRowContext(wctx,
-			"SELECT COUNT(*), SUM(LENGTH(data)) FROM entities WHERE resource_id = ?", resourceID,
+			"SELECT COUNT(*), SUM(LENGTH(CAST(data AS BLOB))) FROM entities WHERE resource_id = ?", resourceID,
 		).Scan(&count, &total); err != nil {
 			return fmt.Errorf("read entity totals for resource %d: %w", resourceID, err)
 		}
@@ -81,7 +81,7 @@ func (r *Repo) Set(ctx context.Context, resourceID int64, base, scope ScopeKey, 
 		var oldLen sql.NullInt64
 		var oldCreated sql.NullInt64
 		err = tx.QueryRowContext(wctx,
-			"SELECT LENGTH(data), created_at FROM entities WHERE resource_id = ? AND base_scope_key = ? AND scope_key = ? AND entity_key = ?",
+			"SELECT LENGTH(CAST(data AS BLOB)), created_at FROM entities WHERE resource_id = ? AND base_scope_key = ? AND scope_key = ? AND entity_key = ?",
 			resourceID, string(base), string(scope), entityKey,
 		).Scan(&oldLen, &oldCreated)
 		switch {
@@ -110,7 +110,7 @@ func (r *Repo) Set(ctx context.Context, resourceID int64, base, scope ScopeKey, 
 			return fmt.Errorf("read entity %q on resource %d: %w", entityKey, resourceID, err)
 		}
 
-		if n, perr := strconv.ParseInt(entityKey, 10, 64); perr == nil && n > 0 {
+		if n, perr := strconv.ParseInt(entityKey, 10, 64); perr == nil && n > 0 && strconv.FormatInt(n, 10) == entityKey {
 			if _, err := tx.ExecContext(wctx,
 				"UPDATE resources SET seq = MAX(seq, ?) WHERE id = ?", n, resourceID); err != nil {
 				return fmt.Errorf("raise seq for resource %d: %w", resourceID, err)
@@ -209,7 +209,7 @@ func (r *Repo) Patch(ctx context.Context, resourceID int64, base, scope ScopeKey
 
 		var total sql.NullInt64
 		if err := tx.QueryRowContext(wctx,
-			"SELECT SUM(LENGTH(data)) FROM entities WHERE resource_id = ?", resourceID,
+			"SELECT SUM(LENGTH(CAST(data AS BLOB))) FROM entities WHERE resource_id = ?", resourceID,
 		).Scan(&total); err != nil {
 			return fmt.Errorf("read entity totals for resource %d: %w", resourceID, err)
 		}
@@ -257,16 +257,10 @@ func allocateSeq(ctx context.Context, tx *sql.Tx, resourceID int64) (int64, erro
 //
 // Order, deliberately literal (D13 clause 32's concurrency guarantee comes
 // from the writer pool being one connection, not from lock discipline
-// here): re-read the row count and stored byte total, refuse over either
-// cap using the AS-GIVEN body's size, allocate seq, overwrite the id field,
-// marshal, and re-check the per-entity cap on the FINAL bytes — R23's
-// narrow band, where the id overwrite grows a body that was within the
-// capture cap into one that no longer is.
+// here): re-read the row count and stored byte total, refuse over the row
+// cap, allocate seq, overwrite the id field, marshal, then check both byte
+// caps on the final stored bytes. Refusal rolls the allocation back too.
 func (r *Repo) Create(ctx context.Context, resourceID int64, base, scope ScopeKey, idField, idType string, data map[string]any) (Entity, error) {
-	preBody, merr := jsonx.Marshal(data)
-	if merr != nil {
-		return Entity{}, fmt.Errorf("create entity on resource %d: marshal: %w", resourceID, merr)
-	}
 	perCap := r.perEntityByteCap()
 	totalCap := r.entityByteCap()
 
@@ -280,14 +274,11 @@ func (r *Repo) Create(ctx context.Context, resourceID int64, base, scope ScopeKe
 		var count int64
 		var total sql.NullInt64
 		if err := tx.QueryRowContext(wctx,
-			"SELECT COUNT(*), SUM(LENGTH(data)) FROM entities WHERE resource_id = ?", resourceID,
+			"SELECT COUNT(*), SUM(LENGTH(CAST(data AS BLOB))) FROM entities WHERE resource_id = ?", resourceID,
 		).Scan(&count, &total); err != nil {
 			return fmt.Errorf("read entity totals for resource %d: %w", resourceID, err)
 		}
 		if count+1 > r.maxEntityRows {
-			return ErrEntityLimit
-		}
-		if total.Int64+int64(len(preBody)) > totalCap {
 			return ErrEntityLimit
 		}
 
@@ -301,7 +292,7 @@ func (r *Repo) Create(ctx context.Context, resourceID int64, base, scope ScopeKe
 		if merr != nil {
 			return fmt.Errorf("marshal entity for resource %d: %w", resourceID, merr)
 		}
-		if int64(len(body)) > perCap {
+		if int64(len(body)) > perCap || total.Int64+int64(len(body)) > totalCap {
 			return ErrEntityLimit
 		}
 

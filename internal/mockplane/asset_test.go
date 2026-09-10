@@ -189,6 +189,51 @@ func TestServeAsset_refusals(t *testing.T) {
 
 // --- A6: bodyRef on a pinned variant --------------------------------------
 
+// Older builds could store XML assets. Both public serving paths must refuse
+// those rows even when their bytes contain only an inert XML element.
+func TestXMLAsset_refusedAtRouteAndBodyRef(t *testing.T) {
+	for _, mediaType := range []string{"application/xml", "TEXT/XML; charset=utf-8", "application/atom+xml"} {
+		t.Run(mediaType, func(t *testing.T) {
+			store := newFakeAssetStore()
+			store.put(1, "sample.xml", mediaType, []byte("<sample/>"))
+			p := assetTestPlane(store)
+			ws := respondTestWorkspace()
+
+			t.Run("asset route", func(t *testing.T) {
+				for _, etag := range []string{"", `"sha-sample.xml"`} {
+					req := httptest.NewRequest(http.MethodGet, "http://alex.mock.local/__mocker/assets/sample.xml", nil)
+					req.Header.Set("If-None-Match", etag)
+					rec := httptest.NewRecorder()
+					p.serveReserved(rec, req, ws, []string{"assets", "sample.xml"})
+					if rec.Code != http.StatusNotFound {
+						t.Fatalf("If-None-Match %q: status=%d body=%q, want 404", etag, rec.Code, rec.Body.String())
+					}
+					if rec.Header().Get("Content-Type") != "application/json; charset=utf-8" || strings.Contains(rec.Body.String(), "<sample/>") {
+						t.Fatalf("refused XML asset reached the wire: headers=%v body=%q", rec.Header(), rec.Body.String())
+					}
+				}
+			})
+
+			t.Run("bodyRef", func(t *testing.T) {
+				rows := map[string]*overrides.Row{
+					overrides.OpKey(http.MethodGet, "/order"): bodyRefRow("/order", "sample.xml"),
+				}
+				rt := fixtureRuntimeWithOverrides(t, orderDoc, orderRoutes(), orderVariants(), domain.DefaultSettings(), rows)
+				req := httptest.NewRequest(http.MethodGet, "http://alex.mock.local/order", nil)
+				req, tm := attachTrafficMatch(req)
+				rec := httptest.NewRecorder()
+				p.serveGenerated(rec, req, ws, rt, mustMatch(t, rt, http.MethodGet, "/order"), resources.ScopeKey(""))
+				if rec.Code != http.StatusOK || rec.Body.Len() != 0 || !tm.assetMissing {
+					t.Fatalf("status=%d body=%q assetMissing=%v, want an empty 200 marked missing", rec.Code, rec.Body.String(), tm.assetMissing)
+				}
+				if got := rec.Header().Get("Content-Type"); got == mediaType {
+					t.Fatalf("refused asset Content-Type reached the wire: %q", got)
+				}
+			})
+		})
+	}
+}
+
 func TestBodyRef_servesTheAssetVerbatimUnderItsType(t *testing.T) {
 	store := newFakeAssetStore()
 	store.put(1, "pic.jpg", "image/jpeg", []byte{0xFF, 0xD8, 0xFF, 0x00})

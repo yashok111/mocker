@@ -76,7 +76,7 @@ func (s *Server) handleExportWorkspace(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	doc, err := s.checkpointsRepo.Export(r.Context(), ws.ID, queryFlag(r, "includeData"))
+	doc, err := s.checkpointsRepo.Export(r.Context(), ws.ID, queryFlag(r, "includeData"), queryFlag(r, "includeSpec"))
 	if err != nil {
 		switch {
 		case errors.Is(err, checkpoints.ErrWorkspaceNotFound):
@@ -89,25 +89,6 @@ func (s *Server) handleExportWorkspace(w http.ResponseWriter, r *http.Request) {
 			httpx.Err(w, http.StatusInternalServerError, httpx.CodeInternal, "failed to export workspace")
 		}
 		return
-	}
-	if queryFlag(r, "includeSpec") && ws.SpecID != nil {
-		raw, rerr := s.specsRepo.Raw(r.Context(), *ws.SpecID)
-		if rerr != nil && !errors.Is(rerr, specs.ErrNotFound) {
-			s.log.Error("export workspace: read spec", "workspace", ws.Slug, "err", rerr)
-			httpx.Err(w, http.StatusInternalServerError, httpx.CodeInternal, "failed to export workspace")
-			return
-		}
-		if rerr == nil {
-			// One JSON string, never the document re-serialised: the
-			// receiving installation hashes exactly these bytes.
-			inline, merr := jsonx.Marshal(string(raw))
-			if merr != nil {
-				s.log.Error("export workspace: encode spec", "workspace", ws.Slug, "err", merr)
-				httpx.Err(w, http.StatusInternalServerError, httpx.CodeInternal, "failed to export workspace")
-				return
-			}
-			doc.Spec.Inline = inline
-		}
 	}
 	body, err := bundle.EncodeExport(doc)
 	if err != nil {

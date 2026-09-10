@@ -383,15 +383,21 @@ func TestHandler_operationsLifecycle(t *testing.T) {
 			{"pinned", "TEXT/HTML; charset=utf-8"},
 			{"pinned", "application/xhtml+xml"},
 			{"pinned", "image/svg+xml"},
+			{"pinned", "application/xml"},
+			{"pinned", "TEXT/XML; charset=utf-8"},
+			{"pinned", "application/atom+xml"},
 			{"generated", "text/html"},
 			{"generated", "TEXT/HTML; charset=utf-8"},
 			{"generated", "application/xhtml+xml"},
 			{"generated", "image/svg+xml"},
+			{"generated", "application/xml"},
+			{"generated", "text/xml"},
+			{"generated", "application/atom+xml"},
 			{"", "text/html"},
 		} {
 			putBody := map[string]any{
 				"responses": map[string]any{
-					"200": map[string]any{"mode": tc.mode, "mediaType": tc.mediaType, "body": "<script>alert(1)</script>"},
+					"200": map[string]any{"mode": tc.mode, "mediaType": tc.mediaType, "body": "<sample/>"},
 				},
 				"editVersion": editVersion,
 			}

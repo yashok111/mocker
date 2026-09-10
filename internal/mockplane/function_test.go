@@ -108,11 +108,8 @@ func TestServeFunction_timeoutIs503AndNoted(t *testing.T) {
 
 // --- clause 23: the browser-executable media type --------------------------
 
-// TestServeFunction_refusesABrowserExecutableContentType is clause 23's three
-// cases, and three is the number that matters: the table in
-// internal/httpx/mediatype.go holds more than one entry and an unparseable
-// value is refused by a different branch, so an implementation that
-// special-cases the literal text/html passes a one-case test and fails here.
+// Function-returned media types reach the shared gate only at serve time;
+// neither XML document types nor malformed types may reach the wire there.
 func TestServeFunction_refusesABrowserExecutableContentType(t *testing.T) {
 	for _, tc := range []struct {
 		name string
@@ -120,20 +117,23 @@ func TestServeFunction_refusesABrowserExecutableContentType(t *testing.T) {
 	}{
 		{"text/html", "text/html"},
 		{"svg", "image/svg+xml"},
+		{"generic XML", "application/xml"},
+		{"text XML with parameters", "TEXT/XML; charset=utf-8"},
+		{"XML suffix", "application/atom+xml"},
 		{"unparseable", "text/html; charset="},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			p, sink, _ := functionPlane(t,
-				`return 200, "<script>alert(1)</script>", {["Content-Type"] = "`+tc.typ+`"}`, 4<<20)
+				`return 200, "<sample/>", {["Content-Type"] = "`+tc.typ+`"}`, 4<<20)
 			rec, ev := serveOrder(t, p, sink)
 
 			if rec.Code != http.StatusInternalServerError {
 				t.Fatalf("status = %d, want 500", rec.Code)
 			}
-			if got := rec.Header().Get("Content-Type"); strings.Contains(got, "html") || strings.Contains(got, "svg") {
+			if got := rec.Header().Get("Content-Type"); got != "application/json; charset=utf-8" {
 				t.Fatalf("Content-Type = %q; not one byte may reach the wire under a type the plane refuses", got)
 			}
-			if strings.Contains(rec.Body.String(), "<script>") {
+			if strings.Contains(rec.Body.String(), "<sample/>") {
 				t.Fatalf("the refused body reached the client: %s", rec.Body)
 			}
 			if ev.Notes != noteFunctionFailed {

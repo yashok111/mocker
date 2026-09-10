@@ -9,6 +9,7 @@ import (
 
 	"github.com/yashok111/mocker/internal/bundle"
 	"github.com/yashok111/mocker/internal/customep"
+	"github.com/yashok111/mocker/internal/jsonx"
 	"github.com/yashok111/mocker/internal/overrides"
 	"github.com/yashok111/mocker/internal/store"
 	"github.com/yashok111/mocker/internal/workspaces"
@@ -48,50 +49,58 @@ var ErrSpecMissing = errors.New("checkpoints: import names a spec this installat
 // Export reads the workspace's configuration as the same v4 document a
 // checkpoint's config_snap holds — decoded, uncompressed — and, when
 // withData, its entity rows as the same [bundle.DataBundle] a checkpoint's
-// data_snap holds. Both reads run on the reader pool; the data half inside
-// ONE read transaction so the rows are one snapshot, not a family-by-family
-// walk over a table the mock plane is writing into.
+// data_snap holds. Configuration, spec and optional entity rows all run
+// inside one read transaction on the reader pool. withSpec includes the
+// uploaded spec bytes from that same snapshot.
 //
 // The data half keeps the checkpoint capture's probe budget and takes the
 // OPPOSITE policy on it: a checkpoint degrades to a NULL data_snap and
 // still writes its row, an export refuses by name ([ErrDataSnapshotTooLarge])
 // so the caller can ask again without the rows — an export that silently
 // dropped the rows would hand a teammate a copy that serves empty lists.
-func (r *Repo) Export(ctx context.Context, workspaceID int64, withData bool) (bundle.Export, error) {
-	_, b, err := r.readBundle(ctx, workspaceID)
-	if err != nil {
-		return bundle.Export{}, err
-	}
-	out := bundle.Export{Bundle: b}
-	if !withData {
-		return out, nil
-	}
-
-	// [store.DB.Read] (BeginTx with ReadOnly: true under the hood) is what
-	// makes this a SNAPSHOT: the probe and the rows it bounds run through
-	// the SAME transaction, so the two see the same committed state rather
-	// than two round trips the mock plane could write between.
-	var d bundle.DataBundle
-	err = r.db.Read(ctx, func(tx *sql.Tx) error {
-		over, oerr := entityDataProbeOverBudgetTx(ctx, tx, workspaceID)
-		if oerr != nil {
-			return oerr
+func (r *Repo) Export(ctx context.Context, workspaceID int64, withData, withSpec bool) (bundle.Export, error) {
+	var out bundle.Export
+	err := r.db.Read(ctx, func(tx *sql.Tx) error {
+		core, b, err := readBundleFrom(ctx, tx, workspaceID)
+		if err != nil {
+			return err
+		}
+		out.Bundle = b
+		if withSpec && core.specID != nil {
+			var raw []byte
+			if err := tx.QueryRowContext(ctx, "SELECT raw FROM specs WHERE id = ?", *core.specID).Scan(&raw); err != nil {
+				return fmt.Errorf("export: read spec %d: %w", *core.specID, err)
+			}
+			// Preserve the uploaded bytes as one JSON string: imports hash
+			// those exact bytes, and the reference above is from this snapshot.
+			inline, err := jsonx.Marshal(string(raw))
+			if err != nil {
+				return fmt.Errorf("export: encode inline spec: %w", err)
+			}
+			out.Spec.Inline = inline
+		}
+		if !withData {
+			return nil
+		}
+		over, err := entityDataProbeOverBudgetTx(ctx, tx, workspaceID)
+		if err != nil {
+			return err
 		}
 		if over {
 			return fmt.Errorf("%w: workspace %d", ErrDataSnapshotTooLarge, workspaceID)
 		}
-		var derr error
-		d, derr = readDataBundleTx(ctx, tx, workspaceID)
-		return derr
+		d, err := readDataBundleTx(ctx, tx, workspaceID)
+		if err != nil {
+			return err
+		}
+		// A workspace with no confirmed family exports as a plain bundle.
+		if len(d.Families) > 0 {
+			out.Data = &d
+		}
+		return nil
 	})
 	if err != nil {
 		return bundle.Export{}, err
-	}
-	// A workspace with no confirmed family exports as a plain bundle: an
-	// empty families array would only say "there is nothing here" in a
-	// second place.
-	if len(d.Families) > 0 {
-		out.Data = &d
 	}
 	return out, nil
 }
@@ -351,7 +360,7 @@ func copyEntitiesTx(ctx context.Context, tx *sql.Tx, sourceID, targetID int64) e
 	if _, err := tx.ExecContext(ctx, `
 		UPDATE resources SET seq = max(seq, COALESCE(
 			(SELECT max(CAST(entity_key AS INTEGER)) FROM entities
-			 WHERE resource_id = resources.id AND entity_key NOT GLOB '*[^0-9]*' AND length(entity_key) <= 18), 0))
+			 WHERE resource_id = resources.id AND CAST(CAST(entity_key AS INTEGER) AS TEXT) = entity_key), 0))
 		WHERE workspace_id = ?`, targetID); err != nil {
 		return fmt.Errorf("fork: raise seq for workspace %d: %w", targetID, err)
 	}

@@ -1,7 +1,9 @@
 package bundle_test
 
 import (
+	"bytes"
 	"errors"
+	"slices"
 	"testing"
 
 	"github.com/yashok111/mocker/internal/bundle"
@@ -211,12 +213,8 @@ func TestValidateData_refusals(t *testing.T) {
 		}
 	})
 
-	t.Run("5 entityKey is not a decimal integer string", func(t *testing.T) {
-		// Each of these would parse under a naive strconv.Atoi/ParseInt
-		// call and must still be refused — CAST('abc' AS INTEGER) is 0 in
-		// SQLite, and "+1"/"01" both parse but are not the canonical
-		// decimal form strconv.Itoa ever produces.
-		for _, key := range []string{"abc", "1.5", "+1", "01", ""} {
+	t.Run("5 entityKey must be a non-empty UTF-8 string", func(t *testing.T) {
+		for _, key := range []string{"", string([]byte{0xff})} {
 			d := dataValidBundle()
 			d.Families[0].Rows = []bundle.EntityRow{dataRow("", key, `{}`)}
 			err := bundle.ValidateData(d)
@@ -436,4 +434,33 @@ func TestEncodeDecodeData_roundTripsATwoScopeFamily(t *testing.T) {
 	// compile-time check that the wire shape agrees with D9's claim, not a
 	// runtime assertion — see the type's own doc comment for the full list
 	// of what it deliberately excludes.
+}
+
+func TestEncodeDataMixedEntityKeysRemainStable(t *testing.T) {
+	d := bundle.DataBundle{MockerData: bundle.DataVersion, Families: []bundle.FamilyEntry{{RouteFamily: "/users"}}}
+	for _, key := range []string{"z", "10", "alice", "2", "007", "550e8400-e29b-41d4-a716-446655440000", "1000000000000000000", "-1"} {
+		d.Families[0].Rows = append(d.Families[0].Rows, dataRow("", key, `{}`))
+	}
+	first, err := bundle.EncodeData(d)
+	if err != nil {
+		t.Fatal(err)
+	}
+	slices.Reverse(d.Families[0].Rows)
+	second, err := bundle.EncodeData(d)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(first, second) {
+		t.Fatalf("input order changes encoded data:\n%s\n%s", first, second)
+	}
+	got, err := bundle.DecodeData(first)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"-1", "2", "10", "1000000000000000000", "007", "550e8400-e29b-41d4-a716-446655440000", "alice", "z"}
+	for i, row := range got.Families[0].Rows {
+		if row.EntityKey != want[i] {
+			t.Errorf("row %d key=%q, want %q", i, row.EntityKey, want[i])
+		}
+	}
 }

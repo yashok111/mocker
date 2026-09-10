@@ -138,7 +138,7 @@ func TestExportImport_roundTripsTheLayerAndRefusesAnUnresolvedSpec(t *testing.T)
 	f.pinStatus(t, 418)
 	f.createEndpoint(t, f.wsID, "POST", "/extra")
 
-	doc, err := f.repo.Export(t.Context(), f.wsID, true)
+	doc, err := f.repo.Export(t.Context(), f.wsID, true, false)
 	if err != nil {
 		t.Fatalf("Export: %v", err)
 	}
@@ -192,7 +192,7 @@ func TestExportImport_roundTripsTheLayerAndRefusesAnUnresolvedSpec(t *testing.T)
 		t.Errorf("imported baseline checkpoints = %d, want 1", n)
 	}
 	// The import's export is the source's export, name aside.
-	again, err := f.repo.Export(t.Context(), out.Workspace.ID, false)
+	again, err := f.repo.Export(t.Context(), out.Workspace.ID, false, false)
 	if err != nil {
 		t.Fatal(err)
 	}

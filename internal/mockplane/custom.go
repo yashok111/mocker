@@ -223,7 +223,7 @@ func (p *Plane) serveCustom(w http.ResponseWriter, r *http.Request, ws *workspac
 	// schema, which then only declares the export's shape).
 	if found && !pinned {
 		if src, ok := rt.lookupCustomInline(row.ID, strconv.Itoa(status)); ok {
-			p.serveCustomGenerated(w, r, ws, rt, m, variant, src, status, delayMs)
+			p.serveCustomGenerated(w, r, ws, rt, m, base, variant, src, status, delayMs)
 			return
 		}
 	}
@@ -412,12 +412,12 @@ func variantPtr(responses map[string]overrides.Variant, status string) *override
 // rv.Inline — and writes the result through the same tail serveGenerated
 // uses. The 406 gate runs here because serveCustom's own only knows a
 // pinned variant's media type; a generated one declares application/json
-// unless the variant says otherwise. No resource takeover: a custom
-// endpoint is never a resource (routes.go), so the base scope the ref
-// resolver takes is the empty one.
+// unless the variant says otherwise. A custom endpoint has no resource
+// takeover, but its ref recipes still read resources within the request's
+// base scope, exactly as spec operations do.
 func (p *Plane) serveCustomGenerated(
 	w http.ResponseWriter, r *http.Request, ws *workspaces.Workspace, rt *runtime, m *router.Match,
-	variant overrides.Variant, src inlineSource, status, delayMs int,
+	base resources.ScopeKey, variant overrides.Variant, src inlineSource, status, delayMs int,
 ) {
 	route := m.Route
 	mediaType := variant.MediaType
@@ -439,7 +439,7 @@ func (p *Plane) serveCustomGenerated(
 		StatusSource: domain.StatusSourceActive,
 		Inline:       &src,
 	}
-	ref := p.newRefResolver(r.Context(), rt.resources, p.entities, ws, r, "")
+	ref := p.newRefResolver(r.Context(), rt.resources, p.entities, ws, r, base)
 	asm := p.assembleResponse(ws, rt, route, nil, rv, m.Params, r.URL.Query(), delayMs, ref,
 		p.newAssetLookup(r.Context(), r, ws), p.assetBase(r, ws))
 	// The variant's own headers, exactly as serveCustom's pinned arm writes

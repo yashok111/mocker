@@ -15,6 +15,7 @@ export function StatusPanel({
   variant,
   updateVariant,
   onBodyErrorChange,
+  onUncommittedBodyChange,
   hasSchema,
 }: {
   workspaceId: number;
@@ -22,6 +23,7 @@ export function StatusPanel({
   variant: Variant | undefined;
   updateVariant: (updater: (v: Variant) => Variant) => void;
   onBodyErrorChange: (hasError: boolean) => void;
+  onUncommittedBodyChange: (hasDraft: boolean) => void;
   /** Whether the spec declares this status (a code added by hand has no
    * schema to generate from). */
   hasSchema: boolean;
@@ -32,6 +34,7 @@ export function StatusPanel({
       variant={variant}
       updateVariant={updateVariant}
       onErrorChange={onBodyErrorChange}
+      onUncommittedBodyChange={onUncommittedBodyChange}
       testId={(name) => `operation-status-${name}-${selector}`}
       whenTestId={(name, index) => `operation-when-${name}-${selector}-${index}`}
       hasSchema={hasSchema}

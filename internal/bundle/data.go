@@ -14,8 +14,8 @@
 // DataBundle addresses a row's family by `route_family`, never by
 // `resources.id` — the identical decision P3c made for the `ref` recipe,
 // and for the identical reason (D4): `resources.id` is not stable across
-// decline-then-reconfirm (SQLite is free to reuse a deleted rowid with no
-// AUTOINCREMENT on the column), while `route_family` is the table's own
+// decline-then-reconfirm (the replacement receives a new ID), while
+// `route_family` is the table's own
 // UNIQUE key. See D4 for the full argument and for what the document
 // deliberately does NOT carry (entities.id, parent_entity_id, resources.seq
 // — each for its own stated reason). P3e's D9, re-decided the same way at
@@ -34,6 +34,7 @@ import (
 	"fmt"
 	"slices"
 	"strconv"
+	"unicode/utf8"
 
 	"github.com/yashok111/mocker/internal/jsonx"
 )
@@ -190,7 +191,7 @@ func DecodeData(data []byte) (DataBundle, error) {
 //  2. Two entries share a routeFamily.
 //  3. A routeFamily is empty.
 //  4. Two rows of one family share (scopeKey, entityKey).
-//  5. An entityKey is not a decimal integer string.
+//  5. An entityKey is empty or is not valid UTF-8.
 //
 // The fourth stays narrow at (scopeKey, entityKey) and deliberately does NOT
 // widen to include baseScopeKey (P3h, D9): it mirrors the physical
@@ -203,11 +204,9 @@ func DecodeData(data []byte) (DataBundle, error) {
 // of a validation error — a refusal in the wrong layer, naming the wrong
 // thing, on the one path a workspace's entity data is recovered by.
 //
-// The fifth looks optional and is not: SQLite's `CAST('abc' AS INTEGER)` is
-// `0`, so a non-decimal key would pass a SQL restore silently and leave the
-// seq counter below a key that exists — the invariant a restore needs to
-// hold is not even STATABLE over such a key, which is why this function
-// refuses it before any caller reaches SQL at all.
+// String keys are supplied by Set as well as numeric keys minted by Create.
+// Family-specific type checks remain at the writer; the codec preserves the
+// key verbatim and refuses strings that cannot round-trip through JSON.
 func ValidateData(d DataBundle) error {
 	if d.MockerData < minDataVersion || d.MockerData > DataVersion {
 		return fmt.Errorf("%w: mockerData %d, this build only knows versions %d..%d",
@@ -227,8 +226,8 @@ func ValidateData(d DataBundle) error {
 		type rowKey struct{ scope, entity string }
 		seenRows := make(map[rowKey]bool, len(f.Rows))
 		for j, r := range f.Rows {
-			if !isDecimalIntegerString(r.EntityKey) {
-				return fmt.Errorf("%w: families[%d] (%s) rows[%d]: entityKey %q is not a decimal integer string",
+			if r.EntityKey == "" || !utf8.ValidString(r.EntityKey) {
+				return fmt.Errorf("%w: families[%d] (%s) rows[%d]: entityKey %q must be a non-empty UTF-8 string",
 					ErrInvalid, i, f.RouteFamily, j, r.EntityKey)
 			}
 			if !isJSONObject(r.Data) {
@@ -249,26 +248,10 @@ func ValidateData(d DataBundle) error {
 	return nil
 }
 
-// isDecimalIntegerString reports whether key is the canonical decimal form
-// of an int64 — parseable AND round-tripping back to the identical string.
-// The round-trip is what catches what a bare strconv.ParseInt would let
-// through silently: "+7" and "007" both parse, but neither is the string
-// EntityRow.EntityKey's own doc comment says a restore replays VERBATIM
-// (strconv.Itoa never produces either form), so accepting them here would
-// let a corrupt or hand-edited snapshot restore a key no live write path
-// could ever have produced.
-func isDecimalIntegerString(key string) bool {
-	n, err := strconv.ParseInt(key, 10, 64)
-	if err != nil {
-		return false
-	}
-	return strconv.FormatInt(n, 10) == key
-}
-
 // canonicalizeData returns a COPY of d with Families sorted by RouteFamily
 // and each family's Rows sorted by the compound key
-// (ScopeKey, EntityKey-as-decimal-integer) — never a plain string compare
-// on EntityKey, which [compareEntityRows]'s own comment explains. d itself
+// (ScopeKey, EntityKey), with canonical integers ordered numerically before
+// the remaining string keys, which are ordered lexically. d itself
 // is never mutated: a caller that goes on to reuse it after calling
 // [EncodeData] must see exactly what it built, the same promise [canonicalize]
 // makes for [Bundle].
@@ -291,24 +274,27 @@ func canonicalizeData(d DataBundle) DataBundle {
 	return out
 }
 
-// compareEntityRows is the compound sort D4 asks for: ScopeKey compared
-// lexically first (the natural key's own leading column), EntityKey second
-// — compared as a DECIMAL INTEGER, not lexically, so "2" sorts before "10"
-// the way the counter that minted both actually orders them, rather than
-// by SQLite's or Go's default string collation. [ValidateData] has already
-// rejected any row whose EntityKey does not parse by the time this runs
-// (both of this file's exported entry points reach ValidateData before a
-// sort is ever attempted), so the parse below cannot fail on a document
-// that passed validation; it is written to ignore rather than propagate a
-// parse error for exactly that reason — there is no error channel a
-// [slices.SortFunc] comparator has to report through.
+// compareEntityRows preserves numeric ordering ("2" before "10") for
+// canonical int64 keys. Numeric keys precede other strings so mixed keys
+// have a transitive, deterministic order; "007" remains a string key.
 func compareEntityRows(a, b EntityRow) int {
 	if c := cmp.Compare(a.ScopeKey, b.ScopeKey); c != 0 {
 		return c
 	}
-	an, _ := strconv.ParseInt(a.EntityKey, 10, 64)
-	bn, _ := strconv.ParseInt(b.EntityKey, 10, 64)
-	return cmp.Compare(an, bn)
+	an, aerr := strconv.ParseInt(a.EntityKey, 10, 64)
+	bn, berr := strconv.ParseInt(b.EntityKey, 10, 64)
+	aNumeric := aerr == nil && strconv.FormatInt(an, 10) == a.EntityKey
+	bNumeric := berr == nil && strconv.FormatInt(bn, 10) == b.EntityKey
+	switch {
+	case aNumeric && bNumeric:
+		return cmp.Compare(an, bn)
+	case aNumeric:
+		return -1
+	case bNumeric:
+		return 1
+	default:
+		return cmp.Compare(a.EntityKey, b.EntityKey)
+	}
 }
 
 // isJSONObject reports whether raw is a syntactically valid JSON object.

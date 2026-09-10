@@ -214,20 +214,15 @@ type migration struct {
 }
 
 func (db *DB) applyMigration(ctx context.Context, m migration) error {
-	// The statements run inside the transaction; the version bump cannot,
-	// because PRAGMA user_version takes a literal only. Setting it right after
-	// the commit leaves a crash window of one pragma: on restart the migration
-	// would re-run, which is why every migration must be written so that a
-	// second run over its own output fails loudly rather than corrupting
-	// (CREATE TABLE without IF NOT EXISTS does exactly that).
-	if err := db.Write(ctx, func(tx *sql.Tx) error {
-		_, err := tx.ExecContext(ctx, m.sql)
+	// user_version takes a literal, but is transactional. Commit the schema
+	// and its version together so a crash cannot replay a completed rebuild.
+	return db.Write(ctx, func(tx *sql.Tx) error {
+		if _, err := tx.ExecContext(ctx, m.sql); err != nil {
+			return err
+		}
+		_, err := tx.ExecContext(ctx, "PRAGMA user_version = "+strconv.Itoa(m.version))
 		return err
-	}); err != nil {
-		return err
-	}
-	_, err := db.W.ExecContext(ctx, "PRAGMA user_version = "+strconv.Itoa(m.version))
-	return err
+	})
 }
 
 // loadMigrations reads and orders the embedded files, whose names are

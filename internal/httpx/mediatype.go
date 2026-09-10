@@ -5,10 +5,9 @@ import (
 	"strings"
 )
 
-// browserExecutableMediaType names the media types a browser navigated to a
-// response DIRECTLY renders and runs, rather than downloads or displays as
-// inert text — the only ones dangerous here, since a mocked response is
-// otherwise no more executable than any other stored string.
+// browserExecutableMediaType names explicit document types a browser renders
+// and executes on navigation. BrowserExecutableMediaType also refuses generic
+// and suffixed XML below: a generic XML type does not make XHTML content inert.
 //
 // This matters because DESIGN §16's path-routing mode (server.go's servePath)
 // puts the admin plane and every workspace's mock plane on ONE origin, and the
@@ -73,6 +72,12 @@ func BrowserExecutableMediaType(mediaType string) bool {
 		// bytes — and this package cannot predict which. Refuse rather than
 		// guess: nothing legitimate needs a Content-Type Go's own parser
 		// rejects.
+		return true
+	}
+	// XML documents can contain executable XHTML elements regardless of the
+	// declared XML subtype. Gate the parsed essence, so parameters and case
+	// cannot evade the same write-time and serve-time refusal.
+	if essence == "application/xml" || essence == "text/xml" || strings.HasSuffix(essence, "+xml") {
 		return true
 	}
 	return browserExecutableMediaType[essence]

@@ -78,7 +78,10 @@ func TestPinObservedBody_changesOnlyTheObservedResponse(t *testing.T) {
 func TestPinObservedBody_dropsABrowserExecutableMediaType(t *testing.T) {
 	t.Parallel()
 
-	for _, mt := range []string{"text/html", "TEXT/HTML; charset=utf-8", "application/xhtml+xml", "image/svg+xml"} {
+	for _, mt := range []string{
+		"text/html", "TEXT/HTML; charset=utf-8", "application/xhtml+xml", "image/svg+xml",
+		"application/xml", "text/xml", "application/atom+xml",
+	} {
 		existing := overrides.Variant{
 			Mode:      "generated",
 			MediaType: mt,
@@ -100,12 +103,12 @@ func TestPinObservedBody_dropsABrowserExecutableMediaType(t *testing.T) {
 }
 
 // TestPinObservedBody_keepsAnInnocuousMediaType is the other side of the check
-// above: only the three browser-executable types go, and a variant that never
+// above: only browser-executable types go, and a variant that never
 // had one is not given an empty string it did not ask for.
 func TestPinObservedBody_keepsAnInnocuousMediaType(t *testing.T) {
 	t.Parallel()
 
-	for _, mt := range []string{"application/json", "text/plain", "application/xml", ""} {
+	for _, mt := range []string{"application/json", "text/plain", "application/octet-stream", ""} {
 		got := pinObservedBody(overrides.Variant{Mode: "generated", MediaType: mt}, jsonx.RawMessage(`{}`), "")
 		if got.MediaType != mt {
 			t.Errorf("MediaType %q was rewritten to %q; only browser-executable types may be dropped", mt, got.MediaType)

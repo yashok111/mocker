@@ -359,7 +359,7 @@ func restoreEntitiesTx(ctx context.Context, tx *sql.Tx, workspaceID int64, d bun
 		if _, err := tx.ExecContext(ctx, `
 			UPDATE resources SET seq = max(seq, COALESCE(
 				(SELECT max(CAST(entity_key AS INTEGER)) FROM entities
-				  WHERE resource_id = ? AND entity_key NOT GLOB '*[^0-9]*' AND length(entity_key) <= 18), 0))
+				  WHERE resource_id = ? AND CAST(CAST(entity_key AS INTEGER) AS TEXT) = entity_key), 0))
 			WHERE id = ?`, resourceID, resourceID,
 		); err != nil {
 			return restored, fmt.Errorf("checkpoint: raise seq of resource %q (workspace %d): %w",

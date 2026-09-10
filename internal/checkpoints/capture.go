@@ -10,8 +10,11 @@ import (
 	"fmt"
 
 	"github.com/yashok111/mocker/internal/bundle"
+	"github.com/yashok111/mocker/internal/customep"
 	"github.com/yashok111/mocker/internal/domain"
 	"github.com/yashok111/mocker/internal/jsonx"
+	"github.com/yashok111/mocker/internal/overrides"
+	"github.com/yashok111/mocker/internal/store"
 )
 
 // --- the pre-transaction read (C5 steps 1-3) ---------------------------------
@@ -86,7 +89,11 @@ func (r *Repo) captureSnapshot(ctx context.Context, workspaceID int64) (capture,
 // checkpoint captures, through the identical code, without the gzip a
 // checkpoint row needs and an HTTP response does not.
 func (r *Repo) readBundle(ctx context.Context, workspaceID int64) (workspaceCore, bundle.Bundle, error) {
-	core, err := r.readWorkspaceCore(ctx, workspaceID)
+	return readBundleFrom(ctx, r.db.R, workspaceID)
+}
+
+func readBundleFrom(ctx context.Context, q store.Queryer, workspaceID int64) (workspaceCore, bundle.Bundle, error) {
+	core, err := readWorkspaceCoreFrom(ctx, q, workspaceID)
 	if err != nil {
 		return workspaceCore{}, bundle.Bundle{}, err
 	}
@@ -103,13 +110,13 @@ func (r *Repo) readBundle(ctx context.Context, workspaceID int64) (workspaceCore
 	// read fails silently.
 	var specRef bundle.SpecRef
 	if core.specID != nil {
-		specRef, err = r.readSpecRef(ctx, *core.specID)
+		specRef, err = readSpecRefFrom(ctx, q, *core.specID)
 		if err != nil {
 			return workspaceCore{}, bundle.Bundle{}, err
 		}
 	}
 
-	overrideRows, err := r.overrides.ForWorkspace(ctx, workspaceID)
+	overrideRows, err := overrides.ForWorkspaceFrom(ctx, q, workspaceID)
 	if err != nil {
 		return workspaceCore{}, bundle.Bundle{}, fmt.Errorf("checkpoint: %w", err)
 	}
@@ -118,7 +125,7 @@ func (r *Repo) readBundle(ctx context.Context, workspaceID int64) (workspaceCore
 		entries = append(entries, bundle.NewOverrideEntry(row))
 	}
 
-	endpointRows, err := r.customep.ForWorkspace(ctx, workspaceID)
+	endpointRows, err := customep.ForWorkspaceFrom(ctx, q, workspaceID)
 	if err != nil {
 		return workspaceCore{}, bundle.Bundle{}, fmt.Errorf("checkpoint: %w", err)
 	}
@@ -152,11 +159,11 @@ func (r *Repo) readBundle(ctx context.Context, workspaceID int64) (workspaceCore
 	// restores a workspace whose decision row says `declined` beside a live
 	// `resources` row — a state the confirm path answers `already_confirmed`
 	// for while the screen renders it as declined.
-	b.Resources, err = r.readResourceEntries(ctx, workspaceID)
+	b.Resources, err = readResourceEntriesFrom(ctx, q, workspaceID)
 	if err != nil {
 		return workspaceCore{}, bundle.Bundle{}, err
 	}
-	b.Decisions, err = r.readDecisionEntries(ctx, workspaceID)
+	b.Decisions, err = readDecisionEntriesFrom(ctx, q, workspaceID)
 	if err != nil {
 		return workspaceCore{}, bundle.Bundle{}, err
 	}
@@ -169,11 +176,15 @@ func (r *Repo) readBundle(ctx context.Context, workspaceID int64) (workspaceCore
 // whole overrides-and-spec read in between is exactly the long-held write
 // transaction this project's single-connection pool cannot afford.
 func (r *Repo) readWorkspaceCore(ctx context.Context, workspaceID int64) (workspaceCore, error) {
+	return readWorkspaceCoreFrom(ctx, r.db.R, workspaceID)
+}
+
+func readWorkspaceCoreFrom(ctx context.Context, q store.Queryer, workspaceID int64) (workspaceCore, error) {
 	var (
 		c      workspaceCore
 		specID sql.NullInt64
 	)
-	err := r.db.R.QueryRowContext(ctx,
+	err := q.QueryRowContext(ctx,
 		"SELECT revision, created_at, slug, name, settings, spec_id FROM workspaces WHERE id = ?", workspaceID,
 	).Scan(&c.revision, &c.createdAt, &c.slug, &c.name, &c.settingsJSON, &specID)
 	switch {
@@ -190,16 +201,16 @@ func (r *Repo) readWorkspaceCore(ctx context.Context, workspaceID int64) (worksp
 	}
 }
 
-// readSpecRef reads the two short strings [bundle.SpecRef] needs, through
+// readSpecRefFrom reads the two short strings [bundle.SpecRef] needs, through
 // the reader pool rather than internal/specs.Repo.ByID — the same choice
 // and the same reason scenarios/repo.go's readSpecRef states: that method
 // selects the FULL specs row, including raw and normalized documents (~350
 // KB apiece on the real fixture), and importing internal/specs would drag
 // internal/config, internal/gen, internal/openapi and internal/router in
 // for two columns.
-func (r *Repo) readSpecRef(ctx context.Context, specID int64) (bundle.SpecRef, error) {
+func readSpecRefFrom(ctx context.Context, q store.Queryer, specID int64) (bundle.SpecRef, error) {
 	var name, hash string
-	if err := r.db.R.QueryRowContext(ctx,
+	if err := q.QueryRowContext(ctx,
 		"SELECT name, hash FROM specs WHERE id = ?", specID,
 	).Scan(&name, &hash); err != nil {
 		return bundle.SpecRef{}, fmt.Errorf("read spec %d for checkpoint snapshot: %w", specID, err)
@@ -207,7 +218,7 @@ func (r *Repo) readSpecRef(ctx context.Context, specID int64) (bundle.SpecRef, e
 	return bundle.SpecRef{Name: name, Hash: hash}, nil
 }
 
-// readResourceEntries reads workspaceID's `resources` rows into the
+// readResourceEntriesFrom reads workspaceID's `resources` rows into the
 // bundle's wire shape, on the reader pool.
 //
 // A resource row is CONFIGURATION — which family is confirmed, its id
@@ -228,8 +239,8 @@ func (r *Repo) readSpecRef(ctx context.Context, specID int64) (bundle.SpecRef, e
 // decline-then-reconfirm, so a restore leaves whatever the live row has
 // standing rather than writing one back. See [bundle.ResourceEntry] for the
 // wire-only `parentFamily` that mirrors this in the other direction.
-func (r *Repo) readResourceEntries(ctx context.Context, workspaceID int64) ([]bundle.ResourceEntry, error) {
-	rows, err := r.db.R.QueryContext(ctx, `
+func readResourceEntriesFrom(ctx context.Context, q store.Queryer, workspaceID int64) ([]bundle.ResourceEntry, error) {
+	rows, err := q.QueryContext(ctx, `
 		SELECT route_family, name, id_field, id_strategy, scope_params,
 		       entity_schema, wrapper, filter_map, write_form, seq, seed_count
 		FROM resources WHERE workspace_id = ? ORDER BY route_family`, workspaceID)
@@ -273,11 +284,11 @@ func (r *Repo) readResourceEntries(ctx context.Context, workspaceID int64) ([]bu
 	return out, nil
 }
 
-// readDecisionEntries reads workspaceID's `resource_decisions` rows — see
-// [Repo.readResourceEntries] on why the two are captured together and never
+// readDecisionEntriesFrom reads workspaceID's `resource_decisions` rows — see
+// [readResourceEntriesFrom] on why the two are captured together and never
 // one without the other.
-func (r *Repo) readDecisionEntries(ctx context.Context, workspaceID int64) ([]bundle.DecisionEntry, error) {
-	rows, err := r.db.R.QueryContext(ctx,
+func readDecisionEntriesFrom(ctx context.Context, q store.Queryer, workspaceID int64) ([]bundle.DecisionEntry, error) {
+	rows, err := q.QueryContext(ctx,
 		"SELECT route_family, state FROM resource_decisions WHERE workspace_id = ? ORDER BY route_family", workspaceID)
 	if err != nil {
 		return nil, fmt.Errorf("checkpoint: read resource decisions for workspace %d: %w", workspaceID, err)
@@ -437,7 +448,7 @@ func readDataBundleTx(ctx context.Context, tx *sql.Tx, workspaceID int64) (bundl
 	}
 	defer func() { _ = rows.Close() }()
 
-	// Non-nil from the start, matching [Repo.readResourceEntries]'s own
+	// Non-nil from the start, matching [readResourceEntriesFrom]'s own
 	// rule: an empty result must still encode as "[]", never "null".
 	families := make([]bundle.FamilyEntry, 0)
 	index := make(map[string]int, len(families))

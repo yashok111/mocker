@@ -9,11 +9,9 @@ import (
 )
 
 // TestBrowserExecutableMediaType is the whole security value of this package's
-// media-type rule, so it is a table of the ACTUAL bypasses rather than a couple
-// of representative cases. Every string in the "dangerous" half below was found
-// by an adversarial pass against the previous implementation — which cut at the
-// first ";", lower-cased, trimmed and looked the result up in a three-entry map
-// — and every one of them reached the wire.
+// media-type rule: executable document types and malformed values are refused,
+// while ordinary data remains available. XML can carry executable XHTML even
+// without an XHTML media type, so generic XML belongs in the refused half.
 func TestBrowserExecutableMediaType(t *testing.T) {
 	t.Parallel()
 
@@ -25,6 +23,12 @@ func TestBrowserExecutableMediaType(t *testing.T) {
 		{" text/html ", "surrounding whitespace"},
 		{"application/xhtml+xml", "the second table entry"},
 		{"image/svg+xml", "the third: SVG carries script"},
+		{"application/xml", "generic XML can render XHTML elements"},
+		{"text/xml", "the text form also renders XML documents"},
+		{"APPLICATION/XML; charset=utf-8", "case and parameters do not change the XML essence"},
+		{" text/xml; charset=utf-8 ", "whitespace and parameters do not make XML safe"},
+		{"application/atom+xml", "XML document subtypes share the same refusal"},
+		{"APPLICATION/VND.EXAMPLE+XML; charset=utf-8", "vendor XML suffixes are parsed case-insensitively"},
 
 		// The bypasses. Each of these passed the old prefix-matching check AND
 		// the mock plane's own mirrored copy of it, was written to the wire
@@ -50,7 +54,9 @@ func TestBrowserExecutableMediaType(t *testing.T) {
 		{"text/plain", "inert"},
 		{"text/csv", "the real customer document declares one of these"},
 		{"multipart/form-data; boundary=x", "and two of these"},
-		{"application/xml", "XML is not XHTML"},
+		{"application/octet-stream", "binary data remains available"},
+		{"application/vnd.api+json", "JSON suffixes remain available"},
+		{"text/plain; note=\"application/xml\"", "an XML name inside a parameter is not the MIME essence"},
 		{"application/json;", "a bare trailing separator: Go parses it cleanly, so it is not the unparseable case and must not be refused"},
 		{"image/png", "an image the browser renders but cannot execute"},
 

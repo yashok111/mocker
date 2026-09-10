@@ -1,6 +1,10 @@
 package store
 
-import "strings"
+import (
+	"context"
+	"database/sql"
+	"strings"
+)
 
 // IsUniqueViolation reports whether err is a UNIQUE constraint failure.
 // modernc.org/sqlite reports these as a plain error whose message contains
@@ -39,4 +43,11 @@ func BoolToInt(b bool) int {
 // here for [IsUniqueViolation]'s reason.
 type RowScanner interface {
 	Scan(dest ...any) error
+}
+
+// Queryer is the read surface shared by a connection pool and a transaction.
+// Readers use the caller's snapshot while retaining one query and decoder.
+type Queryer interface {
+	QueryContext(context.Context, string, ...any) (*sql.Rows, error)
+	QueryRowContext(context.Context, string, ...any) *sql.Row
 }

@@ -28,7 +28,13 @@ func NewRepo(db *store.DB) *Repo {
 // revision); a query per operation on that path is the N+1 DESIGN §18
 // forbids.
 func (r *Repo) ForWorkspace(ctx context.Context, workspaceID int64) (map[string]*Row, error) {
-	rows, err := r.db.R.QueryContext(ctx, selectRow+" WHERE workspace_id = ?", workspaceID)
+	return ForWorkspaceFrom(ctx, r.db.R, workspaceID)
+}
+
+// ForWorkspaceFrom reads and decodes the workspace rows using the caller's
+// connection or transaction, so multi-table snapshots share this decoder.
+func ForWorkspaceFrom(ctx context.Context, q store.Queryer, workspaceID int64) (map[string]*Row, error) {
+	rows, err := q.QueryContext(ctx, selectRow+" WHERE workspace_id = ?", workspaceID)
 	if err != nil {
 		return nil, fmt.Errorf("list overrides for workspace %d: %w", workspaceID, err)
 	}

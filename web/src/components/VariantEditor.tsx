@@ -68,6 +68,7 @@ export function VariantEditor({
   variant,
   updateVariant,
   onErrorChange,
+  onUncommittedBodyChange,
   testId,
   whenTestId,
   hasSchema,
@@ -79,6 +80,9 @@ export function VariantEditor({
    * whatever this editor is not showing survives untouched. */
   updateVariant: (updater: (v: Variant) => Variant) => void;
   onErrorChange: (hasError: boolean) => void;
+  /** Raw JSON that cannot yet be represented in the owning document still
+   * needs discard protection, independently of the active producer's validity. */
+  onUncommittedBodyChange?: (hasDraft: boolean) => void;
   /** `testId("body")` → the screen's own id for the body box, etc. */
   testId: (name: string) => string;
   /** `whenTestId("name", 0)` → the id of the first condition's name field. */
@@ -145,14 +149,25 @@ export function VariantEditor({
   // the parent passes a fresh closure every render, and depending on it
   // would re-fire this effect on every keystroke elsewhere in the document.
   const onErrorChangeRef = useRef(onErrorChange);
+  const onUncommittedBodyChangeRef = useRef(onUncommittedBodyChange);
   useEffect(() => {
     onErrorChangeRef.current = onErrorChange;
+    onUncommittedBodyChangeRef.current = onUncommittedBodyChange;
   });
+  const pinnedBodyInvalid = producer === "pinned" && bodyError !== null;
   useEffect(() => {
-    onErrorChangeRef.current(bodyError !== null || functionEmpty || fileEmpty || whenInvalid);
-  }, [bodyError, functionEmpty, fileEmpty, whenInvalid]);
+    onErrorChangeRef.current(pinnedBodyInvalid || functionEmpty || fileEmpty || whenInvalid);
+  }, [pinnedBodyInvalid, functionEmpty, fileEmpty, whenInvalid]);
   useEffect(() => {
-    return () => onErrorChangeRef.current(false);
+    // Valid edits already live in variant.body; incomplete text is the
+    // missing part of the parent's comparison with its saved document.
+    onUncommittedBodyChangeRef.current?.(bodyError !== null);
+  }, [bodyError]);
+  useEffect(() => {
+    return () => {
+      onErrorChangeRef.current(false);
+      onUncommittedBodyChangeRef.current?.(false);
+    };
   }, []);
 
   function switchToFunction(): void {

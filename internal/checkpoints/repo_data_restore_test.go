@@ -288,10 +288,9 @@ func TestRollback_dataRestoreResolvesByFamilyAcrossADeclineAndReconfirm(t *testi
 	}
 	f.writeDecision(t, "/widgets", "declined")
 
-	// A decoy row FORCES the reconfirm below to mint a different id than
-	// the declined one — SQLite is free to reuse a deleted rowid with no
-	// AUTOINCREMENT on the column when the table would otherwise be empty,
-	// and this fixture must not rely on that NOT happening.
+	// The decoy verifies that restore resolves the reconfirmed family by its
+	// natural key while another live resource occupies a different ID.
+	// AUTOINCREMENT also guarantees the retired ID is never reused.
 	f.insertResource(t, resourceFixture{
 		family: "/decoy", name: "decoy", idField: "id", wrapper: wrapperJSON, seq: 0, seedCount: 0,
 	})
@@ -408,7 +407,7 @@ func TestRollback_refusesAHandBuiltDataDocumentOutsideValidateDatasDomain(t *tes
 	if err != nil {
 		t.Fatalf("encode a valid data document to craft from: %v", err)
 	}
-	corrupted := bytes.Replace(doc, []byte(`"entityKey":"1"`), []byte(`"entityKey":"abc"`), 1)
+	corrupted := bytes.Replace(doc, []byte(`"entityKey":"1"`), []byte(`"entityKey":""`), 1)
 	if bytes.Equal(corrupted, doc) {
 		t.Fatal("the entityKey replacement did not match; fixture is stale")
 	}
