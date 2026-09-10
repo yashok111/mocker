@@ -128,7 +128,7 @@ install_set() {
   # by pinning the package (-p skills@X.Y.Z) and each repo to a commit SHA.
   local agent
   for agent in "${AGENTS[@]}"; do   # one pass per agent (see CLI note)
-    run npx -y -p skills skills add "$repo" -y -a "$agent" --skill "${skills[@]}"
+    run npx --registry=https://registry.npmjs.org/ -y -p skills skills add "$repo" -y -a "$agent" --skill "${skills[@]}"
   done
 }
 
