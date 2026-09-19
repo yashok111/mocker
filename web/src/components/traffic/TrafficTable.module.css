@@ -1,0 +1,48 @@
+.table {
+  min-width: 900px;
+  position: relative;
+}
+
+.table thead {
+  z-index: 1;
+}
+
+.time {
+  white-space: nowrap;
+  font-size: 12px;
+  color: var(--mocker-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.duration {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.path {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 30px;
+  max-width: 280px;
+  min-width: 140px;
+}
+
+.path svg {
+  flex-shrink: 0;
+  color: var(--mocker-muted);
+}
+
+.path code {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  background: transparent;
+}
+
+.details {
+  background: #f8faf8;
+}
+
+.details pre {
+  max-width: min(900px, 75vw);
+}

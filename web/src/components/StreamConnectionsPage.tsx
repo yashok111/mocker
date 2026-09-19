@@ -13,7 +13,12 @@ import {
   TextInput,
   Title,
 } from "@mantine/core";
-import { IconAlertTriangle, IconPlugConnectedX, IconSend } from "@tabler/icons-react";
+import {
+  IconAlertTriangle,
+  IconPlugConnected,
+  IconPlugConnectedX,
+  IconSend,
+} from "@tabler/icons-react";
 import { useQueryClient } from "@tanstack/react-query";
 import dayjs from "dayjs";
 import {
@@ -28,6 +33,7 @@ import { TabLink } from "./TabLink";
 import { describeApiFailure, describeApiFailureDetailed } from "@/api/errors";
 import { jsonLocation } from "@/validation/json";
 import { QueryState } from "./QueryState";
+import classes from "./WorkspaceTools.module.css";
 
 // StreamConnectionsPage is §30.14's connections panel (P6e) over the P6c
 // surface: the workspace's live SSE/WebSocket connections on the mock
@@ -59,13 +65,10 @@ export function StreamConnectionsPage({ id }: { id: number }): ReactElement {
   return (
     <div data-testid="connections-page">
       <Stack gap="md">
-        <Title order={1}>Соединения</Title>
+        <Title order={2}>Соединения</Title>
         <Text size="sm" c="dimmed">
-          Живые SSE- и WebSocket-соединения с потоковыми endpoint&apos;ами этого воркспейса. Список
-          обновляется каждые {POLL_MS / 1000} с. Соединение можно закрыть или отправить в него один
-          кадр — он уйдёт только в это соединение и нигде не сохраняется.
+          Живые SSE- и WebSocket-соединения воркспейса. Обновление каждые {POLL_MS / 1000} с.
         </Text>
-        <StreamStatsStrip id={id} />
         <QueryState queries={[connections]} testIdPrefix="connections">
           {connections.data?.status !== 200 ? (
             <Alert
@@ -85,6 +88,7 @@ export function StreamConnectionsPage({ id }: { id: number }): ReactElement {
             />
           )}
         </QueryState>
+        <StreamStatsStrip id={id} />
       </Stack>
     </div>
   );
@@ -180,119 +184,135 @@ function ConnectionsTable({
         ) : null}
       </Group>
       {rows.length === 0 ? (
-        <Text data-testid="connections-empty">
-          Сейчас ни одного соединения. Откройте потоковый endpoint из браузера (кнопка «Проверить»
-          на вкладке{" "}
-          <TabLink id={id} tab="endpoints" testId="connections-endpoints-link">
-            «Свои эндпоинты»
-          </TabLink>
-          ) или подключите клиент — строка появится здесь.
-        </Text>
+        <Card withBorder className={classes.emptyState} data-testid="connections-empty">
+          <IconPlugConnected size={30} stroke={1.5} aria-hidden="true" />
+          <Text fw={600} mt="md">
+            Сейчас нет открытых соединений
+          </Text>
+          <Text size="sm" c="dimmed" maw={470} mt="xs">
+            Подключите SSE- или WebSocket-клиент либо нажмите «Проверить» на вкладке{" "}
+            <TabLink id={id} tab="endpoints" testId="connections-endpoints-link">
+              «Свои эндпоинты»
+            </TabLink>
+            . Соединение появится здесь автоматически.
+          </Text>
+        </Card>
       ) : (
         <Card withBorder p={0} data-testid="connections-table">
-          <Table fz="sm">
-            <Table.Thead>
-              <Table.Tr>
-                <Table.Th>id</Table.Th>
-                <Table.Th>тип</Table.Th>
-                <Table.Th>путь</Table.Th>
-                <Table.Th>клиент</Table.Th>
-                <Table.Th>открыто</Table.Th>
-                <Table.Th>кадров →</Table.Th>
-                <Table.Th>← кадров</Table.Th>
-                <Table.Th />
-              </Table.Tr>
-            </Table.Thead>
-            <Table.Tbody>
-              {rows.map((row) => (
-                <Table.Tr key={row.id} data-testid="connection-row">
-                  <Table.Td>{row.id}</Table.Td>
-                  <Table.Td>
-                    <Badge size="sm" variant="light">
-                      {row.kind === "ws" ? "WebSocket" : "SSE"}
-                    </Badge>
-                  </Table.Td>
-                  <Table.Td>
-                    {row.path}{" "}
-                    <Text span size="xs" c="dimmed">
-                      #{row.endpointId}
-                    </Text>
-                  </Table.Td>
-                  <Table.Td>{row.remoteAddr}</Table.Td>
-                  <Table.Td>{formatOpened(row.openedAt)}</Table.Td>
-                  <Table.Td>
-                    {row.frames}
-                    {row.pushed > 0 ? ` (из них отправлено вручную ${row.pushed})` : ""}
-                    {row.skipped > 0 ? ` · пропущено ${row.skipped}` : ""}
-                  </Table.Td>
-                  <Table.Td>{row.kind === "ws" ? row.framesIn : "—"}</Table.Td>
-                  <Table.Td>
-                    <Group gap="xs" wrap="nowrap" justify="flex-end">
-                      <Button
-                        variant="default"
-                        size="xs"
-                        leftSection={<IconSend size={14} />}
-                        onClick={() => setPushingId(pushingId === row.id ? null : row.id)}
-                        data-testid="connection-push-toggle"
-                      >
-                        Отправить кадр
-                      </Button>
-                      <Button
-                        variant="default"
-                        size="xs"
-                        color="red"
-                        leftSection={<IconPlugConnectedX size={14} />}
-                        loading={close.isPending}
-                        onClick={() => handleClose(row)}
-                        data-testid="connection-close"
-                      >
-                        Закрыть
-                      </Button>
-                    </Group>
-                    {rowError?.cid === row.id ? (
-                      <Alert color="red" mt="xs" role="alert" data-testid="connection-error">
-                        {rowError.message}
-                      </Alert>
-                    ) : null}
-                    {pushed?.cid === row.id ? (
-                      <Text size="xs" mt="xs" data-testid="connection-pushed">
-                        Отправлено, id кадра {pushed.frameId}
-                      </Text>
-                    ) : null}
-                    {pushingId === row.id ? (
-                      <Stack gap="xs" mt="xs" data-testid="connection-push-form">
-                        {row.kind === "sse" ? (
-                          <TextInput
-                            label="Событие (необязательно)"
-                            value={event}
-                            onChange={(e) => setEvent(e.currentTarget.value)}
-                            data-testid="connection-push-event"
-                          />
-                        ) : null}
-                        <Textarea
-                          label="Данные, JSON"
-                          rows={3}
-                          value={dataText}
-                          error={dataError}
-                          onChange={(e) => setDataText(e.currentTarget.value)}
-                          data-testid="connection-push-data"
-                        />
-                        <Button
-                          size="xs"
-                          w="fit-content"
-                          loading={push.isPending}
-                          onClick={() => handlePush(row)}
-                          data-testid="connection-push-submit"
-                        >
-                          Отправить в соединение {row.id}
-                        </Button>
-                      </Stack>
-                    ) : null}
-                  </Table.Td>
+          <section
+            className={classes.tableScroll}
+            aria-label="Открытые соединения"
+            // Focus lets keyboard users scroll a table wider than the viewport.
+            // oxlint-disable-next-line jsx-a11y/no-noninteractive-tabindex
+            tabIndex={0}
+          >
+            <Table fz="sm" miw={900}>
+              <Table.Thead>
+                <Table.Tr>
+                  <Table.Th>id</Table.Th>
+                  <Table.Th>тип</Table.Th>
+                  <Table.Th>путь</Table.Th>
+                  <Table.Th>клиент</Table.Th>
+                  <Table.Th>открыто</Table.Th>
+                  <Table.Th>кадров →</Table.Th>
+                  <Table.Th>← кадров</Table.Th>
+                  <Table.Th />
                 </Table.Tr>
-              ))}
-            </Table.Tbody>
-          </Table>
+              </Table.Thead>
+              <Table.Tbody>
+                {rows.map((row) => (
+                  <Table.Tr key={row.id} data-testid="connection-row">
+                    <Table.Td>{row.id}</Table.Td>
+                    <Table.Td>
+                      <Badge size="sm" variant="light">
+                        {row.kind === "ws" ? "WebSocket" : "SSE"}
+                      </Badge>
+                    </Table.Td>
+                    <Table.Td>
+                      {row.path}{" "}
+                      <Text span size="xs" c="dimmed">
+                        #{row.endpointId}
+                      </Text>
+                    </Table.Td>
+                    <Table.Td>{row.remoteAddr}</Table.Td>
+                    <Table.Td>{formatOpened(row.openedAt)}</Table.Td>
+                    <Table.Td>
+                      {row.frames}
+                      {row.pushed > 0 ? ` (из них отправлено вручную ${row.pushed})` : ""}
+                      {row.skipped > 0 ? ` · пропущено ${row.skipped}` : ""}
+                    </Table.Td>
+                    <Table.Td>{row.kind === "ws" ? row.framesIn : "—"}</Table.Td>
+                    <Table.Td>
+                      <Group gap="xs" wrap="nowrap" justify="flex-end">
+                        <Button
+                          variant="default"
+                          size="xs"
+                          leftSection={<IconSend size={14} />}
+                          onClick={() => setPushingId(pushingId === row.id ? null : row.id)}
+                          data-testid="connection-push-toggle"
+                        >
+                          Отправить кадр
+                        </Button>
+                        <Button
+                          variant="default"
+                          size="xs"
+                          color="red"
+                          leftSection={<IconPlugConnectedX size={14} />}
+                          loading={close.isPending}
+                          onClick={() => handleClose(row)}
+                          data-testid="connection-close"
+                        >
+                          Закрыть
+                        </Button>
+                      </Group>
+                      {rowError?.cid === row.id ? (
+                        <Alert color="red" mt="xs" role="alert" data-testid="connection-error">
+                          {rowError.message}
+                        </Alert>
+                      ) : null}
+                      {pushed?.cid === row.id ? (
+                        <Text size="xs" mt="xs" data-testid="connection-pushed">
+                          Отправлено, id кадра {pushed.frameId}
+                        </Text>
+                      ) : null}
+                      {pushingId === row.id ? (
+                        <Stack gap="xs" mt="xs" data-testid="connection-push-form">
+                          <Text size="xs" c="dimmed">
+                            Кадр уйдёт только в это соединение и нигде не сохраняется.
+                          </Text>
+                          {row.kind === "sse" ? (
+                            <TextInput
+                              label="Событие (необязательно)"
+                              value={event}
+                              onChange={(e) => setEvent(e.currentTarget.value)}
+                              data-testid="connection-push-event"
+                            />
+                          ) : null}
+                          <Textarea
+                            label="Данные, JSON"
+                            rows={3}
+                            value={dataText}
+                            error={dataError}
+                            onChange={(e) => setDataText(e.currentTarget.value)}
+                            data-testid="connection-push-data"
+                          />
+                          <Button
+                            size="xs"
+                            w="fit-content"
+                            loading={push.isPending}
+                            onClick={() => handlePush(row)}
+                            data-testid="connection-push-submit"
+                          >
+                            Отправить в соединение {row.id}
+                          </Button>
+                        </Stack>
+                      ) : null}
+                    </Table.Td>
+                  </Table.Tr>
+                ))}
+              </Table.Tbody>
+            </Table>
+          </section>
         </Card>
       )}
     </Stack>

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { ChangeEvent, ReactElement } from "react";
 import {
   Alert,
@@ -18,7 +18,13 @@ import {
 } from "@mantine/core";
 import { modals } from "@mantine/modals";
 import { notifications } from "@mantine/notifications";
-import { IconAlertTriangle, IconFileImport, IconPlus, IconTrash } from "@tabler/icons-react";
+import {
+  IconAlertTriangle,
+  IconArrowUpRight,
+  IconFileImport,
+  IconPlus,
+  IconTrash,
+} from "@tabler/icons-react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { Controller, useForm } from "react-hook-form";
@@ -41,6 +47,7 @@ import type {
 import { describeApiFailure, describeApiFailureDetailed } from "@/api/errors";
 import { arktypeResolver } from "@/validation/resolver";
 import { userName } from "@/validation/name";
+import classes from "./WorkspaceEntry.module.css";
 
 // WorkspacesPage is DESIGN §14 screen 2, minus the auto-create half (P1d-2: no
 // MOCKER_DEFAULT_SPEC handling here). It lists the caller's own workspaces,
@@ -58,6 +65,7 @@ export function WorkspacesPage({ initialSpecId }: { initialSpecId?: number } = {
   // A21 (G14): GET /api/workspaces?all=1 lists every workspace, not only
   // the caller's — on a shared install a colleague's was invisible.
   const [showAll, setShowAll] = useState(false);
+  const [createOpen, setCreateOpen] = useState(initialSpecId !== undefined);
   const workspaces = useListWorkspaces(showAll ? { all: "1" } : undefined);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -159,8 +167,53 @@ export function WorkspacesPage({ initialSpecId }: { initialSpecId?: number } = {
 
   return (
     <Stack gap="md">
-      <Group justify="space-between" align="center">
-        <Title order={1}>Воркспейсы</Title>
+      <Group justify="space-between" align="center" gap="lg">
+        <div>
+          <Title order={1}>Воркспейсы</Title>
+          <Text size="sm" c="dimmed" mt={6}>
+            Изолированные API для разработки и проверки сценариев
+          </Text>
+        </div>
+        <Group gap="xs">
+          <Button
+            variant="default"
+            size="xs"
+            leftSection={<IconFileImport size={16} />}
+            onClick={openImport}
+            data-testid="workspace-import"
+          >
+            Импорт из файла
+          </Button>
+          <Button
+            leftSection={<IconPlus size={16} />}
+            onClick={() => setCreateOpen(!createOpen)}
+            aria-expanded={createOpen}
+            aria-controls="workspace-create-region"
+            data-testid="workspace-create-toggle"
+          >
+            {createOpen ? "Закрыть создание" : "Новый воркспейс"}
+          </Button>
+        </Group>
+      </Group>
+      {isEmpty ? <Text data-testid="workspaces-empty">У вас пока нет воркспейсов</Text> : null}
+      {/* Same position regardless of isEmpty, so this form never unmounts the
+          instant the list it just populated stops being empty — losing that
+          instance would also lose the "created: <slug>" message the moment the
+          create it just reported succeeds. */}
+      <div id="workspace-create-region" hidden={!createOpen}>
+        <CreateWorkspaceForm
+          expanded={createOpen}
+          specs={specs.data?.status === 200 ? specs.data.data : []}
+          initialSpecId={initialSpecId}
+        />
+      </div>
+      <Group justify="space-between" mt="xs">
+        <Text size="sm" fw={600}>
+          {showAll ? "Все воркспейсы" : "Мои воркспейсы"}{" "}
+          <Text component="span" c="dimmed" inherit>
+            · {list.length}
+          </Text>
+        </Text>
         <Switch
           size="xs"
           label="показать чужие"
@@ -168,26 +221,7 @@ export function WorkspacesPage({ initialSpecId }: { initialSpecId?: number } = {
           onChange={(e) => setShowAll(e.currentTarget.checked)}
           data-testid="workspaces-show-all"
         />
-        <Button
-          variant="default"
-          size="xs"
-          leftSection={<IconFileImport size={16} />}
-          onClick={openImport}
-          data-testid="workspace-import"
-        >
-          Импорт из файла
-        </Button>
       </Group>
-      {isEmpty ? <Text data-testid="workspaces-empty">У вас пока нет воркспейсов</Text> : null}
-      {/* Same position regardless of isEmpty, so this form never unmounts the
-          instant the list it just populated stops being empty — losing that
-          instance would also lose the "created: <slug>" message the moment the
-          create it just reported succeeds. */}
-      <CreateWorkspaceForm
-        autoFocusName={isEmpty}
-        specs={specs.data?.status === 200 ? specs.data.data : []}
-        initialSpecId={initialSpecId}
-      />
       {isEmpty ? (
         specsEmpty ? (
           <Text size="xs" c="dimmed" data-testid="workspaces-empty-hint">
@@ -216,11 +250,11 @@ export function WorkspacesPage({ initialSpecId }: { initialSpecId?: number } = {
 }
 
 function CreateWorkspaceForm({
-  autoFocusName,
+  expanded,
   specs,
   initialSpecId,
 }: {
-  autoFocusName: boolean;
+  expanded: boolean;
   specs: SpecView[];
   initialSpecId?: number;
 }) {
@@ -232,6 +266,7 @@ function CreateWorkspaceForm({
     register,
     handleSubmit,
     reset,
+    setFocus,
     formState: { errors },
   } = useForm<CreateForm>({
     resolver: arktypeResolver(createForm),
@@ -241,6 +276,9 @@ function CreateWorkspaceForm({
       specId: initialSpecId === undefined ? "" : String(initialSpecId),
     },
   });
+  useEffect(() => {
+    if (expanded) setFocus("name");
+  }, [expanded, setFocus]);
 
   const createWorkspace = useCreateWorkspace({
     mutation: {
@@ -277,6 +315,7 @@ function CreateWorkspaceForm({
       )}
     >
       <Stack gap="sm">
+        <Title order={2}>Новый воркспейс</Title>
         {createWorkspace.isError ? (
           <Alert color="red" icon={<IconAlertTriangle size={18} />} role="alert">
             {describeApiFailure(createWorkspace.error)}
@@ -299,17 +338,11 @@ function CreateWorkspaceForm({
         ) : null}
         <TextInput
           label="Название"
-          data-autofocus={autoFocusName ? true : undefined}
-          // Only when the list is EMPTY, i.e. this field is the single thing
-          // there is to do on the screen — the case the rule's usability
-          // objection (stealing focus from other content) does not describe.
-          // oxlint-disable-next-line jsx-a11y/no-autofocus
-          autoFocus={autoFocusName}
           data-testid="workspace-create-name"
           error={errors.name?.message}
           {...register("name")}
         />
-        <Group grow align="flex-start">
+        <Group grow align="flex-start" className={classes.createFields}>
           <TextInput
             label="Слаг (необязательно)"
             placeholder="выведется из названия"
@@ -422,18 +455,19 @@ function WorkspaceList({
               key={ws.id}
               justify="space-between"
               wrap="nowrap"
-              px="md"
-              py="sm"
-              style={{ borderTop: "1px solid var(--mantine-color-gray-3)" }}
+              className={classes.workspaceRow}
             >
               <UnstyledButton
-                style={{ flex: 1 }}
+                className={classes.workspaceOpen}
                 data-testid="workspace-row"
                 onClick={() => void navigate({ to: "/workspaces/$id", params: { id: ws.id } })}
               >
-                <Text size="sm" fw={500}>
-                  {ws.name}
-                </Text>
+                <Group justify="space-between" gap="xs" wrap="nowrap">
+                  <Text size="md" fw={600}>
+                    {ws.name}
+                  </Text>
+                  <IconArrowUpRight size={18} aria-hidden="true" />
+                </Group>
                 <Text size="xs" c="dimmed">
                   {ws.slug} · ревизия {ws.revision} · {specStatus(ws.specId, specs)}
                   {ws.forkedFrom !== null ? ` · копия воркспейса #${ws.forkedFrom}` : ""}
@@ -449,7 +483,7 @@ function WorkspaceList({
                   button one click from destroying their work. */}
               {currentUserId === null || ws.ownerId === currentUserId ? (
                 <Button
-                  variant="default"
+                  variant="subtle"
                   size="xs"
                   color="red"
                   leftSection={<IconTrash size={16} />}

@@ -43,6 +43,23 @@ afterEach(() => {
 });
 
 describe("HistoryPage", () => {
+  it("reveals reset controls on demand and keeps the typed confirmation when collapsed", async () => {
+    route({
+      [WORKSPACE]: () => json(200, workspaceFixture({ id: WS, slug: "alex" })),
+      [LIST]: () => json(200, { checkpoints: [checkpointFixture({ id: 1 })] }),
+    });
+    renderInRouter(<HistoryPage id={WS} />);
+    expect(await screen.findByTestId("checkpoint-row")).toBeVisible();
+    const reset = screen.getByTestId("history-reset-section");
+    expect(reset).not.toHaveAttribute("open");
+    expect(screen.getByTestId("reset-data-slug")).not.toBeVisible();
+    await userEvent.click(screen.getByTestId("history-reset-toggle"));
+    await userEvent.type(screen.getByTestId("reset-data-slug"), "alex");
+    await userEvent.click(screen.getByTestId("history-reset-toggle"));
+    await userEvent.click(screen.getByTestId("history-reset-toggle"));
+    expect(screen.getByTestId("reset-data-slug")).toBeVisible();
+    expect(screen.getByTestId("reset-data-slug")).toHaveValue("alex");
+  });
   it("renders its outer marker and says it is loading before the list answers", async () => {
     vi.stubGlobal(
       "fetch",
@@ -226,6 +243,7 @@ describe("HistoryPage", () => {
     });
     renderInRouter(<HistoryPage id={WS} />);
 
+    await userEvent.click(await screen.findByTestId("history-reset-toggle"));
     await userEvent.click(await screen.findByTestId("reset-overrides-button"));
     const dialog = await screen.findByRole("dialog");
     expect(dialog).toHaveTextContent("свои эндпоинт");
@@ -247,6 +265,7 @@ describe("HistoryPage", () => {
     });
     renderInRouter(<HistoryPage id={WS} />);
 
+    await userEvent.click(await screen.findByTestId("history-reset-toggle"));
     await userEvent.click(await screen.findByTestId("reset-overrides-button"));
     const dialog = await screen.findByRole("dialog");
     expect(within(dialog).getByTestId("reset-scenario-warning")).toHaveTextContent("замаскирована");
@@ -262,6 +281,7 @@ describe("HistoryPage", () => {
     const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
     renderInRouter(<HistoryPage id={WS} />, { queryClient });
 
+    await userEvent.click(await screen.findByTestId("history-reset-toggle"));
     await userEvent.click(await screen.findByTestId("reset-overrides-button"));
     const dialog = await screen.findByRole("dialog");
     await userEvent.click(within(dialog).getByTestId("reset-confirm-submit"));
@@ -286,6 +306,7 @@ describe("HistoryPage", () => {
     });
     renderInRouter(<HistoryPage id={WS} />);
 
+    await userEvent.click(await screen.findByTestId("history-reset-toggle"));
     await userEvent.click(await screen.findByTestId("reset-overrides-button"));
     const dialog = await screen.findByRole("dialog");
     await userEvent.click(within(dialog).getByTestId("reset-confirm-submit"));
@@ -628,7 +649,9 @@ describe("HistoryPage", () => {
     });
     renderInRouter(<HistoryPage id={WS} />);
 
-    expect(await screen.findByTestId("history-intro")).toHaveTextContent(
+    await userEvent.click(await screen.findByText("Что сохраняется в точке и как работает откат"));
+    expect(screen.getByTestId("history-intro")).toBeVisible();
+    expect(screen.getByTestId("history-intro")).toHaveTextContent(
       "Чекпойнт — снимок слоя воркспейса: настройки, правки операций, свои эндпоинты и " +
         "подтверждённые ресурсы. При откате можно вернуть и сами записи ресурсов — флажком «вернуть " +
         "и данные ресурсов», если эта точка их сохранила. Откат и сброс правок сохраняют свою " +
@@ -644,6 +667,7 @@ describe("HistoryPage", () => {
         [LIST]: () => json(200, { checkpoints: [] }),
       });
       renderInRouter(<HistoryPage id={WS} />);
+      await userEvent.click(await screen.findByTestId("history-reset-toggle"));
 
       expect(await screen.findByTestId("reset-data-warning")).toHaveTextContent(
         "Это НЕОБРАТИМО: записи, созданные через POST, будут удалены. В отличие от отката и " +
@@ -664,6 +688,7 @@ describe("HistoryPage", () => {
         [RESET_DATA]: () => json(200, { changed: true, deleted: 7, skipped: [] }),
       });
       renderInRouter(<HistoryPage id={WS} />);
+      await userEvent.click(await screen.findByTestId("history-reset-toggle"));
 
       await userEvent.click(await screen.findByText("Очистить"));
       await userEvent.type(await screen.findByTestId("reset-data-slug"), "alex");
@@ -692,6 +717,7 @@ describe("HistoryPage", () => {
         [RESET_DATA]: () => json(200, { changed: false, deleted: 0, skipped: [] }),
       });
       renderInRouter(<HistoryPage id={WS} />);
+      await userEvent.click(await screen.findByTestId("history-reset-toggle"));
 
       await userEvent.type(await screen.findByTestId("reset-data-slug"), "alex");
       await userEvent.click(await screen.findByTestId("reset-data-submit"));
@@ -721,6 +747,7 @@ describe("HistoryPage", () => {
           }),
       });
       renderInRouter(<HistoryPage id={WS} />);
+      await userEvent.click(await screen.findByTestId("history-reset-toggle"));
 
       await userEvent.type(await screen.findByTestId("reset-data-slug"), "alex");
       await userEvent.click(await screen.findByTestId("reset-data-submit"));
@@ -744,6 +771,7 @@ describe("HistoryPage", () => {
           }),
       });
       renderInRouter(<HistoryPage id={WS} />);
+      await userEvent.click(await screen.findByTestId("history-reset-toggle"));
 
       // A21 (U10): a slug that does not match what the screen knows never
       // reaches the server — the button is disabled until it does. The
@@ -765,6 +793,7 @@ describe("HistoryPage", () => {
         [RESET_DATA]: () => json(200, { changed: true, deleted: 1, skipped: [] }),
       });
       renderInRouter(<HistoryPage id={WS} />);
+      await userEvent.click(await screen.findByTestId("history-reset-toggle"));
 
       const slugField = await screen.findByTestId("reset-data-slug");
       await userEvent.type(slugField, "alex");

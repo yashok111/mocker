@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { screen } from "@testing-library/react";
+import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { WorkspaceOverview } from "./WorkspaceOverview";
 import { renderInRouter } from "@/test/render";
@@ -90,5 +90,10 @@ describe("WorkspaceOverview", () => {
     renderInRouter(<WorkspaceOverview id={7} config={config} />);
     expect(await screen.findByTestId("overview-no-spec")).toBeInTheDocument();
     expect(screen.getByTestId("overview-no-spec-link")).toHaveAttribute("href", "#settings-spec");
+    expect(screen.getByTestId("overview-settings")).not.toHaveAttribute("open");
+    await userEvent.click(screen.getByTestId("overview-no-spec-link"));
+    expect(screen.getByTestId("overview-settings")).toHaveAttribute("open");
+    expect(screen.getByRole("combobox", { name: "Привязать спеку" })).toBeVisible();
+    await waitFor(() => expect(screen.getByTestId("settings-spec-select")).toHaveFocus());
   });
 });

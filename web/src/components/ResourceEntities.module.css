@@ -1,0 +1,37 @@
+.tableViewport {
+  max-width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--mocker-border, var(--mantine-color-gray-3));
+  border-radius: var(--mantine-radius-md);
+  background: var(--mocker-surface, white);
+}
+
+.table {
+  min-width: 760px;
+}
+
+.table thead {
+  background: var(--mocker-canvas, var(--mantine-color-gray-0));
+}
+
+.entityBody + .entityBody tr:first-child td {
+  border-top: 1px solid var(--mocker-border, var(--mantine-color-gray-3));
+}
+
+.summary {
+  max-width: 58ch;
+  color: var(--mocker-ink, var(--mantine-color-dark-8));
+}
+
+.detailsCell {
+  padding: 0.75rem 1rem 1rem;
+  background: var(--mocker-canvas, var(--mantine-color-gray-0));
+}
+
+.json {
+  max-height: 24rem;
+  overflow: auto;
+  border: 1px solid var(--mocker-border, var(--mantine-color-gray-3));
+  border-radius: var(--mantine-radius-sm);
+  background: var(--mocker-surface, white);
+}

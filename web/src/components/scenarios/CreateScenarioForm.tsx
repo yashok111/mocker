@@ -14,6 +14,7 @@ import type { ScenarioSummaryView } from "@/api/generated/schemas";
 import { describeApiFailureDetailed } from "@/api/errors";
 import { arktypeResolver } from "@/validation/resolver";
 import { EMPTY_FORM, createForm, type CreateForm } from "./shared";
+import classes from "../WorkspaceTools.module.css";
 
 export function CreateScenarioForm({
   id,
@@ -131,21 +132,26 @@ export function CreateScenarioForm({
             Создан сценарий «<strong>{created}</strong>»
           </Text>
         ) : null}
-        <TextInput
-          label="Имя сценария"
-          data-testid="scenario-create-name"
-          error={errors.name?.message}
-          {...register("name")}
-        />
-        <Button
-          type="submit"
-          w="fit-content"
-          leftSection={<IconDeviceFloppy size={16} />}
-          loading={pending}
-          data-testid="scenario-create-submit"
-        >
-          {activeScenario ? "Деактивировать и сохранить" : "Сохранить настройки и правки операций"}
-        </Button>
+        <div className={classes.inlineForm}>
+          <TextInput
+            label="Имя сценария"
+            placeholder="Например, ошибка оплаты"
+            data-testid="scenario-create-name"
+            error={errors.name?.message}
+            {...register("name")}
+          />
+          <Button
+            type="submit"
+            w="fit-content"
+            leftSection={<IconDeviceFloppy size={16} />}
+            loading={pending}
+            data-testid="scenario-create-submit"
+          >
+            {activeScenario
+              ? "Деактивировать и сохранить"
+              : "Сохранить настройки и правки операций"}
+          </Button>
+        </div>
       </Stack>
     </Card>
   );

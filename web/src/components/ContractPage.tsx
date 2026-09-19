@@ -79,12 +79,10 @@ export function ContractPage({ id }: { id: number }): ReactElement {
   return (
     <div data-testid="contract-page">
       <Stack gap="md">
-        <Title order={1}>Контракт</Title>
-        <Text size="sm" c="dimmed">
-          Воркспейс как один документ OpenAPI: основа — привязанная спека, поверх неё — всё, что
-          спроектировано здесь. Новая операция помечена «добавлено», изменённый ответ операции
-          основы — «изменено», предложение убрать операцию — «удалено»; остальное — «база». Документ
-          только для чтения: править операции — на вкладках{" "}
+        <Title order={2}>Контракт</Title>
+        <Text size="sm" c="dimmed" className="mocker-page-intro">
+          Итоговый OpenAPI с вашими изменениями. Скачайте его или откройте операцию для просмотра
+          схемы. Изменить ответы можно в разделах{" "}
           <TabLink id={id} tab="endpoints" testId="contract-endpoints-link">
             «Свои эндпоинты»
           </TabLink>{" "}
@@ -158,7 +156,7 @@ function ContractView({
 
   return (
     <Stack gap="md">
-      <Group gap="md" wrap="wrap" data-testid="contract-header">
+      <Group gap="md" wrap="wrap" className="mocker-contract-toolbar" data-testid="contract-header">
         <Text size="sm">
           {title !== "" ? <strong>{title}</strong> : null}
           {version !== "" ? (
@@ -201,9 +199,15 @@ function ContractView({
           .
         </Text>
       ) : (
-        <Stack gap="sm" data-testid="contract-paths">
+        <Stack gap={0} className="mocker-contract-paths" data-testid="contract-paths">
           {[...byPath.entries()].map(([path, list]) => (
-            <Stack key={path} gap={4} data-testid="contract-path">
+            <Stack
+              key={path}
+              gap={8}
+              p="md"
+              className="mocker-contract-path"
+              data-testid="contract-path"
+            >
               <Code fw={600}>{path}</Code>
               {list.map((op) => (
                 <OperationRow
@@ -259,16 +263,16 @@ function OperationRow({
 
   return (
     <Stack gap={4} ml="md" data-testid="contract-op" data-badge={badge.kind}>
-      <Group gap="xs" wrap="nowrap">
+      <Group gap="xs" wrap="wrap">
         <UnstyledButton
           onClick={() => setOpen((v) => !v)}
           aria-expanded={open}
           data-testid="contract-op-toggle"
-          style={{ flex: 1 }}
+          style={{ flex: "1 1 240px", minWidth: 0 }}
         >
-          <Group gap="xs" wrap="nowrap">
+          <Group gap="xs" wrap="wrap">
             {open ? <IconChevronDown size={14} /> : <IconChevronRight size={14} />}
-            <Badge size="sm" color={METHOD_COLOR[op.method] ?? "gray"} variant="filled">
+            <Badge size="sm" color={METHOD_COLOR[op.method] ?? "gray"} variant="light">
               {op.method}
             </Badge>
             <Text size="sm" truncate>

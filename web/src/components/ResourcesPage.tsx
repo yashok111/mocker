@@ -29,6 +29,7 @@ import type { ResourceFamilyView } from "@/api/generated/schemas";
 import { describeApiFailure, describeApiFailureDetailed } from "@/api/errors";
 import { QueryState } from "./QueryState";
 import { ResourceEntities } from "./ResourceEntities";
+import classes from "./ResourcesPage.module.css";
 
 // ResourcesPage is DESIGN §14 screen 7, P3a: the operator's window onto the
 // slice's whole point — "created it - saw it in the list". D10 cut the route
@@ -75,19 +76,28 @@ export function ResourcesPage({ id }: { id: number }): ReactElement {
   return (
     <div data-testid="resources-page">
       <Stack gap="md">
-        <Title order={1}>Ресурсы</Title>
-        <Text size="sm" c="dimmed">
-          Ресурс — семейство маршрутов (коллекция и её элемент), которое можно подтвердить и дальше
-          обслуживать из хранилища вместо генератора: то, что записано через POST, переживает
-          рестарт и видно в следующем GET. Ресурс, который подтвердили неправильно, не редактируется
-          — его отклоняют и подтверждают заново. Строки подтверждённого семейства — кнопка «Записи»,
-          по 50 на страницу. Сбросить данные всех семейств разом (заполнить заново или очистить) —
-          на вкладке{" "}
-          <TabLink id={id} tab="history" testId="resources-reset-data-link">
-            «История»
-          </TabLink>
-          .
-        </Text>
+        <div>
+          <Title order={2}>Ресурсы</Title>
+          <Text size="sm" c="dimmed" mt={4} className={classes.intro}>
+            Подтверждённый ресурс хранит записи коллекции между запросами и перезапусками. Заполнить
+            или очистить все семейства можно в{" "}
+            <TabLink id={id} tab="history" testId="resources-reset-data-link">
+              истории
+            </TabLink>
+            .
+          </Text>
+          <Box component="details" mt="xs" className={classes.guidance}>
+            <Text component="summary" size="sm" fw={600} className={classes.guidanceSummary}>
+              Как работают ресурсы
+            </Text>
+            <Text size="sm" c="dimmed" mt="xs" className={classes.intro}>
+              Ресурс объединяет маршруты коллекции и элемента и обслуживает их из хранилища вместо
+              генератора: POST сохраняет запись, следующий GET её возвращает. Неверно подтверждённый
+              ресурс не редактируется — его нужно отклонить и подтвердить заново. Строки
+              подтверждённого семейства — кнопка «Записи», по 50 на страницу.
+            </Text>
+          </Box>
+        </div>
         {workspace.data?.status === 200 && specId === null ? (
           <Alert color="gray" data-testid="resources-no-spec">
             К воркспейсу не привязана спека — новых предложений нет. Привязать её можно на вкладке{" "}
@@ -230,10 +240,10 @@ function ResourceList({
                 px="md"
                 py="sm"
                 data-testid="resource-row"
-                style={{ borderTop: "1px solid var(--mantine-color-gray-3)" }}
+                className={classes.resourceRow}
               >
-                <div>
-                  <Group gap="xs">
+                <div className={classes.resourceIdentity}>
+                  <Group gap="xs" wrap="wrap">
                     <Text size="sm" fw={500}>
                       {family.name}
                     </Text>
@@ -255,7 +265,12 @@ function ResourceList({
                       <Text size="xs" c="dimmed" data-testid="resource-entity-count">
                         Записей: {family.entityCount}
                         {family.byBaseScope !== null && family.byBaseScope.length > 0
-                          ? ` (${family.byBaseScope.map((b) => `${b.baseScope}: ${b.entityCount}`).join(", ")})`
+                          ? ` (${family.byBaseScope
+                              .map(
+                                (b) =>
+                                  `${b.baseScope === "" ? "общая" : b.baseScope}: ${b.entityCount}`,
+                              )
+                              .join(", ")})`
                           : ""}
                       </Text>
                       <Text
@@ -263,6 +278,7 @@ function ResourceList({
                         c="dimmed"
                         ff="monospace"
                         data-testid="resource-collection-url"
+                        className={classes.collectionUrl}
                       >
                         GET {workspaceUrl}
                         {family.routeFamily}{" "}
@@ -293,7 +309,7 @@ function ResourceList({
                     </Stack>
                   ) : null}
                 </div>
-                <Group gap="xs" wrap="nowrap">
+                <Group gap="xs" wrap="wrap" className={classes.resourceActions}>
                   {family.decision === "confirmed" ? (
                     <Button
                       variant="default"
@@ -332,7 +348,7 @@ function ResourceList({
                 </Group>
               </Group>
               {openFamily === family.routeFamily && family.decision === "confirmed" ? (
-                <Box px="md" pb="sm">
+                <Box px="md" pb="sm" className={classes.entitiesPanel}>
                   <ResourceEntities id={id} family={family} />
                 </Box>
               ) : null}

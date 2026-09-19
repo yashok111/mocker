@@ -1,8 +1,12 @@
-/* Everything visual comes from Mantine's own stylesheets (imported in
-   main.tsx) plus the theme object. This file exists for the two things a
-   component library cannot own: the page background behind the app shell,
-   and making the root element actually fill the viewport so a short screen
-   still paints the full height. */
+:root {
+  --mocker-canvas: #f5f6f4;
+  --mocker-surface: #ffffff;
+  --mocker-border: #dfe5e0;
+  --mocker-ink: #25332f;
+  --mocker-muted: #65746b;
+  --mocker-accent: #087f70;
+  --mocker-accent-soft: #e9f4ef;
+}
 
 html,
 body,
@@ -12,5 +16,217 @@ body,
 
 body {
   margin: 0;
-  background-color: var(--mantine-color-gray-0);
+  color: var(--mocker-ink);
+  background-color: var(--mocker-canvas);
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  background: #c7eadd;
+  color: #173c31;
+}
+
+:focus-visible {
+  outline: 2px solid var(--mocker-accent);
+  outline-offset: 3px;
+}
+
+.mantine-Title-root {
+  color: var(--mocker-ink);
+  letter-spacing: -0.025em;
+  overflow-wrap: anywhere;
+}
+
+.mantine-Card-root,
+.mantine-Paper-root[data-with-border] {
+  border-color: var(--mocker-border);
+}
+
+.mantine-Input-input {
+  border-color: #cdd7d0;
+  transition:
+    border-color 120ms ease,
+    box-shadow 120ms ease;
+}
+
+.mantine-Input-input:focus-within {
+  box-shadow: 0 0 0 3px var(--mocker-accent-soft);
+}
+
+.mantine-InputWrapper-label {
+  color: var(--mocker-ink);
+  font-weight: 550;
+  margin-bottom: 5px;
+}
+
+.mantine-InputWrapper-description {
+  line-height: 1.55;
+  margin-bottom: 6px;
+}
+
+.mantine-Button-root {
+  flex-shrink: 0;
+  transition:
+    background-color 120ms ease,
+    border-color 120ms ease;
+}
+
+.mantine-Button-root[data-variant="default"] {
+  color: var(--mocker-ink);
+  border-color: var(--mocker-border);
+  background: var(--mocker-surface);
+  box-shadow: 0 1px 2px rgb(24 46 34 / 3%);
+}
+
+.mantine-Button-root[data-variant="default"]:hover:not(:disabled) {
+  background: #f2f6f3;
+  border-color: #b8c7bc;
+}
+
+.mantine-Badge-root {
+  letter-spacing: 0.02em;
+  text-transform: none;
+  flex-shrink: 0;
+}
+
+.mantine-Table-table {
+  color: var(--mocker-ink);
+  font-size: var(--mantine-font-size-sm);
+}
+
+.mantine-Table-th {
+  color: var(--mocker-muted);
+  font-size: var(--mantine-font-size-xs);
+  font-weight: 600;
+  background: #f7f9f7;
+  white-space: nowrap;
+}
+
+.mantine-Table-td {
+  border-color: var(--mocker-border);
+}
+
+.mantine-Code-root {
+  color: #365449;
+  background: #eef3ef;
+  border-radius: 4px;
+}
+
+.mantine-Code-root[data-block] {
+  padding: 16px;
+  line-height: 1.65;
+  border: 1px solid var(--mocker-border);
+  max-width: 100%;
+  max-height: 440px;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.mantine-Textarea-input {
+  line-height: 1.6;
+}
+
+.mantine-Alert-root {
+  border-radius: 8px;
+}
+
+.mantine-Drawer-header,
+.mantine-Modal-header {
+  border-bottom: 1px solid var(--mocker-border);
+  margin-bottom: 20px;
+}
+
+.mantine-Drawer-title,
+.mantine-Modal-title {
+  font-weight: 650;
+  font-size: 1.125rem;
+}
+
+.mocker-page-intro {
+  max-width: 78ch;
+  line-height: 1.7;
+}
+
+.mocker-empty-state {
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  min-height: 250px;
+  padding: 32px;
+  background: var(--mocker-surface);
+  border: 1px dashed #cbd7cd;
+  border-radius: 12px;
+}
+
+.mocker-empty-state > .mantine-Text-root {
+  max-width: 65ch;
+}
+
+.mocker-table-surface {
+  position: relative;
+  border: 1px solid var(--mocker-border);
+  background: var(--mocker-surface);
+  border-radius: 10px;
+  overflow: auto;
+  min-width: 0;
+}
+
+.mocker-upload-panel {
+  background: transparent;
+  border: 0;
+  padding: 0;
+}
+
+.mocker-upload-panel .mantine-Dropzone-root {
+  background: var(--mocker-surface);
+  border: 1px dashed #b9cac0;
+  border-radius: 10px;
+}
+
+.mocker-upload-panel .mantine-Dropzone-root:hover {
+  background: var(--mocker-accent-soft);
+}
+
+.mocker-contract-toolbar {
+  padding: 16px 20px;
+  border: 1px solid var(--mocker-border);
+  background: var(--mocker-surface);
+  border-radius: 10px;
+}
+
+.mocker-contract-paths {
+  background: var(--mocker-surface);
+  border: 1px solid var(--mocker-border);
+  border-radius: 10px;
+}
+
+.mocker-contract-path + .mocker-contract-path {
+  border-top: 1px solid var(--mocker-border);
+}
+
+.mocker-contract-path > code {
+  background: transparent;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 48em) {
+  .mantine-Modal-body,
+  .mantine-Drawer-body {
+    padding: 16px;
+  }
+
+  .mantine-Button-label {
+    white-space: normal;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
 }

@@ -1,6 +1,17 @@
 import { useState } from "react";
 import type { ReactElement } from "react";
-import { Alert, Badge, Button, Card, Group, Stack, Text } from "@mantine/core";
+import {
+  ActionIcon,
+  Alert,
+  Badge,
+  Button,
+  Card,
+  Drawer,
+  Group,
+  Stack,
+  Text,
+  Tooltip,
+} from "@mantine/core";
 import { modals } from "@mantine/modals";
 import { IconAlertTriangle, IconPencil, IconPlugConnected, IconTrash } from "@tabler/icons-react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -17,6 +28,7 @@ import { formatTimestamp } from "@/format";
 import { EditEndpointForm } from "./EditEndpointForm";
 import { EditStreamForm } from "./EditStreamForm";
 import { kindLabel } from "./shared";
+import classes from "./EndpointList.module.css";
 
 /** eventNamesOf lists the named events a definition sends, for the browser
  * client's listeners — EventSource fires `message` only for unnamed frames. */
@@ -38,18 +50,28 @@ function hasFunction(ep: Pick<EndpointView, "responses">): boolean {
   return Object.values(ep.responses).some((v) => v.function !== undefined && v.function !== "");
 }
 
+const METHOD_COLOR: Record<string, string> = {
+  GET: "blue",
+  POST: "teal",
+  PUT: "orange",
+  PATCH: "yellow",
+  DELETE: "red",
+};
+
 export function EndpointList({
   id,
   endpoints,
   workspaceUrl,
   limits,
   initialEditingId,
+  onDeepLinkClose,
 }: {
   id: number;
   endpoints: EndpointView[];
   workspaceUrl: string | undefined;
   limits: ServerConfigViewLimits | undefined;
   initialEditingId?: number;
+  onDeepLinkClose?: () => void;
 }): ReactElement {
   const queryClient = useQueryClient();
   // P6e: at most one row's browser test client open at a time, like the
@@ -58,11 +80,17 @@ export function EndpointList({
   // Named per-row rather than read off deleteEndpoint.error directly: the
   // mutation itself carries no memory of WHICH endpoint it was deleting.
   const [deleteError, setDeleteError] = useState<{ label: string; message: string } | null>(null);
-  // At most one row's edit form open at a time — id of the endpoint, or
-  // null. A row swaps its own display for the form rather than opening a
-  // modal: the whole point of the affordance is showing the CURRENT values
-  // next to the fields being changed.
+  // At most one endpoint editor is open. The wide drawer keeps the route
+  // list stable while the current values remain visible in the editor.
   const [editingId, setEditingId] = useState<number | null>(initialEditingId ?? null);
+  const editingEndpoint = endpoints.find((ep) => ep.id === editingId) ?? null;
+
+  function closeEditor(): void {
+    setEditingId(null);
+    if (initialEditingId !== undefined) {
+      onDeepLinkClose?.();
+    }
+  }
 
   const deleteEndpoint = useDeleteEndpoint({
     mutation: {
@@ -104,129 +132,133 @@ export function EndpointList({
           Не удалось удалить «{deleteError.label}»: {deleteError.message}
         </Alert>
       ) : null}
-      <Card withBorder p={0} data-testid="endpoint-list">
-        <Stack gap={0}>
-          {endpoints.map((ep) => (
-            <Group
-              key={ep.id}
-              justify="space-between"
-              wrap="nowrap"
-              px="md"
-              py="sm"
-              data-testid="endpoint-row"
-              style={{ borderTop: "1px solid var(--mantine-color-gray-3)" }}
-            >
-              {editingId === ep.id ? (
-                ep.kind === "http" ? (
-                  <EditEndpointForm
-                    id={id}
-                    endpoint={ep}
-                    onDone={() => setEditingId(null)}
-                    onCancel={() => setEditingId(null)}
-                  />
-                ) : (
-                  <EditStreamForm
-                    id={id}
-                    endpoint={ep}
-                    limits={limits}
-                    onDone={() => setEditingId(null)}
-                    onCancel={() => setEditingId(null)}
-                  />
-                )
-              ) : testingId === ep.id && ep.kind !== "http" && workspaceUrl !== undefined ? (
-                <Stack gap="xs" w="100%" data-testid="endpoint-test-client">
-                  <Group justify="space-between">
-                    <Text size="sm" fw={500}>
-                      {ep.method} {ep.path} — проверка из браузера
-                    </Text>
-                    <Button
-                      variant="default"
-                      size="xs"
-                      onClick={() => setTestingId(null)}
-                      data-testid="endpoint-test-close"
+      <Card withBorder p={0} data-testid="endpoint-list" className={classes.list}>
+        {endpoints.map((ep) => (
+          <div key={ep.id} className={classes.rowWrap} data-testid="endpoint-row">
+            <Group justify="space-between" wrap="nowrap" px="md" py="sm" gap="md">
+              <div className={classes.identity}>
+                <Group gap="xs" wrap="wrap">
+                  <Badge color={METHOD_COLOR[ep.method] ?? "gray"} variant="light" size="sm">
+                    {ep.method}
+                  </Badge>
+                  <Text size="sm" fw={600} ff="monospace" className={classes.path}>
+                    {ep.path}
+                  </Text>
+                  {kindLabel(ep.kind) ? (
+                    <Badge color="cyan" size="sm" data-testid="endpoint-kind">
+                      {kindLabel(ep.kind)}
+                    </Badge>
+                  ) : null}
+                  {ep.routeOff ? (
+                    <Badge color="yellow" size="sm">
+                      маршрут выключен
+                    </Badge>
+                  ) : null}
+                  {hasFunction(ep) ? (
+                    <Badge color="grape" size="sm" data-testid="endpoint-function">
+                      функция Lua
+                    </Badge>
+                  ) : null}
+                </Group>
+                <Text size="xs" c="dimmed" mt={4}>
+                  канонический путь {ep.canonicalPath} · активный статус {ep.activeStatus} ·
+                  статусы: {Object.keys(ep.responses).join(", ") || "—"}
+                </Text>
+                <Text size="xs" c="dimmed">
+                  обновлён {formatTimestamp(ep.updatedAt)} · создан {formatTimestamp(ep.createdAt)}
+                </Text>
+              </div>
+              <Group gap={4} wrap="nowrap">
+                {ep.kind !== "http" ? (
+                  <Tooltip label="Проверить поток в браузере">
+                    <ActionIcon
+                      variant="subtle"
+                      disabled={workspaceUrl === undefined}
+                      onClick={() => setTestingId(ep.id)}
+                      data-testid="endpoint-test-toggle"
+                      aria-label="Проверить поток в браузере"
                     >
-                      Свернуть
-                    </Button>
-                  </Group>
-                  <StreamTestClient
-                    url={`${workspaceUrl}${ep.path}`}
-                    kind={ep.kind}
-                    eventNames={eventNamesOf(ep.stream)}
-                    testIdPrefix={`endpoint-${ep.id}`}
-                  />
-                </Stack>
-              ) : (
-                <>
-                  <div>
-                    <Group gap="xs">
-                      <Text size="sm" fw={500}>
-                        {ep.method} {ep.path}
-                      </Text>
-                      {kindLabel(ep.kind) ? (
-                        <Badge color="blue" size="sm" data-testid="endpoint-kind">
-                          {kindLabel(ep.kind)}
-                        </Badge>
-                      ) : null}
-                      {ep.routeOff ? (
-                        <Badge color="yellow" size="sm">
-                          маршрут выключен
-                        </Badge>
-                      ) : null}
-                      {hasFunction(ep) ? (
-                        <Badge color="grape" size="sm" data-testid="endpoint-function">
-                          функция Lua
-                        </Badge>
-                      ) : null}
-                    </Group>
-                    <Text size="xs" c="dimmed">
-                      канонический путь {ep.canonicalPath} · активный статус {ep.activeStatus} ·
-                      статусы: {Object.keys(ep.responses).join(", ") || "—"}
-                    </Text>
-                    <Text size="xs" c="dimmed">
-                      создан {formatTimestamp(ep.createdAt)} · обновлён{" "}
-                      {formatTimestamp(ep.updatedAt)}
-                    </Text>
-                  </div>
-                  <Group gap="xs" wrap="nowrap">
-                    {ep.kind !== "http" ? (
-                      <Button
-                        variant="default"
-                        size="xs"
-                        leftSection={<IconPlugConnected size={16} />}
-                        disabled={workspaceUrl === undefined}
-                        onClick={() => setTestingId(ep.id)}
-                        data-testid="endpoint-test-toggle"
-                      >
-                        Проверить
-                      </Button>
-                    ) : null}
-                    <Button
-                      variant="default"
-                      size="xs"
-                      leftSection={<IconPencil size={16} />}
-                      onClick={() => setEditingId(ep.id)}
-                      data-testid="endpoint-edit-toggle"
-                    >
-                      Изменить
-                    </Button>
-                    <Button
-                      variant="default"
-                      size="xs"
-                      color="red"
-                      leftSection={<IconTrash size={16} />}
-                      onClick={() => handleDelete(ep)}
-                      loading={deleteEndpoint.isPending}
-                      data-testid="endpoint-delete"
-                    >
-                      Удалить
-                    </Button>
-                  </Group>
-                </>
-              )}
+                      <IconPlugConnected size={17} />
+                    </ActionIcon>
+                  </Tooltip>
+                ) : null}
+                <Tooltip label="Изменить эндпоинт">
+                  <ActionIcon
+                    variant="subtle"
+                    onClick={() => setEditingId(ep.id)}
+                    data-testid="endpoint-edit-toggle"
+                    aria-label={`Изменить ${ep.method} ${ep.path}`}
+                  >
+                    <IconPencil size={17} />
+                  </ActionIcon>
+                </Tooltip>
+                <Tooltip label="Удалить эндпоинт">
+                  <ActionIcon
+                    variant="subtle"
+                    color="red"
+                    onClick={() => handleDelete(ep)}
+                    loading={deleteEndpoint.isPending}
+                    data-testid="endpoint-delete"
+                    aria-label={`Удалить ${ep.method} ${ep.path}`}
+                  >
+                    <IconTrash size={17} />
+                  </ActionIcon>
+                </Tooltip>
+              </Group>
             </Group>
-          ))}
-        </Stack>
+            {testingId === ep.id && ep.kind !== "http" && workspaceUrl !== undefined ? (
+              <Stack gap="xs" className={classes.testPanel} data-testid="endpoint-test-client">
+                <Group justify="space-between">
+                  <Text size="sm" fw={500}>
+                    {ep.method} {ep.path} — проверка из браузера
+                  </Text>
+                  <Button
+                    variant="default"
+                    size="xs"
+                    onClick={() => setTestingId(null)}
+                    data-testid="endpoint-test-close"
+                  >
+                    Свернуть
+                  </Button>
+                </Group>
+                <StreamTestClient
+                  url={`${workspaceUrl}${ep.path}`}
+                  kind={ep.kind}
+                  eventNames={eventNamesOf(ep.stream)}
+                  testIdPrefix={`endpoint-${ep.id}`}
+                />
+              </Stack>
+            ) : null}
+          </div>
+        ))}
       </Card>
+      <Drawer
+        opened={editingEndpoint !== null}
+        onClose={closeEditor}
+        title={editingEndpoint ? `${editingEndpoint.method} ${editingEndpoint.path}` : "Эндпоинт"}
+        position="right"
+        size="min(840px, 100vw)"
+        closeButtonProps={{ "aria-label": "Закрыть редактор эндпоинта" }}
+        data-testid="endpoint-edit-drawer"
+        classNames={{ body: classes.drawerBody, title: classes.drawerTitle }}
+      >
+        {editingEndpoint?.kind === "http" ? (
+          <EditEndpointForm
+            id={id}
+            endpoint={editingEndpoint}
+            onDone={closeEditor}
+            onCancel={closeEditor}
+          />
+        ) : editingEndpoint ? (
+          <EditStreamForm
+            id={id}
+            endpoint={editingEndpoint}
+            limits={limits}
+            onDone={closeEditor}
+            onCancel={closeEditor}
+          />
+        ) : null}
+      </Drawer>
     </Stack>
   );
 }

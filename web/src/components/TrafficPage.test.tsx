@@ -100,6 +100,32 @@ afterEach(() => {
 });
 
 describe("TrafficPage", () => {
+  it("opens request details from a named keyboard control without noisy refusal rows", async () => {
+    const row = trafficRowFixture({
+      id: 1,
+      path: "/tasks/1",
+      matchedKind: "none",
+      matchedId: null,
+      respBody: '{"id":9223372036854775807,"key":1,"key":2}',
+    });
+    route({
+      ...baseRoutes({ tail: () => json(200, trafficListViewFixture({ rows: [row] })) }),
+      [`GET /api/workspaces/${WS}/traffic/poll?since=1&limit=200`]: () =>
+        json(200, trafficPollViewFixture({ rows: [], lastId: 1 })),
+    });
+    renderInRouter(<TrafficPage id={WS} />);
+    const toggle = await screen.findByRole("button", { name: "Подробнее о запросе GET /tasks/1" });
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    expect(screen.getByTestId("traffic-table").querySelectorAll("tbody > tr")).toHaveLength(1);
+    toggle.focus();
+    await userEvent.keyboard("{Enter}");
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByTestId("traffic-row-details")).toHaveTextContent("Правка недоступна");
+    expect(screen.getByTestId("traffic-row-details")).toHaveTextContent(
+      '{"id":9223372036854775807,"key":1,"key":2}',
+    );
+  });
+
   it("renders its outer marker and says it is loading before the tail answers", async () => {
     vi.stubGlobal(
       "fetch",

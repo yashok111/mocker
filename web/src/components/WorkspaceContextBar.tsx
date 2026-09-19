@@ -5,6 +5,7 @@ import { useListScenarios } from "@/api/generated/scenarios/scenarios.ts";
 import { useListSessionDirectives } from "@/api/generated/session/session.ts";
 import type { WorkspaceView } from "@/api/generated/schemas";
 import { TabLink } from "./TabLink";
+import classes from "./Workbench.module.css";
 
 // WorkspaceContextBar is the line under the workspace's name on every tab:
 // the four pieces of live state that decide what the mock answers, which
@@ -40,7 +41,7 @@ export function WorkspaceContextBar({ workspace }: { workspace: WorkspaceView })
     directives.data?.status === 200 ? directives.data.data.directives.length : 0;
 
   return (
-    <Group gap="sm" wrap="wrap" data-testid="workspace-context-bar">
+    <Group gap="sm" wrap="wrap" className={classes.contextBar} data-testid="workspace-context-bar">
       <Text size="sm" c="dimmed" data-testid="workspace-detail-meta">
         {workspace.slug} ·{" "}
         <Tooltip

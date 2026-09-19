@@ -5,14 +5,13 @@ import {
   Anchor,
   Badge,
   Group,
-  ScrollArea,
   Stack,
   Text,
   TextInput,
   Title,
   UnstyledButton,
 } from "@mantine/core";
-import { IconAlertTriangle, IconSearch } from "@tabler/icons-react";
+import { IconAlertTriangle, IconCode, IconSearch } from "@tabler/icons-react";
 import { Link } from "@tanstack/react-router";
 import { useGetWorkspace } from "@/api/generated/workspaces/workspaces.ts";
 import { useListWorkspaceOperations } from "@/api/generated/operations/operations.ts";
@@ -25,6 +24,7 @@ import { describeApiFailure } from "@/api/errors";
 import { OperationEditor } from "./OperationEditor";
 import { QueryState } from "./QueryState";
 import { SessionControls } from "./SessionControls";
+import classes from "./Workbench.module.css";
 
 // OperationsPage is DESIGN §14 screen 5, P1 subset: the merged operation
 // tree (grouped by tag, searchable), the per-operation override editor, and
@@ -240,7 +240,12 @@ export function OperationsPage({
 
   return (
     <Stack gap="md" data-testid="operations-page">
-      <Title order={1}>Операции спеки</Title>
+      <div>
+        <Title order={2}>Операции спеки</Title>
+        <Text c="dimmed" size="sm" mt={4}>
+          Выберите маршрут и настройте ответ для нужного случая.
+        </Text>
+      </div>
       {activeScenarioId !== null ? (
         <ScenarioMaskBanner workspaceId={id} scenarioId={activeScenarioId} />
       ) : null}
@@ -265,10 +270,19 @@ export function OperationsPage({
             и привяжите её в настройках воркспейса.
           </Text>
         ) : (
-          <Group align="flex-start" gap="lg" wrap="nowrap">
-            <Stack w={340} gap="sm">
+          <div className={classes.operationsWorkbench}>
+            <Stack gap="sm" className={classes.operationBrowser}>
+              <Group justify="space-between">
+                <Text size="sm" fw={600}>
+                  Маршруты
+                </Text>
+                <Text size="xs" c="dimmed">
+                  {filtered.length} из {mergedList.length}
+                </Text>
+              </Group>
               <TextInput
-                placeholder="Метод, путь, тег, описание…"
+                aria-label="Поиск операций"
+                placeholder="Метод, путь, описание…"
                 value={search}
                 onChange={(e) => setSearch(e.currentTarget.value)}
                 leftSection={<IconSearch size={14} />}
@@ -280,7 +294,7 @@ export function OperationsPage({
                   за этой границей могут не подтянуться.
                 </Text>
               ) : null}
-              <ScrollArea h={560} data-testid="operation-list">
+              <div className={classes.operationList} data-testid="operation-list">
                 <Stack gap="md">
                   {groups.size === 0 ? (
                     <Text size="sm" c="dimmed">
@@ -289,9 +303,7 @@ export function OperationsPage({
                   ) : (
                     [...groups.entries()].map(([tag, ops]) => (
                       <div key={tag}>
-                        <Text fw={600} size="sm">
-                          {tag}
-                        </Text>
+                        <Text className={classes.operationTag}>{tag}</Text>
                         <Stack gap={4} mt={4}>
                           {ops.map((op) => (
                             <UnstyledButton
@@ -305,26 +317,43 @@ export function OperationsPage({
                                   statuses: op.statuses,
                                 })
                               }
-                              px="xs"
-                              py={4}
-                              style={{
-                                borderRadius: 4,
-                                background:
-                                  selected?.opKey === op.opKey
-                                    ? "var(--mantine-color-blue-light)"
-                                    : undefined,
-                              }}
+                              className={classes.operationRow}
+                              aria-label={`${op.method} ${op.path}. ${signature(op)}`}
+                              data-selected={selected?.opKey === op.opKey || undefined}
+                              aria-pressed={selected?.opKey === op.opKey}
                             >
                               <Group gap="xs" wrap="nowrap">
-                                <Badge size="sm" variant="light">
+                                <Badge
+                                  size="sm"
+                                  variant="light"
+                                  color={
+                                    op.method === "GET"
+                                      ? "blue"
+                                      : op.method === "DELETE"
+                                        ? "red"
+                                        : op.method === "POST"
+                                          ? "teal"
+                                          : op.method === "PATCH"
+                                            ? "yellow"
+                                            : op.method === "PUT"
+                                              ? "orange"
+                                              : "gray"
+                                  }
+                                  className={classes.methodBadge}
+                                >
                                   {op.method}
                                 </Badge>
-                                <Text size="sm" fw={500} style={{ wordBreak: "break-all" }}>
+                                <Text size="sm" fw={500} className={classes.operationPath}>
                                   {op.path}
                                 </Text>
                               </Group>
-                              <Text size="xs" c="dimmed">
-                                {signature(op)}
+                              <Text
+                                size="xs"
+                                c="dimmed"
+                                className={classes.operationSignature}
+                                title={signature(op)}
+                              >
+                                {op.override === undefined ? "Ответ по спеке" : signature(op)}
                               </Text>
                             </UnstyledButton>
                           ))}
@@ -333,9 +362,9 @@ export function OperationsPage({
                     ))
                   )}
                 </Stack>
-              </ScrollArea>
+              </div>
             </Stack>
-            <div style={{ flex: 1, minWidth: 0 }}>
+            <div className={classes.operationEditor}>
               {selected ? (
                 <OperationEditor
                   key={selected.opKey}
@@ -349,10 +378,22 @@ export function OperationsPage({
                   }
                 />
               ) : (
-                <Text c="dimmed">Выберите операцию слева</Text>
+                <div className={classes.operationPlaceholder}>
+                  <span className={classes.placeholderIcon}>
+                    <IconCode size={28} stroke={1.5} />
+                  </span>
+                  <Title order={3}>Выберите операцию</Title>
+                  <Text size="sm" c="dimmed" maw={300}>
+                    Найдите маршрут в списке, чтобы изменить статус, тело ответа или условия его
+                    выдачи.
+                  </Text>
+                  <Text size="xs" c="dimmed">
+                    Пока нет правок, ответы создаются по спеке.
+                  </Text>
+                </div>
               )}
             </div>
-          </Group>
+          </div>
         )}
       </QueryState>
       <SessionControls

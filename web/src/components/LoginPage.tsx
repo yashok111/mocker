@@ -9,7 +9,7 @@ import {
   Title,
   Text,
 } from "@mantine/core";
-import { IconAlertTriangle } from "@tabler/icons-react";
+import { IconAlertTriangle, IconBraces } from "@tabler/icons-react";
 import { useForm } from "react-hook-form";
 import { type } from "arktype";
 import { useLogin } from "@/api/generated/auth/auth.ts";
@@ -17,6 +17,7 @@ import { ApiFailure, setCsrfToken } from "@/api/client";
 import { clientUnknownErrorCode, describeErrorCode } from "@/api/errors";
 import { arktypeResolver } from "@/validation/resolver";
 import { userName } from "@/validation/name";
+import classes from "./WorkspaceEntry.module.css";
 
 // LoginPage is DESIGN §14 screen 1: password + name, вход = get-or-create by
 // name. It owns only the form and the copy shown for a failed attempt — the
@@ -80,57 +81,73 @@ export function LoginPage({ onSuccess }: { onSuccess: () => void }) {
   const failureMessage = login.isError ? describeFailure(login.error) : null;
 
   return (
-    <Box
-      style={{
-        minHeight: "100vh",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: "var(--mantine-spacing-md)",
-      }}
-    >
-      <Card
-        component="form"
-        withBorder
-        shadow="sm"
-        p="lg"
-        w="100%"
-        maw={380}
-        data-testid="login-form"
-        onSubmit={handleSubmit((values) =>
-          login.mutate({ data: { name: values.name.trim(), password: values.password } }),
-        )}
-      >
-        <Stack gap="md">
-          <Title order={1}>Вход</Title>
-          {failureMessage !== null ? (
-            <Alert color="red" icon={<IconAlertTriangle size={18} />} role="alert">
-              {failureMessage}
-            </Alert>
-          ) : null}
-          <TextInput
-            label="Имя"
-            autoComplete="username"
-            data-testid="login-name"
-            error={errors.name?.message}
-            {...register("name")}
-          />
-          <PasswordInput
-            label="Пароль"
-            autoComplete="current-password"
-            data-testid="login-password"
-            error={errors.password?.message}
-            {...register("password")}
-          />
-          <Text size="xs" c="dimmed" data-testid="login-hint">
-            Имя — любое: оно подписывает ваши правки в истории и создаётся при первом входе. Пароль
-            один на всю установку; его выдаёт тот, кто её поднял.
+    <Box className={classes.loginPage}>
+      <div className={classes.loginLayout}>
+        <div className={classes.loginIntro}>
+          <div className={classes.brand}>
+            <span className={classes.brandMark} aria-hidden="true">
+              <IconBraces size={26} stroke={1.8} />
+            </span>
+            mocker
+          </div>
+          <Text className={classes.loginEyebrow}>РАБОЧЕЕ ПРОСТРАНСТВО ДЛЯ API</Text>
+          <Text className={classes.loginHeadline}>
+            Ваш API.
+            <br />
+            Ваш сценарий.
           </Text>
-          <Button type="submit" fullWidth loading={login.isPending} data-testid="login-submit">
-            {login.isPending ? "Входим…" : "Войти"}
-          </Button>
-        </Stack>
-      </Card>
+          <Text className={classes.loginDescription}>
+            Настройте ответы, подключите фронтенд и проверяйте сценарии в своём воркспейсе.
+          </Text>
+        </div>
+        <Card
+          component="form"
+          withBorder
+          className={classes.loginCard}
+          p="xl"
+          w="100%"
+          maw={420}
+          data-testid="login-form"
+          onSubmit={handleSubmit((values) =>
+            login.mutate({ data: { name: values.name.trim(), password: values.password } }),
+          )}
+        >
+          <Stack gap="md">
+            <div>
+              <Title order={1}>Вход в mocker</Title>
+              <Text size="sm" c="dimmed" mt={6}>
+                Продолжите работу с вашим API
+              </Text>
+            </div>
+            {failureMessage !== null ? (
+              <Alert color="red" icon={<IconAlertTriangle size={18} />} role="alert">
+                {failureMessage}
+              </Alert>
+            ) : null}
+            <TextInput
+              label="Имя"
+              autoComplete="username"
+              data-testid="login-name"
+              error={errors.name?.message}
+              {...register("name")}
+            />
+            <PasswordInput
+              label="Пароль"
+              autoComplete="current-password"
+              data-testid="login-password"
+              error={errors.password?.message}
+              {...register("password")}
+            />
+            <Text size="xs" c="dimmed" data-testid="login-hint">
+              Имя — любое: оно подписывает ваши правки в истории и создаётся при первом входе.
+              Пароль один на всю установку; его выдаёт тот, кто её поднял.
+            </Text>
+            <Button type="submit" fullWidth loading={login.isPending} data-testid="login-submit">
+              {login.isPending ? "Входим…" : "Войти"}
+            </Button>
+          </Stack>
+        </Card>
+      </div>
     </Box>
   );
 }

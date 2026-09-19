@@ -51,6 +51,61 @@ describe("ResourceEntities", () => {
     expect(await screen.findByTestId("resource-entities-empty")).toBeInTheDocument();
   });
 
+  it("summarises scalar fields in the table and reveals raw JSON only on demand", async () => {
+    route({
+      [LIST]: () =>
+        json(200, {
+          rows: [
+            entity({ data: { id: 42, name: "Alex", active: true, nested: { role: "admin" } } }),
+          ],
+          lastId: 1,
+        }),
+    });
+    renderWithProviders(<ResourceEntities id={WS} family={users} />);
+
+    const row = await screen.findByTestId("entity-row");
+    expect(within(row).getByTestId("entity-summary")).toHaveTextContent("name: Alex");
+    expect(within(row).getByTestId("entity-summary")).toHaveTextContent("active: да");
+    expect(within(row).queryByTestId("entity-data")).not.toBeInTheDocument();
+
+    const details = within(row).getByTestId("entity-details-toggle");
+    expect(details).toHaveAttribute("aria-expanded", "false");
+    await userEvent.click(details);
+    expect(within(row).getByTestId("entity-data")).toHaveTextContent('"role": "admin"');
+    expect(details).toHaveAttribute("aria-expanded", "true");
+  });
+
+  it("prefers familiar identifying fields and skips empty scalars in the summary", async () => {
+    route({
+      [LIST]: () =>
+        json(200, {
+          rows: [
+            entity({
+              data: {
+                id: 42,
+                assigneeId: 7,
+                attachmentName: "",
+                description: "Long implementation detail",
+                title: "Polish resource rows",
+                status: "review",
+                email: null,
+              },
+            }),
+          ],
+          lastId: 1,
+        }),
+    });
+    renderWithProviders(<ResourceEntities id={WS} family={users} />);
+
+    const summary = await screen.findByTestId("entity-summary");
+    expect(summary).toHaveTextContent(
+      "title: Polish resource rows · status: review · assigneeId: 7",
+    );
+    expect(summary).not.toHaveTextContent("attachmentName");
+    expect(summary).not.toHaveTextContent("description");
+    expect(summary).not.toHaveTextContent("email");
+  });
+
   it("edits a row as JSON through PUT .../entities/{key}, scope omitted for a top-level row", async () => {
     const fetchMock = route({
       [LIST]: () => json(200, { rows: [entity()], lastId: 1 }),
@@ -60,7 +115,7 @@ describe("ResourceEntities", () => {
     renderWithProviders(<ResourceEntities id={WS} family={users} />);
     const row = await screen.findByTestId("entity-row");
     expect(row).toHaveTextContent("id = 42");
-    expect(within(row).getByTestId("entity-data")).toHaveTextContent('"name": "Alex"');
+    expect(within(row).getByTestId("entity-summary")).toHaveTextContent("name: Alex");
 
     await userEvent.click(within(row).getByTestId("entity-edit"));
     const box = within(row).getByTestId("entity-edit-data");

@@ -2,9 +2,12 @@ import type { InputHTMLAttributes, ReactElement } from "react";
 import { useState } from "react";
 import {
   Alert,
+  Box,
+  ActionIcon,
   Anchor,
   Button,
   Card,
+  CopyButton,
   Group,
   Progress,
   Stack,
@@ -12,10 +15,19 @@ import {
   Text,
   TextInput,
   Title,
+  Tooltip,
 } from "@mantine/core";
 import { modals } from "@mantine/modals";
 import { Dropzone, type FileWithPath } from "@mantine/dropzone";
-import { IconAlertTriangle, IconTrash, IconUpload } from "@tabler/icons-react";
+import {
+  IconAlertTriangle,
+  IconCheck,
+  IconCopy,
+  IconExternalLink,
+  IconFile,
+  IconTrash,
+  IconUpload,
+} from "@tabler/icons-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { invalidateAssetChange } from "@/api/cachePolicy";
 import { useDeleteAsset, useListAssets, useUploadAsset } from "@/api/generated/assets/assets.ts";
@@ -57,13 +69,11 @@ export function AssetsPage({ id }: { id: number }): ReactElement {
   return (
     <div data-testid="assets-page">
       <Stack gap="md">
-        <Title order={1}>Файлы</Title>
-        <Text size="sm" c="dimmed">
-          Файлы, которые мок отдаёт как есть: картинки, PDF, архивы — всё, что браузер не исполняет.
-          Каждый доступен по своему адресу на хосте воркспейса, а в ответ попадает через{" "}
+        <Title order={2}>Файлы</Title>
+        <Text size="sm" c="dimmed" className="mocker-page-intro">
+          Изображения, PDF и архивы для ответов API. Используйте адрес файла или{" "}
           <code>bodyRef: asset:имя</code> на закреплённом варианте или рецептом{" "}
-          <code>asset_url</code>. Загрузка под уже занятым именем заменяет файл; ссылки на удалённый
-          файл продолжают работать и отдают пустое тело с пометкой в трафике.
+          <code>asset_url</code>.
         </Text>
         <UploadCard
           id={id}
@@ -141,7 +151,7 @@ function UploadCard({ id, existingNames }: { id: number; existingNames: string[]
   }
 
   return (
-    <Card withBorder p="md" data-testid="asset-upload-form">
+    <Card withBorder p="md" className="mocker-upload-panel" data-testid="asset-upload-form">
       <Stack gap="sm">
         <Dropzone
           onDrop={handleDrop}
@@ -151,9 +161,11 @@ function UploadCard({ id, existingNames }: { id: number; existingNames: string[]
             { "data-testid": "asset-file-input" } as InputHTMLAttributes<HTMLInputElement>
           }
         >
-          <Group gap="xs" justify="center" py="md">
-            <IconUpload size={20} />
-            <Text size="sm">Перетащите файл сюда или нажмите, чтобы выбрать</Text>
+          <Group gap="md" justify="center" py="md">
+            <IconUpload size={24} color="var(--mocker-accent)" stroke={1.5} />
+            <Text size="sm" ta="center">
+              Перетащите файл сюда или нажмите, чтобы выбрать
+            </Text>
           </Group>
         </Dropzone>
         {upload.isError ? (
@@ -272,16 +284,22 @@ function AssetList({
           хосте воркспейса.
         </Text>
       ) : (
-        <Card withBorder p={0} data-testid="asset-list">
-          <Table fz="sm">
+        <Box
+          component="section"
+          className="mocker-table-surface"
+          data-testid="asset-list"
+          aria-label="Загруженные файлы"
+          tabIndex={0}
+        >
+          <Table fz="sm" miw={760}>
             <Table.Thead>
               <Table.Tr>
-                <Table.Th>имя</Table.Th>
-                <Table.Th>тип</Table.Th>
-                <Table.Th>размер</Table.Th>
-                <Table.Th>обновлён</Table.Th>
+                <Table.Th>Имя</Table.Th>
+                <Table.Th>Тип</Table.Th>
+                <Table.Th>Размер</Table.Th>
+                <Table.Th>Обновлён</Table.Th>
                 <Table.Th>sha256</Table.Th>
-                <Table.Th>адрес</Table.Th>
+                <Table.Th>Адрес</Table.Th>
                 <Table.Th />
               </Table.Tr>
             </Table.Thead>
@@ -289,9 +307,17 @@ function AssetList({
               {rows.map((asset) => (
                 <Table.Tr key={asset.name} data-testid="asset-row">
                   <Table.Td>
-                    <Text size="sm" fw={500}>
-                      {asset.name}
-                    </Text>
+                    <Group gap="xs" wrap="nowrap">
+                      <IconFile
+                        size={20}
+                        color="var(--mocker-muted)"
+                        stroke={1.5}
+                        style={{ flexShrink: 0 }}
+                      />
+                      <Text size="sm" fw={500} style={{ overflowWrap: "anywhere" }}>
+                        {asset.name}
+                      </Text>
+                    </Group>
                   </Table.Td>
                   <Table.Td>{asset.mediaType}</Table.Td>
                   <Table.Td>{formatBytes(asset.sizeBytes)}</Table.Td>
@@ -302,13 +328,36 @@ function AssetList({
                     </Text>
                   </Table.Td>
                   <Table.Td>
-                    <Anchor href={asset.url} target="_blank" rel="noreferrer" size="sm">
-                      {asset.url}
-                    </Anchor>
+                    <Group gap="xs" wrap="nowrap">
+                      <Anchor
+                        href={asset.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        size="sm"
+                        title={asset.url}
+                        aria-label={`Открыть ${asset.name}`}
+                      >
+                        <Group gap={4} wrap="nowrap">
+                          Открыть <IconExternalLink size={14} />
+                        </Group>
+                      </Anchor>
+                      <CopyButton value={asset.url}>
+                        {({ copied, copy }) => (
+                          <Tooltip label={copied ? "Адрес скопирован" : "Скопировать адрес"}>
+                            <ActionIcon
+                              onClick={copy}
+                              aria-label={`Скопировать адрес ${asset.name}`}
+                            >
+                              {copied ? <IconCheck size={16} /> : <IconCopy size={16} />}
+                            </ActionIcon>
+                          </Tooltip>
+                        )}
+                      </CopyButton>
+                    </Group>
                   </Table.Td>
                   <Table.Td>
                     <Button
-                      variant="default"
+                      variant="subtle"
                       size="xs"
                       color="red"
                       leftSection={<IconTrash size={14} />}
@@ -323,7 +372,7 @@ function AssetList({
               ))}
             </Table.Tbody>
           </Table>
-        </Card>
+        </Box>
       )}
     </Stack>
   );

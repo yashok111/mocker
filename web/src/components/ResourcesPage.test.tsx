@@ -439,8 +439,9 @@ describe("ResourcesPage", () => {
               resourceId: 1,
               idField: "id",
               writeForm: "bare",
-              entityCount: 5,
+              entityCount: 17,
               byBaseScope: [
+                { baseScope: "", entityCount: 12 },
                 { baseScope: "acme", entityCount: 3 },
                 { baseScope: "globex", entityCount: 2 },
               ],
@@ -450,7 +451,7 @@ describe("ResourcesPage", () => {
     });
     renderInRouter(<ResourcesPage id={WS} />);
     expect(await screen.findByTestId("resource-entity-count")).toHaveTextContent(
-      "Записей: 5 (acme: 3, globex: 2)",
+      "Записей: 17 (общая: 12, acme: 3, globex: 2)",
     );
   });
 });

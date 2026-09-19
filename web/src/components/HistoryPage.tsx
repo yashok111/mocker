@@ -9,6 +9,7 @@ import { CheckpointList } from "./history/CheckpointList";
 import { CreateCheckpointForm } from "./history/CreateCheckpointForm";
 import { ResetDataCard } from "./history/ResetDataCard";
 import { ResetOverridesCard } from "./history/ResetOverridesCard";
+import classes from "./WorkspaceTools.module.css";
 
 // HistoryPage is DESIGN §14 screen 10, P2c: the workspace's undo log. A
 // checkpoint is a point-in-time snapshot of the WORKSPACE layer only —
@@ -67,17 +68,21 @@ export function HistoryPage({ id }: { id: number }): ReactElement {
   return (
     <div data-testid="history-page">
       <Stack gap="md">
-        <Title order={1}>История</Title>
-        <Text size="sm" c="dimmed" data-testid="history-intro">
-          Чекпойнт — снимок слоя воркспейса: настройки, правки операций, свои эндпоинты и
-          подтверждённые ресурсы. При откате можно вернуть и сами записи ресурсов — флажком «вернуть
-          и данные ресурсов», если эта точка их сохранила. Откат и сброс правок сохраняют свою
-          собственную точку прямо перед тем, как что-то стереть, так что их можно отменить откатом
-          на неё. Сброс ДАННЫХ ресурсов — нет: он необратим.
+        <Title order={2}>История</Title>
+        <Text size="sm" c="dimmed">
+          Сохраняйте контрольные точки и возвращайтесь к предыдущим настройкам воркспейса.
         </Text>
+        <details className={classes.explanation}>
+          <summary>Что сохраняется в точке и как работает откат</summary>
+          <Text size="sm" c="dimmed" data-testid="history-intro">
+            Чекпойнт — снимок слоя воркспейса: настройки, правки операций, свои эндпоинты и
+            подтверждённые ресурсы. При откате можно вернуть и сами записи ресурсов — флажком
+            «вернуть и данные ресурсов», если эта точка их сохранила. Откат и сброс правок сохраняют
+            свою собственную точку прямо перед тем, как что-то стереть, так что их можно отменить
+            откатом на неё. Сброс ДАННЫХ ресурсов — нет: он необратим.
+          </Text>
+        </details>
         <CreateCheckpointForm id={id} scenarioActive={scenarioActive} />
-        <ResetOverridesCard id={id} scenarioActive={scenarioActive} />
-        <ResetDataCard id={id} workspaceSlug={workspaceSlug} />
         <QueryState queries={[checkpoints]} testIdPrefix="history">
           {checkpoints.data?.status !== 200 ? (
             // An unexpected status is not the query failing — no retry
@@ -104,6 +109,13 @@ export function HistoryPage({ id }: { id: number }): ReactElement {
             />
           )}
         </QueryState>
+        <details className={classes.resetSection} data-testid="history-reset-section">
+          <summary data-testid="history-reset-toggle">Сброс воркспейса и данных</summary>
+          <Stack gap="sm" p="md">
+            <ResetOverridesCard id={id} scenarioActive={scenarioActive} />
+            <ResetDataCard id={id} workspaceSlug={workspaceSlug} />
+          </Stack>
+        </details>
       </Stack>
     </div>
   );

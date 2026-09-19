@@ -1,13 +1,27 @@
+import { createContext, useCallback, useContext, useState } from "react";
 import type { ReactNode } from "react";
+import { createPortal } from "react-dom";
 import {
   AppShell as MantineAppShell,
+  ActionIcon,
+  Avatar,
   Button,
+  Drawer,
   Group,
   NativeSelect,
   Text,
   UnstyledButton,
 } from "@mantine/core";
-import { IconLogout } from "@tabler/icons-react";
+import {
+  IconBook2,
+  IconBraces,
+  IconChevronRight,
+  IconFileCode,
+  IconLayoutGrid,
+  IconLogout,
+  IconMenu2,
+} from "@tabler/icons-react";
+import { useMediaQuery } from "@mantine/hooks";
 import { useLocation, useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { useLogout } from "@/api/generated/auth/auth.ts";
@@ -16,6 +30,26 @@ import { useGetHealthz, useGetReadyz } from "@/api/generated/health/health.ts";
 import { ApiFailure } from "@/api/client";
 import { forgetSession } from "@/auth/session";
 import type { UserView } from "@/api/generated/schemas";
+import classes from "./Workbench.module.css";
+
+const NavigationContext = createContext<{
+  target: HTMLDivElement | null;
+  close: () => void;
+} | null>(null);
+
+// The workspace owns its navigation and data. A portal places it in the same
+// rail as global navigation without coupling the shell to workspace queries.
+export function WorkspaceNavigationSlot({ children }: { children: ReactNode }) {
+  const navigation = useContext(NavigationContext);
+  if (navigation === null) {
+    return <>{children}</>;
+  }
+  return navigation.target === null ? null : createPortal(children, navigation.target);
+}
+
+export function useCloseNavigation() {
+  return useContext(NavigationContext)?.close;
+}
 
 // AppShell is the frame every authenticated screen renders inside: the name of
 // the tool, who is logged in, and the way out. It owns no data of its own —
@@ -23,6 +57,11 @@ import type { UserView } from "@/api/generated/schemas";
 export function AppShell({ user, children }: { user: UserView; children: ReactNode }) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const location = useLocation();
+  const mobile = useMediaQuery("(max-width: 48em)", false, { getInitialValueInEffect: false });
+  const [navigationOpened, setNavigationOpened] = useState(false);
+  const [navigationTarget, setNavigationTarget] = useState<HTMLDivElement | null>(null);
+  const closeNavigation = useCallback(() => setNavigationOpened(false), []);
 
   const logout = useLogout({
     mutation: {
@@ -37,54 +76,139 @@ export function AppShell({ user, children }: { user: UserView; children: ReactNo
     },
   });
 
-  return (
-    <MantineAppShell header={{ height: 56 }} padding="md">
-      <MantineAppShell.Header>
-        <Group h="100%" px="md" justify="space-between">
-          <Group gap="lg">
-            <UnstyledButton onClick={() => void navigate({ to: "/" })}>
-              <Text fw={600} size="sm">
-                mocker
-              </Text>
-            </UnstyledButton>
-            {/* A21 (U2): the list was reachable only through the wordmark,
-                which nothing marked as a link. */}
-            <UnstyledButton onClick={() => void navigate({ to: "/" })} data-testid="nav-workspaces">
-              <Text size="sm">Воркспейсы</Text>
-            </UnstyledButton>
-            <WorkspaceSwitcher />
-            {/* Without this link /specs is reachable only by typing the URL
-                by hand — a route nobody can reach is not shipped. */}
-            <UnstyledButton onClick={() => void navigate({ to: "/specs" })} data-testid="nav-specs">
-              <Text size="sm">Спеки</Text>
-            </UnstyledButton>
-            {/* The operator's manual (docs/USER-GUIDE.md) rendered in place —
-                the one screen added after the A4 "no new screens" rule, on
-                the owner's own request, and it calls no admin route. */}
-            <UnstyledButton onClick={() => void navigate({ to: "/guide" })} data-testid="nav-guide">
-              <Text size="sm">Руководство</Text>
-            </UnstyledButton>
-          </Group>
-          <Group gap="sm">
-            <ServerStatus />
-            <Text size="sm" c="dimmed" data-testid="current-user-name">
-              {user.name}
-            </Text>
-            <Button
-              variant="default"
-              size="xs"
-              leftSection={<IconLogout size={16} />}
-              loading={logout.isPending}
-              onClick={() => logout.mutate()}
-              data-testid="logout-button"
+  const globalLinks = [
+    { to: "/", label: "Воркспейсы", icon: IconLayoutGrid, testId: "nav-workspaces" },
+    { to: "/specs", label: "Спеки", icon: IconFileCode, testId: "nav-specs" },
+    { to: "/guide", label: "Руководство", icon: IconBook2, testId: "nav-guide" },
+  ] as const;
+  const navigation = (
+    <nav aria-label="Основная навигация" className={classes.navigation}>
+      <div className={classes.globalLinks}>
+        <Text className={classes.navCaption}>Пространство</Text>
+        {globalLinks.map(({ to, label, icon: Icon, testId }) => {
+          const active =
+            to === "/"
+              ? location.pathname === "/" || location.pathname.startsWith("/workspaces/")
+              : location.pathname.startsWith(to);
+          return (
+            <UnstyledButton
+              key={to}
+              className={classes.globalLink}
+              data-active={active || undefined}
+              aria-current={active ? "page" : undefined}
+              data-testid={testId}
+              onClick={() => {
+                closeNavigation();
+                void navigate({ to });
+              }}
             >
-              {logout.isPending ? "Выходим…" : "Выйти"}
-            </Button>
+              <Icon size={18} stroke={1.6} aria-hidden="true" />
+              <span>{label}</span>
+              {active ? <IconChevronRight size={14} aria-hidden="true" /> : null}
+            </UnstyledButton>
+          );
+        })}
+      </div>
+      <WorkspaceSwitcher onNavigate={closeNavigation} />
+      <div ref={setNavigationTarget} className={classes.workspaceNavigationSlot} />
+      <div className={classes.railFooter}>
+        <Text size="xs" c="dimmed">
+          API под вашим контролем
+        </Text>
+        <Text size="xs" c="dimmed">
+          Настраивайте. Проверяйте. Повторяйте.
+        </Text>
+      </div>
+    </nav>
+  );
+
+  return (
+    <NavigationContext.Provider value={{ target: navigationTarget, close: closeNavigation }}>
+      <MantineAppShell
+        header={{ height: 64 }}
+        navbar={{ width: 224, breakpoint: "sm", collapsed: { mobile: true, desktop: mobile } }}
+        padding={0}
+        classNames={{ header: classes.header, navbar: classes.rail, main: classes.main }}
+      >
+        <MantineAppShell.Header>
+          <Group h="100%" px={{ base: "md", sm: "lg" }} justify="space-between" wrap="nowrap">
+            <Group gap="sm" wrap="nowrap">
+              {mobile ? (
+                <ActionIcon
+                  variant="subtle"
+                  size="lg"
+                  aria-label="Открыть навигацию"
+                  aria-expanded={navigationOpened}
+                  aria-controls="mobile-navigation"
+                  onClick={() => setNavigationOpened(true)}
+                >
+                  <IconMenu2 size={22} />
+                </ActionIcon>
+              ) : null}
+              <UnstyledButton className={classes.brand} onClick={() => void navigate({ to: "/" })}>
+                <span className={classes.brandMark}>
+                  <IconBraces size={24} stroke={2} />
+                </span>
+                <span>
+                  mocker<span className={classes.brandDot}>.</span>
+                </span>
+              </UnstyledButton>
+              <Text className={classes.headerCaption}>Ваше API. Ваши правила.</Text>
+            </Group>
+            <Group gap="md" wrap="nowrap">
+              <div className={classes.headerStatus}>
+                <ServerStatus />
+              </div>
+              <Group gap="xs" wrap="nowrap" className={classes.user}>
+                <Avatar size={30} radius="xl" color="teal">
+                  {user.name.slice(0, 1).toUpperCase()}
+                </Avatar>
+                <Text
+                  size="sm"
+                  fw={500}
+                  data-testid="current-user-name"
+                  className={classes.userName}
+                >
+                  {user.name}
+                </Text>
+              </Group>
+              <Button
+                variant="subtle"
+                color="gray"
+                size="xs"
+                leftSection={<IconLogout size={16} />}
+                loading={logout.isPending}
+                onClick={() => logout.mutate()}
+                data-testid="logout-button"
+              >
+                {logout.isPending ? "Выходим…" : "Выйти"}
+              </Button>
+            </Group>
           </Group>
-        </Group>
-      </MantineAppShell.Header>
-      <MantineAppShell.Main>{children}</MantineAppShell.Main>
-    </MantineAppShell>
+        </MantineAppShell.Header>
+        {!mobile ? <MantineAppShell.Navbar>{navigation}</MantineAppShell.Navbar> : null}
+        <MantineAppShell.Main>
+          <div className={classes.mainContent}>{children}</div>
+        </MantineAppShell.Main>
+      </MantineAppShell>
+      {mobile ? (
+        <Drawer
+          opened={navigationOpened}
+          onClose={closeNavigation}
+          keepMounted
+          title="Навигация"
+          size={292}
+          position="left"
+          padding="md"
+          id="mobile-navigation"
+          closeButtonProps={{ "aria-label": "Закрыть навигацию" }}
+          classNames={{ body: classes.drawerBody }}
+        >
+          {navigation}
+          <ServerStatus />
+        </Drawer>
+      ) : null}
+    </NavigationContext.Provider>
   );
 }
 
@@ -123,6 +247,8 @@ function ServerStatus() {
   return (
     <Text
       size="xs"
+      className={classes.serverStatus}
+      data-ready={isReady || undefined}
       c={isReady ? "dimmed" : "red"}
       component="output"
       title="GET /readyz и GET /healthz раз в 30 с"
@@ -141,7 +267,10 @@ function ServerStatus() {
 // control every other screen in this tree uses for a pick.
 // `pathname` is a test seam: renderInRouter mounts a component at "/" only,
 // so the switcher's own test hands it the path a workspace route would have.
-export function WorkspaceSwitcher({ pathname }: { pathname?: string } = {}) {
+export function WorkspaceSwitcher({
+  pathname,
+  onNavigate,
+}: { pathname?: string; onNavigate?: () => void } = {}) {
   const navigate = useNavigate();
   const location = useLocation();
   const path = pathname ?? location.pathname;
@@ -156,15 +285,18 @@ export function WorkspaceSwitcher({ pathname }: { pathname?: string } = {}) {
   }
   return (
     <NativeSelect
-      size="xs"
+      size="sm"
+      className={classes.workspaceSwitcher}
+      label="Текущий воркспейс"
       aria-label="Перейти к воркспейсу"
       value={current}
-      onChange={(e) =>
+      onChange={(e) => {
+        onNavigate?.();
         void navigate({
           to: `/workspaces/$id${tab}`,
           params: { id: Number(e.currentTarget.value) },
-        })
-      }
+        });
+      }}
       data-testid="workspace-switcher"
     >
       {workspaces.data.data.map((ws) => (

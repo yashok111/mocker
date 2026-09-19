@@ -1,15 +1,18 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 import type { ReactElement } from "react";
 import {
   Alert,
+  ActionIcon,
   Button,
   Code,
   Group,
   Loader,
   Stack,
+  Table,
   Text,
   Textarea,
   TextInput,
+  Tooltip,
 } from "@mantine/core";
 import { modals } from "@mantine/modals";
 import { IconAlertTriangle, IconPencil, IconPlus, IconTrash } from "@tabler/icons-react";
@@ -20,6 +23,7 @@ import { useDeleteResourceEntity, useSetResourceEntity } from "@/api/generated/d
 import type { ResourceEntityView, ResourceFamilyView } from "@/api/generated/schemas";
 import { describeApiFailure, describeApiFailureDetailed } from "@/api/errors";
 import { jsonLocation } from "@/validation/json";
+import classes from "./ResourceEntities.module.css";
 
 // ResourceEntities is the entity browser ResourcesPage.tsx's own header
 // comment says it does not have (D10, P3a cut the read route at round 6).
@@ -322,9 +326,23 @@ function EntityPage({
           Записей пока нет — они появляются из POST на коллекцию или из записи агентом.
         </Text>
       ) : null}
-      {rows.map((row) => (
-        <EntityRow key={row.id} id={id} family={family} row={row} onWrite={onWrite} />
-      ))}
+      {rows.length > 0 ? (
+        <div className={classes.tableViewport}>
+          <Table className={classes.table} verticalSpacing="sm">
+            <Table.Thead>
+              <Table.Tr>
+                <Table.Th>Ключ</Table.Th>
+                <Table.Th>Данные</Table.Th>
+                <Table.Th>Область</Table.Th>
+                <Table.Th aria-label="Действия" />
+              </Table.Tr>
+            </Table.Thead>
+            {rows.map((row) => (
+              <EntityRow key={row.id} id={id} family={family} row={row} onWrite={onWrite} />
+            ))}
+          </Table>
+        </div>
+      ) : null}
       {isLast && rows.length === PAGE ? (
         <Button
           variant="default"
@@ -338,6 +356,38 @@ function EntityPage({
       ) : null}
     </>
   );
+}
+
+function scalarSummary(data: unknown, idField: string | null): string {
+  if (data === null || typeof data !== "object" || Array.isArray(data)) {
+    return "Нет краткого представления";
+  }
+  const preferredKeys = ["title", "name", "label", "email", "status"];
+  const scalarEntries = Object.entries(data as Record<string, unknown>).filter(
+    ([key, value]) =>
+      key !== idField &&
+      value !== null &&
+      value !== undefined &&
+      typeof value !== "object" &&
+      !(typeof value === "string" && value.trim() === ""),
+  );
+  const preferred = preferredKeys.flatMap((key) => {
+    const entry = scalarEntries.find(([candidate]) => candidate === key);
+    return entry === undefined ? [] : [entry];
+  });
+  const fields = [...preferred, ...scalarEntries.filter(([key]) => !preferredKeys.includes(key))]
+    .slice(0, 3)
+    .map(([key, value]) => {
+      let rendered: string;
+      if (typeof value === "boolean") {
+        rendered = value ? "да" : "нет";
+      } else {
+        const raw = String(value);
+        rendered = raw.length > 52 ? `${raw.slice(0, 49)}…` : raw;
+      }
+      return `${key}: ${rendered}`;
+    });
+  return fields.length > 0 ? fields.join(" · ") : "Нет скалярных полей";
 }
 
 function scopeLine(row: ResourceEntityView): string | null {
@@ -367,6 +417,8 @@ function EntityRow({
   onWrite: () => void;
 }): ReactElement {
   const queryClient = useQueryClient();
+  const detailsId = useId();
+  const [expanded, setExpanded] = useState(false);
   const [editing, setEditing] = useState(false);
   // updatedAt of the row the draft was opened from. The PUT has no version
   // check (A11's request carries data and scope only), so the one thing
@@ -420,6 +472,7 @@ function EntityRow({
     setText(JSON.stringify(row.data, null, 2));
     setDraftOf(row.updatedAt);
     setParseError(null);
+    setExpanded(true);
     setEditing(true);
   }
 
@@ -468,113 +521,138 @@ function EntityRow({
             data:
               scope.scopeKey === undefined && scope.baseScopeKey === undefined ? undefined : scope,
           },
-          { onError: (err) => setDeleteError(describeApiFailureDetailed(err)) },
+          {
+            onError: (err) => {
+              setDeleteError(describeApiFailureDetailed(err));
+              setExpanded(true);
+            },
+          },
         );
       },
     });
   }
 
   return (
-    <Stack
-      gap={4}
-      px="sm"
-      py="xs"
-      data-testid="entity-row"
-      style={{ borderTop: "1px solid var(--mantine-color-gray-3)" }}
-    >
-      <Group justify="space-between" wrap="nowrap" align="flex-start">
-        <div>
-          <Text size="sm" fw={500}>
+    <Table.Tbody data-testid="entity-row" className={classes.entityBody}>
+      <Table.Tr>
+        <Table.Td>
+          <Text size="sm" fw={600} ff="monospace">
             {family.idField ?? "id"} = {row.entityKey}
           </Text>
-          {scopeLine(row) !== null ? (
-            <Text size="xs" c="dimmed" ff="monospace" data-testid="entity-scope">
-              {scopeLine(row)}
-            </Text>
-          ) : null}
-        </div>
-        <Group gap="xs" wrap="nowrap">
-          <Button
-            variant="default"
-            size="xs"
-            leftSection={<IconPencil size={16} />}
-            onClick={startEdit}
-            disabled={editing}
-            data-testid="entity-edit"
-          >
-            Изменить
-          </Button>
-          <Button
-            variant="default"
-            size="xs"
-            color="red"
-            leftSection={<IconTrash size={16} />}
-            onClick={remove}
-            loading={deleteEntity.isPending}
-            data-testid="entity-delete"
-          >
-            Удалить
-          </Button>
-        </Group>
-      </Group>
-      {deleteError !== null ? (
-        <Alert color="red" icon={<IconAlertTriangle size={18} />} role="alert">
-          {deleteError}
-        </Alert>
-      ) : null}
-      {editing ? (
-        <Stack gap="xs" data-testid="entity-edit-form">
-          {stale ? (
-            <Alert
-              color="orange"
-              icon={<IconAlertTriangle size={18} />}
-              role="alert"
-              data-testid="entity-edit-stale"
-            >
-              Запись изменилась, пока вы её редактировали. Откройте её заново — иначе сохранение
-              затёрло бы чужую правку.
-            </Alert>
-          ) : null}
-          {setEntity.isError ? (
-            <Alert color="red" icon={<IconAlertTriangle size={18} />} role="alert">
-              {describeApiFailureDetailed(setEntity.error)}
-            </Alert>
-          ) : null}
-          <Textarea
-            label={`Запись, JSON — поле ${family.idField ?? "id"} перезапишется ключом`}
-            rows={6}
-            value={text}
-            onChange={(e) => setText(e.currentTarget.value)}
-            error={parseError}
-            styles={{ input: { fontFamily: "var(--mantine-font-family-monospace)" } }}
-            data-testid="entity-edit-data"
-          />
-          <Group gap="xs">
+        </Table.Td>
+        <Table.Td>
+          <Text size="sm" data-testid="entity-summary" className={classes.summary}>
+            {scalarSummary(row.data, family.idField)}
+          </Text>
+        </Table.Td>
+        <Table.Td>
+          <Text size="xs" c="dimmed" ff="monospace" data-testid="entity-scope">
+            {scopeLine(row) ?? "общая"}
+          </Text>
+        </Table.Td>
+        <Table.Td>
+          <Group gap={4} wrap="nowrap" justify="flex-end">
             <Button
-              size="xs"
-              loading={setEntity.isPending}
-              disabled={stale}
-              onClick={save}
-              data-testid="entity-edit-submit"
+              variant="subtle"
+              size="compact-xs"
+              onClick={() => setExpanded((value) => !value)}
+              disabled={editing}
+              aria-expanded={expanded}
+              aria-controls={detailsId}
+              data-testid="entity-details-toggle"
             >
-              Сохранить
+              {expanded ? "Скрыть" : "Подробнее"}
             </Button>
-            <Button
-              variant="default"
-              size="xs"
-              onClick={() => setEditing(false)}
-              data-testid="entity-edit-cancel"
-            >
-              Отмена
-            </Button>
+            <Tooltip label="Изменить запись">
+              <ActionIcon
+                variant="subtle"
+                onClick={startEdit}
+                disabled={editing}
+                data-testid="entity-edit"
+                aria-label={`Изменить запись ${row.entityKey}`}
+              >
+                <IconPencil size={17} />
+              </ActionIcon>
+            </Tooltip>
+            <Tooltip label="Удалить запись">
+              <ActionIcon
+                variant="subtle"
+                color="red"
+                onClick={remove}
+                loading={deleteEntity.isPending}
+                data-testid="entity-delete"
+                aria-label={`Удалить запись ${row.entityKey}`}
+              >
+                <IconTrash size={17} />
+              </ActionIcon>
+            </Tooltip>
           </Group>
-        </Stack>
-      ) : (
-        <Code block style={{ maxHeight: 200, overflow: "auto" }} data-testid="entity-data">
-          {JSON.stringify(row.data, null, 2)}
-        </Code>
-      )}
-    </Stack>
+        </Table.Td>
+      </Table.Tr>
+      {expanded ? (
+        <Table.Tr>
+          <Table.Td colSpan={4} id={detailsId} className={classes.detailsCell}>
+            {deleteError !== null ? (
+              <Alert color="red" icon={<IconAlertTriangle size={18} />} role="alert" mb="sm">
+                {deleteError}
+              </Alert>
+            ) : null}
+            {editing ? (
+              <Stack gap="xs" data-testid="entity-edit-form">
+                {stale ? (
+                  <Alert
+                    color="orange"
+                    icon={<IconAlertTriangle size={18} />}
+                    role="alert"
+                    data-testid="entity-edit-stale"
+                  >
+                    Запись изменилась, пока вы её редактировали. Откройте её заново — иначе
+                    сохранение затёрло бы чужую правку.
+                  </Alert>
+                ) : null}
+                {setEntity.isError ? (
+                  <Alert color="red" icon={<IconAlertTriangle size={18} />} role="alert">
+                    {describeApiFailureDetailed(setEntity.error)}
+                  </Alert>
+                ) : null}
+                <Textarea
+                  label={`Запись, JSON — поле ${family.idField ?? "id"} перезапишется ключом`}
+                  rows={8}
+                  value={text}
+                  onChange={(e) => setText(e.currentTarget.value)}
+                  error={parseError}
+                  styles={{ input: { fontFamily: "var(--mantine-font-family-monospace)" } }}
+                  data-testid="entity-edit-data"
+                />
+                <Group gap="xs">
+                  <Button
+                    size="xs"
+                    loading={setEntity.isPending}
+                    disabled={stale}
+                    onClick={save}
+                    data-testid="entity-edit-submit"
+                  >
+                    Сохранить
+                  </Button>
+                  <Button
+                    variant="default"
+                    size="xs"
+                    onClick={() => setEditing(false)}
+                    data-testid="entity-edit-cancel"
+                  >
+                    Отмена
+                  </Button>
+                </Group>
+              </Stack>
+            ) : (
+              <Code block className={classes.json} data-testid="entity-data">
+                {JSON.stringify(row.data, null, 2)}
+              </Code>
+            )}
+          </Table.Td>
+        </Table.Tr>
+      ) : null}
+    </Table.Tbody>
   );
 }
 

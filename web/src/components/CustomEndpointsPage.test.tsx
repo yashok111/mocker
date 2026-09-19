@@ -19,6 +19,11 @@ const WS = 7;
 const LIST = `GET /api/workspaces/${WS}/endpoints`;
 const CREATE = `POST /api/workspaces/${WS}/endpoints`;
 
+async function openCreateForm(): Promise<HTMLElement> {
+  await userEvent.click(await screen.findByTestId("endpoint-create-toggle"));
+  return screen.findByTestId("endpoint-create-form");
+}
+
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
@@ -66,14 +71,35 @@ describe("CustomEndpointsPage", () => {
     expect(await screen.findByTestId("endpoints-empty")).toHaveTextContent("Своих эндпоинтов");
   });
 
+  it("keeps endpoint creation out of the workspace until requested and restores focus on close", async () => {
+    route({ [LIST]: () => json(200, endpointListViewFixture({ endpoints: [] })) });
+    renderInRouter(<CustomEndpointsPage id={WS} />);
+
+    const trigger = await screen.findByTestId("endpoint-create-toggle");
+    expect(screen.queryByTestId("endpoint-create-form")).not.toBeInTheDocument();
+
+    await userEvent.click(trigger);
+    const dialog = await screen.findByRole("dialog", { name: "Создать эндпоинт" });
+    expect(within(dialog).getByTestId("endpoint-create-form")).toBeInTheDocument();
+
+    await userEvent.click(
+      within(dialog).getByRole("button", { name: "Закрыть создание эндпоинта" }),
+    );
+    await waitFor(() => {
+      expect(screen.queryByTestId("endpoint-create-form")).not.toBeInTheDocument();
+      expect(trigger).toHaveFocus();
+    });
+  });
+
   it("points to the traffic screen as the primary way to create one", async () => {
     route({ [LIST]: () => json(200, endpointListViewFixture({ endpoints: [] })) });
     renderInRouter(<CustomEndpointsPage id={WS} />);
 
     await screen.findByTestId("custom-endpoints-page");
-    expect(
-      screen.getByRole("link", { name: "«создать endpoint из запроса» на экране трафика" }),
-    ).toHaveAttribute("href", `/workspaces/${WS}/traffic`);
+    expect(screen.getByRole("link", { name: "экране трафика" })).toHaveAttribute(
+      "href",
+      `/workspaces/${WS}/traffic`,
+    );
   });
 
   it("lists method, path, canonicalPath, active status, routeOff and the response statuses present", async () => {
@@ -92,7 +118,8 @@ describe("CustomEndpointsPage", () => {
     renderInRouter(<CustomEndpointsPage id={WS} />);
 
     const row = await screen.findByTestId("endpoint-row");
-    expect(row).toHaveTextContent("POST /custom/widgets");
+    expect(within(row).getByText("POST")).toBeInTheDocument();
+    expect(within(row).getByText("/custom/widgets")).toBeInTheDocument();
     expect(row).toHaveTextContent("канонический путь /custom/widgets");
     expect(row).toHaveTextContent("активный статус 201");
     expect(row).toHaveTextContent("статусы: 201, 404");
@@ -123,6 +150,7 @@ describe("CustomEndpointsPage", () => {
 
     await userEvent.click(await screen.findByTestId("endpoint-edit-toggle"));
 
+    expect(await screen.findByRole("dialog", { name: "GET /custom/ping" })).toBeInTheDocument();
     const form = await screen.findByTestId("endpoint-edit-form");
     expect(within(form).getByTestId("endpoint-edit-path")).toHaveValue("/custom/ping");
     expect(within(form).getByTestId("endpoint-edit-status")).toHaveValue("200");
@@ -130,6 +158,23 @@ describe("CustomEndpointsPage", () => {
     expect(within(form).getByTestId("endpoint-edit-body")).toHaveValue(
       JSON.stringify({ ok: true }, null, 2),
     );
+  });
+
+  it("opens a deep-linked endpoint in the drawer and reports its close so the route can clear search", async () => {
+    const onDeepLinkClose = vi.fn();
+    const ep = endpointViewFixture({ id: 5, method: "PATCH", path: "/tasks/5" });
+    route({ [LIST]: () => json(200, endpointListViewFixture({ endpoints: [ep] })) });
+    renderInRouter(
+      <CustomEndpointsPage id={WS} initialEditingId={5} onDeepLinkClose={onDeepLinkClose} />,
+    );
+
+    const dialog = await screen.findByRole("dialog", { name: "PATCH /tasks/5" });
+    await userEvent.click(
+      within(dialog).getByRole("button", { name: "Закрыть редактор эндпоинта" }),
+    );
+
+    expect(screen.queryByTestId("endpoint-edit-form")).not.toBeInTheDocument();
+    expect(onDeepLinkClose).toHaveBeenCalledOnce();
   });
 
   it("cancels the edit form without calling the server", async () => {
@@ -391,7 +436,7 @@ describe("CustomEndpointsPage", () => {
       [CREATE]: () => json(201, endpointViewFixture({ method: "POST", path: "/login" })),
     });
     renderInRouter(<CustomEndpointsPage id={WS} />);
-    await screen.findByTestId("endpoint-create-form");
+    await openCreateForm();
     await fill(screen.getByTestId("endpoint-create-path"), "/login");
     await fill(screen.getByTestId("endpoint-create-function"), "return 200, {}");
     await userEvent.click(screen.getByTestId("endpoint-create-submit"));
@@ -412,7 +457,7 @@ describe("CustomEndpointsPage", () => {
     });
     renderInRouter(<CustomEndpointsPage id={WS} />);
 
-    await screen.findByTestId("endpoint-create-form");
+    await openCreateForm();
     await fill(screen.getByTestId("endpoint-create-path"), "/custom/ping");
     // user-event v14 treats { as the start of a special-key sequence, so a
     // literal brace is typed as {{ — this is still just "{not json" landing
@@ -432,7 +477,7 @@ describe("CustomEndpointsPage", () => {
     });
     renderInRouter(<CustomEndpointsPage id={WS} />);
 
-    await screen.findByTestId("endpoint-create-form");
+    await openCreateForm();
     await userEvent.click(screen.getByTestId("endpoint-create-submit"));
 
     expect(await screen.findByText("Укажите путь")).toBeInTheDocument();
@@ -450,7 +495,7 @@ describe("CustomEndpointsPage", () => {
     const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
     renderInRouter(<CustomEndpointsPage id={WS} />, { queryClient });
 
-    await screen.findByTestId("endpoint-create-form");
+    await openCreateForm();
     await fill(screen.getByTestId("endpoint-create-path"), "/custom/ping");
     await userEvent.click(screen.getByTestId("endpoint-create-submit"));
 
@@ -478,7 +523,7 @@ describe("CustomEndpointsPage", () => {
     });
     renderInRouter(<CustomEndpointsPage id={WS} />);
 
-    await screen.findByTestId("endpoint-create-form");
+    await openCreateForm();
     await fill(screen.getByTestId("endpoint-create-path"), "/custom/x");
     await userEvent.type(screen.getByTestId("endpoint-create-status"), "404");
     await fill(screen.getByTestId("endpoint-create-media-type"), "text/plain");
@@ -510,7 +555,7 @@ describe("CustomEndpointsPage", () => {
     });
     renderInRouter(<CustomEndpointsPage id={WS} />);
 
-    await screen.findByTestId("endpoint-create-form");
+    await openCreateForm();
     await fill(screen.getByTestId("endpoint-create-path"), "/custom/ping");
     await userEvent.click(screen.getByTestId("endpoint-create-submit"));
 
@@ -604,7 +649,7 @@ describe("CustomEndpointsPage", () => {
         ),
     });
     renderInRouter(<CustomEndpointsPage id={WS} />);
-    await screen.findByTestId("endpoint-create-form");
+    await openCreateForm();
 
     await userEvent.selectOptions(screen.getByTestId("endpoint-create-kind"), "sse");
     expect(screen.getByTestId("endpoint-create-method")).toBeDisabled();
@@ -631,7 +676,7 @@ describe("CustomEndpointsPage", () => {
       [LIST]: () => json(200, endpointListViewFixture({ endpoints: [] })),
     });
     renderInRouter(<CustomEndpointsPage id={WS} />);
-    await screen.findByTestId("endpoint-create-form");
+    await openCreateForm();
     await userEvent.selectOptions(screen.getByTestId("endpoint-create-kind"), "ws");
     await fill(screen.getByTestId("endpoint-create-path"), "/chat");
     await userEvent.click(screen.getByTestId("endpoint-create-schedule-on"));

@@ -1,10 +1,47 @@
 import type { ReactElement, ReactNode } from "react";
 import { Alert, Button, Group, Loader, Stack, Tabs, Text, Title } from "@mantine/core";
-import { IconAlertTriangle } from "@tabler/icons-react";
+import {
+  IconAlertTriangle,
+  IconActivity,
+  IconArrowsExchange,
+  IconBox,
+  IconChartBar,
+  IconCode,
+  IconFiles,
+  IconGitBranch,
+  IconHistory,
+  IconLayoutDashboard,
+  IconPlug,
+} from "@tabler/icons-react";
 import { useLocation, useNavigate } from "@tanstack/react-router";
 import { useGetWorkspace } from "@/api/generated/workspaces/workspaces.ts";
 import { describeApiFailure } from "@/api/errors";
 import { WorkspaceContextBar } from "./WorkspaceContextBar";
+import { WorkspaceNavigationSlot, useCloseNavigation } from "./AppShell";
+import classes from "./Workbench.module.css";
+
+const navigationGroups = [
+  {
+    label: "Настройка API",
+    tabs: [
+      { value: "overview", label: "Обзор", icon: IconLayoutDashboard },
+      { value: "operations", label: "Операции спеки", icon: IconCode },
+      { value: "endpoints", label: "Свои эндпоинты", icon: IconPlug },
+      { value: "resources", label: "Ресурсы", icon: IconBox },
+      { value: "assets", label: "Файлы", icon: IconFiles },
+    ],
+  },
+  {
+    label: "Проверка и состояние",
+    tabs: [
+      { value: "traffic", label: "Трафик", icon: IconActivity },
+      { value: "connections", label: "Соединения", icon: IconArrowsExchange },
+      { value: "scenarios", label: "Сценарии", icon: IconGitBranch },
+      { value: "history", label: "История", icon: IconHistory },
+      { value: "contract", label: "Контракт", icon: IconChartBar },
+    ],
+  },
+];
 
 // WorkspaceLayout is the frame every /workspaces/$id/* screen renders inside:
 // the workspace's own identity (name, slug, revision — what WorkspacePage.tsx
@@ -26,6 +63,7 @@ export function WorkspaceLayout({
   const workspace = useGetWorkspace(id);
   const navigate = useNavigate();
   const location = useLocation();
+  const closeNavigation = useCloseNavigation();
 
   const activeTab = location.pathname.endsWith("/operations")
     ? "operations"
@@ -48,6 +86,7 @@ export function WorkspaceLayout({
                     : "overview";
 
   function handleTabChange(value: string | null): void {
+    closeNavigation?.();
     switch (value) {
       case "overview":
         void navigate({ to: "/workspaces/$id", params: { id } });
@@ -130,30 +169,60 @@ export function WorkspaceLayout({
         </Alert>
       ) : (
         <>
-          <div>
+          <div className={classes.workspaceHeading}>
+            <Text className={classes.eyebrow}>Воркспейс</Text>
             <Title order={1} data-testid="workspace-detail-name">
               {workspace.data.data.name}
             </Title>
             <WorkspaceContextBar workspace={workspace.data.data} />
           </div>
-          <Tabs value={activeTab} onChange={handleTabChange}>
-            <Tabs.List>
-              <Tabs.Tab value="overview">Обзор</Tabs.Tab>
-              <Tabs.Tab value="operations">Операции спеки</Tabs.Tab>
-              <Tabs.Tab value="endpoints">Свои эндпоинты</Tabs.Tab>
-              <Tabs.Tab value="traffic">Трафик</Tabs.Tab>
-              <Tabs.Tab value="scenarios">Сценарии</Tabs.Tab>
-              <Tabs.Tab value="history">История</Tabs.Tab>
-              <Tabs.Tab value="resources">Ресурсы</Tabs.Tab>
-              {/* P6e: the live SSE/WebSocket connections of the mock plane. */}
-              <Tabs.Tab value="connections">Соединения</Tabs.Tab>
-              {/* A10: uploaded files a mock can serve (DESIGN §32). */}
-              <Tabs.Tab value="assets">Файлы</Tabs.Tab>
-              {/* P7b: the workspace as one OpenAPI document (DESIGN §34.5). */}
-              <Tabs.Tab value="contract">Контракт</Tabs.Tab>
-            </Tabs.List>
-          </Tabs>
-          {children}
+          <WorkspaceNavigationSlot>
+            <Tabs
+              id={`workspace-navigation-${id}`}
+              value={activeTab}
+              onChange={handleTabChange}
+              activateTabWithKeyboard={false}
+              orientation="vertical"
+              variant="pills"
+              classNames={{
+                root: classes.workspaceTabs,
+                list: classes.workspaceTabsList,
+                tab: classes.workspaceTab,
+                tabLabel: classes.workspaceTabLabel,
+                tabSection: classes.workspaceTabSection,
+              }}
+            >
+              <Tabs.List aria-label="Разделы воркспейса">
+                {navigationGroups.map((group) => (
+                  <div key={group.label} className={classes.navGroup}>
+                    <Text className={classes.navCaption}>{group.label}</Text>
+                    {group.tabs.map(({ value, label, icon: Icon }) => (
+                      <Tabs.Tab
+                        key={value}
+                        value={value}
+                        aria-controls={
+                          value === activeTab
+                            ? `workspace-navigation-${id}-panel-${value}`
+                            : undefined
+                        }
+                        leftSection={<Icon size={17} stroke={1.6} aria-hidden="true" />}
+                      >
+                        {label}
+                      </Tabs.Tab>
+                    ))}
+                  </div>
+                ))}
+              </Tabs.List>
+            </Tabs>
+          </WorkspaceNavigationSlot>
+          <div
+            role="tabpanel"
+            id={`workspace-navigation-${id}-panel-${activeTab}`}
+            aria-labelledby={`workspace-navigation-${id}-tab-${activeTab}`}
+            className={classes.workspaceContent}
+          >
+            {children}
+          </div>
         </>
       )}
     </Stack>

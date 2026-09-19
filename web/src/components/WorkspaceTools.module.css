@@ -1,0 +1,99 @@
+.inlineForm {
+  display: grid;
+  grid-template-columns: minmax(160px, 1fr) auto;
+  align-items: start;
+  gap: 12px;
+}
+
+.inlineForm > button {
+  margin-top: 25px;
+  max-width: 100%;
+}
+
+.explanation {
+  max-width: 78ch;
+}
+
+.explanation > summary {
+  width: fit-content;
+  cursor: pointer;
+  color: var(--mocker-muted);
+  font-size: 12px;
+}
+
+.explanation > p {
+  margin-top: 10px;
+  line-height: 1.7;
+}
+
+.resetSection {
+  border: 1px solid var(--mocker-border);
+  border-radius: 10px;
+  margin-top: 8px;
+  background: var(--mocker-surface);
+}
+
+.resetSection > summary {
+  padding: 16px 20px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--mocker-muted);
+}
+
+.scenarioRow {
+  gap: 20px;
+  align-items: flex-start;
+}
+
+.scenarioRow + .scenarioRow {
+  border-top: 1px solid var(--mocker-border);
+}
+
+.scenarioIdentity {
+  min-width: 0;
+  flex: 1 1 240px;
+  overflow-wrap: anywhere;
+}
+
+.scenarioActions {
+  justify-content: flex-end;
+}
+
+.emptyState {
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 56px 24px;
+}
+
+.emptyState > svg {
+  color: var(--mocker-accent);
+}
+
+.tableScroll {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+@media (max-width: 48em) {
+  .inlineForm {
+    grid-template-columns: 1fr;
+  }
+
+  .inlineForm > button {
+    margin-top: 0;
+    height: auto;
+    min-height: 36px;
+    padding-top: 8px;
+    padding-bottom: 8px;
+  }
+
+  .inlineForm > button span {
+    white-space: normal;
+  }
+
+  .scenarioActions {
+    justify-content: flex-start;
+  }
+}

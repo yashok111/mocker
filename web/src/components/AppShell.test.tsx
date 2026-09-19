@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { screen, waitFor } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { AppShell, WorkspaceSwitcher } from "./AppShell";
+import { WorkspaceLayout } from "./WorkspaceLayout";
 import { renderInRouter } from "@/test/render";
 import { userFixture, workspaceFixture } from "@/test/fixtures";
 import { json, route } from "@/test/http";
@@ -16,6 +17,56 @@ afterEach(() => {
 // good answer in `data`, so the word must come from the error state, not
 // from stale data.
 describe("AppShell server status", () => {
+  it("places all workspace sections in the shared navigation rail", async () => {
+    route({
+      "GET /readyz": () => json(200, { ok: true }),
+      "GET /healthz": () => json(200, { ok: true }),
+      "GET /api/workspaces/7": () => json(200, workspaceFixture({ id: 7 })),
+    });
+    renderInRouter(
+      <AppShell user={userFixture()}>
+        <WorkspaceLayout id={7}>Workspace content</WorkspaceLayout>
+      </AppShell>,
+    );
+    const navigation = await screen.findByRole("navigation", { name: "Основная навигация" });
+    await waitFor(() => expect(within(navigation).getAllByRole("tab")).toHaveLength(10));
+    expect(within(navigation).getByTestId("nav-workspaces")).toBeInTheDocument();
+    expect(within(screen.getByRole("main")).queryByRole("tablist")).toBeNull();
+    const activeTab = within(navigation).getByRole("tab", { name: "Обзор" });
+    const panel = screen.getByRole("tabpanel");
+    expect(activeTab).toHaveAttribute("aria-controls", panel.id);
+    expect(panel).toHaveAttribute("aria-labelledby", activeTab.id);
+  });
+
+  it("opens mobile navigation in a dialog and closes it with Escape", async () => {
+    const originalMatchMedia = window.matchMedia.bind(window);
+    vi.spyOn(window, "matchMedia").mockImplementation((query) => {
+      const result = originalMatchMedia(query);
+      if (query === "(max-width: 48em)") {
+        Object.defineProperty(result, "matches", { value: true });
+      }
+      return result;
+    });
+    route({
+      "GET /readyz": () => json(200, { ok: true }),
+      "GET /healthz": () => json(200, { ok: true }),
+      "GET /api/workspaces/7": () => json(200, workspaceFixture({ id: 7 })),
+    });
+    renderInRouter(
+      <AppShell user={userFixture()}>
+        <WorkspaceLayout id={7}>Workspace content</WorkspaceLayout>
+      </AppShell>,
+    );
+    const toggle = await screen.findByRole("button", { name: "Открыть навигацию" });
+    await userEvent.click(toggle);
+    const dialog = await screen.findByRole("dialog", { name: "Навигация" });
+    await waitFor(() => expect(within(dialog).getAllByRole("tab")).toHaveLength(10));
+    await userEvent.keyboard("{Escape}");
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    await waitFor(() => expect(toggle).toHaveFocus());
+  });
+
   it("says «готов» when /readyz answers ok", async () => {
     route({
       "GET /readyz": () => json(200, { ok: true }),

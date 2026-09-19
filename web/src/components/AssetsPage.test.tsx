@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { screen, waitFor } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { AssetsPage, suggestName } from "./AssetsPage";
 import { renderWithProviders } from "@/test/render";
@@ -62,7 +62,10 @@ describe("AssetsPage", () => {
     const row = await screen.findByTestId("asset-row");
     expect(row).toHaveTextContent("photo.jpg");
     expect(row).toHaveTextContent("image/jpeg");
-    expect(row).toHaveTextContent("http://alex.mock.local/__mocker/assets/photo.jpg");
+    expect(within(row).getByRole("link", { name: "Открыть photo.jpg" })).toHaveAttribute(
+      "href",
+      "http://alex.mock.local/__mocker/assets/photo.jpg",
+    );
   });
 
   it("uploads a dropped file as a raw PUT under the file's own media type", async () => {

@@ -1,6 +1,7 @@
+import { useState } from "react";
 import type { ReactElement } from "react";
-import { Alert, Anchor, Stack, Text, Title } from "@mantine/core";
-import { IconAlertTriangle } from "@tabler/icons-react";
+import { Alert, Anchor, Button, Drawer, Group, Stack, Text, Title } from "@mantine/core";
+import { IconAlertTriangle, IconPlus } from "@tabler/icons-react";
 import { useNavigate } from "@tanstack/react-router";
 import { useListEndpoints } from "@/api/generated/endpoints/endpoints.ts";
 import { useGetWorkspace } from "@/api/generated/workspaces/workspaces.ts";
@@ -10,6 +11,7 @@ import { TabLink } from "./TabLink";
 import { QueryState } from "./QueryState";
 import { CreateEndpointForm } from "./custom-endpoints/CreateEndpointForm";
 import { EndpointList } from "./custom-endpoints/EndpointList";
+import classes from "./CustomEndpointsPage.module.css";
 
 // CustomEndpointsPage is DESIGN §14 screen 6, P1 subset: a custom endpoint is
 // a route this workspace serves that no spec declares (contrast with
@@ -35,16 +37,21 @@ export function CustomEndpointsPage({
   id,
   config,
   initialEditingId,
+  onDeepLinkClose,
 }: {
   id: number;
   /** P7b: the row id the «Контракт» tab linked here with — its edit form
    * opens on mount. */
   initialEditingId?: number;
+  /** Clears the route's endpointId search parameter after a deep-linked
+   * editor closes. Component tests can omit it; the file route wires it. */
+  onDeepLinkClose?: () => void;
   /** The session's server config (A9): its `limits` feed the stream caps
    * strip. Optional so a component test that mounts the screen alone gets
    * the strip's constants instead of a crash. */
   config?: ServerConfigView;
 }): ReactElement {
+  const [creating, setCreating] = useState(false);
   const endpoints = useListEndpoints(id);
   const limits = config?.limits;
   // The workspace's own public URL, for the browser test client — read from
@@ -57,38 +64,48 @@ export function CustomEndpointsPage({
 
   return (
     <div data-testid="custom-endpoints-page">
-      <Stack gap="md">
-        <Title order={1}>Свои эндпоинты</Title>
-        <Text size="sm" c="dimmed">
-          Свой эндпоинт — это маршрут, которого нет в спеке. Основной способ его завести —{" "}
-          <Anchor
-            href={`/workspaces/${id}/traffic`}
-            onClick={(e) => {
-              // A real href (so middle-click / open-in-new-tab still work),
-              // but a click still goes through the router's own navigate —
-              // Anchor's `component={Link}` prop, tried first, defeats
-              // TanStack Router's typed `params` inference through Mantine's
-              // polymorphic `component` prop (verified against this exact
-              // route: it collapses `params` to the reducer-function overload
-              // only, rejecting the plain `{ id }` object every other screen
-              // in this codebase passes to useNavigate/Route.useParams).
-              e.preventDefault();
-              void navigate({ to: "/workspaces/$id/traffic", params: { id } });
-            }}
+      <Stack gap="lg">
+        <Group justify="space-between" align="flex-start" gap="md">
+          <div>
+            <Title order={2}>Свои эндпоинты</Title>
+            <Text size="sm" c="dimmed" mt={4} className={classes.intro}>
+              Маршруты вне спеки. Быстрее всего создать эндпоинт из готового ответа на{" "}
+              <Anchor
+                href={`/workspaces/${id}/traffic`}
+                onClick={(e) => {
+                  e.preventDefault();
+                  void navigate({ to: "/workspaces/$id/traffic", params: { id } });
+                }}
+              >
+                экране трафика
+              </Anchor>
+              ; совпадающий со спекой маршрут настраивается в{" "}
+              <TabLink id={id} tab="operations" testId="endpoints-operations-link">
+                операциях спеки
+              </TabLink>
+              .
+            </Text>
+          </div>
+          <Button
+            leftSection={<IconPlus size={16} />}
+            onClick={() => setCreating(true)}
+            data-testid="endpoint-create-toggle"
           >
-            «создать endpoint из запроса» на экране трафика
-          </Anchor>
-          : там виден уже готовый ответ, и достаточно поправить нужную цифру. Форма ниже — запасной
-          путь для случая, когда подходящего запроса в трафике ещё не было. Маршрут, который
-          канонически совпадает со спековым, здесь заводить не нужно — это «переопределить операцию»
-          на вкладке{" "}
-          <TabLink id={id} tab="operations" testId="endpoints-operations-link">
-            «Операции спеки»
-          </TabLink>
-          . Уже созданный endpoint можно поправить прямо в списке ниже — кнопка «Изменить» открывает
-          форму с текущими значениями.
-        </Text>
-        <CreateEndpointForm id={id} limits={limits} />
+            Создать эндпоинт
+          </Button>
+        </Group>
+        <Drawer
+          opened={creating}
+          onClose={() => setCreating(false)}
+          title="Создать эндпоинт"
+          position="right"
+          size="min(760px, 100vw)"
+          closeButtonProps={{ "aria-label": "Закрыть создание эндпоинта" }}
+          data-testid="endpoint-create-drawer"
+          classNames={{ body: classes.drawerBody }}
+        >
+          {creating ? <CreateEndpointForm id={id} limits={limits} /> : null}
+        </Drawer>
         <QueryState queries={[endpoints]} testIdPrefix="endpoints">
           {endpoints.data?.status !== 200 ? (
             // An unexpected status is not the query failing — no retry button
@@ -117,6 +134,7 @@ export function CustomEndpointsPage({
               workspaceUrl={workspaceUrl}
               limits={limits}
               initialEditingId={initialEditingId}
+              onDeepLinkClose={onDeepLinkClose}
             />
           )}
         </QueryState>

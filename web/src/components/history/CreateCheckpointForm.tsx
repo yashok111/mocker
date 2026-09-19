@@ -11,6 +11,7 @@ import {
 } from "@/api/generated/checkpoints/checkpoints.ts";
 import { describeApiFailureDetailed } from "@/api/errors";
 import { arktypeResolver } from "@/validation/resolver";
+import classes from "../WorkspaceTools.module.css";
 
 const labelField = type("string").narrow((value, ctx) => {
   const trimmed = value.trim();
@@ -108,21 +109,24 @@ export function CreateCheckpointForm({
             Сохранена точка «<strong>{created}</strong>»
           </Text>
         ) : null}
-        <TextInput
-          label="Метка точки"
-          data-testid="checkpoint-create-label"
-          error={errors.label?.message}
-          {...register("label")}
-        />
-        <Button
-          type="submit"
-          w="fit-content"
-          leftSection={<IconDeviceFloppy size={16} />}
-          loading={createCheckpoint.isPending}
-          data-testid="checkpoint-create-submit"
-        >
-          Сохранить точку
-        </Button>
+        <div className={classes.inlineForm}>
+          <TextInput
+            label="Метка точки"
+            placeholder="Например, перед изменением ответов"
+            data-testid="checkpoint-create-label"
+            error={errors.label?.message}
+            {...register("label")}
+          />
+          <Button
+            type="submit"
+            w="fit-content"
+            leftSection={<IconDeviceFloppy size={16} />}
+            loading={createCheckpoint.isPending}
+            data-testid="checkpoint-create-submit"
+          >
+            Сохранить точку
+          </Button>
+        </div>
       </Stack>
     </Card>
   );

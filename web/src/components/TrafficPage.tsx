@@ -2,19 +2,19 @@ import { useMemo, useState } from "react";
 import type { ReactElement } from "react";
 import {
   Alert,
+  Box,
   Badge,
   Button,
   Code,
   Group,
   NativeSelect,
-  ScrollArea,
   Stack,
   Text,
   TextInput,
   Title,
 } from "@mantine/core";
 import { modals } from "@mantine/modals";
-import { IconAlertTriangle } from "@tabler/icons-react";
+import { IconActivity, IconAlertTriangle, IconSearch } from "@tabler/icons-react";
 import { notifications } from "@mantine/notifications";
 import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
@@ -214,7 +214,12 @@ export function TrafficPage({
   return (
     <Stack gap="md" data-testid="traffic-page">
       <Group justify="space-between" wrap="wrap">
-        <Title order={2}>Трафик</Title>
+        <div>
+          <Title order={2}>Трафик</Title>
+          <Text size="sm" c="dimmed" mt={6}>
+            Запросы к моку, ответы и время выполнения.
+          </Text>
+        </div>
         <Group gap="md">
           <Badge
             color={live ? "green" : "yellow"}
@@ -266,7 +271,8 @@ export function TrafficPage({
             {describeApiFailure(null)}
           </Alert>
         ) : sortedRows.length === 0 ? (
-          <Stack gap={4} data-testid="traffic-empty">
+          <Stack gap="sm" className="mocker-empty-state" data-testid="traffic-empty">
+            <IconActivity size={32} color="var(--mocker-accent)" stroke={1.5} />
             <Text>Пока ничего не записано.</Text>
             <Text size="sm" c="dimmed">
               Запросы появятся здесь, как только фронтенд сходит на мок
@@ -284,17 +290,20 @@ export function TrafficPage({
             </Text>
           </Stack>
         ) : (
-          <ScrollArea>
-            <Group gap="xs" align="flex-end" mb="xs" data-testid="traffic-filters">
+          <Stack gap="md">
+            <Group gap="sm" align="flex-end" data-testid="traffic-filters">
               <TextInput
-                size="xs"
+                size="sm"
                 label="Путь содержит"
+                placeholder="Найти запрос по пути…"
+                leftSection={<IconSearch size={16} />}
+                style={{ flex: "1 1 220px", maxWidth: 420 }}
                 value={filterPath}
                 onChange={(e) => setFilterPath(e.currentTarget.value)}
                 data-testid="traffic-filter-path"
               />
               <NativeSelect
-                size="xs"
+                size="sm"
                 label="Метод"
                 value={filterMethod}
                 onChange={(e) => setFilterMethod(e.currentTarget.value)}
@@ -308,7 +317,7 @@ export function TrafficPage({
                 ))}
               </NativeSelect>
               <NativeSelect
-                size="xs"
+                size="sm"
                 label="Статус"
                 value={filterStatus}
                 onChange={(e) => setFilterStatus(e.currentTarget.value)}
@@ -326,18 +335,31 @@ export function TrafficPage({
                 </Text>
               ) : null}
             </Group>
-            <TrafficTable
-              workspaceId={id}
-              rows={visibleRows}
-              expanded={expanded}
-              onToggle={(rowId) => setExpanded((prev) => (prev === rowId ? null : rowId))}
-              rowErrors={rowErrors}
-              onCreateOverride={(tid) => toOverride.mutate({ id, tid })}
-              onCreateEndpoint={(tid) => toEndpoint.mutate({ id, tid })}
-              overridePendingFor={toOverride.isPending ? toOverride.variables?.tid : undefined}
-              endpointPendingFor={toEndpoint.isPending ? toEndpoint.variables?.tid : undefined}
-            />
-          </ScrollArea>
+            <Box
+              component="section"
+              className="mocker-table-surface"
+              style={{ maxHeight: "calc(100dvh - 330px)", minHeight: 160 }}
+              tabIndex={0}
+              aria-label="Журнал запросов"
+            >
+              <TrafficTable
+                workspaceId={id}
+                rows={visibleRows}
+                expanded={expanded}
+                onToggle={(rowId) => setExpanded((prev) => (prev === rowId ? null : rowId))}
+                rowErrors={rowErrors}
+                onCreateOverride={(tid) => toOverride.mutate({ id, tid })}
+                onCreateEndpoint={(tid) => toEndpoint.mutate({ id, tid })}
+                overridePendingFor={toOverride.isPending ? toOverride.variables?.tid : undefined}
+                endpointPendingFor={toEndpoint.isPending ? toEndpoint.variables?.tid : undefined}
+              />
+              {visibleRows.length === 0 ? (
+                <Text p="xl" ta="center" c="dimmed">
+                  Нет запросов с такими фильтрами.
+                </Text>
+              ) : null}
+            </Box>
+          </Stack>
         )}
       </QueryState>
     </Stack>

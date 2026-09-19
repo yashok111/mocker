@@ -1,0 +1,13 @@
+.intro {
+  max-width: 72ch;
+}
+
+.drawerBody {
+  padding-bottom: 2rem;
+}
+
+@media (max-width: 48em) {
+  .drawerBody {
+    padding-inline: 0.75rem;
+  }
+}

@@ -20,12 +20,23 @@ function EndpointsRoute() {
   const { id } = Route.useParams();
   const { session } = Route.useRouteContext();
   const { endpointId } = Route.useSearch();
+  const navigate = Route.useNavigate();
   const parsed = endpointId === undefined ? undefined : Number(endpointId);
   return (
     <CustomEndpointsPage
       id={id}
       config={session.config}
       initialEditingId={parsed !== undefined && Number.isFinite(parsed) ? parsed : undefined}
+      onDeepLinkClose={() => {
+        void navigate({
+          replace: true,
+          search: (previous) => {
+            const next = { ...previous };
+            delete next.endpointId;
+            return next;
+          },
+        });
+      }}
     />
   );
 }

@@ -1,0 +1,46 @@
+.list {
+  overflow: hidden;
+  background: var(--mocker-surface, white);
+  border-color: var(--mocker-border, var(--mantine-color-gray-3));
+}
+
+.rowWrap + .rowWrap {
+  border-top: 1px solid var(--mocker-border, var(--mantine-color-gray-3));
+}
+
+.identity {
+  min-width: 0;
+}
+
+.path {
+  overflow-wrap: anywhere;
+  color: var(--mocker-ink, var(--mantine-color-dark-8));
+}
+
+.testPanel {
+  padding: 0 var(--mantine-spacing-md) var(--mantine-spacing-md);
+}
+
+.drawerTitle {
+  max-width: calc(100% - 3rem);
+  overflow: hidden;
+  font-family: var(--mantine-font-family-monospace);
+  font-size: var(--mantine-font-size-md);
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.drawerBody {
+  padding-bottom: 2rem;
+}
+
+@media (max-width: 48em) {
+  .rowWrap > div:first-child {
+    align-items: flex-start;
+  }
+
+  .drawerBody {
+    padding-inline: 0.75rem;
+  }
+}

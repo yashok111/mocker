@@ -23,6 +23,7 @@ import { formatTimestamp } from "@/format";
 import { CloneScenarioForm } from "./CloneScenarioForm";
 import { RenameScenarioForm } from "./RenameScenarioForm";
 import { ScenarioDetails } from "./ScenarioDetails";
+import classes from "../WorkspaceTools.module.css";
 
 export function ScenarioList({
   id,
@@ -170,13 +171,12 @@ export function ScenarioList({
             <Group
               key={sc.id}
               justify="space-between"
-              wrap="nowrap"
+              className={classes.scenarioRow}
               px="md"
               py="sm"
               data-testid="scenario-row"
-              style={{ borderTop: "1px solid var(--mantine-color-gray-3)" }}
             >
-              <div>
+              <div className={classes.scenarioIdentity}>
                 <Group gap="xs">
                   <Text size="sm" fw={500}>
                     {sc.name}
@@ -201,9 +201,9 @@ export function ScenarioList({
                 </Text>
                 {openId === sc.id ? <ScenarioDetails id={id} scenarioId={sc.id} /> : null}
               </div>
-              <Group gap="xs" wrap="nowrap">
+              <Group gap="xs" className={classes.scenarioActions}>
                 <Button
-                  variant="default"
+                  variant="subtle"
                   size="xs"
                   leftSection={<IconCopy size={16} />}
                   onClick={() => handleClone(sc)}
@@ -212,7 +212,7 @@ export function ScenarioList({
                   Клонировать
                 </Button>
                 <Button
-                  variant="default"
+                  variant="subtle"
                   size="xs"
                   leftSection={<IconEdit size={16} />}
                   onClick={() => handleRename(sc)}
@@ -222,7 +222,7 @@ export function ScenarioList({
                 </Button>
                 {sc.isActive ? (
                   <Button
-                    variant="default"
+                    variant="light"
                     size="xs"
                     leftSection={<IconPlayerStop size={16} />}
                     onClick={() => handleDeactivate(sc)}
@@ -233,7 +233,7 @@ export function ScenarioList({
                   </Button>
                 ) : (
                   <Button
-                    variant="default"
+                    variant="light"
                     size="xs"
                     leftSection={<IconPlayerPlay size={16} />}
                     onClick={() => handleActivate(sc)}
@@ -244,7 +244,7 @@ export function ScenarioList({
                   </Button>
                 )}
                 <Button
-                  variant="default"
+                  variant="subtle"
                   size="xs"
                   color="red"
                   leftSection={<IconTrash size={16} />}

@@ -18,6 +18,7 @@ import { apiAddress, buildRecipes, type Recipe } from "@/connect/recipes";
 import { runProbe, type ProbeResult } from "@/connect/probe";
 import { describeApiFailure } from "@/api/errors";
 import type { ServerConfigView, ServerProbeView, WorkspaceView } from "@/api/generated/schemas";
+import classes from "./WorkspaceEntry.module.css";
 
 // ConnectPanel is DESIGN §14 screen 4, «Подключить»: the panel that turns "the
 // mock exists" into "my frontend talks to it" for someone who has never heard
@@ -101,7 +102,7 @@ function CopyField({ testId, label, value }: { testId: string; label: string; va
 
   return (
     <Stack gap={4}>
-      <Group gap="xs" align="flex-end" wrap="nowrap">
+      <Group gap="xs" align="flex-end" wrap="nowrap" className={classes.copyRow}>
         <TextInput
           label={label}
           readOnly
@@ -110,7 +111,7 @@ function CopyField({ testId, label, value }: { testId: string; label: string; va
           data-testid={`${testId}-input`}
           onFocus={(event) => event.currentTarget.select()}
           styles={{ input: { fontFamily: "var(--mantine-font-family-monospace)", fontSize: 12 } }}
-          style={{ flex: 1 }}
+          className={classes.copyInput}
         />
         <Button
           variant="default"
@@ -137,10 +138,7 @@ function CopyField({ testId, label, value }: { testId: string; label: string; va
 
 function RecipeCard({ recipe }: { recipe: Recipe }) {
   return (
-    <Card withBorder p="sm" data-testid={`connect-recipe-${recipe.id}`}>
-      <Text size="sm" fw={500}>
-        {recipe.title}
-      </Text>
+    <div className={classes.recipe} data-testid={`connect-recipe-${recipe.id}`}>
       <Text size="xs" c="dimmed" mb="xs">
         {recipe.note}
       </Text>
@@ -149,7 +147,7 @@ function RecipeCard({ recipe }: { recipe: Recipe }) {
         label={recipe.title}
         value={recipe.snippet}
       />
-    </Card>
+    </div>
   );
 }
 
@@ -470,27 +468,19 @@ export function ConnectPanel({
           ) : null}
         </div>
 
-        <Stack gap="sm">
-          <Title order={2}>Как подключить фронтенд</Title>
-          <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="sm">
-            {recipes.map((recipe) => (
-              <RecipeCard key={recipe.id} recipe={recipe} />
-            ))}
-          </SimpleGrid>
-        </Stack>
-
-        <RateIndicator workspaceId={workspace.id} />
-
         <Stack gap="xs">
-          <Button
-            w="fit-content"
-            leftSection={<IconPlayerPlay size={16} />}
-            loading={probing}
-            onClick={() => void handleProbe()}
-            data-testid="connect-probe-button"
-          >
-            {probing ? "Проверяем…" : "Проверить"}
-          </Button>
+          <Group justify="space-between" gap="sm">
+            <RateIndicator workspaceId={workspace.id} />
+            <Button
+              w="fit-content"
+              leftSection={<IconPlayerPlay size={16} />}
+              loading={probing}
+              onClick={() => void handleProbe()}
+              data-testid="connect-probe-button"
+            >
+              {probing ? "Проверяем…" : "Проверить"}
+            </Button>
+          </Group>
           {result !== null ? (
             <Stack gap="xs">
               <ProbeResultView result={result} />
@@ -510,6 +500,14 @@ export function ConnectPanel({
             </Stack>
           ) : null}
         </Stack>
+        <details className={classes.recipes} data-testid="connect-recipes">
+          <summary>Как подключить фронтенд</summary>
+          <SimpleGrid cols={{ base: 1, md: 2 }} spacing="lg">
+            {recipes.map((recipe) => (
+              <RecipeCard key={recipe.id} recipe={recipe} />
+            ))}
+          </SimpleGrid>
+        </details>
       </Stack>
     </Card>
   );

@@ -1,5 +1,7 @@
 import { useMemo } from "react";
-import { Anchor, Box, Grid, List, Paper, Text, Title, Typography } from "@mantine/core";
+import { Anchor, Box, List, Text, Typography } from "@mantine/core";
+import { IconBook2 } from "@tabler/icons-react";
+import classes from "./Workbench.module.css";
 import { Marked, type Tokens } from "marked";
 import guideSource from "../../../docs/USER-GUIDE.md?raw";
 
@@ -53,33 +55,38 @@ export function GuidePage() {
   );
 
   return (
-    <Box data-testid="guide-page">
-      <Grid gap="xl">
-        <Grid.Col span={{ base: 12, md: 3 }}>
-          <Paper withBorder p="md" pos="sticky" top={72}>
-            <Title order={5} mb="xs">
-              Содержание
-            </Title>
-            <List spacing={4} size="sm" listStyleType="none" data-testid="guide-toc">
-              {toc.map((entry) => (
-                <List.Item key={entry.id}>
-                  <Anchor href={`#${entry.id}`} size="sm">
-                    {entry.text}
-                  </Anchor>
-                </List.Item>
-              ))}
-            </List>
-            <Text size="xs" c="dimmed" mt="md">
-              Для агентов: инструмент MCP <code>get_guide</code>.
-            </Text>
-          </Paper>
-        </Grid.Col>
-        <Grid.Col span={{ base: 12, md: 9 }}>
-          <Typography>
-            <div data-testid="guide-body" dangerouslySetInnerHTML={{ __html: html }} />
-          </Typography>
-        </Grid.Col>
-      </Grid>
+    <Box data-testid="guide-page" className={classes.guideLayout}>
+      <aside className={classes.guideContents} aria-label="Содержание руководства">
+        <details open className={classes.guideContentsDetails}>
+          <summary className={classes.guideContentsTitle}>
+            <IconBook2 size={18} aria-hidden="true" />
+            Содержание
+          </summary>
+          <List
+            spacing={4}
+            size="sm"
+            listStyleType="none"
+            data-testid="guide-toc"
+            className={classes.guideToc}
+          >
+            {toc.map((entry) => (
+              <List.Item key={entry.id}>
+                <Anchor href={`#${entry.id}`} size="sm">
+                  {entry.text}
+                </Anchor>
+              </List.Item>
+            ))}
+          </List>
+        </details>
+        <Text size="xs" c="dimmed" mt="md">
+          Для агентов: инструмент MCP <code>get_guide</code>.
+        </Text>
+      </aside>
+      <article className={classes.guideArticle}>
+        <Typography>
+          <div data-testid="guide-body" dangerouslySetInnerHTML={{ __html: html }} />
+        </Typography>
+      </article>
     </Box>
   );
 }

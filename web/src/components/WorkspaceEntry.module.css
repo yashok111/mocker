@@ -1,0 +1,224 @@
+.loginPage {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: 48px 24px;
+  background: var(--mocker-canvas, #f5f6f4);
+}
+
+.loginLayout {
+  width: min(100%, 920px);
+  display: grid;
+  grid-template-columns: 1fr 420px;
+  align-items: center;
+  gap: 80px;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -1px;
+  margin-bottom: 64px;
+}
+
+.brandMark {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  background: var(--mocker-accent, #087f70);
+  color: white;
+  font-size: 25px;
+}
+
+.loginEyebrow {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  color: var(--mocker-accent, #087f70);
+}
+
+.loginHeadline {
+  font-size: clamp(32px, 4vw, 48px);
+  font-weight: 600;
+  letter-spacing: -2px;
+  line-height: 1.12;
+  margin: 18px 0;
+  color: var(--mocker-ink, #25332f);
+}
+
+.loginDescription {
+  font-size: 14px;
+  line-height: 1.8;
+  color: var(--mocker-muted, #68756f);
+  max-width: 330px;
+}
+
+.loginCard {
+  box-shadow: 0 12px 40px #25332f08;
+}
+
+.workspaceRow {
+  padding: 20px 22px;
+  gap: 24px;
+  transition: background-color 120ms ease;
+}
+
+.workspaceRow + .workspaceRow {
+  border-top: 1px solid var(--mocker-border, #dde3df);
+}
+
+.workspaceRow:hover {
+  background: var(--mocker-canvas, #f5f6f4);
+}
+
+.workspaceOpen {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.workspaceOpen > :last-child {
+  margin-top: 6px;
+  line-height: 1.6;
+}
+
+.workspaceOpen svg {
+  flex-shrink: 0;
+  color: var(--mocker-accent, #087f70);
+}
+
+.advanced {
+  background: var(--mocker-surface, white);
+  border: 1px solid var(--mocker-border, #dde3df);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.disclosure + .disclosure {
+  border-top: 1px solid var(--mocker-border, #dde3df);
+}
+
+.disclosure > summary,
+.recipes > summary {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  list-style: none;
+  cursor: pointer;
+  padding: 18px 22px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.disclosure > summary::-webkit-details-marker,
+.recipes > summary::-webkit-details-marker {
+  display: none;
+}
+
+.disclosure > summary::before,
+.recipes > summary::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  flex-shrink: 0;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(-45deg);
+}
+
+.disclosure[open] > summary::before,
+.recipes[open] > summary::before {
+  transform: rotate(45deg);
+}
+
+.disclosure > summary:hover,
+.recipes > summary:hover {
+  background: var(--mocker-canvas, #f5f6f4);
+}
+
+.disclosure small {
+  display: block;
+  margin-top: 3px;
+  color: var(--mocker-muted, #68756f);
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.disclosureBody {
+  min-width: 0;
+  overflow-x: auto;
+  padding: 8px 22px 24px;
+}
+
+.recipes {
+  border-top: 1px solid var(--mocker-border, #dde3df);
+}
+
+.recipes > summary {
+  padding: 16px 0 0;
+}
+
+.recipe {
+  min-width: 0;
+  padding: 16px 0 0;
+}
+
+.copyInput {
+  flex: 1;
+  min-width: 0;
+}
+
+@media (max-width: 48em) {
+  .loginLayout {
+    max-width: 420px;
+    grid-template-columns: 1fr;
+    gap: 28px;
+  }
+
+  .brand {
+    margin-bottom: 28px;
+  }
+
+  .loginHeadline {
+    font-size: 34px;
+  }
+
+  .loginDescription,
+  .loginEyebrow {
+    display: none;
+  }
+
+  .createFields {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .workspaceRow {
+    gap: 10px;
+    padding: 16px;
+    align-items: flex-start;
+  }
+
+  .disclosure > summary {
+    padding: 16px;
+  }
+
+  .disclosureBody {
+    padding: 8px 16px 20px;
+  }
+}
+
+@media (max-width: 30em) {
+  .copyRow {
+    flex-wrap: wrap;
+  }
+
+  .copyInput {
+    flex-basis: 100%;
+  }
+}

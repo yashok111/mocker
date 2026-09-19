@@ -56,12 +56,16 @@ describe("ConnectPanel", () => {
     );
   });
 
-  it("renders all four recipes", async () => {
+  it("reveals all four recipes on demand", async () => {
     route({ [`GET ${trafficURL}`]: () => json(200, { rows: [], rate1m: 0, dropped: 0 }) });
     renderWithProviders(<ConnectPanel workspace={workspace} config={config} />);
 
+    expect(screen.getByTestId("connect-recipes")).not.toHaveAttribute("open");
+    await userEvent.click(screen.getByText("Как подключить фронтенд"));
+    expect(screen.getByTestId("connect-recipes")).toHaveAttribute("open");
     for (const id of ["env", "apiBase", "devtools", "curl"]) {
       expect(screen.getByTestId(`connect-recipe-${id}`)).toBeInTheDocument();
+      expect(screen.getByTestId(`connect-recipe-copy-${id}`)).toBeVisible();
     }
   });
 

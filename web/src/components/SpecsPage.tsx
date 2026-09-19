@@ -80,7 +80,12 @@ export function SpecsPage(): ReactElement {
   return (
     <div data-testid="specs-page">
       <Stack gap="md">
-        <Title order={1}>Спеки</Title>
+        <div>
+          <Title order={1}>Спеки</Title>
+          <Text size="sm" c="dimmed" mt={6}>
+            Спецификации OpenAPI — основа маршрутов и ответов вашего API.
+          </Text>
+        </div>
         <ImportSpecForm />
         <QueryState queries={[specs]} testIdPrefix="specs">
           {specs.data?.status !== 200 ? (
@@ -157,7 +162,7 @@ function ImportSpecForm(): ReactElement {
   }
 
   return (
-    <Card withBorder p="md" data-testid="spec-import-form">
+    <Card withBorder p="md" className="mocker-upload-panel" data-testid="spec-import-form">
       <Stack gap="sm">
         <Dropzone
           onDrop={handleDrop}
@@ -171,9 +176,9 @@ function ImportSpecForm(): ReactElement {
           // change event, so userEvent.upload works against it directly).
           inputProps={{ "data-testid": "spec-file-input" } as InputHTMLAttributes<HTMLInputElement>}
         >
-          <Group gap="xs" justify="center" py="md">
-            <IconUpload size={20} />
-            <Text size="sm">
+          <Group gap="md" justify="center" py="md">
+            <IconUpload size={24} color="var(--mocker-accent)" stroke={1.5} />
+            <Text size="sm" ta="center">
               Перетащите файл спеки (.json или .yaml) сюда или нажмите, чтобы выбрать
             </Text>
           </Group>

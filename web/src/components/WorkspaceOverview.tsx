@@ -1,4 +1,4 @@
-import type { ReactElement } from "react";
+import { useRef, type ReactElement } from "react";
 import { Alert, Anchor, Button, Group, Loader, Stack, Text } from "@mantine/core";
 import { IconAlertTriangle } from "@tabler/icons-react";
 import { useNavigate } from "@tanstack/react-router";
@@ -10,6 +10,7 @@ import { SettingsPanel } from "./SettingsPanel";
 import { TransferPanel } from "./TransferPanel";
 import { DriftPanel } from "./DriftPanel";
 import type { ServerConfigView } from "@/api/generated/schemas";
+import classes from "./WorkspaceEntry.module.css";
 
 // WorkspaceOverview is the index child of /workspaces/$id — DESIGN §14
 // screen 4's home, where WorkspacePage.tsx's former body lands. It fetches
@@ -27,6 +28,7 @@ export function WorkspaceOverview({
 }): ReactElement {
   const workspace = useGetWorkspace(id);
   const navigate = useNavigate();
+  const settingsRef = useRef<HTMLDetailsElement>(null);
 
   return (
     <div data-testid="overview-page">
@@ -77,17 +79,71 @@ export function WorkspaceOverview({
             // divider of the third panel down.
             <Alert color="blue" data-testid="overview-no-spec">
               Спека не привязана: воркспейс отвечает только на свои эндпоинты. Привязать её —{" "}
-              <Anchor href="#settings-spec" data-testid="overview-no-spec-link">
+              <Anchor
+                href="#settings-spec"
+                data-testid="overview-no-spec-link"
+                onClick={() => {
+                  if (settingsRef.current) settingsRef.current.open = true;
+                  requestAnimationFrame(() => {
+                    document.getElementById("settings-spec")?.scrollIntoView?.({ block: "start" });
+                    settingsRef.current
+                      ?.querySelector<HTMLInputElement>("[data-testid='settings-spec-select']")
+                      ?.focus({ preventScroll: true });
+                  });
+                }}
+              >
                 в настройках ниже
               </Anchor>
               , или создайте воркспейс заново с выбранной спекой.
             </Alert>
           ) : null}
           <ConnectPanel workspace={workspace.data.data} config={config} />
-          <AuthPresetPanel id={id} />
-          <SettingsPanel workspace={workspace.data.data} />
-          <TransferPanel workspace={workspace.data.data} />
-          <DriftPanel id={id} />
+          <div className={classes.advanced}>
+            <details
+              className={classes.disclosure}
+              ref={settingsRef}
+              data-testid="overview-settings"
+            >
+              <summary>
+                <span>
+                  Настройки воркспейса<small>Спека, генерация ответов, личность и доступ</small>
+                </span>
+              </summary>
+              <div className={classes.disclosureBody}>
+                <SettingsPanel workspace={workspace.data.data} />
+              </div>
+            </details>
+            <details className={classes.disclosure}>
+              <summary>
+                <span>
+                  Пресет авторизации<small>Подстановка данных пользователя в ответы</small>
+                </span>
+              </summary>
+              <div className={classes.disclosureBody}>
+                <AuthPresetPanel id={id} />
+              </div>
+            </details>
+            <details className={classes.disclosure}>
+              <summary>
+                <span>
+                  Перенос и копирование<small>Экспорт настроек и создание копии воркспейса</small>
+                </span>
+              </summary>
+              <div className={classes.disclosureBody}>
+                <TransferPanel workspace={workspace.data.data} />
+              </div>
+            </details>
+            <details className={classes.disclosure}>
+              <summary>
+                <span>
+                  Соответствие спеке<small>Проверка настроек после изменения контракта</small>
+                </span>
+              </summary>
+              <div className={classes.disclosureBody}>
+                <DriftPanel id={id} />
+              </div>
+            </details>
+          </div>
         </Stack>
       )}
     </div>

@@ -1,0 +1,51 @@
+.intro {
+  max-width: 72ch;
+}
+
+.guidance {
+  max-width: 72ch;
+}
+
+.guidanceSummary {
+  width: fit-content;
+  cursor: pointer;
+  color: var(--mocker-accent, var(--mantine-color-teal-8));
+}
+
+.resourceRow {
+  border-top: 1px solid var(--mocker-border, var(--mantine-color-gray-3));
+}
+
+.resourceIdentity {
+  min-width: 0;
+}
+
+.collectionUrl {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.resourceActions {
+  flex: 0 0 auto;
+}
+
+@media (max-width: 48em) {
+  .resourceRow {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .resourceActions {
+    width: 100%;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
+
+  .resourceActions > * {
+    max-width: 100%;
+  }
+
+  .entitiesPanel {
+    padding-inline: 0.5rem;
+  }
+}

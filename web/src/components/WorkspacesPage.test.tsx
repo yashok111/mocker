@@ -92,8 +92,9 @@ describe("WorkspacesPage", () => {
       "У вас пока нет воркспейсов",
     );
     expect(screen.getByTestId("workspaces-empty-hint")).toBeInTheDocument();
-    // The create form is the only thing to do from here, so it must be there.
-    expect(screen.getByTestId("workspace-create-form")).toBeInTheDocument();
+    expect(screen.getByTestId("workspace-create-form")).not.toBeVisible();
+    await userEvent.click(screen.getByTestId("workspace-create-toggle"));
+    expect(screen.getByTestId("workspace-create-form")).toBeVisible();
   });
 
   it("points to /specs when there are no workspaces AND no specs in the database at all", async () => {
@@ -146,7 +147,7 @@ describe("WorkspacesPage", () => {
     });
     renderInRouter(<WorkspacesPage />);
 
-    await screen.findByTestId("workspace-create-form");
+    await userEvent.click(await screen.findByTestId("workspace-create-toggle"));
     await userEvent.type(screen.getByTestId("workspace-create-name"), "Алекс");
     await userEvent.click(screen.getByTestId("workspace-create-submit"));
 
@@ -160,12 +161,37 @@ describe("WorkspacesPage", () => {
     });
     renderInRouter(<WorkspacesPage />);
 
-    await screen.findByTestId("workspace-create-form");
+    await userEvent.click(await screen.findByTestId("workspace-create-toggle"));
     await userEvent.click(screen.getByTestId("workspace-create-submit"));
 
     expect(await screen.findByText("Введите имя")).toBeInTheDocument();
     const posts = fetchMock.mock.calls.filter(([, init]) => init?.method === "POST");
     expect(posts).toHaveLength(0);
+  });
+
+  it("preserves the draft when creation is collapsed and keeps success after the empty list fills", async () => {
+    let created = false;
+    route({
+      "GET /api/workspaces": () => json(200, created ? [workspaceFixture({ slug: "alex-2" })] : []),
+      "GET /api/specs": specsPresent,
+      "POST /api/workspaces": () => {
+        created = true;
+        return json(201, workspaceFixture({ slug: "alex-2" }));
+      },
+    });
+    renderInRouter(<WorkspacesPage />);
+    const toggle = await screen.findByTestId("workspace-create-toggle");
+    await userEvent.click(toggle);
+    await userEvent.type(screen.getByTestId("workspace-create-name"), "Alex");
+    await userEvent.click(toggle);
+    expect(screen.getByTestId("workspace-create-form")).not.toBeVisible();
+    await userEvent.click(toggle);
+    expect(screen.getByTestId("workspace-create-name")).toHaveValue("Alex");
+    expect(screen.getByTestId("workspace-create-name")).toHaveFocus();
+    await userEvent.click(screen.getByTestId("workspace-create-submit"));
+    expect(await screen.findByTestId("workspace-list")).toBeVisible();
+    expect(screen.getByTestId("workspace-created-slug")).toHaveTextContent("alex-2");
+    expect(screen.getByTestId("workspace-created-slug")).toBeVisible();
   });
 
   it("translates a create failure rather than showing the server's message", async () => {
@@ -177,7 +203,7 @@ describe("WorkspacesPage", () => {
     });
     renderInRouter(<WorkspacesPage />);
 
-    await screen.findByTestId("workspace-create-form");
+    await userEvent.click(await screen.findByTestId("workspace-create-toggle"));
     await userEvent.type(screen.getByTestId("workspace-create-name"), "Alex");
     await userEvent.click(screen.getByTestId("workspace-create-submit"));
 

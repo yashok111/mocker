@@ -358,6 +358,12 @@ describe("route tree", () => {
     await userEvent.click(within(added).getByTestId("contract-op-link"));
     await waitFor(() => expect(router.state.location.pathname).toBe("/workspaces/7/endpoints"));
     expect(router.state.location.search).toEqual({ endpointId: "12" });
+
+    const editor = await screen.findByRole("dialog", { name: "GET /things" });
+    await userEvent.click(
+      within(editor).getByRole("button", { name: "Закрыть редактор эндпоинта" }),
+    );
+    await waitFor(() => expect(router.state.location.search).toEqual({}));
   });
 
   it("the «удалено» spec operation on /contract opens Endpoint'ы with its opKey (B6)", async () => {
