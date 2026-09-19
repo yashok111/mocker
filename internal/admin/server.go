@@ -19,6 +19,7 @@ import (
 
 	"github.com/yashok111/mocker/internal/jsonx"
 
+	"github.com/yashok111/mocker/internal/apidesign"
 	"github.com/yashok111/mocker/internal/assets"
 	"github.com/yashok111/mocker/internal/auth"
 	"github.com/yashok111/mocker/internal/checkpoints"
@@ -78,7 +79,8 @@ type Server struct {
 	// as a New parameter: New's signature is shared with cmd/mocker/main.go,
 	// which this package does not own, so adding a parameter here would break
 	// a build outside this package's remit.
-	specsRepo *specs.Repo
+	specsRepo   *specs.Repo
+	designsRepo *apidesign.Repo
 
 	// overridesRepo is constructed internally for the same reason specsRepo
 	// is: New's signature is shared with cmd/mocker/main.go (which wires its
@@ -236,6 +238,7 @@ func New(cfg *config.Config, sessions *auth.Manager, ws *workspaces.Repo, db *st
 		db:            db,
 		log:           log,
 		specsRepo:     specsRepo,
+		designsRepo:   apidesign.NewRepo(db, cfg),
 		overridesRepo: overridesRepo,
 		trafficRepo:   traffic.NewRepo(db),
 		customepRepo:  customepRepo,

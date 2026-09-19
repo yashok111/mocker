@@ -577,7 +577,7 @@ func TestRouteMCPPolicyIsDecided(t *testing.T) {
 // lives at the row (route_table.go); this test pins the SET, and the fact
 // that both changes to it were decisions on the record rather than edits
 // nobody reviewed.
-func TestMCPExclusionsAreExactlyTheDocumentedSeven(t *testing.T) {
+func TestMCPExclusionsAreExactlyTheDocumentedEight(t *testing.T) {
 	t.Parallel()
 
 	want := map[string]bool{
@@ -592,7 +592,8 @@ func TestMCPExclusionsAreExactlyTheDocumentedSeven(t *testing.T) {
 		// It cascades across every bound workspace.
 		"DELETE /api/specs/{id}": true,
 		// A loopback response cannot take a write deadline (P6a D9).
-		"GET /api/workspaces/{id}/traffic/stream": true,
+		"GET /api/workspaces/{id}/traffic/stream":      true,
+		"POST /api/designs/{id}/reviews/{rid}/publish": true,
 	}
 
 	got := make(map[string]bool)

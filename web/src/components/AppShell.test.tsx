@@ -1,9 +1,18 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import {
+  Link,
+  Outlet,
+  RouterProvider,
+  createMemoryHistory,
+  createRootRoute,
+  createRoute,
+  createRouter,
+} from "@tanstack/react-router";
 import { AppShell, WorkspaceSwitcher } from "./AppShell";
 import { WorkspaceLayout } from "./WorkspaceLayout";
-import { renderInRouter } from "@/test/render";
+import { renderInRouter, renderWithProviders } from "@/test/render";
 import { userFixture, workspaceFixture } from "@/test/fixtures";
 import { json, route } from "@/test/http";
 
@@ -67,6 +76,50 @@ describe("AppShell server status", () => {
     await waitFor(() => expect(toggle).toHaveFocus());
   });
 
+  it("offers desktop designer navigation in a drawer and returns focus after closing", async () => {
+    renderDesignerShell("/designs/12");
+
+    const toggle = await screen.findByRole("button", { name: "Открыть навигацию" });
+    expect(screen.queryByRole("navigation", { name: "Основная навигация" })).toBeNull();
+    expect(screen.getByText("Designer content").parentElement).toHaveAttribute("data-designer");
+
+    await userEvent.click(toggle);
+    const dialog = await screen.findByRole("dialog", { name: "Навигация" });
+    expect(
+      within(dialog).getByRole("navigation", { name: "Основная навигация" }),
+    ).toBeInTheDocument();
+    expect(within(dialog).getByTestId("nav-designs")).toHaveAttribute("aria-current", "page");
+    await userEvent.keyboard("{Escape}");
+
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    await waitFor(() => expect(toggle).toHaveFocus());
+  });
+
+  it("restores the desktop rail when leaving a designer for the project list", async () => {
+    renderDesignerShell("/designs");
+
+    const openDesign = await screen.findByRole("link", { name: "Открыть проект" });
+    expect(screen.getByRole("navigation", { name: "Основная навигация" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Открыть навигацию" })).toBeNull();
+    expect(openDesign.parentElement).not.toHaveAttribute("data-designer");
+
+    await userEvent.click(openDesign);
+    const toggle = await screen.findByRole("button", { name: "Открыть навигацию" });
+    expect(screen.queryByRole("navigation", { name: "Основная навигация" })).toBeNull();
+    await userEvent.click(toggle);
+    const dialog = await screen.findByRole("dialog", { name: "Навигация" });
+    await userEvent.click(within(dialog).getByTestId("nav-designs"));
+
+    expect(await screen.findByRole("link", { name: "Открыть проект" })).toBeInTheDocument();
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Открыть навигацию" })).toBeNull();
+    expect(screen.getAllByRole("navigation", { name: "Основная навигация" })).toHaveLength(1);
+    expect(screen.getByRole("link", { name: "Открыть проект" }).parentElement).not.toHaveAttribute(
+      "data-designer",
+    );
+  });
+
   it("says «готов» when /readyz answers ok", async () => {
     route({
       "GET /readyz": () => json(200, { ok: true }),
@@ -121,6 +174,7 @@ describe("AppShell server status", () => {
       });
       renderInRouter(<AppShell user={userFixture()}>x</AppShell>);
       expect(await screen.findByTestId("nav-workspaces")).toBeInTheDocument();
+      expect(screen.getByTestId("nav-designs")).toHaveTextContent("Проектирование API");
       expect(screen.queryByTestId("workspace-switcher")).toBeNull();
     });
 
@@ -143,3 +197,36 @@ describe("AppShell server status", () => {
     });
   });
 });
+
+function renderDesignerShell(path: string): void {
+  route({
+    "GET /readyz": () => json(200, { ok: true }),
+    "GET /healthz": () => json(200, { ok: true }),
+  });
+  const rootRoute = createRootRoute({
+    component: () => (
+      <AppShell user={userFixture()}>
+        <Outlet />
+      </AppShell>
+    ),
+  });
+  const listRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: "/designs",
+    component: () => (
+      <Link to="/designs/$id" params={{ id: 12 }}>
+        Открыть проект
+      </Link>
+    ),
+  });
+  const detailRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: "/designs/$id",
+    component: () => <div>Designer content</div>,
+  });
+  const router = createRouter({
+    routeTree: rootRoute.addChildren([listRoute, detailRoute]),
+    history: createMemoryHistory({ initialEntries: [path] }),
+  });
+  renderWithProviders(<RouterProvider router={router as never} />);
+}

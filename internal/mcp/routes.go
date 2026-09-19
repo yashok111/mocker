@@ -51,6 +51,18 @@ import (
 var noRoute = []string{}
 
 var toolRoutes = map[string][]string{
+	// Versioned API authoring. Human publication is deliberately not MCP-accessible.
+	"list_api_designs":             {"GET /api/designs"},
+	"create_api_design":            {"POST /api/designs"},
+	"get_api_design":               {"GET /api/designs/{id}"},
+	"save_api_design_draft":        {"PUT /api/designs/{id}/draft"},
+	"get_api_design_revision":      {"GET /api/designs/{id}/revisions/{rid}"},
+	"get_api_design_diff":          {"GET /api/designs/{id}/diff"},
+	"validate_api_design":          {"POST /api/designs/{id}/validate"},
+	"create_api_design_change_set": {"POST /api/designs/{id}/change-sets"},
+	"close_api_design_change_set":  {"PUT /api/designs/{id}/change-sets/{cid}"},
+	"request_api_design_review":    {"POST /api/designs/{id}/reviews"},
+	"restore_api_design_revision":  {"POST /api/designs/{id}/restore"},
 	// Reads.
 	"list_workspaces":       {"GET /api/workspaces"},
 	"get_workspace":         {"GET /api/workspaces/{id}"},
@@ -195,10 +207,10 @@ var toolRoutes = map[string][]string{
 // (set_resource_entity, delete_resource_entity), plus the three slice P4b
 // adds (export_workspace, import_workspace, fork_workspace), plus the one
 // slice P7a adds (export_openapi)
-// — 9 + 29 + 4 + 1 + 1 + 2 + 1 + 1 + 3 + 3 + 1 + 1 + 1 + 2 + 3 + 1 = 63. Pinned in routes_test.go so
+// — 63 legacy tools plus eleven versioned API designer tools. Pinned in routes_test.go so
 // a tool added without an entry here is caught by a test rather than by a
 // 404 in production.
-const toolCount = 63
+const toolCount = 74
 
 // toolPath resolves ONE call a tool makes into the (method, path) pair
 // loopback.do/call take.

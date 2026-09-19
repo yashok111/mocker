@@ -561,7 +561,7 @@ func TestToolSurfaceStaysAt51(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &env); err != nil {
 		t.Fatalf("decode tools/list: %v; body=%s", err, rec.Body.String())
 	}
-	if len(env.Result.Tools) != 63 {
-		t.Errorf("tools/list returned %d tools, want 63 — A3 added no route and no tool; P3b added four; P3f added one; P4a added one; A4 added two; P6a added one; P6b added one; P6c added three; A6 added three; A7 added get_guide; A8 added import_spec; A9 added get_server_config; A11 added set_resource_entity and delete_resource_entity; P4b added export_workspace, import_workspace and fork_workspace; P7a added export_openapi", len(env.Result.Tools))
+	if len(env.Result.Tools) != 74 {
+		t.Errorf("tools/list returned %d tools, want 74 including eleven API designer tools", len(env.Result.Tools))
 	}
 }

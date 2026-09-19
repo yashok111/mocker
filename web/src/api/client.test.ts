@@ -1,5 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { ApiFailure, customFetch, setCsrfToken, setUnauthorizedHandler } from "./client";
+import {
+  ApiFailure,
+  customFetch,
+  requestMock,
+  setCsrfToken,
+  setUnauthorizedHandler,
+} from "./client";
 
 // customFetch is the ONE place the admin plane's transport rules live, so this
 // file asserts each of them directly rather than through a screen that would
@@ -183,5 +189,41 @@ describe("customFetch", () => {
     // "/api/me" is a prefix of "/api/metrics"; a startsWith check without the
     // boundary would silently exempt a future sibling route.
     expect(onUnauthorized).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("requestMock", () => {
+  it("returns a designed 401 body without ending the analyst session", async () => {
+    const onUnauthorized = vi.fn();
+    setUnauthorizedHandler(onUnauthorized);
+    mockFetch(
+      new Response('{"error":"missing token"}', {
+        status: 401,
+        headers: { "Content-Type": "application/json", "X-Mock": "orders" },
+      }),
+    );
+
+    const response = await requestMock("http://orders.mock.local/orders");
+
+    expect(response).toMatchObject({ status: 401, body: '{"error":"missing token"}' });
+    expect(response.headers.get("X-Mock")).toBe("orders");
+    expect(onUnauthorized).not.toHaveBeenCalled();
+  });
+
+  it("preserves text responses and caller request headers", async () => {
+    const fn = mockFetch(
+      new Response("created", { status: 201, headers: { "Content-Type": "text/plain" } }),
+    );
+
+    const response = await requestMock("http://orders.mock.local/orders", {
+      method: "POST",
+      headers: { "Content-Type": "application/xml", "X-Scenario": "slow" },
+      body: "<order />",
+    });
+
+    expect(response.body).toBe("created");
+    expect(response.headers.get("Content-Type")).toContain("text/plain");
+    expect(headersOf(fn).get("Content-Type")).toBe("application/xml");
+    expect(headersOf(fn).get("X-Scenario")).toBe("slow");
   });
 });

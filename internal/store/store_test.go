@@ -19,8 +19,8 @@ func TestMigrate_reachesSchemaVersion5(t *testing.T) {
 	if err != nil {
 		t.Fatalf("schema version: %v", err)
 	}
-	if v != 9 {
-		t.Fatalf("schema version = %d, want 9", v)
+	if v != 10 {
+		t.Fatalf("schema version = %d, want 10", v)
 	}
 }
 
@@ -148,8 +148,8 @@ func TestMigrate_backfillsEmptyBaseScopeAndServes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("schema version: %v", err)
 	}
-	if v != 9 {
-		t.Fatalf("schema version = %d, want 9", v)
+	if v != 10 {
+		t.Fatalf("schema version = %d, want 10", v)
 	}
 
 	for _, id := range entIDs {

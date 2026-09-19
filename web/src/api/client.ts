@@ -34,6 +34,27 @@ export function notifyUnauthorized(): void {
   onUnauthorized?.();
 }
 
+export type MockResponse = {
+  status: number;
+  body: string;
+  headers: Headers;
+};
+
+// Mock responses are user-authored API behavior, so their status and body must
+// not pass through the admin client's error-envelope or session handling.
+export async function requestMock(url: string, init: RequestInit = {}): Promise<MockResponse> {
+  const response = await fetch(url, {
+    ...init,
+    credentials: "omit",
+    headers: new Headers(init.headers),
+  });
+  return {
+    status: response.status,
+    body: response.status === 204 ? "" : await response.text(),
+    headers: response.headers,
+  };
+}
+
 // ApiFailure is the one error type this client ever throws. status and code
 // let a caller branch (a 401 vs a 429) without re-parsing a response body it
 // may not even have gotten a JSON copy of. `details` (A3) carries whatever

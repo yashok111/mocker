@@ -229,7 +229,7 @@ func TestOpenAPIContract_declaresResetDataSchemas(t *testing.T) {
 // 7, `0007_fk_indexes.sql`, seven plain CREATE INDEX over the foreign-key
 // columns that had none (EXPLAIN showed `DELETE FROM resources` scanning
 // three tables whole), ADD-only, no rebuild.
-func TestMigrations_stillExactlyNineFiles(t *testing.T) {
+func TestMigrations_stillExactlyTenFiles(t *testing.T) {
 	entries, err := os.ReadDir(filepath.FromSlash("../../internal/store/migrations"))
 	if err != nil {
 		t.Fatalf("read migrations dir: %v", err)
@@ -240,8 +240,8 @@ func TestMigrations_stillExactlyNineFiles(t *testing.T) {
 			sqlFiles = append(sqlFiles, e.Name())
 		}
 	}
-	if len(sqlFiles) != 9 {
-		t.Errorf("internal/store/migrations/ holds %d .sql files (%v), want exactly 9", len(sqlFiles), sqlFiles)
+	if len(sqlFiles) != 10 {
+		t.Errorf("internal/store/migrations/ holds %d .sql files (%v), want exactly 10", len(sqlFiles), sqlFiles)
 	}
 }
 

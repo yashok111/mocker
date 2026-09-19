@@ -152,6 +152,12 @@ func (s *Server) handleExportOpenAPI(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Managed runtimes export the frozen authored revision, including extensions
+	// and examples that the derivative runtime normalizer does not preserve.
+	if s.exportManagedContract(w, r, ws.ID) {
+		return
+	}
+
 	var base []byte
 	if ws.SpecID != nil {
 		var err error

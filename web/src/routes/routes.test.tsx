@@ -164,6 +164,35 @@ describe("route tree", () => {
     expect(await screen.findByText("Такой страницы нет")).toBeInTheDocument();
   });
 
+  it("mounts /designs inside the authenticated shell", async () => {
+    route({
+      "GET /api/me": () => json(200, authResponseFixture()),
+      "GET /api/designs": () => json(200, { designs: [] }),
+      "GET /api/workspaces?all=1": () => json(200, []),
+    });
+
+    mount("/designs");
+
+    expect(await screen.findByTestId("designs-page")).toBeInTheDocument();
+    expect(screen.getByTestId("nav-designs")).toHaveAttribute("aria-current", "page");
+  });
+
+  it("parses /designs/$id and its reviewId before mounting the workbench", async () => {
+    const detail = apiDesignDetailFixture();
+    const fetchMock = route({
+      "GET /api/me": () => json(200, authResponseFixture()),
+      "GET /api/designs/12": () => json(200, detail),
+      "GET /api/designs/12/diff?fromRevisionId=41&toRevisionId=41": () =>
+        json(200, { from: detail.draft, to: detail.draft, changes: [] }),
+    });
+
+    mount("/designs/12?reviewId=8");
+
+    expect(await screen.findByTestId("api-designer-workbench")).toBeInTheDocument();
+    expect(screen.getByText("Кандидат #8")).toBeInTheDocument();
+    expect(fetchMock.mock.calls.map(([url]) => String(url))).toContain("/api/designs/12");
+  });
+
   // --- New in this phase: every route DESIGN §14 names, reachable. ---------
   //
   // Each assertion below finds the screen's own root data-testid (from the
@@ -624,3 +653,55 @@ describe("route tree", () => {
     expect(await screen.findByTestId("specs-page")).toBeInTheDocument();
   });
 });
+
+function apiDesignDetailFixture() {
+  const document = JSON.stringify(
+    { openapi: "3.1.0", info: { title: "Заказы API", version: "1" }, paths: {} },
+    null,
+    2,
+  );
+  const revision = {
+    id: 41,
+    designId: 12,
+    version: 1,
+    hash: "sha256:first",
+    source: "ui",
+    summary: "Проект создан",
+    changeSetId: null,
+    createdAt: 1_795_000_000,
+    document,
+  };
+  return {
+    design: {
+      id: 12,
+      name: "Заказы API",
+      version: 1,
+      draftWorkspaceId: 31,
+      publishedWorkspaceId: 32,
+      draftUrl: "http://orders-draft.mock.local",
+      publishedUrl: "http://orders.mock.local",
+      draftRevisionId: 41,
+      publishedRevisionId: null,
+      latestReviewId: 8,
+      createdAt: 1_795_000_000,
+      updatedAt: 1_795_000_000,
+    },
+    draft: revision,
+    published: null,
+    revisions: [revision],
+    changeSets: [],
+    reviews: [
+      {
+        id: 8,
+        designId: 12,
+        revisionId: 41,
+        baseRevisionId: 41,
+        status: "pending",
+        summary: "Первая публикация",
+        source: "ui",
+        createdAt: 1_795_000_001,
+      },
+    ],
+    releases: [],
+  };
+}
