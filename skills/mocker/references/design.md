@@ -1,4 +1,55 @@
-# Designing an API in mocker — from a brief to a contract
+# Designing an API in mocker — drafts, review and publication
+
+## Analyst editor: the recommended workflow
+
+The **API designer** stores a complete OpenAPI document with immutable revisions.
+It has two independent mock URLs: a working draft and a stable published version.
+An agent edits the draft through MCP; an analyst reviews structural changes and
+the Monaco line diff, then confirms publication in the browser. A save never
+changes the published mock.
+
+1. `list_api_designs`, then `get_api_design {designId}`. To start a project,
+   `create_api_design {name, document}` imports JSON/YAML. Alternatively pass
+   `workspaceId` to capture an existing workspace, or neither for an empty API.
+   The source workspace is left unchanged. Creation is not idempotent: inspect the
+   list after a lost response before creating again.
+2. `create_api_design_change_set {designId, expectedVersion, title}` opens a named
+   task. Use the design's current `version`; this is separate from a workspace's
+   `revision` or an operation's `editVersion`.
+3. Read the complete `draft.document`, edit it and preserve every unrelated field.
+   `validate_api_design {designId, document}` checks proposed JSON/YAML without
+   saving. `save_api_design_draft {designId, expectedVersion, document, summary,
+   changeSetId}` atomically saves the full document, history and draft mock.
+   This is FULL REPLACEMENT, not a merge. Local references, path parameters and
+   operation identifiers must remain valid.
+4. On `409 design_conflict`, read the current state and compare both edits before
+   retrying. Never just substitute the new version number into an old document:
+   that would overwrite the analyst's changes.
+5. `get_api_design_diff {designId}` compares the latest publication (the initial
+   import before the first publication) to the draft. For historical comparisons,
+   supply `fromRevisionId` and `toRevisionId`. Results contain both exact documents
+   and changes with JSON pointers. `impact: review` requires human analysis; it
+   does not certify compatibility. Call the draft URL to inspect generated responses.
+6. `close_api_design_change_set {designId, changeSetId, expectedVersion}` finishes
+   the task. `request_api_design_review {designId, expectedVersion, summary}` freezes
+   a candidate and returns `reviewUrl`. Give that link to the analyst. New saves
+   supersede the candidate, so publication cannot include an unseen later edit.
+7. **The analyst publishes in the UI.** The shared MCP key cannot confirm
+   publication. `get_api_design` reports reviews/releases and the stable published
+   mock URL. Retrying a successful publication returns the same release.
+8. `get_api_design_revision {designId, revisionId}` reads an immutable document for
+   handover. `restore_api_design_revision {designId, revisionId, expectedVersion,
+   summary}` creates a new draft from history; it does not publish or erase history.
+
+Managed draft/published workspaces are runtime projections. Legacy endpoint,
+override, spec/settings, scenario, rollback and session-control writes cannot edit
+them. Use the designer tools instead. Publication includes the HTTP contract and
+generated mock, not entity data, assets, Lua functions or transient session state.
+The author document preserves OpenAPI fields; runtime normalization is separate.
+Names a client reports for an agent are not verified identities; history records
+the server-derived UI/MCP source.
+
+## Classic workspace design (existing workflow)
 
 This is the workflow DESIGN §34 describes: a frontend developer or systems
 analyst designs an API here, sees it SERVING while they design it, and
@@ -80,7 +131,7 @@ The base is never edited in place. When the design is agreed:
 After that the workspace is a clean delta over the new base, and the next
 round of design starts from step 2.
 
-## What this does not do
+## Limits of the classic workspace workflow
 
 - **No request validation.** `reqSchema` is exported as `requestBody` and
   is never enforced on an incoming request; the mock accepts what it is

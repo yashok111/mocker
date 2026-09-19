@@ -20,6 +20,7 @@ import {
   IconLayoutGrid,
   IconLogout,
   IconMenu2,
+  IconRoute,
 } from "@tabler/icons-react";
 import { useMediaQuery } from "@mantine/hooks";
 import { useLocation, useNavigate } from "@tanstack/react-router";
@@ -59,6 +60,8 @@ export function AppShell({ user, children }: { user: UserView; children: ReactNo
   const queryClient = useQueryClient();
   const location = useLocation();
   const mobile = useMediaQuery("(max-width: 48em)", false, { getInitialValueInEffect: false });
+  const designer = /^\/designs\/[^/]+\/?$/.test(location.pathname);
+  const navigationInDrawer = mobile || designer;
   const [navigationOpened, setNavigationOpened] = useState(false);
   const [navigationTarget, setNavigationTarget] = useState<HTMLDivElement | null>(null);
   const closeNavigation = useCallback(() => setNavigationOpened(false), []);
@@ -78,6 +81,7 @@ export function AppShell({ user, children }: { user: UserView; children: ReactNo
 
   const globalLinks = [
     { to: "/", label: "Воркспейсы", icon: IconLayoutGrid, testId: "nav-workspaces" },
+    { to: "/designs", label: "Проектирование API", icon: IconRoute, testId: "nav-designs" },
     { to: "/specs", label: "Спеки", icon: IconFileCode, testId: "nav-specs" },
     { to: "/guide", label: "Руководство", icon: IconBook2, testId: "nav-guide" },
   ] as const;
@@ -126,14 +130,18 @@ export function AppShell({ user, children }: { user: UserView; children: ReactNo
     <NavigationContext.Provider value={{ target: navigationTarget, close: closeNavigation }}>
       <MantineAppShell
         header={{ height: 64 }}
-        navbar={{ width: 224, breakpoint: "sm", collapsed: { mobile: true, desktop: mobile } }}
+        navbar={{
+          width: 224,
+          breakpoint: "sm",
+          collapsed: { mobile: true, desktop: navigationInDrawer },
+        }}
         padding={0}
         classNames={{ header: classes.header, navbar: classes.rail, main: classes.main }}
       >
         <MantineAppShell.Header>
           <Group h="100%" px={{ base: "md", sm: "lg" }} justify="space-between" wrap="nowrap">
             <Group gap="sm" wrap="nowrap">
-              {mobile ? (
+              {navigationInDrawer ? (
                 <ActionIcon
                   variant="subtle"
                   size="lg"
@@ -186,12 +194,14 @@ export function AppShell({ user, children }: { user: UserView; children: ReactNo
             </Group>
           </Group>
         </MantineAppShell.Header>
-        {!mobile ? <MantineAppShell.Navbar>{navigation}</MantineAppShell.Navbar> : null}
+        {!navigationInDrawer ? <MantineAppShell.Navbar>{navigation}</MantineAppShell.Navbar> : null}
         <MantineAppShell.Main>
-          <div className={classes.mainContent}>{children}</div>
+          <div className={classes.mainContent} data-designer={designer || undefined}>
+            {children}
+          </div>
         </MantineAppShell.Main>
       </MantineAppShell>
-      {mobile ? (
+      {navigationInDrawer ? (
         <Drawer
           opened={navigationOpened}
           onClose={closeNavigation}
@@ -205,7 +215,7 @@ export function AppShell({ user, children }: { user: UserView; children: ReactNo
           classNames={{ body: classes.drawerBody }}
         >
           {navigation}
-          <ServerStatus />
+          {mobile ? <ServerStatus /> : null}
         </Drawer>
       ) : null}
     </NavigationContext.Provider>

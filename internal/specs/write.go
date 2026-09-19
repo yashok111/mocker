@@ -87,107 +87,79 @@ const insertBatchSize = 200
 // Because store.DB.W is a single connection, that transaction is strictly
 // serialized against every concurrent Import, so two callers racing to
 // import the same bytes can never both see "no duplicate" and both insert.
-func (r *Repo) Import(ctx context.Context, in ImportInput) (*ImportResult, error) {
-	if size := int64(len(in.Document)); size > r.cfg.MaxBody {
-		return nil, fmt.Errorf("%w: %d bytes exceeds max %d", ErrTooLarge, size, r.cfg.MaxBody)
+// PreparedImport contains a validated runtime projection. It is immutable after
+// preparation and may be inserted in a caller-owned transaction.
+type PreparedImport struct {
+	in                   ImportInput
+	doc                  *openapi.Document
+	Report               *openapi.Report
+	Operations           []*Operation
+	responses            map[int][]*Response
+	suggestions          []Suggestion
+	hash, name, basePath string
+}
+
+func (r *Repo) PrepareImport(in ImportInput) (*PreparedImport, error) {
+	if int64(len(in.Document)) > r.cfg.MaxBody {
+		return nil, ErrTooLarge
 	}
-
-	sum := sha256.Sum256(in.Document)
-	hash := hex.EncodeToString(sum[:])
-
 	doc, report, err := openapi.Load(in.Document)
 	if err != nil {
-		return nil, fmt.Errorf("specs: import %q: %w", in.Name, err)
+		return nil, err
 	}
-
-	// Index is pure CPU over the already-loaded document, same as Load
-	// itself — it runs here, outside the write transaction, for the same
-	// reason Load does: holding store.DB.W's single connection for the
-	// duration of a parse would serialize it against every other admin
-	// write in the system for no reason.
 	resolver := openapi.NewResolver(doc, openapi.DefaultRefBudget)
-	ops, resp := Index(doc, resolver, report)
+	ops, responses := Index(doc, resolver, report)
 	if len(ops) > maxIndexedOperations {
-		return nil, fmt.Errorf("%w: %d operations exceeds max %d", ErrTooManyOperations, len(ops), maxIndexedOperations)
+		return nil, ErrTooManyOperations
 	}
-
-	// deriveSuggestions is pure CPU over the already-Indexed document, same
-	// as Index itself — it runs here, outside the write transaction, for
-	// the identical reason (decisions.md §D3: "the parse stays outside the
-	// write transaction, deliberately"). Its rows are inserted below, by
-	// the SAME transaction that writes the operation rows, so a reader can
-	// never observe an operations row with no matching resource_suggestions
-	// record for reasons other than "this spec predates P3a" (see
-	// [Repo.EnsureSuggestions]'s backfill for that case).
-	suggestions := deriveSuggestions(resolver, ops, resp)
-
+	sum := sha256.Sum256(in.Document)
 	name := strings.TrimSpace(in.Name)
 	if name == "" {
 		name = doc.Title()
 	}
 	basePath, _ := doc.BasePath()
+	return &PreparedImport{in: in, doc: doc, Report: report, Operations: ops, responses: responses,
+		suggestions: deriveSuggestions(resolver, ops, responses), hash: hex.EncodeToString(sum[:]), name: name, basePath: basePath}, nil
+}
+
+// ImportTx stores the prepared document and its complete index atomically with
+// the caller's own changes. Duplicate content returns the existing immutable spec.
+func (r *Repo) ImportTx(ctx context.Context, tx *sql.Tx, p *PreparedImport) (*ImportResult, error) {
+	existing, err := scanSpec(tx.QueryRowContext(ctx, selectSpec+" WHERE hash = ?", p.hash))
+	if err == nil {
+		return &ImportResult{Spec: existing, Report: p.Report}, ErrDuplicate
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return nil, err
+	}
 	now := time.Now().UTC()
-
-	var (
-		spec    *Spec
-		dupSpec *Spec
-	)
-	writeErr := r.db.Write(ctx, func(tx *sql.Tx) error {
-		existing, ferr := scanSpec(tx.QueryRowContext(ctx, selectSpec+" WHERE hash = ?", hash))
-		switch {
-		case ferr == nil:
-			dupSpec = existing
-			return ErrDuplicate
-		case errors.Is(ferr, sql.ErrNoRows):
-			// no existing row with this hash: proceed to insert below.
-		default:
-			return fmt.Errorf("check existing hash: %w", ferr)
-		}
-
-		res, ierr := tx.ExecContext(ctx, `
-			INSERT INTO specs
-				(name, version, format, source, source_ref, base_path, hash, raw, normalized, created_at, created_by)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-			name, doc.Version(), string(doc.Format()), in.Source, in.SourceRef,
-			basePath, hash, doc.Raw(), doc.Normalized(), now.Unix(), in.CreatedBy,
-		)
-		if ierr != nil {
-			return fmt.Errorf("insert spec: %w", ierr)
-		}
-		id, ierr := res.LastInsertId()
-		if ierr != nil {
-			return fmt.Errorf("spec id: %w", ierr)
-		}
-
-		if rerr := r.ReplaceOperations(ctx, tx, id, ops, resp); rerr != nil {
-			return rerr
-		}
-		if serr := insertSuggestionsTx(ctx, tx, id, suggestions); serr != nil {
-			return serr
-		}
-
-		spec = &Spec{
-			ID:        id,
-			Name:      name,
-			Version:   doc.Version(),
-			Format:    string(doc.Format()),
-			Source:    in.Source,
-			SourceRef: in.SourceRef,
-			BasePath:  basePath,
-			Hash:      hash,
-			CreatedAt: now,
-			CreatedBy: in.CreatedBy,
-		}
-		return nil
-	})
-
-	if errors.Is(writeErr, ErrDuplicate) {
-		return &ImportResult{Spec: dupSpec, Report: report}, ErrDuplicate
+	result, err := tx.ExecContext(ctx, `INSERT INTO specs
+ (name,version,format,source,source_ref,base_path,hash,raw,normalized,created_at,created_by)
+ VALUES (?,?,?,?,?,?,?,?,?,?,?)`, p.name, p.doc.Version(), string(p.doc.Format()), p.in.Source, p.in.SourceRef, p.basePath, p.hash, p.doc.Raw(), p.doc.Normalized(), now.Unix(), p.in.CreatedBy)
+	if err != nil {
+		return nil, err
 	}
-	if writeErr != nil {
-		return nil, writeErr
+	id, err := result.LastInsertId()
+	if err != nil {
+		return nil, err
 	}
-	return &ImportResult{Spec: spec, Report: report}, nil
+	if err = r.ReplaceOperations(ctx, tx, id, p.Operations, p.responses); err != nil {
+		return nil, err
+	}
+	if err = insertSuggestionsTx(ctx, tx, id, p.suggestions); err != nil {
+		return nil, err
+	}
+	return &ImportResult{Spec: &Spec{ID: id, Name: p.name, Version: p.doc.Version(), Format: string(p.doc.Format()), Source: p.in.Source, SourceRef: p.in.SourceRef, BasePath: p.basePath, Hash: p.hash, CreatedAt: now, CreatedBy: p.in.CreatedBy}, Report: p.Report}, nil
+}
+
+func (r *Repo) Import(ctx context.Context, in ImportInput) (*ImportResult, error) {
+	prepared, err := r.PrepareImport(in)
+	if err != nil {
+		return nil, err
+	}
+	var result *ImportResult
+	err = r.db.Write(ctx, func(tx *sql.Tx) error { var err error; result, err = r.ImportTx(ctx, tx, prepared); return err })
+	return result, err
 }
 
 // Delete removes specID's spec row, cascading its operations and their

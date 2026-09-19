@@ -172,6 +172,11 @@
   min-width: 0;
 }
 
+.mainContent[data-designer] {
+  max-width: none;
+  padding: 20px 24px 32px;
+}
+
 .serverStatus {
   display: flex;
   align-items: center;
@@ -475,6 +480,10 @@
 @media (max-width: 48em) {
   .mainContent {
     padding: 24px 16px 36px;
+  }
+
+  .mainContent[data-designer] {
+    padding: 12px 16px 24px;
   }
 
   .headerStatus,

@@ -60,6 +60,9 @@ func (p *Plane) SetLiveState(src LiveStateSource) {
 // serveReserved already filtered the method and the single "state" segment
 // before calling this, the same pattern serveHealth's own caller uses.
 func (p *Plane) serveLiveState(w http.ResponseWriter, r *http.Request, ws *workspaces.Workspace) {
+	if p.refuseManagedControl(w, r, ws) {
+		return
+	}
 	if p.livestate == nil {
 		// Legal, exactly like a nil OverrideSource — but this endpoint has
 		// nothing else to answer with: there is no "no live-state support"

@@ -213,6 +213,18 @@ func cpLabelled(label string) checkpointPolicy {
 // slice's context document for the full reasoning.
 func (s *Server) routes() []route {
 	return []route{
+		{"GET /api/designs", s.handleListAPIDesigns, mcpAllow, cpRead},
+		{"POST /api/designs", s.handleCreateAPIDesign, mcpAllow, cpAnotherLayer},
+		{"GET /api/designs/{id}", s.handleGetAPIDesign, mcpAllow, cpRead},
+		{"PUT /api/designs/{id}/draft", s.handleSaveAPIDesignDraft, mcpAllow, cpAnotherLayer},
+		{"GET /api/designs/{id}/revisions/{rid}", s.handleGetAPIDesignRevision, mcpAllow, cpRead},
+		{"GET /api/designs/{id}/diff", s.handleGetAPIDesignDiff, mcpAllow, cpRead},
+		{"POST /api/designs/{id}/validate", s.handleValidateAPIDesign, mcpAllow, cpNeverTouchesLayer},
+		{"POST /api/designs/{id}/change-sets", s.handleCreateAPIDesignChangeSet, mcpAllow, cpAnotherLayer},
+		{"PUT /api/designs/{id}/change-sets/{cid}", s.handleCloseAPIDesignChangeSet, mcpAllow, cpAnotherLayer},
+		{"POST /api/designs/{id}/reviews", s.handleRequestAPIDesignReview, mcpAllow, cpAnotherLayer},
+		{"POST /api/designs/{id}/reviews/{rid}/publish", s.handlePublishAPIDesignReview, mcpDeny("publication requires human confirmation through a UI session"), cpAnotherLayer},
+		{"POST /api/designs/{id}/restore", s.handleRestoreAPIDesignRevision, mcpAllow, cpAnotherLayer},
 		// The two infrastructure probes: not part of the admin surface a
 		// tool composes (mocker-a-mcp D12), and reads, so no checkpoint.
 		{"GET /healthz", s.handleHealthz, mcpDeny("an infrastructure probe, not part of the admin surface a tool composes"), cpRead},
@@ -524,6 +536,7 @@ func (s *Server) routeMux() *http.ServeMux {
 			if rt.checkpoint.label != "" && s.cfg.CheckpointDebounce > 0 {
 				handler = s.withAutoCheckpoint(rt.checkpoint.label, handler)
 			}
+			handler = s.withManagedWorkspaceGuard(rt.pattern, handler)
 			mux.HandleFunc(rt.pattern, handler)
 		}
 		s.routeMuxVal = mux

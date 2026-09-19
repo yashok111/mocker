@@ -39,7 +39,7 @@ export function renderWithProviders(
 ): RenderResult & { queryClient: QueryClient } {
   const result = render(
     <QueryClientProvider client={queryClient}>
-      <MantineProvider theme={theme} defaultColorScheme="light">
+      <MantineProvider theme={theme} defaultColorScheme="light" env="test">
         <ModalsProvider>{ui}</ModalsProvider>
       </MantineProvider>
     </QueryClientProvider>,
@@ -83,7 +83,7 @@ export function renderInRouter(
 
   const result = render(
     <QueryClientProvider client={queryClient}>
-      <MantineProvider theme={theme} defaultColorScheme="light">
+      <MantineProvider theme={theme} defaultColorScheme="light" env="test">
         <ModalsProvider>
           {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
           <RouterProvider router={router as never} />
