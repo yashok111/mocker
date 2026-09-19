@@ -45,6 +45,9 @@
 .idea/
 .vscode/
 
+# Local UI screenshots
+/screenshots/
+
 # wfcheck --freeze snapshots of workflow scripts, one per gate round: local
 # review artefacts, and a "git add -N ." in a reviewer prompt would otherwise
 # intent-add ~200 KB apiece.
