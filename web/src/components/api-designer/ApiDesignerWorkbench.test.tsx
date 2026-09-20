@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { screen, within } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { ApiDesignerWorkbench } from "./ApiDesignerWorkbench";
 import { renderInRouter } from "@/test/render";
@@ -10,6 +10,13 @@ import type {
   ApiDesignRevisionSummary,
 } from "@/api/generated/schemas";
 
+// SVG layout requires browser text measurements. The workbench still exercises
+// the real schema converter; the real renderer is verified in a browser.
+vi.mock("./renderSchemaDiagram", () => ({
+  renderSchemaDiagram: async () =>
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 100"></svg>',
+}));
+
 afterEach(() => {
   localStorage.clear();
   vi.unstubAllGlobals();
@@ -17,6 +24,47 @@ afterEach(() => {
 });
 
 describe("ApiDesignerWorkbench", () => {
+  it("diagrams the unsaved document and clears the diagram when its source is invalid", async () => {
+    route({
+      "GET /api/designs/12": () => json(200, detailFixture()),
+      "GET /api/designs/12/diff?fromRevisionId=41&toRevisionId=41": () =>
+        json(200, diffFixture(detailFixture())),
+    });
+    renderInRouter(<ApiDesignerWorkbench id={12} />);
+    await userEvent.click(await screen.findByRole("tab", { name: "Редактор" }));
+    await userEvent.click(screen.getByRole("radio", { name: "Исходник" }));
+    const source = screen.getByRole("textbox", { name: "Исходник OpenAPI" });
+    await userEvent.clear(source);
+    source.focus();
+    await userEvent.paste(
+      JSON.stringify({
+        openapi: "3.1.0",
+        info: { title: "Local", version: "1" },
+        paths: {},
+        components: { schemas: { LocalOnly: { properties: { unsaved: { type: "string" } } } } },
+      }),
+    );
+    await userEvent.click(screen.getByRole("tab", { name: "Диаграмма" }));
+    await userEvent.click(await screen.findByText("Исходник Mermaid"));
+    const mermaidSource = screen.getByRole<HTMLTextAreaElement>("textbox", {
+      name: "Исходник Mermaid",
+    });
+    expect(mermaidSource.value).toContain("LocalOnly");
+    expect(mermaidSource.value).toContain("unsaved?");
+    await waitFor(() => expect(screen.getByRole("button", { name: "Скачать SVG" })).toBeEnabled());
+
+    await userEvent.click(screen.getByRole("tab", { name: "Редактор" }));
+    await userEvent.clear(source);
+    source.focus();
+    await userEvent.paste("{invalid");
+    await userEvent.click(screen.getByRole("tab", { name: "Диаграмма" }));
+    expect(
+      await screen.findByText("Исправьте JSON в редакторе, чтобы построить диаграмму."),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Скачать SVG" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("textbox", { name: "Исходник Mermaid" })).not.toBeInTheDocument();
+  });
+
   it("keeps a dirty source buffer when polling observes an external revision", async () => {
     let current = detailFixture();
     route({

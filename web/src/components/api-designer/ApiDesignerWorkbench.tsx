@@ -1,4 +1,13 @@
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import {
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import type { ReactElement, ReactNode } from "react";
 import {
   ActionIcon,
@@ -91,7 +100,8 @@ import { hasUnsafeJsonNumber } from "./jsonNumberPrecision";
 import classes from "./ApiDesigner.module.css";
 
 const POLL_MS = 5_000;
-type CanvasView = "documentation" | "editor" | "compare" | "review";
+const SchemaDiagram = lazy(() => import("./SchemaDiagram"));
+type CanvasView = "documentation" | "editor" | "diagram" | "compare" | "review";
 type EditorMode = "form" | "source";
 type InspectorView = "changes" | "history" | "checks" | "mock";
 
@@ -708,6 +718,7 @@ export function ApiDesignerWorkbench({
             <Tabs.List className={classes.tabList}>
               <Tabs.Tab value="documentation">Документация</Tabs.Tab>
               <Tabs.Tab value="editor">Редактор</Tabs.Tab>
+              <Tabs.Tab value="diagram">Диаграмма</Tabs.Tab>
               <Tabs.Tab value="compare">Сравнение</Tabs.Tab>
               <Tabs.Tab value="review">Проверка</Tabs.Tab>
             </Tabs.List>
@@ -718,6 +729,23 @@ export function ApiDesignerWorkbench({
                 operation={selectedOperation}
                 schema={selectedSchema}
               />
+            </Tabs.Panel>
+            <Tabs.Panel value="diagram" className={classes.canvasPanel}>
+              {view === "diagram" && (
+                <Suspense
+                  fallback={
+                    <Text size="sm" c="dimmed" component="output">
+                      Загрузка диаграммы…
+                    </Text>
+                  }
+                >
+                  <SchemaDiagram
+                    document={parsed.document}
+                    selection={selection}
+                    pendingFormDraft={formDraft.dirty}
+                  />
+                </Suspense>
+              )}
             </Tabs.Panel>
             <Tabs.Panel value="editor" className={classes.canvasPanel}>
               <Stack gap="sm">

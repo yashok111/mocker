@@ -1,0 +1,80 @@
+.toolbar,
+.filters {
+  min-width: 0;
+}
+
+.filters {
+  flex: 1;
+}
+
+.schemaSelect {
+  flex: 1;
+  min-width: 180px;
+  max-width: 360px;
+}
+
+.viewport {
+  max-width: 100%;
+  min-height: 300px;
+  max-height: 70dvh;
+  overflow: auto;
+  overscroll-behavior: contain;
+  border: 1px solid var(--mocker-border, #e0e5e1);
+  border-radius: 8px;
+  background: var(--mocker-canvas, #f5f6f4);
+}
+
+.viewport:focus-visible,
+.source summary:focus-visible {
+  outline: 2px solid var(--mocker-accent, #087f70);
+  outline-offset: 3px;
+}
+
+.drawing {
+  margin: 0;
+  padding: 24px;
+}
+
+.drawing svg {
+  display: block;
+  width: 100%;
+  max-width: none !important;
+  height: auto;
+}
+
+.loading {
+  min-height: 300px;
+}
+
+.zoom {
+  min-width: 38px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.source {
+  min-width: 0;
+}
+
+.source summary {
+  width: fit-content;
+  color: var(--mocker-muted, #69756e);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.warnings {
+  margin: 0;
+  padding-left: 18px;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 30em) {
+  .schemaSelect {
+    max-width: 100%;
+  }
+
+  .drawing {
+    padding: 12px;
+  }
+}
