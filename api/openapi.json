@@ -67,6 +67,10 @@
     {
       "name": "api-designs",
       "description": "Full OpenAPI authoring, immutable drafts, review and human publication."
+    },
+    {
+      "name": "design-scenarios",
+      "description": "Persisted sequence-design canvas and immutable history."
     }
   ],
   "components": {
@@ -4976,6 +4980,1612 @@
             }
           }
         }
+      },
+      "DesignScenarioParticipant": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "kind",
+          "description"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "name": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "user",
+              "client",
+              "service",
+              "external",
+              "database",
+              "queue",
+              "other"
+            ]
+          },
+          "description": {
+            "type": "string"
+          },
+          "color": {
+            "type": "string",
+            "pattern": "^#[0-9a-fA-F]{6}$",
+            "minLength": 7,
+            "maxLength": 7,
+            "description": "Object card fill as opaque #RRGGBB. Omit to use the default color."
+          }
+        },
+        "additionalProperties": false
+      },
+      "DesignScenarioOperationBinding": {
+        "type": "object",
+        "required": [
+          "contractId",
+          "operationKey"
+        ],
+        "properties": {
+          "contractId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "operationKey": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "additionalProperties": false
+      },
+      "DesignScenarioMessage": {
+        "type": "object",
+        "required": [
+          "id",
+          "fromId",
+          "toId",
+          "kind",
+          "label",
+          "description"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "fromId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "toId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "request",
+              "response",
+              "event",
+              "note"
+            ]
+          },
+          "label": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "color": {
+            "type": "string",
+            "pattern": "^#[0-9a-fA-F]{6}$",
+            "minLength": 7,
+            "maxLength": 7,
+            "description": "Message card fill as opaque #RRGGBB. Omit to use the default color."
+          },
+          "arrowColor": {
+            "type": "string",
+            "pattern": "^#[0-9a-fA-F]{6}$",
+            "minLength": 7,
+            "maxLength": 7,
+            "description": "Message arrow stroke and arrowhead as opaque #RRGGBB; not displayed for notes. Omit to use the default color."
+          },
+          "replyToId": {
+            "type": "string"
+          },
+          "operation": {
+            "$ref": "#/components/schemas/DesignScenarioOperationBinding"
+          },
+          "execution": {
+            "$ref": "#/components/schemas/DesignScenarioStepExecution"
+          }
+        },
+        "additionalProperties": false
+      },
+      "DesignScenarioFragment": {
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "label",
+          "fromMessageId",
+          "toMessageId"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "opt",
+              "loop"
+            ]
+          },
+          "label": {
+            "type": "string"
+          },
+          "fromMessageId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "toMessageId": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "additionalProperties": false
+      },
+      "DesignScenarioContractSource": {
+        "type": "object",
+        "required": [
+          "designId",
+          "revisionId"
+        ],
+        "properties": {
+          "designId": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "revisionId": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "version": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "description": "Optional for copy provenance; linked contracts require a positive source version."
+          }
+        },
+        "additionalProperties": false
+      },
+      "DesignScenarioContract": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "document"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "name": {
+            "type": "string"
+          },
+          "document": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "copy",
+              "linked"
+            ],
+            "description": "Omitted means copy."
+          },
+          "source": {
+            "$ref": "#/components/schemas/DesignScenarioContractSource"
+          }
+        },
+        "additionalProperties": false
+      },
+      "DesignScenarioDocument": {
+        "type": "object",
+        "required": [
+          "formatVersion",
+          "title",
+          "participants",
+          "messages",
+          "fragments",
+          "contracts"
+        ],
+        "properties": {
+          "formatVersion": {
+            "type": "integer",
+            "enum": [
+              1
+            ]
+          },
+          "title": {
+            "type": "string"
+          },
+          "participants": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DesignScenarioParticipant"
+            }
+          },
+          "messages": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DesignScenarioMessage"
+            }
+          },
+          "fragments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DesignScenarioFragment"
+            }
+          },
+          "contracts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DesignScenarioContract"
+            }
+          },
+          "execution": {
+            "$ref": "#/components/schemas/DesignScenarioExecution"
+          }
+        },
+        "additionalProperties": false
+      },
+      "DesignScenario": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "version",
+          "draftRevisionId",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "name": {
+            "type": "string"
+          },
+          "version": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "draftRevisionId": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "createdAt": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "updatedAt": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "DesignScenarioRevisionSummary": {
+        "type": "object",
+        "required": [
+          "id",
+          "scenarioId",
+          "version",
+          "hash",
+          "source",
+          "summary",
+          "createdAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "scenarioId": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "version": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "hash": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "ui",
+              "mcp"
+            ]
+          },
+          "summary": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "DesignScenarioRevision": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/DesignScenarioRevisionSummary"
+          },
+          {
+            "type": "object",
+            "required": [
+              "document",
+              "formDrafts"
+            ],
+            "properties": {
+              "document": {
+                "$ref": "#/components/schemas/DesignScenarioDocument"
+              },
+              "formDrafts": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        ]
+      },
+      "DesignScenarioDiagnostic": {
+        "type": "object",
+        "required": [
+          "pointer",
+          "message",
+          "severity"
+        ],
+        "properties": {
+          "pointer": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "error",
+              "warning"
+            ]
+          }
+        }
+      },
+      "DesignScenarioContractUpdate": {
+        "type": "object",
+        "required": [
+          "contractId",
+          "designId",
+          "revisionId",
+          "version"
+        ],
+        "properties": {
+          "contractId": {
+            "type": "string"
+          },
+          "designId": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "revisionId": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "version": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          }
+        }
+      },
+      "DesignScenarioDetail": {
+        "type": "object",
+        "required": [
+          "scenario",
+          "draft",
+          "revisions",
+          "diagnostics",
+          "contractUpdates"
+        ],
+        "properties": {
+          "scenario": {
+            "$ref": "#/components/schemas/DesignScenario"
+          },
+          "draft": {
+            "$ref": "#/components/schemas/DesignScenarioRevision"
+          },
+          "revisions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DesignScenarioRevisionSummary"
+            }
+          },
+          "diagnostics": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DesignScenarioDiagnostic"
+            }
+          },
+          "contractUpdates": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DesignScenarioContractUpdate"
+            }
+          }
+        }
+      },
+      "DesignScenarioChange": {
+        "type": "object",
+        "required": [
+          "pointer"
+        ],
+        "properties": {
+          "pointer": {
+            "type": "string"
+          },
+          "before": {},
+          "after": {}
+        }
+      },
+      "DesignScenarioDiff": {
+        "type": "object",
+        "required": [
+          "fromRevisionId",
+          "toRevisionId",
+          "changes"
+        ],
+        "properties": {
+          "fromRevisionId": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "toRevisionId": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "changes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DesignScenarioChange"
+            }
+          }
+        }
+      },
+      "DesignScenarioConflictDetails": {
+        "type": "object",
+        "required": [
+          "version",
+          "draftRevisionId"
+        ],
+        "properties": {
+          "version": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "draftRevisionId": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "designId": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "contractId": {
+            "type": "string"
+          }
+        }
+      },
+      "DesignScenarioInvalidDetails": {
+        "type": "object",
+        "required": [
+          "diagnostics"
+        ],
+        "properties": {
+          "diagnostics": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DesignScenarioDiagnostic"
+            }
+          }
+        }
+      },
+      "ListDesignScenariosResponse": {
+        "type": "object",
+        "required": [
+          "scenarios"
+        ],
+        "properties": {
+          "scenarios": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DesignScenario"
+            }
+          }
+        }
+      },
+      "CreateDesignScenarioRequest": {
+        "type": "object",
+        "required": [
+          "document"
+        ],
+        "properties": {
+          "document": {
+            "$ref": "#/components/schemas/DesignScenarioDocument"
+          },
+          "formDrafts": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "summary": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "SaveDesignScenarioDraftRequest": {
+        "type": "object",
+        "required": [
+          "expectedVersion",
+          "document"
+        ],
+        "properties": {
+          "expectedVersion": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "document": {
+            "$ref": "#/components/schemas/DesignScenarioDocument"
+          },
+          "formDrafts": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "summary": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "RestoreDesignScenarioRevisionRequest": {
+        "type": "object",
+        "required": [
+          "expectedVersion",
+          "revisionId"
+        ],
+        "properties": {
+          "expectedVersion": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "revisionId": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "summary": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ValidateDesignScenarioRequest": {
+        "type": "object",
+        "required": [
+          "document"
+        ],
+        "properties": {
+          "document": {
+            "$ref": "#/components/schemas/DesignScenarioDocument"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ValidateDesignScenarioResponse": {
+        "type": "object",
+        "required": [
+          "diagnostics"
+        ],
+        "properties": {
+          "diagnostics": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DesignScenarioDiagnostic"
+            }
+          }
+        }
+      },
+      "DesignScenarioSetTitleCommand": {
+        "type": "object",
+        "required": [
+          "type",
+          "title"
+        ],
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "set_title"
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "DesignScenarioUpsertParticipantCommand": {
+        "type": "object",
+        "required": [
+          "type",
+          "participant"
+        ],
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "upsert_participant"
+          },
+          "participant": {
+            "$ref": "#/components/schemas/DesignScenarioParticipant"
+          }
+        },
+        "additionalProperties": false
+      },
+      "DesignScenarioRemoveParticipantCommand": {
+        "type": "object",
+        "required": [
+          "type",
+          "id"
+        ],
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "remove_participant"
+          },
+          "id": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "DesignScenarioMoveParticipantCommand": {
+        "type": "object",
+        "required": [
+          "type",
+          "id",
+          "index"
+        ],
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "move_participant"
+          },
+          "id": {
+            "type": "string"
+          },
+          "index": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false
+      },
+      "DesignScenarioUpsertMessageCommand": {
+        "type": "object",
+        "required": [
+          "type",
+          "message"
+        ],
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "upsert_message"
+          },
+          "message": {
+            "$ref": "#/components/schemas/DesignScenarioMessage"
+          }
+        },
+        "additionalProperties": false
+      },
+      "DesignScenarioRemoveMessageCommand": {
+        "type": "object",
+        "required": [
+          "type",
+          "id"
+        ],
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "remove_message"
+          },
+          "id": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "DesignScenarioMoveMessageCommand": {
+        "type": "object",
+        "required": [
+          "type",
+          "id",
+          "index"
+        ],
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "move_message"
+          },
+          "id": {
+            "type": "string"
+          },
+          "index": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false
+      },
+      "DesignScenarioUpsertFragmentCommand": {
+        "type": "object",
+        "required": [
+          "type",
+          "fragment"
+        ],
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "upsert_fragment"
+          },
+          "fragment": {
+            "$ref": "#/components/schemas/DesignScenarioFragment"
+          }
+        },
+        "additionalProperties": false
+      },
+      "DesignScenarioRemoveFragmentCommand": {
+        "type": "object",
+        "required": [
+          "type",
+          "id"
+        ],
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "remove_fragment"
+          },
+          "id": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "DesignScenarioBindOperationCommand": {
+        "type": "object",
+        "required": [
+          "type",
+          "messageId",
+          "contractId",
+          "operationKey"
+        ],
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "bind_operation"
+          },
+          "messageId": {
+            "type": "string"
+          },
+          "contractId": {
+            "type": "string"
+          },
+          "operationKey": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "DesignScenarioCreateOperationCommand": {
+        "type": "object",
+        "required": [
+          "type",
+          "messageId",
+          "method",
+          "path"
+        ],
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "create_operation"
+          },
+          "messageId": {
+            "type": "string"
+          },
+          "contractId": {
+            "type": "string"
+          },
+          "method": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "DesignScenarioImportContractCommand": {
+        "type": "object",
+        "required": [
+          "type",
+          "designId",
+          "mode"
+        ],
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "import_contract"
+          },
+          "id": {
+            "type": "string"
+          },
+          "designId": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "revisionId": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "copy",
+              "linked"
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "DesignScenarioRefreshContractCommand": {
+        "type": "object",
+        "required": [
+          "type",
+          "contractId"
+        ],
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "refresh_contract"
+          },
+          "contractId": {
+            "type": "string"
+          },
+          "revisionId": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          }
+        },
+        "additionalProperties": false
+      },
+      "DesignScenarioDetachContractCommand": {
+        "type": "object",
+        "required": [
+          "type",
+          "contractId"
+        ],
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "detach_contract"
+          },
+          "contractId": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "DesignScenarioMaterializeContractCommand": {
+        "type": "object",
+        "required": [
+          "type",
+          "contractId"
+        ],
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "materialize_contract"
+          },
+          "contractId": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "DesignScenarioCommand": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/DesignScenarioSetTitleCommand"
+          },
+          {
+            "$ref": "#/components/schemas/DesignScenarioUpsertParticipantCommand"
+          },
+          {
+            "$ref": "#/components/schemas/DesignScenarioRemoveParticipantCommand"
+          },
+          {
+            "$ref": "#/components/schemas/DesignScenarioMoveParticipantCommand"
+          },
+          {
+            "$ref": "#/components/schemas/DesignScenarioUpsertMessageCommand"
+          },
+          {
+            "$ref": "#/components/schemas/DesignScenarioRemoveMessageCommand"
+          },
+          {
+            "$ref": "#/components/schemas/DesignScenarioMoveMessageCommand"
+          },
+          {
+            "$ref": "#/components/schemas/DesignScenarioUpsertFragmentCommand"
+          },
+          {
+            "$ref": "#/components/schemas/DesignScenarioRemoveFragmentCommand"
+          },
+          {
+            "$ref": "#/components/schemas/DesignScenarioBindOperationCommand"
+          },
+          {
+            "$ref": "#/components/schemas/DesignScenarioCreateOperationCommand"
+          },
+          {
+            "$ref": "#/components/schemas/DesignScenarioCreateContractCommand"
+          },
+          {
+            "$ref": "#/components/schemas/DesignScenarioImportContractCommand"
+          },
+          {
+            "$ref": "#/components/schemas/DesignScenarioRefreshContractCommand"
+          },
+          {
+            "$ref": "#/components/schemas/DesignScenarioDetachContractCommand"
+          },
+          {
+            "$ref": "#/components/schemas/DesignScenarioMaterializeContractCommand"
+          }
+        ]
+      },
+      "ApplyDesignScenarioCommandsRequest": {
+        "type": "object",
+        "required": [
+          "expectedVersion",
+          "commands"
+        ],
+        "properties": {
+          "expectedVersion": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "commands": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "$ref": "#/components/schemas/DesignScenarioCommand"
+            }
+          },
+          "summary": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "DesignScenarioCreateContractCommand": {
+        "type": "object",
+        "description": "Adds a new independent contract copy. Its id must be unique in the scenario. Source and linked mode are forbidden. Combine with bind_operation and materialize_contract in one batch to create an API project atomically.",
+        "required": [
+          "type",
+          "contract"
+        ],
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "create_contract"
+          },
+          "contract": {
+            "type": "object",
+            "required": [
+              "id",
+              "name",
+              "document"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "name": {
+                "type": "string"
+              },
+              "document": {
+                "type": "object",
+                "additionalProperties": {}
+              },
+              "mode": {
+                "type": "string",
+                "const": "copy"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      },
+      "DesignScenarioExecution": {
+        "type": "object",
+        "required": [
+          "variables"
+        ],
+        "properties": {
+          "variables": {
+            "type": "object",
+            "maxProperties": 100,
+            "additionalProperties": {
+              "type": "string",
+              "maxLength": 50000
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "DesignScenarioExecutionAssertion": {
+        "type": "object",
+        "required": [
+          "pointer",
+          "equals"
+        ],
+        "properties": {
+          "pointer": {
+            "type": "string",
+            "maxLength": 2000,
+            "description": "RFC 6901 JSON Pointer; empty string selects the whole response body."
+          },
+          "equals": {
+            "description": "Any JSON value, compared structurally; null differs from a missing field."
+          }
+        },
+        "additionalProperties": false
+      },
+      "DesignScenarioExecutionExtraction": {
+        "type": "object",
+        "required": [
+          "name",
+          "pointer"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^[A-Za-z_][A-Za-z0-9_]{0,99}$",
+            "maxLength": 100
+          },
+          "pointer": {
+            "type": "string",
+            "maxLength": 2000,
+            "description": "RFC 6901 JSON Pointer; empty string selects the whole response body."
+          }
+        },
+        "additionalProperties": false
+      },
+      "DesignScenarioStepExecution": {
+        "type": "object",
+        "required": [
+          "enabled",
+          "pathParams",
+          "query",
+          "headers",
+          "body",
+          "assertions",
+          "extract"
+        ],
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "pathParams": {
+            "type": "object",
+            "maxProperties": 100,
+            "additionalProperties": {
+              "type": "string",
+              "maxLength": 50000
+            }
+          },
+          "query": {
+            "type": "object",
+            "maxProperties": 100,
+            "additionalProperties": {
+              "type": "string",
+              "maxLength": 50000
+            }
+          },
+          "headers": {
+            "type": "object",
+            "maxProperties": 100,
+            "additionalProperties": {
+              "type": "string",
+              "maxLength": 50000
+            }
+          },
+          "body": {
+            "type": "string",
+            "description": "Request body template; at most 1 MiB UTF-8."
+          },
+          "expectedStatus": {
+            "type": "integer",
+            "minimum": 100,
+            "maximum": 599
+          },
+          "assertions": {
+            "type": "array",
+            "maxItems": 100,
+            "items": {
+              "$ref": "#/components/schemas/DesignScenarioExecutionAssertion"
+            }
+          },
+          "extract": {
+            "type": "array",
+            "maxItems": 100,
+            "items": {
+              "$ref": "#/components/schemas/DesignScenarioExecutionExtraction"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "ExecuteDesignScenarioStepRequest": {
+        "type": "object",
+        "required": [
+          "revisionId",
+          "messageId",
+          "pathParams",
+          "query",
+          "headers",
+          "body"
+        ],
+        "properties": {
+          "revisionId": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "messageId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "pathParams": {
+            "type": "object",
+            "maxProperties": 100,
+            "additionalProperties": {
+              "type": "string",
+              "maxLength": 50000
+            }
+          },
+          "query": {
+            "type": "object",
+            "maxProperties": 100,
+            "additionalProperties": {
+              "type": "string",
+              "maxLength": 50000
+            }
+          },
+          "headers": {
+            "type": "object",
+            "maxProperties": 100,
+            "additionalProperties": {
+              "type": "string",
+              "maxLength": 50000
+            }
+          },
+          "body": {
+            "type": "string",
+            "description": "Resolved request body, at most 1 MiB UTF-8."
+          }
+        },
+        "additionalProperties": false
+      },
+      "ExecuteDesignScenarioStepResponse": {
+        "type": "object",
+        "required": [
+          "scenarioRevisionId",
+          "designId",
+          "designRevisionId",
+          "workspaceRevision",
+          "method",
+          "path",
+          "status",
+          "headers",
+          "body",
+          "durationMs"
+        ],
+        "properties": {
+          "scenarioRevisionId": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "designId": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "designRevisionId": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "workspaceRevision": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "method": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string",
+            "description": "Escaped path including encoded query; no origin."
+          },
+          "status": {
+            "type": "integer",
+            "minimum": 100,
+            "maximum": 599
+          },
+          "headers": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "body": {
+            "type": "string"
+          },
+          "durationMs": {
+            "type": "number",
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false
+      },
+      "RunDesignScenarioRequest": {
+        "type": "object",
+        "required": [
+          "runId",
+          "revisionId"
+        ],
+        "properties": {
+          "runId": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,100}$",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "revisionId": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "variables": {
+            "type": "object",
+            "maxProperties": 100,
+            "additionalProperties": {
+              "type": "string",
+              "maxLength": 50000
+            }
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 200
+          }
+        },
+        "additionalProperties": false
+      },
+      "DesignScenarioRunSummary": {
+        "type": "object",
+        "required": [
+          "id",
+          "scenarioId",
+          "revisionId",
+          "version",
+          "name",
+          "source",
+          "status",
+          "startedAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,100}$",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "scenarioId": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "revisionId": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "version": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "name": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "ui",
+              "mcp"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "running",
+              "passed",
+              "failed",
+              "cancelled"
+            ]
+          },
+          "startedAt": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "finishedAt": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "DesignScenarioRunAssertionResult": {
+        "type": "object",
+        "required": [
+          "pointer",
+          "expectedJson",
+          "passed"
+        ],
+        "properties": {
+          "pointer": {
+            "type": "string"
+          },
+          "expectedJson": {
+            "type": "string"
+          },
+          "actualJson": {
+            "type": "string"
+          },
+          "passed": {
+            "type": "boolean"
+          },
+          "error": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "DesignScenarioRunStepResult": {
+        "type": "object",
+        "required": [
+          "messageId",
+          "status",
+          "assertions"
+        ],
+        "properties": {
+          "messageId": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "running",
+              "passed",
+              "failed",
+              "skipped",
+              "cancelled"
+            ]
+          },
+          "reason": {
+            "type": "string"
+          },
+          "request": {
+            "$ref": "#/components/schemas/ExecuteDesignScenarioStepRequest"
+          },
+          "response": {
+            "$ref": "#/components/schemas/ExecuteDesignScenarioStepResponse"
+          },
+          "assertions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DesignScenarioRunAssertionResult"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "DesignScenarioRunReport": {
+        "type": "object",
+        "required": [
+          "id",
+          "scenarioId",
+          "revisionId",
+          "version",
+          "name",
+          "source",
+          "status",
+          "startedAt",
+          "document",
+          "inputVariables",
+          "variables",
+          "steps"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,100}$",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "scenarioId": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "revisionId": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "version": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "name": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "ui",
+              "mcp"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "running",
+              "passed",
+              "failed",
+              "cancelled"
+            ]
+          },
+          "startedAt": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "finishedAt": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "reason": {
+            "type": "string"
+          },
+          "document": {
+            "$ref": "#/components/schemas/DesignScenarioDocument"
+          },
+          "inputVariables": {
+            "type": "object",
+            "maxProperties": 100,
+            "additionalProperties": {
+              "type": "string",
+              "maxLength": 50000
+            }
+          },
+          "variables": {
+            "type": "object",
+            "maxProperties": 100,
+            "additionalProperties": {
+              "type": "string",
+              "maxLength": 50000
+            }
+          },
+          "steps": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DesignScenarioRunStepResult"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "ListDesignScenarioRunsResponse": {
+        "type": "object",
+        "required": [
+          "runs"
+        ],
+        "properties": {
+          "runs": {
+            "type": "array",
+            "maxItems": 50,
+            "items": {
+              "$ref": "#/components/schemas/DesignScenarioRunSummary"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "CancelDesignScenarioRunRequest": {
+        "type": "object",
+        "required": [],
+        "properties": {},
+        "additionalProperties": false
       }
     }
   },
@@ -10221,6 +11831,1420 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/RestoreApiDesignRevisionRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/design-scenarios": {
+      "get": {
+        "tags": [
+          "design-scenarios"
+        ],
+        "operationId": "listDesignScenarios",
+        "summary": "List persisted sequence-design scenarios",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListDesignScenariosResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "design-scenarios"
+        ],
+        "operationId": "createDesignScenario",
+        "summary": "Create a sequence-design scenario and its initial immutable revision",
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfToken": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateDesignScenarioRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DesignScenarioDetail"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "design_scenario_invalid: document or command diagnostics.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "$ref": "#/components/schemas/DesignScenarioInvalidDetails"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "413": {
+            "$ref": "#/components/responses/PayloadTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          },
+          "409": {
+            "description": "design_scenario_conflict: current scenario or linked API version. No write was applied.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "$ref": "#/components/schemas/DesignScenarioConflictDetails"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/design-scenarios/{id}": {
+      "get": {
+        "tags": [
+          "design-scenarios"
+        ],
+        "operationId": "getDesignScenario",
+        "summary": "Read the current draft, diagnostics, contract updates and history",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DesignScenarioDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        }
+      }
+    },
+    "/api/design-scenarios/{id}/draft": {
+      "put": {
+        "tags": [
+          "design-scenarios"
+        ],
+        "operationId": "saveDesignScenarioDraft",
+        "summary": "Replace the complete draft with optimistic concurrency",
+        "description": "Read getDesignScenario first. expectedVersion must be the current scenario version. Linked API changes and the scenario revision commit atomically.",
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SaveDesignScenarioDraftRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DesignScenarioDetail"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "design_scenario_invalid: document or command diagnostics.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "$ref": "#/components/schemas/DesignScenarioInvalidDetails"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "413": {
+            "$ref": "#/components/responses/PayloadTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          },
+          "409": {
+            "description": "design_scenario_conflict: current scenario or linked API version. No write was applied.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "$ref": "#/components/schemas/DesignScenarioConflictDetails"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/design-scenarios/{id}/commands": {
+      "post": {
+        "tags": [
+          "design-scenarios"
+        ],
+        "operationId": "applyDesignScenarioCommands",
+        "summary": "Apply an atomic batch of stable-ID canvas commands",
+        "description": "Commands run in order under one expectedVersion fence. Participant, message, ordering, fragment and API contract edits either all commit or none commit.",
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApplyDesignScenarioCommandsRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DesignScenarioDetail"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "design_scenario_invalid: document or command diagnostics.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "$ref": "#/components/schemas/DesignScenarioInvalidDetails"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "413": {
+            "$ref": "#/components/responses/PayloadTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          },
+          "409": {
+            "description": "design_scenario_conflict: current scenario or linked API version. No write was applied.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "$ref": "#/components/schemas/DesignScenarioConflictDetails"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/design-scenarios/{id}/revisions/{rid}": {
+      "get": {
+        "tags": [
+          "design-scenarios"
+        ],
+        "operationId": "getDesignScenarioRevision",
+        "summary": "Read one immutable scenario revision",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "rid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DesignScenarioRevision"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        }
+      }
+    },
+    "/api/design-scenarios/{id}/diff": {
+      "get": {
+        "tags": [
+          "design-scenarios"
+        ],
+        "operationId": "getDesignScenarioDiff",
+        "summary": "Compare two immutable scenario revisions",
+        "description": "from defaults to the previous revision and to defaults to the current draft.",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DesignScenarioDiff"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        }
+      }
+    },
+    "/api/design-scenarios/{id}/restore": {
+      "post": {
+        "tags": [
+          "design-scenarios"
+        ],
+        "operationId": "restoreDesignScenarioRevision",
+        "summary": "Restore an immutable revision as a new draft revision",
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RestoreDesignScenarioRevisionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DesignScenarioDetail"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "design_scenario_invalid: document or command diagnostics.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "$ref": "#/components/schemas/DesignScenarioInvalidDetails"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "413": {
+            "$ref": "#/components/responses/PayloadTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          },
+          "409": {
+            "description": "design_scenario_conflict: current scenario or linked API version. No write was applied.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "$ref": "#/components/schemas/DesignScenarioConflictDetails"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/design-scenarios/{id}/validate": {
+      "post": {
+        "tags": [
+          "design-scenarios"
+        ],
+        "operationId": "validateDesignScenario",
+        "summary": "Validate a proposed canvas document without saving",
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ValidateDesignScenarioRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidateDesignScenarioResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "design_scenario_invalid: document or command diagnostics.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "$ref": "#/components/schemas/DesignScenarioInvalidDetails"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "413": {
+            "$ref": "#/components/responses/PayloadTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        }
+      }
+    },
+    "/api/design-scenarios/{id}/execute-step": {
+      "post": {
+        "tags": [
+          "design-scenarios"
+        ],
+        "operationId": "executeDesignScenarioStep",
+        "summary": "Execute one saved HTTP step against its linked draft mock",
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExecuteDesignScenarioStepRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExecuteDesignScenarioStepResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "413": {
+            "$ref": "#/components/responses/PayloadTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          },
+          "409": {
+            "description": "design_scenario_conflict: current scenario or linked API version. No write was applied.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "$ref": "#/components/schemas/DesignScenarioConflictDetails"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "$ref": "#/components/responses/ServiceUnavailable"
+          },
+          "504": {
+            "description": "Execution cancelled or timed out.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "description": "Uses a workspace snapshot in-process. Requires the linked API draft revision to match the saved contract before and after execution. Mock errors are returned as response.status; no redirects or external URLs are followed."
+      }
+    },
+    "/api/design-scenarios/{id}/runs": {
+      "get": {
+        "tags": [
+          "design-scenarios"
+        ],
+        "operationId": "listDesignScenarioRuns",
+        "summary": "List the newest retained scenario runs",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1
+            }
+          }
+        ],
+        "responses": {
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "413": {
+            "$ref": "#/components/responses/PayloadTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          },
+          "409": {
+            "description": "design_scenario_conflict: current scenario or linked API version. No write was applied.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "$ref": "#/components/schemas/DesignScenarioConflictDetails"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "$ref": "#/components/responses/ServiceUnavailable"
+          },
+          "410": {
+            "description": "The retained report body was pruned. Its run ID remains reserved and will never execute again.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Persisted run report",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListDesignScenarioRunsResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "design-scenarios"
+        ],
+        "operationId": "runDesignScenario",
+        "summary": "Start an idempotent server-side scenario run",
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1
+            }
+          }
+        ],
+        "responses": {
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "413": {
+            "$ref": "#/components/responses/PayloadTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          },
+          "409": {
+            "description": "design_scenario_conflict: current scenario or linked API version. No write was applied.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "$ref": "#/components/schemas/DesignScenarioConflictDetails"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "$ref": "#/components/responses/ServiceUnavailable"
+          },
+          "410": {
+            "description": "The retained report body was pruned. Its run ID remains reserved and will never execute again.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Persisted run report",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DesignScenarioRunReport"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Persisted active run; poll GET for progress",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DesignScenarioRunReport"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RunDesignScenarioRequest"
+              }
+            }
+          }
+        },
+        "description": "Creates a durable running report before dispatch. The same runId and revision/variables/name returns the original run; a different input conflicts. An expired retained payload returns 410, never reruns. Maximum four runs globally and one per scenario."
+      }
+    },
+    "/api/design-scenarios/{id}/runs/{runId}": {
+      "get": {
+        "tags": [
+          "design-scenarios"
+        ],
+        "operationId": "getDesignScenarioRun",
+        "summary": "Read one saved or active scenario run",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "runId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{1,100}$",
+              "minLength": 1,
+              "maxLength": 100
+            }
+          }
+        ],
+        "responses": {
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "413": {
+            "$ref": "#/components/responses/PayloadTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          },
+          "409": {
+            "description": "design_scenario_conflict: current scenario or linked API version. No write was applied.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "$ref": "#/components/schemas/DesignScenarioConflictDetails"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "$ref": "#/components/responses/ServiceUnavailable"
+          },
+          "410": {
+            "description": "The retained report body was pruned. Its run ID remains reserved and will never execute again.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Persisted run report",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DesignScenarioRunReport"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/design-scenarios/{id}/runs/{runId}/cancel": {
+      "post": {
+        "tags": [
+          "design-scenarios"
+        ],
+        "operationId": "cancelDesignScenarioRun",
+        "summary": "Cancel an active scenario run; completed effects remain",
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "runId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{1,100}$",
+              "minLength": 1,
+              "maxLength": 100
+            }
+          }
+        ],
+        "responses": {
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "413": {
+            "$ref": "#/components/responses/PayloadTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          },
+          "409": {
+            "description": "design_scenario_conflict: current scenario or linked API version. No write was applied.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "$ref": "#/components/schemas/DesignScenarioConflictDetails"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "$ref": "#/components/responses/ServiceUnavailable"
+          },
+          "410": {
+            "description": "The retained report body was pruned. Its run ID remains reserved and will never execute again.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Persisted run report",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DesignScenarioRunReport"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CancelDesignScenarioRunRequest"
               }
             }
           }

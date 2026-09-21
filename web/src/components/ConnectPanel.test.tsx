@@ -117,6 +117,34 @@ describe("ConnectPanel", () => {
     expect(fetchMock.mock.calls.map(([url]) => String(url))).toContain(healthURL);
   });
 
+  it("keeps probe loading feedback without scheduling test-environment animations", async () => {
+    let finishProbe: (() => void) | undefined;
+    route({
+      [`GET ${trafficURL}`]: () => json(200, { rows: [], rate1m: 0, dropped: 0 }),
+      [`GET ${healthURL}`]: () =>
+        new Promise<Response>((resolve) => {
+          finishProbe = () =>
+            resolve(json(200, { ok: true, workspace: "alex", revision: 4, spec: null }));
+        }),
+      [`POST ${probeURL}`]: () => json(200, { kind: "ok", workspace: "alex", revision: 4 }),
+    });
+    const animationFrame = vi.spyOn(window, "requestAnimationFrame");
+    renderWithProviders(<ConnectPanel workspace={workspace} config={config} />);
+
+    await userEvent.click(screen.getByTestId("connect-probe-button"));
+    expect(screen.getByTestId("connect-probe-button")).toBeDisabled();
+    expect(screen.getByTestId("connect-probe-button")).toHaveTextContent("Проверяем…");
+
+    expect(finishProbe).toBeDefined();
+    finishProbe?.();
+    expect(await screen.findByTestId("connect-probe-result")).toHaveAttribute(
+      "data-probe-kind",
+      "ok",
+    );
+    expect(screen.getByTestId("connect-probe-button")).toBeEnabled();
+    expect(animationFrame).not.toHaveBeenCalled();
+  });
+
   it("calls out a wildcard/proxy mix-up when another workspace answers", async () => {
     route({
       [`GET ${trafficURL}`]: () => json(200, { rows: [], rate1m: 0, dropped: 0 }),

@@ -547,8 +547,9 @@ func containsStr(list []string, want string) bool {
 // mocker-p6c-live-conns) added list_stream_connections,
 // close_stream_connection and push_stream_frame, 48 -> 51. mcp_test.go's
 // own tools/list test only logs the count (t.Logf, "not a check" per D13's
-// own text); this asserts it.
-func TestToolSurfaceStaysAt51(t *testing.T) {
+// own text). Later groups grew the surface to 74; the persisted sequence
+// designer adds ten more and persisted runs add four, so this now pins 88.
+func TestToolSurfaceStaysAt88(t *testing.T) {
 	t.Parallel()
 	h := newTestEndpoint(t).Handler()
 	rec := doMCP(t, h, `{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}`,
@@ -561,7 +562,7 @@ func TestToolSurfaceStaysAt51(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &env); err != nil {
 		t.Fatalf("decode tools/list: %v; body=%s", err, rec.Body.String())
 	}
-	if len(env.Result.Tools) != 74 {
-		t.Errorf("tools/list returned %d tools, want 74 including eleven API designer tools", len(env.Result.Tools))
+	if len(env.Result.Tools) != 88 {
+		t.Errorf("tools/list returned %d tools, want 88 including fourteen design-scenario tools", len(env.Result.Tools))
 	}
 }

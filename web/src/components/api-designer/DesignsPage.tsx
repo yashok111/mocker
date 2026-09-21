@@ -77,9 +77,14 @@ export function DesignsPage(): ReactElement {
             Полный OpenAPI-документ, работающий черновик и стабильный опубликованный мок.
           </Text>
         </div>
-        <Button leftSection={<IconPlus size={17} />} onClick={() => setOpened(true)}>
-          Новый проект
-        </Button>
+        <Group gap="xs">
+          <Button variant="default" onClick={() => void navigate({ to: "/design-scenarios" })}>
+            Канвас взаимодействий
+          </Button>
+          <Button leftSection={<IconPlus size={17} />} onClick={() => setOpened(true)}>
+            Новый проект
+          </Button>
+        </Group>
       </Group>
 
       {designs.isPending ? <Loader aria-label="Загружаем проекты" /> : null}

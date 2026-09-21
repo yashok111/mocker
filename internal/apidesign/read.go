@@ -38,6 +38,17 @@ func (r *Repo) Detail(ctx context.Context, id int64) (*Detail, error) {
 	}
 	return out, nil
 }
+
+// DetailTx reads an API aggregate using the caller's transaction snapshot.
+func (r *Repo) DetailTx(ctx context.Context, tx *sql.Tx, id int64) (*Detail, error) {
+	return detailTx(ctx, tx, id)
+}
+
+// RevisionTx reads an immutable API revision belonging to the given design.
+func (r *Repo) RevisionTx(ctx context.Context, tx *sql.Tx, designID, revisionID int64) (Revision, error) {
+	return getRevision(ctx, tx, designID, revisionID)
+}
+
 func detailTx(ctx context.Context, q queryer, id int64) (*Detail, error) {
 	d, err := getDesign(ctx, q, id)
 	if err != nil {

@@ -94,11 +94,11 @@ fields realistic without pinning the whole body.
 
 ## When to open which reference
 
-- `references/tools.md` — all 63 tools: inputs, outputs, gotchas, `editVersion` and `confirmSlug` rules.
+- `references/tools.md` — tool inputs, outputs, gotchas, `editVersion` and `confirmSlug` rules.
 - `references/shapes.md` — override document, `when[]`, recipes (14 kinds), custom endpoint, stream document, session directive, settings, resources, assets, error envelope.
 - `references/cookbook.md` — twelve ordered recipes.
 - `references/http.md` — the same thing with curl: login/CSRF, spec import, raw asset upload, the `/__mocker/state` calls a test suite makes, MCP client config.
-- `references/design.md` — designing an API on top of a workspace: a response schema on a custom endpoint, `$ref` into the base, `export_openapi`, and the accept step (re-import as the next base, then delete the delta).
+- `references/design.md` — API designer revisions and publication, sequence-canvas scenarios and complete runs, plus the classic workspace design/export workflow.
 - `references/functions.md` — endpoint functions: the `req`/return contract, the `mock` helpers, the sandbox, the guards, where the branch sits on each plane, and the two stream hooks (`tick.lua`, `stream.onFrame`).
 
 The running server serves these same texts: `get_guide {topic: "overview" | "tools" | "shapes" | "cookbook" | "http" | "design" | "functions"}`.

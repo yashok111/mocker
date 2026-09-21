@@ -4,6 +4,8 @@
 // error-parsing rules exist in exactly one place — a screen that reaches for
 // fetch directly is how a header silently goes missing on one request.
 
+import { parseBrowserSafeJson } from "./preciseJson";
+
 // csrfToken lives at module scope, not as a call argument: the caller of a
 // generated endpoint has no reason to thread the token through every call
 // site by hand, and auth/session.tsx is the only file that ever calls
@@ -108,18 +110,31 @@ function isErrorEnvelope(value: unknown): value is ErrorEnvelope {
   return typeof candidate.code === "string" && typeof candidate.message === "string";
 }
 
-// parseJSON returns undefined instead of throwing on empty or non-JSON text,
-// so customFetch can treat "not parseable" and "not the shape we expect" the
-// same way: fall back to a synthesized message.
-function parseJSON(text: string): unknown {
+// parseJSON returns undefined on empty or malformed JSON so customFetch can
+// fall back to a synthesized server error. Design-scenario precision errors
+// stay visible: swallowing one here would hand the rounded document to the UI.
+function parseJSON(text: string, requireBrowserSafeNumbers: boolean): unknown {
   if (text === "") {
     return undefined;
   }
   try {
-    return JSON.parse(text);
-  } catch {
+    return requireBrowserSafeNumbers ? parseBrowserSafeJson(text) : JSON.parse(text);
+  } catch (error) {
+    if (requireBrowserSafeNumbers && !(error instanceof SyntaxError)) {
+      throw error;
+    }
     return undefined;
   }
+}
+
+const designScenarioPath = "/api/design-scenarios";
+
+function isDesignScenarioResponse(url: string): boolean {
+  return (
+    url === designScenarioPath ||
+    url.startsWith(`${designScenarioPath}/`) ||
+    url.startsWith(`${designScenarioPath}?`)
+  );
 }
 
 // authFlowPaths are the routes whose 401 is NOT a dead session and must not
@@ -181,7 +196,7 @@ export const customFetch = async <T>(url: string, init: RequestInit = {}): Promi
   // 204 (DELETE, logout) has no body at all; checking the status directly
   // says what is actually true instead of inferring it from an empty string.
   const text = res.status === 204 ? "" : await res.text();
-  const parsed = parseJSON(text);
+  const parsed = parseJSON(text, isDesignScenarioResponse(url));
 
   if (!res.ok) {
     const isAuthFlow = authFlowPaths.some((p) => url === p || url.startsWith(`${p}?`));

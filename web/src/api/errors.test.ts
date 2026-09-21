@@ -8,6 +8,7 @@ import {
   describeErrorCode,
   isGoneTombstone,
 } from "./errors";
+import { BrowserJsonPrecisionError } from "./preciseJson";
 
 describe("describeErrorCode", () => {
   it.each([
@@ -34,6 +35,14 @@ describe("describeErrorCode", () => {
 });
 
 describe("describeApiFailure", () => {
+  it("surfaces only the dedicated browser precision failure", () => {
+    const message =
+      "Документ содержит числа, которые браузер не может сохранить без потери точности. Используйте MCP для работы с этим документом.";
+
+    expect(describeApiFailure(new BrowserJsonPrecisionError())).toBe(message);
+    expect(describeApiFailure(new Error(message))).toBe("Сервер не ответил");
+  });
+
   it("reports a rejected fetch as no answer at all", () => {
     expect(describeApiFailure(new TypeError("Failed to fetch"))).toBe("Сервер не ответил");
   });

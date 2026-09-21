@@ -23,9 +23,10 @@ import (
 // moment a method IS called — is the honest shape for a test about wiring
 // rather than about behaviour.
 type (
-	readyLiveState struct{ admin.LiveStateSource }
-	readyTraffic   struct{ admin.TrafficControl }
-	readyPreviewer struct{ admin.Previewer }
+	readyLiveState        struct{ admin.LiveStateSource }
+	readyTraffic          struct{ admin.TrafficControl }
+	readyPreviewer        struct{ admin.Previewer }
+	readyScenarioExecutor struct{ admin.ScenarioExecutor }
 )
 
 // newReadyServer builds a Server the way cmd/mocker does — a real database
@@ -66,6 +67,7 @@ func TestServerReadyReportsEverySetterUntilItRuns(t *testing.T) {
 			s.SetStream(stream.NewRegistry(), stream.NewWorkspaceRegistry(1), admin.StreamOptions{})
 		}},
 		{"SetPreviewer", func(s *admin.Server) { s.SetPreviewer(readyPreviewer{}) }},
+		{"SetScenarioExecutor", func(s *admin.Server) { s.SetScenarioExecutor(readyScenarioExecutor{}) }},
 	}
 
 	srv := newReadyServer(t)
@@ -105,6 +107,7 @@ func TestServerReadyIgnoresMCP(t *testing.T) {
 	srv.SetTraffic(readyTraffic{})
 	srv.SetStream(stream.NewRegistry(), stream.NewWorkspaceRegistry(1), admin.StreamOptions{})
 	srv.SetPreviewer(readyPreviewer{})
+	srv.SetScenarioExecutor(readyScenarioExecutor{})
 
 	if got := srv.Ready(); len(got) != 0 {
 		t.Fatalf("SetMCP never called: Ready() = %v, want nothing missing", got)

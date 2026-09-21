@@ -1,0 +1,101 @@
+.shell {
+  position: relative;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  overscroll-behavior: none;
+  background: var(--mocker-canvas, #f8faf8);
+}
+
+.graph {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+}
+
+.graph :global(.x6-graph-svg) {
+  display: block;
+}
+
+.tooltipAnchor {
+  position: absolute;
+  pointer-events: none;
+}
+
+.descriptionTooltip {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.controls {
+  position: absolute;
+  z-index: 30;
+  top: 12px;
+  right: calc(12px + var(--canvas-inspector-width, 0px));
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  box-sizing: border-box;
+  height: 44px;
+  padding: 5px;
+  border: 1px solid var(--mocker-border, #e0e5e1);
+  border-radius: 9px;
+  background: rgb(255 255 255 / 94%);
+  box-shadow: 0 4px 14px rgb(37 51 47 / 8%);
+  backdrop-filter: blur(8px);
+}
+
+.controls button {
+  display: grid;
+  place-items: center;
+  min-width: 32px;
+  height: 32px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--mocker-ink, #25332f);
+  font: inherit;
+  font-size: 17px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.controls button:hover {
+  background: var(--mocker-accent-soft, #edf6f3);
+  color: var(--mocker-accent, #087f70);
+}
+
+.controls button:focus-visible {
+  outline: 2px solid var(--mocker-accent, #087f70);
+  outline-offset: 1px;
+}
+
+.controls .fitButton {
+  min-width: auto;
+  padding-inline: 10px;
+  border-left: 1px solid var(--mocker-border, #e0e5e1);
+  border-radius: 0 6px 6px 0;
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.hint {
+  position: absolute;
+  z-index: 20;
+  left: calc((100% - var(--canvas-inspector-width, 0px)) / 2);
+  bottom: 12px;
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: calc(100% - var(--canvas-inspector-width, 0px) - 24px);
+  padding: 5px 8px;
+  border: 1px solid rgb(224 229 225 / 80%);
+  border-radius: 6px;
+  background: rgb(255 255 255 / 88%);
+  color: var(--mocker-muted, #69756e);
+  font-size: 10px;
+  line-height: 1.35;
+  pointer-events: none;
+  backdrop-filter: blur(6px);
+}

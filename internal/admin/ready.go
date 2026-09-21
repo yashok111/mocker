@@ -20,7 +20,7 @@ package admin
 //
 // REQUIRED vs OPTIONAL, decided from the setters' own doc comments:
 //
-//   - SetLiveState, SetTraffic, SetPreviewer — required. Each takes an
+//   - SetLiveState, SetTraffic, SetPreviewer, SetScenarioExecutor — required. Each takes an
 //     instance the MOCK plane holds too (the same *livestate.Store, the
 //     same *traffic.Recorder, the same *mockplane.Plane), there is no
 //     configuration that turns any of them off, and a deployment missing
@@ -54,6 +54,9 @@ func (s *Server) Ready() []string {
 	}
 	if s.previewer == nil {
 		missing = append(missing, "SetPreviewer")
+	}
+	if s.scenarioExecutor == nil {
+		missing = append(missing, "SetScenarioExecutor")
 	}
 	return missing
 }

@@ -9,18 +9,15 @@ import (
 	"github.com/yashok111/mocker/internal/testkit"
 )
 
-// TestMigrate_reachesSchemaVersion5 asserts a fresh database ends up on the
-// version 0005_custom_endpoints_stream.sql declares (P6b D2; 4 after P6a's
-// 0004, 3 through P3h's 0003).
-func TestMigrate_reachesSchemaVersion5(t *testing.T) {
+func TestMigrate_reachesSchemaVersion12(t *testing.T) {
 	db := testkit.NewDB(t)
 
 	v, err := db.SchemaVersion(t.Context())
 	if err != nil {
 		t.Fatalf("schema version: %v", err)
 	}
-	if v != 10 {
-		t.Fatalf("schema version = %d, want 10", v)
+	if v != 12 {
+		t.Fatalf("schema version = %d, want 12", v)
 	}
 }
 
@@ -148,8 +145,8 @@ func TestMigrate_backfillsEmptyBaseScopeAndServes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("schema version: %v", err)
 	}
-	if v != 10 {
-		t.Fatalf("schema version = %d, want 10", v)
+	if v != 12 {
+		t.Fatalf("schema version = %d, want 12", v)
 	}
 
 	for _, id := range entIDs {

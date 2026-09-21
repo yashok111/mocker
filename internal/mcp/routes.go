@@ -51,6 +51,23 @@ import (
 var noRoute = []string{}
 
 var toolRoutes = map[string][]string{
+	// Persisted sequence-design scenarios. All mutations use the same admin
+	// handlers as the UI; validation is a write-shaped read with no side effects.
+	"list_design_scenarios":            {"GET /api/design-scenarios"},
+	"create_design_scenario":           {"POST /api/design-scenarios"},
+	"get_design_scenario":              {"GET /api/design-scenarios/{id}"},
+	"save_design_scenario_draft":       {"PUT /api/design-scenarios/{id}/draft"},
+	"apply_design_scenario_commands":   {"POST /api/design-scenarios/{id}/commands"},
+	"get_design_scenario_revision":     {"GET /api/design-scenarios/{id}/revisions/{rid}"},
+	"get_design_scenario_diff":         {"GET /api/design-scenarios/{id}/diff"},
+	"restore_design_scenario_revision": {"POST /api/design-scenarios/{id}/restore"},
+	"validate_design_scenario":         {"POST /api/design-scenarios/{id}/validate"},
+	"execute_design_scenario_step":     {"POST /api/design-scenarios/{id}/execute-step"},
+	"run_design_scenario":              {"POST /api/design-scenarios/{id}/runs"},
+	"list_design_scenario_runs":        {"GET /api/design-scenarios/{id}/runs"},
+	"get_design_scenario_run":          {"GET /api/design-scenarios/{id}/runs/{runId}"},
+	"cancel_design_scenario_run":       {"POST /api/design-scenarios/{id}/runs/{runId}/cancel"},
+
 	// Versioned API authoring. Human publication is deliberately not MCP-accessible.
 	"list_api_designs":             {"GET /api/designs"},
 	"create_api_design":            {"POST /api/designs"},
@@ -207,10 +224,12 @@ var toolRoutes = map[string][]string{
 // (set_resource_entity, delete_resource_entity), plus the three slice P4b
 // adds (export_workspace, import_workspace, fork_workspace), plus the one
 // slice P7a adds (export_openapi)
-// — 63 legacy tools plus eleven versioned API designer tools. Pinned in routes_test.go so
-// a tool added without an entry here is caught by a test rather than by a
-// 404 in production.
-const toolCount = 74
+// — 63 legacy tools plus eleven versioned API designer tools, plus the ten
+// original persisted design-scenario tools and four server-run tools above.
+// Pinned in routes_test.go so a tool
+// added without an entry here is caught by a test rather than by a 404 in
+// production.
+const toolCount = 88
 
 // toolPath resolves ONE call a tool makes into the (method, path) pair
 // loopback.do/call take.

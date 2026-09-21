@@ -12,6 +12,8 @@ import {
 } from "@tanstack/react-router";
 import { theme } from "@/theme/mantine";
 
+const testTheme = { ...theme, respectReducedMotion: true };
+
 // renderWithProviders wraps a component in the same providers main.tsx does.
 // Every Mantine component reads its theme through context and throws without
 // MantineProvider, so a test that renders a screen directly with Testing
@@ -39,7 +41,7 @@ export function renderWithProviders(
 ): RenderResult & { queryClient: QueryClient } {
   const result = render(
     <QueryClientProvider client={queryClient}>
-      <MantineProvider theme={theme} defaultColorScheme="light" env="test">
+      <MantineProvider theme={testTheme} defaultColorScheme="light" env="test">
         <ModalsProvider>{ui}</ModalsProvider>
       </MantineProvider>
     </QueryClientProvider>,
@@ -83,7 +85,7 @@ export function renderInRouter(
 
   const result = render(
     <QueryClientProvider client={queryClient}>
-      <MantineProvider theme={theme} defaultColorScheme="light" env="test">
+      <MantineProvider theme={testTheme} defaultColorScheme="light" env="test">
         <ModalsProvider>
           {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
           <RouterProvider router={router as never} />

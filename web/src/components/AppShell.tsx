@@ -15,6 +15,7 @@ import {
 import {
   IconBook2,
   IconBraces,
+  IconChartArrowsVertical,
   IconChevronRight,
   IconFileCode,
   IconLayoutGrid,
@@ -60,7 +61,10 @@ export function AppShell({ user, children }: { user: UserView; children: ReactNo
   const queryClient = useQueryClient();
   const location = useLocation();
   const mobile = useMediaQuery("(max-width: 48em)", false, { getInitialValueInEffect: false });
-  const designer = /^\/designs\/[^/]+\/?$/.test(location.pathname);
+  const canvas =
+    /^\/design-canvas\/?$/.test(location.pathname) ||
+    /^\/design-scenarios\/[^/]+\/?$/.test(location.pathname);
+  const designer = /^\/designs\/[^/]+\/?$/.test(location.pathname) || canvas;
   const navigationInDrawer = mobile || designer;
   const [navigationOpened, setNavigationOpened] = useState(false);
   const [navigationTarget, setNavigationTarget] = useState<HTMLDivElement | null>(null);
@@ -82,6 +86,12 @@ export function AppShell({ user, children }: { user: UserView; children: ReactNo
   const globalLinks = [
     { to: "/", label: "Воркспейсы", icon: IconLayoutGrid, testId: "nav-workspaces" },
     { to: "/designs", label: "Проектирование API", icon: IconRoute, testId: "nav-designs" },
+    {
+      to: "/design-scenarios",
+      label: "Сценарии взаимодействия",
+      icon: IconChartArrowsVertical,
+      testId: "nav-design-scenarios",
+    },
     { to: "/specs", label: "Спеки", icon: IconFileCode, testId: "nav-specs" },
     { to: "/guide", label: "Руководство", icon: IconBook2, testId: "nav-guide" },
   ] as const;
@@ -196,7 +206,11 @@ export function AppShell({ user, children }: { user: UserView; children: ReactNo
         </MantineAppShell.Header>
         {!navigationInDrawer ? <MantineAppShell.Navbar>{navigation}</MantineAppShell.Navbar> : null}
         <MantineAppShell.Main>
-          <div className={classes.mainContent} data-designer={designer || undefined}>
+          <div
+            className={classes.mainContent}
+            data-designer={designer || undefined}
+            data-canvas={canvas || undefined}
+          >
             {children}
           </div>
         </MantineAppShell.Main>

@@ -41,6 +41,9 @@ func (r *Repo) prepare(raw string) (*preparedDocument, error) {
 	if len(diagnostics) > 0 {
 		return nil, &InvalidError{Diagnostics: diagnostics}
 	}
+	if _, err := operationKeys(authoredOperations(root)); err != nil {
+		return nil, err
+	}
 	diagnostics, err = validateGrammar(root)
 	if err != nil {
 		return nil, err

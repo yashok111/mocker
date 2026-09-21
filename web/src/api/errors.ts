@@ -1,5 +1,6 @@
 import type { EditConflictTombstone } from "@/api/generated/schemas";
 import { ApiFailure } from "./client";
+import { BrowserJsonPrecisionError } from "./preciseJson";
 
 // errors.ts is the one place a server-issued error code becomes the Russian
 // copy DESIGN §14 asks for. A screen calls describeApiFailure instead of ever
@@ -96,6 +97,9 @@ export const clientUnknownErrorCode = "client_unknown_error";
  * must read the same way wherever it surfaces.
  */
 export function describeApiFailure(err: unknown): string {
+  if (err instanceof BrowserJsonPrecisionError) {
+    return BrowserJsonPrecisionError.userMessage;
+  }
   if (!(err instanceof ApiFailure)) {
     // fetch() itself rejected — offline, DNS, CORS — so there is no status
     // and no server message to report.

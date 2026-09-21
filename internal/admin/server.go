@@ -25,6 +25,7 @@ import (
 	"github.com/yashok111/mocker/internal/checkpoints"
 	"github.com/yashok111/mocker/internal/config"
 	"github.com/yashok111/mocker/internal/customep"
+	"github.com/yashok111/mocker/internal/designscenario"
 	"github.com/yashok111/mocker/internal/httpx"
 	"github.com/yashok111/mocker/internal/overrides"
 	"github.com/yashok111/mocker/internal/resources"
@@ -81,6 +82,11 @@ type Server struct {
 	// a build outside this package's remit.
 	specsRepo   *specs.Repo
 	designsRepo *apidesign.Repo
+	// designScenariosRepo owns the persisted sequence-design canvas. Its name
+	// stays distinct from scenariosRepo, which is the pre-existing runtime
+	// workspace snapshot feature in internal/scenarios.
+	designScenariosRepo designScenarioService
+	scenarioRuns        *scenarioRunService
 
 	// overridesRepo is constructed internally for the same reason specsRepo
 	// is: New's signature is shared with cmd/mocker/main.go (which wires its
@@ -189,7 +195,8 @@ type Server struct {
 	// SetPreviewer runs, every route checking for that rather than
 	// assuming a caller always wires it) is identical, and preview_handlers.go
 	// is where the check and the 503 it answers with both live.
-	previewer Previewer
+	previewer        Previewer
+	scenarioExecutor ScenarioExecutor
 
 	// routeMuxOnce/routeMuxVal back [Server.routeMux]: the ONE dispatch mux
 	// [Server.Handler] and [Server.CallAsMCP] share, built at most once no
@@ -231,14 +238,20 @@ func New(cfg *config.Config, sessions *auth.Manager, ws *workspaces.Repo, db *st
 	overridesRepo := overrides.NewRepo(db)
 	customepRepo := customep.NewRepo(db)
 	specsRepo := specs.NewRepo(db, cfg)
-	return &Server{
-		cfg:           cfg,
-		sessions:      sessions,
-		ws:            ws,
-		db:            db,
-		log:           log,
-		specsRepo:     specsRepo,
-		designsRepo:   apidesign.NewRepo(db, cfg),
+	designsRepo := apidesign.NewRepo(db, cfg)
+	s := &Server{
+		cfg:         cfg,
+		sessions:    sessions,
+		ws:          ws,
+		db:          db,
+		log:         log,
+		specsRepo:   specsRepo,
+		designsRepo: designsRepo,
+		designScenariosRepo: designscenario.NewRepo(
+			db,
+			cfg,
+			designsRepo,
+		),
 		overridesRepo: overridesRepo,
 		trafficRepo:   traffic.NewRepo(db),
 		customepRepo:  customepRepo,
@@ -262,6 +275,8 @@ func New(cfg *config.Config, sessions *auth.Manager, ws *workspaces.Repo, db *st
 		// not threaded through config.Config.
 		loginLimiter: newRateLimiter(10, time.Minute),
 	}
+	s.scenarioRuns = &scenarioRunService{server: s, repo: designscenario.NewRunRepo(db), active: map[scenarioRunKey]*activeScenarioRun{}}
+	return s
 }
 
 func (s *Server) Handler() http.Handler {

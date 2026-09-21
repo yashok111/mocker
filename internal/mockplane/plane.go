@@ -249,6 +249,15 @@ func (p *Plane) ServeSlug(w http.ResponseWriter, r *http.Request, slug string) {
 	}).ServeHTTP(w, r)
 }
 
+// ServeWorkspace executes normal mock traffic against the supplied immutable
+// workspace snapshot. It never resolves a mutable slug or exposes control routes.
+// Resource and session stores retain their usual runtime behavior.
+func (p *Plane) ServeWorkspace(w http.ResponseWriter, r *http.Request, ws *workspaces.Workspace) {
+	p.recovered(func(w http.ResponseWriter, r *http.Request) {
+		p.serveWorkspace(w, r, ws, false)
+	}).ServeHTTP(w, r)
+}
+
 // recovered wraps fn with the shared httpx.Recover middleware so a panic
 // anywhere below — health, the reserved prefix, the route table from P1 —
 // turns into a 500 that still carries whatever CORS headers had already been
@@ -275,6 +284,10 @@ func (p *Plane) serveResolved(w http.ResponseWriter, r *http.Request, slug strin
 		return
 	}
 
+	p.serveWorkspace(w, r, ws, true)
+}
+
+func (p *Plane) serveWorkspace(w http.ResponseWriter, r *http.Request, ws *workspaces.Workspace, controls bool) {
 	// Step 2: CORS headers go on the response now, before any branch that
 	// could 404 or panic, so those responses still carry them.
 	setCORS(w, r, ws.Settings.CORS)
@@ -299,7 +312,11 @@ func (p *Plane) serveResolved(w http.ResponseWriter, r *http.Request, slug strin
 
 	// Step 4: the reserved control prefix.
 	if rest, ok := cutReservedPrefix(segments, p.cfg.ReservedPrefix); ok {
-		p.serveReserved(w, r, ws, rest)
+		if controls {
+			p.serveReserved(w, r, ws, rest)
+		} else {
+			p.serveNoRoute(w, r, ws, segments)
+		}
 		return
 	}
 

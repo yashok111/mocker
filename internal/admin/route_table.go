@@ -213,6 +213,21 @@ func cpLabelled(label string) checkpointPolicy {
 // slice's context document for the full reasoning.
 func (s *Server) routes() []route {
 	return []route{
+		{"GET /api/design-scenarios", s.handleListDesignScenarios, mcpAllow, cpRead},
+		{"POST /api/design-scenarios", s.handleCreateDesignScenario, mcpAllow, cpAnotherLayer},
+		{"GET /api/design-scenarios/{id}", s.handleGetDesignScenario, mcpAllow, cpRead},
+		{"PUT /api/design-scenarios/{id}/draft", s.handleSaveDesignScenarioDraft, mcpAllow, cpAnotherLayer},
+		{"POST /api/design-scenarios/{id}/commands", s.handleApplyDesignScenarioCommands, mcpAllow, cpAnotherLayer},
+		{"GET /api/design-scenarios/{id}/revisions/{rid}", s.handleGetDesignScenarioRevision, mcpAllow, cpRead},
+		{"GET /api/design-scenarios/{id}/diff", s.handleGetDesignScenarioDiff, mcpAllow, cpRead},
+		{"POST /api/design-scenarios/{id}/restore", s.handleRestoreDesignScenarioRevision, mcpAllow, cpAnotherLayer},
+		{"POST /api/design-scenarios/{id}/validate", s.handleValidateDesignScenario, mcpAllow, cpNeverTouchesLayer},
+		{"POST /api/design-scenarios/{id}/execute-step", s.handleExecuteDesignScenarioStep, mcpAllow, cpNeverTouchesLayer},
+		{"POST /api/design-scenarios/{id}/runs", s.handleRunDesignScenario, mcpAllow, cpAnotherLayer},
+		{"GET /api/design-scenarios/{id}/runs", s.handleListDesignScenarioRuns, mcpAllow, cpRead},
+		{"GET /api/design-scenarios/{id}/runs/{runId}", s.handleGetDesignScenarioRun, mcpAllow, cpRead},
+		{"POST /api/design-scenarios/{id}/runs/{runId}/cancel", s.handleCancelDesignScenarioRun, mcpAllow, cpAnotherLayer},
+
 		{"GET /api/designs", s.handleListAPIDesigns, mcpAllow, cpRead},
 		{"POST /api/designs", s.handleCreateAPIDesign, mcpAllow, cpAnotherLayer},
 		{"GET /api/designs/{id}", s.handleGetAPIDesign, mcpAllow, cpRead},
