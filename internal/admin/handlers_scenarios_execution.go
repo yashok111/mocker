@@ -94,7 +94,7 @@ func (s *Server) executeScenarioStep(ctx context.Context, revision designscenari
 		return fail(err)
 	}
 	if input.RevisionID != revision.ID {
-		return fail(errors.New("Версия запроса не совпадает с версией сценария"))
+		return fail(errors.New("версия запроса не совпадает с версией сценария"))
 	}
 	contract, err := executableContract(revision, input.MessageID)
 	if err != nil {
@@ -103,23 +103,8 @@ func (s *Server) executeScenarioStep(ctx context.Context, revision designscenari
 	if s.scenarioExecutor == nil {
 		return designscenario.StepResponse{}, stepError(503, "service_unavailable", "Исполнение мока недоступно")
 	}
-	design, err := s.designsRepo.Detail(ctx, contract.Source.DesignID)
+	design, ws, err := s.stepExecutionWorkspace(ctx, contract)
 	if err != nil {
-		return designscenario.StepResponse{}, s.stepRepositoryError(err)
-	}
-	if err := stepDesignConflict(contract, design); err != nil {
-		return designscenario.StepResponse{}, err
-	}
-	ws, err := s.ws.ByID(ctx, design.Design.DraftWorkspaceID)
-	if err != nil {
-		return designscenario.StepResponse{}, s.stepRepositoryError(err)
-	}
-	// Fence the two repository snapshots before dispatching the workspace snapshot.
-	current, err := s.designsRepo.Detail(ctx, contract.Source.DesignID)
-	if err != nil {
-		return designscenario.StepResponse{}, s.stepRepositoryError(err)
-	}
-	if err := stepDesignConflict(contract, current); err != nil {
 		return designscenario.StepResponse{}, err
 	}
 	method, route, err := savedStepOperation(revision.Document, input.MessageID, design.Draft.Document)
@@ -134,7 +119,7 @@ func (s *Server) executeScenarioStep(ctx context.Context, revision designscenari
 	defer cancel()
 	req, err := http.NewRequestWithContext(stepCtx, method, path, strings.NewReader(input.Body))
 	if err != nil {
-		return fail(errors.New("Не удалось сформировать запрос"))
+		return fail(errors.New("не удалось сформировать запрос"))
 	}
 	for key, value := range input.Headers {
 		req.Header.Set(key, value)
@@ -155,7 +140,7 @@ func (s *Server) executeScenarioStep(ctx context.Context, revision designscenari
 	if stepCtx.Err() != nil {
 		return designscenario.StepResponse{}, stepError(504, "execution_cancelled", "Запрос отменён или превысил время ожидания")
 	}
-	current, err = s.designsRepo.Detail(ctx, contract.Source.DesignID)
+	current, err := s.designsRepo.Detail(ctx, contract.Source.DesignID)
 	if err != nil {
 		return designscenario.StepResponse{}, s.stepRepositoryError(err)
 	}
@@ -179,8 +164,27 @@ func (s *Server) executeScenarioStep(ctx context.Context, revision designscenari
 	return designscenario.StepResponse{ScenarioRevisionID: revision.ID, DesignID: design.Design.ID, DesignRevisionID: design.Draft.ID, WorkspaceRevision: ws.Revision, Method: method, Path: path, Status: status, Headers: headers, Body: response.body.String(), DurationMS: duration}, nil
 }
 
-func executionInputError(w http.ResponseWriter, err error) {
-	httpx.Err(w, http.StatusBadRequest, "design_scenario_execution_invalid", err.Error())
+func (s *Server) stepExecutionWorkspace(ctx context.Context, contract *designscenario.Contract) (*apidesign.Detail, *workspaces.Workspace, error) {
+	design, err := s.designsRepo.Detail(ctx, contract.Source.DesignID)
+	if err != nil {
+		return nil, nil, s.stepRepositoryError(err)
+	}
+	if err := stepDesignConflict(contract, design); err != nil {
+		return nil, nil, err
+	}
+	ws, err := s.ws.ByID(ctx, design.Design.DraftWorkspaceID)
+	if err != nil {
+		return nil, nil, s.stepRepositoryError(err)
+	}
+	// Fence the two repository snapshots before dispatching the workspace snapshot.
+	current, err := s.designsRepo.Detail(ctx, contract.Source.DesignID)
+	if err != nil {
+		return nil, nil, s.stepRepositoryError(err)
+	}
+	if err := stepDesignConflict(contract, current); err != nil {
+		return nil, nil, err
+	}
+	return design, ws, nil
 }
 
 func stepDesignConflict(contract *designscenario.Contract, design *apidesign.Detail) error {
@@ -192,7 +196,7 @@ func stepDesignConflict(contract *designscenario.Contract, design *apidesign.Det
 
 func executableContract(revision designscenario.Revision, messageID string) (*designscenario.Contract, error) {
 	if len(revision.Document.Fragments) != 0 {
-		return nil, errors.New("Исполнение opt/loop пока не поддерживается; удалите фрагменты")
+		return nil, errors.New("исполнение opt/loop пока не поддерживается; удалите фрагменты")
 	}
 	for key, value := range revision.FormDrafts {
 		// The UI persists its complete form-store envelope even when clean.
@@ -200,26 +204,26 @@ func executableContract(revision designscenario.Revision, messageID string) (*de
 		if key == "all" && jsonx.Unmarshal([]byte(value), &fields) == nil && fields != nil && len(fields) == 0 {
 			continue
 		}
-		return nil, errors.New("Сначала завершите редактирование форм сценария")
+		return nil, errors.New("сначала завершите редактирование форм сценария")
 	}
 	for _, message := range revision.Document.Messages {
 		if message.ID != messageID {
 			continue
 		}
 		if message.Kind != "request" || message.Operation == nil {
-			return nil, errors.New("Сообщение не является HTTP-запросом с API-операцией")
+			return nil, errors.New("сообщение не является HTTP-запросом с API-операцией")
 		}
 		if message.Execution != nil && !message.Execution.Enabled {
-			return nil, errors.New("Шаг выключен")
+			return nil, errors.New("шаг выключен")
 		}
 		for _, contract := range revision.Document.Contracts {
 			if contract.ID == message.Operation.ContractID && contract.Mode == "linked" && contract.Source != nil {
 				return &contract, nil
 			}
 		}
-		return nil, errors.New("Свяжите контракт шага с API через панель контрактов")
+		return nil, errors.New("свяжите контракт шага с API через панель контрактов")
 	}
-	return nil, errors.New("Сообщение отсутствует в сохранённой версии сценария")
+	return nil, errors.New("сообщение отсутствует в сохранённой версии сценария")
 }
 
 func savedStepOperation(document designscenario.Document, messageID, raw string) (string, string, error) {
@@ -248,7 +252,7 @@ func savedStepOperation(document designscenario.Document, messageID, raw string)
 			}
 		}
 	}
-	return "", "", errors.New("Операция отсутствует в закреплённой версии API")
+	return "", "", errors.New("операция отсутствует в закреплённой версии API")
 }
 
 var stepPathParameter = regexp.MustCompile(`\{([^{}]+)\}`)
@@ -256,31 +260,35 @@ var stepHeaderName = regexp.MustCompile("^[!#$%&'*+.^_`|~0-9A-Za-z-]+$")
 
 func validateStepRequest(input ExecuteDesignScenarioStepRequest) error {
 	if input.RevisionID <= 0 || input.MessageID == "" || len(input.MessageID) > 50_000 {
-		return errors.New("Укажите версию сценария и сообщение")
+		return errors.New("укажите версию сценария и сообщение")
 	}
 	if len(input.Body) > designscenario.MaxExecutionBody {
-		return errors.New("Тело запроса превышает 1 МиБ")
+		return errors.New("тело запроса превышает 1 МиБ")
 	}
 	for _, values := range []map[string]string{input.PathParams, input.Query, input.Headers} {
 		if values == nil || len(values) > designscenario.MaxExecutionEntries {
-			return errors.New("Параметры должны содержать не более 100 значений")
+			return errors.New("параметры должны содержать не более 100 значений")
 		}
 		for key, value := range values {
 			if key == "" || utf8.RuneCountInString(key) > 256 || utf8.RuneCountInString(value) > 50_000 {
-				return errors.New("Параметр запроса превышает допустимую длину")
+				return errors.New("параметр запроса превышает допустимую длину")
 			}
 		}
 	}
+	return validateStepHeaders(input.Headers)
+}
+
+func validateStepHeaders(headers map[string]string) error {
 	names := map[string]bool{}
-	for name, value := range input.Headers {
+	for name, value := range headers {
 		lower := strings.ToLower(name)
 		if names[lower] || !stepHeaderName.MatchString(name) || strings.HasPrefix(lower, "access-control-") || strings.HasPrefix(lower, "x-mocker-") || strings.HasPrefix(lower, "sec-") || strings.HasPrefix(lower, "proxy-") || strings.HasPrefix(lower, "x-forwarded-") || slices.Contains([]string{"host", "cookie", "cookie2", "connection", "content-length", "transfer-encoding", "te", "trailer", "upgrade", "expect", "keep-alive", "forwarded", "origin", "referer", "x-csrf-token", "accept-encoding"}, lower) {
-			return fmt.Errorf("Заголовок %q запрещён", name)
+			return fmt.Errorf("заголовок %q запрещён", name)
 		}
 		names[lower] = true
 		for _, ch := range value {
 			if ch < 32 || ch == 127 {
-				return fmt.Errorf("Заголовок %q содержит управляющие символы", name)
+				return fmt.Errorf("заголовок %q содержит управляющие символы", name)
 			}
 		}
 	}
@@ -290,29 +298,11 @@ func validateStepRequest(input ExecuteDesignScenarioStepRequest) error {
 func stepRequestPath(base, route string, params, query map[string]string, reserved string) (string, error) {
 	path := strings.TrimRight(base, "/") + route
 	if !strings.HasPrefix(path, "/") || strings.HasPrefix(path, "//") || strings.ContainsAny(path, "?#\\\r\n") {
-		return "", errors.New("Недопустимый путь API-операции")
+		return "", errors.New("недопустимый путь API-операции")
 	}
-	used := map[string]bool{}
-	var invalid error
-	path = stepPathParameter.ReplaceAllStringFunc(path, func(token string) string {
-		name := token[1 : len(token)-1]
-		value, ok := params[name]
-		used[name] = true
-		if !ok || value == "" || value == "." || value == ".." || strings.ContainsAny(value, "\\\x00\r\n") {
-			invalid = fmt.Errorf("Укажите допустимый path-параметр %q", name)
-		}
-		return url.PathEscape(value)
-	})
-	if invalid != nil {
-		return "", invalid
-	}
-	if strings.ContainsAny(path, "{}") {
-		return "", errors.New("Неразрешённый path-параметр")
-	}
-	for name := range params {
-		if !used[name] {
-			return "", fmt.Errorf("Неизвестный path-параметр %q", name)
-		}
+	path, err := expandStepPath(path, params)
+	if err != nil {
+		return "", err
 	}
 	segments, err := executionPathSegments(path)
 	if err != nil {
@@ -323,7 +313,7 @@ func stepRequestPath(base, route string, params, query map[string]string, reserv
 		return "", err
 	}
 	if len(prefix) > 0 && len(segments) >= len(prefix) && slices.Equal(segments[:len(prefix)], prefix) {
-		return "", errors.New("Управляющие маршруты мока недоступны для исполнения")
+		return "", errors.New("управляющие маршруты мока недоступны для исполнения")
 	}
 	values := url.Values{}
 	for key, value := range query {
@@ -333,7 +323,33 @@ func stepRequestPath(base, route string, params, query map[string]string, reserv
 		path += "?" + encoded
 	}
 	if len(path) > 64<<10 {
-		return "", errors.New("Путь запроса превышает допустимую длину")
+		return "", errors.New("путь запроса превышает допустимую длину")
+	}
+	return path, nil
+}
+
+func expandStepPath(path string, params map[string]string) (string, error) {
+	used := map[string]bool{}
+	var invalid error
+	path = stepPathParameter.ReplaceAllStringFunc(path, func(token string) string {
+		name := token[1 : len(token)-1]
+		value, ok := params[name]
+		used[name] = true
+		if !ok || value == "" || value == "." || value == ".." || strings.ContainsAny(value, "\\\x00\r\n") {
+			invalid = fmt.Errorf("укажите допустимый path-параметр %q", name)
+		}
+		return url.PathEscape(value)
+	})
+	if invalid != nil {
+		return "", invalid
+	}
+	if strings.ContainsAny(path, "{}") {
+		return "", errors.New("неразрешённый path-параметр")
+	}
+	for name := range params {
+		if !used[name] {
+			return "", fmt.Errorf("неизвестный path-параметр %q", name)
+		}
 	}
 	return path, nil
 }
@@ -346,7 +362,7 @@ func executionPathSegments(path string) ([]string, error) {
 		}
 		decoded, err := url.PathUnescape(segment)
 		if err != nil || decoded == "." || decoded == ".." || strings.ContainsAny(decoded, "\\\x00\r\n") {
-			return nil, errors.New("Недопустимый сегмент пути")
+			return nil, errors.New("недопустимый сегмент пути")
 		}
 		segments = append(segments, decoded)
 	}

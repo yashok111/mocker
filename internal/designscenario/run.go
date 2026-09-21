@@ -21,28 +21,15 @@ const MaxRunRetainedData = 20 << 20
 var (
 	runIDPattern    = regexp.MustCompile(`^[A-Za-z0-9_-]{1,100}$`)
 	runTemplate     = regexp.MustCompile(`\{\{([^{}]+)\}\}`)
-	errRunDataLimit = errors.New("Суммарный размер запросов, ответов и проверок превышает 20 МиБ; последнее значение не сохранено")
+	errRunDataLimit = errors.New("суммарный размер запросов, ответов и проверок превышает 20 МиБ; последнее значение не сохранено")
 )
 
 // PrepareRun validates all executable bindings before any request is dispatched.
 // The report owns its document and variables; overrides never modify the revision.
 func PrepareRun(revision Revision, runID, name, source string, variables ExecutionValues) (RunReport, error) {
 	invalid := func(message string) (RunReport, error) { return RunReport{}, fmt.Errorf("%w: %s", ErrInvalid, message) }
-	if !runIDPattern.MatchString(runID) || utf8.RuneCountInString(name) > 200 || (source != "ui" && source != "mcp") || revision.ID <= 0 || revision.ScenarioID <= 0 {
-		return invalid("Укажите допустимые ID, название и источник запуска")
-	}
-	if len(revision.Document.Fragments) != 0 {
-		return invalid("Исполнение opt/loop пока не поддерживается; удалите фрагменты")
-	}
-	for key, value := range revision.FormDrafts {
-		var fields map[string]jsonx.RawMessage
-		if key == "all" && jsonx.Unmarshal([]byte(value), &fields) == nil && fields != nil && len(fields) == 0 {
-			continue
-		}
-		return invalid("Сначала завершите редактирование форм сценария")
-	}
-	if diagnostics := executionDiagnostics(revision.Document); len(diagnostics) != 0 {
-		return invalid(diagnostics[0].Pointer + ": " + diagnostics[0].Message)
+	if err := validateRunRevision(revision, runID, name, source); err != nil {
+		return invalid(err.Error())
 	}
 	document, err := cloneDocument(revision.Document)
 	if err != nil {
@@ -93,13 +80,33 @@ func PrepareRun(revision Revision, runID, name, source string, variables Executi
 	return report, nil
 }
 
+func validateRunRevision(revision Revision, runID, name, source string) error {
+	if !runIDPattern.MatchString(runID) || utf8.RuneCountInString(name) > 200 || (source != "ui" && source != "mcp") || revision.ID <= 0 || revision.ScenarioID <= 0 {
+		return errors.New("укажите допустимые ID, название и источник запуска")
+	}
+	if len(revision.Document.Fragments) != 0 {
+		return errors.New("исполнение opt/loop пока не поддерживается; удалите фрагменты")
+	}
+	for key, value := range revision.FormDrafts {
+		var fields map[string]jsonx.RawMessage
+		if key == "all" && jsonx.Unmarshal([]byte(value), &fields) == nil && fields != nil && len(fields) == 0 {
+			continue
+		}
+		return errors.New("сначала завершите редактирование форм сценария")
+	}
+	if diagnostics := executionDiagnostics(revision.Document); len(diagnostics) != 0 {
+		return fmt.Errorf("%s: %s", diagnostics[0].Pointer, diagnostics[0].Message)
+	}
+	return nil
+}
+
 func validateRunVariables(variables ExecutionValues) error {
 	if len(variables) > MaxExecutionEntries {
-		return errors.New("Прогон не может содержать более 100 переменных")
+		return errors.New("прогон не может содержать более 100 переменных")
 	}
 	for key, value := range variables {
 		if !executionVariableName.MatchString(key) || utf8.RuneCountInString(value) > maxText {
-			return fmt.Errorf("Недопустимое имя или слишком большое значение переменной %q", key)
+			return fmt.Errorf("недопустимое имя или слишком большое значение переменной %q", key)
 		}
 	}
 	return nil
@@ -115,7 +122,7 @@ func validateRunVariableSnapshots(input, variables ExecutionValues) error {
 			encodedValue, _ := jsonx.Marshal(value)
 			retained += len(encodedKey) + len(encodedValue) + 2
 			if retained > MaxRunRetainedData {
-				return errors.New("Суммарный размер снимков переменных превышает 20 МиБ")
+				return errors.New("суммарный размер снимков переменных превышает 20 МиБ")
 			}
 		}
 	}
@@ -129,15 +136,15 @@ func runContract(document Document, message Message) (*Contract, error) {
 			continue
 		}
 		if contract.Mode != "linked" || contract.Source == nil || contract.Source.DesignID <= 0 || contract.Source.RevisionID <= 0 {
-			return nil, fmt.Errorf("Свяжите контракт сообщения %q с проектом API", message.ID)
+			return nil, fmt.Errorf("свяжите контракт сообщения %q с проектом API", message.ID)
 		}
 		keys, diagnostics := operationKeys(contract.Document, "")
 		if _, ok := keys[message.Operation.OperationKey]; !ok || len(diagnostics) > 0 {
-			return nil, fmt.Errorf("Операция API сообщения %q недоступна", message.ID)
+			return nil, fmt.Errorf("операция API сообщения %q недоступна", message.ID)
 		}
 		return contract, nil
 	}
-	return nil, fmt.Errorf("Контракт сообщения %q недоступен", message.ID)
+	return nil, fmt.Errorf("контракт сообщения %q недоступен", message.ID)
 }
 
 type runEngine struct {
@@ -205,29 +212,60 @@ func (e *runEngine) executeStep(ctx context.Context, index int, message Message,
 	if err = e.publish(); err != nil {
 		return err
 	}
-	if err = ctx.Err(); err != nil {
+	response, err := dispatchRunRequest(ctx, request, execute)
+	if err != nil {
 		return err
 	}
+	if err = e.saveStepResponse(index, response); err != nil {
+		return err
+	}
+	if err = e.validateStepResponse(message, config, response); err != nil {
+		return err
+	}
+	if len(config.Assertions) == 0 && len(config.Extract) == 0 {
+		return nil
+	}
+	if !jsonx.Valid([]byte(response.Body)) {
+		return errors.New("ответ не содержит допустимый JSON")
+	}
+	body, err := decodeJSONValue([]byte(response.Body))
+	if err != nil {
+		return fmt.Errorf("не удалось прочитать JSON ответа: %w", err)
+	}
+	if err = e.checkStepAssertions(index, config.Assertions, body); err != nil {
+		return err
+	}
+	return e.extractStepVariables(config.Extract, body)
+}
+
+func dispatchRunRequest(ctx context.Context, request StepRequest, execute StepExecutor) (StepResponse, error) {
+	if err := ctx.Err(); err != nil {
+		return StepResponse{}, err
+	}
 	if execute == nil {
-		return errors.New("Исполнение мока недоступно")
+		return StepResponse{}, errors.New("исполнение мока недоступно")
 	}
 	stepCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	response, err := execute(stepCtx, cloneStepRequest(request))
 	stepError := stepCtx.Err()
 	cancel()
 	if stepError != nil {
-		return fmt.Errorf("Запрос отменён или превысил время ожидания: %w", stepError)
+		return StepResponse{}, fmt.Errorf("запрос отменён или превысил время ожидания: %w", stepError)
 	}
 	if err != nil {
-		return err
+		return StepResponse{}, err
 	}
 	if err = ctx.Err(); err != nil {
-		return err
+		return StepResponse{}, err
 	}
+	return response, nil
+}
+
+func (e *runEngine) saveStepResponse(index int, response StepResponse) error {
 	if len(response.Body) > MaxExecutionBody {
-		return errors.New("Ответ мока превышает 1 МиБ; тело не сохранено")
+		return errors.New("ответ мока превышает 1 МиБ; тело не сохранено")
 	}
-	if err = e.retain(response, 0); err != nil {
+	if err := e.retain(response, 0); err != nil {
 		return err
 	}
 	response.Headers = maps.Clone(response.Headers)
@@ -235,15 +273,16 @@ func (e *runEngine) executeStep(ctx context.Context, index int, message Message,
 		response.Headers = map[string]string{}
 	}
 	e.report.Steps[index].Response = &response
-	if err = e.publish(); err != nil {
-		return err
-	}
+	return e.publish()
+}
+
+func (e *runEngine) validateStepResponse(message Message, config *StepExecution, response StepResponse) error {
 	contract, err := runContract(e.report.Document, message)
 	if err != nil {
 		return err
 	}
 	if response.ScenarioRevisionID != e.report.RevisionID || response.DesignID != contract.Source.DesignID || response.DesignRevisionID != contract.Source.RevisionID {
-		return errors.New("Ответ сервера относится к другой ревизии сценария или API")
+		return errors.New("ответ сервера относится к другой ревизии сценария или API")
 	}
 	if config.ExpectedStatus == nil {
 		if response.Status < 200 || response.Status >= 300 {
@@ -252,18 +291,12 @@ func (e *runEngine) executeStep(ctx context.Context, index int, message Message,
 	} else if response.Status != *config.ExpectedStatus {
 		return fmt.Errorf("HTTP %d: ожидался %d", response.Status, *config.ExpectedStatus)
 	}
-	if len(config.Assertions) == 0 && len(config.Extract) == 0 {
-		return nil
-	}
-	if !jsonx.Valid([]byte(response.Body)) {
-		return errors.New("Ответ не содержит допустимый JSON")
-	}
-	body, err := decodeJSONValue([]byte(response.Body))
-	if err != nil {
-		return fmt.Errorf("Не удалось прочитать JSON ответа: %w", err)
-	}
+	return nil
+}
+
+func (e *runEngine) checkStepAssertions(index int, assertions []ExecutionAssertion, body any) error {
 	assertionsPassed := true
-	for _, assertion := range config.Assertions {
+	for _, assertion := range assertions {
 		result := AssertionResult{Pointer: assertion.Pointer, ExpectedJSON: string(assertion.Equals)}
 		actual, exists := runReadPointer(body, assertion.Pointer)
 		if exists {
@@ -281,23 +314,27 @@ func (e *runEngine) executeStep(ctx context.Context, index int, message Message,
 			result.Error = "Значение по JSON Pointer отсутствует."
 		}
 		// Each appended array element adds a comma after the first element.
-		if err = e.retain(result, -1); err != nil {
+		if err := e.retain(result, -1); err != nil {
 			return err
 		}
 		e.report.Steps[index].Assertions = append(e.report.Steps[index].Assertions, result)
 		assertionsPassed = assertionsPassed && result.Passed
 	}
-	if err = e.publish(); err != nil {
+	if err := e.publish(); err != nil {
 		return err
 	}
 	if !assertionsPassed {
-		return errors.New("Проверка JSON-ответа не пройдена")
+		return errors.New("проверка JSON-ответа не пройдена")
 	}
+	return nil
+}
+
+func (e *runEngine) extractStepVariables(extractions []ExecutionExtraction, body any) error {
 	variables := maps.Clone(e.report.Variables)
-	for _, extraction := range config.Extract {
+	for _, extraction := range extractions {
 		value, exists := runReadPointer(body, extraction.Pointer)
 		if !exists {
-			return fmt.Errorf("Не найден JSON Pointer %q для переменной %q", extraction.Pointer, extraction.Name)
+			return fmt.Errorf("не найден JSON Pointer %q для переменной %q", extraction.Pointer, extraction.Name)
 		}
 		text, ok := value.(string)
 		if !ok {
@@ -309,10 +346,10 @@ func (e *runEngine) executeStep(ctx context.Context, index int, message Message,
 		}
 		variables[extraction.Name] = text
 	}
-	if err = validateRunVariables(variables); err != nil {
+	if err := validateRunVariables(variables); err != nil {
 		return err
 	}
-	if err = validateRunVariableSnapshots(e.report.InputVariables, variables); err != nil {
+	if err := validateRunVariableSnapshots(e.report.InputVariables, variables); err != nil {
 		return err
 	}
 	e.report.Variables = variables
@@ -337,7 +374,7 @@ func (e *runEngine) publish() error {
 	}
 	if err := e.progress(cloneRunReport(e.report)); err != nil {
 		e.progressFailed = true
-		return fmt.Errorf("Не удалось сохранить прогресс запуска: %w", err)
+		return fmt.Errorf("не удалось сохранить прогресс запуска: %w", err)
 	}
 	return nil
 }
@@ -352,12 +389,13 @@ func (e *runEngine) finish(status, reason string) RunReport {
 	e.report.FinishedAt = new(time.Now().UnixMilli())
 	for i := range e.report.Steps {
 		step := &e.report.Steps[i]
-		if step.Status == "pending" {
+		switch step.Status {
+		case "pending":
 			step.Status, step.Reason = "skipped", "Предыдущий шаг не выполнен."
 			if status == "cancelled" {
 				step.Reason = "Прогон отменён."
 			}
-		} else if step.Status == "running" {
+		case "running":
 			step.Status, step.Reason = status, e.report.Reason
 		}
 	}
@@ -401,7 +439,7 @@ func resolveRunRequest(revisionID int64, messageID string, config *StepExecution
 				return StepRequest{}, err
 			}
 			if utf8.RuneCountInString(text) > maxText {
-				return StepRequest{}, fmt.Errorf("Значение параметра %q после подстановки слишком большое", key)
+				return StepRequest{}, fmt.Errorf("значение параметра %q после подстановки слишком большое", key)
 			}
 			(*pair.output)[key] = text
 		}
@@ -418,7 +456,7 @@ func substituteRunValue(source string, variables ExecutionValues, limit int) (st
 	var out strings.Builder
 	appendText := func(text string) error {
 		if out.Len()+len(text) > limit {
-			return errors.New("Значение после подстановки превышает допустимый размер")
+			return errors.New("значение после подстановки превышает допустимый размер")
 		}
 		out.WriteString(text)
 		return nil
@@ -437,7 +475,7 @@ func substituteRunValue(source string, variables ExecutionValues, limit int) (st
 		name := source[match[2]:match[3]]
 		value, ok := variables[name]
 		if !ok {
-			return "", fmt.Errorf("Неизвестная переменная %q", name)
+			return "", fmt.Errorf("неизвестная переменная %q", name)
 		}
 		if err := appendText(value); err != nil {
 			return "", err

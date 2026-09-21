@@ -268,7 +268,7 @@ func TestScenarioRunAsyncIdempotencyAndDetachedRequest(t *testing.T) {
 		close(entered)
 		select {
 		case <-release:
-			w.WriteHeader(201)
+			w.WriteHeader(http.StatusCreated)
 		case <-r.Context().Done():
 		}
 	}))

@@ -140,25 +140,8 @@ func executionDiagnostics(document Document) []Diagnostic {
 	add := func(pointer, message string) {
 		out = append(out, Diagnostic{Pointer: pointer, Message: message, Severity: "error"})
 	}
-	checkMap := func(pointer string, values map[string]string, variables bool) {
-		if values == nil {
-			add(pointer, "must be an object")
-			return
-		}
-		if len(values) > MaxExecutionEntries {
-			add(pointer, "contains too many entries")
-		}
-		for key, value := range values {
-			if key == "" || utf8.RuneCountInString(key) > 256 || (variables && !executionVariableName.MatchString(key)) {
-				add(pointer+"/"+escapePointer(key), "invalid key")
-			}
-			if utf8.RuneCountInString(value) > maxText {
-				add(pointer+"/"+escapePointer(key), "value is too long")
-			}
-		}
-	}
 	if document.Execution != nil {
-		checkMap("/execution/variables", document.Execution.Variables, true)
+		checkExecutionValues("/execution/variables", document.Execution.Variables, true, add)
 	}
 	for i, message := range document.Messages {
 		e := message.Execution
@@ -166,43 +149,65 @@ func executionDiagnostics(document Document) []Diagnostic {
 			continue
 		}
 		pointer := fmt.Sprintf("/messages/%d/execution", i)
-		checkMap(pointer+"/pathParams", e.PathParams, false)
-		checkMap(pointer+"/query", e.Query, false)
-		checkMap(pointer+"/headers", e.Headers, false)
-		if len(e.Body) > MaxExecutionBody {
-			add(pointer+"/body", "body is too large")
-		}
-		if e.ExpectedStatus != nil && (*e.ExpectedStatus < 100 || *e.ExpectedStatus > 599) {
-			add(pointer+"/expectedStatus", "must be an HTTP status between 100 and 599")
-		}
-		if e.Assertions == nil || len(e.Assertions) > MaxExecutionEntries {
-			add(pointer+"/assertions", "must be an array of at most 100 assertions")
-		}
-		if e.Extract == nil || len(e.Extract) > MaxExecutionEntries {
-			add(pointer+"/extract", "must be an array of at most 100 extractions")
-		}
-		for j, assertion := range e.Assertions {
-			p := fmt.Sprintf("%s/assertions/%d", pointer, j)
-			if !validExecutionPointer(assertion.Pointer) {
-				add(p+"/pointer", "invalid JSON Pointer")
-			}
-			if len(assertion.Equals) == 0 || len(assertion.Equals) > MaxExecutionBody || !jsonx.Valid(assertion.Equals) {
-				add(p+"/equals", "must be a JSON value of at most 1 MiB")
-			}
-		}
-		names := map[string]bool{}
-		for j, extraction := range e.Extract {
-			p := fmt.Sprintf("%s/extract/%d", pointer, j)
-			if !executionVariableName.MatchString(extraction.Name) || names[extraction.Name] {
-				add(p+"/name", "invalid or duplicate variable name")
-			}
-			names[extraction.Name] = true
-			if !validExecutionPointer(extraction.Pointer) {
-				add(p+"/pointer", "invalid JSON Pointer")
-			}
-		}
+		checkStepExecution(pointer, e, add)
 	}
 	return out
+}
+
+func checkExecutionValues(pointer string, values map[string]string, variables bool, add func(string, string)) {
+	if values == nil {
+		add(pointer, "must be an object")
+		return
+	}
+	if len(values) > MaxExecutionEntries {
+		add(pointer, "contains too many entries")
+	}
+	for key, value := range values {
+		if key == "" || utf8.RuneCountInString(key) > 256 || (variables && !executionVariableName.MatchString(key)) {
+			add(pointer+"/"+escapePointer(key), "invalid key")
+		}
+		if utf8.RuneCountInString(value) > maxText {
+			add(pointer+"/"+escapePointer(key), "value is too long")
+		}
+	}
+}
+
+func checkStepExecution(pointer string, e *StepExecution, add func(string, string)) {
+	checkExecutionValues(pointer+"/pathParams", e.PathParams, false, add)
+	checkExecutionValues(pointer+"/query", e.Query, false, add)
+	checkExecutionValues(pointer+"/headers", e.Headers, false, add)
+	if len(e.Body) > MaxExecutionBody {
+		add(pointer+"/body", "body is too large")
+	}
+	if e.ExpectedStatus != nil && (*e.ExpectedStatus < 100 || *e.ExpectedStatus > 599) {
+		add(pointer+"/expectedStatus", "must be an HTTP status between 100 and 599")
+	}
+	if e.Assertions == nil || len(e.Assertions) > MaxExecutionEntries {
+		add(pointer+"/assertions", "must be an array of at most 100 assertions")
+	}
+	if e.Extract == nil || len(e.Extract) > MaxExecutionEntries {
+		add(pointer+"/extract", "must be an array of at most 100 extractions")
+	}
+	for j, assertion := range e.Assertions {
+		p := fmt.Sprintf("%s/assertions/%d", pointer, j)
+		if !validExecutionPointer(assertion.Pointer) {
+			add(p+"/pointer", "invalid JSON Pointer")
+		}
+		if len(assertion.Equals) == 0 || len(assertion.Equals) > MaxExecutionBody || !jsonx.Valid(assertion.Equals) {
+			add(p+"/equals", "must be a JSON value of at most 1 MiB")
+		}
+	}
+	names := map[string]bool{}
+	for j, extraction := range e.Extract {
+		p := fmt.Sprintf("%s/extract/%d", pointer, j)
+		if !executionVariableName.MatchString(extraction.Name) || names[extraction.Name] {
+			add(p+"/name", "invalid or duplicate variable name")
+		}
+		names[extraction.Name] = true
+		if !validExecutionPointer(extraction.Pointer) {
+			add(p+"/pointer", "invalid JSON Pointer")
+		}
+	}
 }
 
 func validExecutionPointer(pointer string) bool {

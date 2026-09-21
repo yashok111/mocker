@@ -4,14 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
+	"reflect"
 	"strings"
 	"testing"
 	"testing/synctest"
 	"time"
 
 	"github.com/yashok111/mocker/internal/jsonx"
-	"math"
-	"reflect"
 )
 
 func runRevision() Revision {

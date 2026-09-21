@@ -43,28 +43,45 @@ func (r *Repo) validate(document Document, formDrafts map[string]string) ([]Diag
 	return diagnostics, nil
 }
 
+type documentValidator struct {
+	diagnostics []Diagnostic
+}
+
 func validateDocument(document Document) []Diagnostic {
-	diagnostics := executionDiagnostics(document)
-	errorAt := func(pointer, message string) {
-		diagnostics = append(diagnostics, Diagnostic{Pointer: pointer, Message: message, Severity: "error"})
+	validator := documentValidator{diagnostics: executionDiagnostics(document)}
+	validator.validateMetadata(document)
+	participants := validator.validateParticipants(document.Participants)
+	messages := validator.validateMessages(document.Messages)
+	contracts := validator.validateContracts(document.Contracts)
+	validator.validateMessageReferences(document, participants, messages, contracts)
+	validator.validateFragments(document.Fragments, messages)
+	return validator.diagnostics
+}
+
+func (v *documentValidator) errorAt(pointer, message string) {
+	v.diagnostics = append(v.diagnostics, Diagnostic{Pointer: pointer, Message: message, Severity: "error"})
+}
+
+func (v *documentValidator) checkText(pointer, value string, emptyOK bool) {
+	if !emptyOK && value == "" {
+		v.errorAt(pointer, "must not be empty")
 	}
+	if utf8.RuneCountInString(value) > maxText {
+		v.errorAt(pointer, "is too long")
+	}
+}
+
+func (v *documentValidator) checkColor(pointer string, color HexColor) {
+	if color != "" && !hexColorPattern.MatchString(string(color)) {
+		v.errorAt(pointer, "must be a #RRGGBB string")
+	}
+}
+
+func (v *documentValidator) validateMetadata(document Document) {
 	if document.FormatVersion != 1 {
-		errorAt("/formatVersion", "formatVersion must be 1")
+		v.errorAt("/formatVersion", "formatVersion must be 1")
 	}
-	checkText := func(pointer, value string, emptyOK bool) {
-		if !emptyOK && value == "" {
-			errorAt(pointer, "must not be empty")
-		}
-		if utf8.RuneCountInString(value) > maxText {
-			errorAt(pointer, "is too long")
-		}
-	}
-	checkColor := func(pointer string, color HexColor) {
-		if color != "" && !hexColorPattern.MatchString(string(color)) {
-			errorAt(pointer, "must be a #RRGGBB string")
-		}
-	}
-	checkText("/title", document.Title, true)
+	v.checkText("/title", document.Title, true)
 	for _, field := range []struct {
 		name    string
 		missing bool
@@ -75,160 +92,175 @@ func validateDocument(document Document) []Diagnostic {
 		{"contracts", document.Contracts == nil},
 	} {
 		if field.missing {
-			errorAt("/"+field.name, "must be an array; use [] for an empty collection")
+			v.errorAt("/"+field.name, "must be an array; use [] for an empty collection")
 		}
 	}
 	if len(document.Participants) > maxParticipants {
-		errorAt("/participants", "contains too many participants")
+		v.errorAt("/participants", "contains too many participants")
 	}
 	if len(document.Messages) > maxMessages {
-		errorAt("/messages", "contains too many messages")
+		v.errorAt("/messages", "contains too many messages")
 	}
 	if len(document.Fragments) > maxFragments {
-		errorAt("/fragments", "contains too many fragments")
+		v.errorAt("/fragments", "contains too many fragments")
 	}
 	if len(document.Contracts) > maxContracts {
-		errorAt("/contracts", "contains too many contracts")
+		v.errorAt("/contracts", "contains too many contracts")
 	}
+}
 
+func (v *documentValidator) validateParticipants(items []Participant) map[string]int {
 	participants := map[string]int{}
-	for index, participant := range document.Participants {
+	for index, participant := range items {
 		pointer := fmt.Sprintf("/participants/%d", index)
-		checkText(pointer+"/id", participant.ID, false)
-		checkText(pointer+"/name", participant.Name, true)
-		checkText(pointer+"/description", participant.Description, true)
-		checkColor(pointer+"/color", participant.Color)
+		v.checkText(pointer+"/id", participant.ID, false)
+		v.checkText(pointer+"/name", participant.Name, true)
+		v.checkText(pointer+"/description", participant.Description, true)
+		v.checkColor(pointer+"/color", participant.Color)
 		if !slices.Contains(participantKinds, participant.Kind) {
-			errorAt(pointer+"/kind", "unknown participant kind")
+			v.errorAt(pointer+"/kind", "unknown participant kind")
 		}
 		if _, exists := participants[participant.ID]; exists {
-			errorAt(pointer+"/id", "duplicate participant id")
+			v.errorAt(pointer+"/id", "duplicate participant id")
 		}
 		participants[participant.ID] = index
 	}
 
+	return participants
+}
+
+func (v *documentValidator) validateMessages(items []Message) map[string]int {
 	messages := map[string]int{}
-	for index, message := range document.Messages {
+	for index, message := range items {
 		pointer := fmt.Sprintf("/messages/%d", index)
-		checkText(pointer+"/id", message.ID, false)
-		checkText(pointer+"/fromId", message.FromID, false)
-		checkText(pointer+"/toId", message.ToID, false)
-		checkText(pointer+"/label", message.Label, true)
-		checkText(pointer+"/description", message.Description, true)
-		checkColor(pointer+"/color", message.Color)
-		checkColor(pointer+"/arrowColor", message.ArrowColor)
+		v.checkText(pointer+"/id", message.ID, false)
+		v.checkText(pointer+"/fromId", message.FromID, false)
+		v.checkText(pointer+"/toId", message.ToID, false)
+		v.checkText(pointer+"/label", message.Label, true)
+		v.checkText(pointer+"/description", message.Description, true)
+		v.checkColor(pointer+"/color", message.Color)
+		v.checkColor(pointer+"/arrowColor", message.ArrowColor)
 		if !slices.Contains(messageKinds, message.Kind) {
-			errorAt(pointer+"/kind", "unknown message kind")
+			v.errorAt(pointer+"/kind", "unknown message kind")
 		}
 		if _, exists := messages[message.ID]; exists {
-			errorAt(pointer+"/id", "duplicate message id")
+			v.errorAt(pointer+"/id", "duplicate message id")
 		}
 		messages[message.ID] = index
 	}
 
+	return messages
+}
+
+func (v *documentValidator) validateContracts(items []Contract) map[string]map[string]struct{} {
 	contracts := map[string]map[string]struct{}{}
 	linkedDesigns := map[int64]string{}
-	for index, contract := range document.Contracts {
+	for index, contract := range items {
 		pointer := fmt.Sprintf("/contracts/%d", index)
-		checkText(pointer+"/id", contract.ID, false)
-		checkText(pointer+"/name", contract.Name, true)
+		v.checkText(pointer+"/id", contract.ID, false)
+		v.checkText(pointer+"/name", contract.Name, true)
 		if _, exists := contracts[contract.ID]; exists {
-			errorAt(pointer+"/id", "duplicate contract id")
+			v.errorAt(pointer+"/id", "duplicate contract id")
 		}
 		mode := contract.Mode
 		if mode == "" {
 			mode = "copy"
 		}
 		if mode != "copy" && mode != "linked" {
-			errorAt(pointer+"/mode", "mode must be copy or linked")
+			v.errorAt(pointer+"/mode", "mode must be copy or linked")
 		}
 		if contract.Source != nil {
 			if contract.Source.DesignID <= 0 {
-				errorAt(pointer+"/source/designId", "must be positive")
+				v.errorAt(pointer+"/source/designId", "must be positive")
 			}
 			if contract.Source.RevisionID <= 0 {
-				errorAt(pointer+"/source/revisionId", "must be positive")
+				v.errorAt(pointer+"/source/revisionId", "must be positive")
 			}
 			if contract.Source.Version < 0 || (mode == "linked" && contract.Source.Version == 0) {
-				errorAt(pointer+"/source/version", "linked source version must be positive")
+				v.errorAt(pointer+"/source/version", "linked source version must be positive")
 			}
 		}
 		if mode == "linked" {
 			if contract.Source == nil {
-				errorAt(pointer+"/source", "linked contract requires a source")
+				v.errorAt(pointer+"/source", "linked contract requires a source")
 			} else if previous, exists := linkedDesigns[contract.Source.DesignID]; exists {
-				errorAt(pointer+"/source/designId", "design is already linked by contract "+previous)
+				v.errorAt(pointer+"/source/designId", "design is already linked by contract "+previous)
 			} else {
 				linkedDesigns[contract.Source.DesignID] = contract.ID
 			}
 		}
 		keys, keyDiagnostics := operationKeys(contract.Document, pointer+"/document")
-		diagnostics = append(diagnostics, keyDiagnostics...)
+		v.diagnostics = append(v.diagnostics, keyDiagnostics...)
 		contracts[contract.ID] = keys
 	}
 
+	return contracts
+}
+
+func (v *documentValidator) validateMessageReferences(document Document, participants, messages map[string]int, contracts map[string]map[string]struct{}) {
 	for index, message := range document.Messages {
 		pointer := fmt.Sprintf("/messages/%d", index)
 		if _, exists := participants[message.FromID]; !exists {
-			errorAt(pointer+"/fromId", "participant does not exist")
+			v.errorAt(pointer+"/fromId", "participant does not exist")
 		}
 		if _, exists := participants[message.ToID]; !exists {
-			errorAt(pointer+"/toId", "participant does not exist")
+			v.errorAt(pointer+"/toId", "participant does not exist")
 		}
 		if message.ReplyToID != "" {
 			replyIndex, exists := messages[message.ReplyToID]
 			switch {
 			case message.Kind != "response":
-				errorAt(pointer+"/replyToId", "only responses may reference a request")
+				v.errorAt(pointer+"/replyToId", "only responses may reference a request")
 			case !exists:
-				errorAt(pointer+"/replyToId", "request does not exist")
+				v.errorAt(pointer+"/replyToId", "request does not exist")
 			case document.Messages[replyIndex].Kind != "request":
-				errorAt(pointer+"/replyToId", "must reference a request")
+				v.errorAt(pointer+"/replyToId", "must reference a request")
 			case replyIndex >= index:
-				errorAt(pointer+"/replyToId", "response must follow its request")
+				v.errorAt(pointer+"/replyToId", "response must follow its request")
 			default:
 				request := document.Messages[replyIndex]
 				if message.FromID != request.ToID || message.ToID != request.FromID {
-					errorAt(pointer+"/replyToId", "response direction must reverse its request")
+					v.errorAt(pointer+"/replyToId", "response direction must reverse its request")
 				}
 			}
 		}
 		if message.Operation != nil {
-			checkText(pointer+"/operation/operationKey", message.Operation.OperationKey, false)
+			v.checkText(pointer+"/operation/operationKey", message.Operation.OperationKey, false)
 			keys, exists := contracts[message.Operation.ContractID]
 			if !exists {
-				errorAt(pointer+"/operation/contractId", "contract does not exist")
+				v.errorAt(pointer+"/operation/contractId", "contract does not exist")
 			} else if _, exists = keys[message.Operation.OperationKey]; !exists {
-				diagnostics = append(diagnostics, Diagnostic{Pointer: pointer + "/operation/operationKey", Message: "operation is missing from the pinned contract", Severity: "warning"})
+				v.diagnostics = append(v.diagnostics, Diagnostic{Pointer: pointer + "/operation/operationKey", Message: "operation is missing from the pinned contract", Severity: "warning"})
 			}
 		}
 	}
+}
 
+func (v *documentValidator) validateFragments(items []Fragment, messages map[string]int) {
 	fragments := map[string]struct{}{}
-	for index, fragment := range document.Fragments {
+	for index, fragment := range items {
 		pointer := fmt.Sprintf("/fragments/%d", index)
-		checkText(pointer+"/id", fragment.ID, false)
-		checkText(pointer+"/label", fragment.Label, true)
+		v.checkText(pointer+"/id", fragment.ID, false)
+		v.checkText(pointer+"/label", fragment.Label, true)
 		if !slices.Contains(fragmentKinds, fragment.Kind) {
-			errorAt(pointer+"/kind", "unknown fragment kind")
+			v.errorAt(pointer+"/kind", "unknown fragment kind")
 		}
 		if _, exists := fragments[fragment.ID]; exists {
-			errorAt(pointer+"/id", "duplicate fragment id")
+			v.errorAt(pointer+"/id", "duplicate fragment id")
 		}
 		fragments[fragment.ID] = struct{}{}
 		from, fromOK := messages[fragment.FromMessageID]
 		to, toOK := messages[fragment.ToMessageID]
 		if !fromOK {
-			errorAt(pointer+"/fromMessageId", "message does not exist")
+			v.errorAt(pointer+"/fromMessageId", "message does not exist")
 		}
 		if !toOK {
-			errorAt(pointer+"/toMessageId", "message does not exist")
+			v.errorAt(pointer+"/toMessageId", "message does not exist")
 		}
 		if fromOK && toOK && from > to {
-			errorAt(pointer, "fragment start must not follow its end")
+			v.errorAt(pointer, "fragment start must not follow its end")
 		}
 	}
-	return diagnostics
 }
 
 func validateDrafts(formDrafts map[string]string) []Diagnostic {

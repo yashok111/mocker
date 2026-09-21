@@ -62,7 +62,27 @@ func (c *Command) UnmarshalJSON(data []byte) error {
 	if !exists {
 		return fmt.Errorf("unknown command type %q", commandType)
 	}
+	if err := validateCommandFields(fields, commandType, spec); err != nil {
+		return err
+	}
+	if commandType == "create_contract" {
+		if err := validateCreateContractFields(fields["contract"]); err != nil {
+			return err
+		}
+	}
 
+	type commandAlias Command
+	var decoded commandAlias
+	decoder := jsonx.NewDecoder(bytes.NewReader(data))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&decoded); err != nil {
+		return fmt.Errorf("decode design scenario command %q: %w", commandType, err)
+	}
+	*c = Command(decoded)
+	return nil
+}
+
+func validateCommandFields(fields map[string]jsonx.RawMessage, commandType string, spec commandWireSpec) error {
 	allowed := make(map[string]bool, 1+len(spec.required)+len(spec.optional))
 	allowed["type"] = true
 	for _, name := range spec.required {
@@ -83,35 +103,28 @@ func (c *Command) UnmarshalJSON(data []byte) error {
 			return fmt.Errorf("design scenario command field %q is not allowed for %q", name, commandType)
 		}
 	}
-	if commandType == "create_contract" {
-		var contractFields map[string]jsonx.RawMessage
-		if err := jsonx.Unmarshal(fields["contract"], &contractFields); err != nil {
-			return fmt.Errorf("create_contract contract must be an object: %w", err)
-		}
-		if _, exists := contractFields["source"]; exists {
-			return fmt.Errorf("create_contract contract must not have a source")
-		}
-		for _, name := range []string{"id", "name", "document"} {
-			if raw, exists := contractFields[name]; !exists || isJSONNull(raw) {
-				return fmt.Errorf("create_contract contract field %q is required", name)
-			}
-		}
-		if !isJSONObject(contractFields["document"]) {
-			return fmt.Errorf("create_contract contract document must be a JSON object")
-		}
-		if raw, exists := contractFields["mode"]; exists && isJSONNull(raw) {
-			return fmt.Errorf("create_contract contract mode cannot be null")
-		}
-	}
+	return nil
+}
 
-	type commandAlias Command
-	var decoded commandAlias
-	decoder := jsonx.NewDecoder(bytes.NewReader(data))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&decoded); err != nil {
-		return fmt.Errorf("decode design scenario command %q: %w", commandType, err)
+func validateCreateContractFields(raw jsonx.RawMessage) error {
+	var fields map[string]jsonx.RawMessage
+	if err := jsonx.Unmarshal(raw, &fields); err != nil {
+		return fmt.Errorf("create_contract contract must be an object: %w", err)
 	}
-	*c = Command(decoded)
+	if _, exists := fields["source"]; exists {
+		return fmt.Errorf("create_contract contract must not have a source")
+	}
+	for _, name := range []string{"id", "name", "document"} {
+		if raw, exists := fields[name]; !exists || isJSONNull(raw) {
+			return fmt.Errorf("create_contract contract field %q is required", name)
+		}
+	}
+	if !isJSONObject(fields["document"]) {
+		return fmt.Errorf("create_contract contract document must be a JSON object")
+	}
+	if raw, exists := fields["mode"]; exists && isJSONNull(raw) {
+		return fmt.Errorf("create_contract contract mode cannot be null")
+	}
 	return nil
 }
 

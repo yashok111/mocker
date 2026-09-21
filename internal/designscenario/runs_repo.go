@@ -133,7 +133,7 @@ func (r *RunRepo) List(ctx context.Context, scenarioID int64) ([]RunSummary, err
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	runs := []RunSummary{}
 	for rows.Next() {
 		var summary RunSummary
@@ -153,16 +153,15 @@ func (r *RunRepo) RecoverInterrupted(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
+		defer func() { _ = rows.Close() }()
 		var reports []RunReport
 		for rows.Next() {
 			var raw string
 			if err = rows.Scan(&raw); err != nil {
-				rows.Close()
 				return err
 			}
 			var report RunReport
 			if err = jsonx.Unmarshal([]byte(raw), &report); err != nil {
-				rows.Close()
 				return err
 			}
 			reports = append(reports, CancelRunReport(report, "server restarted during execution"))

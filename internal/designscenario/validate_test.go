@@ -2,6 +2,7 @@ package designscenario
 
 import (
 	"errors"
+	"slices"
 	"testing"
 
 	"github.com/yashok111/mocker/internal/apidesign"
@@ -9,6 +10,37 @@ import (
 	"github.com/yashok111/mocker/internal/jsonx"
 	"github.com/yashok111/mocker/internal/testkit"
 )
+
+func TestValidateDocumentPreservesDiagnosticOrderAndDuplicateReferences(t *testing.T) {
+	t.Parallel()
+	document := validDocument("Invalid references")
+	document.FormatVersion = 2
+	document.Participants = []Participant{
+		{ID: "client", Kind: "unknown"},
+		{ID: "client", Kind: "client"},
+	}
+	document.Messages = []Message{
+		{ID: "call", FromID: "client", ToID: "missing", Kind: "request"},
+		{ID: "call", FromID: "client", ToID: "client", Kind: "response", ReplyToID: "call"},
+	}
+	document.Contracts = []Contract{{ID: "api", Mode: "linked", Document: jsonx.RawMessage(`{}`)}}
+	document.Fragments = []Fragment{{ID: "fragment", Kind: "unknown", FromMessageID: "call", ToMessageID: "missing"}}
+
+	want := []Diagnostic{
+		{Pointer: "/formatVersion", Message: "formatVersion must be 1", Severity: "error"},
+		{Pointer: "/participants/0/kind", Message: "unknown participant kind", Severity: "error"},
+		{Pointer: "/participants/1/id", Message: "duplicate participant id", Severity: "error"},
+		{Pointer: "/messages/1/id", Message: "duplicate message id", Severity: "error"},
+		{Pointer: "/contracts/0/source", Message: "linked contract requires a source", Severity: "error"},
+		{Pointer: "/messages/0/toId", Message: "participant does not exist", Severity: "error"},
+		{Pointer: "/messages/1/replyToId", Message: "must reference a request", Severity: "error"},
+		{Pointer: "/fragments/0/kind", Message: "unknown fragment kind", Severity: "error"},
+		{Pointer: "/fragments/0/toMessageId", Message: "message does not exist", Severity: "error"},
+	}
+	if got := validateDocument(document); !slices.Equal(got, want) {
+		t.Fatalf("diagnostics = %+v, want %+v", got, want)
+	}
+}
 
 func TestRepo_ValidateAllowsBrokenOperationAsWarning(t *testing.T) {
 	repo := newTestRepo(t)

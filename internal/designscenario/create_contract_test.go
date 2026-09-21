@@ -163,9 +163,9 @@ func TestRepo_CreateContractKeepsExplicitCopyIndependent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	copy := result.Draft.Document.Contracts[1]
-	if copy.Mode != "copy" || copy.Source != nil || string(copy.Document) != apiDocument("new") {
-		t.Fatalf("new copy unexpectedly linked or changed: %+v", copy)
+	createdCopy := result.Draft.Document.Contracts[1]
+	if createdCopy.Mode != "copy" || createdCopy.Source != nil || string(createdCopy.Document) != apiDocument("new") {
+		t.Fatalf("new copy unexpectedly linked or changed: %+v", createdCopy)
 	}
 	designs, err := repo.designs.List(t.Context())
 	if err != nil || len(designs) != 0 {

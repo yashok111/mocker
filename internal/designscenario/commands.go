@@ -60,47 +60,12 @@ func (r *Repo) applyCommand(ctx context.Context, tx *sql.Tx, document *Document,
 	switch command.Type {
 	case "set_title":
 		document.Title = command.Title
-	case "upsert_participant":
-		if command.Participant == nil {
-			return invalidAt("/participant", "participant is required")
-		}
-		upsertParticipant(&document.Participants, *command.Participant)
-	case "remove_participant":
-		if !removeParticipant(document, command.ID) {
-			return invalidAt("/id", "participant does not exist")
-		}
-	case "move_participant":
-		if command.Index == nil {
-			return invalidAt("/index", "index is required")
-		}
-		if !moveParticipant(&document.Participants, command.ID, *command.Index) {
-			return invalidAt("", "participant or target index does not exist")
-		}
-	case "upsert_message":
-		if command.Message == nil {
-			return invalidAt("/message", "message is required")
-		}
-		upsertMessage(&document.Messages, *command.Message)
-	case "remove_message":
-		if !removeMessages(document, map[string]struct{}{command.ID: {}}) {
-			return invalidAt("/id", "message does not exist")
-		}
-	case "move_message":
-		if command.Index == nil {
-			return invalidAt("/index", "index is required")
-		}
-		if !moveMessage(&document.Messages, command.ID, *command.Index) {
-			return invalidAt("", "message or target index does not exist")
-		}
-	case "upsert_fragment":
-		if command.Fragment == nil {
-			return invalidAt("/fragment", "fragment is required")
-		}
-		upsertFragment(&document.Fragments, *command.Fragment)
-	case "remove_fragment":
-		if !removeFragment(&document.Fragments, command.ID) {
-			return invalidAt("/id", "fragment does not exist")
-		}
+	case "upsert_participant", "remove_participant", "move_participant":
+		return applyParticipantCommand(document, command)
+	case "upsert_message", "remove_message", "move_message":
+		return applyMessageCommand(document, command)
+	case "upsert_fragment", "remove_fragment":
+		return applyFragmentCommand(document, command)
 	case "bind_operation":
 		message := findMessage(document.Messages, command.MessageID)
 		if message == nil {
@@ -128,6 +93,65 @@ func (r *Repo) applyCommand(ctx context.Context, tx *sql.Tx, document *Document,
 		return r.materializeContract(ctx, tx, document, command, source, ownerID)
 	default:
 		return invalidAt("/type", "unknown command")
+	}
+	return nil
+}
+
+func applyParticipantCommand(document *Document, command Command) error {
+	switch command.Type {
+	case "upsert_participant":
+		if command.Participant == nil {
+			return invalidAt("/participant", "participant is required")
+		}
+		upsertParticipant(&document.Participants, *command.Participant)
+	case "remove_participant":
+		if !removeParticipant(document, command.ID) {
+			return invalidAt("/id", "participant does not exist")
+		}
+	case "move_participant":
+		if command.Index == nil {
+			return invalidAt("/index", "index is required")
+		}
+		if !moveParticipant(&document.Participants, command.ID, *command.Index) {
+			return invalidAt("", "participant or target index does not exist")
+		}
+	}
+	return nil
+}
+
+func applyMessageCommand(document *Document, command Command) error {
+	switch command.Type {
+	case "upsert_message":
+		if command.Message == nil {
+			return invalidAt("/message", "message is required")
+		}
+		upsertMessage(&document.Messages, *command.Message)
+	case "remove_message":
+		if !removeMessages(document, map[string]struct{}{command.ID: {}}) {
+			return invalidAt("/id", "message does not exist")
+		}
+	case "move_message":
+		if command.Index == nil {
+			return invalidAt("/index", "index is required")
+		}
+		if !moveMessage(&document.Messages, command.ID, *command.Index) {
+			return invalidAt("", "message or target index does not exist")
+		}
+	}
+	return nil
+}
+
+func applyFragmentCommand(document *Document, command Command) error {
+	switch command.Type {
+	case "upsert_fragment":
+		if command.Fragment == nil {
+			return invalidAt("/fragment", "fragment is required")
+		}
+		upsertFragment(&document.Fragments, *command.Fragment)
+	case "remove_fragment":
+		if !removeFragment(&document.Fragments, command.ID) {
+			return invalidAt("/id", "fragment does not exist")
+		}
 	}
 	return nil
 }

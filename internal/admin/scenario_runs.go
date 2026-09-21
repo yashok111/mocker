@@ -23,7 +23,6 @@ type activeScenarioRun struct {
 	done          chan struct{}
 	inputHash     string
 	final         *designscenario.RunReport
-	persistCtx    context.Context
 	persistCancel context.CancelFunc
 }
 type scenarioRunService struct {
@@ -137,13 +136,13 @@ func (r *scenarioRunService) start(ctx context.Context, scenarioID int64, input 
 	// explicit cancel endpoint, shutdown and the run deadline cancel it.
 	runCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 120*time.Second)
 	persistCtx, persistCancel := context.WithCancel(context.WithoutCancel(ctx))
-	active := &activeScenarioRun{cancel: cancel, done: make(chan struct{}), inputHash: hash, persistCtx: persistCtx, persistCancel: persistCancel}
+	active := &activeScenarioRun{cancel: cancel, done: make(chan struct{}), inputHash: hash, persistCancel: persistCancel}
 	r.active[key] = active
-	go r.execute(runCtx, key, active, revision, initial)
+	go r.execute(runCtx, persistCtx, key, active, revision, initial)
 	return stored, nil
 }
 
-func (r *scenarioRunService) execute(ctx context.Context, key scenarioRunKey, active *activeScenarioRun, revision designscenario.Revision, initial designscenario.RunReport) {
+func (r *scenarioRunService) execute(ctx, persistCtx context.Context, key scenarioRunKey, active *activeScenarioRun, revision designscenario.Revision, initial designscenario.RunReport) {
 	defer close(active.done)
 	defer active.cancel()
 	defer active.persistCancel()
@@ -171,7 +170,7 @@ func (r *scenarioRunService) execute(ctx context.Context, key scenarioRunKey, ac
 	active.final = &final
 	r.mu.Unlock()
 	for {
-		finalCtx, cancel := context.WithTimeout(active.persistCtx, 5*time.Second)
+		finalCtx, cancel := context.WithTimeout(persistCtx, 5*time.Second)
 		err := r.repo.Finish(finalCtx, final)
 		cancel()
 		if err == nil {
@@ -182,7 +181,7 @@ func (r *scenarioRunService) execute(ctx context.Context, key scenarioRunKey, ac
 		}
 		r.server.log.Error("persist final scenario run; retrying", "scenario_id", key.scenarioID, "run_id", key.runID, "err", err)
 		select {
-		case <-active.persistCtx.Done():
+		case <-persistCtx.Done():
 			return
 		case <-time.After(time.Second):
 		}
