@@ -51,7 +51,7 @@ func TestMigrateResourceIdentityPreservesPopulatedSchema(t *testing.T) {
 	queries := []string{
 		"SELECT * FROM resources ORDER BY id", "SELECT * FROM entities ORDER BY id",
 		"SELECT * FROM op_overrides ORDER BY id", "SELECT * FROM custom_endpoints ORDER BY id",
-		"SELECT name, sql FROM sqlite_master WHERE type = 'index' AND sql IS NOT NULL ORDER BY name",
+		"SELECT name, sql FROM sqlite_master WHERE type = 'index' AND sql IS NOT NULL AND name NOT LIKE 'design_scenario%' ORDER BY name",
 	}
 	before := make([]string, len(queries))
 	for i, query := range queries {

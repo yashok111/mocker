@@ -36,6 +36,19 @@ if (typeof window !== "undefined" && !window.matchMedia) {
   });
 }
 
+// Mantine 9 runs its transition hook even with env="test". Reduced motion
+// prevents loading-button animation timers from outliving the test DOM.
+if (typeof window !== "undefined") {
+  const matchMedia = window.matchMedia.bind(window);
+  window.matchMedia = (query) => {
+    const result = matchMedia(query);
+    if (query === "(prefers-reduced-motion: reduce)") {
+      Object.defineProperty(result, "matches", { configurable: true, value: true });
+    }
+    return result;
+  };
+}
+
 if (typeof window !== "undefined" && !("ResizeObserver" in window)) {
   // @ts-expect-error – a DOM-environment polyfill
   window.ResizeObserver = class {

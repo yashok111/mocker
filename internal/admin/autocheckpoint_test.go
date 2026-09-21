@@ -423,13 +423,13 @@ func TestAutoCheckpointPolicy_pinsEveryMutatingRoute(t *testing.T) {
 		// changing its mind: P3b's reset-data (D3 R12), P3f's rederive
 		// (D7.3), P6b's endpoint preview (D13), P6c's close and push
 		// (D9), A6's two asset writes (D3), A11's two entity writes,
-		// P4b's import and fork — twenty.
-		cpGroupNeverTouchesLayer: 21,
-		// §4's group of four: a scenario row (including the clone) or a
-		// checkpoint row itself.
-		cpGroupAnotherLayer: 11,
+		// P4b's import and fork, then design-scenario validation and execution — twenty-three.
+		cpGroupNeverTouchesLayer: 23,
+		// Rows in another aggregate: runtime scenarios, checkpoints, API
+		// designs, four persisted design-scenario writes, and run start/cancel.
+		cpGroupAnotherLayer: 17,
 		// Every GET in the table.
-		cpGroupRead: 33,
+		cpGroupRead: 39,
 	}
 
 	byPattern := checkpointPolicyByPattern(t)
@@ -482,7 +482,10 @@ func TestAutoCheckpointPolicy_pinsEveryMutatingRoute(t *testing.T) {
 	// not configuration), plus A11's two entity writes, plus P4b's import and
 	// fork — 41. A mismatch here means the route table changed shape in a way
 	// this test's data has not caught up with yet — a signal to look, not to
-	// bump the number blindly.
+	// bump the number blindly. Persisted design scenarios add five mutating
+	// routes: create, full save, commands, restore and side-effect-free
+	// validation and HTTP-step execution; persisted run start/cancel add two
+	// more, bringing the current total to 57.
 	var mutating []string
 	for _, rt := range (&Server{}).routes() {
 		method, _, ok := strings.Cut(rt.pattern, " ")
@@ -494,8 +497,8 @@ func TestAutoCheckpointPolicy_pinsEveryMutatingRoute(t *testing.T) {
 			mutating = append(mutating, rt.pattern)
 		}
 	}
-	if len(mutating) != 49 {
-		t.Fatalf("routes() registers %d mutating patterns, want 49", len(mutating))
+	if len(mutating) != 57 {
+		t.Fatalf("routes() registers %d mutating patterns, want 57", len(mutating))
 	}
 
 	// The two halves the group counts alone cannot state: a mutating route

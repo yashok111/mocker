@@ -17,6 +17,7 @@
     "gen": "orval --config ./orval.config.ts && tsr generate"
   },
   "dependencies": {
+    "@antv/x6": "3.1.8",
     "@mantine/core": "9.5.1",
     "@mantine/dates": "9.5.1",
     "@mantine/dropzone": "9.5.1",

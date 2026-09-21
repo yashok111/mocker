@@ -81,7 +81,9 @@ describe("AppShell server status", () => {
 
     const toggle = await screen.findByRole("button", { name: "Открыть навигацию" });
     expect(screen.queryByRole("navigation", { name: "Основная навигация" })).toBeNull();
-    expect(screen.getByText("Designer content").parentElement).toHaveAttribute("data-designer");
+    const mainContent = screen.getByText("Designer content").parentElement;
+    expect(mainContent).toHaveAttribute("data-designer");
+    expect(mainContent).not.toHaveAttribute("data-canvas");
 
     await userEvent.click(toggle);
     const dialog = await screen.findByRole("dialog", { name: "Навигация" });
@@ -117,6 +119,21 @@ describe("AppShell server status", () => {
     expect(screen.getAllByRole("navigation", { name: "Основная навигация" })).toHaveLength(1);
     expect(screen.getByRole("link", { name: "Открыть проект" }).parentElement).not.toHaveAttribute(
       "data-designer",
+    );
+  });
+
+  it("gives the sequence canvas a full-width workspace and active drawer navigation", async () => {
+    renderDesignerShell("/design-scenarios/12");
+    const toggle = await screen.findByRole("button", { name: "Открыть навигацию" });
+    const mainContent = screen.getByText("Canvas content").parentElement;
+    expect(mainContent).toHaveAttribute("data-designer");
+    expect(mainContent).toHaveAttribute("data-canvas");
+    expect(screen.queryByRole("navigation", { name: "Основная навигация" })).toBeNull();
+    await userEvent.click(toggle);
+    const dialog = await screen.findByRole("dialog", { name: "Навигация" });
+    expect(within(dialog).getByTestId("nav-design-scenarios")).toHaveAttribute(
+      "aria-current",
+      "page",
     );
   });
 
@@ -225,7 +242,20 @@ function renderDesignerShell(path: string): void {
     component: () => <div>Designer content</div>,
   });
   const router = createRouter({
-    routeTree: rootRoute.addChildren([listRoute, detailRoute]),
+    routeTree: rootRoute.addChildren([
+      listRoute,
+      detailRoute,
+      createRoute({
+        getParentRoute: () => rootRoute,
+        path: "/design-canvas",
+        component: () => <div>Canvas content</div>,
+      }),
+      createRoute({
+        getParentRoute: () => rootRoute,
+        path: "/design-scenarios/$id",
+        component: () => <div>Canvas content</div>,
+      }),
+    ]),
     history: createMemoryHistory({ initialEntries: [path] }),
   });
   renderWithProviders(<RouterProvider router={router as never} />);

@@ -26,7 +26,7 @@ import {
 } from "../documentModel";
 import { JsonValueEditor } from "./JsonValueEditor";
 import { SchemaFields } from "./SchemaFields";
-import { useFormDraftStore } from "./FormDraftContext";
+import { useFormFieldDraft } from "./FormDraftContext";
 
 function changePropertyName(
   properties: Record<string, unknown>,
@@ -51,10 +51,11 @@ export function SharedSchemaForm({
   onChange: (document: ApiDocument) => void;
 }): ReactElement {
   const [currentName, setCurrentName] = useState(name);
-  const [nameDraft, setNameDraft] = useState(name);
   const [renameError, setRenameError] = useState<string>();
   const [propertyErrors, setPropertyErrors] = useState<Record<string, string>>({});
-  const draftStore = useFormDraftStore();
+  const nameDraftPointer = `${schemaPointer(currentName)}/$form/name`;
+  const { store: draftStore, draft: nameFieldDraft } = useFormFieldDraft(nameDraftPointer);
+  const nameDraft = nameFieldDraft?.source ?? currentName;
 
   const schema = getSchema(document, currentName);
   if (!schema)
@@ -81,7 +82,15 @@ export function SharedSchemaForm({
         <TextInput
           label="Имя схемы"
           value={nameDraft}
-          onChange={(event) => setNameDraft(event.currentTarget.value)}
+          onChange={(event) => {
+            const source = event.currentTarget.value;
+            if (source === currentName) draftStore.remove(nameDraftPointer);
+            else
+              draftStore.set(nameDraftPointer, {
+                source,
+                propertySource: nameFieldDraft?.propertySource ?? currentName,
+              });
+          }}
           flex={1}
         />
         <Button
@@ -90,6 +99,7 @@ export function SharedSchemaForm({
             const nextName = nameDraft.trim();
             try {
               const next = renameSchema(document, currentName, nextName);
+              draftStore.remove(nameDraftPointer);
               draftStore.moveTree(schemaPointer(currentName), schemaPointer(nextName));
               setCurrentName(nextName);
               setRenameError(undefined);

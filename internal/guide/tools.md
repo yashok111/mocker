@@ -1,6 +1,6 @@
 # mocker MCP tools — the catalogue
 
-Fifty-five tools on `POST /mcp` (admin host, `Authorization: Bearer <MOCKER_MCP_KEY>`).
+Tools on `POST /mcp` (admin host, `Authorization: Bearer <MOCKER_MCP_KEY>`).
 Every tool is an adapter over the admin HTTP API: it calls the same handlers the
 UI calls, under an MCP identity, and returns what the handler returned. This
 file is the catalogue; `SKILL.md` says which of them to call in which order.
@@ -94,6 +94,20 @@ workspace bound to the spec.
 | `rename_scenario` | Rename | `workspaceId*`, `scenarioId*`, `name*`, `editVersion*` | scenario, conflict? | Breaks an external test that switches by the old name through `POST {prefix}/state`. |
 | `activate_scenario` / `deactivate_scenario` | Switch the layer on or off | `workspaceId*`, `scenarioId*` / `workspaceId*` | revision | basePath, CORS, notFoundBody and basePathValues stay the workspace's own. Re-activating the active one is a no-op. |
 | `delete_scenario` | Delete one | `workspaceId*`, `scenarioId*`, `confirmSlug*` | deleted | No undo. |
+
+## Sequence-canvas scenarios and execution
+
+These are persisted design documents, separate from workspace snapshot scenarios
+above. `get_guide {topic: "design"}` explains editing and the run/poll workflow.
+
+| tool | purpose | input | output | gotchas |
+|---|---|---|---|---|
+| `list_design_scenarios` / `get_design_scenario` | Find a sequence and read its current document | — / `scenarioId*` | list / scenario, draft, revisions, diagnostics | Read `scenario.version` before editing and `draft.id` before running. |
+| `run_design_scenario` | Run every enabled HTTP step, assertions and extraction | `scenarioId*`, `revisionId*`, `runId*`, `variables?` (string map), `name?` | full run report, initially `status: running` | Async: poll `get_design_scenario_run` until terminal. Overrides apply only to this run. Same ID and input returns the existing run; different input with same ID is409. Pruned report IDs return410 and never redispatch. |
+| `get_design_scenario_run` | Read progress or the complete result | `scenarioId*`, `runId*` | report with document snapshot, resolved requests, responses, assertions, final variables and reasons | Inspect `status` and each step. A successful tool call can contain a failed run. Assertion `expectedJson`/`actualJson` are exact JSON strings; absent actual is distinct from `"null"`. |
+| `list_design_scenario_runs` | Find recent runs from UI and MCP | `scenarioId*` | `runs[]` with ID, name, source, revision, status and times | Latest50, newest first; reports survive page reload and server restart. |
+| `cancel_design_scenario_run` | Stop an active run | `scenarioId*`, `runId*` | current full report | Idempotent; poll until terminal if still running. Completed steps are not rolled back. |
+| `execute_design_scenario_step` | Probe one resolved HTTP request | `scenarioId*`, `revisionId*`, `messageId*`, `pathParams*`, `query*`, `headers*`, `body*` | method, path, status, headers, body, duration and revision identities | Does not run assertions or extraction. Can change mock state; do not retry a lost response blindly. Use `run_design_scenario` for a complete sequence. |
 
 ## Checkpoints (history and undo of the workspace layer)
 

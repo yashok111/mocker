@@ -1,0 +1,224 @@
+.modal {
+  max-width: 1600px;
+  height: calc(100dvh - 48px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.header {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--mocker-border, #e0e5e1);
+  flex-shrink: 0;
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+.workspace {
+  display: grid;
+  grid-template-columns: 260px minmax(0, 1fr);
+  flex: 1;
+  min-height: 0;
+}
+.sidebar {
+  min-height: 0;
+  overflow-y: auto;
+  border-right: 1px solid var(--mocker-border, #e0e5e1);
+  background: #fafcfb;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+.sidebarTitle {
+  padding: 18px 16px 10px;
+  letter-spacing: 0.04em;
+}
+.timeline {
+  list-style: none;
+  padding: 0 10px 16px 22px;
+  margin: 0;
+}
+.timeline li {
+  border-left: 1px solid var(--mocker-border, #e0e5e1);
+  padding: 3px 0 3px 10px;
+}
+.revision {
+  position: relative;
+  width: 100%;
+  padding: 10px;
+  border-radius: 6px;
+}
+.revision::before {
+  content: "";
+  position: absolute;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  left: -14px;
+  top: 17px;
+  background: #aab9b2;
+  box-shadow: 0 0 0 3px #fafcfb;
+}
+.revision:hover {
+  background: #f0f5f2;
+}
+.revision[data-active] {
+  background: #eaf3ef;
+}
+.revision[data-active]::before {
+  background: var(--mocker-accent, #087f70);
+}
+.revision:focus-visible,
+.changeTitle:focus-visible {
+  outline: 2px solid var(--mocker-accent, #087f70);
+  outline-offset: 2px;
+}
+.summary {
+  overflow-wrap: anywhere;
+}
+.comparison {
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+.pair {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 24px minmax(0, 1fr);
+  gap: 12px;
+  align-items: end;
+  padding: 16px;
+}
+.pairArrow {
+  margin-bottom: 10px;
+  color: var(--mocker-muted, #69756e);
+}
+.results {
+  min-width: 0;
+}
+.previews {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  border-block: 1px solid var(--mocker-border, #e0e5e1);
+}
+.preview {
+  min-width: 0;
+}
+.preview + .preview {
+  border-left: 1px solid var(--mocker-border, #e0e5e1);
+}
+.previewHeading {
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--mocker-border, #e0e5e1);
+  min-height: 64px;
+}
+.graph {
+  --canvas-inspector-width: 0px;
+  position: relative;
+  height: clamp(260px, 37dvh, 420px);
+  min-width: 0;
+  overflow: hidden;
+}
+.emptyGraph {
+  position: absolute;
+  inset: 45% 20px auto;
+  text-align: center;
+  pointer-events: none;
+}
+.changes {
+  padding: 18px 20px;
+}
+.change {
+  padding: 14px 0;
+  border-top: 1px solid var(--mocker-border, #e0e5e1);
+}
+.change[data-selected] {
+  border-left: 3px solid var(--mocker-accent, #087f70);
+  padding-left: 12px;
+  background: #f7fbf9;
+}
+.changeTitle {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--mocker-accent, #087f70);
+}
+.changeTitle:hover {
+  text-decoration: underline;
+}
+.fields {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+  font-size: 12px;
+  text-align: left;
+}
+.fields th,
+.fields td {
+  vertical-align: top;
+  padding: 6px 10px;
+  overflow-wrap: anywhere;
+}
+.fields th {
+  font-weight: 500;
+  color: var(--mocker-muted, #69756e);
+}
+.fields th:first-child {
+  width: 26%;
+  padding-left: 0;
+}
+.fields thead {
+  font-size: 10px;
+}
+.fields td {
+  border-left: 1px solid var(--mocker-border, #e0e5e1);
+}
+.value {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 180px;
+  overflow: auto;
+}
+.absent {
+  color: var(--mocker-muted, #69756e);
+  font-style: italic;
+}
+.swatch {
+  display: inline-block;
+  width: 13px;
+  height: 13px;
+  border: 1px solid #69756e80;
+  border-radius: 3px;
+  margin-right: 6px;
+  vertical-align: -2px;
+}
+.footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 20px;
+  border-top: 1px solid var(--mocker-border, #e0e5e1);
+  flex-shrink: 0;
+}
+.restoreNote {
+  flex: 1;
+  min-width: 180px;
+  max-width: 620px;
+}
+
+@media (max-width: 1200px) {
+  .workspace {
+    grid-template-columns: 220px minmax(0, 1fr);
+  }
+  .fields th:first-child {
+    width: 24%;
+  }
+  .changes {
+    padding-inline: 14px;
+  }
+}

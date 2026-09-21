@@ -33,7 +33,9 @@ import { ResponseEditor } from "./ResponseEditor";
 import { SchemaFields } from "./SchemaFields";
 import { omitEmpty } from "./objectFields";
 import { StringListEditor } from "./StringListEditor";
-import { useFormDraftStore } from "./FormDraftContext";
+import { useFormFieldDraft } from "./FormDraftContext";
+
+const DEFAULT_NEW_STATUS = "201";
 
 export function OperationForm({
   document,
@@ -45,11 +47,17 @@ export function OperationForm({
   onChange: (document: ApiDocument) => void;
 }): ReactElement {
   const [current, setCurrent] = useState({ ...location, method: location.method.toLowerCase() });
-  const [pathDraft, setPathDraft] = useState(location.path);
-  const [methodDraft, setMethodDraft] = useState(location.method.toLowerCase());
   const [moveError, setMoveError] = useState<string>();
-  const [newStatus, setNewStatus] = useState("201");
-  const draftStore = useFormDraftStore();
+  const pointer = operationPointer(current);
+  const pathDraftPointer = `${pointer}/$form/address/path`;
+  const methodDraftPointer = `${pointer}/$form/address/method`;
+  const newStatusDraftPointer = `${pointer}/$form/new-response-status`;
+  const { store: draftStore, draft: pathFieldDraft } = useFormFieldDraft(pathDraftPointer);
+  const { draft: methodFieldDraft } = useFormFieldDraft(methodDraftPointer);
+  const { draft: newStatusFieldDraft } = useFormFieldDraft(newStatusDraftPointer);
+  const pathDraft = pathFieldDraft?.source ?? current.path;
+  const methodDraft = methodFieldDraft?.source ?? current.method;
+  const newStatus = newStatusFieldDraft?.source ?? DEFAULT_NEW_STATUS;
 
   const operation = getOperation(document, current);
   if (!operation) {
@@ -57,7 +65,6 @@ export function OperationForm({
   }
   const parameters = Array.isArray(operation.parameters) ? operation.parameters : [];
   const responses = isRecord(operation.responses) ? operation.responses : {};
-  const pointer = operationPointer(current);
   const patch = (update: (value: Record<string, unknown>) => Record<string, unknown>) =>
     onChange(updateOperation(document, current, update));
 
@@ -73,7 +80,15 @@ export function OperationForm({
         <NativeSelect
           label="Метод"
           value={methodDraft}
-          onChange={(event) => setMethodDraft(event.currentTarget.value)}
+          onChange={(event) => {
+            const source = event.currentTarget.value;
+            if (source === current.method) draftStore.remove(methodDraftPointer);
+            else
+              draftStore.set(methodDraftPointer, {
+                source,
+                propertySource: methodFieldDraft?.propertySource ?? current.method,
+              });
+          }}
         >
           {HTTP_METHODS.map((method) => (
             <option key={method} value={method}>
@@ -84,7 +99,15 @@ export function OperationForm({
         <TextInput
           label="Путь"
           value={pathDraft}
-          onChange={(event) => setPathDraft(event.currentTarget.value)}
+          onChange={(event) => {
+            const source = event.currentTarget.value;
+            if (source === current.path) draftStore.remove(pathDraftPointer);
+            else
+              draftStore.set(pathDraftPointer, {
+                source,
+                propertySource: pathFieldDraft?.propertySource ?? current.path,
+              });
+          }}
           flex={1}
         />
         <Button
@@ -93,6 +116,8 @@ export function OperationForm({
             const target = { path: pathDraft.trim(), method: methodDraft };
             try {
               const next = renameOperation(document, current, target);
+              draftStore.remove(pathDraftPointer);
+              draftStore.remove(methodDraftPointer);
               draftStore.moveTree(operationPointer(current), operationPointer(target));
               setCurrent(target);
               setMoveError(undefined);
@@ -373,7 +398,15 @@ export function OperationForm({
         <TextInput
           label="Новый статус ответа"
           value={newStatus}
-          onChange={(event) => setNewStatus(event.currentTarget.value)}
+          onChange={(event) => {
+            const source = event.currentTarget.value;
+            if (source === DEFAULT_NEW_STATUS) draftStore.remove(newStatusDraftPointer);
+            else
+              draftStore.set(newStatusDraftPointer, {
+                source,
+                propertySource: newStatusFieldDraft?.propertySource ?? DEFAULT_NEW_STATUS,
+              });
+          }}
         />
         <Button
           variant="default"
@@ -384,6 +417,7 @@ export function OperationForm({
               ...value,
               responses: { ...responses, [status]: { description: "Ответ" } },
             }));
+            draftStore.remove(newStatusDraftPointer);
           }}
         >
           Добавить ответ

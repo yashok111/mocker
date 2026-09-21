@@ -53,6 +53,35 @@ describe("customFetch", () => {
     expect(res.data).toEqual({ ok: true });
   });
 
+  it("rejects a design-scenario response whose document numbers would be rounded", async () => {
+    mockFetch(
+      new Response('{"contracts":[{"document":{"sequence":9007199254740993}}]}', {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    await expect(customFetch("/api/design-scenarios/scenario-1", {})).rejects.toThrow(
+      "Документ содержит числа, которые браузер не может сохранить без потери точности. Используйте MCP для работы с этим документом.",
+    );
+  });
+
+  it("keeps the precision guard scoped to the design-scenarios route boundary", async () => {
+    mockFetch(
+      new Response('{"sequence":9007199254740993}', {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    const res = await customFetch<{ status: number; data: { sequence: number } }>(
+      "/api/design-scenarios-copy",
+      {},
+    );
+
+    expect(res.data.sequence).toBe(9007199254740992);
+  });
+
   it("never sends X-CSRF-Token or Content-Type on a GET", async () => {
     setCsrfToken("tok");
     const fn = mockFetch(jsonResponse(200, []));

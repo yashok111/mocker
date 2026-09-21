@@ -39,6 +39,7 @@ REPO_TANSTACK="https://github.com/DeckardGer/tanstack-agent-skills"
 REPO_MANTINE="https://github.com/mantinedev/skills"
 REPO_DOCKER="https://github.com/netresearch/docker-development-skill"
 REPO_VERCEL="https://github.com/vercel-labs/agent-skills"
+REPO_ANTV="https://github.com/antvis/chart-visualization-skills"
 
 # obra/superpowers — stack-agnostic dev-workflow discipline.
 SUPERPOWERS_SKILLS=(
@@ -96,15 +97,18 @@ DOCKER_SKILLS=(docker-development)
 # vercel-labs/agent-skills — React render/bundle rules; the Next-only ones
 # do not fire without Next.
 VERCEL_SKILLS=(vercel-react-best-practices)
+# antvis/chart-visualization-skills — G6 graph visualization and X6 diagram
+# editing for the interactive design canvas.
+ANTV_SKILLS=(antv-g6-graph antv-x6-editor)
 
 DRY_RUN=0
-ALL_GROUPS=(superpowers golang netresearch jetbrains ecc wshobson mattpocock anthropics tanstack mantine docker vercel)
+ALL_GROUPS=(superpowers golang netresearch jetbrains ecc wshobson mattpocock anthropics tanstack mantine docker vercel antv)
 TARGETS=("${ALL_GROUPS[@]}")
 SELECTED=()
 for arg in "$@"; do
   case "$arg" in
     --dry-run|-n) DRY_RUN=1 ;;
-    superpowers|golang|netresearch|jetbrains|ecc|wshobson|mattpocock|anthropics|tanstack|mantine|docker|vercel)
+    superpowers|golang|netresearch|jetbrains|ecc|wshobson|mattpocock|anthropics|tanstack|mantine|docker|vercel|antv)
       SELECTED+=("$arg") ;;
     -h|--help) sed -n '2,19p' "$0"; exit 0 ;;
     *) echo "unknown arg: $arg" >&2; exit 2 ;;
@@ -147,6 +151,7 @@ for t in "${TARGETS[@]}"; do
     mantine)     install_set "$REPO_MANTINE"     "${MANTINE_SKILLS[@]}" ;;
     docker)      install_set "$REPO_DOCKER"      "${DOCKER_SKILLS[@]}" ;;
     vercel)      install_set "$REPO_VERCEL"      "${VERCEL_SKILLS[@]}" ;;
+    antv)        install_set "$REPO_ANTV"        "${ANTV_SKILLS[@]}" ;;
   esac
 done
 echo

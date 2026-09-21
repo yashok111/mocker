@@ -80,7 +80,147 @@ function Harness({
   );
 }
 
+function SelectionHarness({
+  initialSelection,
+  draftStore,
+}: {
+  initialSelection: DocumentSelection;
+  draftStore: FormDraftStore;
+}) {
+  const [selection, setSelection] = useState(initialSelection);
+  return (
+    <>
+      <button onClick={() => setSelection({ kind: "document" })}>Metadata</button>
+      <button onClick={() => setSelection({ kind: "operation", path: "/orders", method: "get" })}>
+        Operation
+      </button>
+      <button onClick={() => setSelection({ kind: "schema", name: "Order" })}>Schema</button>
+      <Harness selection={selection} draftStore={draftStore} />
+    </>
+  );
+}
+
 describe("DocumentForm", () => {
+  it("restores pending operation method and path after selection switches and hydration", async () => {
+    const store = createFormDraftStore();
+    const mounted = renderWithProviders(
+      <SelectionHarness
+        initialSelection={{ kind: "operation", path: "/orders", method: "get" }}
+        draftStore={store}
+      />,
+    );
+
+    await userEvent.selectOptions(screen.getByRole("combobox", { name: "Метод" }), "post");
+    const path = screen.getByRole("textbox", { name: "Путь" });
+    await userEvent.clear(path);
+    await fill(path, "/purchases/{id}");
+    expect(store.getSnapshot()).toEqual({ dirty: true, invalid: false });
+
+    await userEvent.click(screen.getByRole("button", { name: "Schema" }));
+    await userEvent.click(screen.getByRole("button", { name: "Operation" }));
+    expect(screen.getByRole("combobox", { name: "Метод" })).toHaveValue("post");
+    expect(screen.getByRole("textbox", { name: "Путь" })).toHaveValue("/purchases/{id}");
+
+    const serialized = store.serialize();
+    mounted.unmount();
+    const restored = createFormDraftStore();
+    restored.hydrate(serialized);
+    renderWithProviders(
+      <SelectionHarness
+        initialSelection={{ kind: "operation", path: "/orders", method: "get" }}
+        draftStore={restored}
+      />,
+    );
+    expect(screen.getByRole("combobox", { name: "Метод" })).toHaveValue("post");
+    expect(screen.getByRole("textbox", { name: "Путь" })).toHaveValue("/purchases/{id}");
+    expect(restored.getSnapshot()).toEqual({ dirty: true, invalid: false });
+  });
+
+  it("restores a pending schema rename after selection switches and hydration", async () => {
+    const store = createFormDraftStore();
+    const mounted = renderWithProviders(
+      <SelectionHarness initialSelection={{ kind: "schema", name: "Order" }} draftStore={store} />,
+    );
+
+    const name = screen.getByRole("textbox", { name: "Имя схемы" });
+    await userEvent.clear(name);
+    await fill(name, "Purchase");
+    expect(store.getSnapshot()).toEqual({ dirty: true, invalid: false });
+
+    await userEvent.click(screen.getByRole("button", { name: "Metadata" }));
+    await userEvent.click(screen.getByRole("button", { name: "Schema" }));
+    expect(screen.getByRole("textbox", { name: "Имя схемы" })).toHaveValue("Purchase");
+
+    const serialized = store.serialize();
+    mounted.unmount();
+    const restored = createFormDraftStore();
+    restored.hydrate(serialized);
+    renderWithProviders(
+      <SelectionHarness
+        initialSelection={{ kind: "schema", name: "Order" }}
+        draftStore={restored}
+      />,
+    );
+    expect(screen.getByRole("textbox", { name: "Имя схемы" })).toHaveValue("Purchase");
+    expect(restored.getSnapshot()).toEqual({ dirty: true, invalid: false });
+  });
+
+  it("clears pending operation address drafts after the rename is applied", async () => {
+    const store = createFormDraftStore();
+    let changed: ApiDocument | undefined;
+    renderWithProviders(
+      <Harness
+        selection={{ kind: "operation", path: "/orders", method: "get" }}
+        draftStore={store}
+        onChange={(document) => (changed = document)}
+      />,
+    );
+
+    await userEvent.selectOptions(screen.getByRole("combobox", { name: "Метод" }), "post");
+    const path = screen.getByRole("textbox", { name: "Путь" });
+    await userEvent.clear(path);
+    await fill(path, "/purchases");
+    expect(store.getSnapshot().dirty).toBe(true);
+    await userEvent.click(screen.getByRole("button", { name: "Изменить адрес" }));
+
+    expect(store.getSnapshot()).toEqual({ dirty: false, invalid: false });
+    expect(store.serialize()).toBe("{}");
+    expect(changed).toMatchObject({ paths: { "/purchases": { post: { summary: "List" } } } });
+  });
+
+  it("restores a pending response status and clears it after adding the response", async () => {
+    const store = createFormDraftStore();
+    const mounted = renderWithProviders(
+      <SelectionHarness
+        initialSelection={{ kind: "operation", path: "/orders", method: "get" }}
+        draftStore={store}
+      />,
+    );
+
+    const status = screen.getByRole("textbox", { name: "Новый статус ответа" });
+    await userEvent.clear(status);
+    await fill(status, "299");
+    expect(store.getSnapshot()).toEqual({ dirty: true, invalid: false });
+    await userEvent.click(screen.getByRole("button", { name: "Schema" }));
+    await userEvent.click(screen.getByRole("button", { name: "Operation" }));
+    expect(screen.getByRole("textbox", { name: "Новый статус ответа" })).toHaveValue("299");
+
+    const serialized = store.serialize();
+    mounted.unmount();
+    const restored = createFormDraftStore();
+    restored.hydrate(serialized);
+    renderWithProviders(
+      <SelectionHarness
+        initialSelection={{ kind: "operation", path: "/orders", method: "get" }}
+        draftStore={restored}
+      />,
+    );
+    expect(screen.getByRole("textbox", { name: "Новый статус ответа" })).toHaveValue("299");
+    await userEvent.click(screen.getByRole("button", { name: "Добавить ответ" }));
+    expect(screen.getByRole("textbox", { name: "Новый статус ответа" })).toHaveValue("201");
+    expect(restored.getSnapshot()).toEqual({ dirty: false, invalid: false });
+  });
+
   it.each(["9007199254740993", "0.1234567890123456789", "1e400"])(
     "keeps lossy numeric token %s in a pending JSON field until corrected",
     async (token) => {
@@ -123,6 +263,7 @@ describe("DocumentForm", () => {
     expect(screen.getByRole("textbox", { name: "Полная схема JSON" })).toHaveValue("{unfinished");
     expect(store.get("/components/schemas/Order")).toBeUndefined();
     expect(store.get("/components/schemas/Purchase")?.source).toBe("{unfinished");
+    expect(store.get("/components/schemas/Purchase/$form/name")).toBeUndefined();
     mounted.unmount();
     const responseStore = createFormDraftStore();
     renderWithProviders(

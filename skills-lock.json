@@ -7,6 +7,18 @@
       "skillPath": "skills/accessibility/SKILL.md",
       "computedHash": "b480cfd582a4fa30e8b52eaab3bcb490653a05f9049efb8a5186f064cc33aa3e"
     },
+    "antv-g6-graph": {
+      "source": "antvis/chart-visualization-skills",
+      "sourceType": "github",
+      "skillPath": "skills/antv-g6-graph/SKILL.md",
+      "computedHash": "3bbb5b3cdca8ed7a6c831048e3e0381eb96a43316886d7195f1b2d8c89927a46"
+    },
+    "antv-x6-editor": {
+      "source": "antvis/chart-visualization-skills",
+      "sourceType": "github",
+      "skillPath": "skills/antv-x6-editor/SKILL.md",
+      "computedHash": "28055d5ee98cf788adbb35ad6dfe2042e1610d52216666b4625d1ee2d13e91e4"
+    },
     "api-design": {
       "source": "affaan-m/everything-claude-code",
       "sourceType": "github",

@@ -177,6 +177,11 @@
   padding: 20px 24px 32px;
 }
 
+.mainContent[data-canvas] {
+  max-width: none;
+  padding: 0;
+}
+
 .serverStatus {
   display: flex;
   align-items: center;

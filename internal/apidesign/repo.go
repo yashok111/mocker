@@ -63,7 +63,12 @@ func scanRevision(row scanner) (Revision, error) {
 	return v, notFound(err)
 }
 func getRevision(ctx context.Context, q queryer, designID, id int64) (Revision, error) {
-	return scanRevision(q.QueryRowContext(ctx, "SELECT "+revisionColumns+" FROM api_design_revisions WHERE design_id=? AND id=?", designID, id))
+	revision, err := scanRevision(q.QueryRowContext(ctx, "SELECT "+revisionColumns+" FROM api_design_revisions WHERE design_id=? AND id=?", designID, id))
+	if err != nil {
+		return revision, err
+	}
+	revision.Document, err = withOperationKeys(revision.Document, "", designID)
+	return revision, err
 }
 
 const reviewColumns = `id,design_id,revision_id,base_revision_id,status,summary,source,created_at`

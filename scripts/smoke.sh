@@ -3639,27 +3639,42 @@ else
 	echo "PASS  initialize: 200, serverInfo.name=mocker"
 fi
 
-echo "== MCP observation 4: tools/list returns exactly 63 tools =="
+echo "== MCP observation 4: tools/list advertises the tools used by this smoke =="
 # No initialize sent first -- measured against v1.7.0: tools/list works
 # without one in stateless mode, so this is a complete, standalone observation.
-# 43 -> 44: P4a's get_workspace_drift (the block below, "P4a: the MCP tool
-# get_workspace_drift names the same override") is registered like every
-# other tool and so raises this count too. 44 -> 46: A4's probe_workspace
-# and list_resource_entities -- A4 moved the Go count and left this line at
-# 44, and the suite was red on this one check from A4 to P6a. 46 -> 47:
-# P6a's get_stream_stats (decisions.md mocker-p6a-sse D16, D25). 47 -> 48:
-# P6b's preview_endpoint (decisions.md mocker-p6b-sse-mock D13). The same
-# 48 the Go tests carry (internal/mcp/a3_editversion_test.go,
-# internal/mcp/mcp_resources_test.go).
+# The Go MCP tests pin the complete catalog. Here additions are allowed:
+# adding API Designer tools must not break unrelated live acceptance checks.
+# Still reject missing tools, malformed names and duplicate registrations.
+mcp_required_tools='[
+  "list_specs", "create_workspace", "list_workspaces", "find_operations",
+  "get_operation", "set_operation_response", "list_traffic",
+  "set_session_directive", "override_from_traffic", "rederive_suggestions",
+  "get_workspace_drift", "get_stream_stats", "create_endpoint",
+  "update_endpoint", "list_endpoints", "preview_endpoint",
+  "list_stream_connections", "push_stream_frame", "close_stream_connection",
+  "list_assets", "delete_asset"
+]'
 mcp_status=$(mcp_call POST "$ADMIN_HOST" /mcp "$MCP_KEY" "$mcp_tools_list_req")
-mcp_tool_count=$(jq '.result.tools | length' "$BODY_FILE")
-mcp_has_lw=$(jq '[.result.tools[].name] | index("list_workspaces") != null' "$BODY_FILE")
-mcp_has_ssd=$(jq '[.result.tools[].name] | index("set_session_directive") != null' "$BODY_FILE")
-if [[ "$mcp_status" != "200" || "$mcp_tool_count" != "63" || "$mcp_has_lw" != "true" || "$mcp_has_ssd" != "true" ]]; then
-	echo "FAIL  tools/list: want status 200, 63 tools, list_workspaces and set_session_directive both present; got status ${mcp_status} count ${mcp_tool_count} list_workspaces=${mcp_has_lw} set_session_directive=${mcp_has_ssd}: $(cat "$BODY_FILE")"
+if ! mcp_catalog_summary=$(jq -ce --argjson required "$mcp_required_tools" '
+  if .jsonrpc != "2.0" or .id != 1 or .error != null or (.result.tools | type) != "array" then
+    error("expected a successful tools/list response with a tools array")
+  else
+    [.result.tools[].name] as $names |
+    {
+      count: ($names | length),
+      missing: ($required - $names),
+      validNames: all($names[]; type == "string" and . != ""),
+      uniqueNames: (($names | unique | length) == ($names | length))
+    }
+  end
+' "$BODY_FILE"); then
+	echo "FAIL  tools/list: invalid JSON-RPC catalog response (HTTP ${mcp_status})"
+	fail_count=$((fail_count + 1))
+elif [[ "$mcp_status" != "200" ]] || ! jq -e '.missing == [] and .validNames and .uniqueNames' <<<"$mcp_catalog_summary" >/dev/null; then
+	echo "FAIL  tools/list: want HTTP 200 and unique nonempty names including every smoke tool; got HTTP ${mcp_status}: ${mcp_catalog_summary}"
 	fail_count=$((fail_count + 1))
 else
-	echo "PASS  tools/list: 200, exactly 63 tools, list_workspaces and set_session_directive both present"
+	echo "PASS  tools/list: 200, $(jq '.count' <<<"$mcp_catalog_summary") tools, unique nonempty names and every smoke tool present"
 fi
 
 echo "== MCP observation 5: create_workspace works live, and so do list_specs and list_workspaces =="

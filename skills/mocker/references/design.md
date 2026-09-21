@@ -49,6 +49,56 @@ The author document preserves OpenAPI fields; runtime normalization is separate.
 Names a client reports for an agent are not verified identities; history records
 the server-derived UI/MCP source.
 
+## Sequence canvas: edit, run, inspect, vary
+
+A sequence-canvas scenario stores participants, ordered messages, contract
+bindings and execution settings. It has its own immutable revisions and is
+separate from the classic workspace snapshot called a scenario.
+
+1. `list_design_scenarios` → `get_design_scenario {scenarioId}`. Read the full
+   `draft.document`, `draft.formDrafts`, `scenario.version` and `draft.id`.
+   `validate_design_scenario {scenarioId, document}` checks a proposed document
+   without saving. Enabled HTTP requests need a linked, current API contract;
+   finish form buffers and remove unsupported opt/loop fragments before a run.
+2. To edit, use `apply_design_scenario_commands` with the exact `expectedVersion`
+   and an ordered command batch, or `save_design_scenario_draft` with the complete
+   document and all retained form buffers. Upserts replace complete objects.
+   Re-read and reconcile a409; never blindly substitute the newer version.
+   Message `execution` configures parameter/header/body templates (`{{name}}`),
+   expected HTTP status, JSON-pointer assertions and extracted variables.
+3. `run_design_scenario {scenarioId, revisionId, runId, name, variables}` starts
+   the saved revision and immediately returns a report. Choose a unique run ID
+   (`[A-Za-z0-9_-]{1,100}`) and a useful name for each experiment. `variables` is
+   an optional map of string overrides; it does not save a new scenario revision.
+4. While `status` is `running`, call `get_design_scenario_run {scenarioId, runId}`
+   roughly once per second. **Starting successfully does not mean the scenario
+   passed.** Read the terminal `passed`, `failed` or `cancelled` result. Every
+   report includes the exact document snapshot and ordered steps with resolved
+   requests, responses, assertion results and reasons. Missing JSON values and
+   JSON null differ. `expectedJson` and `actualJson` contain serialized JSON so
+   large integers remain exact; preserve them as strings when reporting them.
+5. On failure, inspect the first failed step, its actual status/body and assertion
+   reason. Try another variable set under a NEW run ID, or edit the scenario and
+   run its new revision. Extraction happens only after the step's checks pass;
+   failure stops later requests. Default expected status is any2xx.
+6. If a start response is lost, GET the known run ID. Retrying the same ID and
+   same input returns the existing run without repeating requests. A different
+   payload with that ID is409. Old pruned report IDs are410 and do not re-execute.
+   `list_design_scenario_runs` lists the latest50 reports from both transports.
+   `cancel_design_scenario_run` stops an active run; completed effects remain.
+
+The server runs the sequence even when the MCP call returns or its client
+disconnects. Four runs may be active globally, one per scenario; runs have a120s
+budget and individual requests30s. Runs use linked draft mocks in-process,
+with the same contract checks as a single-step probe. External URLs, conditions
+and loops are not supported; disabled/descriptive messages are skipped. Runs
+use normal mock state and do not isolate or roll back effects.
+
+The UI's execution panel follows new agent runs, shows progress and keeps saved
+reports after reload. A manually selected historical report stays selected.
+Closing the viewer does not cancel a run started by an agent. The run's `source`
+is recorded by the transport (`mcp` or `ui`), not supplied by the caller.
+
 ## Classic workspace design (existing workflow)
 
 This is the workflow DESIGN §34 describes: a frontend developer or systems

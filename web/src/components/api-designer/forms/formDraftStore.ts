@@ -27,11 +27,14 @@ export interface FormDraftStore {
 export function createFormDraftStore(): FormDraftStore {
   const drafts = new Map<string, FormFieldDraft>();
   const listeners = new Set<() => void>();
+  let invalidSerialized: string | null = null;
   let snapshot: FormDraftSnapshot = { dirty: false, invalid: false };
   const notify = () => {
     snapshot = {
-      dirty: drafts.size > 0,
-      invalid: [...drafts.values()].some((draft) => draft.error !== undefined),
+      dirty: drafts.size > 0 || invalidSerialized !== null,
+      invalid:
+        invalidSerialized !== null ||
+        [...drafts.values()].some((draft) => draft.error !== undefined),
     };
     for (const listener of listeners) listener();
   };
@@ -43,6 +46,7 @@ export function createFormDraftStore(): FormDraftStore {
     getSnapshot: () => snapshot,
     get: (pointer) => drafts.get(pointer),
     set(pointer, draft) {
+      invalidSerialized = null;
       drafts.set(pointer, draft);
       notify();
     },
@@ -67,27 +71,48 @@ export function createFormDraftStore(): FormDraftStore {
       if (moved.length > 0) notify();
     },
     clear() {
-      if (drafts.size === 0) return;
+      if (drafts.size === 0 && invalidSerialized === null) return;
       drafts.clear();
+      invalidSerialized = null;
       notify();
     },
-    serialize: () => JSON.stringify(Object.fromEntries(drafts)),
+    serialize: () => invalidSerialized ?? JSON.stringify(Object.fromEntries(drafts)),
     hydrate(serialized) {
       let parsed: unknown;
       try {
         parsed = JSON.parse(serialized);
       } catch {
+        drafts.clear();
+        invalidSerialized = serialized;
+        notify();
         return;
       }
-      if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return;
+      if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+        drafts.clear();
+        invalidSerialized = serialized;
+        notify();
+        return;
+      }
+      const entries = Object.entries(parsed);
+      if (
+        entries.some(([, value]) => {
+          if (typeof value !== "object" || value === null || Array.isArray(value)) return true;
+          const draft = value as Record<string, unknown>;
+          return typeof draft.source !== "string" || typeof draft.propertySource !== "string";
+        })
+      ) {
+        drafts.clear();
+        invalidSerialized = serialized;
+        notify();
+        return;
+      }
       drafts.clear();
-      for (const [pointer, value] of Object.entries(parsed)) {
-        if (typeof value !== "object" || value === null || Array.isArray(value)) continue;
+      invalidSerialized = null;
+      for (const [pointer, value] of entries) {
         const draft = value as Record<string, unknown>;
-        if (typeof draft.source !== "string" || typeof draft.propertySource !== "string") continue;
         drafts.set(pointer, {
-          source: draft.source,
-          propertySource: draft.propertySource,
+          source: draft.source as string,
+          propertySource: draft.propertySource as string,
           ...(typeof draft.error === "string" ? { error: draft.error } : {}),
         });
       }

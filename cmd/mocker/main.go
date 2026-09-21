@@ -365,6 +365,7 @@ func (a *app) wireMockPlane() {
 	// and the route ships wired to nothing, answering 503 forever, while
 	// every Go test (which wires it explicitly) keeps passing.
 	a.adminSrv.SetPreviewer(a.mockPlane)
+	a.adminSrv.SetScenarioExecutor(a.mockPlane)
 
 	// The SLICE P2b source: scenarios. Same near-miss risk as every setter
 	// above — and a sharper one, because the feature is INVISIBLE without
@@ -521,6 +522,9 @@ func (a *app) checkWiring() error {
 // file. Read the comments before changing it: they cite the incident where
 // the recorder lost the last traffic records.
 func (a *app) startAndDrain(ctx context.Context, stop context.CancelFunc) error {
+	if err := a.adminSrv.InitializeScenarioRuns(ctx); err != nil {
+		return fmt.Errorf("recover scenario runs: %w", err)
+	}
 	dispatcher := server.New(a.cfg, a.adminSrv.Handler(), a.mockPlane, a.log)
 	// Recover, RequestLog and MaxBody wrap the WHOLE dispatcher exactly once
 	// here — both planes build their own handler with only what is specific
@@ -633,6 +637,9 @@ func (a *app) startAndDrain(ctx context.Context, stop context.CancelFunc) error 
 		// accepts it as inherited; a bare Background here is the finding
 		// it raised the day run() was split into phases).
 		shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), shutdownDrain)
+		if err := a.adminSrv.CloseScenarioRuns(shutdownCtx); err != nil {
+			runErr = fmt.Errorf("drain scenario runs: %w", err)
+		}
 		if err := httpServer.Shutdown(shutdownCtx); err != nil {
 			runErr = fmt.Errorf("graceful shutdown: %w", err)
 		}
@@ -664,6 +671,11 @@ func (a *app) startAndDrain(ctx context.Context, stop context.CancelFunc) error 
 		// is no drain on this path, so this is the only thing that does.
 		a.streamRegistry.Close()
 		a.mockStreams.Close()
+		runsCtx, runsCancel := context.WithTimeout(context.WithoutCancel(ctx), shutdownDrain)
+		if closeErr := a.adminSrv.CloseScenarioRuns(runsCtx); closeErr != nil {
+			a.log.Error("drain scenario runs", "err", closeErr)
+		}
+		runsCancel()
 		// No Shutdown was called and nothing is draining, so there is no
 		// reason to keep the recorder waiting either — cancel it here too,
 		// or <-recorderDone below blocks forever on this path.
