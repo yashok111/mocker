@@ -1,4 +1,5 @@
 import { resolveOperation } from "./canvasModel";
+import { canvasTextMeasurer, wrapCanvasText, CANVAS_MONOSPACE_FONT_FAMILY } from "./canvasText";
 import {
   participantNameMeasurer,
   wrapParticipantName,
@@ -17,6 +18,10 @@ const FIRST_MESSAGE_Y = 148;
 const MESSAGE_GAP = 72;
 const MESSAGE_LABEL_HEIGHT = 28;
 const MESSAGE_LABEL_GAP = 6;
+const MESSAGE_LABEL_PADDING_X = 37;
+const MESSAGE_LIFELINE_GAP = 12;
+export const MESSAGE_LABEL_LINE_HEIGHT = 14;
+export const MESSAGE_OPERATION_LINE_HEIGHT = 12;
 const SELF_CALL_WIDTH = 56;
 const SELF_CALL_HEIGHT = 34;
 const FRAGMENT_PADDING_X = 44;
@@ -45,6 +50,8 @@ export interface MessageLayout {
   source: SequencePoint;
   target: SequencePoint;
   vertices: SequencePoint[];
+  labelLines: string[];
+  operationLines: string[];
   label: { x: number; y: number; width: number; height: number };
   note?: { x: number; y: number; width: number; height: number };
 }
@@ -68,6 +75,8 @@ export interface SequenceLayout {
 export function layoutSequence(document: CanvasDocument): SequenceLayout {
   const participantX = new Map<string, number>();
   const measureName = participantNameMeasurer();
+  const measureLabel = canvasTextMeasurer(11, 550);
+  const measureOperation = canvasTextMeasurer(9, 650, CANVAS_MONOSPACE_FONT_FAMILY);
   let horizontalOffset = 0;
   const participants = document.participants.map((participant, index): ParticipantLayout => {
     horizontalOffset += participant.offsetX ?? 0;
@@ -117,15 +126,45 @@ export function layoutSequence(document: CanvasDocument): SequenceLayout {
       : message.operation
         ? "API-связь недоступна"
         : "";
-    const labelWidth = Math.max(
-      96,
-      Array.from(message.label).length * 7.2 + 44,
-      operationLabel ? Array.from(operationLabel).length * 6.4 + 38 : 0,
-    );
-    const labelHeight = operationLabel ? 42 : MESSAGE_LABEL_HEIGHT;
-    const noteHeight = operationLabel ? 58 : 46;
     const isNote = message.kind === "note";
     const isSelfCall = !isNote && message.fromId === message.toId;
+    const nextX = participants.find(({ x }) => x > fromX)?.x;
+    const availableWidth =
+      (isSelfCall
+        ? (nextX ?? fromX + HEADER_WIDTH + PARTICIPANT_GAP) - fromX
+        : Math.abs(toX - fromX)) -
+      2 * MESSAGE_LIFELINE_GAP;
+    const naturalWidth = Math.max(
+      96,
+      ...message.label
+        .split(/\r\n|\r|\n/)
+        .map((line) => measureLabel(line) + MESSAGE_LABEL_PADDING_X),
+      ...operationLabel
+        .split(/\r\n|\r|\n/)
+        .map((line) => measureOperation(line) + MESSAGE_LABEL_PADDING_X),
+    );
+    const labelWidth = isNote
+      ? Math.max(
+          96,
+          Array.from(message.label).length * 7.2 + 44,
+          operationLabel ? Array.from(operationLabel).length * 6.4 + 38 : 0,
+        )
+      : Math.min(naturalWidth, availableWidth);
+    const labelLines = isNote
+      ? [message.label]
+      : wrapCanvasText(message.label, labelWidth - MESSAGE_LABEL_PADDING_X, measureLabel);
+    const operationLines = !operationLabel
+      ? []
+      : isNote
+        ? [operationLabel]
+        : wrapCanvasText(operationLabel, labelWidth - MESSAGE_LABEL_PADDING_X, measureOperation);
+    const labelHeight =
+      MESSAGE_LABEL_HEIGHT +
+      (labelLines.length - 1) * MESSAGE_LABEL_LINE_HEIGHT +
+      (operationLines.length
+        ? 14 + (operationLines.length - 1) * MESSAGE_OPERATION_LINE_HEIGHT
+        : 0);
+    const noteHeight = operationLabel ? 58 : 46;
     const topExtent = isNote ? noteHeight / 2 : labelHeight + MESSAGE_LABEL_GAP;
     const opening = ranges.filter((range) => range.from === index);
     const rowY = Math.max(
@@ -137,13 +176,15 @@ export function layoutSequence(document: CanvasDocument): SequenceLayout {
       range.top = rowY - topExtent - (opening.length - depth) * FRAGMENT_HEADER_HEIGHT;
     }
     const targetY = isSelfCall ? rowY + SELF_CALL_HEIGHT : rowY;
-    const midpointX = isSelfCall ? fromX + SELF_CALL_WIDTH / 2 : (fromX + toX) / 2;
+    const labelX = isSelfCall ? fromX + MESSAGE_LIFELINE_GAP : (fromX + toX - labelWidth) / 2;
     const geometry: MessageLayout = {
       id: message.id,
       index,
       rowY,
       source: { x: fromX, y: rowY },
       target: { x: toX, y: targetY },
+      labelLines,
+      operationLines,
       vertices: isSelfCall
         ? [
             { x: fromX + SELF_CALL_WIDTH, y: rowY },
@@ -151,7 +192,7 @@ export function layoutSequence(document: CanvasDocument): SequenceLayout {
           ]
         : [],
       label: {
-        x: midpointX - labelWidth / 2,
+        x: labelX,
         y: rowY - labelHeight - MESSAGE_LABEL_GAP,
         width: labelWidth,
         height: labelHeight,

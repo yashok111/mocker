@@ -20,6 +20,114 @@ const participants: CanvasDocument["participants"] = [
 ];
 
 describe("layoutSequence", () => {
+  it.each(["request", "response", "event"] as const)(
+    "wraps a long %s label inside its lifelines",
+    (kind) => {
+      const label =
+        "Проверить сессию пользователя и загрузить список доступных заданий и приглашений";
+      const layout = layoutSequence(
+        documentOf({
+          participants: participants.slice(0, 2),
+          messages: [
+            {
+              id: "long",
+              fromId: kind === "response" ? "shop" : "buyer",
+              toId: kind === "response" ? "buyer" : "shop",
+              kind,
+              label,
+              description: "",
+            },
+            {
+              id: "next",
+              fromId: "buyer",
+              toId: "shop",
+              kind: "request",
+              label: "Следующий",
+              description: "",
+            },
+          ],
+        }),
+      );
+      const [long, next] = layout.messages;
+      expect(long!.label.x).toBeGreaterThan(144);
+      expect(long!.label.x + long!.label.width).toBeLessThan(400);
+      expect(long!.labelLines.length).toBeGreaterThan(1);
+      expect(long!.labelLines.join(" ")).toBe(label);
+      expect(long!.label.height).toBeGreaterThan(28);
+      expect(long!.label.y + long!.label.height).toBeLessThan(long!.source.y - 3);
+      expect(next!.label.y).toBeGreaterThan(long!.target.y);
+    },
+  );
+
+  it("wraps API paths below the whole message and reflows when lanes widen", () => {
+    const label = "Получить подробную информацию о текущей сессии пользователя и его заданиях";
+    const path = "/api/v1/quizzes/student-sessions/by-token/very-long-path-without-spaces";
+    const document = documentOf({
+      participants: participants.slice(0, 2),
+      messages: [
+        {
+          id: "api",
+          fromId: "buyer",
+          toId: "shop",
+          kind: "request",
+          label,
+          description: "",
+          operation: { contractId: "api", operationKey: "get-session" },
+        },
+      ],
+      contracts: [
+        {
+          id: "api",
+          name: "API",
+          document: {
+            openapi: "3.1.0",
+            info: { title: "API", version: "1" },
+            paths: {
+              [path]: {
+                get: {
+                  "x-mocker-canvas-operation-id": "get-session",
+                  responses: { "200": { description: "OK" } },
+                },
+              },
+            },
+          },
+        },
+      ],
+    });
+    const narrow = layoutSequence(document).messages[0]!;
+    expect(narrow.operationLines.length).toBeGreaterThan(1);
+    expect(narrow.operationLines.join("").replace(/\s/g, "")).toBe(`GET${path}`);
+    const wider = layoutSequence({
+      ...document,
+      participants: document.participants.map((p, i) => ({ ...p, offsetX: i ? 400 : 0 })),
+    }).messages[0]!;
+    expect(wider.label.width).toBeGreaterThan(narrow.label.width);
+    expect(wider.label.height).toBeLessThan(narrow.label.height);
+  });
+
+  it("wraps self-call cards on the right without crossing the next participant", () => {
+    const layout = layoutSequence(
+      documentOf({
+        participants,
+        messages: [
+          {
+            id: "self",
+            fromId: "buyer",
+            toId: "buyer",
+            kind: "event",
+            label:
+              "Сформировать и подписать гостевой JWT и сохранить данные новой пользовательской сессии",
+            description: "",
+          },
+        ],
+      }),
+    );
+    const message = layout.messages[0]!;
+    expect(message.label.x).toBeGreaterThan(message.source.x);
+    expect(message.label.x + message.label.width).toBeLessThan(layout.participants[1]!.x);
+    expect(message.labelLines.length).toBeGreaterThan(1);
+  });
+
   it("grows participant cards and starts messages below the tallest name", () => {
     const name = "Platform API · auth + quiz · пользовательские сессии";
     const layout = layoutSequence(

@@ -8,7 +8,14 @@ import { PARTICIPANT_NAME_FONT_FAMILY, PARTICIPANT_NAME_LINE_HEIGHT } from "./pa
 import { installCanvasWheelZoom } from "./canvasZoom";
 import { ObjectDescriptionTooltip, type TooltipBounds } from "./ObjectDescriptionTooltip";
 import styles from "./SequenceGraph.module.css";
-import { layoutSequence, messageIndexAtY, type SequenceLayout } from "./sequenceLayout";
+import {
+  layoutSequence,
+  messageIndexAtY,
+  MESSAGE_LABEL_LINE_HEIGHT,
+  MESSAGE_OPERATION_LINE_HEIGHT,
+  type SequenceLayout,
+} from "./sequenceLayout";
+import { CANVAS_TEXT_FONT_FAMILY, CANVAS_MONOSPACE_FONT_FAMILY } from "./canvasText";
 import type { CanvasDocument, CanvasSelection, MessageKind, ParticipantKind } from "./types";
 import { MAX_PARTICIPANT_OFFSET_X } from "./types";
 
@@ -523,27 +530,31 @@ function addMessageCells(
         },
         label: {
           ...absoluteText,
-          text: message.label,
+          text: geometry.labelLines.join("\n"),
+          "aria-label": message.label,
           x: 25,
-          y: operationLabel ? 13 : labelHeight / 2,
+          y: 7,
           fill: textColor(palette.ink),
+          fontFamily: CANVAS_TEXT_FONT_FAMILY,
           fontSize: 11,
           fontWeight: 550,
+          lineHeight: MESSAGE_LABEL_LINE_HEIGHT,
           textAnchor: "start",
-          textVerticalAnchor: "middle",
+          textVerticalAnchor: "top",
           pointerEvents: "none",
         },
         operation: {
           ...absoluteText,
-          text: operationLabel ?? "",
+          text: geometry.operationLines.join("\n"),
           x: 25,
-          y: 29,
+          y: 9 + geometry.labelLines.length * MESSAGE_LABEL_LINE_HEIGHT,
           fill: textColor(resolvedOperation ? palette.accent : "#a15c4b"),
-          fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+          fontFamily: CANVAS_MONOSPACE_FONT_FAMILY,
           fontSize: 9,
           fontWeight: 650,
+          lineHeight: MESSAGE_OPERATION_LINE_HEIGHT,
           textAnchor: "start",
-          textVerticalAnchor: "middle",
+          textVerticalAnchor: "top",
           pointerEvents: "none",
         },
       },

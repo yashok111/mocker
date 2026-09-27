@@ -80,6 +80,25 @@ beforeEach(() => vi.clearAllMocks());
 afterEach(cleanup);
 
 describe("SequenceGraph colors", () => {
+  it("renders wrapped labels and places the API text below all title lines", () => {
+    const document = documentOf();
+    const message = document.messages[0]!;
+    message.label =
+      "Проверить текущую сессию пользователя и получить все доступные задания и приглашения";
+    message.operation = { contractId: "missing", operationKey: "missing" };
+    render(view(document));
+    const card = cell("message-label:call");
+    const label = card.attrs.label!;
+    const operation = card.attrs.operation!;
+    const lines = String(label.text).split("\n");
+    expect(lines.length).toBeGreaterThan(1);
+    expect(lines.join(" ")).toBe(message.label);
+    expect(Number(operation.y)).toBeGreaterThan(
+      Number(label.y) + lines.length * Number(label.lineHeight),
+    );
+    expect(Number(operation.y) + 12).toBeLessThan(card.height);
+  });
+
   it("keeps defaults and selected defaults for documents without colors", () => {
     const document = documentOf();
     const result = render(view(document));
