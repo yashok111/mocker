@@ -7,6 +7,7 @@ import {
   Divider,
   Group,
   NativeSelect,
+  NumberInput,
   Stack,
   Text,
   Textarea,
@@ -25,7 +26,14 @@ import { Link } from "@tanstack/react-router";
 import { DocumentForm } from "../api-designer/DocumentForm";
 import type { FormDraftStore } from "../api-designer/forms/formDraftStore";
 import { getOperation, listOperations, listSchemas } from "../api-designer/documentModel";
-import { addLocalOperation, OPERATION_KEY, resolveOperation, updateMessage } from "./canvasModel";
+import {
+  addLocalOperation,
+  OPERATION_KEY,
+  resolveOperation,
+  spaceParticipant,
+  updateMessage,
+} from "./canvasModel";
+import { MAX_PARTICIPANT_OFFSET_X } from "./types";
 import { scopeFormDrafts } from "./useCanvasDraft";
 import { CanvasColorInput } from "./CanvasColorInput";
 import { messageLabels, participantLabels } from "./labels";
@@ -139,6 +147,28 @@ export function CanvasInspector(props: Props): ReactElement {
                 })
               }
             />
+            <NumberInput
+              label="Дополнительный отступ слева"
+              description="Раздвигает колонки; участники справа сдвигаются вместе."
+              value={participant.offsetX ?? 0}
+              min={0}
+              max={MAX_PARTICIPANT_OFFSET_X}
+              step={20}
+              allowDecimal={false}
+              allowNegative={false}
+              suffix=" px"
+              onChange={(value) => {
+                if (typeof value === "number")
+                  onChange(spaceParticipant(document, participant.id, value));
+              }}
+            />
+            <Button
+              variant="subtle"
+              disabled={!participant.offsetX}
+              onClick={() => onChange(spaceParticipant(document, participant.id, 0))}
+            >
+              Сбросить отступ
+            </Button>
             <Group grow>
               <Button
                 variant="default"

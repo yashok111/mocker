@@ -117,6 +117,9 @@ func (v *documentValidator) validateParticipants(items []Participant) map[string
 		v.checkText(pointer+"/name", participant.Name, true)
 		v.checkText(pointer+"/description", participant.Description, true)
 		v.checkColor(pointer+"/color", participant.Color)
+		if participant.OffsetX < 0 || participant.OffsetX > 2000 {
+			v.errorAt(pointer+"/offsetX", "must be an integer from 0 to 2000")
+		}
 		if !slices.Contains(participantKinds, participant.Kind) {
 			v.errorAt(pointer+"/kind", "unknown participant kind")
 		}

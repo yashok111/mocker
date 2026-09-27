@@ -52,6 +52,18 @@ function validDocument(): CanvasDocument {
 }
 
 describe("canvas persistence", () => {
+  it("round-trips participant spacing", () => {
+    const document = validDocument();
+    document.participants[0] = { ...document.participants[0]!, offsetX: 280 };
+    expect(parseSavedCanvas(serializeSavedCanvas(document, {})).document).toEqual(document);
+  });
+
+  it.each([-1, 2001, 0.5, "100", null])("rejects invalid participant spacing %s", (offsetX) => {
+    const document = validDocument();
+    const participants = document.participants.map((item) => ({ ...item, offsetX }));
+    expect(() => parseCanvas(JSON.stringify({ ...document, participants }))).toThrow(/offsetX/);
+  });
+
   it("accepts wide JSON assertion arrays within the document size limit", () => {
     const document = validDocument();
     document.messages[0]!.execution = {

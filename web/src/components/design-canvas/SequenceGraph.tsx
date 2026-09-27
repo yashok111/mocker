@@ -7,13 +7,9 @@ import { resolveOperation } from "./canvasModel";
 import { installCanvasWheelZoom } from "./canvasZoom";
 import { ObjectDescriptionTooltip, type TooltipBounds } from "./ObjectDescriptionTooltip";
 import styles from "./SequenceGraph.module.css";
-import {
-  layoutSequence,
-  messageIndexAtY,
-  participantIndexAtX,
-  type SequenceLayout,
-} from "./sequenceLayout";
+import { layoutSequence, messageIndexAtY, type SequenceLayout } from "./sequenceLayout";
 import type { CanvasDocument, CanvasSelection, MessageKind, ParticipantKind } from "./types";
+import { MAX_PARTICIPANT_OFFSET_X } from "./types";
 
 const palette = {
   ink: "#25332f",
@@ -90,7 +86,7 @@ export interface SequenceGraphProps {
   document: CanvasDocument;
   selection: CanvasSelection;
   onSelect: (selection: CanvasSelection) => void;
-  onMoveParticipant: (id: string, index: number) => void;
+  onSpaceParticipant: (id: string, offsetX: number) => void;
   onMoveMessage: (id: string, index: number) => void;
   readOnly?: boolean;
   highlights?: SequenceGraphHighlight[];
@@ -346,12 +342,7 @@ function addMessageCells(
         : null;
 
     if (message.kind === "note" && geometry.note) {
-      const noteWidth = Math.max(
-        geometry.note.width,
-        operationLabel ? Array.from(operationLabel).length * 6.4 + 38 : 0,
-      );
-      const noteHeight = operationLabel ? 58 : geometry.note.height;
-      const noteY = geometry.rowY - noteHeight / 2;
+      const { width: noteWidth, height: noteHeight, y: noteY } = geometry.note;
       graph.addEdge({
         id: cellId("note-link", message.id),
         source: geometry.source,
@@ -478,13 +469,7 @@ function addMessageCells(
       data: { selection: { kind: "message", id: message.id } } satisfies DiagramCellData,
     });
 
-    const labelWidth = Math.max(
-      geometry.label.width,
-      operationLabel ? Array.from(operationLabel).length * 6.4 + 38 : 0,
-    );
-    const labelHeight = operationLabel ? 42 : geometry.label.height;
-    const labelX = geometry.label.x + geometry.label.width / 2 - labelWidth / 2;
-    const labelY = geometry.rowY - labelHeight + 6;
+    const { x: labelX, y: labelY, width: labelWidth, height: labelHeight } = geometry.label;
     graph.addNode({
       id: cellId("message-label", message.id),
       x: labelX,
@@ -649,7 +634,7 @@ export default function SequenceGraph({
   document,
   selection,
   onSelect,
-  onMoveParticipant,
+  onSpaceParticipant,
   onMoveMessage,
   readOnly = false,
   highlights,
@@ -660,7 +645,7 @@ export default function SequenceGraph({
   const layoutRef = useRef<SequenceLayout>(layoutSequence(document));
   const fitOnFirstRenderRef = useRef(true);
   const onSelectRef = useRef(onSelect);
-  const onMoveParticipantRef = useRef(onMoveParticipant);
+  const onSpaceParticipantRef = useRef(onSpaceParticipant);
   const onMoveMessageRef = useRef(onMoveMessage);
   const documentRef = useRef(document);
   const readOnlyRef = useRef(readOnly);
@@ -679,11 +664,11 @@ export default function SequenceGraph({
 
   useEffect(() => {
     onSelectRef.current = onSelect;
-    onMoveParticipantRef.current = onMoveParticipant;
+    onSpaceParticipantRef.current = onSpaceParticipant;
     onMoveMessageRef.current = onMoveMessage;
     documentRef.current = document;
     readOnlyRef.current = readOnly;
-  }, [document, onMoveMessage, onMoveParticipant, onSelect, readOnly]);
+  }, [document, onMoveMessage, onSpaceParticipant, onSelect, readOnly]);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -763,7 +748,18 @@ export default function SequenceGraph({
       const origin = data?.origin;
       if (!origin) return;
       const position = node.getPosition();
-      if (data.role === "participantGrip") node.setPosition(position.x, origin.y);
+      if (data.role === "participantGrip") {
+        const offsetX =
+          documentRef.current.participants.find((item) => item.id === data.selection?.id)
+            ?.offsetX ?? 0;
+        node.setPosition(
+          Math.max(
+            origin.x - offsetX,
+            Math.min(origin.x + MAX_PARTICIPANT_OFFSET_X - offsetX, position.x),
+          ),
+          origin.y,
+        );
+      }
       if (data.role === "messageGrip") node.setPosition(origin.x, position.y);
     });
     graph.on("node:moved", ({ node }) => {
@@ -774,13 +770,18 @@ export default function SequenceGraph({
       if (!movedSelection || !origin) return;
       const position = node.getPosition();
       const anchor = data.anchor;
-      const projectedX = anchor ? anchor.x + position.x - origin.x : position.x;
       const projectedY = anchor ? anchor.y + position.y - origin.y : position.y;
       try {
         if (data.role === "participantGrip" && movedSelection.kind === "participant") {
-          onMoveParticipantRef.current(
+          const offsetX =
+            documentRef.current.participants.find((item) => item.id === movedSelection.id)
+              ?.offsetX ?? 0;
+          onSpaceParticipantRef.current(
             movedSelection.id,
-            participantIndexAtX(layoutRef.current, projectedX),
+            Math.max(
+              0,
+              Math.min(MAX_PARTICIPANT_OFFSET_X, Math.round(offsetX + position.x - origin.x)),
+            ),
           );
         }
         if (data.role === "messageGrip" && movedSelection.kind === "message") {
@@ -879,7 +880,8 @@ export default function SequenceGraph({
       ) : null}
       {!readOnly ? (
         <div className={styles.hint}>
-          ЛКМ по свободному месту — перемещение · Колёсико — масштаб · Карточки и захваты — порядок
+          ЛКМ по фону — перемещение · Колёсико — масштаб · Заголовки — расстояние между колонками ·
+          Карточки и захваты сообщений — порядок
         </div>
       ) : null}
     </section>

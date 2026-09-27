@@ -5018,6 +5018,12 @@
             "minLength": 7,
             "maxLength": 7,
             "description": "Object card fill as opaque #RRGGBB. Omit to use the default color."
+          },
+          "offsetX": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 2000,
+            "description": "Additional horizontal space before this participant in pixels. Omit for zero."
           }
         },
         "additionalProperties": false

@@ -1020,7 +1020,7 @@ function ExecutionSession({
                       selection={selectedId ? { kind: "message", id: selectedId } : null}
                       onSelect={selectGraph}
                       onMoveMessage={noMove}
-                      onMoveParticipant={noMove}
+                      onSpaceParticipant={noMove}
                       readOnly
                       executionStatuses={statuses}
                     />

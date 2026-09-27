@@ -72,6 +72,21 @@ function renderInspector(document: CanvasDocument, selection: CanvasSelection, o
 }
 
 describe("CanvasInspector", () => {
+  it("edits and resets participant spacing without reordering columns", () => {
+    const document = documentFixture();
+    document.participants[1] = { ...document.participants[1]!, offsetX: 100 };
+    const onChange = renderInspector(document, { kind: "participant", id: "orders" });
+    fireEvent.change(screen.getByLabelText("Дополнительный отступ слева"), {
+      target: { value: "300" },
+    });
+    expect(onChange.mock.lastCall?.[0].participants.map((item: { id: string }) => item.id)).toEqual(
+      ["client", "orders", "billing"],
+    );
+    expect(onChange.mock.lastCall?.[0].participants[1].offsetX).toBe(300);
+    fireEvent.click(screen.getByRole("button", { name: "Сбросить отступ" }));
+    expect(onChange.mock.lastCall?.[0].participants[1].offsetX ?? 0).toBe(0);
+  });
+
   it("changes only the selected object's card color and resets it", async () => {
     const user = userEvent.setup();
     const document = documentFixture();

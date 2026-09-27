@@ -23,6 +23,36 @@ func TestDocument_JSONRoundTripsColors(t *testing.T) {
 	}
 }
 
+func TestDocument_JSONRoundTripsParticipantSpacing(t *testing.T) {
+	const raw = `{"formatVersion":1,"title":"Spacing","participants":[{"id":"api","name":"API","kind":"service","description":"","offsetX":280},{"id":"client","name":"Client","kind":"client","description":""}],"messages":[],"fragments":[],"contracts":[]}`
+	var document Document
+	if err := jsonx.Unmarshal([]byte(raw), &document); err != nil {
+		t.Fatal(err)
+	}
+	if document.Participants[0].OffsetX != 280 || document.Participants[1].OffsetX != 0 {
+		t.Fatalf("decoded spacing = %+v", document.Participants)
+	}
+	encoded, err := jsonx.Marshal(document)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(encoded) != raw {
+		t.Fatalf("spacing changed in JSON round-trip: %s", encoded)
+	}
+}
+
+func TestDocument_JSONRejectsNonIntegerParticipantSpacing(t *testing.T) {
+	for _, value := range []string{`null`, `0.5`, `"100"`, `{}`, `true`} {
+		t.Run(value, func(t *testing.T) {
+			var document Document
+			raw := `{"participants":[{"offsetX":` + value + `}]}`
+			if err := jsonx.Unmarshal([]byte(raw), &document); err == nil {
+				t.Fatal("invalid participant spacing was accepted")
+			}
+		})
+	}
+}
+
 func TestDocument_JSONRejectsInvalidSuppliedColors(t *testing.T) {
 	for _, color := range []string{`""`, `"red"`, `"#123"`, `"#12345678"`, `"#abcdez"`, `"#123456\n"`, `" #123456"`, `null`, `12`, `{}`} {
 		for _, target := range []struct {

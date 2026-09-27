@@ -20,6 +20,9 @@ func TestCommandUnmarshalJSONRequiresFieldsAndRejectsIrrelevantFields(t *testing
 		{name: "irrelevant command field", raw: `{"type":"set_title","title":"Wanted","label":"ignored"}`, wantErr: "label"},
 		{name: "null required field", raw: `{"type":"set_title","title":null}`, wantErr: "title"},
 		{name: "unknown nested participant field", raw: `{"type":"upsert_participant","participant":{"id":"p","name":"P","kind":"user","description":"","extra":true}}`, wantErr: "extra"},
+		{name: "null participant spacing", raw: `{"type":"upsert_participant","participant":{"id":"p","name":"P","kind":"user","description":"","offsetX":null}}`, wantErr: "offsetX"},
+		{name: "fractional participant spacing", raw: `{"type":"upsert_participant","participant":{"id":"p","name":"P","kind":"user","description":"","offsetX":1.5}}`, wantErr: "offsetX"},
+		{name: "string participant spacing", raw: `{"type":"upsert_participant","participant":{"id":"p","name":"P","kind":"user","description":"","offsetX":"100"}}`, wantErr: "offsetX"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

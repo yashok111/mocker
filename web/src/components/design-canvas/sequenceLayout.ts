@@ -1,3 +1,4 @@
+import { resolveOperation } from "./canvasModel";
 import type { CanvasDocument } from "./types";
 
 const MIN_WIDTH = 720;
@@ -9,11 +10,14 @@ const HEADER_HEIGHT = 52;
 const PARTICIPANT_GAP = 96;
 const FIRST_MESSAGE_Y = 148;
 const MESSAGE_GAP = 72;
+const MESSAGE_LABEL_HEIGHT = 28;
+const MESSAGE_LABEL_GAP = 6;
 const SELF_CALL_WIDTH = 56;
 const SELF_CALL_HEIGHT = 34;
 const FRAGMENT_PADDING_X = 44;
-const FRAGMENT_TOP_PADDING = 64;
-const FRAGMENT_BOTTOM_PADDING = 30;
+const CONTENT_GAP = 16;
+const FRAGMENT_HEADER_HEIGHT = 32;
+const FRAGMENT_BOTTOM_PADDING = 16;
 
 export interface SequencePoint {
   x: number;
@@ -55,21 +59,12 @@ export interface SequenceLayout {
   fragments: FragmentLayout[];
 }
 
-export function layoutSequence(_document: CanvasDocument): SequenceLayout {
+export function layoutSequence(document: CanvasDocument): SequenceLayout {
   const participantX = new Map<string, number>();
-  const contentWidth =
-    _document.participants.length === 0
-      ? MIN_WIDTH
-      : SIDE_PADDING * 2 +
-        HEADER_WIDTH * _document.participants.length +
-        PARTICIPANT_GAP * (_document.participants.length - 1);
-  const height = Math.max(
-    MIN_HEIGHT,
-    FIRST_MESSAGE_Y + Math.max(0, _document.messages.length - 1) * MESSAGE_GAP + 80,
-  );
-
-  const participants = _document.participants.map((participant, index): ParticipantLayout => {
-    const headerX = SIDE_PADDING + index * (HEADER_WIDTH + PARTICIPANT_GAP);
+  let horizontalOffset = 0;
+  const participants = document.participants.map((participant, index): ParticipantLayout => {
+    horizontalOffset += participant.offsetX ?? 0;
+    const headerX = SIDE_PADDING + index * (HEADER_WIDTH + PARTICIPANT_GAP) + horizontalOffset;
     const x = headerX + HEADER_WIDTH / 2;
     participantX.set(participant.id, x);
     return {
@@ -79,95 +74,138 @@ export function layoutSequence(_document: CanvasDocument): SequenceLayout {
       header: { x: headerX, y: HEADER_TOP, width: HEADER_WIDTH, height: HEADER_HEIGHT },
       lifeline: {
         source: { x, y: HEADER_TOP + HEADER_HEIGHT },
-        target: { x, y: height - 40 },
+        target: { x, y: MIN_HEIGHT - 40 },
       },
     };
   });
 
-  const messages = _document.messages.flatMap((message, index): MessageLayout[] => {
+  const messageIndices = new Map(document.messages.map((message, index) => [message.id, index]));
+  const ranges = document.fragments.flatMap((fragment, order) => {
+    const from = messageIndices.get(fragment.fromMessageId);
+    const to = messageIndices.get(fragment.toMessageId);
+    if (from === undefined || to === undefined) return [];
+    return [
+      { fragment, order, from: Math.min(from, to), to: Math.max(from, to), top: 0, bottom: 0 },
+    ];
+  });
+  // Outer frames open first; equal ranges nest in document order.
+  ranges.sort((a, b) => a.from - b.from || b.to - a.to || a.order - b.order);
+  let contentBottom = HEADER_TOP + HEADER_HEIGHT;
+  let previousRowY = FIRST_MESSAGE_Y - MESSAGE_GAP;
+  const messages: MessageLayout[] = [];
+
+  for (const [index, message] of document.messages.entries()) {
     const fromX = participantX.get(message.fromId);
     const toX = participantX.get(message.toId);
-    if (fromX === undefined || toX === undefined) {
-      return [];
-    }
-
-    const rowY = FIRST_MESSAGE_Y + index * MESSAGE_GAP;
-    const isSelfCall = message.fromId === message.toId;
-    const targetY = isSelfCall ? rowY + SELF_CALL_HEIGHT : rowY;
-    const labelWidth = Math.max(96, Array.from(message.label).length * 7.2 + 44);
-    const midpointX = isSelfCall ? fromX + SELF_CALL_WIDTH / 2 : (fromX + toX) / 2;
-    const note =
-      message.kind === "note"
-        ? { x: toX + 18, y: rowY - 23, width: labelWidth, height: 46 }
-        : undefined;
-
-    return [
-      {
-        id: message.id,
-        index,
-        rowY,
-        source: { x: fromX, y: rowY },
-        target: { x: toX, y: targetY },
-        vertices: isSelfCall
-          ? [
-              { x: fromX + SELF_CALL_WIDTH, y: rowY },
-              { x: fromX + SELF_CALL_WIDTH, y: targetY },
-            ]
-          : [],
-        label: {
-          x: midpointX - labelWidth / 2,
-          y: rowY - 22,
-          width: labelWidth,
-          height: 28,
-        },
-        ...(note ? { note } : {}),
-      },
-    ];
-  });
-
-  const messageById = new Map(messages.map((message) => [message.id, message]));
-  const fragments = _document.fragments.flatMap((fragment): FragmentLayout[] => {
-    const first = messageById.get(fragment.fromMessageId);
-    const last = messageById.get(fragment.toMessageId);
-    if (!first || !last) {
-      return [];
-    }
-
-    const fromIndex = Math.min(first.index, last.index);
-    const toIndex = Math.max(first.index, last.index);
-    const participantXs = _document.messages
-      .slice(fromIndex, toIndex + 1)
-      .flatMap((message) => [participantX.get(message.fromId), participantX.get(message.toId)])
-      .filter((x): x is number => x !== undefined);
-    if (participantXs.length === 0) {
-      return [];
-    }
-
-    const minX = Math.min(...participantXs);
-    const maxX = Math.max(...participantXs);
-    const y = Math.min(first.rowY, last.rowY) - FRAGMENT_TOP_PADDING;
-    const bottom = Math.max(
-      first.target.y,
-      last.target.y,
-      Math.max(
-        ...messages
-          .filter(({ index }) => index >= fromIndex && index <= toIndex)
-          .map(({ target }) => target.y),
-      ),
+    if (fromX === undefined || toX === undefined) continue;
+    const operation = message.operation ? resolveOperation(document, message.operation) : null;
+    const operationLabel = operation
+      ? `${operation.location.method.toUpperCase()} ${operation.location.path}`
+      : message.operation
+        ? "API-связь недоступна"
+        : "";
+    const labelWidth = Math.max(
+      96,
+      Array.from(message.label).length * 7.2 + 44,
+      operationLabel ? Array.from(operationLabel).length * 6.4 + 38 : 0,
     );
-
-    return [
-      {
-        id: fragment.id,
-        x: minX - FRAGMENT_PADDING_X,
-        y,
-        width: Math.max(176, maxX - minX + FRAGMENT_PADDING_X * 2),
-        height: bottom + FRAGMENT_BOTTOM_PADDING - y,
+    const labelHeight = operationLabel ? 42 : MESSAGE_LABEL_HEIGHT;
+    const noteHeight = operationLabel ? 58 : 46;
+    const isNote = message.kind === "note";
+    const isSelfCall = !isNote && message.fromId === message.toId;
+    const topExtent = isNote ? noteHeight / 2 : labelHeight + MESSAGE_LABEL_GAP;
+    const opening = ranges.filter((range) => range.from === index);
+    const rowY = Math.max(
+      FIRST_MESSAGE_Y,
+      previousRowY + MESSAGE_GAP,
+      contentBottom + CONTENT_GAP + opening.length * FRAGMENT_HEADER_HEIGHT + topExtent,
+    );
+    for (const [depth, range] of opening.entries()) {
+      range.top = rowY - topExtent - (opening.length - depth) * FRAGMENT_HEADER_HEIGHT;
+    }
+    const targetY = isSelfCall ? rowY + SELF_CALL_HEIGHT : rowY;
+    const midpointX = isSelfCall ? fromX + SELF_CALL_WIDTH / 2 : (fromX + toX) / 2;
+    const geometry: MessageLayout = {
+      id: message.id,
+      index,
+      rowY,
+      source: { x: fromX, y: rowY },
+      target: { x: toX, y: targetY },
+      vertices: isSelfCall
+        ? [
+            { x: fromX + SELF_CALL_WIDTH, y: rowY },
+            { x: fromX + SELF_CALL_WIDTH, y: targetY },
+          ]
+        : [],
+      label: {
+        x: midpointX - labelWidth / 2,
+        y: rowY - labelHeight - MESSAGE_LABEL_GAP,
+        width: labelWidth,
+        height: labelHeight,
       },
-    ];
-  });
+      ...(isNote
+        ? { note: { x: toX + 18, y: rowY - noteHeight / 2, width: labelWidth, height: noteHeight } }
+        : {}),
+    };
+    messages.push(geometry);
+    previousRowY = rowY;
+    contentBottom = isNote ? rowY + noteHeight / 2 : targetY + 4;
+    // Close inner frames first and reserve their borders before the next row.
+    for (const range of ranges.filter((range) => range.to === index).reverse()) {
+      contentBottom += FRAGMENT_BOTTOM_PADDING;
+      range.bottom = contentBottom;
+    }
+  }
 
-  return { width: Math.max(MIN_WIDTH, contentWidth), height, participants, messages, fragments };
+  const fragmentBounds = new Map<string, FragmentLayout>();
+  for (const range of [...ranges].reverse()) {
+    const contained = messages.filter(({ index }) => index >= range.from && index <= range.to);
+    if (contained.length === 0 || range.bottom === 0) continue;
+    let left = Infinity;
+    let right = -Infinity;
+    for (const message of contained) {
+      const card = message.note ?? message.label;
+      left = Math.min(
+        left,
+        message.source.x - FRAGMENT_PADDING_X,
+        message.target.x - FRAGMENT_PADDING_X,
+        card.x - CONTENT_GAP,
+      );
+      right = Math.max(
+        right,
+        message.source.x + FRAGMENT_PADDING_X,
+        message.target.x + FRAGMENT_PADDING_X,
+        card.x + card.width + CONTENT_GAP,
+        ...message.vertices.map(({ x }) => x + CONTENT_GAP),
+      );
+    }
+    for (const inner of fragmentBounds.values()) {
+      if (inner.y > range.top && inner.y + inner.height < range.bottom) {
+        left = Math.min(left, inner.x - CONTENT_GAP);
+        right = Math.max(right, inner.x + inner.width + CONTENT_GAP);
+      }
+    }
+    fragmentBounds.set(range.fragment.id, {
+      id: range.fragment.id,
+      x: left,
+      y: range.top,
+      width: Math.max(176, right - left, Array.from(range.fragment.label).length * 7.2 + 84),
+      height: range.bottom - range.top,
+    });
+  }
+  const fragments = document.fragments.flatMap(({ id }) => {
+    const geometry = fragmentBounds.get(id);
+    return geometry ? [geometry] : [];
+  });
+  const height = Math.max(MIN_HEIGHT, contentBottom + 80);
+  for (const participant of participants) participant.lifeline.target.y = height - 40;
+  const width = Math.max(
+    MIN_WIDTH,
+    ...participants.map(({ header }) => header.x + header.width + SIDE_PADDING),
+    ...messages.map(({ label, note }) => (note ?? label).x + (note ?? label).width + SIDE_PADDING),
+    ...fragments.map(({ x, width }) => x + width + SIDE_PADDING),
+  );
+  return { width, height, participants, messages, fragments };
 }
 
 export function participantIndexAtX(layout: SequenceLayout, x: number): number {

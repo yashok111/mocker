@@ -233,6 +233,7 @@ function participantFields(before?: CanvasParticipant, after?: CanvasParticipant
     ),
     ...field("Описание", before?.description, after?.description),
     ...colorField("Цвет объекта", before?.color, after?.color),
+    ...field("Отступ слева", before?.offsetX ?? 0, after?.offsetX ?? 0),
   ];
 }
 

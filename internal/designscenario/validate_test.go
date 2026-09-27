@@ -2,6 +2,7 @@ package designscenario
 
 import (
 	"errors"
+	"fmt"
 	"slices"
 	"testing"
 
@@ -80,6 +81,33 @@ func TestValidateDocument_RejectsInvalidProgrammaticColors(t *testing.T) {
 				if diagnostics[index].Pointer != pointer || diagnostics[index].Severity != "error" {
 					t.Fatalf("diagnostic = %+v, want error at %s", diagnostics[index], pointer)
 				}
+			}
+		})
+	}
+}
+
+func TestValidateDocument_RejectsParticipantSpacingOutsideRange(t *testing.T) {
+	t.Parallel()
+	for _, value := range []OffsetX{-1, 2001} {
+		t.Run(fmt.Sprint(value), func(t *testing.T) {
+			document := validDocument("Spacing")
+			document.Participants = []Participant{{ID: "api", Kind: "service", OffsetX: value}}
+			diagnostics := validateDocument(document)
+			if len(diagnostics) != 1 || diagnostics[0].Pointer != "/participants/0/offsetX" || diagnostics[0].Severity != "error" {
+				t.Fatalf("diagnostics = %+v", diagnostics)
+			}
+		})
+	}
+}
+
+func TestValidateDocument_AcceptsParticipantSpacingBoundaries(t *testing.T) {
+	t.Parallel()
+	for _, value := range []OffsetX{0, 2000} {
+		t.Run(fmt.Sprint(value), func(t *testing.T) {
+			document := validDocument("Spacing")
+			document.Participants = []Participant{{ID: "api", Kind: "service", OffsetX: value}}
+			if diagnostics := validateDocument(document); len(diagnostics) != 0 {
+				t.Fatalf("diagnostics = %+v", diagnostics)
 			}
 		})
 	}
