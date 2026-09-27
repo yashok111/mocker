@@ -16,12 +16,15 @@ const (
 	OpenAPIYAML Format = "openapi-yaml"
 	Postman     Format = "postman"
 	CURL        Format = "curl"
+	Markdown    Format = "markdown"
+	HTML        Format = "html"
 )
 
 var (
 	ErrUnsupportedFormat = errors.New("unsupported scenario export format")
 	ErrContractNotFound  = errors.New("scenario export contract not found")
 	ErrTooLarge          = errors.New("scenario export exceeds byte limit")
+	ErrTooManyPages      = errors.New("scenario documentation exceeds 200 print sheets")
 	ErrInvalidRequest    = errors.New("invalid scenario export request")
 )
 

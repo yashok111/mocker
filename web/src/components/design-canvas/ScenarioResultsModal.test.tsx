@@ -1,5 +1,6 @@
 import { afterEach, expect, it, vi } from "vitest";
-import { screen, waitFor, within } from "@testing-library/react";
+import { useState } from "react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { renderWithProviders } from "@/test/render";
 import { json, route } from "@/test/http";
@@ -27,6 +28,7 @@ const revision: DesignScenarioRevision = {
 it.each([
   ["postman", "Postman", "collection.json", '{"info":{"name":"Saved collection"}}'],
   ["curl", "cURL", "requests.sh", "#!/bin/sh\ncurl --request GET --url 'https://example.test'"],
+  ["markdown", "Markdown", "scenario.md", "# Saved scenario\n```mermaid\nsequenceDiagram\n```"],
 ])(
   "downloads %s from the selected revision without a contract filter",
   async (format, label, filename, content) => {
@@ -80,6 +82,87 @@ it.each([
     ).toBe(true);
   },
 );
+
+it("prints the pinned HTML revision in a script-free frame and clears it on refresh", async () => {
+  const content = "<!doctype html><html><body><h1>Saved revision</h1></body></html>";
+  const fetch = route({
+    "GET /api/design-scenarios/7/revisions/11/export-options": () =>
+      json(200, {
+        scenarioId: 7,
+        revisionId: 11,
+        sourceHash: "hash-11",
+        options: [{ format: "html", ready: true, diagnostics: [] }],
+      }),
+    "GET /api/design-scenarios/7/revisions/11/exports/html": () =>
+      json(200, {
+        scenarioId: 7,
+        revisionId: 11,
+        sourceHash: "hash-11",
+        format: "html",
+        filename: "scenario.html",
+        content,
+        mediaType: "text/html",
+        diagnostics: [],
+      }),
+    "GET /api/design-scenarios/7/revisions/12/export-options": () =>
+      json(200, {
+        scenarioId: 7,
+        revisionId: 12,
+        sourceHash: "hash-12",
+        options: [{ format: "html", ready: false, diagnostics: [] }],
+      }),
+  });
+  const props = {
+    opened: true,
+    scenarioId: 7,
+    revision,
+    latestRevisionId: 12,
+    onClose: vi.fn(),
+    onLocate: vi.fn(),
+    onPrepareContracts: vi.fn(),
+    onRun: vi.fn(),
+  };
+  function Harness() {
+    const [current, setCurrent] = useState(revision);
+    return (
+      <ScenarioResultsModal
+        {...props}
+        revision={current}
+        onRefresh={() => setCurrent({ ...revision, id: 12 })}
+      />
+    );
+  }
+  renderWithProviders(<Harness />);
+  await userEvent.selectOptions(screen.getByLabelText("Формат результата"), "pdf");
+  const frame = await screen.findByTitle<HTMLIFrameElement>("Предпросмотр документа");
+  expect(frame).toHaveAttribute("srcdoc", content);
+  expect(frame).toHaveAttribute("sandbox", "allow-same-origin allow-modals");
+  const print = vi.fn();
+  Object.defineProperty(frame, "contentWindow", {
+    value: { print, focus: vi.fn() },
+    configurable: true,
+  });
+  fireEvent.load(frame);
+  await userEvent.click(screen.getByRole("button", { name: "Печать / сохранить PDF" }));
+  expect(print).toHaveBeenCalledOnce();
+  expect(fetch.mock.calls.some(([input]) => String(input).includes("/exports/pdf"))).toBe(false);
+  expect(fetch.mock.calls.every(([input]) => !String(input).includes("/revisions/12/"))).toBe(true);
+  print.mockImplementation(() => {
+    throw new Error("Print blocked");
+  });
+  await userEvent.click(screen.getByRole("button", { name: "Печать / сохранить PDF" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent("Скачайте HTML");
+  expect(screen.getByRole("button", { name: "Скачать HTML" })).toBeEnabled();
+  const download = vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:html");
+  vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {});
+  const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+  await userEvent.click(screen.getByRole("button", { name: "Скачать HTML" }));
+  expect(await (download.mock.calls[0]![0] as Blob).text()).toBe(content);
+  expect(click.mock.instances[0]).toHaveAttribute("download", "scenario.html");
+  await userEvent.click(screen.getByRole("button", { name: "Обновить до текущей ревизии" }));
+  expect(screen.queryByTitle("Предпросмотр документа")).not.toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Печать / сохранить PDF" })).toBeDisabled();
+});
 
 it("shows missing HTTP inputs before download and opens execution settings", async () => {
   route({

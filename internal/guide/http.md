@@ -42,7 +42,8 @@ Authenticated read-only routes:
 - `GET /api/design-scenarios/{id}/revisions/{rid}/export-options`
 - `GET /api/design-scenarios/{id}/revisions/{rid}/exports/{format}?contractId=...`
 
-Formats: `plantuml`, `mermaid`, `openapi-json`, `openapi-yaml`, `postman`, `curl`.
+Formats: `plantuml`, `mermaid`, `openapi-json`, `openapi-yaml`, `postman`, `curl`,
+`markdown`, `html`.
 Supply `contractId` only for OpenAPI. The response is JSON with `content` as a string, plus
 `filename`, `mediaType`, `scenarioId`, `revisionId`, `sourceHash` and diagnostics.
 Write the content exactly; parsing and reserializing the contract in JavaScript
@@ -59,7 +60,12 @@ history. A revision from another scenario is 404. Unknown format is 400;
 missing contract is 404; blocked output is 422 with `error.details.diagnostics`;
 results exceeding the configured body-size limit are 413. JSON preserves the
 saved contract bytes; YAML preserves scalar types and numeric precision.
-Images are exported locally from the browser.
+Images are exported locally from the browser. Markdown and self-contained HTML
+include the saved diagram, scenario metadata, participants, steps, HTTP API
+details and complete JSON contracts. Execution inputs are excluded. Pending API
+forms and invalid contracts are warnings; invalid diagrams block documentation.
+PDF is browser printing of HTML (A4 landscape, up to 200 overlapping diagram
+sheets), not a server format.
 
 `postman` returns a Collection v2.1 JSON file; `curl` returns a POSIX shell file.
 Both use enabled HTTP requests and execution inputs in the selected revision.

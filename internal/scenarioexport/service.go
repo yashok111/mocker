@@ -34,6 +34,11 @@ func (s *Service) Options(rev designscenario.Revision) ([]Option, error) {
 		}
 		options = append(options, makeOption(format, "", ds))
 	}
+	documentation, err := s.documentationDiagnostics(rev)
+	if err != nil {
+		return nil, err
+	}
+	options = append(options, makeOption(Markdown, "", documentation), makeOption(HTML, "", documentation))
 	if err := s.CheckResponse(options); err != nil {
 		return nil, err
 	}
@@ -51,6 +56,22 @@ func (s *Service) Export(rev designscenario.Revision, req Request) (Artifact, er
 	var err error
 	ext := ""
 	switch req.Format {
+	case Markdown, HTML:
+		if req.ContractID != "" {
+			return Artifact{}, ErrInvalidRequest
+		}
+		diagnostics, err = s.documentationDiagnostics(rev)
+		if err != nil {
+			return Artifact{}, err
+		}
+		if !makeOption(req.Format, "", diagnostics).Ready {
+			return Artifact{}, &BlockedError{Diagnostics: diagnostics}
+		}
+		content, err = s.renderDocumentation(rev, req.Format, diagnostics)
+		ext, artifact.MediaType = "md", "text/markdown;charset=utf-8"
+		if req.Format == HTML {
+			ext, artifact.MediaType = "html", "text/html;charset=utf-8"
+		}
 	case Postman, CURL:
 		if req.ContractID != "" {
 			return Artifact{}, ErrInvalidRequest

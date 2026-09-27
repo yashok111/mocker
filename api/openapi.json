@@ -6649,7 +6649,9 @@
           "openapi-json",
           "openapi-yaml",
           "postman",
-          "curl"
+          "curl",
+          "markdown",
+          "html"
         ]
       },
       "ScenarioExportTarget": {
@@ -13643,7 +13645,7 @@
             "name": "contractId",
             "in": "query",
             "required": false,
-            "description": "Required only for OpenAPI, which exports the entire saved contract. Must be absent for diagrams, Postman and cURL.",
+            "description": "Required only for OpenAPI, which exports the entire saved contract. Must be absent for diagrams, Postman, cURL, Markdown and HTML.",
             "schema": {
               "type": "string"
             }

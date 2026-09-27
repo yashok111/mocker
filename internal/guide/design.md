@@ -76,10 +76,15 @@ Local legacy canvases must first use the existing server-save migration.
 
 Agents use `get_design_scenario_export_options {scenarioId, revisionId}` followed
 by `export_design_scenario {scenarioId, revisionId, format, contractId?}`.
-Formats are `plantuml`, `mermaid`, `openapi-json`, `openapi-yaml`, `postman` and
-`curl`. Only OpenAPI accepts and requires `contractId`. Save the returned `content` string unchanged using `filename` and
-`mediaType`. `sourceHash` identifies the immutable snapshot. SVG/PNG are browser
-features. Export reads neither runtime mock state nor newer linked API revisions
+Formats are `plantuml`, `mermaid`, `openapi-json`, `openapi-yaml`, `postman`,
+`curl`, `markdown` and `html`. Only OpenAPI accepts and requires `contractId`. Save the returned `content` string unchanged using `filename` and
+`mediaType`. `sourceHash` identifies the immutable snapshot. SVG/PNG and PDF printing are browser
+features. Markdown and HTML document participants, ordered steps, nested blocks,
+HTTP bindings and complete saved JSON contracts without execution settings.
+HTML includes an offline SVG and overlapping A4 landscape print sheets (up to
+200). PDF uses the HTML print view and the browser Save as PDF dialog; there is
+no server `pdf` format. Incomplete or invalid API details produce warnings in
+documentation; an invalid diagram still blocks export. Export reads neither runtime mock state nor newer linked API revisions
 and creates no resources. Oversized results return 413; blocked results return
 422 with diagnostics. Importing arbitrary diagram formats and exporting other
 contract formats are future work.

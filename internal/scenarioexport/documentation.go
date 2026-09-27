@@ -1,0 +1,317 @@
+package scenarioexport
+
+import (
+	"fmt"
+	"strings"
+
+	"github.com/yashok111/mocker/internal/designscenario"
+	"github.com/yashok111/mocker/internal/jsonx"
+)
+
+func (s *Service) documentationDiagnostics(rev designscenario.Revision) ([]Diagnostic, error) {
+	result := diagramDiagnostics(rev.Document)
+	for _, contract := range rev.Document.Contracts {
+		if err := s.CheckResponse(result); err != nil {
+			return nil, err
+		}
+		ds, err := s.contractDiagnostics(rev, contract)
+		if err != nil {
+			return nil, err
+		}
+		for _, d := range ds {
+			if d.Code == "descriptive_messages_omitted" || d.Code == "api_forms_pending" {
+				continue
+			}
+			if d.Severity == "error" {
+				d.Severity = "warning"
+			}
+			result = append(result, d)
+		}
+	}
+	pending := false
+	for key, raw := range rev.FormDrafts {
+		var forms map[string]jsonx.RawMessage
+		if key != "all" || jsonx.Unmarshal([]byte(raw), &forms) != nil || forms == nil || len(forms) != 0 {
+			pending = true
+		}
+	}
+	if pending {
+		result = append(result, Diagnostic{Code: "api_forms_pending", Severity: "warning", Message: "Есть несохранённые поля API. Документ содержит сохранённые контракты; завершите редактирование API для их обновления."})
+	}
+	return result, s.CheckResponse(result)
+}
+
+// Every output path uses the bounded writer, including escaping and raw code blocks.
+// Keep the error sticky so no later section can resume after exhausting the budget.
+type documentationWriter struct {
+	buffer boundedBuffer
+	html   bool
+	err    error
+}
+
+func (w *documentationWriter) raw(s string) {
+	for w.err == nil && s != "" {
+		n := min(len(s), 4096)
+		_, w.err = w.buffer.Write([]byte(s[:n]))
+		s = s[n:]
+	}
+}
+func (w *documentationWriter) text(s string) {
+	start := 0
+	for i, r := range s {
+		if w.err != nil {
+			return
+		}
+		replacement := ""
+		switch r {
+		case '&':
+			replacement = "&amp;"
+		case '<':
+			replacement = "&lt;"
+		case '>':
+			replacement = "&gt;"
+		case '"':
+			replacement = "&quot;"
+		case '\'':
+			replacement = "&#39;"
+		default:
+			if !w.html {
+				if r == '\n' || r == '\r' {
+					replacement = " "
+				} else if r < 128 && strings.ContainsRune("\\`*_{}[]()#+-.!|~:=", r) {
+					replacement = "\\" + string(r)
+				}
+			}
+		}
+		if replacement != "" {
+			w.raw(s[start:i])
+			w.raw(replacement)
+			start = i + len(string(r))
+		}
+	}
+	w.raw(s[start:])
+}
+func (w *documentationWriter) heading(level int, parts ...string) {
+	if w.html {
+		w.raw(fmt.Sprintf("<h%d>", level))
+		for _, part := range parts {
+			w.text(part)
+		}
+		w.raw(fmt.Sprintf("</h%d>\n", level))
+	} else {
+		w.raw(strings.Repeat("#", level) + " ")
+		for _, part := range parts {
+			w.text(part)
+		}
+		w.raw("\n\n")
+	}
+}
+func (w *documentationWriter) paragraph(parts ...string) {
+	if w.html {
+		w.raw("<p>")
+	}
+	for _, part := range parts {
+		w.text(part)
+	}
+	if w.html {
+		w.raw("</p>")
+	}
+	w.raw("\n\n")
+}
+func (w *documentationWriter) code(language, source string) {
+	if int64(len(source)) > w.buffer.limit-int64(w.buffer.Len()) {
+		w.err = ErrTooLarge
+		return
+	}
+	if w.html {
+		w.raw("<pre><code>")
+		w.text(source)
+		w.raw("</code></pre>\n")
+		return
+	}
+	maxRun, run := 0, 0
+	for _, r := range source {
+		if r == '`' {
+			run++
+			maxRun = max(maxRun, run)
+		} else {
+			run = 0
+		}
+	}
+	fence := strings.Repeat("`", max(3, maxRun+1))
+	w.raw(fence + language + "\n")
+	w.raw(source)
+	w.raw("\n" + fence + "\n\n")
+}
+
+const documentationCSS = `:root{color-scheme:light}*{box-sizing:border-box}body{margin:0 auto;padding:24px;max-width:1200px;font:15px/1.5 system-ui,sans-serif;color:#172033;background:#fff}h1,h2,h3,p,li{overflow-wrap:anywhere}h1{font-size:28px}h2{margin-top:32px;border-bottom:1px solid #cbd5e1}h3{margin-bottom:8px}p{white-space:pre-wrap}pre{white-space:pre-wrap;overflow-wrap:anywhere;font:12px/1.5 ui-monospace,monospace;background:#f1f5f9;padding:12px}.diagram-screen{overflow:auto}.diagram-screen svg{display:block;max-width:none}.diagram-print{display:none}.diagram-defs{position:absolute;width:0;height:0;overflow:hidden}@page{size:A4 landscape;margin:10mm}@media print{body{padding:0;max-width:none;font-size:10pt}.diagram-screen,.screen-hint{display:none}.diagram-print{display:block}.diagram-sheet{break-before:page;break-after:page;page-break-inside:avoid;width:277mm;height:185mm}.diagram-sheet p{height:8mm;margin:0;font-size:9pt}.diagram-sheet svg{display:block;width:277mm;height:175mm}h1,h2,h3{break-after:avoid}pre{background:none;padding:0}#participants{break-before:page}}`
+
+// At 96 CSS pixels per inch, these tiles fit on an A4 landscape page with
+// room for the page caption. Neighbouring tiles overlap by 24px on both axes.
+const documentationTileWidth = 1040
+const documentationTileHeight = 650
+const documentationTileOverlap = 24
+const documentationMaxTiles = 200
+
+type documentationTile struct{ X, Y, Width, Height int }
+
+func documentationTiles(width, height int) ([]documentationTile, error) {
+	if width <= 0 || height <= 0 {
+		return nil, ErrInvalidRequest
+	}
+	count := func(size, span int) int {
+		if size <= span {
+			return 1
+		}
+		return 1 + (size-span-1)/(span-documentationTileOverlap) + 1
+	}
+	cols, rows := count(width, documentationTileWidth), count(height, documentationTileHeight)
+	if cols > documentationMaxTiles || rows > documentationMaxTiles || cols > documentationMaxTiles/rows {
+		return nil, fmt.Errorf("%w: %w", ErrTooLarge, ErrTooManyPages)
+	}
+	tiles := make([]documentationTile, 0, cols*rows)
+	for row := range rows {
+		for col := range cols {
+			x, y := col*(documentationTileWidth-documentationTileOverlap), row*(documentationTileHeight-documentationTileOverlap)
+			tiles = append(tiles, documentationTile{X: x, Y: y, Width: documentationTileWidth, Height: documentationTileHeight})
+		}
+	}
+	return tiles, nil
+}
+
+func (s *Service) renderDocumentation(rev designscenario.Revision, format Format, diagnostics []Diagnostic) ([]byte, error) {
+	w := documentationWriter{buffer: boundedBuffer{limit: s.maxBytes}, html: format == HTML}
+	if w.html {
+		w.raw(`<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'"><title>`)
+		w.text(rev.Document.Title)
+		w.raw("</title><style>" + documentationCSS + "</style></head><body>")
+	}
+	w.heading(1, rev.Document.Title)
+	w.paragraph(fmt.Sprintf("Сценарий %d · Ревизия %d · Версия %d", rev.ScenarioID, rev.ID, rev.Version))
+	w.paragraph("Хеш исходника: ", rev.Hash)
+	if len(diagnostics) > 0 {
+		w.heading(2, "Замечания")
+		for _, d := range diagnostics {
+			w.paragraph(d.Code, " (", d.Severity, "): ", d.Message)
+		}
+	}
+	if w.err != nil {
+		return nil, w.err
+	}
+	if w.html {
+		diagram, err := renderDocumentationDiagram(rev.Document, s.maxBytes-int64(w.buffer.Len()))
+		if err != nil {
+			return nil, err
+		}
+		tiles, err := documentationTiles(diagram.Width, diagram.Height)
+		if err != nil {
+			return nil, err
+		}
+		w.raw(`<section id="diagram">`)
+		w.heading(2, "Диаграмма")
+		w.raw(`<p class="screen-hint">Для PDF выберите печать и «Сохранить как PDF». Схема печатается на листах A4 в альбомной ориентации с перекрытием.</p>`)
+		w.raw(`<svg xmlns="http://www.w3.org/2000/svg" class="diagram-defs" width="0" height="0" aria-hidden="true"><defs><g id="doc-sequence-content">`)
+		w.raw(diagram.Markup)
+		w.raw(`</g></defs></svg>`)
+		w.raw(fmt.Sprintf(`<div class="diagram-screen"><svg xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Диаграмма сценария" width="%d" height="%d" viewBox="0 0 %d %d"><use href="#doc-sequence-content"/></svg></div><div class="diagram-print">`, diagram.Width, diagram.Height, diagram.Width, diagram.Height))
+		for i, tile := range tiles {
+			w.raw(`<div class="diagram-sheet">`)
+			w.paragraph(fmt.Sprintf("Диаграмма · Лист %d из %d · x=%d, y=%d", i+1, len(tiles), tile.X, tile.Y))
+			w.raw(fmt.Sprintf(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="%d %d %d %d"><use href="#doc-sequence-content"/></svg></div>`, tile.X, tile.Y, tile.Width, tile.Height))
+		}
+		w.raw("</div></section>")
+	} else {
+		w.heading(2, "Диаграмма")
+		diagram, err := renderSequence(rev.Document, Mermaid, s.maxBytes-int64(w.buffer.Len()))
+		if err != nil {
+			return nil, err
+		}
+		w.code("mermaid", string(diagram))
+	}
+	if w.html {
+		w.raw(`<section id="participants">`)
+	}
+	w.heading(2, "Участники")
+	names := map[string]string{}
+	for _, p := range rev.Document.Participants {
+		if w.err != nil {
+			return nil, w.err
+		}
+		names[p.ID] = p.Name
+		w.heading(3, p.Name)
+		w.paragraph("ID: ", p.ID, " · Тип: ", p.Kind)
+		w.paragraph(p.Description)
+	}
+	if w.html {
+		w.raw(`</section><section id="steps">`)
+	}
+	w.heading(2, "Шаги")
+	for i, m := range rev.Document.Messages {
+		if w.err != nil {
+			return nil, w.err
+		}
+		w.heading(3, fmt.Sprintf("%d. ", i+1), m.Label)
+		w.paragraph(names[m.FromID], " → ", names[m.ToID], " · Тип: ", m.Kind, " · ID: ", m.ID)
+		if m.ReplyToID != "" {
+			w.paragraph("Ответ на: ", m.ReplyToID)
+		}
+		w.paragraph(m.Description)
+		if m.Operation != nil {
+			w.paragraph("Контракт: ", m.Operation.ContractID, " · Операция: ", m.Operation.OperationKey)
+			for _, c := range rev.Document.Contracts {
+				if c.ID != m.Operation.ContractID {
+					continue
+				}
+				op, ok := findSavedOperation(c.Document, m.Operation.OperationKey)
+				if !ok {
+					continue
+				}
+				w.paragraph(op.Method, " ", op.Path)
+				for _, key := range []string{"summary", "description"} {
+					if value, ok := op.Operation[key].(string); ok {
+						w.paragraph(value)
+					}
+				}
+				break
+			}
+		}
+	}
+	if len(rev.Document.Fragments) > 0 {
+		w.heading(2, "Блоки и ветки")
+		for _, f := range rev.Document.Fragments {
+			if w.err != nil {
+				return nil, w.err
+			}
+			w.heading(3, f.Kind, " ", f.Label)
+			w.paragraph("ID: ", f.ID, " · Шаги: ", f.FromMessageID, " → ", f.ToMessageID)
+			if f.ParentFragmentID != "" {
+				w.paragraph("Родительский блок: ", f.ParentFragmentID, " · Ветка: ", f.ParentBranchID)
+			}
+			for _, b := range f.Branches {
+				w.paragraph("Ветка ", b.ID, ": ", b.Label, " · Шаги: ", b.FromMessageID, " → ", b.ToMessageID)
+			}
+		}
+	}
+	if w.html {
+		w.raw(`</section><section id="contracts">`)
+	}
+	w.heading(2, "Приложение: HTTP API контракты")
+	if len(rev.Document.Contracts) == 0 {
+		w.paragraph("HTTP API контракты не добавлены.")
+	}
+	for _, c := range rev.Document.Contracts {
+		if w.err != nil {
+			return nil, w.err
+		}
+		w.heading(3, c.Name)
+		w.paragraph("ID: ", c.ID)
+		if c.Source != nil {
+			w.paragraph(fmt.Sprintf("API %d · Ревизия %d · Версия %d", c.Source.DesignID, c.Source.RevisionID, c.Source.Version))
+		}
+		w.code("json", string(c.Document))
+	}
+	if w.html {
+		w.raw("</section></body></html>")
+	}
+	return w.buffer.Bytes(), w.err
+}

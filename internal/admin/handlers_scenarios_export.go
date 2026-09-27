@@ -56,6 +56,8 @@ func (s *Server) scenarioExportError(w http.ResponseWriter, err error) {
 		httpx.Err(w, http.StatusBadRequest, "scenario_export_invalid", "Проверьте формат и параметры экспорта")
 	case errors.Is(err, scenarioexport.ErrContractNotFound):
 		httpx.Err(w, http.StatusNotFound, httpx.CodeNotFound, "Контракт отсутствует в выбранной версии сценария")
+	case errors.Is(err, scenarioexport.ErrTooManyPages):
+		httpx.Err(w, http.StatusRequestEntityTooLarge, "scenario_export_too_large", "Схема требует более 200 печатных листов. Сократите сценарий или выберите Markdown.")
 	case errors.Is(err, scenarioexport.ErrTooLarge):
 		httpx.Err(w, http.StatusRequestEntityTooLarge, "scenario_export_too_large", "Результат превышает допустимый размер")
 	default:

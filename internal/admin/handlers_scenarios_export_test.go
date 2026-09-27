@@ -2,6 +2,7 @@ package admin
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -52,7 +53,7 @@ func TestScenarioExportReturnsSavedArtifactAndRejectsBadRequests(t *testing.T) {
 		format, rid string
 		auth        bool
 		status      int
-	}{{"mermaid", "11", true, 200}, {"plantuml", "11", true, 200}, {"mermaid", "12", true, 404}, {"unknown", "11", true, 400}, {"mermaid", "11", false, 401}, {"openapi-json", "11", true, 404}} {
+	}{{"markdown", "11", true, 200}, {"html", "11", true, 200}, {"mermaid", "11", true, 200}, {"plantuml", "11", true, 200}, {"mermaid", "12", true, 404}, {"unknown", "11", true, 400}, {"mermaid", "11", false, 401}, {"openapi-json", "11", true, 404}} {
 		rr := httptest.NewRecorder()
 		s.handleExportDesignScenario(rr, exportRequest(tt.format, tt.rid, tt.auth))
 		if rr.Code != tt.status {
@@ -99,5 +100,14 @@ func TestScenarioExportBlockedResponseRespectsLimit(t *testing.T) {
 	s.handleExportDesignScenario(rr, exportRequest("mermaid", "11", true))
 	if rr.Code != 413 {
 		t.Fatalf("oversized diagnostics: %d %s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestScenarioDocumentationExplainsPrintPageLimit(t *testing.T) {
+	s := exportTestServer()
+	rr := httptest.NewRecorder()
+	s.scenarioExportError(rr, fmt.Errorf("%w: %w", scenarioexport.ErrTooLarge, scenarioexport.ErrTooManyPages))
+	if rr.Code != 413 || !strings.Contains(rr.Body.String(), "200") || !strings.Contains(rr.Body.String(), "Markdown") {
+		t.Fatalf("print limit not explained: %d %s", rr.Code, rr.Body.String())
 	}
 }

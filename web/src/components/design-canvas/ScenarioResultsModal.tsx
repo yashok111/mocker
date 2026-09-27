@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactElement } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactElement } from "react";
 import { Alert, Button, Group, Loader, Modal, NativeSelect, Stack, Text } from "@mantine/core";
 import { ApiFailure } from "@/api/client";
 import { describeApiFailureDetailed } from "@/api/errors";
@@ -13,7 +13,7 @@ import type { DesignScenarioRevision } from "./designScenarioApi";
 import { loadScenarioArtifact, loadScenarioExportOptions } from "./scenarioExportApi";
 import { downloadScenarioArtifact, downloadScenarioBlob } from "./scenarioExportFiles";
 
-export type ResultFormat = ScenarioExportFormat | "svg" | "png";
+export type ResultFormat = ScenarioExportFormat | "svg" | "png" | "pdf";
 export interface ScenarioResultSelection {
   format: ResultFormat;
   contractId: string;
@@ -25,6 +25,9 @@ const formatLabels: Record<ResultFormat, string> = {
   "openapi-yaml": "OpenAPI YAML",
   postman: "Postman",
   curl: "cURL",
+  markdown: "Markdown",
+  html: "HTML",
+  pdf: "PDF (печать)",
   svg: "SVG",
   png: "PNG",
 };
@@ -80,11 +83,17 @@ export function ScenarioResultsModal({
   const [error, setError] = useState("");
   const [blockedDiagnostics, setBlockedDiagnostics] = useState<ScenarioExportDiagnostic[]>([]);
   const [loading, setLoading] = useState(false);
+  const documentFrame = useRef<HTMLIFrameElement>(null);
+  const [loadedDocumentKey, setLoadedDocumentKey] = useState("");
+  const isDocument = format === "html" || format === "pdf";
+  const serverFormat = format === "pdf" ? "html" : format;
   const isContract = format === "openapi-json" || format === "openapi-yaml";
-  const requestKey = `${revision.id}:${format}:${isContract ? contractId : ""}`;
-  const currentOptions = options?.revisionId === revision.id ? options : null;
+  const requestKey = `${scenarioId}:${revision.id}:${format}:${isContract ? contractId : ""}`;
+  const currentOptions =
+    options?.scenarioId === scenarioId && options.revisionId === revision.id ? options : null;
   const option = currentOptions?.options.find(
-    (item) => item.format === format && (item.contractId ?? "") === (isContract ? contractId : ""),
+    (item) =>
+      item.format === serverFormat && (item.contractId ?? "") === (isContract ? contractId : ""),
   );
   const visibleArtifact = artifactKey === requestKey ? artifact : null;
   const visibleImage = imageKey === requestKey ? image : null;
@@ -106,6 +115,7 @@ export function ScenarioResultsModal({
     setOptions(null);
     setArtifact(null);
     setImage(null);
+    setLoadedDocumentKey("");
     setError("");
     setLoading(true);
     void loadScenarioExportOptions(scenarioId, revision.id)
@@ -129,6 +139,7 @@ export function ScenarioResultsModal({
     if (isContract && !selectedContract) return;
     setArtifact(null);
     setImage(null);
+    setLoadedDocumentKey("");
     setBlockedDiagnostics([]);
     setError("");
     if (option && !option.ready) return;
@@ -147,7 +158,7 @@ export function ScenarioResultsModal({
         : loadScenarioArtifact(
             scenarioId,
             revision.id,
-            format,
+            serverFormat as ScenarioExportFormat,
             isContract ? contractId : undefined,
           ).then((next) => {
             if (active) {
@@ -180,6 +191,7 @@ export function ScenarioResultsModal({
     opened,
     currentOptions,
     format,
+    serverFormat,
     contractId,
     scenarioId,
     revision,
@@ -231,6 +243,14 @@ export function ScenarioResultsModal({
           }
           data={Object.entries(formatLabels).map(([value, label]) => ({ value, label }))}
         />
+        {isDocument ? (
+          <Text size="sm" c="dimmed">
+            Документ содержит диаграмму, участников, шаги и сохранённые API-контракты.
+            {format === "pdf"
+              ? " В окне печати выберите «Сохранить как PDF». Большая диаграмма разделена на листы."
+              : " HTML можно открыть без подключения к сети."}
+          </Text>
+        ) : null}
         {format === "postman" || format === "curl" ? (
           <Text size="sm" c="dimmed">
             {format === "postman"
@@ -301,7 +321,22 @@ export function ScenarioResultsModal({
             Описать API
           </Button>
         ) : null}
-        {visibleArtifact ? (
+        {visibleArtifact && isDocument ? (
+          <iframe
+            key={requestKey}
+            ref={documentFrame}
+            title="Предпросмотр документа"
+            sandbox="allow-same-origin allow-modals"
+            srcDoc={visibleArtifact.content}
+            onLoad={() => setLoadedDocumentKey(requestKey)}
+            style={{
+              width: "100%",
+              height: 420,
+              border: "1px solid var(--mantine-color-default-border)",
+              background: "white",
+            }}
+          />
+        ) : visibleArtifact ? (
           <pre
             aria-label="Предпросмотр результата"
             style={{ overflow: "auto", maxHeight: 360, whiteSpace: "pre-wrap" }}
@@ -317,7 +352,27 @@ export function ScenarioResultsModal({
           />
         ) : null}
         <Group>
+          {format === "pdf" ? (
+            <Button
+              disabled={!visibleArtifact || loadedDocumentKey !== requestKey}
+              onClick={() => {
+                try {
+                  const target = documentFrame.current?.contentWindow;
+                  if (!target) throw new Error("Document frame unavailable");
+                  target.focus();
+                  target.print();
+                } catch {
+                  setError(
+                    "Не удалось открыть печать. Скачайте HTML и откройте его в браузере для сохранения PDF.",
+                  );
+                }
+              }}
+            >
+              Печать / сохранить PDF
+            </Button>
+          ) : null}
           <Button
+            variant={format === "pdf" ? "default" : "filled"}
             disabled={!visibleArtifact && !visibleImage}
             onClick={() => {
               if (visibleArtifact) downloadScenarioArtifact(visibleArtifact);
@@ -328,7 +383,7 @@ export function ScenarioResultsModal({
                 );
             }}
           >
-            Скачать {formatLabels[format]}
+            Скачать {format === "pdf" ? "HTML" : formatLabels[format]}
           </Button>
           <Button
             variant="default"

@@ -124,6 +124,13 @@ func TestScenarioExportsPersistedRESTAndMCP(t *testing.T) {
 		}
 		return viaMCP
 	}
+	markdownBefore := httpExport(linked.Draft, "markdown")
+	htmlBefore := httpExport(linked.Draft, "html")
+	for _, artifact := range []scenarioexport.Artifact{markdownBefore, htmlBefore} {
+		if !strings.Contains(artifact.Content, "9007199254740993") {
+			t.Fatal("documentation rounded saved contract")
+		}
+	}
 	postmanBefore := httpExport(linked.Draft, "postman")
 	curlBefore := httpExport(linked.Draft, "curl")
 	first := export(linked.Draft, "a")
@@ -161,6 +168,9 @@ func TestScenarioExportsPersistedRESTAndMCP(t *testing.T) {
 	if !reflect.DeepEqual(postmanBefore, httpExport(linked.Draft, "postman")) || !reflect.DeepEqual(curlBefore, httpExport(linked.Draft, "curl")) {
 		t.Fatal("API or scenario edit changed historical HTTP exports")
 	}
+	if !reflect.DeepEqual(markdownBefore, httpExport(linked.Draft, "markdown")) || !reflect.DeepEqual(htmlBefore, httpExport(linked.Draft, "html")) {
+		t.Fatal("API or scenario edit changed historical documentation")
+	}
 	other, err := repo.Create(t.Context(), designscenario.CreateInput{Document: doc, Source: "ui"})
 	if err != nil {
 		t.Fatalf("%#v", err)
@@ -183,6 +193,12 @@ func TestScenarioExportsPersistedRESTAndMCP(t *testing.T) {
 	args := map[string]any{"scenarioId": pending.Scenario.ID, "revisionId": pending.Draft.ID, "format": "openapi-json", "contractId": "a"}
 	if msg := callDesignScenarioTool(t, srv, "export_design_scenario", args, &ignored); !strings.Contains(msg, "422") || !strings.Contains(msg, "api_forms_pending") {
 		t.Fatalf("MCP pending: %s", msg)
+	}
+	for _, format := range []string{"markdown", "html"} {
+		artifact := httpExport(pending.Draft, format)
+		if !strings.Contains(strings.ReplaceAll(artifact.Content, `\_`, `_`), "api_forms_pending") {
+			t.Fatal("pending forms warning absent")
+		}
 	}
 	cfg.MaxBody = 300
 	if response = read(path); response.Code != 413 {
