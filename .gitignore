@@ -47,6 +47,15 @@
 
 # Local UI screenshots
 /screenshots/
+/.playwright-mcp/
+
+# Local task specifications, plans and review reports
+/docs/*-spec.md
+/docs/*-plan.md
+/docs/*-report.md
+/docs/*-review.md
+/docs/*-qa.md
+/docs/api-designer-api.md
 
 # wfcheck --freeze snapshots of workflow scripts, one per gate round: local
 # review artefacts, and a "git add -N ." in a reviewer prompt would otherwise
