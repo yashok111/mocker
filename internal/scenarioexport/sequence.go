@@ -15,6 +15,18 @@ type interval struct {
 }
 
 func sequenceIntervals(doc designscenario.Document) ([]interval, []Diagnostic) {
+	if doc.FormatVersion == 2 {
+		issues := []Diagnostic{}
+		for _, d := range designscenario.ValidateFragments(doc) {
+			id := ""
+			var index int
+			if _, err := fmt.Sscanf(d.Pointer, "/fragments/%d", &index); err == nil && index >= 0 && index < len(doc.Fragments) {
+				id = doc.Fragments[index].ID
+			}
+			issues = append(issues, diagnostic("fragment_invalid", d.Severity, d.Message, "fragment", id, d.Pointer))
+		}
+		return nil, issues
+	}
 	positions := make(map[string]int, len(doc.Messages))
 	for i, m := range doc.Messages {
 		positions[m.ID] = i
@@ -84,10 +96,14 @@ func renderSequence(doc designscenario.Document, format Format, limit int64) ([]
 	}
 	intervals, _ := sequenceIntervals(doc)
 	stack := []interval{}
+	before, after := branchEvents(doc, label)
 	next := 0
 	for i, m := range doc.Messages {
 		if writeErr != nil {
 			return nil, writeErr
+		}
+		for _, event := range before[i] {
+			line(event)
 		}
 		for next < len(intervals) && intervals[next].start == i {
 			current := intervals[next]
@@ -124,6 +140,9 @@ func renderSequence(doc designscenario.Document, format Format, limit int64) ([]
 		if m.Description != "" {
 			line("note over " + from + ": " + label(m.Description))
 		}
+		for _, event := range after[i] {
+			line(event)
+		}
 		for len(stack) > 0 && stack[len(stack)-1].end == i {
 			line("end")
 			stack = stack[:len(stack)-1]
@@ -140,4 +159,51 @@ func renderSequence(doc designscenario.Document, format Format, limit int64) ([]
 
 func cleanNewlines(value string) string {
 	return strings.ReplaceAll(strings.ReplaceAll(value, "\r\n", "\n"), "\r", "\n")
+}
+
+// branchEvents traverses explicit parent links, including equal-bound children.
+// Children close before their parent's next else or end event.
+func branchEvents(doc designscenario.Document, label func(string) string) (map[int][]string, map[int][]string) {
+	before, after := map[int][]string{}, map[int][]string{}
+	if doc.FormatVersion != 2 {
+		return before, after
+	}
+	positions := make(map[string]int, len(doc.Messages))
+	for i, message := range doc.Messages {
+		positions[message.ID] = i
+	}
+	type scope struct{ parent, branch string }
+	children := map[scope][]designscenario.Fragment{}
+	for _, f := range doc.Fragments {
+		key := scope{f.ParentFragmentID, f.ParentBranchID}
+		children[key] = append(children[key], f)
+	}
+	var visit func(scope)
+	visit = func(key scope) {
+		frames := children[key]
+		slices.SortFunc(frames, func(a, b designscenario.Fragment) int {
+			return cmp.Compare(positions[a.FromMessageID], positions[b.FromMessageID])
+		})
+		for _, f := range frames {
+			if f.Kind == "alt" {
+				for i, b := range f.Branches {
+					kind := "alt"
+					if i > 0 {
+						kind = "else"
+					}
+					start := positions[b.FromMessageID]
+					before[start] = append(before[start], kind+" "+label(b.Label))
+					visit(scope{f.ID, b.ID})
+				}
+			} else {
+				start := positions[f.FromMessageID]
+				before[start] = append(before[start], f.Kind+" "+label(f.Label))
+				visit(scope{parent: f.ID})
+			}
+			end := positions[f.ToMessageID]
+			after[end] = append(after[end], "end")
+		}
+	}
+	visit(scope{})
+	return before, after
 }

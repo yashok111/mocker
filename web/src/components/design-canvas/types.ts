@@ -74,12 +74,22 @@ export interface CanvasMessage {
   execution?: CanvasStepExecution;
 }
 
-export interface CanvasFragment {
+export interface CanvasFragmentBranch {
   id: string;
-  kind: "opt" | "loop";
   label: string;
   fromMessageId: string;
   toMessageId: string;
+}
+
+export interface CanvasFragment {
+  id: string;
+  kind: "opt" | "loop" | "alt";
+  label: string;
+  fromMessageId: string;
+  toMessageId: string;
+  parentFragmentId?: string;
+  parentBranchId?: string;
+  branches?: CanvasFragmentBranch[];
 }
 
 export interface CanvasContract {
@@ -91,7 +101,7 @@ export interface CanvasContract {
 }
 
 export interface CanvasDocument {
-  formatVersion: 1;
+  formatVersion: 1 | 2;
   title: string;
   participants: CanvasParticipant[];
   messages: CanvasMessage[];

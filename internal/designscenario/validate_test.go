@@ -15,7 +15,7 @@ import (
 func TestValidateDocumentPreservesDiagnosticOrderAndDuplicateReferences(t *testing.T) {
 	t.Parallel()
 	document := validDocument("Invalid references")
-	document.FormatVersion = 2
+	document.FormatVersion = 3
 	document.Participants = []Participant{
 		{ID: "client", Kind: "unknown"},
 		{ID: "client", Kind: "client"},
@@ -28,7 +28,7 @@ func TestValidateDocumentPreservesDiagnosticOrderAndDuplicateReferences(t *testi
 	document.Fragments = []Fragment{{ID: "fragment", Kind: "unknown", FromMessageID: "call", ToMessageID: "missing"}}
 
 	want := []Diagnostic{
-		{Pointer: "/formatVersion", Message: "formatVersion must be 1", Severity: "error"},
+		{Pointer: "/formatVersion", Message: "formatVersion must be 1 or 2", Severity: "error"},
 		{Pointer: "/participants/0/kind", Message: "unknown participant kind", Severity: "error"},
 		{Pointer: "/participants/1/id", Message: "duplicate participant id", Severity: "error"},
 		{Pointer: "/messages/1/id", Message: "duplicate message id", Severity: "error"},

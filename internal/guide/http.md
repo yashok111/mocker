@@ -42,8 +42,8 @@ Authenticated read-only routes:
 - `GET /api/design-scenarios/{id}/revisions/{rid}/export-options`
 - `GET /api/design-scenarios/{id}/revisions/{rid}/exports/{format}?contractId=...`
 
-Formats: `plantuml`, `mermaid`, `openapi-json`, `openapi-yaml`. Supply `contractId`
-only for OpenAPI. The response is JSON with `content` as a string, plus
+Formats: `plantuml`, `mermaid`, `openapi-json`, `openapi-yaml`, `postman`, `curl`.
+Supply `contractId` only for OpenAPI. The response is JSON with `content` as a string, plus
 `filename`, `mediaType`, `scenarioId`, `revisionId`, `sourceHash` and diagnostics.
 Write the content exactly; parsing and reserializing the contract in JavaScript
 can round large numbers. Example using the login variables above:
@@ -60,6 +60,12 @@ missing contract is 404; blocked output is 422 with `error.details.diagnostics`;
 results exceeding the configured body-size limit are 413. JSON preserves the
 saved contract bytes; YAML preserves scalar types and numeric precision.
 Images are exported locally from the browser.
+
+`postman` returns a Collection v2.1 JSON file; `curl` returns a POSIX shell file.
+Both use enabled HTTP requests and execution inputs in the selected revision.
+Fill missing base URL variables before running the downloaded artifact. Inspect
+`export-options` diagnostics first: required inputs and unsupported execution
+semantics can block these formats while diagram exports remain available.
 
 ## Import a spec (from a shell; the MCP tool is `import_spec`)
 

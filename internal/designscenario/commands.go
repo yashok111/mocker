@@ -105,6 +105,15 @@ func applyParticipantCommand(document *Document, command Command) error {
 		}
 		upsertParticipant(&document.Participants, *command.Participant)
 	case "remove_participant":
+		removed := map[string]struct{}{}
+		for _, message := range document.Messages {
+			if message.FromID == command.ID || message.ToID == command.ID {
+				removed[message.ID] = struct{}{}
+			}
+		}
+		if err := guardFragmentRemoval(*document, removed); err != nil {
+			return err
+		}
 		if !removeParticipant(document, command.ID) {
 			return invalidAt("/id", "participant does not exist")
 		}
@@ -127,12 +136,18 @@ func applyMessageCommand(document *Document, command Command) error {
 		}
 		upsertMessage(&document.Messages, *command.Message)
 	case "remove_message":
+		if err := guardFragmentRemoval(*document, map[string]struct{}{command.ID: {}}); err != nil {
+			return err
+		}
 		if !removeMessages(document, map[string]struct{}{command.ID: {}}) {
 			return invalidAt("/id", "message does not exist")
 		}
 	case "move_message":
 		if command.Index == nil {
 			return invalidAt("/index", "index is required")
+		}
+		if document.FormatVersion == 2 {
+			return moveFragmentMessage(document, command.ID, *command.Index)
 		}
 		if !moveMessage(&document.Messages, command.ID, *command.Index) {
 			return invalidAt("", "message or target index does not exist")
@@ -149,7 +164,11 @@ func applyFragmentCommand(document *Document, command Command) error {
 		}
 		upsertFragment(&document.Fragments, *command.Fragment)
 	case "remove_fragment":
-		if !removeFragment(&document.Fragments, command.ID) {
+		remove := removeFragment
+		if document.FormatVersion == 2 {
+			remove = removeFragmentTree
+		}
+		if !remove(&document.Fragments, command.ID) {
 			return invalidAt("/id", "fragment does not exist")
 		}
 	}
@@ -200,6 +219,7 @@ func upsertMessage(items *[]Message, value Message) {
 }
 
 func upsertFragment(items *[]Fragment, value Fragment) {
+	value.Branches = slices.Clone(value.Branches)
 	for index := range *items {
 		if (*items)[index].ID == value.ID {
 			(*items)[index] = value

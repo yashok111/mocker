@@ -463,3 +463,25 @@ describe("compareCanvasRevisions", () => {
     expect(snapshots).toEqual(original);
   });
 });
+
+it("reports parent and branch changes in revision history", () => {
+  const before = document();
+  const after = structuredClone(before);
+  after.formatVersion = 2;
+  after.fragments[0] = {
+    ...after.fragments[0]!,
+    kind: "alt",
+    branches: [
+      { id: "yes", label: "approved", fromMessageId: "request", toMessageId: "request" },
+      { id: "no", label: "else", fromMessageId: "save", toMessageId: "save" },
+    ],
+  };
+  const changes = compareCanvasRevisions({ document: before }, { document: after });
+  const fragment = changes.find((c) => c.entityType === "fragment");
+  expect(fragment?.fields).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({ label: "Тип блока", after: "Ветвление" }),
+      expect.objectContaining({ label: "Ветки", after: expect.stringContaining("approved") }),
+    ]),
+  );
+});

@@ -309,3 +309,22 @@ func TestDesignScenarioToolsRejectInvalidColorsBeforeAdminCall(t *testing.T) {
 		}
 	}
 }
+
+func TestDesignScenarioToolsAcceptBranchTree(t *testing.T) {
+	t.Parallel()
+	const fragment = `{"id":"alt","kind":"alt","label":"Decision","fromMessageId":"a","toMessageId":"b","branches":[{"id":"yes","label":"ok","fromMessageId":"a","toMessageId":"a"},{"id":"no","label":"else","fromMessageId":"b","toMessageId":"b"}]}`
+	document := strings.Replace(designScenarioDocumentFixture, `"formatVersion":1`, `"formatVersion":2`, 1)
+	document = strings.Replace(document, `"fragments":[]`, `"fragments":[`+fragment+`]`, 1)
+	calls := &recordingCaller{status: http.StatusOK, body: []byte(`{}`)}
+	if _, errMsg := callTool(t, calls, "create_design_scenario", `{"document":`+document+`}`); errMsg != "" {
+		t.Fatal(errMsg)
+	}
+	if !strings.Contains(string(calls.sent), `"branches"`) {
+		t.Fatalf("lost branches: %s", calls.sent)
+	}
+	calls = &recordingCaller{status: http.StatusOK, body: []byte(`{}`)}
+	legacy := strings.Replace(document, `"formatVersion":2`, `"formatVersion":1`, 1)
+	if _, errMsg := callTool(t, calls, "create_design_scenario", `{"document":`+legacy+`}`); errMsg == "" || calls.method != "" {
+		t.Fatal("v1 branches reached admin")
+	}
+}

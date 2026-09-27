@@ -24,6 +24,104 @@ const revision: DesignScenarioRevision = {
   formDrafts: {},
 };
 
+it.each([
+  ["postman", "Postman", "collection.json", '{"info":{"name":"Saved collection"}}'],
+  ["curl", "cURL", "requests.sh", "#!/bin/sh\ncurl --request GET --url 'https://example.test'"],
+])(
+  "downloads %s from the selected revision without a contract filter",
+  async (format, label, filename, content) => {
+    const fetch = route({
+      "GET /api/design-scenarios/7/revisions/11/export-options": () =>
+        json(200, {
+          scenarioId: 7,
+          revisionId: 11,
+          sourceHash: "hash-11",
+          options: [{ format, ready: true, diagnostics: [] }],
+        }),
+      [`GET /api/design-scenarios/7/revisions/11/exports/${format}`]: () =>
+        json(200, {
+          scenarioId: 7,
+          revisionId: 11,
+          sourceHash: "hash-11",
+          format,
+          filename,
+          content,
+          mediaType: "text/plain",
+          diagnostics: [],
+        }),
+    });
+    const download = vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:download");
+    vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {});
+    vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+    renderWithProviders(
+      <ScenarioResultsModal
+        opened
+        scenarioId={7}
+        revision={revision}
+        latestRevisionId={12}
+        onClose={vi.fn()}
+        onLocate={vi.fn()}
+        onPrepareContracts={vi.fn()}
+        onRun={vi.fn()}
+      />,
+    );
+    await userEvent.selectOptions(screen.getByLabelText("Формат результата"), format);
+    expect(await screen.findByLabelText("Предпросмотр результата")).toHaveTextContent(
+      content.replace(/\n/g, " "),
+    );
+    expect(screen.queryByLabelText("Весь API-контракт")).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: `Скачать ${label}` }));
+    expect(await (download.mock.calls[0]![0] as Blob).text()).toBe(content);
+    expect(
+      fetch.mock.calls.every(
+        ([input]) =>
+          !String(input).includes("contractId=") && !String(input).includes("/revisions/12/"),
+      ),
+    ).toBe(true);
+  },
+);
+
+it("shows missing HTTP inputs before download and opens execution settings", async () => {
+  route({
+    "GET /api/design-scenarios/7/revisions/11/export-options": () =>
+      json(200, {
+        scenarioId: 7,
+        revisionId: 11,
+        sourceHash: "hash-11",
+        options: [
+          {
+            format: "curl",
+            ready: false,
+            diagnostics: [
+              {
+                code: "path_parameter_missing",
+                severity: "error",
+                message: "Укажите параметр пути id",
+              },
+            ],
+          },
+        ],
+      }),
+  });
+  const onRun = vi.fn();
+  renderWithProviders(
+    <ScenarioResultsModal
+      opened
+      scenarioId={7}
+      revision={revision}
+      selection={{ format: "curl", contractId: "" }}
+      onClose={vi.fn()}
+      onLocate={vi.fn()}
+      onPrepareContracts={vi.fn()}
+      onRun={onRun}
+    />,
+  );
+  expect(await screen.findByText("Укажите параметр пути id")).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Скачать cURL" })).toBeDisabled();
+  await userEvent.click(screen.getByRole("button", { name: "Открыть выполнение" }));
+  expect(onRun).toHaveBeenCalledOnce();
+});
+
 it("previews and downloads Mermaid while offering API repair and diagnostic navigation", async () => {
   const target = { kind: "message" as const, id: revision.document.messages[0]!.id };
   route({

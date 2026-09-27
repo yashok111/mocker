@@ -54,7 +54,10 @@ func validateDocument(document Document) []Diagnostic {
 	messages := validator.validateMessages(document.Messages)
 	contracts := validator.validateContracts(document.Contracts)
 	validator.validateMessageReferences(document, participants, messages, contracts)
-	validator.validateFragments(document.Fragments, messages)
+	validator.validateFragments(document.Fragments, messages, document.FormatVersion)
+	if document.FormatVersion == 2 {
+		validator.validateFragmentTree(document.Fragments, messages)
+	}
 	return validator.diagnostics
 }
 
@@ -78,8 +81,8 @@ func (v *documentValidator) checkColor(pointer string, color HexColor) {
 }
 
 func (v *documentValidator) validateMetadata(document Document) {
-	if document.FormatVersion != 1 {
-		v.errorAt("/formatVersion", "formatVersion must be 1")
+	if document.FormatVersion != 1 && document.FormatVersion != 2 {
+		v.errorAt("/formatVersion", "formatVersion must be 1 or 2")
 	}
 	v.checkText("/title", document.Title, true)
 	for _, field := range []struct {
@@ -239,19 +242,22 @@ func (v *documentValidator) validateMessageReferences(document Document, partici
 	}
 }
 
-func (v *documentValidator) validateFragments(items []Fragment, messages map[string]int) {
+func (v *documentValidator) validateFragments(items []Fragment, messages map[string]int, version int) {
 	fragments := map[string]struct{}{}
 	for index, fragment := range items {
 		pointer := fmt.Sprintf("/fragments/%d", index)
 		v.checkText(pointer+"/id", fragment.ID, false)
 		v.checkText(pointer+"/label", fragment.Label, true)
-		if !slices.Contains(fragmentKinds, fragment.Kind) {
+		if !slices.Contains(fragmentKinds, fragment.Kind) && !(version == 2 && fragment.Kind == "alt") {
 			v.errorAt(pointer+"/kind", "unknown fragment kind")
 		}
 		if _, exists := fragments[fragment.ID]; exists {
 			v.errorAt(pointer+"/id", "duplicate fragment id")
 		}
 		fragments[fragment.ID] = struct{}{}
+		if version != 2 && (fragment.ParentFragmentID != "" || fragment.ParentBranchID != "" || fragment.Branches != nil) {
+			v.errorAt(pointer, "parent and branch fields require formatVersion 2")
+		}
 		from, fromOK := messages[fragment.FromMessageID]
 		to, toOK := messages[fragment.ToMessageID]
 		if !fromOK {

@@ -35,12 +35,12 @@ import {
 } from "./canvasModel";
 import { MAX_PARTICIPANT_OFFSET_X } from "./types";
 import { scopeFormDrafts } from "./useCanvasDraft";
+import { CanvasFragmentInspector } from "./CanvasFragmentInspector";
 import { CanvasColorInput } from "./CanvasColorInput";
 import { CanvasCreateOperationModal } from "./CanvasCreateOperationModal";
 import { messageLabels, participantLabels } from "./labels";
 import type {
   CanvasDocument,
-  CanvasFragment,
   CanvasMessage,
   CanvasSelection,
   MessageKind,
@@ -201,7 +201,12 @@ export function CanvasInspector(props: Props): ReactElement {
         ) : null}
         {message ? <MessageInspector {...props} message={message} /> : null}
         {fragment ? (
-          <FragmentInspector document={document} fragment={fragment} onChange={onChange} />
+          <CanvasFragmentInspector
+            key={fragment.id}
+            document={document}
+            fragment={fragment}
+            onChange={onChange}
+          />
         ) : null}
         {participant || message || fragment ? (
           <>
@@ -222,84 +227,6 @@ export function CanvasInspector(props: Props): ReactElement {
         )}
       </Stack>
     </section>
-  );
-}
-
-function orderedFragmentBounds(
-  document: CanvasDocument,
-  fragment: CanvasFragment,
-): { first: string; last: string } {
-  const fromIndex = document.messages.findIndex((message) => message.id === fragment.fromMessageId);
-  const toIndex = document.messages.findIndex((message) => message.id === fragment.toMessageId);
-  return fromIndex <= toIndex
-    ? { first: fragment.fromMessageId, last: fragment.toMessageId }
-    : { first: fragment.toMessageId, last: fragment.fromMessageId };
-}
-
-function FragmentInspector({
-  document,
-  fragment,
-  onChange,
-}: {
-  document: CanvasDocument;
-  fragment: CanvasFragment;
-  onChange: (document: CanvasDocument) => void;
-}): ReactElement {
-  const bounds = orderedFragmentBounds(document, fragment);
-  const patch = (changes: Partial<CanvasFragment>) =>
-    onChange({
-      ...document,
-      fragments: document.fragments.map((item) =>
-        item.id === fragment.id
-          ? { ...item, fromMessageId: bounds.first, toMessageId: bounds.last, ...changes }
-          : item,
-      ),
-    });
-  const firstIndex = document.messages.findIndex((message) => message.id === bounds.first);
-  const lastIndex = document.messages.findIndex((message) => message.id === bounds.last);
-
-  return (
-    <>
-      <NativeSelect
-        label="Тип блока"
-        value={fragment.kind}
-        data={[
-          { value: "opt", label: "Условие (opt)" },
-          { value: "loop", label: "Цикл (loop)" },
-        ]}
-        onChange={(event) => patch({ kind: event.currentTarget.value as "opt" | "loop" })}
-      />
-      <Textarea
-        label="Условие блока"
-        value={fragment.label}
-        onChange={(event) => patch({ label: event.currentTarget.value })}
-      />
-      <NativeSelect
-        label="Первый шаг блока"
-        value={bounds.first}
-        data={document.messages.map((item, index) => ({
-          value: item.id,
-          label: `${index + 1}. ${item.label}`,
-        }))}
-        onChange={(event) => {
-          const first = event.currentTarget.value;
-          const selectedIndex = document.messages.findIndex((message) => message.id === first);
-          patch({
-            fromMessageId: first,
-            toMessageId: selectedIndex > lastIndex ? first : bounds.last,
-          });
-        }}
-      />
-      <NativeSelect
-        label="Последний шаг блока"
-        value={bounds.last}
-        data={document.messages.slice(Math.max(0, firstIndex)).map((item) => ({
-          value: item.id,
-          label: item.label,
-        }))}
-        onChange={(event) => patch({ toMessageId: event.currentTarget.value })}
-      />
-    </>
   );
 }
 

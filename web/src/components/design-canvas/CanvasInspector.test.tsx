@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { fireEvent, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
@@ -72,6 +73,79 @@ function renderInspector(document: CanvasDocument, selection: CanvasSelection, o
 }
 
 describe("CanvasInspector", () => {
+  it("converts a legacy block into alt with explicit branch ranges", async () => {
+    const onChange = renderInspector(documentFixture(), { kind: "fragment", id: "inverted" });
+    await userEvent.selectOptions(screen.getByLabelText("Тип блока"), "alt");
+    const result = onChange.mock.lastCall![0] as CanvasDocument;
+    expect(result.formatVersion).toBe(2);
+    expect(result.fragments[0]!.branches).toHaveLength(2);
+    expect(result.fragments[0]!.branches![1]!.label).toBe("else");
+  });
+  it("shows a local error without saving a one-step alt", async () => {
+    const doc = documentFixture();
+    doc.fragments[0]!.toMessageId = "response";
+    const onChange = renderInspector(doc, { kind: "fragment", id: "inverted" });
+    await userEvent.selectOptions(screen.getByLabelText("Тип блока"), "alt");
+    expect(screen.getByRole("alert")).toHaveTextContent("хотя бы два шага");
+    expect(onChange).not.toHaveBeenCalled();
+  });
+  it("applies parent branch and range changes atomically", async () => {
+    const initial = documentFixture();
+    initial.formatVersion = 2;
+    initial.fragments = [
+      {
+        id: "outer",
+        kind: "alt",
+        label: "Branches",
+        fromMessageId: "request",
+        toMessageId: "response",
+        branches: [
+          { id: "yes", label: "yes", fromMessageId: "request", toMessageId: "middle" },
+          { id: "no", label: "else", fromMessageId: "response", toMessageId: "response" },
+        ],
+      },
+      {
+        id: "inner",
+        kind: "loop",
+        label: "Retry",
+        fromMessageId: "request",
+        toMessageId: "middle",
+        parentFragmentId: "outer",
+        parentBranchId: "yes",
+      },
+    ];
+    const changed = vi.fn();
+    function Editor() {
+      const [document, setDocument] = useState(initial);
+      return (
+        <CanvasInspector
+          document={document}
+          selection={{ kind: "fragment", id: "inner" }}
+          onChange={(next) => {
+            changed(next);
+            setDocument(next);
+          }}
+          onClose={vi.fn()}
+          onDelete={vi.fn()}
+          onMove={vi.fn()}
+          onImportApi={vi.fn()}
+          formStore={createFormDraftStore()}
+        />
+      );
+    }
+    renderWithProviders(<Editor />);
+    await userEvent.selectOptions(screen.getByLabelText("Ветка родительского блока"), "no");
+    expect(changed).not.toHaveBeenCalled();
+    await userEvent.selectOptions(screen.getByLabelText("Первый шаг блока"), "response");
+    await userEvent.click(screen.getByRole("button", { name: "Применить вложенность" }));
+    expect(changed).toHaveBeenCalledTimes(1);
+    expect(changed.mock.lastCall![0].fragments[1]).toMatchObject({
+      parentBranchId: "no",
+      fromMessageId: "response",
+      toMessageId: "response",
+    });
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
   it("edits and resets participant spacing without reordering columns", () => {
     const document = documentFixture();
     document.participants[1] = { ...document.participants[1]!, offsetX: 100 };

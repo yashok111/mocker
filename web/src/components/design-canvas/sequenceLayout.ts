@@ -1,4 +1,10 @@
 import { resolveOperation } from "./canvasModel";
+import { canvasTextMeasurer, wrapCanvasText, CANVAS_MONOSPACE_FONT_FAMILY } from "./canvasText";
+import {
+  participantNameMeasurer,
+  wrapParticipantName,
+  PARTICIPANT_NAME_LINE_HEIGHT,
+} from "./participantName";
 import type { CanvasDocument } from "./types";
 
 const MIN_WIDTH = 720;
@@ -12,12 +18,17 @@ const FIRST_MESSAGE_Y = 148;
 const MESSAGE_GAP = 72;
 const MESSAGE_LABEL_HEIGHT = 28;
 const MESSAGE_LABEL_GAP = 6;
+const MESSAGE_LABEL_PADDING_X = 37;
+const MESSAGE_LIFELINE_GAP = 12;
+export const MESSAGE_LABEL_LINE_HEIGHT = 14;
+export const MESSAGE_OPERATION_LINE_HEIGHT = 12;
 const SELF_CALL_WIDTH = 56;
 const SELF_CALL_HEIGHT = 34;
 const FRAGMENT_PADDING_X = 44;
 const CONTENT_GAP = 16;
 const FRAGMENT_HEADER_HEIGHT = 32;
 const FRAGMENT_BOTTOM_PADDING = 16;
+export const FRAGMENT_LABEL_LINE_HEIGHT = 14;
 
 export interface SequencePoint {
   x: number;
@@ -28,6 +39,7 @@ export interface ParticipantLayout {
   id: string;
   index: number;
   x: number;
+  nameLines: string[];
   header: { x: number; y: number; width: number; height: number };
   lifeline: { source: SequencePoint; target: SequencePoint };
 }
@@ -39,6 +51,8 @@ export interface MessageLayout {
   source: SequencePoint;
   target: SequencePoint;
   vertices: SequencePoint[];
+  labelLines: string[];
+  operationLines: string[];
   label: { x: number; y: number; width: number; height: number };
   note?: { x: number; y: number; width: number; height: number };
 }
@@ -49,6 +63,18 @@ export interface FragmentLayout {
   y: number;
   width: number;
   height: number;
+  depth?: number;
+  labelLines?: string[];
+  headerHeight?: number;
+  branches?: FragmentBranchLayout[];
+}
+
+export interface FragmentBranchLayout {
+  id: string;
+  labelLines: string[];
+  y: number;
+  height: number;
+  separatorY?: number;
 }
 
 export interface SequenceLayout {
@@ -60,20 +86,29 @@ export interface SequenceLayout {
 }
 
 export function layoutSequence(document: CanvasDocument): SequenceLayout {
+  if (document.formatVersion === 2 && document.fragments.length) {
+    return layoutNestedSequence(document);
+  }
   const participantX = new Map<string, number>();
+  const measureName = participantNameMeasurer();
+  const measureLabel = canvasTextMeasurer(11, 550);
+  const measureOperation = canvasTextMeasurer(9, 650, CANVAS_MONOSPACE_FONT_FAMILY);
   let horizontalOffset = 0;
   const participants = document.participants.map((participant, index): ParticipantLayout => {
     horizontalOffset += participant.offsetX ?? 0;
     const headerX = SIDE_PADDING + index * (HEADER_WIDTH + PARTICIPANT_GAP) + horizontalOffset;
     const x = headerX + HEADER_WIDTH / 2;
+    const nameLines = wrapParticipantName(participant.name, measureName);
+    const headerHeight = HEADER_HEIGHT + (nameLines.length - 1) * PARTICIPANT_NAME_LINE_HEIGHT;
     participantX.set(participant.id, x);
     return {
       id: participant.id,
       index,
       x,
-      header: { x: headerX, y: HEADER_TOP, width: HEADER_WIDTH, height: HEADER_HEIGHT },
+      nameLines,
+      header: { x: headerX, y: HEADER_TOP, width: HEADER_WIDTH, height: headerHeight },
       lifeline: {
-        source: { x, y: HEADER_TOP + HEADER_HEIGHT },
+        source: { x, y: HEADER_TOP + headerHeight },
         target: { x, y: MIN_HEIGHT - 40 },
       },
     };
@@ -90,7 +125,10 @@ export function layoutSequence(document: CanvasDocument): SequenceLayout {
   });
   // Outer frames open first; equal ranges nest in document order.
   ranges.sort((a, b) => a.from - b.from || b.to - a.to || a.order - b.order);
-  let contentBottom = HEADER_TOP + HEADER_HEIGHT;
+  let contentBottom = Math.max(
+    HEADER_TOP + HEADER_HEIGHT,
+    ...participants.map(({ lifeline }) => lifeline.source.y),
+  );
   let previousRowY = FIRST_MESSAGE_Y - MESSAGE_GAP;
   const messages: MessageLayout[] = [];
 
@@ -104,15 +142,45 @@ export function layoutSequence(document: CanvasDocument): SequenceLayout {
       : message.operation
         ? "API-связь недоступна"
         : "";
-    const labelWidth = Math.max(
-      96,
-      Array.from(message.label).length * 7.2 + 44,
-      operationLabel ? Array.from(operationLabel).length * 6.4 + 38 : 0,
-    );
-    const labelHeight = operationLabel ? 42 : MESSAGE_LABEL_HEIGHT;
-    const noteHeight = operationLabel ? 58 : 46;
     const isNote = message.kind === "note";
     const isSelfCall = !isNote && message.fromId === message.toId;
+    const nextX = participants.find(({ x }) => x > fromX)?.x;
+    const availableWidth =
+      (isSelfCall
+        ? (nextX ?? fromX + HEADER_WIDTH + PARTICIPANT_GAP) - fromX
+        : Math.abs(toX - fromX)) -
+      2 * MESSAGE_LIFELINE_GAP;
+    const naturalWidth = Math.max(
+      96,
+      ...message.label
+        .split(/\r\n|\r|\n/)
+        .map((line) => measureLabel(line) + MESSAGE_LABEL_PADDING_X),
+      ...operationLabel
+        .split(/\r\n|\r|\n/)
+        .map((line) => measureOperation(line) + MESSAGE_LABEL_PADDING_X),
+    );
+    const labelWidth = isNote
+      ? Math.max(
+          96,
+          Array.from(message.label).length * 7.2 + 44,
+          operationLabel ? Array.from(operationLabel).length * 6.4 + 38 : 0,
+        )
+      : Math.min(naturalWidth, availableWidth);
+    const labelLines = isNote
+      ? [message.label]
+      : wrapCanvasText(message.label, labelWidth - MESSAGE_LABEL_PADDING_X, measureLabel);
+    const operationLines = !operationLabel
+      ? []
+      : isNote
+        ? [operationLabel]
+        : wrapCanvasText(operationLabel, labelWidth - MESSAGE_LABEL_PADDING_X, measureOperation);
+    const labelHeight =
+      MESSAGE_LABEL_HEIGHT +
+      (labelLines.length - 1) * MESSAGE_LABEL_LINE_HEIGHT +
+      (operationLines.length
+        ? 14 + (operationLines.length - 1) * MESSAGE_OPERATION_LINE_HEIGHT
+        : 0);
+    const noteHeight = operationLabel ? 58 : 46;
     const topExtent = isNote ? noteHeight / 2 : labelHeight + MESSAGE_LABEL_GAP;
     const opening = ranges.filter((range) => range.from === index);
     const rowY = Math.max(
@@ -124,13 +192,15 @@ export function layoutSequence(document: CanvasDocument): SequenceLayout {
       range.top = rowY - topExtent - (opening.length - depth) * FRAGMENT_HEADER_HEIGHT;
     }
     const targetY = isSelfCall ? rowY + SELF_CALL_HEIGHT : rowY;
-    const midpointX = isSelfCall ? fromX + SELF_CALL_WIDTH / 2 : (fromX + toX) / 2;
+    const labelX = isSelfCall ? fromX + MESSAGE_LIFELINE_GAP : (fromX + toX - labelWidth) / 2;
     const geometry: MessageLayout = {
       id: message.id,
       index,
       rowY,
       source: { x: fromX, y: rowY },
       target: { x: toX, y: targetY },
+      labelLines,
+      operationLines,
       vertices: isSelfCall
         ? [
             { x: fromX + SELF_CALL_WIDTH, y: rowY },
@@ -138,7 +208,7 @@ export function layoutSequence(document: CanvasDocument): SequenceLayout {
           ]
         : [],
       label: {
-        x: midpointX - labelWidth / 2,
+        x: labelX,
         y: rowY - labelHeight - MESSAGE_LABEL_GAP,
         width: labelWidth,
         height: labelHeight,
@@ -206,6 +276,179 @@ export function layoutSequence(document: CanvasDocument): SequenceLayout {
     ...fragments.map(({ x, width }) => x + width + SIDE_PADDING),
   );
   return { width, height, participants, messages, fragments };
+}
+
+function layoutNestedSequence(document: CanvasDocument): SequenceLayout {
+  // Measure cards once without frames. Their horizontal geometry does not depend on blocks.
+  const layout = layoutSequence({ ...document, formatVersion: 1, fragments: [] });
+  const indices = new Map(document.messages.map(({ id }, index) => [id, index]));
+  const byId = new Map(document.fragments.map((fragment) => [fragment.id, fragment]));
+  const measure = canvasTextMeasurer(11, 400);
+  const ranges = document.fragments.flatMap((fragment) => {
+    const from = indices.get(fragment.fromMessageId);
+    const to = indices.get(fragment.toMessageId);
+    if (from === undefined || to === undefined) return [];
+    let depth = 0;
+    let parent = fragment.parentFragmentId;
+    const seen = new Set([fragment.id]);
+    while (parent && !seen.has(parent)) {
+      seen.add(parent);
+      depth += 1;
+      parent = byId.get(parent)?.parentFragmentId;
+    }
+    return [{ fragment, from, to, depth }];
+  });
+  const frames = new Map<string, FragmentLayout>();
+  // Children establish their widths before parents, including children with equal bounds.
+  for (const range of [...ranges].sort((a, b) => b.depth - a.depth)) {
+    const contained = layout.messages.filter(
+      ({ index }) => index >= range.from && index <= range.to,
+    );
+    if (!contained.length) continue;
+    let left = Infinity;
+    let right = -Infinity;
+    for (const message of contained) {
+      const card = message.note ?? message.label;
+      left = Math.min(
+        left,
+        message.source.x - FRAGMENT_PADDING_X,
+        message.target.x - FRAGMENT_PADDING_X,
+        card.x - CONTENT_GAP,
+      );
+      right = Math.max(
+        right,
+        message.source.x + FRAGMENT_PADDING_X,
+        message.target.x + FRAGMENT_PADDING_X,
+        card.x + card.width + CONTENT_GAP,
+        ...message.vertices.map(({ x }) => x + CONTENT_GAP),
+      );
+    }
+    for (const child of ranges.filter(
+      ({ fragment }) => fragment.parentFragmentId === range.fragment.id,
+    )) {
+      const inner = frames.get(child.fragment.id);
+      if (!inner) continue;
+      left = Math.min(left, inner.x - CONTENT_GAP);
+      right = Math.max(right, inner.x + inner.width + CONTENT_GAP);
+    }
+    const width = Math.max(176, right - left);
+    const labelLines = wrapCanvasText(range.fragment.label, width - 84, measure);
+    frames.set(range.fragment.id, {
+      id: range.fragment.id,
+      x: left,
+      y: 0,
+      width,
+      height: 0,
+      depth: range.depth,
+      labelLines,
+      headerHeight: Math.max(
+        FRAGMENT_HEADER_HEIGHT,
+        labelLines.length * FRAGMENT_LABEL_LINE_HEIGHT + 16,
+      ),
+      branches:
+        range.fragment.kind === "alt"
+          ? (range.fragment.branches ?? []).map((branch) => {
+              const lines = wrapCanvasText(branch.label, width - 32, measure);
+              return {
+                id: branch.id,
+                labelLines: lines,
+                y: 0,
+                height: lines.length * FRAGMENT_LABEL_LINE_HEIGHT + 16,
+              };
+            })
+          : [],
+    });
+  }
+  let contentBottom = Math.max(
+    HEADER_TOP + HEADER_HEIGHT,
+    ...layout.participants.map(({ lifeline }) => lifeline.source.y),
+  );
+  let previousRowY = FIRST_MESSAGE_Y - MESSAGE_GAP;
+  for (const message of layout.messages) {
+    const headers: { order: number; height: number; place: (y: number) => void }[] = [];
+    for (const range of ranges) {
+      const frame = frames.get(range.fragment.id);
+      if (!frame) continue;
+      if (range.from === message.index) {
+        headers.push({
+          order: range.depth * 2,
+          height: frame.headerHeight!,
+          place: (y) => {
+            frame.y = y;
+          },
+        });
+      }
+      for (const [index, branch] of (range.fragment.branches ?? []).entries()) {
+        if (indices.get(branch.fromMessageId) !== message.index) continue;
+        const geometry = frame.branches![index]!;
+        headers.push({
+          order: range.depth * 2 + 1,
+          height: geometry.height,
+          place: (y) => {
+            geometry.y = y;
+            if (index > 0) geometry.separatorY = y;
+          },
+        });
+      }
+    }
+    headers.sort((a, b) => a.order - b.order);
+    const headerHeight = headers.reduce((height, header) => height + header.height, 0);
+    const card = message.note ?? message.label;
+    const topExtent = message.rowY - card.y;
+    const rowY = Math.max(
+      FIRST_MESSAGE_Y,
+      previousRowY + MESSAGE_GAP,
+      contentBottom + CONTENT_GAP + headerHeight + topExtent,
+    );
+    let headerY = rowY - topExtent - headerHeight;
+    for (const header of headers) {
+      header.place(headerY);
+      headerY += header.height;
+    }
+    const delta = rowY - message.rowY;
+    message.rowY = rowY;
+    message.source.y += delta;
+    message.target.y += delta;
+    message.label.y += delta;
+    if (message.note) message.note.y += delta;
+    for (const point of message.vertices) point.y += delta;
+    previousRowY = rowY;
+    contentBottom = message.note ? message.note.y + message.note.height : message.target.y + 4;
+    for (const range of ranges
+      .filter(({ to }) => to === message.index)
+      .sort((a, b) => b.depth - a.depth)) {
+      const frame = frames.get(range.fragment.id);
+      if (!frame) continue;
+      contentBottom += FRAGMENT_BOTTOM_PADDING;
+      frame.height = contentBottom - frame.y;
+    }
+  }
+  layout.fragments = document.fragments.flatMap(({ id }) =>
+    frames.has(id) ? [frames.get(id)!] : [],
+  );
+  // Deep nesting can extend left of the canvas; move the complete projection together.
+  const shift = Math.max(0, SIDE_PADDING - Math.min(...layout.fragments.map(({ x }) => x)));
+  for (const frame of layout.fragments) frame.x += shift;
+  for (const participant of layout.participants) {
+    participant.x += shift;
+    participant.header.x += shift;
+    participant.lifeline.source.x += shift;
+    participant.lifeline.target.x += shift;
+  }
+  for (const message of layout.messages) {
+    message.source.x += shift;
+    message.target.x += shift;
+    message.label.x += shift;
+    if (message.note) message.note.x += shift;
+    for (const point of message.vertices) point.x += shift;
+  }
+  layout.height = Math.max(MIN_HEIGHT, contentBottom + 80);
+  layout.width = Math.max(
+    layout.width + shift,
+    ...layout.fragments.map(({ x, width }) => x + width + SIDE_PADDING),
+  );
+  for (const participant of layout.participants) participant.lifeline.target.y = layout.height - 40;
+  return layout;
 }
 
 export function participantIndexAtX(layout: SequenceLayout, x: number): number {

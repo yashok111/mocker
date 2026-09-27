@@ -772,7 +772,7 @@ function readStoredDraft(id: number): StoredScenarioDraft | null {
 function isCanvasDocument(value: unknown): value is CanvasDocument {
   if (!isRecord(value)) return false;
   return (
-    value.formatVersion === 1 &&
+    (value.formatVersion === 1 || value.formatVersion === 2) &&
     typeof value.title === "string" &&
     Array.isArray(value.participants) &&
     Array.isArray(value.messages) &&

@@ -12,7 +12,7 @@ import (
 func TestResponseBudgetMatchesJSONEscaping(t *testing.T) {
 	for _, content := range []string{"", "wrap:test", "\"\\\b\f\n\r\t\x00<>&\u2028\u2029", "Привет😀", string([]byte{0xff})} {
 		d := Diagnostic{Code: "invalid", Severity: "error", Message: content, Target: &Target{Kind: "message", ID: "m1"}}
-		for _, value := range []any{Artifact{Content: content, Diagnostics: []Diagnostic{d}}, OptionsResponse{Options: []Option{{Format: Mermaid, Ready: true, Diagnostics: []Diagnostic{d}}}}, httpx.ErrorBody{Error: httpx.ErrorDetail{Code: "blocked", Details: &BlockedError{Diagnostics: []Diagnostic{d}}}}} {
+		for _, value := range []any{Artifact{Content: content, Diagnostics: []Diagnostic{d}}, OptionsResponse{Options: []Option{{Format: Mermaid, Ready: true, Diagnostics: []Diagnostic{d}}}}, httpx.ErrorBody{Error: httpx.ErrorDetail{Code: "blocked", Details: &BlockedError{Diagnostics: []Diagnostic{d}}}}, map[string]any{content: []any{content, true, 42, map[string]string(nil)}}} {
 			raw, err := jsonx.Marshal(value)
 			if err != nil {
 				t.Fatal(err)

@@ -10,8 +10,8 @@ import (
 
 // jsonBudget measures the plain export DTOs before encoding/json can allocate
 // an escaped response. It deliberately rejects types outside this DTO vocabulary.
-// No maps, custom marshalers, raw JSON, embedded fields, or floating point values
-// occur in export responses.
+// Maps with string keys are used by Postman artifacts; custom marshalers, raw
+// JSON, embedded fields and floating point values are outside this vocabulary.
 type jsonBudget struct{ remaining int64 }
 
 func (b *jsonBudget) take(n int64) error {
@@ -64,6 +64,36 @@ func (b *jsonBudget) value(v reflect.Value) error {
 		return b.take(5)
 	case reflect.Int, reflect.Int64:
 		return b.take(int64(len(strconv.FormatInt(v.Int(), 10))))
+	case reflect.Map:
+		if v.Type().Key().Kind() != reflect.String {
+			return fmt.Errorf("unsupported export JSON map %s", v.Type())
+		}
+		if v.IsNil() {
+			return b.take(4)
+		}
+		if err := b.take(2); err != nil {
+			return err
+		}
+		iterator := v.MapRange()
+		first := true
+		for iterator.Next() {
+			if !first {
+				if err := b.take(1); err != nil {
+					return err
+				}
+			}
+			first = false
+			if err := b.text(iterator.Key().String()); err != nil {
+				return err
+			}
+			if err := b.take(1); err != nil {
+				return err
+			}
+			if err := b.value(iterator.Value()); err != nil {
+				return err
+			}
+		}
+		return nil
 	case reflect.Slice:
 		if v.IsNil() {
 			return b.take(4)

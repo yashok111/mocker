@@ -1,3 +1,4 @@
+import { validateFragmentTree } from "./canvasFragments";
 import type { CanvasDocument, CanvasMessage } from "./types";
 
 function assertNewId(doc: CanvasDocument, id: string): void {
@@ -16,7 +17,22 @@ export function insertCanvasMessage(
   if (afterId !== null && index < 0) throw new Error(`Сообщение ${afterId} не найдено`);
   const messages = [...doc.messages];
   messages.splice(index + 1, 0, message);
-  return { ...doc, messages };
+  if (doc.formatVersion === 1) return { ...doc, messages };
+  // Inserting after a step keeps the new step in the same nested branch.
+  const fragments = doc.fragments.map((f) => ({
+    ...f,
+    ...(f.toMessageId === afterId ? { toMessageId: message.id } : {}),
+    ...(f.branches
+      ? {
+          branches: f.branches.map((b) =>
+            b.toMessageId === afterId ? { ...b, toMessageId: message.id } : b,
+          ),
+        }
+      : {}),
+  }));
+  const result = { ...doc, messages, fragments };
+  validateFragmentTree(result);
+  return result;
 }
 
 export function addCanvasReply(

@@ -1,5 +1,29 @@
 # Designing an API in mocker — drafts, review and publication
 
+## Branches and nested blocks
+
+In a block inspector, choose **alt** for alternatives and edit each branch's
+condition. Split a branch to add an alternative, or remove it to merge its steps
+into an adjacent branch. Conditions are descriptive text. Choose a parent block
+and, for an alt parent, its branch to nest a block. Removing a block also removes
+its child frames; messages stay in place. Boundary messages cannot be removed
+until the block or branch boundaries are adjusted. Moves that change branch
+membership are rejected.
+
+REST and MCP accept `formatVersion: 1 | 2`. Version 2 fragments retain
+`fromMessageId`/`toMessageId` and add optional `parentFragmentId`,
+`parentBranchId` and `branches: [{id, label, fromMessageId, toMessageId}]`.
+An alt has 2–100 contiguous nonempty branches covering its range. Children must
+fit their parent range or branch; sibling blocks cannot overlap. Limits are
+500 blocks, 1,000 branches total and depth 16. Version 1 rejects the new fields.
+Editing blocks in the canvas upgrades a copy of the draft; saved revision hashes
+stay intact. MCP clients must first call `save_design_scenario_draft` with the
+complete document converted to `formatVersion: 2`, including explicit parent
+links, before using `upsert_fragment` commands with alt or nested blocks on an
+existing v1 scenario. The server does not migrate the document automatically.
+Text diagram exports use branch labels for `alt`/`else` conditions. Running a
+scenario or exporting Postman/cURL remains blocked while any blocks are present.
+
 ## Start with a sequence, then get a result
 
 In **Scenarios**, create a blank sequence or choose Login, Checkout or Error.
@@ -17,7 +41,7 @@ status remains `default` until the analyst specifies it.
 Open **Получить результат** after saving:
 
 - PlantUML and Mermaid preserve participants, ordered messages, replies, notes,
-  self-calls and nested opt/loop blocks. Crossing blocks need correction for text
+  self-calls and nested alt/else, opt and loop blocks. Crossing blocks need correction for text
   export. Canvas colors are available in SVG/PNG.
 - SVG and PNG use the full saved diagram, independently of zoom, selection and
   execution overlays. PNG uses scale 2, at most 16,384 pixels on either side and
@@ -29,6 +53,18 @@ Open **Получить результат** after saving:
   forms block the affected contract; they do not block diagram export. JSON is
   the saved contract text; YAML preserves numbers and scalar types. The original
   OpenAPI version is retained.
+- Postman exports a Collection v2.1 with enabled HTTP requests in scenario order,
+  including saved execution parameters, headers, bodies and variables. Review
+  per-service base URLs before running it. Supported explicit status/JSON Pointer
+  assertions and response extractions become Postman scripts. Failed checks
+  stop the collection before extracting values or sending the next request.
+- cURL exports a POSIX shell file with saved input values and separate base URL
+  variables. It checks the expected status (2xx by default), but does not run
+  JSON body assertions or extract response values;
+  diagnostics explain these omissions. A later request that needs an extracted
+  value blocks cURL export. Use Postman for such request chains.
+- Missing required inputs, unresolved bindings and unfinished forms block HTTP
+  exports. alt/opt/loop execution is not supported and blocks these formats.
 - Create a mock through contract preparation, then inspect it in the execution
   panel. Export itself does not execute requests or publish an API.
 
@@ -40,8 +76,8 @@ Local legacy canvases must first use the existing server-save migration.
 
 Agents use `get_design_scenario_export_options {scenarioId, revisionId}` followed
 by `export_design_scenario {scenarioId, revisionId, format, contractId?}`.
-Formats are `plantuml`, `mermaid`, `openapi-json`, `openapi-yaml`; OpenAPI requires
-`contractId`. Save the returned `content` string unchanged using `filename` and
+Formats are `plantuml`, `mermaid`, `openapi-json`, `openapi-yaml`, `postman` and
+`curl`. Only OpenAPI accepts and requires `contractId`. Save the returned `content` string unchanged using `filename` and
 `mediaType`. `sourceHash` identifies the immutable snapshot. SVG/PNG are browser
 features. Export reads neither runtime mock state nor newer linked API revisions
 and creates no resources. Oversized results return 413; blocked results return
@@ -107,7 +143,7 @@ separate from the classic workspace snapshot called a scenario.
    `draft.document`, `draft.formDrafts`, `scenario.version` and `draft.id`.
    `validate_design_scenario {scenarioId, document}` checks a proposed document
    without saving. Enabled HTTP requests need a linked, current API contract;
-   finish form buffers and remove unsupported opt/loop fragments before a run.
+   finish form buffers and remove unsupported alt/opt/loop fragments before a run.
 2. To edit, use `apply_design_scenario_commands` with the exact `expectedVersion`
    and an ordered command batch, or `save_design_scenario_draft` with the complete
    document and all retained form buffers. Upserts replace complete objects.

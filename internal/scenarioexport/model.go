@@ -14,6 +14,8 @@ const (
 	Mermaid     Format = "mermaid"
 	OpenAPIJSON Format = "openapi-json"
 	OpenAPIYAML Format = "openapi-yaml"
+	Postman     Format = "postman"
+	CURL        Format = "curl"
 )
 
 var (

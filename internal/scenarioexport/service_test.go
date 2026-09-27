@@ -37,7 +37,7 @@ func TestDiagramDoesNotRequireAPIOrCompletedForms(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(opts) != 4 || !opts[0].Ready || !opts[1].Ready || opts[2].Ready {
+	if len(opts) != 6 || !opts[0].Ready || !opts[1].Ready || opts[2].Ready {
 		t.Fatalf("wrong readiness: %+v", opts)
 	}
 	for _, format := range []Format{PlantUML, Mermaid} {

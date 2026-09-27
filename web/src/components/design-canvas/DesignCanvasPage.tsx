@@ -37,6 +37,7 @@ import {
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { describeApiFailureDetailed } from "@/api/errors";
+import { addCanvasFragment, removeCanvasFragment } from "./canvasFragments";
 import { CanvasInspector } from "./CanvasInspector";
 import { CanvasApiPicker } from "./CanvasApiPicker";
 import { createCanvasId } from "./canvasId";
@@ -195,12 +196,14 @@ export function DesignCanvasEditor({
     );
   }
 
-  function guarded(change: () => CanvasDocument): void {
+  function guarded(change: () => CanvasDocument): boolean {
     try {
       draft.update(change());
       draft.setError("");
+      return true;
     } catch (error) {
       draft.setError(error instanceof Error ? error.message : "Не удалось изменить сценарий.");
+      return false;
     }
   }
 
@@ -277,19 +280,10 @@ export function DesignCanvasEditor({
   }
 
   function addFragment(): void {
-    const first = document.messages[0];
-    const last = document.messages.at(-1);
-    if (!first || !last) return;
+    if (document.messages.length === 0) return;
     const id = createCanvasId();
-    const from = selection?.kind === "message" ? selection.id : first.id;
-    draft.update({
-      ...document,
-      fragments: [
-        ...document.fragments,
-        { id, kind: "opt", label: "Условие выполнения", fromMessageId: from, toMessageId: last.id },
-      ],
-    });
-    setSelection({ kind: "fragment", id });
+    if (guarded(() => addCanvasFragment(document, selection, id)))
+      setSelection({ kind: "fragment", id });
   }
 
   function deleteSelection(): void {
@@ -302,17 +296,14 @@ export function DesignCanvasEditor({
       !window.confirm("Удалить объект и все связанные сообщения?")
     )
       return;
-    guarded(() =>
+    const removed = guarded(() =>
       selection.kind === "participant"
         ? removeParticipant(document, selection.id)
         : selection.kind === "message"
           ? removeMessage(document, selection.id)
-          : {
-              ...document,
-              fragments: document.fragments.filter((item) => item.id !== selection.id),
-            },
+          : removeCanvasFragment(document, selection.id),
     );
-    setSelection(null);
+    if (removed) setSelection(null);
   }
 
   function moveSelection(offset: number): void {

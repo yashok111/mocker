@@ -5,6 +5,7 @@ import {
   type ApiDocument,
   type OperationLocation,
 } from "../api-designer/documentModel";
+import { assertFragmentMembershipUnchanged, validateFragmentTree } from "./canvasFragments";
 import { createCanvasId } from "./canvasId";
 import { MAX_PARTICIPANT_OFFSET_X } from "./types";
 import type { CanvasContract, CanvasDocument, CanvasMessage, OperationBinding } from "./types";
@@ -170,7 +171,9 @@ export function moveMessage(doc: CanvasDocument, id: string, index: number): Can
       throw new Error(`В блоке «${fragment.label}» начало не может идти после конца`);
     }
   }
-  return { ...doc, messages };
+  const result = { ...doc, messages };
+  assertFragmentMembershipUnchanged(doc, result);
+  return result;
 }
 
 function applyMessageChanges(
@@ -230,6 +233,20 @@ function removeMessages(doc: CanvasDocument, initialIds: Set<string>): CanvasDoc
 
   const messages = doc.messages.filter((message) => !removedIds.has(message.id));
   if (messages.length === doc.messages.length) return doc;
+  if (doc.formatVersion === 2) {
+    for (const fragment of doc.fragments) {
+      for (const range of [fragment, ...(fragment.branches ?? [])]) {
+        if (removedIds.has(range.fromMessageId) || removedIds.has(range.toMessageId)) {
+          throw new Error(
+            "Шаг является границей блока или ветки. Измените границы или удалите блок перед удалением шага.",
+          );
+        }
+      }
+    }
+    const result = { ...doc, messages };
+    validateFragmentTree(result);
+    return result;
+  }
   const remainingIds = new Set(messages.map((message) => message.id));
   const fragments = doc.fragments.filter(
     (fragment) =>

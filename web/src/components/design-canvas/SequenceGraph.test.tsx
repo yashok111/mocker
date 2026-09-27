@@ -80,6 +80,35 @@ beforeEach(() => vi.clearAllMocks());
 afterEach(cleanup);
 
 describe("SequenceGraph colors", () => {
+  it("renders selectable alt conditions and branch separators above the lifelines", () => {
+    const document = documentOf();
+    document.formatVersion = 2;
+    document.messages.push({ ...document.messages[0]!, id: "fallback" });
+    const condition = "Длинное условие доступности пользовательской сессии ".repeat(5).trim();
+    document.fragments = [
+      {
+        id: "choice",
+        kind: "alt",
+        label: "Choose route",
+        fromMessageId: "call",
+        toMessageId: "fallback",
+        branches: [
+          { id: "yes", label: condition, fromMessageId: "call", toMessageId: "call" },
+          { id: "no", label: "else", fromMessageId: "fallback", toMessageId: "fallback" },
+        ],
+      },
+    ];
+    render(view(document, { kind: "fragment", id: "choice" }));
+    expect(cell("fragment-header:choice").attrs.label!.text).toBe("Choose route");
+    const first = cell("fragment-branch:choice:yes");
+    const second = cell("fragment-branch:choice:no");
+    expect(String(first.attrs.label!.text).split("\n").join(" ")).toBe(condition);
+    expect(String(first.attrs.label!.text)).toContain("\n");
+    expect(first.data!.selection).toEqual({ kind: "fragment", id: "choice" });
+    expect(second.attrs.separator!.strokeDasharray).toBe("6 4");
+    expect(second.y + second.height).toBeLessThanOrEqual(cell("message-label:fallback").y);
+  });
+
   it("opens inline editing on double click without remounting the graph", () => {
     const onEditLabel = vi.fn();
     const result = render(view(documentOf(), null, { onEditLabel }));
@@ -136,6 +165,25 @@ describe("SequenceGraph colors", () => {
       width: "190px",
     });
   });
+  it("renders wrapped labels and places the API text below all title lines", () => {
+    const document = documentOf();
+    const message = document.messages[0]!;
+    message.label =
+      "Проверить текущую сессию пользователя и получить все доступные задания и приглашения";
+    message.operation = { contractId: "missing", operationKey: "missing" };
+    render(view(document));
+    const card = cell("message-label:call");
+    const label = card.attrs.label!;
+    const operation = card.attrs.operation!;
+    const lines = String(label.text).split("\n");
+    expect(lines.length).toBeGreaterThan(1);
+    expect(lines.join(" ")).toBe(message.label);
+    expect(Number(operation.y)).toBeGreaterThan(
+      Number(label.y) + lines.length * Number(label.lineHeight),
+    );
+    expect(Number(operation.y) + 12).toBeLessThan(card.height);
+  });
+
   it("keeps defaults and selected defaults for documents without colors", () => {
     const document = documentOf();
     const result = render(view(document));

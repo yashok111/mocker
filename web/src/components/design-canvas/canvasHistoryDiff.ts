@@ -291,10 +291,38 @@ function fragmentFields(
   after: CanvasFragment | undefined,
   documents: { before: CanvasDocument; after: CanvasDocument },
 ): Field[] {
+  const parentName = (id: string | undefined, side: "before" | "after") =>
+    id === undefined
+      ? "Верхний уровень"
+      : (documents[side].fragments.find((f) => f.id === id)?.label ?? id);
   return [
+    ...field("Родительский блок", before?.parentFragmentId, after?.parentFragmentId, parentName),
+    ...field("Ветка родителя", before?.parentBranchId, after?.parentBranchId, (id, side) => {
+      if (id === undefined) return undefined;
+      const item = side === "before" ? before : after;
+      return (
+        documents[side].fragments
+          .find((f) => f.id === item?.parentFragmentId)
+          ?.branches?.find((b) => b.id === id)?.label ?? id
+      );
+    }),
+    ...field("Ветки", before?.branches, after?.branches, (branches, side) =>
+      branches
+        ?.map(
+          (b, i) =>
+            `${i + 1}. ${b.label}: ${messageName(documents[side], b.fromMessageId)} → ${messageName(documents[side], b.toMessageId)}`,
+        )
+        .join("\n"),
+    ),
     ...field("Название", before?.label, after?.label),
     ...field("Тип блока", before?.kind, after?.kind, (value) =>
-      value === undefined ? undefined : value === "loop" ? "Цикл" : "Условие",
+      value === undefined
+        ? undefined
+        : value === "loop"
+          ? "Цикл"
+          : value === "alt"
+            ? "Ветвление"
+            : "Условие",
     ),
     ...field("Первое сообщение", before?.fromMessageId, after?.fromMessageId, (id, side) =>
       messageName(documents[side], id),

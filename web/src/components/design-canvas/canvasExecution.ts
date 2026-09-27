@@ -102,7 +102,7 @@ export function canvasExecutionBlockReason(document: CanvasDocument): string | n
     return error instanceof Error ? error.message : "Не удалось проверить настройки запуска.";
   }
   if (document.fragments.length > 0)
-    return "Исполнение блоков opt/loop пока не поддерживается. Удалите блоки перед запуском.";
+    return "Исполнение блоков opt/loop/alt пока не поддерживается. Удалите блоки перед запуском.";
   const executable = document.messages.filter(
     (message) =>
       message.kind === "request" &&

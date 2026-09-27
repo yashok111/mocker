@@ -85,7 +85,7 @@ func validateRunRevision(revision Revision, runID, name, source string) error {
 		return errors.New("укажите допустимые ID, название и источник запуска")
 	}
 	if len(revision.Document.Fragments) != 0 {
-		return errors.New("исполнение opt/loop пока не поддерживается; удалите фрагменты")
+		return errors.New("исполнение alt/opt/loop пока не поддерживается; удалите фрагменты")
 	}
 	for key, value := range revision.FormDrafts {
 		var fields map[string]jsonx.RawMessage
@@ -631,6 +631,9 @@ func cloneRunReport(report RunReport) RunReport {
 func cloneRunDocument(document Document) Document {
 	document.Participants = slices.Clone(document.Participants)
 	document.Fragments = slices.Clone(document.Fragments)
+	for i := range document.Fragments {
+		document.Fragments[i].Branches = slices.Clone(document.Fragments[i].Branches)
+	}
 	document.Contracts = slices.Clone(document.Contracts)
 	for i := range document.Contracts {
 		contract := &document.Contracts[i]

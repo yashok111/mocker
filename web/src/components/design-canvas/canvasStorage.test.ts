@@ -202,7 +202,7 @@ describe("canvas persistence", () => {
   });
 
   it("rejects unsupported versions and malformed containers", () => {
-    expect(() => parseCanvas(JSON.stringify({ ...validDocument(), formatVersion: 2 }))).toThrow(
+    expect(() => parseCanvas(JSON.stringify({ ...validDocument(), formatVersion: 3 }))).toThrow(
       /версия формата/i,
     );
     expect(() => parseCanvas(JSON.stringify({ ...validDocument(), participants: {} }))).toThrow(

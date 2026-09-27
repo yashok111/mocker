@@ -27,6 +27,13 @@ func (s *Service) Options(rev designscenario.Revision) ([]Option, error) {
 		}
 		options = append(options, makeOption(OpenAPIJSON, contract.ID, ds), makeOption(OpenAPIYAML, contract.ID, ds))
 	}
+	for _, format := range []Format{Postman, CURL} {
+		_, ds, err := s.prepareHTTP(rev, format)
+		if err != nil {
+			return nil, err
+		}
+		options = append(options, makeOption(format, "", ds))
+	}
 	if err := s.CheckResponse(options); err != nil {
 		return nil, err
 	}
@@ -44,6 +51,25 @@ func (s *Service) Export(rev designscenario.Revision, req Request) (Artifact, er
 	var err error
 	ext := ""
 	switch req.Format {
+	case Postman, CURL:
+		if req.ContractID != "" {
+			return Artifact{}, ErrInvalidRequest
+		}
+		var prepared httpExport
+		prepared, diagnostics, err = s.prepareHTTP(rev, req.Format)
+		if err != nil {
+			return Artifact{}, err
+		}
+		if !makeOption(req.Format, "", diagnostics).Ready {
+			return Artifact{}, &BlockedError{Diagnostics: diagnostics}
+		}
+		if req.Format == Postman {
+			content, err = s.renderPostman(rev.Document.Title, prepared)
+			ext, artifact.MediaType = "postman_collection.json", "application/json;charset=utf-8"
+		} else {
+			content, err = s.renderCURL(prepared)
+			ext, artifact.MediaType = "sh", "application/x-sh;charset=utf-8"
+		}
 	case PlantUML, Mermaid:
 		if req.ContractID != "" {
 			return Artifact{}, ErrInvalidRequest

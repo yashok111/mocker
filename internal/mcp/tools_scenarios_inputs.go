@@ -24,7 +24,7 @@ type designScenarioRunInput struct {
 }
 
 type createDesignScenarioInput struct {
-	Document   designscenario.Document `json:"document" jsonschema:"complete sequence-canvas document; starts as formatVersion 1"`
+	Document   designscenario.Document `json:"document" jsonschema:"complete sequence-canvas document; formatVersion 1 for legacy documents or 2 for branches and nested blocks"`
 	FormDrafts map[string]string       `json:"formDrafts,omitempty" jsonschema:"unfinished API form buffers keyed by the UI form identity"`
 	Summary    string                  `json:"summary,omitempty" jsonschema:"short explanation of the initial scenario"`
 }

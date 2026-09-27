@@ -5128,7 +5128,8 @@
             "type": "string",
             "enum": [
               "opt",
-              "loop"
+              "loop",
+              "alt"
             ]
           },
           "label": {
@@ -5141,6 +5142,22 @@
           "toMessageId": {
             "type": "string",
             "minLength": 1
+          },
+          "parentFragmentId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "parentBranchId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "branches": {
+            "type": "array",
+            "minItems": 2,
+            "maxItems": 100,
+            "items": {
+              "$ref": "#/components/schemas/DesignScenarioFragmentBranch"
+            }
           }
         },
         "additionalProperties": false
@@ -5218,7 +5235,8 @@
           "formatVersion": {
             "type": "integer",
             "enum": [
-              1
+              1,
+              2
             ]
           },
           "title": {
@@ -5252,7 +5270,37 @@
             "$ref": "#/components/schemas/DesignScenarioExecution"
           }
         },
-        "additionalProperties": false
+        "additionalProperties": false,
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "formatVersion": {
+                  "const": 1
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "fragments": {
+                  "items": {
+                    "properties": {
+                      "kind": {
+                        "enum": [
+                          "opt",
+                          "loop"
+                        ]
+                      },
+                      "parentFragmentId": false,
+                      "parentBranchId": false,
+                      "branches": false
+                    }
+                  }
+                }
+              }
+            }
+          }
+        ]
       },
       "DesignScenario": {
         "type": "object",
@@ -6599,7 +6647,9 @@
           "plantuml",
           "mermaid",
           "openapi-json",
-          "openapi-yaml"
+          "openapi-yaml",
+          "postman",
+          "curl"
         ]
       },
       "ScenarioExportTarget": {
@@ -6793,6 +6843,33 @@
             }
           }
         }
+      },
+      "DesignScenarioFragmentBranch": {
+        "type": "object",
+        "required": [
+          "id",
+          "label",
+          "fromMessageId",
+          "toMessageId"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "label": {
+            "type": "string"
+          },
+          "fromMessageId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "toMessageId": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "additionalProperties": false
       }
     }
   },
@@ -13566,7 +13643,7 @@
             "name": "contractId",
             "in": "query",
             "required": false,
-            "description": "Required for OpenAPI; must be absent for text diagrams. Exports the entire saved contract.",
+            "description": "Required only for OpenAPI, which exports the entire saved contract. Must be absent for diagrams, Postman and cURL.",
             "schema": {
               "type": "string"
             }

@@ -80,3 +80,8 @@ globalThis.fetch = noNetwork;
 if (typeof window !== "undefined") {
   window.fetch = noNetwork;
 }
+
+// Mantine autosizing textareas listen for font loading; happy-dom has no FontFaceSet.
+if (typeof document !== "undefined" && !document.fonts) {
+  Object.defineProperty(document, "fonts", { configurable: true, value: new EventTarget() });
+}

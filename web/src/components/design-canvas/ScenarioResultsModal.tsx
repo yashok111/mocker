@@ -23,6 +23,8 @@ const formatLabels: Record<ResultFormat, string> = {
   mermaid: "Mermaid",
   "openapi-json": "OpenAPI JSON",
   "openapi-yaml": "OpenAPI YAML",
+  postman: "Postman",
+  curl: "cURL",
   svg: "SVG",
   png: "PNG",
 };
@@ -229,6 +231,13 @@ export function ScenarioResultsModal({
           }
           data={Object.entries(formatLabels).map(([value, label]) => ({ value, label }))}
         />
+        {format === "postman" || format === "curl" ? (
+          <Text size="sm" c="dimmed">
+            {format === "postman"
+              ? "Коллекция Postman v2.1 содержит включённые HTTP-запросы и настройки выполнения. Перед запуском проверьте переменные и базовые URL сервисов в коллекции."
+              : "Команды cURL используют сохранённые параметры выполнения. Перед запуском проверьте базовые URL сервисов в файле .sh. Ограничения проверок и извлечения значений указаны ниже."}
+          </Text>
+        ) : null}
         {isContract ? (
           <>
             <NativeSelect

@@ -1,4 +1,5 @@
 import { getOperation, listOperations, isRecord } from "../api-designer/documentModel";
+import { validateFragmentTree } from "./canvasFragments";
 import { OPERATION_KEY } from "./canvasModel";
 import { isCanvasColor } from "./canvasColors";
 import { CANVAS_EXECUTION_LIMITS, MAX_PARTICIPANT_OFFSET_X } from "./types";
@@ -32,7 +33,7 @@ const PARTICIPANT_KINDS = new Set<ParticipantKind>([
   "other",
 ]);
 const MESSAGE_KINDS = new Set<MessageKind>(["request", "response", "event", "note"]);
-const FRAGMENT_KINDS = new Set(["opt", "loop"]);
+const FRAGMENT_KINDS = new Set(["opt", "loop", "alt"]);
 
 function fail(message: string): never {
   throw new Error(`Некорректный сценарий: ${message}`);
@@ -240,6 +241,21 @@ function validateFragment(value: unknown, index: number): CanvasFragment {
   requireString(fragment.label, `${path}.label`);
   requireId(fragment.fromMessageId, `${path}.fromMessageId`);
   requireId(fragment.toMessageId, `${path}.toMessageId`);
+  if (fragment.parentFragmentId !== undefined)
+    requireId(fragment.parentFragmentId, `${path}.parentFragmentId`);
+  if (fragment.parentBranchId !== undefined)
+    requireId(fragment.parentBranchId, `${path}.parentBranchId`);
+  if (fragment.branches !== undefined) {
+    const branches = requireArray(fragment.branches, `${path}.branches`, 100);
+    for (const [branchIndex, value] of branches.entries()) {
+      const branchPath = `${path}.branches[${branchIndex}]`;
+      const branch = requireRecord(value, branchPath);
+      requireId(branch.id, `${branchPath}.id`);
+      requireString(branch.label, `${branchPath}.label`);
+      requireId(branch.fromMessageId, `${branchPath}.fromMessageId`);
+      requireId(branch.toMessageId, `${branchPath}.toMessageId`);
+    }
+  }
   return fragment as unknown as CanvasFragment;
 }
 
@@ -270,7 +286,8 @@ function validateContract(value: unknown, index: number): CanvasContract {
 
 function validateCanvas(value: unknown): CanvasDocument {
   const document = requireRecord(value, "корень");
-  if (document.formatVersion !== 1) fail("неподдерживаемая версия формата formatVersion");
+  if (document.formatVersion !== 1 && document.formatVersion !== 2)
+    fail("неподдерживаемая версия формата formatVersion");
   requireString(document.title, "title");
   validateDocumentExecution(document.execution);
 
@@ -335,6 +352,7 @@ function validateCanvas(value: unknown): CanvasDocument {
     if (end === undefined) fail(`fragments[${index}].toMessageId не ссылается на сообщение`);
   }
 
+  validateFragmentTree(document as unknown as CanvasDocument);
   return document as unknown as CanvasDocument;
 }
 

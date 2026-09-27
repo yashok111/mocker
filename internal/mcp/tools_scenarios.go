@@ -43,7 +43,7 @@ func addDesignScenarioTools(s *sdk.Server, lb *loopback) {
 			return call, err
 		})
 	addDesignScenarioTool(s, lb, "execute_design_scenario_step", "POST /api/design-scenarios/{id}/execute-step",
-		"Executes one HTTP request from an immutable scenario revision against its linked current API draft mock, in-process. Supply resolved parameter/header/body values, never a URL. Refuses detached or stale contracts, unfinished forms, disabled requests and opt/loop fragments. Returns mock HTTP errors in status; may affect runtime state. It does not evaluate assertions or extract variables. Do not retry a lost response blindly.", false,
+		"Executes one HTTP request from an immutable scenario revision against its linked current API draft mock, in-process. Supply resolved parameter/header/body values, never a URL. Refuses detached or stale contracts, unfinished forms, disabled requests and alt/opt/loop fragments. Returns mock HTTP errors in status; may affect runtime state. It does not evaluate assertions or extract variables. Do not retry a lost response blindly.", false,
 		func(in executeDesignScenarioStepInput) (designScenarioCall, error) {
 			call, err := designScenarioRead(in.ScenarioID)
 			call.body = in.executeDesignScenarioStepBody
@@ -468,14 +468,26 @@ func designScenarioDocumentSchema() map[string]any {
 			"execution":   designScenarioStepExecutionSchema(),
 		},
 	)
-	fragment := designScenarioSchemaObject(
-		[]string{"id", "kind", "label", "fromMessageId", "toMessageId"},
+	branch := designScenarioSchemaObject(
+		[]string{"id", "label", "fromMessageId", "toMessageId"},
 		map[string]any{
 			"id":            map[string]any{"type": "string", "minLength": 1},
-			"kind":          map[string]any{"type": "string", "enum": []string{"opt", "loop"}},
 			"label":         map[string]any{"type": "string"},
 			"fromMessageId": map[string]any{"type": "string", "minLength": 1},
 			"toMessageId":   map[string]any{"type": "string", "minLength": 1},
+		},
+	)
+	fragment := designScenarioSchemaObject(
+		[]string{"id", "kind", "label", "fromMessageId", "toMessageId"},
+		map[string]any{
+			"id":               map[string]any{"type": "string", "minLength": 1},
+			"kind":             map[string]any{"type": "string", "enum": []string{"opt", "loop", "alt"}},
+			"label":            map[string]any{"type": "string"},
+			"fromMessageId":    map[string]any{"type": "string", "minLength": 1},
+			"toMessageId":      map[string]any{"type": "string", "minLength": 1},
+			"parentFragmentId": map[string]any{"type": "string", "minLength": 1},
+			"parentBranchId":   map[string]any{"type": "string", "minLength": 1},
+			"branches":         map[string]any{"type": "array", "minItems": 2, "maxItems": 100, "items": branch},
 		},
 	)
 	contractSource := designScenarioSchemaObject(
@@ -500,10 +512,10 @@ func designScenarioDocumentSchema() map[string]any {
 			"source":   contractSource,
 		},
 	)
-	return designScenarioSchemaObject(
+	schema := designScenarioSchemaObject(
 		[]string{"formatVersion", "title", "participants", "messages", "fragments", "contracts"},
 		map[string]any{
-			"formatVersion": map[string]any{"type": "integer", "const": 1},
+			"formatVersion": map[string]any{"type": "integer", "enum": []int{1, 2}},
 			"title":         map[string]any{"type": "string"},
 			"participants":  map[string]any{"type": "array", "items": participant},
 			"messages":      map[string]any{"type": "array", "items": message},
@@ -512,6 +524,13 @@ func designScenarioDocumentSchema() map[string]any {
 			"execution":     designScenarioSchemaObject([]string{"variables"}, map[string]any{"variables": designScenarioExecutionMapSchema()}),
 		},
 	)
+	schema["allOf"] = []any{map[string]any{
+		"if": map[string]any{"properties": map[string]any{"formatVersion": map[string]any{"const": 1}}},
+		"then": map[string]any{"properties": map[string]any{"fragments": map[string]any{"items": map[string]any{"properties": map[string]any{
+			"kind": map[string]any{"enum": []string{"opt", "loop"}}, "parentFragmentId": false, "parentBranchId": false, "branches": false,
+		}}}}},
+	}}
+	return schema
 }
 
 func designScenarioExecutionMapSchema() map[string]any {

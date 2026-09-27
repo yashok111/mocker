@@ -2,7 +2,15 @@ import { type Cell, type Graph } from "@antv/x6";
 import { readableCanvasTextColor } from "./canvasColors";
 import type { CanvasExecutionStatus } from "./canvasExecution";
 import { resolveOperation } from "./canvasModel";
-import { layoutSequence, type SequenceLayout } from "./sequenceLayout";
+import {
+  layoutSequence,
+  MESSAGE_LABEL_LINE_HEIGHT,
+  MESSAGE_OPERATION_LINE_HEIGHT,
+  FRAGMENT_LABEL_LINE_HEIGHT,
+  type SequenceLayout,
+} from "./sequenceLayout";
+import { PARTICIPANT_NAME_FONT_FAMILY, PARTICIPANT_NAME_LINE_HEIGHT } from "./participantName";
+import { CANVAS_TEXT_FONT_FAMILY, CANVAS_MONOSPACE_FONT_FAMILY } from "./canvasText";
 import type { CanvasDocument, CanvasSelection, MessageKind, ParticipantKind } from "./types";
 
 export const palette = {
@@ -93,7 +101,7 @@ function addFragmentCells(
   selection: CanvasSelection,
 ) {
   const fragmentsById = new Map(document.fragments.map((fragment) => [fragment.id, fragment]));
-  for (const geometry of layout.fragments) {
+  for (const geometry of [...layout.fragments].sort((a, b) => (a.depth ?? 0) - (b.depth ?? 0))) {
     const fragment = fragmentsById.get(geometry.id);
     if (!fragment) continue;
     const selected = isSelected(selection, "fragment", fragment.id);
@@ -104,12 +112,14 @@ function addFragmentCells(
       width: geometry.width,
       height: geometry.height,
       zIndex: 1,
-      markup: [
-        { tagName: "rect", selector: "body" },
-        { tagName: "path", selector: "tab" },
-        { tagName: "text", selector: "kind" },
-        { tagName: "text", selector: "label" },
-      ],
+      markup: geometry.headerHeight
+        ? [{ tagName: "rect", selector: "body" }]
+        : [
+            { tagName: "rect", selector: "body" },
+            { tagName: "path", selector: "tab" },
+            { tagName: "text", selector: "kind" },
+            { tagName: "text", selector: "label" },
+          ],
       attrs: {
         root: { style: { cursor: "pointer" } },
         body: {
@@ -151,6 +161,101 @@ function addFragmentCells(
       },
       data: { selection: { kind: "fragment", id: fragment.id } } satisfies DiagramCellData,
     });
+    if (!geometry.headerHeight) continue;
+    // Opaque header strips sit above lifelines; message cards have their own reserved rows.
+    graph.addNode({
+      id: cellId("fragment-header", fragment.id),
+      x: geometry.x + 1,
+      y: geometry.y + 1,
+      width: geometry.width - 2,
+      height: geometry.headerHeight - 2,
+      zIndex: 3,
+      markup: [
+        { tagName: "rect", selector: "body" },
+        { tagName: "path", selector: "tab" },
+        { tagName: "text", selector: "kind" },
+        { tagName: "text", selector: "label" },
+      ],
+      attrs: {
+        root: { style: { cursor: "pointer" } },
+        body: { fill: palette.canvas, stroke: "none", rx: 5, ry: 5 },
+        tab: {
+          d: "M 0 0 H 48 L 58 20 H 0 Z",
+          fill: selected ? "#dceee8" : "#eef2ef",
+          stroke: selected ? palette.accent : "#aab9b2",
+          strokeWidth: 1,
+        },
+        kind: {
+          ...absoluteText,
+          text: fragment.kind,
+          x: 11,
+          y: 10,
+          fill: palette.ink,
+          fontSize: 10,
+          fontWeight: 700,
+          textAnchor: "start",
+          textVerticalAnchor: "middle",
+        },
+        label: {
+          ...absoluteText,
+          text: geometry.labelLines!.join("\n"),
+          "aria-label": fragment.label,
+          x: 67,
+          y: 7,
+          fill: palette.muted,
+          fontFamily: CANVAS_TEXT_FONT_FAMILY,
+          fontSize: 11,
+          lineHeight: FRAGMENT_LABEL_LINE_HEIGHT,
+          textAnchor: "start",
+          textVerticalAnchor: "top",
+          pointerEvents: "none",
+        },
+      },
+      data: { selection: { kind: "fragment", id: fragment.id } } satisfies DiagramCellData,
+    });
+    for (const branch of geometry.branches ?? []) {
+      graph.addNode({
+        id: cellId(
+          "fragment-branch",
+          `${encodeURIComponent(fragment.id)}:${encodeURIComponent(branch.id)}`,
+        ),
+        x: geometry.x + 1,
+        y: branch.y,
+        width: geometry.width - 2,
+        height: branch.height,
+        zIndex: 3,
+        markup: [
+          { tagName: "rect", selector: "body" },
+          ...(branch.separatorY === undefined ? [] : [{ tagName: "path", selector: "separator" }]),
+          { tagName: "text", selector: "label" },
+        ],
+        attrs: {
+          root: { style: { cursor: "pointer" } },
+          body: { fill: palette.canvas, stroke: "none" },
+          separator: {
+            d: `M 0 0 H ${geometry.width - 2}`,
+            fill: "none",
+            stroke: selected ? palette.accent : "#aab9b2",
+            strokeWidth: 1,
+            strokeDasharray: "6 4",
+          },
+          label: {
+            ...absoluteText,
+            text: branch.labelLines.join("\n"),
+            x: 15,
+            y: 8,
+            fill: palette.muted,
+            fontFamily: CANVAS_TEXT_FONT_FAMILY,
+            fontSize: 11,
+            lineHeight: FRAGMENT_LABEL_LINE_HEIGHT,
+            textAnchor: "start",
+            textVerticalAnchor: "top",
+            pointerEvents: "none",
+          },
+        },
+        data: { selection: { kind: "fragment", id: fragment.id } } satisfies DiagramCellData,
+      });
+    }
   }
 }
 
@@ -221,7 +326,7 @@ function addParticipantCells(
         },
         kindPill: {
           x: 12,
-          y: 30,
+          y: geometry.header.height - 22,
           width: 93,
           height: 15,
           rx: 7.5,
@@ -231,23 +336,24 @@ function addParticipantCells(
         },
         name: {
           ...absoluteText,
-          text: participant.name,
-          textWrap: { width: 120, height: 14, ellipsis: "…" },
+          text: geometry.nameLines.join("\n"),
+          lineHeight: PARTICIPANT_NAME_LINE_HEIGHT,
           "aria-label": participant.name,
           x: 12,
-          y: 17,
+          y: 10,
           fill: textColor(palette.ink),
+          fontFamily: PARTICIPANT_NAME_FONT_FAMILY,
           fontSize: 12,
           fontWeight: 650,
           textAnchor: "start",
-          textVerticalAnchor: "middle",
+          textVerticalAnchor: "top",
           pointerEvents: "none",
         },
         kind: {
           ...absoluteText,
           text: participantKinds[participant.kind],
           x: 20,
-          y: 37.5,
+          y: geometry.header.height - 14.5,
           fill: participant.color
             ? readableCanvasTextColor("#eef2ef", palette.muted)
             : palette.muted,
@@ -270,7 +376,7 @@ function addParticipantCells(
           ...absoluteText,
           text: "⠿",
           x: 145,
-          y: 26,
+          y: geometry.header.height / 2,
           fill: textColor(palette.muted),
           fontSize: 14,
           textAnchor: "middle",
@@ -502,27 +608,31 @@ function addMessageCells(
         },
         label: {
           ...absoluteText,
-          text: message.label,
+          text: geometry.labelLines.join("\n"),
+          "aria-label": message.label,
           x: 25,
-          y: operationLabel ? 13 : labelHeight / 2,
+          y: 7,
           fill: textColor(palette.ink),
+          fontFamily: CANVAS_TEXT_FONT_FAMILY,
           fontSize: 11,
           fontWeight: 550,
+          lineHeight: MESSAGE_LABEL_LINE_HEIGHT,
           textAnchor: "start",
-          textVerticalAnchor: "middle",
+          textVerticalAnchor: "top",
           pointerEvents: "none",
         },
         operation: {
           ...absoluteText,
-          text: operationLabel ?? "",
+          text: geometry.operationLines.join("\n"),
           x: 25,
-          y: 29,
+          y: 9 + geometry.labelLines.length * MESSAGE_LABEL_LINE_HEIGHT,
           fill: textColor(resolvedOperation ? palette.accent : "#a15c4b"),
-          fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+          fontFamily: CANVAS_MONOSPACE_FONT_FAMILY,
           fontSize: 9,
           fontWeight: 650,
+          lineHeight: MESSAGE_OPERATION_LINE_HEIGHT,
           textAnchor: "start",
-          textVerticalAnchor: "middle",
+          textVerticalAnchor: "top",
           pointerEvents: "none",
         },
       },
@@ -553,7 +663,10 @@ export function renderSequenceProjection(
     addNode(metadata) {
       const entity = (metadata.data as DiagramCellData | undefined)?.selection;
       const status = entity && statusByEntity.get(cellId(entity.kind, entity.id));
-      if (status) {
+      if (
+        status &&
+        (entity?.kind !== "fragment" || metadata.id === cellId("fragment", entity.id))
+      ) {
         // Keep change contours outside the card, independent of saved colors and selection.
         cells.push(
           graph.createNode({

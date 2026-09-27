@@ -115,8 +115,20 @@ type Message struct {
 }
 
 type Fragment struct {
+	ID               string `json:"id"`
+	Kind             string `json:"kind"`
+	Label            string `json:"label"`
+	FromMessageID    string `json:"fromMessageId"`
+	ToMessageID      string `json:"toMessageId"`
+	ParentFragmentID string `json:"parentFragmentId,omitempty"`
+	ParentBranchID   string `json:"parentBranchId,omitempty"`
+	// Preserve present empty arrays through JSON cloning so validation rejects
+	// them; absent branches still omit the field and preserve legacy hashes.
+	Branches []FragmentBranch `json:"branches,omitzero"`
+}
+
+type FragmentBranch struct {
 	ID            string `json:"id"`
-	Kind          string `json:"kind"`
 	Label         string `json:"label"`
 	FromMessageID string `json:"fromMessageId"`
 	ToMessageID   string `json:"toMessageId"`

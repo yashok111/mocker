@@ -3,7 +3,11 @@ import { exampleCanvas } from "./canvasModel";
 import { exportSequenceImage } from "./sequenceImageExport";
 
 const state = vi.hoisted(() => ({
-  cells: [] as Array<{ id: string; attrs?: Record<string, unknown> }>,
+  cells: [] as Array<{
+    id: string;
+    height?: number;
+    attrs?: Record<string, Record<string, unknown>>;
+  }>,
   box: { x: 0, y: 0, width: 700, height: 400 },
   svg: vi.fn(),
   png: vi.fn(),
@@ -40,6 +44,69 @@ beforeEach(() => {
 afterEach(() => vi.useRealTimers());
 
 describe("exportSequenceImage", () => {
+  it("uses identical nested alt projection for SVG and PNG with complete wrapped conditions", async () => {
+    const doc = exampleCanvas();
+    doc.formatVersion = 2;
+    const first = doc.messages[0]!;
+    const second = doc.messages[1]!;
+    const condition = "Проверить разрешение пользователя и доступность выбранного ресурса "
+      .repeat(5)
+      .trim();
+    doc.fragments = [
+      {
+        id: "nested",
+        kind: "loop",
+        label: "Retry",
+        fromMessageId: first.id,
+        toMessageId: first.id,
+        parentFragmentId: "choice",
+        parentBranchId: "yes",
+      },
+      {
+        id: "choice",
+        kind: "alt",
+        label: "Route",
+        fromMessageId: first.id,
+        toMessageId: second.id,
+        branches: [
+          { id: "yes", label: condition, fromMessageId: first.id, toMessageId: first.id },
+          { id: "no", label: "else", fromMessageId: second.id, toMessageId: second.id },
+        ],
+      },
+    ];
+    await exportSequenceImage(doc, "svg");
+    const svgCells = structuredClone(state.cells);
+    const branch = svgCells.find(({ id }) => id === "fragment-branch:choice:yes")!;
+    expect(String(branch.attrs!.label!.text)).toContain("\n");
+    expect(String(branch.attrs!.label!.text).replace(/\n/g, " ")).toBe(condition);
+    expect(svgCells.some(({ id }) => id === "fragment:nested")).toBe(true);
+    expect(
+      svgCells.find(({ id }) => id === "fragment-branch:choice:no")!.attrs!.separator!
+        .strokeDasharray,
+    ).toBe("6 4");
+    await exportSequenceImage(doc, "png");
+    expect(state.cells).toEqual(svgCells);
+  });
+
+  it("preserves wrapped participant and message text in the export projection", async () => {
+    const doc = exampleCanvas();
+    const participant = doc.participants[0]!;
+    participant.name = "Очень длинное название участника сценария для проверки экспорта";
+    const message = doc.messages[0]!;
+    message.label = "Проверить текущую сессию пользователя и получить все доступные задания";
+    await exportSequenceImage(doc, "svg");
+    const header = state.cells.find((cell) => cell.id === `participant:${participant.id}`)!;
+    const card = state.cells.find((cell) => cell.id === `message-label:${message.id}`)!;
+    const name = String(header.attrs!.name!.text);
+    const label = String(card.attrs!.label!.text);
+    expect(name).toContain("\n");
+    expect(name.replace(/\n/g, " ")).toBe(participant.name);
+    expect(header.height).toBeGreaterThan(52);
+    expect(label).toContain("\n");
+    expect(label.replace(/\n/g, " ")).toBe(message.label);
+    expect(card.height).toBeGreaterThan(28);
+  });
+
   it("exports the snapshot without editor overlays and releases its graph", async () => {
     const doc = exampleCanvas();
     const blob = await exportSequenceImage(doc, "svg");

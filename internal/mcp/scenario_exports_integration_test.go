@@ -101,6 +101,31 @@ func TestScenarioExportsPersistedRESTAndMCP(t *testing.T) {
 		return out
 	}
 	counts := beforeCounts()
+	httpExport := func(rev designscenario.Revision, format string) scenarioexport.Artifact {
+		t.Helper()
+		var viaMCP scenarioexport.Artifact
+		args := map[string]any{"scenarioId": rev.ScenarioID, "revisionId": rev.ID, "format": format}
+		if message := callDesignScenarioTool(t, srv, "export_design_scenario", args, &viaMCP); message != "" {
+			t.Fatal(message)
+		}
+		response := read(fmt.Sprintf("/api/design-scenarios/%d/revisions/%d/exports/%s", rev.ScenarioID, rev.ID, format))
+		if response.Code != http.StatusOK {
+			t.Fatalf("%s: %d %s", format, response.Code, response.Body.String())
+		}
+		var viaHTTP scenarioexport.Artifact
+		if err := jsonx.Unmarshal(response.Body.Bytes(), &viaHTTP); err != nil {
+			t.Fatal(err)
+		}
+		if !reflect.DeepEqual(viaHTTP, viaMCP) || viaMCP.RevisionID != rev.ID || viaMCP.SourceHash != rev.Hash {
+			t.Fatalf("%s changed snapshot or transport content", format)
+		}
+		if !strings.Contains(viaMCP.Content, "/status") {
+			t.Fatalf("%s lost the HTTP operation", format)
+		}
+		return viaMCP
+	}
+	postmanBefore := httpExport(linked.Draft, "postman")
+	curlBefore := httpExport(linked.Draft, "curl")
 	first := export(linked.Draft, "a")
 	second := export(linked.Draft, "b")
 	if first.Content == second.Content {
@@ -132,6 +157,9 @@ func TestScenarioExportsPersistedRESTAndMCP(t *testing.T) {
 	}
 	if !reflect.DeepEqual(first, export(linked.Draft, "a")) {
 		t.Fatal("draft edit changed historical export")
+	}
+	if !reflect.DeepEqual(postmanBefore, httpExport(linked.Draft, "postman")) || !reflect.DeepEqual(curlBefore, httpExport(linked.Draft, "curl")) {
+		t.Fatal("API or scenario edit changed historical HTTP exports")
 	}
 	other, err := repo.Create(t.Context(), designscenario.CreateInput{Document: doc, Source: "ui"})
 	if err != nil {
