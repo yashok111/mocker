@@ -207,7 +207,7 @@ type Server struct {
 	routeMuxVal  *http.ServeMux
 
 	// mcpUserMu/mcpUser cache the MCP identity [Server.CallAsMCP] resolves
-	// through auth.Manager.EnsureUser. See [Server.mcpIdentity]'s own
+	// through auth.Manager.EnsureMCPUser. See [Server.mcpIdentity]'s own
 	// comment (loopback.go) for why only a SUCCESSFUL resolution is cached.
 	mcpUserMu sync.Mutex
 	mcpUser   *auth.User

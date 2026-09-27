@@ -168,22 +168,8 @@ func ensureUserTx(ctx context.Context, tx *sql.Tx, name, role string) (*User, er
 	return &user, nil
 }
 
-// EnsureUser returns the users row named name, creating it with role if it
-// does not exist yet. It is the same upsert Login performs, exposed for the
-// one caller that has no credentials to present: the MCP endpoint, whose
-// identity is a key in the environment rather than a person at a keyboard.
-//
-// Unlike Login, name and role here come from the caller, not untyped
-// provider/request input — [validateName]'s free-text rules (trim, control
-// characters, a 64-rune cap meant for what someone typed at a login screen)
-// do not apply. The MCP endpoint always calls this with the same two fixed
-// literals ("mcp", "member"), so there is nothing here to validate that the
-// UNIQUE constraint on users.name does not already enforce.
-//
-// Why a real row and not a synthetic &User{ID: 0}: workspaces.owner_id is
-// INTEGER REFERENCES users(id) with foreign_keys=ON, so owner_id = 0 would
-// fail that constraint on the very first workspace the MCP identity tries to
-// create.
+// EnsureUser returns a real users row, using the same upsert as Login.
+// Name and role are trusted caller-supplied values.
 func (m *Manager) EnsureUser(ctx context.Context, name, role string) (*User, error) {
 	var user *User
 	err := m.db.Write(ctx, func(tx *sql.Tx) error {
@@ -196,6 +182,31 @@ func (m *Manager) EnsureUser(ctx context.Context, name, role string) (*User, err
 	})
 	if err != nil {
 		return nil, fmt.Errorf("auth: ensure user: %w", err)
+	}
+	return user, nil
+}
+
+// EnsureMCPUser binds MCP to a browser account and transfers the former
+// service account's workspaces in the same transaction. Other users' rows
+// and sessions are retained. Repeated calls are safe, including name == "mcp".
+func (m *Manager) EnsureMCPUser(ctx context.Context, name string) (*User, error) {
+	name, err := validateName(name)
+	if err != nil {
+		return nil, err
+	}
+	var user *User
+	err = m.db.Write(ctx, func(tx *sql.Tx) error {
+		var err error
+		user, err = ensureUserTx(ctx, tx, name, "member")
+		if err != nil {
+			return err
+		}
+		_, err = tx.ExecContext(ctx, `UPDATE workspaces SET owner_id = ?
+			WHERE owner_id = (SELECT id FROM users WHERE name = 'mcp') AND owner_id <> ?`, user.ID, user.ID)
+		return err
+	})
+	if err != nil {
+		return nil, fmt.Errorf("auth: bind MCP account: %w", err)
 	}
 	return user, nil
 }

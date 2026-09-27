@@ -17,6 +17,8 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 )
 
 // Routing selects how a request is attributed to a workspace.
@@ -42,6 +44,9 @@ const (
 // rate limit by design (a key-holder is already trusted, DESIGN §18's model
 // for every other route), so the key itself has to be the whole defense.
 const minMCPKeyLen = 32
+
+// DefaultMCPUser is the browser account used when MOCKER_MCP_USER is unset.
+const DefaultMCPUser = "admin"
 
 // TrustProxy describes how much of X-Forwarded-* may be believed.
 //
@@ -87,6 +92,9 @@ type Config struct {
 	// mcpKey() helper (unlike size/count) because the rule is a single
 	// length check, not a parseable shape worth its own function.
 	MCPKey string
+
+	// MCPUser is the case-sensitive browser login name used by MCP.
+	MCPUser string
 
 	// DefaultSpecID is specs.id of a spec ALREADY imported before this
 	// process starts (DESIGN §14 screen 2: "Первый вход"). An operator
@@ -214,7 +222,8 @@ func Load() (*Config, error) {
 		AuthMode:           AuthMode(env("MOCKER_AUTH_MODE", string(AuthShared))),
 		SharedPasswordHash: env("MOCKER_SHARED_PASSWORD_HASH", ""),
 
-		MCPKey: env("MOCKER_MCP_KEY", ""),
+		MCPKey:  env("MOCKER_MCP_KEY", ""),
+		MCPUser: strings.TrimSpace(env("MOCKER_MCP_USER", DefaultMCPUser)),
 
 		DataDir: strings.TrimRight(env("MOCKER_DATA_DIR", "/data"), "/"),
 
@@ -332,6 +341,9 @@ func Load() (*Config, error) {
 	// Empty is exempt — that is "feature off", not "feature on and weak".
 	if c.MCPKey != "" && len(c.MCPKey) < minMCPKeyLen {
 		fail("MOCKER_MCP_KEY: must be at least %d bytes when set, got %d", minMCPKeyLen, len(c.MCPKey))
+	}
+	if c.MCPUser == "" || utf8.RuneCountInString(c.MCPUser) > 64 || strings.ContainsFunc(c.MCPUser, unicode.IsControl) {
+		fail("MOCKER_MCP_USER: want a login name of 1..64 characters without control characters")
 	}
 
 	if c.DataDir == "" {

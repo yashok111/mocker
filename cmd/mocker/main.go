@@ -215,9 +215,11 @@ func run(cfg *config.Config) error {
 	if err := a.buildPlanes(ctx); err != nil {
 		return err
 	}
+	if err := a.wireMCP(ctx); err != nil {
+		return err
+	}
 	a.wireMockPlane()
 	a.wireStreaming()
-	a.wireMCP()
 
 	// Before the listener opens, never after: see [app.checkWiring].
 	if err := a.checkWiring(); err != nil {
@@ -434,7 +436,7 @@ func (a *app) wireStreaming() {
 
 // wireMCP mounts the MCP endpoint, or — the point of the branch — very
 // deliberately does not.
-func (a *app) wireMCP() {
+func (a *app) wireMCP(ctx context.Context) error {
 	// MOCKER_MCP_KEY unset (config.Load's own default) means nothing in this
 	// block runs at all and SetMCP is never called — the "no surface"
 	// state the MCP slice's context document (§A2) requires: an operator
@@ -466,6 +468,9 @@ func (a *app) wireMCP() {
 	// goroutine of its own) and starts none of its own background work, so
 	// there is nothing for either exit path to release.
 	if a.cfg.MCPKey != "" {
+		if err := a.adminSrv.PrepareMCP(ctx); err != nil {
+			return fmt.Errorf("prepare MCP account: %w", err)
+		}
 		mcpEndpoint := mcp.New(a.adminSrv, a.cfg.MCPKey, a.cfg, a.log)
 		a.adminSrv.SetMCP(mcpEndpoint.Handler())
 		// Never the key, never its length — this line is an operator's
@@ -473,6 +478,7 @@ func (a *app) wireMCP() {
 		// either would defeat the point of having a secret.
 		a.log.Info("mcp endpoint mounted", "path", "/mcp")
 	}
+	return nil
 }
 
 // checkWiring refuses to start a process that is missing a source. It is the

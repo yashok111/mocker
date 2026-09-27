@@ -344,6 +344,77 @@ func TestCaptureResponse(t *testing.T) {
 	}
 }
 
+func TestMCPWorkspacesBelongToBrowserAccount(t *testing.T) {
+	t.Parallel()
+	srv := loopbackTestServer(t, nil)
+	ctx := t.Context()
+	login := httptest.NewRequest(http.MethodPost, loginPath, strings.NewReader(`{"name":"admin","password":"`+testauth.Password+`"}`))
+	session, browserUser, err := srv.sessions.Login(ctx, login)
+	if err != nil {
+		t.Fatal(err)
+	}
+	owners := make(map[string]int64)
+	for _, name := range []string{"mcp", "colleague"} {
+		u, err := srv.sessions.EnsureUser(ctx, name, "member")
+		if err != nil {
+			t.Fatal(err)
+		}
+		owners[name] = u.ID
+		if _, err := srv.ws.Create(ctx, workspaces.CreateInput{Name: name, Slug: name, OwnerID: &u.ID}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	status, body, err := srv.CallAsMCP(ctx, loopbackTestSrc(), http.MethodPost, "/api/workspaces", []byte(`{"name":"from-mcp","slug":"from-mcp"}`))
+	if err != nil || status != http.StatusCreated {
+		t.Fatalf("create via MCP: status=%d body=%s err=%v", status, body, err)
+	}
+	for slug, want := range map[string]int64{"mcp": browserUser.ID, "from-mcp": browserUser.ID, "colleague": owners["colleague"]} {
+		var got int64
+		if err := srv.db.R.QueryRowContext(ctx, "SELECT owner_id FROM workspaces WHERE slug = ?", slug).Scan(&got); err != nil {
+			t.Fatal(err)
+		}
+		if got != want {
+			t.Errorf("workspace %s owner = %d, want %d", slug, got, want)
+		}
+	}
+	req := httptest.NewRequest(http.MethodGet, "http://mocker.local/api/workspaces", nil)
+	req.AddCookie(&http.Cookie{Name: srv.sessions.CookieName(), Value: session.ID})
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("browser listing: %d %s", rec.Code, rec.Body.String())
+	}
+	var list []workspaceView
+	if err := json.Unmarshal(rec.Body.Bytes(), &list); err != nil {
+		t.Fatal(err)
+	}
+	if len(list) != 2 {
+		t.Fatalf("browser own workspaces = %d, want old and new MCP workspaces", len(list))
+	}
+	for _, ws := range list {
+		if ws.OwnerID == nil || *ws.OwnerID != browserUser.ID {
+			t.Fatalf("browser received foreign workspace: %+v", ws)
+		}
+	}
+}
+
+func TestMCPAccountExistsBeforeFirstBrowserLogin(t *testing.T) {
+	t.Parallel()
+	srv := loopbackTestServer(t, func(cfg *config.Config) { cfg.MCPUser = "  Яков  " })
+	mcpUser, err := srv.mcpIdentity(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	login := httptest.NewRequest(http.MethodPost, loginPath, strings.NewReader(`{"name":"Яков","password":"`+testauth.Password+`"}`))
+	_, browserUser, err := srv.sessions.Login(t.Context(), login)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if mcpUser.ID != browserUser.ID || mcpUser.Name != "Яков" {
+		t.Fatalf("MCP user = %+v, browser user = %+v", mcpUser, browserUser)
+	}
+}
+
 // TestMcpIdentity_cachesOnlySuccessfulResolution is §B2 rule 5's "cache
 // only a SUCCESSFUL resolution" half: a second call must return the SAME
 // *auth.User (pointer identity, not merely the same id — a fresh
@@ -358,8 +429,8 @@ func TestMcpIdentity_cachesOnlySuccessfulResolution(t *testing.T) {
 	if err != nil {
 		t.Fatalf("first mcpIdentity(): %v", err)
 	}
-	if user1.Name != mcpIdentityName || user1.Role != mcpIdentityRole {
-		t.Errorf("identity = {%q,%q}, want {%q,%q}", user1.Name, user1.Role, mcpIdentityName, mcpIdentityRole)
+	if user1.Name != config.DefaultMCPUser || user1.Role != "member" {
+		t.Errorf("identity = {%q,%q}, want {%q,%q}", user1.Name, user1.Role, config.DefaultMCPUser, "member")
 	}
 
 	user2, err := srv.mcpIdentity(t.Context())
@@ -404,8 +475,8 @@ func TestMcpIdentity_retriesAfterAFailedResolution(t *testing.T) {
 	if err != nil {
 		t.Fatalf("mcpIdentity() after migrating = %v, want success — a failed first resolution must not be cached forever", err)
 	}
-	if user.Name != mcpIdentityName {
-		t.Errorf("Name = %q, want %q", user.Name, mcpIdentityName)
+	if user.Name != config.DefaultMCPUser {
+		t.Errorf("Name = %q, want %q", user.Name, config.DefaultMCPUser)
 	}
 }
 

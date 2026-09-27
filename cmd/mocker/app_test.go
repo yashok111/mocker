@@ -8,7 +8,48 @@ import (
 
 	"github.com/yashok111/mocker/internal/config"
 	"github.com/yashok111/mocker/internal/testauth"
+	"github.com/yashok111/mocker/internal/workspaces"
 )
+
+func TestWireMCPTransfersLegacyOwnershipBeforeServing(t *testing.T) {
+	t.Parallel()
+	a := wireApp(t)
+	a.cfg.MCPKey = strings.Repeat("k", 32)
+	a.cfg.MCPUser = "admin"
+	legacy, err := a.sessions.EnsureUser(t.Context(), "mcp", "member")
+	if err != nil {
+		t.Fatal(err)
+	}
+	owner, err := a.sessions.EnsureUser(t.Context(), "admin", "member")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := workspaces.NewRepo(a.db).Create(t.Context(), workspaces.CreateInput{Name: "legacy", Slug: "legacy", OwnerID: &legacy.ID}); err != nil {
+		t.Fatal(err)
+	}
+	for range 2 {
+		if err := a.wireMCP(t.Context()); err != nil {
+			t.Fatal(err)
+		}
+		var got int64
+		if err := a.db.R.QueryRowContext(t.Context(), "SELECT owner_id FROM workspaces WHERE slug = 'legacy'").Scan(&got); err != nil {
+			t.Fatal(err)
+		}
+		if got != owner.ID {
+			t.Fatalf("legacy owner = %d, want %d before first MCP request", got, owner.ID)
+		}
+	}
+}
+
+func TestWireMCPRejectsInvalidAccount(t *testing.T) {
+	t.Parallel()
+	a := wireApp(t)
+	a.cfg.MCPKey = strings.Repeat("k", 32)
+	a.cfg.MCPUser = "  "
+	if err := a.wireMCP(t.Context()); err == nil {
+		t.Fatal("wireMCP accepted an invalid account")
+	}
+}
 
 // appTestConfig is the smallest configuration [run]'s phases will assemble
 // against: the fields config.Load would have filled in, spelled out here
@@ -72,7 +113,9 @@ func TestAppWiringIsComplete(t *testing.T) {
 	a.wireStreaming()
 	t.Cleanup(a.streamRegistry.Close)
 	t.Cleanup(a.mockStreams.Close)
-	a.wireMCP()
+	if err := a.wireMCP(t.Context()); err != nil {
+		t.Fatal(err)
+	}
 
 	if err := a.checkWiring(); err != nil {
 		t.Fatalf("a fully wired app reports a gap: %v", err)
@@ -89,7 +132,9 @@ func TestCheckWiringRefusesAMissingPhase(t *testing.T) {
 	t.Parallel()
 
 	a := wireApp(t)
-	a.wireMCP() // MOCKER_MCP_KEY is unset here, so this is a no-op by design
+	if err := a.wireMCP(t.Context()); err != nil {
+		t.Fatal(err)
+	}
 
 	err := a.checkWiring()
 	if err == nil {

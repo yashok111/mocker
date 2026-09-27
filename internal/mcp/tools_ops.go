@@ -152,15 +152,9 @@ type workspaceWire struct {
 func handleListWorkspaces(lb *loopback) sdk.ToolHandlerFor[ListWorkspacesInput, ListWorkspacesOutput] {
 	return func(ctx context.Context, _ *sdk.CallToolRequest, _ ListWorkspacesInput) (*sdk.CallToolResult, ListWorkspacesOutput, error) {
 		var wire []workspaceWire
-		// ?all=1: the MCP identity (internal/auth.EnsureUser, §B1) is a real
-		// but synthetic user row. Without ?all=1, handleListWorkspaces
-		// (workspace_handlers.go:134-157) would filter to workspaces THAT
-		// IDENTITY owns — which, for a tool whose whole job is discovery,
-		// would hide every workspace a human created through the UI. The
-		// admin route allowlist matches on the mux PATTERN, not the raw
-		// string (§B2 rule 8), so the query string here does not need its
-		// own allowlist entry — which is why toolPath hands back a path a
-		// caller appends to rather than a finished URL.
+		// Discovery includes colleagues' workspaces as well as those owned
+		// by the configured MCP account. The allowlist matches the route
+		// pattern, so ?all=1 does not require a separate entry.
 		method, path := toolPath("list_workspaces", "GET /api/workspaces")
 		if err := lb.call(ctx, method, path+"?all=1", nil, &wire); err != nil {
 			return nil, ListWorkspacesOutput{}, err

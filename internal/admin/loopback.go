@@ -25,17 +25,7 @@ import (
 	"sync"
 
 	"github.com/yashok111/mocker/internal/auth"
-)
-
-// mcpIdentityName and mcpIdentityRole are the fixed users.name/role
-// [Server.mcpIdentity] resolves via [auth.Manager.EnsureUser] for every MCP
-// call. The MCP endpoint has no logged-in person behind it — its identity is
-// a key in the environment — so every tool call this process ever makes is
-// attributed to this one well-known row. See [auth.Manager.EnsureUser]'s own
-// doc comment for why a real row and not a synthetic zero id.
-const (
-	mcpIdentityName = "mcp"
-	mcpIdentityRole = "member"
+	"github.com/yashok111/mocker/internal/config"
 )
 
 // mcpAllowedRoutes is the ALLOWLIST OF ROUTE TEMPLATES [CallAsMCP] may
@@ -278,19 +268,30 @@ func (c *captureResponse) Write(b []byte) (int, error) {
 // check, not sync.Once with a stored error. A cancelled first request, or
 // one transient database error on the very first MCP call this process ever
 // serves, must not wedge the MCP endpoint dead for the rest of the
-// process's life; the next call simply tries EnsureUser again.
+// process's life; the next call simply tries EnsureMCPUser again.
 func (s *Server) mcpIdentity(ctx context.Context) (*auth.User, error) {
 	s.mcpUserMu.Lock()
 	defer s.mcpUserMu.Unlock()
 	if s.mcpUser != nil {
 		return s.mcpUser, nil
 	}
-	user, err := s.sessions.EnsureUser(ctx, mcpIdentityName, mcpIdentityRole)
+	name := s.cfg.MCPUser
+	if name == "" {
+		name = config.DefaultMCPUser
+	}
+	user, err := s.sessions.EnsureMCPUser(ctx, name)
 	if err != nil {
 		return nil, err
 	}
 	s.mcpUser = user
 	return user, nil
+}
+
+// PrepareMCP resolves the configured account before accepting requests, so
+// the browser immediately sees the former MCP workspaces under that account.
+func (s *Server) PrepareMCP(ctx context.Context) error {
+	_, err := s.mcpIdentity(ctx)
+	return err
 }
 
 // CallAsMCP dispatches an in-process admin-API request as the MCP identity

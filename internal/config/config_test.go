@@ -144,6 +144,39 @@ func TestLoad_MCPKey(t *testing.T) {
 	}
 }
 
+func TestLoad_MCPUser(t *testing.T) {
+	for _, tt := range []struct {
+		name, raw, want string
+		invalid         bool
+	}{
+		{name: "default", want: "admin"},
+		{name: "trim without changing case", raw: "  Alex  ", want: "Alex"},
+		{name: "unicode", raw: "Яков", want: "Яков"},
+		{name: "64 runes", raw: strings.Repeat("я", 64), want: strings.Repeat("я", 64)},
+		{name: "blank", raw: "   ", invalid: true},
+		{name: "control", raw: "a\nb", invalid: true},
+		{name: "too long", raw: strings.Repeat("я", 65), invalid: true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			setBaseEnv(t)
+			t.Setenv("MOCKER_MCP_USER", tt.raw)
+			cfg, err := config.Load()
+			if tt.invalid {
+				if err == nil || !strings.Contains(err.Error(), "MOCKER_MCP_USER") {
+					t.Fatalf("Load() = %v, want MCP user validation error", err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if cfg.MCPUser != tt.want {
+				t.Fatalf("MCPUser = %q, want %q", cfg.MCPUser, tt.want)
+			}
+		})
+	}
+}
+
 // TestLoad_DefaultSpecID covers MOCKER_DEFAULT_SPEC's contract: unset means
 // "skip auto-create" (0, and Load must still succeed — the exact behavior a
 // deployment with the variable absent has today), a positive integer is

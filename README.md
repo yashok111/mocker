@@ -426,6 +426,7 @@ Nothing is read from a config file, only `MOCKER_*` (DESIGN §16):
 | `MOCKER_TRUST_PROXY` | `off` | `off` \| a list of proxy CIDRs/addresses, optionally with one hop count (a hop count alone is refused); the HTTPS overlay sets it to Caddy's one static address (`MOCKER_TLS_SUBNET`'s `.254`) |
 | `MOCKER_URL_IMPORT_ALLOWLIST` | empty | domains and CIDRs for spec import by URL |
 | `MOCKER_MCP_KEY` | empty | bearer key for `POST /mcp` (see "MCP" below); empty — the route does not exist at all |
+| `MOCKER_MCP_USER` | `admin` | browser login name used as the MCP workspace owner; case-sensitive |
 
 `MOCKER_SESSION_SECRET` is deliberately absent: a session is a random token in
 the DB, there is nothing to sign.
@@ -695,6 +696,12 @@ curl -s -X POST https://<admin-host>/mcp \
   "there is no attack surface", not "a surface locked with an empty lock".
 - `/mcp` does not accept a session cookie at all — only the `Authorization`
   header, compared in constant time.
+- MCP uses the same account as a browser login with the name in
+  `MOCKER_MCP_USER` (default `admin`). Set it to your exact login name; names
+  are case-sensitive and surrounding whitespace is trimmed. When MCP is enabled,
+  startup creates this account if needed and transfers workspaces owned by the
+  former `mcp` service account to it. Other users' workspaces and existing sessions
+  are preserved. New MCP creations, imports and forks use this account too.
 - An agent orients itself without the repository: `initialize` answers with a
   short `instructions` text, and `get_guide {topic}` returns the usage guide
   by topic (`overview`, `tools`, `shapes`, `cookbook`, `http`, `design`) — the same
