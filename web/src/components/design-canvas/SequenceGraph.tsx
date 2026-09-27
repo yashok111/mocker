@@ -252,6 +252,8 @@ function addParticipantCells(
           ...absoluteText,
           text: participant.name,
           textWrap: { width: 120, height: 14, ellipsis: "…" },
+          // X6's default line height exceeds the single-line box and hides overflow text.
+          lineHeight: 14,
           "aria-label": participant.name,
           x: 12,
           y: 17,
