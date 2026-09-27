@@ -1,4 +1,9 @@
 import { resolveOperation } from "./canvasModel";
+import {
+  participantNameMeasurer,
+  wrapParticipantName,
+  PARTICIPANT_NAME_LINE_HEIGHT,
+} from "./participantName";
 import type { CanvasDocument } from "./types";
 
 const MIN_WIDTH = 720;
@@ -28,6 +33,7 @@ export interface ParticipantLayout {
   id: string;
   index: number;
   x: number;
+  nameLines: string[];
   header: { x: number; y: number; width: number; height: number };
   lifeline: { source: SequencePoint; target: SequencePoint };
 }
@@ -61,19 +67,23 @@ export interface SequenceLayout {
 
 export function layoutSequence(document: CanvasDocument): SequenceLayout {
   const participantX = new Map<string, number>();
+  const measureName = participantNameMeasurer();
   let horizontalOffset = 0;
   const participants = document.participants.map((participant, index): ParticipantLayout => {
     horizontalOffset += participant.offsetX ?? 0;
     const headerX = SIDE_PADDING + index * (HEADER_WIDTH + PARTICIPANT_GAP) + horizontalOffset;
     const x = headerX + HEADER_WIDTH / 2;
+    const nameLines = wrapParticipantName(participant.name, measureName);
+    const headerHeight = HEADER_HEIGHT + (nameLines.length - 1) * PARTICIPANT_NAME_LINE_HEIGHT;
     participantX.set(participant.id, x);
     return {
       id: participant.id,
       index,
       x,
-      header: { x: headerX, y: HEADER_TOP, width: HEADER_WIDTH, height: HEADER_HEIGHT },
+      nameLines,
+      header: { x: headerX, y: HEADER_TOP, width: HEADER_WIDTH, height: headerHeight },
       lifeline: {
-        source: { x, y: HEADER_TOP + HEADER_HEIGHT },
+        source: { x, y: HEADER_TOP + headerHeight },
         target: { x, y: MIN_HEIGHT - 40 },
       },
     };
@@ -90,7 +100,10 @@ export function layoutSequence(document: CanvasDocument): SequenceLayout {
   });
   // Outer frames open first; equal ranges nest in document order.
   ranges.sort((a, b) => a.from - b.from || b.to - a.to || a.order - b.order);
-  let contentBottom = HEADER_TOP + HEADER_HEIGHT;
+  let contentBottom = Math.max(
+    HEADER_TOP + HEADER_HEIGHT,
+    ...participants.map(({ lifeline }) => lifeline.source.y),
+  );
   let previousRowY = FIRST_MESSAGE_Y - MESSAGE_GAP;
   const messages: MessageLayout[] = [];
 

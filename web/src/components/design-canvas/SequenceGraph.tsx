@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { readableCanvasTextColor } from "./canvasColors";
 import type { CanvasExecutionStatus } from "./canvasExecution";
 import { resolveOperation } from "./canvasModel";
+import { PARTICIPANT_NAME_FONT_FAMILY, PARTICIPANT_NAME_LINE_HEIGHT } from "./participantName";
 import { installCanvasWheelZoom } from "./canvasZoom";
 import { ObjectDescriptionTooltip, type TooltipBounds } from "./ObjectDescriptionTooltip";
 import styles from "./SequenceGraph.module.css";
@@ -240,7 +241,7 @@ function addParticipantCells(
         },
         kindPill: {
           x: 12,
-          y: 30,
+          y: geometry.header.height - 22,
           width: 93,
           height: 15,
           rx: 7.5,
@@ -250,25 +251,24 @@ function addParticipantCells(
         },
         name: {
           ...absoluteText,
-          text: participant.name,
-          textWrap: { width: 120, height: 14, ellipsis: "…" },
-          // X6's default line height exceeds the single-line box and hides overflow text.
-          lineHeight: 14,
+          text: geometry.nameLines.join("\n"),
+          lineHeight: PARTICIPANT_NAME_LINE_HEIGHT,
           "aria-label": participant.name,
           x: 12,
-          y: 17,
+          y: 10,
           fill: textColor(palette.ink),
+          fontFamily: PARTICIPANT_NAME_FONT_FAMILY,
           fontSize: 12,
           fontWeight: 650,
           textAnchor: "start",
-          textVerticalAnchor: "middle",
+          textVerticalAnchor: "top",
           pointerEvents: "none",
         },
         kind: {
           ...absoluteText,
           text: participantKinds[participant.kind],
           x: 20,
-          y: 37.5,
+          y: geometry.header.height - 14.5,
           fill: participant.color
             ? readableCanvasTextColor("#eef2ef", palette.muted)
             : palette.muted,
@@ -291,7 +291,7 @@ function addParticipantCells(
           ...absoluteText,
           text: "⠿",
           x: 145,
-          y: 26,
+          y: geometry.header.height / 2,
           fill: textColor(palette.muted),
           fontSize: 14,
           textAnchor: "middle",

@@ -20,6 +20,32 @@ const participants: CanvasDocument["participants"] = [
 ];
 
 describe("layoutSequence", () => {
+  it("grows participant cards and starts messages below the tallest name", () => {
+    const name = "Platform API · auth + quiz · пользовательские сессии";
+    const layout = layoutSequence(
+      documentOf({
+        participants: [participants[0]!, { ...participants[1]!, name }],
+        messages: [
+          {
+            id: "call",
+            fromId: "buyer",
+            toId: "shop",
+            kind: "request",
+            label: "Call",
+            description: "",
+          },
+        ],
+      }),
+    );
+    const short = layout.participants[0]!;
+    const tall = layout.participants[1]!;
+    expect(short.header.height).toBe(52);
+    expect(tall.header.height).toBeGreaterThan(short.header.height);
+    expect(tall.nameLines.join(" ")).toBe(name);
+    expect(tall.lifeline.source.y).toBe(tall.header.y + tall.header.height);
+    expect(layout.messages[0]!.label.y).toBeGreaterThan(tall.lifeline.source.y);
+  });
+
   it("adds space before a participant and moves following columns and arrows with it", () => {
     const document = documentOf({
       participants: participants.map((p, index) => ({ ...p, offsetX: index === 1 ? 300 : 0 })),
