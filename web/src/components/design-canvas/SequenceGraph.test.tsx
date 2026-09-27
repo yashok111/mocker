@@ -62,7 +62,7 @@ function view(
       document={document}
       selection={selection}
       onSelect={vi.fn()}
-      onMoveParticipant={vi.fn()}
+      onSpaceParticipant={vi.fn()}
       onMoveMessage={vi.fn()}
       {...props}
     />
@@ -240,12 +240,35 @@ describe("SequenceGraph history", () => {
     handler(payload);
   }
 
+  it("drags a participant to change its saved spacing instead of its order", () => {
+    const onSpaceParticipant = vi.fn();
+    const document = documentOf();
+    document.participants[1]!.offsetX = 100;
+    render(view(document, null, { onSpaceParticipant }));
+    const node = nodeOf("participant:api");
+    emit("node:moved", { node });
+    expect(onSpaceParticipant).toHaveBeenCalledWith("api", 600);
+  });
+
+  it("clamps participant spacing while dragging beyond either limit", () => {
+    const onSpaceParticipant = vi.fn();
+    render(view(documentOf(), null, { onSpaceParticipant }));
+    const metadata = cell("participant:api");
+    const node = nodeOf("participant:api");
+    node.getPosition = () => ({ x: metadata.x - 500, y: metadata.y });
+    emit("node:moved", { node });
+    expect(onSpaceParticipant).toHaveBeenLastCalledWith("api", 0);
+    node.getPosition = () => ({ x: metadata.x + 3000, y: metadata.y });
+    emit("node:moved", { node });
+    expect(onSpaceParticipant).toHaveBeenLastCalledWith("api", 2000);
+  });
+
   it("prevents read-only moves while retaining selection, pan and zoom", () => {
-    const onMoveParticipant = vi.fn();
+    const onSpaceParticipant = vi.fn();
     const onMoveMessage = vi.fn();
     const onSelect = vi.fn();
     render(
-      view(documentOf(), null, { readOnly: true, onMoveParticipant, onMoveMessage, onSelect }),
+      view(documentOf(), null, { readOnly: true, onSpaceParticipant, onMoveMessage, onSelect }),
     );
     expect(graph.zoomToFit).toHaveBeenLastCalledWith({
       padding: { top: 60, right: 20, bottom: 44, left: 20 },
@@ -267,7 +290,7 @@ describe("SequenceGraph history", () => {
     }
     emit("blank:click");
     expect(onSelect).toHaveBeenLastCalledWith(null);
-    expect(onMoveParticipant).not.toHaveBeenCalled();
+    expect(onSpaceParticipant).not.toHaveBeenCalled();
     expect(onMoveMessage).not.toHaveBeenCalled();
     expect(screen.queryByText(/Карточки и захваты/)).not.toBeInTheDocument();
     expect(screen.queryByText(/Только просмотр/)).not.toBeInTheDocument();
@@ -276,9 +299,9 @@ describe("SequenceGraph history", () => {
   });
 
   it("switches read-only mode without resetting viewport and restores editing afterwards", () => {
-    const onMoveParticipant = vi.fn();
+    const onSpaceParticipant = vi.fn();
     const document = documentOf();
-    const result = render(view(document, null, { onMoveParticipant }));
+    const result = render(view(document, null, { onSpaceParticipant }));
     expect(graph.zoomToFit).toHaveBeenLastCalledWith({
       padding: { top: 72, right: 28, bottom: 112, left: 28 },
       maxScale: 1,
@@ -286,17 +309,17 @@ describe("SequenceGraph history", () => {
     const options = graph.construct.mock.lastCall![0];
     const node = nodeOf("participant:client");
     expect(options.interacting({ cell: node }).nodeMovable).toBe(true);
-    result.rerender(view(document, null, { readOnly: true, onMoveParticipant }));
+    result.rerender(view(document, null, { readOnly: true, onSpaceParticipant }));
     expect(options.interacting({ cell: node }).nodeMovable).toBe(false);
     emit("node:moved", { node });
-    expect(onMoveParticipant).not.toHaveBeenCalled();
-    result.rerender(view(document, null, { readOnly: false, onMoveParticipant }));
+    expect(onSpaceParticipant).not.toHaveBeenCalled();
+    result.rerender(view(document, null, { readOnly: false, onSpaceParticipant }));
     expect(options.interacting({ cell: node }).nodeMovable).toBe(true);
     expect(cell("participant:client").markup?.some(({ selector }) => selector === "drag")).toBe(
       true,
     );
     emit("node:moved", { node });
-    expect(onMoveParticipant).toHaveBeenCalledWith("client", 1);
+    expect(onSpaceParticipant).toHaveBeenCalledWith("client", 500);
     expect(node.setPosition).toHaveBeenCalledWith(
       cell("participant:client").x,
       cell("participant:client").y,

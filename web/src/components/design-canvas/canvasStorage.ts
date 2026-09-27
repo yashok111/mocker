@@ -1,7 +1,7 @@
 import { getOperation, listOperations, isRecord } from "../api-designer/documentModel";
 import { OPERATION_KEY } from "./canvasModel";
 import { isCanvasColor } from "./canvasColors";
-import { CANVAS_EXECUTION_LIMITS } from "./types";
+import { CANVAS_EXECUTION_LIMITS, MAX_PARTICIPANT_OFFSET_X } from "./types";
 import type {
   CanvasContract,
   CanvasDocument,
@@ -190,6 +190,14 @@ function validateParticipant(value: unknown, index: number): CanvasParticipant {
   requireString(participant.name, `${path}.name`);
   requireString(participant.description, `${path}.description`);
   validateColor(participant.color, `${path}.color`);
+  if (
+    participant.offsetX !== undefined &&
+    (typeof participant.offsetX !== "number" ||
+      !Number.isInteger(participant.offsetX) ||
+      participant.offsetX < 0 ||
+      participant.offsetX > MAX_PARTICIPANT_OFFSET_X)
+  )
+    fail(`${path}.offsetX должен быть целым числом от 0 до ${MAX_PARTICIPANT_OFFSET_X}`);
   return participant as unknown as CanvasParticipant;
 }
 

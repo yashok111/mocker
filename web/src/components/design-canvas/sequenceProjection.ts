@@ -323,12 +323,7 @@ function addMessageCells(
         : null;
 
     if (message.kind === "note" && geometry.note) {
-      const noteWidth = Math.max(
-        geometry.note.width,
-        operationLabel ? Array.from(operationLabel).length * 6.4 + 38 : 0,
-      );
-      const noteHeight = operationLabel ? 58 : geometry.note.height;
-      const noteY = geometry.rowY - noteHeight / 2;
+      const { width: noteWidth, height: noteHeight, y: noteY } = geometry.note;
       graph.addEdge({
         id: cellId("note-link", message.id),
         source: geometry.source,
@@ -455,13 +450,7 @@ function addMessageCells(
       data: { selection: { kind: "message", id: message.id } } satisfies DiagramCellData,
     });
 
-    const labelWidth = Math.max(
-      geometry.label.width,
-      operationLabel ? Array.from(operationLabel).length * 6.4 + 38 : 0,
-    );
-    const labelHeight = operationLabel ? 42 : geometry.label.height;
-    const labelX = geometry.label.x + geometry.label.width / 2 - labelWidth / 2;
-    const labelY = geometry.rowY - labelHeight + 6;
+    const { x: labelX, y: labelY, width: labelWidth, height: labelHeight } = geometry.label;
     graph.addNode({
       id: cellId("message-label", message.id),
       x: labelX,

@@ -92,6 +92,7 @@ type Participant struct {
 	Kind        string   `json:"kind"`
 	Description string   `json:"description"`
 	Color       HexColor `json:"color,omitempty"`
+	OffsetX     OffsetX  `json:"offsetX,omitzero"`
 }
 
 type OperationBinding struct {

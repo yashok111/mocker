@@ -48,6 +48,7 @@ import {
   moveParticipant,
   removeMessage,
   removeParticipant,
+  spaceParticipant,
   updateMessage,
 } from "./canvasModel";
 import { useCanvasDraft, type CanvasDraftController } from "./useCanvasDraft";
@@ -479,7 +480,9 @@ export function DesignCanvasEditor({
               document={document}
               selection={selection}
               onSelect={setSelection}
-              onMoveParticipant={(id, index) => guarded(() => moveParticipant(document, id, index))}
+              onSpaceParticipant={(id, offsetX) =>
+                guarded(() => spaceParticipant(document, id, offsetX))
+              }
               onMoveMessage={(id, index) => guarded(() => moveMessage(document, id, index))}
               onEditLabel={setEditingSelection}
               editingSelection={editingSelection}

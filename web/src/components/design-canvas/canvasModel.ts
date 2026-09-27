@@ -6,6 +6,7 @@ import {
   type OperationLocation,
 } from "../api-designer/documentModel";
 import { createCanvasId } from "./canvasId";
+import { MAX_PARTICIPANT_OFFSET_X } from "./types";
 import type { CanvasContract, CanvasDocument, CanvasMessage, OperationBinding } from "./types";
 
 export const OPERATION_KEY = "x-mocker-canvas-operation-id";
@@ -130,6 +131,19 @@ function moveById<T extends { id: string }>(items: T[], id: string, index: numbe
 export function moveParticipant(doc: CanvasDocument, id: string, index: number): CanvasDocument {
   const participants = moveById(doc.participants, id, index);
   return participants === null ? doc : { ...doc, participants };
+}
+
+export function spaceParticipant(doc: CanvasDocument, id: string, offsetX: number): CanvasDocument {
+  if (!Number.isFinite(offsetX)) return doc;
+  const offset = Math.max(0, Math.min(MAX_PARTICIPANT_OFFSET_X, Math.round(offsetX)));
+  const participant = doc.participants.find((item) => item.id === id);
+  if (!participant || (participant.offsetX ?? 0) === offset) return doc;
+  return {
+    ...doc,
+    participants: doc.participants.map((item) =>
+      item.id === id ? { ...item, offsetX: offset } : item,
+    ),
+  };
 }
 
 function assertResponsePrecedence(messages: CanvasMessage[]): void {

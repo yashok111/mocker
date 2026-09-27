@@ -107,6 +107,71 @@ func TestRepo_ColorsPersistResetAndRestore(t *testing.T) {
 	assertDocument(saved.Draft.Document)
 }
 
+func TestRepo_ParticipantSpacingPersistsAcrossSaveCommandAndRestore(t *testing.T) {
+	repo := newTestRepo(t)
+	document := validDocument("Spacing")
+	document.Participants = []Participant{{ID: "api", Kind: "service", OffsetX: 280}}
+	created, err := repo.Create(t.Context(), CreateInput{Document: document, Source: "ui"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	document.Participants[0].OffsetX = 600
+	saved, err := repo.Save(t.Context(), created.Scenario.ID, SaveInput{ExpectedVersion: 1, Document: document, Source: "ui"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if saved.Draft.Document.Participants[0].OffsetX != 600 {
+		t.Fatalf("saved spacing = %+v", saved.Draft.Document.Participants)
+	}
+
+	commanded, err := repo.Apply(t.Context(), created.Scenario.ID, CommandsInput{
+		ExpectedVersion: 2,
+		Commands:        []Command{{Type: "upsert_participant", Participant: &Participant{ID: "api", Kind: "service", OffsetX: 120}}},
+		Source:          "ui",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if commanded.Draft.Document.Participants[0].OffsetX != 120 {
+		t.Fatalf("commanded spacing = %+v", commanded.Draft.Document.Participants)
+	}
+
+	revision, err := repo.Revision(t.Context(), created.Scenario.ID, saved.Draft.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if revision.Document.Participants[0].OffsetX != 600 {
+		t.Fatalf("revision spacing = %+v", revision.Document.Participants)
+	}
+	restored, err := repo.Restore(t.Context(), created.Scenario.ID, RestoreInput{ExpectedVersion: 3, RevisionID: created.Draft.ID, Source: "ui"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if restored.Draft.Document.Participants[0].OffsetX != 280 || restored.Draft.Document.FormatVersion != 1 {
+		t.Fatalf("restored document = %+v", restored.Draft.Document)
+	}
+
+	for _, offset := range []OffsetX{-1, 2001} {
+		_, err := repo.Apply(t.Context(), created.Scenario.ID, CommandsInput{
+			ExpectedVersion: 4,
+			Commands:        []Command{{Type: "upsert_participant", Participant: &Participant{ID: "api", Kind: "service", OffsetX: offset}}},
+			Source:          "ui",
+		})
+		var invalid *InvalidError
+		if !errors.As(err, &invalid) || len(invalid.Diagnostics) != 1 || invalid.Diagnostics[0].Pointer != "/participants/0/offsetX" {
+			t.Fatalf("invalid command spacing %d: error = %v", offset, err)
+		}
+	}
+	after, err := repo.Detail(t.Context(), created.Scenario.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if after.Scenario.Version != 4 || len(after.Revisions) != 4 || after.Draft.Document.Participants[0].OffsetX != 280 {
+		t.Fatalf("invalid spacing changed history: %+v", after)
+	}
+}
+
 func TestRepo_SaveUsesCASAndNoOpKeepsRevision(t *testing.T) {
 	repo := newTestRepo(t)
 	created, err := repo.Create(t.Context(), CreateInput{Document: validDocument("v1"), Source: "ui"})

@@ -16,7 +16,10 @@ export interface CanvasParticipant {
   kind: ParticipantKind;
   description: string;
   color?: string;
+  offsetX?: number;
 }
+
+export const MAX_PARTICIPANT_OFFSET_X = 2000;
 
 export interface OperationBinding {
   contractId: string;

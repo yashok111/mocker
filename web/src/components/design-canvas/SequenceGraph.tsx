@@ -13,13 +13,9 @@ import type { CanvasExecutionStatus } from "./canvasExecution";
 import { installCanvasWheelZoom } from "./canvasZoom";
 import { ObjectDescriptionTooltip, type TooltipBounds } from "./ObjectDescriptionTooltip";
 import styles from "./SequenceGraph.module.css";
-import {
-  layoutSequence,
-  messageIndexAtY,
-  participantIndexAtX,
-  type SequenceLayout,
-} from "./sequenceLayout";
+import { layoutSequence, messageIndexAtY, type SequenceLayout } from "./sequenceLayout";
 import type { CanvasDocument, CanvasSelection } from "./types";
+import { MAX_PARTICIPANT_OFFSET_X } from "./types";
 
 const fitPadding = { top: 72, right: 28, bottom: 112, left: 28 } as const;
 const readOnlyFitPadding = { top: 60, right: 20, bottom: 44, left: 20 } as const;
@@ -28,7 +24,7 @@ export interface SequenceGraphProps {
   document: CanvasDocument;
   selection: CanvasSelection;
   onSelect: (selection: CanvasSelection) => void;
-  onMoveParticipant: (id: string, index: number) => void;
+  onSpaceParticipant: (id: string, offsetX: number) => void;
   onMoveMessage: (id: string, index: number) => void;
   onEditLabel?: (selection: CanvasSelection) => void;
   editingSelection?: CanvasSelection;
@@ -102,7 +98,7 @@ export default function SequenceGraph({
   document,
   selection,
   onSelect,
-  onMoveParticipant,
+  onSpaceParticipant,
   onMoveMessage,
   onEditLabel,
   editingSelection,
@@ -117,7 +113,7 @@ export default function SequenceGraph({
   const layoutRef = useRef<SequenceLayout>(layoutSequence(document));
   const fitOnFirstRenderRef = useRef(true);
   const onSelectRef = useRef(onSelect);
-  const onMoveParticipantRef = useRef(onMoveParticipant);
+  const onSpaceParticipantRef = useRef(onSpaceParticipant);
   const onMoveMessageRef = useRef(onMoveMessage);
   const onEditLabelRef = useRef(onEditLabel);
   const documentRef = useRef(document);
@@ -137,12 +133,12 @@ export default function SequenceGraph({
 
   useEffect(() => {
     onSelectRef.current = onSelect;
-    onMoveParticipantRef.current = onMoveParticipant;
+    onSpaceParticipantRef.current = onSpaceParticipant;
     onMoveMessageRef.current = onMoveMessage;
     onEditLabelRef.current = onEditLabel;
     documentRef.current = document;
     readOnlyRef.current = readOnly;
-  }, [document, onMoveMessage, onMoveParticipant, onSelect, onEditLabel, readOnly]);
+  }, [document, onMoveMessage, onSpaceParticipant, onSelect, onEditLabel, readOnly]);
 
   const editingItem =
     editingSelection?.kind === "message"
@@ -246,7 +242,18 @@ export default function SequenceGraph({
       const origin = data?.origin;
       if (!origin) return;
       const position = node.getPosition();
-      if (data.role === "participantGrip") node.setPosition(position.x, origin.y);
+      if (data.role === "participantGrip") {
+        const offsetX =
+          documentRef.current.participants.find((item) => item.id === data.selection?.id)
+            ?.offsetX ?? 0;
+        node.setPosition(
+          Math.max(
+            origin.x - offsetX,
+            Math.min(origin.x + MAX_PARTICIPANT_OFFSET_X - offsetX, position.x),
+          ),
+          origin.y,
+        );
+      }
       if (data.role === "messageGrip") node.setPosition(origin.x, position.y);
     });
     graph.on("node:moved", ({ node }) => {
@@ -257,13 +264,18 @@ export default function SequenceGraph({
       if (!movedSelection || !origin) return;
       const position = node.getPosition();
       const anchor = data.anchor;
-      const projectedX = anchor ? anchor.x + position.x - origin.x : position.x;
       const projectedY = anchor ? anchor.y + position.y - origin.y : position.y;
       try {
         if (data.role === "participantGrip" && movedSelection.kind === "participant") {
-          onMoveParticipantRef.current(
+          const offsetX =
+            documentRef.current.participants.find((item) => item.id === movedSelection.id)
+              ?.offsetX ?? 0;
+          onSpaceParticipantRef.current(
             movedSelection.id,
-            participantIndexAtX(layoutRef.current, projectedX),
+            Math.max(
+              0,
+              Math.min(MAX_PARTICIPANT_OFFSET_X, Math.round(offsetX + position.x - origin.x)),
+            ),
           );
         }
         if (data.role === "messageGrip" && movedSelection.kind === "message") {
@@ -372,7 +384,8 @@ export default function SequenceGraph({
       ) : null}
       {!readOnly ? (
         <div className={styles.hint}>
-          ЛКМ по свободному месту — перемещение · Колёсико — масштаб · Карточки и захваты — порядок
+          ЛКМ по фону — перемещение · Колёсико — масштаб · Заголовки — расстояние между колонками ·
+          Карточки и захваты сообщений — порядок
         </div>
       ) : null}
     </section>

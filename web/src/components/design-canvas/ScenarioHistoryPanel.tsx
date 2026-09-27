@@ -327,7 +327,7 @@ function Comparison({
                   selection={selection}
                   onSelect={setSelection}
                   highlights={highlights}
-                  onMoveParticipant={noMove}
+                  onSpaceParticipant={noMove}
                   onMoveMessage={noMove}
                 />
               </Suspense>

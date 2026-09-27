@@ -20,6 +20,119 @@ const participants: CanvasDocument["participants"] = [
 ];
 
 describe("layoutSequence", () => {
+  it("adds space before a participant and moves following columns and arrows with it", () => {
+    const document = documentOf({
+      participants: participants.map((p, index) => ({ ...p, offsetX: index === 1 ? 300 : 0 })),
+      messages: [
+        {
+          id: "call",
+          fromId: "buyer",
+          toId: "shop",
+          kind: "request",
+          label: "Call",
+          description: "",
+        },
+      ],
+    });
+    const layout = layoutSequence(document);
+    expect(layout.participants.map(({ x }) => x)).toEqual([144, 700, 956]);
+    expect(layout.messages[0]!.target.x).toBe(700);
+    expect(layout.width).toBeGreaterThan(1036);
+  });
+
+  it("keeps fragment headers below the preceding self-call and above API cards", () => {
+    const document = documentOf({
+      participants,
+      messages: [
+        {
+          id: "self",
+          fromId: "buyer",
+          toId: "buyer",
+          kind: "request",
+          label: "Прочитать cookie",
+          description: "",
+        },
+        {
+          id: "guest",
+          fromId: "buyer",
+          toId: "shop",
+          kind: "request",
+          label: "Создать гостя",
+          description: "",
+          operation: { contractId: "missing", operationKey: "missing" },
+        },
+        {
+          id: "next",
+          fromId: "shop",
+          toId: "buyer",
+          kind: "response",
+          label: "Ответ",
+          description: "",
+        },
+      ],
+      fragments: [
+        {
+          id: "opt",
+          kind: "opt",
+          label: "Первый вход",
+          fromMessageId: "guest",
+          toMessageId: "guest",
+        },
+      ],
+    });
+    const layout = layoutSequence(document);
+    const [self, guest, next] = layout.messages;
+    const frame = layout.fragments[0]!;
+    expect(frame.y).toBeGreaterThan(self!.target.y + 4);
+    expect(guest!.label.y).toBeGreaterThan(frame.y + 20);
+    expect(guest!.label.height).toBe(42);
+    expect(guest!.label.y + guest!.label.height).toBeLessThan(guest!.source.y - 3);
+    expect(next!.label.y).toBeGreaterThan(frame.y + frame.height);
+  });
+
+  it("encloses wide cards and self-call paths inside nested fragments", () => {
+    const layout = layoutSequence(
+      documentOf({
+        participants: participants.slice(0, 1),
+        messages: [
+          {
+            id: "self",
+            fromId: "buyer",
+            toId: "buyer",
+            kind: "request",
+            label: "Сформировать и подписать гостевой JWT",
+            description: "",
+          },
+        ],
+        fragments: [
+          {
+            id: "outer",
+            kind: "opt",
+            label: "Первый вход",
+            fromMessageId: "self",
+            toMessageId: "self",
+          },
+          {
+            id: "inner",
+            kind: "loop",
+            label: "Повтор",
+            fromMessageId: "self",
+            toMessageId: "self",
+          },
+        ],
+      }),
+    );
+    const [outer, inner] = layout.fragments;
+    const message = layout.messages[0]!;
+    expect(inner!.y).toBeGreaterThan(outer!.y + 20);
+    expect(message.label.y).toBeGreaterThan(inner!.y + 20);
+    expect(inner!.x).toBeLessThan(message.label.x);
+    expect(inner!.x + inner!.width).toBeGreaterThan(message.label.x + message.label.width);
+    expect(outer!.x).toBeLessThan(inner!.x);
+    expect(outer!.y + outer!.height).toBeGreaterThan(inner!.y + inner!.height);
+    expect(inner!.y + inner!.height).toBeGreaterThan(message.target.y);
+  });
+
   it("returns a usable empty canvas without invented cells", () => {
     const layout = layoutSequence(documentOf());
 
@@ -164,10 +277,11 @@ describe("layoutSequence", () => {
     expect(layout.fragments[0]).toMatchObject({
       id: "optional",
       x: 100,
-      y: 156,
       width: 600,
-      height: 166,
     });
-    expect(layout.fragments[0]!.y + 20).toBeLessThan(layout.messages[1]!.rowY - 36);
+    const frame = layout.fragments[0]!;
+    expect(frame.y).toBeGreaterThan(layout.messages[0]!.target.y);
+    expect(frame.y + 20).toBeLessThan(layout.messages[1]!.label.y);
+    expect(frame.y + frame.height).toBeGreaterThan(layout.messages[2]!.target.y);
   });
 });
