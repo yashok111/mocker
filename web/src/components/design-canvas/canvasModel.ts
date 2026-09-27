@@ -273,10 +273,48 @@ export function resolveOperation(
   return null;
 }
 
-export function addLocalOperation(doc: CanvasDocument, messageId: string): CanvasDocument {
+export interface LocalOperationInput {
+  method: string;
+  path: string;
+  responseStatus: string;
+  contractId?: string;
+}
+
+export function addLocalOperation(
+  doc: CanvasDocument,
+  messageId: string,
+  input: LocalOperationInput,
+): CanvasDocument {
   const message = doc.messages.find((candidate) => candidate.id === messageId);
   if (message === undefined) throw new Error(`Сообщение ${messageId} не найдено`);
   if (message.operation !== undefined) return doc;
+
+  const method = input.method.trim().toLowerCase();
+  const path = input.path.trim();
+  const status = input.responseStatus.trim();
+  if (
+    !/^(get|post|put|patch|delete|head|options|trace)$/.test(method) ||
+    !path.startsWith("/") ||
+    /[\s?#]/.test(path) ||
+    /[{}]/.test(path.replace(/\{[^{} /]+\}/g, "")) ||
+    !/^(?:[1-5]\d{2}|[1-5]XX|default)$/.test(status)
+  ) {
+    throw new Error("Укажите корректный метод, путь и статус ответа");
+  }
+  if (input.contractId !== undefined) {
+    const contract = doc.contracts.find(({ id }) => id === input.contractId);
+    const key = contract && getOperation(contract.document, { method, path })?.[OPERATION_KEY];
+    if (!contract || typeof key !== "string")
+      throw new Error("Выбранная операция не найдена в контракте");
+    return {
+      ...doc,
+      messages: doc.messages.map((candidate) =>
+        candidate.id === messageId
+          ? { ...candidate, operation: { contractId: contract.id, operationKey: key } }
+          : candidate,
+      ),
+    };
+  }
 
   const contractId = createCanvasId();
   const operationKey = createCanvasId();
@@ -288,11 +326,31 @@ export function addLocalOperation(doc: CanvasDocument, messageId: string): Canva
       openapi: "3.1.0",
       info: { title: targetName ?? message.label, version: "1.0.0" },
       paths: {
-        "/request": {
-          post: {
+        [path]: {
+          [method]: {
             [OPERATION_KEY]: operationKey,
             summary: message.label,
-            responses: { "200": { description: "Успешный ответ" } },
+            ...(Array.from(path.matchAll(/\{([^{} /]+)\}/g)).length > 0
+              ? {
+                  parameters: Array.from(path.matchAll(/\{([^{} /]+)\}/g), (match) => ({
+                    name: match[1],
+                    in: "path",
+                    required: true,
+                    schema: {
+                      type: "string",
+                      description: "Предположен тип string; уточните в API Designer",
+                    },
+                  })),
+                }
+              : {}),
+            responses: {
+              [status]: {
+                description:
+                  status === "default"
+                    ? "Ответ не описан — уточните статус и структуру данных"
+                    : "Уточните структуру ответа",
+              },
+            },
           },
         },
       },

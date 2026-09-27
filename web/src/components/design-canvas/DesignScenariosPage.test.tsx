@@ -12,6 +12,27 @@ afterEach(() => {
 });
 
 describe("DesignScenariosPage", () => {
+  it("creates a descriptive login template", async () => {
+    const fetchMock = route({
+      "GET /api/design-scenarios": () => json(200, { scenarios: [] }),
+      "POST /api/design-scenarios": () => json(500, {}),
+    });
+    renderInRouter(<DesignScenariosPage />);
+    await userEvent.click(await screen.findByRole("button", { name: "Новый сценарий" }));
+    await userEvent.type(screen.getByRole("textbox", { name: "Название сценария" }), "Вход");
+    await userEvent.selectOptions(
+      screen.getByRole("combobox", { name: "Шаблон сценария" }),
+      "login",
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Создать сценарий" }));
+    const write = fetchMock.mock.calls.find(
+      ([input, init]) => String(input) === "/api/design-scenarios" && init?.method === "POST",
+    );
+    const body = JSON.parse(String(write?.[1]?.body));
+    expect(body.document.participants).toHaveLength(3);
+    expect(body.document.messages).toHaveLength(4);
+    expect(body.document.contracts).toEqual([]);
+  });
   it("lists server scenarios and opens the selected editor", async () => {
     route({
       "GET /api/design-scenarios": () =>

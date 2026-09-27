@@ -1,0 +1,12 @@
+sequenceDiagram
+participant p0 as wrap#58;Клиент
+participant p1 as nowrap#58;API
+opt условие
+loop повтор
+p0 ->> p1: wrap#58;GET /status
+note over p0: nowrap#58;описание<br/>#60;script#62;
+end
+p1 -->> p0: 200 OK
+end
+note over p1: nowrap#58;note
+p1 -) p1: event

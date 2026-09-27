@@ -1,5 +1,53 @@
 # Designing an API in mocker — drafts, review and publication
 
+## Start with a sequence, then get a result
+
+In **Scenarios**, create a blank sequence or choose Login, Checkout or Error.
+Add participants, insert messages before/after a selected message, add replies,
+and edit labels directly on the canvas. A descriptive sequence is enough to
+export a diagram; API details can be added as the design becomes concrete.
+
+For an HTTP request, choose **Создать API для вызова**, set its method and
+path, or reuse an existing operation. Add parameters, body, response schemas and
+examples in the inspector. When converting requests into contracts, mocker makes
+one API per receiving service. Two services may both expose `GET /status`.
+Review the conversion and apply the whole batch atomically. Unknown response
+status remains `default` until the analyst specifies it.
+
+Open **Получить результат** after saving:
+
+- PlantUML and Mermaid preserve participants, ordered messages, replies, notes,
+  self-calls and nested opt/loop blocks. Crossing blocks need correction for text
+  export. Canvas colors are available in SVG/PNG.
+- SVG and PNG use the full saved diagram, independently of zoom, selection and
+  execution overlays. PNG uses scale 2, at most 16,384 pixels on either side and
+  32 million pixels total; choose SVG for larger diagrams. Images are generated
+  locally in the browser and have a 15-second rendering timeout.
+- OpenAPI JSON/YAML exports the **entire selected API contract**, including
+  operations outside this sequence, shared schemas, security and extensions.
+  Descriptive messages are listed as omitted. Invalid bindings or unfinished API
+  forms block the affected contract; they do not block diagram export. JSON is
+  the saved contract text; YAML preserves numbers and scalar types. The original
+  OpenAPI version is retained.
+- Create a mock through contract preparation, then inspect it in the execution
+  panel. Export itself does not execute requests or publish an API.
+
+The result window pins a saved revision. Polling never silently switches the
+preview or download to a newer one. Resolve save conflicts and unfinished saves
+before opening results, or explicitly refresh an open result to a newer saved
+revision. Diagnostics point back to messages, blocks or contracts for correction.
+Local legacy canvases must first use the existing server-save migration.
+
+Agents use `get_design_scenario_export_options {scenarioId, revisionId}` followed
+by `export_design_scenario {scenarioId, revisionId, format, contractId?}`.
+Formats are `plantuml`, `mermaid`, `openapi-json`, `openapi-yaml`; OpenAPI requires
+`contractId`. Save the returned `content` string unchanged using `filename` and
+`mediaType`. `sourceHash` identifies the immutable snapshot. SVG/PNG are browser
+features. Export reads neither runtime mock state nor newer linked API revisions
+and creates no resources. Oversized results return 413; blocked results return
+422 with diagnostics. Importing arbitrary diagram formats and exporting other
+contract formats are future work.
+
 ## Analyst editor: the recommended workflow
 
 The **API designer** stores a complete OpenAPI document with immutable revisions.

@@ -105,6 +105,45 @@ func TestRepo_CreateContractBatchFailuresLeaveNoAPIOrMock(t *testing.T) {
 	}
 }
 
+func TestRepo_CreateContractSecondServiceFailureRollsBackFirst(t *testing.T) {
+	repo := newTestRepo(t)
+	document := validDocument("Two services")
+	document.Participants = []Participant{{ID: "client", Kind: "client"}, {ID: "orders", Kind: "service"}, {ID: "billing", Kind: "service"}}
+	document.Messages = []Message{
+		{ID: "call", FromID: "client", ToID: "orders", Kind: "request", Label: "GET /orders"},
+		{ID: "invoice", FromID: "client", ToID: "billing", Kind: "request", Label: "GET /invoices"},
+	}
+	created, err := repo.Create(t.Context(), CreateInput{Document: document, Source: "ui"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	commands := conversionCommands(t)
+	second := &Contract{ID: "converted", Name: "Billing", Mode: "copy", Document: jsonx.RawMessage(apiDocument("billing"))}
+	commands = append(commands,
+		Command{Type: "create_contract", Contract: second},
+	)
+	_, err = repo.Apply(t.Context(), created.Scenario.ID, CommandsInput{ExpectedVersion: 1, Source: "ui", Commands: commands})
+	if !errors.Is(err, ErrInvalid) {
+		t.Fatalf("Apply error = %v, want invalid second group", err)
+	}
+	after, err := repo.Detail(t.Context(), created.Scenario.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if after.Draft.Hash != created.Draft.Hash || after.Scenario.Version != 1 || len(after.Draft.Document.Contracts) != 0 {
+		t.Fatalf("failed second group changed scenario: %+v", after)
+	}
+	for _, table := range []string{"api_designs", "api_design_revisions", "api_design_workspaces", "workspaces", "specs"} {
+		var count int
+		if err := repo.db.R.QueryRowContext(t.Context(), "SELECT COUNT(*) FROM "+table).Scan(&count); err != nil {
+			t.Fatal(err)
+		}
+		if count != 0 {
+			t.Fatalf("failed second group retained %d rows in %s", count, table)
+		}
+	}
+}
+
 func TestCommandCreateContractRejectsMissingAndIrrelevantFields(t *testing.T) {
 	for _, raw := range []string{
 		`{"type":"create_contract"}`,

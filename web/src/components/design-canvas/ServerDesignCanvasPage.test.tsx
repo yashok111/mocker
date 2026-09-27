@@ -44,6 +44,181 @@ function detailFixture(version = 1, title = "Оформление заказа")
 }
 
 describe("ServerDesignCanvasPage", () => {
+  it("returns keyboard focus to the results trigger after Escape", async () => {
+    route({
+      "GET /api/design-scenarios/12": () => json(200, detailFixture()),
+      "GET /api/design-scenarios/12/revisions/41": () => json(200, detailFixture().draft),
+      "GET /api/design-scenarios/12/revisions/41/export-options": () =>
+        json(200, { scenarioId: 12, revisionId: 41, sourceHash: "hash-1", options: [] }),
+    });
+    renderInRouter(<ServerDesignCanvasPage id={12} />);
+    const trigger = await screen.findByRole("button", { name: "Получить результат" });
+    await userEvent.click(trigger);
+    expect(await screen.findByRole("dialog", { name: "Получить результат" })).toBeInTheDocument();
+    await userEvent.keyboard("{Escape}");
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog", { name: "Получить результат" })).not.toBeInTheDocument(),
+    );
+    await waitFor(() => expect(trigger).toHaveFocus());
+  });
+
+  it("lets the contracts panel take focus when creating a mock from results", async () => {
+    route({
+      "GET /api/design-scenarios/12": () => json(200, detailFixture()),
+      "GET /api/design-scenarios/12/revisions/41": () => json(200, detailFixture().draft),
+      "GET /api/design-scenarios/12/revisions/41/export-options": () =>
+        json(200, { scenarioId: 12, revisionId: 41, sourceHash: "hash-1", options: [] }),
+      "GET /api/designs": () => json(200, { designs: [] }),
+    });
+    renderInRouter(<ServerDesignCanvasPage id={12} />);
+    const trigger = await screen.findByRole("button", { name: "Получить результат" });
+    await userEvent.click(trigger);
+    const dialog = await screen.findByRole("dialog", { name: "Получить результат" });
+    await userEvent.click(within(dialog).getByRole("button", { name: "Создать мок" }));
+    expect(await screen.findByRole("dialog", { name: "Контракты API" })).toBeInTheDocument();
+    expect(trigger).not.toHaveFocus();
+  });
+
+  it("pins results to the opened revision while polling advances the editor", async () => {
+    let current = detailFixture();
+    const fetch = route({
+      "GET /api/design-scenarios/12": () => json(200, current),
+      "GET /api/design-scenarios/12/revisions/41": () => json(200, detailFixture().draft),
+      "GET /api/design-scenarios/12/revisions/41/export-options": () =>
+        json(200, {
+          scenarioId: 12,
+          revisionId: 41,
+          sourceHash: "hash-1",
+          options: [{ format: "mermaid", ready: true, diagnostics: [] }],
+        }),
+      "GET /api/design-scenarios/12/revisions/41/exports/mermaid": () =>
+        json(200, {
+          scenarioId: 12,
+          revisionId: 41,
+          sourceHash: "hash-1",
+          format: "mermaid",
+          content: "sequenceDiagram old",
+          filename: "old.mmd",
+          mediaType: "text/plain",
+          diagnostics: [],
+        }),
+    });
+    const { queryClient } = renderInRouter(<ServerDesignCanvasPage id={12} />);
+    await screen.findByRole("textbox", { name: "Название сценария" });
+    await userEvent.click(screen.getByRole("button", { name: "Получить результат" }));
+    const dialog = await screen.findByRole("dialog", { name: "Получить результат" });
+    expect(await within(dialog).findByLabelText("Предпросмотр результата")).toHaveTextContent(
+      "sequenceDiagram old",
+    );
+    current = detailFixture(2, "Из MCP");
+    await queryClient.invalidateQueries({ queryKey: designScenarioKeys.detail(12) });
+    expect(
+      await within(dialog).findByRole("button", { name: "Обновить до текущей ревизии" }),
+    ).toBeInTheDocument();
+    expect(within(dialog).getByLabelText("Предпросмотр результата")).toHaveTextContent(
+      "sequenceDiagram old",
+    );
+    expect(
+      fetch.mock.calls.some(([input]) => String(input).includes("/revisions/42/exports/")),
+    ).toBe(false);
+  });
+
+  it("remembers the chosen OpenAPI format and contract after locating a message and saving a new revision", async () => {
+    const initial = detailFixture();
+    const first = initial.draft.document.contracts[0]!;
+    const second = { ...first, id: "second-api", name: "Второй сервис" };
+    initial.draft.document.contracts.push(second);
+    const saved = structuredClone(initial);
+    saved.scenario.version = 2;
+    saved.scenario.draftRevisionId = 42;
+    saved.draft.version = 2;
+    saved.draft.id = 42;
+    saved.draft.hash = "hash-2";
+    saved.draft.document.messages[0]!.label = "Исправленный вызов";
+    let current = initial;
+    const target = { kind: "message", id: initial.draft.document.messages[0]!.id };
+    const fetch = route({
+      "GET /api/design-scenarios/12": () => json(200, current),
+      "GET /api/design-scenarios/12/revisions/41": () => json(200, initial.draft),
+      "GET /api/design-scenarios/12/revisions/42": () => json(200, saved.draft),
+      "GET /api/design-scenarios/12/revisions/41/export-options": () =>
+        json(200, {
+          scenarioId: 12,
+          revisionId: 41,
+          sourceHash: "hash-1",
+          options: [
+            { format: "openapi-json", contractId: first.id, ready: true, diagnostics: [] },
+            {
+              format: "openapi-json",
+              contractId: second.id,
+              ready: false,
+              diagnostics: [{ code: "api", severity: "error", message: "Исправьте вызов", target }],
+            },
+          ],
+        }),
+      "GET /api/design-scenarios/12/revisions/42/export-options": () =>
+        json(200, {
+          scenarioId: 12,
+          revisionId: 42,
+          sourceHash: "hash-2",
+          options: [
+            { format: "openapi-json", contractId: second.id, ready: true, diagnostics: [] },
+          ],
+        }),
+      [`GET /api/design-scenarios/12/revisions/42/exports/openapi-json?contractId=${second.id}`]:
+        () =>
+          json(200, {
+            scenarioId: 12,
+            revisionId: 42,
+            sourceHash: "hash-2",
+            format: "openapi-json",
+            content: '{"fixed":true}',
+            filename: "second.json",
+            mediaType: "application/json",
+            diagnostics: [],
+          }),
+      "PUT /api/design-scenarios/12/draft": () => {
+        current = saved;
+        return json(200, saved);
+      },
+    });
+    renderInRouter(<ServerDesignCanvasPage id={12} />);
+    await screen.findByRole("textbox", { name: "Название сценария" });
+    await userEvent.click(screen.getByRole("button", { name: "Получить результат" }));
+    const dialog = await screen.findByRole("dialog", { name: "Получить результат" });
+    await userEvent.selectOptions(
+      within(dialog).getByLabelText("Формат результата"),
+      "openapi-json",
+    );
+    await userEvent.selectOptions(within(dialog).getByLabelText("Весь API-контракт"), second.id);
+    await userEvent.click(await within(dialog).findByRole("button", { name: "Перейти к объекту" }));
+    const label = await screen.findByRole("textbox", { name: "Название сообщения" });
+    expect(label).toHaveFocus();
+    fireEvent.change(label, { target: { value: "Исправленный вызов" } });
+    await waitFor(() => expect(screen.getByText("Сохранено")).toBeInTheDocument());
+    await userEvent.click(screen.getByRole("button", { name: "Получить результат" }));
+    const reopened = await screen.findByRole("dialog", { name: "Получить результат" });
+    expect(within(reopened).getByLabelText("Формат результата")).toHaveValue("openapi-json");
+    expect(within(reopened).getByLabelText("Весь API-контракт")).toHaveValue(second.id);
+    expect(await within(reopened).findByLabelText("Предпросмотр результата")).toHaveTextContent(
+      '{"fixed":true}',
+    );
+    expect(
+      fetch.mock.calls.some(([input]) =>
+        String(input).includes(`/revisions/41/exports/openapi-json?contractId=${first.id}`),
+      ),
+    ).toBe(false);
+  });
+
+  it("holds results while a local change is unsaved", async () => {
+    route({ "GET /api/design-scenarios/12": () => json(200, detailFixture()) });
+    renderInRouter(<ServerDesignCanvasPage id={12} />);
+    const title = await screen.findByRole("textbox", { name: "Название сценария" });
+    fireEvent.change(title, { target: { value: "Локальная правка" } });
+    await userEvent.click(screen.getByRole("button", { name: "Получить результат" }));
+    expect(screen.queryByRole("dialog", { name: "Получить результат" })).not.toBeInTheDocument();
+    expect(screen.getByText(/Результат будет доступен после сохранения/)).toBeInTheDocument();
+  });
   it("runs the saved revision through the shared server runner without saving results into the document", async () => {
     const detail = detailFixture();
     detail.draft.document.fragments = [];

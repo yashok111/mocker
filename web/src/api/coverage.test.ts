@@ -54,7 +54,7 @@ const HTTP_METHODS = ["get", "post", "put", "delete", "patch"] as const;
 // agree with anything that file said. Every test below that wants to name it
 // reads it from here, which is the one thing the old title did not do — it
 // said "64" while the assertion said 70, for four slices running.
-const ROUTE_COUNT = 96;
+const ROUTE_COUNT = 98;
 
 interface RouteInfo {
   method: string;
@@ -250,6 +250,7 @@ describe("web/src API coverage", () => {
     // save, commands, revision, diff, restore and validate), 82 -> 91 after
     // the intervening API Designer routes; +1 for execute-step and +4 for
     // persisted scenario runs (start, list, detail, cancel), 91 -> 96.
+    // Saved scenario export options and artifacts add two read routes, 96 -> 98.
     // This count is OPERATIONS (method + path), not `paths` keys — a
     // 48-to-51 edit that instead counted paths would silently undercount.
     expect(routes).toHaveLength(ROUTE_COUNT);

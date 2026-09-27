@@ -10,6 +10,7 @@ import {
   Stack,
   Text,
   TextInput,
+  NativeSelect,
   Title,
   UnstyledButton,
 } from "@mantine/core";
@@ -17,7 +18,7 @@ import { IconArrowRight, IconChartArrowsVertical, IconPlus } from "@tabler/icons
 import { useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { describeApiFailureDetailed } from "@/api/errors";
-import { emptyCanvas } from "./canvasModel";
+import { createCanvasTemplate, type CanvasTemplateKind } from "./canvasTemplates";
 import {
   designScenarioKeys,
   useCreateDesignScenario,
@@ -30,6 +31,7 @@ export function DesignScenariosPage(): ReactElement {
   const query = useListDesignScenarios();
   const [createOpened, setCreateOpened] = useState(false);
   const [title, setTitle] = useState("");
+  const [template, setTemplate] = useState<CanvasTemplateKind>("blank");
   const create = useCreateDesignScenario({
     onSuccess: async (response) => {
       await queryClient.invalidateQueries({ queryKey: designScenarioKeys.all });
@@ -45,7 +47,7 @@ export function DesignScenariosPage(): ReactElement {
   function createBlank(): void {
     const trimmed = title.trim();
     if (trimmed === "") return;
-    create.mutate({ document: { ...emptyCanvas(), title: trimmed }, formDrafts: {} });
+    create.mutate({ document: createCanvasTemplate(template, trimmed), formDrafts: {} });
   }
 
   return (
@@ -125,6 +127,17 @@ export function DesignScenariosPage(): ReactElement {
             required
             value={title}
             onChange={(event) => setTitle(event.currentTarget.value)}
+          />
+          <NativeSelect
+            label="Шаблон сценария"
+            value={template}
+            data={[
+              { value: "blank", label: "Пустой" },
+              { value: "login", label: "Вход" },
+              { value: "checkout", label: "Оформление заказа" },
+              { value: "error", label: "Обработка ошибки" },
+            ]}
+            onChange={(event) => setTemplate(event.currentTarget.value as CanvasTemplateKind)}
           />
           {create.isError ? (
             <Alert color="red" role="alert">

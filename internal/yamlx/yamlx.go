@@ -1,8 +1,8 @@
 // Package yamlx is the ONE importer of the YAML decoder, the way
 // internal/jsonx isolates encoding/json and internal/wsmock isolates the
 // WebSocket library (A8, 2026-09-02; boundary_test.go fails the build on a
-// second importer). It does exactly one thing: turn a YAML document into
-// the JSON bytes the rest of the tree already understands, so that
+// second importer). It converts YAML documents into JSON bytes and exports
+// JSON as YAML while retaining scalar types and number text, so that
 // internal/openapi never sees a YAML node, a YAML type or a YAML error.
 //
 // The dependency, go.yaml.in/yaml/v3 (the maintained continuation of

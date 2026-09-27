@@ -35,6 +35,32 @@ means the session is gone (logout, restart with a wiped volume, another tab
 logged out). On a write the hostname of `Origin` (or, absent that, of
 `Referer` — never neither) must equal `MOCKER_ADMIN_HOST`, else 403.
 
+## Export a saved sequence or API contract
+
+Authenticated read-only routes:
+
+- `GET /api/design-scenarios/{id}/revisions/{rid}/export-options`
+- `GET /api/design-scenarios/{id}/revisions/{rid}/exports/{format}?contractId=...`
+
+Formats: `plantuml`, `mermaid`, `openapi-json`, `openapi-yaml`. Supply `contractId`
+only for OpenAPI. The response is JSON with `content` as a string, plus
+`filename`, `mediaType`, `scenarioId`, `revisionId`, `sourceHash` and diagnostics.
+Write the content exactly; parsing and reserializing the contract in JavaScript
+can round large numbers. Example using the login variables above:
+
+```bash
+curl -fsS -b "$JAR" -H "$H" \
+  "$ADMIN/api/design-scenarios/7/revisions/11/exports/mermaid" \
+  | jq -j '.content' > scenario.mmd
+```
+
+These endpoints read immutable snapshots and do not create mocks or change
+history. A revision from another scenario is 404. Unknown format is 400;
+missing contract is 404; blocked output is 422 with `error.details.diagnostics`;
+results exceeding the configured body-size limit are 413. JSON preserves the
+saved contract bytes; YAML preserves scalar types and numeric precision.
+Images are exported locally from the browser.
+
 ## Import a spec (from a shell; the MCP tool is `import_spec`)
 
 ```bash

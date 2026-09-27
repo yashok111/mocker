@@ -1,4 +1,12 @@
-import { lazy, Suspense, useRef, useState, type ReactElement, type ReactNode } from "react";
+import {
+  lazy,
+  Suspense,
+  useEffect,
+  useRef,
+  useState,
+  type ReactElement,
+  type ReactNode,
+} from "react";
 import {
   ActionIcon,
   Alert,
@@ -32,6 +40,7 @@ import { describeApiFailureDetailed } from "@/api/errors";
 import { CanvasInspector } from "./CanvasInspector";
 import { CanvasApiPicker } from "./CanvasApiPicker";
 import { createCanvasId } from "./canvasId";
+import { addCanvasReply, duplicateCanvasMessage, insertCanvasMessage } from "./canvasQuickActions";
 import {
   emptyCanvas,
   exampleCanvas,
@@ -39,6 +48,7 @@ import {
   moveParticipant,
   removeMessage,
   removeParticipant,
+  updateMessage,
 } from "./canvasModel";
 import { useCanvasDraft, type CanvasDraftController } from "./useCanvasDraft";
 import { designScenarioKeys, useCreateDesignScenario } from "./designScenarioApi";
@@ -131,12 +141,37 @@ export function DesignCanvasPage(): ReactElement {
 export function DesignCanvasEditor({
   draft,
   persistence,
+  locateTarget,
+  locateNonce,
 }: {
   draft: CanvasDraftController;
   persistence?: CanvasPersistenceControls;
+  locateTarget?: CanvasSelection;
+  locateNonce?: number;
 }): ReactElement {
   const document = draft.document;
   const [requestedSelection, setSelection] = useState<CanvasSelection>(null);
+  useEffect(() => {
+    if (!locateTarget) return;
+    setSelection(locateTarget);
+    const label =
+      locateTarget.kind === "message"
+        ? "Название сообщения"
+        : locateTarget.kind === "participant"
+          ? "Название объекта"
+          : null;
+    if (!label) return;
+    const timer = window.setTimeout(() => {
+      const labelElement = Array.from(window.document.querySelectorAll("label")).find(
+        (item) => item.textContent?.trim() === label,
+      );
+      const input = labelElement?.htmlFor
+        ? window.document.getElementById(labelElement.htmlFor)
+        : null;
+      input?.focus();
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [locateTarget, locateNonce]);
   const selectedItems =
     requestedSelection?.kind === "participant"
       ? document.participants
@@ -148,6 +183,7 @@ export function DesignCanvasEditor({
     : null;
   const [outline, setOutline] = useState(false);
   const [apiPicker, setApiPicker] = useState(false);
+  const [editingSelection, setEditingSelection] = useState<CanvasSelection>(null);
   const narrow = useMediaQuery("(max-width: 1023px)", false, { getInitialValueInEffect: false });
 
   if (narrow) {
@@ -194,20 +230,48 @@ export function DesignCanvasEditor({
     const from = selected ?? first;
     const to = document.participants.find((item) => item.id !== from.id) ?? from;
     const id = createCanvasId();
-    draft.update({
-      ...document,
-      messages: [
-        ...document.messages,
-        {
-          id,
-          fromId: from.id,
-          toId: to.id,
-          kind: "request",
-          label: "Новый вызов",
-          description: "",
-        },
-      ],
-    });
+    guarded(() =>
+      insertCanvasMessage(document, document.messages.at(-1)?.id ?? null, {
+        id,
+        fromId: from.id,
+        toId: to.id,
+        kind: "request",
+        label: "Новый вызов",
+        description: "",
+      }),
+    );
+    setSelection({ kind: "message", id });
+  }
+
+  function addAfter(): void {
+    if (selection?.kind !== "message") return;
+    const anchor = document.messages.find((item) => item.id === selection.id);
+    if (!anchor) return;
+    const id = createCanvasId();
+    guarded(() =>
+      insertCanvasMessage(document, anchor.id, {
+        id,
+        fromId: anchor.fromId,
+        toId: anchor.toId,
+        kind: "request",
+        label: "Новый вызов",
+        description: "",
+      }),
+    );
+    setSelection({ kind: "message", id });
+  }
+
+  function addReply(): void {
+    if (selection?.kind !== "message") return;
+    const id = createCanvasId();
+    guarded(() => addCanvasReply(document, selection.id, id));
+    setSelection({ kind: "message", id });
+  }
+
+  function duplicateMessage(): void {
+    if (selection?.kind !== "message") return;
+    const id = createCanvasId();
+    guarded(() => duplicateCanvasMessage(document, selection.id, id));
     setSelection({ kind: "message", id });
   }
 
@@ -283,6 +347,10 @@ export function DesignCanvasEditor({
       onDelete={deleteSelection}
       onMove={moveSelection}
       onImportApi={() => setApiPicker(true)}
+      onAddAfter={addAfter}
+      onReply={addReply}
+      onDuplicate={duplicateMessage}
+      onEditLabel={setEditingSelection}
       formStore={draft.formStore}
     />
   );
@@ -413,6 +481,29 @@ export function DesignCanvasEditor({
               onSelect={setSelection}
               onMoveParticipant={(id, index) => guarded(() => moveParticipant(document, id, index))}
               onMoveMessage={(id, index) => guarded(() => moveMessage(document, id, index))}
+              onEditLabel={setEditingSelection}
+              editingSelection={editingSelection}
+              onCommitLabel={(target, label) => {
+                guarded(() =>
+                  target.kind === "message"
+                    ? updateMessage(document, target.id, { label })
+                    : target.kind === "participant"
+                      ? {
+                          ...document,
+                          participants: document.participants.map((item) =>
+                            item.id === target.id ? { ...item, name: label } : item,
+                          ),
+                        }
+                      : {
+                          ...document,
+                          fragments: document.fragments.map((item) =>
+                            item.id === target.id ? { ...item, label } : item,
+                          ),
+                        },
+                );
+                setEditingSelection(null);
+              }}
+              onCancelEditLabel={() => setEditingSelection(null)}
             />
           </Suspense>
           {!document.participants.length ? (

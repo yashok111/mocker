@@ -28,6 +28,7 @@ import { getOperation, listOperations, listSchemas } from "../api-designer/docum
 import { addLocalOperation, OPERATION_KEY, resolveOperation, updateMessage } from "./canvasModel";
 import { scopeFormDrafts } from "./useCanvasDraft";
 import { CanvasColorInput } from "./CanvasColorInput";
+import { CanvasCreateOperationModal } from "./CanvasCreateOperationModal";
 import { messageLabels, participantLabels } from "./labels";
 import type {
   CanvasDocument,
@@ -47,6 +48,10 @@ interface Props {
   onDelete: () => void;
   onMove: (offset: number) => void;
   onImportApi: () => void;
+  onAddAfter?: () => void;
+  onReply?: () => void;
+  onDuplicate?: () => void;
+  onEditLabel?: (selection: CanvasSelection) => void;
   formStore: FormDraftStore;
 }
 
@@ -81,6 +86,11 @@ export function CanvasInspector(props: Props): ReactElement {
         </ActionIcon>
       </Group>
       <Stack className={classes.inspectorBody} gap="md">
+        {selection ? (
+          <Button variant="default" onClick={() => props.onEditLabel?.(selection)}>
+            Изменить подпись на диаграмме
+          </Button>
+        ) : null}
         {participant ? (
           <>
             <TextInput
@@ -269,9 +279,13 @@ function MessageInspector({
   onChange,
   onMove,
   onImportApi,
+  onAddAfter,
+  onReply,
+  onDuplicate,
   formStore,
 }: Props & { message: CanvasMessage }): ReactElement {
   const [schema, setSchema] = useState("");
+  const [createOperation, setCreateOperation] = useState(false);
   const resolved = message.operation ? resolveOperation(document, message.operation) : null;
   const scopedStore = useMemo(
     () => scopeFormDrafts(formStore, resolved?.contract.id ?? "none"),
@@ -308,6 +322,21 @@ function MessageInspector({
 
   return (
     <>
+      <Group grow>
+        <Button variant="default" onClick={onAddAfter}>
+          Добавить после
+        </Button>
+      </Group>
+      <Group grow>
+        {message.kind === "request" ? (
+          <Button variant="default" onClick={onReply}>
+            Ответить
+          </Button>
+        ) : null}
+        <Button variant="default" onClick={onDuplicate}>
+          Дублировать
+        </Button>
+      </Group>
       <TextInput
         label="Название сообщения"
         value={message.label}
@@ -420,7 +449,7 @@ function MessageInspector({
           disabled={message.operation !== undefined}
           onClick={() => {
             setSchema("");
-            onChange(addLocalOperation(document, message.id));
+            setCreateOperation(true);
           }}
         >
           Создать API для вызова
@@ -429,6 +458,17 @@ function MessageInspector({
           Выбрать проект API
         </Button>
       </Group>
+      {createOperation ? (
+        <CanvasCreateOperationModal
+          document={document}
+          label={message.label}
+          onClose={() => setCreateOperation(false)}
+          onCreate={(input) => {
+            onChange(addLocalOperation(document, message.id, input));
+            setCreateOperation(false);
+          }}
+        />
+      ) : null}
       {message.operation && !resolved ? (
         <Alert color="yellow">Связанная операция недоступна. Выберите её заново.</Alert>
       ) : null}

@@ -429,7 +429,7 @@ func TestAutoCheckpointPolicy_pinsEveryMutatingRoute(t *testing.T) {
 		// designs, four persisted design-scenario writes, and run start/cancel.
 		cpGroupAnotherLayer: 17,
 		// Every GET in the table.
-		cpGroupRead: 39,
+		cpGroupRead: 41,
 	}
 
 	byPattern := checkpointPolicyByPattern(t)

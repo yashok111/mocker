@@ -72,6 +72,16 @@ function renderInspector(document: CanvasDocument, selection: CanvasSelection, o
 }
 
 describe("CanvasInspector", () => {
+  it("asks for an endpoint before changing a descriptive request", async () => {
+    const document = documentFixture();
+    document.messages[0]!.label = "Получить клиента";
+    const onChange = renderInspector(document, { kind: "message", id: "request" });
+    await userEvent.click(screen.getByRole("button", { name: "Создать API для вызова" }));
+    expect(screen.getByLabelText("Путь")).toHaveValue("");
+    expect(screen.getByRole("button", { name: "Создать операцию" })).toBeDisabled();
+    expect(onChange).not.toHaveBeenCalled();
+    expect(document.contracts).toEqual([]);
+  });
   it("changes only the selected object's card color and resets it", async () => {
     const user = userEvent.setup();
     const document = documentFixture();

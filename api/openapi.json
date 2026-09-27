@@ -6586,6 +6586,207 @@
         "required": [],
         "properties": {},
         "additionalProperties": false
+      },
+      "ScenarioExportFormat": {
+        "type": "string",
+        "enum": [
+          "plantuml",
+          "mermaid",
+          "openapi-json",
+          "openapi-yaml"
+        ]
+      },
+      "ScenarioExportTarget": {
+        "type": "object",
+        "required": [
+          "kind",
+          "id"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "message",
+              "participant",
+              "fragment",
+              "contract"
+            ]
+          },
+          "id": {
+            "type": "string"
+          }
+        }
+      },
+      "ScenarioExportDiagnostic": {
+        "type": "object",
+        "required": [
+          "code",
+          "severity",
+          "message"
+        ],
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "error",
+              "warning",
+              "info"
+            ]
+          },
+          "message": {
+            "type": "string"
+          },
+          "pointer": {
+            "type": "string"
+          },
+          "target": {
+            "$ref": "#/components/schemas/ScenarioExportTarget"
+          }
+        }
+      },
+      "ScenarioExportOption": {
+        "type": "object",
+        "required": [
+          "format",
+          "ready",
+          "diagnostics"
+        ],
+        "properties": {
+          "format": {
+            "$ref": "#/components/schemas/ScenarioExportFormat"
+          },
+          "contractId": {
+            "type": "string"
+          },
+          "ready": {
+            "type": "boolean"
+          },
+          "diagnostics": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ScenarioExportDiagnostic"
+            }
+          }
+        }
+      },
+      "ScenarioExportOptions": {
+        "type": "object",
+        "required": [
+          "scenarioId",
+          "revisionId",
+          "sourceHash",
+          "options"
+        ],
+        "properties": {
+          "scenarioId": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "revisionId": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "sourceHash": {
+            "type": "string"
+          },
+          "options": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ScenarioExportOption"
+            }
+          }
+        }
+      },
+      "ScenarioExportArtifact": {
+        "type": "object",
+        "required": [
+          "scenarioId",
+          "revisionId",
+          "sourceHash",
+          "format",
+          "filename",
+          "mediaType",
+          "content",
+          "diagnostics"
+        ],
+        "properties": {
+          "scenarioId": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "revisionId": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "sourceHash": {
+            "type": "string"
+          },
+          "format": {
+            "$ref": "#/components/schemas/ScenarioExportFormat"
+          },
+          "filename": {
+            "type": "string"
+          },
+          "mediaType": {
+            "type": "string"
+          },
+          "content": {
+            "type": "string",
+            "description": "Exact artifact text. Save unchanged; do not parse and re-serialize API numbers in JavaScript."
+          },
+          "diagnostics": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ScenarioExportDiagnostic"
+            }
+          }
+        }
+      },
+      "ScenarioExportBlockedError": {
+        "type": "object",
+        "required": [
+          "error"
+        ],
+        "properties": {
+          "error": {
+            "type": "object",
+            "required": [
+              "code",
+              "message",
+              "details"
+            ],
+            "properties": {
+              "code": {
+                "type": "string",
+                "const": "scenario_export_blocked"
+              },
+              "message": {
+                "type": "string"
+              },
+              "details": {
+                "type": "object",
+                "required": [
+                  "diagnostics"
+                ],
+                "properties": {
+                  "diagnostics": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/ScenarioExportDiagnostic"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
       }
     }
   },
@@ -13245,6 +13446,159 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/CancelDesignScenarioRunRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/design-scenarios/{id}/revisions/{rid}/export-options": {
+      "get": {
+        "tags": [
+          "design-scenarios"
+        ],
+        "operationId": "getDesignScenarioExportOptions",
+        "summary": "List ready exports and per-format diagnostics",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "rid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScenarioExportOptions"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "413": {
+            "$ref": "#/components/responses/PayloadTooLarge"
+          }
+        }
+      }
+    },
+    "/api/design-scenarios/{id}/revisions/{rid}/exports/{format}": {
+      "get": {
+        "tags": [
+          "design-scenarios"
+        ],
+        "operationId": "exportDesignScenario",
+        "summary": "Export an immutable scenario revision",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "rid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "format",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/ScenarioExportFormat"
+            }
+          },
+          {
+            "name": "contractId",
+            "in": "query",
+            "required": false,
+            "description": "Required for OpenAPI; must be absent for text diagrams. Exports the entire saved contract.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScenarioExportArtifact"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "413": {
+            "$ref": "#/components/responses/PayloadTooLarge"
+          },
+          "422": {
+            "description": "Data needed for this format is incomplete",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScenarioExportBlockedError"
+                }
               }
             }
           }

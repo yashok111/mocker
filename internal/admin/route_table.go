@@ -219,6 +219,8 @@ func (s *Server) routes() []route {
 		{"PUT /api/design-scenarios/{id}/draft", s.handleSaveDesignScenarioDraft, mcpAllow, cpAnotherLayer},
 		{"POST /api/design-scenarios/{id}/commands", s.handleApplyDesignScenarioCommands, mcpAllow, cpAnotherLayer},
 		{"GET /api/design-scenarios/{id}/revisions/{rid}", s.handleGetDesignScenarioRevision, mcpAllow, cpRead},
+		{"GET /api/design-scenarios/{id}/revisions/{rid}/export-options", s.handleDesignScenarioExportOptions, mcpAllow, cpRead},
+		{"GET /api/design-scenarios/{id}/revisions/{rid}/exports/{format}", s.handleExportDesignScenario, mcpAllow, cpRead},
 		{"GET /api/design-scenarios/{id}/diff", s.handleGetDesignScenarioDiff, mcpAllow, cpRead},
 		{"POST /api/design-scenarios/{id}/restore", s.handleRestoreDesignScenarioRevision, mcpAllow, cpAnotherLayer},
 		{"POST /api/design-scenarios/{id}/validate", s.handleValidateDesignScenario, mcpAllow, cpNeverTouchesLayer},

@@ -21,6 +21,7 @@ import (
 // same admin handlers the UI uses. A command batch is the composable mutation
 // surface; full-document save remains available for the interactive editor.
 func addDesignScenarioTools(s *sdk.Server, lb *loopback) {
+	addScenarioExportTools(s, lb)
 	addDesignScenarioTool(s, lb, "run_design_scenario", "POST /api/design-scenarios/{id}/runs",
 		"Starts an asynchronous server run of an immutable saved scenario revision. Executes enabled HTTP steps sequentially, substitutes variables, checks expected status and JSON assertions, and extracts variables for later steps. Returns a persisted report; poll get_design_scenario_run until terminal. Supply a unique runId for each intentional run or variable variant. Repeating the SAME runId with identical revisionId, variables and name returns the original run without dispatching again, including after a lost response. Changed input returns 409; a pruned report returns 410 and never replays. Variable overrides affect only this run; the scenario revision stays unchanged. May mutate mock runtime state.", false,
 		func(in runDesignScenarioInput) (designScenarioCall, error) {

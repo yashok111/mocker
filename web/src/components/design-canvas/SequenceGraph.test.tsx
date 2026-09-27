@@ -80,6 +80,62 @@ beforeEach(() => vi.clearAllMocks());
 afterEach(cleanup);
 
 describe("SequenceGraph colors", () => {
+  it("opens inline editing on double click without remounting the graph", () => {
+    const onEditLabel = vi.fn();
+    const result = render(view(documentOf(), null, { onEditLabel }));
+    const handler = graph.on.mock.calls.find(([name]) => name === "cell:dblclick")?.[1];
+    handler({ cell: { getData: () => ({ selection: { kind: "message", id: "call" } }) } });
+    expect(onEditLabel).toHaveBeenCalledWith({ kind: "message", id: "call" });
+    result.rerender(
+      view(documentOf(), null, { onEditLabel, editingSelection: { kind: "message", id: "call" } }),
+    );
+    expect(screen.getByRole("textbox", { name: "Изменить подпись на диаграмме" })).toHaveValue(
+      "Call",
+    );
+    expect(graph.construct).toHaveBeenCalledTimes(1);
+  });
+  it("commits with Enter and cancels with Escape", () => {
+    const onCommitLabel = vi.fn();
+    const onCancelEditLabel = vi.fn();
+    const editingSelection = { kind: "message" as const, id: "call" };
+    const result = render(
+      view(documentOf(), null, { editingSelection, onCommitLabel, onCancelEditLabel }),
+    );
+    const input = screen.getByRole("textbox", { name: "Изменить подпись на диаграмме" });
+    fireEvent.change(input, { target: { value: "Renamed" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(onCommitLabel).toHaveBeenCalledWith(editingSelection, "Renamed");
+    result.rerender(
+      view(documentOf(), null, { editingSelection: null, onCommitLabel, onCancelEditLabel }),
+    );
+    result.rerender(
+      view(documentOf(), null, { editingSelection, onCommitLabel, onCancelEditLabel }),
+    );
+    fireEvent.keyDown(screen.getByRole("textbox", { name: "Изменить подпись на диаграмме" }), {
+      key: "Escape",
+    });
+    expect(onCancelEditLabel).toHaveBeenCalledTimes(1);
+    expect(onCommitLabel).toHaveBeenCalledTimes(1);
+  });
+  it("places the editor over a note cell", () => {
+    const result = render(view(documentOf("note")));
+    const graphContainer = result.container.querySelector('[class*="graph"]')!;
+    const noteCell = document.createElement("div");
+    noteCell.setAttribute("data-cell-id", "note:call");
+    noteCell.getBoundingClientRect = () =>
+      ({ left: 150, top: 120, width: 190, height: 40 }) as DOMRect;
+    graphContainer.append(noteCell);
+    const shell = result.container.querySelector("section")!;
+    shell.getBoundingClientRect = () => ({ left: 20, top: 30, width: 600, height: 400 }) as DOMRect;
+    result.rerender(
+      view(documentOf("note"), null, { editingSelection: { kind: "message", id: "call" } }),
+    );
+    expect(screen.getByRole("textbox", { name: "Изменить подпись на диаграмме" })).toHaveStyle({
+      left: "130px",
+      top: "90px",
+      width: "190px",
+    });
+  });
   it("keeps defaults and selected defaults for documents without colors", () => {
     const document = documentOf();
     const result = render(view(document));

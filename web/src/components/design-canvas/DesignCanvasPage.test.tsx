@@ -22,6 +22,16 @@ async function addFromCanvasMenu(name: string): Promise<void> {
 }
 
 describe("DesignCanvasPage", () => {
+  it("adds a linked reply in one undo step", async () => {
+    renderInRouter(<DesignCanvasPage />);
+    await userEvent.click(await screen.findByRole("button", { name: "Структура сценария" }));
+    await userEvent.click(screen.getByRole("button", { name: "1. POST /orders Вызов" }));
+    await userEvent.click(screen.getByRole("button", { name: "Ответить" }));
+    expect(screen.getByRole("textbox", { name: "Название сообщения" })).toHaveValue("Ответ");
+    await userEvent.click(screen.getByRole("button", { name: "Отменить" }));
+    expect(screen.getByRole("button", { name: "2. Проверить заказ Вызов" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "2. Ответ Ответ" })).not.toBeInTheDocument();
+  });
   it("creates and saves canvas elements when randomUUID is unavailable on HTTP", async () => {
     vi.stubGlobal("crypto", { getRandomValues: crypto.getRandomValues.bind(crypto) });
     renderInRouter(<DesignCanvasPage />);

@@ -76,6 +76,12 @@ export function ScenarioContractsPanel({
           ) : null}
           {document.contracts.map((contract) => {
             const linked = contract.mode === "linked";
+            const users = document.participants.filter((participant) =>
+              document.messages.some(
+                (message) =>
+                  message.toId === participant.id && message.operation?.contractId === contract.id,
+              ),
+            );
             const update = updates.find((item) => item.contractId === contract.id);
             const source = contract.source;
             const sourceDesign = source
@@ -94,6 +100,12 @@ export function ScenarioContractsPanel({
                     {linked ? "Общий API" : "Независимая копия"}
                   </Badge>
                 </Group>
+                {users.length > 0 ? (
+                  <Text size="xs" c="dimmed">
+                    Используется:{" "}
+                    {users.map((participant) => participant.name || participant.id).join(", ")}
+                  </Text>
+                ) : null}
                 {source ? (
                   <Group gap="md">
                     <Anchor

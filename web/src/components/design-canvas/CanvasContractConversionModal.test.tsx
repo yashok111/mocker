@@ -28,6 +28,94 @@ function unboundDocument() {
 }
 
 describe("CanvasContractConversionModal", () => {
+  it("allows excluding a whole service and submits only selected service commands", async () => {
+    const document = unboundDocument();
+    document.participants.push({
+      id: "billing",
+      name: "Биллинг",
+      kind: "service",
+      description: "",
+    });
+    document.messages.push({
+      id: "charge",
+      fromId: document.messages[0]!.fromId,
+      toId: "billing",
+      kind: "request",
+      label: "POST /charge",
+      description: "",
+    });
+    const create = vi.fn().mockResolvedValue(undefined);
+    renderWithProviders(
+      <CanvasContractConversionModal
+        document={document}
+        expectedVersion={7}
+        onClose={vi.fn()}
+        onCreate={create}
+      />,
+    );
+    const submit = screen.getByRole("button", { name: "Создать API-проект" });
+    await userEvent.click(screen.getByRole("checkbox", { name: "Включить: Войти" }));
+    expect(submit).toBeEnabled();
+    await userEvent.click(screen.getByRole("checkbox", { name: "Включить: POST /charge" }));
+    expect(submit).toBeDisabled();
+    await userEvent.click(screen.getByRole("checkbox", { name: "Включить: POST /charge" }));
+    await userEvent.click(submit);
+    await waitFor(() => expect(create).toHaveBeenCalledOnce());
+    const commands = create.mock.calls[0]![0];
+    expect(commands.map((command: { type: string }) => command.type)).toEqual([
+      "create_contract",
+      "bind_operation",
+      "materialize_contract",
+    ]);
+    expect(commands[0].contract.name).toContain("Биллинг");
+    expect(commands[1].messageId).toBe("charge");
+  });
+
+  it("submits one ordered batch for two receiver services", async () => {
+    const document = unboundDocument();
+    document.participants.push({
+      id: "billing",
+      name: "Биллинг",
+      kind: "service",
+      description: "",
+    });
+    document.messages.push({
+      id: "charge",
+      fromId: document.messages[0]!.fromId,
+      toId: "billing",
+      kind: "request",
+      label: "POST /charge",
+      description: "",
+    });
+    const create = vi.fn().mockResolvedValue(undefined);
+    renderWithProviders(
+      <CanvasContractConversionModal
+        document={document}
+        expectedVersion={7}
+        onClose={vi.fn()}
+        onCreate={create}
+      />,
+    );
+    expect(screen.getAllByRole("textbox", { name: /Название API ·/ })).toHaveLength(2);
+    const methods = screen.getAllByRole("combobox", { name: "Метод" });
+    await userEvent.selectOptions(methods[0]!, "POST");
+    const paths = screen.getAllByRole("textbox", { name: "Путь" });
+    await userEvent.type(paths[0]!, "/auth/login");
+    await userEvent.type(screen.getByRole("textbox", { name: "HTTP-статус: Токен" }), "200");
+    await userEvent.click(screen.getByRole("button", { name: "Создать API-проект" }));
+    await waitFor(() => expect(create).toHaveBeenCalledOnce());
+    const [commands, version] = create.mock.calls[0]!;
+    expect(version).toBe(7);
+    expect(commands.map((command: { type: string }) => command.type)).toEqual([
+      "create_contract",
+      "bind_operation",
+      "materialize_contract",
+      "create_contract",
+      "bind_operation",
+      "materialize_contract",
+    ]);
+    expect(commands[0].contract.name).not.toBe(commands[3].contract.name);
+  });
   it("creates a contract identifier without randomUUID on HTTP", async () => {
     const document = exampleCanvas();
     vi.stubGlobal("crypto", { getRandomValues: crypto.getRandomValues.bind(crypto) });

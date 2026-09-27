@@ -297,26 +297,46 @@ describe("canvas contracts", () => {
     ).toBeNull();
   });
 
-  it("adds a local POST /request with a 200 response and binds only the selected message", () => {
+  it("adds only the chosen endpoint with an unknown default response", () => {
     const original = documentFixture();
-    const withLocalOperation = addLocalOperation(original, "create");
+    const withLocalOperation = addLocalOperation(original, "create", {
+      method: "GET",
+      path: "/orders/{id}",
+      responseStatus: "default",
+    });
     const binding = withLocalOperation.messages[0]!.operation;
     const resolved = resolveOperation(withLocalOperation, binding!);
 
     expect(withLocalOperation.contracts).toHaveLength(1);
-    expect(resolved?.location).toEqual({ method: "post", path: "/request" });
+    expect(resolved?.location).toEqual({ method: "get", path: "/orders/{id}" });
     expect(resolved?.contract.document).toMatchObject({
-      paths: { "/request": { post: { responses: { "200": { description: "Успешный ответ" } } } } },
+      paths: {
+        "/orders/{id}": {
+          get: { responses: { default: { description: expect.stringContaining("не описан") } } },
+        },
+      },
     });
     expect(original.contracts).toEqual([]);
     expect(original.messages[0]!.operation).toBeUndefined();
   });
 
   it("does not create another local contract for an already bound message", () => {
-    const once = addLocalOperation(documentFixture(), "create");
-    const twice = addLocalOperation(once, "create");
+    const input = { method: "POST", path: "/orders", responseStatus: "default" };
+    const once = addLocalOperation(documentFixture(), "create", input);
+    const twice = addLocalOperation(once, "create", input);
 
     expect(twice).toBe(once);
     expect(twice.contracts).toHaveLength(1);
+  });
+
+  it("reuses an explicitly selected matching operation without editing its contract", () => {
+    const input = { method: "POST", path: "/orders", responseStatus: "default" };
+    const first = addLocalOperation(documentFixture(), "create", input);
+    const contract = first.contracts[0]!;
+    const second = addLocalOperation(first, "charge", { ...input, contractId: contract.id });
+    expect(second.contracts).toEqual(first.contracts);
+    expect(second.messages.find(({ id }) => id === "charge")?.operation).toEqual(
+      first.messages.find(({ id }) => id === "create")?.operation,
+    );
   });
 });

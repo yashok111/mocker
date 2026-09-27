@@ -6,12 +6,16 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import { ApiFailure } from "@/api/client";
 import { describeApiFailureDetailed } from "@/api/errors";
 import { getListApiDesignsQueryKey } from "@/api/generated/api-designs/api-designs";
-import { useApplyDesignScenarioCommands } from "@/api/generated/design-scenarios/design-scenarios";
+import {
+  getDesignScenarioRevision,
+  useApplyDesignScenarioCommands,
+} from "@/api/generated/design-scenarios/design-scenarios";
 import { DesignCanvasEditor } from "./DesignCanvasPage";
 import { ScenarioContractsPanel } from "./ScenarioContractsPanel";
 import { ScenarioHistoryPanel } from "./ScenarioHistoryPanel";
 import { ScenarioValidationAction } from "./ScenarioValidationAction";
 import { ScenarioExecutionPanel } from "./ScenarioExecutionPanel";
+import { ScenarioResultsModal, type ScenarioResultSelection } from "./ScenarioResultsModal";
 import {
   runScenario,
   listScenarioRuns,
@@ -25,9 +29,10 @@ import {
   useGetDesignScenario,
   useSaveDesignScenarioDraft,
   type DesignScenarioDetail,
+  type DesignScenarioRevision,
 } from "./designScenarioApi";
 import { useCanvasDraft } from "./useCanvasDraft";
-import type { CanvasDocument } from "./types";
+import type { CanvasDocument, CanvasSelection } from "./types";
 
 const POLL_MS = 5_000;
 const AUTOSAVE_DELAY_MS = 800;
@@ -80,6 +85,16 @@ function ServerCanvasEditor({
   const [saveUnconfirmed, setSaveUnconfirmed] = useState(stored?.pendingSave ?? false);
   const [reloading, setReloading] = useState(false);
   const [contractsOpened, setContractsOpened] = useState(false);
+  const [resultsRevision, setResultsRevision] = useState<DesignScenarioRevision | null>(null);
+  const [resultSelection, setResultSelection] = useState<ScenarioResultSelection>({
+    format: "mermaid",
+    contractId: "",
+  });
+  const [resultsLoading, setResultsLoading] = useState(false);
+  const [resultsError, setResultsError] = useState("");
+  const [locateTarget, setLocateTarget] = useState<CanvasSelection>(null);
+  const [locateNonce, setLocateNonce] = useState(0);
+  const resultsTriggerRef = useRef<HTMLButtonElement>(null);
   const writeInFlight = useRef(false);
   const initialDocument = stored?.document ?? detail.draft.document;
   const initialFormDrafts = stored?.formDrafts ?? detail.draft.formDrafts.all ?? "{}";
@@ -97,7 +112,10 @@ function ServerCanvasEditor({
       saved: true,
       error: "",
     },
-    { pendingWrite: saveUnconfirmed, shortcutsEnabled: !contractsOpened },
+    {
+      pendingWrite: saveUnconfirmed,
+      shortcutsEnabled: !contractsOpened && resultsRevision === null,
+    },
   );
   const {
     dirty: draftDirty,
@@ -363,6 +381,38 @@ function ServerCanvasEditor({
     }
   }
 
+  const resultsBlocked =
+    draft.dirty ||
+    saveInFlight ||
+    saveUnconfirmed ||
+    conflict ||
+    externalDetail !== null ||
+    save.isError ||
+    commands.isPending ||
+    createCopy.isPending ||
+    reloading;
+  async function openResults(): Promise<void> {
+    if (resultsBlocked || resultsLoading) return;
+    setResultsLoading(true);
+    setResultsError("");
+    try {
+      const response = await getDesignScenarioRevision(id, baseRevisionId);
+      if (response.status !== 200) throw new Error("Не удалось загрузить ревизию");
+      setResultsRevision(response.data as DesignScenarioRevision);
+    } catch (error) {
+      setResultsError(describeApiFailureDetailed(error));
+    } finally {
+      setResultsLoading(false);
+    }
+  }
+
+  function closeResults(reason?: "action"): void {
+    setResultsRevision(null);
+    if (reason !== "action") {
+      window.setTimeout(() => resultsTriggerRef.current?.focus(), 0);
+    }
+  }
+
   const notice =
     externalDetail !== null || conflict || save.isError || createCopy.isError || createdCopyID ? (
       <Alert color={conflict ? "red" : "yellow"} role="alert">
@@ -442,6 +492,8 @@ function ServerCanvasEditor({
     <>
       <DesignCanvasEditor
         draft={draft}
+        locateTarget={locateTarget}
+        locateNonce={locateNonce}
         persistence={{
           automatic: true,
           status: (
@@ -479,6 +531,15 @@ function ServerCanvasEditor({
           actions: (
             <Group gap="xs">
               <Button
+                ref={resultsTriggerRef}
+                size="sm"
+                variant="default"
+                loading={resultsLoading}
+                onClick={() => void openResults()}
+              >
+                Получить результат
+              </Button>
+              <Button
                 size="sm"
                 leftSection={<IconPlayerPlay size={16} />}
                 onClick={() => setExecutionOpened(true)}
@@ -512,6 +573,21 @@ function ServerCanvasEditor({
           notice: (
             <>
               {notice}
+              {resultsBlocked ? (
+                <Text size="sm" c="orange">
+                  Результат будет доступен после сохранения.{" "}
+                  {conflict || externalDetail !== null
+                    ? "Разрешите конфликт изменений."
+                    : save.isError
+                      ? "Повторите сохранение."
+                      : "Дождитесь подтверждения сохранения."}
+                </Text>
+              ) : null}
+              {resultsError ? (
+                <Alert color="red" role="alert">
+                  {resultsError}
+                </Alert>
+              ) : null}
               {diagnostics.length > 0 ? (
                 <Alert color="yellow">
                   {diagnostics.map((diagnostic) => (
@@ -525,6 +601,28 @@ function ServerCanvasEditor({
           ),
         }}
       />
+      {resultsRevision ? (
+        <ScenarioResultsModal
+          opened
+          scenarioId={id}
+          revision={resultsRevision}
+          selection={resultSelection}
+          onSelectionChange={setResultSelection}
+          latestRevisionId={baseRevisionId}
+          onRefresh={() => void openResults()}
+          onClose={closeResults}
+          onLocate={(target) => {
+            if (target.kind === "contract") {
+              setContractsOpened(true);
+              return;
+            }
+            setLocateTarget({ kind: target.kind, id: target.id });
+            setLocateNonce((current) => current + 1);
+          }}
+          onPrepareContracts={() => setContractsOpened(true)}
+          onRun={() => setExecutionOpened(true)}
+        />
+      ) : null}
       <ScenarioExecutionPanel
         opened={executionOpened}
         onClose={() => setExecutionOpened(false)}
