@@ -89,6 +89,20 @@ and creates no resources. Oversized results return 413; blocked results return
 422 with diagnostics. Importing arbitrary diagram formats and exporting other
 contract formats are future work.
 
+For a ZIP bundle use `export_design_scenario_archive {scenarioId, revisionId,
+items:[{format, contractId?}]}`. Select 1–32 unique server exports; OpenAPI needs
+one item per contract and format. Decode `contentBase64` explicitly and save it
+using `filename` (`application/zip`). The read-only REST equivalent is
+`POST /api/design-scenarios/{id}/revisions/{rid}/archive` with `{items}` and the
+normal authentication and CSRF headers. The ZIP stores the original file bytes
+plus `manifest.json` (schemaVersion 1, kind `mocker-scenario-artifacts`,
+restorable false). Manifest files retain selection order and describe paths,
+formats, media types, byte counts, SHA-256 and diagnostics. Any selected export
+failure cancels the entire archive; raw files, ZIP and base64 JSON response all
+have size limits. In the browser, ZIP also supports SVG/PNG from the same pinned
+revision. PDF remains separate HTML printing. ZIP is an artifact bundle and
+cannot restore a Mocker project.
+
 ## Analyst editor: the recommended workflow
 
 The **API designer** stores a complete OpenAPI document with immutable revisions.

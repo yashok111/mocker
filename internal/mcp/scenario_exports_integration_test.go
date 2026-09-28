@@ -51,6 +51,47 @@ func TestScenarioExportsPersistedRESTAndMCP(t *testing.T) {
 		t.Fatal(auth.Body.String())
 	}
 	cookie := auth.Result().Cookies()[0]
+	var loginBody struct {
+		CSRFToken string `json:"csrfToken"`
+	}
+	if err := jsonx.Unmarshal(auth.Body.Bytes(), &loginBody); err != nil {
+		t.Fatal(err)
+	}
+	archiveRequest := func(rev designscenario.Revision, csrf string) *httptest.ResponseRecorder {
+		t.Helper()
+		path := fmt.Sprintf("/api/design-scenarios/%d/revisions/%d/archive", rev.ScenarioID, rev.ID)
+		r := httptest.NewRequest("POST", "http://mocker.local"+path, strings.NewReader(`{"items":[{"format":"mermaid"},{"format":"openapi-json","contractId":"a"},{"format":"markdown"}]}`))
+		r.AddCookie(cookie)
+		r.Header.Set("Content-Type", "application/json")
+		r.Header.Set("Origin", "http://mocker.local")
+		r.Header.Set("X-CSRF-Token", csrf)
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, r)
+		return w
+	}
+	archive := func(rev designscenario.Revision) scenarioexport.ArchiveArtifact {
+		t.Helper()
+		response := archiveRequest(rev, loginBody.CSRFToken)
+		if response.Code != 200 {
+			t.Fatalf("archive: %d %s", response.Code, response.Body.String())
+		}
+		var viaHTTP, viaMCP scenarioexport.ArchiveArtifact
+		if err := jsonx.Unmarshal(response.Body.Bytes(), &viaHTTP); err != nil {
+			t.Fatal(err)
+		}
+		args := map[string]any{"scenarioId": rev.ScenarioID, "revisionId": rev.ID, "items": []scenarioexport.Request{{Format: scenarioexport.Mermaid}, {Format: scenarioexport.OpenAPIJSON, ContractID: "a"}, {Format: scenarioexport.Markdown}}}
+		if msg := callDesignScenarioTool(t, srv, "export_design_scenario_archive", args, &viaMCP); msg != "" {
+			t.Fatal(msg)
+		}
+		if !reflect.DeepEqual(viaHTTP, viaMCP) || viaMCP.RevisionID != rev.ID || viaMCP.SourceHash != rev.Hash || len(viaMCP.Manifest.Files) != 3 {
+			t.Fatal("REST/MCP archives differ or wrong snapshot")
+		}
+		return viaMCP
+	}
+	if response := archiveRequest(linked.Draft, ""); response.Code != 403 {
+		t.Fatalf("archive missing CSRF: %d", response.Code)
+	}
+
 	read := func(path string) *httptest.ResponseRecorder {
 		t.Helper()
 		r := httptest.NewRequest("GET", "http://mocker.local"+path, nil)
@@ -101,6 +142,7 @@ func TestScenarioExportsPersistedRESTAndMCP(t *testing.T) {
 		return out
 	}
 	counts := beforeCounts()
+	archiveBefore := archive(linked.Draft)
 	httpExport := func(rev designscenario.Revision, format string) scenarioexport.Artifact {
 		t.Helper()
 		var viaMCP scenarioexport.Artifact
@@ -171,6 +213,10 @@ func TestScenarioExportsPersistedRESTAndMCP(t *testing.T) {
 	if !reflect.DeepEqual(markdownBefore, httpExport(linked.Draft, "markdown")) || !reflect.DeepEqual(htmlBefore, httpExport(linked.Draft, "html")) {
 		t.Fatal("API or scenario edit changed historical documentation")
 	}
+
+	if !reflect.DeepEqual(archiveBefore, archive(linked.Draft)) {
+		t.Fatal("edits changed historical ZIP")
+	}
 	other, err := repo.Create(t.Context(), designscenario.CreateInput{Document: doc, Source: "ui"})
 	if err != nil {
 		t.Fatalf("%#v", err)
@@ -178,6 +224,12 @@ func TestScenarioExportsPersistedRESTAndMCP(t *testing.T) {
 	response := read(fmt.Sprintf("/api/design-scenarios/%d/revisions/%d/exports/mermaid", other.Scenario.ID, linked.Draft.ID))
 	if response.Code != http.StatusNotFound {
 		t.Fatalf("cross-scenario read: %d", response.Code)
+	}
+
+	wrongScenario := linked.Draft
+	wrongScenario.ScenarioID = other.Scenario.ID
+	if response := archiveRequest(wrongScenario, loginBody.CSRFToken); response.Code != 404 {
+		t.Fatalf("cross-scenario archive: %d", response.Code)
 	}
 	// Pending forms produce identical structured diagnostics through both transports.
 	pending, err := repo.Save(t.Context(), newer.Scenario.ID, designscenario.SaveInput{ExpectedVersion: newer.Scenario.Version, Document: newer.Draft.Document, FormDrafts: map[string]string{"pending": "{"}, Source: "ui"})
@@ -194,6 +246,14 @@ func TestScenarioExportsPersistedRESTAndMCP(t *testing.T) {
 	if msg := callDesignScenarioTool(t, srv, "export_design_scenario", args, &ignored); !strings.Contains(msg, "422") || !strings.Contains(msg, "api_forms_pending") {
 		t.Fatalf("MCP pending: %s", msg)
 	}
+
+	if response := archiveRequest(pending.Draft, loginBody.CSRFToken); response.Code != 422 || !strings.Contains(response.Body.String(), "api_forms_pending") || strings.Contains(response.Body.String(), "contentBase64") {
+		t.Fatalf("atomic archive failure: %d %s", response.Code, response.Body.String())
+	}
+	archiveArgs := map[string]any{"scenarioId": pending.Scenario.ID, "revisionId": pending.Draft.ID, "items": []scenarioexport.Request{{Format: scenarioexport.Mermaid}, {Format: scenarioexport.OpenAPIJSON, ContractID: "a"}}}
+	if msg := callDesignScenarioTool(t, srv, "export_design_scenario_archive", archiveArgs, &ignored); !strings.Contains(msg, "422") || !strings.Contains(msg, "api_forms_pending") {
+		t.Fatalf("MCP archive diagnostics: %s", msg)
+	}
 	for _, format := range []string{"markdown", "html"} {
 		artifact := httpExport(pending.Draft, format)
 		if !strings.Contains(strings.ReplaceAll(artifact.Content, `\_`, `_`), "api_forms_pending") {
@@ -201,6 +261,13 @@ func TestScenarioExportsPersistedRESTAndMCP(t *testing.T) {
 		}
 	}
 	cfg.MaxBody = 300
+	if response := archiveRequest(linked.Draft, loginBody.CSRFToken); response.Code != 413 {
+		t.Fatalf("archive output budget: %d %s", response.Code, response.Body.String())
+	}
+	if msg := callDesignScenarioTool(t, srv, "export_design_scenario_archive", archiveArgs, &ignored); !strings.Contains(msg, "413") {
+		t.Fatalf("MCP archive budget: %s", msg)
+	}
+
 	if response = read(path); response.Code != 413 {
 		t.Fatalf("diagnostic limit: %d %s", response.Code, response.Body.String())
 	}

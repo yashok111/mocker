@@ -423,8 +423,8 @@ func TestAutoCheckpointPolicy_pinsEveryMutatingRoute(t *testing.T) {
 		// changing its mind: P3b's reset-data (D3 R12), P3f's rederive
 		// (D7.3), P6b's endpoint preview (D13), P6c's close and push
 		// (D9), A6's two asset writes (D3), A11's two entity writes,
-		// P4b's import and fork, then design-scenario validation and execution — twenty-three.
-		cpGroupNeverTouchesLayer: 23,
+		// P4b's import and fork, then design-scenario validation, execution and archive — twenty-four.
+		cpGroupNeverTouchesLayer: 24,
 		// Rows in another aggregate: runtime scenarios, checkpoints, API
 		// designs, four persisted design-scenario writes, and run start/cancel.
 		cpGroupAnotherLayer: 17,
@@ -485,7 +485,7 @@ func TestAutoCheckpointPolicy_pinsEveryMutatingRoute(t *testing.T) {
 	// bump the number blindly. Persisted design scenarios add five mutating
 	// routes: create, full save, commands, restore and side-effect-free
 	// validation and HTTP-step execution; persisted run start/cancel add two
-	// more, bringing the current total to 57.
+	// more; read-only scenario archives also use POST, bringing the total to 58.
 	var mutating []string
 	for _, rt := range (&Server{}).routes() {
 		method, _, ok := strings.Cut(rt.pattern, " ")
@@ -497,8 +497,8 @@ func TestAutoCheckpointPolicy_pinsEveryMutatingRoute(t *testing.T) {
 			mutating = append(mutating, rt.pattern)
 		}
 	}
-	if len(mutating) != 57 {
-		t.Fatalf("routes() registers %d mutating patterns, want 57", len(mutating))
+	if len(mutating) != 58 {
+		t.Fatalf("routes() registers %d mutating patterns, want 58", len(mutating))
 	}
 
 	// The two halves the group counts alone cannot state: a mutating route

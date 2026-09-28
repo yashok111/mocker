@@ -548,8 +548,8 @@ func containsStr(list []string, want string) bool {
 // close_stream_connection and push_stream_frame, 48 -> 51. mcp_test.go's
 // own tools/list test only logs the count (t.Logf, "not a check" per D13's
 // own text). Later groups grew the surface to 74; the persisted sequence
-// designer adds ten, persisted runs four and scenario exports two: 90 tools.
-func TestToolSurfaceStaysAt90(t *testing.T) {
+// designer adds ten, persisted runs four and scenario exports three: 91 tools.
+func TestToolSurfaceStaysAt91(t *testing.T) {
 	t.Parallel()
 	h := newTestEndpoint(t).Handler()
 	rec := doMCP(t, h, `{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}`,
@@ -562,7 +562,7 @@ func TestToolSurfaceStaysAt90(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &env); err != nil {
 		t.Fatalf("decode tools/list: %v; body=%s", err, rec.Body.String())
 	}
-	if len(env.Result.Tools) != 90 {
-		t.Errorf("tools/list returned %d tools, want 90 including sixteen design-scenario tools", len(env.Result.Tools))
+	if len(env.Result.Tools) != 91 {
+		t.Errorf("tools/list returned %d tools, want 91 including seventeen design-scenario tools", len(env.Result.Tools))
 	}
 }

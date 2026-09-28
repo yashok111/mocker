@@ -100,3 +100,20 @@ func (s *Server) handleExportDesignScenario(w http.ResponseWriter, r *http.Reque
 	}
 	httpx.JSON(w, http.StatusOK, artifact)
 }
+
+func (s *Server) handleExportDesignScenarioArchive(w http.ResponseWriter, r *http.Request) {
+	rev, ok := s.scenarioExportRevision(w, r)
+	if !ok {
+		return
+	}
+	var input scenarioexport.ArchiveRequest
+	if !s.designScenarioBody(w, r, &input) {
+		return
+	}
+	archive, err := s.scenarioExporter().ExportArchive(rev, input.Items)
+	if err != nil {
+		s.scenarioExportError(w, err)
+		return
+	}
+	httpx.JSON(w, http.StatusOK, archive)
+}

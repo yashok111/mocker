@@ -61,6 +61,7 @@ var toolRoutes = map[string][]string{
 	"get_design_scenario_revision":       {"GET /api/design-scenarios/{id}/revisions/{rid}"},
 	"get_design_scenario_export_options": {"GET /api/design-scenarios/{id}/revisions/{rid}/export-options"},
 	"export_design_scenario":             {"GET /api/design-scenarios/{id}/revisions/{rid}/exports/{format}"},
+	"export_design_scenario_archive":     {"POST /api/design-scenarios/{id}/revisions/{rid}/archive"},
 	"get_design_scenario_diff":           {"GET /api/design-scenarios/{id}/diff"},
 	"restore_design_scenario_revision":   {"POST /api/design-scenarios/{id}/restore"},
 	"validate_design_scenario":           {"POST /api/design-scenarios/{id}/validate"},
@@ -227,11 +228,12 @@ var toolRoutes = map[string][]string{
 // adds (export_workspace, import_workspace, fork_workspace), plus the one
 // slice P7a adds (export_openapi)
 // — 63 legacy tools plus eleven versioned API designer tools, plus the ten
-// original persisted design-scenario tools and four server-run tools above.
+// original persisted design-scenario tools, four server-run tools and three
+// scenario-export tools above.
 // Pinned in routes_test.go so a tool
 // added without an entry here is caught by a test rather than by a 404 in
 // production.
-const toolCount = 90
+const toolCount = 91
 
 // toolPath resolves ONE call a tool makes into the (method, path) pair
 // loopback.do/call take.

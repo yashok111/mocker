@@ -41,6 +41,7 @@ Authenticated read-only routes:
 
 - `GET /api/design-scenarios/{id}/revisions/{rid}/export-options`
 - `GET /api/design-scenarios/{id}/revisions/{rid}/exports/{format}?contractId=...`
+- `POST /api/design-scenarios/{id}/revisions/{rid}/archive`
 
 Formats: `plantuml`, `mermaid`, `openapi-json`, `openapi-yaml`, `postman`, `curl`,
 `markdown`, `html`.
@@ -72,6 +73,20 @@ Both use enabled HTTP requests and execution inputs in the selected revision.
 Fill missing base URL variables before running the downloaded artifact. Inspect
 `export-options` diagnostics first: required inputs and unsupported execution
 semantics can block these formats while diagram exports remain available.
+
+For ZIP, POST `{"items":[{"format":"mermaid"},{"format":"openapi-json",
+"contractId":"api"}]}` to the archive route. It accepts 1–32 unique selections
+of the server formats above. Include the session cookie, `Origin`,
+`X-CSRF-Token` and `Content-Type: application/json`; the usual CSRF checks apply
+even though this operation is read-only. Decode the response's `contentBase64`
+into binary ZIP bytes and save them under `filename` (`application/zip`). The
+response includes `scenarioId`, `revisionId`, `sourceHash` and `manifest`.
+Inside the ZIP, `manifest.json` v1 lists the exact exported files, byte lengths,
+SHA-256 and diagnostics in selection order. The bundle cannot restore a project
+(`restorable: false`). Invalid or repeated selections return 400; a failure in
+any selected export cancels the entire archive. Raw contents, ZIP bytes and the
+base64 JSON response are subject to the server size limit (413). SVG/PNG are
+browser ZIP options; PDF remains separate HTML printing.
 
 ## Import a spec (from a shell; the MCP tool is `import_spec`)
 

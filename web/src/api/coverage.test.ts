@@ -54,7 +54,7 @@ const HTTP_METHODS = ["get", "post", "put", "delete", "patch"] as const;
 // agree with anything that file said. Every test below that wants to name it
 // reads it from here, which is the one thing the old title did not do — it
 // said "64" while the assertion said 70, for four slices running.
-const ROUTE_COUNT = 98;
+const ROUTE_COUNT = 99;
 
 interface RouteInfo {
   method: string;
@@ -117,7 +117,10 @@ function loadRoutes(): RouteInfo[] {
 // here naming its tool, and the test keeps checking that every other route
 // has a caller. An exemption is a decision on the record and so is its
 // withdrawal, in this comment.
-const EXEMPT: Record<string, string> = {};
+const EXEMPT: Record<string, string> = {
+  "POST /api/design-scenarios/{id}/revisions/{rid}/archive":
+    "export_design_scenario_archive serves REST/MCP clients. ScenarioArchivePanel builds ZIP locally from individual exports and browser-only SVG/PNG of the same revision.",
+};
 
 // The routes no generated hook can ever cover, because the browser reaches
 // them through a transport orval does not emit. Each entry NAMES the file
@@ -251,6 +254,7 @@ describe("web/src API coverage", () => {
     // the intervening API Designer routes; +1 for execute-step and +4 for
     // persisted scenario runs (start, list, detail, cancel), 91 -> 96.
     // Saved scenario export options and artifacts add two read routes, 96 -> 98.
+    // ZIP archive generation for REST/MCP adds one read-only POST, 98 -> 99.
     // This count is OPERATIONS (method + path), not `paths` keys — a
     // 48-to-51 edit that instead counted paths would silently undercount.
     expect(routes).toHaveLength(ROUTE_COUNT);

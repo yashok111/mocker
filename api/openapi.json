@@ -6872,6 +6872,188 @@
           }
         },
         "additionalProperties": false
+      },
+      "ScenarioArchiveScenario": {
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "revisionId",
+          "version",
+          "sourceHash"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "title": {
+            "type": "string"
+          },
+          "revisionId": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "version": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "sourceHash": {
+            "type": "string"
+          }
+        }
+      },
+      "ScenarioArchiveFile": {
+        "type": "object",
+        "required": [
+          "path",
+          "format",
+          "mediaType",
+          "bytes",
+          "sha256",
+          "diagnostics"
+        ],
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "format": {
+            "type": "string",
+            "description": "Artifact format, including browser-only svg and png."
+          },
+          "mediaType": {
+            "type": "string"
+          },
+          "bytes": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "diagnostics": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ScenarioExportDiagnostic"
+            }
+          },
+          "contractId": {
+            "type": "string"
+          }
+        }
+      },
+      "ScenarioArchiveManifest": {
+        "type": "object",
+        "required": [
+          "schemaVersion",
+          "kind",
+          "restorable",
+          "scenario",
+          "files"
+        ],
+        "properties": {
+          "schemaVersion": {
+            "type": "integer",
+            "const": 1
+          },
+          "kind": {
+            "type": "string",
+            "const": "mocker-scenario-artifacts"
+          },
+          "restorable": {
+            "type": "boolean",
+            "const": false
+          },
+          "scenario": {
+            "$ref": "#/components/schemas/ScenarioArchiveScenario"
+          },
+          "files": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 32,
+            "items": {
+              "$ref": "#/components/schemas/ScenarioArchiveFile"
+            }
+          }
+        }
+      },
+      "ScenarioExportArchiveRequest": {
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 32,
+            "uniqueItems": true,
+            "items": {
+              "type": "object",
+              "required": [
+                "format"
+              ],
+              "properties": {
+                "format": {
+                  "$ref": "#/components/schemas/ScenarioExportFormat"
+                },
+                "contractId": {
+                  "type": "string",
+                  "description": "Required only for OpenAPI; must be absent for other formats."
+                }
+              },
+              "additionalProperties": false
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "ScenarioExportArchive": {
+        "type": "object",
+        "required": [
+          "scenarioId",
+          "revisionId",
+          "sourceHash",
+          "filename",
+          "mediaType",
+          "contentBase64",
+          "manifest"
+        ],
+        "properties": {
+          "scenarioId": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "revisionId": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "sourceHash": {
+            "type": "string"
+          },
+          "filename": {
+            "type": "string"
+          },
+          "mediaType": {
+            "type": "string",
+            "const": "application/zip"
+          },
+          "contentBase64": {
+            "type": "string",
+            "contentEncoding": "base64",
+            "description": "Decode base64 to ZIP bytes. This archive contains artifacts and cannot restore a project."
+          },
+          "manifest": {
+            "$ref": "#/components/schemas/ScenarioArchiveManifest"
+          }
+        }
       }
     }
   },
@@ -13684,6 +13866,94 @@
                 "schema": {
                   "$ref": "#/components/schemas/ScenarioExportBlockedError"
                 }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/design-scenarios/{id}/revisions/{rid}/archive": {
+      "post": {
+        "tags": [
+          "design-scenarios"
+        ],
+        "operationId": "exportDesignScenarioArchive",
+        "summary": "Export selected artifacts of an immutable scenario revision as ZIP",
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "rid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScenarioExportArchive"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "413": {
+            "$ref": "#/components/responses/PayloadTooLarge"
+          },
+          "422": {
+            "description": "Data needed for this format is incomplete",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScenarioExportBlockedError"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        },
+        "description": "Read-only, atomic export of 1–32 unique selections. Server formats only; SVG/PNG/PDF are not accepted. Decode contentBase64 explicitly. ZIP is not a restorable project. Raw contents, ZIP bytes and the complete JSON response are bounded by the server export size limit.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScenarioExportArchiveRequest"
               }
             }
           }

@@ -12,25 +12,14 @@ import type {
 import type { DesignScenarioRevision } from "./designScenarioApi";
 import { loadScenarioArtifact, loadScenarioExportOptions } from "./scenarioExportApi";
 import { downloadScenarioArtifact, downloadScenarioBlob } from "./scenarioExportFiles";
+import { ScenarioArchivePanel } from "./ScenarioArchivePanel";
+import { formatLabels } from "./scenarioExportLabels";
 
-export type ResultFormat = ScenarioExportFormat | "svg" | "png" | "pdf";
+export type ResultFormat = keyof typeof formatLabels;
 export interface ScenarioResultSelection {
   format: ResultFormat;
   contractId: string;
 }
-const formatLabels: Record<ResultFormat, string> = {
-  plantuml: "PlantUML",
-  mermaid: "Mermaid",
-  "openapi-json": "OpenAPI JSON",
-  "openapi-yaml": "OpenAPI YAML",
-  postman: "Postman",
-  curl: "cURL",
-  markdown: "Markdown",
-  html: "HTML",
-  pdf: "PDF (печать)",
-  svg: "SVG",
-  png: "PNG",
-};
 
 export interface ScenarioResultsModalProps {
   opened: boolean;
@@ -142,6 +131,10 @@ export function ScenarioResultsModal({
     setLoadedDocumentKey("");
     setBlockedDiagnostics([]);
     setError("");
+    if (format === "zip") {
+      setLoading(false);
+      return;
+    }
     if (option && !option.ready) return;
     let active = true;
     setLoading(true);
@@ -321,6 +314,17 @@ export function ScenarioResultsModal({
             Описать API
           </Button>
         ) : null}
+        {opened && format === "zip" && currentOptions ? (
+          <ScenarioArchivePanel
+            key={`${scenarioId}:${revision.id}`}
+            revision={revision}
+            options={currentOptions}
+            onLocate={(target) => {
+              onClose("action");
+              onLocate(target);
+            }}
+          />
+        ) : null}
         {visibleArtifact && isDocument ? (
           <iframe
             key={requestKey}
@@ -371,20 +375,22 @@ export function ScenarioResultsModal({
               Печать / сохранить PDF
             </Button>
           ) : null}
-          <Button
-            variant={format === "pdf" ? "default" : "filled"}
-            disabled={!visibleArtifact && !visibleImage}
-            onClick={() => {
-              if (visibleArtifact) downloadScenarioArtifact(visibleArtifact);
-              if (visibleImage)
-                downloadScenarioBlob(
-                  visibleImage,
-                  `${revision.document.title || "scenario"}-${revision.id}.${format}`,
-                );
-            }}
-          >
-            Скачать {format === "pdf" ? "HTML" : formatLabels[format]}
-          </Button>
+          {format !== "zip" ? (
+            <Button
+              variant={format === "pdf" ? "default" : "filled"}
+              disabled={!visibleArtifact && !visibleImage}
+              onClick={() => {
+                if (visibleArtifact) downloadScenarioArtifact(visibleArtifact);
+                if (visibleImage)
+                  downloadScenarioBlob(
+                    visibleImage,
+                    `${revision.document.title || "scenario"}-${revision.id}.${format}`,
+                  );
+              }}
+            >
+              Скачать {format === "pdf" ? "HTML" : formatLabels[format]}
+            </Button>
+          ) : null}
           <Button
             variant="default"
             onClick={() => {

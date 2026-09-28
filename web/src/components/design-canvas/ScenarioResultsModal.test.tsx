@@ -25,6 +25,33 @@ const revision: DesignScenarioRevision = {
   formDrafts: {},
 };
 
+it("offers ZIP composition without requesting a fictitious single zip artifact", async () => {
+  const fetch = route({
+    "GET /api/design-scenarios/7/revisions/11/export-options": () =>
+      json(200, {
+        scenarioId: 7,
+        revisionId: 11,
+        sourceHash: "hash-11",
+        options: [{ format: "mermaid", ready: true, diagnostics: [] }],
+      }),
+  });
+  renderWithProviders(
+    <ScenarioResultsModal
+      opened
+      scenarioId={7}
+      revision={revision}
+      selection={{ format: "zip", contractId: "" }}
+      onClose={vi.fn()}
+      onLocate={vi.fn()}
+      onPrepareContracts={vi.fn()}
+      onRun={vi.fn()}
+    />,
+  );
+  expect(await screen.findByRole("checkbox", { name: "Mermaid" })).toBeChecked();
+  expect(screen.getAllByRole("button", { name: "Скачать ZIP" })).toHaveLength(1);
+  expect(fetch.mock.calls.some(([input]) => String(input).includes("/exports/zip"))).toBe(false);
+});
+
 it.each([
   ["postman", "Postman", "collection.json", '{"info":{"name":"Saved collection"}}'],
   ["curl", "cURL", "requests.sh", "#!/bin/sh\ncurl --request GET --url 'https://example.test'"],

@@ -111,3 +111,72 @@ func TestScenarioDocumentationExplainsPrintPageLimit(t *testing.T) {
 		t.Fatalf("print limit not explained: %d %s", rr.Code, rr.Body.String())
 	}
 }
+
+func TestScenarioArchiveStrictBodyAndErrors(t *testing.T) {
+	t.Parallel()
+	for _, tt := range []struct {
+		name, body, rid string
+		auth            bool
+		status          int
+	}{
+		{"success", `{"items":[{"format":"mermaid"},{"format":"markdown"}]}`, "11", true, 200},
+		{"unauthorized", `{"items":[{"format":"mermaid"}]}`, "11", false, 401},
+		{"revision", `{"items":[{"format":"mermaid"}]}`, "12", true, 404},
+		{"empty", `{"items":[]}`, "11", true, 400},
+		{"null", `null`, "11", true, 400},
+		{"duplicate", `{"items":[{"format":"mermaid"},{"format":"mermaid"}]}`, "11", true, 400},
+		{"unknown field", `{"items":[{"format":"mermaid"}],"extra":true}`, "11", true, 400},
+		{"unknown item field", `{"items":[{"format":"mermaid","extra":true}]}`, "11", true, 400},
+		{"trailing", `{"items":[{"format":"mermaid"}]} {}`, "11", true, 400},
+		{"svg", `{"items":[{"format":"svg"}]}`, "11", true, 400},
+		{"unknown contract", `{"items":[{"format":"openapi-json","contractId":"missing"}]}`, "11", true, 404},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			s := exportTestServer()
+			r := archiveRequest(tt.body, tt.rid, tt.auth)
+			w := httptest.NewRecorder()
+			s.handleExportDesignScenarioArchive(w, r)
+			if w.Code != tt.status {
+				t.Fatalf("status %d: %s", w.Code, w.Body.String())
+			}
+			if w.Code == 200 {
+				var got scenarioexport.ArchiveArtifact
+				if err := jsonx.Unmarshal(w.Body.Bytes(), &got); err != nil {
+					t.Fatal(err)
+				}
+				if got.ContentBase64 == "" || got.Manifest.Scenario.RevisionID != 11 || got.Manifest.Scenario.SourceHash != "saved-hash" || len(got.Manifest.Files) != 2 {
+					t.Fatalf("bad snapshot: %+v", got)
+				}
+			} else if strings.Contains(w.Body.String(), "contentBase64") {
+				t.Fatal("partial archive leaked")
+			}
+		})
+	}
+	s := exportTestServer()
+	s.cfg.MaxBody = 100
+	w := httptest.NewRecorder()
+	s.handleExportDesignScenarioArchive(w, archiveRequest(`{"items":[{"format":"mermaid"}]}`, "11", true))
+	if w.Code != 413 {
+		t.Fatalf("output budget: %d %s", w.Code, w.Body.String())
+	}
+	w = httptest.NewRecorder()
+	s.handleExportDesignScenarioArchive(w, archiveRequest(`{"items":[{"format":"`+strings.Repeat("a", 101)+`"}]}`, "11", true))
+	if w.Code != 413 {
+		t.Fatalf("request budget: %d %s", w.Code, w.Body.String())
+	}
+	s = exportTestServer()
+	s.designScenariosRepo = exportScenarioStub{revision: designscenario.Revision{RevisionSummary: designscenario.RevisionSummary{ID: 11, ScenarioID: 7}}}
+	w = httptest.NewRecorder()
+	s.handleExportDesignScenarioArchive(w, archiveRequest(`{"items":[{"format":"mermaid"}]}`, "11", true))
+	if w.Code != 422 || !strings.Contains(w.Body.String(), "diagram_empty") {
+		t.Fatalf("blocked diagnostics: %d %s", w.Code, w.Body.String())
+	}
+}
+
+func archiveRequest(body, rid string, authenticated bool) *http.Request {
+	r := exportRequest("", rid, authenticated)
+	r.Method = http.MethodPost
+	r.Body = io.NopCloser(strings.NewReader(body))
+	r.Header.Set("Content-Type", "application/json")
+	return r
+}
