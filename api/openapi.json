@@ -5106,9 +5106,35 @@
           },
           "execution": {
             "$ref": "#/components/schemas/DesignScenarioStepExecution"
+          },
+          "eventBindings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DesignScenarioEventBinding"
+            },
+            "maxItems": 2,
+            "minItems": 1,
+            "uniqueItems": true
           }
         },
-        "additionalProperties": false
+        "additionalProperties": false,
+        "allOf": [
+          {
+            "if": {
+              "required": [
+                "eventBindings"
+              ]
+            },
+            "then": {
+              "properties": {
+                "kind": {
+                  "const": "event"
+                },
+                "operation": false
+              }
+            }
+          }
+        ]
       },
       "DesignScenarioFragment": {
         "type": "object",
@@ -5236,7 +5262,8 @@
             "type": "integer",
             "enum": [
               1,
-              2
+              2,
+              3
             ]
           },
           "title": {
@@ -5268,6 +5295,9 @@
           },
           "execution": {
             "$ref": "#/components/schemas/DesignScenarioExecution"
+          },
+          "eventModel": {
+            "$ref": "#/components/schemas/DesignScenarioEventModel"
           }
         },
         "additionalProperties": false,
@@ -5294,6 +5324,30 @@
                       "parentFragmentId": false,
                       "parentBranchId": false,
                       "branches": false
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "formatVersion": {
+                  "enum": [
+                    1,
+                    2
+                  ]
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "eventModel": false,
+                "messages": {
+                  "items": {
+                    "properties": {
+                      "eventBindings": false
                     }
                   }
                 }
@@ -6050,6 +6104,9 @@
           },
           {
             "$ref": "#/components/schemas/DesignScenarioMaterializeContractCommand"
+          },
+          {
+            "$ref": "#/components/schemas/DesignScenarioSetEventModelCommand"
           }
         ]
       },
@@ -6651,7 +6708,9 @@
           "postman",
           "curl",
           "markdown",
-          "html"
+          "html",
+          "asyncapi-json",
+          "asyncapi-yaml"
         ]
       },
       "ScenarioExportTarget": {
@@ -6667,7 +6726,12 @@
               "message",
               "participant",
               "fragment",
-              "contract"
+              "contract",
+              "event-contract",
+              "event-channel",
+              "event-message",
+              "event-schema",
+              "event-server"
             ]
           },
           "id": {
@@ -7054,6 +7118,437 @@
             "$ref": "#/components/schemas/ScenarioArchiveManifest"
           }
         }
+      },
+      "DesignScenarioEventServer": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "description",
+          "host",
+          "protocol",
+          "auth"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,100}$",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 50000
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 50000
+          },
+          "host": {
+            "type": "string",
+            "maxLength": 50000
+          },
+          "protocol": {
+            "type": "string",
+            "enum": [
+              "kafka",
+              "kafka-secure"
+            ]
+          },
+          "auth": {
+            "type": "string",
+            "enum": [
+              "unspecified",
+              "none",
+              "plain",
+              "scramSha256",
+              "scramSha512"
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "DesignScenarioEventChannelKafka": {
+        "type": "object",
+        "required": [],
+        "properties": {
+          "partitions": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 2147483647
+          },
+          "replicas": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 2147483647
+          }
+        },
+        "additionalProperties": false
+      },
+      "DesignScenarioEventChannel": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "description",
+          "address",
+          "serverIds",
+          "messageIds"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,100}$",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 50000
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 50000
+          },
+          "address": {
+            "type": "string",
+            "maxLength": 50000
+          },
+          "serverIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{1,100}$",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "maxItems": 100,
+            "uniqueItems": true
+          },
+          "messageIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{1,100}$",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "maxItems": 100,
+            "uniqueItems": true
+          },
+          "discriminatorProperty": {
+            "type": "string",
+            "maxLength": 50000
+          },
+          "kafka": {
+            "$ref": "#/components/schemas/DesignScenarioEventChannelKafka"
+          }
+        },
+        "additionalProperties": false
+      },
+      "DesignScenarioEventExample": {
+        "type": "object",
+        "required": [
+          "name",
+          "payloadJSON"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 50000
+          },
+          "payloadJSON": {
+            "type": "string",
+            "maxLength": 262144
+          },
+          "headersJSON": {
+            "type": "string",
+            "maxLength": 262144
+          }
+        },
+        "additionalProperties": false
+      },
+      "DesignScenarioEventMessage": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "description",
+          "examples"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,100}$",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 50000
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 50000
+          },
+          "payloadSchemaId": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,100}$",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "headersSchemaId": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,100}$",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "keySchemaId": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,100}$",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "examples": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DesignScenarioEventExample"
+            },
+            "maxItems": 20
+          }
+        },
+        "additionalProperties": false
+      },
+      "DesignScenarioEventSchema": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "description",
+          "schemaJSON"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,100}$",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 50000
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 50000
+          },
+          "schemaJSON": {
+            "type": "string",
+            "maxLength": 262144,
+            "description": "Original Draft 07 JSON text, preserved without numeric rounding. UTF-8 byte limit 256 KiB is checked by the server."
+          }
+        },
+        "additionalProperties": false
+      },
+      "DesignScenarioEventOperationKafka": {
+        "type": "object",
+        "required": [],
+        "properties": {
+          "groupId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256,
+            "pattern": "^[^\r\n\u0000]+$"
+          },
+          "clientId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256,
+            "pattern": "^[^\r\n\u0000]+$"
+          }
+        },
+        "additionalProperties": false
+      },
+      "DesignScenarioEventOperation": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "description",
+          "action",
+          "channelId",
+          "messageId"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,100}$",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 50000
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 50000
+          },
+          "action": {
+            "type": "string",
+            "enum": [
+              "send",
+              "receive"
+            ]
+          },
+          "channelId": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,100}$",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "messageId": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,100}$",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "kafka": {
+            "$ref": "#/components/schemas/DesignScenarioEventOperationKafka"
+          }
+        },
+        "additionalProperties": false
+      },
+      "DesignScenarioEventContract": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "description",
+          "participantId",
+          "version",
+          "operations"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,100}$",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 50000
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 50000
+          },
+          "participantId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 50000
+          },
+          "version": {
+            "type": "string",
+            "maxLength": 50000
+          },
+          "operations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DesignScenarioEventOperation"
+            },
+            "maxItems": 2000
+          }
+        },
+        "additionalProperties": false
+      },
+      "DesignScenarioEventBinding": {
+        "type": "object",
+        "required": [
+          "contractId",
+          "operationId"
+        ],
+        "properties": {
+          "contractId": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,100}$",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "operationId": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,100}$",
+            "minLength": 1,
+            "maxLength": 100
+          }
+        },
+        "additionalProperties": false
+      },
+      "DesignScenarioEventModel": {
+        "type": "object",
+        "required": [
+          "servers",
+          "channels",
+          "messages",
+          "schemas",
+          "contracts"
+        ],
+        "properties": {
+          "servers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DesignScenarioEventServer"
+            },
+            "maxItems": 100
+          },
+          "channels": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DesignScenarioEventChannel"
+            },
+            "maxItems": 500
+          },
+          "messages": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DesignScenarioEventMessage"
+            },
+            "maxItems": 1000
+          },
+          "schemas": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DesignScenarioEventSchema"
+            },
+            "maxItems": 1000
+          },
+          "contracts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DesignScenarioEventContract"
+            },
+            "maxItems": 200
+          }
+        },
+        "additionalProperties": false
+      },
+      "DesignScenarioSetEventModelCommand": {
+        "type": "object",
+        "required": [
+          "type",
+          "eventModel"
+        ],
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "set_event_model"
+          },
+          "eventModel": {
+            "$ref": "#/components/schemas/DesignScenarioEventModel"
+          }
+        },
+        "additionalProperties": false
       }
     }
   },
@@ -13827,7 +14322,7 @@
             "name": "contractId",
             "in": "query",
             "required": false,
-            "description": "Required only for OpenAPI, which exports the entire saved contract. Must be absent for diagrams, Postman, cURL, Markdown and HTML.",
+            "description": "Required for OpenAPI and AsyncAPI. Select a contract of the matching family from the pinned revision.",
             "schema": {
               "type": "string"
             }
@@ -13869,7 +14364,8 @@
               }
             }
           }
-        }
+        },
+        "description": "AsyncAPI JSON/YAML exports a Kafka application contract from the same saved revision. contractId is required for OpenAPI and AsyncAPI. Kafka execution is not supported."
       }
     },
     "/api/design-scenarios/{id}/revisions/{rid}/archive": {
@@ -13947,7 +14443,7 @@
             "$ref": "#/components/responses/Forbidden"
           }
         },
-        "description": "Read-only, atomic export of 1–32 unique selections. Server formats only; SVG/PNG/PDF are not accepted. Decode contentBase64 explicitly. ZIP is not a restorable project. Raw contents, ZIP bytes and the complete JSON response are bounded by the server export size limit.",
+        "description": "Read-only, atomic export of 1–32 unique selections. Server formats only; SVG/PNG/PDF are not accepted. Decode contentBase64 explicitly. ZIP is not a restorable project. Raw contents, ZIP bytes and the complete JSON response are bounded by the server export size limit. AsyncAPI JSON/YAML selections require the event contractId.",
         "requestBody": {
           "required": true,
           "content": {

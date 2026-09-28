@@ -2,14 +2,15 @@ package scenarioexport
 
 import (
 	"archive/zip"
+	"context"
 	"crypto/sha256"
 	"encoding/base64"
-	"encoding/json"
 	"fmt"
 	"io"
 	"reflect"
 
 	"github.com/yashok111/mocker/internal/designscenario"
+	"github.com/yashok111/mocker/internal/jsonx"
 )
 
 const MaxArchiveItems = 32
@@ -66,7 +67,7 @@ func ValidateArchiveRequests(items []Request) error {
 			if item.ContractID != "" {
 				return ErrInvalidRequest
 			}
-		case OpenAPIJSON, OpenAPIYAML:
+		case OpenAPIJSON, OpenAPIYAML, AsyncAPIJSON, AsyncAPIYAML:
 			if item.ContractID == "" {
 				return ErrInvalidRequest
 			}
@@ -85,6 +86,13 @@ func ValidateArchiveRequests(items []Request) error {
 // All allocations are bounded by the raw, ZIP and JSON response budgets. A
 // failed item returns no archive; ZIP contents never leave this method early.
 func (s *Service) ExportArchive(rev designscenario.Revision, items []Request) (ArchiveArtifact, error) {
+	return s.ExportArchiveContext(context.Background(), rev, items)
+}
+
+func (s *Service) ExportArchiveContext(ctx context.Context, rev designscenario.Revision, items []Request) (ArchiveArtifact, error) {
+	if err := ctx.Err(); err != nil {
+		return ArchiveArtifact{}, err
+	}
 	if err := ValidateArchiveRequests(items); err != nil {
 		return ArchiveArtifact{}, err
 	}
@@ -97,7 +105,10 @@ func (s *Service) ExportArchive(rev designscenario.Revision, items []Request) (A
 	writer := zip.NewWriter(output)
 	remaining := s.maxBytes
 	for _, item := range items {
-		artifact, err := s.Export(rev, item)
+		if err := ctx.Err(); err != nil {
+			return ArchiveArtifact{}, err
+		}
+		artifact, err := s.ExportContext(ctx, rev, item)
 		if err != nil {
 			return ArchiveArtifact{}, err
 		}
@@ -115,7 +126,7 @@ func (s *Service) ExportArchive(rev designscenario.Revision, items []Request) (A
 			return ArchiveArtifact{}, err
 		}
 	}
-	manifest, err := json.Marshal(result.Manifest)
+	manifest, err := jsonx.Marshal(result.Manifest)
 	if err != nil {
 		return ArchiveArtifact{}, err
 	}
@@ -126,6 +137,9 @@ func (s *Service) ExportArchive(rev designscenario.Revision, items []Request) (A
 		return ArchiveArtifact{}, err
 	}
 	if err := writer.Close(); err != nil {
+		return ArchiveArtifact{}, err
+	}
+	if err := ctx.Err(); err != nil {
 		return ArchiveArtifact{}, err
 	}
 	// Count the full DTO (including an empty string's quotes) before allocating

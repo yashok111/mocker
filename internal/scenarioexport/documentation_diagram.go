@@ -220,7 +220,7 @@ func renderDocumentationDiagram(doc designscenario.Document, limit int64) (docum
 func documentationDiagramEvents(doc designscenario.Document, intervals []interval) ([]*diagramFrame, map[int][]diagramEvent, map[int][]diagramEvent) {
 	frames := []*diagramFrame{}
 	before, after := map[int][]diagramEvent{}, map[int][]diagramEvent{}
-	if doc.FormatVersion != 2 {
+	if doc.FormatVersion < 2 {
 		stack := []interval{}
 		active := []*diagramFrame{}
 		next := 0

@@ -119,7 +119,7 @@ export function validateFragmentTree(document: CanvasDocument): void {
 }
 
 export function upgradeFragmentDocument(document: CanvasDocument): CanvasDocument {
-  if (document.formatVersion === 2) return document;
+  if (document.formatVersion >= 2) return document;
   validateFragmentTree(document);
   const positions = new Map(document.messages.map((m, i) => [m.id, i]));
   const fragments = document.fragments.map((f) => {
@@ -378,7 +378,7 @@ export function assertFragmentMembershipUnchanged(
   before: CanvasDocument,
   after: CanvasDocument,
 ): void {
-  if (before.formatVersion !== 2) return;
+  if (before.formatVersion === 1) return;
   validateFragmentTree(after);
   const positionsBefore = new Map(before.messages.map((m, i) => [m.id, i]));
   const positionsAfter = new Map(after.messages.map((m, i) => [m.id, i]));

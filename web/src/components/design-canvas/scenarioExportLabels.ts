@@ -5,6 +5,8 @@ export const formatLabels: Record<ScenarioExportFormat | "svg" | "png" | "pdf" |
   mermaid: "Mermaid",
   "openapi-json": "OpenAPI JSON",
   "openapi-yaml": "OpenAPI YAML",
+  "asyncapi-json": "AsyncAPI JSON",
+  "asyncapi-yaml": "AsyncAPI YAML",
   postman: "Postman",
   curl: "cURL",
   markdown: "Markdown",

@@ -68,6 +68,39 @@ it("selects ready formats and contracts, exposes blocked reasons and downloads o
   expect(downloadScenarioBlob).toHaveBeenCalledWith(expect.any(Blob), "scenario-7-r11.zip");
 });
 
+it("forwards an archive diagnostic pointer to its event field", async () => {
+  const target = { kind: "event-message" as const, id: "created" };
+  const pointer = "/eventModel/messages/0/examples/1/payloadJSON";
+  const onLocate = vi.fn();
+  renderWithProviders(
+    <ScenarioArchivePanel
+      revision={revision}
+      options={{
+        ...options,
+        options: [
+          {
+            format: "asyncapi-json",
+            contractId: "events",
+            ready: false,
+            diagnostics: [
+              {
+                code: "event_example_invalid",
+                severity: "error",
+                message: "Исправьте пример",
+                target,
+                pointer,
+              },
+            ],
+          },
+        ],
+      }}
+      onLocate={onLocate}
+    />,
+  );
+  await userEvent.click(screen.getByRole("button", { name: "Перейти к объекту" }));
+  expect(onLocate).toHaveBeenCalledWith(target, pointer);
+});
+
 it("disables an empty selection and displays build errors without partial download", async () => {
   renderWithProviders(
     <ScenarioArchivePanel revision={revision} options={options} onLocate={vi.fn()} />,

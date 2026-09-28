@@ -71,7 +71,7 @@ func (s *Server) handleDesignScenarioExportOptions(w http.ResponseWriter, r *htt
 		return
 	}
 	exporter := s.scenarioExporter()
-	options, err := exporter.Options(rev)
+	options, err := exporter.OptionsContext(r.Context(), rev)
 	if err != nil {
 		s.scenarioExportError(w, err)
 		return
@@ -93,7 +93,9 @@ func (s *Server) handleExportDesignScenario(w http.ResponseWriter, r *http.Reque
 		s.scenarioExportError(w, scenarioexport.ErrInvalidRequest)
 		return
 	}
-	artifact, err := s.scenarioExporter().Export(rev, scenarioexport.Request{Format: scenarioexport.Format(r.PathValue("format")), ContractID: r.URL.Query().Get("contractId")})
+	artifact, err := s.scenarioExporter().ExportContext(r.Context(), rev, scenarioexport.Request{
+		Format: scenarioexport.Format(r.PathValue("format")), ContractID: r.URL.Query().Get("contractId"),
+	})
 	if err != nil {
 		s.scenarioExportError(w, err)
 		return
@@ -110,7 +112,7 @@ func (s *Server) handleExportDesignScenarioArchive(w http.ResponseWriter, r *htt
 	if !s.designScenarioBody(w, r, &input) {
 		return
 	}
-	archive, err := s.scenarioExporter().ExportArchive(rev, input.Items)
+	archive, err := s.scenarioExporter().ExportArchiveContext(r.Context(), rev, input.Items)
 	if err != nil {
 		s.scenarioExportError(w, err)
 		return

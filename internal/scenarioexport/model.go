@@ -10,14 +10,16 @@ import (
 type Format string
 
 const (
-	PlantUML    Format = "plantuml"
-	Mermaid     Format = "mermaid"
-	OpenAPIJSON Format = "openapi-json"
-	OpenAPIYAML Format = "openapi-yaml"
-	Postman     Format = "postman"
-	CURL        Format = "curl"
-	Markdown    Format = "markdown"
-	HTML        Format = "html"
+	PlantUML     Format = "plantuml"
+	Mermaid      Format = "mermaid"
+	OpenAPIJSON  Format = "openapi-json"
+	OpenAPIYAML  Format = "openapi-yaml"
+	Postman      Format = "postman"
+	CURL         Format = "curl"
+	Markdown     Format = "markdown"
+	HTML         Format = "html"
+	AsyncAPIJSON Format = "asyncapi-json"
+	AsyncAPIYAML Format = "asyncapi-yaml"
 )
 
 var (

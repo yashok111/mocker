@@ -39,6 +39,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { describeApiFailureDetailed } from "@/api/errors";
 import { addCanvasFragment, removeCanvasFragment } from "./canvasFragments";
 import { CanvasInspector } from "./CanvasInspector";
+import { EventModelEditor } from "./EventModelEditor";
 import { CanvasApiPicker } from "./CanvasApiPicker";
 import { createCanvasId } from "./canvasId";
 import { addCanvasReply, duplicateCanvasMessage, insertCanvasMessage } from "./canvasQuickActions";
@@ -145,14 +146,20 @@ export function DesignCanvasEditor({
   persistence,
   locateTarget,
   locateNonce,
+  eventTarget,
+  onDismissEventTarget,
 }: {
   draft: CanvasDraftController;
   persistence?: CanvasPersistenceControls;
   locateTarget?: CanvasSelection;
   locateNonce?: number;
+  eventTarget?: { kind: string; id: string; pointer?: string } | null;
+  onDismissEventTarget?: () => void;
 }): ReactElement {
   const document = draft.document;
   const [requestedSelection, setSelection] = useState<CanvasSelection>(null);
+  const [eventEditorArrow, setEventEditorArrow] = useState<string | null>(null);
+  const [eventEditorOpened, setEventEditorOpened] = useState(false);
   useEffect(() => {
     if (!locateTarget) return;
     setSelection(locateTarget);
@@ -343,12 +350,34 @@ export function DesignCanvasEditor({
       onReply={addReply}
       onDuplicate={duplicateMessage}
       onEditLabel={setEditingSelection}
+      onOpenEventEditor={(id) => {
+        setEventEditorArrow(id);
+        setEventEditorOpened(true);
+      }}
       formStore={draft.formStore}
     />
   );
 
   return (
     <section className={classes.page} data-testid="design-canvas-page">
+      <EventModelEditor
+        key={
+          eventTarget
+            ? `${eventTarget.kind}:${eventTarget.id}:${eventTarget.pointer ?? ""}`
+            : "canvas-events"
+        }
+        opened={eventEditorOpened || Boolean(eventTarget)}
+        arrowId={eventEditorArrow ?? undefined}
+        target={eventTarget}
+        document={document}
+        onChange={draft.update}
+        onClose={() => {
+          setEventEditorArrow(null);
+          setEventEditorOpened(false);
+          onDismissEventTarget?.();
+        }}
+        formStore={draft.formStore}
+      />
       <header className={classes.header}>
         <Group gap="sm" wrap="nowrap" className={classes.heading}>
           <span className={classes.mark}>

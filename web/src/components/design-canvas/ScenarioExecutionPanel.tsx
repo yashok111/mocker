@@ -644,7 +644,11 @@ function ExecutionSession({
       title={
         <Group gap="xs">
           <IconPlayerPlay size={20} />
-          <Text fw={650}>Запуск сценария</Text>
+          <Text fw={650}>
+            {document.messages.some((message) => message.kind === "event")
+              ? "HTTP-проверка сценария"
+              : "Запуск сценария"}
+          </Text>
           <Badge variant="light" color="gray">
             Текущая версия {version}
           </Badge>
@@ -993,9 +997,13 @@ function ExecutionSession({
                     </Badge>
                     <Text fw={650} size="sm">
                       {report.status === "running"
-                        ? "Сценарий выполняется"
+                        ? report.document.messages.some((message) => message.kind === "event")
+                          ? "HTTP-проверка выполняется"
+                          : "Сценарий выполняется"
                         : report.status === "passed"
-                          ? "Прогон завершён"
+                          ? report.document.messages.some((message) => message.kind === "event")
+                            ? "HTTP-проверка завершена"
+                            : "Прогон завершён"
                           : report.status === "cancelled"
                             ? "Прогон отменён"
                             : "Прогон остановлен"}
@@ -1005,6 +1013,9 @@ function ExecutionSession({
                     Результат для версии {report.version} · ревизия {report.revisionId} ·{" "}
                     {report.steps.filter((step) => step.status === "passed").length} из{" "}
                     {report.steps.filter((step) => step.status !== "skipped").length} шагов успешно
+                    {report.document.messages.some((message) => message.kind === "event")
+                      ? ` · пропущено событийных шагов: ${report.steps.filter((step) => step.status === "skipped" && report.document.messages.some((message) => message.id === step.messageId && message.kind === "event")).length}`
+                      : ""}
                     {report.finishedAt ? ` · ${report.finishedAt - report.startedAt} мс` : ""}
                   </Text>
                   {report.reason ? (
@@ -1077,6 +1088,9 @@ function ExecutionSession({
                   (disabled
                     ? "Запуск станет доступен после сохранения сценария и завершения открытых форм."
                     : `Новый запуск: версия ${version}. Запросы выполняются по порядку на draft-моках, до первой ошибки.`))}
+          {document.messages.some((message) => message.kind === "event")
+            ? ` Событийных шагов будет пропущено: ${document.messages.filter((message) => message.kind === "event").length}. Kafka runtime отсутствует.`
+            : ""}
         </Text>
         <Group gap="xs">
           {recoverableRunId ? (

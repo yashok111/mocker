@@ -1,4 +1,5 @@
 import type { ApiDocument } from "../api-designer/documentModel";
+import type { EventBinding, EventModel } from "./eventTypes";
 
 export type ParticipantKind =
   | "user"
@@ -71,6 +72,7 @@ export interface CanvasMessage {
   arrowColor?: string;
   replyToId?: string;
   operation?: OperationBinding;
+  eventBindings?: EventBinding[];
   execution?: CanvasStepExecution;
 }
 
@@ -101,13 +103,14 @@ export interface CanvasContract {
 }
 
 export interface CanvasDocument {
-  formatVersion: 1 | 2;
+  formatVersion: 1 | 2 | 3;
   title: string;
   participants: CanvasParticipant[];
   messages: CanvasMessage[];
   fragments: CanvasFragment[];
   contracts: CanvasContract[];
   execution?: CanvasExecution;
+  eventModel?: EventModel;
 }
 
 export type CanvasSelection = {

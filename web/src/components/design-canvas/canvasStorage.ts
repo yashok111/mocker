@@ -66,6 +66,40 @@ function requireId(value: unknown, path: string): string {
   return requireString(value, path, false);
 }
 
+function requireEventId(value: unknown, path: string): string {
+  const id = requireString(value, path, false, 100);
+  if (!/^[A-Za-z0-9_-]{1,100}$/.test(id)) fail(`${path} содержит недопустимый ID`);
+  return id;
+}
+
+function validateEventJSON(source: string, path: string, schema = false): void {
+  if (new TextEncoder().encode(source).length > 262144) fail(`${path} превышает 256 КиБ`);
+  if (schema && source === "") return;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(source);
+  } catch {
+    fail(`${path} должен содержать корректный JSON`);
+  }
+  if (
+    schema &&
+    !(
+      typeof parsed === "boolean" ||
+      (parsed !== null && typeof parsed === "object" && !Array.isArray(parsed))
+    )
+  )
+    fail(`${path} должен быть JSON-объектом или boolean`);
+  let nodes = 0;
+  const visit = (value: unknown, depth: number): void => {
+    nodes++;
+    if (depth > 64 || nodes > 10_000) fail(`${path} превышает лимит глубины или узлов JSON`);
+    if (Array.isArray(value)) value.forEach((item) => visit(item, depth + 1));
+    else if (value !== null && typeof value === "object")
+      Object.values(value).forEach((item) => visit(item, depth + 1));
+  };
+  visit(parsed, 0);
+}
+
 function validateColor(value: unknown, path: string): void {
   if (value !== undefined && !isCanvasColor(value)) fail(`${path} должен быть цветом #RRGGBB`);
 }
@@ -227,6 +261,17 @@ function validateMessage(value: unknown, index: number): CanvasMessage {
   validateColor(message.arrowColor, `${path}.arrowColor`);
   if (message.replyToId !== undefined) requireId(message.replyToId, `${path}.replyToId`);
   if (message.operation !== undefined) validateBinding(message.operation, `${path}.operation`);
+  if (message.eventBindings !== undefined) {
+    for (const [bindingIndex, value] of requireArray(
+      message.eventBindings,
+      `${path}.eventBindings`,
+      2,
+    ).entries()) {
+      const binding = requireRecord(value, `${path}.eventBindings[${bindingIndex}]`);
+      requireEventId(binding.contractId, `${path}.eventBindings[${bindingIndex}].contractId`);
+      requireEventId(binding.operationId, `${path}.eventBindings[${bindingIndex}].operationId`);
+    }
+  }
   if (message.execution !== undefined)
     validateStepExecution(message.execution, `${path}.execution`);
   return message as unknown as CanvasMessage;
@@ -284,10 +329,233 @@ function validateContract(value: unknown, index: number): CanvasContract {
   return contract as unknown as CanvasContract;
 }
 
+function validateEventModel(value: unknown, document: Record<string, unknown>): void {
+  const model = requireRecord(value, "eventModel");
+  const limits = {
+    servers: 100,
+    channels: 500,
+    messages: 1000,
+    schemas: 1000,
+    contracts: 200,
+  } as const;
+  const ids = new Map<string, Set<string>>();
+  for (const [kind, limit] of Object.entries(limits)) {
+    const items = requireArray(model[kind], `eventModel.${kind}`, limit);
+    const itemIds: string[] = [];
+    for (const [index, raw] of items.entries()) {
+      const path = `eventModel.${kind}[${index}]`;
+      const item = requireRecord(raw, path);
+      itemIds.push(requireEventId(item.id, `${path}.id`));
+      requireString(item.name, `${path}.name`);
+      requireString(item.description, `${path}.description`);
+      if (kind === "servers") {
+        requireString(item.host, `${path}.host`);
+        if (!["kafka", "kafka-secure"].includes(String(item.protocol)))
+          fail(`${path}.protocol неверен`);
+        if (
+          !["unspecified", "none", "plain", "scramSha256", "scramSha512"].includes(
+            String(item.auth),
+          )
+        )
+          fail(`${path}.auth неверен`);
+      } else if (kind === "channels") {
+        requireString(item.address, `${path}.address`);
+        if (item.discriminatorProperty !== undefined)
+          requireString(item.discriminatorProperty, `${path}.discriminatorProperty`);
+        if (item.kafka !== undefined) {
+          const kafka = requireRecord(item.kafka, `${path}.kafka`);
+          for (const field of ["partitions", "replicas"] as const) {
+            if (kafka[field] === undefined) continue;
+            if (
+              typeof kafka[field] !== "number" ||
+              !Number.isInteger(kafka[field]) ||
+              (kafka[field] as number) < 1 ||
+              (kafka[field] as number) > 2147483647
+            )
+              fail(`${path}.kafka.${field} должен быть положительным целым числом int32`);
+          }
+        }
+        requireArray(item.serverIds, `${path}.serverIds`, 100).forEach((id) =>
+          requireEventId(id, `${path}.serverIds`),
+        );
+        requireArray(item.messageIds, `${path}.messageIds`, 100).forEach((id) =>
+          requireEventId(id, `${path}.messageIds`),
+        );
+      } else if (kind === "messages") {
+        for (const field of ["payloadSchemaId", "headersSchemaId", "keySchemaId"])
+          if (item[field] !== undefined) requireEventId(item[field], `${path}.${field}`);
+        for (const [exampleIndex, rawExample] of requireArray(
+          item.examples,
+          `${path}.examples`,
+          20,
+        ).entries()) {
+          const example = requireRecord(rawExample, `${path}.examples[${exampleIndex}]`);
+          requireString(example.name, `${path}.examples[${exampleIndex}].name`);
+          validateEventJSON(
+            requireString(
+              example.payloadJSON,
+              `${path}.examples[${exampleIndex}].payloadJSON`,
+              true,
+              262144,
+            ),
+            `${path}.examples[${exampleIndex}].payloadJSON`,
+          );
+          if (example.headersJSON !== undefined)
+            validateEventJSON(
+              requireString(
+                example.headersJSON,
+                `${path}.examples[${exampleIndex}].headersJSON`,
+                true,
+                262144,
+              ),
+              `${path}.examples[${exampleIndex}].headersJSON`,
+            );
+        }
+      } else if (kind === "schemas") {
+        validateEventJSON(
+          requireString(item.schemaJSON, `${path}.schemaJSON`, true, 262144),
+          `${path}.schemaJSON`,
+          true,
+        );
+      } else {
+        requireId(item.participantId, `${path}.participantId`);
+        requireString(item.version, `${path}.version`);
+        const operations = requireArray(item.operations, `${path}.operations`, 2000);
+        const operationIds = operations.map((rawOperation, operationIndex) => {
+          const operationPath = `${path}.operations[${operationIndex}]`;
+          const operation = requireRecord(rawOperation, operationPath);
+          requireString(operation.name, `${operationPath}.name`);
+          requireString(operation.description, `${operationPath}.description`);
+          if (operation.action !== "send" && operation.action !== "receive")
+            fail(`${operationPath}.action неверен`);
+          if (operation.kafka !== undefined) {
+            const kafka = requireRecord(operation.kafka, `${operationPath}.kafka`);
+            for (const field of ["groupId", "clientId"] as const) {
+              if (kafka[field] === undefined) continue;
+              const metadata = requireString(
+                kafka[field],
+                `${operationPath}.kafka.${field}`,
+                false,
+              );
+              if (
+                operation.action !== "receive" ||
+                Array.from(metadata).length > 256 ||
+                /[\r\n\0]/.test(metadata) ||
+                metadata.includes("{{")
+              )
+                fail(
+                  `${operationPath}.kafka.${field} допустим только для receive, до 256 символов, без управляющих символов и шаблонов`,
+                );
+            }
+          }
+          requireEventId(operation.channelId, `${operationPath}.channelId`);
+          requireEventId(operation.messageId, `${operationPath}.messageId`);
+          return requireEventId(operation.id, `${operationPath}.id`);
+        });
+        assertNoDuplicates(operationIds, `${path}.operations`);
+      }
+    }
+    assertNoDuplicates(itemIds, `eventModel.${kind}`);
+    ids.set(kind, new Set(itemIds));
+  }
+  const schemas = ids.get("schemas")!;
+  const messages = ids.get("messages")!;
+  const servers = ids.get("servers")!;
+  const channels = ids.get("channels")!;
+  const contracts = ids.get("contracts")!;
+  for (const [index, raw] of (model.messages as unknown[]).entries()) {
+    const item = raw as Record<string, unknown>;
+    for (const field of ["payloadSchemaId", "headersSchemaId", "keySchemaId"])
+      if (item[field] !== undefined && !schemas.has(item[field] as string))
+        fail(`eventModel.messages[${index}].${field} не ссылается на схему`);
+  }
+  const channelMap = new Map<string, Record<string, unknown>>();
+  for (const [index, raw] of (model.channels as unknown[]).entries()) {
+    const item = raw as Record<string, unknown>;
+    channelMap.set(item.id as string, item);
+    assertNoDuplicates(item.serverIds as string[], `eventModel.channels[${index}].serverIds`);
+    assertNoDuplicates(item.messageIds as string[], `eventModel.channels[${index}].messageIds`);
+    for (const id of item.serverIds as string[])
+      if (!servers.has(id)) fail(`eventModel.channels[${index}].serverIds не ссылается на сервер`);
+    for (const id of item.messageIds as string[])
+      if (!messages.has(id))
+        fail(`eventModel.channels[${index}].messageIds не ссылается на тип события`);
+  }
+  const owners = new Set<string>();
+  const participantMap = new Map(
+    (document.participants as Record<string, unknown>[]).map((item) => [item.id as string, item]),
+  );
+  const httpIDs = new Set((document.contracts as Record<string, unknown>[]).map((item) => item.id));
+  const contractMap = new Map<string, Record<string, unknown>>();
+  for (const [index, raw] of (model.contracts as unknown[]).entries()) {
+    const item = raw as Record<string, unknown>;
+    const id = item.id as string;
+    contractMap.set(id, item);
+    if (httpIDs.has(id)) fail(`eventModel.contracts[${index}].id пересекается с HTTP-контрактом`);
+    const ownerId = item.participantId as string;
+    const owner = participantMap.get(ownerId);
+    if (!owner || !["client", "service", "external", "other"].includes(String(owner.kind)))
+      fail(`eventModel.contracts[${index}].participantId не ссылается на приложение`);
+    if (owners.has(ownerId))
+      fail(`eventModel.contracts[${index}].participantId уже владеет контрактом`);
+    owners.add(ownerId);
+    const triplets = new Set<string>();
+    for (const [operationIndex, rawOperation] of (item.operations as unknown[]).entries()) {
+      const operation = rawOperation as Record<string, unknown>;
+      const path = `eventModel.contracts[${index}].operations[${operationIndex}]`;
+      if (!channels.has(operation.channelId as string))
+        fail(`${path}.channelId не ссылается на topic`);
+      if (!messages.has(operation.messageId as string))
+        fail(`${path}.messageId не ссылается на тип события`);
+      const referencedChannel = channelMap.get(operation.channelId as string);
+      if (
+        !referencedChannel ||
+        !(referencedChannel.messageIds as string[]).includes(operation.messageId as string)
+      )
+        fail(`${path}.messageId отсутствует на topic`);
+      const triplet = JSON.stringify([operation.action, operation.channelId, operation.messageId]);
+      if (triplets.has(triplet)) fail(`${path} повторяет роль, topic и тип события`);
+      triplets.add(triplet);
+    }
+  }
+  for (const [index, raw] of (document.messages as Record<string, unknown>[]).entries()) {
+    const bindings = raw.eventBindings as { contractId: string; operationId: string }[] | undefined;
+    if (bindings === undefined) continue;
+    if (!bindings.length || raw.kind !== "event" || raw.operation !== undefined)
+      fail(`messages[${index}].eventBindings несовместимы со стрелкой`);
+    const pairs = new Set<string>();
+    let first: Record<string, unknown> | undefined;
+    for (const binding of bindings) {
+      const key = `${binding.contractId}/${binding.operationId}`;
+      if (pairs.has(key)) fail(`messages[${index}].eventBindings повторяются`);
+      pairs.add(key);
+      if (!contracts.has(binding.contractId))
+        fail(`messages[${index}].eventBindings не ссылаются на контракт`);
+      const contract = contractMap.get(binding.contractId)!;
+      const operation = (contract.operations as Record<string, unknown>[]).find(
+        (item) => item.id === binding.operationId,
+      );
+      if (!operation) fail(`messages[${index}].eventBindings не ссылаются на операцию`);
+      if (contract.participantId !== (operation.action === "send" ? raw.fromId : raw.toId))
+        fail(`messages[${index}].eventBindings не совпадают с владельцем`);
+      if (
+        first &&
+        (first.action === operation.action ||
+          first.channelId !== operation.channelId ||
+          first.messageId !== operation.messageId)
+      )
+        fail(`messages[${index}].eventBindings используют разные события`);
+      first = operation;
+    }
+  }
+}
+
 function validateCanvas(value: unknown): CanvasDocument {
   const document = requireRecord(value, "корень");
-  if (document.formatVersion !== 1 && document.formatVersion !== 2)
+  if (document.formatVersion !== 1 && document.formatVersion !== 2 && document.formatVersion !== 3)
     fail("неподдерживаемая версия формата formatVersion");
+  if (document.eventModel !== undefined && document.formatVersion !== 3)
+    fail("eventModel требует formatVersion 3");
   requireString(document.title, "title");
   validateDocumentExecution(document.execution);
 
@@ -301,6 +569,7 @@ function validateCanvas(value: unknown): CanvasDocument {
   const contracts = requireArray(document.contracts, "contracts", MAX_CONTRACTS).map(
     validateContract,
   );
+  if (document.eventModel !== undefined) validateEventModel(document.eventModel, document);
 
   assertNoDuplicates(
     participants.map(({ id }) => id),
@@ -329,6 +598,11 @@ function validateCanvas(value: unknown): CanvasDocument {
     if (message.operation !== undefined && !contractIds.has(message.operation.contractId)) {
       fail(`messages[${index}].operation.contractId не ссылается на контракт`);
     }
+    if (
+      message.eventBindings !== undefined &&
+      (document.formatVersion !== 3 || document.eventModel === undefined)
+    )
+      fail(`messages[${index}].eventBindings требует eventModel и formatVersion 3`);
     if (message.kind === "response" && message.replyToId !== undefined) {
       const requestPosition = messagePositions.get(message.replyToId);
       if (requestPosition === undefined)

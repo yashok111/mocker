@@ -14,6 +14,7 @@ type commandWireSpec struct {
 
 var commandWireSpecs = map[string]commandWireSpec{
 	"set_title":          {required: []string{"title"}},
+	"set_event_model":    {required: []string{"eventModel"}},
 	"upsert_participant": {required: []string{"participant"}},
 	"remove_participant": {required: []string{"id"}},
 	"move_participant":   {required: []string{"id", "index"}},

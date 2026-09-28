@@ -20,7 +20,7 @@ export function ScenarioArchivePanel({
 }: {
   revision: DesignScenarioRevision;
   options: ScenarioExportOptions;
-  onLocate: (target: ScenarioExportTarget) => void;
+  onLocate: (target: ScenarioExportTarget, pointer?: string) => void;
 }) {
   const diagram = options.options.find((option) => option.format === "mermaid");
   const choices = [
@@ -92,7 +92,11 @@ export function ScenarioArchivePanel({
       </Text>
       {choices.map((choice) => {
         const key = archiveItemKey(choice);
-        const contract = revision.document.contracts.find((c) => c.id === choice.contractId);
+        const contract = (
+          choice.format === "asyncapi-json" || choice.format === "asyncapi-yaml"
+            ? (revision.document.eventModel?.contracts ?? [])
+            : revision.document.contracts
+        ).find((c) => c.id === choice.contractId);
         return (
           <Stack key={key} gap={4}>
             <Checkbox
@@ -121,7 +125,10 @@ export function ScenarioArchivePanel({
                   <Button
                     size="compact-xs"
                     variant="subtle"
-                    onClick={() => onLocate(diagnostic.target!)}
+                    onClick={() => {
+                      if (diagnostic.pointer) onLocate(diagnostic.target!, diagnostic.pointer);
+                      else onLocate(diagnostic.target!);
+                    }}
                   >
                     Перейти к объекту
                   </Button>

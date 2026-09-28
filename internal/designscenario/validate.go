@@ -55,9 +55,10 @@ func validateDocument(document Document) []Diagnostic {
 	contracts := validator.validateContracts(document.Contracts)
 	validator.validateMessageReferences(document, participants, messages, contracts)
 	validator.validateFragments(document.Fragments, messages, document.FormatVersion)
-	if document.FormatVersion == 2 {
+	if document.FormatVersion >= 2 {
 		validator.validateFragmentTree(document.Fragments, messages)
 	}
+	validator.validateEventModel(document, participants)
 	return validator.diagnostics
 }
 
@@ -81,8 +82,8 @@ func (v *documentValidator) checkColor(pointer string, color HexColor) {
 }
 
 func (v *documentValidator) validateMetadata(document Document) {
-	if document.FormatVersion != 1 && document.FormatVersion != 2 {
-		v.errorAt("/formatVersion", "formatVersion must be 1 or 2")
+	if document.FormatVersion != 1 && document.FormatVersion != 2 && document.FormatVersion != 3 {
+		v.errorAt("/formatVersion", "formatVersion must be 1, 2, or 3")
 	}
 	v.checkText("/title", document.Title, true)
 	for _, field := range []struct {
@@ -248,14 +249,14 @@ func (v *documentValidator) validateFragments(items []Fragment, messages map[str
 		pointer := fmt.Sprintf("/fragments/%d", index)
 		v.checkText(pointer+"/id", fragment.ID, false)
 		v.checkText(pointer+"/label", fragment.Label, true)
-		if !slices.Contains(fragmentKinds, fragment.Kind) && !(version == 2 && fragment.Kind == "alt") {
+		if !slices.Contains(fragmentKinds, fragment.Kind) && !(version >= 2 && fragment.Kind == "alt") {
 			v.errorAt(pointer+"/kind", "unknown fragment kind")
 		}
 		if _, exists := fragments[fragment.ID]; exists {
 			v.errorAt(pointer+"/id", "duplicate fragment id")
 		}
 		fragments[fragment.ID] = struct{}{}
-		if version != 2 && (fragment.ParentFragmentID != "" || fragment.ParentBranchID != "" || fragment.Branches != nil) {
+		if version < 2 && (fragment.ParentFragmentID != "" || fragment.ParentBranchID != "" || fragment.Branches != nil) {
 			v.errorAt(pointer, "parent and branch fields require formatVersion 2")
 		}
 		from, fromOK := messages[fragment.FromMessageID]

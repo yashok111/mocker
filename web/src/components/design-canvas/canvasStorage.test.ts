@@ -52,6 +52,93 @@ function validDocument(): CanvasDocument {
 }
 
 describe("canvas persistence", () => {
+  it("accepts event JSON text above 50,000 characters within 256 KiB", () => {
+    const document = {
+      ...validDocument(),
+      formatVersion: 3 as const,
+      eventModel: {
+        servers: [],
+        channels: [],
+        contracts: [],
+        schemas: [
+          {
+            id: "payload",
+            name: "Payload",
+            description: "",
+            schemaJSON: JSON.stringify({ description: "x".repeat(60_000) }),
+          },
+        ],
+        messages: [
+          {
+            id: "created",
+            name: "Created",
+            description: "",
+            examples: [
+              {
+                name: "Large",
+                payloadJSON: JSON.stringify({ value: "x".repeat(60_000) }),
+                headersJSON: JSON.stringify({ header: "x".repeat(60_000) }),
+              },
+            ],
+          },
+        ],
+      },
+    };
+    expect(parseCanvas(JSON.stringify(document)).eventModel).toEqual(document.eventModel);
+  });
+
+  it("rejects event JSON text over 256 KiB measured in UTF-8 bytes", () => {
+    const document = {
+      ...validDocument(),
+      formatVersion: 3 as const,
+      eventModel: {
+        servers: [],
+        channels: [],
+        contracts: [],
+        messages: [],
+        schemas: [
+          {
+            id: "payload",
+            name: "Payload",
+            description: "",
+            schemaJSON: JSON.stringify({ description: "я".repeat(131_070) }),
+          },
+        ],
+      },
+    };
+    expect(() => parseCanvas(JSON.stringify(document))).toThrow(/schemaJSON превышает 256 КиБ/);
+  });
+
+  it("accepts an existing participant ID outside the event ID alphabet", () => {
+    const document = validDocument();
+    document.participants[0]!.id = "orders:legacy";
+    document.messages[0]!.fromId = "orders:legacy";
+    document.messages[1]!.toId = "orders:legacy";
+    const eventDocument = {
+      ...document,
+      formatVersion: 3 as const,
+      eventModel: {
+        servers: [],
+        channels: [],
+        messages: [],
+        schemas: [],
+        contracts: [
+          {
+            id: "events",
+            name: "Events",
+            description: "",
+            participantId: "orders:legacy",
+            version: "1",
+            operations: [],
+          },
+        ],
+      },
+    };
+    expect(parseCanvas(JSON.stringify(eventDocument)).eventModel?.contracts[0]?.participantId).toBe(
+      "orders:legacy",
+    );
+  });
+
   it("round-trips participant spacing", () => {
     const document = validDocument();
     document.participants[0] = { ...document.participants[0]!, offsetX: 280 };
@@ -202,12 +289,126 @@ describe("canvas persistence", () => {
   });
 
   it("rejects unsupported versions and malformed containers", () => {
-    expect(() => parseCanvas(JSON.stringify({ ...validDocument(), formatVersion: 3 }))).toThrow(
+    expect(() => parseCanvas(JSON.stringify({ ...validDocument(), formatVersion: 4 }))).toThrow(
       /версия формата/i,
     );
     expect(() => parseCanvas(JSON.stringify({ ...validDocument(), participants: {} }))).toThrow(
       /participants.*массив/i,
     );
+  });
+
+  it("roundtrips v3 event JSON text and rejects broken event references", () => {
+    const source = '{"const":90071992547409931234567890123456789}';
+    const document = {
+      ...validDocument(),
+      formatVersion: 3 as const,
+      eventModel: {
+        servers: [],
+        channels: [
+          {
+            id: "topic",
+            name: "Topic",
+            description: "",
+            address: "orders.events",
+            serverIds: [],
+            messageIds: ["created"],
+          },
+        ],
+        messages: [
+          {
+            id: "created",
+            name: "Created",
+            description: "",
+            examples: [{ name: "Exact", payloadJSON: source }],
+          },
+        ],
+        schemas: [{ id: "payload", name: "Payload", description: "", schemaJSON: source }],
+        contracts: [],
+      },
+    };
+    expect(parseCanvas(JSON.stringify(document)).eventModel?.schemas[0]?.schemaJSON).toBe(source);
+    document.eventModel.channels[0]!.messageIds = ["missing"];
+    expect(() => parseCanvas(JSON.stringify(document))).toThrow(/messageIds.*не ссылается/);
+  });
+
+  it.each([
+    ["discriminatorProperty", { discriminatorProperty: 7 }, /discriminatorProperty/],
+    ["kafka shape", { kafka: [] }, /kafka/],
+    ["partitions zero", { kafka: { partitions: 0 } }, /partitions/],
+    ["partitions fractional", { kafka: { partitions: 1.5 } }, /partitions/],
+    ["replicas overflow", { kafka: { replicas: 2147483648 } }, /replicas/],
+  ])("rejects malformed optional event channel %s", (_name, changes, error) => {
+    const document = {
+      ...validDocument(),
+      formatVersion: 3,
+      eventModel: {
+        servers: [],
+        schemas: [],
+        messages: [{ id: "created", name: "Created", description: "", examples: [] }],
+        channels: [
+          {
+            id: "topic",
+            name: "Topic",
+            description: "",
+            address: "orders.events",
+            serverIds: [],
+            messageIds: ["created"],
+            ...changes,
+          },
+        ],
+        contracts: [],
+      },
+    };
+    expect(() => parseCanvas(JSON.stringify(document))).toThrow(error);
+  });
+
+  it.each([
+    ["kafka shape", { kafka: null }, /kafka/],
+    ["group type", { kafka: { groupId: 3 } }, /groupId/],
+    ["client control", { kafka: { clientId: "a\n" } }, /clientId/],
+    ["group template", { kafka: { groupId: "{{tenant}}" } }, /groupId/],
+    ["send metadata", { action: "send", kafka: { groupId: "group" } }, /groupId/],
+  ])("rejects malformed optional event operation %s", (_name, changes, error) => {
+    const document = {
+      ...validDocument(),
+      formatVersion: 3,
+      eventModel: {
+        servers: [],
+        schemas: [],
+        messages: [{ id: "created", name: "Created", description: "", examples: [] }],
+        channels: [
+          {
+            id: "topic",
+            name: "Topic",
+            description: "",
+            address: "orders.events",
+            serverIds: [],
+            messageIds: ["created"],
+          },
+        ],
+        contracts: [
+          {
+            id: "events",
+            name: "Events",
+            description: "",
+            participantId: "a",
+            version: "1",
+            operations: [
+              {
+                id: "receive",
+                name: "Receive",
+                description: "",
+                action: "receive",
+                channelId: "topic",
+                messageId: "created",
+                ...changes,
+              },
+            ],
+          },
+        ],
+      },
+    };
+    expect(() => parseCanvas(JSON.stringify(document))).toThrow(error);
   });
 
   it("rejects duplicate entity identities", () => {

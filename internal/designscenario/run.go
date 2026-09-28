@@ -59,6 +59,8 @@ func PrepareRun(revision Revision, runID, name, source string, variables Executi
 	for i, message := range document.Messages {
 		step := StepResult{MessageID: message.ID, Status: "pending", Assertions: []AssertionResult{}}
 		switch {
+		case message.Kind == "event":
+			step.Status, step.Reason = "skipped", "event_execution_unsupported"
 		case message.Execution != nil && !message.Execution.Enabled:
 			step.Status, step.Reason = "skipped", "Шаг выключен."
 		case message.Kind != "request" || (message.Operation == nil && message.Execution == nil):
@@ -75,6 +77,11 @@ func PrepareRun(revision Revision, runID, name, source string, variables Executi
 		report.Steps[i] = step
 	}
 	if executable == 0 {
+		for _, message := range document.Messages {
+			if message.Kind == "event" {
+				return invalid("В сценарии нет исполняемых HTTP-шагов: Kafka runtime недоступен")
+			}
+		}
 		return invalid("В сценарии нет включённых HTTP-запросов с операцией API")
 	}
 	return report, nil
@@ -648,6 +655,7 @@ func cloneRunDocument(document Document) Document {
 	document.Messages = slices.Clone(document.Messages)
 	for i := range document.Messages {
 		message := &document.Messages[i]
+		message.EventBindings = slices.Clone(message.EventBindings)
 		if message.Operation != nil {
 			message.Operation = new(*message.Operation)
 		}
@@ -665,6 +673,40 @@ func cloneRunDocument(document Document) Document {
 			config.Assertions[j].Equals = slices.Clone(config.Assertions[j].Equals)
 		}
 		config.Extract = slices.Clone(config.Extract)
+	}
+	if document.EventModel != nil {
+		model := *document.EventModel
+		model.Servers = slices.Clone(model.Servers)
+		model.Channels = slices.Clone(model.Channels)
+		for i := range model.Channels {
+			model.Channels[i].ServerIDs = slices.Clone(model.Channels[i].ServerIDs)
+			model.Channels[i].MessageIDs = slices.Clone(model.Channels[i].MessageIDs)
+			if model.Channels[i].Kafka != nil {
+				kafka := *model.Channels[i].Kafka
+				if kafka.Partitions != nil {
+					kafka.Partitions = new(*kafka.Partitions)
+				}
+				if kafka.Replicas != nil {
+					kafka.Replicas = new(*kafka.Replicas)
+				}
+				model.Channels[i].Kafka = &kafka
+			}
+		}
+		model.Messages = slices.Clone(model.Messages)
+		for i := range model.Messages {
+			model.Messages[i].Examples = slices.Clone(model.Messages[i].Examples)
+		}
+		model.Schemas = slices.Clone(model.Schemas)
+		model.Contracts = slices.Clone(model.Contracts)
+		for i := range model.Contracts {
+			model.Contracts[i].Operations = slices.Clone(model.Contracts[i].Operations)
+			for j := range model.Contracts[i].Operations {
+				if model.Contracts[i].Operations[j].Kafka != nil {
+					model.Contracts[i].Operations[j].Kafka = new(*model.Contracts[i].Operations[j].Kafka)
+				}
+			}
+		}
+		document.EventModel = &model
 	}
 	return document
 }

@@ -72,6 +72,52 @@ it("packages exact saved bytes and images with version, hashes and warnings", as
   );
 });
 
+it("adds a pinned AsyncAPI contract with the server filename and exact bytes", async () => {
+  const eventRevision: DesignScenarioRevision = {
+    ...revision,
+    document: {
+      ...revision.document,
+      formatVersion: 3,
+      eventModel: {
+        servers: [],
+        channels: [],
+        messages: [],
+        schemas: [],
+        contracts: [
+          {
+            id: "orders-events",
+            name: "Orders events",
+            description: "",
+            participantId: "orders",
+            version: "1.0.0",
+            operations: [],
+          },
+        ],
+      },
+    },
+  };
+  const source = '{"x-id":9007199254740993123456789}\n';
+  vi.mocked(loadScenarioArtifact).mockResolvedValueOnce({
+    scenarioId: 7,
+    revisionId: 11,
+    sourceHash: "saved-hash",
+    format: "asyncapi-json",
+    filename: "scenario-7-r11.asyncapi-1.json",
+    mediaType: "application/json",
+    content: source,
+    diagnostics: [],
+  });
+  const blob = await buildScenarioArchive(eventRevision, [
+    { format: "asyncapi-json", contractId: "orders-events" },
+  ]);
+  const files = unzipSync(new Uint8Array(await blob.arrayBuffer()));
+  expect(strFromU8(files["scenario-7-r11.asyncapi-1.json"]!)).toBe(source);
+  expect(JSON.parse(strFromU8(files["manifest.json"]!)).files[0]).toMatchObject({
+    format: "asyncapi-json",
+    contractId: "orders-events",
+  });
+});
+
 it("creates SHA-256 manifests on plain HTTP where WebCrypto is unavailable", async () => {
   vi.stubGlobal("crypto", {});
   const blob = await buildScenarioArchive(revision, [{ format: "markdown" }]);

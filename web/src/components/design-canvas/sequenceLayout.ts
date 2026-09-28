@@ -86,7 +86,7 @@ export interface SequenceLayout {
 }
 
 export function layoutSequence(document: CanvasDocument): SequenceLayout {
-  if (document.formatVersion === 2 && document.fragments.length) {
+  if (document.formatVersion >= 2 && document.fragments.length) {
     return layoutNestedSequence(document);
   }
   const participantX = new Map<string, number>();

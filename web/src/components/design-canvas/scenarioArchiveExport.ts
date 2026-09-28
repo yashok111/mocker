@@ -14,6 +14,8 @@ const extensions: Record<ScenarioExportFormat | "svg" | "png", string> = {
   mermaid: "mmd",
   "openapi-json": "json",
   "openapi-yaml": "yaml",
+  "asyncapi-json": "json",
+  "asyncapi-yaml": "yaml",
   postman: "postman_collection.json",
   curl: "sh",
   markdown: "md",
@@ -50,11 +52,16 @@ export async function buildScenarioArchive(
     if (seen.has(key)) throw new Error("В ZIP не должно быть повторных файлов");
     seen.add(key);
     if (!Object.hasOwn(extensions, item.format)) throw new Error("Неизвестный формат ZIP");
-    const isContract = item.format === "openapi-json" || item.format === "openapi-yaml";
-    const index = revision.document.contracts.findIndex((c) => c.id === item.contractId);
+    const isAsyncAPI = item.format === "asyncapi-json" || item.format === "asyncapi-yaml";
+    const isContract =
+      isAsyncAPI || item.format === "openapi-json" || item.format === "openapi-yaml";
+    const contracts = isAsyncAPI
+      ? (revision.document.eventModel?.contracts ?? [])
+      : revision.document.contracts;
+    const index = contracts.findIndex((c) => c.id === item.contractId);
     if ((isContract && index < 0) || (!isContract && item.contractId))
       throw new Error("Проверьте выбранный контракт");
-    return `scenario-${revision.scenarioId}-r${revision.id}.${isContract ? `api-${index + 1}.` : ""}${extensions[item.format]}`;
+    return `scenario-${revision.scenarioId}-r${revision.id}.${isContract ? `${isAsyncAPI ? "asyncapi" : "api"}-${index + 1}.` : ""}${extensions[item.format]}`;
   });
   const manifest: ScenarioArchiveManifest = {
     schemaVersion: 1,

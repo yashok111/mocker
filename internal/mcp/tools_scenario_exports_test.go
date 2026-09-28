@@ -45,6 +45,28 @@ func TestScenarioExportToolRejectsUnknownFormatBeforeRequest(t *testing.T) {
 	}
 }
 
+func TestAsyncAPIExportToolRequiresContractAndUsesPinnedRevision(t *testing.T) {
+	for _, format := range []string{"asyncapi-json", "asyncapi-yaml"} {
+		t.Run(format, func(t *testing.T) {
+			calls := &recordingCaller{status: http.StatusOK, body: []byte(`{"revisionId":11,"content":"9007199254740993"}`)}
+			args := `{"scenarioId":7,"revisionId":11,"format":"` + format + `","contractId":"orders"}`
+			raw, message := callTool(t, calls, "export_design_scenario", args)
+			wantPath := "/api/design-scenarios/7/revisions/11/exports/" + format + "?contractId=orders"
+			if message != "" || calls.method != http.MethodGet || calls.path != wantPath {
+				t.Fatalf("AsyncAPI export did not reach the saved revision: %s %s %s", message, calls.method, calls.path)
+			}
+			if !strings.Contains(string(raw), "9007199254740993") {
+				t.Fatal("export content changed")
+			}
+			missing := &recordingCaller{status: http.StatusOK, body: []byte(`{}`)}
+			_, message = callTool(t, missing, "export_design_scenario", `{"scenarioId":7,"revisionId":11,"format":"`+format+`"}`)
+			if !strings.Contains(message, "contractId") || missing.method != "" {
+				t.Fatalf("missing contract reached server: %s %s", message, missing.method)
+			}
+		})
+	}
+}
+
 func TestScenarioArchiveToolUsesReadOnlyPost(t *testing.T) {
 	calls := &recordingCaller{status: 200, body: []byte(`{"contentBase64":"UEs=","manifest":{"schemaVersion":1}}`)}
 	raw, message := callTool(t, calls, "export_design_scenario_archive", `{"scenarioId":7,"revisionId":11,"items":[{"format":"mermaid"},{"format":"openapi-json","contractId":"a&b"}]}`)

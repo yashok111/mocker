@@ -25,6 +25,90 @@ const revision: DesignScenarioRevision = {
   formDrafts: {},
 };
 
+it("previews a pinned AsyncAPI contract and opens an event schema diagnostic", async () => {
+  const eventRevision: DesignScenarioRevision = {
+    ...revision,
+    document: {
+      ...revision.document,
+      formatVersion: 3,
+      eventModel: {
+        servers: [],
+        channels: [],
+        messages: [],
+        schemas: [],
+        contracts: [
+          {
+            id: "orders-events",
+            name: "Orders events",
+            description: "",
+            participantId: "orders",
+            version: "1.0.0",
+            operations: [],
+          },
+        ],
+      },
+    },
+  };
+  const target = { kind: "event-schema" as const, id: "payload" };
+  const pointer = "/eventModel/schemas/0/schemaJSON";
+  const source = '{"asyncapi":"3.0.0","x-id":9007199254740993123456789}';
+  const fetch = route({
+    "GET /api/design-scenarios/7/revisions/11/export-options": () =>
+      json(200, {
+        scenarioId: 7,
+        revisionId: 11,
+        sourceHash: "hash-11",
+        options: [
+          {
+            format: "asyncapi-json",
+            contractId: "orders-events",
+            ready: true,
+            diagnostics: [
+              {
+                code: "event_schema_unconstrained",
+                severity: "warning",
+                message: "Проверьте payload",
+                target,
+                pointer,
+              },
+            ],
+          },
+        ],
+      }),
+    "GET /api/design-scenarios/7/revisions/11/exports/asyncapi-json?contractId=orders-events": () =>
+      json(200, {
+        scenarioId: 7,
+        revisionId: 11,
+        sourceHash: "hash-11",
+        format: "asyncapi-json",
+        filename: "scenario-7-r11.asyncapi-1.json",
+        content: source,
+        mediaType: "application/json",
+        diagnostics: [],
+      }),
+  });
+  const onLocate = vi.fn();
+  renderWithProviders(
+    <ScenarioResultsModal
+      opened
+      scenarioId={7}
+      revision={eventRevision}
+      selection={{ format: "asyncapi-json", contractId: "orders-events" }}
+      onClose={vi.fn()}
+      onLocate={onLocate}
+      onPrepareContracts={vi.fn()}
+      onRun={vi.fn()}
+    />,
+  );
+  expect(await screen.findByLabelText("Предпросмотр результата")).toHaveTextContent(source);
+  expect(screen.getByLabelText("Событийный контракт")).toHaveValue("orders-events");
+  expect(
+    fetch.mock.calls.some(([input]) => String(input).includes("contractId=orders-events")),
+  ).toBe(true);
+  await userEvent.click(screen.getByRole("button", { name: "Перейти к объекту" }));
+  expect(onLocate).toHaveBeenCalledWith(target, pointer);
+});
+
 it("offers ZIP composition without requesting a fictitious single zip artifact", async () => {
   const fetch = route({
     "GET /api/design-scenarios/7/revisions/11/export-options": () =>

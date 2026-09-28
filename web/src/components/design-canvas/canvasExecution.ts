@@ -109,7 +109,10 @@ export function canvasExecutionBlockReason(document: CanvasDocument): string | n
       message.operation !== undefined &&
       message.execution?.enabled !== false,
   );
-  if (executable.length === 0) return "В сценарии нет включённых HTTP-запросов с операцией API.";
+  if (executable.length === 0)
+    return document.messages.some((message) => message.kind === "event")
+      ? "В сценарии нет включённых HTTP-запросов. Выполнение Kafka-событий пока не поддерживается."
+      : "В сценарии нет включённых HTTP-запросов с операцией API.";
   for (const message of executable) {
     const resolved = resolveOperation(document, message.operation!);
     if (!resolved) return `Операция API сообщения «${message.label}» недоступна.`;

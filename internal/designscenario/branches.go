@@ -20,7 +20,7 @@ func ValidateFragments(document Document) []Diagnostic {
 		v.errorAt("/fragments", "contains too many fragments")
 	}
 	v.validateFragments(document.Fragments, positions, document.FormatVersion)
-	if document.FormatVersion == 2 {
+	if document.FormatVersion >= 2 {
 		v.validateFragmentTree(document.Fragments, positions)
 	}
 	return v.diagnostics
@@ -78,7 +78,7 @@ func (v *documentValidator) validateFragmentTree(items []Fragment, positions map
 }
 
 func guardFragmentRemoval(document Document, removed map[string]struct{}) error {
-	if document.FormatVersion != 2 {
+	if document.FormatVersion < 2 {
 		return nil
 	}
 	for { // Include response cascades before checking any boundaries.

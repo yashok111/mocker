@@ -1,6 +1,7 @@
 package scenarioexport
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -9,8 +10,18 @@ import (
 )
 
 func (s *Service) documentationDiagnostics(rev designscenario.Revision) ([]Diagnostic, error) {
+	return s.documentationDiagnosticsWithCache(rev, newEventValidationCache(context.Background(), rev))
+}
+
+func (s *Service) documentationDiagnosticsWithCache(rev designscenario.Revision, cache *eventValidationCache) ([]Diagnostic, error) {
+	if err := cache.ctx.Err(); err != nil {
+		return nil, err
+	}
 	result := diagramDiagnostics(rev.Document)
 	for _, contract := range rev.Document.Contracts {
+		if err := cache.ctx.Err(); err != nil {
+			return nil, err
+		}
 		if err := s.CheckResponse(result); err != nil {
 			return nil, err
 		}
@@ -26,6 +37,20 @@ func (s *Service) documentationDiagnostics(rev designscenario.Revision) ([]Diagn
 				d.Severity = "warning"
 			}
 			result = append(result, d)
+		}
+	}
+	if rev.Document.EventModel != nil {
+		for _, contract := range rev.Document.EventModel.Contracts {
+			ds, err := s.eventContractDiagnostics(cache, contract)
+			if err != nil {
+				return nil, err
+			}
+			for _, d := range ds {
+				if d.Severity == "error" {
+					d.Severity = "warning"
+				}
+				result = append(result, d)
+			}
 		}
 	}
 	pending := false
@@ -275,6 +300,9 @@ func (s *Service) renderDocumentation(rev designscenario.Revision, format Format
 				break
 			}
 		}
+		for _, binding := range m.EventBindings {
+			w.paragraph("Kafka контракт: ", binding.ContractID, " · Операция: ", binding.OperationID)
+		}
 	}
 	if len(rev.Document.Fragments) > 0 {
 		w.heading(2, "Блоки и ветки")
@@ -309,6 +337,70 @@ func (s *Service) renderDocumentation(rev designscenario.Revision, format Format
 			w.paragraph(fmt.Sprintf("API %d · Ревизия %d · Версия %d", c.Source.DesignID, c.Source.RevisionID, c.Source.Version))
 		}
 		w.code("json", string(c.Document))
+	}
+	if rev.Document.EventModel != nil {
+		model := rev.Document.EventModel
+		w.heading(2, "Kafka · Событийные контракты")
+		if len(model.Contracts) == 0 {
+			w.paragraph("Событийные контракты не добавлены.")
+		}
+		channels := map[string]designscenario.EventChannel{}
+		messages := map[string]designscenario.EventMessage{}
+		schemas := map[string]designscenario.EventSchema{}
+		for _, item := range model.Channels {
+			channels[item.ID] = item
+		}
+		for _, item := range model.Messages {
+			messages[item.ID] = item
+		}
+		for _, item := range model.Schemas {
+			schemas[item.ID] = item
+		}
+		for _, contract := range model.Contracts {
+			if w.err != nil {
+				return nil, w.err
+			}
+			w.heading(3, contract.Name)
+			w.paragraph("ID: ", contract.ID, " · Приложение: ", contract.ParticipantID, " · Версия: ", contract.Version)
+			w.paragraph(contract.Description)
+			if len(contract.Operations) == 0 {
+				w.paragraph("Нет операций Kafka: контракт пока не готов к экспорту.")
+			}
+			for _, op := range contract.Operations {
+				ch, ok := channels[op.ChannelID]
+				if !ok {
+					w.paragraph("Операция ", op.ID, ": канал не найден")
+					continue
+				}
+				m, ok := messages[op.MessageID]
+				if !ok {
+					w.paragraph("Операция ", op.ID, ": тип события не найден")
+					continue
+				}
+				w.paragraph(op.Action, " · ", op.Name, " · topic: ", ch.Address, " · событие: ", m.Name)
+				w.paragraph(op.Description)
+				w.paragraph(m.Description)
+				for _, id := range []string{m.PayloadSchemaID, m.HeadersSchemaID, m.KeySchemaID} {
+					if id == "" {
+						continue
+					}
+					if schema, found := schemas[id]; found {
+						w.paragraph("Схема: ", schema.Name, " (", id, ")")
+						w.code("json", schema.SchemaJSON)
+					} else {
+						w.paragraph("Схема ", id, " не найдена")
+					}
+				}
+				for _, example := range m.Examples {
+					w.paragraph("Пример: ", example.Name)
+					w.code("json", example.PayloadJSON)
+					if example.HeadersJSON != "" {
+						w.paragraph("Headers:")
+						w.code("json", example.HeadersJSON)
+					}
+				}
+			}
+		}
 	}
 	if w.html {
 		w.raw("</section></body></html>")

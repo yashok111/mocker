@@ -4,6 +4,8 @@ import { Link } from "@tanstack/react-router";
 import { useListApiDesigns } from "@/api/generated/api-designs/api-designs";
 import type { DesignScenarioCommand, DesignScenarioContractUpdate } from "@/api/generated/schemas";
 import type { CanvasDocument } from "./types";
+import type { FormDraftStore } from "../api-designer/forms/formDraftStore";
+import { EventModelEditor } from "./EventModelEditor";
 import { CanvasApiPicker } from "./CanvasApiPicker";
 import { CanvasContractConversionModal } from "./CanvasContractConversionModal";
 
@@ -19,6 +21,8 @@ export function ScenarioContractsPanel({
   error,
   onCommand,
   onCreateFromSchema,
+  onChangeDocument,
+  formStore,
 }: {
   opened: boolean;
   onClose: () => void;
@@ -31,8 +35,11 @@ export function ScenarioContractsPanel({
   error?: string;
   onCommand: (commands: DesignScenarioCommand[], summary: string) => void;
   onCreateFromSchema: (commands: DesignScenarioCommand[], expectedVersion: number) => Promise<void>;
+  onChangeDocument: (document: CanvasDocument) => void;
+  formStore: FormDraftStore;
 }): ReactElement {
   const [pickerOpened, setPickerOpened] = useState(false);
+  const [eventsOpened, setEventsOpened] = useState(false);
   const [conversion, setConversion] = useState<{
     document: CanvasDocument;
     version: number;
@@ -42,13 +49,44 @@ export function ScenarioContractsPanel({
   return (
     <>
       <Modal
-        opened={opened && conversion === null}
+        opened={opened && conversion === null && !eventsOpened}
         onClose={pending ? () => {} : onClose}
         closeButtonProps={{ disabled: pending }}
         title="Контракты API"
         size="lg"
       >
         <Stack gap="md">
+          <Button variant="light" onClick={() => setEventsOpened(true)}>
+            Событийные контракты Kafka
+          </Button>
+          {(document.eventModel?.contracts ?? []).map((contract) => (
+            <Stack
+              key={contract.id}
+              gap={4}
+              p="sm"
+              style={{ border: "1px solid var(--mocker-border)" }}
+            >
+              <Group justify="space-between">
+                <Text fw={650}>{contract.name}</Text>
+                <Badge color="violet">AsyncAPI · Kafka</Badge>
+              </Group>
+              <Text size="sm">
+                Владелец:{" "}
+                {document.participants.find((item) => item.id === contract.participantId)?.name ||
+                  contract.participantId}
+              </Text>
+              {contract.operations.map((operation) => (
+                <Text key={operation.id} size="sm">
+                  {operation.action} ·{" "}
+                  {document.eventModel?.channels.find((item) => item.id === operation.channelId)
+                    ?.address || "topic не указан"}{" "}
+                  ·{" "}
+                  {document.eventModel?.messages.find((item) => item.id === operation.messageId)
+                    ?.name || operation.messageId}
+                </Text>
+              ))}
+            </Stack>
+          ))}
           {dirty ? (
             <Alert color="yellow">
               Операции с контрактами доступны после сохранения изменений.
@@ -218,6 +256,13 @@ export function ScenarioContractsPanel({
           }
         />
       ) : null}
+      <EventModelEditor
+        opened={eventsOpened}
+        document={document}
+        onChange={onChangeDocument}
+        onClose={() => setEventsOpened(false)}
+        formStore={formStore}
+      />
     </>
   );
 }

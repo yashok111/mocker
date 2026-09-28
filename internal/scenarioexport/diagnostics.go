@@ -94,32 +94,22 @@ func (s *Service) contractDiagnostics(rev designscenario.Revision, contract desi
 
 func hasPendingForms(envelope map[string]string, contractID string) bool {
 	prefix := "/canvas-contract/" + contractID
-	for key, raw := range envelope {
-		if key != "all" {
+	forms, corrupt := parseFormDrafts(envelope)
+	if corrupt {
+		return true
+	}
+	for pointer := range forms {
+		if pointer == prefix || strings.HasPrefix(pointer, prefix+"/") {
 			return true
 		}
-		var drafts map[string]jsonx.RawMessage
-		if err := jsonx.Unmarshal([]byte(raw), &drafts); err != nil || drafts == nil {
+		parts := strings.Split(strings.TrimPrefix(pointer, "/"), "/")
+		if len(parts) < 2 {
 			return true
 		}
-		for pointer, value := range drafts {
-			var field map[string]jsonx.RawMessage
-			if err := jsonx.Unmarshal(value, &field); err != nil || field == nil {
-				return true
-			}
-			var source, property string
-			if field["source"] == nil || field["propertySource"] == nil {
-				return true
-			}
-			if jsonx.Unmarshal(field["source"], &source) != nil || jsonx.Unmarshal(field["propertySource"], &property) != nil {
-				return true
-			}
-			if !strings.HasPrefix(pointer, "/canvas-contract/") {
-				return true
-			}
-			if pointer == prefix || strings.HasPrefix(pointer, prefix+"/") {
-				return true
-			}
+		switch parts[0] {
+		case "canvas-contract", "event-contract", "event-channel", "event-message", "event-schema", "event-server":
+		default:
+			return true
 		}
 	}
 	return false

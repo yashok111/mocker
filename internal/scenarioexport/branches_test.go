@@ -2,6 +2,7 @@ package scenarioexport
 
 import (
 	"errors"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -21,22 +22,26 @@ func branchRevision(t *testing.T) designscenario.Revision {
 
 func TestNestedBranchSequenceExport(t *testing.T) {
 	t.Parallel()
-	for _, format := range []Format{PlantUML, Mermaid} {
-		t.Run(string(format), func(t *testing.T) {
-			service := &Service{maxBytes: 1_000_000}
-			got, err := service.Export(branchRevision(t), Request{Format: format})
-			if err != nil {
-				t.Fatal(err)
-			}
-			arrow := " -> "
-			if format == Mermaid {
-				arrow = " ->> "
-			}
-			want := "alt ok\nloop retry\np0" + arrow + "p0: A\np0" + arrow + "p0: B\nend\nelse else\np0" + arrow + "p0: C\nend\n"
-			if !strings.Contains(got.Content, want) {
-				t.Fatalf("unexpected export:\n%s", got.Content)
-			}
-		})
+	for _, version := range []int{2, 3} {
+		for _, format := range []Format{PlantUML, Mermaid} {
+			t.Run(string(format)+"-v"+strconv.Itoa(version), func(t *testing.T) {
+				service := &Service{maxBytes: 1_000_000}
+				rev := branchRevision(t)
+				rev.Document.FormatVersion = version
+				got, err := service.Export(rev, Request{Format: format})
+				if err != nil {
+					t.Fatal(err)
+				}
+				arrow := " -> "
+				if format == Mermaid {
+					arrow = " ->> "
+				}
+				want := "alt ok\nloop retry\np0" + arrow + "p0: A\np0" + arrow + "p0: B\nend\nelse else\np0" + arrow + "p0: C\nend\n"
+				if !strings.Contains(got.Content, want) {
+					t.Fatalf("unexpected export:\n%s", got.Content)
+				}
+			})
+		}
 	}
 }
 

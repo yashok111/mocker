@@ -30,7 +30,7 @@ export interface ScenarioResultsModalProps {
   selection?: ScenarioResultSelection;
   onSelectionChange?: (selection: ScenarioResultSelection) => void;
   onClose(reason?: "action"): void;
-  onLocate(target: ScenarioExportTarget): void;
+  onLocate(target: ScenarioExportTarget, pointer?: string): void;
   onPrepareContracts(): void;
   onRun(): void;
 }
@@ -54,9 +54,11 @@ export function ScenarioResultsModal({
   });
   const currentSelection = selection ?? localSelection;
   const format = currentSelection.format;
-  const contractId = revision.document.contracts.some(
-    (item) => item.id === currentSelection.contractId,
-  )
+  const isAsyncAPI = format === "asyncapi-json" || format === "asyncapi-yaml";
+  const contracts = isAsyncAPI
+    ? (revision.document.eventModel?.contracts ?? [])
+    : revision.document.contracts;
+  const contractId = contracts.some((item) => item.id === currentSelection.contractId)
     ? currentSelection.contractId
     : "";
   function chooseSelection(next: ScenarioResultSelection): void {
@@ -76,7 +78,7 @@ export function ScenarioResultsModal({
   const [loadedDocumentKey, setLoadedDocumentKey] = useState("");
   const isDocument = format === "html" || format === "pdf";
   const serverFormat = format === "pdf" ? "html" : format;
-  const isContract = format === "openapi-json" || format === "openapi-yaml";
+  const isContract = isAsyncAPI || format === "openapi-json" || format === "openapi-yaml";
   const requestKey = `${scenarioId}:${revision.id}:${format}:${isContract ? contractId : ""}`;
   const currentOptions =
     options?.scenarioId === scenarioId && options.revisionId === revision.id ? options : null;
@@ -86,16 +88,24 @@ export function ScenarioResultsModal({
   );
   const visibleArtifact = artifactKey === requestKey ? artifact : null;
   const visibleImage = imageKey === requestKey ? image : null;
-  const selectedContract = revision.document.contracts.find((item) => item.id === contractId);
+  const selectedContract = contracts.find((item) => item.id === contractId);
   const included = useMemo(
     () =>
-      revision.document.messages.filter((message) => message.operation?.contractId === contractId),
-    [revision, contractId],
+      revision.document.messages.filter((message) =>
+        isAsyncAPI
+          ? message.eventBindings?.some((binding) => binding.contractId === contractId)
+          : message.operation?.contractId === contractId,
+      ),
+    [revision, contractId, isAsyncAPI],
   );
   const descriptive = useMemo(
     () =>
-      revision.document.messages.filter((message) => message.operation?.contractId !== contractId),
-    [revision, contractId],
+      revision.document.messages.filter((message) =>
+        isAsyncAPI
+          ? !message.eventBindings?.some((binding) => binding.contractId === contractId)
+          : message.operation?.contractId !== contractId,
+      ),
+    [revision, contractId, isAsyncAPI],
   );
 
   useEffect(() => {
@@ -254,14 +264,14 @@ export function ScenarioResultsModal({
         {isContract ? (
           <>
             <NativeSelect
-              label="Весь API-контракт"
+              label={isAsyncAPI ? "Событийный контракт" : "Весь API-контракт"}
               value={contractId}
               onChange={(event) =>
                 chooseSelection({ ...currentSelection, contractId: event.currentTarget.value })
               }
               data={[
                 { value: "", label: "Выберите контракт" },
-                ...revision.document.contracts.map((contract) => ({
+                ...contracts.map((contract) => ({
                   value: contract.id,
                   label: contract.name,
                 })),
@@ -293,7 +303,8 @@ export function ScenarioResultsModal({
                     variant="subtle"
                     onClick={() => {
                       onClose("action");
-                      onLocate(diagnostic.target!);
+                      if (diagnostic.pointer) onLocate(diagnostic.target!, diagnostic.pointer);
+                      else onLocate(diagnostic.target!);
                     }}
                   >
                     Перейти к {diagnostic.target.kind === "contract" ? "контракту" : "объекту"}
@@ -311,7 +322,7 @@ export function ScenarioResultsModal({
               onPrepareContracts();
             }}
           >
-            Описать API
+            {isAsyncAPI ? "Описать событие" : "Описать API"}
           </Button>
         ) : null}
         {opened && format === "zip" && currentOptions ? (
@@ -319,9 +330,10 @@ export function ScenarioResultsModal({
             key={`${scenarioId}:${revision.id}`}
             revision={revision}
             options={currentOptions}
-            onLocate={(target) => {
+            onLocate={(target, pointer) => {
               onClose("action");
-              onLocate(target);
+              if (pointer) onLocate(target, pointer);
+              else onLocate(target);
             }}
           />
         ) : null}
@@ -391,15 +403,17 @@ export function ScenarioResultsModal({
               Скачать {format === "pdf" ? "HTML" : formatLabels[format]}
             </Button>
           ) : null}
-          <Button
-            variant="default"
-            onClick={() => {
-              onClose("action");
-              onPrepareContracts();
-            }}
-          >
-            Создать мок
-          </Button>
+          {!isAsyncAPI ? (
+            <Button
+              variant="default"
+              onClick={() => {
+                onClose("action");
+                onPrepareContracts();
+              }}
+            >
+              Создать мок
+            </Button>
+          ) : null}
           <Button
             variant="default"
             onClick={() => {
@@ -407,7 +421,9 @@ export function ScenarioResultsModal({
               onRun();
             }}
           >
-            Открыть выполнение
+            {revision.document.messages.some((message) => message.kind === "event")
+              ? "Открыть HTTP-проверку"
+              : "Открыть выполнение"}
           </Button>
         </Group>
       </Stack>

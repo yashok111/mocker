@@ -2,6 +2,7 @@ package scenarioexport
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"reflect"
@@ -11,6 +12,13 @@ import (
 )
 
 func (s *Service) Options(rev designscenario.Revision) ([]Option, error) {
+	return s.OptionsContext(context.Background(), rev)
+}
+
+func (s *Service) OptionsContext(ctx context.Context, rev designscenario.Revision) ([]Option, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	diagram := diagramDiagnostics(rev.Document)
 	options := []Option{makeOption(PlantUML, "", diagram), makeOption(Mermaid, "", diagram)}
 	if len(rev.Document.Contracts) == 0 {
@@ -18,6 +26,9 @@ func (s *Service) Options(rev designscenario.Revision) ([]Option, error) {
 		options = append(options, makeOption(OpenAPIJSON, "", ds), makeOption(OpenAPIYAML, "", ds))
 	}
 	for _, contract := range rev.Document.Contracts {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		if err := s.CheckResponse(options); err != nil {
 			return nil, err
 		}
@@ -34,12 +45,31 @@ func (s *Service) Options(rev designscenario.Revision) ([]Option, error) {
 		}
 		options = append(options, makeOption(format, "", ds))
 	}
-	documentation, err := s.documentationDiagnostics(rev)
+	eventCache := newEventValidationCache(ctx, rev)
+	documentation, err := s.documentationDiagnosticsWithCache(rev, eventCache)
 	if err != nil {
 		return nil, err
 	}
 	options = append(options, makeOption(Markdown, "", documentation), makeOption(HTML, "", documentation))
+	if rev.Document.EventModel == nil || len(rev.Document.EventModel.Contracts) == 0 {
+		ds := []Diagnostic{{Code: "event_contract_empty", Severity: "error", Message: "Создайте событийный контракт"}}
+		options = append(options, makeOption(AsyncAPIJSON, "", ds), makeOption(AsyncAPIYAML, "", ds))
+	} else {
+		for _, contract := range rev.Document.EventModel.Contracts {
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
+			ds, err := s.eventContractDiagnostics(eventCache, contract)
+			if err != nil {
+				return nil, err
+			}
+			options = append(options, makeOption(AsyncAPIJSON, contract.ID, ds), makeOption(AsyncAPIYAML, contract.ID, ds))
+		}
+	}
 	if err := s.CheckResponse(options); err != nil {
+		return nil, err
+	}
+	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
 	return options, nil
@@ -50,17 +80,54 @@ func makeOption(format Format, id string, diagnostics []Diagnostic) Option {
 }
 
 func (s *Service) Export(rev designscenario.Revision, req Request) (Artifact, error) {
+	return s.ExportContext(context.Background(), rev, req)
+}
+
+func (s *Service) ExportContext(ctx context.Context, rev designscenario.Revision, req Request) (Artifact, error) {
+	if err := ctx.Err(); err != nil {
+		return Artifact{}, err
+	}
 	artifact := Artifact{ScenarioID: rev.ScenarioID, RevisionID: rev.ID, SourceHash: rev.Hash, Format: req.Format}
 	var diagnostics []Diagnostic
 	var content []byte
 	var err error
 	ext := ""
 	switch req.Format {
+	case AsyncAPIJSON, AsyncAPIYAML:
+		if req.ContractID == "" {
+			return Artifact{}, ErrInvalidRequest
+		}
+		if slices.ContainsFunc(rev.Document.Contracts, func(c designscenario.Contract) bool { return c.ID == req.ContractID }) {
+			return Artifact{}, ErrInvalidRequest
+		}
+		if rev.Document.EventModel == nil {
+			return Artifact{}, ErrContractNotFound
+		}
+		index := slices.IndexFunc(rev.Document.EventModel.Contracts, func(c designscenario.EventContract) bool { return c.ID == req.ContractID })
+		if index < 0 {
+			return Artifact{}, ErrContractNotFound
+		}
+		diagnostics, content, err = s.prepareAsyncAPI(newEventValidationCache(ctx, rev), rev.Document.EventModel.Contracts[index])
+		if err != nil {
+			return Artifact{}, err
+		}
+		if !makeOption(req.Format, req.ContractID, diagnostics).Ready {
+			return Artifact{}, &BlockedError{Diagnostics: diagnostics}
+		}
+		if req.Format == AsyncAPIYAML {
+			content, err = convertAsyncAPIYAML(content, s.maxBytes)
+		}
+		ext = fmt.Sprintf("asyncapi-%d.json", index+1)
+		artifact.MediaType = "application/json;charset=utf-8"
+		if req.Format == AsyncAPIYAML {
+			ext = fmt.Sprintf("asyncapi-%d.yaml", index+1)
+			artifact.MediaType = "application/yaml;charset=utf-8"
+		}
 	case Markdown, HTML:
 		if req.ContractID != "" {
 			return Artifact{}, ErrInvalidRequest
 		}
-		diagnostics, err = s.documentationDiagnostics(rev)
+		diagnostics, err = s.documentationDiagnosticsWithCache(rev, newEventValidationCache(ctx, rev))
 		if err != nil {
 			return Artifact{}, err
 		}
@@ -106,6 +173,9 @@ func (s *Service) Export(rev designscenario.Revision, req Request) (Artifact, er
 		}
 		artifact.MediaType = "text/plain;charset=utf-8"
 	case OpenAPIJSON, OpenAPIYAML:
+		if rev.Document.EventModel != nil && slices.ContainsFunc(rev.Document.EventModel.Contracts, func(c designscenario.EventContract) bool { return c.ID == req.ContractID }) {
+			return Artifact{}, ErrInvalidRequest
+		}
 		index := slices.IndexFunc(rev.Document.Contracts, func(c designscenario.Contract) bool { return c.ID == req.ContractID })
 		if index < 0 {
 			return Artifact{}, ErrContractNotFound
@@ -129,6 +199,9 @@ func (s *Service) Export(rev designscenario.Revision, req Request) (Artifact, er
 		return Artifact{}, ErrUnsupportedFormat
 	}
 	if err != nil {
+		return Artifact{}, err
+	}
+	if err := ctx.Err(); err != nil {
 		return Artifact{}, err
 	}
 	artifact.Content = string(content)

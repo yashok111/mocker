@@ -43,9 +43,10 @@ Authenticated read-only routes:
 - `GET /api/design-scenarios/{id}/revisions/{rid}/exports/{format}?contractId=...`
 - `POST /api/design-scenarios/{id}/revisions/{rid}/archive`
 
-Formats: `plantuml`, `mermaid`, `openapi-json`, `openapi-yaml`, `postman`, `curl`,
-`markdown`, `html`.
-Supply `contractId` only for OpenAPI. The response is JSON with `content` as a string, plus
+Formats: `plantuml`, `mermaid`, `openapi-json`, `openapi-yaml`, `asyncapi-json`,
+`asyncapi-yaml`, `postman`, `curl`, `markdown`, `html`.
+Supply `contractId` for OpenAPI or AsyncAPI, selecting a contract of the matching
+family. The response is JSON with `content` as a string, plus
 `filename`, `mediaType`, `scenarioId`, `revisionId`, `sourceHash` and diagnostics.
 Write the content exactly; parsing and reserializing the contract in JavaScript
 can round large numbers. Example using the login variables above:
@@ -59,14 +60,24 @@ curl -fsS -b "$JAR" -H "$H" \
 These endpoints read immutable snapshots and do not create mocks or change
 history. A revision from another scenario is 404. Unknown format is 400;
 missing contract is 404; blocked output is 422 with `error.details.diagnostics`;
-results exceeding the configured body-size limit are 413. JSON preserves the
-saved contract bytes; YAML preserves scalar types and numeric precision.
+results exceeding the configured body-size limit are 413. OpenAPI JSON preserves
+the saved contract bytes; AsyncAPI is generated from saved event definitions.
+JSON and YAML retain schema values and numeric precision.
 Images are exported locally from the browser. Markdown and self-contained HTML
 include the saved diagram, scenario metadata, participants, steps, HTTP API
 details and complete JSON contracts. Execution inputs are excluded. Pending API
 forms and invalid contracts are warnings; invalid diagrams block documentation.
 PDF is browser printing of HTML (A4 landscape, up to 200 overlapping diagram
 sheets), not a server format.
+
+`asyncapi-json` and `asyncapi-yaml` describe one Kafka application using AsyncAPI
+3.0.0 and Kafka bindings 0.5.0. Document v3 stores shared definitions in
+`eventModel` and event-step references in `eventBindings`. Create/save/validate
+use the existing scenario routes; commands accept `set_event_model`. Schemas
+and examples are JSON text strings to preserve numbers. Missing contractId or
+a contract from the wrong family is 400; an unknown contract ID is 404.
+Export does not connect to a broker, execute Kafka messages or contact a schema
+registry. Inspect readiness diagnostics before downloading a contract.
 
 `postman` returns a Collection v2.1 JSON file; `curl` returns a POSIX shell file.
 Both use enabled HTTP requests and execution inputs in the selected revision.

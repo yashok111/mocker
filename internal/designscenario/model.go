@@ -84,6 +84,7 @@ type Document struct {
 	Fragments     []Fragment    `json:"fragments"`
 	Contracts     []Contract    `json:"contracts"`
 	Execution     *Execution    `json:"execution,omitempty"`
+	EventModel    *EventModel   `json:"eventModel,omitempty"`
 }
 
 type Participant struct {
@@ -101,17 +102,18 @@ type OperationBinding struct {
 }
 
 type Message struct {
-	ID          string            `json:"id"`
-	FromID      string            `json:"fromId"`
-	ToID        string            `json:"toId"`
-	Kind        string            `json:"kind"`
-	Label       string            `json:"label"`
-	Description string            `json:"description"`
-	Color       HexColor          `json:"color,omitempty"`
-	ArrowColor  HexColor          `json:"arrowColor,omitempty"`
-	ReplyToID   string            `json:"replyToId,omitempty"`
-	Operation   *OperationBinding `json:"operation,omitempty"`
-	Execution   *StepExecution    `json:"execution,omitempty"`
+	ID            string            `json:"id"`
+	FromID        string            `json:"fromId"`
+	ToID          string            `json:"toId"`
+	Kind          string            `json:"kind"`
+	Label         string            `json:"label"`
+	Description   string            `json:"description"`
+	Color         HexColor          `json:"color,omitempty"`
+	ArrowColor    HexColor          `json:"arrowColor,omitempty"`
+	ReplyToID     string            `json:"replyToId,omitempty"`
+	Operation     *OperationBinding `json:"operation,omitempty"`
+	EventBindings []EventBinding    `json:"eventBindings,omitzero"`
+	Execution     *StepExecution    `json:"execution,omitempty"`
 }
 
 type Fragment struct {
@@ -184,6 +186,7 @@ type Command struct {
 	Message      *Message     `json:"message,omitempty"`
 	Fragment     *Fragment    `json:"fragment,omitempty"`
 	Contract     *Contract    `json:"contract,omitempty"`
+	EventModel   *EventModel  `json:"eventModel,omitempty"`
 	ID           string       `json:"id,omitempty"`
 	Index        *int         `json:"index,omitempty"`
 	MessageID    string       `json:"messageId,omitempty"`

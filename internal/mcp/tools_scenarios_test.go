@@ -175,17 +175,24 @@ func TestDesignScenarioToolsListPublishesObjectContractAndCommandUnion(t *testin
 		t.Fatal(err)
 	}
 	variants := commandSchema.Properties["commands"].Items.OneOf
-	if len(variants) != 16 {
-		t.Fatalf("command variants=%d, want 16; schema=%s", len(variants), byName["apply_design_scenario_commands"])
+	if len(variants) != 17 {
+		t.Fatalf("command variants=%d, want 17; schema=%s", len(variants), byName["apply_design_scenario_commands"])
 	}
 	var foundSetTitle bool
+	var foundSetEventModel bool
 	for _, variant := range variants {
 		if variant.Properties["type"].Const == "set_title" {
 			foundSetTitle = slices.Contains(variant.Required, "title")
 		}
+		if variant.Properties["type"].Const == "set_event_model" {
+			foundSetEventModel = slices.Contains(variant.Required, "eventModel")
+		}
 	}
 	if !foundSetTitle {
 		t.Fatalf("set_title does not require title; schema=%s", byName["apply_design_scenario_commands"])
+	}
+	if !foundSetEventModel {
+		t.Fatalf("set_event_model does not require eventModel; schema=%s", byName["apply_design_scenario_commands"])
 	}
 }
 

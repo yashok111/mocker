@@ -64,11 +64,11 @@ func TestDocumentationDiagramMessagesAndSafeText(t *testing.T) {
 
 func TestDocumentationDiagramNestedFrames(t *testing.T) {
 	t.Parallel()
-	for _, version := range []int{1, 2} {
+	for _, version := range []int{1, 2, 3} {
 		t.Run(strconv.Itoa(version), func(t *testing.T) {
 			doc := branchRevision(t).Document
+			doc.FormatVersion = version
 			if version == 1 {
-				doc.FormatVersion = 1
 				doc.Fragments = []designscenario.Fragment{
 					{ID: "inner", Kind: "opt", Label: "INNER", FromMessageID: "a", ToMessageID: "b"},
 					{ID: "outer", Kind: "loop", Label: "OUTER", FromMessageID: "a", ToMessageID: "c"},
@@ -80,7 +80,7 @@ func TestDocumentationDiagramNestedFrames(t *testing.T) {
 			}
 			text, elements := readDocumentationSVG(t, got)
 			want := []string{"loop", "opt", "OUTER", "INNER"}
-			if version == 2 {
+			if version >= 2 {
 				want = []string{"alt", "Decision", "ok", "loop", "retry", "else"}
 			}
 			for _, label := range want {

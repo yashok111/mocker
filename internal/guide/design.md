@@ -76,8 +76,9 @@ Local legacy canvases must first use the existing server-save migration.
 
 Agents use `get_design_scenario_export_options {scenarioId, revisionId}` followed
 by `export_design_scenario {scenarioId, revisionId, format, contractId?}`.
-Formats are `plantuml`, `mermaid`, `openapi-json`, `openapi-yaml`, `postman`,
-`curl`, `markdown` and `html`. Only OpenAPI accepts and requires `contractId`. Save the returned `content` string unchanged using `filename` and
+Formats are `plantuml`, `mermaid`, `openapi-json`, `openapi-yaml`, `asyncapi-json`,
+`asyncapi-yaml`, `postman`, `curl`, `markdown` and `html`. OpenAPI and AsyncAPI
+accept and require `contractId`. Save the returned `content` string unchanged using `filename` and
 `mediaType`. `sourceHash` identifies the immutable snapshot. SVG/PNG and PDF printing are browser
 features. Markdown and HTML document participants, ordered steps, nested blocks,
 HTTP bindings and complete saved JSON contracts without execution settings.
@@ -86,11 +87,42 @@ HTML includes an offline SVG and overlapping A4 landscape print sheets (up to
 no server `pdf` format. Incomplete or invalid API details produce warnings in
 documentation; an invalid diagram still blocks export. Export reads neither runtime mock state nor newer linked API revisions
 and creates no resources. Oversized results return 413; blocked results return
-422 with diagnostics. Importing arbitrary diagram formats and exporting other
-contract formats are future work.
+422 with diagnostics. Importing arbitrary diagram formats remains future work.
+
+### Kafka event contracts
+
+Document version 3 adds `eventModel` with five arrays: `servers`, `channels`,
+`messages`, `schemas` and `contracts`. Each event contract belongs to one
+application participant and contains explicit `send` or `receive` operations.
+Shared channels/messages/schemas are reused across producers and consumers.
+Each event step may use `eventBindings: [{contractId, operationId}]`; the sender
+owns a send operation and the receiver owns a receive operation. Descriptive
+events may remain unbound. Existing version 1/2 revisions keep their original
+content and hashes.
+
+Use `apply_design_scenario_commands` with `set_event_model {eventModel}` to
+replace the complete event model, followed by `upsert_message` commands in the
+same atomic batch to bind steps. Read the current `expectedVersion` first.
+The command upgrades the working document to v3. The ordinary complete-document
+save also accepts v3. Store schemas in `schemaJSON` and examples in `payloadJSON`
+and optional `headersJSON` strings, preserving exact JSON numbers. Schema dialect
+is Draft 07; external references and other schema formats are not supported.
+
+Export `asyncapi-json` or `asyncapi-yaml` with the event `contractId`. The result
+is AsyncAPI 3.0.0 with Kafka bindings 0.5.0 for that application: topic addresses,
+schemas, message keys, servers, SASL descriptions and consumer groups when supplied.
+Readiness diagnostics identify incomplete or invalid dependencies. Incomplete
+event definitions do not prevent diagram export. Event definitions appear in
+Markdown/HTML documentation, and each ready contract can be selected in ZIP.
+
+Kafka support covers contract authoring and export. Mocker does not connect to
+Kafka, publish/consume records, create topics or contact Schema Registry.
+HTTP runs and Postman/cURL export skip event steps explicitly; their success
+describes only the HTTP checks. AsyncAPI import, Avro/Protobuf and Kafka runtime
+are separate future capabilities.
 
 For a ZIP bundle use `export_design_scenario_archive {scenarioId, revisionId,
-items:[{format, contractId?}]}`. Select 1–32 unique server exports; OpenAPI needs
+items:[{format, contractId?}]}`. Select 1–32 unique server exports; OpenAPI/AsyncAPI need
 one item per contract and format. Decode `contentBase64` explicitly and save it
 using `filename` (`application/zip`). The read-only REST equivalent is
 `POST /api/design-scenarios/{id}/revisions/{rid}/archive` with `{items}` and the

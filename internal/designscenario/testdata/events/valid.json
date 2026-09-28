@@ -1,0 +1,25 @@
+{
+  "formatVersion": 3,
+  "title": "Order events",
+  "participants": [
+    {"id":"orders","name":"Orders","kind":"service","description":""},
+    {"id":"broker","name":"Kafka","kind":"queue","description":""},
+    {"id":"notifications","name":"Notifications","kind":"service","description":""}
+  ],
+  "messages": [
+    {"id":"publish","fromId":"orders","toId":"broker","kind":"event","label":"OrderCreated","description":"","eventBindings":[{"contractId":"ordersContract","operationId":"publishOrder"}]},
+    {"id":"consume","fromId":"broker","toId":"notifications","kind":"event","label":"OrderCreated","description":"","eventBindings":[{"contractId":"notificationsContract","operationId":"consumeOrder"}]}
+  ],
+  "fragments": [],
+  "contracts": [],
+  "eventModel": {
+    "servers": [{"id":"localKafka","name":"Kafka","description":"","host":"kafka.example.test:9092","protocol":"kafka","auth":"none"}],
+    "channels": [{"id":"ordersEvents","name":"Orders events","description":"","address":"orders.events","serverIds":["localKafka"],"messageIds":["orderCreated"]}],
+    "messages": [{"id":"orderCreated","name":"OrderCreated","description":"","payloadSchemaId":"orderPayload","examples":[{"name":"Order","payloadJSON":"{\"orderId\":\"o-123\"}"}]}],
+    "schemas": [{"id":"orderPayload","name":"Order payload","description":"","schemaJSON":"{\"type\":\"object\",\"properties\":{\"orderId\":{\"type\":\"string\"}}}"}],
+    "contracts": [
+      {"id":"ordersContract","name":"Orders events","description":"","participantId":"orders","version":"1.0.0","operations":[{"id":"publishOrder","name":"Publish order","description":"","action":"send","channelId":"ordersEvents","messageId":"orderCreated"}]},
+      {"id":"notificationsContract","name":"Notifications events","description":"","participantId":"notifications","version":"1.0.0","operations":[{"id":"consumeOrder","name":"Consume order","description":"","action":"receive","channelId":"ordersEvents","messageId":"orderCreated","kafka":{"groupId":"notifications"}}]}
+    ]
+  }
+}

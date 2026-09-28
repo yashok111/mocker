@@ -23,7 +23,7 @@ import (
 func addDesignScenarioTools(s *sdk.Server, lb *loopback) {
 	addScenarioExportTools(s, lb)
 	addDesignScenarioTool(s, lb, "run_design_scenario", "POST /api/design-scenarios/{id}/runs",
-		"Starts an asynchronous server run of an immutable saved scenario revision. Executes enabled HTTP steps sequentially, substitutes variables, checks expected status and JSON assertions, and extracts variables for later steps. Returns a persisted report; poll get_design_scenario_run until terminal. Supply a unique runId for each intentional run or variable variant. Repeating the SAME runId with identical revisionId, variables and name returns the original run without dispatching again, including after a lost response. Changed input returns 409; a pruned report returns 410 and never replays. Variable overrides affect only this run; the scenario revision stays unchanged. May mutate mock runtime state.", false,
+		"Starts an asynchronous server run of an immutable saved scenario revision. Executes enabled HTTP steps sequentially, substitutes variables, checks expected status and JSON assertions, and extracts variables for later steps. Kafka event steps are skipped explicitly; this is an HTTP check, not verification of event delivery. Returns a persisted report; poll get_design_scenario_run until terminal. Supply a unique runId for each intentional run or variable variant. Repeating the SAME runId with identical revisionId, variables and name returns the original run without dispatching again, including after a lost response. Changed input returns 409; a pruned report returns 410 and never replays. Variable overrides affect only this run; the scenario revision stays unchanged. May mutate mock runtime state.", false,
 		func(in runDesignScenarioInput) (designScenarioCall, error) {
 			call, err := designScenarioRead(in.ScenarioID)
 			call.body = in.runDesignScenarioBody
@@ -80,7 +80,7 @@ func addDesignScenarioTools(s *sdk.Server, lb *loopback) {
 			return call, err
 		})
 	addDesignScenarioTool(s, lb, "apply_design_scenario_commands", "POST /api/design-scenarios/{id}/commands",
-		"Applies an ordered atomic command batch to participants, messages, order, fragments and API contracts. Supported types: set_title, upsert_participant, remove_participant, move_participant, upsert_message, remove_message, move_message, upsert_fragment, remove_fragment, bind_operation, create_operation, create_contract, import_contract, refresh_contract, detach_contract and materialize_contract. create_contract accepts a new independent copy with a unique id and no source; combine it with bind_operation and materialize_contract to create an API project from multiple calls atomically. Upserts carry complete objects. The batch preserves form buffers, checks one expectedVersion and either saves every command plus linked API work or saves nothing.", false,
+		"Applies an ordered atomic command batch to participants, messages, order, fragments, HTTP API contracts and shared Kafka event definitions. Supports document versions 1, 2 and 3. Supported types: set_title, set_event_model, upsert_participant, remove_participant, move_participant, upsert_message, remove_message, move_message, upsert_fragment, remove_fragment, bind_operation, create_operation, create_contract, import_contract, refresh_contract, detach_contract and materialize_contract. create_contract accepts a new independent copy with a unique id and no source; combine it with bind_operation and materialize_contract to create an API project from multiple calls atomically. set_event_model replaces the complete eventModel and upgrades the document to v3; use upsert_message eventBindings in the same batch. Schemas and examples are JSON text strings that preserve exact numbers. Upserts carry complete objects. The batch preserves form buffers, checks one expectedVersion and either saves every command plus linked API work or saves nothing.", false,
 		func(in applyDesignScenarioCommandsInput) (designScenarioCall, error) {
 			call, err := designScenarioWrite(in.ScenarioID, in.ExpectedVersion)
 			if err == nil && len(in.Commands) == 0 {
@@ -455,19 +455,21 @@ func designScenarioDocumentSchema() map[string]any {
 	message := designScenarioSchemaObject(
 		[]string{"id", "fromId", "toId", "kind", "label", "description"},
 		map[string]any{
-			"id":          map[string]any{"type": "string", "minLength": 1},
-			"fromId":      map[string]any{"type": "string", "minLength": 1},
-			"toId":        map[string]any{"type": "string", "minLength": 1},
-			"kind":        map[string]any{"type": "string", "enum": []string{"request", "response", "event", "note"}},
-			"label":       map[string]any{"type": "string"},
-			"description": map[string]any{"type": "string"},
-			"color":       designScenarioColorSchema("Message card fill as opaque #RRGGBB."),
-			"arrowColor":  designScenarioColorSchema("Message arrow stroke and arrowhead as opaque #RRGGBB; not displayed for notes."),
-			"replyToId":   map[string]any{"type": "string"},
-			"operation":   operation,
-			"execution":   designScenarioStepExecutionSchema(),
+			"id":            map[string]any{"type": "string", "minLength": 1},
+			"fromId":        map[string]any{"type": "string", "minLength": 1},
+			"toId":          map[string]any{"type": "string", "minLength": 1},
+			"kind":          map[string]any{"type": "string", "enum": []string{"request", "response", "event", "note"}},
+			"label":         map[string]any{"type": "string"},
+			"description":   map[string]any{"type": "string"},
+			"color":         designScenarioColorSchema("Message card fill as opaque #RRGGBB."),
+			"arrowColor":    designScenarioColorSchema("Message arrow stroke and arrowhead as opaque #RRGGBB; not displayed for notes."),
+			"replyToId":     map[string]any{"type": "string"},
+			"operation":     operation,
+			"execution":     designScenarioStepExecutionSchema(),
+			"eventBindings": eventBindingsSchema(),
 		},
 	)
+	message["allOf"] = []any{eventMessageBindingCondition()}
 	branch := designScenarioSchemaObject(
 		[]string{"id", "label", "fromMessageId", "toMessageId"},
 		map[string]any{
@@ -515,13 +517,14 @@ func designScenarioDocumentSchema() map[string]any {
 	schema := designScenarioSchemaObject(
 		[]string{"formatVersion", "title", "participants", "messages", "fragments", "contracts"},
 		map[string]any{
-			"formatVersion": map[string]any{"type": "integer", "enum": []int{1, 2}},
+			"formatVersion": map[string]any{"type": "integer", "enum": []int{1, 2, 3}},
 			"title":         map[string]any{"type": "string"},
 			"participants":  map[string]any{"type": "array", "items": participant},
 			"messages":      map[string]any{"type": "array", "items": message},
 			"fragments":     map[string]any{"type": "array", "items": fragment},
 			"contracts":     map[string]any{"type": "array", "items": contract},
 			"execution":     designScenarioSchemaObject([]string{"variables"}, map[string]any{"variables": designScenarioExecutionMapSchema()}),
+			"eventModel":    eventModelSchema(),
 		},
 	)
 	schema["allOf"] = []any{map[string]any{
@@ -529,6 +532,12 @@ func designScenarioDocumentSchema() map[string]any {
 		"then": map[string]any{"properties": map[string]any{"fragments": map[string]any{"items": map[string]any{"properties": map[string]any{
 			"kind": map[string]any{"enum": []string{"opt", "loop"}}, "parentFragmentId": false, "parentBranchId": false, "branches": false,
 		}}}}},
+	}, map[string]any{
+		"if": map[string]any{"properties": map[string]any{"formatVersion": map[string]any{"enum": []int{1, 2}}}},
+		"then": map[string]any{"properties": map[string]any{
+			"eventModel": false,
+			"messages":   map[string]any{"items": map[string]any{"properties": map[string]any{"eventBindings": false}}},
+		}},
 	}}
 	return schema
 }
@@ -568,6 +577,7 @@ func designScenarioCommandSchemas() []any {
 	})
 	return []any{
 		command("set_title", []string{"title"}, map[string]any{"title": stringField()}),
+		command("set_event_model", []string{"eventModel"}, map[string]any{"eventModel": eventModelSchema()}),
 		command("upsert_participant", []string{"participant"}, map[string]any{"participant": participant}),
 		command("remove_participant", []string{"id"}, map[string]any{"id": stringField()}),
 		command("move_participant", []string{"id", "index"}, map[string]any{"id": stringField(), "index": map[string]any{"type": "integer", "minimum": 0}}),

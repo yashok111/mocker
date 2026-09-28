@@ -71,6 +71,8 @@ func (s *Service) prepareHTTP(rev designscenario.Revision, format Format) (httpE
 		stepAdd := func(code, severity, message string) { add(code, severity, message) }
 		if m.Execution != nil && !m.Execution.Enabled {
 			stepAdd("disabled_messages_omitted", "info", "Выключенный шаг пропущен")
+		} else if m.Kind == "event" {
+			stepAdd("event_execution_unsupported", "info", "Kafka event пропущен: Postman и cURL экспортируют только HTTP-запросы")
 		} else if m.Kind != "request" || m.Operation == nil {
 			stepAdd("descriptive_messages_omitted", "info", "Описательное сообщение пропущено")
 			if m.Kind == "request" && m.Execution != nil {

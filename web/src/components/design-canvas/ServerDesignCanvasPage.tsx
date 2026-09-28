@@ -93,6 +93,11 @@ function ServerCanvasEditor({
   const [resultsLoading, setResultsLoading] = useState(false);
   const [resultsError, setResultsError] = useState("");
   const [locateTarget, setLocateTarget] = useState<CanvasSelection>(null);
+  const [eventLocateTarget, setEventLocateTarget] = useState<{
+    kind: string;
+    id: string;
+    pointer?: string;
+  } | null>(null);
   const [locateNonce, setLocateNonce] = useState(0);
   const resultsTriggerRef = useRef<HTMLButtonElement>(null);
   const writeInFlight = useRef(false);
@@ -493,6 +498,8 @@ function ServerCanvasEditor({
       <DesignCanvasEditor
         draft={draft}
         locateTarget={locateTarget}
+        eventTarget={eventLocateTarget}
+        onDismissEventTarget={() => setEventLocateTarget(null)}
         locateNonce={locateNonce}
         persistence={{
           automatic: true,
@@ -611,9 +618,17 @@ function ServerCanvasEditor({
           latestRevisionId={baseRevisionId}
           onRefresh={() => void openResults()}
           onClose={closeResults}
-          onLocate={(target) => {
+          onLocate={(target, pointer) => {
             if (target.kind === "contract") {
               setContractsOpened(true);
+              return;
+            }
+            if (
+              target.kind !== "participant" &&
+              target.kind !== "message" &&
+              target.kind !== "fragment"
+            ) {
+              setEventLocateTarget({ kind: target.kind, id: target.id, pointer });
               return;
             }
             setLocateTarget({ kind: target.kind, id: target.id });
@@ -647,6 +662,8 @@ function ServerCanvasEditor({
         opened={contractsOpened}
         onClose={() => setContractsOpened(false)}
         document={draft.document}
+        onChangeDocument={draft.update}
+        formStore={draft.formStore}
         version={baseVersion}
         updates={detail.contractUpdates}
         dirty={draft.dirty || conflict || externalDetail !== null || save.isError}
@@ -772,7 +789,7 @@ function readStoredDraft(id: number): StoredScenarioDraft | null {
 function isCanvasDocument(value: unknown): value is CanvasDocument {
   if (!isRecord(value)) return false;
   return (
-    (value.formatVersion === 1 || value.formatVersion === 2) &&
+    (value.formatVersion === 1 || value.formatVersion === 2 || value.formatVersion === 3) &&
     typeof value.title === "string" &&
     Array.isArray(value.participants) &&
     Array.isArray(value.messages) &&

@@ -3,6 +3,7 @@ package designscenario
 import (
 	"fmt"
 	"maps"
+	"reflect"
 	"slices"
 	"strings"
 
@@ -55,6 +56,14 @@ func revisionDescription(before *Revision, document Document, formDrafts map[str
 		}
 	}
 	if count == 0 {
+		if !reflect.DeepEqual(before.Document.EventModel, document.EventModel) {
+			return "Изменена событийная модель"
+		}
+		for _, message := range document.Messages {
+			if previous, exists := messages[message.ID]; exists && !reflect.DeepEqual(previous.EventBindings, message.EventBindings) {
+				return "Изменены привязки событий"
+			}
+		}
 		return "Изменён сценарий"
 	}
 	summary := strings.Join(changes, "; ")

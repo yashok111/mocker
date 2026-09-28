@@ -66,6 +66,19 @@ func (r *Repo) applyCommand(ctx context.Context, tx *sql.Tx, document *Document,
 		return applyMessageCommand(document, command)
 	case "upsert_fragment", "remove_fragment":
 		return applyFragmentCommand(document, command)
+	case "set_event_model":
+		if command.EventModel == nil {
+			return invalidAt("/eventModel", "eventModel is required")
+		}
+		if document.FormatVersion == 1 {
+			candidate := *document
+			candidate.FormatVersion = 2
+			if diagnostics := ValidateFragments(candidate); len(diagnostics) != 0 {
+				return &InvalidError{Diagnostics: diagnostics}
+			}
+		}
+		document.FormatVersion = 3
+		document.EventModel = command.EventModel
 	case "bind_operation":
 		message := findMessage(document.Messages, command.MessageID)
 		if message == nil {
@@ -146,7 +159,7 @@ func applyMessageCommand(document *Document, command Command) error {
 		if command.Index == nil {
 			return invalidAt("/index", "index is required")
 		}
-		if document.FormatVersion == 2 {
+		if document.FormatVersion >= 2 {
 			return moveFragmentMessage(document, command.ID, *command.Index)
 		}
 		if !moveMessage(&document.Messages, command.ID, *command.Index) {
@@ -165,7 +178,7 @@ func applyFragmentCommand(document *Document, command Command) error {
 		upsertFragment(&document.Fragments, *command.Fragment)
 	case "remove_fragment":
 		remove := removeFragment
-		if document.FormatVersion == 2 {
+		if document.FormatVersion >= 2 {
 			remove = removeFragmentTree
 		}
 		if !remove(&document.Fragments, command.ID) {

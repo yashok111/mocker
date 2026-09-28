@@ -40,6 +40,11 @@ function scenario(): CanvasDocument {
 
 // Execution semantics are covered by the shared Go runner; these are UI start gates.
 describe("canvasExecutionBlockReason", () => {
+  it("explains that an event-only scenario has no Kafka runtime", () => {
+    const document = scenario();
+    document.messages = [{ ...document.messages[0]!, kind: "event", operation: undefined }];
+    expect(canvasExecutionBlockReason(document)).toMatch(/Kafka-событий пока не поддерживается/);
+  });
   it.each(["disabled", "note", "event", "response"] as const)(
     "allows a %s message with a dangling contract beside a valid request",
     (kind) => {

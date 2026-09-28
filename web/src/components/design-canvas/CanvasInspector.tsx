@@ -61,10 +61,12 @@ interface Props {
   onDuplicate?: () => void;
   onEditLabel?: (selection: CanvasSelection) => void;
   formStore: FormDraftStore;
+  onOpenEventEditor?: (messageId: string) => void;
 }
 
 export function CanvasInspector(props: Props): ReactElement {
   const { document, selection, onChange, onClose, onDelete, onMove } = props;
+  const [dependencyError, setDependencyError] = useState("");
   const participant =
     selection?.kind === "participant"
       ? document.participants.find((item) => item.id === selection.id)
@@ -94,6 +96,11 @@ export function CanvasInspector(props: Props): ReactElement {
         </ActionIcon>
       </Group>
       <Stack className={classes.inspectorBody} gap="md">
+        {dependencyError ? (
+          <Alert color="red" role="alert">
+            {dependencyError}
+          </Alert>
+        ) : null}
         {selection ? (
           <Button variant="default" onClick={() => props.onEditLabel?.(selection)}>
             Изменить подпись на диаграмме
@@ -119,16 +126,27 @@ export function CanvasInspector(props: Props): ReactElement {
               label="Тип объекта"
               value={participant.kind}
               data={Object.entries(participantLabels).map(([value, label]) => ({ value, label }))}
-              onChange={(event) =>
+              onChange={(event) => {
+                const kind = event.currentTarget.value as ParticipantKind;
+                if (
+                  document.eventModel?.contracts.some(
+                    (item) => item.participantId === participant.id,
+                  ) &&
+                  !["client", "service", "external", "other"].includes(kind)
+                ) {
+                  setDependencyError(
+                    "Объект владеет событийным контрактом. Сначала измените или удалите контракт.",
+                  );
+                  return;
+                }
+                setDependencyError("");
                 onChange({
                   ...document,
                   participants: document.participants.map((item) =>
-                    item.id === participant.id
-                      ? { ...item, kind: event.currentTarget.value as ParticipantKind }
-                      : item,
+                    item.id === participant.id ? { ...item, kind } : item,
                   ),
-                })
-              }
+                });
+              }}
             />
             <Textarea
               label="Описание объекта"
@@ -240,6 +258,7 @@ function MessageInspector({
   onReply,
   onDuplicate,
   formStore,
+  onOpenEventEditor,
 }: Props & { message: CanvasMessage }): ReactElement {
   const [schema, setSchema] = useState("");
   const [createOperation, setCreateOperation] = useState(false);
@@ -259,8 +278,22 @@ function MessageInspector({
     value: item.id,
     label: item.name || "Без имени",
   }));
-  const patch = (changes: Partial<CanvasMessage>) =>
-    onChange(updateMessage(document, message.id, changes));
+  const patch = (changes: Partial<CanvasMessage>) => {
+    const hasEventBindings = Boolean(message.eventBindings?.length);
+    const breaksBinding =
+      hasEventBindings &&
+      ((changes.kind !== undefined && changes.kind !== "event") ||
+        (changes.fromId !== undefined && changes.fromId !== message.fromId) ||
+        (changes.toId !== undefined && changes.toId !== message.toId) ||
+        changes.operation !== undefined);
+    if (
+      breaksBinding &&
+      !window.confirm("Изменение снимет событийные привязки этой стрелки. Продолжить?")
+    )
+      return;
+    const next = breaksBinding ? { ...changes, eventBindings: undefined } : changes;
+    onChange(updateMessage(document, message.id, next));
+  };
   const operationChoices = document.contracts.flatMap((contract) =>
     listOperations(contract.document).flatMap((location) => {
       const key = getOperation(contract.document, location)?.[OPERATION_KEY];
@@ -284,6 +317,32 @@ function MessageInspector({
           Добавить после
         </Button>
       </Group>
+      {message.kind === "event" ? (
+        <>
+          <Divider label="Событие Kafka" labelPosition="left" />
+          <Button variant="light" onClick={() => onOpenEventEditor?.(message.id)}>
+            Описать событие
+          </Button>
+          {(message.eventBindings ?? []).map((binding) => {
+            const contract = document.eventModel?.contracts.find(
+              (item) => item.id === binding.contractId,
+            );
+            const operation = contract?.operations.find((item) => item.id === binding.operationId);
+            const topic = document.eventModel?.channels.find(
+              (item) => item.id === operation?.channelId,
+            );
+            const eventType = document.eventModel?.messages.find(
+              (item) => item.id === operation?.messageId,
+            );
+            return (
+              <Text key={`${binding.contractId}/${binding.operationId}`} size="sm">
+                {operation?.action ?? "?"} · {contract?.name ?? "Контракт недоступен"} ·{" "}
+                {topic?.address || "topic не указан"} · {eventType?.name ?? "тип события не указан"}
+              </Text>
+            );
+          })}
+        </>
+      ) : null}
       <Group grow>
         {message.kind === "request" ? (
           <Button variant="default" onClick={onReply}>

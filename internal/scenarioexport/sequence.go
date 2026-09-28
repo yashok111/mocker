@@ -15,7 +15,7 @@ type interval struct {
 }
 
 func sequenceIntervals(doc designscenario.Document) ([]interval, []Diagnostic) {
-	if doc.FormatVersion == 2 {
+	if doc.FormatVersion >= 2 {
 		issues := []Diagnostic{}
 		for _, d := range designscenario.ValidateFragments(doc) {
 			id := ""
@@ -165,7 +165,7 @@ func cleanNewlines(value string) string {
 // Children close before their parent's next else or end event.
 func branchEvents(doc designscenario.Document, label func(string) string) (map[int][]string, map[int][]string) {
 	before, after := map[int][]string{}, map[int][]string{}
-	if doc.FormatVersion != 2 {
+	if doc.FormatVersion < 2 {
 		return before, after
 	}
 	positions := make(map[string]int, len(doc.Messages))

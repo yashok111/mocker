@@ -183,6 +183,8 @@ function applyMessageChanges(
   const updated = { ...message, ...changes };
   if ("replyToId" in changes && changes.replyToId === undefined) delete updated.replyToId;
   if ("operation" in changes && changes.operation === undefined) delete updated.operation;
+  if ("eventBindings" in changes && changes.eventBindings === undefined)
+    delete updated.eventBindings;
   return updated;
 }
 
@@ -193,6 +195,16 @@ export function updateMessage(
 ): CanvasDocument {
   const message = doc.messages.find((candidate) => candidate.id === id);
   if (message === undefined) throw new Error(`Сообщение ${id} не найдено`);
+  if (
+    message.eventBindings?.length &&
+    changes.eventBindings === undefined &&
+    !Object.hasOwn(changes, "eventBindings") &&
+    ((changes.kind !== undefined && changes.kind !== "event") ||
+      (changes.fromId !== undefined && changes.fromId !== message.fromId) ||
+      (changes.toId !== undefined && changes.toId !== message.toId) ||
+      changes.operation !== undefined)
+  )
+    throw new Error("Сначала снимите событийные привязки стрелки");
 
   const updated = applyMessageChanges(message, changes);
   const requestDetached = message.kind === "request" && updated.kind !== "request";
@@ -233,7 +245,7 @@ function removeMessages(doc: CanvasDocument, initialIds: Set<string>): CanvasDoc
 
   const messages = doc.messages.filter((message) => !removedIds.has(message.id));
   if (messages.length === doc.messages.length) return doc;
-  if (doc.formatVersion === 2) {
+  if (doc.formatVersion >= 2) {
     for (const fragment of doc.fragments) {
       for (const range of [fragment, ...(fragment.branches ?? [])]) {
         if (removedIds.has(range.fromMessageId) || removedIds.has(range.toMessageId)) {
@@ -257,6 +269,8 @@ function removeMessages(doc: CanvasDocument, initialIds: Set<string>): CanvasDoc
 
 export function removeParticipant(doc: CanvasDocument, id: string): CanvasDocument {
   if (!doc.participants.some((participant) => participant.id === id)) return doc;
+  if (doc.eventModel?.contracts.some((contract) => contract.participantId === id))
+    throw new Error("Объект владеет событийным контрактом. Сначала измените или удалите контракт.");
   const participants = doc.participants.filter((participant) => participant.id !== id);
   const incidentMessages = new Set(
     doc.messages
