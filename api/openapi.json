@@ -7939,6 +7939,307 @@
           "diagnostics"
         ],
         "additionalProperties": false
+      },
+      "SchemaModelCommand": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "create_schema",
+              "replace_schema",
+              "rename_schema",
+              "delete_schema",
+              "upsert_property",
+              "rename_property",
+              "delete_property",
+              "set_reference",
+              "move_schema"
+            ]
+          },
+          "schemaName": {
+            "type": "string"
+          },
+          "newName": {
+            "type": "string"
+          },
+          "propertyName": {
+            "type": "string"
+          },
+          "targetSchema": {
+            "type": "string"
+          },
+          "schemaJSON": {
+            "type": "string",
+            "maxLength": 65536
+          },
+          "required": {
+            "type": "boolean"
+          },
+          "array": {
+            "type": "boolean"
+          },
+          "x": {
+            "type": "number",
+            "minimum": -100000,
+            "maximum": 100000
+          },
+          "y": {
+            "type": "number",
+            "minimum": -100000,
+            "maximum": 100000
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "additionalProperties": false
+      },
+      "SchemaModelProperty": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "pointer": {
+            "type": "string"
+          },
+          "schemaJSON": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          },
+          "required": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "name",
+          "pointer",
+          "schemaJSON",
+          "type",
+          "required"
+        ],
+        "additionalProperties": false
+      },
+      "SchemaModelSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "pointer": {
+            "type": "string"
+          },
+          "schemaJSON": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "properties": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SchemaModelProperty"
+            }
+          },
+          "x": {
+            "type": "number"
+          },
+          "y": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "name",
+          "pointer",
+          "schemaJSON",
+          "type",
+          "description",
+          "properties",
+          "x",
+          "y"
+        ],
+        "additionalProperties": false
+      },
+      "SchemaModelReference": {
+        "type": "object",
+        "properties": {
+          "sourceSchema": {
+            "type": "string"
+          },
+          "sourceProperty": {
+            "type": "string"
+          },
+          "targetSchema": {
+            "type": "string"
+          },
+          "pointer": {
+            "type": "string"
+          },
+          "ref": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "sourceSchema",
+          "targetSchema",
+          "pointer",
+          "ref"
+        ],
+        "additionalProperties": false
+      },
+      "SchemaModelOperation": {
+        "type": "object",
+        "properties": {
+          "method": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "pointer": {
+            "type": "string"
+          },
+          "schemas": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "method",
+          "path",
+          "pointer",
+          "schemas"
+        ],
+        "additionalProperties": false
+      },
+      "SchemaModel": {
+        "type": "object",
+        "properties": {
+          "schemas": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SchemaModelSchema"
+            }
+          },
+          "references": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SchemaModelReference"
+            }
+          },
+          "operations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SchemaModelOperation"
+            }
+          }
+        },
+        "required": [
+          "schemas",
+          "references",
+          "operations"
+        ],
+        "additionalProperties": false
+      },
+      "SchemaModelDetail": {
+        "type": "object",
+        "properties": {
+          "designId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "version": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "revisionId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "model": {
+            "$ref": "#/components/schemas/SchemaModel"
+          }
+        },
+        "required": [
+          "designId",
+          "version",
+          "revisionId",
+          "model"
+        ],
+        "additionalProperties": false
+      },
+      "SchemaModelPreviewRequest": {
+        "type": "object",
+        "properties": {
+          "document": {
+            "type": "string"
+          },
+          "commands": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SchemaModelCommand"
+            },
+            "maxItems": 100
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      },
+      "SchemaModelCommandsRequest": {
+        "type": "object",
+        "properties": {
+          "expectedVersion": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "commands": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SchemaModelCommand"
+            },
+            "maxItems": 100
+          }
+        },
+        "required": [
+          "expectedVersion",
+          "commands"
+        ],
+        "additionalProperties": false
+      },
+      "SchemaModelPreview": {
+        "type": "object",
+        "properties": {
+          "document": {
+            "type": "string"
+          },
+          "model": {
+            "$ref": "#/components/schemas/SchemaModel"
+          },
+          "diagnostics": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ApiDesignDiagnostic"
+            }
+          },
+          "valid": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "document",
+          "model",
+          "diagnostics",
+          "valid"
+        ],
+        "additionalProperties": false
       }
     }
   },
@@ -15938,6 +16239,397 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/StateDiagramProposal"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/designs/{id}/schema-model": {
+      "get": {
+        "tags": [
+          "schema-model"
+        ],
+        "operationId": "getSchemaModel",
+        "summary": "getSchemaModel",
+        "description": "Lifecycle authoring and side-effect-free simulation. Diagram writes share API design versions. Exact expectedVersion is required for writes; a conflict must be reconciled.",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SchemaModelDetail"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "design_invalid: document validation diagnostics.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "$ref": "#/components/schemas/ApiDesignInvalidDetails"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "description": "design_conflict: current version and draft revision. No write was applied.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "$ref": "#/components/schemas/ApiDesignConflictDetails"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "413": {
+            "$ref": "#/components/responses/PayloadTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1
+            }
+          }
+        ]
+      }
+    },
+    "/api/designs/{id}/schema-model/preview": {
+      "post": {
+        "tags": [
+          "schema-model"
+        ],
+        "operationId": "previewSchemaModel",
+        "summary": "previewSchemaModel",
+        "description": "Lifecycle authoring and side-effect-free simulation. Diagram writes share API design versions. Exact expectedVersion is required for writes; a conflict must be reconciled.",
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfToken": []
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "design_invalid: document validation diagnostics.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "$ref": "#/components/schemas/ApiDesignInvalidDetails"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "description": "design_conflict: current version and draft revision. No write was applied.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "$ref": "#/components/schemas/ApiDesignConflictDetails"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "413": {
+            "$ref": "#/components/responses/PayloadTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          },
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SchemaModelPreview"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SchemaModelPreviewRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/designs/{id}/schema-model/commands": {
+      "post": {
+        "tags": [
+          "schema-model"
+        ],
+        "operationId": "applySchemaModelCommands",
+        "summary": "applySchemaModelCommands",
+        "description": "Lifecycle authoring and side-effect-free simulation. Diagram writes share API design versions. Exact expectedVersion is required for writes; a conflict must be reconciled.",
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfToken": []
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "design_invalid: document validation diagnostics.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "$ref": "#/components/schemas/ApiDesignInvalidDetails"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "description": "design_conflict: current version and draft revision. No write was applied.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "$ref": "#/components/schemas/ApiDesignConflictDetails"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "413": {
+            "$ref": "#/components/responses/PayloadTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          },
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiDesignDetail"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SchemaModelCommandsRequest"
               }
             }
           }

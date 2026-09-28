@@ -270,6 +270,76 @@ The author document preserves OpenAPI fields; runtime normalization is separate.
 Names a client reports for an agent are not verified identities; history records
 the server-derived UI/MCP source.
 
+## Schema model: components, fields and references
+
+`get_schema_model {designId}` returns the current version, component cards,
+field `schemaJSON`, reference sites and API operations using each component,
+including transitive usage. The source is `components.schemas`; positions live
+in `x-mocker-schema-layout`. External references are displayed without fetching.
+
+Start with `create_api_design {name:"Orders"}` and retain its id and version.
+Preview this batch with `preview_schema_model_changes {designId, commands}`:
+
+```json
+[
+  {"kind":"create_schema","schemaName":"User","schemaJSON":"{\"type\":\"object\"}"},
+  {"kind":"create_schema","schemaName":"OrderItem","schemaJSON":"{\"type\":\"object\"}"},
+  {"kind":"create_schema","schemaName":"Order","schemaJSON":"{\"type\":\"object\"}"},
+  {"kind":"upsert_property","schemaName":"Order","propertyName":"id","schemaJSON":"{\"type\":\"integer\",\"minimum\":1,\"example\":9007199254740993}","required":true},
+  {"kind":"upsert_property","schemaName":"Order","propertyName":"user","schemaJSON":"{}","required":true},
+  {"kind":"upsert_property","schemaName":"Order","propertyName":"items","schemaJSON":"{\"minItems\":1}"},
+  {"kind":"set_reference","schemaName":"Order","propertyName":"user","targetSchema":"User"},
+  {"kind":"set_reference","schemaName":"Order","propertyName":"items","targetSchema":"OrderItem","array":true},
+  {"kind":"move_schema","schemaName":"Order","x":0,"y":0},
+  {"kind":"move_schema","schemaName":"User","x":450,"y":0},
+  {"kind":"move_schema","schemaName":"OrderItem","x":450,"y":350}
+]
+```
+
+Preview returns `document`, `model`, `valid` and `diagnostics` and creates no
+revision. Supply optional `document` to preview against an unsaved full OpenAPI
+buffer; omit commands to inspect it. When valid, use
+`apply_schema_model_commands {designId, expectedVersion, commands}` with the
+same batch against the stored draft. It returns updated API detail. For an
+unsaved full-document buffer, use the existing `save_api_design_draft` instead.
+On 409 reread the draft and reconcile the edit before retrying.
+
+The same actions have individual tools, each requiring `designId` and the
+current `expectedVersion`:
+
+| Tool | Additional arguments |
+|---|---|
+| `create_api_schema`, `replace_api_schema` | `schemaName`, complete `schemaJSON` |
+| `rename_api_schema` | `schemaName`, `newName` |
+| `delete_api_schema` | `schemaName` |
+| `upsert_api_schema_property` | `schemaName`, `propertyName`, complete `schemaJSON`, optional `required` |
+| `rename_api_schema_property` | `schemaName`, `propertyName`, `newName` |
+| `delete_api_schema_property` | `schemaName`, `propertyName` |
+| `set_api_schema_reference` | `schemaName`, `propertyName`, `targetSchema`, optional `array` |
+| `move_api_schema` | `schemaName`, `x`, `y` |
+
+Next, `rename_api_schema {designId, expectedVersion, schemaName:"User",
+newName:"Customer"}` updates local references and layout. Read
+`get_schema_model` to inspect referrers and operation usage. Existing diff,
+revision, restore and analyst publication tools apply to these edits too.
+A referenced schema or property cannot be deleted until its consumers are fixed;
+errors name their JSON pointers. Unknown names are errors.
+
+`schemaJSON` accepts an object or boolean and preserves advanced keywords and
+exact numbers. A field upsert replaces that whole field; read its current JSON
+before editing. Omitted `required` retains membership, while `false` removes it.
+Property actions need an object-compatible component (type object or absent,
+without root `$ref`). Explicit direct binding sets `$ref` and removes the field's
+old `type` and `items`. Array binding sets `type:array`, removes the field's `$ref`,
+and sets `items.$ref` after removing the element's old `type` and `items`. Other
+field and element keywords are retained. Binding across a scope with `$id` or
+removing nested resources is refused. Schema/property deletion may also be
+refused for anchor references or resources with `$id`; inspect their consumers
+and use explicit raw JSON edits when the change needs manual reference handling.
+Batches are atomic, capped at 100 commands, 200 schemas and 200 direct properties per schema;
+each `schemaJSON` is at most 64 KiB. Coordinates must be finite within ±100000.
+The visual workbench uses preview to edit its buffer; Save creates a revision.
+
 ## Sequence canvas: edit, run, inspect, vary
 
 A sequence-canvas scenario stores participants, ordered messages, contract

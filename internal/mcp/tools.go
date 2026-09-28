@@ -19,7 +19,8 @@ import (
 // push_stream_frame) — fifty-one; plus the three A6 adds (decisions.md
 // mocker-a6-assets D8: upload_asset, list_assets, delete_asset, their own
 // group) — fifty-four; later groups grew the surface to seventy-four, and
-// the persisted sequence designer adds nine more. This is the ONLY place any
+// persisted sequence, state diagram and schema model groups extend it further.
+// This is the ONLY place any
 // tool is registered — New (mcp.go) calls it exactly once, before ever
 // returning an Endpoint, so sdk.AddTool's panic on a schema it cannot infer
 // (mcp/server.go:561) surfaces at process startup, on the ground, rather
@@ -55,6 +56,7 @@ func registerTools(srv *sdk.Server, lb *loopback) {
 	addDesignTools(srv, lb)
 	addAPIDesignTools(srv, lb)
 	addStateDiagramTools(srv, lb)
+	addSchemaModelTools(srv, lb)
 	addDesignScenarioTools(srv, lb)
 	// The guide takes no loopback: it calls no admin route (tools_guide.go).
 	addGuideTools(srv)

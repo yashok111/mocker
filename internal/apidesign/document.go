@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/yashok111/mocker/internal/jsonx"
+	"github.com/yashok111/mocker/internal/schemamodel"
 	"github.com/yashok111/mocker/internal/specs"
 	"github.com/yashok111/mocker/internal/statediagram"
 	"github.com/yashok111/mocker/internal/yamlx"
@@ -40,6 +41,9 @@ func (r *Repo) prepare(raw string) (*preparedDocument, error) {
 	}
 	if _, err := statediagram.Decode(root); err != nil {
 		return nil, invalidField("/"+statediagram.Extension, err.Error())
+	}
+	if err := schemamodel.ValidateLayout(root); err != nil {
+		return nil, schemaModelError(err)
 	}
 	diagnostics := validateRoot(root)
 	if len(diagnostics) > 0 {
@@ -129,7 +133,7 @@ func validateRoot(root map[string]any) []Diagnostic {
 	if !ok {
 		add("/paths", "Обязателен объект paths")
 	}
-	walkRefs(root, root, "", add)
+	walkRefs(root, add)
 	validateSchemaLocations(root, "", add)
 	ids := map[string]string{}
 	shapes := map[string]string{}
@@ -308,34 +312,12 @@ func validateParameter(path string, param map[string]any, at string, add diagnos
 	return location + ":" + name
 }
 
-func walkRefs(root map[string]any, value any, pointer string, add diagnosticSink) {
-	walkReferences(root, value, pointer, false, add)
-}
-
-func walkReferences(root map[string]any, value any, pointer string, named bool, add diagnosticSink) {
-	switch value := value.(type) {
-	case map[string]any:
-		for key, child := range value {
-			p := pointer + "/" + escape(key)
-			if key == "$ref" && !named {
-				validateReference(root, child, p, add)
-				continue
-			}
-			if !named {
-				if key == "example" || key == "default" || key == "const" || key == "enum" || strings.HasPrefix(key, "x-") {
-					continue
-				}
-				if key == "examples" {
-					walkExampleRefs(root, child, p, add)
-					continue
-				}
-			}
-			walkReferences(root, child, p, !named && namedObjectMap(key), add)
-		}
-	case []any:
-		for i, child := range value {
-			walkReferences(root, child, pointer+"/"+strconv.Itoa(i), false, add)
-		}
+func walkRefs(root map[string]any, add diagnosticSink) {
+	err := schemamodel.VisitReferences(root, func(pointer, ref string) { validateReference(root, ref, pointer, add) })
+	if problem, ok := errors.AsType[*schemamodel.Error](err); ok {
+		add(problem.Pointer, problem.Message)
+	} else if err != nil {
+		add("", err.Error())
 	}
 }
 
@@ -357,22 +339,6 @@ func validateReference(root map[string]any, value any, pointer string, add diagn
 	}
 	if _, ok := resolvePointer(root, ref); !ok {
 		add(pointer, "Ссылка не найдена или внешняя ссылка не поддерживается: "+ref)
-	}
-}
-
-func walkExampleRefs(root map[string]any, value any, pointer string, add diagnosticSink) {
-	// Schema examples are data arrays. OpenAPI examples maps contain Example
-	// Objects: only their direct $ref is structural, their value is arbitrary data.
-	examples, ok := value.(map[string]any)
-	if !ok {
-		return
-	}
-	for name, value := range examples {
-		if example, ok := value.(map[string]any); ok {
-			if ref, exists := example["$ref"]; exists {
-				validateReference(root, ref, pointer+"/"+escape(name)+"/$ref", add)
-			}
-		}
 	}
 }
 

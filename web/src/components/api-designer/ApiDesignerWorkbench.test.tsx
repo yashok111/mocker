@@ -17,6 +17,10 @@ vi.mock("./renderSchemaDiagram", () => ({
     '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 100"></svg>',
 }));
 
+vi.mock("../schema-model/SchemaGraph", () => ({
+  default: () => <div data-testid="schema-graph" />,
+}));
+
 vi.mock("../state-diagram/StateGraph", () => ({
   default: () => <div data-testid="state-graph" />,
 }));
@@ -28,6 +32,82 @@ afterEach(() => {
 });
 
 describe("ApiDesignerWorkbench", () => {
+  it("retains pending schema input across tabs and saves only after command preview", async () => {
+    const fetchMock = route({
+      "GET /api/designs/12": () => json(200, detailFixture()),
+      "GET /api/designs/12/diff?fromRevisionId=41&toRevisionId=41": () =>
+        json(200, diffFixture(detailFixture())),
+      "GET /api/designs/12/diff?fromRevisionId=41&toRevisionId=42": () =>
+        json(200, diffFixture(detailFixture())),
+      "POST /api/designs/12/schema-model/preview": () => {
+        const body = JSON.parse(String(fetchMock.mock.calls.at(-1)?.[1]?.body));
+        const document = JSON.parse(body.document);
+        if (body.commands?.length)
+          document.components = { schemas: { Customer: { type: "object", properties: {} } } };
+        const schemas = document.components?.schemas?.Customer
+          ? [
+              {
+                name: "Customer",
+                pointer: "/components/schemas/Customer",
+                schemaJSON: '{"type":"object","properties":{}}',
+                properties: [],
+                type: "object",
+                description: "",
+                x: 40,
+                y: 40,
+              },
+            ]
+          : [];
+        return json(200, {
+          document: JSON.stringify(document),
+          model: { schemas, references: [], operations: [] },
+          diagnostics: [],
+          valid: true,
+        });
+      },
+      "PUT /api/designs/12/draft": () => {
+        const body = JSON.parse(String(fetchMock.mock.calls.at(-1)?.[1]?.body));
+        const saved = detailFixture({ version: 2, revisionId: 42 });
+        saved.draft.document = body.document;
+        return json(200, saved);
+      },
+    });
+    renderInRouter(<ApiDesignerWorkbench id={12} />);
+    await userEvent.click(await screen.findByRole("tab", { name: "Диаграмма" }));
+    const modelEditor = await screen.findByTestId("schema-model-editor");
+    await waitFor(() =>
+      expect(within(modelEditor).getByRole("button", { name: "Добавить схему" })).toBeEnabled(),
+    );
+    await userEvent.click(within(modelEditor).getByRole("button", { name: "Добавить схему" }));
+    const name = screen.getByLabelText("Имя схемы");
+    await userEvent.click(name);
+    await userEvent.paste("Customer");
+    expect(screen.getByRole("button", { name: "Сохранить черновик" })).toBeDisabled();
+    await userEvent.click(screen.getByRole("tab", { name: "Документация" }));
+    await userEvent.click(screen.getByRole("tab", { name: "Диаграмма" }));
+    expect(await screen.findByLabelText("Имя схемы")).toHaveValue("Customer");
+    expect(screen.getByRole("button", { name: "Сохранить черновик" })).toBeDisabled();
+    await userEvent.click(screen.getByRole("button", { name: "Применить" }));
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Сохранить черновик" })).toBeEnabled(),
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Сохранить черновик" }));
+    await waitFor(() =>
+      expect(fetchMock.mock.calls.some(([, options]) => options?.method === "PUT")).toBe(true),
+    );
+    const saved = JSON.parse(
+      String(fetchMock.mock.calls.find(([, options]) => options?.method === "PUT")?.[1]?.body),
+    );
+    expect(saved.expectedVersion).toBe(1);
+    expect(JSON.parse(saved.document).components.schemas.Customer).toEqual({
+      type: "object",
+      properties: {},
+    });
+    expect(
+      fetchMock.mock.calls.every(([url]) => !String(url).endsWith("/schema-model/commands")),
+    ).toBe(true);
+  });
+
   it("saves a state diagram directly from its own tab", async () => {
     const fetchMock = route({
       "GET /api/designs/12": () => json(200, detailFixture()),
@@ -76,6 +156,7 @@ describe("ApiDesignerWorkbench", () => {
       }),
     );
     await userEvent.click(screen.getByRole("tab", { name: "Диаграмма" }));
+    await userEvent.click(await screen.findByRole("radio", { name: "Mermaid и экспорт" }));
     await userEvent.click(await screen.findByText("Исходник Mermaid"));
     const mermaidSource = screen.getByRole<HTMLTextAreaElement>("textbox", {
       name: "Исходник Mermaid",

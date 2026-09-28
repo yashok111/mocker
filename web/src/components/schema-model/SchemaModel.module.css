@@ -1,0 +1,71 @@
+.layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: var(--mantine-spacing-md);
+  align-items: start;
+}
+.graphShell {
+  position: relative;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--mantine-color-gray-3);
+  border-radius: 8px;
+}
+.graph {
+  margin: 0;
+  height: 540px;
+  width: 100%;
+}
+.tools {
+  position: absolute;
+  bottom: 12px;
+  left: 12px;
+}
+.inspector {
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--mantine-color-gray-3);
+  border-radius: 8px;
+}
+.list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.wrap {
+  overflow-wrap: anywhere;
+}
+@media (max-width: 80em) {
+  .layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .graph {
+    height: 440px;
+  }
+}
+@media (max-width: 30em) {
+  .graph {
+    height: 350px;
+  }
+  .inspector {
+    padding: 10px;
+  }
+}
+
+.list > button {
+  max-width: 100%;
+}
+.list :global(.mantine-Button-label),
+.wrap :global(.mantine-Button-label) {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-align: left;
+}
+.list > button,
+button.wrap {
+  height: auto;
+  min-height: 26px;
+  padding-top: 4px;
+  padding-bottom: 4px;
+  max-width: 100%;
+}

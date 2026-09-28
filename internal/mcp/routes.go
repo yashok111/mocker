@@ -51,6 +51,20 @@ import (
 var noRoute = []string{}
 
 var toolRoutes = map[string][]string{
+	// Schema model authoring shares one version-fenced command route.
+	"get_schema_model":             {"GET /api/designs/{id}/schema-model"},
+	"preview_schema_model_changes": {"POST /api/designs/{id}/schema-model/preview"},
+	"apply_schema_model_commands":  {"POST /api/designs/{id}/schema-model/commands"},
+	"create_api_schema":            {"POST /api/designs/{id}/schema-model/commands"},
+	"replace_api_schema":           {"POST /api/designs/{id}/schema-model/commands"},
+	"rename_api_schema":            {"POST /api/designs/{id}/schema-model/commands"},
+	"delete_api_schema":            {"POST /api/designs/{id}/schema-model/commands"},
+	"upsert_api_schema_property":   {"POST /api/designs/{id}/schema-model/commands"},
+	"rename_api_schema_property":   {"POST /api/designs/{id}/schema-model/commands"},
+	"delete_api_schema_property":   {"POST /api/designs/{id}/schema-model/commands"},
+	"set_api_schema_reference":     {"POST /api/designs/{id}/schema-model/commands"},
+	"move_api_schema":              {"POST /api/designs/{id}/schema-model/commands"},
+
 	// Persisted sequence-design scenarios. All mutations use the same admin
 	// handlers as the UI; validation is a write-shaped read with no side effects.
 	"list_design_scenarios":              {"GET /api/design-scenarios"},
@@ -237,11 +251,11 @@ var toolRoutes = map[string][]string{
 // slice P7a adds (export_openapi)
 // — 63 legacy tools plus eleven versioned API designer tools, plus the ten
 // original persisted design-scenario tools, four server-run tools and three
-// scenario-export tools above.
+// scenario-export tools, eight state-diagram tools and twelve schema-model tools.
 // Pinned in routes_test.go so a tool
 // added without an entry here is caught by a test rather than by a 404 in
 // production.
-const toolCount = 99
+const toolCount = 111
 
 // toolPath resolves ONE call a tool makes into the (method, path) pair
 // loopback.do/call take.

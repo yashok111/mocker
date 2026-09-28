@@ -101,6 +101,7 @@ import classes from "./ApiDesigner.module.css";
 
 const POLL_MS = 5_000;
 const StateDiagramEditor = lazy(() => import("../state-diagram/StateDiagramEditor"));
+const SchemaModelEditor = lazy(() => import("../schema-model/SchemaModelEditor"));
 const SchemaDiagram = lazy(() => import("./SchemaDiagram"));
 type CanvasView = "documentation" | "editor" | "diagram" | "states" | "compare" | "review";
 type EditorMode = "form" | "source";
@@ -130,6 +131,7 @@ export function ApiDesignerWorkbench({
   const [focusMode, setFocusMode] = useState(false);
   const treeComposer = useApiTreeComposer();
   const [view, setView] = useState<CanvasView>(reviewId === undefined ? "documentation" : "review");
+  const [schemaView, setSchemaView] = useState("model");
   const [editorMode, setEditorMode] = useState<EditorMode>("form");
   const [inspectorView, setInspectorView] = useState<InspectorView>("changes");
   const [selection, setSelection] = useState<DocumentSelection>({ kind: "document" });
@@ -741,11 +743,62 @@ export function ApiDesignerWorkbench({
                     </Text>
                   }
                 >
-                  <SchemaDiagram
-                    document={parsed.document}
-                    selection={selection}
-                    pendingFormDraft={formDraft.dirty}
-                  />
+                  <Stack gap="md">
+                    <Group justify="space-between">
+                      <SegmentedControl
+                        aria-label="Вид диаграммы схем"
+                        value={schemaView}
+                        onChange={setSchemaView}
+                        data={[
+                          { value: "model", label: "Редактор модели" },
+                          { value: "mermaid", label: "Mermaid и экспорт" },
+                        ]}
+                      />
+                      <Button
+                        leftSection={<IconDeviceFloppy size={16} />}
+                        loading={save.isPending}
+                        disabled={
+                          !dirty || parsed.error !== null || formDraft.dirty || unsafeNumber
+                        }
+                        onClick={() => {
+                          submittedFormDrafts.current = draftStore.serialize();
+                          save.mutate({
+                            id,
+                            data: {
+                              expectedVersion: baseVersion,
+                              document: buffer,
+                              summary: summary.trim() || "Изменение модели схем",
+                              ...(activeChangeSetId === null
+                                ? {}
+                                : { changeSetId: activeChangeSetId }),
+                            },
+                          });
+                        }}
+                      >
+                        Сохранить черновик
+                      </Button>
+                    </Group>
+                    {save.isError && !conflict && (
+                      <Alert color="red" role="alert">
+                        {describeApiFailureDetailed(save.error)}
+                      </Alert>
+                    )}
+                    {schemaView === "model" ? (
+                      <SchemaModelEditor
+                        designId={id}
+                        document={buffer}
+                        blocked={parsed.error !== null || unsafeNumber}
+                        formStore={draftStore}
+                        onChange={setBuffer}
+                      />
+                    ) : (
+                      <SchemaDiagram
+                        document={parsed.document}
+                        selection={selection}
+                        pendingFormDraft={formDraft.dirty}
+                      />
+                    )}
+                  </Stack>
                 </Suspense>
               )}
             </Tabs.Panel>
