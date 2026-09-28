@@ -72,6 +72,14 @@ var toolRoutes = map[string][]string{
 	"cancel_design_scenario_run":         {"POST /api/design-scenarios/{id}/runs/{runId}/cancel"},
 
 	// Versioned API authoring. Human publication is deliberately not MCP-accessible.
+	"list_state_diagrams":          {"GET /api/designs/{id}/state-diagrams"},
+	"get_state_diagram":            {"GET /api/designs/{id}/state-diagrams/{did}"},
+	"create_state_diagram":         {"POST /api/designs/{id}/state-diagrams"},
+	"save_state_diagram":           {"PUT /api/designs/{id}/state-diagrams/{did}"},
+	"delete_state_diagram":         {"DELETE /api/designs/{id}/state-diagrams/{did}"},
+	"apply_state_diagram_commands": {"POST /api/designs/{id}/state-diagrams/{did}/commands"},
+	"validate_state_diagram":       {"POST /api/designs/{id}/state-diagrams/{did}/validate"},
+	"simulate_state_diagram":       {"POST /api/designs/{id}/state-diagrams/{did}/simulate"},
 	"list_api_designs":             {"GET /api/designs"},
 	"create_api_design":            {"POST /api/designs"},
 	"get_api_design":               {"GET /api/designs/{id}"},
@@ -233,7 +241,7 @@ var toolRoutes = map[string][]string{
 // Pinned in routes_test.go so a tool
 // added without an entry here is caught by a test rather than by a 404 in
 // production.
-const toolCount = 91
+const toolCount = 99
 
 // toolPath resolves ONE call a tool makes into the (method, path) pair
 // loopback.do/call take.

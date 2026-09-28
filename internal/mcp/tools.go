@@ -54,6 +54,7 @@ func registerTools(srv *sdk.Server, lb *loopback) {
 	addTransferTools(srv, lb)
 	addDesignTools(srv, lb)
 	addAPIDesignTools(srv, lb)
+	addStateDiagramTools(srv, lb)
 	addDesignScenarioTools(srv, lb)
 	// The guide takes no loopback: it calls no admin route (tools_guide.go).
 	addGuideTools(srv)

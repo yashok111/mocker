@@ -17,6 +17,10 @@ vi.mock("./renderSchemaDiagram", () => ({
     '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 100"></svg>',
 }));
 
+vi.mock("../state-diagram/StateGraph", () => ({
+  default: () => <div data-testid="state-graph" />,
+}));
+
 afterEach(() => {
   localStorage.clear();
   vi.unstubAllGlobals();
@@ -24,6 +28,33 @@ afterEach(() => {
 });
 
 describe("ApiDesignerWorkbench", () => {
+  it("saves a state diagram directly from its own tab", async () => {
+    const fetchMock = route({
+      "GET /api/designs/12": () => json(200, detailFixture()),
+      "GET /api/designs/12/diff?fromRevisionId=41&toRevisionId=41": () =>
+        json(200, diffFixture(detailFixture())),
+      "GET /api/designs/12/diff?fromRevisionId=41&toRevisionId=42": () =>
+        json(200, diffFixture(detailFixture())),
+      "PUT /api/designs/12/draft": () => {
+        const body = JSON.parse(String(fetchMock.mock.calls.at(-1)?.[1]?.body));
+        const saved = detailFixture({ version: 2, revisionId: 42 });
+        saved.draft.document = body.document;
+        return json(200, saved);
+      },
+    });
+    renderInRouter(<ApiDesignerWorkbench id={12} />);
+    await userEvent.click(await screen.findByRole("tab", { name: "Состояния" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Пример заказа" }));
+    await userEvent.click(screen.getByRole("button", { name: "Сохранить черновик" }));
+    await waitFor(() =>
+      expect(fetchMock.mock.calls.some(([, init]) => init?.method === "PUT")).toBe(true),
+    );
+    const savedCall = fetchMock.mock.calls.find(([, init]) => init?.method === "PUT");
+    const body = JSON.parse(String(savedCall?.[1]?.body));
+    expect(body.expectedVersion).toBe(1);
+    expect(JSON.parse(body.document)["x-mocker-state-diagrams"].diagrams[0].states).toHaveLength(4);
+  });
+
   it("diagrams the unsaved document and clears the diagram when its source is invalid", async () => {
     route({
       "GET /api/designs/12": () => json(200, detailFixture()),

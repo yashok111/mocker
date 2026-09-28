@@ -14,6 +14,7 @@ import (
 
 	"github.com/yashok111/mocker/internal/jsonx"
 	"github.com/yashok111/mocker/internal/specs"
+	"github.com/yashok111/mocker/internal/statediagram"
 	"github.com/yashok111/mocker/internal/yamlx"
 )
 
@@ -36,6 +37,9 @@ func (r *Repo) prepare(raw string) (*preparedDocument, error) {
 	root, err := decodeDocument(raw)
 	if err != nil {
 		return nil, &InvalidError{Diagnostics: []Diagnostic{{Pointer: "", Message: err.Error(), Severity: "error"}}}
+	}
+	if _, err := statediagram.Decode(root); err != nil {
+		return nil, invalidField("/"+statediagram.Extension, err.Error())
 	}
 	diagnostics := validateRoot(root)
 	if len(diagnostics) > 0 {

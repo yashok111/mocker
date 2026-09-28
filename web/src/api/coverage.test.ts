@@ -54,7 +54,7 @@ const HTTP_METHODS = ["get", "post", "put", "delete", "patch"] as const;
 // agree with anything that file said. Every test below that wants to name it
 // reads it from here, which is the one thing the old title did not do — it
 // said "64" while the assertion said 70, for four slices running.
-const ROUTE_COUNT = 99;
+const ROUTE_COUNT = 107;
 
 interface RouteInfo {
   method: string;
@@ -118,6 +118,18 @@ function loadRoutes(): RouteInfo[] {
 // has a caller. An exemption is a decision on the record and so is its
 // withdrawal, in this comment.
 const EXEMPT: Record<string, string> = {
+  "GET /api/designs/{id}/state-diagrams":
+    "Dedicated MCP authoring; UI edits the shared API buffer and persists with saveApiDesignDraft.",
+  "POST /api/designs/{id}/state-diagrams":
+    "Dedicated MCP authoring; UI edits the shared API buffer and persists with saveApiDesignDraft.",
+  "GET /api/designs/{id}/state-diagrams/{did}":
+    "Dedicated MCP authoring; UI edits the shared API buffer and persists with saveApiDesignDraft.",
+  "PUT /api/designs/{id}/state-diagrams/{did}":
+    "Dedicated MCP authoring; UI edits the shared API buffer and persists with saveApiDesignDraft.",
+  "DELETE /api/designs/{id}/state-diagrams/{did}":
+    "Dedicated MCP authoring; UI edits the shared API buffer and persists with saveApiDesignDraft.",
+  "POST /api/designs/{id}/state-diagrams/{did}/commands":
+    "Dedicated MCP authoring; UI edits the shared API buffer and persists with saveApiDesignDraft.",
   "POST /api/design-scenarios/{id}/revisions/{rid}/archive":
     "export_design_scenario_archive serves REST/MCP clients. ScenarioArchivePanel builds ZIP locally from individual exports and browser-only SVG/PNG of the same revision.",
 };

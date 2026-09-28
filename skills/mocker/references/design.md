@@ -1,5 +1,91 @@
 # Designing an API in mocker — drafts, review and publication
 
+## State diagrams: visual authoring and simulation
+
+Open an API project and select **Состояния**. Create an empty diagram or use
+**Пример заказа**. Move states on the canvas, connect their ports, or use the
+labelled state/transition lists and **Добавить переход**. The inspector edits
+names, initial/terminal flags, positions and transition endpoints. Every graph
+edit also has a keyboard-accessible form. **Сохранить черновик** on this tab
+saves the diagrams together with the API draft.
+
+A transition optionally binds to a method/path in this API. Its guard compares
+an entity-data JSON Pointer to `equalsJSON` (missing differs from JSON null).
+`patchJSON` is a JSON object shallow-merged after an accepted transition;
+`responseStatus` is the simulated response, not a network response. Removing or
+renaming a bound API operation requires repairing the binding. An unbound
+transition remains usable as a descriptive business action.
+
+**Проверить диаграмму** reports missing initial states, dangling transitions,
+outgoing transitions from terminal states, missing API operations and
+unreachable states. **Начать заново** starts from the initial state and the
+entered JSON object. Clicking actions replays a path and shows accepted or
+blocked steps, current state and exact resulting data. The first blocked action
+stops the trace without applying its patch. Editing a diagram or seed resets the
+local run; late responses from an older proposal are discarded.
+
+Simulation performs no HTTP mock calls, writes no entity data and saves no
+revision. State diagrams describe and simulate lifecycle behavior only; they do
+not install executable state machines in HTTP mocks.
+
+The authored OpenAPI extension `x-mocker-state-diagrams` stores
+`{formatVersion:1, diagrams:[...]}`. Existing draft history, diff, restore and
+contract export preserve it. The complete-document API save validates the
+extension structure too. Limits: 20 diagrams/API, 100 states and 300
+transitions/diagram, 100 simulated actions and 64 KiB per JSON value/data object.
+
+### First-class state diagram MCP tools
+
+- `list_state_diagrams {designId}` and `get_state_diagram {designId,diagramId}`
+  return the current API `version` and `revisionId` with the diagram data.
+- `create_state_diagram {designId,expectedVersion,diagram}` creates one model.
+  A blank diagram needs `id`, `name`, `initialStateId:""`, `states:[]` and
+  `transitions:[]`. Choose a stable URL-safe ID. After a lost response read before
+  retrying; create is not idempotent.
+- `save_state_diagram {designId,diagramId,expectedVersion,diagram}` replaces
+  only that complete diagram. `delete_state_diagram` takes the same identity and
+  expected version. Other contract fields and diagrams are preserved.
+- `apply_state_diagram_commands {designId,diagramId,expectedVersion,commands}`
+  applies an atomic batch. Kinds: `upsert_state` with a complete `state`,
+  `remove_state` with `id`, `upsert_transition` with a complete `transition`,
+  `remove_transition` with `id`, and `settings` with `name` and/or
+  `initialStateId`. Removing a state removes its incident transitions and clears
+  its initial-state selection. Upserts replace complete objects.
+- `validate_state_diagram {designId,diagramId}` checks the saved model.
+- `simulate_state_diagram {designId,diagramId,dataJSON,transitionIds}` replays
+  from the initial state; an empty action array inspects the initial run.
+  Both evaluate tools accept optional `diagram` and `document` to evaluate an
+  unsaved proposal. `document` is the full proposed OpenAPI text for bindings;
+  omission resolves bindings against the current saved draft. Both tools are
+  read-only despite their POST transport. UI uses the same handlers/evaluator.
+
+All writes require the API design version, not a diagram-local version. A 409
+means re-read and reconcile both API and diagram changes; never simply replace
+`expectedVersion` in a stale request. Restoring a diagram's old snapshot uses the
+existing `get_api_design_revision` and `restore_api_design_revision` tools and
+restores that entire API revision as a new draft. Publication stays separate.
+
+Example atomic construction after creating an empty `order` diagram:
+
+```json
+{
+  "designId": 7,
+  "diagramId": "order",
+  "expectedVersion": 2,
+  "commands": [
+    {"kind":"upsert_state","state":{"id":"created","name":"Created","x":60,"y":80,"terminal":false}},
+    {"kind":"upsert_state","state":{"id":"paid","name":"Paid","x":360,"y":80,"terminal":true}},
+    {"kind":"settings","initialStateId":"created"},
+    {"kind":"upsert_transition","transition":{"id":"pay","name":"Pay","from":"created","to":"paid","guard":{"pointer":"/allowed","equalsJSON":"true"},"patchJSON":"{\"status\":\"paid\"}","responseStatus":200}}
+  ]
+}
+```
+
+Then simulate with `dataJSON:"{\"allowed\":true}"` and
+`transitionIds:["pay"]`. Preserve returned `dataJSON` as text when handling
+numbers outside JavaScript's exact integer range.
+
+
 ## Branches and nested blocks
 
 In a block inspector, choose **alt** for alternatives and edit each branch's

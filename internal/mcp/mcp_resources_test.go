@@ -328,8 +328,8 @@ func TestToolsList_hasCurrentSurfaceAndIrreversibilityWarning(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &env); err != nil {
 		t.Fatalf("decode tools/list: %v; body=%s", err, rec.Body.String())
 	}
-	if len(env.Result.Tools) != 91 {
-		t.Errorf("tools/list returned %d tools, want 91", len(env.Result.Tools))
+	if len(env.Result.Tools) != 99 {
+		t.Errorf("tools/list returned %d tools, want 99", len(env.Result.Tools))
 	}
 	var found bool
 	for _, tool := range env.Result.Tools {

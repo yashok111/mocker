@@ -100,8 +100,9 @@ import { hasUnsafeJsonNumber } from "./jsonNumberPrecision";
 import classes from "./ApiDesigner.module.css";
 
 const POLL_MS = 5_000;
+const StateDiagramEditor = lazy(() => import("../state-diagram/StateDiagramEditor"));
 const SchemaDiagram = lazy(() => import("./SchemaDiagram"));
-type CanvasView = "documentation" | "editor" | "diagram" | "compare" | "review";
+type CanvasView = "documentation" | "editor" | "diagram" | "states" | "compare" | "review";
 type EditorMode = "form" | "source";
 type InspectorView = "changes" | "history" | "checks" | "mock";
 
@@ -719,6 +720,7 @@ export function ApiDesignerWorkbench({
               <Tabs.Tab value="documentation">Документация</Tabs.Tab>
               <Tabs.Tab value="editor">Редактор</Tabs.Tab>
               <Tabs.Tab value="diagram">Диаграмма</Tabs.Tab>
+              <Tabs.Tab value="states">Состояния</Tabs.Tab>
               <Tabs.Tab value="compare">Сравнение</Tabs.Tab>
               <Tabs.Tab value="review">Проверка</Tabs.Tab>
             </Tabs.List>
@@ -743,6 +745,48 @@ export function ApiDesignerWorkbench({
                     document={parsed.document}
                     selection={selection}
                     pendingFormDraft={formDraft.dirty}
+                  />
+                </Suspense>
+              )}
+            </Tabs.Panel>
+            <Tabs.Panel value="states" className={classes.canvasPanel}>
+              <Group justify="space-between" mb="md">
+                <Text size="sm" c="dimmed">
+                  Диаграммы сохраняются вместе с черновиком API.
+                </Text>
+                <Button
+                  leftSection={<IconDeviceFloppy size={16} />}
+                  loading={save.isPending}
+                  disabled={!dirty || parsed.error !== null || formDraft.dirty || unsafeNumber}
+                  onClick={() => {
+                    submittedFormDrafts.current = draftStore.serialize();
+                    save.mutate({
+                      id,
+                      data: {
+                        expectedVersion: baseVersion,
+                        document: buffer,
+                        summary: summary.trim() || "Изменение диаграмм состояний",
+                        ...(activeChangeSetId === null ? {} : { changeSetId: activeChangeSetId }),
+                      },
+                    });
+                  }}
+                >
+                  Сохранить черновик
+                </Button>
+              </Group>
+              {save.isError && !conflict ? (
+                <Alert color="red" role="alert" mb="md">
+                  {describeApiFailureDetailed(save.error)}
+                </Alert>
+              ) : null}
+
+              {view === "states" && (
+                <Suspense fallback={<Text>Загрузка диаграмм состояний…</Text>}>
+                  <StateDiagramEditor
+                    designId={id}
+                    document={parsed.document}
+                    blocked={formDraft.dirty || unsafeNumber}
+                    onChange={(next) => setBuffer(JSON.stringify(next, null, 2))}
                   />
                 </Suspense>
               )}

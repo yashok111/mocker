@@ -1,0 +1,103 @@
+.root {
+  min-width: 0;
+}
+.workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 280px;
+  gap: 16px;
+  align-items: start;
+}
+.workspace > div {
+  min-width: 0;
+}
+.graphShell {
+  min-width: 0;
+  height: 460px;
+  position: relative;
+  border: 1px solid var(--mocker-border, #d6dfd6);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.graph {
+  margin: 0;
+  height: 100%;
+  width: 100%;
+  min-width: 0;
+}
+.graphTools {
+  position: absolute;
+  bottom: 12px;
+  right: 12px;
+}
+.inspector {
+  border-left: 1px solid var(--mocker-border, #d6dfd6);
+  padding-left: 16px;
+  min-width: 0;
+}
+.lists {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 14px;
+  margin-top: 14px;
+}
+.list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.row {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 8px 10px;
+  border-radius: 6px;
+  overflow-wrap: anywhere;
+}
+.row[aria-pressed="true"] {
+  background: #e5eee2;
+  color: #24482e;
+}
+.row:focus-visible {
+  outline: 2px solid #245e39;
+  outline-offset: 2px;
+}
+.simulation {
+  border-top: 1px solid var(--mocker-border, #d6dfd6);
+  padding-top: 18px;
+  margin-top: 20px;
+}
+.simulationGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 16px;
+}
+.data {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 260px;
+  overflow: auto;
+  font-size: 12px;
+  padding: 12px;
+  border-radius: 6px;
+  background: var(--mantine-color-gray-0);
+}
+@media (max-width: 75em) {
+  .workspace {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .inspector {
+    border-left: 0;
+    border-top: 1px solid var(--mocker-border, #d6dfd6);
+    padding-left: 0;
+    padding-top: 14px;
+  }
+}
+@media (max-width: 40em) {
+  .lists,
+  .simulationGrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .graphShell {
+    height: 340px;
+  }
+}
