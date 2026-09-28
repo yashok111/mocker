@@ -1,0 +1,13 @@
+diff --git a/out/kinds.js b/out/kinds.js
+index 0d9dec4284320212984f989d768b4548dfca11cc..e35f68da4ee46730c18326ae05c512d6082d3a1e 100644
+--- a/out/kinds.js
++++ b/out/kinds.js
+@@ -40,7 +40,7 @@ $ark.defaultConfig = withAlphabetizedKeys(Object.assign(flatMorph(nodeImplementa
+     kind,
+     implementation.defaults
+ ]), {
+-    jitless: envHasCsp(),
++    jitless: $ark.config.jitless ?? envHasCsp(),
+     clone: deepClone,
+     onUndeclaredKey: "ignore",
+     exactOptionalPropertyTypes: true,

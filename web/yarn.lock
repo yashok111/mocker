@@ -43,6 +43,15 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@ark/schema@patch:@ark/schema@npm%3A0.56.2#~/.yarn/patches/@ark-schema-npm-0.56.2-9e438d578f.patch":
+  version: 0.56.2
+  resolution: "@ark/schema@patch:@ark/schema@npm%3A0.56.2#~/.yarn/patches/@ark-schema-npm-0.56.2-9e438d578f.patch::version=0.56.2&hash=1e87a9"
+  dependencies:
+    "@ark/util": "npm:0.56.2"
+  checksum: 10c0/236c0ba41d10df16bcc5ba6c3756c6833a247daaa55e894e6a1db278e408c282f90a7abd40b3868f1743130a271bb69c869649640dd28a0f195e02049f80280b
+  languageName: node
+  linkType: hard
+
 "@ark/util@npm:0.56.2":
   version: 0.56.2
   resolution: "@ark/util@npm:0.56.2"

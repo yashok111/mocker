@@ -23,7 +23,7 @@ mocker
 *.db-wal
 *.db-shm
 
-# UI build artefacts. /web/node_modules/ and /web/.yarn/ are just context
+# UI build artefacts. /web/node_modules/ and Yarn caches are just context
 # bloat (300 MB nobody needs — the webbuilder stage runs its own
 # `yarn install --immutable`). Excluding
 # /internal/webui/dist/ entirely is the load-bearing rule, not a tidiness
@@ -36,7 +36,8 @@ mocker
 # is deliberately NOT excluded — the webbuilder stage needs it in the context,
 # and neither is api/openapi.json, which that stage generates the client from.
 /web/node_modules/
-/web/.yarn/
+/web/.yarn/*
+!/web/.yarn/patches/
 /internal/webui/dist/
 
 # local env — must never end up in an image layer

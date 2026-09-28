@@ -199,7 +199,7 @@ func TestHandler_CSP_WithBaseDomain(t *testing.T) {
 	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "http://admin.local/", nil))
 
 	want := "default-src 'self'; script-src 'self'; base-uri 'none'; frame-ancestors 'none'; " +
-		"object-src 'none'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; " +
+		"object-src 'none'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; " +
 		"connect-src 'self' http://*.mocks.example.com:* https://*.mocks.example.com:*" +
 		" ws://*.mocks.example.com:* wss://*.mocks.example.com:*"
 	if got := rec.Header().Get("Content-Security-Policy"); got != want {

@@ -231,7 +231,7 @@ func buildCSP(cfg *config.Config) string {
 		"base-uri 'none'",
 		"frame-ancestors 'none'",
 		"object-src 'none'",
-		"img-src 'self' data:",
+		"img-src 'self' data: blob:", // SVG/PNG previews use locally generated object URLs.
 		"style-src 'self' 'unsafe-inline'",
 	)
 
