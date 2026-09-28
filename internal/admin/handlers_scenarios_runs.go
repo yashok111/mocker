@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"regexp"
+	"strconv"
 	"unicode/utf8"
 
 	"github.com/yashok111/mocker/internal/designscenario"
@@ -109,6 +110,44 @@ func (s *Server) handleListDesignScenarioRuns(w http.ResponseWriter, r *http.Req
 		return
 	}
 	httpx.JSON(w, http.StatusOK, map[string]any{"runs": runs})
+}
+
+func (s *Server) handleGetDesignScenarioCoverage(w http.ResponseWriter, r *http.Request) {
+	id, ok := s.designScenarioRequest(w, r)
+	if !ok {
+		return
+	}
+	var revisionID int64
+	if raw := r.URL.Query().Get("revisionId"); raw != "" {
+		var err error
+		revisionID, err = strconv.ParseInt(raw, 10, 64)
+		if err != nil || revisionID <= 0 {
+			httpx.Err(w, http.StatusBadRequest, httpx.CodeBadRequest, "Укажите положительный revisionId")
+			return
+		}
+	} else {
+		detail, err := s.designScenariosRepo.Detail(r.Context(), id)
+		if err != nil {
+			s.designScenarioError(w, err)
+			return
+		}
+		revisionID = detail.Draft.ID
+	}
+	revision, err := s.designScenariosRepo.Revision(r.Context(), id, revisionID)
+	if err != nil {
+		s.designScenarioError(w, err)
+		return
+	}
+	if s.scenarioRuns == nil || s.scenarioRuns.repo == nil {
+		s.scenarioRunError(w, errScenarioRunsUnavailable)
+		return
+	}
+	reports, err := s.scenarioRuns.repo.CoverageReports(r.Context(), id, revisionID)
+	if err != nil {
+		s.designScenarioError(w, err)
+		return
+	}
+	httpx.JSON(w, http.StatusOK, designscenario.BuildCoverage(revision, reports))
 }
 
 func (s *Server) handleGetDesignScenarioRun(w http.ResponseWriter, r *http.Request) {

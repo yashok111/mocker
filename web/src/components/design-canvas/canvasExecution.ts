@@ -54,6 +54,21 @@ export interface CanvasExecutionStepResult {
   request?: CanvasExecuteStepInput;
   response?: CanvasExecuteStepResponse;
   assertions: CanvasAssertionResult[];
+  occurrence?: number;
+  iterations?: CanvasLoopIteration[];
+}
+
+export interface CanvasLoopIteration {
+  fragmentId: string;
+  iteration: number;
+}
+
+export interface CanvasControlFlowResult {
+  fragmentId: string;
+  branchId?: string;
+  outcome: "taken" | "skipped";
+  iterations?: CanvasLoopIteration[];
+  reason?: string;
 }
 
 export interface CanvasExecutionRunInput {
@@ -81,6 +96,21 @@ export interface CanvasExecutionReport extends CanvasExecutionRunSummary {
   inputVariables: Record<string, string>;
   variables: Record<string, string>;
   steps: CanvasExecutionStepResult[];
+  controlFlow?: CanvasControlFlowResult[];
+}
+
+export interface CanvasExecutionCoverage {
+  revisionId: number;
+  runCount: number;
+  sampleLimit: number;
+  messages: {
+    messageId: string;
+    attempted: number;
+    passed: number;
+    failed: number;
+    skipped: number;
+  }[];
+  paths: { fragmentId: string; branchId?: string; outcome: "taken" | "skipped"; hits: number }[];
 }
 
 export function defaultStepExecution(): CanvasStepExecution {
@@ -101,8 +131,28 @@ export function canvasExecutionBlockReason(document: CanvasDocument): string | n
   } catch (error) {
     return error instanceof Error ? error.message : "Не удалось проверить настройки запуска.";
   }
-  if (document.fragments.length > 0)
-    return "Исполнение блоков opt/loop/alt пока не поддерживается. Удалите блоки перед запуском.";
+  for (const fragment of document.fragments) {
+    if (fragment.kind === "opt" && !fragment.execution?.condition)
+      return `Задайте условие выполнения блока «${fragment.label || fragment.id}».`;
+    if (fragment.kind === "loop" && !fragment.execution?.iterations)
+      return `Задайте число повторений блока «${fragment.label || fragment.id}».`;
+    if (fragment.kind === "alt") {
+      const branches = fragment.branches ?? [];
+      if (
+        !branches.length ||
+        branches.some(
+          (branch) => !branch.execution?.condition && branch.execution?.otherwise !== true,
+        )
+      )
+        return `Задайте условие или «иначе» для каждой ветки блока «${fragment.label || fragment.id}».`;
+      const otherwise = branches.filter((branch) => branch.execution?.otherwise === true);
+      if (
+        otherwise.length > 1 ||
+        (otherwise.length === 1 && branches.at(-1)?.id !== otherwise[0]?.id)
+      )
+        return `В блоке «${fragment.label || fragment.id}» ветка «иначе» может быть только последней.`;
+    }
+  }
   const executable = document.messages.filter(
     (message) =>
       message.kind === "request" &&

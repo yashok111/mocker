@@ -48,7 +48,7 @@ type documentValidator struct {
 }
 
 func validateDocument(document Document) []Diagnostic {
-	validator := documentValidator{diagnostics: executionDiagnostics(document)}
+	validator := documentValidator{diagnostics: append(executionDiagnostics(document), validateControlFlow(document, false)...)}
 	validator.validateMetadata(document)
 	participants := validator.validateParticipants(document.Participants)
 	messages := validator.validateMessages(document.Messages)

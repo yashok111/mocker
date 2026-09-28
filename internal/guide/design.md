@@ -350,11 +350,20 @@ separate from the classic workspace snapshot called a scenario.
    `draft.document`, `draft.formDrafts`, `scenario.version` and `draft.id`.
    `validate_design_scenario {scenarioId, document}` checks a proposed document
    without saving. Enabled HTTP requests need a linked, current API contract;
-   finish form buffers and remove unsupported alt/opt/loop fragments before a run.
+   finish form buffers and configure every alt/opt/loop guard before a run. Labels are descriptive and never evaluated.
 2. To edit, use `apply_design_scenario_commands` with the exact `expectedVersion`
    and an ordered command batch, or `save_design_scenario_draft` with the complete
    document and all retained form buffers. Upserts replace complete objects.
    Re-read and reconcile a409; never blindly substitute the newer version.
+   `set_design_scenario_fragment_execution {scenarioId, expectedVersion, fragmentId, execution}` and
+   `set_design_scenario_branch_execution {scenarioId, expectedVersion, fragmentId, branchId, execution}`
+   are focused version-fenced edits; `execution: null` clears a setting. The same
+   changes work in command batches as `set_fragment_execution {id, fragmentExecution}`
+   and `set_branch_execution {id, branchId, branchExecution}`. An opt needs a
+   condition, a loop needs 1–100 maximum iterations and may have a condition,
+   and each alt branch needs a condition or one final `otherwise: true`. Conditions
+   compare exact string variables using `equals`, `not_equals`, `exists` or
+   `not_exists`; equality requires `value`, including an empty string.
    Message `execution` configures parameter/header/body templates (`{{name}}`),
    expected HTTP status, JSON-pointer assertions and extracted variables.
 3. `run_design_scenario {scenarioId, revisionId, runId, name, variables}` starts
@@ -364,8 +373,10 @@ separate from the classic workspace snapshot called a scenario.
 4. While `status` is `running`, call `get_design_scenario_run {scenarioId, runId}`
    roughly once per second. **Starting successfully does not mean the scenario
    passed.** Read the terminal `passed`, `failed` or `cancelled` result. Every
-   report includes the exact document snapshot and ordered steps with resolved
-   requests, responses, assertion results and reasons. Missing JSON values and
+   report includes `controlFlow` decisions and the exact document snapshot and ordered steps with resolved
+   requests, responses, assertion results and reasons. Repeated loop steps have
+   `occurrence` and `iterations`; skipped branches are decisions, not HTTP calls.
+   Missing JSON values and
    JSON null differ. `expectedJson` and `actualJson` contain serialized JSON so
    large integers remain exact; preserve them as strings when reporting them.
 5. On failure, inspect the first failed step, its actual status/body and assertion
@@ -377,12 +388,18 @@ separate from the classic workspace snapshot called a scenario.
    payload with that ID is409. Old pruned report IDs are410 and do not re-execute.
    `list_design_scenario_runs` lists the latest50 reports from both transports.
    `cancel_design_scenario_run` stops an active run; completed effects remain.
+   `get_design_scenario_coverage {scenarioId, revisionId?}` returns observed
+   message and control-flow path counts for one immutable revision, sampled from
+   at most 50 retained terminal reports; omitted revision selects the draft.
+   Zero hits mean unobserved, not impossible.
 
 The server runs the sequence even when the MCP call returns or its client
 disconnects. Four runs may be active globally, one per scenario; runs have a120s
 budget and individual requests30s. Runs use linked draft mocks in-process,
-with the same contract checks as a single-step probe. External URLs, conditions
-and loops are not supported; disabled/descriptive messages are skipped. Runs
+with the same contract checks as a single-step probe. External URLs are never dispatched. The server evaluates configured conditions
+and bounded loops against run variables; incomplete fragment settings stop a full
+run before dispatch. Direct `execute_design_scenario_step` still refuses any
+fragmented revision. Disabled/descriptive messages are skipped. Runs
 use normal mock state and do not isolate or roll back effects.
 
 The UI's execution panel follows new agent runs, shows progress and keeps saved

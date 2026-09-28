@@ -18,6 +18,7 @@ import { ScenarioExecutionPanel } from "./ScenarioExecutionPanel";
 import { ScenarioResultsModal, type ScenarioResultSelection } from "./ScenarioResultsModal";
 import {
   runScenario,
+  getScenarioCoverage,
   listScenarioRuns,
   getScenarioRun,
   cancelScenarioRun,
@@ -657,6 +658,7 @@ function ServerCanvasEditor({
         listRuns={(signal) => listScenarioRuns(id, signal)}
         getRun={(runId, signal) => getScenarioRun(id, runId, signal)}
         cancelRun={(runId, signal) => cancelScenarioRun(id, runId, signal)}
+        getCoverage={(revisionId, signal) => getScenarioCoverage(id, revisionId, signal)}
       />
       <ScenarioContractsPanel
         opened={contractsOpened}

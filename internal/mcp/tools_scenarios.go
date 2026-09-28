@@ -22,6 +22,32 @@ import (
 // surface; full-document save remains available for the interactive editor.
 func addDesignScenarioTools(s *sdk.Server, lb *loopback) {
 	addScenarioExportTools(s, lb)
+	addDesignScenarioTool(s, lb, "get_design_scenario_coverage", "GET /api/design-scenarios/{id}/coverage",
+		"Reads measured HTTP message and control-flow path coverage for one immutable scenario revision. Defaults to the current draft. Samples at most 50 retained terminal reports for that exact revision; zero hits mean unobserved, not impossible.", true,
+		func(in designScenarioCoverageInput) (designScenarioCall, error) {
+			call, err := designScenarioRead(in.ScenarioID)
+			if in.RevisionID != nil {
+				if *in.RevisionID <= 0 {
+					return call, errors.New("revisionId must be positive")
+				}
+				call.query = url.Values{"revisionId": {strconv.FormatInt(*in.RevisionID, 10)}}.Encode()
+			}
+			return call, err
+		})
+	addDesignScenarioTool(s, lb, "set_design_scenario_fragment_execution", "POST /api/design-scenarios/{id}/commands",
+		"Sets or clears opt/loop execution settings through the version-fenced atomic scenario command path. Pass execution:null to clear. Read get_design_scenario before writing; reconcile a 409 instead of blindly retrying.", false,
+		func(in setFragmentExecutionInput) (designScenarioCall, error) {
+			call, err := designScenarioWrite(in.ScenarioID, in.ExpectedVersion)
+			call.body = designScenarioExecutionCommandBody(in.ExpectedVersion, designscenario.Command{Type: "set_fragment_execution", ID: in.FragmentID, FragmentExecution: in.Execution}, in.Summary)
+			return call, err
+		})
+	addDesignScenarioTool(s, lb, "set_design_scenario_branch_execution", "POST /api/design-scenarios/{id}/commands",
+		"Sets or clears one alt branch guard through the version-fenced atomic scenario command path. Pass execution:null to clear. Read get_design_scenario before writing; reconcile a 409 instead of blindly retrying.", false,
+		func(in setBranchExecutionInput) (designScenarioCall, error) {
+			call, err := designScenarioWrite(in.ScenarioID, in.ExpectedVersion)
+			call.body = designScenarioExecutionCommandBody(in.ExpectedVersion, designscenario.Command{Type: "set_branch_execution", ID: in.FragmentID, BranchID: in.BranchID, BranchExecution: in.Execution}, in.Summary)
+			return call, err
+		})
 	addDesignScenarioTool(s, lb, "run_design_scenario", "POST /api/design-scenarios/{id}/runs",
 		"Starts an asynchronous server run of an immutable saved scenario revision. Executes enabled HTTP steps sequentially, substitutes variables, checks expected status and JSON assertions, and extracts variables for later steps. Kafka event steps are skipped explicitly; this is an HTTP check, not verification of event delivery. Returns a persisted report; poll get_design_scenario_run until terminal. Supply a unique runId for each intentional run or variable variant. Repeating the SAME runId with identical revisionId, variables and name returns the original run without dispatching again, including after a lost response. Changed input returns 409; a pruned report returns 410 and never replays. Variable overrides affect only this run; the scenario revision stays unchanged. May mutate mock runtime state.", false,
 		func(in runDesignScenarioInput) (designScenarioCall, error) {
@@ -151,6 +177,14 @@ func addDesignScenarioTools(s *sdk.Server, lb *loopback) {
 		})
 }
 
+func designScenarioExecutionCommandBody(version int64, command designscenario.Command, summary string) any {
+	return struct {
+		ExpectedVersion int64                    `json:"expectedVersion"`
+		Commands        []designscenario.Command `json:"commands"`
+		Summary         string                   `json:"summary,omitempty"`
+	}{version, []designscenario.Command{command}, summary}
+}
+
 func designScenarioRunCall(in designScenarioRunInput) (designScenarioCall, error) {
 	call, err := designScenarioRead(in.ScenarioID)
 	if err != nil {
@@ -204,7 +238,7 @@ func addDesignScenarioTool[Input any](
 	if schema := designScenarioInputSchema(name); schema != nil {
 		tool.InputSchema = schema
 	}
-	if name == "create_design_scenario" || name == "save_design_scenario_draft" || name == "validate_design_scenario" || name == "apply_design_scenario_commands" {
+	if name == "create_design_scenario" || name == "save_design_scenario_draft" || name == "validate_design_scenario" || name == "apply_design_scenario_commands" || name == "set_design_scenario_fragment_execution" || name == "set_design_scenario_branch_execution" {
 		addRawDesignScenarioTool(s, lb, tool, route, build)
 		return
 	}
@@ -345,6 +379,12 @@ func designScenarioInputSchema(name string) any {
 		return designScenarioSchemaObject([]string{"scenarioId", "runId"}, map[string]any{"scenarioId": designScenarioPositiveIntegerSchema(), "runId": designScenarioRunIDSchema()})
 	case "list_design_scenario_runs":
 		return designScenarioSchemaObject([]string{"scenarioId"}, map[string]any{"scenarioId": designScenarioPositiveIntegerSchema()})
+	case "get_design_scenario_coverage":
+		return designScenarioSchemaObject([]string{"scenarioId"}, map[string]any{"scenarioId": designScenarioPositiveIntegerSchema(), "revisionId": designScenarioPositiveIntegerSchema()})
+	case "set_design_scenario_fragment_execution":
+		return designScenarioSchemaObject([]string{"scenarioId", "expectedVersion", "fragmentId", "execution"}, map[string]any{"scenarioId": designScenarioPositiveIntegerSchema(), "expectedVersion": designScenarioPositiveIntegerSchema(), "fragmentId": map[string]any{"type": "string", "minLength": 1}, "execution": map[string]any{"anyOf": []any{designScenarioFragmentExecutionSchema(), map[string]any{"type": "null"}}}, "summary": map[string]any{"type": "string"}})
+	case "set_design_scenario_branch_execution":
+		return designScenarioSchemaObject([]string{"scenarioId", "expectedVersion", "fragmentId", "branchId", "execution"}, map[string]any{"scenarioId": designScenarioPositiveIntegerSchema(), "expectedVersion": designScenarioPositiveIntegerSchema(), "fragmentId": map[string]any{"type": "string", "minLength": 1}, "branchId": map[string]any{"type": "string", "minLength": 1}, "execution": map[string]any{"anyOf": []any{designScenarioBranchExecutionSchema(), map[string]any{"type": "null"}}}, "summary": map[string]any{"type": "string"}})
 	case "execute_design_scenario_step":
 		return designScenarioSchemaObject([]string{"scenarioId", "revisionId", "messageId", "pathParams", "query", "headers", "body"}, map[string]any{
 			"scenarioId": designScenarioPositiveIntegerSchema(), "revisionId": designScenarioPositiveIntegerSchema(),
@@ -477,6 +517,7 @@ func designScenarioDocumentSchema() map[string]any {
 			"label":         map[string]any{"type": "string"},
 			"fromMessageId": map[string]any{"type": "string", "minLength": 1},
 			"toMessageId":   map[string]any{"type": "string", "minLength": 1},
+			"execution":     designScenarioBranchExecutionSchema(),
 		},
 	)
 	fragment := designScenarioSchemaObject(
@@ -490,6 +531,7 @@ func designScenarioDocumentSchema() map[string]any {
 			"parentFragmentId": map[string]any{"type": "string", "minLength": 1},
 			"parentBranchId":   map[string]any{"type": "string", "minLength": 1},
 			"branches":         map[string]any{"type": "array", "minItems": 2, "maxItems": 100, "items": branch},
+			"execution":        designScenarioFragmentExecutionSchema(),
 		},
 	)
 	contractSource := designScenarioSchemaObject(
@@ -546,6 +588,22 @@ func designScenarioExecutionMapSchema() map[string]any {
 	return map[string]any{"type": "object", "maxProperties": designscenario.MaxExecutionEntries, "additionalProperties": map[string]any{"type": "string", "maxLength": 50_000}}
 }
 
+func designScenarioConditionSchema() map[string]any {
+	return designScenarioSchemaObject([]string{"variable", "operator"}, map[string]any{
+		"variable": map[string]any{"type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]{0,99}$"},
+		"operator": map[string]any{"type": "string", "enum": []string{"equals", "not_equals", "exists", "not_exists"}},
+		"value":    map[string]any{"type": "string"},
+	})
+}
+
+func designScenarioFragmentExecutionSchema() map[string]any {
+	return designScenarioSchemaObject([]string{}, map[string]any{"condition": designScenarioConditionSchema(), "iterations": map[string]any{"type": "integer", "minimum": 1, "maximum": 100}})
+}
+
+func designScenarioBranchExecutionSchema() map[string]any {
+	return designScenarioSchemaObject([]string{}, map[string]any{"condition": designScenarioConditionSchema(), "otherwise": map[string]any{"type": "boolean"}})
+}
+
 func designScenarioStepExecutionSchema() map[string]any {
 	pointer := map[string]any{"type": "string", "maxLength": 2000}
 	assertion := designScenarioSchemaObject([]string{"pointer", "equals"}, map[string]any{"pointer": pointer, "equals": map[string]any{}})
@@ -585,6 +643,8 @@ func designScenarioCommandSchemas() []any {
 		command("remove_message", []string{"id"}, map[string]any{"id": stringField()}),
 		command("move_message", []string{"id", "index"}, map[string]any{"id": stringField(), "index": map[string]any{"type": "integer", "minimum": 0}}),
 		command("upsert_fragment", []string{"fragment"}, map[string]any{"fragment": fragment}),
+		command("set_fragment_execution", []string{"id"}, map[string]any{"id": stringField(), "fragmentExecution": map[string]any{"anyOf": []any{designScenarioFragmentExecutionSchema(), map[string]any{"type": "null"}}}}),
+		command("set_branch_execution", []string{"id", "branchId"}, map[string]any{"id": stringField(), "branchId": stringField(), "branchExecution": map[string]any{"anyOf": []any{designScenarioBranchExecutionSchema(), map[string]any{"type": "null"}}}}),
 		command("remove_fragment", []string{"id"}, map[string]any{"id": stringField()}),
 		command("bind_operation", []string{"messageId", "contractId", "operationKey"}, map[string]any{"messageId": stringField(), "contractId": stringField(), "operationKey": stringField()}),
 		command("create_operation", []string{"messageId", "method", "path"}, map[string]any{"messageId": stringField(), "contractId": stringField(), "method": stringField(), "path": stringField(), "label": stringField()}),

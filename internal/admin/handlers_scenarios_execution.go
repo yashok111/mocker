@@ -87,6 +87,17 @@ func (s *Server) stepRepositoryError(err error) error {
 // executeScenarioStep is shared by the single-step endpoint and server runs.
 // It dispatches only a saved operation and never opens a network connection.
 func (s *Server) executeScenarioStep(ctx context.Context, revision designscenario.Revision, input designscenario.StepRequest) (designscenario.StepResponse, error) {
+	return s.executeScenarioStepMode(ctx, revision, input, false)
+}
+
+// executeScenarioRunStep is called only after the runner has validated and
+// selected the active control-flow path. The public single-step route keeps
+// its fragment guard so callers cannot bypass branch selection.
+func (s *Server) executeScenarioRunStep(ctx context.Context, revision designscenario.Revision, input designscenario.StepRequest) (designscenario.StepResponse, error) {
+	return s.executeScenarioStepMode(ctx, revision, input, true)
+}
+
+func (s *Server) executeScenarioStepMode(ctx context.Context, revision designscenario.Revision, input designscenario.StepRequest, fromRun bool) (designscenario.StepResponse, error) {
 	fail := func(err error) (designscenario.StepResponse, error) {
 		return designscenario.StepResponse{}, stepError(400, "design_scenario_execution_invalid", err.Error())
 	}
@@ -96,7 +107,7 @@ func (s *Server) executeScenarioStep(ctx context.Context, revision designscenari
 	if input.RevisionID != revision.ID {
 		return fail(errors.New("версия запроса не совпадает с версией сценария"))
 	}
-	contract, err := executableContract(revision, input.MessageID)
+	contract, err := executableContract(revision, input.MessageID, fromRun)
 	if err != nil {
 		return fail(err)
 	}
@@ -194,8 +205,8 @@ func stepDesignConflict(contract *designscenario.Contract, design *apidesign.Det
 	return &designscenario.LinkedConflictError{ContractID: contract.ID, DesignID: design.Design.ID, Version: design.Design.Version, DraftRevisionID: design.Design.DraftRevisionID}
 }
 
-func executableContract(revision designscenario.Revision, messageID string) (*designscenario.Contract, error) {
-	if len(revision.Document.Fragments) != 0 {
+func executableContract(revision designscenario.Revision, messageID string, fromRun bool) (*designscenario.Contract, error) {
+	if !fromRun && len(revision.Document.Fragments) != 0 {
 		return nil, errors.New("исполнение opt/loop пока не поддерживается; удалите фрагменты")
 	}
 	for key, value := range revision.FormDrafts {

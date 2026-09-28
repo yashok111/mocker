@@ -5184,6 +5184,9 @@
             "items": {
               "$ref": "#/components/schemas/DesignScenarioFragmentBranch"
             }
+          },
+          "execution": {
+            "$ref": "#/components/schemas/DesignScenarioFragmentExecution"
           }
         },
         "additionalProperties": false
@@ -6107,6 +6110,12 @@
           },
           {
             "$ref": "#/components/schemas/DesignScenarioSetEventModelCommand"
+          },
+          {
+            "$ref": "#/components/schemas/DesignScenarioSetFragmentExecutionCommand"
+          },
+          {
+            "$ref": "#/components/schemas/DesignScenarioSetBranchExecutionCommand"
           }
         ]
       },
@@ -6574,6 +6583,16 @@
             "items": {
               "$ref": "#/components/schemas/DesignScenarioRunAssertionResult"
             }
+          },
+          "occurrence": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "iterations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DesignScenarioLoopIteration"
+            }
           }
         },
         "additionalProperties": false
@@ -6671,6 +6690,12 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/DesignScenarioRunStepResult"
+            }
+          },
+          "controlFlow": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DesignScenarioControlFlowResult"
             }
           }
         },
@@ -6933,6 +6958,9 @@
           "toMessageId": {
             "type": "string",
             "minLength": 1
+          },
+          "execution": {
+            "$ref": "#/components/schemas/DesignScenarioBranchExecution"
           }
         },
         "additionalProperties": false
@@ -8239,6 +8267,268 @@
           "diagnostics",
           "valid"
         ],
+        "additionalProperties": false
+      },
+      "DesignScenarioExecutionCondition": {
+        "type": "object",
+        "required": [
+          "variable",
+          "operator"
+        ],
+        "properties": {
+          "variable": {
+            "type": "string",
+            "pattern": "^[A-Za-z_][A-Za-z0-9_]{0,99}$"
+          },
+          "operator": {
+            "type": "string",
+            "enum": [
+              "equals",
+              "not_equals",
+              "exists",
+              "not_exists"
+            ]
+          },
+          "value": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "DesignScenarioFragmentExecution": {
+        "type": "object",
+        "required": [],
+        "properties": {
+          "condition": {
+            "$ref": "#/components/schemas/DesignScenarioExecutionCondition"
+          },
+          "iterations": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          }
+        },
+        "additionalProperties": false
+      },
+      "DesignScenarioBranchExecution": {
+        "type": "object",
+        "required": [],
+        "properties": {
+          "condition": {
+            "$ref": "#/components/schemas/DesignScenarioExecutionCondition"
+          },
+          "otherwise": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      },
+      "DesignScenarioSetFragmentExecutionCommand": {
+        "type": "object",
+        "required": [
+          "type",
+          "id"
+        ],
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "set_fragment_execution"
+          },
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "fragmentExecution": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/DesignScenarioFragmentExecution"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "DesignScenarioSetBranchExecutionCommand": {
+        "type": "object",
+        "required": [
+          "type",
+          "id",
+          "branchId"
+        ],
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "set_branch_execution"
+          },
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "branchId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "branchExecution": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/DesignScenarioBranchExecution"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "DesignScenarioLoopIteration": {
+        "type": "object",
+        "required": [
+          "fragmentId",
+          "iteration"
+        ],
+        "properties": {
+          "fragmentId": {
+            "type": "string"
+          },
+          "iteration": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "additionalProperties": false
+      },
+      "DesignScenarioControlFlowResult": {
+        "type": "object",
+        "required": [
+          "fragmentId",
+          "outcome"
+        ],
+        "properties": {
+          "fragmentId": {
+            "type": "string"
+          },
+          "branchId": {
+            "type": "string"
+          },
+          "outcome": {
+            "type": "string",
+            "enum": [
+              "taken",
+              "skipped"
+            ]
+          },
+          "iterations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DesignScenarioLoopIteration"
+            }
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "DesignScenarioCoverageMessage": {
+        "type": "object",
+        "required": [
+          "messageId",
+          "attempted",
+          "passed",
+          "failed",
+          "skipped"
+        ],
+        "properties": {
+          "messageId": {
+            "type": "string"
+          },
+          "attempted": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "passed": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "failed": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "skipped": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false
+      },
+      "DesignScenarioCoveragePath": {
+        "type": "object",
+        "required": [
+          "fragmentId",
+          "outcome",
+          "hits"
+        ],
+        "properties": {
+          "fragmentId": {
+            "type": "string"
+          },
+          "branchId": {
+            "type": "string"
+          },
+          "outcome": {
+            "type": "string",
+            "enum": [
+              "taken",
+              "skipped"
+            ]
+          },
+          "hits": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false
+      },
+      "DesignScenarioCoverage": {
+        "type": "object",
+        "required": [
+          "revisionId",
+          "runCount",
+          "sampleLimit",
+          "messages",
+          "paths"
+        ],
+        "properties": {
+          "revisionId": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "runCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "sampleLimit": {
+            "type": "integer",
+            "const": 50
+          },
+          "messages": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DesignScenarioCoverageMessage"
+            }
+          },
+          "paths": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DesignScenarioCoveragePath"
+            }
+          }
+        },
         "additionalProperties": false
       }
     }
@@ -16632,6 +16922,67 @@
                 "$ref": "#/components/schemas/SchemaModelCommandsRequest"
               }
             }
+          }
+        }
+      }
+    },
+    "/api/design-scenarios/{id}/coverage": {
+      "get": {
+        "tags": [
+          "design-scenarios"
+        ],
+        "operationId": "getDesignScenarioCoverage",
+        "summary": "Read revision-scoped coverage from up to 50 retained terminal reports",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "revisionId",
+            "in": "query",
+            "required": false,
+            "description": "Immutable scenario revision; defaults to current draft",
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Measured coverage for one immutable revision",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DesignScenarioCoverage"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
           }
         }
       }

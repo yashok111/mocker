@@ -37,8 +37,10 @@ var commandWireSpecs = map[string]commandWireSpec{
 		required: []string{"contractId"},
 		optional: []string{"revisionId"},
 	},
-	"detach_contract":      {required: []string{"contractId"}},
-	"materialize_contract": {required: []string{"contractId"}},
+	"detach_contract":        {required: []string{"contractId"}},
+	"materialize_contract":   {required: []string{"contractId"}},
+	"set_fragment_execution": {required: []string{"id"}, optional: []string{"fragmentExecution"}},
+	"set_branch_execution":   {required: []string{"id", "branchId"}, optional: []string{"branchExecution"}},
 }
 
 // UnmarshalJSON keeps Command's convenient service representation while
@@ -89,13 +91,13 @@ func validateCommandFields(fields map[string]jsonx.RawMessage, commandType strin
 	for _, name := range spec.required {
 		allowed[name] = true
 		raw, present := fields[name]
-		if !present || isJSONNull(raw) {
+		if !present || (isJSONNull(raw) && name != "fragmentExecution" && name != "branchExecution") {
 			return fmt.Errorf("design scenario command field %q is required for %q", name, commandType)
 		}
 	}
 	for _, name := range spec.optional {
 		allowed[name] = true
-		if raw, present := fields[name]; present && isJSONNull(raw) {
+		if raw, present := fields[name]; present && isJSONNull(raw) && name != "fragmentExecution" && name != "branchExecution" {
 			return fmt.Errorf("design scenario command field %q cannot be null", name)
 		}
 	}

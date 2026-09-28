@@ -4,6 +4,7 @@ import {
   listDesignScenarioRuns,
   getDesignScenarioRun,
   cancelDesignScenarioRun,
+  getDesignScenarioCoverage,
 } from "@/api/generated/design-scenarios/design-scenarios";
 import { describeApiFailureDetailed } from "@/api/errors";
 import type {
@@ -12,6 +13,7 @@ import type {
   CanvasExecutionRunInput,
   CanvasExecutionRunSummary,
   CanvasExecutionReport,
+  CanvasExecutionCoverage,
 } from "./canvasExecution";
 
 async function requestRun<T>(signal: AbortSignal, request: () => Promise<T>): Promise<T> {
@@ -21,6 +23,18 @@ async function requestRun<T>(signal: AbortSignal, request: () => Promise<T>): Pr
     if (signal.aborted) throw error;
     throw new Error(describeApiFailureDetailed(error), { cause: error });
   }
+}
+
+export function getScenarioCoverage(
+  id: number,
+  revisionId: number,
+  signal: AbortSignal,
+): Promise<CanvasExecutionCoverage> {
+  return requestRun(signal, async () => {
+    const response = await getDesignScenarioCoverage(id, { revisionId }, { signal });
+    if (response.status !== 200) throw new Error("Не удалось загрузить покрытие");
+    return response.data as CanvasExecutionCoverage;
+  });
 }
 
 export function runScenario(

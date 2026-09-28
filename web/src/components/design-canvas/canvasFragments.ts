@@ -202,8 +202,24 @@ export function setFragmentKind(
     ...upgraded,
     fragments: upgraded.fragments.map((f) => {
       if (f.id === id) {
-        const { branches: _branches, ...rest } = f;
-        return { ...rest, kind, ...(branches ? { branches } : {}) };
+        const { branches: _branches, execution: _execution, ...rest } = f;
+        const execution =
+          kind === "alt"
+            ? undefined
+            : f.execution
+              ? {
+                  ...(f.execution.condition ? { condition: f.execution.condition } : {}),
+                  ...(kind === "loop" && f.execution.iterations !== undefined
+                    ? { iterations: f.execution.iterations }
+                    : {}),
+                }
+              : undefined;
+        return {
+          ...rest,
+          kind,
+          ...(execution ? { execution } : {}),
+          ...(branches ? { branches } : {}),
+        };
       }
       if (f.parentFragmentId !== id) return f;
       const { parentBranchId: _parentBranchId, ...rest } = f;
@@ -242,8 +258,10 @@ export function splitFragmentBranch(
   )
     split++;
   if (split === range.end) fail("для новой ветки нужен свободный разделитель между шагами");
+  const { execution: _addedExecution, ...branchWithoutExecution } = branch;
   const added = {
-    ...branch,
+    ...branchWithoutExecution,
+    ...(branch.execution?.otherwise ? { execution: { otherwise: true } } : {}),
     id: createCanvasId(),
     label: "Условие",
     fromMessageId: document.messages[split + 1]!.id,
@@ -255,7 +273,16 @@ export function splitFragmentBranch(
         return {
           ...f,
           branches: f.branches!.flatMap((b) =>
-            b.id === branchId ? [{ ...b, toMessageId: document.messages[split]!.id }, added] : [b],
+            b.id === branchId
+              ? [
+                  {
+                    ...b,
+                    toMessageId: document.messages[split]!.id,
+                    ...(b.execution?.otherwise ? { execution: undefined } : {}),
+                  },
+                  added,
+                ]
+              : [b],
           ),
         };
       if (children.includes(f) && positions.get(f.fromMessageId)! > split)

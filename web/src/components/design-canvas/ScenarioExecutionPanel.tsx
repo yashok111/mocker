@@ -34,6 +34,7 @@ import {
   type CanvasExecutionRunInput,
   type CanvasExecutionRunSummary,
   type CanvasExecutionReport,
+  type CanvasExecutionCoverage,
   type CanvasExecutionStatus,
   type CanvasExecutionStepResult,
 } from "./canvasExecution";
@@ -77,6 +78,7 @@ export interface ScenarioExecutionPanelProps {
   listRuns: (signal: AbortSignal) => Promise<CanvasExecutionRunSummary[]>;
   getRun: (runId: string, signal: AbortSignal) => Promise<CanvasExecutionReport>;
   cancelRun: (runId: string, signal: AbortSignal) => Promise<CanvasExecutionReport>;
+  getCoverage?: (revisionId: number, signal: AbortSignal) => Promise<CanvasExecutionCoverage>;
 }
 
 type OwnedRun = {
@@ -275,6 +277,7 @@ function ExecutionSession({
   listRuns,
   getRun,
   cancelRun,
+  getCoverage,
 }: ScenarioExecutionPanelProps): ReactElement {
   const sourceForm = useMemo(() => settingsOf(document), [document]);
   const sourceSignature = JSON.stringify(sourceForm);
@@ -287,6 +290,16 @@ function ExecutionSession({
       document.messages[0]?.id ??
       "",
   );
+  const [selectedStepIndex, setSelectedStepIndex] = useState<number | null>(null);
+  const [graphSelection, setGraphSelection] = useState<CanvasSelection>(null);
+  const [coverageFocus, setCoverageFocus] = useState(false);
+  const [coverage, setCoverage] = useState<CanvasExecutionCoverage | null>(null);
+  const [coverageError, setCoverageError] = useState<string | null>(null);
+  const [coverageRefresh, setCoverageRefresh] = useState(0);
+  const coverageApi = useRef(getCoverage);
+  useEffect(() => {
+    coverageApi.current = getCoverage;
+  }, [getCoverage]);
   const [tab, setTab] = useState<string | null>("settings");
   const [report, setReport] = useState<CanvasExecutionReport | null>(null);
   const [runs, setRuns] = useState<CanvasExecutionRunSummary[]>([]);
@@ -320,6 +333,8 @@ function ExecutionSession({
       setReport(next);
       setReportError(null);
     }
+    if (previous?.id === next.id && previous.status === "running" && next.status !== "running")
+      setCoverageRefresh((value) => value + 1);
     setRuns((current) =>
       [runSummary(next), ...current.filter((item) => item.id !== next.id)]
         .sort((a, b) => b.startedAt - a.startedAt)
@@ -333,6 +348,7 @@ function ExecutionSession({
       ownedRun.current.terminal = true;
       ownedRun.current = null;
       setOwnedRunId(null);
+      setCoverageRefresh((value) => value + 1);
     }
   }, []);
   const markRecoverable = useCallback((id: string) => {
@@ -389,6 +405,26 @@ function ExecutionSession({
     setForm(sourceForm);
     setBaseSignature(sourceSignature);
   }
+  useEffect(() => {
+    if (!opened || disabled || !coverageApi.current) return;
+    const controller = new AbortController();
+    coverageApi
+      .current(revisionId, controller.signal)
+      .then((next) => {
+        if (controller.signal.aborted) return;
+        if (next.revisionId !== revisionId) {
+          setCoverage(null);
+          setCoverageError("Сервер вернул покрытие другой ревизии.");
+          return;
+        }
+        setCoverage(next);
+        setCoverageError(null);
+      })
+      .catch((cause) => {
+        if (!controller.signal.aborted) setCoverageError(errorText(cause));
+      });
+    return () => controller.abort();
+  }, [opened, disabled, revisionId, coverageRefresh]);
   useEffect(() => {
     mounted.current = true;
     const leavingPage = () => {
@@ -494,7 +530,10 @@ function ExecutionSession({
     );
   }
   const selectedMessage = shownDocument.messages.find((message) => message.id === selectedId);
-  const selectedStep = report?.steps.find((step) => step.messageId === selectedId);
+  const selectedStep =
+    selectedStepIndex !== null && report?.steps[selectedStepIndex]?.messageId === selectedId
+      ? report.steps[selectedStepIndex]
+      : report?.steps.find((step) => step.messageId === selectedId);
   const selectedForm = form.steps[selectedId];
   const resolved = selectedMessage?.operation
     ? resolveOperation(shownDocument, selectedMessage.operation)
@@ -502,13 +541,37 @@ function ExecutionSession({
   const statuses = useMemo(
     () =>
       report
-        ? Object.fromEntries(report.steps.map((step) => [step.messageId, step.status]))
+        ? Object.fromEntries(
+            report.document.messages.map((message) => {
+              const occurrences = report.steps.filter((step) => step.messageId === message.id);
+              return [
+                message.id,
+                occurrences.some((step) => step.status === "failed")
+                  ? "failed"
+                  : occurrences.some((step) => step.status === "passed")
+                    ? "passed"
+                    : (occurrences.at(-1)?.status ?? "pending"),
+              ];
+            }),
+          )
         : undefined,
     [report],
   );
   const selectGraph = (selection: CanvasSelection) => {
-    if (selection?.kind === "message") setSelectedId(selection.id);
+    setGraphSelection(selection);
+    if (selection?.kind === "message") {
+      setSelectedId(selection.id);
+      setSelectedStepIndex(null);
+    }
   };
+  const displayedSteps =
+    tab === "results" && report?.steps.length
+      ? report.steps.map((step, index) => ({
+          step,
+          index,
+          message: report.document.messages.find((message) => message.id === step.messageId),
+        }))
+      : shownDocument.messages.map((message, index) => ({ message, index, step: undefined }));
 
   function close(): void {
     if (ownedRun.current) void cancelOwned(ownedRun.current);
@@ -673,27 +736,37 @@ function ExecutionSession({
       <div className={styles.workspace}>
         <aside className={styles.sidebar} aria-label="Шаги сценария">
           <Text size="xs" c="dimmed" fw={650} className={styles.sidebarTitle}>
-            ПОСЛЕДОВАТЕЛЬНОСТЬ · {shownDocument.messages.length}
+            ПОСЛЕДОВАТЕЛЬНОСТЬ · {displayedSteps.length}
           </Text>
           <ol className={styles.steps}>
-            {shownDocument.messages.map((message, index) => {
-              const step =
-                tab === "results"
-                  ? report?.steps.find((item) => item.messageId === message.id)
-                  : undefined;
+            {displayedSteps.map(({ message, step, index }) => {
+              if (!message) return null;
               const operation = message.operation
                 ? resolveOperation(shownDocument, message.operation)
                 : null;
               return (
-                <li key={message.id}>
+                <li key={`${message.id}:${step?.occurrence ?? 0}:${index}`}>
                   <UnstyledButton
                     className={styles.step}
-                    aria-pressed={message.id === selectedId}
-                    data-active={message.id === selectedId || undefined}
-                    onClick={() => setSelectedId(message.id)}
+                    aria-pressed={
+                      message.id === selectedId && (!step || selectedStepIndex === index)
+                    }
+                    data-active={
+                      (message.id === selectedId && (!step || selectedStepIndex === index)) ||
+                      undefined
+                    }
+                    onClick={() => {
+                      setSelectedId(message.id);
+                      setSelectedStepIndex(step ? index : null);
+                      setGraphSelection({ kind: "message", id: message.id });
+                      setCoverageFocus(false);
+                    }}
                   >
                     <Text size="sm" fw={650}>
                       {index + 1}. {message.label || "Без названия"}
+                      {step?.occurrence && step.occurrence > 1
+                        ? ` · повтор ${step.occurrence}`
+                        : ""}
                     </Text>
                     <Text size="xs" c="dimmed" mt={4} className={styles.wrap}>
                       {message.kind === "request" && operation
@@ -1025,21 +1098,31 @@ function ExecutionSession({
                   ) : null}
                 </div>
                 <div className={styles.graph}>
+                  {coverageFocus && report.revisionId !== revisionId ? (
+                    <Text size="xs" c="dimmed" p="xs">
+                      Показана текущая диаграмма ревизии {revisionId} для покрытия.
+                    </Text>
+                  ) : null}
                   <Suspense fallback={<Loader size="sm" m="md" aria-label="Загружаем диаграмму" />}>
                     <SequenceGraph
-                      document={report.document}
-                      selection={selectedId ? { kind: "message", id: selectedId } : null}
+                      document={coverageFocus ? document : report.document}
+                      selection={
+                        graphSelection ?? (selectedId ? { kind: "message", id: selectedId } : null)
+                      }
                       onSelect={selectGraph}
                       onMoveMessage={noMove}
                       onSpaceParticipant={noMove}
                       readOnly
-                      executionStatuses={statuses}
+                      executionStatuses={coverageFocus ? undefined : statuses}
                     />
                   </Suspense>
                 </div>
                 <div className={styles.details}>
                   {selectedStep ? (
-                    <StepResult step={selectedStep} label={selectedMessage?.label ?? selectedId} />
+                    <StepResult
+                      step={selectedStep}
+                      label={`${selectedMessage?.label ?? selectedId}${selectedStep.occurrence ? ` · Повтор ${selectedStep.occurrence}` : ""}${selectedStep.iterations?.length ? ` · ${selectedStep.iterations.map((item) => `цикл ${item.fragmentId}: ${item.iteration}`).join(", ")}` : ""}`}
+                    />
                   ) : (
                     <Text c="dimmed" size="sm">
                       Выберите шаг, чтобы увидеть запрос и ответ.
@@ -1049,6 +1132,203 @@ function ExecutionSession({
                     <summary>Переменные прогона</summary>
                     <pre className={styles.code}>{JSON.stringify(report.variables, null, 2)}</pre>
                   </details>
+                  {report.controlFlow?.length ? (
+                    <section aria-label="Решения блоков">
+                      <Text fw={650} size="sm" mt="md">
+                        Решения блоков
+                      </Text>
+                      <Stack gap="xs" mt="xs">
+                        {report.controlFlow.map((decision, index) => {
+                          const fragment = report.document.fragments.find(
+                            (item) => item.id === decision.fragmentId,
+                          );
+                          const branch = fragment?.branches?.find(
+                            (item) => item.id === decision.branchId,
+                          );
+                          return (
+                            <Button
+                              key={`${decision.fragmentId}:${decision.branchId ?? ""}:${index}`}
+                              className={styles.coverageItem}
+                              variant="subtle"
+                              size="xs"
+                              justify="start"
+                              onClick={() => {
+                                setCoverageFocus(false);
+                                setGraphSelection({ kind: "fragment", id: decision.fragmentId });
+                              }}
+                            >
+                              {fragment?.label || decision.fragmentId}
+                              {branch ? ` · ${branch.label || branch.id}` : ""}:{" "}
+                              {decision.outcome === "taken" ? "выполнено" : "пропущено"}
+                              {decision.iterations?.length
+                                ? ` · повтор ${decision.iterations.map((item) => item.iteration).join(", ")}`
+                                : ""}
+                              {decision.reason ? ` · ${decision.reason}` : ""}
+                            </Button>
+                          );
+                        })}
+                      </Stack>
+                    </section>
+                  ) : null}
+                  <section aria-label="Покрытие ревизии">
+                    <Group justify="space-between" mt="lg" mb="xs">
+                      <Text fw={650} size="sm">
+                        Покрытие ревизии {revisionId}
+                      </Text>
+                      <Button
+                        size="xs"
+                        variant="subtle"
+                        onClick={() => setCoverageRefresh((value) => value + 1)}
+                        disabled={disabled}
+                      >
+                        Обновить покрытие
+                      </Button>
+                    </Group>
+                    {disabled ? (
+                      <Text size="sm" c="dimmed">
+                        Сохраните черновик, чтобы увидеть покрытие этой ревизии.
+                      </Text>
+                    ) : coverageError ? (
+                      <Alert color="yellow">{coverageError}</Alert>
+                    ) : coverage?.revisionId === revisionId ? (
+                      <>
+                        <Text size="xs" c="dimmed">
+                          Ревизия {coverage.revisionId} · прогонов {coverage.runCount} · максимум{" "}
+                          {coverage.sampleLimit} последних завершённых прогонов. Счётчики показывают
+                          наблюдения, а не все возможные пути.
+                        </Text>
+                        <Stack gap={4} mt="xs">
+                          {coverage.messages.map((item) => {
+                            const message = document.messages.find(
+                              (entry) => entry.id === item.messageId,
+                            );
+                            return (
+                              <Button
+                                key={item.messageId}
+                                className={styles.coverageItem}
+                                size="xs"
+                                variant="subtle"
+                                justify="start"
+                                onClick={() => {
+                                  setSelectedId(item.messageId);
+                                  setSelectedStepIndex(null);
+                                  setGraphSelection({ kind: "message", id: item.messageId });
+                                  setCoverageFocus(true);
+                                }}
+                              >
+                                {message?.label || item.messageId}:{" "}
+                                {item.attempted
+                                  ? `${item.attempted} попыток · ${item.passed} успешно · ${item.failed} ошибок · ${item.skipped} пропусков`
+                                  : "не покрыто"}
+                              </Button>
+                            );
+                          })}
+                          {coverage.paths.map((item, index) => {
+                            const fragment = document.fragments.find(
+                              (entry) => entry.id === item.fragmentId,
+                            );
+                            const branch = fragment?.branches?.find(
+                              (entry) => entry.id === item.branchId,
+                            );
+                            return (
+                              <Button
+                                key={`${item.fragmentId}:${item.branchId ?? ""}:${item.outcome}:${index}`}
+                                className={styles.coverageItem}
+                                size="xs"
+                                variant="subtle"
+                                justify="start"
+                                onClick={() => {
+                                  setCoverageFocus(true);
+                                  setGraphSelection({ kind: "fragment", id: item.fragmentId });
+                                }}
+                              >
+                                {fragment?.label || item.fragmentId}
+                                {branch ? ` · ${branch.label || branch.id}` : ""} ·{" "}
+                                {item.outcome === "taken" ? "выполнено" : "пропущено"}:{" "}
+                                {item.hits ? `${item.hits} наблюдений` : "не покрыто"}
+                              </Button>
+                            );
+                          })}
+                        </Stack>
+                      </>
+                    ) : (
+                      <Loader size="sm" aria-label="Загружаем покрытие" />
+                    )}
+                  </section>
+                </div>
+              </>
+            ) : null}
+            {!report && !selectedRunId ? (
+              <>
+                <div className={styles.graph}>
+                  <Suspense fallback={<Loader size="sm" m="md" aria-label="Загружаем диаграмму" />}>
+                    <SequenceGraph
+                      document={document}
+                      selection={graphSelection}
+                      onSelect={selectGraph}
+                      onMoveMessage={noMove}
+                      onSpaceParticipant={noMove}
+                      readOnly
+                    />
+                  </Suspense>
+                </div>
+                <div className={styles.details}>
+                  <Text fw={650} size="sm">
+                    Покрытие ревизии {revisionId}
+                  </Text>
+                  {disabled ? (
+                    <Text size="sm" c="dimmed">
+                      Сохраните черновик, чтобы увидеть покрытие этой ревизии.
+                    </Text>
+                  ) : coverageError ? (
+                    <Alert color="yellow">{coverageError}</Alert>
+                  ) : coverage?.revisionId === revisionId ? (
+                    <>
+                      <Text size="xs" c="dimmed">
+                        Прогонов {coverage.runCount} · максимум {coverage.sampleLimit} последних
+                        завершённых прогонов.
+                      </Text>
+                      {coverage.messages.map((item) => (
+                        <Button
+                          key={item.messageId}
+                          className={styles.coverageItem}
+                          size="xs"
+                          variant="subtle"
+                          justify="start"
+                          onClick={() => {
+                            setSelectedId(item.messageId);
+                            setGraphSelection({ kind: "message", id: item.messageId });
+                          }}
+                        >
+                          {document.messages.find((message) => message.id === item.messageId)
+                            ?.label || item.messageId}
+                          : {item.attempted ? `${item.attempted} попыток` : "не покрыто"}
+                        </Button>
+                      ))}
+                      {coverage.paths.map((item, index) => (
+                        <Button
+                          key={`${item.fragmentId}:${item.branchId ?? ""}:${item.outcome}:${index}`}
+                          className={styles.coverageItem}
+                          size="xs"
+                          variant="subtle"
+                          justify="start"
+                          onClick={() =>
+                            setGraphSelection({ kind: "fragment", id: item.fragmentId })
+                          }
+                        >
+                          {document.fragments.find((fragment) => fragment.id === item.fragmentId)
+                            ?.label || item.fragmentId}
+                          {item.branchId
+                            ? ` · ${document.fragments.find((fragment) => fragment.id === item.fragmentId)?.branches?.find((branch) => branch.id === item.branchId)?.label || item.branchId}`
+                            : ""}{" "}
+                          · {item.outcome === "taken" ? "выполнено" : "пропущено"}:{" "}
+                          {item.hits ? `${item.hits} наблюдений` : "не покрыто"}
+                        </Button>
+                      ))}
+                    </>
+                  ) : (
+                    <Loader size="sm" aria-label="Загружаем покрытие" />
+                  )}
                 </div>
               </>
             ) : null}

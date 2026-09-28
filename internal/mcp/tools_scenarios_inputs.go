@@ -6,6 +6,28 @@ type designScenarioIDInput struct {
 	ScenarioID int64 `json:"scenarioId" jsonschema:"scenario project id from list_design_scenarios"`
 }
 
+type designScenarioCoverageInput struct {
+	ScenarioID int64  `json:"scenarioId"`
+	RevisionID *int64 `json:"revisionId,omitempty"`
+}
+
+type setFragmentExecutionInput struct {
+	ScenarioID      int64                             `json:"scenarioId"`
+	ExpectedVersion int64                             `json:"expectedVersion"`
+	FragmentID      string                            `json:"fragmentId"`
+	Execution       *designscenario.FragmentExecution `json:"execution"`
+	Summary         string                            `json:"summary,omitempty"`
+}
+
+type setBranchExecutionInput struct {
+	ScenarioID      int64                           `json:"scenarioId"`
+	ExpectedVersion int64                           `json:"expectedVersion"`
+	FragmentID      string                          `json:"fragmentId"`
+	BranchID        string                          `json:"branchId"`
+	Execution       *designscenario.BranchExecution `json:"execution"`
+	Summary         string                          `json:"summary,omitempty"`
+}
+
 type runDesignScenarioInput struct {
 	ScenarioID int64 `json:"scenarioId"`
 	runDesignScenarioBody

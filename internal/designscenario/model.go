@@ -126,14 +126,16 @@ type Fragment struct {
 	ParentBranchID   string `json:"parentBranchId,omitempty"`
 	// Preserve present empty arrays through JSON cloning so validation rejects
 	// them; absent branches still omit the field and preserve legacy hashes.
-	Branches []FragmentBranch `json:"branches,omitzero"`
+	Branches  []FragmentBranch   `json:"branches,omitzero"`
+	Execution *FragmentExecution `json:"execution,omitempty"`
 }
 
 type FragmentBranch struct {
-	ID            string `json:"id"`
-	Label         string `json:"label"`
-	FromMessageID string `json:"fromMessageId"`
-	ToMessageID   string `json:"toMessageId"`
+	ID            string           `json:"id"`
+	Label         string           `json:"label"`
+	FromMessageID string           `json:"fromMessageId"`
+	ToMessageID   string           `json:"toMessageId"`
+	Execution     *BranchExecution `json:"execution,omitempty"`
 }
 
 type Contract struct {
@@ -180,24 +182,27 @@ type CommandsInput struct {
 // Command is the wire union for atomic scenario edits. Fields irrelevant to
 // the selected Type must be absent and are rejected during validation.
 type Command struct {
-	Type         string       `json:"type"`
-	Title        string       `json:"title,omitempty"`
-	Participant  *Participant `json:"participant,omitempty"`
-	Message      *Message     `json:"message,omitempty"`
-	Fragment     *Fragment    `json:"fragment,omitempty"`
-	Contract     *Contract    `json:"contract,omitempty"`
-	EventModel   *EventModel  `json:"eventModel,omitempty"`
-	ID           string       `json:"id,omitempty"`
-	Index        *int         `json:"index,omitempty"`
-	MessageID    string       `json:"messageId,omitempty"`
-	ContractID   string       `json:"contractId,omitempty"`
-	OperationKey string       `json:"operationKey,omitempty"`
-	Method       string       `json:"method,omitempty"`
-	Path         string       `json:"path,omitempty"`
-	Label        string       `json:"label,omitempty"`
-	DesignID     int64        `json:"designId,omitempty"`
-	RevisionID   *int64       `json:"revisionId,omitempty"`
-	Mode         string       `json:"mode,omitempty"`
+	Type              string             `json:"type"`
+	Title             string             `json:"title,omitempty"`
+	Participant       *Participant       `json:"participant,omitempty"`
+	Message           *Message           `json:"message,omitempty"`
+	Fragment          *Fragment          `json:"fragment,omitempty"`
+	Contract          *Contract          `json:"contract,omitempty"`
+	EventModel        *EventModel        `json:"eventModel,omitempty"`
+	ID                string             `json:"id,omitempty"`
+	Index             *int               `json:"index,omitempty"`
+	MessageID         string             `json:"messageId,omitempty"`
+	ContractID        string             `json:"contractId,omitempty"`
+	OperationKey      string             `json:"operationKey,omitempty"`
+	Method            string             `json:"method,omitempty"`
+	Path              string             `json:"path,omitempty"`
+	Label             string             `json:"label,omitempty"`
+	DesignID          int64              `json:"designId,omitempty"`
+	RevisionID        *int64             `json:"revisionId,omitempty"`
+	Mode              string             `json:"mode,omitempty"`
+	BranchID          string             `json:"branchId,omitempty"`
+	FragmentExecution *FragmentExecution `json:"fragmentExecution,omitempty"`
+	BranchExecution   *BranchExecution   `json:"branchExecution,omitempty"`
 }
 
 type RestoreInput struct {

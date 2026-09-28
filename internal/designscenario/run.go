@@ -91,8 +91,26 @@ func validateRunRevision(revision Revision, runID, name, source string) error {
 	if !runIDPattern.MatchString(runID) || utf8.RuneCountInString(name) > 200 || (source != "ui" && source != "mcp") || revision.ID <= 0 || revision.ScenarioID <= 0 {
 		return errors.New("укажите допустимые ID, название и источник запуска")
 	}
-	if len(revision.Document.Fragments) != 0 {
-		return errors.New("исполнение alt/opt/loop пока не поддерживается; удалите фрагменты")
+	if diagnostics := ValidateFragments(revision.Document); len(diagnostics) > 0 {
+		return fmt.Errorf("%s: %s", diagnostics[0].Pointer, diagnostics[0].Message)
+	}
+	if revision.Document.FormatVersion == 1 {
+		positions := map[string]int{}
+		for i, m := range revision.Document.Messages {
+			positions[m.ID] = i
+		}
+		for i, a := range revision.Document.Fragments {
+			ar, _ := messageRange(a.FromMessageID, a.ToMessageID, positions)
+			for _, b := range revision.Document.Fragments[i+1:] {
+				br, _ := messageRange(b.FromMessageID, b.ToMessageID, positions)
+				if ar.start <= br.end && br.start <= ar.end {
+					return errors.New("неоднозначные фрагменты formatVersion 1: обновите формат сценария")
+				}
+			}
+		}
+	}
+	if diagnostics := validateControlFlow(revision.Document, true); len(diagnostics) > 0 {
+		return fmt.Errorf("%s: %s", diagnostics[0].Pointer, diagnostics[0].Message)
 	}
 	for key, value := range revision.FormDrafts {
 		var fields map[string]jsonx.RawMessage
@@ -175,7 +193,13 @@ func Run(ctx context.Context, revision Revision, initial RunReport, execute Step
 	if err := e.publish(); err != nil {
 		return e.finish("failed", err.Error())
 	}
+	if len(e.report.Document.Fragments) > 0 {
+		return e.runControlFlow(ctx, execute)
+	}
 	for i, message := range e.report.Document.Messages {
+		if i >= maxRunOccurrences {
+			return e.finish("failed", "превышен предел 1000 посещений сообщений")
+		}
 		if e.report.Steps[i].Status == "skipped" {
 			continue
 		}
@@ -616,8 +640,13 @@ func cloneRunReport(report RunReport) RunReport {
 		report.FinishedAt = new(*report.FinishedAt)
 	}
 	report.Steps = slices.Clone(report.Steps)
+	report.ControlFlow = slices.Clone(report.ControlFlow)
+	for i := range report.ControlFlow {
+		report.ControlFlow[i].Iterations = slices.Clone(report.ControlFlow[i].Iterations)
+	}
 	for i := range report.Steps {
 		step := &report.Steps[i]
+		step.Iterations = slices.Clone(step.Iterations)
 		if step.Request != nil {
 			step.Request = new(cloneStepRequest(*step.Request))
 		}
@@ -640,6 +669,26 @@ func cloneRunDocument(document Document) Document {
 	document.Fragments = slices.Clone(document.Fragments)
 	for i := range document.Fragments {
 		document.Fragments[i].Branches = slices.Clone(document.Fragments[i].Branches)
+		if document.Fragments[i].Execution != nil {
+			document.Fragments[i].Execution = new(*document.Fragments[i].Execution)
+			if c := document.Fragments[i].Execution.Condition; c != nil {
+				document.Fragments[i].Execution.Condition = new(*c)
+				if c.Value != nil {
+					document.Fragments[i].Execution.Condition.Value = new(*c.Value)
+				}
+			}
+		}
+		for j := range document.Fragments[i].Branches {
+			if b := document.Fragments[i].Branches[j].Execution; b != nil {
+				document.Fragments[i].Branches[j].Execution = new(*b)
+				if c := b.Condition; c != nil {
+					document.Fragments[i].Branches[j].Execution.Condition = new(*c)
+					if c.Value != nil {
+						document.Fragments[i].Branches[j].Execution.Condition.Value = new(*c.Value)
+					}
+				}
+			}
+		}
 	}
 	document.Contracts = slices.Clone(document.Contracts)
 	for i := range document.Contracts {

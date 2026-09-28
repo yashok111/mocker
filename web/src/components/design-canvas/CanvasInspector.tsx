@@ -224,6 +224,7 @@ export function CanvasInspector(props: Props): ReactElement {
             document={document}
             fragment={fragment}
             onChange={onChange}
+            formStore={props.formStore}
           />
         ) : null}
         {participant || message || fragment ? (

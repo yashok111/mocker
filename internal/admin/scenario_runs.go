@@ -147,7 +147,7 @@ func (r *scenarioRunService) execute(ctx, persistCtx context.Context, key scenar
 	defer active.cancel()
 	defer active.persistCancel()
 	final := designscenario.Run(ctx, revision, initial, func(stepCtx context.Context, input designscenario.StepRequest) (designscenario.StepResponse, error) {
-		return r.server.executeScenarioStep(stepCtx, revision, input)
+		return r.server.executeScenarioRunStep(stepCtx, revision, input)
 	}, func(report designscenario.RunReport) error {
 		// Terminal persistence belongs to the finalization critical section,
 		// so a concurrently accepted cancellation cannot be overwritten.

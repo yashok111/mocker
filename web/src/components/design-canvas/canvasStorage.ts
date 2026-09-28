@@ -205,6 +205,47 @@ function validateDocumentExecution(value: unknown): void {
   validateExecutionMap(config.variables, "execution.variables", true);
 }
 
+function validateCondition(value: unknown, path: string): void {
+  const condition = requireRecord(value, path);
+  variableName(condition.variable, `${path}.variable`);
+  if (!["equals", "not_equals", "exists", "not_exists"].includes(String(condition.operator)))
+    fail(`${path}.operator содержит неизвестное сравнение`);
+  if (condition.operator === "equals" || condition.operator === "not_equals") {
+    executionString(condition.value, `${path}.value`, CANVAS_EXECUTION_LIMITS.value);
+  } else if (condition.value !== undefined) {
+    fail(`${path}.value допустимо только для сравнения строк`);
+  }
+}
+
+function validateFragmentExecution(
+  value: unknown,
+  kind: CanvasFragment["kind"],
+  path: string,
+): void {
+  const execution = requireRecord(value, path);
+  if (kind === "alt") fail(`${path} не поддерживается для alt`);
+  if (execution.condition !== undefined)
+    validateCondition(execution.condition, `${path}.condition`);
+  if (
+    execution.iterations !== undefined &&
+    (kind !== "loop" ||
+      !Number.isInteger(execution.iterations) ||
+      (execution.iterations as number) < 1 ||
+      (execution.iterations as number) > 100)
+  )
+    fail(`${path}.iterations должен быть целым числом от 1 до 100 для loop`);
+}
+
+function validateBranchExecution(value: unknown, path: string): void {
+  const execution = requireRecord(value, path);
+  if (execution.condition !== undefined)
+    validateCondition(execution.condition, `${path}.condition`);
+  if (execution.otherwise !== undefined && typeof execution.otherwise !== "boolean")
+    fail(`${path}.otherwise должен быть логическим значением`);
+  if (execution.otherwise === true && execution.condition !== undefined)
+    fail(`${path} не может совмещать условие и otherwise`);
+}
+
 // Server documents may retain unresolved bindings as diagnostics. Editing or
 // running execution settings must not turn skipped bindings into fatal errors.
 export function validateCanvasExecutionSettings(document: CanvasDocument): void {
@@ -212,6 +253,24 @@ export function validateCanvasExecutionSettings(document: CanvasDocument): void 
   for (const [index, message] of document.messages.entries()) {
     if (message.execution !== undefined)
       validateStepExecution(message.execution, `messages[${index}].execution`);
+  }
+  for (const [index, fragment] of document.fragments.entries()) {
+    if (fragment.execution !== undefined)
+      validateFragmentExecution(fragment.execution, fragment.kind, `fragments[${index}].execution`);
+    for (const [branchIndex, branch] of (fragment.branches ?? []).entries()) {
+      if (branch.execution !== undefined)
+        validateBranchExecution(
+          branch.execution,
+          `fragments[${index}].branches[${branchIndex}].execution`,
+        );
+    }
+    const branches = fragment.branches ?? [];
+    if (
+      branches.some(
+        (branch, branchIndex) => branch.execution?.otherwise && branchIndex !== branches.length - 1,
+      )
+    )
+      fail(`fragments[${index}]: otherwise допустим только для последней ветки`);
   }
 }
 
@@ -290,6 +349,12 @@ function validateFragment(value: unknown, index: number): CanvasFragment {
     requireId(fragment.parentFragmentId, `${path}.parentFragmentId`);
   if (fragment.parentBranchId !== undefined)
     requireId(fragment.parentBranchId, `${path}.parentBranchId`);
+  if (fragment.execution !== undefined)
+    validateFragmentExecution(
+      fragment.execution,
+      kind as CanvasFragment["kind"],
+      `${path}.execution`,
+    );
   if (fragment.branches !== undefined) {
     const branches = requireArray(fragment.branches, `${path}.branches`, 100);
     for (const [branchIndex, value] of branches.entries()) {
@@ -299,7 +364,19 @@ function validateFragment(value: unknown, index: number): CanvasFragment {
       requireString(branch.label, `${branchPath}.label`);
       requireId(branch.fromMessageId, `${branchPath}.fromMessageId`);
       requireId(branch.toMessageId, `${branchPath}.toMessageId`);
+      if (branch.execution !== undefined)
+        validateBranchExecution(branch.execution, `${branchPath}.execution`);
     }
+    if (
+      branches.some(
+        (value, branchIndex) =>
+          isRecord(value) &&
+          isRecord(value.execution) &&
+          value.execution.otherwise === true &&
+          branchIndex !== branches.length - 1,
+      )
+    )
+      fail(`${path}: otherwise допустим только для последней ветки`);
   }
   return fragment as unknown as CanvasFragment;
 }

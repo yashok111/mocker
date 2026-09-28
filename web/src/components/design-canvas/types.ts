@@ -81,6 +81,23 @@ export interface CanvasFragmentBranch {
   label: string;
   fromMessageId: string;
   toMessageId: string;
+  execution?: CanvasBranchExecution;
+}
+
+export interface CanvasExecutionCondition {
+  variable: string;
+  operator: "equals" | "not_equals" | "exists" | "not_exists";
+  value?: string;
+}
+
+export interface CanvasBranchExecution {
+  condition?: CanvasExecutionCondition;
+  otherwise?: boolean;
+}
+
+export interface CanvasFragmentExecution {
+  condition?: CanvasExecutionCondition;
+  iterations?: number;
 }
 
 export interface CanvasFragment {
@@ -92,6 +109,7 @@ export interface CanvasFragment {
   parentFragmentId?: string;
   parentBranchId?: string;
   branches?: CanvasFragmentBranch[];
+  execution?: CanvasFragmentExecution;
 }
 
 export interface CanvasContract {

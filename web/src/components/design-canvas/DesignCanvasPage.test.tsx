@@ -22,6 +22,34 @@ async function addFromCanvasMenu(name: string): Promise<void> {
 }
 
 describe("DesignCanvasPage", () => {
+  it("clears pending execution buffers for a deleted fragment and its descendant", async () => {
+    const document = exampleCanvas();
+    document.formatVersion = 2;
+    document.fragments.push({
+      id: "nested",
+      kind: "loop",
+      label: "Внутри",
+      fromMessageId: "validate-order",
+      toMessageId: "order-saved",
+      parentFragmentId: "save-if-valid",
+    });
+    localStorage.setItem(STORAGE_KEY, serializeSavedCanvas(document, {}));
+    renderInRouter(<DesignCanvasPage />);
+    await userEvent.click(await screen.findByRole("button", { name: "Структура сценария" }));
+    await userEvent.click(screen.getByRole("button", { name: "opt · Заказ прошёл проверку" }));
+    await userEvent.selectOptions(
+      screen.getByRole("combobox", { name: "Режим блока" }),
+      "condition",
+    );
+    await userEvent.click(screen.getByRole("button", { name: "loop · Внутри" }));
+    await userEvent.type(screen.getByRole("textbox", { name: "Максимум повторений" }), "2");
+    expect(screen.getByRole("button", { name: "Отменить" })).toBeDisabled();
+    await userEvent.click(screen.getByRole("button", { name: "opt · Заказ прошёл проверку" }));
+    await userEvent.click(screen.getByRole("button", { name: "Удалить блок" }));
+    expect(screen.getByRole("button", { name: "Отменить" })).toBeEnabled();
+    await userEvent.click(screen.getByRole("button", { name: "Сохранить в браузере" }));
+    expect(parseSavedCanvas(localStorage.getItem(STORAGE_KEY)!).document.fragments).toHaveLength(0);
+  });
   it("adds a linked reply in one undo step", async () => {
     renderInRouter(<DesignCanvasPage />);
     await userEvent.click(await screen.findByRole("button", { name: "Структура сценария" }));

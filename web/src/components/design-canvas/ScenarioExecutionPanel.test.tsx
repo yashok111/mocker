@@ -14,12 +14,15 @@ vi.mock("./SequenceGraph", () => ({
   default: ({
     document,
     executionStatuses,
+    selection,
   }: {
     document: CanvasDocument;
     executionStatuses?: Record<string, string>;
+    selection?: { kind: string; id: string } | null;
   }) => (
     <div data-testid="execution-graph">
-      {document.title} {JSON.stringify(executionStatuses)}
+      {document.title} {JSON.stringify(executionStatuses)}{" "}
+      {selection ? `${selection.kind}:${selection.id}` : ""}
     </div>
   ),
 }));
@@ -135,10 +138,97 @@ function props() {
     cancelRun: vi
       .fn<ScenarioExecutionPanelProps["cancelRun"]>()
       .mockImplementation(async (id) => report(id, "cancelled")),
+    getCoverage: vi
+      .fn<NonNullable<ScenarioExecutionPanelProps["getCoverage"]>>()
+      .mockResolvedValue({ revisionId: 42, runCount: 0, sampleLimit: 50, messages: [], paths: [] }),
   };
 }
 
 describe("ScenarioExecutionPanel", () => {
+  it("shows every repeated occurrence and revision coverage with diagram selection", async () => {
+    const handlers = props();
+    handlers.getCoverage = vi.fn().mockResolvedValue({
+      revisionId: 42,
+      runCount: 1,
+      sampleLimit: 50,
+      messages: [{ messageId: "login", attempted: 2, passed: 2, failed: 0, skipped: 0 }],
+      paths: [],
+    });
+    handlers.listRuns.mockResolvedValue([report()]);
+    handlers.getRun.mockResolvedValue({
+      ...report(),
+      steps: [
+        { messageId: "login", occurrence: 1, status: "passed", assertions: [] },
+        { messageId: "login", occurrence: 2, status: "passed", assertions: [] },
+      ],
+    });
+    renderPanel(<ScenarioExecutionPanel {...handlers} />);
+    fireEvent.click(screen.getByRole("tab", { name: /Результат/ }));
+    expect(await screen.findByRole("button", { name: /Войти · повтор 2/ })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Войти · повтор 2/ }));
+    expect(screen.getByText(/Повтор 2/)).toBeInTheDocument();
+    expect(await screen.findByText(/Покрытие ревизии 42/)).toBeInTheDocument();
+    expect(handlers.getCoverage).toHaveBeenCalledWith(42, expect.any(AbortSignal));
+    fireEvent.click(screen.getByRole("button", { name: /Войти: 2 попыток/ }));
+    expect(screen.getByTestId("execution-graph")).toHaveTextContent("message:login");
+  });
+
+  it("shows zero-hit coverage before any run and selects a fragment", async () => {
+    const handlers = props();
+    handlers.document.fragments = [
+      {
+        id: "loop",
+        kind: "loop",
+        label: "Повтор",
+        fromMessageId: "login",
+        toMessageId: "login",
+        execution: { iterations: 2 },
+      },
+    ];
+    handlers.getCoverage.mockResolvedValue({
+      revisionId: 42,
+      runCount: 0,
+      sampleLimit: 50,
+      messages: [{ messageId: "login", attempted: 0, passed: 0, failed: 0, skipped: 0 }],
+      paths: [{ fragmentId: "loop", outcome: "taken", hits: 0 }],
+    });
+    renderPanel(<ScenarioExecutionPanel {...handlers} />);
+    fireEvent.click(screen.getByRole("tab", { name: /Результат/ }));
+    fireEvent.click(await screen.findByRole("button", { name: /Повтор · выполнено: не покрыто/ }));
+    expect(screen.getByTestId("execution-graph")).toHaveTextContent("fragment:loop");
+  });
+
+  it("does not present saved coverage as coverage for an unsaved draft", async () => {
+    const handlers = props();
+    const result = renderPanel(<ScenarioExecutionPanel {...handlers} />);
+    fireEvent.click(screen.getByRole("tab", { name: /Результат/ }));
+    expect(await screen.findByText(/Прогонов 0 · максимум 50/)).toBeInTheDocument();
+    result.rerender(<ScenarioExecutionPanel {...handlers} disabled />);
+    expect(
+      screen.getByText(/Сохраните черновик, чтобы увидеть покрытие этой ревизии/),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/Прогонов 0 · максимум 50/)).not.toBeInTheDocument();
+  });
+
+  it("clears historical run status when coverage focuses a newer revision with the same message ID", async () => {
+    const handlers = props();
+    handlers.getCoverage.mockResolvedValue({
+      revisionId: 43,
+      runCount: 0,
+      sampleLimit: 50,
+      messages: [{ messageId: "login", attempted: 0, passed: 0, failed: 0, skipped: 0 }],
+      paths: [],
+    });
+    handlers.listRuns.mockResolvedValue([report()]);
+    renderPanel(<ScenarioExecutionPanel {...handlers} revisionId={43} />);
+    fireEvent.click(screen.getByRole("tab", { name: /Результат/ }));
+    await waitFor(() =>
+      expect(screen.getByTestId("execution-graph")).toHaveTextContent('"login":"passed"'),
+    );
+    fireEvent.click(await screen.findByRole("button", { name: /Войти: не покрыто/ }));
+    expect(screen.getByTestId("execution-graph")).toHaveTextContent("message:login");
+    expect(screen.getByTestId("execution-graph")).not.toHaveTextContent('"login":"passed"');
+  });
   it("starts and displays a run without randomUUID on HTTP", async () => {
     vi.stubGlobal("crypto", { getRandomValues: crypto.getRandomValues.bind(crypto) });
     const handlers = props();
@@ -296,7 +386,7 @@ describe("ScenarioExecutionPanel", () => {
     ];
     result.rerender(<ScenarioExecutionPanel {...handlers} document={document} />);
     expect(screen.getByRole("button", { name: "Запустить" })).toBeDisabled();
-    expect(screen.getByText(/opt.*loop|фрагмент/i)).toBeInTheDocument();
+    expect(screen.getByText(/задайте число повторений блока/i)).toBeInTheDocument();
   });
 
   it("keeps local settings during an API pin update and merges into the latest document", () => {

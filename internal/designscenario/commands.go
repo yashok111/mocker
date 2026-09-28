@@ -66,6 +66,27 @@ func (r *Repo) applyCommand(ctx context.Context, tx *sql.Tx, document *Document,
 		return applyMessageCommand(document, command)
 	case "upsert_fragment", "remove_fragment":
 		return applyFragmentCommand(document, command)
+	case "set_fragment_execution":
+		for i := range document.Fragments {
+			if document.Fragments[i].ID == command.ID {
+				document.Fragments[i].Execution = command.FragmentExecution
+				return nil
+			}
+		}
+		return invalidAt("/id", "fragment does not exist")
+	case "set_branch_execution":
+		for i := range document.Fragments {
+			if document.Fragments[i].ID == command.ID {
+				for j := range document.Fragments[i].Branches {
+					if document.Fragments[i].Branches[j].ID == command.BranchID {
+						document.Fragments[i].Branches[j].Execution = command.BranchExecution
+						return nil
+					}
+				}
+				return invalidAt("/branchId", "branch does not exist")
+			}
+		}
+		return invalidAt("/id", "fragment does not exist")
 	case "set_event_model":
 		if command.EventModel == nil {
 			return invalidAt("/eventModel", "eventModel is required")

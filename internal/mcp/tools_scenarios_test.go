@@ -31,6 +31,9 @@ func TestDesignScenarioToolsUseAdminRoutes(t *testing.T) {
 		{name: "restore_design_scenario_revision", args: `{"scenarioId":7,"revisionId":8,"expectedVersion":3,"summary":"Restore"}`, method: "POST", path: "/api/design-scenarios/7/restore"},
 		{name: "validate_design_scenario", args: `{"scenarioId":7,"document":` + designScenarioDocumentFixture + `}`, method: "POST", path: "/api/design-scenarios/7/validate"},
 		{name: "execute_design_scenario_step", args: `{"scenarioId":7,"revisionId":8,"messageId":"call","pathParams":{},"query":{},"headers":{},"body":""}`, method: "POST", path: "/api/design-scenarios/7/execute-step"},
+		{name: "get_design_scenario_coverage", args: `{"scenarioId":7,"revisionId":8}`, method: "GET", path: "/api/design-scenarios/7/coverage?revisionId=8"},
+		{name: "set_design_scenario_fragment_execution", args: `{"scenarioId":7,"expectedVersion":3,"fragmentId":"loop","execution":{"iterations":3}}`, method: "POST", path: "/api/design-scenarios/7/commands"},
+		{name: "set_design_scenario_branch_execution", args: `{"scenarioId":7,"expectedVersion":3,"fragmentId":"alt","branchId":"yes","execution":{"condition":{"variable":"mode","operator":"equals","value":"yes"}}}`, method: "POST", path: "/api/design-scenarios/7/commands"},
 	}
 
 	for _, tt := range tests {
@@ -74,6 +77,44 @@ func TestDesignScenarioToolRejectsMissingVersionWithoutAdminCall(t *testing.T) {
 	_, errMsg := callTool(t, calls, "apply_design_scenario_commands", `{"scenarioId":7,"expectedVersion":0,"commands":[{"type":"set_title","title":"Changed"}]}`)
 	if errMsg == "" || calls.method != "" {
 		t.Fatalf("missing CAS reached admin: call=%q error=%q", calls.method, errMsg)
+	}
+}
+
+func TestExecutionToolsSendVersionedCommandsAndAllowClear(t *testing.T) {
+	for _, tt := range []struct {
+		name        string
+		args        string
+		commandType string
+		field       string
+	}{
+		{"set_design_scenario_fragment_execution", `{"scenarioId":7,"expectedVersion":3,"fragmentId":"loop","execution":{"iterations":3}}`, "set_fragment_execution", "fragmentExecution"},
+		{"set_design_scenario_branch_execution", `{"scenarioId":7,"expectedVersion":3,"fragmentId":"alt","branchId":"yes","execution":{"otherwise":true}}`, "set_branch_execution", "branchExecution"},
+		{"set_design_scenario_fragment_execution", `{"scenarioId":7,"expectedVersion":3,"fragmentId":"loop","execution":null}`, "set_fragment_execution", "fragmentExecution"},
+	} {
+		t.Run(tt.name+tt.args, func(t *testing.T) {
+			calls := &recordingCaller{status: http.StatusOK, body: []byte(`{"scenario":{"version":4}}`)}
+			_, errMsg := callTool(t, calls, tt.name, tt.args)
+			if errMsg != "" {
+				t.Fatal(errMsg)
+			}
+			var body struct {
+				ExpectedVersion int64            `json:"expectedVersion"`
+				Commands        []map[string]any `json:"commands"`
+			}
+			if err := jsonx.Unmarshal(calls.sent, &body); err != nil {
+				t.Fatal(err)
+			}
+			if body.ExpectedVersion != 3 || len(body.Commands) != 1 || body.Commands[0]["type"] != tt.commandType || body.Commands[0]["id"] != map[bool]string{true: "alt", false: "loop"}[tt.commandType == "set_branch_execution"] {
+				t.Fatalf("wrong command: %s", calls.sent)
+			}
+			if strings.Contains(tt.args, `"execution":null`) {
+				if body.Commands[0][tt.field] != nil {
+					t.Fatalf("clear retained execution: %s", calls.sent)
+				}
+			} else if body.Commands[0][tt.field] == nil {
+				t.Fatalf("execution lost: %s", calls.sent)
+			}
+		})
 	}
 }
 
@@ -175,8 +216,8 @@ func TestDesignScenarioToolsListPublishesObjectContractAndCommandUnion(t *testin
 		t.Fatal(err)
 	}
 	variants := commandSchema.Properties["commands"].Items.OneOf
-	if len(variants) != 17 {
-		t.Fatalf("command variants=%d, want 17; schema=%s", len(variants), byName["apply_design_scenario_commands"])
+	if len(variants) != 19 {
+		t.Fatalf("command variants=%d, want 19; schema=%s", len(variants), byName["apply_design_scenario_commands"])
 	}
 	var foundSetTitle bool
 	var foundSetEventModel bool

@@ -38,6 +38,7 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { describeApiFailureDetailed } from "@/api/errors";
 import { addCanvasFragment, removeCanvasFragment } from "./canvasFragments";
+import { clearObsoleteFragmentDrafts } from "./canvasFragmentDrafts";
 import { CanvasInspector } from "./CanvasInspector";
 import { EventModelEditor } from "./EventModelEditor";
 import { CanvasApiPicker } from "./CanvasApiPicker";
@@ -303,14 +304,20 @@ export function DesignCanvasEditor({
       !window.confirm("Удалить объект и все связанные сообщения?")
     )
       return;
-    const removed = guarded(() =>
-      selection.kind === "participant"
-        ? removeParticipant(document, selection.id)
-        : selection.kind === "message"
-          ? removeMessage(document, selection.id)
-          : removeCanvasFragment(document, selection.id),
-    );
-    if (removed) setSelection(null);
+    let next: CanvasDocument | undefined;
+    const removed = guarded(() => {
+      next =
+        selection.kind === "participant"
+          ? removeParticipant(document, selection.id)
+          : selection.kind === "message"
+            ? removeMessage(document, selection.id)
+            : removeCanvasFragment(document, selection.id);
+      return next;
+    });
+    if (removed && next) {
+      clearObsoleteFragmentDrafts(draft.formStore, document, next);
+      setSelection(null);
+    }
   }
 
   function moveSelection(offset: number): void {

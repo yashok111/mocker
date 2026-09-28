@@ -53,10 +53,11 @@ type RunSummary struct {
 
 type RunReport struct {
 	RunSummary
-	Document       Document        `json:"document"`
-	InputVariables ExecutionValues `json:"inputVariables"`
-	Variables      ExecutionValues `json:"variables"`
-	Steps          []StepResult    `json:"steps"`
+	Document       Document            `json:"document"`
+	InputVariables ExecutionValues     `json:"inputVariables"`
+	Variables      ExecutionValues     `json:"variables"`
+	Steps          []StepResult        `json:"steps"`
+	ControlFlow    []ControlFlowResult `json:"controlFlow,omitempty"`
 }
 
 type StepResult struct {
@@ -66,6 +67,8 @@ type StepResult struct {
 	Request    *StepRequest      `json:"request,omitempty"`
 	Response   *StepResponse     `json:"response,omitempty"`
 	Assertions []AssertionResult `json:"assertions"`
+	Occurrence int               `json:"occurrence,omitzero"`
+	Iterations []LoopIteration   `json:"iterations,omitempty"`
 }
 
 // ActualJSON is absent for a missing pointer and contains "null" for JSON null.

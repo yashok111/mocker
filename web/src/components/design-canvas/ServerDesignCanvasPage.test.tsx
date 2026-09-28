@@ -44,6 +44,26 @@ function detailFixture(version = 1, title = "Оформление заказа")
 }
 
 describe("ServerDesignCanvasPage", () => {
+  it("blocks a server run while a fragment condition edit is pending across selection changes", async () => {
+    route({
+      "GET /api/design-scenarios/12": () => json(200, detailFixture()),
+      "GET /api/design-scenarios/12/runs": () => json(200, { runs: [] }),
+    });
+    renderInRouter(<ServerDesignCanvasPage id={12} />);
+    await userEvent.click(await screen.findByRole("button", { name: "Структура сценария" }));
+    await userEvent.click(screen.getByRole("button", { name: "opt · Заказ прошёл проверку" }));
+    await userEvent.selectOptions(
+      screen.getByRole("combobox", { name: "Режим блока" }),
+      "condition",
+    );
+    await userEvent.type(screen.getByRole("textbox", { name: "Переменная блока" }), "token");
+    await userEvent.click(screen.getByRole("button", { name: "1. POST /orders Вызов" }));
+    await userEvent.click(screen.getByRole("button", { name: "opt · Заказ прошёл проверку" }));
+    expect(screen.getByRole("textbox", { name: "Переменная блока" })).toHaveValue("token");
+    await userEvent.click(screen.getByRole("button", { name: "Запуск" }));
+    const dialog = await screen.findByRole("dialog", { name: /Запуск сценария/ });
+    expect(within(dialog).getByRole("button", { name: "Запустить" })).toBeDisabled();
+  });
   it("returns keyboard focus to the results trigger after Escape", async () => {
     route({
       "GET /api/design-scenarios/12": () => json(200, detailFixture()),
