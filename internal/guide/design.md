@@ -1,5 +1,63 @@
 # Designing an API in mocker — drafts, review and publication
 
+## Analyze the impact of API changes
+
+Open **Влияние** in the API designer and click **Проанализировать**. The default
+comparison uses the editor's exact current JSON text and the saved revision on
+which those edits began. Apply or cancel unfinished forms first. **Ревизии**
+compares two explicit saved revisions independently of local edits. Neither mode
+saves a draft, creates a checkpoint, publishes, refreshes contracts or runs tests.
+
+Agents call the same analysis with either input:
+
+```json
+{"designId":7,"fromRevisionId":45,"document":"{\"openapi\":\"3.1.0\",\"info\":{\"title\":\"Orders\",\"version\":\"2\"},\"paths\":{}}"}
+```
+
+```json
+{"designId":7,"fromRevisionId":37,"toRevisionId":45}
+```
+
+Pass these to `analyze_api_design_impact`. IDs must be positive and belong to
+the same API; exactly one target is required. Preserve `document` as a string,
+including large numeric literals. JSON syntax errors are rejected; unresolved
+references produce a partial report with diagnostics. External references are
+never fetched.
+
+Read `changes`, then follow each change's `evidence` to `affected` entities.
+Evidence records its `before`/`after` side, request/response direction and ordered
+reference sites. It can connect shared schemas and contract nodes to operations,
+resources, state transitions and scenario messages. Deleted definitions keep
+their old consumers. User-drawn resource relations do not propagate impact.
+`beforeJSON`/`afterJSON` are strings of exact JSON; `"null"` differs from a missing
+side. Values over 4 KiB are omitted with a corresponding truncation flag.
+
+Compatibility is deliberately limited: disappearance of an effective HTTP
+method/path or an unambiguous new required input can be `breaking`. Complex
+schema, constraint and response changes are `review`. A moved editor key can
+require checking bindings while the old HTTP address still exists. Compatible
+presentation metadata is hidden by default; identity warnings remain visible.
+
+`complete` describes dependency coverage within this feature's scope. It does
+not certify compatibility. Read `diagnostics` and `coverage.truncatedReasons`
+before concluding that no consumers were found. Limits are 500 changes, 10,000
+reference sites per document, 200,000 traversal visits, 5,000 entities, 10,000
+evidence records and 4 MiB of output. Scenario reads stop at 500 current drafts,
+1,000 usages or 64 MiB. The graph shows at most 100 nodes for the selected change;
+the list retains the returned evidence.
+
+Scenario usages refer to **current saved scenario drafts**, read separately
+from the API snapshots. Every locator includes the actual scenario revision,
+contract ID, pinned API revision and `copy`/`linked` mode. A copied contract may
+have been edited even when its pinned revision matches the comparison base.
+Linked snapshots are pinned too; runtime separately checks stale API revisions.
+The report identifies operation usage. It does not validate individual bindings,
+assertions, extracts or status expectations against a replaced contract.
+
+Use source/diff navigation to inspect the reported side. Historical and deleted
+elements open in a read-only comparison. Opening a scenario shows its current
+version, which may be newer than the revision named in the report.
+
 ## Choosing an operation for a sequence step
 
 A sequence step uses the stable **operationKey** stored in the authored OpenAPI

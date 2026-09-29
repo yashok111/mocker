@@ -119,6 +119,7 @@ var toolRoutes = map[string][]string{
 	"get_api_design_revision":      {"GET /api/designs/{id}/revisions/{rid}"},
 	"get_api_design_diff":          {"GET /api/designs/{id}/diff"},
 	"validate_api_design":          {"POST /api/designs/{id}/validate"},
+	"analyze_api_design_impact":    {"POST /api/designs/{id}/impact"},
 	"create_api_design_change_set": {"POST /api/designs/{id}/change-sets"},
 	"close_api_design_change_set":  {"PUT /api/designs/{id}/change-sets/{cid}"},
 	"request_api_design_review":    {"POST /api/designs/{id}/reviews"},
@@ -271,11 +272,11 @@ var toolRoutes = map[string][]string{
 // original persisted design-scenario tools, four server-run tools and three
 // scenario-export tools, eight state-diagram tools, twelve schema-model tools,
 // three control-flow/coverage tools, four data-binding tools, test suggestions,
-// and nine resource-map tools.
+// ten resource-map tools and API impact analysis.
 // Pinned in routes_test.go so a tool
 // added without an entry here is caught by a test rather than by a 404 in
 // production.
-const toolCount = 129
+const toolCount = 130
 
 // toolPath resolves ONE call a tool makes into the (method, path) pair
 // loopback.do/call take.

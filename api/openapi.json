@@ -9493,6 +9493,441 @@
           "valid"
         ],
         "additionalProperties": false
+      },
+      "ApiImpactInput": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "fromRevisionId",
+              "document"
+            ],
+            "properties": {
+              "fromRevisionId": {
+                "type": "integer",
+                "format": "int64",
+                "minimum": 1
+              },
+              "document": {
+                "type": "string",
+                "description": "Exact JSON text from the editor; not normalized."
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "fromRevisionId",
+              "toRevisionId"
+            ],
+            "properties": {
+              "fromRevisionId": {
+                "type": "integer",
+                "format": "int64",
+                "minimum": 1
+              },
+              "toRevisionId": {
+                "type": "integer",
+                "format": "int64",
+                "minimum": 1
+              }
+            },
+            "additionalProperties": false
+          }
+        ]
+      },
+      "ApiImpactChange": {
+        "type": "object",
+        "required": [
+          "id",
+          "pointer",
+          "kind",
+          "changeClass",
+          "compatibility",
+          "reasonCode",
+          "explanation",
+          "beforeTruncated",
+          "afterTruncated"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "pointer": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "added",
+              "removed",
+              "changed"
+            ]
+          },
+          "changeClass": {
+            "type": "string",
+            "enum": [
+              "contract",
+              "metadata"
+            ]
+          },
+          "compatibility": {
+            "type": "string",
+            "enum": [
+              "breaking",
+              "compatible",
+              "review"
+            ]
+          },
+          "reasonCode": {
+            "type": "string"
+          },
+          "explanation": {
+            "type": "string"
+          },
+          "beforeJSON": {
+            "type": "string",
+            "description": "Exact JSON encoded as a string. Literal null differs from absent."
+          },
+          "afterJSON": {
+            "type": "string"
+          },
+          "beforeTruncated": {
+            "type": "boolean"
+          },
+          "afterTruncated": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ApiImpactLocator": {
+        "type": "object",
+        "required": [
+          "pointer"
+        ],
+        "properties": {
+          "pointer": {
+            "type": "string"
+          },
+          "sourcePointer": {
+            "type": "string"
+          },
+          "operationKey": {
+            "type": "string"
+          },
+          "method": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "resourceId": {
+            "type": "string"
+          },
+          "scenarioName": {
+            "type": "string"
+          },
+          "contractId": {
+            "type": "string"
+          },
+          "messageId": {
+            "type": "string"
+          },
+          "diagramId": {
+            "type": "string"
+          },
+          "transitionId": {
+            "type": "string"
+          },
+          "scenarioId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "scenarioRevision": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "pinnedRevisionId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "copy",
+              "linked"
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "ApiImpactEntity": {
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "label"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "schema",
+              "contract_node",
+              "operation",
+              "resource",
+              "scenario_message",
+              "state_transition"
+            ]
+          },
+          "label": {
+            "type": "string"
+          },
+          "before": {
+            "$ref": "#/components/schemas/ApiImpactLocator"
+          },
+          "after": {
+            "$ref": "#/components/schemas/ApiImpactLocator"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ApiImpactReferenceSite": {
+        "type": "object",
+        "required": [
+          "pointer",
+          "targetPointer",
+          "kind"
+        ],
+        "properties": {
+          "pointer": {
+            "type": "string"
+          },
+          "targetPointer": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ApiImpactEvidence": {
+        "type": "object",
+        "required": [
+          "id",
+          "changeId",
+          "entityId",
+          "side",
+          "direction",
+          "referenceSites",
+          "explanation"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "changeId": {
+            "type": "string"
+          },
+          "entityId": {
+            "type": "string"
+          },
+          "side": {
+            "type": "string",
+            "enum": [
+              "before",
+              "after"
+            ]
+          },
+          "direction": {
+            "type": "string",
+            "enum": [
+              "request",
+              "response",
+              "mixed",
+              "unknown"
+            ]
+          },
+          "referenceSites": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ApiImpactReferenceSite"
+            }
+          },
+          "explanation": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ApiImpactDiagnostic": {
+        "type": "object",
+        "required": [
+          "code",
+          "severity",
+          "side",
+          "pointer",
+          "message"
+        ],
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "warning",
+              "error",
+              "info"
+            ]
+          },
+          "side": {
+            "type": "string",
+            "enum": [
+              "before",
+              "after"
+            ]
+          },
+          "pointer": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "entityId": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ApiImpactCoverage": {
+        "type": "object",
+        "required": [
+          "scenariosScanned",
+          "scenarioUsagesReturned",
+          "changesReturned",
+          "entitiesReturned",
+          "evidenceReturned",
+          "truncatedReasons"
+        ],
+        "properties": {
+          "scenariosScanned": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "scenarioUsagesReturned": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "changesReturned": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "entitiesReturned": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "evidenceReturned": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "truncatedReasons": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "changes",
+                "references",
+                "traversal",
+                "entities",
+                "evidence",
+                "scenario_scan",
+                "scenario_usages",
+                "scenario_bytes",
+                "output"
+              ]
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "ApiImpactReport": {
+        "type": "object",
+        "required": [
+          "designId",
+          "version",
+          "fromRevisionId",
+          "fromHash",
+          "proposedHash",
+          "changes",
+          "affected",
+          "evidence",
+          "diagnostics",
+          "coverage",
+          "complete"
+        ],
+        "properties": {
+          "designId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "version": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "fromRevisionId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "toRevisionId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "fromHash": {
+            "type": "string"
+          },
+          "proposedHash": {
+            "type": "string"
+          },
+          "changes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ApiImpactChange"
+            }
+          },
+          "affected": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ApiImpactEntity"
+            }
+          },
+          "evidence": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ApiImpactEvidence"
+            }
+          },
+          "diagnostics": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ApiImpactDiagnostic"
+            }
+          },
+          "coverage": {
+            "$ref": "#/components/schemas/ApiImpactCoverage"
+          },
+          "complete": {
+            "type": "boolean",
+            "description": "Dependency traversal completeness within the declared scope, not proof of compatibility."
+          }
+        },
+        "additionalProperties": false
       }
     }
   },
@@ -18526,6 +18961,107 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/ApiResourceMapCommandsRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/designs/{id}/impact": {
+      "post": {
+        "tags": [
+          "api-designs"
+        ],
+        "operationId": "analyzeApiDesignImpact",
+        "summary": "Analyze API change impact",
+        "description": "Read-only analysis of an explicit saved base against exact JSON text or another saved revision. Current scenario drafts are read separately; their actual revisions are reported. Does not save, publish, update contracts, or execute scenarios.",
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfToken": []
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "design_invalid: document validation diagnostics.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "$ref": "#/components/schemas/ApiDesignInvalidDetails"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "413": {
+            "$ref": "#/components/responses/PayloadTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          },
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiImpactReport"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApiImpactInput"
               }
             }
           }

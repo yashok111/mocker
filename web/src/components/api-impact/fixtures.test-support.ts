@@ -1,0 +1,103 @@
+import type { ApiImpactReport } from "@/api/generated/schemas";
+
+export function reportFixture(): ApiImpactReport {
+  return {
+    designId: 12,
+    version: 2,
+    fromRevisionId: 41,
+    fromHash: "a",
+    proposedHash: "b",
+    complete: true,
+    changes: [
+      {
+        id: "change",
+        pointer: "/value",
+        kind: "removed",
+        changeClass: "contract",
+        compatibility: "review",
+        reasonCode: "schema_changed",
+        explanation: "Изменено поле общей схемы",
+        beforeJSON: "9007199254740993",
+        afterJSON: "null",
+        beforeTruncated: false,
+        afterTruncated: false,
+      },
+      {
+        id: "metadata",
+        pointer: "/info/description",
+        kind: "changed",
+        changeClass: "metadata",
+        compatibility: "compatible",
+        reasonCode: "description",
+        explanation: "Изменено описание",
+        beforeTruncated: false,
+        afterTruncated: false,
+      },
+      {
+        id: "identity",
+        pointer: "/paths/~1orders/get/x-mocker-canvas-operation-id",
+        kind: "changed",
+        changeClass: "metadata",
+        compatibility: "review",
+        reasonCode: "identity",
+        explanation: "Изменилась привязка",
+        beforeTruncated: false,
+        afterTruncated: false,
+      },
+    ],
+    affected: [
+      {
+        id: "operation",
+        kind: "operation",
+        label: "GET /orders",
+        before: { pointer: "/paths/~1orders/get" },
+      },
+      {
+        id: "scenario",
+        kind: "scenario_message",
+        label: "Создать заказ",
+        before: {
+          pointer: "/messages/0",
+          scenarioId: 7,
+          scenarioName: "Покупка",
+          scenarioRevision: 9,
+          contractId: "orders",
+          pinnedRevisionId: 35,
+          mode: "copy",
+          messageId: "create",
+        },
+      },
+    ],
+    evidence: [
+      {
+        id: "e1",
+        changeId: "change",
+        entityId: "operation",
+        side: "before",
+        direction: "response",
+        referenceSites: [
+          { pointer: "/paths/~1orders/get/responses/200", targetPointer: "/value", kind: "$ref" },
+        ],
+        explanation: "Операция использует изменённую схему",
+      },
+      {
+        id: "e2",
+        changeId: "change",
+        entityId: "scenario",
+        side: "before",
+        direction: "response",
+        referenceSites: [],
+        explanation: "Шаг использует затронутую операцию",
+      },
+    ],
+    diagnostics: [],
+    coverage: {
+      changesReturned: 3,
+      entitiesReturned: 2,
+      evidenceReturned: 2,
+      scenariosScanned: 4,
+      scenarioUsagesReturned: 1,
+      truncatedReasons: [],
+    },
+  };
+}

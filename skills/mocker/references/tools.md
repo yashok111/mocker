@@ -165,6 +165,14 @@ above. `get_guide {topic: "design"}` explains editing and the run/poll workflow.
 | `list_assets` | Names, sizes, URLs, caps | `workspaceId*` | assets[], totalBytes, maxAssetBytes, maxTotalBytes | Never the bytes: GET the `url`. |
 | `delete_asset` | Delete one | `workspaceId*`, `name*`, `confirmSlug*` | deleted | A `bodyRef`/`asset_url` naming it keeps working and serves empty, noted `asset_missing`. |
 
+### API change impact
+
+| tool | purpose | input | output | gotchas |
+|---|---|---|---|---|
+| `analyze_api_design_impact` | Read-only comparison with dependency evidence | `designId*`, `fromRevisionId*`, exactly one of `document` or `toRevisionId` | designId, version, exact revision IDs and hashes, changes[], affected[], evidence[], diagnostics[], coverage, complete | JSON text stays exact; null targets and unknown fields are rejected. Current scenario drafts are read separately and carry their own revision IDs. `complete` is dependency coverage, not compatibility. No contract refresh, binding/assertion validation, save, checkpoint, publication or execution. |
+
+See `design.md` for both input variants, compatibility rules and limits.
+
 ### API resource map
 
 These ten tools use the same API design draft and version fence as the rest of

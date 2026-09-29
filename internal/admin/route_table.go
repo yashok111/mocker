@@ -239,6 +239,7 @@ func (s *Server) routes() []route {
 		{"POST /api/designs/{id}/schema-model/preview", s.handlePreviewSchemaModel, mcpAllow, cpNeverTouchesLayer},
 		{"POST /api/designs/{id}/schema-model/commands", s.handleApplySchemaModelCommands, mcpAllow, cpAnotherLayer},
 		{"GET /api/designs/{id}/resource-map", s.handleGetResourceMap, mcpAllow, cpRead},
+		{"POST /api/designs/{id}/impact", s.handleAnalyzeAPIDesignImpact, mcpAllow, cpNeverTouchesLayer},
 		{"POST /api/designs/{id}/resource-map/preview", s.handlePreviewResourceMap, mcpAllow, cpNeverTouchesLayer},
 		{"POST /api/designs/{id}/resource-map/commands", s.handleApplyResourceMapCommands, mcpAllow, cpAnotherLayer},
 		{"GET /api/designs/{id}/state-diagrams", s.handleListStateDiagrams, mcpAllow, cpRead},

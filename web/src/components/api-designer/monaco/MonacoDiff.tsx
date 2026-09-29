@@ -9,17 +9,23 @@ export default function MonacoDiff({
   modified,
   narrow,
   focusPointer,
+  focusSide,
 }: {
   original: string;
   modified: string;
   narrow: boolean;
   focusPointer?: string;
+  focusSide?: "before" | "after";
 }): ReactElement {
   const containerRef = useRef<HTMLDivElement>(null);
   const editorRef = useRef<editor.IStandaloneDiffEditor | null>(null);
   const originalModelRef = useRef<editor.ITextModel | null>(null);
   const modifiedModelRef = useRef<editor.ITextModel | null>(null);
   const initialValues = useRef({ original, modified, narrow });
+  const missingPointer =
+    focusSide !== undefined &&
+    focusPointer !== undefined &&
+    findJsonPointerRange(focusSide === "before" ? original : modified, focusPointer) === null;
 
   useEffect(() => {
     const container = containerRef.current;
@@ -81,13 +87,17 @@ export default function MonacoDiff({
   useEffect(() => {
     const instance = editorRef.current;
     if (instance === null || focusPointer === undefined) return;
+    if (missingPointer) {
+      instance.getOriginalEditor().setPosition({ lineNumber: 1, column: 1 });
+      instance.getModifiedEditor().setPosition({ lineNumber: 1, column: 1 });
+      return;
+    }
 
     const modifiedRange = findJsonPointerRange(modified, focusPointer);
     const originalRange = findJsonPointerRange(original, focusPointer);
-    const targetEditor = modifiedRange
-      ? instance.getModifiedEditor()
-      : instance.getOriginalEditor();
-    const sourceRange = modifiedRange ?? originalRange;
+    const useOriginal = focusSide === "before" || (focusSide === undefined && !modifiedRange);
+    const targetEditor = useOriginal ? instance.getOriginalEditor() : instance.getModifiedEditor();
+    const sourceRange = useOriginal ? originalRange : modifiedRange;
     const model = targetEditor.getModel();
     if (sourceRange === null || model === null) return;
 
@@ -101,15 +111,23 @@ export default function MonacoDiff({
     };
     targetEditor.revealRangeInCenter(range);
     targetEditor.setSelection(range);
-  }, [focusPointer, modified, original]);
+  }, [focusPointer, focusSide, modified, original, missingPointer]);
 
   return (
-    <div
-      ref={containerRef}
-      style={{
-        height: "clamp(420px, calc(100dvh - 330px), 760px)",
-        width: "100%",
-      }}
-    />
+    <>
+      {missingPointer && (
+        <output style={{ display: "block", marginBottom: "var(--mantine-spacing-sm)" }}>
+          Элемент {focusPointer || "/"} отсутствует на стороне «
+          {focusSide === "before" ? "Было" : "Стало"}».
+        </output>
+      )}
+      <div
+        ref={containerRef}
+        style={{
+          height: "clamp(420px, calc(100dvh - 330px), 760px)",
+          width: "100%",
+        }}
+      />
+    </>
   );
 }

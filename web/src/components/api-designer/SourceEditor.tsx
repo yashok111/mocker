@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useRef } from "react";
 import type { ReactElement } from "react";
-import { Center, Loader, Textarea } from "@mantine/core";
+import { Center, Loader, Text, Textarea } from "@mantine/core";
 import { findJsonPointerRange } from "./monaco/jsonPointerRange";
 
 const LazyMonacoEditor = lazy(() => import("./monaco/MonacoEditor"));
@@ -55,16 +55,47 @@ export function SourceDiff({
   modified,
   narrow,
   focusPointer,
+  focusSide,
 }: {
   original: string;
   modified: string;
   narrow: boolean;
   focusPointer?: string;
+  focusSide?: "before" | "after";
 }): ReactElement {
+  const beforeRef = useRef<HTMLTextAreaElement>(null);
+  const afterRef = useRef<HTMLTextAreaElement>(null);
+  const missingPointer =
+    focusSide !== undefined &&
+    focusPointer !== undefined &&
+    findJsonPointerRange(focusSide === "before" ? original : modified, focusPointer) === null;
+  useEffect(() => {
+    if (focusPointer === undefined) return;
+    if (missingPointer) {
+      beforeRef.current?.setSelectionRange(0, 0);
+      afterRef.current?.setSelectionRange(0, 0);
+      return;
+    }
+    const before = findJsonPointerRange(original, focusPointer);
+    const after = findJsonPointerRange(modified, focusPointer);
+    const useBefore = focusSide === "before" || (focusSide === undefined && after === null);
+    const range = useBefore ? before : after;
+    const textarea = useBefore ? beforeRef.current : afterRef.current;
+    if (!range || !textarea) return;
+    textarea.focus();
+    textarea.setSelectionRange(range.startOffset, range.endOffset);
+  }, [focusPointer, focusSide, original, modified, missingPointer]);
   if (typeof Worker === "undefined") {
     return (
       <div aria-label="Построчное сравнение OpenAPI">
+        {missingPointer && (
+          <Text component="output" size="sm" mb="sm">
+            Элемент {focusPointer || "/"} отсутствует на стороне «
+            {focusSide === "before" ? "Было" : "Стало"}».
+          </Text>
+        )}
         <Textarea
+          ref={beforeRef}
           label="Было"
           value={original}
           readOnly
@@ -72,6 +103,7 @@ export function SourceDiff({
           styles={{ input: { fontFamily: "var(--mantine-font-family-monospace)" } }}
         />
         <Textarea
+          ref={afterRef}
           label="Стало"
           value={modified}
           readOnly
@@ -85,11 +117,12 @@ export function SourceDiff({
   return (
     <Suspense fallback={<EditorLoader label="Загружаем сравнение" />}>
       <LazyMonacoDiff
-        key={focusPointer ?? "diff"}
+        key={`${focusSide ?? "auto"}:${focusPointer ?? "diff"}`}
         original={original}
         modified={modified}
         narrow={narrow}
         focusPointer={focusPointer}
+        focusSide={focusSide}
       />
     </Suspense>
   );

@@ -34,6 +34,13 @@ type validateAPIDesignInput struct {
 	Document string `json:"document"`
 }
 
+type apiDesignImpactInput struct {
+	DesignID       int64   `json:"designId"`
+	FromRevisionID int64   `json:"fromRevisionId"`
+	Document       *string `json:"document,omitempty"`
+	ToRevisionID   *int64  `json:"toRevisionId,omitempty"`
+}
+
 type createAPIDesignChangeSetInput struct {
 	DesignID        int64  `json:"designId"`
 	ExpectedVersion int64  `json:"expectedVersion"`

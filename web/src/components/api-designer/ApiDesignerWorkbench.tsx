@@ -103,6 +103,7 @@ const POLL_MS = 5_000;
 const StateDiagramEditor = lazy(() => import("../state-diagram/StateDiagramEditor"));
 const SchemaModelEditor = lazy(() => import("../schema-model/SchemaModelEditor"));
 const ResourceMapEditor = lazy(() => import("../resource-map/ResourceMapEditor"));
+const ImpactPanel = lazy(() => import("../api-impact/ImpactPanel"));
 const SchemaDiagram = lazy(() => import("./SchemaDiagram"));
 type CanvasView =
   | "documentation"
@@ -110,6 +111,7 @@ type CanvasView =
   | "diagram"
   | "resources"
   | "states"
+  | "impact"
   | "compare"
   | "review";
 type EditorMode = "form" | "source";
@@ -142,6 +144,7 @@ export function ApiDesignerWorkbench({
   const [schemaView, setSchemaView] = useState("model");
   const [editorMode, setEditorMode] = useState<EditorMode>("form");
   const [operationSourcePointer, setOperationSourcePointer] = useState<string>();
+  const [sourcePointer, setSourcePointer] = useState<string>();
   const [inspectorView, setInspectorView] = useState<InspectorView>("changes");
   const [selection, setSelection] = useState<DocumentSelection>({ kind: "document" });
   const [search, setSearch] = useState("");
@@ -460,6 +463,7 @@ export function ApiDesignerWorkbench({
       changedPointers={changedPointers}
       document={unsafeNumber ? null : parsed.document}
       onDocumentChange={(next, nextSelection) => {
+        setSourcePointer(undefined);
         setOperationSourcePointer(undefined);
         setBuffer(JSON.stringify(next, null, 2));
         setSelection(nextSelection);
@@ -469,6 +473,7 @@ export function ApiDesignerWorkbench({
       }}
       onRemoveDraftTree={draftStore.removeTree}
       onSelect={(next) => {
+        setSourcePointer(undefined);
         setOperationSourcePointer(undefined);
         setSelection(next);
         tree.close();
@@ -736,6 +741,7 @@ export function ApiDesignerWorkbench({
               <Tabs.Tab value="diagram">Диаграмма</Tabs.Tab>
               <Tabs.Tab value="resources">Ресурсы</Tabs.Tab>
               <Tabs.Tab value="states">Состояния</Tabs.Tab>
+              <Tabs.Tab value="impact">Влияние</Tabs.Tab>
               <Tabs.Tab value="compare">Сравнение</Tabs.Tab>
               <Tabs.Tab value="review">Проверка</Tabs.Tab>
             </Tabs.List>
@@ -861,6 +867,7 @@ export function ApiDesignerWorkbench({
                     onChange={setBuffer}
                     onLayoutPendingChange={setResourceLayoutPending}
                     onOperation={(path, method, sourcePointer) => {
+                      setSourcePointer(undefined);
                       setOperationSourcePointer(sourcePointer);
                       setSelection(
                         sourcePointer ? { kind: "document" } : { kind: "operation", path, method },
@@ -869,6 +876,7 @@ export function ApiDesignerWorkbench({
                       setView("editor");
                     }}
                     onSchema={(name) => {
+                      setSourcePointer(undefined);
                       setOperationSourcePointer(undefined);
                       setSelection({ kind: "schema", name });
                       setEditorMode("form");
@@ -933,6 +941,7 @@ export function ApiDesignerWorkbench({
                   <SegmentedControl
                     value={editorMode}
                     onChange={(next) => {
+                      setSourcePointer(undefined);
                       setOperationSourcePointer(undefined);
                       setEditorMode(next as EditorMode);
                     }}
@@ -997,7 +1006,7 @@ export function ApiDesignerWorkbench({
                       <SourceEditor
                         value={buffer}
                         onChange={setBuffer}
-                        focusPointer={operationSourcePointer}
+                        focusPointer={sourcePointer ?? operationSourcePointer}
                       />
                     </>
                   )}
@@ -1046,6 +1055,32 @@ export function ApiDesignerWorkbench({
                   </Alert>
                 ) : null}
               </Stack>
+            </Tabs.Panel>
+            <Tabs.Panel value="impact" className={classes.canvasPanel}>
+              {view === "impact" && (
+                <Suspense fallback={<Text component="output">Загрузка анализа влияния…</Text>}>
+                  <ImpactPanel
+                    designId={id}
+                    document={buffer}
+                    baseDocument={baseDocument}
+                    baseRevisionId={baseRevisionId}
+                    revisions={detail.revisions}
+                    pendingForm={formDraft.dirty}
+                    pendingLayout={resourceLayoutPending}
+                    sourceError={parsed.error}
+                    onSource={(pointer, sharedOperation) => {
+                      setSourcePointer(pointer);
+                      setOperationSourcePointer(sharedOperation ? pointer : undefined);
+                      setSelection({ kind: "document" });
+                      setEditorMode("source");
+                      setView("editor");
+                    }}
+                    onScenario={(scenarioId) =>
+                      void navigate({ to: "/design-scenarios/$id", params: { id: scenarioId } })
+                    }
+                  />
+                </Suspense>
+              )}
             </Tabs.Panel>
             <Tabs.Panel value="compare" className={classes.canvasPanel}>
               <Stack gap="sm">

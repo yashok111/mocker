@@ -17,6 +17,17 @@ import (
 // immutable revisions and structural diff are already the agent-facing view.
 // Publication deliberately has no tool: a UI session confirms the candidate.
 func addAPIDesignTools(s *sdk.Server, lb *loopback) {
+	addAPIDesignTool(s, lb, "analyze_api_design_impact", "POST /api/designs/{id}/impact",
+		"Analyzes an immutable fromRevisionId against exact JSON document text OR toRevisionId from the same API. Returns contract changes, dependency evidence, affected resources, state transitions and current saved scenario draft usages with their revisions. Read-only: no saves, normalization, publication or runs. complete describes dependency coverage, not proof of compatibility. Scenario links identify operation usage only; bindings/assertions/extracts are not validated. Copies may have been edited; pinned revisions can differ from the base.", true,
+		func(in apiDesignImpactInput) (apiDesignCall, error) {
+			call, err := apiDesignRead(in.DesignID)
+			call.body = struct {
+				FromRevisionID int64   `json:"fromRevisionId"`
+				Document       *string `json:"document,omitempty"`
+				ToRevisionID   *int64  `json:"toRevisionId,omitempty"`
+			}{FromRevisionID: in.FromRevisionID, Document: in.Document, ToRevisionID: in.ToRevisionID}
+			return call, err
+		}, apiImpactInputSchema())
 	addAPIDesignTool(s, lb, "list_api_designs", "GET /api/designs",
 		"Lists API design projects with draft and published mock URLs and their current versions.", true,
 		func(_ struct{}) (apiDesignCall, error) { return apiDesignCall{}, nil })
@@ -159,8 +170,12 @@ func apiDesignWrite(designID, expectedVersion int64, objectIDs ...int64) (apiDes
 	return apiDesignRead(append([]int64{designID}, objectIDs...)...)
 }
 
-func addAPIDesignTool[Input any](s *sdk.Server, lb *loopback, name, route, description string, readOnly bool, build func(Input) (apiDesignCall, error)) {
-	sdk.AddTool(s, &sdk.Tool{Name: name, Description: description, Annotations: &sdk.ToolAnnotations{ReadOnlyHint: readOnly, IdempotentHint: readOnly}},
+func addAPIDesignTool[Input any](s *sdk.Server, lb *loopback, name, route, description string, readOnly bool, build func(Input) (apiDesignCall, error), inputSchema ...any) {
+	tool := &sdk.Tool{Name: name, Description: description, Annotations: &sdk.ToolAnnotations{ReadOnlyHint: readOnly, IdempotentHint: readOnly}}
+	if len(inputSchema) > 0 {
+		tool.InputSchema = inputSchema[0]
+	}
+	sdk.AddTool(s, tool,
 		func(ctx context.Context, _ *sdk.CallToolRequest, in Input) (*sdk.CallToolResult, any, error) {
 			call, err := build(in)
 			if err != nil {
@@ -212,6 +227,23 @@ func addAPIDesignTool[Input any](s *sdk.Server, lb *loopback, name, route, descr
 				Content:           []sdk.Content{&sdk.TextContent{Text: string(response)}},
 			}, nil, nil
 		})
+}
+
+func apiImpactInputSchema() any {
+	return map[string]any{
+		"type": "object", "additionalProperties": false,
+		"required": []string{"designId", "fromRevisionId"},
+		"properties": map[string]any{
+			"designId":       designScenarioPositiveIntegerSchema(),
+			"fromRevisionId": designScenarioPositiveIntegerSchema(),
+			"toRevisionId":   designScenarioPositiveIntegerSchema(),
+			"document":       map[string]any{"type": "string", "description": "Exact JSON string from the editor, preserving large numbers."},
+		},
+		"oneOf": []any{
+			map[string]any{"required": []string{"document"}},
+			map[string]any{"required": []string{"toRevisionId"}},
+		},
+	}
 }
 
 func apiDesignToolError(status int, body []byte) error {

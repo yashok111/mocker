@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { ApiDesignerWorkbench } from "./ApiDesignerWorkbench";
 import { renderInRouter } from "@/test/render";
 import { json, route } from "@/test/http";
+import { reportFixture } from "../api-impact/fixtures.test-support";
 import type {
   ApiDesignDetail,
   ApiDesignReview,
@@ -29,6 +30,10 @@ vi.mock("../resource-map/ResourceGraph", () => ({
   default: () => <div data-testid="resource-graph" />,
 }));
 
+vi.mock("../api-impact/ImpactGraph", () => ({
+  default: () => <div data-testid="impact-graph" />,
+}));
+
 afterEach(() => {
   localStorage.clear();
   vi.unstubAllGlobals();
@@ -36,6 +41,66 @@ afterEach(() => {
 });
 
 describe("ApiDesignerWorkbench", () => {
+  it("analyzes the frozen local base and exact unsafe number buffer after observing a newer draft", async () => {
+    const base = detailFixture();
+    const buffer = base.draft.document.replace(
+      '"version": "1"',
+      '"version": "local", "x-number": 9007199254740993',
+    );
+    // Keep explicit whitespace as part of the exact candidate text.
+    const candidate = `${buffer}\n `;
+    localStorage.setItem(
+      "mocker:api-design:12:draft",
+      JSON.stringify({
+        text: candidate,
+        baseDocument: base.draft.document,
+        baseRevisionId: 41,
+        baseVersion: 1,
+        formDrafts: "{}",
+        savedAt: Date.now(),
+      }),
+    );
+    const current = detailFixture({ version: 2, revisionId: 42 });
+    const fetch = route({
+      "GET /api/designs/12": () => json(200, current),
+      "GET /api/designs/12/diff?fromRevisionId=42&toRevisionId=42": () =>
+        json(200, diffFixture(current)),
+      "POST /api/designs/12/impact": () =>
+        json(200, { ...reportFixture(), changes: [], affected: [], evidence: [] }),
+    });
+    renderInRouter(<ApiDesignerWorkbench id={12} />);
+    await userEvent.click(await screen.findByRole("tab", { name: "Влияние" }));
+    expect(await screen.findByText("Текущие правки → от ревизии 41")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Проанализировать" }));
+    await screen.findByText("Изменений нет");
+    const request = fetch.mock.calls.find(([url]) => String(url).endsWith("/impact"));
+    expect(JSON.parse(String(request?.[1]?.body))).toEqual({
+      fromRevisionId: 41,
+      document: candidate,
+    });
+  });
+
+  it("opens an affected schema source without a shared Path Item warning", async () => {
+    const detail = detailFixture();
+    const report = reportFixture();
+    report.changes = [{ ...report.changes[0]!, pointer: "/info", kind: "changed" }];
+    report.affected = [];
+    report.evidence = [];
+    route({
+      "GET /api/designs/12": () => json(200, detail),
+      "GET /api/designs/12/diff?fromRevisionId=41&toRevisionId=41": () =>
+        json(200, diffFixture(detail)),
+      "POST /api/designs/12/impact": () => json(200, report),
+    });
+    renderInRouter(<ApiDesignerWorkbench id={12} />);
+    await userEvent.click(await screen.findByRole("tab", { name: "Влияние" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Проанализировать" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Исходник" }));
+    const source = screen.getByLabelText<HTMLTextAreaElement>("Исходник OpenAPI");
+    expect(source.value.slice(source.selectionStart, source.selectionEnd)).toContain('"info"');
+    expect(screen.queryByText("Общая операция из Path Item")).not.toBeInTheDocument();
+  });
+
   it("opens an inherited resource operation at its shared source and explains the edit scope", async () => {
     const detail = detailFixture();
     const document = JSON.parse(detail.draft.document);
