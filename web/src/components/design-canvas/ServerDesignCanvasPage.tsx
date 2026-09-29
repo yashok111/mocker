@@ -1,3 +1,4 @@
+import { suggestScenarioTests } from "./scenarioTestSuggestionsApi";
 import { useCallback, useEffect, useRef, useState, type ReactElement } from "react";
 import { Alert, Button, Group, Loader, Text } from "@mantine/core";
 import { IconCheck, IconAlertCircle, IconPlayerPlay } from "@tabler/icons-react";
@@ -15,6 +16,7 @@ import { ScenarioContractsPanel } from "./ScenarioContractsPanel";
 import { ScenarioHistoryPanel } from "./ScenarioHistoryPanel";
 import { ScenarioValidationAction } from "./ScenarioValidationAction";
 import { ScenarioExecutionPanel } from "./ScenarioExecutionPanel";
+import { analyzeScenarioDataFlow } from "./scenarioDataFlowApi";
 import { ScenarioResultsModal, type ScenarioResultSelection } from "./ScenarioResultsModal";
 import {
   runScenario,
@@ -658,7 +660,9 @@ function ServerCanvasEditor({
         listRuns={(signal) => listScenarioRuns(id, signal)}
         getRun={(runId, signal) => getScenarioRun(id, runId, signal)}
         cancelRun={(runId, signal) => cancelScenarioRun(id, runId, signal)}
+        suggestTests={(revisionId, signal) => suggestScenarioTests(id, revisionId, signal)}
         getCoverage={(revisionId, signal) => getScenarioCoverage(id, revisionId, signal)}
+        analyzeDataFlow={(document, signal) => analyzeScenarioDataFlow(id, document, signal)}
       />
       <ScenarioContractsPanel
         opened={contractsOpened}

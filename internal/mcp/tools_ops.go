@@ -74,7 +74,8 @@ func addOperationTools(s *sdk.Server, lb *loopback) {
 			"and path, returning each match's opKey, declared statuses and whether it already has an " +
 			"override. Use this to locate the opKey get_operation and set_operation_response need — " +
 			"the result is capped and always says so via returned/total/truncated, so a capped list is " +
-			"never mistaken for \"no such operation\".",
+			"never mistaken for \"no such operation\". For a sequence scenario, read get_api_design and copy " +
+			"x-mocker-canvas-operation-id from draft.document into operationKey; the workspace opKey returned here cannot bind a sequence step.",
 		Annotations: &sdk.ToolAnnotations{ReadOnlyHint: true, IdempotentHint: true},
 	}, handleFindOperations(lb))
 

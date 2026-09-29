@@ -5041,7 +5041,8 @@
           },
           "operationKey": {
             "type": "string",
-            "minLength": 1
+            "minLength": 1,
+            "description": "Copy operationKey verbatim from x-mocker-canvas-operation-id on the selected operation in the pinned contracts[].document. It is a stable opaque string, not the workspace opKey from find_operations, METHOD path, or OpenAPI operationId."
           }
         },
         "additionalProperties": false
@@ -5931,7 +5932,8 @@
             "type": "string"
           },
           "operationKey": {
-            "type": "string"
+            "type": "string",
+            "description": "Copy operationKey verbatim from x-mocker-canvas-operation-id on the selected operation in the pinned contracts[].document. It is a stable opaque string, not the workspace opKey from find_operations, METHOD path, or OpenAPI operationId."
           }
         },
         "additionalProperties": false
@@ -6116,6 +6118,12 @@
           },
           {
             "$ref": "#/components/schemas/DesignScenarioSetBranchExecutionCommand"
+          },
+          {
+            "$ref": "#/components/schemas/DesignScenarioUpsertDataBindingCommand"
+          },
+          {
+            "$ref": "#/components/schemas/DesignScenarioRemoveDataBindingCommand"
           }
         ]
       },
@@ -6301,6 +6309,13 @@
             "items": {
               "$ref": "#/components/schemas/DesignScenarioExecutionExtraction"
             }
+          },
+          "bindings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DesignScenarioDataBinding"
+            },
+            "maxItems": 100
           }
         },
         "additionalProperties": false
@@ -6592,6 +6607,12 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/DesignScenarioLoopIteration"
+            }
+          },
+          "bindingResults": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DesignScenarioBindingResult"
             }
           }
         },
@@ -8530,6 +8551,421 @@
           }
         },
         "additionalProperties": false
+      },
+      "DesignScenarioDataBindingTarget": {
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "name"
+            ],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "path",
+                  "query",
+                  "header"
+                ]
+              },
+              "name": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "pointer"
+            ],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "body"
+                ]
+              },
+              "pointer": {
+                "type": "string",
+                "maxLength": 2000,
+                "pattern": "^(?:/(?:[^~/]|~[01])*)*$"
+              }
+            }
+          }
+        ]
+      },
+      "DesignScenarioDataBinding": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "sourceMessageId",
+          "sourcePointer",
+          "target"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,100}$",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "sourceMessageId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "sourcePointer": {
+            "type": "string",
+            "maxLength": 2000,
+            "pattern": "^(?:/(?:[^~/]|~[01])*)*$"
+          },
+          "target": {
+            "$ref": "#/components/schemas/DesignScenarioDataBindingTarget"
+          },
+          "prefix": {
+            "type": "string",
+            "maxLength": 50000
+          }
+        }
+      },
+      "DesignScenarioUpsertDataBindingCommand": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "type",
+          "messageId",
+          "binding"
+        ],
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "upsert_data_binding"
+            ]
+          },
+          "messageId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "binding": {
+            "$ref": "#/components/schemas/DesignScenarioDataBinding"
+          }
+        }
+      },
+      "DesignScenarioRemoveDataBindingCommand": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "type",
+          "messageId",
+          "id"
+        ],
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "remove_data_binding"
+            ]
+          },
+          "messageId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,100}$",
+            "minLength": 1,
+            "maxLength": 100
+          }
+        }
+      },
+      "DesignScenarioDataFlowField": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "type",
+          "required"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "response",
+              "path",
+              "query",
+              "header",
+              "body"
+            ]
+          },
+          "name": {
+            "type": "string"
+          },
+          "pointer": {
+            "type": "string",
+            "maxLength": 2000,
+            "pattern": "^(?:/(?:[^~/]|~[01])*)*$"
+          },
+          "type": {
+            "type": "string"
+          },
+          "required": {
+            "type": "boolean"
+          }
+        }
+      },
+      "DesignScenarioDataFlowAnalysis": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "messages",
+          "bindings",
+          "diagnostics"
+        ],
+        "properties": {
+          "messages": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "messageId",
+                "responseFields",
+                "requestFields"
+              ],
+              "properties": {
+                "messageId": {
+                  "type": "string"
+                },
+                "responseFields": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/DesignScenarioDataFlowField"
+                  }
+                },
+                "requestFields": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/DesignScenarioDataFlowField"
+                  }
+                }
+              }
+            }
+          },
+          "bindings": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "messageId",
+                "binding"
+              ],
+              "properties": {
+                "messageId": {
+                  "type": "string"
+                },
+                "binding": {
+                  "$ref": "#/components/schemas/DesignScenarioDataBinding"
+                }
+              }
+            }
+          },
+          "diagnostics": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DesignScenarioDiagnostic"
+            }
+          }
+        }
+      },
+      "AnalyzeDesignScenarioDataFlowRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "document"
+        ],
+        "properties": {
+          "document": {
+            "$ref": "#/components/schemas/DesignScenarioDocument"
+          }
+        }
+      },
+      "DesignScenarioBindingResult": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "bindingId",
+          "sourceMessageId",
+          "sourcePointer",
+          "sourceOccurrence",
+          "target",
+          "valueJson"
+        ],
+        "properties": {
+          "bindingId": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,100}$",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "sourceMessageId": {
+            "type": "string"
+          },
+          "sourcePointer": {
+            "type": "string",
+            "maxLength": 2000,
+            "pattern": "^(?:/(?:[^~/]|~[01])*)*$"
+          },
+          "sourceOccurrence": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "sourceIterations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DesignScenarioLoopIteration"
+            }
+          },
+          "target": {
+            "$ref": "#/components/schemas/DesignScenarioDataBindingTarget"
+          },
+          "valueJson": {
+            "type": "string",
+            "description": "Original typed JSON value before applying the literal prefix. Numbers retain their precision."
+          }
+        }
+      },
+      "DesignScenarioTestTarget": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "fragmentId",
+          "outcome"
+        ],
+        "properties": {
+          "fragmentId": {
+            "type": "string"
+          },
+          "outcome": {
+            "type": "string",
+            "enum": [
+              "taken",
+              "skipped"
+            ]
+          },
+          "branchId": {
+            "type": "string"
+          }
+        }
+      },
+      "DesignScenarioSuggestedTest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "name",
+          "variables",
+          "targets"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "variables": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "targets": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DesignScenarioTestTarget"
+            }
+          }
+        }
+      },
+      "DesignScenarioUnresolvedTestTarget": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "target",
+          "code",
+          "reason"
+        ],
+        "properties": {
+          "target": {
+            "$ref": "#/components/schemas/DesignScenarioTestTarget"
+          },
+          "code": {
+            "type": "string",
+            "enum": [
+              "no_input_found",
+              "response_dependent",
+              "search_limit"
+            ]
+          },
+          "reason": {
+            "type": "string"
+          }
+        }
+      },
+      "DesignScenarioTestSuggestions": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "revisionId",
+          "runCount",
+          "sampleLimit",
+          "cases",
+          "unresolved",
+          "truncated",
+          "checkedCandidates"
+        ],
+        "properties": {
+          "revisionId": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "runCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "sampleLimit": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "cases": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DesignScenarioSuggestedTest"
+            }
+          },
+          "unresolved": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DesignScenarioUnresolvedTestTarget"
+            }
+          },
+          "truncated": {
+            "type": "boolean"
+          },
+          "checkedCandidates": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
       }
     }
   },
@@ -16985,6 +17421,197 @@
             "$ref": "#/components/responses/Internal"
           }
         }
+      }
+    },
+    "/api/design-scenarios/{id}/data-flow": {
+      "get": {
+        "tags": [
+          "design-scenarios"
+        ],
+        "operationId": "getDesignScenarioDataFlow",
+        "summary": "Analyze bindings and schema fields from the saved scenario revision",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "revisionId",
+            "in": "query",
+            "required": false,
+            "description": "Immutable scenario revision; defaults to current draft",
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Bounded schema fields, bindings and diagnostics",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DesignScenarioDataFlowAnalysis"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "design-scenarios"
+        ],
+        "operationId": "analyzeDesignScenarioDataFlow",
+        "summary": "Analyze a proposed document without saving or executing it",
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Bounded schema fields, bindings and diagnostics",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DesignScenarioDataFlowAnalysis"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "413": {
+            "$ref": "#/components/responses/PayloadTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AnalyzeDesignScenarioDataFlowRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/design-scenarios/{id}/test-suggestions": {
+      "get": {
+        "tags": [
+          "design-scenarios"
+        ],
+        "operationId": "suggestDesignScenarioTests",
+        "summary": "Suggest variable variants for unobserved control-flow paths",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "revisionId",
+            "in": "query",
+            "required": false,
+            "description": "Immutable scenario revision; defaults to current draft",
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Proposed inputs and unresolved paths",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DesignScenarioTestSuggestions"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "description": "Read-only bounded search over initial string variables for a saved revision. Does not run HTTP or change coverage. Run cases through runDesignScenario using revisionId, name, variables and a fresh runId. Targets are predictions; verify actual controlFlow and reread coverage. Response-dependent or unresolved paths include reasons. Saved default variables cannot be removed by overrides."
       }
     }
   }

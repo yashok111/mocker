@@ -54,7 +54,7 @@ const HTTP_METHODS = ["get", "post", "put", "delete", "patch"] as const;
 // agree with anything that file said. Every test below that wants to name it
 // reads it from here, which is the one thing the old title did not do — it
 // said "64" while the assertion said 70, for four slices running.
-const ROUTE_COUNT = 111;
+const ROUTE_COUNT = 114;
 
 interface RouteInfo {
   method: string;
@@ -118,6 +118,8 @@ function loadRoutes(): RouteInfo[] {
 // has a caller. An exemption is a decision on the record and so is its
 // withdrawal, in this comment.
 const EXEMPT: Record<string, string> = {
+  "GET /api/design-scenarios/{id}/data-flow":
+    "get_design_scenario_data_flow reads a saved revision for MCP; UI analyzes its unsaved settings document with analyzeDesignScenarioDataFlow (POST on the same path).",
   "GET /api/designs/{id}/schema-model":
     "get_schema_model reads the saved model for MCP; UI previews its unsaved document with previewSchemaModel.",
   "POST /api/designs/{id}/schema-model/commands":
@@ -271,6 +273,7 @@ describe("web/src API coverage", () => {
     // persisted scenario runs (start, list, detail, cancel), 91 -> 96.
     // Saved scenario export options and artifacts add two read routes, 96 -> 98.
     // ZIP archive generation for REST/MCP adds one read-only POST, 98 -> 99.
+    // Saved/candidate data-flow analysis adds GET and POST operations, 111 -> 113.
     // This count is OPERATIONS (method + path), not `paths` keys — a
     // 48-to-51 edit that instead counted paths would silently undercount.
     expect(routes).toHaveLength(ROUTE_COUNT);

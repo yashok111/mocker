@@ -1,4 +1,9 @@
 import {
+  ScenarioTestSuggestions,
+  type SuggestTests,
+  type SuggestedTest,
+} from "./ScenarioTestSuggestions";
+import {
   lazy,
   Suspense,
   useEffect,
@@ -7,6 +12,7 @@ import {
   useState,
   useCallback,
   type ReactElement,
+  type ComponentProps,
 } from "react";
 import {
   ActionIcon,
@@ -41,7 +47,20 @@ import {
 import { resolveOperation } from "./canvasModel";
 import { createCanvasId } from "./canvasId";
 import { validateCanvasExecutionSettings } from "./canvasStorage";
-import type { CanvasDocument, CanvasSelection, CanvasStepExecution, JSONValue } from "./types";
+import type {
+  CanvasDocument,
+  CanvasSelection,
+  CanvasStepExecution,
+  DataBinding,
+  JSONValue,
+} from "./types";
+import {
+  ScenarioDataBindingsEditor,
+  bindingTargetLabel,
+  bindingFieldName,
+  targetKey,
+} from "./ScenarioDataBindingsEditor";
+import { useDataFlowAnalysis, type AnalyzeDataFlow } from "./useDataFlowAnalysis";
 import styles from "./ScenarioExecutionPanel.module.css";
 
 const SequenceGraph = lazy(() => import("./SequenceGraph"));
@@ -78,6 +97,8 @@ export interface ScenarioExecutionPanelProps {
   listRuns: (signal: AbortSignal) => Promise<CanvasExecutionRunSummary[]>;
   getRun: (runId: string, signal: AbortSignal) => Promise<CanvasExecutionReport>;
   cancelRun: (runId: string, signal: AbortSignal) => Promise<CanvasExecutionReport>;
+  analyzeDataFlow?: AnalyzeDataFlow;
+  suggestTests?: SuggestTests;
   getCoverage?: (revisionId: number, signal: AbortSignal) => Promise<CanvasExecutionCoverage>;
 }
 
@@ -133,6 +154,7 @@ type StepForm = {
   expectedStatus: string;
   assertions: { pointer: string; equals: string }[];
   extract: Pair[];
+  bindings?: DataBinding[];
 };
 type SettingsForm = { variables: Pair[]; steps: Record<string, StepForm> };
 
@@ -153,6 +175,7 @@ function settingsOf(document: CanvasDocument): SettingsForm {
           return [
             message.id,
             {
+              ...(config.bindings === undefined ? {} : { bindings: config.bindings }),
               enabled: config.enabled,
               pathParams: pairs(config.pathParams),
               query: pairs(config.query),
@@ -225,6 +248,7 @@ function applySettings(document: CanvasDocument, form: SettingsForm): CanvasDocu
         throw new Error("Не более 100 проверок и 100 извлекаемых переменных на шаг.");
       const extracted = new Set<string>();
       const execution: CanvasStepExecution = {
+        ...(step.bindings === undefined ? {} : { bindings: step.bindings }),
         enabled: step.enabled,
         pathParams: mapFromRows(step.pathParams, "Параметры пути"),
         query: mapFromRows(step.query, "Query-параметры"),
@@ -278,6 +302,8 @@ function ExecutionSession({
   getRun,
   cancelRun,
   getCoverage,
+  suggestTests,
+  analyzeDataFlow,
 }: ScenarioExecutionPanelProps): ReactElement {
   const sourceForm = useMemo(() => settingsOf(document), [document]);
   const sourceSignature = JSON.stringify(sourceForm);
@@ -397,8 +423,38 @@ function ExecutionSession({
   );
   const externalSettingsChanged = formDirty && sourceSignature !== baseSignature;
   const blockReason = useMemo(() => canvasExecutionBlockReason(document), [document]);
+  const candidate = useMemo(() => {
+    try {
+      const next = applySettings(document, form);
+      validateCanvasExecutionSettings(next);
+      return { document: next, error: null };
+    } catch (cause) {
+      return { document: null, error: errorText(cause) };
+    }
+  }, [document, form]);
+  const dataFlow = useDataFlowAnalysis(candidate.document, opened, analyzeDataFlow);
+  const hasBindings = (candidate.document ?? document).messages.some(
+    (message) => message.execution?.bindings?.length,
+  );
+  // Catalog discovery is optional for legacy runs. A run that consumes bindings
+  // must wait for analysis, while invalid settings always remain blocking.
+  const analysisBlockReason =
+    candidate.error ??
+    (hasBindings
+      ? ((dataFlow.pending ? "Проверяем передачу данных…" : null) ??
+        (dataFlow.error ? `Не удалось проверить передачу данных: ${dataFlow.error}` : null) ??
+        (!analyzeDataFlow ? "Анализ передачи данных недоступен." : null) ??
+        dataFlow.current?.diagnostics.find((diagnostic) => diagnostic.severity === "error")
+          ?.message ??
+        null)
+      : null);
   const canRun =
-    !running && !disabled && !formDirty && !blockReason && sourceSignature === baseSignature;
+    !running &&
+    !disabled &&
+    !formDirty &&
+    !blockReason &&
+    !analysisBlockReason &&
+    sourceSignature === baseSignature;
 
   // API pin/version updates leave buffers intact. Actual config changes refresh a clean form.
   if (!formDirty && sourceSignature !== baseSignature) {
@@ -535,6 +591,18 @@ function ExecutionSession({
       ? report.steps[selectedStepIndex]
       : report?.steps.find((step) => step.messageId === selectedId);
   const selectedForm = form.steps[selectedId];
+  const bindingContext: ComponentProps<typeof ScenarioDataBindingsEditor> = {
+    document: candidate.document ?? document,
+    messageId: selectedId,
+    bindings: selectedForm?.bindings ?? [],
+    analysis: dataFlow.analysis,
+    onChange: (bindings) => updateStep({ bindings }),
+    examples:
+      report?.revisionId === revisionId && report.version === version
+        ? report.steps.flatMap((step) => step.bindingResults ?? [])
+        : [],
+  };
+
   const resolved = selectedMessage?.operation
     ? resolveOperation(shownDocument, selectedMessage.operation)
     : null;
@@ -598,12 +666,16 @@ function ExecutionSession({
     }
   }
 
-  async function run(): Promise<void> {
+  async function run(test?: SuggestedTest): Promise<void> {
     if (!canRun || ownedRun.current) return;
     const id = createCanvasId();
     const owned: OwnedRun = {
       id,
-      input: Object.freeze({ runId: id, revisionId }),
+      input: Object.freeze({
+        runId: id,
+        revisionId,
+        ...(test ? { name: test.name, variables: { ...test.variables } } : {}),
+      }),
       version,
       creationSettled: false,
       confirmed: false,
@@ -818,6 +890,7 @@ function ExecutionSession({
             >
               Результат
             </Tabs.Tab>
+            {suggestTests ? <Tabs.Tab value="suggestions">Тесты для веток</Tabs.Tab> : null}
           </Tabs.List>
           <Tabs.Panel value="settings" className={styles.settings}>
             <fieldset disabled={running} className={styles.fieldset}>
@@ -875,7 +948,9 @@ function ExecutionSession({
                           : "Для параметров в фигурных скобках, например /users/{id}."
                       }
                     >
-                      <PairEditor
+                      <RequestParameterEditor
+                        kind="path"
+                        bindingContext={bindingContext}
                         label="Параметр пути"
                         rows={selectedForm.pathParams}
                         onChange={(pathParams) => updateStep({ pathParams })}
@@ -885,7 +960,9 @@ function ExecutionSession({
                       />
                     </FieldSection>
                     <FieldSection title="Query-параметры">
-                      <PairEditor
+                      <RequestParameterEditor
+                        kind="query"
+                        bindingContext={bindingContext}
                         label="Query-параметр"
                         rows={selectedForm.query}
                         onChange={(query) => updateStep({ query })}
@@ -895,7 +972,9 @@ function ExecutionSession({
                       />
                     </FieldSection>
                     <FieldSection title="Заголовки">
-                      <PairEditor
+                      <RequestParameterEditor
+                        kind="header"
+                        bindingContext={bindingContext}
                         label="Заголовок"
                         rows={selectedForm.headers}
                         onChange={(headers) => updateStep({ headers })}
@@ -914,6 +993,9 @@ function ExecutionSession({
                       resize="vertical"
                       styles={{ input: { fontFamily: "monospace" } }}
                     />
+                    <FieldSection title="Поля тела из ответов предыдущих шагов">
+                      <ScenarioDataBindingsEditor {...bindingContext} kind="body" />
+                    </FieldSection>
                     <TextInput
                       label="Ожидаемый статус"
                       description="Пустое поле — любой успешный ответ 2xx."
@@ -1019,6 +1101,18 @@ function ExecutionSession({
               )}
             </fieldset>
           </Tabs.Panel>
+          {suggestTests ? (
+            <Tabs.Panel value="suggestions" className={styles.results}>
+              <ScenarioTestSuggestions
+                document={document}
+                revisionId={revisionId}
+                refreshToken={coverageRefresh}
+                disabled={!canRun}
+                suggest={suggestTests}
+                onRun={(test) => void run(test)}
+              />
+            </Tabs.Panel>
+          ) : null}
           <Tabs.Panel value="results" className={styles.results}>
             <div className={styles.runSelector}>
               <NativeSelect
@@ -1121,6 +1215,7 @@ function ExecutionSession({
                   {selectedStep ? (
                     <StepResult
                       step={selectedStep}
+                      document={report.document}
                       label={`${selectedMessage?.label ?? selectedId}${selectedStep.occurrence ? ` · Повтор ${selectedStep.occurrence}` : ""}${selectedStep.iterations?.length ? ` · ${selectedStep.iterations.map((item) => `цикл ${item.fragmentId}: ${item.iteration}`).join(", ")}` : ""}`}
                     />
                   ) : (
@@ -1336,6 +1431,28 @@ function ExecutionSession({
         </Tabs>
       </div>
       <footer className={styles.footer}>
+        {dataFlow.error ? (
+          <Alert color="red" role="alert" w="100%">
+            Не удалось проверить передачу данных: {dataFlow.error}
+            <Button size="xs" variant="subtle" onClick={dataFlow.retry}>
+              Повторить анализ
+            </Button>
+          </Alert>
+        ) : null}
+        {dataFlow.current?.diagnostics.length ? (
+          <details
+            className={styles.analysisDiagnostics}
+            open={dataFlow.current.diagnostics.some((item) => item.severity === "error")}
+          >
+            <summary>Проверка передачи данных · {dataFlow.current.diagnostics.length}</summary>
+            {dataFlow.current.diagnostics.map((diagnostic, index) => (
+              <Text key={index} size="xs" c={diagnostic.severity === "error" ? "red" : "dimmed"}>
+                {diagnostic.severity === "error" ? "Ошибка" : "Предупреждение"}:{" "}
+                {diagnostic.message}
+              </Text>
+            ))}
+          </details>
+        ) : null}
         {error ? (
           <Alert color="red" role="alert" w="100%">
             {error}
@@ -1364,10 +1481,13 @@ function ExecutionSession({
               ? "Отмена остановит дальнейшие запросы. Уже выполненные действия сохранятся."
               : formDirty
                 ? "Сохраните настройки перед запуском."
-                : (blockReason ??
+                : (analysisBlockReason ??
+                  blockReason ??
                   (disabled
                     ? "Запуск станет доступен после сохранения сценария и завершения открытых форм."
-                    : `Новый запуск: версия ${version}. Запросы выполняются по порядку на draft-моках, до первой ошибки.`))}
+                    : tab === "suggestions"
+                      ? "Выберите вариант выше, чтобы проверить его ветки."
+                      : `Новый запуск: версия ${version}. Запросы выполняются по порядку на draft-моках, до первой ошибки.`))}
           {document.messages.some((message) => message.kind === "event")
             ? ` Событийных шагов будет пропущено: ${document.messages.filter((message) => message.kind === "event").length}. Kafka runtime отсутствует.`
             : ""}
@@ -1376,13 +1496,15 @@ function ExecutionSession({
           {recoverableRunId ? (
             <Button onClick={() => void retryRun()}>Повторить запрос запуска</Button>
           ) : null}
-          <Button
-            variant="default"
-            disabled={!formDirty || running || externalSettingsChanged}
-            onClick={save}
-          >
-            Сохранить настройки
-          </Button>
+          {tab !== "suggestions" || formDirty ? (
+            <Button
+              variant="default"
+              disabled={!formDirty || running || externalSettingsChanged}
+              onClick={save}
+            >
+              Сохранить настройки
+            </Button>
+          ) : null}
           {running ? (
             <Button
               color="red"
@@ -1394,7 +1516,7 @@ function ExecutionSession({
             >
               {selectedRunId === ownedRunId ? "Отменить запуск" : "Отменить свой запуск"}
             </Button>
-          ) : (
+          ) : tab !== "suggestions" ? (
             <Button
               disabled={!canRun}
               leftSection={<IconPlayerPlay size={16} />}
@@ -1402,7 +1524,7 @@ function ExecutionSession({
             >
               Запустить
             </Button>
-          )}
+          ) : null}
         </Group>
       </footer>
     </Modal>
@@ -1430,6 +1552,116 @@ function FieldSection({
       ) : null}
       {children}
     </div>
+  );
+}
+
+function RequestParameterEditor({
+  rows,
+  onChange,
+  label,
+  addLabel,
+  namePlaceholder,
+  valuePlaceholder,
+  kind,
+  bindingContext,
+}: ComponentProps<typeof PairEditor> & {
+  kind: "path" | "query" | "header";
+  bindingContext: ComponentProps<typeof ScenarioDataBindingsEditor>;
+}): ReactElement {
+  const canonicalName = (name: string) => (kind === "header" ? name.toLowerCase() : name);
+  const catalog =
+    bindingContext.analysis?.messages
+      .find((message) => message.messageId === bindingContext.messageId)
+      ?.requestFields.filter((field) => field.kind === kind) ?? [];
+  const suggested = [
+    ...catalog.map((field) => field.name ?? ""),
+    ...bindingContext.bindings.flatMap((binding) =>
+      binding.target.kind === kind ? [binding.target.name] : [],
+    ),
+  ];
+  const names = new Set(rows.map((row) => canonicalName(row.name)));
+  const visibleRows = [...rows];
+  for (const name of suggested) {
+    if (!names.has(canonicalName(name))) {
+      visibleRows.push({ name, value: "" });
+      names.add(canonicalName(name));
+    }
+  }
+  const catalogOrder = new Map(
+    catalog.map((field, index) => [canonicalName(field.name ?? ""), index]),
+  );
+  visibleRows.sort(
+    (a, b) =>
+      (catalogOrder.get(canonicalName(a.name)) ?? catalog.length) -
+      (catalogOrder.get(canonicalName(b.name)) ?? catalog.length),
+  );
+  const change = (index: number, row: Pair) =>
+    onChange(index >= 0 ? rows.map((item, i) => (i === index ? row : item)) : [...rows, row]);
+  return (
+    <>
+      <Stack gap="sm">
+        {visibleRows.map((row, index) => {
+          const sourceIndex = rows.indexOf(row);
+          const target = { kind, name: row.name };
+          const bound = bindingContext.bindings.some(
+            (binding) => targetKey(binding.target) === targetKey(target),
+          );
+          const fromCatalog = catalog.some(
+            (field) => canonicalName(field.name ?? "") === canonicalName(row.name),
+          );
+          return (
+            <div key={index}>
+              {!bound ? (
+                <div className={styles.pair}>
+                  <TextInput
+                    aria-label={`${label} ${index + 1}: имя`}
+                    placeholder={namePlaceholder}
+                    value={row.name}
+                    readOnly={fromCatalog}
+                    onChange={(event) =>
+                      change(sourceIndex, { ...row, name: event.currentTarget.value })
+                    }
+                  />
+                  {!bound ? (
+                    <TextInput
+                      aria-label={`${label} ${index + 1}: значение`}
+                      placeholder={valuePlaceholder}
+                      value={row.value}
+                      onChange={(event) =>
+                        change(sourceIndex, { ...row, value: event.currentTarget.value })
+                      }
+                    />
+                  ) : null}
+                  {sourceIndex >= 0 ? (
+                    <ActionIcon
+                      variant="subtle"
+                      color="gray"
+                      aria-label={`Удалить: ${label.toLowerCase()} ${index + 1}`}
+                      onClick={() => onChange(rows.filter((_, i) => i !== sourceIndex))}
+                    >
+                      <IconTrash size={16} />
+                    </ActionIcon>
+                  ) : null}
+                </div>
+              ) : null}
+              {row.name || bound ? (
+                <ScenarioDataBindingsEditor {...bindingContext} target={target} />
+              ) : null}
+            </div>
+          );
+        })}
+      </Stack>
+      <Button
+        variant="subtle"
+        size="xs"
+        leftSection={<IconPlus size={14} />}
+        mt={6}
+        disabled={rows.length >= 100}
+        onClick={() => onChange([...rows, { name: "", value: "" }])}
+      >
+        {addLabel}
+      </Button>
+    </>
   );
 }
 
@@ -1505,9 +1737,11 @@ function PairEditor({
 function StepResult({
   step,
   label,
+  document,
 }: {
   step: CanvasExecutionStepResult;
   label: string;
+  document: CanvasDocument;
 }): ReactElement {
   return (
     <section aria-label="Детали шага">
@@ -1558,6 +1792,57 @@ function StepResult({
             </div>
           ))}
         </Stack>
+      ) : null}
+      {step.bindingResults?.length ? (
+        <section aria-label="Переданные значения">
+          <Text fw={600} size="sm" mt="md">
+            Переданные значения
+          </Text>
+          {step.bindingResults.map((binding) => {
+            const target = binding.target;
+            const values =
+              target.kind === "path"
+                ? step.request?.pathParams
+                : target.kind === "query"
+                  ? step.request?.query
+                  : target.kind === "header"
+                    ? step.request?.headers
+                    : undefined;
+            const value =
+              values && target.kind !== "body"
+                ? Object.entries(values).find(([name]) =>
+                    target.kind === "header"
+                      ? name.toLowerCase() === target.name.toLowerCase()
+                      : name === target.name,
+                  )?.[1]
+                : undefined;
+            return (
+              <div key={binding.bindingId} className={styles.bindingResult}>
+                <Text size="sm" className={styles.wrap}>
+                  Передали {bindingFieldName(binding.target)}:{" "}
+                  <span>{value ?? binding.valueJson}</span>
+                </Text>
+                <details className={styles.disclosure}>
+                  <summary>Откуда взялось значение</summary>
+                  <Text size="sm" className={styles.wrap}>
+                    {document.messages.find((message) => message.id === binding.sourceMessageId)
+                      ?.label || binding.sourceMessageId}{" "}
+                    {binding.sourcePointer || "Весь ответ"} → {bindingTargetLabel(binding.target)}
+                  </Text>
+                  <Text size="xs" c="dimmed">
+                    Источник: выполнение {binding.sourceOccurrence}
+                    {binding.sourceIterations
+                      ?.map(
+                        (iteration) =>
+                          ` · цикл ${document.fragments.find((fragment) => fragment.id === iteration.fragmentId)?.label || iteration.fragmentId}: ${iteration.iteration}`,
+                      )
+                      .join("")}
+                  </Text>
+                </details>
+              </div>
+            );
+          })}
+        </section>
       ) : null}
       {step.request ? (
         <details className={styles.disclosure}>

@@ -155,6 +155,44 @@ func hasDiagnostic(ds []Diagnostic, code string) bool {
 	return false
 }
 
+func TestHTTPFormatsRejectDataBindings(t *testing.T) {
+	t.Parallel()
+	for _, format := range []Format{Postman, CURL} {
+		t.Run(string(format), func(t *testing.T) {
+			rev := httpFixture("https://example.test")
+			// Decode the public document shape so this regression also covers
+			// loading a saved binding before an export is requested.
+			config := `{"enabled":true,"pathParams":{"id":"old-id"},"query":{},"headers":{},"body":"","assertions":[],"extract":[],"bindings":[{"id":"order-id","sourceMessageId":"create-order","sourcePointer":"/id","target":{"kind":"path","name":"id"}}]}`
+			if err := jsonx.Unmarshal([]byte(config), rev.Document.Messages[0].Execution); err != nil {
+				t.Fatal(err)
+			}
+			before, err := jsonx.Marshal(rev)
+			if err != nil {
+				t.Fatal(err)
+			}
+			svc := New(validContract, 1<<20)
+			artifact, err := svc.Export(rev, Request{Format: format})
+			blocked, ok := errors.AsType[*BlockedError](err)
+			if !ok || !hasDiagnostic(blocked.Diagnostics, "data_bindings_unsupported") {
+				t.Fatalf("binding exported as a literal: artifact=%+v error=%v", artifact, err)
+			}
+			if artifact.Content != "" {
+				t.Fatal("blocked export returned a runnable artifact")
+			}
+			for _, diagnostic := range blocked.Diagnostics {
+				if diagnostic.Code == "data_bindings_unsupported" &&
+					(diagnostic.Target == nil || diagnostic.Target.ID != "call" || diagnostic.Severity != "error") {
+					t.Fatalf("binding diagnostic lacks message target: %+v", diagnostic)
+				}
+			}
+			after, err := jsonx.Marshal(rev)
+			if err != nil || string(before) != string(after) {
+				t.Fatal("export changed saved bindings")
+			}
+		})
+	}
+}
+
 func TestHTTPBaseURLAndBudgets(t *testing.T) {
 	for _, format := range []Format{"postman", "curl"} {
 		rev := httpFixture("")

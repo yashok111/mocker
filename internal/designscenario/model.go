@@ -96,6 +96,12 @@ type Participant struct {
 	OffsetX     OffsetX  `json:"offsetX,omitzero"`
 }
 
+// OperationKeyDescription explains the identity shared by scenario bindings and MCP inputs.
+const OperationKeyDescription = "Copy operationKey verbatim from x-mocker-canvas-operation-id " +
+	"on the selected operation in the pinned contracts[].document. " +
+	"It is a stable opaque string, not the workspace opKey from find_operations, " +
+	"METHOD path, or OpenAPI operationId."
+
 type OperationBinding struct {
 	ContractID   string `json:"contractId"`
 	OperationKey string `json:"operationKey"`
@@ -182,6 +188,7 @@ type CommandsInput struct {
 // Command is the wire union for atomic scenario edits. Fields irrelevant to
 // the selected Type must be absent and are rejected during validation.
 type Command struct {
+	Binding           *DataBinding       `json:"binding,omitempty"`
 	Type              string             `json:"type"`
 	Title             string             `json:"title,omitempty"`
 	Participant       *Participant       `json:"participant,omitempty"`

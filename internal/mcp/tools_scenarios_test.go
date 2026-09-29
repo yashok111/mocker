@@ -31,6 +31,7 @@ func TestDesignScenarioToolsUseAdminRoutes(t *testing.T) {
 		{name: "restore_design_scenario_revision", args: `{"scenarioId":7,"revisionId":8,"expectedVersion":3,"summary":"Restore"}`, method: "POST", path: "/api/design-scenarios/7/restore"},
 		{name: "validate_design_scenario", args: `{"scenarioId":7,"document":` + designScenarioDocumentFixture + `}`, method: "POST", path: "/api/design-scenarios/7/validate"},
 		{name: "execute_design_scenario_step", args: `{"scenarioId":7,"revisionId":8,"messageId":"call","pathParams":{},"query":{},"headers":{},"body":""}`, method: "POST", path: "/api/design-scenarios/7/execute-step"},
+		{name: "suggest_design_scenario_tests", args: `{"scenarioId":7,"revisionId":8}`, method: "GET", path: "/api/design-scenarios/7/test-suggestions?revisionId=8"},
 		{name: "get_design_scenario_coverage", args: `{"scenarioId":7,"revisionId":8}`, method: "GET", path: "/api/design-scenarios/7/coverage?revisionId=8"},
 		{name: "set_design_scenario_fragment_execution", args: `{"scenarioId":7,"expectedVersion":3,"fragmentId":"loop","execution":{"iterations":3}}`, method: "POST", path: "/api/design-scenarios/7/commands"},
 		{name: "set_design_scenario_branch_execution", args: `{"scenarioId":7,"expectedVersion":3,"fragmentId":"alt","branchId":"yes","execution":{"condition":{"variable":"mode","operator":"equals","value":"yes"}}}`, method: "POST", path: "/api/design-scenarios/7/commands"},
@@ -216,8 +217,8 @@ func TestDesignScenarioToolsListPublishesObjectContractAndCommandUnion(t *testin
 		t.Fatal(err)
 	}
 	variants := commandSchema.Properties["commands"].Items.OneOf
-	if len(variants) != 19 {
-		t.Fatalf("command variants=%d, want 19; schema=%s", len(variants), byName["apply_design_scenario_commands"])
+	if len(variants) != 21 {
+		t.Fatalf("command variants=%d, want 21; schema=%s", len(variants), byName["apply_design_scenario_commands"])
 	}
 	var foundSetTitle bool
 	var foundSetEventModel bool

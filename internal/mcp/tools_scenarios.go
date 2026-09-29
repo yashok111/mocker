@@ -22,6 +22,19 @@ import (
 // surface; full-document save remains available for the interactive editor.
 func addDesignScenarioTools(s *sdk.Server, lb *loopback) {
 	addScenarioExportTools(s, lb)
+	addDesignScenarioDataFlowTools(s, lb)
+	addDesignScenarioTool(s, lb, "suggest_design_scenario_tests", "GET /api/design-scenarios/{id}/test-suggestions",
+		"Proposes initial variable overrides for unobserved alt/opt/loop paths in one saved revision (default: current draft), using up to 50 retained terminal reports. Read-only: does not save, execute HTTP or increase coverage. Returns cases with name, variables, targets, plus unresolved reasons and bounded-search status. Run each case with run_design_scenario using this revisionId, the exact variables and name, and a NEW unique runId (case.id is not a runId). Poll the report and compare actual controlFlow with targets; then reread coverage. HTTP response-dependent conditions may need mock setup. Defaults cannot be removed by variable overrides.", true,
+		func(in designScenarioCoverageInput) (designScenarioCall, error) {
+			call, err := designScenarioRead(in.ScenarioID)
+			if in.RevisionID != nil {
+				if *in.RevisionID <= 0 {
+					return call, errors.New("revisionId must be positive")
+				}
+				call.query = url.Values{"revisionId": {strconv.FormatInt(*in.RevisionID, 10)}}.Encode()
+			}
+			return call, err
+		})
 	addDesignScenarioTool(s, lb, "get_design_scenario_coverage", "GET /api/design-scenarios/{id}/coverage",
 		"Reads measured HTTP message and control-flow path coverage for one immutable scenario revision. Defaults to the current draft. Samples at most 50 retained terminal reports for that exact revision; zero hits mean unobserved, not impossible.", true,
 		func(in designScenarioCoverageInput) (designScenarioCall, error) {
@@ -69,7 +82,7 @@ func addDesignScenarioTools(s *sdk.Server, lb *loopback) {
 			return call, err
 		})
 	addDesignScenarioTool(s, lb, "execute_design_scenario_step", "POST /api/design-scenarios/{id}/execute-step",
-		"Executes one HTTP request from an immutable scenario revision against its linked current API draft mock, in-process. Supply resolved parameter/header/body values, never a URL. Refuses detached or stale contracts, unfinished forms, disabled requests and alt/opt/loop fragments. Returns mock HTTP errors in status; may affect runtime state. It does not evaluate assertions or extract variables. Do not retry a lost response blindly.", false,
+		"Executes one HTTP request from an immutable scenario revision against its linked current API draft mock, in-process. Supply resolved parameter/header/body values, never a URL. Refuses detached or stale contracts, unfinished forms, disabled requests, data bindings and alt/opt/loop fragments. Returns mock HTTP errors in status; may affect runtime state. It does not evaluate assertions or extract variables. Do not retry a lost response blindly.", false,
 		func(in executeDesignScenarioStepInput) (designScenarioCall, error) {
 			call, err := designScenarioRead(in.ScenarioID)
 			call.body = in.executeDesignScenarioStepBody
@@ -79,7 +92,7 @@ func addDesignScenarioTools(s *sdk.Server, lb *loopback) {
 		"Lists persisted sequence-design scenarios with their current versions and draft revision ids.", true,
 		func(_ struct{}) (designScenarioCall, error) { return designScenarioCall{}, nil })
 	addDesignScenarioTool(s, lb, "create_design_scenario", "POST /api/design-scenarios",
-		"Creates a persisted sequence-design scenario from a complete canvas document and optional unfinished API form buffers. Returns version 1 and its immutable draft revision. Not idempotent: after a lost response, inspect list_design_scenarios before creating again.", false,
+		"Creates a persisted sequence-design scenario from a complete canvas document and optional unfinished API form buffers. Returns version 1 and its immutable draft revision. For message.operation.operationKey, copy x-mocker-canvas-operation-id from the returned API draft.document; workspace find_operations.opKey is a different identifier. Not idempotent: after a lost response, inspect list_design_scenarios before creating again.", false,
 		func(in createDesignScenarioInput) (designScenarioCall, error) {
 			return designScenarioCall{body: in}, nil
 		})
@@ -106,7 +119,7 @@ func addDesignScenarioTools(s *sdk.Server, lb *loopback) {
 			return call, err
 		})
 	addDesignScenarioTool(s, lb, "apply_design_scenario_commands", "POST /api/design-scenarios/{id}/commands",
-		"Applies an ordered atomic command batch to participants, messages, order, fragments, HTTP API contracts and shared Kafka event definitions. Supports document versions 1, 2 and 3. Supported types: set_title, set_event_model, upsert_participant, remove_participant, move_participant, upsert_message, remove_message, move_message, upsert_fragment, remove_fragment, bind_operation, create_operation, create_contract, import_contract, refresh_contract, detach_contract and materialize_contract. create_contract accepts a new independent copy with a unique id and no source; combine it with bind_operation and materialize_contract to create an API project from multiple calls atomically. set_event_model replaces the complete eventModel and upgrades the document to v3; use upsert_message eventBindings in the same batch. Schemas and examples are JSON text strings that preserve exact numbers. Upserts carry complete objects. The batch preserves form buffers, checks one expectedVersion and either saves every command plus linked API work or saves nothing.", false,
+		"Applies an ordered atomic command batch to participants, messages, order, fragments, HTTP API contracts and shared Kafka event definitions. Supports document versions 1, 2 and 3. Supported types: set_title, set_event_model, upsert_participant, remove_participant, move_participant, upsert_message, remove_message, move_message, upsert_fragment, remove_fragment, bind_operation, create_operation, create_contract, import_contract, refresh_contract, detach_contract and materialize_contract. bind_operation reuses an existing operation: copy its x-mocker-canvas-operation-id from the pinned contract document into operationKey. create_operation creates a new method/path and refuses an existing operation. create_contract accepts a new independent copy with a unique id and no source; combine it with bind_operation and materialize_contract to create an API project from multiple calls atomically. set_event_model replaces the complete eventModel and upgrades the document to v3; use upsert_message eventBindings in the same batch. Schemas and examples are JSON text strings that preserve exact numbers. Upserts carry complete objects. The batch preserves form buffers, checks one expectedVersion and either saves every command plus linked API work or saves nothing.", false,
 		func(in applyDesignScenarioCommandsInput) (designScenarioCall, error) {
 			call, err := designScenarioWrite(in.ScenarioID, in.ExpectedVersion)
 			if err == nil && len(in.Commands) == 0 {
@@ -379,7 +392,11 @@ func designScenarioInputSchema(name string) any {
 		return designScenarioSchemaObject([]string{"scenarioId", "runId"}, map[string]any{"scenarioId": designScenarioPositiveIntegerSchema(), "runId": designScenarioRunIDSchema()})
 	case "list_design_scenario_runs":
 		return designScenarioSchemaObject([]string{"scenarioId"}, map[string]any{"scenarioId": designScenarioPositiveIntegerSchema()})
-	case "get_design_scenario_coverage":
+	case "upsert_design_scenario_data_binding":
+		return designScenarioDataBindingInputSchema(true)
+	case "remove_design_scenario_data_binding":
+		return designScenarioDataBindingInputSchema(false)
+	case "get_design_scenario_coverage", "get_design_scenario_data_flow", "suggest_design_scenario_tests":
 		return designScenarioSchemaObject([]string{"scenarioId"}, map[string]any{"scenarioId": designScenarioPositiveIntegerSchema(), "revisionId": designScenarioPositiveIntegerSchema()})
 	case "set_design_scenario_fragment_execution":
 		return designScenarioSchemaObject([]string{"scenarioId", "expectedVersion", "fragmentId", "execution"}, map[string]any{"scenarioId": designScenarioPositiveIntegerSchema(), "expectedVersion": designScenarioPositiveIntegerSchema(), "fragmentId": map[string]any{"type": "string", "minLength": 1}, "execution": map[string]any{"anyOf": []any{designScenarioFragmentExecutionSchema(), map[string]any{"type": "null"}}}, "summary": map[string]any{"type": "string"}})
@@ -427,7 +444,7 @@ func designScenarioInputSchema(name string) any {
 				"summary": map[string]any{"type": "string"},
 			},
 		)
-	case "validate_design_scenario":
+	case "validate_design_scenario", "analyze_design_scenario_data_flow":
 		return designScenarioSchemaObject(
 			[]string{"scenarioId", "document"},
 			map[string]any{
@@ -474,6 +491,16 @@ func designScenarioColorSchema(description string) map[string]any {
 	}
 }
 
+func designScenarioOperationKeySchema() map[string]any {
+	return map[string]any{
+		"type":      "string",
+		"minLength": 1,
+		"description": designscenario.OperationKeyDescription +
+			" For a linked API, parse draft.document returned by create_api_design or get_api_design, " +
+			"preserve that document in the scenario contract and use its operation key.",
+	}
+}
+
 func designScenarioDocumentSchema() map[string]any {
 	participant := designScenarioSchemaObject(
 		[]string{"id", "name", "kind", "description"},
@@ -489,7 +516,7 @@ func designScenarioDocumentSchema() map[string]any {
 		[]string{"contractId", "operationKey"},
 		map[string]any{
 			"contractId":   map[string]any{"type": "string", "minLength": 1},
-			"operationKey": map[string]any{"type": "string", "minLength": 1},
+			"operationKey": designScenarioOperationKeySchema(),
 		},
 	)
 	message := designScenarioSchemaObject(
@@ -610,6 +637,7 @@ func designScenarioStepExecutionSchema() map[string]any {
 	extraction := designScenarioSchemaObject([]string{"name", "pointer"}, map[string]any{"name": map[string]any{"type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]{0,99}$"}, "pointer": pointer})
 	return designScenarioSchemaObject([]string{"enabled", "pathParams", "query", "headers", "body", "assertions", "extract"}, map[string]any{
 		"enabled":    map[string]any{"type": "boolean"},
+		"bindings":   map[string]any{"type": "array", "maxItems": 100, "items": designScenarioDataBindingSchema()},
 		"pathParams": designScenarioExecutionMapSchema(), "query": designScenarioExecutionMapSchema(), "headers": designScenarioExecutionMapSchema(),
 		"body":           map[string]any{"type": "string"},
 		"expectedStatus": map[string]any{"type": "integer", "minimum": 100, "maximum": 599},
@@ -634,6 +662,8 @@ func designScenarioCommandSchemas() []any {
 		"mode":     map[string]any{"type": "string", "const": "copy"},
 	})
 	return []any{
+		command("upsert_data_binding", []string{"messageId", "binding"}, map[string]any{"messageId": stringField(), "binding": designScenarioDataBindingSchema()}),
+		command("remove_data_binding", []string{"messageId", "id"}, map[string]any{"messageId": stringField(), "id": designScenarioRunIDSchema()}),
 		command("set_title", []string{"title"}, map[string]any{"title": stringField()}),
 		command("set_event_model", []string{"eventModel"}, map[string]any{"eventModel": eventModelSchema()}),
 		command("upsert_participant", []string{"participant"}, map[string]any{"participant": participant}),
@@ -646,7 +676,7 @@ func designScenarioCommandSchemas() []any {
 		command("set_fragment_execution", []string{"id"}, map[string]any{"id": stringField(), "fragmentExecution": map[string]any{"anyOf": []any{designScenarioFragmentExecutionSchema(), map[string]any{"type": "null"}}}}),
 		command("set_branch_execution", []string{"id", "branchId"}, map[string]any{"id": stringField(), "branchId": stringField(), "branchExecution": map[string]any{"anyOf": []any{designScenarioBranchExecutionSchema(), map[string]any{"type": "null"}}}}),
 		command("remove_fragment", []string{"id"}, map[string]any{"id": stringField()}),
-		command("bind_operation", []string{"messageId", "contractId", "operationKey"}, map[string]any{"messageId": stringField(), "contractId": stringField(), "operationKey": stringField()}),
+		command("bind_operation", []string{"messageId", "contractId", "operationKey"}, map[string]any{"messageId": stringField(), "contractId": stringField(), "operationKey": designScenarioOperationKeySchema()}),
 		command("create_operation", []string{"messageId", "method", "path"}, map[string]any{"messageId": stringField(), "contractId": stringField(), "method": stringField(), "path": stringField(), "label": stringField()}),
 		command("create_contract", []string{"contract"}, map[string]any{"contract": newContract}),
 		command("import_contract", []string{"designId", "mode"}, map[string]any{"id": stringField(), "designId": designScenarioPositiveIntegerSchema(), "revisionId": designScenarioPositiveIntegerSchema(), "mode": map[string]any{"type": "string", "enum": []string{"copy", "linked"}}}),

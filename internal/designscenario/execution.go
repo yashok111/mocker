@@ -49,6 +49,7 @@ func (v *ExecutionValues) UnmarshalJSON(data []byte) error {
 }
 
 type StepExecution struct {
+	Bindings       []DataBinding         `json:"bindings,omitempty"`
 	Enabled        bool                  `json:"enabled"`
 	PathParams     ExecutionValues       `json:"pathParams"`
 	Query          ExecutionValues       `json:"query"`
@@ -127,6 +128,9 @@ func decodeExecutionObject(data []byte, out any, required ...string) error {
 			return fmt.Errorf("execution field %q is required", key)
 		}
 	}
+	if raw, ok := fields["bindings"]; ok && isJSONNull(raw) {
+		return fmt.Errorf("bindings must be an array")
+	}
 	if raw, ok := fields["expectedStatus"]; ok && isJSONNull(raw) {
 		return fmt.Errorf("expectedStatus must be an integer")
 	}
@@ -173,6 +177,7 @@ func checkExecutionValues(pointer string, values map[string]string, variables bo
 }
 
 func checkStepExecution(pointer string, e *StepExecution, add func(string, string)) {
+	checkDataBindings(pointer+"/bindings", e.Bindings, add)
 	checkExecutionValues(pointer+"/pathParams", e.PathParams, false, add)
 	checkExecutionValues(pointer+"/query", e.Query, false, add)
 	checkExecutionValues(pointer+"/headers", e.Headers, false, add)

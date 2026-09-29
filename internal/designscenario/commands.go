@@ -58,6 +58,8 @@ func (r *Repo) ApplyCommands(ctx context.Context, id int64, input CommandsInput)
 
 func (r *Repo) applyCommand(ctx context.Context, tx *sql.Tx, document *Document, command Command, source string, ownerID *int64) error {
 	switch command.Type {
+	case "upsert_data_binding", "remove_data_binding":
+		return applyDataBindingCommand(document, command)
 	case "set_title":
 		document.Title = command.Title
 	case "upsert_participant", "remove_participant", "move_participant":

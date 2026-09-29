@@ -224,6 +224,9 @@ func executableContract(revision designscenario.Revision, messageID string, from
 		if message.Kind != "request" || message.Operation == nil {
 			return nil, errors.New("сообщение не является HTTP-запросом с API-операцией")
 		}
+		if !fromRun && message.Execution != nil && len(message.Execution.Bindings) > 0 {
+			return nil, errors.New("шаг с передачей данных требует запуска сценария с историей источников")
+		}
 		if message.Execution != nil && !message.Execution.Enabled {
 			return nil, errors.New("шаг выключен")
 		}

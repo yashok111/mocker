@@ -119,6 +119,13 @@ func validateRunRevision(revision Revision, runID, name, source string) error {
 		}
 		return errors.New("сначала завершите редактирование форм сценария")
 	}
+	if hasDataBindings(revision.Document) {
+		for _, diagnostic := range AnalyzeDataFlow(revision.Document).Diagnostics {
+			if diagnostic.Severity == "error" {
+				return fmt.Errorf("%s: %s", diagnostic.Pointer, diagnostic.Message)
+			}
+		}
+	}
 	if diagnostics := executionDiagnostics(revision.Document); len(diagnostics) != 0 {
 		return fmt.Errorf("%s: %s", diagnostics[0].Pointer, diagnostics[0].Message)
 	}
@@ -165,7 +172,7 @@ func runContract(document Document, message Message) (*Contract, error) {
 		}
 		keys, diagnostics := operationKeys(contract.Document, "")
 		if _, ok := keys[message.Operation.OperationKey]; !ok || len(diagnostics) > 0 {
-			return nil, fmt.Errorf("операция API сообщения %q недоступна", message.ID)
+			return nil, fmt.Errorf("операция API сообщения %q недоступна; %s", message.ID, OperationKeyDescription)
 		}
 		return contract, nil
 	}
@@ -173,6 +180,7 @@ func runContract(document Document, message Message) (*Contract, error) {
 }
 
 type runEngine struct {
+	bindingSchemas []bindingSchema
 	report         RunReport
 	progress       func(RunReport) error
 	retained       int
@@ -232,9 +240,15 @@ func (e *runEngine) executeStep(ctx context.Context, index int, message Message,
 	if config == nil {
 		config = &StepExecution{Enabled: true, PathParams: ExecutionValues{}, Query: ExecutionValues{}, Headers: ExecutionValues{}}
 	}
-	request, err := resolveRunRequest(e.report.RevisionID, message.ID, config, e.report.Variables)
+	request, results, err := e.resolveBindingRequest(index, message, config)
 	if err != nil {
 		return err
+	}
+	if len(results) > 0 {
+		if err = e.retain(results, 0); err != nil {
+			return err
+		}
+		e.report.Steps[index].BindingResults = results
 	}
 	if err = e.retain(request, 0); err != nil {
 		return err
@@ -647,6 +661,10 @@ func cloneRunReport(report RunReport) RunReport {
 	for i := range report.Steps {
 		step := &report.Steps[i]
 		step.Iterations = slices.Clone(step.Iterations)
+		step.BindingResults = slices.Clone(step.BindingResults)
+		for j := range step.BindingResults {
+			step.BindingResults[j].SourceIterations = slices.Clone(step.BindingResults[j].SourceIterations)
+		}
 		if step.Request != nil {
 			step.Request = new(cloneStepRequest(*step.Request))
 		}
@@ -722,6 +740,7 @@ func cloneRunDocument(document Document) Document {
 			config.Assertions[j].Equals = slices.Clone(config.Assertions[j].Equals)
 		}
 		config.Extract = slices.Clone(config.Extract)
+		config.Bindings = slices.Clone(config.Bindings)
 	}
 	if document.EventModel != nil {
 		model := *document.EventModel

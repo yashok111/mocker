@@ -495,3 +495,52 @@ describe("canvas persistence", () => {
     expect(() => parseCanvas(`{"padding":"${"x".repeat(2_100_000)}"}`)).toThrow(/слишком большой/i);
   });
 });
+
+describe("data binding persistence", () => {
+  const binding = {
+    id: "order-id",
+    sourceMessageId: "missing-source",
+    sourcePointer: "/id",
+    target: { kind: "body" as const, pointer: "" },
+  };
+  const withBindings = (bindings: unknown): string => {
+    const document = validDocument();
+    document.messages[0]!.execution = { ...defaultStepExecution(), bindings: bindings as never };
+    return JSON.stringify(document);
+  };
+
+  it("preserves whole-body pointers and dangling semantic links in saved snapshots", () => {
+    const parsed = parseCanvas(withBindings([binding]));
+    expect(parsed.messages[0]?.execution?.bindings).toEqual([binding]);
+    expect(
+      parseSavedCanvas(serializeSavedCanvas(parsed, {})).document.messages[0]?.execution?.bindings,
+    ).toEqual([binding]);
+  });
+
+  it("leaves legacy documents without bindings", () => {
+    const document = validDocument();
+    document.messages[0]!.execution = defaultStepExecution();
+    expect(
+      parseSavedCanvas(serializeSavedCanvas(document, {})).document.messages[0]?.execution,
+    ).not.toHaveProperty("bindings");
+  });
+
+  it.each([
+    null,
+    [{ ...binding, id: "bad id" }],
+    [{ ...binding, sourcePointer: "/bad~2" }],
+    [{ ...binding, prefix: null }],
+    [{ ...binding, extra: "unknown" }],
+    [{ ...binding, target: { kind: "body" } }],
+    [{ ...binding, target: { kind: "body", pointer: "", name: "x" } }],
+    [{ ...binding, target: { kind: "header", name: "" } }],
+    [binding, { ...binding, target: { kind: "query", name: "id" } }],
+    [
+      { ...binding, target: { kind: "header", name: "Authorization" } },
+      { ...binding, id: "other", target: { kind: "header", name: "authorization" } },
+    ],
+    [binding, { ...binding, id: "other", target: { kind: "body", pointer: "/id" } }],
+  ])("rejects invalid binding structure %#", (bindings) => {
+    expect(() => parseCanvas(withBindings(bindings))).toThrow();
+  });
+});

@@ -1,6 +1,6 @@
 import { resolveOperation } from "./canvasModel";
 import { validateCanvasExecutionSettings } from "./canvasStorage";
-import type { CanvasDocument, CanvasStepExecution } from "./types";
+import type { CanvasDocument, CanvasStepExecution, DataBindingTarget } from "./types";
 
 export { CANVAS_EXECUTION_LIMITS } from "./types";
 
@@ -47,6 +47,16 @@ export interface CanvasAssertionResult {
   error?: string;
 }
 
+export interface CanvasBindingResult {
+  bindingId: string;
+  sourceMessageId: string;
+  sourcePointer: string;
+  sourceOccurrence: number;
+  sourceIterations?: CanvasLoopIteration[];
+  target: DataBindingTarget;
+  valueJson: string;
+}
+
 export interface CanvasExecutionStepResult {
   messageId: string;
   status: CanvasExecutionStatus;
@@ -54,6 +64,7 @@ export interface CanvasExecutionStepResult {
   request?: CanvasExecuteStepInput;
   response?: CanvasExecuteStepResponse;
   assertions: CanvasAssertionResult[];
+  bindingResults?: CanvasBindingResult[];
   occurrence?: number;
   iterations?: CanvasLoopIteration[];
 }

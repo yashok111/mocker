@@ -58,6 +58,34 @@ func TestDocumentationSnapshotAndEscaping(t *testing.T) {
 	}
 }
 
+func TestDocumentationDescribesDataBindingsWithoutExecutionValues(t *testing.T) {
+	t.Parallel()
+	for _, format := range []Format{Markdown, HTML} {
+		t.Run(string(format), func(t *testing.T) {
+			rev := revisionFixture()
+			rev.Document.Messages[0].Execution = &designscenario.StepExecution{}
+			config := `{"enabled":true,"pathParams":{},"query":{},"headers":{},"body":"PRIVATE_BODY","assertions":[],"extract":[],"bindings":[{"id":"token","sourceMessageId":"login","sourcePointer":"/token","target":{"kind":"header","name":"Authorization"},"prefix":"PRIVATE_PREFIX"}]}`
+			if err := jsonx.Unmarshal([]byte(config), rev.Document.Messages[0].Execution); err != nil {
+				t.Fatal(err)
+			}
+			artifact, err := New(validContract, 1<<20).Export(rev, Request{Format: format})
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, text := range []string{"Передача данных", "login", "/token", "Authorization"} {
+				if !strings.Contains(artifact.Content, text) {
+					t.Fatalf("missing binding metadata %q", text)
+				}
+			}
+			for _, value := range []string{"PRIVATE_BODY", "PRIVATE_PREFIX"} {
+				if strings.Contains(artifact.Content, value) {
+					t.Fatalf("exported execution value %q", value)
+				}
+			}
+		})
+	}
+}
+
 func TestDocumentationWarningsAndFailures(t *testing.T) {
 	t.Parallel()
 	rev := revisionFixture()

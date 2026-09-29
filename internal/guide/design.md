@@ -1,5 +1,52 @@
 # Designing an API in mocker — drafts, review and publication
 
+## Choosing an operation for a sequence step
+
+A sequence step uses the stable **operationKey** stored in the authored OpenAPI
+operation's **x-mocker-canvas-operation-id** extension. Copy the value exactly;
+it is an opaque string and is not required to be a UUID.
+
+| Identifier | Read it from | Use it for |
+|---|---|---|
+| `opKey`, e.g. `POST%20%2Forders` | `find_operations` | Workspace tools such as `get_operation` and response overrides |
+| `operationKey` | `x-mocker-canvas-operation-id` in the pinned contract | `message.operation` and the `bind_operation` command |
+| `operationId`, e.g. `createOrder` | Standard OpenAPI operation | OpenAPI naming; it does not identify a sequence binding |
+
+For a new sequence using an API project:
+
+1. Call `create_api_design` or `get_api_design`. Parse the **returned**
+   `draft.document` JSON text; it contains the stable keys assigned by the server.
+   Your original input document may not contain them.
+2. Select the operation by method/path and copy its extension value:
+
+   ```js
+   const authored = JSON.parse(api.draft.document);
+   const operationKey = authored.paths["/orders"].post["x-mocker-canvas-operation-id"];
+   const contract = {
+     id: "orders-api", name: "Orders API", mode: "linked",
+     source: {designId: api.design.id, revisionId: api.draft.id, version: api.design.version},
+     document: authored,
+   };
+   const operation = {contractId: contract.id, operationKey};
+   ```
+
+3. Put `contract` into `document.contracts` and `operation` into the request
+   message when calling `create_design_scenario`. For an existing message, use
+   `apply_design_scenario_commands` with
+   `{type:"bind_operation", messageId, contractId, operationKey}` and the current
+   scenario `expectedVersion`.
+4. Validate the scenario and its data flow before running it.
+
+For an existing scenario, get the key from its **pinned** `contracts[].document`
+returned by `get_design_scenario` or `get_design_scenario_revision`. If you need a
+newer API revision, use `refresh_contract` first and read the updated scenario.
+A stable key follows method/path renames when preserved in the authored API.
+
+If validation says the operation is missing, check the matching contract and
+extension value. Do not decode a workspace opKey or substitute OpenAPI
+operationId. Use `create_operation` only when creating a new method/path;
+it refuses an operation that already exists. Use `bind_operation` to reuse one.
+
 ## State diagrams: visual authoring and simulation
 
 Open an API project and select **Состояния**. Create an empty diagram or use
@@ -500,3 +547,82 @@ round of design starts from step 2.
   is inline. Two rows with the same shape carry two copies.
 - **No review or comments.** The export is a file: put it in git, review
   it there.
+
+
+### Typed response-to-request data bindings
+
+Use `get_design_scenario_data_flow {scenarioId, revisionId?}` to inspect fields
+from saved OpenAPI snapshots. Use `analyze_design_scenario_data_flow
+{scenarioId, document}` to analyze unsaved changes without saving or executing.
+Both tools are read-only. Unknown or unsupported schema types produce warnings;
+incompatible known types and unavailable sources are errors that block runs.
+Catalogs have a depth limit of 20 and 2000 fields per message, with explicit
+warnings when truncated. External schema references are never fetched.
+
+A binding is stored in `message.execution.bindings` (at most 100 per step):
+
+```json
+{"id":"order-id","sourceMessageId":"create-order","sourcePointer":"/id","target":{"kind":"path","name":"id"}}
+```
+
+For a typed mutation, first read `get_design_scenario`, then call:
+
+```json
+{"scenarioId":1,"expectedVersion":1,"messageId":"get-order","binding":{"id":"order-id","sourceMessageId":"create-order","sourcePointer":"/id","target":{"kind":"path","name":"id"}}}
+```
+
+Pass this object to `upsert_design_scenario_data_binding`. Reusing `binding.id`
+replaces that binding. `remove_design_scenario_data_binding` takes `scenarioId`,
+`expectedVersion`, `messageId` and `id`. Generic `apply_design_scenario_commands`
+accepts `upsert_data_binding` (`messageId`, `binding`) and `remove_data_binding`
+(`messageId`, `id`) in an atomic batch. Reconcile stale versions; never blind-retry.
+
+Targets are `path`, `query` or `header` with `name`, or `body` with `pointer`.
+The body pointer `""` replaces the whole JSON body. `prefix` is literal text,
+for example `"Bearer "`, and is allowed only for string destinations. JSON body
+values retain their original types and number precision. Existing templates and
+extractions remain supported; bindings override their occupied destinations.
+
+The source must be an earlier enabled HTTP request with an operation. Every
+source opt/loop/alt-branch must also enclose the target. Values cannot escape a
+branch or loop or cross branches. A loop uses only successful source occurrences
+from the same iteration; a missing field or incompatible value fails before
+sending the target request. Structurally valid broken references remain editable
+and are reported by analysis; they are never removed silently.
+
+Run the whole scenario with `run_design_scenario`: direct
+`execute_design_scenario_step` refuses bindings because it lacks source history.
+Read `get_design_scenario_run` and inspect each step's optional `bindingResults`:
+`bindingId`, `sourceMessageId`, `sourcePointer`, `sourceOccurrence`, optional
+`sourceIterations`, `target`, and `valueJson` show the exact successful source
+and original typed value. The final prefixed value is visible in the request.
+Use the report's document snapshot when interpreting historical runs.
+Standalone HTTP, cURL and Postman exports reject steps with bindings explicitly.
+
+
+### Generate tests for unobserved sequence branches
+
+Call `suggest_design_scenario_tests {scenarioId, revisionId?}` after saving the
+scenario. It reads the same revision-scoped coverage as
+`get_design_scenario_coverage` (up to 50 retained terminal reports) and returns:
+
+- `cases[]`: `id`, `name`, initial `variables` overrides and expected `targets`
+  (`fragmentId`, optional `branchId`, `outcome`).
+- `unresolved[]`: paths for which no input was found, with `code` and `reason`.
+- `truncated` and `checkedCandidates`: bounded-search status.
+
+For each selected case call `run_design_scenario` with the returned `revisionId`,
+case `variables`, case `name`, and a **new unique runId**. The case `id` is only a
+preview label; do not reuse it as runId. Poll `get_design_scenario_run` to a
+terminal report, compare its `controlFlow` with the case targets, then refresh
+coverage. A passed run alone does not prove that every proposed target was hit.
+
+Generation does not save or execute requests. Existing HTTP assertions and data
+bindings remain active. Initial values are combined with saved defaults, exactly
+like normal runs; overrides cannot remove a saved default variable. Conditions
+whose values come from HTTP responses may need mock configuration. `unresolved`
+means no input was found, not that the path is impossible. The search checks up to
+256 input sets and returns at most 20 cases / 1 MiB of case JSON. Cases are
+proposals, and coverage increases only through actual observed run decisions.
+Executed cases persist as named runs with their inputVariables; there is no
+separate saved test-suite entity in this version.

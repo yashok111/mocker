@@ -197,6 +197,55 @@ function validateStepExecution(value: unknown, path: string): void {
     return variableName(extraction.name, `${path}.extract[${index}].name`);
   });
   assertNoDuplicates(names, `${path}.extract`);
+  if (config.bindings !== undefined) validateDataBindings(config.bindings, `${path}.bindings`);
+}
+
+export function validateDataBindings(value: unknown, path = "Передача данных"): void {
+  const ids: string[] = [];
+  const targets: string[] = [];
+  const bodyPointers: string[] = [];
+  requireArray(value, path, CANVAS_EXECUTION_LIMITS.entries).forEach((value, index) => {
+    const at = `${path}[${index}]`;
+    const binding = requireRecord(value, at);
+    for (const key of Object.keys(binding))
+      if (!["id", "sourceMessageId", "sourcePointer", "target", "prefix"].includes(key))
+        fail(`${at}.${key}: неизвестное поле`);
+    const id = executionString(binding.id, `${at}.id`, 100, false);
+    if (!/^[A-Za-z0-9_-]+$/.test(id)) fail(`${at}.id: используйте буквы, цифры, _ и -`);
+    ids.push(id);
+    executionString(binding.sourceMessageId, `${at}.sourceMessageId`, 200, false);
+    validatePointer(binding.sourcePointer, `${at}.sourcePointer`);
+    if (binding.prefix !== undefined)
+      executionString(binding.prefix, `${at}.prefix`, CANVAS_EXECUTION_LIMITS.value);
+    const target = requireRecord(binding.target, `${at}.target`);
+    const body = target.kind === "body";
+    if (!["body", "path", "query", "header"].includes(String(target.kind)))
+      fail(`${at}.target.kind: выберите назначение`);
+    for (const key of Object.keys(target))
+      if (!["kind", body ? "pointer" : "name"].includes(key))
+        fail(`${at}.target.${key}: поле недопустимо для этого назначения`);
+    if (body) {
+      validatePointer(target.pointer, `${at}.target.pointer`);
+      bodyPointers.push(target.pointer as string);
+    } else {
+      const name = executionString(
+        target.name,
+        `${at}.target.name`,
+        CANVAS_EXECUTION_LIMITS.key,
+        false,
+      );
+      targets.push(`${target.kind}:${target.kind === "header" ? name.toLowerCase() : name}`);
+    }
+  });
+  assertNoDuplicates(ids, path);
+  assertNoDuplicates(targets, `${path}: назначения`);
+  for (let i = 0; i < bodyPointers.length; i++)
+    for (let j = i + 1; j < bodyPointers.length; j++) {
+      const a = bodyPointers[i]!;
+      const b = bodyPointers[j]!;
+      if (a === b || a === "" || b === "" || a.startsWith(`${b}/`) || b.startsWith(`${a}/`))
+        fail(`${path}: назначения JSON-тела пересекаются`);
+    }
 }
 
 function validateDocumentExecution(value: unknown): void {

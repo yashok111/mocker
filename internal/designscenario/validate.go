@@ -59,6 +59,12 @@ func validateDocument(document Document) []Diagnostic {
 		validator.validateFragmentTree(document.Fragments, messages)
 	}
 	validator.validateEventModel(document, participants)
+	if hasDataBindings(document) {
+		for _, diagnostic := range analyzeDataFlow(document).Diagnostics {
+			diagnostic.Severity = "warning"
+			validator.diagnostics = append(validator.diagnostics, diagnostic)
+		}
+	}
 	return validator.diagnostics
 }
 
@@ -237,7 +243,7 @@ func (v *documentValidator) validateMessageReferences(document Document, partici
 			if !exists {
 				v.errorAt(pointer+"/operation/contractId", "contract does not exist")
 			} else if _, exists = keys[message.Operation.OperationKey]; !exists {
-				v.diagnostics = append(v.diagnostics, Diagnostic{Pointer: pointer + "/operation/operationKey", Message: "operation is missing from the pinned contract", Severity: "warning"})
+				v.diagnostics = append(v.diagnostics, Diagnostic{Pointer: pointer + "/operation/operationKey", Message: "operation is missing from the pinned contract; " + OperationKeyDescription, Severity: "warning"})
 			}
 		}
 	}

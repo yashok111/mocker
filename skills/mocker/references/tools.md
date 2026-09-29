@@ -9,6 +9,15 @@ Legend: `*` = required. Types are wire types. `editVersion` is the per-row
 compare-and-swap token (see "Compare-and-swap" at the end). `confirmSlug` is the
 workspace's exact slug (see "confirmSlug").
 
+## Operation identifiers
+
+Workspace `opKey` from `find_operations` addresses a mock route. Sequence
+`operationKey` is the value of `x-mocker-canvas-operation-id` in the pinned
+`contracts[].document`. For a new linked contract, parse the `draft.document`
+returned by `create_api_design` or `get_api_design`. See the operation-binding
+recipe in `design.md`. `bind_operation` reuses an existing operation;
+`create_operation` creates a new method/path.
+
 ## Orientation
 
 | tool | purpose | input | output | gotchas |
@@ -110,7 +119,11 @@ above. `get_guide {topic: "design"}` explains editing and the run/poll workflow.
 | `get_design_scenario_run` | Read progress or the complete result | `scenarioId*`, `runId*` | report with document snapshot, resolved requests, responses, assertions, final variables and reasons | Inspect `status` and each step. A successful tool call can contain a failed run. Assertion `expectedJson`/`actualJson` are exact JSON strings; absent actual is distinct from `"null"`. |
 | `list_design_scenario_runs` | Find recent runs from UI and MCP | `scenarioId*` | `runs[]` with ID, name, source, revision, status and times | Latest50, newest first; reports survive page reload and server restart. |
 | `cancel_design_scenario_run` | Stop an active run | `scenarioId*`, `runId*` | current full report | Idempotent; poll until terminal if still running. Completed steps are not rolled back. |
-| `execute_design_scenario_step` | Probe one resolved HTTP request | `scenarioId*`, `revisionId*`, `messageId*`, `pathParams*`, `query*`, `headers*`, `body*` | method, path, status, headers, body, duration and revision identities | Does not run assertions or extraction. Can change mock state; do not retry a lost response blindly. Use `run_design_scenario` for a complete sequence. |
+| `get_design_scenario_data_flow` | Read binding analysis for a saved revision | `scenarioId*`, `revisionId` | bounded response/request fields, bindings and diagnostics | Read-only; defaults to current draft. |
+| `analyze_design_scenario_data_flow` | Analyze unsaved bindings | `scenarioId*`, `document*` | field catalogs, bindings and diagnostics | Read-only; saves nothing and executes no requests. |
+| `upsert_design_scenario_data_binding` | Create or replace a binding by ID | `scenarioId*`, `expectedVersion*`, `messageId*`, `binding*`, `summary` | updated scenario and revision | Atomic version-fenced command; reconcile conflicts. |
+| `remove_design_scenario_data_binding` | Remove a binding | `scenarioId*`, `expectedVersion*`, `messageId*`, `id*`, `summary` | updated scenario and revision | Use the binding ID and the version from your latest read. |
+| `execute_design_scenario_step` | Probe one resolved HTTP request | `scenarioId*`, `revisionId*`, `messageId*`, `pathParams*`, `query*`, `headers*`, `body*` | method, path, status, headers, body, duration and revision identities | Refuses steps containing data bindings. Does not run assertions or extraction. Can change mock state; do not retry a lost response blindly. Use `run_design_scenario` for a complete sequence. |
 
 ## Checkpoints (history and undo of the workspace layer)
 
@@ -188,3 +201,15 @@ A 4xx from the admin plane becomes a tool error `admin API returned <status>:
 field or the rule. A 5xx is `admin API returned <status>` with nothing more.
 Exceptions: 409 `edit_conflict` → the `conflict` field above; `push_stream_frame`'s
 504 keeps its message.
+
+
+### Sequence branch test suggestions
+
+| Tool | Purpose | Parameters |
+| --- | --- | --- |
+| `suggest_design_scenario_tests` | Read-only initial-variable proposals for unobserved alt/opt/loop paths; returns cases, expected targets, unresolved reasons and search limits | `scenarioId*`, `revisionId` (default: current draft) |
+
+Run a returned case through `run_design_scenario` with its revisionId, name,
+variables and a fresh unique runId. Poll and compare actual controlFlow with
+targets; reread coverage. The preview does not execute HTTP or change coverage.
+See `design.md` for limits and the complete workflow.

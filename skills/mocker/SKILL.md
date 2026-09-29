@@ -51,7 +51,11 @@ fields realistic without pinning the whole body.
 ## Start here
 
 1. `get_server_config` once — the limits behind every 413 and refused draft. Then `list_workspaces` → `get_workspace` (slug, url, specId, editVersion).
-2. `find_operations {query}` → `opKey`s. `get_operation {opKey}` before any write.
+2. For workspace response changes, `find_operations {query}` → `opKey`s;
+   `get_operation {opKey}` before a write. For a saved sequence, read
+   `references/design.md` (or `get_guide {topic:"design"}`): its `operationKey`
+   comes from `x-mocker-canvas-operation-id` in the returned API `draft.document`.
+   Keep that returned document when creating the scenario contract.
 3. No spec yet? `import_spec {name, document}` with the file's text (JSON or
    YAML); then `create_workspace {specId}`.
 4. Do the task from the cookbook (`references/cookbook.md`): stand up a
@@ -102,3 +106,10 @@ fields realistic without pinning the whole body.
 - `references/functions.md` — endpoint functions: the `req`/return contract, the `mock` helpers, the sandbox, the guards, where the branch sits on each plane, and the two stream hooks (`tick.lua`, `stream.onFrame`).
 
 The running server serves these same texts: `get_guide {topic: "overview" | "tools" | "shapes" | "cookbook" | "http" | "design" | "functions"}`.
+
+
+For sequence branch coverage gaps, use `suggest_design_scenario_tests` to obtain
+initial-variable variants. Run selected cases with `run_design_scenario`, a
+fresh runId and the returned revisionId/name/variables, then verify the actual
+controlFlow and refresh coverage. Generation is read-only; unresolved paths
+include reasons. See `references/design.md` for the workflow and limits.

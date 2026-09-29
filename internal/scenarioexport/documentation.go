@@ -303,6 +303,17 @@ func (s *Service) renderDocumentation(rev designscenario.Revision, format Format
 		for _, binding := range m.EventBindings {
 			w.paragraph("Kafka контракт: ", binding.ContractID, " · Операция: ", binding.OperationID)
 		}
+		if m.Execution != nil && len(m.Execution.Bindings) > 0 {
+			w.heading(4, "Передача данных")
+			for _, binding := range m.Execution.Bindings {
+				target := binding.Target.Name
+				if binding.Target.Kind == "body" {
+					target = binding.Target.Pointer
+				}
+				w.paragraph("Источник: ", binding.SourceMessageID, " · JSON Pointer: ", binding.SourcePointer,
+					" → ", binding.Target.Kind, " ", target)
+			}
+		}
 	}
 	if len(rev.Document.Fragments) > 0 {
 		w.heading(2, "Блоки и ветки")

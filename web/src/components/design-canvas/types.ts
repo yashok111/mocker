@@ -50,6 +50,36 @@ export interface CanvasExecution {
   variables: Record<string, string>;
 }
 
+export type DataBindingTarget =
+  | { kind: "path" | "query" | "header"; name: string }
+  | { kind: "body"; pointer: string };
+
+export interface DataBinding {
+  id: string;
+  sourceMessageId: string;
+  sourcePointer: string;
+  target: DataBindingTarget;
+  prefix?: string;
+}
+
+export interface DataFlowField {
+  kind: "response" | "path" | "query" | "header" | "body";
+  name?: string;
+  pointer?: string;
+  type: string;
+  required: boolean;
+}
+
+export interface DataFlowAnalysis {
+  messages: {
+    messageId: string;
+    responseFields: DataFlowField[];
+    requestFields: DataFlowField[];
+  }[];
+  bindings: { messageId: string; binding: DataBinding }[];
+  diagnostics: { pointer: string; message: string; severity: string }[];
+}
+
 export interface CanvasStepExecution {
   enabled: boolean;
   pathParams: Record<string, string>;
@@ -59,6 +89,7 @@ export interface CanvasStepExecution {
   expectedStatus?: number;
   assertions: { pointer: string; equals: JSONValue }[];
   extract: { name: string; pointer: string }[];
+  bindings?: DataBinding[];
 }
 
 export interface CanvasMessage {

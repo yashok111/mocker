@@ -61,14 +61,15 @@ type RunReport struct {
 }
 
 type StepResult struct {
-	MessageID  string            `json:"messageId"`
-	Status     string            `json:"status"`
-	Reason     string            `json:"reason,omitempty"`
-	Request    *StepRequest      `json:"request,omitempty"`
-	Response   *StepResponse     `json:"response,omitempty"`
-	Assertions []AssertionResult `json:"assertions"`
-	Occurrence int               `json:"occurrence,omitzero"`
-	Iterations []LoopIteration   `json:"iterations,omitempty"`
+	BindingResults []BindingResult   `json:"bindingResults,omitempty"`
+	MessageID      string            `json:"messageId"`
+	Status         string            `json:"status"`
+	Reason         string            `json:"reason,omitempty"`
+	Request        *StepRequest      `json:"request,omitempty"`
+	Response       *StepResponse     `json:"response,omitempty"`
+	Assertions     []AssertionResult `json:"assertions"`
+	Occurrence     int               `json:"occurrence,omitzero"`
+	Iterations     []LoopIteration   `json:"iterations,omitempty"`
 }
 
 // ActualJSON is absent for a missing pointer and contains "null" for JSON null.

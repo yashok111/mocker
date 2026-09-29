@@ -3,7 +3,8 @@ import { MantineProvider } from "@mantine/core";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ScenarioExecutionPanel } from "./ScenarioExecutionPanel";
-import type { CanvasDocument } from "./types";
+import type { CanvasDocument, DataFlowAnalysis } from "./types";
+import { defaultStepExecution } from "./canvasExecution";
 import type { CanvasExecutionReport } from "./canvasExecution";
 import type { ScenarioExecutionPanelProps } from "./ScenarioExecutionPanel";
 import { ApiFailure } from "@/api/client";
@@ -145,6 +146,41 @@ function props() {
 }
 
 describe("ScenarioExecutionPanel", () => {
+  it("runs a generated variant with its exact name and variables without saving settings", async () => {
+    const handlers = props();
+    const suggestTests = vi.fn().mockResolvedValue({
+      revisionId: 42,
+      runCount: 0,
+      sampleLimit: 50,
+      checkedCandidates: 1,
+      truncated: false,
+      unresolved: [],
+      cases: [
+        {
+          id: "branch-test-1",
+          name: "Отказ оплаты",
+          variables: { paid: "no" },
+          targets: [{ fragmentId: "payment", outcome: "skipped" }],
+        },
+      ],
+    });
+    renderPanel(<ScenarioExecutionPanel {...handlers} suggestTests={suggestTests} />);
+    fireEvent.click(screen.getByRole("tab", { name: "Тесты для веток" }));
+    expect(screen.queryByRole("button", { name: "Запустить" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Подобрать тесты" })).not.toBeInTheDocument();
+    await screen.findByText("Отказ оплаты");
+    fireEvent.click(screen.getByRole("button", { name: "Запустить вариант" }));
+    await waitFor(() => expect(handlers.runScenario).toHaveBeenCalledTimes(1));
+    expect(handlers.runScenario.mock.calls[0]![0]).toEqual({
+      runId: expect.any(String),
+      revisionId: 42,
+      name: "Отказ оплаты",
+      variables: { paid: "no" },
+    });
+    expect(handlers.runScenario.mock.calls[0]![0].runId).not.toBe("branch-test-1");
+    expect(handlers.onChangeDocument).not.toHaveBeenCalled();
+  });
+
   it("shows every repeated occurrence and revision coverage with diagram selection", async () => {
     const handlers = props();
     handlers.getCoverage = vi.fn().mockResolvedValue({
@@ -669,5 +705,245 @@ describe("ScenarioExecutionPanel", () => {
     expect(handlers.runScenario).toHaveBeenCalledOnce();
     fireEvent.click(screen.getByRole("button", { name: "Закрыть запуск" }));
     expect(handlers.cancelRun).not.toHaveBeenCalled();
+  });
+});
+
+describe("execution data bindings", () => {
+  it("keeps legacy runs available during catalog analysis and after a catalog budget error", async () => {
+    const handlers = props();
+    let resolveAnalysis!: (analysis: DataFlowAnalysis) => void;
+    const analyzeDataFlow = vi
+      .fn<NonNullable<ScenarioExecutionPanelProps["analyzeDataFlow"]>>()
+      .mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            resolveAnalysis = resolve;
+          }),
+      );
+    renderPanel(<ScenarioExecutionPanel {...handlers} analyzeDataFlow={analyzeDataFlow} />);
+    await waitFor(() => expect(analyzeDataFlow).toHaveBeenCalled());
+    expect(screen.getByRole("button", { name: "Запустить" })).toBeEnabled();
+    await act(async () =>
+      resolveAnalysis({
+        messages: [],
+        bindings: [],
+        diagnostics: [
+          { pointer: "/contracts", severity: "error", message: "schema analysis budget exhausted" },
+        ],
+      }),
+    );
+    expect(screen.getByText("Ошибка: schema analysis budget exhausted")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Запустить" })).toBeEnabled();
+    fireEvent.click(screen.getByRole("button", { name: "Запустить" }));
+    await waitFor(() => expect(handlers.runScenario).toHaveBeenCalled());
+  });
+
+  it("keeps legacy runs available when the optional catalog request fails", async () => {
+    const analyzeDataFlow = vi
+      .fn<NonNullable<ScenarioExecutionPanelProps["analyzeDataFlow"]>>()
+      .mockRejectedValue(new Error("offline"));
+    renderPanel(<ScenarioExecutionPanel {...props()} analyzeDataFlow={analyzeDataFlow} />);
+    await screen.findByRole("button", { name: "Повторить анализ" });
+    expect(screen.getByRole("button", { name: "Запустить" })).toBeEnabled();
+  });
+
+  const binding = {
+    id: "token",
+    sourceMessageId: "login",
+    sourcePointer: "/token",
+    target: { kind: "header" as const, name: "Authorization" },
+    prefix: "Bearer ",
+  };
+  const analysis: DataFlowAnalysis = { messages: [], bindings: [], diagnostics: [] };
+
+  function bindingProps() {
+    const handlers = props();
+    handlers.document.messages.push({
+      ...handlers.document.messages[0]!,
+      id: "next",
+      label: "Продолжить",
+      execution: { ...defaultStepExecution(), bindings: [binding] },
+    });
+    return {
+      ...handlers,
+      analyzeDataFlow: vi
+        .fn<NonNullable<ScenarioExecutionPanelProps["analyzeDataFlow"]>>()
+        .mockResolvedValue(analysis),
+    };
+  }
+
+  it("offers contract parameters inline and restores literal values after removing their binding", async () => {
+    const handlers = bindingProps();
+    handlers.analyzeDataFlow.mockResolvedValue({
+      messages: [
+        {
+          messageId: "login",
+          requestFields: [],
+          responseFields: [{ kind: "response", pointer: "/id", type: "integer", required: true }],
+        },
+        {
+          messageId: "next",
+          responseFields: [],
+          requestFields: [{ kind: "path", name: "id", type: "integer", required: true }],
+        },
+      ],
+      bindings: [],
+      diagnostics: [],
+    });
+    const view = renderPanel(<ScenarioExecutionPanel {...handlers} />);
+    fireEvent.click(screen.getByRole("button", { name: /2. Продолжить/ }));
+    const take = await screen.findByRole("button", { name: "Взять из ответа: id" });
+    fireEvent.change(screen.getByLabelText("Параметр пути 1: значение"), {
+      target: { value: "17" },
+    });
+    fireEvent.click(take);
+    fireEvent.change(screen.getByLabelText("Шаг-источник связи 2"), { target: { value: "login" } });
+    fireEvent.change(screen.getByLabelText("Поле ответа связи 2"), {
+      target: { value: "pointer:/id" },
+    });
+    expect(screen.queryByLabelText("Параметр пути 1: значение")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Сохранить настройки" }));
+    const saved = handlers.onChangeDocument.mock.calls[0]![0].messages[1].execution;
+    expect(saved.pathParams).toEqual({ id: "17" });
+    expect(saved.bindings[1]).toMatchObject({
+      sourceMessageId: "login",
+      sourcePointer: "/id",
+      target: { kind: "path", name: "id" },
+    });
+    expect(saved.bindings[0]).toEqual(binding);
+    view.rerender(
+      <ScenarioExecutionPanel
+        {...handlers}
+        document={handlers.onChangeDocument.mock.calls[0]![0]}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Удалить связь 2" }));
+    expect(screen.getByLabelText("Параметр пути 1: значение")).toHaveValue("17");
+  });
+
+  it("keeps contract rows in place when the user first enters a value in the second row", async () => {
+    const handlers = bindingProps();
+    handlers.analyzeDataFlow.mockResolvedValue({
+      messages: [
+        {
+          messageId: "next",
+          responseFields: [],
+          requestFields: [
+            { kind: "query", name: "limit", type: "integer", required: false },
+            { kind: "query", name: "offset", type: "integer", required: false },
+          ],
+        },
+      ],
+      bindings: [],
+      diagnostics: [],
+    });
+    renderPanel(<ScenarioExecutionPanel {...handlers} />);
+    fireEvent.click(screen.getByRole("button", { name: /2. Продолжить/ }));
+    const input = await screen.findByLabelText("Query-параметр 2: значение");
+    input.focus();
+    fireEvent.change(input, { target: { value: "2" } });
+    expect(screen.getByLabelText("Query-параметр 2: имя")).toHaveValue("offset");
+    expect(input).toHaveFocus();
+    fireEvent.change(input, { target: { value: "20" } });
+    fireEvent.click(screen.getByRole("button", { name: "Сохранить настройки" }));
+    expect(handlers.onChangeDocument.mock.calls[0]![0].messages[1].execution.query).toEqual({
+      offset: "20",
+    });
+  });
+
+  it("keeps an unfinished manual destination editable when changing its kind", async () => {
+    renderPanel(<ScenarioExecutionPanel {...bindingProps()} />);
+    fireEvent.click(screen.getByRole("button", { name: /2. Продолжить/ }));
+    fireEvent.click(screen.getByText("Другое поле запроса"));
+    fireEvent.click(screen.getByRole("button", { name: "Добавить связь" }));
+    fireEvent.change(screen.getByLabelText("Тип назначения связи 2"), {
+      target: { value: "query" },
+    });
+    expect(screen.getByLabelText("Имя назначения связи 2")).toHaveValue("");
+    fireEvent.change(screen.getByLabelText("Имя назначения связи 2"), { target: { value: "ref" } });
+    expect(screen.getByLabelText("Имя назначения связи 2")).toHaveValue("ref");
+  });
+
+  it("preserves bindings when saving other settings and keeps incomplete drafts across steps", async () => {
+    const handlers = bindingProps();
+    renderPanel(<ScenarioExecutionPanel {...handlers} />);
+    await waitFor(() => expect(screen.getByRole("button", { name: "Запустить" })).toBeEnabled());
+    fireEvent.click(screen.getByRole("button", { name: /2. Продолжить/ }));
+    fireEvent.change(screen.getByLabelText("Тело запроса"), { target: { value: "{}" } });
+    fireEvent.click(screen.getByRole("button", { name: "Сохранить настройки" }));
+    expect(handlers.onChangeDocument.mock.calls[0]![0].messages[1].execution.bindings).toEqual([
+      binding,
+    ]);
+    fireEvent.click(screen.getByText("Другое поле запроса"));
+    fireEvent.click(screen.getByRole("button", { name: "Добавить связь" }));
+    fireEvent.change(screen.getByLabelText("JSON Pointer источника связи 2"), {
+      target: { value: "/draft" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /1. Войти/ }));
+    expect(screen.getByRole("button", { name: "Запустить" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: /2. Продолжить/ }));
+    expect(screen.getByLabelText("JSON Pointer источника связи 2")).toHaveValue("/draft");
+  });
+
+  it("blocks run on analysis failure and semantic errors while allowing broken bindings to be removed", async () => {
+    const handlers = bindingProps();
+    handlers.analyzeDataFlow
+      .mockRejectedValueOnce(new Error("offline"))
+      .mockResolvedValueOnce({
+        ...analysis,
+        diagnostics: [
+          {
+            pointer: "/messages/1/execution/bindings/0",
+            severity: "error",
+            message: "Источник недоступен",
+          },
+        ],
+      })
+      .mockResolvedValue(analysis);
+    renderPanel(<ScenarioExecutionPanel {...handlers} />);
+    await screen.findByRole("button", { name: "Повторить анализ" });
+    expect(screen.getByRole("button", { name: "Запустить" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Повторить анализ" }));
+    await screen.findByText("Ошибка: Источник недоступен");
+    expect(screen.getByRole("button", { name: "Запустить" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: /2. Продолжить/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Удалить связь 1" }));
+    fireEvent.click(screen.getByRole("button", { name: "Сохранить настройки" }));
+    expect(handlers.onChangeDocument.mock.calls[0]![0].messages[1].execution.bindings).toEqual([]);
+  });
+
+  it("shows the selected occurrence provenance using the report snapshot and preserves precise JSON", async () => {
+    const handlers = bindingProps();
+    const snapshot = { ...report(), document: structuredClone(handlers.document) };
+    snapshot.document.messages[0]!.label = "Исторический источник";
+    snapshot.steps = [1, 2].map((occurrence) => ({
+      messageId: "next",
+      occurrence,
+      status: "passed",
+      assertions: [],
+      bindingResults: [
+        {
+          bindingId: "token",
+          sourceMessageId: "login",
+          sourcePointer: "/token",
+          sourceOccurrence: occurrence,
+          sourceIterations: [{ fragmentId: "loop", iteration: occurrence }],
+          target: binding.target,
+          valueJson: occurrence === 1 ? '"first"' : "9007199254740993",
+        },
+      ],
+    }));
+    handlers.listRuns.mockResolvedValue([snapshot]);
+    handlers.getRun.mockResolvedValue(snapshot);
+    renderPanel(<ScenarioExecutionPanel {...handlers} />);
+    fireEvent.click(screen.getByRole("tab", { name: /Результат/ }));
+    fireEvent.click(await screen.findByRole("button", { name: /Продолжить · повтор 2/ }));
+    expect(screen.getByText(/Передали Authorization:/)).toHaveTextContent("9007199254740993");
+    expect(screen.getByText(/Источник: выполнение 2.*цикл loop: 2/)).not.toBeVisible();
+    fireEvent.click(screen.getByText("Откуда взялось значение"));
+    expect(screen.getByText(/Исторический источник.*Authorization/)).toBeVisible();
+    expect(screen.getByText(/Источник: выполнение 2.*цикл loop: 2/)).toBeInTheDocument();
+    expect(screen.getByText("9007199254740993")).toBeInTheDocument();
+    expect(screen.queryByText('"first"')).not.toBeInTheDocument();
   });
 });

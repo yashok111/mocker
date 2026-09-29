@@ -69,6 +69,10 @@ func (s *Service) prepareHTTP(rev designscenario.Revision, format Format) (httpE
 		}
 		first := len(ds)
 		stepAdd := func(code, severity, message string) { add(code, severity, message) }
+		if m.Execution != nil && len(m.Execution.Bindings) > 0 {
+			stepAdd("data_bindings_unsupported", "error",
+				"Экспорт передачи данных между шагами пока не поддерживается; выполните сценарий в Mocker")
+		}
 		if m.Execution != nil && !m.Execution.Enabled {
 			stepAdd("disabled_messages_omitted", "info", "Выключенный шаг пропущен")
 		} else if m.Kind == "event" {

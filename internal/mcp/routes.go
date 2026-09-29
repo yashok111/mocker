@@ -82,6 +82,11 @@ var toolRoutes = map[string][]string{
 	"execute_design_scenario_step":           {"POST /api/design-scenarios/{id}/execute-step"},
 	"run_design_scenario":                    {"POST /api/design-scenarios/{id}/runs"},
 	"list_design_scenario_runs":              {"GET /api/design-scenarios/{id}/runs"},
+	"get_design_scenario_data_flow":          {"GET /api/design-scenarios/{id}/data-flow"},
+	"analyze_design_scenario_data_flow":      {"POST /api/design-scenarios/{id}/data-flow"},
+	"upsert_design_scenario_data_binding":    {"POST /api/design-scenarios/{id}/commands"},
+	"remove_design_scenario_data_binding":    {"POST /api/design-scenarios/{id}/commands"},
+	"suggest_design_scenario_tests":          {"GET /api/design-scenarios/{id}/test-suggestions"},
 	"get_design_scenario_coverage":           {"GET /api/design-scenarios/{id}/coverage"},
 	"set_design_scenario_fragment_execution": {"POST /api/design-scenarios/{id}/commands"},
 	"set_design_scenario_branch_execution":   {"POST /api/design-scenarios/{id}/commands"},
@@ -254,11 +259,12 @@ var toolRoutes = map[string][]string{
 // slice P7a adds (export_openapi)
 // — 63 legacy tools plus eleven versioned API designer tools, plus the ten
 // original persisted design-scenario tools, four server-run tools and three
-// scenario-export tools, eight state-diagram tools and twelve schema-model tools.
+// scenario-export tools, eight state-diagram tools, twelve schema-model tools,
+// three control-flow/coverage tools, four data-binding tools and test suggestions.
 // Pinned in routes_test.go so a tool
 // added without an entry here is caught by a test rather than by a 404 in
 // production.
-const toolCount = 114
+const toolCount = 119
 
 // toolPath resolves ONE call a tool makes into the (method, path) pair
 // loopback.do/call take.
