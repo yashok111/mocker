@@ -165,6 +165,32 @@ above. `get_guide {topic: "design"}` explains editing and the run/poll workflow.
 | `list_assets` | Names, sizes, URLs, caps | `workspaceId*` | assets[], totalBytes, maxAssetBytes, maxTotalBytes | Never the bytes: GET the `url`. |
 | `delete_asset` | Delete one | `workspaceId*`, `name*`, `confirmSlug*` | deleted | A `bodyRef`/`asset_url` naming it keeps working and serves empty, noted `asset_missing`. |
 
+### API resource map
+
+These ten tools use the same API design draft and version fence as the rest of
+the designer. See `design.md` for a preview and relationship example.
+
+| tool | purpose | input | output | gotchas |
+|---|---|---|---|---|
+| `get_api_resource_map` | Read resources, operations, relations and saved scenario usages | `designId*` | designId, version, revisionId, model, scenarioUsages[], usagesTruncated | Local Path Item operations have distinct per-path keys and optional sourcePointer. Usage source revision may be older than the API draft; scan is bounded. |
+| `preview_api_resource_map` | Project changes without saving | `designId*`, `document?`, `commands` (0–100) | document, model, valid, diagnostics | `document` is a complete OpenAPI string; returned document includes generated stable operation keys. |
+| `apply_api_resource_map_commands` | Write ordered atomic batch | `designId*`, `expectedVersion*`, `commands*` (1–100) | API detail | A 409 requires rereading and reconciling. |
+| `upsert_api_resource` | Replace a resource annotation | `designId*`, `expectedVersion*`, `resource*` | API detail | Complete resource `{id,name,service,description,operationKeys,x,y}`. |
+| `remove_api_resource` | Remove annotation and its explicit relations | `designId*`, `expectedVersion*`, `resourceId*` | API detail | Operations return to automatic grouping. |
+| `assign_api_resource_operation` | Assign or restore automatic grouping | `designId*`, `expectedVersion*`, `operationKey*`, `resourceId*` | API detail | Empty resourceId restores automatic grouping. |
+| `upsert_api_resource_relation` | Replace a directed relation | `designId*`, `expectedVersion*`, `relation*` | API detail | Complete relation `{id,fromResourceId,toResourceId,label}`; no self link or duplicate endpoint pair. |
+| `remove_api_resource_relation` | Remove an explicit relation | `designId*`, `expectedVersion*`, `relationId*` | API detail | Does not remove either resource. |
+| `move_api_resource` | Position a resource card | `designId*`, `expectedVersion*`, `resourceId*`, `x*`, `y*` | API detail | Coordinates are finite and in [-100000,100000]. |
+| `auto_layout_api_resources` | Arrange all resource cards from their relationships | `designId*`, `expectedVersion*` | API detail | Saves deterministic positions; preserves resource metadata, assignments and relations. Preview first with `commands:[{kind:"auto_layout"}]`. The command takes no additional parameters. |
+
+Copy operation keys from the map. Inline keys live in
+`x-mocker-canvas-operation-id`; inherited keys live in the consumer Path Item's
+`x-mocker-canvas-operation-ids` map by HTTP method. An inherited operation's
+`sourcePointer` identifies its shared authored definition using a decoded JSON
+Pointer. Editing that definition affects its other consumers; the UI opens source
+with this warning. Map support does not add inherited-operation support to mock
+runtime indexing or sequence bindings, which still enumerate literal operations.
+
 ## confirmSlug
 
 Nine destructive tools take `confirmSlug`: `delete_workspace`, `clear_traffic`,

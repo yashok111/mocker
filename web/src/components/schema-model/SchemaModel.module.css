@@ -4,22 +4,8 @@
   gap: var(--mantine-spacing-md);
   align-items: start;
 }
-.graphShell {
-  position: relative;
-  min-width: 0;
-  overflow: hidden;
-  border: 1px solid var(--mantine-color-gray-3);
-  border-radius: 8px;
-}
 .graph {
-  margin: 0;
   height: 540px;
-  width: 100%;
-}
-.tools {
-  position: absolute;
-  bottom: 12px;
-  left: 12px;
 }
 .inspector {
   min-width: 0;

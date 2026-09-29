@@ -210,73 +210,52 @@ func collectOperations(root map[string]any) ([]operation, error) {
 				continue
 			}
 			p := "/" + section + "/" + escape(path)
-			nodes, err := pathItems(root, object(root[section])[path], p)
-			if err != nil {
-				return nil, err
-			}
-			methods := map[string]string{}
-			common := []string{}
-			for _, node := range nodes {
-				common = append(common, node.pointer+"/parameters")
-				for key := range node.value {
-					if isMethod(key) && methods[key] == "" {
-						methods[key] = node.pointer + "/" + key
-					}
+			nodes, diagnostics := PathItems(root, object(root[section])[path], p)
+			for _, diagnostic := range diagnostics {
+				if diagnostic.Code == "path_item_ref_depth" {
+					return nil, fail(diagnostic.Pointer, diagnostic.Message)
 				}
 			}
-			for _, method := range slices.Sorted(maps.Keys(methods)) {
-				sources := append(slices.Clone(common), methods[method])
-				ops = append(ops, operation{OperationUsage: OperationUsage{Method: strings.ToUpper(method), Path: path, Pointer: p + "/" + method}, common: sources})
+			common := []string{}
+			for _, node := range nodes {
+				common = append(common, node.Pointer+"/parameters")
+			}
+			for _, method := range PathItemOperations(nodes) {
+				sources := append(slices.Clone(common), method.Pointer)
+				ops = append(ops, operation{OperationUsage: OperationUsage{Method: strings.ToUpper(method.Method), Path: path, Pointer: p + "/" + method.Method}, common: sources})
 			}
 		}
 	}
 	return ops, nil
 }
 
-type pathItemNode struct {
-	pointer string
-	value   map[string]any
+func resolve(root map[string]any, pointer string) any {
+	value, _ := resolveFound(root, pointer)
+	return value
 }
 
-func pathItems(root map[string]any, value any, p string) ([]pathItemNode, error) {
-	nodes := []pathItemNode{}
-	seen := map[string]bool{}
-	for !seen[p] {
-		seen[p] = true
-		if len(seen) > maxDepth {
-			return nil, fail(p, "Слишком длинная цепочка ссылок пути")
-		}
-		m := object(value)
-		if m == nil {
-			break
-		}
-		nodes = append(nodes, pathItemNode{pointer: p, value: m})
-		p = localPointer(text(m["$ref"]))
-		if p == "" {
-			break
-		}
-		value = resolve(root, p)
-	}
-	return nodes, nil
-}
-func resolve(root map[string]any, pointer string) any {
+func resolveFound(root map[string]any, pointer string) (any, bool) {
 	var value any = root
 	for token := range strings.SplitSeq(strings.TrimPrefix(pointer, "/"), "/") {
 		key := unescape(token)
 		switch node := value.(type) {
 		case map[string]any:
-			value = node[key]
+			var exists bool
+			value, exists = node[key]
+			if !exists {
+				return nil, false
+			}
 		case []any:
 			index, err := strconv.Atoi(key)
 			if err != nil || index < 0 || index >= len(node) {
-				return nil
+				return nil, false
 			}
 			value = node[index]
 		default:
-			return nil
+			return nil, false
 		}
 	}
-	return value
+	return value, true
 }
 
 func resolveURI(base, ref string) string {

@@ -51,6 +51,16 @@ import (
 var noRoute = []string{}
 
 var toolRoutes = map[string][]string{
+	"get_api_resource_map":            {"GET /api/designs/{id}/resource-map"},
+	"preview_api_resource_map":        {"POST /api/designs/{id}/resource-map/preview"},
+	"apply_api_resource_map_commands": {"POST /api/designs/{id}/resource-map/commands"},
+	"upsert_api_resource":             {"POST /api/designs/{id}/resource-map/commands"},
+	"remove_api_resource":             {"POST /api/designs/{id}/resource-map/commands"},
+	"assign_api_resource_operation":   {"POST /api/designs/{id}/resource-map/commands"},
+	"upsert_api_resource_relation":    {"POST /api/designs/{id}/resource-map/commands"},
+	"remove_api_resource_relation":    {"POST /api/designs/{id}/resource-map/commands"},
+	"move_api_resource":               {"POST /api/designs/{id}/resource-map/commands"},
+	"auto_layout_api_resources":       {"POST /api/designs/{id}/resource-map/commands"},
 	// Schema model authoring shares one version-fenced command route.
 	"get_schema_model":             {"GET /api/designs/{id}/schema-model"},
 	"preview_schema_model_changes": {"POST /api/designs/{id}/schema-model/preview"},
@@ -260,11 +270,12 @@ var toolRoutes = map[string][]string{
 // — 63 legacy tools plus eleven versioned API designer tools, plus the ten
 // original persisted design-scenario tools, four server-run tools and three
 // scenario-export tools, eight state-diagram tools, twelve schema-model tools,
-// three control-flow/coverage tools, four data-binding tools and test suggestions.
+// three control-flow/coverage tools, four data-binding tools, test suggestions,
+// and nine resource-map tools.
 // Pinned in routes_test.go so a tool
 // added without an entry here is caught by a test rather than by a 404 in
 // production.
-const toolCount = 119
+const toolCount = 129
 
 // toolPath resolves ONE call a tool makes into the (method, path) pair
 // loopback.do/call take.

@@ -54,7 +54,7 @@ const HTTP_METHODS = ["get", "post", "put", "delete", "patch"] as const;
 // agree with anything that file said. Every test below that wants to name it
 // reads it from here, which is the one thing the old title did not do — it
 // said "64" while the assertion said 70, for four slices running.
-const ROUTE_COUNT = 114;
+const ROUTE_COUNT = 117;
 
 interface RouteInfo {
   method: string;
@@ -118,6 +118,8 @@ function loadRoutes(): RouteInfo[] {
 // has a caller. An exemption is a decision on the record and so is its
 // withdrawal, in this comment.
 const EXEMPT: Record<string, string> = {
+  "POST /api/designs/{id}/resource-map/commands":
+    "apply_api_resource_map_commands persists version-fenced MCP edits; UI previews its unsaved document and uses the shared workbench Save.",
   "GET /api/design-scenarios/{id}/data-flow":
     "get_design_scenario_data_flow reads a saved revision for MCP; UI analyzes its unsaved settings document with analyzeDesignScenarioDataFlow (POST on the same path).",
   "GET /api/designs/{id}/schema-model":

@@ -1,0 +1,24 @@
+.shell {
+  position: relative;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--mocker-border, #d6dfd6);
+  border-radius: 10px;
+}
+
+.host {
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+}
+
+.controls {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  padding: 6px;
+  border: 1px solid var(--mocker-border, #d6dfd6);
+  border-radius: 8px;
+  background: var(--mantine-color-white);
+  box-shadow: 0 2px 8px rgb(33 55 40 / 6%);
+}

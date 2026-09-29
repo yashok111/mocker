@@ -10,24 +10,8 @@
 .workspace > div {
   min-width: 0;
 }
-.graphShell {
-  min-width: 0;
-  height: 460px;
-  position: relative;
-  border: 1px solid var(--mocker-border, #d6dfd6);
-  border-radius: 10px;
-  overflow: hidden;
-}
 .graph {
-  margin: 0;
-  height: 100%;
-  width: 100%;
-  min-width: 0;
-}
-.graphTools {
-  position: absolute;
-  bottom: 12px;
-  right: 12px;
+  height: 460px;
 }
 .inspector {
   border-left: 1px solid var(--mocker-border, #d6dfd6);
@@ -97,7 +81,7 @@
   .simulationGrid {
     grid-template-columns: minmax(0, 1fr);
   }
-  .graphShell {
+  .graph {
     height: 340px;
   }
 }

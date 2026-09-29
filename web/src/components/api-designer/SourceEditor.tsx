@@ -1,6 +1,7 @@
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useEffect, useRef } from "react";
 import type { ReactElement } from "react";
 import { Center, Loader, Textarea } from "@mantine/core";
+import { findJsonPointerRange } from "./monaco/jsonPointerRange";
 
 const LazyMonacoEditor = lazy(() => import("./monaco/MonacoEditor"));
 const LazyMonacoDiff = lazy(() => import("./monaco/MonacoDiff"));
@@ -9,14 +10,26 @@ export function SourceEditor({
   value,
   onChange,
   ariaLabel = "Исходник OpenAPI",
+  focusPointer,
 }: {
   value: string;
   onChange: (value: string) => void;
   ariaLabel?: string;
+  focusPointer?: string;
 }): ReactElement {
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    const textarea = textareaRef.current;
+    if (!textarea || focusPointer === undefined) return;
+    const range = findJsonPointerRange(textarea.value, focusPointer);
+    if (!range) return;
+    textarea.focus();
+    textarea.setSelectionRange(range.startOffset, range.endOffset);
+  }, [focusPointer]);
   if (typeof Worker === "undefined") {
     return (
       <Textarea
+        ref={textareaRef}
         aria-label={ariaLabel}
         value={value}
         onChange={(event) => onChange(event.currentTarget.value)}
@@ -27,7 +40,12 @@ export function SourceEditor({
   }
   return (
     <Suspense fallback={<EditorLoader label="Загружаем редактор" />}>
-      <LazyMonacoEditor value={value} onChange={onChange} ariaLabel={ariaLabel} />
+      <LazyMonacoEditor
+        value={value}
+        onChange={onChange}
+        ariaLabel={ariaLabel}
+        focusPointer={focusPointer}
+      />
     </Suspense>
   );
 }

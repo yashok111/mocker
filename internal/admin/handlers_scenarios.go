@@ -12,6 +12,7 @@ import (
 
 type designScenarioService interface {
 	List(context.Context) ([]designscenario.Scenario, error)
+	ResourceMapUsages(context.Context, int64) ([]designscenario.ResourceMapUsage, bool, error)
 	Create(context.Context, designscenario.CreateInput) (*designscenario.Detail, error)
 	Detail(context.Context, int64) (*designscenario.Detail, error)
 	Save(context.Context, int64, designscenario.SaveInput) (*designscenario.Detail, error)

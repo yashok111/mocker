@@ -70,6 +70,29 @@ func TestReferencesCyclesAndArrayLinks(t *testing.T) {
 		t.Fatal(string(raw))
 	}
 }
+
+func TestProjectOperationWithoutReferencesUsesEmptySchemaArray(t *testing.T) {
+	t.Parallel()
+	root := document(t, `{
+		"paths": {"/orders/pay": {"post": {"responses": {"200": {"description": "Paid"}}}}},
+		"components": {"schemas": {"Order": {"type": "object"}}}
+	}`)
+	model, err := Project(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(model.Operations) != 1 {
+		t.Fatalf("operations=%+v", model.Operations)
+	}
+	wire, err := jsonx.Marshal(model.Operations[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(wire), `"schemas":[]`) {
+		t.Fatalf("operation schema names must serialize as an array: %s", wire)
+	}
+}
+
 func TestOpaqueKeywordsAndNamedProperties(t *testing.T) {
 	root := document(t, `{"components":{"schemas":{"A":{"properties":{"example":{"$ref":"#/components/schemas/B"},"x-name":{"$ref":"#/components/schemas/B"}},"examples":[{"$ref":"#/components/schemas/B"}],"unknown":{"$ref":"#/components/schemas/B"}},"B":true}}}`)
 	m, err := Project(root)

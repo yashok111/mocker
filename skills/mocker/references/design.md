@@ -383,9 +383,112 @@ field and element keywords are retained. Binding across a scope with `$id` or
 removing nested resources is refused. Schema/property deletion may also be
 refused for anchor references or resources with `$id`; inspect their consumers
 and use explicit raw JSON edits when the change needs manual reference handling.
+
 Batches are atomic, capped at 100 commands, 200 schemas and 200 direct properties per schema;
 each `schemaJSON` is at most 64 KiB. Coordinates must be finite within ±100000.
 The visual workbench uses preview to edit its buffer; Save creates a revision.
+
+## API resource map: operations, ownership and relationships
+
+`get_api_resource_map {designId}` groups the current API draft's HTTP operations
+into resources. It returns `designId`, `version`, `revisionId`, `model`,
+`scenarioUsages` and `usagesTruncated`. Use each returned operation `key` verbatim
+when assigning it. Inline operations store the key in
+`x-mocker-canvas-operation-id`; inherited Path Item operations use the per-path
+identity described below. A scenario usage refers to that scenario's saved draft and its pinned
+contract revision, with `mode` equal to `copy` or `linked`. It does not mean the
+scenario uses the latest API draft. At most 500 scenario drafts are scanned and
+1000 usages returned; a true `usagesTruncated` means the list is incomplete.
+
+Preview an ordered batch before saving:
+
+```json
+{"designId":7,"commands":[
+  {"kind":"upsert_resource","resource":{"id":"orders","name":"Orders","service":"billing","description":"Order lifecycle","operationKeys":[],"x":40,"y":80}},
+  {"kind":"assign_operation","operationKey":"order-list","resourceId":"orders"},
+  {"kind":"upsert_relation","relation":{"id":"orders-payments","fromResourceId":"orders","toResourceId":"payments","label":"charges"}},
+  {"kind":"move_resource","resourceId":"orders","x":120,"y":160}
+]}
+```
+
+Pass that object to `preview_api_resource_map`. Its optional `document` is a
+complete unsaved OpenAPI string; preview returns the normalized document,
+projected model, validity and diagnostics without writing. Omit `commands` to
+inspect a document. If the preview used the saved draft, pass the same commands
+to `apply_api_resource_map_commands {designId, expectedVersion, commands}`.
+It writes one revision atomically and returns API detail. For an unsaved full
+document, use `save_api_design_draft` with the preview document. Reread and
+reconcile after a 409 version conflict.
+
+Individual tools use the same command route and require `designId` and
+`expectedVersion`: `upsert_api_resource {resource}`, `remove_api_resource
+{resourceId}`, `assign_api_resource_operation {operationKey, resourceId}`,
+`upsert_api_resource_relation {relation}`, `remove_api_resource_relation
+{relationId}`, `move_api_resource {resourceId, x, y}` and
+`auto_layout_api_resources {designId, expectedVersion}`. Empty `resourceId`
+on assignment restores automatic grouping. Removing an annotation also returns
+its operations to automatic grouping; it never deletes HTTP operations. Unknown
+operation keys and missing relation endpoints remain visible as diagnostics so
+they can be repaired. All commands preserve unrelated OpenAPI fields and exact
+JSON numbers. A batch holds 1–100 commands; preview permits zero.
+Maps support 200 resources, 1000 operations and 500 relationships. Coordinates
+must be finite within ±100000.
+The visual workbench uses preview to edit its buffer; Save creates a revision.
+
+### Arrange resource cards
+
+Preview the parameter-free `auto_layout` command:
+
+```json
+{"designId":7,"commands":[{"kind":"auto_layout"}]}
+```
+
+The server arranges all resource cards from their directed relationships, with
+deterministic positions for cycles and disconnected groups. Names, ownership,
+descriptions, operation assignments and relationships are preserved. Inferred
+resources receive stored positions while retaining automatic operation grouping.
+One command handles all 200 supported resources. No arrangement runs implicitly.
+
+After inspecting the proposal, apply the command with the current
+`expectedVersion`, or call `auto_layout_api_resources {designId, expectedVersion}`
+to save the arrangement directly. Both use the same atomic command handler.
+The visual **Расставить ресурсы** action displays a proposal before changing the
+API buffer. **Применить расположение** applies it to the buffer; **Отменить**
+restores the previous presentation. Save persists an applied arrangement.
+
+### Operations inherited from a local Path Item
+
+The map includes operations inherited through local JSON Pointer `$ref` chains,
+including their schema dependencies and path-level parameter schemas. A reusable
+Path Item referenced by two paths produces distinct operation keys. The server
+stores inherited identities on each consumer Path Item, for example:
+
+```json
+{
+  "$ref": "#/components/pathItems/Orders",
+  "x-mocker-canvas-operation-ids": {"get":"orders-list-instance"}
+}
+```
+
+Preserve this metadata when moving the consumer path. Read generated keys from
+the returned document or map; changing a method without preserving its key
+creates a new identity. Resource commands preserve the reference and shared
+definition instead of flattening them.
+
+An inherited operation's optional `sourcePointer` is a decoded JSON Pointer to
+its authored definition, such as `/components/pathItems/Orders/get`. Its `path`
+still names the concrete API path. The workbench opens inherited definitions in
+the source editor and explains that editing the shared definition affects its
+other consumers.
+
+The nearest authored sibling method takes precedence in the map. Conflicting
+methods, cycles, missing or invalid targets, excessive reference depth and
+unsupported external references produce diagnostics. No external document is
+fetched. Resolve diagnostics before saving a valid API draft.
+
+This reference support covers map projection, assignment and schema analysis.
+Mock runtime indexing and sequence operation bindings currently read literal
+operations under `paths`; inherited map keys do not enable those flows.
 
 ## Sequence canvas: edit, run, inspect, vary
 

@@ -1,6 +1,13 @@
 import { Graph } from "@antv/x6";
 import { useEffect, useRef } from "react";
-import { Button, Group } from "@mantine/core";
+import DiagramViewport from "../diagram/DiagramViewport";
+import { createInitialFit } from "../diagram/initialFit";
+import {
+  diagramCardBody,
+  diagramEdgeLabel,
+  diagramEdgeLine,
+  diagramOptions,
+} from "../diagram/presentation";
 import type { StateDiagram, Selection } from "./model";
 import styles from "./StateDiagram.module.css";
 
@@ -20,7 +27,7 @@ export default function StateGraph(props: Props) {
   const host = useRef<HTMLElement>(null);
   const graphRef = useRef<Graph | null>(null);
   const current = useRef(props);
-  const fitted = useRef("");
+  const initialFit = useRef<ReturnType<typeof createInitialFit> | null>(null);
   const { diagram, selection, activeState } = props;
   useEffect(() => {
     current.current = props;
@@ -29,11 +36,9 @@ export default function StateGraph(props: Props) {
     if (!host.current) return;
     const graph = new Graph({
       container: host.current,
-      autoResize: true,
-      background: { color: "#f5f7f4" },
-      grid: { visible: true, size: 20, type: "dot", args: { color: "#ccd5cc", thickness: 1 } },
-      panning: { enabled: true, modifiers: "shift", eventTypes: ["leftMouseDown"] },
-      mousewheel: { enabled: true, modifiers: ["ctrl", "meta"], minScale: 0.25, maxScale: 2 },
+      ...diagramOptions(0.25),
+      // Remove old SVG views before rebuilding states and transitions with the same IDs.
+      async: false,
       connecting: {
         allowBlank: false,
         allowEdge: false,
@@ -45,7 +50,7 @@ export default function StateGraph(props: Props) {
           return graph.createEdge({
             router: { name: "manhattan" },
             connector: { name: "rounded" },
-            attrs: { line: { stroke: "#46624c", targetMarker: "block" } },
+            attrs: { line: diagramEdgeLine() },
           });
         },
       },
@@ -59,9 +64,10 @@ export default function StateGraph(props: Props) {
       },
     });
     graphRef.current = graph;
+    const fit = createInitialFit(graph, host.current, FIT_PADDING);
+    initialFit.current = fit;
     graph.on("resize", () => {
-      if (current.current.diagram.states.length)
-        graph.zoomToFit({ padding: FIT_PADDING, maxScale: 1 });
+      fit(current.current.diagram.id);
     });
     graph.on("node:click", ({ node }) => {
       if (node.id.startsWith("state:"))
@@ -89,7 +95,7 @@ export default function StateGraph(props: Props) {
     return () => {
       graph.dispose();
       graphRef.current = null;
-      fitted.current = "";
+      initialFit.current = null;
     };
   }, []);
   useEffect(() => {
@@ -111,11 +117,10 @@ export default function StateGraph(props: Props) {
         label: `${state.name}\n${active ? "● Сейчас · " : ""}${state.id === diagram.initialStateId ? "Начальное" : state.terminal ? "Конечное" : "Состояние"}`,
         attrs: {
           body: {
-            fill: active ? "#e1f0df" : "#ffffff",
-            stroke: selected ? "#225936" : active ? "#527b42" : "#8c9b8d",
+            ...diagramCardBody(selected),
+            ...(active ? { fill: "#e1f0df", ...(selected ? {} : { stroke: "#527b42" }) } : {}),
             strokeWidth: selected || state.terminal ? 3 : 1.5,
-            rx: state.terminal ? 28 : 12,
-            ry: state.terminal ? 28 : 12,
+            ...(state.terminal ? { rx: 28, ry: 28 } : {}),
           },
           label: {
             fill: "#213728",
@@ -208,82 +213,34 @@ export default function StateGraph(props: Props) {
           name: "manhattan",
           args: { startDirections: [sourceSide], endDirections: [targetSide], padding: 16 },
         },
-        attrs: {
-          line: {
-            stroke: selected ? "#245e39" : "#667868",
-            strokeWidth: selected ? 3 : 1.5,
-            targetMarker: { name: "block", width: 8, height: 6 },
-          },
-        },
+        attrs: { line: diagramEdgeLine(selected) },
         labels: [
-          {
-            // A horizontal gap can be narrower than an API path. Lift its
-            // label above the states instead of covering their ports/bodies.
-            position: { distance: 0.5, offset: { x: 0, y: !vertical && !same ? -84 : 0 } },
-            attrs: {
-              label: {
-                text:
-                  transition.name +
-                  (transition.binding
-                    ? `\n${transition.binding.method.toUpperCase()} ${transition.binding.path}`
-                    : "") +
-                  (transition.guard ? "\n[условие]" : ""),
-                fill: "#263c2d",
-                fontSize: 11,
-                textWrap: { width: 180, height: 65, ellipsis: true },
-              },
-              body: {
-                fill: "#f5f7f4",
-                stroke: "#d5dfd4",
-                rx: 4,
-                ry: 4,
-                refX: -10,
-                refY: -6,
-                refWidth: 20,
-                refHeight: 12,
-              },
+          diagramEdgeLabel(
+            transition.name +
+              (transition.binding
+                ? `\n${transition.binding.method.toUpperCase()} ${transition.binding.path}`
+                : "") +
+              (transition.guard ? "\n[условие]" : ""),
+            {
+              // A horizontal gap can be narrower than an API path. Lift its
+              // label above the states instead of covering their ports/bodies.
+              position: { distance: 0.5, offset: { x: 0, y: !vertical && !same ? -84 : 0 } },
+              fill: "#f5f7f4",
             },
-          },
+          ),
         ],
       });
     }
-    if (diagram.states.length && fitted.current !== diagram.id) {
-      graph.zoomToFit({ padding: FIT_PADDING, maxScale: 1 });
-      fitted.current = diagram.id;
-    }
+    initialFit.current?.(diagram.id);
   }, [diagram, selection, activeState]);
   return (
-    <div className={styles.graphShell}>
-      <figure
-        ref={host}
-        className={styles.graph}
-        aria-label={`Диаграмма ${props.diagram.name}. ${props.diagram.states.length} состояний. Редактирование доступно в списках ниже.`}
-      />
-      <Group className={styles.graphTools} gap={6}>
-        <Button
-          size="compact-sm"
-          variant="default"
-          onClick={() => graphRef.current?.zoom(-0.15)}
-          aria-label="Уменьшить диаграмму"
-        >
-          −
-        </Button>
-        <Button
-          size="compact-sm"
-          variant="default"
-          onClick={() => graphRef.current?.zoom(0.15)}
-          aria-label="Увеличить диаграмму"
-        >
-          +
-        </Button>
-        <Button
-          size="compact-sm"
-          variant="default"
-          onClick={() => graphRef.current?.zoomToFit({ padding: FIT_PADDING, maxScale: 1 })}
-        >
-          Вместить
-        </Button>
-      </Group>
-    </div>
+    <DiagramViewport
+      hostRef={host}
+      graphRef={graphRef}
+      className={styles.graph}
+      ariaLabel={`Диаграмма ${props.diagram.name}. ${props.diagram.states.length} состояний. Редактирование доступно в списках ниже.`}
+      zoomLabel="диаграмму"
+      fitPadding={FIT_PADDING}
+    />
   );
 }

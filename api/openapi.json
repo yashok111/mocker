@@ -8966,6 +8966,533 @@
             "minimum": 0
           }
         }
+      },
+      "ApiResourceMapResource": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "service": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 2000
+          },
+          "operationKeys": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          "x": {
+            "type": "number",
+            "minimum": -100000,
+            "maximum": 100000
+          },
+          "y": {
+            "type": "number",
+            "minimum": -100000,
+            "maximum": 100000
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "service",
+          "description",
+          "operationKeys",
+          "x",
+          "y"
+        ],
+        "additionalProperties": false
+      },
+      "ApiResourceMapResourceView": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "service": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 2000
+          },
+          "operationKeys": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          "x": {
+            "type": "number",
+            "minimum": -100000,
+            "maximum": 100000
+          },
+          "y": {
+            "type": "number",
+            "minimum": -100000,
+            "maximum": 100000
+          },
+          "inferred": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "service",
+          "description",
+          "operationKeys",
+          "x",
+          "y",
+          "inferred"
+        ],
+        "additionalProperties": false
+      },
+      "ApiResourceMapRelation": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "fromResourceId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "toResourceId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "label": {
+            "type": "string",
+            "maxLength": 200
+          }
+        },
+        "required": [
+          "id",
+          "fromResourceId",
+          "toResourceId",
+          "label"
+        ],
+        "additionalProperties": false
+      },
+      "ApiResourceMapOperation": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "method": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "summary": {
+            "type": "string"
+          },
+          "sourcePointer": {
+            "type": "string",
+            "description": "Decoded JSON Pointer to the authored operation when inherited through a local Path Item reference. Open this source explicitly; editing it affects every path using that definition. Absent for a literal path operation."
+          },
+          "schemas": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "key",
+          "method",
+          "path",
+          "summary",
+          "schemas"
+        ],
+        "additionalProperties": false
+      },
+      "ApiResourceMapDiagnostic": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "severity": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "resourceId": {
+            "type": "string"
+          },
+          "operationKey": {
+            "type": "string"
+          },
+          "relationId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "severity",
+          "message"
+        ],
+        "additionalProperties": false
+      },
+      "ApiResourceMapModel": {
+        "type": "object",
+        "properties": {
+          "resources": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ApiResourceMapResourceView"
+            }
+          },
+          "operations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ApiResourceMapOperation"
+            }
+          },
+          "relations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ApiResourceMapRelation"
+            }
+          },
+          "diagnostics": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ApiResourceMapDiagnostic"
+            }
+          }
+        },
+        "required": [
+          "resources",
+          "operations",
+          "relations",
+          "diagnostics"
+        ],
+        "additionalProperties": false
+      },
+      "ApiResourceMapScenarioUsage": {
+        "type": "object",
+        "properties": {
+          "scenarioId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "scenarioName": {
+            "type": "string"
+          },
+          "revisionId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "messageId": {
+            "type": "string"
+          },
+          "operationKey": {
+            "type": "string"
+          },
+          "contractRevisionId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "copy",
+              "linked"
+            ]
+          }
+        },
+        "required": [
+          "scenarioId",
+          "scenarioName",
+          "revisionId",
+          "messageId",
+          "operationKey",
+          "contractRevisionId",
+          "mode"
+        ],
+        "additionalProperties": false
+      },
+      "ApiResourceMapDetail": {
+        "type": "object",
+        "properties": {
+          "designId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "version": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "revisionId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "model": {
+            "$ref": "#/components/schemas/ApiResourceMapModel"
+          },
+          "scenarioUsages": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ApiResourceMapScenarioUsage"
+            }
+          },
+          "usagesTruncated": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "designId",
+          "version",
+          "revisionId",
+          "model",
+          "scenarioUsages",
+          "usagesTruncated"
+        ],
+        "additionalProperties": false
+      },
+      "ApiResourceMapCommand": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "auto_layout"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "upsert_resource"
+              },
+              "resource": {
+                "$ref": "#/components/schemas/ApiResourceMapResource"
+              }
+            },
+            "required": [
+              "kind",
+              "resource"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "remove_resource"
+              },
+              "resourceId": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              }
+            },
+            "required": [
+              "kind",
+              "resourceId"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "assign_operation"
+              },
+              "operationKey": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              "resourceId": {
+                "type": "string",
+                "maxLength": 200
+              }
+            },
+            "required": [
+              "kind",
+              "operationKey",
+              "resourceId"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "upsert_relation"
+              },
+              "relation": {
+                "$ref": "#/components/schemas/ApiResourceMapRelation"
+              }
+            },
+            "required": [
+              "kind",
+              "relation"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "remove_relation"
+              },
+              "relationId": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              }
+            },
+            "required": [
+              "kind",
+              "relationId"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "move_resource"
+              },
+              "resourceId": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              "x": {
+                "type": "number",
+                "minimum": -100000,
+                "maximum": 100000
+              },
+              "y": {
+                "type": "number",
+                "minimum": -100000,
+                "maximum": 100000
+              }
+            },
+            "required": [
+              "kind",
+              "resourceId",
+              "x",
+              "y"
+            ],
+            "additionalProperties": false
+          }
+        ]
+      },
+      "ApiResourceMapPreviewRequest": {
+        "type": "object",
+        "properties": {
+          "document": {
+            "type": "string"
+          },
+          "commands": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ApiResourceMapCommand"
+            },
+            "maxItems": 100
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      },
+      "ApiResourceMapCommandsRequest": {
+        "type": "object",
+        "properties": {
+          "expectedVersion": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "commands": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ApiResourceMapCommand"
+            },
+            "minItems": 1,
+            "maxItems": 100
+          }
+        },
+        "required": [
+          "expectedVersion",
+          "commands"
+        ],
+        "additionalProperties": false
+      },
+      "ApiResourceMapPreview": {
+        "type": "object",
+        "properties": {
+          "document": {
+            "type": "string"
+          },
+          "model": {
+            "$ref": "#/components/schemas/ApiResourceMapModel"
+          },
+          "diagnostics": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ApiDesignDiagnostic"
+            }
+          },
+          "valid": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "document",
+          "model",
+          "diagnostics",
+          "valid"
+        ],
+        "additionalProperties": false
       }
     }
   },
@@ -17612,6 +18139,397 @@
           }
         },
         "description": "Read-only bounded search over initial string variables for a saved revision. Does not run HTTP or change coverage. Run cases through runDesignScenario using revisionId, name, variables and a fresh runId. Targets are predictions; verify actual controlFlow and reread coverage. Response-dependent or unresolved paths include reasons. Saved default variables cannot be removed by overrides."
+      }
+    },
+    "/api/designs/{id}/resource-map": {
+      "get": {
+        "tags": [
+          "resource-map"
+        ],
+        "operationId": "getApiResourceMap",
+        "summary": "getApiResourceMap",
+        "description": "Projects API resources and operations from the current design draft. Scenario usages refer to saved scenario drafts and pinned contract revisions.",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResourceMapDetail"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "design_invalid: document validation diagnostics.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "$ref": "#/components/schemas/ApiDesignInvalidDetails"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "description": "design_conflict: current version and draft revision. No write was applied.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "$ref": "#/components/schemas/ApiDesignConflictDetails"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "413": {
+            "$ref": "#/components/responses/PayloadTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1
+            }
+          }
+        ]
+      }
+    },
+    "/api/designs/{id}/resource-map/preview": {
+      "post": {
+        "tags": [
+          "resource-map"
+        ],
+        "operationId": "previewApiResourceMap",
+        "summary": "previewApiResourceMap",
+        "description": "Previews resource-map changes against an optional unsaved document without writing.",
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfToken": []
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "design_invalid: document validation diagnostics.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "$ref": "#/components/schemas/ApiDesignInvalidDetails"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "description": "design_conflict: current version and draft revision. No write was applied.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "$ref": "#/components/schemas/ApiDesignConflictDetails"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "413": {
+            "$ref": "#/components/responses/PayloadTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          },
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResourceMapPreview"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApiResourceMapPreviewRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/designs/{id}/resource-map/commands": {
+      "post": {
+        "tags": [
+          "resource-map"
+        ],
+        "operationId": "applyApiResourceMapCommands",
+        "summary": "applyApiResourceMapCommands",
+        "description": "Atomically applies 1-100 resource-map commands to the current draft with expectedVersion.",
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfToken": []
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "design_invalid: document validation diagnostics.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "$ref": "#/components/schemas/ApiDesignInvalidDetails"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "description": "design_conflict: current version and draft revision. No write was applied.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "$ref": "#/components/schemas/ApiDesignConflictDetails"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "413": {
+            "$ref": "#/components/responses/PayloadTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          },
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiDesignDetail"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApiResourceMapCommandsRequest"
+              }
+            }
+          }
+        }
       }
     }
   }

@@ -38,6 +38,14 @@ var loadGrammars = sync.OnceValues(func() (map[string]*jsonschema.Schema, error)
 		if err := jsonx.Unmarshal(raw, &resource); err != nil {
 			return nil, err
 		}
+		if name == "oas31-schema" {
+			// The bundled 2022 grammar omits the Path Item $ref field defined by
+			// OAS 3.1. Accept it alongside sibling fields, including extensions.
+			defs := resource.(map[string]any)["$defs"].(map[string]any)
+			pathItem := defs["path-item"].(map[string]any)
+			pathItem["properties"].(map[string]any)["$ref"] = map[string]any{"type": "string", "format": "uri-reference"}
+			defs["path-item-or-reference"] = map[string]any{"$ref": "#/$defs/path-item"}
+		}
 		if name == "oas31-base" {
 			// OAS's schema-base pins its own dialect. JSON Schema 2020-12 is
 			// also supported locally; both share the same schema grammar.

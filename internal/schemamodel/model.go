@@ -286,6 +286,9 @@ func operationUsages(sites []referenceSite, ops []operation) ([]OperationUsage, 
 			}
 		}
 		op.Schemas = slices.Sorted(maps.Keys(names))
+		if op.Schemas == nil {
+			op.Schemas = []string{}
+		}
 		usages = append(usages, op.OperationUsage)
 	}
 	return usages, nil

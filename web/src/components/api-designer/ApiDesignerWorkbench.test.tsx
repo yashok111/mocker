@@ -25,6 +25,10 @@ vi.mock("../state-diagram/StateGraph", () => ({
   default: () => <div data-testid="state-graph" />,
 }));
 
+vi.mock("../resource-map/ResourceGraph", () => ({
+  default: () => <div data-testid="resource-graph" />,
+}));
+
 afterEach(() => {
   localStorage.clear();
   vi.unstubAllGlobals();
@@ -32,6 +36,164 @@ afterEach(() => {
 });
 
 describe("ApiDesignerWorkbench", () => {
+  it("opens an inherited resource operation at its shared source and explains the edit scope", async () => {
+    const detail = detailFixture();
+    const document = JSON.parse(detail.draft.document);
+    const operation = document.paths["/orders"].get;
+    document.paths = { "/orders": { $ref: "#/components/pathItems/Orders" } };
+    document.components = { pathItems: { Orders: { get: operation } } };
+    detail.draft.document = JSON.stringify(document, null, 2);
+    const sourcePointer = "/components/pathItems/Orders/get";
+    const model = {
+      resources: [
+        {
+          id: "orders",
+          name: "/orders",
+          service: "",
+          description: "",
+          operationKeys: ["alias-get"],
+          x: 40,
+          y: 40,
+          inferred: true,
+        },
+      ],
+      operations: [
+        {
+          key: "alias-get",
+          path: "/orders",
+          method: "get",
+          summary: "Список заказов",
+          schemas: [],
+          sourcePointer,
+        },
+      ],
+      relations: [],
+      diagnostics: [],
+    };
+    route({
+      "GET /api/designs/12": () => json(200, detail),
+      "GET /api/designs/12/diff?fromRevisionId=41&toRevisionId=41": () =>
+        json(200, diffFixture(detail)),
+      "GET /api/designs/12/resource-map": () =>
+        json(200, {
+          designId: 12,
+          version: 1,
+          revisionId: 41,
+          model,
+          scenarioUsages: [],
+          usagesTruncated: false,
+        }),
+      "POST /api/designs/12/resource-map/preview": () =>
+        json(200, { document: detail.draft.document, model, valid: true, diagnostics: [] }),
+    });
+    renderInRouter(<ApiDesignerWorkbench id={12} />);
+    await userEvent.click(await screen.findByRole("tab", { name: "Ресурсы" }));
+    await userEvent.click(await screen.findByRole("button", { name: /Ресурс \/orders/ }));
+    await userEvent.click(screen.getByRole("button", { name: /\/orders · Список заказов/ }));
+    expect(screen.getByRole("tab", { name: "Редактор" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByText(/Изменения затронут все пути/)).toBeInTheDocument();
+    expect(screen.getByText(sourcePointer)).toBeInTheDocument();
+    const source = screen.getByLabelText<HTMLTextAreaElement>("Исходник OpenAPI");
+    expect(source).toHaveValue(detail.draft.document);
+    expect(source.value.slice(source.selectionStart, source.selectionEnd)).toContain('"get":');
+    expect(source.value.slice(source.selectionStart, source.selectionEnd)).toContain(
+      '"responses":',
+    );
+  });
+
+  it("edits an inferred resource in the common buffer, saves it, and opens its operation", async () => {
+    const key = "op-list-orders";
+    const resource = {
+      id: "orders",
+      name: "/orders",
+      service: "",
+      description: "",
+      operationKeys: [key],
+      x: 40,
+      y: 40,
+      inferred: true,
+    };
+    const operation = {
+      key,
+      method: "get",
+      path: "/orders",
+      summary: "Список заказов",
+      schemas: ["Order"],
+    };
+    const fetchMock = route({
+      "GET /api/designs/12": () => json(200, detailFixture()),
+      "GET /api/designs/12/diff?fromRevisionId=41&toRevisionId=41": () =>
+        json(200, diffFixture(detailFixture())),
+      "GET /api/designs/12/resource-map": () =>
+        json(200, {
+          designId: 12,
+          version: 1,
+          revisionId: 41,
+          model: { resources: [resource], operations: [operation], relations: [], diagnostics: [] },
+          scenarioUsages: [],
+          usagesTruncated: false,
+        }),
+      "POST /api/designs/12/resource-map/preview": () => {
+        const body = JSON.parse(String(fetchMock.mock.calls.at(-1)?.[1]?.body));
+        const next = JSON.parse(body.document);
+        const edited =
+          body.commands?.[0]?.kind === "auto_layout"
+            ? { ...next["x-mocker-resource-map"].resources[0], x: 480 }
+            : body.commands?.[0]?.resource;
+        if (edited)
+          next["x-mocker-resource-map"] = { formatVersion: 1, resources: [edited], relations: [] };
+        next.paths["/orders"].get["x-mocker-canvas-operation-id"] = key;
+        return json(200, {
+          document: JSON.stringify(next),
+          model: {
+            resources: [{ ...resource, ...edited }],
+            operations: [operation],
+            relations: [],
+            diagnostics: [],
+          },
+          valid: true,
+          diagnostics: [],
+        });
+      },
+      "PUT /api/designs/12/draft": () => {
+        const body = JSON.parse(String(fetchMock.mock.calls.at(-1)?.[1]?.body));
+        const saved = detailFixture({ version: 2, revisionId: 42 });
+        saved.draft.document = body.document;
+        return json(200, saved);
+      },
+    });
+    renderInRouter(<ApiDesignerWorkbench id={12} />);
+    await userEvent.click(await screen.findByRole("tab", { name: "Ресурсы" }));
+    await userEvent.click(await screen.findByRole("button", { name: /Ресурс \/orders/ }));
+    await userEvent.clear(screen.getByLabelText("Название ресурса"));
+    await userEvent.paste("Заказы");
+    expect(screen.getByRole("button", { name: "Сохранить черновик" })).toBeDisabled();
+    await userEvent.click(screen.getByRole("button", { name: "Применить" }));
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Сохранить черновик" })).toBeEnabled(),
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Расставить ресурсы" }));
+    await screen.findByRole("button", { name: "Применить расположение" });
+    expect(screen.getByRole("button", { name: "Сохранить черновик" })).toBeDisabled();
+    await userEvent.click(screen.getByRole("button", { name: "Отменить" }));
+    expect(screen.getByRole("button", { name: "Сохранить черновик" })).toBeEnabled();
+    await userEvent.click(screen.getByRole("button", { name: "Расставить ресурсы" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Применить расположение" }));
+    expect(screen.getByRole("button", { name: "Сохранить черновик" })).toBeEnabled();
+    await userEvent.click(screen.getByRole("button", { name: "Сохранить черновик" }));
+    await waitFor(() =>
+      expect(fetchMock.mock.calls.some(([, init]) => init?.method === "PUT")).toBe(true),
+    );
+    const saveBody = JSON.parse(
+      String(fetchMock.mock.calls.find(([, init]) => init?.method === "PUT")?.[1]?.body),
+    );
+    expect(saveBody.expectedVersion).toBe(1);
+    expect(JSON.parse(saveBody.document)["x-mocker-resource-map"].resources[0].name).toBe("Заказы");
+    expect(JSON.parse(saveBody.document)["x-mocker-resource-map"].resources[0].x).toBe(480);
+    await userEvent.click(await screen.findByRole("button", { name: /Ресурс \/orders/ }));
+    await userEvent.click(screen.getByRole("button", { name: /\/orders · Список заказов/ }));
+    expect(screen.getByRole("tab", { name: "Редактор" })).toHaveAttribute("aria-selected", "true");
+  });
   it("retains pending schema input across tabs and saves only after command preview", async () => {
     const fetchMock = route({
       "GET /api/designs/12": () => json(200, detailFixture()),

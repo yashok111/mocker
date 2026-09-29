@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/yashok111/mocker/internal/jsonx"
+	"github.com/yashok111/mocker/internal/resourcemap"
 	"github.com/yashok111/mocker/internal/schemamodel"
 	"github.com/yashok111/mocker/internal/specs"
 	"github.com/yashok111/mocker/internal/statediagram"
@@ -45,11 +46,18 @@ func (r *Repo) prepare(raw string) (*preparedDocument, error) {
 	if err := schemamodel.ValidateLayout(root); err != nil {
 		return nil, schemaModelError(err)
 	}
+	if err := resourcemap.ValidateStored(root); err != nil {
+		return nil, resourceMapError(err)
+	}
 	diagnostics := validateRoot(root)
 	if len(diagnostics) > 0 {
 		return nil, &InvalidError{Diagnostics: diagnostics}
 	}
-	if _, err := operationKeys(authoredOperations(root)); err != nil {
+	operations, err := authoredOperations(root)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := operationKeys(operations); err != nil {
 		return nil, err
 	}
 	diagnostics, err = validateGrammar(root)
@@ -155,18 +163,21 @@ func validateRoot(root map[string]any) []Diagnostic {
 			add(pointer, "Ожидается объект пути")
 			continue
 		}
-		validatePathItem(root, path, resolveObject(root, item), ids, add)
+		validatePathItem(root, path, item, ids, add)
 	}
 	return out
 }
 
 func validatePathItem(root map[string]any, path string, item map[string]any, ids map[string]string, add diagnosticSink) {
-	for method, value := range item {
-		if !methods[method] {
-			continue
+	nodes, diagnostics := schemamodel.PathItems(root, item, "/paths/"+escape(path))
+	for _, diagnostic := range diagnostics {
+		if diagnostic.Code != "path_item_method_conflict" {
+			add(diagnostic.Pointer, diagnostic.Message)
 		}
-		p := "/paths/" + escape(path) + "/" + method
-		op, ok := value.(map[string]any)
+	}
+	for _, operation := range schemamodel.PathItemOperations(nodes) {
+		p := "/paths/" + escape(path) + "/" + operation.Method
+		op, ok := operation.Value.(map[string]any)
 		if !ok {
 			add(p, "Ожидается объект операции")
 			continue
@@ -182,7 +193,12 @@ func validatePathItem(root map[string]any, path string, item map[string]any, ids
 			}
 		}
 		validateResponses(root, op, p, add)
-		validateParameters(root, path, item, op, p, add)
+		parameters := make([]map[string]any, 0, len(nodes)+1)
+		for i := len(nodes) - 1; i >= 0; i-- {
+			parameters = append(parameters, nodes[i].Value)
+		}
+		parameters = append(parameters, op)
+		validateParameters(root, path, parameters, p, add)
 		if body, exists := op["requestBody"]; exists {
 			obj, ok := body.(map[string]any)
 			if !ok {
@@ -254,9 +270,9 @@ func resolveObject(root map[string]any, obj map[string]any) map[string]any {
 	}
 }
 
-func validateParameters(root map[string]any, path string, item, op map[string]any, p string, add diagnosticSink) {
+func validateParameters(root map[string]any, path string, objects []map[string]any, p string, add diagnosticSink) {
 	params := map[string]map[string]any{}
-	for _, object := range []map[string]any{item, op} {
+	for _, object := range objects {
 		raw, exists := object["parameters"]
 		if !exists {
 			continue

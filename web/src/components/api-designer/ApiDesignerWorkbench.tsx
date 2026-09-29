@@ -102,8 +102,16 @@ import classes from "./ApiDesigner.module.css";
 const POLL_MS = 5_000;
 const StateDiagramEditor = lazy(() => import("../state-diagram/StateDiagramEditor"));
 const SchemaModelEditor = lazy(() => import("../schema-model/SchemaModelEditor"));
+const ResourceMapEditor = lazy(() => import("../resource-map/ResourceMapEditor"));
 const SchemaDiagram = lazy(() => import("./SchemaDiagram"));
-type CanvasView = "documentation" | "editor" | "diagram" | "states" | "compare" | "review";
+type CanvasView =
+  | "documentation"
+  | "editor"
+  | "diagram"
+  | "resources"
+  | "states"
+  | "compare"
+  | "review";
 type EditorMode = "form" | "source";
 type InspectorView = "changes" | "history" | "checks" | "mock";
 
@@ -133,6 +141,7 @@ export function ApiDesignerWorkbench({
   const [view, setView] = useState<CanvasView>(reviewId === undefined ? "documentation" : "review");
   const [schemaView, setSchemaView] = useState("model");
   const [editorMode, setEditorMode] = useState<EditorMode>("form");
+  const [operationSourcePointer, setOperationSourcePointer] = useState<string>();
   const [inspectorView, setInspectorView] = useState<InspectorView>("changes");
   const [selection, setSelection] = useState<DocumentSelection>({ kind: "document" });
   const [search, setSearch] = useState("");
@@ -154,6 +163,7 @@ export function ApiDesignerWorkbench({
   const [selectedRevisionId, setSelectedRevisionId] = useState<number | null>(null);
   const [comparisonToRevisionId, setComparisonToRevisionId] = useState<number | null>(null);
   const [focusPointer, setFocusPointer] = useState<string>();
+  const [resourceLayoutPending, setResourceLayoutPending] = useState(false);
   const initialized = useRef(false);
   const bufferRef = useRef(buffer);
   const submittedFormDrafts = useRef("{}");
@@ -450,6 +460,7 @@ export function ApiDesignerWorkbench({
       changedPointers={changedPointers}
       document={unsafeNumber ? null : parsed.document}
       onDocumentChange={(next, nextSelection) => {
+        setOperationSourcePointer(undefined);
         setBuffer(JSON.stringify(next, null, 2));
         setSelection(nextSelection);
         setView("editor");
@@ -458,6 +469,7 @@ export function ApiDesignerWorkbench({
       }}
       onRemoveDraftTree={draftStore.removeTree}
       onSelect={(next) => {
+        setOperationSourcePointer(undefined);
         setSelection(next);
         tree.close();
       }}
@@ -722,6 +734,7 @@ export function ApiDesignerWorkbench({
               <Tabs.Tab value="documentation">Документация</Tabs.Tab>
               <Tabs.Tab value="editor">Редактор</Tabs.Tab>
               <Tabs.Tab value="diagram">Диаграмма</Tabs.Tab>
+              <Tabs.Tab value="resources">Ресурсы</Tabs.Tab>
               <Tabs.Tab value="states">Состояния</Tabs.Tab>
               <Tabs.Tab value="compare">Сравнение</Tabs.Tab>
               <Tabs.Tab value="review">Проверка</Tabs.Tab>
@@ -802,6 +815,76 @@ export function ApiDesignerWorkbench({
                 </Suspense>
               )}
             </Tabs.Panel>
+            <Tabs.Panel value="resources" className={classes.canvasPanel}>
+              <Group justify="space-between" mb="md">
+                <Text size="sm" c="dimmed">
+                  Изменения карты сохраняются вместе с черновиком API.
+                </Text>
+                <Button
+                  leftSection={<IconDeviceFloppy size={16} />}
+                  loading={save.isPending}
+                  disabled={
+                    !dirty ||
+                    parsed.error !== null ||
+                    formDraft.dirty ||
+                    unsafeNumber ||
+                    resourceLayoutPending
+                  }
+                  onClick={() => {
+                    submittedFormDrafts.current = draftStore.serialize();
+                    save.mutate({
+                      id,
+                      data: {
+                        expectedVersion: baseVersion,
+                        document: buffer,
+                        summary: summary.trim() || "Изменение карты ресурсов",
+                        ...(activeChangeSetId === null ? {} : { changeSetId: activeChangeSetId }),
+                      },
+                    });
+                  }}
+                >
+                  Сохранить черновик
+                </Button>
+              </Group>
+              {save.isError && !conflict && (
+                <Alert color="red" role="alert" mb="md">
+                  {describeApiFailureDetailed(save.error)}
+                </Alert>
+              )}
+              {view === "resources" && (
+                <Suspense fallback={<Text>Загрузка карты ресурсов…</Text>}>
+                  <ResourceMapEditor
+                    designId={id}
+                    document={buffer}
+                    blocked={parsed.error !== null || unsafeNumber}
+                    formStore={draftStore}
+                    onChange={setBuffer}
+                    onLayoutPendingChange={setResourceLayoutPending}
+                    onOperation={(path, method, sourcePointer) => {
+                      setOperationSourcePointer(sourcePointer);
+                      setSelection(
+                        sourcePointer ? { kind: "document" } : { kind: "operation", path, method },
+                      );
+                      setEditorMode(sourcePointer ? "source" : "form");
+                      setView("editor");
+                    }}
+                    onSchema={(name) => {
+                      setOperationSourcePointer(undefined);
+                      setSelection({ kind: "schema", name });
+                      setEditorMode("form");
+                      setView("editor");
+                    }}
+                    onScenario={(scenarioId) =>
+                      void navigate({ to: "/design-scenarios/$id", params: { id: scenarioId } })
+                    }
+                    onAddOperation={() => {
+                      treeComposer.setOperationComposer("create");
+                      tree.open();
+                    }}
+                  />
+                </Suspense>
+              )}
+            </Tabs.Panel>
             <Tabs.Panel value="states" className={classes.canvasPanel}>
               <Group justify="space-between" mb="md">
                 <Text size="sm" c="dimmed">
@@ -849,7 +932,10 @@ export function ApiDesignerWorkbench({
                 <Group justify="space-between" align="flex-end">
                   <SegmentedControl
                     value={editorMode}
-                    onChange={(next) => setEditorMode(next as EditorMode)}
+                    onChange={(next) => {
+                      setOperationSourcePointer(undefined);
+                      setEditorMode(next as EditorMode);
+                    }}
                     data={[
                       { value: "form", label: "Форма", disabled: unsafeNumber },
                       { value: "source", label: "Исходник" },
@@ -899,7 +985,21 @@ export function ApiDesignerWorkbench({
                       последний серверный черновик.
                     </Alert>
                   ) : (
-                    <SourceEditor value={buffer} onChange={setBuffer} />
+                    <>
+                      {operationSourcePointer && (
+                        <Alert color="blue" title="Общая операция из Path Item" mb="sm">
+                          Изменения затронут все пути, которые ссылаются на это определение.
+                          <Text size="sm" ff="monospace" style={{ overflowWrap: "anywhere" }}>
+                            {operationSourcePointer}
+                          </Text>
+                        </Alert>
+                      )}
+                      <SourceEditor
+                        value={buffer}
+                        onChange={setBuffer}
+                        focusPointer={operationSourcePointer}
+                      />
+                    </>
                   )}
                 </div>
                 <TextInput

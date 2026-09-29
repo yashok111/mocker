@@ -9,17 +9,53 @@ import (
 	"uuid"
 
 	"github.com/yashok111/mocker/internal/jsonx"
+	"github.com/yashok111/mocker/internal/schemamodel"
 )
 
 // OperationKey identifies an authored operation across method/path changes.
 const OperationKey = "x-mocker-canvas-operation-id"
 
+// PathOperationKeys stores identities of inherited methods on their consumer.
+const PathOperationKeys = "x-mocker-canvas-operation-ids"
+
 type authoredOperation struct {
 	pointer string
 	value   map[string]any
+	method  string
 }
 
-func authoredOperations(root map[string]any) []authoredOperation {
+func (o authoredOperation) key() (any, bool) {
+	if o.method == "" {
+		value, exists := o.value[OperationKey]
+		return value, exists
+	}
+	keys, _ := o.value[PathOperationKeys].(map[string]any)
+	value, exists := keys[o.method]
+	return value, exists
+}
+
+func (o authoredOperation) keyPointer() string {
+	if o.method == "" {
+		return o.pointer + "/" + OperationKey
+	}
+	path, _, _ := strings.CutLast(o.pointer, "/")
+	return path + "/" + PathOperationKeys + "/" + o.method
+}
+
+func (o authoredOperation) setKey(key string) {
+	if o.method == "" {
+		o.value[OperationKey] = key
+		return
+	}
+	keys, ok := o.value[PathOperationKeys].(map[string]any)
+	if !ok {
+		keys = map[string]any{}
+		o.value[PathOperationKeys] = keys
+	}
+	keys[o.method] = key
+}
+
+func authoredOperations(root map[string]any) ([]authoredOperation, error) {
 	paths, _ := root["paths"].(map[string]any)
 	out := []authoredOperation{}
 	for _, path := range slices.Sorted(maps.Keys(paths)) {
@@ -27,14 +63,34 @@ func authoredOperations(root map[string]any) []authoredOperation {
 			continue
 		}
 		item, _ := paths[path].(map[string]any)
-		for _, method := range slices.Sorted(maps.Keys(item)) {
-			operation, ok := item[method].(map[string]any)
-			if methods[method] && ok {
-				out = append(out, authoredOperation{"/paths/" + escape(path) + "/" + method, operation})
+		pointer := "/paths/" + escape(path)
+		if raw, exists := item[PathOperationKeys]; exists {
+			keys, ok := raw.(map[string]any)
+			if !ok {
+				return nil, invalidField(pointer+"/"+PathOperationKeys, "Ожидается объект ключей операций пути")
+			}
+			for method, value := range keys {
+				key, ok := value.(string)
+				if !methods[method] || !ok || strings.TrimSpace(key) == "" || len(key) > 200 {
+					return nil, invalidField(pointer+"/"+PathOperationKeys+"/"+escape(method), "Ожидается HTTP-метод и непустой ключ до 200 байт")
+				}
+			}
+		}
+		nodes, _ := schemamodel.PathItems(root, item, pointer)
+		for _, method := range schemamodel.PathItemOperations(nodes) {
+			operation, ok := method.Value.(map[string]any)
+			if !ok {
+				continue
+			}
+			at := pointer + "/" + method.Method
+			if method.Pointer == at {
+				out = append(out, authoredOperation{pointer: at, value: operation})
+			} else {
+				out = append(out, authoredOperation{pointer: at, value: item, method: method.Method})
 			}
 		}
 	}
-	return out
+	return out, nil
 }
 
 // withOperationKeys preserves explicit IDs and matches unannotated operations only
@@ -51,17 +107,25 @@ func withOperationKeys(raw, previous string, legacyID int64) (string, error) {
 		if err != nil {
 			return "", err
 		}
-		for _, operation := range authoredOperations(old) {
-			oldKeys[operation.pointer], _ = operation.value[OperationKey].(string)
+		operations, err := authoredOperations(old)
+		if err != nil {
+			return "", err
+		}
+		for _, operation := range operations {
+			value, _ := operation.key()
+			oldKeys[operation.pointer], _ = value.(string)
 		}
 	}
-	operations := authoredOperations(root)
+	operations, err := authoredOperations(root)
+	if err != nil {
+		return "", err
+	}
 	used, err := operationKeys(operations)
 	if err != nil {
 		return "", err
 	}
 	for _, operation := range operations {
-		if _, exists := operation.value[OperationKey]; exists {
+		if _, exists := operation.key(); exists {
 			continue
 		}
 		key := oldKeys[operation.pointer]
@@ -74,9 +138,9 @@ func withOperationKeys(raw, previous string, legacyID int64) (string, error) {
 			}
 		}
 		if used[key] {
-			return "", invalidField(operation.pointer+"/"+OperationKey, "Ключ операции уже используется")
+			return "", invalidField(operation.keyPointer(), "Ключ операции уже используется")
 		}
-		operation.value[OperationKey] = key
+		operation.setKey(key)
 		used[key] = true
 	}
 	canonical, err := jsonx.MarshalIndent(root, "", "  ")
@@ -86,13 +150,13 @@ func withOperationKeys(raw, previous string, legacyID int64) (string, error) {
 func operationKeys(operations []authoredOperation) (map[string]bool, error) {
 	used := map[string]bool{}
 	for _, operation := range operations {
-		if value, exists := operation.value[OperationKey]; exists {
+		if value, exists := operation.key(); exists {
 			key, ok := value.(string)
 			if !ok || strings.TrimSpace(key) == "" || len(key) > 200 {
-				return nil, invalidField(operation.pointer+"/"+OperationKey, "Ожидается непустой ключ операции длиной до 200 байт")
+				return nil, invalidField(operation.keyPointer(), "Ожидается непустой ключ операции длиной до 200 байт")
 			}
 			if used[key] {
-				return nil, invalidField(operation.pointer+"/"+OperationKey, "Ключ операции уже используется")
+				return nil, invalidField(operation.keyPointer(), "Ключ операции уже используется")
 			}
 			used[key] = true
 		}

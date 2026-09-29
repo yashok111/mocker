@@ -1,7 +1,9 @@
 import { Graph, routerPresets, type EdgeView, type PointLike } from "@antv/x6";
 import { useEffect, useRef } from "react";
-import { Button, Group } from "@mantine/core";
 import type { SchemaModel } from "@/api/generated/schemas";
+import DiagramViewport from "../diagram/DiagramViewport";
+import { createInitialFit } from "../diagram/initialFit";
+import { diagramCardBody, diagramEdgeLine, diagramOptions } from "../diagram/presentation";
 import type { Selection } from "./form";
 import styles from "./SchemaModel.module.css";
 import {
@@ -23,7 +25,7 @@ export default function SchemaGraph(props: Props) {
   const host = useRef<HTMLElement>(null);
   const graphRef = useRef<Graph | null>(null);
   const current = useRef(props);
-  const fitted = useRef(false);
+  const initialFit = useRef<ReturnType<typeof createInitialFit> | null>(null);
   useEffect(() => {
     current.current = props;
   });
@@ -31,13 +33,9 @@ export default function SchemaGraph(props: Props) {
     if (!host.current) return;
     const graph = new Graph({
       container: host.current,
-      autoResize: true,
+      ...diagramOptions(),
       // Rebuilding the projection must remove old SVG views before reusing IDs.
       async: false,
-      background: { color: "#f5f7f4" },
-      grid: { visible: true, size: 20, type: "dot", args: { color: "#ccd5cc" } },
-      panning: { enabled: true, modifiers: "shift", eventTypes: ["leftMouseDown"] },
-      mousewheel: { enabled: true, modifiers: ["ctrl", "meta"], minScale: 0.15, maxScale: 2 },
       interacting: () => ({
         nodeMovable: !current.current.disabled,
         edgeMovable: false,
@@ -59,12 +57,14 @@ export default function SchemaGraph(props: Props) {
           return graph.createEdge({
             router: { name: "manhattan", args: { padding: 24 } },
             connector: { name: "rounded" },
-            attrs: { line: { stroke: "#55715b", targetMarker: "block" } },
+            attrs: { line: diagramEdgeLine() },
           });
         },
       },
     });
     graphRef.current = graph;
+    const fit = createInitialFit(graph, host.current, 32);
+    initialFit.current = fit;
     graph.on("node:click", ({ node, e }) => {
       const property =
         (e.target as Element).closest("[data-property]")?.getAttribute("data-property") ?? null;
@@ -91,12 +91,12 @@ export default function SchemaGraph(props: Props) {
         );
     });
     graph.on("resize", () => {
-      if (current.current.model.schemas.length) graph.zoomToFit({ padding: 32, maxScale: 1 });
+      fit();
     });
     return () => {
       graph.dispose();
       graphRef.current = null;
-      fitted.current = false;
+      initialFit.current = null;
     };
   }, []);
   useEffect(() => {
@@ -121,13 +121,7 @@ export default function SchemaGraph(props: Props) {
           ...schema.properties.map((_, i) => ({ tagName: "text", selector: `field${i}` })),
         ],
         attrs: {
-          body: {
-            fill: "#fff",
-            stroke: selected ? "#315b3a" : "#abbcac",
-            strokeWidth: selected ? 2 : 1,
-            rx: 8,
-            ry: 8,
-          },
+          body: diagramCardBody(selected),
           title: {
             text: schema.name,
             refX: 14,
@@ -216,46 +210,18 @@ export default function SchemaGraph(props: Props) {
               );
         },
         connector: { name: "rounded", args: { radius: 6 } },
-        attrs: { line: { stroke: "#69896d", strokeWidth: 1.5, targetMarker: "block" } },
+        attrs: { line: diagramEdgeLine() },
       });
     });
-    if (!fitted.current && props.model.schemas.length) {
-      graph.zoomToFit({ padding: 32, maxScale: 1 });
-      fitted.current = true;
-    }
+    initialFit.current?.();
   }, [props.model, props.selection]);
   return (
-    <div className={styles.graphShell}>
-      <figure
-        ref={host}
-        className={styles.graph}
-        aria-label="Модель схем. Выбор схем и полей также доступен в списке."
-      />
-      <Group className={styles.tools} gap={6}>
-        <Button
-          size="compact-sm"
-          variant="default"
-          aria-label="Уменьшить модель"
-          onClick={() => graphRef.current?.zoom(-0.15)}
-        >
-          −
-        </Button>
-        <Button
-          size="compact-sm"
-          variant="default"
-          aria-label="Увеличить модель"
-          onClick={() => graphRef.current?.zoom(0.15)}
-        >
-          +
-        </Button>
-        <Button
-          size="compact-sm"
-          variant="default"
-          onClick={() => graphRef.current?.zoomToFit({ padding: 32, maxScale: 1 })}
-        >
-          Вместить
-        </Button>
-      </Group>
-    </div>
+    <DiagramViewport
+      hostRef={host}
+      graphRef={graphRef}
+      className={styles.graph}
+      ariaLabel="Модель схем. Выбор схем и полей также доступен в списке."
+      zoomLabel="модель"
+    />
   );
 }

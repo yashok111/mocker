@@ -1,0 +1,69 @@
+.layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 320px);
+  gap: var(--mantine-spacing-md);
+  align-items: start;
+}
+.mapColumn,
+.inspector {
+  min-width: 0;
+}
+.graph {
+  width: 100%;
+  height: 500px;
+}
+.resourceList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+.resourceButton {
+  max-width: 100%;
+  height: auto;
+  min-height: 28px;
+  padding-block: 4px;
+}
+.resourceButton :global(.mantine-Button-label),
+.wrapButton :global(.mantine-Button-label) {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-align: left;
+}
+.inspector {
+  padding: 14px;
+  border: 1px solid var(--mantine-color-gray-3);
+  border-radius: 8px;
+}
+.operationRow {
+  min-width: 0;
+  padding-block: 8px;
+  border-top: 1px solid var(--mantine-color-gray-2);
+}
+.wrap,
+.wrapButton {
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+.wrapButton {
+  height: auto;
+  min-height: 28px;
+  max-width: 100%;
+  padding-block: 4px;
+}
+@media (max-width: 80em) {
+  .layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .graph {
+    height: 420px;
+  }
+}
+@media (max-width: 30em) {
+  .graph {
+    height: 320px;
+  }
+  .inspector {
+    padding: 10px;
+  }
+}
