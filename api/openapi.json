@@ -9928,6 +9928,1082 @@
           }
         },
         "additionalProperties": false
+      },
+      "ResponseRuleBinding": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "method": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string",
+            "maxLength": 2048
+          }
+        },
+        "required": [
+          "method",
+          "path"
+        ]
+      },
+      "ResponseRuleField": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 256
+          },
+          "value": {
+            "type": "string",
+            "maxLength": 4096
+          }
+        },
+        "required": [
+          "name",
+          "value"
+        ]
+      },
+      "ResponseRuleResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "status": {
+            "type": "integer"
+          },
+          "mediaType": {
+            "type": "string",
+            "description": "Safe application/json or application/*+json media type; optional valid MIME parameters."
+          },
+          "headers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ResponseRuleField"
+            },
+            "maxItems": 100
+          },
+          "bodyJSON": {
+            "type": "string",
+            "maxLength": 65536,
+            "description": "Exact JSON text, at most 65536 UTF-8 bytes and depth 64. Duplicate object keys and trailing data are invalid. Absence means no body; null is forbidden."
+          }
+        },
+        "required": [
+          "status",
+          "mediaType",
+          "headers"
+        ],
+        "description": "Static response. Semantic validation requires status 200..599 and no body for 204/205/304 or bound HEAD. Unsafe media types and response headers are rejected even on save."
+      },
+      "ResponseRuleCondition": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "in": {
+            "type": "string",
+            "maxLength": 256,
+            "description": "Semantic choices: query, header, body. Incomplete authoring values are retained and diagnosed during validation. At most 256 UTF-8 bytes."
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 256
+          },
+          "op": {
+            "type": "string",
+            "maxLength": 256,
+            "description": "Semantic choices: equals, contains, exists. Incomplete authoring values are retained and diagnosed during validation. At most 256 UTF-8 bytes."
+          },
+          "value": {
+            "type": "string",
+            "maxLength": 4096,
+            "description": "Optional while authoring; equals/contains require a nonempty value for simulation. The exists operator forbids a supplied value."
+          }
+        },
+        "required": [
+          "in",
+          "name",
+          "op"
+        ],
+        "not": {
+          "properties": {
+            "op": {
+              "const": "exists"
+            }
+          },
+          "required": [
+            "op",
+            "value"
+          ]
+        },
+        "description": "Structural authoring shape. Missing or empty predicate values and incomplete source/operator names produce semantic diagnostics, so saved drafts can still be read and edited."
+      },
+      "ResponseRuleStartNode": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,80}$"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "start"
+            ]
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "x": {
+            "type": "number",
+            "minimum": -100000,
+            "maximum": 100000
+          },
+          "y": {
+            "type": "number",
+            "minimum": -100000,
+            "maximum": 100000
+          }
+        },
+        "required": [
+          "id",
+          "type",
+          "name",
+          "x",
+          "y"
+        ]
+      },
+      "ResponseRuleConditionNode": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,80}$"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "condition"
+            ]
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "x": {
+            "type": "number",
+            "minimum": -100000,
+            "maximum": 100000
+          },
+          "y": {
+            "type": "number",
+            "minimum": -100000,
+            "maximum": 100000
+          },
+          "condition": {
+            "$ref": "#/components/schemas/ResponseRuleCondition"
+          }
+        },
+        "required": [
+          "id",
+          "type",
+          "name",
+          "x",
+          "y",
+          "condition"
+        ]
+      },
+      "ResponseRuleDelayNode": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,80}$"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "delay"
+            ]
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "x": {
+            "type": "number",
+            "minimum": -100000,
+            "maximum": 100000
+          },
+          "y": {
+            "type": "number",
+            "minimum": -100000,
+            "maximum": 100000
+          },
+          "delayMs": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "type",
+          "name",
+          "x",
+          "y",
+          "delayMs"
+        ]
+      },
+      "ResponseRuleResponseNode": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,80}$"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "response"
+            ]
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "x": {
+            "type": "number",
+            "minimum": -100000,
+            "maximum": 100000
+          },
+          "y": {
+            "type": "number",
+            "minimum": -100000,
+            "maximum": 100000
+          },
+          "response": {
+            "$ref": "#/components/schemas/ResponseRuleResponse"
+          }
+        },
+        "required": [
+          "id",
+          "type",
+          "name",
+          "x",
+          "y",
+          "response"
+        ]
+      },
+      "ResponseRuleFallbackNode": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,80}$"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "fallback"
+            ]
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "x": {
+            "type": "number",
+            "minimum": -100000,
+            "maximum": 100000
+          },
+          "y": {
+            "type": "number",
+            "minimum": -100000,
+            "maximum": 100000
+          }
+        },
+        "required": [
+          "id",
+          "type",
+          "name",
+          "x",
+          "y"
+        ]
+      },
+      "ResponseRuleNode": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/ResponseRuleStartNode"
+          },
+          {
+            "$ref": "#/components/schemas/ResponseRuleConditionNode"
+          },
+          {
+            "$ref": "#/components/schemas/ResponseRuleDelayNode"
+          },
+          {
+            "$ref": "#/components/schemas/ResponseRuleResponseNode"
+          },
+          {
+            "$ref": "#/components/schemas/ResponseRuleFallbackNode"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "type"
+        }
+      },
+      "ResponseRuleEdge": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,80}$"
+          },
+          "from": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,80}$"
+          },
+          "port": {
+            "type": "string"
+          },
+          "to": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,80}$"
+          }
+        },
+        "required": [
+          "id",
+          "from",
+          "port",
+          "to"
+        ]
+      },
+      "ResponseRule": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,80}$"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "binding": {
+            "$ref": "#/components/schemas/ResponseRuleBinding"
+          },
+          "nodes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ResponseRuleNode"
+            },
+            "maxItems": 100
+          },
+          "edges": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ResponseRuleEdge"
+            },
+            "maxItems": 200
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "nodes",
+          "edges"
+        ]
+      },
+      "ResponseRulesEnvelope": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "formatVersion": {
+            "type": "integer",
+            "enum": [
+              1
+            ]
+          },
+          "rules": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ResponseRule"
+            },
+            "maxItems": 20
+          }
+        },
+        "required": [
+          "formatVersion",
+          "rules"
+        ],
+        "description": "Authoring envelope: at most 1 MiB compact JSON; one rule at most 512 KiB. String limits are UTF-8 byte limits on the server. Names/bindings/connections may be incomplete; semantic errors are reported by validation."
+      },
+      "ResponseRules": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "designId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "version": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "revisionId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "rules": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ResponseRule"
+            },
+            "maxItems": 20
+          }
+        },
+        "required": [
+          "designId",
+          "version",
+          "revisionId",
+          "rules"
+        ]
+      },
+      "ResponseRuleDetail": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "designId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "version": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "revisionId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "rule": {
+            "$ref": "#/components/schemas/ResponseRule"
+          }
+        },
+        "required": [
+          "designId",
+          "version",
+          "revisionId",
+          "rule"
+        ]
+      },
+      "ResponseRuleRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "query": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ResponseRuleField"
+            },
+            "maxItems": 100
+          },
+          "headers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ResponseRuleField"
+            },
+            "maxItems": 100
+          },
+          "bodyJSON": {
+            "type": "string",
+            "maxLength": 65536,
+            "description": "Exact JSON text, at most 65536 UTF-8 bytes and depth 64. Duplicate object keys and trailing data are invalid. Absence means no body; null is forbidden."
+          }
+        },
+        "required": [
+          "query",
+          "headers"
+        ],
+        "description": "Logical request, at most 128 KiB compact JSON. Ordered duplicate query/header rows are retained; headers use the first case-insensitive value. Body numbers retain source spelling."
+      },
+      "ResponseRuleSource": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "designId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "version": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "revisionId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "ruleId": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,80}$"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "proposal",
+              "saved"
+            ]
+          },
+          "documentHash": {
+            "type": "string",
+            "pattern": "^sha256:[a-f0-9]{64}$"
+          }
+        },
+        "required": [
+          "designId",
+          "ruleId",
+          "kind",
+          "documentHash"
+        ],
+        "description": "Hash of exact UTF-8 source bytes. Saved sources contain version and revisionId; proposals omit both."
+      },
+      "ResponseRuleDiagnostic": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "error",
+              "warning"
+            ]
+          },
+          "message": {
+            "type": "string"
+          },
+          "pointer": {
+            "type": "string"
+          },
+          "ruleId": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,80}$"
+          },
+          "nodeId": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,80}$"
+          },
+          "edgeId": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,80}$"
+          }
+        },
+        "required": [
+          "code",
+          "severity",
+          "message",
+          "pointer"
+        ]
+      },
+      "ResponseRuleValidation": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "valid": {
+            "type": "boolean"
+          },
+          "diagnostics": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ResponseRuleDiagnostic"
+            },
+            "maxItems": 200
+          },
+          "diagnosticsTruncated": {
+            "type": "boolean"
+          },
+          "source": {
+            "$ref": "#/components/schemas/ResponseRuleSource"
+          }
+        },
+        "required": [
+          "valid",
+          "diagnostics",
+          "diagnosticsTruncated",
+          "source"
+        ]
+      },
+      "ResponseRuleStep": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "step": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          },
+          "nodeId": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,80}$"
+          },
+          "edgeId": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,80}$"
+          },
+          "matched": {
+            "type": "boolean"
+          },
+          "delayMs": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 30000
+          }
+        },
+        "required": [
+          "step",
+          "nodeId"
+        ]
+      },
+      "ResponseRuleSimulation": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "valid": {
+            "type": "boolean"
+          },
+          "diagnostics": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ResponseRuleDiagnostic"
+            },
+            "maxItems": 200
+          },
+          "diagnosticsTruncated": {
+            "type": "boolean"
+          },
+          "source": {
+            "$ref": "#/components/schemas/ResponseRuleSource"
+          },
+          "inputHash": {
+            "type": "string"
+          },
+          "outcome": {
+            "type": "string",
+            "enum": [
+              "invalid",
+              "fallback",
+              "response"
+            ]
+          },
+          "trace": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ResponseRuleStep"
+            },
+            "maxItems": 100
+          },
+          "terminalNodeId": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,80}$"
+          },
+          "totalDelayMs": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 30000
+          },
+          "response": {
+            "$ref": "#/components/schemas/ResponseRuleResponse"
+          }
+        },
+        "required": [
+          "valid",
+          "diagnostics",
+          "diagnosticsTruncated",
+          "source",
+          "inputHash",
+          "outcome",
+          "trace"
+        ],
+        "description": "Entire encoded result is limited to 512 KiB. Invalid graphs return outcome invalid and empty trace, with no terminalNodeId, totalDelayMs or response. Fallback omits response. No fixture values are copied into trace."
+      },
+      "ResponseRulePosition": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "nodeId": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,80}$"
+          },
+          "x": {
+            "type": "number",
+            "minimum": -100000,
+            "maximum": 100000
+          },
+          "y": {
+            "type": "number",
+            "minimum": -100000,
+            "maximum": 100000
+          }
+        },
+        "required": [
+          "nodeId",
+          "x",
+          "y"
+        ]
+      },
+      "ResponseRuleSetRuleCommand": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "set_rule"
+            ]
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "binding": {
+            "$ref": "#/components/schemas/ResponseRuleBinding"
+          }
+        },
+        "required": [
+          "type",
+          "name"
+        ]
+      },
+      "ResponseRuleAddNodeCommand": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "add_node"
+            ]
+          },
+          "node": {
+            "$ref": "#/components/schemas/ResponseRuleNode"
+          }
+        },
+        "required": [
+          "type",
+          "node"
+        ]
+      },
+      "ResponseRuleUpdateNodeCommand": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "update_node"
+            ]
+          },
+          "node": {
+            "$ref": "#/components/schemas/ResponseRuleNode"
+          }
+        },
+        "required": [
+          "type",
+          "node"
+        ]
+      },
+      "ResponseRuleRemoveNodeCommand": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "remove_node"
+            ]
+          },
+          "nodeId": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,80}$"
+          }
+        },
+        "required": [
+          "type",
+          "nodeId"
+        ]
+      },
+      "ResponseRuleAddEdgeCommand": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "add_edge"
+            ]
+          },
+          "edge": {
+            "$ref": "#/components/schemas/ResponseRuleEdge"
+          }
+        },
+        "required": [
+          "type",
+          "edge"
+        ]
+      },
+      "ResponseRuleUpdateEdgeCommand": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "update_edge"
+            ]
+          },
+          "edge": {
+            "$ref": "#/components/schemas/ResponseRuleEdge"
+          }
+        },
+        "required": [
+          "type",
+          "edge"
+        ]
+      },
+      "ResponseRuleRemoveEdgeCommand": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "remove_edge"
+            ]
+          },
+          "edgeId": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,80}$"
+          }
+        },
+        "required": [
+          "type",
+          "edgeId"
+        ]
+      },
+      "ResponseRuleMoveNodesCommand": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "move_nodes"
+            ]
+          },
+          "positions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ResponseRulePosition"
+            },
+            "maxItems": 100
+          }
+        },
+        "required": [
+          "type",
+          "positions"
+        ]
+      },
+      "ResponseRuleCommand": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/ResponseRuleSetRuleCommand"
+          },
+          {
+            "$ref": "#/components/schemas/ResponseRuleAddNodeCommand"
+          },
+          {
+            "$ref": "#/components/schemas/ResponseRuleUpdateNodeCommand"
+          },
+          {
+            "$ref": "#/components/schemas/ResponseRuleRemoveNodeCommand"
+          },
+          {
+            "$ref": "#/components/schemas/ResponseRuleAddEdgeCommand"
+          },
+          {
+            "$ref": "#/components/schemas/ResponseRuleUpdateEdgeCommand"
+          },
+          {
+            "$ref": "#/components/schemas/ResponseRuleRemoveEdgeCommand"
+          },
+          {
+            "$ref": "#/components/schemas/ResponseRuleMoveNodesCommand"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "type"
+        }
+      },
+      "SaveResponseRuleRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "expectedVersion": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "rule": {
+            "$ref": "#/components/schemas/ResponseRule"
+          }
+        },
+        "required": [
+          "expectedVersion",
+          "rule"
+        ]
+      },
+      "DeleteResponseRuleRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "expectedVersion": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "expectedVersion"
+        ]
+      },
+      "ApplyResponseRuleCommandsRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "expectedVersion": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "commands": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ResponseRuleCommand"
+            },
+            "maxItems": 200
+          }
+        },
+        "required": [
+          "expectedVersion",
+          "commands"
+        ]
+      },
+      "ResponseRuleProposal": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "document": {
+            "type": "string",
+            "description": "Exact entire API document. Omitted loads saved draft. Present empty text and null are invalid. Proposal sources omit saved revision provenance."
+          }
+        },
+        "required": []
+      },
+      "SimulateResponseRuleRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "document": {
+            "type": "string",
+            "description": "Exact entire API document. Omitted loads saved draft. Present empty text and null are invalid. Proposal sources omit saved revision provenance."
+          },
+          "request": {
+            "$ref": "#/components/schemas/ResponseRuleRequest"
+          }
+        },
+        "required": [
+          "request"
+        ]
+      },
+      "ResponseRuleExecutionState": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "ruleId",
+          "name",
+          "binding",
+          "state"
+        ],
+        "properties": {
+          "ruleId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "binding": {
+            "$ref": "#/components/schemas/ResponseRuleBinding"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "current",
+              "outdated",
+              "missing"
+            ]
+          }
+        }
+      },
+      "ResponseRuleExecution": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "designId",
+          "version",
+          "revisionId",
+          "rules"
+        ],
+        "properties": {
+          "designId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "version": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "revisionId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "rules": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ResponseRuleExecutionState"
+            }
+          }
+        }
+      },
+      "ResponseRuleExecutionInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "expectedVersion"
+        ],
+        "properties": {
+          "expectedVersion": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          }
+        }
       }
     }
   },
@@ -19062,6 +20138,1511 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/ApiImpactInput"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/designs/{id}/response-rules": {
+      "get": {
+        "tags": [
+          "response-rules"
+        ],
+        "operationId": "listResponseRules",
+        "summary": "listResponseRules",
+        "description": "Authoring and deterministic read-only simulation of response rules. Authoring writes do not alter applied execution copies; use applyResponseRule or unapplyResponseRule to change draft mock execution. Writes use whole-API expectedVersion. Graph semantic errors are returned as diagnostics; incomplete authoring graphs may be saved.",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "Structural admission error (design_invalid), malformed request, or simulation_invalid fixture. No state is changed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "$ref": "#/components/schemas/ApiDesignInvalidDetails"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "description": "design_conflict: current version and draft revision. No write was applied.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "$ref": "#/components/schemas/ApiDesignConflictDetails"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "413": {
+            "$ref": "#/components/responses/PayloadTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          },
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseRules"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1
+            }
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "response-rules"
+        ],
+        "operationId": "createResponseRule",
+        "summary": "createResponseRule",
+        "description": "Authoring and deterministic read-only simulation of response rules. Authoring writes do not alter applied execution copies; use applyResponseRule or unapplyResponseRule to change draft mock execution. Writes use whole-API expectedVersion. Graph semantic errors are returned as diagnostics; incomplete authoring graphs may be saved.",
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfToken": []
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "Structural admission error (design_invalid), malformed request, or simulation_invalid fixture. No state is changed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "$ref": "#/components/schemas/ApiDesignInvalidDetails"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "description": "design_conflict: current version and draft revision. No write was applied.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "$ref": "#/components/schemas/ApiDesignConflictDetails"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "413": {
+            "$ref": "#/components/responses/PayloadTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          },
+          "201": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiDesignDetail"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SaveResponseRuleRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/designs/{id}/response-rules/{rid}": {
+      "get": {
+        "tags": [
+          "response-rules"
+        ],
+        "operationId": "getResponseRule",
+        "summary": "getResponseRule",
+        "description": "Authoring and deterministic read-only simulation of response rules. Authoring writes do not alter applied execution copies; use applyResponseRule or unapplyResponseRule to change draft mock execution. Writes use whole-API expectedVersion. Graph semantic errors are returned as diagnostics; incomplete authoring graphs may be saved.",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "Structural admission error (design_invalid), malformed request, or simulation_invalid fixture. No state is changed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "$ref": "#/components/schemas/ApiDesignInvalidDetails"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "description": "design_conflict: current version and draft revision. No write was applied.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "$ref": "#/components/schemas/ApiDesignConflictDetails"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "413": {
+            "$ref": "#/components/responses/PayloadTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          },
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseRuleDetail"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "rid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{1,80}$"
+            }
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "response-rules"
+        ],
+        "operationId": "saveResponseRule",
+        "summary": "saveResponseRule",
+        "description": "Authoring and deterministic read-only simulation of response rules. Authoring writes do not alter applied execution copies; use applyResponseRule or unapplyResponseRule to change draft mock execution. Writes use whole-API expectedVersion. Graph semantic errors are returned as diagnostics; incomplete authoring graphs may be saved.",
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfToken": []
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "Structural admission error (design_invalid), malformed request, or simulation_invalid fixture. No state is changed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "$ref": "#/components/schemas/ApiDesignInvalidDetails"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "description": "design_conflict: current version and draft revision. No write was applied.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "$ref": "#/components/schemas/ApiDesignConflictDetails"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "413": {
+            "$ref": "#/components/responses/PayloadTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          },
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiDesignDetail"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "rid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{1,80}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SaveResponseRuleRequest"
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "response-rules"
+        ],
+        "operationId": "deleteResponseRule",
+        "summary": "deleteResponseRule",
+        "description": "Authoring and deterministic read-only simulation of response rules. Authoring writes do not alter applied execution copies; use applyResponseRule or unapplyResponseRule to change draft mock execution. Writes use whole-API expectedVersion. Graph semantic errors are returned as diagnostics; incomplete authoring graphs may be saved.",
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfToken": []
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "Structural admission error (design_invalid), malformed request, or simulation_invalid fixture. No state is changed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "$ref": "#/components/schemas/ApiDesignInvalidDetails"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "description": "design_conflict: current version and draft revision. No write was applied.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "$ref": "#/components/schemas/ApiDesignConflictDetails"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "413": {
+            "$ref": "#/components/responses/PayloadTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          },
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiDesignDetail"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "rid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{1,80}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeleteResponseRuleRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/designs/{id}/response-rules/{rid}/commands": {
+      "post": {
+        "tags": [
+          "response-rules"
+        ],
+        "operationId": "applyResponseRuleCommands",
+        "summary": "applyResponseRuleCommands",
+        "description": "Authoring and deterministic read-only simulation of response rules. Authoring writes do not alter applied execution copies; use applyResponseRule or unapplyResponseRule to change draft mock execution. Writes use whole-API expectedVersion. Graph semantic errors are returned as diagnostics; incomplete authoring graphs may be saved.",
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfToken": []
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "Structural admission error (design_invalid), malformed request, or simulation_invalid fixture. No state is changed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "$ref": "#/components/schemas/ApiDesignInvalidDetails"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "description": "design_conflict: current version and draft revision. No write was applied.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "$ref": "#/components/schemas/ApiDesignConflictDetails"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "413": {
+            "$ref": "#/components/responses/PayloadTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          },
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiDesignDetail"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "rid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{1,80}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApplyResponseRuleCommandsRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/designs/{id}/response-rules/{rid}/validate": {
+      "post": {
+        "tags": [
+          "response-rules"
+        ],
+        "operationId": "validateResponseRule",
+        "summary": "validateResponseRule",
+        "description": "Authoring and deterministic read-only simulation of response rules. Authoring writes do not alter applied execution copies; use applyResponseRule or unapplyResponseRule to change draft mock execution. Writes use whole-API expectedVersion. Graph semantic errors are returned as diagnostics; incomplete authoring graphs may be saved.",
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfToken": []
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "Structural admission error (design_invalid), malformed request, or simulation_invalid fixture. No state is changed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "$ref": "#/components/schemas/ApiDesignInvalidDetails"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "description": "design_conflict: current version and draft revision. No write was applied.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "$ref": "#/components/schemas/ApiDesignConflictDetails"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "413": {
+            "$ref": "#/components/responses/PayloadTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          },
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseRuleValidation"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "rid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{1,80}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResponseRuleProposal"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/designs/{id}/response-rules/{rid}/simulate": {
+      "post": {
+        "tags": [
+          "response-rules"
+        ],
+        "operationId": "simulateResponseRule",
+        "summary": "simulateResponseRule",
+        "description": "Authoring and deterministic read-only simulation of response rules. Authoring writes do not alter applied execution copies; use applyResponseRule or unapplyResponseRule to change draft mock execution. Writes use whole-API expectedVersion. Graph semantic errors are returned as diagnostics; incomplete authoring graphs may be saved.",
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfToken": []
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "Structural admission error (design_invalid), malformed request, or simulation_invalid fixture. No state is changed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "$ref": "#/components/schemas/ApiDesignInvalidDetails"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "description": "design_conflict: current version and draft revision. No write was applied.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "$ref": "#/components/schemas/ApiDesignConflictDetails"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "413": {
+            "$ref": "#/components/responses/PayloadTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          },
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseRuleSimulation"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "rid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{1,80}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SimulateResponseRuleRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/designs/{id}/response-rule-execution": {
+      "get": {
+        "tags": [
+          "response-rules"
+        ],
+        "operationId": "getResponseRuleExecution",
+        "summary": "Read applied response rules",
+        "description": "Reads immutable execution copies and compares them with saved authoring rules. State is current, outdated, or missing. Does not change API or mock state.",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "Structural admission error (design_invalid), malformed request, or simulation_invalid fixture. No state is changed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "$ref": "#/components/schemas/ApiDesignInvalidDetails"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "description": "design_conflict: current version and draft revision. No write was applied.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "$ref": "#/components/schemas/ApiDesignConflictDetails"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "413": {
+            "$ref": "#/components/responses/PayloadTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          },
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseRuleExecution"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1
+            }
+          }
+        ]
+      }
+    },
+    "/api/designs/{id}/response-rules/{rid}/execution": {
+      "put": {
+        "tags": [
+          "response-rules"
+        ],
+        "operationId": "applyResponseRule",
+        "summary": "Apply response rule to draft mock",
+        "description": "Uses whole-API expectedVersion. Applies a saved authoring rule as an immutable execution copy, or removes that copy. Updates only the draft mock; published behavior changes through normal API review/publication. Repeating an identical action is a no-op with CAS still checked.",
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfToken": []
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "Structural admission error (design_invalid), malformed request, or simulation_invalid fixture. No state is changed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "$ref": "#/components/schemas/ApiDesignInvalidDetails"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "description": "design_conflict: current version and draft revision. No write was applied.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "$ref": "#/components/schemas/ApiDesignConflictDetails"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "413": {
+            "$ref": "#/components/responses/PayloadTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          },
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiDesignDetail"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "rid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{1,80}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResponseRuleExecutionInput"
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "response-rules"
+        ],
+        "operationId": "unapplyResponseRule",
+        "summary": "Remove response rule from draft mock",
+        "description": "Uses whole-API expectedVersion. Applies a saved authoring rule as an immutable execution copy, or removes that copy. Updates only the draft mock; published behavior changes through normal API review/publication. Repeating an identical action is a no-op with CAS still checked.",
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfToken": []
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "Structural admission error (design_invalid), malformed request, or simulation_invalid fixture. No state is changed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "$ref": "#/components/schemas/ApiDesignInvalidDetails"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "description": "design_conflict: current version and draft revision. No write was applied.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "$ref": "#/components/schemas/ApiDesignConflictDetails"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "413": {
+            "$ref": "#/components/responses/PayloadTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          },
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiDesignDetail"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "rid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{1,80}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResponseRuleExecutionInput"
               }
             }
           }

@@ -1,0 +1,113 @@
+.root,
+.workspace > *,
+.simulationGrid > *,
+.fieldRow > * {
+  min-width: 0;
+}
+.root {
+  container: response-rules / inline-size;
+  overflow-wrap: anywhere;
+}
+.workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+.root .graph {
+  height: 460px;
+  min-height: 460px;
+  max-height: 460px;
+}
+.inspector {
+  border-top: 1px solid var(--mocker-border, #d6dfd6);
+  padding-top: 14px;
+  min-width: 0;
+}
+.lists,
+.simulationGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 16px;
+}
+.lists {
+  margin-top: 16px;
+}
+.list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.steps {
+  margin: 0;
+  padding-left: 24px;
+}
+.row {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 8px 10px;
+  border-radius: 6px;
+  overflow-wrap: anywhere;
+}
+.row[aria-pressed="true"] {
+  background: #e5eee2;
+  color: #24482e;
+}
+.row:focus-visible {
+  outline: 2px solid #245e39;
+  outline-offset: 2px;
+}
+.simulation {
+  border-top: 1px solid var(--mocker-border, #d6dfd6);
+  padding-top: 18px;
+  margin-top: 12px;
+}
+.data {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 280px;
+  overflow: auto;
+  font-size: 12px;
+  padding: 12px;
+  border-radius: 6px;
+  background: var(--mantine-color-gray-0);
+}
+.fieldRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  gap: 6px;
+  align-items: end;
+}
+.identity {
+  overflow-wrap: anywhere;
+  font-size: 12px;
+}
+@container response-rules (min-width: 1400px) {
+  .workspace {
+    grid-template-columns: minmax(0, 1fr) 290px;
+  }
+  .inspector {
+    border-top: 0;
+    border-left: 1px solid var(--mocker-border, #d6dfd6);
+    padding-top: 0;
+    padding-left: 16px;
+  }
+}
+@media (max-width: 40em) {
+  .lists,
+  .simulationGrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .root .graph {
+    height: 340px;
+    min-height: 340px;
+    max-height: 340px;
+  }
+  .fieldRow {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+  .fieldRow > button {
+    justify-self: start;
+  }
+}

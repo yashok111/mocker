@@ -143,6 +143,11 @@ type trafficMatch struct {
 	// outcome would let two of them be set at once, which no code path can
 	// produce and every reader would then have to rank.
 	function string
+	// Rule notes carry bounded identifiers/outcomes only; the simulation's
+	// trace and request values must never become extra persisted traffic data.
+	responseRuleID           string
+	responseRuleOutcome      string
+	responseRuleBodyRejected bool
 }
 
 // notePauseRefused and noteRefUnresolved are [traffic.Event.Notes] tokens
@@ -582,6 +587,15 @@ func (p *Plane) captureTraffic(w http.ResponseWriter, r *http.Request, ws *works
 	}
 	if tm.function != "" {
 		notes = append(notes, tm.function)
+	}
+	if tm.responseRuleID != "" {
+		notes = append(notes, "response_rule:"+tm.responseRuleID)
+	}
+	if tm.responseRuleOutcome != "" {
+		notes = append(notes, tm.responseRuleOutcome)
+	}
+	if tm.responseRuleBodyRejected {
+		notes = append(notes, "response_rule_body_rejected")
 	}
 	if tm.stream != "" {
 		// P6b (D11): one row per connection. The writer's own capture is

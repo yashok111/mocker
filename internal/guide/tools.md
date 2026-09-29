@@ -199,6 +199,41 @@ Pointer. Editing that definition affects its other consumers; the UI opens sourc
 with this warning. Map support does not add inherited-operation support to mock
 runtime indexing or sequence bindings, which still enumerate literal operations.
 
+### Visual response rules
+
+These eight tools edit `x-mocker-response-rules` in the API draft and simulate
+decision graphs. Saving or publishing this metadata does not activate it in a
+live mock. See `design.md` for a complete recipe and predicate semantics.
+
+| tool | purpose | input | output | gotchas |
+|---|---|---|---|---|
+| `list_response_rules` | List complete graphs | `designId*` | designId, version, revisionId, rules[] | Uses the API draft's version. |
+| `get_response_rule` | Read one graph | `designId*`, `ruleId*` | designId, version, revisionId, rule | Read before replacing or editing. |
+| `create_response_rule` | Add a graph | `designId*`, `expectedVersion*`, `rule*` | API detail | Unique stable ID; incomplete graphs may be saved. |
+| `save_response_rule` | Replace a complete graph | `designId*`, `ruleId*`, `expectedVersion*`, `rule*` | API detail | Retain every node/edge you need. rule.id must match ruleId. |
+| `delete_response_rule` | Remove a graph | `designId*`, `ruleId*`, `expectedVersion*` | API detail | Revision history is retained. |
+| `apply_response_rule_commands` | Ordered atomic graph edits | `designId*`, `ruleId*`, `expectedVersion*`, `commands*` (≤200) | API detail | set_rule, add/update/remove_node, add/update/remove_edge, move_nodes. Failed batches save nothing. |
+| `validate_response_rule` | Check selected graph and binding | `designId*`, `ruleId*`, `document?` | valid, diagnostics[], diagnosticsTruncated, source | Exact proposed document or saved draft. No writes. |
+| `simulate_response_rule` | Evaluate an explicit sample request | `designId*`, `ruleId*`, `document?`, `request*` | validation, source, inputHash, outcome, trace[], terminalNodeId?, totalDelayMs?, response? | Ordered query/header rows; optional bodyJSON text. No sleeping or HTTP/entity/session effects. Fallback has no concrete response. |
+
+Every write fences the whole API version; reread and reconcile a 409. Evaluation
+allows an unsaved rule ID when `document` contains that rule. Explicit null or
+empty document is invalid. Request data and traces are not persisted.
+
+### Executable response copies
+
+| Tool | Purpose | Required parameters | Returns |
+| --- | --- | --- | --- |
+| `get_response_rule_execution` | List applied copies and current/outdated/missing authoring status | `designId` | designId, version, revisionId, rules[] |
+| `apply_response_rule` | Copy saved valid graph into draft HTTP execution | `designId`, `ruleId`, `expectedVersion` | API detail |
+| `unapply_response_rule` | Remove execution copy, retaining authoring and published revision | `designId`, `ruleId`, `expectedVersion` | API detail |
+
+These actions use whole-API CAS. Save source edits first; reapply to update the
+executable copy. Removing an authoring graph does not remove its execution copy.
+Draft behavior changes immediately; published behavior changes through existing
+UI review/publication. Read `design.md` for routing/layer priorities, live input
+capture differences, real delays and immutable copy/rollback semantics.
+
 ## confirmSlug
 
 Nine destructive tools take `confirmSlug`: `delete_workspace`, `clear_traffic`,

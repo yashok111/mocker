@@ -697,6 +697,127 @@ The base is never edited in place. When the design is agreed:
 After that the workspace is a clean delta over the new base, and the next
 round of design starts from step 2.
 
+## Visual response rules in API designer
+
+The `x-mocker-response-rules` extension contains `{formatVersion:1,rules:[]}`.
+A rule has stable `id`, `name`, optional `binding:{method,path}`, `nodes` and
+`edges`. Methods are uppercase and paths are exact direct OpenAPI operation
+paths; Path Item `$ref` bindings are reported unsupported. Nodes are `start`,
+`condition`, `delay`, `response` and `fallback`; condition exits are `true` and
+`false`, other nonterminal exits are `next`.
+
+Read `get_api_design` for the current version and choose an existing operation.
+For an API with `GET /orders`, call `create_response_rule` with:
+
+```json
+{
+  "designId":1,
+  "expectedVersion":1,
+  "rule":{
+    "id":"header-check","name":"Проверка заголовка",
+    "binding":{"method":"GET","path":"/orders"},
+    "nodes":[
+      {"id":"start","type":"start","name":"Запрос","x":40,"y":100},
+      {"id":"check","type":"condition","name":"Есть заголовок?","x":460,"y":100,
+       "condition":{"in":"header","name":"Authorization","op":"exists"}},
+      {"id":"ok","type":"response","name":"Успех","x":880,"y":0,
+       "response":{"status":200,"mediaType":"application/json","headers":[],"bodyJSON":"{\"ok\":true}"}},
+      {"id":"fallback","type":"fallback","name":"Стандартная обработка","x":880,"y":200}
+    ],
+    "edges":[
+      {"id":"a","from":"start","port":"next","to":"check"},
+      {"id":"b","from":"check","port":"true","to":"ok"},
+      {"id":"c","from":"check","port":"false","to":"fallback"}
+    ]
+  }
+}
+```
+
+Substitute the actual design/version. Then `validate_response_rule` with
+`{designId:1,ruleId:"header-check"}` and `simulate_response_rule` with:
+
+```json
+{"designId":1,"ruleId":"header-check","request":{"query":[],"headers":[{"name":"Authorization","value":"Bearer demo"}]}}
+```
+
+This selects `ok`; empty headers select `fallback`, which does not calculate a
+generated response. Add optional `document` with the complete proposed OpenAPI
+string to evaluate local edits without saving. Saved results identify version
+and revision; proposed results identify the exact document hash.
+
+Use `apply_response_rule_commands` for small edits. For example, rename and
+move without replacing a graph:
+
+```json
+{"designId":1,"ruleId":"header-check","expectedVersion":2,"commands":[{"type":"set_rule","name":"Проверка запроса","binding":{"method":"GET","path":"/orders"}},{"type":"move_nodes","positions":[{"nodeId":"check","x":460,"y":120}]}]}
+```
+
+`set_rule` without binding clears it. `update_node` and `update_edge` replace
+their complete objects; node types are immutable. `remove_node` also removes
+incident edges. On conflict, reread and reconcile before retrying.
+
+Conditions reuse `equals|contains|exists` over query, header or a top-level JSON
+body field. Query matches any repeated value; header names ignore case and use
+the first value in fixture order. Empty query keys exist; empty header values
+do not. Body `exists` includes null/object/array values, while equals/contains
+compare only rendered strings, numbers and booleans. `bodyJSON` is optional
+exact JSON text: absent differs from `"null"`; malformed JSON is a fixture error.
+Numbers retain their spelling: `1`, `1.0`, `1e0` differ, and integers above 2^53
+stay exact. This logical fixture differs from live HTTP body capture.
+
+Graphs have up to 100 nodes/200 edges and 20 rules per API. A valid graph is an
+acyclic graph with one start, both condition exits, reachable nodes and terminal
+responses/fallbacks. Incomplete graphs remain saveable; unrelated incomplete
+rules do not block selected-rule simulation. Duplicate operation bindings do.
+Body texts are ≤64 KiB; total delay on every path is ≤30000 ms and is calculated
+without sleeping. Static responses support 200–599, JSON media types and safe
+headers. 204/205/304 and HEAD require absent body. Simulation has no entity,
+session, traffic or revision side effects, and 201 does not create an entity.
+### Apply a rule to the draft HTTP mock
+
+Save the source graph, read the current API version, then call:
+
+```json
+{"designId":1,"ruleId":"header-check","expectedVersion":2}
+```
+
+Use that input with `apply_response_rule`. It copies the saved graph into the
+separate `x-mocker-response-rules-execution` envelope and creates an API revision.
+The draft mock now executes the copy. `get_response_rule_execution {designId:1}`
+reports copies as `current`, `outdated`, or `missing` relative to authoring data.
+Later graph edits need reapply. `unapply_response_rule` takes the same fields and
+removes execution without deleting the graph; it also removes orphan copies.
+Every write checks CAS, even a no-op. Reread and reconcile after 409 or a lost response.
+
+The published mock receives the frozen execution copies through ordinary API
+review/publication; MCP cannot bypass its UI-only approval. API Restore restores
+execution too. Full-spec bundle export/import and fork preserve copies. Workspace
+checkpoints/scenarios do not rebind historical specs; their existing overrides
+can mask the current graph. Directly editing the execution extension is also an
+explicit configuration change, subject to the same validation.
+
+Routing and layers still apply: custom routes, active routeOff, session forced
+status/fail-next, and active composed workspace/scenario override rows take
+precedence. Even an active delay-only override masks the whole spec graph;
+OverrideOn=false exposes it. Otherwise graph response precedes Lua, generation,
+assets and resource writes. A static response, including 201, creates no entity
+and bypasses response envelopes; fallback continues ordinary handling.
+
+Live delays are real: session delay wins, otherwise graph delay adds to effective
+workspace/scenario delay, capped at 30 seconds. Cancellation stops waiting.
+Accept is checked against the chosen media type; response-size and header/media
+safety limits still apply. GET rules also handle HEAD with no response body;
+separate HEAD-bound execution is refused.
+
+HTTP uses captured request input. GET/HEAD/DELETE and multipart bodies are not
+available, and the existing JSON/absent/text-plain media gate applies. Invalid,
+truncated, duplicate-key, over-64-KiB or over-depth-64 JSON makes body predicates
+false and adds a bounded traffic note; it does not invent a route-wide 400.
+Supported valid JSON uses the same exact-number decoder as simulation. Network
+headers/query values do not acquire the stricter authoring fixture field limits.
+Simulation still rejects malformed explicit bodyJSON and allows method-independent
+fixtures. Only HTTP response/fallback/masking notes are recorded, not graph traces.
+
 ## Limits of the classic workspace workflow
 
 - **No request validation.** `reqSchema` is exported as `requestBody` and

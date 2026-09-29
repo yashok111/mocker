@@ -2,6 +2,7 @@ package apidesign
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
@@ -14,6 +15,7 @@ import (
 
 	"github.com/yashok111/mocker/internal/jsonx"
 	"github.com/yashok111/mocker/internal/resourcemap"
+	"github.com/yashok111/mocker/internal/responserules"
 	"github.com/yashok111/mocker/internal/schemamodel"
 	"github.com/yashok111/mocker/internal/specs"
 	"github.com/yashok111/mocker/internal/statediagram"
@@ -48,6 +50,12 @@ func (r *Repo) prepare(raw string) (*preparedDocument, error) {
 	}
 	if err := resourcemap.ValidateStored(root); err != nil {
 		return nil, resourceMapError(err)
+	}
+	if _, err := responserules.Decode(root); err != nil {
+		return nil, responseRuleError(err)
+	}
+	if _, err := responserules.CompileExecution(context.Background(), root); err != nil {
+		return nil, responseRuleError(err)
 	}
 	diagnostics := validateRoot(root)
 	if len(diagnostics) > 0 {

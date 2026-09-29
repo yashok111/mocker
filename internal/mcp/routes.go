@@ -51,6 +51,17 @@ import (
 var noRoute = []string{}
 
 var toolRoutes = map[string][]string{
+	"list_response_rules":             {"GET /api/designs/{id}/response-rules"},
+	"get_response_rule":               {"GET /api/designs/{id}/response-rules/{rid}"},
+	"create_response_rule":            {"POST /api/designs/{id}/response-rules"},
+	"save_response_rule":              {"PUT /api/designs/{id}/response-rules/{rid}"},
+	"delete_response_rule":            {"DELETE /api/designs/{id}/response-rules/{rid}"},
+	"apply_response_rule_commands":    {"POST /api/designs/{id}/response-rules/{rid}/commands"},
+	"validate_response_rule":          {"POST /api/designs/{id}/response-rules/{rid}/validate"},
+	"simulate_response_rule":          {"POST /api/designs/{id}/response-rules/{rid}/simulate"},
+	"get_response_rule_execution":     {"GET /api/designs/{id}/response-rule-execution"},
+	"apply_response_rule":             {"PUT /api/designs/{id}/response-rules/{rid}/execution"},
+	"unapply_response_rule":           {"DELETE /api/designs/{id}/response-rules/{rid}/execution"},
 	"get_api_resource_map":            {"GET /api/designs/{id}/resource-map"},
 	"preview_api_resource_map":        {"POST /api/designs/{id}/resource-map/preview"},
 	"apply_api_resource_map_commands": {"POST /api/designs/{id}/resource-map/commands"},
@@ -276,7 +287,7 @@ var toolRoutes = map[string][]string{
 // Pinned in routes_test.go so a tool
 // added without an entry here is caught by a test rather than by a 404 in
 // production.
-const toolCount = 130
+const toolCount = 141
 
 // toolPath resolves ONE call a tool makes into the (method, path) pair
 // loopback.do/call take.

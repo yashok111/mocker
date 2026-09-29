@@ -1,10 +1,12 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { useState } from "react";
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { ApiDesignerWorkbench } from "./ApiDesignerWorkbench";
 import { renderInRouter } from "@/test/render";
 import { json, route } from "@/test/http";
 import { reportFixture } from "../api-impact/fixtures.test-support";
+import { headerTemplate, writeRules } from "../response-rules/model";
 import type {
   ApiDesignDetail,
   ApiDesignReview,
@@ -25,6 +27,9 @@ vi.mock("../schema-model/SchemaGraph", () => ({
 vi.mock("../state-diagram/StateGraph", () => ({
   default: () => <div data-testid="state-graph" />,
 }));
+vi.mock("../response-rules/ResponseRuleGraph", () => ({
+  default: () => <div data-testid="response-rule-graph" />,
+}));
 
 vi.mock("../resource-map/ResourceGraph", () => ({
   default: () => <div data-testid="resource-graph" />,
@@ -41,6 +46,409 @@ afterEach(() => {
 });
 
 describe("ApiDesignerWorkbench", () => {
+  it("applies the saved response rule and removes it with the resulting version fence", async () => {
+    let current = responseRuleDetail();
+    let applied = false;
+    const fetchMock = route({
+      "GET /api/designs/12": () => json(200, current),
+      "GET /api/designs/12/diff?fromRevisionId=41&toRevisionId=41": () =>
+        json(200, diffFixture(current)),
+      "GET /api/designs/12/diff?fromRevisionId=41&toRevisionId=42": () =>
+        json(200, diffFixture(current)),
+      "GET /api/designs/12/diff?fromRevisionId=41&toRevisionId=43": () =>
+        json(200, diffFixture(current)),
+      "GET /api/designs/12/response-rule-execution": () =>
+        json(200, executionFixture(current, applied ? "current" : null)),
+      "PUT /api/designs/12/response-rules/auth/execution": () => {
+        current = responseRuleDetail({ version: 2, revisionId: 42 }, true);
+        applied = true;
+        return json(200, current);
+      },
+      "DELETE /api/designs/12/response-rules/auth/execution": () => {
+        current = responseRuleDetail({ version: 3, revisionId: 43 });
+        applied = false;
+        return json(200, current);
+      },
+    });
+    renderInRouter(<ApiDesignerWorkbench id={12} />);
+    await userEvent.click(await screen.findByRole("tab", { name: "Правила ответа" }));
+    const apply = await screen.findByRole("button", { name: "Применить к моку" });
+    await waitFor(() => expect(apply).toBeEnabled());
+    await userEvent.click(apply);
+    const remove = await screen.findByRole("button", { name: "Снять применение: Авторизация" });
+    await waitFor(() => expect(remove).toBeEnabled());
+    expect(screen.getByText("Черновик · версия 2")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Сохранить черновик" })).toBeDisabled();
+    await userEvent.click(remove);
+    await screen.findByText("Черновик · версия 3");
+    await waitFor(() =>
+      expect(screen.queryByRole("button", { name: /Снять применение:/ })).not.toBeInTheDocument(),
+    );
+    const writes = fetchMock.mock.calls.filter(
+      ([url, init]) => String(url).endsWith("/execution") && init?.method !== "GET",
+    );
+    expect(writes.map(([, init]) => [init?.method, JSON.parse(String(init?.body))])).toEqual([
+      ["PUT", { expectedVersion: 1 }],
+      ["DELETE", { expectedVersion: 2 }],
+    ]);
+  });
+
+  it("blocks runtime mutations for pending forms and unsaved API edits", async () => {
+    const detail = responseRuleDetail();
+    const fetchMock = route({
+      "GET /api/designs/12": () => json(200, detail),
+      "GET /api/designs/12/diff?fromRevisionId=41&toRevisionId=41": () =>
+        json(200, diffFixture(detail)),
+      "GET /api/designs/12/response-rule-execution": () =>
+        json(200, executionFixture(detail, "outdated")),
+    });
+    renderInRouter(<ApiDesignerWorkbench id={12} />);
+    await userEvent.click(await screen.findByRole("tab", { name: "Правила ответа" }));
+    const apply = await screen.findByRole("button", { name: "Применить повторно" });
+    const remove = screen.getByRole("button", { name: "Снять применение: Авторизация" });
+    await waitFor(() => expect(apply).toBeEnabled());
+    await userEvent.type(screen.getByLabelText("Название правила"), " изменено");
+    expect(apply).toBeDisabled();
+    expect(remove).toBeDisabled();
+    await userEvent.click(screen.getByRole("button", { name: "Применить свойства" }));
+    expect(apply).toBeDisabled();
+    expect(remove).toBeDisabled();
+    expect(
+      fetchMock.mock.calls.filter(
+        ([, init]) => init?.method === "PUT" || init?.method === "DELETE",
+      ),
+    ).toEqual([]);
+  });
+
+  it("lets an orphan execution copy be removed when no authoring rules remain", async () => {
+    const detail = detailFixture();
+    let removed = false;
+    const fetchMock = route({
+      "GET /api/designs/12": () => json(200, detail),
+      "GET /api/designs/12/diff?fromRevisionId=41&toRevisionId=41": () =>
+        json(200, diffFixture(detail)),
+      "GET /api/designs/12/diff?fromRevisionId=41&toRevisionId=42": () =>
+        json(200, diffFixture(detail)),
+      "GET /api/designs/12/response-rule-execution": () =>
+        json(
+          200,
+          executionFixture(
+            removed ? detailFixture({ version: 2, revisionId: 42 }) : detail,
+            removed ? null : "missing",
+          ),
+        ),
+      "DELETE /api/designs/12/response-rules/auth/execution": () => {
+        removed = true;
+        return json(200, detailFixture({ version: 2, revisionId: 42 }));
+      },
+    });
+    renderInRouter(<ApiDesignerWorkbench id={12} />);
+    await userEvent.click(await screen.findByRole("tab", { name: "Правила ответа" }));
+    const remove = await screen.findByRole("button", { name: "Снять применение: Авторизация" });
+    await waitFor(() => expect(remove).toBeEnabled());
+    expect(screen.getByText("Исходное правило удалено")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Применить к моку" })).not.toBeInTheDocument();
+    await userEvent.click(remove);
+    await waitFor(() =>
+      expect(fetchMock.mock.calls.some(([, init]) => init?.method === "DELETE")).toBe(true),
+    );
+    await screen.findByText("Черновик · версия 2");
+  });
+
+  it("preserves the old base when API text changes while a rule is being applied", async () => {
+    let current = responseRuleDetail();
+    const fetchMock = route({
+      "GET /api/designs/12": () => json(200, current),
+      "GET /api/designs/12/diff?fromRevisionId=41&toRevisionId=41": () =>
+        json(200, diffFixture(current)),
+      "GET /api/designs/12/diff?fromRevisionId=41&toRevisionId=42": () =>
+        json(200, diffFixture(current)),
+      "GET /api/designs/12/response-rule-execution": () =>
+        json(200, executionFixture(current, current.design.version > 1 ? "current" : null)),
+      "PUT /api/designs/12/draft": () =>
+        json(409, { error: { code: "design_conflict", message: "Changed" } }),
+    });
+    const finish = deferExecution(fetchMock);
+    renderInRouter(<ApiDesignerWorkbench id={12} />);
+    await userEvent.click(await screen.findByRole("tab", { name: "Правила ответа" }));
+    const apply = await screen.findByRole("button", { name: "Применить к моку" });
+    await waitFor(() => expect(apply).toBeEnabled());
+    await userEvent.click(apply);
+    await userEvent.click(screen.getByRole("tab", { name: "Редактор" }));
+    await userEvent.click(screen.getByRole("radio", { name: "Исходник" }));
+    const source = screen.getByRole("textbox", { name: "Исходник OpenAPI" });
+    await userEvent.clear(source);
+    source.focus();
+    const edited = current.draft.document.replace(
+      '"title": "Заказы API"',
+      '"title": "Локальные правки"',
+    );
+    await userEvent.paste(edited);
+    current = responseRuleDetail({ version: 2, revisionId: 42 }, true);
+    finish(json(200, current));
+    await screen.findByText("На сервере появилась версия 2");
+    expect(source).toHaveValue(edited);
+    await userEvent.type(screen.getByLabelText("Описание изменения"), "Локальная правка");
+    await userEvent.click(screen.getByRole("button", { name: "Сохранить черновик" }));
+    await waitFor(() =>
+      expect(
+        fetchMock.mock.calls.some(
+          ([url, init]) => String(url).endsWith("/draft") && init?.method === "PUT",
+        ),
+      ).toBe(true),
+    );
+    const save = fetchMock.mock.calls.find(
+      ([url, init]) => String(url).endsWith("/draft") && init?.method === "PUT",
+    );
+    expect(JSON.parse(String(save?.[1]?.body)).expectedVersion).toBe(1);
+    expect(JSON.parse(localStorage.getItem("mocker:api-design:12:draft")!).baseVersion).toBe(1);
+  });
+
+  it("does not replace newer detail cache with an older activation response", async () => {
+    let current = responseRuleDetail();
+    const fetchMock = route({
+      "GET /api/designs/12": () => json(200, current),
+      "GET /api/designs/12/diff?fromRevisionId=41&toRevisionId=41": () =>
+        json(200, diffFixture(current)),
+      "GET /api/designs/12/diff?fromRevisionId=41&toRevisionId=43": () =>
+        json(200, diffFixture(current)),
+      "GET /api/designs/12/response-rule-execution": () =>
+        json(200, executionFixture(current, current.design.version > 1 ? "outdated" : null)),
+    });
+    const finish = deferExecution(fetchMock);
+    const { queryClient } = renderInRouter(<ApiDesignerWorkbench id={12} />);
+    await userEvent.click(await screen.findByRole("tab", { name: "Правила ответа" }));
+    const apply = await screen.findByRole("button", { name: "Применить к моку" });
+    await waitFor(() => expect(apply).toBeEnabled());
+    await userEvent.click(apply);
+    current = responseRuleDetail({ version: 3, revisionId: 43 }, true);
+    queryClient.setQueryData(["/api/designs/12"], {
+      status: 200,
+      data: current,
+      headers: new Headers(),
+    });
+    await screen.findByText("Черновик · версия 3");
+    finish(json(200, responseRuleDetail({ version: 2, revisionId: 42 }, true)));
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Применить повторно" })).toBeEnabled(),
+    );
+    expect(screen.getByText("Черновик · версия 3")).toBeInTheDocument();
+    expect(
+      queryClient.getQueryData<{ data: ApiDesignDetail }>(["/api/designs/12"])?.data.design.version,
+    ).toBe(3);
+  });
+
+  it("accepts a matching polled activation result without creating a local conflict", async () => {
+    let current = responseRuleDetail();
+    const fetchMock = route({
+      "GET /api/designs/12": () => json(200, current),
+      "GET /api/designs/12/diff?fromRevisionId=41&toRevisionId=41": () =>
+        json(200, diffFixture(current)),
+      "GET /api/designs/12/diff?fromRevisionId=41&toRevisionId=42": () =>
+        json(200, diffFixture(current)),
+      "GET /api/designs/12/response-rule-execution": () =>
+        json(200, executionFixture(current, current.design.version > 1 ? "current" : null)),
+    });
+    const finish = deferExecution(fetchMock);
+    const { queryClient } = renderInRouter(<ApiDesignerWorkbench id={12} />);
+    await userEvent.click(await screen.findByRole("tab", { name: "Правила ответа" }));
+    const apply = await screen.findByRole("button", { name: "Применить к моку" });
+    await waitFor(() => expect(apply).toBeEnabled());
+    await userEvent.click(apply);
+    current = responseRuleDetail({ version: 2, revisionId: 42 }, true);
+    queryClient.setQueryData(["/api/designs/12"], {
+      status: 200,
+      data: current,
+      headers: new Headers(),
+    });
+    await screen.findByText("Черновик · версия 2");
+    finish(json(200, current));
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Применить повторно" })).toBeEnabled(),
+    );
+    expect(screen.queryByText("На сервере появилась версия 2")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Сохранить черновик" })).toBeDisabled();
+  });
+
+  it("preserves unapplied form drafts created during activation", async () => {
+    let current = responseRuleDetail();
+    const fetchMock = route({
+      "GET /api/designs/12": () => json(200, current),
+      "GET /api/designs/12/diff?fromRevisionId=41&toRevisionId=41": () =>
+        json(200, diffFixture(current)),
+      "GET /api/designs/12/diff?fromRevisionId=41&toRevisionId=42": () =>
+        json(200, diffFixture(current)),
+      "GET /api/designs/12/response-rule-execution": () =>
+        json(200, executionFixture(current, current.design.version > 1 ? "current" : null)),
+    });
+    const finish = deferExecution(fetchMock);
+    renderInRouter(<ApiDesignerWorkbench id={12} />);
+    await userEvent.click(await screen.findByRole("tab", { name: "Правила ответа" }));
+    const apply = await screen.findByRole("button", { name: "Применить к моку" });
+    await waitFor(() => expect(apply).toBeEnabled());
+    await userEvent.click(apply);
+    await userEvent.type(screen.getByLabelText("Название правила"), " локально");
+    current = responseRuleDetail({ version: 2, revisionId: 42 }, true);
+    finish(json(200, current));
+    await screen.findByText("На сервере появилась версия 2");
+    expect(screen.getByLabelText("Название правила")).toHaveValue("Авторизация локально");
+    expect(screen.getByRole("button", { name: "Сохранить черновик" })).toBeDisabled();
+    await waitFor(() => {
+      const saved = JSON.parse(localStorage.getItem("mocker:api-design:12:draft")!);
+      expect(saved.baseVersion).toBe(1);
+      expect(saved.formDrafts).toContain("Авторизация локально");
+    });
+  });
+
+  it("keeps the editor usable and blocks another apply after a version conflict", async () => {
+    const detail = responseRuleDetail();
+    route({
+      "GET /api/designs/12": () => json(200, detail),
+      "GET /api/designs/12/diff?fromRevisionId=41&toRevisionId=41": () =>
+        json(200, diffFixture(detail)),
+      "GET /api/designs/12/response-rule-execution": () =>
+        json(200, executionFixture(detail, null)),
+      "PUT /api/designs/12/response-rules/auth/execution": () =>
+        json(409, { error: { code: "design_conflict", message: "Changed" } }),
+    });
+    renderInRouter(<ApiDesignerWorkbench id={12} />);
+    await userEvent.click(await screen.findByRole("tab", { name: "Правила ответа" }));
+    const apply = await screen.findByRole("button", { name: "Применить к моку" });
+    await waitFor(() => expect(apply).toBeEnabled());
+    await userEvent.click(apply);
+    await screen.findByText("Конфликт версий");
+    expect(apply).toBeDisabled();
+    expect(screen.getByLabelText("Название правила")).toHaveValue("Авторизация");
+  });
+
+  it("ignores an activation response after switching to another API", async () => {
+    const first = responseRuleDetail();
+    const second = detailFixture({ title: "Другой API" });
+    second.design.id = 13;
+    second.design.name = "Другой API";
+    second.draft.designId = 13;
+    const fetchMock = route({
+      "GET /api/designs/12": () => json(200, first),
+      "GET /api/designs/13": () => json(200, second),
+      "GET /api/designs/12/diff?fromRevisionId=41&toRevisionId=41": () =>
+        json(200, diffFixture(first)),
+      "GET /api/designs/13/diff?fromRevisionId=41&toRevisionId=41": () =>
+        json(200, diffFixture(second)),
+      "GET /api/designs/12/response-rule-execution": () => json(200, executionFixture(first, null)),
+      "GET /api/designs/13/response-rule-execution": () =>
+        json(200, { ...executionFixture(second, null), designId: 13 }),
+    });
+    const finish = deferExecution(fetchMock);
+    function Switcher() {
+      const [id, setId] = useState(12);
+      return (
+        <>
+          <button onClick={() => setId(13)}>Другой API</button>
+          <ApiDesignerWorkbench id={id} />
+        </>
+      );
+    }
+    const { queryClient } = renderInRouter(<Switcher />);
+    await userEvent.click(await screen.findByRole("tab", { name: "Правила ответа" }));
+    const apply = await screen.findByRole("button", { name: "Применить к моку" });
+    await waitFor(() => expect(apply).toBeEnabled());
+    await userEvent.click(apply);
+    await userEvent.click(screen.getByRole("button", { name: "Другой API" }));
+    await screen.findByRole("heading", { name: "Другой API", level: 1 });
+    finish(json(200, responseRuleDetail({ version: 2, revisionId: 42 }, true)));
+    await userEvent.click(screen.getByRole("tab", { name: "Правила ответа" }));
+    await screen.findByText("Выберите ответ по условиям запроса");
+    expect(
+      queryClient.getQueryData<{ data: ApiDesignDetail }>(["/api/designs/13"])?.data.design.id,
+    ).toBe(13);
+    expect(screen.queryByRole("button", { name: /Снять применение:/ })).not.toBeInTheDocument();
+  });
+  it("discards response rule edits and pending forms through the common API buffer", async () => {
+    const detail = detailFixture();
+    vi.stubGlobal(
+      "confirm",
+      vi.fn(() => true),
+    );
+    route({
+      "GET /api/designs/12": () => json(200, detail),
+      "GET /api/designs/12/diff?fromRevisionId=41&toRevisionId=41": () =>
+        json(200, diffFixture(detail)),
+    });
+    renderInRouter(<ApiDesignerWorkbench id={12} />);
+    await userEvent.click(await screen.findByRole("tab", { name: "Правила ответа" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Новое правило" }));
+    await userEvent.selectOptions(screen.getByLabelText("Операция правила"), "GET /orders");
+    await userEvent.click(screen.getByRole("button", { name: "Отменить изменения API" }));
+    expect(await screen.findByText("Выберите ответ по условиям запроса")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Сохранить черновик" })).toBeDisabled();
+    expect(localStorage.getItem("mocker:api-design:12:draft")).toBeNull();
+  });
+  it("keeps response rule inspector drafts across tabs and saves the shared buffer", async () => {
+    const detail = detailFixture();
+    const fetchMock = route({
+      "GET /api/designs/12": () => json(200, detail),
+      "GET /api/designs/12/diff?fromRevisionId=41&toRevisionId=41": () =>
+        json(200, diffFixture(detail)),
+      "GET /api/designs/12/diff?fromRevisionId=41&toRevisionId=42": () =>
+        json(200, diffFixture(detail)),
+      "PUT /api/designs/12/draft": () => {
+        const saved = detailFixture({ version: 2, revisionId: 42 });
+        saved.draft.document = JSON.parse(String(fetchMock.mock.calls.at(-1)?.[1]?.body)).document;
+        return json(200, saved);
+      },
+    });
+    renderInRouter(<ApiDesignerWorkbench id={12} />);
+    await userEvent.click(await screen.findByRole("tab", { name: "Правила ответа" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Проверка заголовка" }));
+    await userEvent.selectOptions(screen.getByLabelText("Операция правила"), "GET /orders");
+    expect(screen.getByRole("button", { name: "Сохранить черновик" })).toBeDisabled();
+    await userEvent.click(screen.getByRole("tab", { name: "Документация" }));
+    await userEvent.click(screen.getByRole("tab", { name: "Правила ответа" }));
+    expect(await screen.findByLabelText("Операция правила")).toHaveValue("GET /orders");
+    await userEvent.click(screen.getByRole("button", { name: "Применить свойства" }));
+    await userEvent.click(screen.getByRole("button", { name: "Сохранить черновик" }));
+    await waitFor(() =>
+      expect(fetchMock.mock.calls.some(([, init]) => init?.method === "PUT")).toBe(true),
+    );
+    const body = JSON.parse(
+      String(fetchMock.mock.calls.find(([, init]) => init?.method === "PUT")?.[1]?.body),
+    );
+    expect(body.expectedVersion).toBe(1);
+    expect(JSON.parse(body.document)["x-mocker-response-rules"].rules[0].binding).toEqual({
+      method: "GET",
+      path: "/orders",
+    });
+    expect(fetchMock.mock.calls.some(([url]) => String(url).includes("/response-rules/"))).toBe(
+      false,
+    );
+  });
+  it("evaluates an unsafe numeric buffer unchanged while visual rule edits are blocked", async () => {
+    const detail = detailFixture();
+    const rule = { ...headerTemplate(), id: "auth" };
+    detail.draft.document = writeRules(detail.draft.document, [rule]).replace(
+      '"version": "1"',
+      '"version": "1", "x-number":9007199254740993',
+    );
+    const fetchMock = route({
+      "GET /api/designs/12": () => json(200, detail),
+      "GET /api/designs/12/diff?fromRevisionId=41&toRevisionId=41": () =>
+        json(200, diffFixture(detail)),
+      "POST /api/designs/12/response-rules/auth/validate": () =>
+        json(200, {
+          valid: true,
+          diagnostics: [],
+          diagnosticsTruncated: false,
+          source: { designId: 12, ruleId: "auth", kind: "proposal", documentHash: "sha256:exact" },
+        }),
+    });
+    renderInRouter(<ApiDesignerWorkbench id={12} />);
+    await userEvent.click(await screen.findByRole("tab", { name: "Правила ответа" }));
+    expect(await screen.findByRole("button", { name: "Новое правило" })).toBeDisabled();
+    await userEvent.click(screen.getByRole("button", { name: "Проверить" }));
+    await screen.findByText("Проверка пройдена");
+    const sent = fetchMock.mock.calls.find(([url]) => String(url).endsWith("/validate"));
+    expect(JSON.parse(String(sent?.[1]?.body)).document).toBe(detail.draft.document);
+  });
   it("analyzes the frozen local base and exact unsafe number buffer after observing a newer draft", async () => {
     const base = detailFixture();
     const buffer = base.draft.document.replace(
@@ -1121,6 +1529,61 @@ function diffFixture(detail: ReturnType<typeof detailFixture>) {
     to: detail.draft,
     changes: [],
   };
+}
+
+function responseRuleDetail(options: DetailOptions = {}, applied = false) {
+  const detail = detailFixture(options);
+  const rule = {
+    ...headerTemplate(),
+    id: "auth",
+    name: "Авторизация",
+    binding: { method: "GET", path: "/orders" },
+  };
+  detail.draft.document = writeRules(detail.draft.document, [rule]);
+  if (applied) {
+    const document = JSON.parse(detail.draft.document);
+    document["x-mocker-response-rules-execution"] = { formatVersion: 1, rules: [rule] };
+    detail.draft.document = JSON.stringify(document, null, 2);
+  }
+  return detail;
+}
+
+function executionFixture(
+  detail: ApiDesignDetail,
+  state: "current" | "outdated" | "missing" | null,
+) {
+  return {
+    designId: detail.design.id,
+    version: detail.design.version,
+    revisionId: detail.draft.id,
+    rules:
+      state === null
+        ? []
+        : [
+            {
+              ruleId: "auth",
+              name: "Авторизация",
+              binding: { method: "GET", path: "/orders" },
+              state,
+            },
+          ],
+  };
+}
+
+function deferExecution(fetchMock: ReturnType<typeof route>) {
+  const initial = fetchMock.getMockImplementation()!;
+  let finish: (response: Response) => void = () => {
+    throw new Error("Execution request has not started");
+  };
+  fetchMock.mockImplementation((input, init) => {
+    if (String(input).endsWith("/response-rules/auth/execution") && init?.method === "PUT") {
+      return new Promise<Response>((resolve) => {
+        finish = resolve;
+      });
+    }
+    return initial(input, init);
+  });
+  return (response: Response) => finish(response);
 }
 
 async function waitForStoredDraft(): Promise<void> {

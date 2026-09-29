@@ -3,6 +3,7 @@ import {
   Suspense,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -66,6 +67,12 @@ import {
   useSaveApiDesignDraft,
   useValidateApiDesign,
 } from "@/api/generated/api-designs/api-designs.ts";
+import {
+  getGetResponseRuleExecutionQueryKey,
+  useApplyResponseRule,
+  useGetResponseRuleExecution,
+  useUnapplyResponseRule,
+} from "@/api/generated/response-rules/response-rules";
 import type {
   ApiDesignChange,
   ApiDesignChangeSet,
@@ -101,6 +108,7 @@ import classes from "./ApiDesigner.module.css";
 
 const POLL_MS = 5_000;
 const StateDiagramEditor = lazy(() => import("../state-diagram/StateDiagramEditor"));
+const ResponseRulesEditor = lazy(() => import("../response-rules/ResponseRulesEditor"));
 const SchemaModelEditor = lazy(() => import("../schema-model/SchemaModelEditor"));
 const ResourceMapEditor = lazy(() => import("../resource-map/ResourceMapEditor"));
 const ImpactPanel = lazy(() => import("../api-impact/ImpactPanel"));
@@ -111,6 +119,7 @@ type CanvasView =
   | "diagram"
   | "resources"
   | "states"
+  | "response-rules"
   | "impact"
   | "compare"
   | "review";
@@ -133,6 +142,10 @@ export function ApiDesignerWorkbench({
   id: number;
   reviewId?: number;
 }): ReactElement {
+  return <Workbench key={id} id={id} reviewId={reviewId} />;
+}
+
+function Workbench({ id, reviewId }: { id: number; reviewId?: number }): ReactElement {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const narrow = useMediaQuery("(max-width: 62em)", false, { getInitialValueInEffect: false });
@@ -167,6 +180,10 @@ export function ApiDesignerWorkbench({
   const [comparisonToRevisionId, setComparisonToRevisionId] = useState<number | null>(null);
   const [focusPointer, setFocusPointer] = useState<string>();
   const [resourceLayoutPending, setResourceLayoutPending] = useState(false);
+  const [executionError, setExecutionError] = useState<string | null>(null);
+  const [executionPending, setExecutionPending] = useState(false);
+  const executionRequest = useRef({ alive: true, generation: 0, busy: false });
+  const latestVersion = useRef(0);
   const initialized = useRef(false);
   const bufferRef = useRef(buffer);
   const submittedFormDrafts = useRef("{}");
@@ -177,9 +194,18 @@ export function ApiDesignerWorkbench({
     draftStore.getSnapshot,
   );
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     bufferRef.current = buffer;
   }, [buffer]);
+
+  useLayoutEffect(() => {
+    const request = executionRequest.current;
+    request.alive = true;
+    return () => {
+      request.alive = false;
+      request.generation += 1;
+    };
+  }, []);
 
   const detailQuery = useGetApiDesign(id, {
     query: {
@@ -189,6 +215,9 @@ export function ApiDesignerWorkbench({
     },
   });
   const detail = detailQuery.data?.status === 200 ? detailQuery.data.data : null;
+  useLayoutEffect(() => {
+    latestVersion.current = Math.max(latestVersion.current, detail?.design.version ?? 0);
+  }, [detail]);
   const documentDirty = baseDocument !== "" && buffer !== baseDocument;
   const dirty = documentDirty || formDraft.dirty;
 
@@ -368,6 +397,101 @@ export function ApiDesignerWorkbench({
       },
     },
   });
+
+  const applyRule = useApplyResponseRule();
+  const unapplyRule = useUnapplyResponseRule();
+  const executionQuery = useGetResponseRuleExecution(id, {
+    query: {
+      queryKey: [...getGetResponseRuleExecutionQueryKey(id), detail?.design.version ?? 0],
+      enabled: detail !== null && view === "response-rules",
+      refetchInterval: POLL_MS,
+      retry: false,
+    },
+  });
+  const execution = executionQuery.data?.status === 200 ? executionQuery.data.data : null;
+  const executionMatchesDetail =
+    execution?.designId === id &&
+    execution.version === detail?.design.version &&
+    execution.revisionId === detail?.draft.id;
+  useEffect(() => {
+    if (execution?.designId === id && execution.version > (detail?.design.version ?? 0)) {
+      void queryClient.invalidateQueries({ queryKey: getGetApiDesignQueryKey(id) });
+    }
+  }, [detail?.design.version, execution, id, queryClient]);
+  const executionBlocked =
+    conflict ||
+    externalDetail !== null ||
+    (detail !== null && detail.design.version !== baseVersion)
+      ? "Сначала разрешите конфликт с серверной версией API."
+      : dirty
+        ? "Сохраните изменения API и примените или отмените изменения форм перед применением правила."
+        : executionPending ||
+            save.isPending ||
+            restoreRevision.isPending ||
+            createChangeSet.isPending ||
+            closeChangeSet.isPending ||
+            requestReview.isPending ||
+            publishReview.isPending
+          ? "Дождитесь завершения изменения API."
+          : !executionMatchesDetail
+            ? "Ожидаем актуальное состояние правил мока."
+            : null;
+
+  async function changeExecution(ruleId: string, apply: boolean): Promise<void> {
+    const request = executionRequest.current;
+    if (executionBlocked || request.busy || !request.alive) return;
+    request.busy = true;
+    const generation = ++request.generation;
+    const submittedDocument = bufferRef.current;
+    const submittedDrafts = draftStore.serialize();
+    const isCurrent = () => request.alive && request.generation === generation;
+    setExecutionPending(true);
+    setExecutionError(null);
+    try {
+      const variables = { id, rid: ruleId, data: { expectedVersion: baseVersion } };
+      const response = apply
+        ? await applyRule.mutateAsync(variables)
+        : await unapplyRule.mutateAsync(variables);
+      if (!isCurrent()) return;
+      if (response.status !== 200 || response.data.design.id !== id) {
+        throw new Error("Не удалось обновить применение правила");
+      }
+      const key = getGetApiDesignQueryKey(id);
+      await queryClient.cancelQueries({ queryKey: key });
+      if (!isCurrent()) return;
+      const cached = queryClient.getQueryData<{ status: number; data: ApiDesignDetail }>(key);
+      const newest = Math.max(
+        latestVersion.current,
+        cached?.status === 200 ? cached.data.design.version : 0,
+      );
+      if (response.data.design.version >= newest) {
+        if (
+          (bufferRef.current === submittedDocument && draftStore.serialize() === submittedDrafts) ||
+          (bufferRef.current === response.data.draft.document && !draftStore.getSnapshot().dirty)
+        ) {
+          adoptServer(response.data);
+        } else {
+          // Keep the old fence: this buffer does not contain the execution edit.
+          // Advancing its base would let the next Save silently undo Apply/Remove.
+          setExternalDetail(response.data);
+        }
+        queryClient.setQueryData(key, response);
+      }
+      void queryClient.invalidateQueries({ queryKey: getGetResponseRuleExecutionQueryKey(id) });
+    } catch (error) {
+      if (!isCurrent()) return;
+      setExecutionError(describeApiFailureDetailed(error));
+      if (error instanceof ApiFailure && error.code === "design_conflict") {
+        setConflict(true);
+        void detailQuery.refetch();
+      }
+    } finally {
+      if (isCurrent()) {
+        request.busy = false;
+        setExecutionPending(false);
+      }
+    }
+  }
 
   const activeReviewId = selectedReviewId ?? reviewId;
   const reviewFromServer = findReview(detail, activeReviewId);
@@ -741,6 +865,7 @@ export function ApiDesignerWorkbench({
               <Tabs.Tab value="diagram">Диаграмма</Tabs.Tab>
               <Tabs.Tab value="resources">Ресурсы</Tabs.Tab>
               <Tabs.Tab value="states">Состояния</Tabs.Tab>
+              <Tabs.Tab value="response-rules">Правила ответа</Tabs.Tab>
               <Tabs.Tab value="impact">Влияние</Tabs.Tab>
               <Tabs.Tab value="compare">Сравнение</Tabs.Tab>
               <Tabs.Tab value="review">Проверка</Tabs.Tab>
@@ -931,6 +1056,89 @@ export function ApiDesignerWorkbench({
                     document={parsed.document}
                     blocked={formDraft.dirty || unsafeNumber}
                     onChange={(next) => setBuffer(JSON.stringify(next, null, 2))}
+                  />
+                </Suspense>
+              )}
+            </Tabs.Panel>
+            <Tabs.Panel value="response-rules" className={classes.canvasPanel}>
+              <Group justify="space-between" mb="md">
+                <Text size="sm" c="dimmed">
+                  Правила сохраняются вместе с черновиком API.
+                </Text>
+                <Group gap="xs">
+                  <Button
+                    variant="subtle"
+                    disabled={!dirty}
+                    onClick={() => {
+                      if (window.confirm("Отменить все несохранённые изменения API и формы?")) {
+                        setBuffer(baseDocument);
+                        draftStore.clear();
+                      }
+                    }}
+                  >
+                    Отменить изменения API
+                  </Button>
+                  <Button
+                    leftSection={<IconDeviceFloppy size={16} />}
+                    loading={save.isPending}
+                    disabled={!dirty || parsed.error !== null || formDraft.dirty || unsafeNumber}
+                    onClick={() => {
+                      submittedFormDrafts.current = draftStore.serialize();
+                      save.mutate({
+                        id,
+                        data: {
+                          expectedVersion: baseVersion,
+                          document: buffer,
+                          summary: summary.trim() || "Изменение правил ответа",
+                          ...(activeChangeSetId === null ? {} : { changeSetId: activeChangeSetId }),
+                        },
+                      });
+                    }}
+                  >
+                    Сохранить черновик
+                  </Button>
+                </Group>
+              </Group>
+              {save.isError && !conflict && (
+                <Alert color="red" role="alert" mb="md">
+                  {describeApiFailureDetailed(save.error)}
+                </Alert>
+              )}
+              {view === "response-rules" && (
+                <Suspense fallback={<Text>Загрузка правил ответа…</Text>}>
+                  <ResponseRulesEditor
+                    designId={id}
+                    document={buffer}
+                    execution={{
+                      data: executionMatchesDetail ? execution : null,
+                      blocked: executionBlocked,
+                      pending: executionPending,
+                      error:
+                        executionError ??
+                        (executionQuery.isError
+                          ? describeApiFailureDetailed(executionQuery.error)
+                          : null),
+                      onApply: (ruleId) => void changeExecution(ruleId, true),
+                      onRemove: (ruleId) => void changeExecution(ruleId, false),
+                      onRefresh: () => {
+                        void detailQuery.refetch();
+                        void executionQuery.refetch();
+                      },
+                    }}
+                    blocked={
+                      unsafeNumber
+                        ? "Документ содержит числа вне точности JavaScript. Изменяйте его в исходнике или через MCP; проверка и симуляция используют точный текст."
+                        : null
+                    }
+                    formStore={draftStore}
+                    onChange={setBuffer}
+                    onSource={(pointer) => {
+                      setSourcePointer(pointer);
+                      setOperationSourcePointer(undefined);
+                      setSelection({ kind: "document" });
+                      setEditorMode("source");
+                      setView("editor");
+                    }}
                   />
                 </Suspense>
               )}

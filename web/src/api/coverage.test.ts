@@ -54,7 +54,7 @@ const HTTP_METHODS = ["get", "post", "put", "delete", "patch"] as const;
 // agree with anything that file said. Every test below that wants to name it
 // reads it from here, which is the one thing the old title did not do — it
 // said "64" while the assertion said 70, for four slices running.
-const ROUTE_COUNT = 118;
+const ROUTE_COUNT = 129;
 
 interface RouteInfo {
   method: string;
@@ -118,6 +118,18 @@ function loadRoutes(): RouteInfo[] {
 // has a caller. An exemption is a decision on the record and so is its
 // withdrawal, in this comment.
 const EXEMPT: Record<string, string> = {
+  "GET /api/designs/{id}/response-rules":
+    "list_response_rules reads saved rules for MCP; the UI reads the shared API document buffer.",
+  "GET /api/designs/{id}/response-rules/{rid}":
+    "get_response_rule reads a saved rule for MCP; the UI reads the shared API document buffer.",
+  "POST /api/designs/{id}/response-rules":
+    "create_response_rule persists version-fenced MCP edits; the UI uses the common workbench Save.",
+  "PUT /api/designs/{id}/response-rules/{rid}":
+    "save_response_rule persists version-fenced MCP edits; the UI uses the common workbench Save.",
+  "DELETE /api/designs/{id}/response-rules/{rid}":
+    "delete_response_rule persists version-fenced MCP edits; the UI uses the common workbench Save.",
+  "POST /api/designs/{id}/response-rules/{rid}/commands":
+    "apply_response_rule_commands persists atomic MCP edits; the UI uses the common workbench Save.",
   "POST /api/designs/{id}/resource-map/commands":
     "apply_api_resource_map_commands persists version-fenced MCP edits; UI previews its unsaved document and uses the shared workbench Save.",
   "GET /api/design-scenarios/{id}/data-flow":

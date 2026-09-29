@@ -20,6 +20,7 @@ import (
 	"github.com/yashok111/mocker/internal/overrides"
 	"github.com/yashok111/mocker/internal/recipes"
 	"github.com/yashok111/mocker/internal/resources"
+	"github.com/yashok111/mocker/internal/responserules"
 	"github.com/yashok111/mocker/internal/router"
 	"github.com/yashok111/mocker/internal/workspaces"
 )
@@ -51,6 +52,9 @@ type runtime struct {
 	gen      *gen.Generator
 	variants map[int64][]gen.ResponseVariant
 	settings domain.Settings
+	// Only explicit immutable execution copies participate in serving. The
+	// authoring extension remains passive, even when the draft spec changes.
+	responseRules map[string]*responserules.Program
 	// resolver is the one the generator walks nested $refs through (the
 	// spec's, or the skeleton's when no spec is bound). Kept on the runtime
 	// since A19 because mock.generate must chase a ROOT $ref and check the
@@ -337,6 +341,7 @@ func (p *Plane) buildRuntime(ctx context.Context, ws *workspaces.Workspace, draf
 		customInline:   customInline,
 		routes:         allRoutes,
 		resources:      resourcesByFamily,
+		responseRules:  spec.responseRules,
 	}, nil
 }
 
@@ -410,6 +415,7 @@ type specLayer struct {
 	variants       map[int64][]gen.ResponseVariant
 	routes         []router.Route
 	patchedSchemas map[patchedSchemaKey]map[string]any
+	responseRules  map[string]*responserules.Program
 }
 
 // buildGeneratorForWorkspace is phase 2: the document, its resolver, the
@@ -454,6 +460,20 @@ func (p *Plane) buildGeneratorForWorkspace(ctx context.Context, ws *workspaces.W
 	if err != nil {
 		return specLayer{}, fmt.Errorf("load routes for spec %d: %w", specID, err)
 	}
+	// Reuse the already decoded UseNumber document. This work belongs to
+	// the revision-keyed build, never the per-request predicate path.
+	value, err := resolver.Resolve("#")
+	if err != nil {
+		return specLayer{}, fmt.Errorf("load response rule root for spec %d: %w", specID, err)
+	}
+	root, ok := value.(map[string]any)
+	if !ok {
+		return specLayer{}, fmt.Errorf("response rule root for spec %d is not an object", specID)
+	}
+	responseRules, err := responserules.CompileExecution(ctx, root)
+	if err != nil {
+		return specLayer{}, fmt.Errorf("compile response rules for spec %d: %w", specID, err)
+	}
 
 	// D1/D2(6): the patch is parsed AND APPLIED here — the TAIL of this
 	// function, after specRoutes is loaded and before it returns — because
@@ -471,6 +491,7 @@ func (p *Plane) buildGeneratorForWorkspace(ctx context.Context, ws *workspaces.W
 		variants:       variants,
 		routes:         specRoutes,
 		patchedSchemas: patchedSchemas,
+		responseRules:  responseRules,
 	}, nil
 }
 

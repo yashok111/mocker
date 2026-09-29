@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/yashok111/mocker/internal/openapi"
+	"github.com/yashok111/mocker/internal/responserules"
 )
 
 // ImportInput is what a caller supplies to [Repo.Import]. Everything else
@@ -106,6 +107,12 @@ func (r *Repo) PrepareImport(in ImportInput) (*PreparedImport, error) {
 	doc, report, err := openapi.Load(in.Document)
 	if err != nil {
 		return nil, err
+	}
+	// Executable copies travel with immutable specs, including bundle imports.
+	// Validate here as well as in the design editor so imports cannot bypass
+	// the graph safety gate. Passive authoring metadata remains unrestricted.
+	if _, err := responserules.CompileExecution(context.Background(), doc.Root()); err != nil {
+		return nil, fmt.Errorf("%w: %w", ErrNotADocument, err)
 	}
 	resolver := openapi.NewResolver(doc, openapi.DefaultRefBudget)
 	ops, responses := Index(doc, resolver, report)

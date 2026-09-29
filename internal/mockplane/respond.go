@@ -139,6 +139,9 @@ func (p *Plane) serveGenerated(w http.ResponseWriter, r *http.Request, ws *works
 	overrideActive := hasRow && row.OverrideOn
 
 	if overrideActive && row.RouteOff {
+		if program := rt.responseRules[overrides.OpKey(route.Method, route.Path)]; program != nil {
+			markResponseRule(r, program.ID(), "response_rule_shadowed_route_off", false)
+		}
 		// The exact shape serveRoute already answers when nothing in the
 		// table matches at all (routes.go's serveNoRoute) — never a new,
 		// distinguishable "this route was disabled" body: a client that
@@ -165,6 +168,15 @@ func (p *Plane) serveGenerated(w http.ResponseWriter, r *http.Request, ws *works
 		return // request context ended while parked: nothing written yet
 	}
 
+	ruleResult, err := p.evaluateResponseRule(r, rt, route, overrideActive, liveEffect)
+	if err != nil {
+		if r.Context().Err() == nil {
+			p.log.Error("evaluate response rule", "workspace", ws.Slug, "method", route.Method, "path", route.Path)
+			httpx.Err(w, http.StatusInternalServerError, "response_rule_failed", "response rule evaluation failed")
+		}
+		return
+	}
+
 	// row is nil whenever there is no override row at all — row.DelayMs
 	// would panic on every request to an operation without one, so
 	// rowDelayMs stays nil except when overrideActive actually gates a real
@@ -174,9 +186,13 @@ func (p *Plane) serveGenerated(w http.ResponseWriter, r *http.Request, ws *works
 	if overrideActive {
 		rowDelayMs = row.DelayMs
 	}
-	delayMs := effectiveDelayMs(liveEffect.DelayMs, rowDelayMs, rt.settings.DelayMs)
+	delayMs := responseRuleDelayMs(liveEffect.DelayMs, rowDelayMs, rt.settings.DelayMs, ruleResult)
 	if !awaitDelay(r.Context(), delayMs) {
 		return // context canceled/timed out mid-sleep: nothing left to write
+	}
+	if ruleResult != nil && ruleResult.Response != nil {
+		p.writeResponseRule(w, r, ws, route, *ruleResult.Response)
+		return
 	}
 
 	rv, ok := p.resolveVariant(ws, rt, route, row, hasRow, overridesInputFor(r), nil, liveEffect)
