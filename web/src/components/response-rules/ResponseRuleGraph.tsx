@@ -3,7 +3,10 @@ import { useEffect, useRef } from "react";
 import type { ResponseRuleStep } from "@/api/generated/schemas";
 import { canvasTextMeasurer, wrapCanvasText } from "../design-canvas/canvasText";
 import DiagramViewport from "../diagram/DiagramViewport";
+import { installCanvasWheelZoom } from "../diagram/canvasControls";
 import { createInitialFit } from "../diagram/initialFit";
+import type { DiagramLayoutResult } from "../diagram/elkLayout";
+import { applyDiagramRoutes } from "../diagram/elkX6";
 import {
   diagramCardBody,
   diagramEdgeLabel,
@@ -17,6 +20,8 @@ import styles from "./ResponseRules.module.css";
 
 type Props = {
   rule: ResponseRule;
+  layout?: DiagramLayoutResult | null;
+  fitRequest?: number;
   selection: GraphSelection;
   trace?: ResponseRuleStep[];
   blocked?: boolean;
@@ -30,6 +35,8 @@ export default function ResponseRuleGraph(props: Props) {
   const graphRef = useRef<Graph | null>(null);
   const current = useRef(props);
   const fitRef = useRef<ReturnType<typeof createInitialFit> | null>(null);
+  const appliedLayout = useRef<DiagramLayoutResult | null>(null);
+  const previousFitRequest = useRef(props.fitRequest);
   useEffect(() => {
     current.current = props;
   });
@@ -37,7 +44,7 @@ export default function ResponseRuleGraph(props: Props) {
     if (!host.current) return;
     const graph = new Graph({
       container: host.current,
-      ...diagramOptions(0.15),
+      ...diagramOptions(),
       async: false,
       interacting: () => ({
         nodeMovable: !current.current.blocked,
@@ -68,6 +75,7 @@ export default function ResponseRuleGraph(props: Props) {
       },
     });
     graphRef.current = graph;
+    const removeWheelZoom = installCanvasWheelZoom(graph, host.current);
     const fit = createInitialFit(graph, host.current, 48);
     fitRef.current = fit;
     graph.on("resize", () => fit(current.current.rule.id));
@@ -101,6 +109,7 @@ export default function ResponseRuleGraph(props: Props) {
         current.current.onConnect(from.slice(5), port, to.slice(5));
     });
     return () => {
+      removeWheelZoom();
       graph.dispose();
       graphRef.current = null;
       fitRef.current = null;
@@ -229,6 +238,19 @@ export default function ResponseRuleGraph(props: Props) {
     }
     fitRef.current?.(rule.id);
   }, [rule, selection, trace]);
+  useEffect(() => {
+    const graph = graphRef.current;
+    if (!graph) return;
+    // Preserve live drag coordinates while an asynchronous layout finishes.
+    const matching = props.layout && applyDiagramRoutes(graph, props.layout);
+    if (
+      (matching && appliedLayout.current !== props.layout) ||
+      previousFitRequest.current !== props.fitRequest
+    )
+      graph.zoomToFit({ padding: 48, maxScale: 1 });
+    previousFitRequest.current = props.fitRequest;
+    appliedLayout.current = matching ? props.layout! : null;
+  }, [rule, selection, trace, props.layout, props.fitRequest]);
   return (
     <DiagramViewport
       hostRef={host}

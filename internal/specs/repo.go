@@ -137,10 +137,15 @@ type Repo struct {
 	// reportMu guards reportCache, [Repo.Report]'s per-spec memo (see that
 	// method's doc comment for why caching it is safe).
 	reportMu    sync.Mutex
-	reportCache map[int64]*openapi.Report
+	reportCache map[int64]cachedReport
+}
+
+type cachedReport struct {
+	hash   string
+	report *openapi.Report
 }
 
 // NewRepo builds a Repo over db, using cfg for the import size limit.
 func NewRepo(db *store.DB, cfg *config.Config) *Repo {
-	return &Repo{db: db, cfg: cfg, reportCache: make(map[int64]*openapi.Report)}
+	return &Repo{db: db, cfg: cfg, reportCache: make(map[int64]cachedReport)}
 }

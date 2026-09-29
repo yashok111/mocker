@@ -160,6 +160,117 @@ func TestRepo_Import_hashDedup(t *testing.T) {
 	}
 }
 
+func TestRepo_RefreshMissingInheritedOperationsPreservesRows(t *testing.T) {
+	const raw = `{"openapi":"3.0.3","info":{"title":"T","version":"1"},"paths":{"/one":{"$ref":"#/components/pathItems/Shared"},"/two":{"$ref":"#/components/pathItems/Shared"}},"components":{"pathItems":{"Shared":{"get":{"responses":{"200":{"description":"ok","content":{"application/json":{"schema":{"type":"object"},"example":{"kind":"shared"}}}}}}}}}}`
+	for _, refresh := range []string{"duplicate import", "rederive"} {
+		t.Run(refresh, func(t *testing.T) {
+			repo, db := newRepo(t)
+			in := specs.ImportInput{Source: "upload", Document: []byte(raw)}
+			first, err := repo.Import(t.Context(), in)
+			if err != nil {
+				t.Fatal(err)
+			}
+			attachWorkspace(t, db, "alias", first.Spec.ID)
+			var keepID int64
+			if err := db.R.QueryRowContext(t.Context(), `SELECT id FROM operations WHERE spec_id = ? AND path = '/one'`, first.Spec.ID).Scan(&keepID); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := db.W.ExecContext(t.Context(), `INSERT INTO op_overrides(workspace_id,method,path,operation_id,responses,updated_at) VALUES (1,'GET','/one',?,'{}',1)`, keepID); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := db.W.ExecContext(t.Context(), `DELETE FROM operations WHERE spec_id = ? AND path = '/two'`, first.Spec.ID); err != nil {
+				t.Fatal(err)
+			}
+			if got := countRows(t, db, `SELECT COUNT(*) FROM operations WHERE spec_id = ?`, first.Spec.ID); got != 1 {
+				t.Fatalf("fixture rows = %d", got)
+			}
+			before, err := repo.Report(t.Context(), first.Spec.ID)
+			if err != nil || before.Operations != 1 {
+				t.Fatalf("cached report before refresh = %+v, %v", before, err)
+			}
+			if refresh == "duplicate import" {
+				result, err := repo.Import(t.Context(), in)
+				if !errors.Is(err, specs.ErrDuplicate) || result.Spec.ID != first.Spec.ID {
+					t.Fatalf("duplicate = %+v, %v", result, err)
+				}
+			} else {
+				result, err := repo.Rederive(t.Context(), first.Spec.ID)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if result.Changed {
+					t.Fatalf("suggestion generation changed for index-only refresh: %+v", result)
+				}
+			}
+			if got := countRows(t, db, `SELECT COUNT(*) FROM operations WHERE spec_id = ?`, first.Spec.ID); got != 2 {
+				t.Fatalf("refreshed rows = %d, want 2", got)
+			}
+			after, err := repo.Report(t.Context(), first.Spec.ID)
+			if err != nil || after.Operations != 2 {
+				t.Fatalf("report after refresh = %+v, %v", after, err)
+			}
+			var gotID, overrideID, revision int64
+			if err := db.R.QueryRowContext(t.Context(), `SELECT id FROM operations WHERE spec_id = ? AND path = '/one'`, first.Spec.ID).Scan(&gotID); err != nil {
+				t.Fatal(err)
+			}
+			if err := db.R.QueryRowContext(t.Context(), `SELECT operation_id FROM op_overrides WHERE path = '/one'`).Scan(&overrideID); err != nil {
+				t.Fatal(err)
+			}
+			if err := db.R.QueryRowContext(t.Context(), `SELECT revision FROM workspaces WHERE slug = 'alias'`).Scan(&revision); err != nil {
+				t.Fatal(err)
+			}
+			if gotID != keepID || overrideID != keepID || revision != 2 {
+				t.Fatalf("kept operation=%d override=%d revision=%d, want %d/%d/2", gotID, overrideID, revision, keepID, keepID)
+			}
+			if got := countRows(t, db, `SELECT COUNT(*) FROM operation_responses r JOIN operations o ON o.id = r.operation_id WHERE o.spec_id = ? AND o.path = '/two' AND r.schema_ptr = '#/components/pathItems/Shared/get/responses/200/content/application~1json/schema'`, first.Spec.ID); got != 1 {
+				t.Fatalf("alias response rows = %d", got)
+			}
+		})
+	}
+}
+
+func TestRepo_ReportDetectsAliasRefreshCommittedByCallerOwnedTransaction(t *testing.T) {
+	const raw = `{"openapi":"3.0.3","info":{"title":"T","version":"1"},"paths":{"/one":{"$ref":"#/components/pathItems/Shared"},"/two":{"$ref":"#/components/pathItems/Shared"}},"components":{"pathItems":{"Shared":{"get":{"responses":{"200":{"description":"ok"}}}}}}}`
+	repo, db := newRepo(t)
+	in := specs.ImportInput{Source: "upload", Document: []byte(raw)}
+	first, err := repo.Import(t.Context(), in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.W.ExecContext(t.Context(), `DELETE FROM operations WHERE spec_id = ? AND path = '/two'`, first.Spec.ID); err != nil {
+		t.Fatal(err)
+	}
+	oldReport, err := repo.Report(t.Context(), first.Spec.ID)
+	if err != nil || oldReport.Operations != 1 {
+		t.Fatalf("report before refresh = %+v, %v", oldReport, err)
+	}
+	prepared, err := repo.PrepareImport(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = db.Write(t.Context(), func(tx *sql.Tx) error {
+		_, importErr := repo.ImportTx(t.Context(), tx, prepared)
+		if !errors.Is(importErr, specs.ErrDuplicate) {
+			return fmt.Errorf("caller-owned ImportTx: %w", importErr)
+		}
+		beforeCommit, reportErr := repo.Report(t.Context(), first.Spec.ID)
+		if reportErr != nil {
+			return reportErr
+		}
+		if beforeCommit.Operations != 1 {
+			return fmt.Errorf("visible operations before commit = %d, want 1", beforeCommit.Operations)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	afterCommit, err := repo.Report(t.Context(), first.Spec.ID)
+	if err != nil || afterCommit.Operations != 2 {
+		t.Fatalf("report after caller-owned commit = %+v, %v; want 2 operations", afterCommit, err)
+	}
+}
+
 func TestRepo_Import_basePathFromReport(t *testing.T) {
 	r, _ := newRepo(t)
 	res, err := r.Import(t.Context(), specs.ImportInput{

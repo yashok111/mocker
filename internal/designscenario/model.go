@@ -98,7 +98,7 @@ type Participant struct {
 
 // OperationKeyDescription explains the identity shared by scenario bindings and MCP inputs.
 const OperationKeyDescription = "Copy operationKey verbatim from x-mocker-canvas-operation-id " +
-	"on the selected operation in the pinned contracts[].document. " +
+	"on the selected operation, or x-mocker-canvas-operation-ids.<method> on its concrete path for an inherited Path Item operation, in the pinned contracts[].document. " +
 	"It is a stable opaque string, not the workspace opKey from find_operations, " +
 	"METHOD path, or OpenAPI operationId."
 
@@ -188,28 +188,37 @@ type CommandsInput struct {
 // Command is the wire union for atomic scenario edits. Fields irrelevant to
 // the selected Type must be absent and are rejected during validation.
 type Command struct {
-	Binding           *DataBinding       `json:"binding,omitempty"`
-	Type              string             `json:"type"`
-	Title             string             `json:"title,omitempty"`
-	Participant       *Participant       `json:"participant,omitempty"`
-	Message           *Message           `json:"message,omitempty"`
-	Fragment          *Fragment          `json:"fragment,omitempty"`
-	Contract          *Contract          `json:"contract,omitempty"`
-	EventModel        *EventModel        `json:"eventModel,omitempty"`
-	ID                string             `json:"id,omitempty"`
-	Index             *int               `json:"index,omitempty"`
-	MessageID         string             `json:"messageId,omitempty"`
-	ContractID        string             `json:"contractId,omitempty"`
-	OperationKey      string             `json:"operationKey,omitempty"`
-	Method            string             `json:"method,omitempty"`
-	Path              string             `json:"path,omitempty"`
-	Label             string             `json:"label,omitempty"`
-	DesignID          int64              `json:"designId,omitempty"`
-	RevisionID        *int64             `json:"revisionId,omitempty"`
-	Mode              string             `json:"mode,omitempty"`
-	BranchID          string             `json:"branchId,omitempty"`
-	FragmentExecution *FragmentExecution `json:"fragmentExecution,omitempty"`
-	BranchExecution   *BranchExecution   `json:"branchExecution,omitempty"`
+	Binding           *DataBinding        `json:"binding,omitempty"`
+	EventServer       *EventServer        `json:"eventServer,omitempty"`
+	EventChannel      *EventChannel       `json:"eventChannel,omitempty"`
+	EventMessage      *EventMessage       `json:"eventMessage,omitempty"`
+	EventSchema       *EventSchema        `json:"eventSchema,omitempty"`
+	EventContract     *EventContract      `json:"eventContract,omitempty"`
+	EventOperation    *EventOperation     `json:"eventOperation,omitempty"`
+	FailureRoutes     *EventFailureRoutes `json:"failureRoutes,omitempty"`
+	APILink           *EventAPILink       `json:"apiLink,omitempty"`
+	StateLink         *EventStateLink     `json:"stateLink,omitempty"`
+	Type              string              `json:"type"`
+	Title             string              `json:"title,omitempty"`
+	Participant       *Participant        `json:"participant,omitempty"`
+	Message           *Message            `json:"message,omitempty"`
+	Fragment          *Fragment           `json:"fragment,omitempty"`
+	Contract          *Contract           `json:"contract,omitempty"`
+	EventModel        *EventModel         `json:"eventModel,omitempty"`
+	ID                string              `json:"id,omitempty"`
+	Index             *int                `json:"index,omitempty"`
+	MessageID         string              `json:"messageId,omitempty"`
+	ContractID        string              `json:"contractId,omitempty"`
+	OperationKey      string              `json:"operationKey,omitempty"`
+	Method            string              `json:"method,omitempty"`
+	Path              string              `json:"path,omitempty"`
+	Label             string              `json:"label,omitempty"`
+	DesignID          int64               `json:"designId,omitempty"`
+	RevisionID        *int64              `json:"revisionId,omitempty"`
+	Mode              string              `json:"mode,omitempty"`
+	BranchID          string              `json:"branchId,omitempty"`
+	FragmentExecution *FragmentExecution  `json:"fragmentExecution,omitempty"`
+	BranchExecution   *BranchExecution    `json:"branchExecution,omitempty"`
 }
 
 type RestoreInput struct {

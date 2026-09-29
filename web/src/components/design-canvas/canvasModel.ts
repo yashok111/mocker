@@ -1,5 +1,4 @@
 import {
-  getOperation,
   listOperations,
   updateOperation,
   type ApiDocument,
@@ -7,6 +6,7 @@ import {
 } from "../api-designer/documentModel";
 import { assertFragmentMembershipUnchanged, validateFragmentTree } from "./canvasFragments";
 import { createCanvasId } from "./canvasId";
+import { CANVAS_ALIAS_KEYS, getCanvasOperation, listCanvasOperations } from "./canvasOperations";
 import { MAX_PARTICIPANT_OFFSET_X } from "./types";
 import type { CanvasContract, CanvasDocument, CanvasMessage, OperationBinding } from "./types";
 
@@ -296,6 +296,18 @@ export function importContract(
       [OPERATION_KEY]: createCanvasId(),
     }));
   }
+  for (const { location, inherited } of listCanvasOperations(localDocument)) {
+    if (!inherited) continue;
+    const paths = localDocument.paths as Record<string, Record<string, unknown>>;
+    const pathItem = paths[location.path]!;
+    const aliases = pathItem[CANVAS_ALIAS_KEYS];
+    pathItem[CANVAS_ALIAS_KEYS] = {
+      ...(typeof aliases === "object" && aliases !== null && !Array.isArray(aliases)
+        ? aliases
+        : {}),
+      [location.method]: createCanvasId(),
+    };
+  }
   return {
     id: createCanvasId(),
     name,
@@ -310,8 +322,8 @@ export function resolveOperation(
 ): { contract: CanvasContract; location: OperationLocation } | null {
   const contract = doc.contracts.find((candidate) => candidate.id === binding.contractId);
   if (contract === undefined) return null;
-  for (const location of listOperations(contract.document)) {
-    if (getOperation(contract.document, location)?.[OPERATION_KEY] === binding.operationKey) {
+  for (const { location, key } of listCanvasOperations(contract.document)) {
+    if (key === binding.operationKey) {
       return { contract, location };
     }
   }
@@ -348,7 +360,7 @@ export function addLocalOperation(
   }
   if (input.contractId !== undefined) {
     const contract = doc.contracts.find(({ id }) => id === input.contractId);
-    const key = contract && getOperation(contract.document, { method, path })?.[OPERATION_KEY];
+    const key = contract && getCanvasOperation(contract.document, { method, path })?.key;
     if (!contract || typeof key !== "string")
       throw new Error("Выбранная операция не найдена в контракте");
     return {

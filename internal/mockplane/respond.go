@@ -526,6 +526,7 @@ func (p *Plane) assembleResponse( //nolint:gocyclo // half of the pre-split serv
 
 	req := gen.Request{
 		Method:        route.Method,
+		Path:          route.Path,
 		CanonicalPath: route.CanonicalPath,
 		PathParams:    pathParams,
 		Query:         query,

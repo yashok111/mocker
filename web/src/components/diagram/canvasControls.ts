@@ -1,4 +1,12 @@
-import type { Graph } from "@antv/x6";
+import type { Graph, GraphManual } from "@antv/x6";
+
+export function canvasInteractionOptions() {
+  return {
+    panning: { enabled: true, eventTypes: ["leftMouseDown"] },
+    // All canvases use the magnitude-aware wheel handler below.
+    mousewheel: { enabled: false },
+  } satisfies Partial<GraphManual>;
+}
 
 export function normalizeWheelDelta(delta: number, mode: number, pageHeight: number): number {
   return delta * (mode === 1 ? 16 : mode === 2 ? pageHeight : 1);
@@ -6,7 +14,9 @@ export function normalizeWheelDelta(delta: number, mode: number, pageHeight: num
 
 export function wheelZoomScale(scale: number, deltaPixels: number): number {
   const exponent = Math.max(-0.18, Math.min(0.18, -deltaPixels * 0.008));
-  return Math.max(0.35, Math.min(2, scale * Math.exp(exponent)));
+  // Fit and zoom buttons can leave the wheel range. Approach it smoothly,
+  // without making a zoom-out gesture enlarge a fitted diagram (or vice versa).
+  return Math.max(Math.min(0.35, scale), Math.min(Math.max(2, scale), scale * Math.exp(exponent)));
 }
 
 // X6's built-in wheel handler uses the sign of delta and a minimum 5% step.

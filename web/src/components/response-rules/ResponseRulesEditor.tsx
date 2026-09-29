@@ -33,6 +33,8 @@ import RuleInspector, { inspectorPointer } from "./RuleInspector";
 import SimulationPanel from "./SimulationPanel";
 import ResponseRuleGraph from "./ResponseRuleGraph";
 import { autoLayout } from "./layout";
+import { useDiagramLayout } from "../diagram/useDiagramLayout";
+import { applyRuleLayout, ruleLayoutInput } from "./elk";
 import ExecutionPanel, { type ExecutionControls } from "./ExecutionPanel";
 import styles from "./ResponseRules.module.css";
 
@@ -79,6 +81,7 @@ function Editor(props: ResponseRulesEditorProps & { parsed: ReturnType<typeof re
   const [port, setPort] = useState<ResponseRuleEdge["port"]>("next");
   const [error, setError] = useState<string | null>(null);
   const [undo, setUndo] = useState<{ before: string; after: string } | null>(null);
+  const [fitRequest, setFitRequest] = useState(0);
   const [active, setActive] = useState<{ signature: string; trace: ResponseRuleStep[] } | null>(
     null,
   );
@@ -89,6 +92,7 @@ function Editor(props: ResponseRulesEditorProps & { parsed: ReturnType<typeof re
   );
   const generation = formStore.serialize();
   const rule = parsed.rules.find((item) => item.id === selectedId) ?? parsed.rules[0];
+  const automatic = useDiagramLayout(ruleLayoutInput(rule));
   const signature = JSON.stringify([document, rule?.id, generation]);
   const onTrace = (trace: ResponseRuleStep[]) => setActive({ signature, trace });
   const trace = active?.signature === signature ? active.trace : [];
@@ -269,15 +273,18 @@ function Editor(props: ResponseRulesEditorProps & { parsed: ReturnType<typeof re
             <Button
               size="xs"
               variant="default"
-              disabled={disabled}
-              onClick={() =>
+              disabled={disabled || !automatic.layout || !rule.nodes.length}
+              loading={automatic.pending}
+              onClick={() => {
+                if (!automatic.layout) return;
                 formStore.set(layoutPointer, {
-                  source: JSON.stringify(autoLayout(rule)),
+                  source: JSON.stringify(applyRuleLayout(rule, automatic.layout)),
                   propertySource: JSON.stringify(rule),
-                })
-              }
+                });
+                setFitRequest((request) => request + 1);
+              }}
             >
-              Авторасстановка
+              Автораскладка
             </Button>
             {layoutDraft && (
               <>
@@ -296,7 +303,14 @@ function Editor(props: ResponseRulesEditorProps & { parsed: ReturnType<typeof re
                 >
                   Применить расстановку
                 </Button>
-                <Button size="xs" variant="default" onClick={() => formStore.remove(layoutPointer)}>
+                <Button
+                  size="xs"
+                  variant="default"
+                  onClick={() => {
+                    formStore.remove(layoutPointer);
+                    setFitRequest((request) => request + 1);
+                  }}
+                >
                   Отменить расстановку
                 </Button>
               </>
@@ -309,20 +323,24 @@ function Editor(props: ResponseRulesEditorProps & { parsed: ReturnType<typeof re
                 onClick={() => {
                   props.onChange(undo.before);
                   setUndo(null);
+                  setFitRequest((request) => request + 1);
                 }}
               >
                 Вернуть прежнюю расстановку
               </Button>
             )}
           </Group>
+          {automatic.error && <Alert color="red">{automatic.error}</Alert>}
           <Text size="xs" c="dimmed">
-            Перетаскивайте узлы и соединяйте выходы. Все действия доступны в списках и формах. Shift
-            + перетаскивание — перемещение холста.
+            Перетаскивайте узлы и соединяйте выходы. Все действия доступны в списках и формах.
+            Перетаскивание фона левой кнопкой — перемещение холста; колесо — масштаб.
           </Text>
           <div className={styles.workspace}>
             <div>
               <ResponseRuleGraph
                 rule={preview ?? rule}
+                layout={automatic.layout}
+                fitRequest={fitRequest}
                 selection={selection}
                 trace={trace}
                 blocked={disabled}

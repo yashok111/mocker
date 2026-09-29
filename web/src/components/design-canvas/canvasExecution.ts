@@ -55,6 +55,7 @@ export interface CanvasBindingResult {
   sourceIterations?: CanvasLoopIteration[];
   target: DataBindingTarget;
   valueJson: string;
+  transformedValueJson?: string;
 }
 
 export interface CanvasExecutionStepResult {

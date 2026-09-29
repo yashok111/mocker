@@ -53,6 +53,7 @@ function Harness({ initialBindings = [] }: { initialBindings?: DataBinding[] }) 
         onChange={setBindings}
         examples={[
           { sourceMessageId: "source", sourcePointer: "/id", valueJson: "9007199254740993" },
+          { sourceMessageId: "source", sourcePointer: "/token", valueJson: '" ABC "' },
         ]}
       />
       <output aria-label="Сохранённые связи">{JSON.stringify(bindings)}</output>
@@ -61,6 +62,59 @@ function Harness({ initialBindings = [] }: { initialBindings?: DataBinding[] }) 
 }
 
 describe("ScenarioDataBindingsEditor", () => {
+  it("adds, reorders and removes transforms while preserving the binding", async () => {
+    const user = userEvent.setup();
+    render(
+      <Harness
+        initialBindings={[
+          {
+            id: "token",
+            sourceMessageId: "source",
+            sourcePointer: "/token",
+            target: { kind: "header", name: "AUTHORIZATION" },
+            prefix: "Bearer ",
+          },
+        ]}
+      />,
+    );
+    await user.click(screen.getByText("Дополнительно"));
+    await user.click(screen.getByRole("button", { name: "Добавить преобразование связи 1" }));
+    await user.selectOptions(screen.getByLabelText("Преобразование 1 связи 1"), "lower");
+    await user.click(screen.getByRole("button", { name: "Добавить преобразование связи 1" }));
+    await user.selectOptions(screen.getByLabelText("Преобразование 2 связи 1"), "trim");
+    await user.click(screen.getByRole("button", { name: "Поднять преобразование 2 связи 1" }));
+    expect(screen.getByLabelText("Сохранённые связи")).toHaveTextContent(
+      '"transforms":[{"kind":"trim"},{"kind":"lower"}]',
+    );
+    await user.click(screen.getByRole("button", { name: "Удалить преобразование 2 связи 1" }));
+    expect(screen.getByLabelText("Сохранённые связи")).toHaveTextContent(
+      '"transforms":[{"kind":"trim"}]',
+    );
+    expect(screen.getByLabelText("Сохранённые связи")).toHaveTextContent('"prefix":"Bearer "');
+    expect(screen.getByLabelText("Сохранённые связи")).toHaveTextContent('"name":"AUTHORIZATION"');
+    expect(screen.getByText(/Исходное значение прошлого запуска/)).toBeInTheDocument();
+  });
+
+  it("stops at eight transforms and allows another after removing one", async () => {
+    const user = userEvent.setup();
+    render(
+      <Harness
+        initialBindings={[
+          {
+            id: "id",
+            sourceMessageId: "source",
+            sourcePointer: "/id",
+            target: { kind: "path", name: "id" },
+            transforms: Array.from({ length: 8 }, () => ({ kind: "trim" as const })),
+          },
+        ]}
+      />,
+    );
+    await user.click(screen.getByText("Дополнительно"));
+    expect(screen.getByRole("button", { name: "Добавить преобразование связи 1" })).toBeDisabled();
+    await user.click(screen.getByRole("button", { name: "Удалить преобразование 8 связи 1" }));
+    expect(screen.getByRole("button", { name: "Добавить преобразование связи 1" })).toBeEnabled();
+  });
   it("creates a binding at a known parameter without asking for its destination", async () => {
     const user = userEvent.setup();
     render(<Harness />);

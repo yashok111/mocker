@@ -180,6 +180,7 @@ function Workbench({ id, reviewId }: { id: number; reviewId?: number }): ReactEl
   const [comparisonToRevisionId, setComparisonToRevisionId] = useState<number | null>(null);
   const [focusPointer, setFocusPointer] = useState<string>();
   const [resourceLayoutPending, setResourceLayoutPending] = useState(false);
+  const [schemaLayoutPending, setSchemaLayoutPending] = useState(false);
   const [executionError, setExecutionError] = useState<string | null>(null);
   const [executionPending, setExecutionPending] = useState(false);
   const executionRequest = useRef({ alive: true, generation: 0, busy: false });
@@ -902,7 +903,11 @@ function Workbench({ id, reviewId }: { id: number; reviewId?: number }): ReactEl
                         leftSection={<IconDeviceFloppy size={16} />}
                         loading={save.isPending}
                         disabled={
-                          !dirty || parsed.error !== null || formDraft.dirty || unsafeNumber
+                          !dirty ||
+                          parsed.error !== null ||
+                          formDraft.dirty ||
+                          unsafeNumber ||
+                          schemaLayoutPending
                         }
                         onClick={() => {
                           submittedFormDrafts.current = draftStore.serialize();
@@ -934,6 +939,7 @@ function Workbench({ id, reviewId }: { id: number; reviewId?: number }): ReactEl
                         blocked={parsed.error !== null || unsafeNumber}
                         formStore={draftStore}
                         onChange={setBuffer}
+                        onLayoutPendingChange={setSchemaLayoutPending}
                       />
                     ) : (
                       <SchemaDiagram
@@ -1274,7 +1280,7 @@ function Workbench({ id, reviewId }: { id: number; reviewId?: number }): ReactEl
                     baseRevisionId={baseRevisionId}
                     revisions={detail.revisions}
                     pendingForm={formDraft.dirty}
-                    pendingLayout={resourceLayoutPending}
+                    pendingLayout={resourceLayoutPending || schemaLayoutPending}
                     sourceError={parsed.error}
                     onSource={(pointer, sharedOperation) => {
                       setSourcePointer(pointer);

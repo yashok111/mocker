@@ -10,7 +10,7 @@ import { Graph } from "@antv/x6";
 import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
 
 import type { CanvasExecutionStatus } from "./canvasExecution";
-import { installCanvasWheelZoom } from "./canvasZoom";
+import { canvasInteractionOptions, installCanvasWheelZoom } from "../diagram/canvasControls";
 import { ObjectDescriptionTooltip, type TooltipBounds } from "./ObjectDescriptionTooltip";
 import styles from "./SequenceGraph.module.css";
 import { layoutSequence, messageIndexAtY, type SequenceLayout } from "./sequenceLayout";
@@ -167,8 +167,7 @@ export default function SequenceGraph({
       container,
       background: { color: palette.canvas },
       grid: { visible: true, size: 16, type: "dot", args: [{ color: "#d8dfda", thickness: 1 }] },
-      panning: { enabled: true, eventTypes: ["leftMouseDown"] },
-      mousewheel: { enabled: false },
+      ...canvasInteractionOptions(),
       connecting: { allowBlank: false, allowEdge: false, allowNode: false, allowPort: false },
       async: false,
       interacting(cellView) {

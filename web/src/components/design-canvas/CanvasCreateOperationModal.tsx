@@ -1,7 +1,7 @@
 import { useState, type ReactElement } from "react";
 import { Button, Group, Modal, NativeSelect, Stack, Text, TextInput } from "@mantine/core";
-import { getOperation, listOperations } from "../api-designer/documentModel";
-import { OPERATION_KEY, type LocalOperationInput } from "./canvasModel";
+import { listCanvasOperations } from "./canvasOperations";
+import { type LocalOperationInput } from "./canvasModel";
 import type { CanvasDocument } from "./types";
 
 const METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS", "TRACE"];
@@ -25,9 +25,8 @@ export function CanvasCreateOperationModal({
   const [responseStatus, setResponseStatus] = useState("default");
   const [reuse, setReuse] = useState("");
   const matches = document.contracts.flatMap((contract) =>
-    listOperations(contract.document).flatMap((location) => {
+    listCanvasOperations(contract.document).flatMap(({ location, key }) => {
       if (location.method.toUpperCase() !== method || location.path !== path.trim()) return [];
-      const key = getOperation(contract.document, location)?.[OPERATION_KEY];
       return typeof key === "string" ? [{ value: contract.id, label: contract.name }] : [];
     }),
   );

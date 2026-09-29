@@ -171,7 +171,8 @@ func runContract(document Document, message Message) (*Contract, error) {
 			return nil, fmt.Errorf("свяжите контракт сообщения %q с проектом API", message.ID)
 		}
 		keys, diagnostics := operationKeys(contract.Document, "")
-		if _, ok := keys[message.Operation.OperationKey]; !ok || len(diagnostics) > 0 {
+		invalidKeys := slices.ContainsFunc(diagnostics, func(d Diagnostic) bool { return d.Severity == "error" })
+		if _, ok := keys[message.Operation.OperationKey]; !ok || invalidKeys {
 			return nil, fmt.Errorf("операция API сообщения %q недоступна; %s", message.ID, OperationKeyDescription)
 		}
 		return contract, nil
@@ -664,6 +665,9 @@ func cloneRunReport(report RunReport) RunReport {
 		step.BindingResults = slices.Clone(step.BindingResults)
 		for j := range step.BindingResults {
 			step.BindingResults[j].SourceIterations = slices.Clone(step.BindingResults[j].SourceIterations)
+			if step.BindingResults[j].TransformedValueJSON != nil {
+				step.BindingResults[j].TransformedValueJSON = new(*step.BindingResults[j].TransformedValueJSON)
+			}
 		}
 		if step.Request != nil {
 			step.Request = new(cloneStepRequest(*step.Request))
@@ -741,6 +745,9 @@ func cloneRunDocument(document Document) Document {
 		}
 		config.Extract = slices.Clone(config.Extract)
 		config.Bindings = slices.Clone(config.Bindings)
+		for j := range config.Bindings {
+			config.Bindings[j].Transforms = slices.Clone(config.Bindings[j].Transforms)
+		}
 	}
 	if document.EventModel != nil {
 		model := *document.EventModel
@@ -769,9 +776,15 @@ func cloneRunDocument(document Document) Document {
 		for i := range model.Contracts {
 			model.Contracts[i].Operations = slices.Clone(model.Contracts[i].Operations)
 			for j := range model.Contracts[i].Operations {
-				if model.Contracts[i].Operations[j].Kafka != nil {
-					model.Contracts[i].Operations[j].Kafka = new(*model.Contracts[i].Operations[j].Kafka)
+				operation := &model.Contracts[i].Operations[j]
+				if operation.Kafka != nil {
+					operation.Kafka = new(*operation.Kafka)
 				}
+				if operation.FailureRoutes != nil {
+					operation.FailureRoutes = new(*operation.FailureRoutes)
+				}
+				operation.APILinks = slices.Clone(operation.APILinks)
+				operation.StateLinks = slices.Clone(operation.StateLinks)
 			}
 		}
 		document.EventModel = &model

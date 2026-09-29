@@ -101,48 +101,56 @@ func (r *Repo) List(ctx context.Context) ([]*Spec, error) {
 	return out, nil
 }
 
-// Report answers specID's [openapi.Report], computing it at most once per
-// spec id and memoizing the result in r.reportCache thereafter.
+// Report answers specID's [openapi.Report], memoizing the expensive document
+// derivation and checking a cheap stored fingerprint before each cache hit.
 //
 // It is NOT reading a stored column — there is no column for it, and HARD
 // RULE 3 forbids adding one — the FIRST call for a given id reloads the
 // spec's raw bytes, runs [openapi.Load] and [Index] over them again, and
 // reconciles the result against the operations table (see computeReport's
-// doc comment for the full derivation). Caching that result is safe because
-// a spec row is immutable after Import: nothing in this package ever
-// updates specs.raw or re-runs ReplaceOperations for an id once Import's
-// transaction commits, so "what Report would compute" cannot change out
-// from under a cached entry while that id stays alive.
+// doc comment for the full derivation). The source document stays immutable,
+// but duplicate import and rederive can add previously missing derived
+// operations. A cached report is reused only while the stored spec hash and
+// operation count still match it. This also catches a stale computation that
+// finishes after another transaction commits its new rows.
 //
 // It CAN change when an id is reused, though: specs.id is a plain
 // `INTEGER PRIMARY KEY` with no AUTOINCREMENT (see 0001_init.sql), so
 // SQLite is free to hand a brand-new spec the same id a just-deleted spec
-// used to have. [Repo.Delete] evicts the cache entry for exactly this
-// reason — see its doc comment — so a reused id is always a fresh miss here
-// rather than a stale hit.
+// used to have. [Repo.Delete] evicts the entry, and the hash check prevents
+// a late computation for the deleted id from matching its replacement.
 //
 // Before this cache existed, every call — however small its own response —
 // re-decoded the full raw document, re-walked normalizeDialect, re-ran
 // Index, and rescanned every operations row for specID from scratch: for a
 // large imported document, seconds of CPU and hundreds of MB of heap per
 // call, with no rate limit ahead of it (finding 3, P1a round-1 review). The
-// returned *openapi.Report is always a fresh copy (see cloneReport): no
-// caller can mutate the cached entry through the pointer it gets back.
+// fingerprint query uses the indexed operation rows and avoids the full
+// parse. The returned *openapi.Report is always a fresh copy (see
+// cloneReport): no caller can mutate the cached entry through the pointer.
 func (r *Repo) Report(ctx context.Context, specID int64) (*openapi.Report, error) {
 	r.reportMu.Lock()
 	cached, ok := r.reportCache[specID]
 	r.reportMu.Unlock()
 	if ok {
-		return cloneReport(cached), nil
+		var hash string
+		var operations int
+		err := r.db.R.QueryRowContext(ctx, `SELECT hash, (SELECT COUNT(*) FROM operations WHERE spec_id = specs.id) FROM specs WHERE id = ?`, specID).Scan(&hash, &operations)
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return nil, fmt.Errorf("check report cache for spec %d: %w", specID, err)
+		}
+		if err == nil && cached.hash == hash && cached.report.Operations == operations {
+			return cloneReport(cached.report), nil
+		}
 	}
 
-	report, err := r.computeReport(ctx, specID)
+	report, hash, err := r.computeReport(ctx, specID)
 	if err != nil {
 		return nil, err
 	}
 
 	r.reportMu.Lock()
-	r.reportCache[specID] = report
+	r.reportCache[specID] = cachedReport{hash: hash, report: report}
 	r.reportMu.Unlock()
 	return cloneReport(report), nil
 }
@@ -166,14 +174,15 @@ func (r *Repo) Report(ctx context.Context, specID int64) (*openapi.Report, error
 // is really stored (Operations, Degraded, per-row parse_error) and what a
 // live re-index of the raw bytes finds (ref-resolution warnings), instead of
 // risking a second, driftable copy of either.
-func (r *Repo) computeReport(ctx context.Context, specID int64) (*openapi.Report, error) {
+func (r *Repo) computeReport(ctx context.Context, specID int64) (*openapi.Report, string, error) {
 	var raw []byte
-	err := r.db.R.QueryRowContext(ctx, "SELECT raw FROM specs WHERE id = ?", specID).Scan(&raw)
+	var hash string
+	err := r.db.R.QueryRowContext(ctx, "SELECT raw, hash FROM specs WHERE id = ?", specID).Scan(&raw, &hash)
 	switch {
 	case errors.Is(err, sql.ErrNoRows):
-		return nil, ErrNotFound
+		return nil, "", ErrNotFound
 	case err != nil:
-		return nil, fmt.Errorf("load spec %d raw: %w", specID, err)
+		return nil, "", fmt.Errorf("load spec %d raw: %w", specID, err)
 	}
 
 	doc, report, err := openapi.Load(raw)
@@ -181,7 +190,7 @@ func (r *Repo) computeReport(ctx context.Context, specID int64) (*openapi.Report
 		// The document was accepted once already, at import time; a failure
 		// here means the stored bytes themselves are corrupted, which is a
 		// real error and not something to paper over as a warning.
-		return nil, fmt.Errorf("re-derive report for spec %d: %w", specID, err)
+		return nil, "", fmt.Errorf("re-derive report for spec %d: %w", specID, err)
 	}
 
 	resolver := openapi.NewResolver(doc, openapi.DefaultRefBudget)
@@ -196,7 +205,7 @@ func (r *Repo) computeReport(ctx context.Context, specID int64) (*openapi.Report
 		SELECT pointer, parse_error FROM operations
 		WHERE spec_id = ? ORDER BY source_order ASC`, specID)
 	if err != nil {
-		return nil, fmt.Errorf("load operations for spec %d: %w", specID, err)
+		return nil, "", fmt.Errorf("load operations for spec %d: %w", specID, err)
 	}
 	defer func() { _ = rows.Close() }()
 
@@ -206,7 +215,7 @@ func (r *Repo) computeReport(ctx context.Context, specID int64) (*openapi.Report
 			parseErr *string
 		)
 		if err := rows.Scan(&pointer, &parseErr); err != nil {
-			return nil, fmt.Errorf("scan operation row: %w", err)
+			return nil, "", fmt.Errorf("scan operation row: %w", err)
 		}
 		report.Operations++
 		if parseErr != nil {
@@ -215,9 +224,9 @@ func (r *Repo) computeReport(ctx context.Context, specID int64) (*openapi.Report
 		}
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterate operations for spec %d: %w", specID, err)
+		return nil, "", fmt.Errorf("iterate operations for spec %d: %w", specID, err)
 	}
-	return report, nil
+	return report, hash, nil
 }
 
 // cloneReport returns a copy of rep safe for a caller to hold and even

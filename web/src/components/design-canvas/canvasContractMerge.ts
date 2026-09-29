@@ -7,6 +7,7 @@ import {
   type OperationLocation,
 } from "../api-designer/documentModel";
 import { OPERATION_KEY } from "./canvasModel";
+import { CANVAS_ALIAS_KEYS, getCanvasOperation } from "./canvasOperations";
 import type { ConversionIssue } from "./canvasContractConversion";
 import type { CanvasContract } from "./types";
 
@@ -314,6 +315,19 @@ export function validateSourceReferences(
   inheritReusablePaths(source);
   const paths = isRecord(source.paths) ? source.paths : {};
   for (const pathItem of Object.values(paths)) inheritPathItem(source, pathItem);
+  // Model each selected inherited method at its concrete source path before
+  // comparing reference origins. The carried export already materializes it.
+  const inherited = selections.flatMap(({ source: location }) => {
+    const projected = getCanvasOperation(source, location);
+    return projected?.inherited ? [{ location, operation: projected.operation }] : [];
+  });
+  for (const { location, operation } of inherited) {
+    const pathItem = paths[location.path];
+    if (!isRecord(pathItem)) continue;
+    pathItem[location.method] = operation;
+    delete pathItem.$ref;
+    delete pathItem[CANVAS_ALIAS_KEYS];
+  }
   const carriedPaths: Record<string, unknown> = {};
   for (const { source: location } of selections) {
     const pathItem = paths[location.path];

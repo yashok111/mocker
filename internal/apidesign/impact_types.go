@@ -18,12 +18,52 @@ type ImpactAnalysis struct {
 
 type ImpactReport struct {
 	ImpactAnalysis
-	DesignID       int64  `json:"designId"`
-	Version        int64  `json:"version"`
-	FromRevisionID int64  `json:"fromRevisionId"`
-	ToRevisionID   *int64 `json:"toRevisionId,omitempty"`
-	FromHash       string `json:"fromHash"`
-	ProposedHash   string `json:"proposedHash"`
+	FieldImpacts   []ImpactFieldImpact `json:"fieldImpacts"`
+	DesignID       int64               `json:"designId"`
+	Version        int64               `json:"version"`
+	FromRevisionID int64               `json:"fromRevisionId"`
+	ToRevisionID   *int64              `json:"toRevisionId,omitempty"`
+	FromHash       string              `json:"fromHash"`
+	ProposedHash   string              `json:"proposedHash"`
+}
+
+// ImpactDocumentPair stays in-process so scenario analysis sees the same exact
+// snapshots as the API diff without a second revision read.
+type ImpactDocumentPair struct {
+	Before   string
+	Proposed string
+}
+
+const (
+	MaxImpactFieldFindings = 2000
+	MaxImpactFieldUsages   = 20000
+)
+
+type ImpactFieldSelector struct {
+	Kind    string `json:"kind"`
+	Pointer string `json:"pointer,omitempty"`
+	Name    string `json:"name,omitempty"`
+}
+
+type ImpactFieldState struct {
+	Presence string `json:"presence"`
+	Type     string `json:"type,omitempty"`
+}
+
+// ImpactFieldImpact describes one saved usage; operation evidence alone cannot
+// establish which contract change caused a field compatibility change.
+type ImpactFieldImpact struct {
+	ID                 string              `json:"id"`
+	Locator            ImpactLocator       `json:"locator"`
+	OperationMessageID string              `json:"operationMessageId"`
+	UsageKind          string              `json:"usageKind"`
+	UsagePointer       string              `json:"usagePointer"`
+	Field              ImpactFieldSelector `json:"field"`
+	Before             ImpactFieldState    `json:"before"`
+	After              ImpactFieldState    `json:"after"`
+	Verdict            string              `json:"verdict"`
+	ReasonCode         string              `json:"reasonCode"`
+	Explanation        string              `json:"explanation"`
 }
 
 type ImpactChange struct {
@@ -94,6 +134,8 @@ type ImpactDiagnostic struct {
 type ImpactCoverage struct {
 	ScenariosScanned       int      `json:"scenariosScanned"`
 	ScenarioUsagesReturned int      `json:"scenarioUsagesReturned"`
+	FieldUsagesChecked     int      `json:"fieldUsagesChecked"`
+	FieldImpactsReturned   int      `json:"fieldImpactsReturned"`
 	ChangesReturned        int      `json:"changesReturned"`
 	EntitiesReturned       int      `json:"entitiesReturned"`
 	EvidenceReturned       int      `json:"evidenceReturned"`

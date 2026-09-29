@@ -1,6 +1,7 @@
 import { suggestScenarioTests } from "./scenarioTestSuggestionsApi";
 import { useCallback, useEffect, useRef, useState, type ReactElement } from "react";
 import { Alert, Button, Group, Loader, Text } from "@mantine/core";
+import { useMediaQuery } from "@mantine/hooks";
 import { IconCheck, IconAlertCircle, IconPlayerPlay } from "@tabler/icons-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
@@ -17,6 +18,7 @@ import { ScenarioHistoryPanel } from "./ScenarioHistoryPanel";
 import { ScenarioValidationAction } from "./ScenarioValidationAction";
 import { ScenarioExecutionPanel } from "./ScenarioExecutionPanel";
 import { analyzeScenarioDataFlow } from "./scenarioDataFlowApi";
+import { analyzeScenarioEventMap, getScenarioEventMap } from "./scenarioEventMapApi";
 import { ScenarioResultsModal, type ScenarioResultSelection } from "./ScenarioResultsModal";
 import {
   runScenario,
@@ -88,6 +90,8 @@ function ServerCanvasEditor({
   const [saveUnconfirmed, setSaveUnconfirmed] = useState(stored?.pendingSave ?? false);
   const [reloading, setReloading] = useState(false);
   const [contractsOpened, setContractsOpened] = useState(false);
+  const [mapOpened, setMapOpened] = useState(false);
+  const narrow = useMediaQuery("(max-width: 1023px)", false, { getInitialValueInEffect: false });
   const [resultsRevision, setResultsRevision] = useState<DesignScenarioRevision | null>(null);
   const [resultSelection, setResultSelection] = useState<ScenarioResultSelection>({
     format: "mermaid",
@@ -498,6 +502,16 @@ function ServerCanvasEditor({
 
   return (
     <>
+      {narrow ? (
+        <Group mb="sm">
+          <Button variant="light" onClick={() => setMapOpened(true)}>
+            Карта событий
+          </Button>
+          <Button variant="default" onClick={() => setContractsOpened(true)}>
+            Контракты API
+          </Button>
+        </Group>
+      ) : null}
       <DesignCanvasEditor
         draft={draft}
         locateTarget={locateTarget}
@@ -563,6 +577,9 @@ function ServerCanvasEditor({
               />
               <Button size="sm" variant="default" onClick={() => setContractsOpened(true)}>
                 Контракты API
+              </Button>
+              <Button size="sm" variant="default" onClick={() => setMapOpened(true)}>
+                Карта событий
               </Button>
               <Button
                 size="sm"
@@ -668,11 +685,18 @@ function ServerCanvasEditor({
         opened={contractsOpened}
         onClose={() => setContractsOpened(false)}
         document={draft.document}
+        baseRevisionId={baseRevisionId}
         onChangeDocument={draft.update}
         formStore={draft.formStore}
+        getEventMap={(revisionId, signal) => getScenarioEventMap(id, revisionId, signal)}
+        analyzeEventMap={(document, signal) => analyzeScenarioEventMap(id, document, signal)}
+        mapOpened={mapOpened}
+        onMapOpenedChange={setMapOpened}
         version={baseVersion}
         updates={detail.contractUpdates}
-        dirty={draft.dirty || conflict || externalDetail !== null || save.isError}
+        dirty={
+          draft.dirty || saveUnconfirmed || conflict || externalDetail !== null || save.isError
+        }
         pendingForms={draft.pendingForms}
         pending={commands.isPending || saveInFlight}
         error={commands.isError ? describeApiFailureDetailed(commands.error) : undefined}

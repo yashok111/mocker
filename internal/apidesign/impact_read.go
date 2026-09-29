@@ -12,36 +12,44 @@ import (
 // AnalyzeImpact reads immutable API snapshots in one transaction, then analyzes
 // them after releasing the reader. Scenario snapshots are read separately.
 func (r *Repo) AnalyzeImpact(ctx context.Context, id int64, in ImpactInput) (*ImpactReport, error) {
+	report, _, err := r.AnalyzeImpactWithDocuments(ctx, id, in)
+	return report, err
+}
+
+// AnalyzeImpactWithDocuments also returns the compared bytes for in-process
+// consumers. The report does not serialize these potentially large snapshots.
+func (r *Repo) AnalyzeImpactWithDocuments(ctx context.Context, id int64, in ImpactInput) (*ImpactReport, ImpactDocumentPair, error) {
 	if in.FromRevisionID <= 0 {
-		return nil, invalidField("/fromRevisionId", "Укажите положительный fromRevisionId")
+		return nil, ImpactDocumentPair{}, invalidField("/fromRevisionId", "Укажите положительный fromRevisionId")
 	}
 	if (in.Document == nil) == (in.ToRevisionID == nil) {
-		return nil, invalidField("", "Укажите ровно одно из document или toRevisionId")
+		return nil, ImpactDocumentPair{}, invalidField("", "Укажите ровно одно из document или toRevisionId")
 	}
 	if in.ToRevisionID != nil && *in.ToRevisionID <= 0 {
-		return nil, invalidField("/toRevisionId", "Укажите положительный toRevisionId")
+		return nil, ImpactDocumentPair{}, invalidField("/toRevisionId", "Укажите положительный toRevisionId")
 	}
 	if in.Document != nil && int64(len(*in.Document)) > r.cfg.MaxBody {
-		return nil, specs.ErrTooLarge
+		return nil, ImpactDocumentPair{}, specs.ErrTooLarge
 	}
 	design, before, after, err := r.impactSnapshots(ctx, id, in)
 	if err != nil {
-		return nil, err
+		return nil, ImpactDocumentPair{}, err
 	}
 	if int64(len(before)) > r.cfg.MaxBody || int64(len(after)) > r.cfg.MaxBody {
-		return nil, specs.ErrTooLarge
+		return nil, ImpactDocumentPair{}, specs.ErrTooLarge
 	}
 	analysis, err := AnalyzeImpactDocuments(ctx, before, after)
 	if err != nil {
-		return nil, err
+		return nil, ImpactDocumentPair{}, err
 	}
 	return &ImpactReport{
 		ImpactAnalysis: analysis,
+		FieldImpacts:   []ImpactFieldImpact{},
 		DesignID:       id, Version: design.Version,
 		FromRevisionID: in.FromRevisionID, ToRevisionID: in.ToRevisionID,
 		FromHash:     fmt.Sprintf("%x", sha256.Sum256([]byte(before))),
 		ProposedHash: fmt.Sprintf("%x", sha256.Sum256([]byte(after))),
-	}, nil
+	}, ImpactDocumentPair{Before: before, Proposed: after}, nil
 }
 
 func (r *Repo) impactSnapshots(ctx context.Context, id int64, in ImpactInput) (Design, string, string, error) {

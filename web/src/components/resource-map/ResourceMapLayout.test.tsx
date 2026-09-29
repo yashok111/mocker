@@ -8,9 +8,26 @@ import { createFormDraftStore } from "../api-designer/forms/formDraftStore";
 import ResourceMapEditor from "./ResourceMapEditor";
 import type { Model } from "./model";
 
+vi.mock("../diagram/elkLayout", () => ({
+  layoutDiagram: vi.fn(
+    async (input: { nodes: { id: string; width: number; height: number }[] }) => ({
+      nodes: input.nodes.map((node, index) => ({ ...node, x: 480, y: 40 + index * 200 })),
+      edges: [],
+    }),
+  ),
+}));
+
 vi.mock("./ResourceGraph", () => ({
-  default: ({ model, disabled }: { model: Model; disabled: boolean }) => (
-    <output data-testid="graph" data-disabled={disabled}>
+  default: ({
+    model,
+    disabled,
+    fitIdentity,
+  }: {
+    model: Model;
+    disabled: boolean;
+    fitIdentity?: number;
+  }) => (
+    <output data-testid="graph" data-disabled={disabled} data-fit-identity={fitIdentity}>
       {model.resources[0]?.x}
     </output>
   ),
@@ -100,19 +117,76 @@ function Harness({
 }
 
 describe("resource layout proposal", () => {
+  it("previews 101 moves in bounded batches and publishes only the complete proposal", async () => {
+    const many: Model = {
+      ...model,
+      resources: Array.from({ length: 101 }, (_, index) => ({
+        ...model.resources[0]!,
+        id: `resource-${index}`,
+        name: `Resource ${index}`,
+      })),
+    };
+    const batches: { document: string; commands: unknown[] }[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+        if (String(input).endsWith("/resource-map"))
+          return Promise.resolve(
+            json(200, {
+              designId: 12,
+              version: 1,
+              revisionId: 41,
+              model: many,
+              scenarioUsages: [],
+              usagesTruncated: false,
+            }),
+          );
+        const body = JSON.parse(String(init?.body));
+        if (body.commands) batches.push(body);
+        return Promise.resolve(
+          json(200, {
+            document: body.commands
+              ? body.document + " "
+              : body.document === document
+                ? normalized
+                : body.document,
+            model: many,
+            valid: true,
+            diagnostics: [],
+          }),
+        );
+      }),
+    );
+    renderWithProviders(<Harness />);
+    await userEvent.click(await screen.findByRole("button", { name: "Расставить ресурсы" }));
+    await screen.findByRole("button", { name: "Применить расположение" });
+    expect(batches.map((batch) => [batch.document, batch.commands.length])).toEqual([
+      [normalized, 100],
+      [normalized + " ", 1],
+    ]);
+    expect(screen.getByTestId("buffer").textContent).toBe(document);
+    await userEvent.click(screen.getByRole("button", { name: "Применить расположение" }));
+    expect(screen.getByTestId("buffer").textContent).toBe(normalized + "  ");
+  });
+
   it("uses normalized input and changes the buffer only when the displayed proposal is applied", async () => {
     const fetchMock = requests(() => result(arranged, 480));
     const store = createFormDraftStore();
     renderWithProviders(<Harness store={store} />);
     await userEvent.click(await screen.findByRole("button", { name: /Ресурс Заказы/ }));
+    expect(screen.getByTestId("graph")).toHaveAttribute("data-fit-identity", "0");
     await userEvent.click(screen.getByRole("button", { name: "Расставить ресурсы" }));
     await screen.findByRole("button", { name: "Применить расположение" });
     const body = fetchMock.mock.calls
       .map(([, init]) => JSON.parse(String(init?.body || "{}")))
       .find((body) => body.commands);
-    expect(body).toEqual({ document: normalized, commands: [{ kind: "auto_layout" }] });
+    expect(body).toEqual({
+      document: normalized,
+      commands: [{ kind: "move_resource", resourceId: "orders", x: 480, y: 40 }],
+    });
     expect(screen.getByTestId("buffer").textContent).toBe(document);
     expect(screen.getByTestId("graph")).toHaveTextContent("480");
+    expect(screen.getByTestId("graph")).toHaveAttribute("data-fit-identity", "1");
     expect(screen.getByTestId("graph")).toHaveAttribute("data-disabled", "true");
     expect(screen.getByLabelText("Название ресурса")).toBeDisabled();
     expect(screen.getByRole("button", { name: "Сохранить" })).toBeDisabled();
@@ -133,6 +207,7 @@ describe("resource layout proposal", () => {
     await userEvent.click(screen.getByRole("button", { name: "Отменить" }));
     expect(screen.getByTestId("buffer").textContent).toBe(document);
     expect(screen.getByTestId("graph")).toHaveTextContent("40");
+    expect(screen.getByTestId("graph")).toHaveAttribute("data-fit-identity", "2");
     expect(screen.getByLabelText("Название ресурса")).toHaveValue("Заказы");
     expect(screen.getByRole("button", { name: "Сохранить" })).toBeEnabled();
   });

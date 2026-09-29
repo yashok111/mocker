@@ -14,7 +14,8 @@ import (
 type designScenarioService interface {
 	List(context.Context) ([]designscenario.Scenario, error)
 	ResourceMapUsages(context.Context, int64) ([]designscenario.ResourceMapUsage, bool, error)
-	ImpactUsages(context.Context, apidesign.ImpactReport) (designscenario.ImpactScenarioResult, error)
+	ImpactUsages(context.Context, apidesign.ImpactReport, apidesign.ImpactDocumentPair) (designscenario.ImpactScenarioResult, error)
+	EventMap(context.Context, int64, int64) (designscenario.EventMapReport, error)
 	Create(context.Context, designscenario.CreateInput) (*designscenario.Detail, error)
 	Detail(context.Context, int64) (*designscenario.Detail, error)
 	Save(context.Context, int64, designscenario.SaveInput) (*designscenario.Detail, error)

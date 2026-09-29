@@ -86,6 +86,34 @@ func widgetsListVariant() ResponseVariant {
 	}
 }
 
+func TestDeclaredQueryParamsFromConcretePathItemChain(t *testing.T) {
+	doc := widgetsDoc()
+	doc["paths"].(map[string]any)["/alias"] = map[string]any{
+		"$ref":       "#/components/pathItems/Nearest",
+		"parameters": []any{map[string]any{"in": "query", "name": "local"}},
+	}
+	doc["components"].(map[string]any)["pathItems"] = map[string]any{
+		"Nearest": map[string]any{"$ref": "#/components/pathItems/Shared", "parameters": []any{map[string]any{"in": "query", "name": "near"}}},
+		"Shared": map[string]any{
+			"parameters": []any{map[string]any{"in": "query", "name": "inherited"}},
+			"get":        map[string]any{"parameters": []any{map[string]any{"in": "query", "name": "own"}}},
+		},
+	}
+	w := New(buildResolver(t, doc), Options{}).newWalker(Request{Path: "/alias"})
+	got := w.declaredQueryParams(ResponseVariant{OpPointer: "#/components/pathItems/Shared/get"})
+	for _, name := range []string{"local", "near", "inherited", "own"} {
+		if !got[name] {
+			t.Errorf("missing declared query parameter %q in %+v", name, got)
+		}
+	}
+	variant := ResponseVariant{OpPointer: "#/components/pathItems/Shared/get"}
+	req := Request{Path: "/alias", Query: url.Values{"inherited": {"active"}, "undeclared": {"ignored"}}}
+	filters := w.listFilters(variant, req, map[string]any{"properties": map[string]any{"inherited": map[string]any{}, "undeclared": map[string]any{}}})
+	if len(filters) != 1 || filters["inherited"][0] != "active" {
+		t.Fatalf("effective query filters = %+v", filters)
+	}
+}
+
 func widgetsDetailVariant() ResponseVariant {
 	return ResponseVariant{
 		Selector:   "200",

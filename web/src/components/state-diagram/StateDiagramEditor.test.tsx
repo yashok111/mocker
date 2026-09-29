@@ -33,6 +33,27 @@ function Harness({ initial = api }: { initial?: ApiDocument }) {
 }
 
 describe("state diagram authoring", () => {
+  it("applies automatic layout as one document change while preserving state and transition data", async () => {
+    const diagram = orderTemplate();
+    const initial = writeDiagrams(api, [diagram]);
+    const onChange = vi.fn();
+    renderWithProviders(
+      <StateDiagramEditor designId={12} document={initial} blocked={false} onChange={onChange} />,
+    );
+    const button = screen.getByRole("button", { name: "Автораскладка" });
+    await waitFor(() => expect(button).toBeEnabled());
+    await userEvent.click(button);
+    expect(onChange).toHaveBeenCalledOnce();
+    const result = onChange.mock.calls[0]![0];
+    expect(result.paths).toEqual(initial.paths);
+    const saved = result[EXTENSION].diagrams[0];
+    expect(saved.transitions).toEqual(diagram.transitions);
+    expect(saved.initialStateId).toBe(diagram.initialStateId);
+    expect(
+      saved.states.map(({ x: _x, y: _y, ...state }: { x: number; y: number }) => state),
+    ).toEqual(diagram.states.map(({ x: _x, y: _y, ...state }) => state));
+    expect(saved.states).not.toEqual(diagram.states);
+  });
   it("creates states and binds a transition while retaining API operations", async () => {
     renderWithProviders(<Harness />);
     await userEvent.click(screen.getByRole("button", { name: "Пример заказа" }));

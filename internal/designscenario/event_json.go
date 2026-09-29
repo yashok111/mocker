@@ -124,3 +124,67 @@ func (k *EventChannelKafka) UnmarshalJSON(data []byte) error {
 	*k = EventChannelKafka(out)
 	return nil
 }
+
+func decodeEventMetadataObject(data []byte, out any, required, nullableForbidden []string) error {
+	var fields map[string]jsonx.RawMessage
+	if err := jsonx.Unmarshal(data, &fields); err != nil {
+		return err
+	}
+	if fields == nil {
+		return fmt.Errorf("event metadata must be an object")
+	}
+	for _, name := range required {
+		raw, present := fields[name]
+		if !present || isJSONNull(raw) {
+			return fmt.Errorf("event metadata field %q is required", name)
+		}
+	}
+	for _, name := range nullableForbidden {
+		if raw, present := fields[name]; present && isJSONNull(raw) {
+			return fmt.Errorf("event metadata field %q cannot be null", name)
+		}
+	}
+	decoder := jsonx.NewDecoder(bytes.NewReader(data))
+	decoder.DisallowUnknownFields()
+	return decoder.Decode(out)
+}
+
+func (o *EventOperation) UnmarshalJSON(data []byte) error {
+	type wire EventOperation
+	var out wire
+	if err := decodeEventMetadataObject(data, &out, nil, []string{"failureRoutes", "apiLinks", "stateLinks"}); err != nil {
+		return err
+	}
+	*o = EventOperation(out)
+	return nil
+}
+
+func (r *EventFailureRoutes) UnmarshalJSON(data []byte) error {
+	type wire EventFailureRoutes
+	var out wire
+	if err := decodeEventMetadataObject(data, &out, nil, []string{"retryChannelId", "deadLetterChannelId"}); err != nil {
+		return err
+	}
+	*r = EventFailureRoutes(out)
+	return nil
+}
+
+func (l *EventAPILink) UnmarshalJSON(data []byte) error {
+	type wire EventAPILink
+	var out wire
+	if err := decodeEventMetadataObject(data, &out, []string{"contractId", "operationKey"}, nil); err != nil {
+		return err
+	}
+	*l = EventAPILink(out)
+	return nil
+}
+
+func (l *EventStateLink) UnmarshalJSON(data []byte) error {
+	type wire EventStateLink
+	var out wire
+	if err := decodeEventMetadataObject(data, &out, []string{"contractId", "diagramId", "transitionId"}, nil); err != nil {
+		return err
+	}
+	*l = EventStateLink(out)
+	return nil
+}

@@ -68,13 +68,32 @@ type EventContract struct {
 }
 
 type EventOperation struct {
-	ID          string               `json:"id"`
-	Name        string               `json:"name"`
-	Description string               `json:"description"`
-	Action      string               `json:"action"`
-	ChannelID   string               `json:"channelId"`
-	MessageID   string               `json:"messageId"`
-	Kafka       *EventOperationKafka `json:"kafka,omitempty"`
+	ID            string               `json:"id"`
+	Name          string               `json:"name"`
+	Description   string               `json:"description"`
+	Action        string               `json:"action"`
+	ChannelID     string               `json:"channelId"`
+	MessageID     string               `json:"messageId"`
+	Kafka         *EventOperationKafka `json:"kafka,omitempty"`
+	FailureRoutes *EventFailureRoutes  `json:"failureRoutes,omitempty"`
+	APILinks      []EventAPILink       `json:"apiLinks,omitempty"`
+	StateLinks    []EventStateLink     `json:"stateLinks,omitempty"`
+}
+
+type EventFailureRoutes struct {
+	RetryChannelID      string `json:"retryChannelId,omitempty"`
+	DeadLetterChannelID string `json:"deadLetterChannelId,omitempty"`
+}
+
+type EventAPILink struct {
+	ContractID   string `json:"contractId"`
+	OperationKey string `json:"operationKey"`
+}
+
+type EventStateLink struct {
+	ContractID   string `json:"contractId"`
+	DiagramID    string `json:"diagramId"`
+	TransitionID string `json:"transitionId"`
 }
 
 type EventOperationKafka struct {

@@ -1,7 +1,9 @@
 import { Graph, routerPresets, type EdgeView, type PointLike } from "@antv/x6";
 import { useEffect, useRef } from "react";
+import { Alert } from "@mantine/core";
 import type { SchemaModel } from "@/api/generated/schemas";
 import DiagramViewport from "../diagram/DiagramViewport";
+import { installCanvasWheelZoom } from "../diagram/canvasControls";
 import { createInitialFit } from "../diagram/initialFit";
 import { diagramCardBody, diagramEdgeLine, diagramOptions } from "../diagram/presentation";
 import type { Selection } from "./form";
@@ -12,6 +14,50 @@ import {
   FIELD_ROW as ROW,
   referenceVertices,
 } from "./projection";
+import { schemaCardHeight, schemaLayoutInput } from "./layout";
+import { useDiagramLayout } from "../diagram/useDiagramLayout";
+import { applyDiagramRoutes } from "../diagram/elkX6";
+
+function restoreManualRoutes(graph: Graph, model: SchemaModel) {
+  const ids = new Map(model.schemas.map((schema, i) => [schema.name, `schema:${i}`]));
+  model.references.forEach((ref, index) => {
+    const edge = graph.getCellById(`ref:${index}`);
+    if (!edge?.isEdge() || !ids.has(ref.sourceSchema) || !ids.has(ref.targetSchema)) return;
+    const hasPort = model.schemas
+      .find((schema) => schema.name === ref.sourceSchema)
+      ?.properties.some((property) => property.name === ref.sourceProperty);
+    edge.setSource({
+      cell: ids.get(ref.sourceSchema)!,
+      ...(hasPort ? { port: `property:${ref.sourceProperty}` } : {}),
+    });
+    edge.setTarget({ cell: ids.get(ref.targetSchema)!, port: "target" });
+    edge.setVertices([]);
+    edge.setConnector({ name: "rounded", args: { radius: 6 } });
+    // setRouter treats its first argument as a router name, including functions.
+    edge.setProp("router", function (_vertices: PointLike[], _options: unknown, view: EdgeView) {
+      const live = {
+        ...model,
+        schemas: model.schemas.map((schema) => {
+          const node = graph.getCellById(ids.get(schema.name)!);
+          return node?.isNode() ? { ...schema, ...node.position() } : schema;
+        }),
+      };
+      const vertices = referenceVertices(live, ref);
+      return vertices.length
+        ? vertices
+        : routerPresets.manhattan.call(
+            view,
+            [],
+            {
+              padding: { top: 24, right: 24, bottom: 24, left: 24 },
+              startDirections: ["right"],
+              endDirections: ["left"],
+            },
+            view,
+          );
+    });
+  });
+}
 
 type Props = {
   model: SchemaModel;
@@ -20,8 +66,10 @@ type Props = {
   onSelect: (s: Selection) => void;
   onMove: (schema: string, x: number, y: number) => void;
   onConnect: (schema: string, property: string, target: string) => void;
+  fitIdentity?: number;
 };
 export default function SchemaGraph(props: Props) {
+  const { layout, error } = useDiagramLayout(schemaLayoutInput(props.model));
   const host = useRef<HTMLElement>(null);
   const graphRef = useRef<Graph | null>(null);
   const current = useRef(props);
@@ -63,6 +111,7 @@ export default function SchemaGraph(props: Props) {
       },
     });
     graphRef.current = graph;
+    const removeWheelZoom = installCanvasWheelZoom(graph, host.current);
     const fit = createInitialFit(graph, host.current, 32);
     initialFit.current = fit;
     graph.on("node:click", ({ node, e }) => {
@@ -77,6 +126,7 @@ export default function SchemaGraph(props: Props) {
       const p = node.position();
       current.current.onMove(node.getData().name as string, Math.round(p.x), Math.round(p.y));
     });
+    graph.on("node:change:position", () => restoreManualRoutes(graph, current.current.model));
     graph.on("edge:connected", ({ edge, isNew }) => {
       if (!isNew) return;
       const from = edge.getSourceCellId(),
@@ -91,9 +141,10 @@ export default function SchemaGraph(props: Props) {
         );
     });
     graph.on("resize", () => {
-      fit();
+      fit(String(current.current.fitIdentity ?? 0));
     });
     return () => {
+      removeWheelZoom();
       graph.dispose();
       graphRef.current = null;
       initialFit.current = null;
@@ -105,7 +156,7 @@ export default function SchemaGraph(props: Props) {
     graph.clearCells();
     const ids = new Map(props.model.schemas.map((schema, i) => [schema.name, `schema:${i}`]));
     for (const schema of props.model.schemas) {
-      const height = HEADER + Math.max(1, schema.properties.length) * ROW + 8;
+      const height = schemaCardHeight(schema.properties.length);
       const selected = props.selection?.schema === schema.name;
       graph.addNode({
         id: ids.get(schema.name),
@@ -184,44 +235,30 @@ export default function SchemaGraph(props: Props) {
           ...(hasPort ? { port: `property:${ref.sourceProperty}` } : {}),
         },
         target: { cell: ids.get(ref.targetSchema)!, port: "target" },
-        router(_vertices: PointLike[], _options: unknown, view: EdgeView) {
-          // Read live positions so the route stays attached while dragging.
-          const model = {
-            ...props.model,
-            schemas: props.model.schemas.map((schema) => {
-              const node = graph.getCellById(ids.get(schema.name)!);
-              return node?.isNode() ? { ...schema, ...node.position() } : schema;
-            }),
-          };
-          const vertices = referenceVertices(model, ref);
-          // Feeding complete orthogonal legs back into Manhattan produces
-          // loops around short segments when it snaps them to its search grid.
-          return vertices.length
-            ? vertices
-            : routerPresets.manhattan.call(
-                view,
-                [],
-                {
-                  padding: { top: 24, right: 24, bottom: 24, left: 24 },
-                  startDirections: ["right"],
-                  endDirections: ["left"],
-                },
-                view,
-              );
-        },
         connector: { name: "rounded", args: { radius: 6 } },
         attrs: { line: diagramEdgeLine() },
       });
     });
-    initialFit.current?.();
+    restoreManualRoutes(graph, props.model);
   }, [props.model, props.selection]);
+  useEffect(() => {
+    if (layout && graphRef.current) applyDiagramRoutes(graphRef.current, layout);
+    initialFit.current?.(String(props.fitIdentity ?? 0));
+  }, [layout, props.model, props.selection, props.fitIdentity]);
   return (
-    <DiagramViewport
-      hostRef={host}
-      graphRef={graphRef}
-      className={styles.graph}
-      ariaLabel="Модель схем. Выбор схем и полей также доступен в списке."
-      zoomLabel="модель"
-    />
+    <>
+      {error && (
+        <Alert color="red" role="alert">
+          Не удалось рассчитать расположение схем. Ручное редактирование доступно.
+        </Alert>
+      )}
+      <DiagramViewport
+        hostRef={host}
+        graphRef={graphRef}
+        className={styles.graph}
+        ariaLabel="Модель схем. Выбор схем и полей также доступен в списке."
+        zoomLabel="модель"
+      />
+    </>
   );
 }

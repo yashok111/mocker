@@ -1,6 +1,6 @@
 import type { Graph } from "@antv/x6";
 import { describe, expect, it, vi } from "vitest";
-import { installCanvasWheelZoom, normalizeWheelDelta, wheelZoomScale } from "./canvasZoom";
+import { installCanvasWheelZoom, normalizeWheelDelta, wheelZoomScale } from "./canvasControls";
 
 describe("canvas wheel zoom", () => {
   it("makes a small trackpad gesture noticeable without a large jump", () => {
@@ -25,6 +25,16 @@ describe("canvas wheel zoom", () => {
   it("respects the available scale range", () => {
     expect(wheelZoomScale(1.99, -50)).toBe(2);
     expect(wheelZoomScale(0.36, 50)).toBe(0.35);
+  });
+
+  it("does not reverse wheel direction when fit or buttons leave the scale range", () => {
+    expect(wheelZoomScale(0.2, 10)).toBe(0.2);
+    expect(wheelZoomScale(0.2, -10)).toBeGreaterThan(0.2);
+    expect(wheelZoomScale(0.2, -10)).toBeLessThan(0.22);
+    expect(wheelZoomScale(2.5, -10)).toBe(2.5);
+    expect(wheelZoomScale(2.5, 10)).toBeLessThan(2.5);
+    expect(wheelZoomScale(2.5, 10)).toBeGreaterThan(2.3);
+    expect(wheelZoomScale(0.2, 0)).toBe(0.2);
   });
 
   it("normalizes pixel, line and page units", () => {

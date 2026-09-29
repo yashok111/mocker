@@ -1,11 +1,12 @@
 import { Graph } from "@antv/x6";
 import { useEffect, useRef } from "react";
+import { Alert, Text } from "@mantine/core";
 import { canvasTextMeasurer, wrapCanvasText } from "../design-canvas/canvasText";
 import DiagramViewport from "../diagram/DiagramViewport";
+import { installCanvasWheelZoom } from "../diagram/canvasControls";
 import { createInitialFit } from "../diagram/initialFit";
 import {
   diagramCardBody,
-  diagramEdgeLabel,
   diagramEdgeLine,
   diagramFontFamily,
   diagramOptions,
@@ -13,6 +14,9 @@ import {
 import type { ImpactGraphModel } from "./model";
 import { impactGraphLabel } from "./graphLabels";
 import styles from "./Impact.module.css";
+import { useDiagramLayout } from "../diagram/useDiagramLayout";
+import { diagramRouteOptions } from "../diagram/elkX6";
+import { impactLayoutInput } from "./layout";
 
 export default function ImpactGraph({
   model,
@@ -21,6 +25,7 @@ export default function ImpactGraph({
   model: ImpactGraphModel;
   changeId: string;
 }) {
+  const { layout, pending, error } = useDiagramLayout(impactLayoutInput(model));
   const host = useRef<HTMLElement>(null);
   const graphRef = useRef<Graph | null>(null);
   const fitRef = useRef<ReturnType<typeof createInitialFit> | null>(null);
@@ -37,10 +42,12 @@ export default function ImpactGraph({
       interacting: false,
     });
     graphRef.current = graph;
+    const removeWheelZoom = installCanvasWheelZoom(graph, host.current);
     const fit = createInitialFit(graph, host.current, 36);
     fitRef.current = fit;
     graph.on("resize", () => fit(identity.current));
     return () => {
+      removeWheelZoom();
       graph.dispose();
       graphRef.current = null;
       fitRef.current = null;
@@ -50,11 +57,16 @@ export default function ImpactGraph({
     const graph = graphRef.current;
     if (!graph) return;
     graph.clearCells();
+    if (!layout) return;
+    const positions = new Map(layout.nodes.map((node) => [node.id, node]));
+    const routes = new Map(layout.edges.map((edge) => [edge.id, edge]));
     const measure = canvasTextMeasurer(12, 400, diagramFontFamily);
     for (const node of model.nodes) {
       const lines = wrapCanvasText(impactGraphLabel(node.label), 180, measure);
       graph.addNode({
         ...node,
+        ...positions.get(node.id)!,
+        zIndex: 1,
         shape: "rect",
         markup: [
           { tagName: "title", textContent: node.label },
@@ -75,34 +87,32 @@ export default function ImpactGraph({
     for (const edge of model.edges) {
       graph.addEdge({
         id: edge.id,
-        source: { cell: edge.source, anchor: "right", connectionPoint: "boundary" },
-        target: { cell: edge.target, anchor: "left", connectionPoint: "boundary" },
-        vertices: edge.vertices,
-        router: { name: "normal" },
-        connector: { name: "rounded", args: { radius: 6 } },
+        ...diagramRouteOptions(layout, routes.get(edge.id)!),
         attrs: { line: diagramEdgeLine() },
-        labels: edge.label
-          ? [
-              diagramEdgeLabel(edge.label, {
-                position: edge.labelPosition,
-                maxWidth: edge.labelMaxWidth,
-                maxHeight: edge.labelMaxHeight,
-              }),
-            ]
-          : [],
       });
     }
     fitRef.current?.(changeId);
-  }, [model, changeId]);
+  }, [model, changeId, layout]);
   return (
-    <DiagramViewport
-      hostRef={host}
-      graphRef={graphRef}
-      className={styles.graph}
-      ariaHidden
-      zoomLabel="граф влияния"
-      fitLabel="Уместить граф"
-      fitPadding={36}
-    />
+    <div>
+      {error ? (
+        <Alert color="red" role="alert">
+          Не удалось расположить граф. Связи доступны в списке доказательств.
+        </Alert>
+      ) : pending ? (
+        <Text component="output" size="sm">
+          Располагаем граф влияния…
+        </Text>
+      ) : null}
+      <DiagramViewport
+        hostRef={host}
+        graphRef={graphRef}
+        className={styles.graph}
+        ariaHidden
+        zoomLabel="граф влияния"
+        fitLabel="Уместить граф"
+        fitPadding={36}
+      />
+    </div>
   );
 }

@@ -1,10 +1,6 @@
-import {
-  getOperation,
-  HTTP_METHODS,
-  isRecord,
-  type ApiDocument,
-} from "../api-designer/documentModel";
+import { HTTP_METHODS, isRecord, type ApiDocument } from "../api-designer/documentModel";
 import { OPERATION_KEY, resolveOperation } from "./canvasModel";
+import { CANVAS_ALIAS_KEYS, getCanvasOperation } from "./canvasOperations";
 import {
   inheritOperation,
   mergeContractDocuments,
@@ -78,7 +74,9 @@ export function previewCanvasContract(document: CanvasDocument): ConversionPrevi
     let row = groups.get(identity);
     if (row === undefined) {
       const operation =
-        resolved === null ? undefined : getOperation(resolved.contract.document, resolved.location);
+        resolved === null
+          ? undefined
+          : getCanvasOperation(resolved.contract.document, resolved.location)?.operation;
       row = {
         id: message.id,
         messageIds: [],
@@ -215,13 +213,23 @@ export function buildCanvasContract(
     const resolved = row.source === undefined ? null : resolveOperation(document, row.source);
     if (row.source !== undefined && resolved === null)
       error("Связанная операция не найдена; исправьте привязку на схеме");
-    const operation =
+    const projected =
       resolved === null
-        ? { summary: row.label }
-        : structuredClone(getOperation(resolved.contract.document, resolved.location)!);
+        ? undefined
+        : getCanvasOperation(resolved.contract.document, resolved.location);
+    const operation = resolved === null ? { summary: row.label } : projected!.operation;
+    if (projected?.inherited && typeof operation.operationId === "string") {
+      // Materialized aliases are separate OpenAPI operations. The reusable
+      // definition and other aliases may carry the same authored operationId.
+      operation.operationId = `${operation.operationId}__canvas_${contractId}_${row.id}`;
+    }
     const sourcePaths = resolved?.contract.document.paths;
     const originalPath = isRecord(sourcePaths) ? sourcePaths[resolved!.location.path] : undefined;
-    const originalPathItem = isRecord(originalPath) ? originalPath : {};
+    const originalPathItem = projected?.inherited
+      ? projected.pathMetadata
+      : isRecord(originalPath)
+        ? originalPath
+        : {};
     if (resolved !== null)
       inheritOperation(resolved.contract.document, originalPathItem, operation);
     const parameters = Array.isArray(operation.parameters) ? operation.parameters : [];
@@ -282,11 +290,9 @@ export function buildCanvasContract(
       Object.entries(originalPathItem).filter(
         ([key]) =>
           !HTTP_METHODS.some((method) => method === key) &&
-          !["parameters", "servers"].includes(key),
+          !["$ref", CANVAS_ALIAS_KEYS, "parameters", "servers"].includes(key),
       ),
     );
-    if ("$ref" in metadata)
-      error("Путь содержит $ref: перед преобразованием разверните ссылку в исходном контракте");
     mergeEntries(pathItem, metadata, `paths/${path}`, result.errors, row.id);
     if (method in pathItem)
       error(`Коллизия ${method.toUpperCase()} ${path}: объедините вызовы или измените путь`);

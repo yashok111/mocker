@@ -71,7 +71,20 @@ func (e *runEngine) resolveBindingRequest(index int, message Message, config *St
 		if err != nil {
 			return fail(err.Error())
 		}
-		actual, want := bindingValueType(value), targetSchema.targetType(binding.Target)
+		actual := bindingValueType(value)
+		var transformedValueJSON *string
+		if len(binding.Transforms) > 0 {
+			value, actual, err = applyBindingTransforms(value, binding.Transforms)
+			if err != nil {
+				return fail(err.Error())
+			}
+			transformed, err := jsonx.Marshal(value)
+			if err != nil {
+				return fail("преобразованное значение нельзя кодировать как JSON")
+			}
+			transformedValueJSON = new(string(transformed))
+		}
+		want := targetSchema.targetType(binding.Target)
 		if binding.Target.Kind != "body" {
 			if actual == "null" || actual == "object" || actual == "array" {
 				return fail("text targets require a non-null scalar")
@@ -84,7 +97,11 @@ func (e *runEngine) resolveBindingRequest(index int, message Message, config *St
 			}
 			text, ok := value.(string)
 			if !ok {
-				text = string(encoded)
+				if transformedValueJSON != nil {
+					text = *transformedValueJSON
+				} else {
+					text = string(encoded)
+				}
 			}
 			text = binding.Prefix + text
 			if utf8.RuneCountInString(text) > maxText {
@@ -126,7 +143,7 @@ func (e *runEngine) resolveBindingRequest(index int, message Message, config *St
 		if occurrence == 0 {
 			occurrence = 1
 		}
-		results = append(results, BindingResult{BindingID: binding.ID, SourceMessageID: binding.SourceMessageID, SourcePointer: binding.SourcePointer, SourceOccurrence: occurrence, SourceIterations: slices.Clone(source.Iterations), Target: binding.Target, ValueJSON: string(encoded)})
+		results = append(results, BindingResult{BindingID: binding.ID, SourceMessageID: binding.SourceMessageID, SourcePointer: binding.SourcePointer, SourceOccurrence: occurrence, SourceIterations: slices.Clone(source.Iterations), Target: binding.Target, ValueJSON: string(encoded), TransformedValueJSON: transformedValueJSON})
 	}
 	if bodyDecoded {
 		encoded, err := jsonx.Marshal(body)

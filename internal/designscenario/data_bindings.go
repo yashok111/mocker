@@ -57,11 +57,39 @@ func (t *DataBindingTarget) UnmarshalJSON(data []byte) error {
 }
 
 type DataBinding struct {
-	ID              string            `json:"id"`
-	SourceMessageID string            `json:"sourceMessageId"`
-	SourcePointer   string            `json:"sourcePointer"`
-	Target          DataBindingTarget `json:"target"`
-	Prefix          string            `json:"prefix,omitempty"`
+	ID              string                 `json:"id"`
+	SourceMessageID string                 `json:"sourceMessageId"`
+	SourcePointer   string                 `json:"sourcePointer"`
+	Target          DataBindingTarget      `json:"target"`
+	Prefix          string                 `json:"prefix,omitempty"`
+	Transforms      []DataBindingTransform `json:"transforms,omitempty"`
+}
+
+const MaxBindingTransforms = 8
+
+type DataBindingTransform struct {
+	Kind string `json:"kind"`
+}
+
+func validBindingTransformKind(kind string) bool {
+	switch kind {
+	case "trim", "lower", "upper", "to_string", "to_number", "to_integer":
+		return true
+	}
+	return false
+}
+
+func (transform *DataBindingTransform) UnmarshalJSON(data []byte) error {
+	type wire DataBindingTransform
+	var decoded wire
+	if err := decodeExecutionObject(data, &decoded, "kind"); err != nil {
+		return err
+	}
+	if !validBindingTransformKind(decoded.Kind) {
+		return fmt.Errorf("неизвестный вид преобразования %q", decoded.Kind)
+	}
+	*transform = DataBindingTransform(decoded)
+	return nil
 }
 
 func (b *DataBinding) UnmarshalJSON(data []byte) error {
@@ -74,21 +102,28 @@ func (b *DataBinding) UnmarshalJSON(data []byte) error {
 	if raw, ok := fields["prefix"]; ok && isJSONNull(raw) {
 		return fmt.Errorf("binding prefix cannot be null")
 	}
+	if raw, ok := fields["transforms"]; ok && isJSONNull(raw) {
+		return fmt.Errorf("преобразования не могут быть null")
+	}
 	if err := decodeExecutionObject(data, &out, "id", "sourceMessageId", "sourcePointer", "target"); err != nil {
 		return err
+	}
+	if len(out.Transforms) > MaxBindingTransforms {
+		return fmt.Errorf("допускается не более %d преобразований", MaxBindingTransforms)
 	}
 	*b = DataBinding(out)
 	return nil
 }
 
 type BindingResult struct {
-	BindingID        string            `json:"bindingId"`
-	SourceMessageID  string            `json:"sourceMessageId"`
-	SourcePointer    string            `json:"sourcePointer"`
-	SourceOccurrence int               `json:"sourceOccurrence"`
-	SourceIterations []LoopIteration   `json:"sourceIterations,omitempty"`
-	Target           DataBindingTarget `json:"target"`
-	ValueJSON        string            `json:"valueJson"`
+	BindingID            string            `json:"bindingId"`
+	SourceMessageID      string            `json:"sourceMessageId"`
+	SourcePointer        string            `json:"sourcePointer"`
+	SourceOccurrence     int               `json:"sourceOccurrence"`
+	SourceIterations     []LoopIteration   `json:"sourceIterations,omitempty"`
+	Target               DataBindingTarget `json:"target"`
+	ValueJSON            string            `json:"valueJson"`
+	TransformedValueJSON *string           `json:"transformedValueJson,omitempty"`
 }
 
 func checkDataBindings(pointer string, bindings []DataBinding, add func(string, string)) {
@@ -131,6 +166,14 @@ func checkDataBindings(pointer string, bindings []DataBinding, add func(string, 
 		}
 		if utf8.RuneCountInString(b.Prefix) > maxText {
 			add(p+"/prefix", "prefix is too long")
+		}
+		if len(b.Transforms) > MaxBindingTransforms {
+			add(p+"/transforms", "допускается не более 8 преобразований")
+		}
+		for j, transform := range b.Transforms {
+			if !validBindingTransformKind(transform.Kind) {
+				add(fmt.Sprintf("%s/transforms/%d/kind", p, j), "неизвестный вид преобразования")
+			}
 		}
 		for _, prior := range bindings[:i] {
 			if bindingTargetsOverlap(prior.Target, b.Target) {

@@ -26,6 +26,9 @@ import {
   type SavedMap,
 } from "./model";
 import styles from "./ResourceMap.module.css";
+import { layoutDiagram } from "../diagram/elkLayout";
+import { previewLayoutCommands } from "../diagram/previewLayout";
+import { resourceLayoutInput } from "./layout";
 
 const DRAFT_KEY = "/x-mocker-resource-map/editor";
 type ResourceForm = {
@@ -133,6 +136,7 @@ export default function ResourceMapEditor({
   const [retry, setRetry] = useState(0);
   const [layout, setLayout] = useState<{ source: string; proposal?: Preview }>();
   const [layoutError, setLayoutError] = useState("");
+  const [layoutFit, setLayoutFit] = useState(0);
   const layoutController = useRef<AbortController | null>(null);
   const generation = useRef(0);
   const commandSequence = useRef(0);
@@ -296,12 +300,23 @@ export default function ResourceMapEditor({
     setLayout({ source: document });
     setLayoutError("");
     try {
-      const response = await previewResourceMap(
-        designId,
-        {
-          document: preview.document,
-          commands: [{ kind: "auto_layout" }],
-        },
+      const arranged = await layoutDiagram(resourceLayoutInput(model));
+      if (
+        controller.signal.aborted ||
+        generation.current !== token ||
+        currentDocument.current !== document
+      )
+        return;
+      const positions = new Map(arranged.nodes.map((node) => [node.id, node]));
+      const commands: Command[] = model.resources.map((resource) => {
+        const point = positions.get(`resource:${resource.id}`)!;
+        return { kind: "move_resource", resourceId: resource.id, x: point.x, y: point.y };
+      });
+      const response = await previewLayoutCommands(
+        preview.document,
+        commands,
+        (document, commands, signal) =>
+          previewResourceMap(designId, { document, commands }, signal),
         controller.signal,
       );
       if (
@@ -311,6 +326,7 @@ export default function ResourceMapEditor({
       )
         return;
       setLayout({ source: document, proposal: response });
+      setLayoutFit((identity) => identity + 1);
     } catch (reason) {
       if (controller.signal.aborted || generation.current !== token) return;
       setLayout(undefined);
@@ -324,6 +340,7 @@ export default function ResourceMapEditor({
     }
   }
   function cancelLayout() {
+    if (proposal) setLayoutFit((identity) => identity + 1);
     generation.current++;
     layoutController.current?.abort();
     layoutController.current = null;
@@ -530,6 +547,7 @@ export default function ResourceMapEditor({
                 <div className={styles.mapColumn}>
                   <ResourceGraph
                     model={model}
+                    fitIdentity={layoutFit}
                     selectedId={form?.kind === "resource" ? form.id : undefined}
                     disabled={pending || busy || layoutActive}
                     onSelect={selectResource}

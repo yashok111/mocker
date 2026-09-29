@@ -3,9 +3,11 @@ import { Alert, Anchor, Badge, Button, Group, Modal, Stack, Text } from "@mantin
 import { Link } from "@tanstack/react-router";
 import { useListApiDesigns } from "@/api/generated/api-designs/api-designs";
 import type { DesignScenarioCommand, DesignScenarioContractUpdate } from "@/api/generated/schemas";
+import type { DesignScenarioEventMapReport } from "@/api/generated/schemas";
 import type { CanvasDocument } from "./types";
 import type { FormDraftStore } from "../api-designer/forms/formDraftStore";
 import { EventModelEditor } from "./EventModelEditor";
+import EventMapPanel, { type EventEditorTarget } from "./EventMapPanel";
 import { CanvasApiPicker } from "./CanvasApiPicker";
 import { CanvasContractConversionModal } from "./CanvasContractConversionModal";
 
@@ -13,6 +15,7 @@ export function ScenarioContractsPanel({
   opened,
   onClose,
   document,
+  baseRevisionId,
   version,
   updates,
   dirty,
@@ -23,10 +26,15 @@ export function ScenarioContractsPanel({
   onCreateFromSchema,
   onChangeDocument,
   formStore,
+  getEventMap,
+  analyzeEventMap,
+  mapOpened: controlledMapOpened,
+  onMapOpenedChange,
 }: {
   opened: boolean;
   onClose: () => void;
   document: CanvasDocument;
+  baseRevisionId: number;
   version: number;
   updates: DesignScenarioContractUpdate[];
   dirty: boolean;
@@ -37,9 +45,20 @@ export function ScenarioContractsPanel({
   onCreateFromSchema: (commands: DesignScenarioCommand[], expectedVersion: number) => Promise<void>;
   onChangeDocument: (document: CanvasDocument) => void;
   formStore: FormDraftStore;
+  getEventMap: (revisionId: number, signal: AbortSignal) => Promise<DesignScenarioEventMapReport>;
+  analyzeEventMap: (
+    document: CanvasDocument,
+    signal: AbortSignal,
+  ) => Promise<DesignScenarioEventMapReport>;
+  mapOpened?: boolean;
+  onMapOpenedChange?: (opened: boolean) => void;
 }): ReactElement {
   const [pickerOpened, setPickerOpened] = useState(false);
   const [eventsOpened, setEventsOpened] = useState(false);
+  const [localMapOpened, setLocalMapOpened] = useState(false);
+  const mapOpened = controlledMapOpened ?? localMapOpened;
+  const setMapOpened = onMapOpenedChange ?? setLocalMapOpened;
+  const [eventTarget, setEventTarget] = useState<EventEditorTarget | null>(null);
   const [conversion, setConversion] = useState<{
     document: CanvasDocument;
     version: number;
@@ -49,7 +68,7 @@ export function ScenarioContractsPanel({
   return (
     <>
       <Modal
-        opened={opened && conversion === null && !eventsOpened}
+        opened={opened && conversion === null && !eventsOpened && !mapOpened}
         onClose={pending ? () => {} : onClose}
         closeButtonProps={{ disabled: pending }}
         title="Контракты API"
@@ -58,6 +77,9 @@ export function ScenarioContractsPanel({
         <Stack gap="md">
           <Button variant="light" onClick={() => setEventsOpened(true)}>
             Событийные контракты Kafka
+          </Button>
+          <Button variant="light" onClick={() => setMapOpened(true)}>
+            Карта событий
           </Button>
           {(document.eventModel?.contracts ?? []).map((contract) => (
             <Stack
@@ -257,11 +279,35 @@ export function ScenarioContractsPanel({
         />
       ) : null}
       <EventModelEditor
+        key={
+          eventTarget
+            ? `${eventTarget.kind}:${eventTarget.id}:${eventTarget.pointer ?? ""}`
+            : "contracts-events"
+        }
         opened={eventsOpened}
+        target={eventTarget}
         document={document}
         onChange={onChangeDocument}
-        onClose={() => setEventsOpened(false)}
+        onClose={() => {
+          setEventsOpened(false);
+          setEventTarget(null);
+        }}
         formStore={formStore}
+      />
+      <EventMapPanel
+        opened={mapOpened}
+        onClose={() => setMapOpened(false)}
+        document={document}
+        baseRevisionId={baseRevisionId}
+        dirty={dirty || pending}
+        pendingForms={pendingForms}
+        getEventMap={getEventMap}
+        analyzeEventMap={analyzeEventMap}
+        onEditEvent={(target) => {
+          setMapOpened(false);
+          setEventTarget(target);
+          setEventsOpened(true);
+        }}
       />
     </>
   );

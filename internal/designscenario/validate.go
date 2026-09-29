@@ -7,7 +7,6 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/yashok111/mocker/internal/apidesign"
 	"github.com/yashok111/mocker/internal/jsonx"
 )
 
@@ -303,29 +302,24 @@ func operationKeys(raw jsonx.RawMessage, pointer string) (map[string]struct{}, [
 	if len(raw) == 0 || err != nil || !ok || document == nil {
 		return keys, []Diagnostic{{Pointer: pointer, Message: "API document must be a JSON object", Severity: "error"}}
 	}
-	paths, _ := document["paths"].(map[string]any)
-	for path, pathValue := range paths {
-		pathItem, _ := pathValue.(map[string]any)
-		for _, method := range operationMethods {
-			operation, _ := pathItem[method].(map[string]any)
-			if operation == nil {
-				continue
-			}
-			value, exists := operation[apidesign.OperationKey]
-			if !exists {
-				continue
-			}
-			key, ok := value.(string)
-			operationPointer := pointer + "/paths/" + escapePointer(path) + "/" + method + "/" + apidesign.OperationKey
-			if !ok || strings.TrimSpace(key) == "" {
-				diagnostics = append(diagnostics, Diagnostic{Pointer: operationPointer, Message: "operation key must be a non-empty string", Severity: "error"})
-				continue
-			}
-			if _, duplicate := keys[key]; duplicate {
-				diagnostics = append(diagnostics, Diagnostic{Pointer: operationPointer, Message: "duplicate operation key", Severity: "error"})
-			}
-			keys[key] = struct{}{}
+	operations, referenceDiagnostics := contractOperations(document)
+	for _, diagnostic := range referenceDiagnostics {
+		diagnostic.Pointer = pointer + diagnostic.Pointer
+		diagnostics = append(diagnostics, diagnostic)
+	}
+	for _, operation := range operations {
+		if !operation.keyPresent {
+			continue
 		}
+		operationPointer := pointer + operation.keyPointer
+		if operation.invalidKey {
+			diagnostics = append(diagnostics, Diagnostic{Pointer: operationPointer, Message: "operation key must be a non-empty string", Severity: "error"})
+			continue
+		}
+		if _, duplicate := keys[operation.Key]; duplicate {
+			diagnostics = append(diagnostics, Diagnostic{Pointer: operationPointer, Message: "duplicate operation key", Severity: "error"})
+		}
+		keys[operation.Key] = struct{}{}
 	}
 	return keys, diagnostics
 }

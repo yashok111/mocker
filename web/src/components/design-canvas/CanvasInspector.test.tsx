@@ -73,6 +73,117 @@ function renderInspector(document: CanvasDocument, selection: CanvasSelection, o
 }
 
 describe("CanvasInspector", () => {
+  it("lists an inherited alias and materializes a local sibling only after an explicit edit", async () => {
+    const initial = documentFixture();
+    initial.contracts = [
+      {
+        id: "shared",
+        name: "Shared",
+        mode: "linked",
+        document: {
+          paths: {
+            "/alias": {
+              $ref: "#/components/pathItems/Shared",
+              "x-mocker-canvas-operation-ids": { get: "alias-key" },
+            },
+          },
+          components: {
+            pathItems: {
+              Shared: {
+                get: { summary: "Inherited", responses: { "200": { description: "ok" } } },
+              },
+            },
+          },
+        },
+      },
+    ];
+    const before = structuredClone(initial);
+    const changed = vi.fn();
+    function Editor() {
+      const [document, setDocument] = useState(initial);
+      return (
+        <CanvasInspector
+          document={document}
+          selection={{ kind: "message", id: "request" }}
+          onChange={(next) => {
+            changed(next);
+            setDocument(next);
+          }}
+          onClose={vi.fn()}
+          onDelete={vi.fn()}
+          onMove={vi.fn()}
+          onImportApi={vi.fn()}
+          formStore={createFormDraftStore()}
+        />
+      );
+    }
+    renderWithProviders(<Editor />);
+    await userEvent.selectOptions(
+      screen.getByLabelText("Операция API"),
+      JSON.stringify(["shared", "alias-key"]),
+    );
+    expect(screen.getByText(/локальное переопределение/)).toBeInTheDocument();
+    expect(screen.getByLabelText("Краткое название")).toHaveValue("Inherited");
+    expect(initial).toEqual(before);
+    fireEvent.change(screen.getByLabelText("Краткое название"), { target: { value: "Local" } });
+    const updated = changed.mock.lastCall![0] as CanvasDocument;
+    const path = (updated.contracts[0]!.document.paths as Record<string, Record<string, unknown>>)[
+      "/alias"
+    ]!;
+    expect(path.get).toMatchObject({
+      summary: "Local",
+      "x-mocker-canvas-operation-id": "alias-key",
+    });
+    expect(path.$ref).toBe("#/components/pathItems/Shared");
+    expect(path).not.toHaveProperty("x-mocker-canvas-operation-ids");
+    expect(initial).toEqual(before);
+  });
+
+  it("edits a shared schema without materializing the selected inherited operation", async () => {
+    const document = documentFixture();
+    document.messages[0]!.operation = { contractId: "shared", operationKey: "alias-key" };
+    document.contracts = [
+      {
+        id: "shared",
+        name: "Shared",
+        mode: "linked",
+        document: {
+          paths: {
+            "/alias": {
+              $ref: "#/components/pathItems/Shared",
+              "x-mocker-canvas-operation-ids": { get: "alias-key" },
+            },
+          },
+          components: {
+            pathItems: { Shared: { get: { responses: { "200": { description: "ok" } } } } },
+            schemas: { Result: { type: "object" } },
+          },
+        },
+      },
+    ];
+    const before = structuredClone(document);
+    const onChange = renderInspector(document, { kind: "message", id: "request" });
+    await userEvent.selectOptions(screen.getByLabelText("Редактируемый объект API"), "Result");
+    fireEvent.change(screen.getByLabelText("Описание схемы"), { target: { value: "Edited" } });
+    const updated = onChange.mock.lastCall![0] as CanvasDocument;
+    const path = (updated.contracts[0]!.document.paths as Record<string, Record<string, unknown>>)[
+      "/alias"
+    ]!;
+    expect(path).toEqual({
+      $ref: "#/components/pathItems/Shared",
+      "x-mocker-canvas-operation-ids": { get: "alias-key" },
+    });
+    expect(path).not.toHaveProperty("get");
+    expect(
+      (
+        updated.contracts[0]!.document.components as Record<
+          string,
+          Record<string, Record<string, unknown>>
+        >
+      ).schemas!.Result!.description,
+    ).toBe("Edited");
+    expect(document).toEqual(before);
+  });
   it("converts a legacy block into alt with explicit branch ranges", async () => {
     const onChange = renderInspector(documentFixture(), { kind: "fragment", id: "inverted" });
     await userEvent.selectOptions(screen.getByLabelText("Тип блока"), "alt");

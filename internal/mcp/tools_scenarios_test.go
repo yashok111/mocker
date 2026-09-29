@@ -217,8 +217,8 @@ func TestDesignScenarioToolsListPublishesObjectContractAndCommandUnion(t *testin
 		t.Fatal(err)
 	}
 	variants := commandSchema.Properties["commands"].Items.OneOf
-	if len(variants) != 21 {
-		t.Fatalf("command variants=%d, want 21; schema=%s", len(variants), byName["apply_design_scenario_commands"])
+	if len(variants) != 38 {
+		t.Fatalf("command variants=%d, want 38; schema=%s", len(variants), byName["apply_design_scenario_commands"])
 	}
 	var foundSetTitle bool
 	var foundSetEventModel bool

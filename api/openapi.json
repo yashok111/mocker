@@ -5042,7 +5042,7 @@
           "operationKey": {
             "type": "string",
             "minLength": 1,
-            "description": "Copy operationKey verbatim from x-mocker-canvas-operation-id on the selected operation in the pinned contracts[].document. It is a stable opaque string, not the workspace opKey from find_operations, METHOD path, or OpenAPI operationId."
+            "description": "Copy operationKey verbatim from x-mocker-canvas-operation-id on the selected operation, or x-mocker-canvas-operation-ids.<method> on its concrete path for an inherited Path Item operation, in the pinned contracts[].document. It is a stable opaque string, not the workspace opKey from find_operations, METHOD path, or OpenAPI operationId."
           }
         },
         "additionalProperties": false
@@ -5933,7 +5933,7 @@
           },
           "operationKey": {
             "type": "string",
-            "description": "Copy operationKey verbatim from x-mocker-canvas-operation-id on the selected operation in the pinned contracts[].document. It is a stable opaque string, not the workspace opKey from find_operations, METHOD path, or OpenAPI operationId."
+            "description": "Copy operationKey verbatim from x-mocker-canvas-operation-id on the selected operation, or x-mocker-canvas-operation-ids.<method> on its concrete path for an inherited Path Item operation, in the pinned contracts[].document. It is a stable opaque string, not the workspace opKey from find_operations, METHOD path, or OpenAPI operationId."
           }
         },
         "additionalProperties": false
@@ -6124,6 +6124,57 @@
           },
           {
             "$ref": "#/components/schemas/DesignScenarioRemoveDataBindingCommand"
+          },
+          {
+            "$ref": "#/components/schemas/DesignScenarioUpsertEventServerCommand"
+          },
+          {
+            "$ref": "#/components/schemas/DesignScenarioRemoveEventServerCommand"
+          },
+          {
+            "$ref": "#/components/schemas/DesignScenarioUpsertEventChannelCommand"
+          },
+          {
+            "$ref": "#/components/schemas/DesignScenarioRemoveEventChannelCommand"
+          },
+          {
+            "$ref": "#/components/schemas/DesignScenarioUpsertEventMessageCommand"
+          },
+          {
+            "$ref": "#/components/schemas/DesignScenarioRemoveEventMessageCommand"
+          },
+          {
+            "$ref": "#/components/schemas/DesignScenarioUpsertEventSchemaCommand"
+          },
+          {
+            "$ref": "#/components/schemas/DesignScenarioRemoveEventSchemaCommand"
+          },
+          {
+            "$ref": "#/components/schemas/DesignScenarioUpsertEventContractCommand"
+          },
+          {
+            "$ref": "#/components/schemas/DesignScenarioRemoveEventContractCommand"
+          },
+          {
+            "$ref": "#/components/schemas/DesignScenarioUpsertEventOperationCommand"
+          },
+          {
+            "$ref": "#/components/schemas/DesignScenarioRemoveEventOperationCommand"
+          },
+          {
+            "$ref": "#/components/schemas/DesignScenarioSetEventFailureRoutesCommand"
+          },
+          {
+            "$ref": "#/components/schemas/DesignScenarioUpsertEventApiLinkCommand"
+          },
+          {
+            "$ref": "#/components/schemas/DesignScenarioRemoveEventApiLinkCommand"
+          },
+          {
+            "$ref": "#/components/schemas/DesignScenarioUpsertEventStateLinkCommand"
+          },
+          {
+            "$ref": "#/components/schemas/DesignScenarioRemoveEventStateLinkCommand"
           }
         ]
       },
@@ -7464,9 +7515,42 @@
           },
           "kafka": {
             "$ref": "#/components/schemas/DesignScenarioEventOperationKafka"
+          },
+          "failureRoutes": {
+            "$ref": "#/components/schemas/DesignScenarioEventFailureRoutes"
+          },
+          "apiLinks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DesignScenarioEventAPILink"
+            },
+            "maxItems": 100
+          },
+          "stateLinks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DesignScenarioEventStateLink"
+            },
+            "maxItems": 100
           }
         },
-        "additionalProperties": false
+        "additionalProperties": false,
+        "allOf": [
+          {
+            "if": {
+              "required": [
+                "failureRoutes"
+              ]
+            },
+            "then": {
+              "properties": {
+                "action": {
+                  "const": "receive"
+                }
+              }
+            }
+          }
+        ]
       },
       "DesignScenarioEventContract": {
         "type": "object",
@@ -8631,6 +8715,14 @@
           "prefix": {
             "type": "string",
             "maxLength": 50000
+          },
+          "transforms": {
+            "type": "array",
+            "maxItems": 8,
+            "items": {
+              "$ref": "#/components/schemas/DesignScenarioDataBindingTransform"
+            },
+            "description": "Ordered typed transformations before target validation and prefix. Numeric conversions accept strict JSON numeric strings and preserve exact number spelling."
           }
         }
       },
@@ -8838,7 +8930,11 @@
           },
           "valueJson": {
             "type": "string",
-            "description": "Original typed JSON value before applying the literal prefix. Numbers retain their precision."
+            "description": "Original source JSON value before transformations and prefix. Numbers retain their precision."
+          },
+          "transformedValueJson": {
+            "type": "string",
+            "description": "Typed result after ordered transformations, before the literal prefix. Present when transformations ran; numbers retain their precision."
           }
         }
       },
@@ -9806,11 +9902,131 @@
         },
         "additionalProperties": false
       },
+      "ApiImpactFieldSelector": {
+        "type": "object",
+        "required": [
+          "kind"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "response",
+              "body",
+              "path",
+              "query",
+              "header"
+            ]
+          },
+          "pointer": {
+            "type": "string",
+            "description": "JSON Pointer for response or body; omitted or empty means the whole body."
+          },
+          "name": {
+            "type": "string",
+            "description": "Parameter name for path, query or header."
+          }
+        },
+        "additionalProperties": false
+      },
+      "ApiImpactFieldState": {
+        "type": "object",
+        "required": [
+          "presence"
+        ],
+        "properties": {
+          "presence": {
+            "type": "string",
+            "enum": [
+              "present",
+              "absent",
+              "unknown"
+            ]
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "string",
+              "number",
+              "integer",
+              "boolean",
+              "null",
+              "object",
+              "array"
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "ApiImpactFieldImpact": {
+        "type": "object",
+        "required": [
+          "id",
+          "locator",
+          "operationMessageId",
+          "usageKind",
+          "usagePointer",
+          "field",
+          "before",
+          "after",
+          "verdict",
+          "reasonCode",
+          "explanation"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "locator": {
+            "$ref": "#/components/schemas/ApiImpactLocator"
+          },
+          "operationMessageId": {
+            "type": "string"
+          },
+          "usageKind": {
+            "type": "string",
+            "enum": [
+              "binding_source",
+              "binding_target",
+              "assertion",
+              "extract"
+            ]
+          },
+          "usagePointer": {
+            "type": "string"
+          },
+          "field": {
+            "$ref": "#/components/schemas/ApiImpactFieldSelector"
+          },
+          "before": {
+            "$ref": "#/components/schemas/ApiImpactFieldState"
+          },
+          "after": {
+            "$ref": "#/components/schemas/ApiImpactFieldState"
+          },
+          "verdict": {
+            "type": "string",
+            "enum": [
+              "broken",
+              "review"
+            ]
+          },
+          "reasonCode": {
+            "type": "string"
+          },
+          "explanation": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
       "ApiImpactCoverage": {
         "type": "object",
         "required": [
           "scenariosScanned",
           "scenarioUsagesReturned",
+          "fieldUsagesChecked",
+          "fieldImpactsReturned",
           "changesReturned",
           "entitiesReturned",
           "evidenceReturned",
@@ -9822,6 +10038,14 @@
             "minimum": 0
           },
           "scenarioUsagesReturned": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "fieldUsagesChecked": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "fieldImpactsReturned": {
             "type": "integer",
             "minimum": 0
           },
@@ -9849,6 +10073,7 @@
                 "evidence",
                 "scenario_scan",
                 "scenario_usages",
+                "scenario_fields",
                 "scenario_bytes",
                 "output"
               ]
@@ -9868,6 +10093,7 @@
           "changes",
           "affected",
           "evidence",
+          "fieldImpacts",
           "diagnostics",
           "coverage",
           "complete"
@@ -9911,6 +10137,12 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/ApiImpactEvidence"
+            }
+          },
+          "fieldImpacts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ApiImpactFieldImpact"
             }
           },
           "diagnostics": {
@@ -11002,6 +11234,762 @@
             "type": "integer",
             "format": "int64",
             "minimum": 1
+          }
+        }
+      },
+      "DesignScenarioDataBindingTransform": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "trim",
+              "lower",
+              "upper",
+              "to_string",
+              "to_number",
+              "to_integer"
+            ]
+          }
+        }
+      },
+      "DesignScenarioEventFailureRoutes": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [],
+        "properties": {
+          "retryChannelId": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,100}$",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "deadLetterChannelId": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,100}$",
+            "minLength": 1,
+            "maxLength": 100
+          }
+        }
+      },
+      "DesignScenarioEventAPILink": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "contractId",
+          "operationKey"
+        ],
+        "properties": {
+          "contractId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "operationKey": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      },
+      "DesignScenarioEventStateLink": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "contractId",
+          "diagramId",
+          "transitionId"
+        ],
+        "properties": {
+          "contractId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "diagramId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "transitionId": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      },
+      "DesignScenarioUpsertEventServerCommand": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "type",
+          "eventServer"
+        ],
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "upsert_event_server"
+          },
+          "eventServer": {
+            "$ref": "#/components/schemas/DesignScenarioEventServer"
+          }
+        }
+      },
+      "DesignScenarioRemoveEventServerCommand": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "type",
+          "id"
+        ],
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "remove_event_server"
+          },
+          "id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,100}$",
+            "minLength": 1,
+            "maxLength": 100
+          }
+        }
+      },
+      "DesignScenarioUpsertEventChannelCommand": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "type",
+          "eventChannel"
+        ],
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "upsert_event_channel"
+          },
+          "eventChannel": {
+            "$ref": "#/components/schemas/DesignScenarioEventChannel"
+          }
+        }
+      },
+      "DesignScenarioRemoveEventChannelCommand": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "type",
+          "id"
+        ],
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "remove_event_channel"
+          },
+          "id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,100}$",
+            "minLength": 1,
+            "maxLength": 100
+          }
+        }
+      },
+      "DesignScenarioUpsertEventMessageCommand": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "type",
+          "eventMessage"
+        ],
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "upsert_event_message"
+          },
+          "eventMessage": {
+            "$ref": "#/components/schemas/DesignScenarioEventMessage"
+          }
+        }
+      },
+      "DesignScenarioRemoveEventMessageCommand": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "type",
+          "id"
+        ],
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "remove_event_message"
+          },
+          "id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,100}$",
+            "minLength": 1,
+            "maxLength": 100
+          }
+        }
+      },
+      "DesignScenarioUpsertEventSchemaCommand": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "type",
+          "eventSchema"
+        ],
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "upsert_event_schema"
+          },
+          "eventSchema": {
+            "$ref": "#/components/schemas/DesignScenarioEventSchema"
+          }
+        }
+      },
+      "DesignScenarioRemoveEventSchemaCommand": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "type",
+          "id"
+        ],
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "remove_event_schema"
+          },
+          "id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,100}$",
+            "minLength": 1,
+            "maxLength": 100
+          }
+        }
+      },
+      "DesignScenarioUpsertEventContractCommand": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "type",
+          "eventContract"
+        ],
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "upsert_event_contract"
+          },
+          "eventContract": {
+            "$ref": "#/components/schemas/DesignScenarioEventContract"
+          }
+        }
+      },
+      "DesignScenarioRemoveEventContractCommand": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "type",
+          "id"
+        ],
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "remove_event_contract"
+          },
+          "id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,100}$",
+            "minLength": 1,
+            "maxLength": 100
+          }
+        }
+      },
+      "DesignScenarioUpsertEventOperationCommand": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "type",
+          "contractId",
+          "eventOperation"
+        ],
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "upsert_event_operation"
+          },
+          "contractId": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,100}$",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "eventOperation": {
+            "$ref": "#/components/schemas/DesignScenarioEventOperation"
+          }
+        }
+      },
+      "DesignScenarioRemoveEventOperationCommand": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "type",
+          "contractId",
+          "id"
+        ],
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "remove_event_operation"
+          },
+          "contractId": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,100}$",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,100}$",
+            "minLength": 1,
+            "maxLength": 100
+          }
+        }
+      },
+      "DesignScenarioSetEventFailureRoutesCommand": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "type",
+          "contractId",
+          "id"
+        ],
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "set_event_failure_routes"
+          },
+          "contractId": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,100}$",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,100}$",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "failureRoutes": {
+            "$ref": "#/components/schemas/DesignScenarioEventFailureRoutes"
+          }
+        }
+      },
+      "DesignScenarioUpsertEventApiLinkCommand": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "type",
+          "contractId",
+          "id",
+          "apiLink"
+        ],
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "upsert_event_api_link"
+          },
+          "contractId": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,100}$",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,100}$",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "apiLink": {
+            "$ref": "#/components/schemas/DesignScenarioEventAPILink"
+          }
+        }
+      },
+      "DesignScenarioRemoveEventApiLinkCommand": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "type",
+          "contractId",
+          "id",
+          "apiLink"
+        ],
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "remove_event_api_link"
+          },
+          "contractId": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,100}$",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,100}$",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "apiLink": {
+            "$ref": "#/components/schemas/DesignScenarioEventAPILink"
+          }
+        }
+      },
+      "DesignScenarioUpsertEventStateLinkCommand": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "type",
+          "contractId",
+          "id",
+          "stateLink"
+        ],
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "upsert_event_state_link"
+          },
+          "contractId": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,100}$",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,100}$",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "stateLink": {
+            "$ref": "#/components/schemas/DesignScenarioEventStateLink"
+          }
+        }
+      },
+      "DesignScenarioRemoveEventStateLinkCommand": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "type",
+          "contractId",
+          "id",
+          "stateLink"
+        ],
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "remove_event_state_link"
+          },
+          "contractId": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,100}$",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,100}$",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "stateLink": {
+            "$ref": "#/components/schemas/DesignScenarioEventStateLink"
+          }
+        }
+      },
+      "DesignScenarioEventMapLocator": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "pointer"
+        ],
+        "properties": {
+          "pointer": {
+            "type": "string"
+          },
+          "entityId": {
+            "type": "string"
+          },
+          "contractId": {
+            "type": "string"
+          },
+          "operationId": {
+            "type": "string"
+          },
+          "participantId": {
+            "type": "string"
+          },
+          "httpContractId": {
+            "type": "string"
+          },
+          "operationKey": {
+            "type": "string"
+          },
+          "diagramId": {
+            "type": "string"
+          },
+          "transitionId": {
+            "type": "string"
+          },
+          "method": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "copy",
+              "linked"
+            ]
+          },
+          "pinnedRevisionId": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          }
+        }
+      },
+      "DesignScenarioEventMapNode": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "kind",
+          "label",
+          "locator"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "participant",
+              "server",
+              "channel",
+              "message",
+              "schema",
+              "operation",
+              "api_operation",
+              "state_transition"
+            ]
+          },
+          "label": {
+            "type": "string"
+          },
+          "locator": {
+            "$ref": "#/components/schemas/DesignScenarioEventMapLocator"
+          },
+          "groupId": {
+            "type": "string"
+          },
+          "clientId": {
+            "type": "string"
+          }
+        }
+      },
+      "DesignScenarioEventMapEdge": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "kind",
+          "source",
+          "target",
+          "label",
+          "locator"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "ownership",
+              "server_channel",
+              "channel_message",
+              "payload",
+              "key",
+              "headers",
+              "send",
+              "receive",
+              "retry",
+              "dead_letter",
+              "api_link",
+              "state_link"
+            ]
+          },
+          "source": {
+            "type": "string"
+          },
+          "target": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "locator": {
+            "$ref": "#/components/schemas/DesignScenarioEventMapLocator"
+          }
+        }
+      },
+      "DesignScenarioEventMapDiagnostic": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "code",
+          "severity",
+          "pointer",
+          "message"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string"
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "error",
+              "warning",
+              "info"
+            ]
+          },
+          "pointer": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "elementId": {
+            "type": "string"
+          }
+        }
+      },
+      "DesignScenarioEventMapCoverage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "nodesReturned",
+          "edgesReturned",
+          "diagnosticsReturned",
+          "truncatedReasons"
+        ],
+        "properties": {
+          "nodesReturned": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "edgesReturned": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "diagnosticsReturned": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "truncatedReasons": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "nodes",
+                "edges",
+                "diagnostics",
+                "output"
+              ]
+            },
+            "maxItems": 4
+          }
+        }
+      },
+      "DesignScenarioEventMapReport": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "scenarioId",
+          "version",
+          "proposed",
+          "nodes",
+          "edges",
+          "diagnostics",
+          "coverage",
+          "complete"
+        ],
+        "properties": {
+          "scenarioId": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "version": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "revisionId": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "proposed": {
+            "type": "boolean"
+          },
+          "nodes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DesignScenarioEventMapNode"
+            },
+            "maxItems": 5000
+          },
+          "edges": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DesignScenarioEventMapEdge"
+            },
+            "maxItems": 10000
+          },
+          "diagnostics": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DesignScenarioEventMapDiagnostic"
+            },
+            "maxItems": 2000
+          },
+          "coverage": {
+            "$ref": "#/components/schemas/DesignScenarioEventMapCoverage"
+          },
+          "complete": {
+            "type": "boolean"
+          }
+        }
+      },
+      "AnalyzeDesignScenarioEventMapRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "document"
+        ],
+        "properties": {
+          "document": {
+            "$ref": "#/components/schemas/DesignScenarioDocument"
           }
         }
       }
@@ -21643,6 +22631,135 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/ResponseRuleExecutionInput"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/design-scenarios/{id}/event-map": {
+      "get": {
+        "tags": [
+          "design-scenarios"
+        ],
+        "operationId": "getDesignScenarioEventMap",
+        "summary": "Read saved Kafka topology",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "revisionId",
+            "in": "query",
+            "required": false,
+            "description": "Immutable scenario revision; defaults to current draft",
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Bounded event topology, pinned contract links and diagnostics",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DesignScenarioEventMapReport"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "design-scenarios"
+        ],
+        "operationId": "analyzeDesignScenarioEventMap",
+        "summary": "Analyze proposed Kafka topology without saving or executing",
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Bounded event topology, pinned contract links and diagnostics",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DesignScenarioEventMapReport"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "413": {
+            "$ref": "#/components/responses/PayloadTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AnalyzeDesignScenarioEventMapRequest"
               }
             }
           }

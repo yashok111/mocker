@@ -113,6 +113,189 @@ function operation(document: ApiDocument, method: string, path: string) {
 }
 
 describe("whole-canvas API conversion", () => {
+  it("exports selected inherited aliases with parameters and response dependencies", () => {
+    const document = fixture();
+    document.contracts = [
+      {
+        id: "source",
+        name: "Source",
+        mode: "linked",
+        source: { designId: 1, revisionId: 1 },
+        document: {
+          openapi: "3.1.0",
+          info: { title: "Source", version: "1" },
+          paths: {
+            "/one/{id}": {
+              $ref: "#/components/pathItems/Shared",
+              "x-mocker-canvas-operation-ids": { get: "one" },
+              parameters: [{ in: "query", name: "mode", schema: { type: "string" } }],
+            },
+            "/two/{id}": {
+              $ref: "#/components/pathItems/Shared",
+              "x-mocker-canvas-operation-ids": { get: "two" },
+            },
+          },
+          components: {
+            pathItems: {
+              Shared: {
+                servers: [{ url: "https://shared.example.test" }],
+                parameters: [
+                  { in: "path", name: "id", required: true, schema: { type: "string" } },
+                ],
+                get: {
+                  operationId: "getShared",
+                  responses: {
+                    "200": {
+                      description: "ok",
+                      content: {
+                        "application/json": { schema: { $ref: "#/components/schemas/Result" } },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            schemas: { Result: { type: "object", properties: { id: { type: "string" } } } },
+          },
+        },
+      },
+    ];
+    document.messages = [
+      request("one", "GET /one/{id}", { operation: { contractId: "source", operationKey: "one" } }),
+      request("two", "GET /two/{id}", { operation: { contractId: "source", operationKey: "two" } }),
+    ];
+    const before = structuredClone(document);
+    const preview = previewCanvasContract(document);
+    expect(preview.rows.map(({ path }) => path)).toEqual(["/one/{id}", "/two/{id}"]);
+    const result = buildCanvasContract(document, preview.rows, "Export", "out");
+    expect(result.errors).toEqual([]);
+    expect(result.bindings).toEqual([
+      { messageId: "one", operationKey: "out:one" },
+      { messageId: "two", operationKey: "out:two" },
+    ]);
+    const api = result.contract!.document;
+    expect(operation(api, "get", "/one/{id}").operationId).toBe("getShared__canvas_out_one");
+    expect(operation(api, "get", "/two/{id}").operationId).toBe("getShared__canvas_out_two");
+    expect(operation(api, "get", "/one/{id}").servers).toEqual([
+      { url: "https://shared.example.test" },
+    ]);
+    expect(operation(api, "get", "/one/{id}").parameters).toEqual([
+      { in: "path", name: "id", required: true, schema: { type: "string" } },
+      { in: "query", name: "mode", schema: { type: "string" } },
+    ]);
+    expect((api.paths as Record<string, Record<string, unknown>>)["/one/{id}"]).not.toHaveProperty(
+      "$ref",
+    );
+    expect(
+      (api.components as Record<string, Record<string, unknown>>).schemas?.Result,
+    ).toBeDefined();
+    expect(document).toEqual(before);
+  });
+  it("materializes a selected alias whose local pointer names another path", () => {
+    const document = fixture();
+    document.contracts = [
+      {
+        id: "source",
+        name: "Source",
+        document: {
+          paths: {
+            "/source": { get: { responses: { "200": { description: "ok" } } } },
+            "/alias": {
+              $ref: "#/paths/~1source",
+              "x-mocker-canvas-operation-ids": { get: "alias" },
+            },
+          },
+        },
+      },
+    ];
+    document.messages = [
+      request("call", "GET /alias", { operation: { contractId: "source", operationKey: "alias" } }),
+    ];
+    const result = build(document);
+    expect(result.errors).toEqual([]);
+    expect(operation(result.contract!.document, "get", "/alias").responses).toEqual({
+      "200": { description: "ok" },
+    });
+    expect((result.contract!.document.paths as Record<string, unknown>)["/source"]).toBeUndefined();
+  });
+
+  it("rejects an inherited response reference retargeted to another source", () => {
+    const document = fixture();
+    document.contracts = [
+      {
+        id: "a",
+        name: "A",
+        document: {
+          paths: {
+            "/alias": {
+              $ref: "#/components/pathItems/Shared",
+              "x-mocker-canvas-operation-ids": { get: "alias" },
+            },
+            "/dependency": {
+              get: {
+                responses: {
+                  "200": {
+                    description: "A",
+                    content: { "application/json": { schema: { type: "integer" } } },
+                  },
+                },
+              },
+            },
+          },
+          components: {
+            pathItems: {
+              Shared: {
+                get: {
+                  responses: {
+                    "200": {
+                      description: "ok",
+                      content: {
+                        "application/json": {
+                          schema: {
+                            $ref: "#/paths/~1dependency/get/responses/200/content/application~1json/schema",
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+      {
+        id: "b",
+        name: "B",
+        document: {
+          paths: {
+            "/dependency": {
+              get: {
+                "x-mocker-canvas-operation-id": "dependency",
+                responses: {
+                  "200": {
+                    description: "B",
+                    content: { "application/json": { schema: { type: "string" } } },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    ];
+    document.messages = [
+      request("alias", "GET /alias", { operation: { contractId: "a", operationKey: "alias" } }),
+      request("dependency", "GET /dependency", {
+        operation: { contractId: "b", operationKey: "dependency" },
+      }),
+    ];
+    const result = build(document);
+    expect(result.contract).toBeNull();
+    expect(result.errors.some(({ message }) => message.includes("#/paths/~1dependency"))).toBe(
+      true,
+    );
+  });
   it("preserves callback extension payloads without treating them as operations", () => {
     const document = jwtFixture();
     const source = document.contracts[0]!.document;

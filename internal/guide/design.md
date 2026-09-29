@@ -43,7 +43,9 @@ not certify compatibility. Read `diagnostics` and `coverage.truncatedReasons`
 before concluding that no consumers were found. Limits are 500 changes, 10,000
 reference sites per document, 200,000 traversal visits, 5,000 entities, 10,000
 evidence records and 4 MiB of output. Scenario reads stop at 500 current drafts,
-1,000 usages or 64 MiB. The graph shows at most 100 nodes for the selected change;
+1,000 operation usages or 64 MiB. Field analysis checks at most 20,000 usage
+roles and returns at most 2,000 field findings (`scenario_fields` truncation).
+The graph shows at most 100 nodes for the selected change;
 the list retains the returned evidence.
 
 Scenario usages refer to **current saved scenario drafts**, read separately
@@ -51,8 +53,19 @@ from the API snapshots. Every locator includes the actual scenario revision,
 contract ID, pinned API revision and `copy`/`linked` mode. A copied contract may
 have been edited even when its pinned revision matches the comparison base.
 Linked snapshots are pinned too; runtime separately checks stale API revisions.
-The report identifies operation usage. It does not validate individual bindings,
-assertions, extracts or status expectations against a replaced contract.
+The separate `fieldImpacts` list compares fields used by bindings, assertions
+and extracts against the proposal. `usagePointer` locates the saved setting;
+`operationMessageId` identifies the response/request step, which may differ
+from the binding's owning message. `before`/`after` distinguish `present`,
+`absent` and `unknown` contract fields. Unknown schemas require review;
+undeclared properties in open objects are not proof that a response lacks them.
+Binding compatibility includes the complete ordered transformation chain.
+
+`broken` requires a linked contract pinned to the comparison base with matching
+embedded JSON content. Copies, older pins and locally edited snapshots produce
+hypothetical `review` findings. These checks use the saved embedded contract and
+the proposal, preserve exact numbers, and never refresh or execute a scenario.
+They do not prove that a runtime conversion will succeed for every value.
 
 Use source/diff navigation to inspect the reported side. Historical and deleted
 elements open in a read-only comparison. Opening a scenario shows its current
@@ -61,13 +74,15 @@ version, which may be newer than the revision named in the report.
 ## Choosing an operation for a sequence step
 
 A sequence step uses the stable **operationKey** stored in the authored OpenAPI
-operation's **x-mocker-canvas-operation-id** extension. Copy the value exactly;
-it is an opaque string and is not required to be a UUID.
+operation's **x-mocker-canvas-operation-id** extension. For an operation inherited
+through a Path Item `$ref`, use **x-mocker-canvas-operation-ids.<method>** on the
+concrete consumer path. Copy the value exactly; it is an opaque string and is
+not required to be a UUID.
 
 | Identifier | Read it from | Use it for |
 |---|---|---|
 | `opKey`, e.g. `POST%20%2Forders` | `find_operations` | Workspace tools such as `get_operation` and response overrides |
-| `operationKey` | `x-mocker-canvas-operation-id` in the pinned contract | `message.operation` and the `bind_operation` command |
+| `operationKey` | Inline `x-mocker-canvas-operation-id`, or per-path `x-mocker-canvas-operation-ids.<method>`, in the pinned contract | `message.operation` and the `bind_operation` command |
 | `operationId`, e.g. `createOrder` | Standard OpenAPI operation | OpenAPI naming; it does not identify a sequence binding |
 
 For a new sequence using an API project:
@@ -544,9 +559,16 @@ methods, cycles, missing or invalid targets, excessive reference depth and
 unsupported external references produce diagnostics. No external document is
 fetched. Resolve diagnostics before saving a valid API draft.
 
-This reference support covers map projection, assignment and schema analysis.
-Mock runtime indexing and sequence operation bindings currently read literal
-operations under `paths`; inherited map keys do not enable those flows.
+HTTP mocks, response-rule bindings, sequence operation selection, data bindings
+and scenario exports use the same local Path Item operations. Each alias keeps
+its concrete route and stable key; responses use the shared authored definition.
+Path Item parameters combine from the farthest definition to the nearest by
+`in` and `name`, with operation parameters taking precedence.
+
+For specifications imported before this support, run the existing rederive
+action or import the same document again to add missing inherited operation rows.
+Existing operation IDs and response overrides are preserved during that refresh.
+No external references are downloaded and the authored document stays unchanged.
 
 ## Sequence canvas: edit, run, inspect, vary
 
@@ -865,6 +887,16 @@ for example `"Bearer "`, and is allowed only for string destinations. JSON body
 values retain their original types and number precision. Existing templates and
 extractions remain supported; bindings override their occupied destinations.
 
+Optional `transforms` is an ordered array of up to eight strict `{kind}` objects:
+`trim`, `lower` and `upper` take strings; `to_string` takes a non-null scalar;
+`to_number` and `to_integer` take strings containing strict JSON numeric tokens.
+For example, `"transforms":[{"kind":"trim"},{"kind":"to_integer"}]` converts
+`" 9007199254740993 "` to the exact JSON integer `9007199254740993`. Numeric
+conversions reject surrounding whitespace unless an earlier `trim` removes it;
+`to_integer` rejects decimals and exponents. No expressions or fallbacks exist.
+Analysis checks types after the complete chain; value-dependent conversion
+failures stop before the recipient request. The literal prefix is applied last.
+
 The source must be an earlier enabled HTTP request with an operation. Every
 source opt/loop/alt-branch must also enclose the target. Values cannot escape a
 branch or loop or cross branches. A loop uses only successful source occurrences
@@ -877,7 +909,10 @@ Run the whole scenario with `run_design_scenario`: direct
 Read `get_design_scenario_run` and inspect each step's optional `bindingResults`:
 `bindingId`, `sourceMessageId`, `sourcePointer`, `sourceOccurrence`, optional
 `sourceIterations`, `target`, and `valueJson` show the exact successful source
-and original typed value. The final prefixed value is visible in the request.
+and original typed value. Optional `transformedValueJson` records the transformed
+typed value before the prefix; older reports only have the source `valueJson`.
+The final prefixed value is visible in the request. Documentation exports list
+the chain without captured execution values.
 Use the report's document snapshot when interpreting historical runs.
 Standalone HTTP, cURL and Postman exports reject steps with bindings explicitly.
 
@@ -908,3 +943,57 @@ means no input was found, not that the path is impossible. The search checks up 
 proposals, and coverage increases only through actual observed run decisions.
 Executed cases persist as named runs with their inputVariables; there is no
 separate saved test-suite entity in this version.
+
+### Kafka event map and targeted edits
+
+Use `get_design_scenario_event_map {scenarioId, revisionId?}` for the current
+saved draft or an exact historical revision. The report returns `scenarioId`,
+current `version`, selected `revisionId`, `proposed:false`, `nodes`, `edges`,
+`diagnostics`, `coverage` and `complete`. The projector reads one snapshot and
+never contacts Kafka. Nodes include participants, servers, channels, messages,
+schemas, event operations, linked HTTP operations and state transitions.
+Receive operations retain their own consumer group, client ID and failure routes.
+
+Use `analyze_design_scenario_event_map {scenarioId, document}` for an unsaved
+complete scenario document. This is read-only and returns `proposed:true` without
+a revision ID. Inspect diagnostics even when nodes exist. Missing links and
+truncation set `complete:false`. Caps are 5,000 nodes, 10,000 edges, 2,000
+diagnostics and 4 MiB; `coverage.truncatedReasons` explains returned limits.
+Graph IDs are opaque; navigate with the returned semantic IDs and JSON Pointer
+in `locator`. All HTTP and state links resolve against embedded contract
+snapshots. A linked contract retains its pinned revision; a copy remains a copy.
+
+Optional event-operation metadata:
+
+```json
+{"failureRoutes":{"retryChannelId":"orders-retry","deadLetterChannelId":"orders-dlq"},"apiLinks":[{"contractId":"orders-http","operationKey":"create-order"}],"stateLinks":[{"contractId":"orders-http","diagramId":"orders","transitionId":"created"}]}
+```
+
+`failureRoutes` is receive-only. Targets must exist and differ from the source
+channel and each other. Cycles and cross-server routes produce warnings. API and
+state link arrays allow at most 100 unique tuples each; dangling cross-model
+links remain editable diagnostics. Operation keys are exact opaque contract keys,
+including concrete-path keys for local Path Item aliases. This metadata does not
+change AsyncAPI exports or execute retry/DLQ behavior.
+
+For edits, read `get_design_scenario` and call
+`apply_design_scenario_event_map_commands {scenarioId, expectedVersion, commands,
+summary?}` with 1–100 commands. The generic `apply_design_scenario_commands`
+also accepts these variants:
+
+- `upsert_event_server|channel|message|schema|contract`: corresponding complete
+  `eventServer|eventChannel|eventMessage|eventSchema|eventContract`.
+- `remove_event_server|channel|message|schema|contract`: `id`.
+- `upsert_event_operation`: `contractId`, complete `eventOperation`.
+- `remove_event_operation`: `contractId`, operation `id`.
+- `set_event_failure_routes`: `contractId`, operation `id`, optional
+  `failureRoutes`; omit routes to clear them.
+- `upsert_event_api_link|remove_event_api_link`: `contractId`, operation `id`,
+  `apiLink`.
+- `upsert_event_state_link|remove_event_state_link`: `contractId`, operation `id`,
+  `stateLink`.
+
+Link upserts are idempotent by tuple. Referenced definitions cannot be removed;
+remove their dependents first in the same ordered batch. Every batch creates one
+revision or changes nothing. Reconcile a stale `expectedVersion` after reading
+the current document; do not blind-retry a full model replacement.

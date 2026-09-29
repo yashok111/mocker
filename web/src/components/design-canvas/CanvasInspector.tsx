@@ -25,7 +25,8 @@ import {
 import { Link } from "@tanstack/react-router";
 import { DocumentForm } from "../api-designer/DocumentForm";
 import type { FormDraftStore } from "../api-designer/forms/formDraftStore";
-import { getOperation, listOperations, listSchemas } from "../api-designer/documentModel";
+import { listSchemas, operationPointer, setAtJsonPointer } from "../api-designer/documentModel";
+import { CANVAS_ALIAS_KEYS, getCanvasOperation, listCanvasOperations } from "./canvasOperations";
 import {
   addLocalOperation,
   OPERATION_KEY,
@@ -268,6 +269,9 @@ function MessageInspector({
     () => scopeFormDrafts(formStore, resolved?.contract.id ?? "none"),
     [formStore, resolved?.contract.id],
   );
+  const effective = resolved
+    ? getCanvasOperation(resolved.contract.document, resolved.location)
+    : undefined;
   const index = document.messages.findIndex((item) => item.id === message.id);
   const priorRequests = document.messages
     .slice(0, index)
@@ -296,8 +300,7 @@ function MessageInspector({
     onChange(updateMessage(document, message.id, next));
   };
   const operationChoices = document.contracts.flatMap((contract) =>
-    listOperations(contract.document).flatMap((location) => {
-      const key = getOperation(contract.document, location)?.[OPERATION_KEY];
+    listCanvasOperations(contract.document).flatMap(({ location, key }) => {
       return typeof key !== "string"
         ? []
         : [
@@ -310,6 +313,13 @@ function MessageInspector({
   );
   const schemas = resolved ? listSchemas(resolved.contract.document) : [];
   const selectedSchema = schemas.includes(schema) ? schema : "";
+  const formDocument =
+    resolved && effective?.inherited && !selectedSchema
+      ? setAtJsonPointer(resolved.contract.document, operationPointer(resolved.location), {
+          ...effective.operation,
+          [OPERATION_KEY]: effective.key,
+        })
+      : resolved?.contract.document;
 
   return (
     <>
@@ -525,22 +535,39 @@ function MessageInspector({
               ]}
             />
           ) : null}
+          {effective?.inherited && !selectedSchema ? (
+            <Text size="xs" c="dimmed">
+              Изменение унаследованной операции создаст локальное переопределение только для этого
+              пути.
+            </Text>
+          ) : null}
           <DocumentForm
-            document={resolved.contract.document}
+            document={formDocument!}
             selection={
               selectedSchema
                 ? { kind: "schema", name: selectedSchema }
                 : { kind: "operation", ...resolved.location }
             }
             draftStore={scopedStore}
-            onChange={(next) =>
+            onChange={(next) => {
+              if (effective?.inherited && !selectedSchema) {
+                const paths = next.paths as Record<string, Record<string, unknown>>;
+                const pathItem = paths[resolved.location.path];
+                const aliases = pathItem?.[CANVAS_ALIAS_KEYS];
+                if (aliases && typeof aliases === "object" && !Array.isArray(aliases)) {
+                  const updated: Record<string, unknown> = { ...aliases };
+                  delete updated[resolved.location.method];
+                  if (Object.keys(updated).length) pathItem![CANVAS_ALIAS_KEYS] = updated;
+                  else delete pathItem![CANVAS_ALIAS_KEYS];
+                }
+              }
               onChange({
                 ...document,
                 contracts: document.contracts.map((contract) =>
                   contract.id === resolved.contract.id ? { ...contract, document: next } : contract,
                 ),
-              })
-            }
+              });
+            }}
           />
         </>
       ) : null}

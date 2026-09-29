@@ -1,7 +1,10 @@
 import { Graph } from "@antv/x6";
 import { useEffect, useRef } from "react";
 import DiagramViewport from "../diagram/DiagramViewport";
+import { installCanvasWheelZoom } from "../diagram/canvasControls";
 import { createInitialFit } from "../diagram/initialFit";
+import type { DiagramLayoutResult } from "../diagram/elkLayout";
+import { applyDiagramRoutes } from "../diagram/elkX6";
 import {
   diagramCardBody,
   diagramEdgeLabel,
@@ -10,6 +13,7 @@ import {
 } from "../diagram/presentation";
 import type { StateDiagram, Selection } from "./model";
 import styles from "./StateDiagram.module.css";
+import { STATE_HEIGHT, STATE_WIDTH, transitionLabel } from "./layout";
 
 // Leave room for labels above horizontal edges when fitting the model bounds.
 const FIT_PADDING = 86;
@@ -17,6 +21,7 @@ const SIDES = ["top", "right", "bottom", "left"] as const;
 
 type Props = {
   diagram: StateDiagram;
+  layout?: DiagramLayoutResult | null;
   selection: Selection;
   activeState?: string;
   onSelect: (s: Selection) => void;
@@ -28,6 +33,7 @@ export default function StateGraph(props: Props) {
   const graphRef = useRef<Graph | null>(null);
   const current = useRef(props);
   const initialFit = useRef<ReturnType<typeof createInitialFit> | null>(null);
+  const appliedLayout = useRef<DiagramLayoutResult | null>(null);
   const { diagram, selection, activeState } = props;
   useEffect(() => {
     current.current = props;
@@ -36,7 +42,7 @@ export default function StateGraph(props: Props) {
     if (!host.current) return;
     const graph = new Graph({
       container: host.current,
-      ...diagramOptions(0.25),
+      ...diagramOptions(),
       // Remove old SVG views before rebuilding states and transitions with the same IDs.
       async: false,
       connecting: {
@@ -64,6 +70,7 @@ export default function StateGraph(props: Props) {
       },
     });
     graphRef.current = graph;
+    const removeWheelZoom = installCanvasWheelZoom(graph, host.current);
     const fit = createInitialFit(graph, host.current, FIT_PADDING);
     initialFit.current = fit;
     graph.on("resize", () => {
@@ -93,6 +100,7 @@ export default function StateGraph(props: Props) {
         current.current.onConnect(from.slice(6), to.slice(6));
     });
     return () => {
+      removeWheelZoom();
       graph.dispose();
       graphRef.current = null;
       initialFit.current = null;
@@ -112,8 +120,8 @@ export default function StateGraph(props: Props) {
         zIndex: 1,
         x: state.x,
         y: state.y,
-        width: 190,
-        height: 76,
+        width: STATE_WIDTH,
+        height: STATE_HEIGHT,
         label: `${state.name}\n${active ? "● Сейчас · " : ""}${state.id === diagram.initialStateId ? "Начальное" : state.terminal ? "Конечное" : "Состояние"}`,
         attrs: {
           body: {
@@ -215,24 +223,27 @@ export default function StateGraph(props: Props) {
         },
         attrs: { line: diagramEdgeLine(selected) },
         labels: [
-          diagramEdgeLabel(
-            transition.name +
-              (transition.binding
-                ? `\n${transition.binding.method.toUpperCase()} ${transition.binding.path}`
-                : "") +
-              (transition.guard ? "\n[условие]" : ""),
-            {
-              // A horizontal gap can be narrower than an API path. Lift its
-              // label above the states instead of covering their ports/bodies.
-              position: { distance: 0.5, offset: { x: 0, y: !vertical && !same ? -84 : 0 } },
-              fill: "#f5f7f4",
-            },
-          ),
+          diagramEdgeLabel(transitionLabel(transition), {
+            // A horizontal gap can be narrower than an API path. Lift its
+            // label above the states instead of covering their ports/bodies.
+            position: { distance: 0.5, offset: { x: 0, y: !vertical && !same ? -84 : 0 } },
+            fill: "#f5f7f4",
+          }),
         ],
       });
     }
     initialFit.current?.(diagram.id);
   }, [diagram, selection, activeState]);
+  useEffect(() => {
+    const graph = graphRef.current;
+    if (!graph) return;
+    // A late layout must inspect live positions without rebuilding a node
+    // currently being dragged from its last saved coordinates.
+    const matching = props.layout && applyDiagramRoutes(graph, props.layout);
+    if (matching && appliedLayout.current !== props.layout)
+      graph.zoomToFit({ padding: FIT_PADDING, maxScale: 1 });
+    appliedLayout.current = matching ? props.layout! : null;
+  }, [diagram, selection, activeState, props.layout]);
   return (
     <DiagramViewport
       hostRef={host}

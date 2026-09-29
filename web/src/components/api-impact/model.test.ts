@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { impactGraphModel } from "./model";
 import { reportFixture } from "./fixtures.test-support";
+import { layoutDiagram } from "../diagram/elkLayout";
+import { impactLayoutInput } from "./layout";
 
 describe("impactGraphModel", () => {
   it("uses the server reference chain, side and direction without adding unrelated dependencies", () => {
@@ -12,6 +14,8 @@ describe("impactGraphModel", () => {
     expect(graph.edges[0]!.label).toContain("Было");
     expect(graph.edges[0]!.label).toContain("Ответ");
     expect(graph.truncated).toBe(false);
+    expect(graph.nodes.every((node) => !("x" in node) && !("y" in node))).toBe(true);
+    expect(graph.edges.every((edge) => !("vertices" in edge))).toBe(true);
   });
 
   it("caps nodes at 100 and never creates dangling edges", () => {
@@ -28,7 +32,7 @@ describe("impactGraphModel", () => {
     expect(report.evidence).toHaveLength(140);
   });
 
-  it("keeps fan-out labels clear of sibling routes, cards and each other", () => {
+  it("lays out twelve fan-out branches with labels clear of foreign routes, cards and each other", async () => {
     const report = reportFixture();
     report.evidence = Array.from({ length: 12 }, (_, index) => ({
       ...report.evidence[0]!,
@@ -37,40 +41,41 @@ describe("impactGraphModel", () => {
       direction: index % 3 === 0 ? "unknown" : "response",
     }));
     const graph = impactGraphModel(report, report.changes[0]!);
-    const nodes = new Map(graph.nodes.map((node) => [node.id, node]));
-    const routes = graph.edges.map((edge) => {
-      const source = nodes.get(edge.source)!;
-      const target = nodes.get(edge.target)!;
-      expect(source.width).toBeGreaterThan(0);
-      expect(source.height).toBeGreaterThan(0);
-      const points = [
-        { x: source.x + source.width, y: source.y + source.height / 2 },
-        ...edge.vertices,
-        { x: target.x, y: target.y + target.height / 2 },
-      ];
-      return { edge, points };
-    });
-    const boxes = routes
-      .filter(({ edge }) => edge.label)
-      .map(({ edge, points }) => {
-        const end = points.at(-1)!;
-        const start = points.at(-2)!;
-        expect(start.y).toBe(end.y);
-        expect(edge.labelPosition.distance).toBeLessThan(-1);
-        const center = end.x + edge.labelPosition.distance;
-        const width = edge.labelMaxWidth + 20;
-        const height = edge.labelMaxHeight + 12;
-        const box = { x: center - width / 2, y: end.y - height / 2, width, height };
-        expect(box.x).toBeGreaterThan(start.x + 6);
-        expect(box.x + width).toBeLessThan(end.x - 8);
-        for (const node of graph.nodes) expect(overlaps(box, node)).toBe(false);
-        for (const route of routes) {
-          if (route.edge.id === edge.id) continue;
+    const layout = await layoutDiagram(impactLayoutInput(graph));
+    for (let index = 0; index < layout.nodes.length; index++) {
+      for (const other of layout.nodes.slice(index + 1))
+        expect(overlaps(layout.nodes[index]!, other)).toBe(false);
+    }
+    for (const edge of layout.edges) {
+      for (const node of layout.nodes) {
+        if (node.id === edge.source || node.id === edge.target) continue;
+        for (let index = 1; index < edge.points.length; index++) {
+          const start = edge.points[index - 1]!,
+            end = edge.points[index]!;
+          expect(
+            overlaps(
+              { x: node.x + 1, y: node.y + 1, width: node.width - 2, height: node.height - 2 },
+              {
+                x: Math.min(start.x, end.x),
+                y: Math.min(start.y, end.y),
+                width: Math.max(0.01, Math.abs(start.x - end.x)),
+                height: Math.max(0.01, Math.abs(start.y - end.y)),
+              },
+            ),
+          ).toBe(false);
+        }
+      }
+    }
+    const boxes = layout.edges
+      .filter((edge) => edge.label)
+      .map((edge) => {
+        const box = edge.label!;
+        for (const node of layout.nodes) expect(overlaps(box, node)).toBe(false);
+        for (const route of layout.edges) {
+          if (route.id === edge.id) continue;
           for (let i = 1; i < route.points.length; i++) {
             const a = route.points[i - 1]!;
             const b = route.points[i]!;
-            // A 1px-wide route is enough to catch the original shared spine
-            // crossing a sibling label, including a zero-length segment.
             expect(
               overlaps(box, {
                 x: Math.min(a.x, b.x),

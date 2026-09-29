@@ -6,6 +6,45 @@ import { addLocalOperation, emptyCanvas } from "./canvasModel";
 import { CanvasCreateOperationModal } from "./CanvasCreateOperationModal";
 
 describe("CanvasCreateOperationModal", () => {
+  it("offers an inherited matching operation for reuse", async () => {
+    const document = {
+      ...emptyCanvas(),
+      contracts: [
+        {
+          id: "shared",
+          name: "Shared",
+          document: {
+            paths: {
+              "/status": {
+                $ref: "#/components/pathItems/Status",
+                "x-mocker-canvas-operation-ids": { get: "alias" },
+              },
+            },
+            components: {
+              pathItems: { Status: { get: { responses: { "200": { description: "ok" } } } } },
+            },
+          },
+        },
+      ],
+    };
+    const onCreate = vi.fn();
+    renderWithProviders(
+      <CanvasCreateOperationModal
+        document={document}
+        label="GET /status"
+        onClose={vi.fn()}
+        onCreate={onCreate}
+      />,
+    );
+    await userEvent.selectOptions(screen.getByLabelText("Операция уже есть"), "shared");
+    await userEvent.click(screen.getByRole("button", { name: "Создать операцию" }));
+    expect(onCreate).toHaveBeenCalledWith({
+      method: "GET",
+      path: "/status",
+      responseStatus: "default",
+      contractId: "shared",
+    });
+  });
   it("requires an explicit endpoint for a descriptive label", async () => {
     const onCreate = vi.fn();
     renderWithProviders(

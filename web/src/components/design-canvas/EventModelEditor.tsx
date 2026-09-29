@@ -15,6 +15,7 @@ import {
 } from "@mantine/core";
 import type { FormDraftStore } from "../api-designer/forms/formDraftStore";
 import { createCanvasId } from "./canvasId";
+import { EventOperationMetadata } from "./EventOperationMetadata";
 import {
   createEventModel,
   describeArrowSide,
@@ -59,6 +60,8 @@ function diagnosticControl(kind: string, pointer?: string): { label: string; ind
   }
   const index = Number.isInteger(operationIndex) && operationIndex >= 0 ? operationIndex : 0;
   if (operationAt >= 0) {
+    if (parts.includes("apiLinks")) return { label: "Операция API для связи", index };
+    if (parts.includes("stateLinks")) return { label: "Переход для связи", index };
     const labels: Record<string, string> = {
       name: "Название операции",
       description: "Описание операции",
@@ -67,6 +70,10 @@ function diagnosticControl(kind: string, pointer?: string): { label: string; ind
       messageId: "Тип события операции",
       groupId: "Consumer group ID",
       clientId: "Client ID",
+      retryChannelId: "Retry topic",
+      deadLetterChannelId: "Dead-letter topic",
+      operationKey: "Операция API для связи",
+      transitionId: "Переход для связи",
     };
     return { label: labels[field ?? ""] ?? "Название операции", index };
   }
@@ -349,6 +356,20 @@ export function EventModelEditor({
       return;
     }
     const nextOperation = { ...operation, ...patchValue };
+    if (nextOperation.failureRoutes && nextOperation.action !== "receive") {
+      setError("Сначала удалите retry и dead-letter маршруты");
+      return;
+    }
+    const routes = nextOperation.failureRoutes;
+    if (
+      routes &&
+      (routes.retryChannelId === nextOperation.channelId ||
+        routes.deadLetterChannelId === nextOperation.channelId ||
+        (routes.retryChannelId && routes.retryChannelId === routes.deadLetterChannelId))
+    ) {
+      setError("Retry и dead-letter topic должны отличаться от исходного и друг от друга");
+      return;
+    }
     if (
       contract.operations.some(
         (value) =>
@@ -955,6 +976,11 @@ export function EventModelEditor({
                         />
                       </>
                     ) : null}
+                    <EventOperationMetadata
+                      document={document}
+                      operation={operation}
+                      onPatch={(value) => patchOperation(operation.id, value)}
+                    />
                   </Stack>
                 ))}
                 <Button

@@ -31,16 +31,12 @@ export const kindLabel: Record<ApiImpactChange["kind"], string> = {
   changed: "Изменено",
 };
 export type ImpactGraphModel = {
-  nodes: { id: string; label: string; x: number; y: number; width: number; height: number }[];
+  nodes: { id: string; label: string; width: number; height: number }[];
   edges: {
     id: string;
     source: string;
     target: string;
     label: string;
-    vertices: { x: number; y: number }[];
-    labelPosition: { distance: number };
-    labelMaxWidth: number;
-    labelMaxHeight: number;
   }[];
   truncated: boolean;
 };
@@ -51,12 +47,11 @@ export function impactGraphModel(
   change: ApiImpactChange,
 ): ImpactGraphModel {
   const model: ImpactGraphModel = {
-    nodes: [{ id: "change", label: change.pointer || "/", x: 24, y: 24, width: 230, height: 84 }],
+    nodes: [{ id: "change", label: change.pointer || "/", width: 230, height: 84 }],
     edges: [],
     truncated: false,
   };
   const entities = new Map(report.affected.map((entity) => [entity.id, entity]));
-  let row = 0;
   for (const evidence of report.evidence) {
     if (evidence.changeId !== change.id) continue;
     const entity = entities.get(evidence.entityId);
@@ -72,32 +67,19 @@ export function impactGraphModel(
       const target = {
         id,
         label,
-        x: 24 + (index + 1) * 470,
-        y: 24 + row * 150,
         width: 230,
         height: 84,
       };
       model.nodes.push(target);
-      // Keep the shared fan-out spine beside its source. Every label gets
-      // the clear horizontal segment leading into its own target row.
-      const spineX = source.x + source.width + 32;
       model.edges.push({
         id: `edge:${id}`,
         source: source.id,
         target: id,
         label:
           index === 0 ? `${sideLabel(evidence.side)}\n${directionLabel[evidence.direction]}` : "",
-        vertices: [
-          { x: spineX, y: source.y + source.height / 2 },
-          { x: spineX, y: target.y + target.height / 2 },
-        ],
-        labelPosition: { distance: -(target.x - spineX) / 2 },
-        labelMaxWidth: 160,
-        labelMaxHeight: 40,
       });
       source = target;
     });
-    row += 1;
   }
   return model;
 }

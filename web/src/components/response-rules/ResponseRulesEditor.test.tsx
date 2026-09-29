@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { screen, within } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { renderWithProviders } from "@/test/render";
 import { fill } from "@/test/user";
@@ -103,12 +103,15 @@ describe("response rule local authoring", () => {
     rule.nodes[0]!.x = 999;
     renderWithProviders(<Harness initial={writeRules(source, [rule])} />);
     const original = screen.getByTestId("document").textContent;
-    await userEvent.click(screen.getByRole("button", { name: "Авторасстановка" }));
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Автораскладка" })).toBeEnabled(),
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Автораскладка" }));
     expect(screen.getByTestId("document").textContent).toBe(original);
     expect(screen.getByRole("button", { name: "Симулировать" })).toBeDisabled();
     await userEvent.click(screen.getByRole("button", { name: "Отменить расстановку" }));
     expect(screen.getByTestId("document").textContent).toBe(original);
-    await userEvent.click(screen.getByRole("button", { name: "Авторасстановка" }));
+    await userEvent.click(screen.getByRole("button", { name: "Автораскладка" }));
     await userEvent.click(screen.getByRole("button", { name: "Применить расстановку" }));
     expect(screen.getByTestId("document").textContent).not.toBe(original);
     await userEvent.click(screen.getByRole("button", { name: "Вернуть прежнюю расстановку" }));

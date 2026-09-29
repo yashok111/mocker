@@ -36,12 +36,12 @@ func (s *Server) handleAnalyzeAPIDesignImpact(w http.ResponseWriter, r *http.Req
 		httpx.Err(w, 400, "design_invalid", "toRevisionId должен быть положительным целым числом")
 		return
 	}
-	report, err := s.designsRepo.AnalyzeImpact(r.Context(), id, in)
+	report, pair, err := s.designsRepo.AnalyzeImpactWithDocuments(r.Context(), id, in)
 	if err != nil {
 		s.designError(w, err)
 		return
 	}
-	scenarios, err := s.designScenariosRepo.ImpactUsages(r.Context(), *report)
+	scenarios, err := s.designScenariosRepo.ImpactUsages(r.Context(), *report, pair)
 	if err != nil {
 		s.designScenarioError(w, err)
 		return
@@ -49,7 +49,9 @@ func (s *Server) handleAnalyzeAPIDesignImpact(w http.ResponseWriter, r *http.Req
 	report.Affected = append(report.Affected, scenarios.Affected...)
 	report.Evidence = append(report.Evidence, scenarios.Evidence...)
 	report.Diagnostics = append(report.Diagnostics, scenarios.Diagnostics...)
+	report.FieldImpacts = append(report.FieldImpacts, scenarios.FieldImpacts...)
 	report.Coverage.ScenariosScanned = scenarios.Coverage.ScenariosScanned
+	report.Coverage.FieldUsagesChecked = scenarios.Coverage.FieldUsagesChecked
 	report.Coverage.TruncatedReasons = append(report.Coverage.TruncatedReasons, scenarios.Coverage.TruncatedReasons...)
 	report.Complete = report.Complete && scenarios.Complete
 	if err := apidesign.FinalizeImpactReport(r.Context(), report); err != nil {

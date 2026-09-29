@@ -105,8 +105,32 @@ func TestValidationResponseAndReferences(t *testing.T) {
 	root := rootDocument()
 	root["paths"].(map[string]any)["/orders"].(map[string]any)["$ref"] = "#/components/pathItems/X"
 	v, err := Validate(context.Background(), Envelope{FormatVersion: 1, Rules: []Rule{baseRule()}}, "r", root)
-	if err != nil || v.Valid || v.Diagnostics[0].Code != "unsupported_operation_ref" {
+	if err != nil || !v.Valid {
 		t.Fatalf("%+v %v", v, err)
+	}
+}
+
+func TestValidationInheritedOperationBinding(t *testing.T) {
+	root := rootDocument()
+	paths := root["paths"].(map[string]any)
+	shared := paths["/orders"].(map[string]any)
+	root["components"] = map[string]any{"pathItems": map[string]any{"Shared": shared}}
+	paths["/orders"] = map[string]any{"$ref": "#/components/pathItems/Shared"}
+	paths["/archive"] = map[string]any{"$ref": "#/components/pathItems/Shared"}
+	for _, path := range []string{"/orders", "/archive"} {
+		rule := baseRule()
+		rule.Binding.Path = path
+		result, err := Validate(t.Context(), Envelope{FormatVersion: 1, Rules: []Rule{rule}}, rule.ID, root)
+		if err != nil || !result.Valid {
+			t.Errorf("binding %s: %+v, %v", path, result, err)
+		}
+	}
+	paths["/archive"] = map[string]any{"$ref": "#/components/pathItems/Missing", "get": shared["get"]}
+	rule := baseRule()
+	rule.Binding.Path = "/archive"
+	result, err := Validate(t.Context(), Envelope{FormatVersion: 1, Rules: []Rule{rule}}, rule.ID, root)
+	if err != nil || !result.Valid {
+		t.Fatalf("valid local sibling beside missing ref: %+v, %v", result, err)
 	}
 }
 

@@ -48,7 +48,7 @@ func addDesignScenarioDataFlowTools(s *sdk.Server, lb *loopback) {
 			return call, err
 		})
 	addDesignScenarioTool(s, lb, "upsert_design_scenario_data_binding", "POST /api/design-scenarios/{id}/commands",
-		"Creates or replaces a response-to-request binding by binding.id on one HTTP message through the atomic command path. Read get_design_scenario and supply its expectedVersion; reconcile conflicts. Semantic errors remain editable but block runs.", false,
+		"Creates or replaces a response-to-request binding by binding.id on one HTTP message through the atomic command path. Optional transforms apply up to eight ordered trim/lower/upper/to_string/to_number/to_integer operations before target validation and prefix; numbers retain exact precision. Read get_design_scenario and supply its expectedVersion; reconcile conflicts. Semantic errors remain editable but block runs.", false,
 		func(in upsertDesignScenarioDataBindingInput) (designScenarioCall, error) {
 			call, err := designScenarioWrite(in.ScenarioID, in.ExpectedVersion)
 			call.body = designScenarioExecutionCommandBody(in.ExpectedVersion, designscenario.Command{Type: "upsert_data_binding", MessageID: in.MessageID, Binding: &in.Binding}, in.Summary)
@@ -73,6 +73,9 @@ func designScenarioDataBindingSchema() map[string]any {
 	return designScenarioSchemaObject([]string{"id", "sourceMessageId", "sourcePointer", "target"}, map[string]any{
 		"id": designScenarioRunIDSchema(), "sourceMessageId": map[string]any{"type": "string", "minLength": 1},
 		"sourcePointer": pointer, "target": map[string]any{"oneOf": []any{textTarget, bodyTarget}}, "prefix": map[string]any{"type": "string", "maxLength": 50_000},
+		"transforms": map[string]any{"type": "array", "maxItems": 8, "items": designScenarioSchemaObject([]string{"kind"}, map[string]any{
+			"kind": map[string]any{"type": "string", "enum": []string{"trim", "lower", "upper", "to_string", "to_number", "to_integer"}},
+		})},
 	})
 }
 

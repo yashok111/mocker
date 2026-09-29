@@ -52,6 +52,46 @@ function validDocument(): CanvasDocument {
 }
 
 describe("canvas persistence", () => {
+  it("round-trips independent inherited alias bindings and rejects duplicate effective keys", () => {
+    const document = validDocument();
+    document.contracts[0]!.document = {
+      paths: {
+        "/one": {
+          $ref: "#/components/pathItems/Shared",
+          "x-mocker-canvas-operation-ids": { get: "one" },
+        },
+        "/two": {
+          $ref: "#/components/pathItems/Shared",
+          "x-mocker-canvas-operation-ids": { get: "two" },
+        },
+      },
+      components: {
+        pathItems: { Shared: { get: { responses: { "200": { description: "ok" } } } } },
+      },
+    };
+    document.messages[0]!.operation = { contractId: "contract", operationKey: "one" };
+    document.messages.push({
+      ...document.messages[0]!,
+      id: "second",
+      operation: { contractId: "contract", operationKey: "two" },
+    });
+    const original = structuredClone(document);
+    const parsed = parseSavedCanvas(serializeSavedCanvas(document, {})).document;
+    expect(resolveOperation(parsed, document.messages[0]!.operation!)).toMatchObject({
+      location: { path: "/one" },
+    });
+    expect(resolveOperation(parsed, document.messages[2]!.operation!)).toMatchObject({
+      location: { path: "/two" },
+    });
+    expect(document).toEqual(original);
+    const paths = document.contracts[0]!.document.paths as Record<string, Record<string, unknown>>;
+    paths["/two"]!["x-mocker-canvas-operation-ids"] = { get: "one" };
+    expect(() => serializeSavedCanvas(document, {})).toThrow(/повторяющийся/i);
+    paths["/two"]!["x-mocker-canvas-operation-ids"] = { get: null };
+    expect(() => serializeSavedCanvas(document, {})).toThrow(/operation-id/i);
+    paths["/two"]!["x-mocker-canvas-operation-ids"] = 42;
+    expect(() => serializeSavedCanvas(document, {})).toThrow(/operation-id/i);
+  });
   it("accepts event JSON text above 50,000 characters within 256 KiB", () => {
     const document = {
       ...validDocument(),
@@ -411,6 +451,97 @@ describe("canvas persistence", () => {
     expect(() => parseCanvas(JSON.stringify(document))).toThrow(error);
   });
 
+  it("preserves optional event routes and cross-model links without resolving embedded targets", () => {
+    const document = {
+      ...validDocument(),
+      formatVersion: 3,
+      eventModel: {
+        servers: [],
+        schemas: [],
+        messages: [{ id: "created", name: "Created", description: "", examples: [] }],
+        channels: ["source", "retry", "dlq"].map((id) => ({
+          id,
+          name: id,
+          description: "",
+          address: id,
+          serverIds: [],
+          messageIds: ["created"],
+        })),
+        contracts: [
+          {
+            id: "events",
+            name: "Events",
+            description: "",
+            participantId: "a",
+            version: "1",
+            operations: [
+              {
+                id: "receive",
+                name: "Receive",
+                description: "",
+                action: "receive",
+                channelId: "source",
+                messageId: "created",
+                failureRoutes: { retryChannelId: "retry", deadLetterChannelId: "dlq" },
+                apiLinks: [{ contractId: "missing-http", operationKey: "opaque-key" }],
+                stateLinks: [
+                  { contractId: "missing-http", diagramId: "order", transitionId: "created" },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    };
+    const saved = parseCanvas(JSON.stringify(document));
+    expect(saved.eventModel?.contracts[0]?.operations[0]).toMatchObject({
+      failureRoutes: { retryChannelId: "retry", deadLetterChannelId: "dlq" },
+      apiLinks: [{ contractId: "missing-http", operationKey: "opaque-key" }],
+      stateLinks: [{ contractId: "missing-http", diagramId: "order", transitionId: "created" }],
+    });
+    const operation = document.eventModel.contracts[0]!.operations[0]!;
+    for (const [name, changes, error] of [
+      ["null routes", { failureRoutes: null }, /failureRoutes/],
+      ["route on send", { action: "send" }, /failureRoutes/],
+      ["self route", { failureRoutes: { retryChannelId: "source" } }, /retryChannelId/],
+      [
+        "duplicate targets",
+        { failureRoutes: { retryChannelId: "retry", deadLetterChannelId: "retry" } },
+        /deadLetterChannelId/,
+      ],
+      ["missing target", { failureRoutes: { retryChannelId: "missing" } }, /retryChannelId/],
+      [
+        "duplicate API link",
+        { apiLinks: [operation.apiLinks[0], operation.apiLinks[0]] },
+        /apiLinks/,
+      ],
+      [
+        "malformed state link",
+        { stateLinks: [{ contractId: "missing-http", diagramId: "order" }] },
+        /transitionId/,
+      ],
+    ] as const) {
+      expect(
+        () =>
+          parseCanvas(
+            JSON.stringify({
+              ...document,
+              eventModel: {
+                ...document.eventModel,
+                contracts: [
+                  {
+                    ...document.eventModel.contracts[0],
+                    operations: [{ ...operation, ...changes }],
+                  },
+                ],
+              },
+            }),
+          ),
+        name,
+      ).toThrow(error);
+    }
+  });
+
   it("rejects duplicate entity identities", () => {
     const document = validDocument();
     document.participants.push({ ...document.participants[0]! });
@@ -515,6 +646,32 @@ describe("data binding persistence", () => {
     expect(
       parseSavedCanvas(serializeSavedCanvas(parsed, {})).document.messages[0]?.execution?.bindings,
     ).toEqual([binding]);
+  });
+
+  it("round-trips an ordered transform chain without changing existing binding fields", () => {
+    const transformed = {
+      ...binding,
+      prefix: "ID ",
+      target: { kind: "header" as const, name: "X-Order" },
+      transforms: [{ kind: "trim" }, { kind: "to_integer" }, { kind: "to_string" }],
+    };
+    const parsed = parseCanvas(withBindings([transformed]));
+    expect(parsed.messages[0]?.execution?.bindings).toEqual([transformed]);
+    expect(
+      parseSavedCanvas(serializeSavedCanvas(parsed, {})).document.messages[0]?.execution?.bindings,
+    ).toEqual([transformed]);
+  });
+
+  it.each([
+    null,
+    {},
+    Array.from({ length: 9 }, () => ({ kind: "trim" })),
+    [null],
+    [{ kind: "unknown" }],
+    [{ kind: "trim", argument: "x" }],
+    [{ kind: 42 }],
+  ])("rejects invalid transform chain %#", (transforms) => {
+    expect(() => parseCanvas(withBindings([{ ...binding, transforms }]))).toThrow();
   });
 
   it("leaves legacy documents without bindings", () => {

@@ -1,13 +1,16 @@
 import { Alert, Button, Group, NativeSelect, Stack, Text, TextInput } from "@mantine/core";
-import { IconPlus, IconTrash } from "@tabler/icons-react";
+import { IconArrowDown, IconArrowUp, IconPlus, IconTrash } from "@tabler/icons-react";
 import { createCanvasId } from "./canvasId";
 import { validateDataBindings } from "./canvasStorage";
+import { DATA_BINDING_TRANSFORM_KINDS } from "./types";
 import type {
   CanvasDocument,
   DataBinding,
   DataBindingTarget,
   DataFlowAnalysis,
   DataFlowField,
+  DataBindingTransform,
+  DataBindingTransformKind,
 } from "./types";
 import styles from "./ScenarioExecutionPanel.module.css";
 
@@ -64,6 +67,19 @@ function fieldLabel(field: DataFlowField): string {
 
 export type BindingExample = { sourceMessageId: string; sourcePointer: string; valueJson: string };
 
+const TRANSFORM_LABELS: Record<DataBindingTransformKind, string> = {
+  trim: "Убрать пробелы по краям",
+  lower: "Нижний регистр",
+  upper: "Верхний регистр",
+  to_string: "Преобразовать в текст",
+  to_number: "Преобразовать в число",
+  to_integer: "Преобразовать в целое число",
+};
+
+export function bindingTransformLabel(kind: DataBindingTransformKind): string {
+  return TRANSFORM_LABELS[kind];
+}
+
 function targetOf(field: DataFlowField): DataBindingTarget {
   return field.kind === "body"
     ? { kind: "body", pointer: field.pointer ?? "" }
@@ -97,6 +113,14 @@ export function ScenarioDataBindingsEditor({
     analysis?.messages.find((message) => message.messageId === messageId)?.requestFields ?? [];
   const patch = (index: number, update: Partial<DataBinding>) =>
     onChange(bindings.map((binding, i) => (i === index ? { ...binding, ...update } : binding)));
+  const patchTransforms = (index: number, transforms: DataBindingTransform[]) =>
+    onChange(
+      bindings.map((binding, i) => {
+        if (i !== index) return binding;
+        const { transforms: _previous, ...rest } = binding;
+        return transforms.length ? { ...rest, transforms } : rest;
+      }),
+    );
   const add = (destination: DataBindingTarget) =>
     onChange([
       ...bindings,
@@ -231,7 +255,7 @@ export function ScenarioDataBindingsEditor({
                 </div>
                 {example ? (
                   <Text size="xs" c="dimmed" className={styles.wrap}>
-                    В прошлом запуске:{" "}
+                    Исходное значение прошлого запуска (не предпросмотр текущих преобразований):{" "}
                     {example.valueJson.length > 160
                       ? `${example.valueJson.slice(0, 160)}…`
                       : example.valueJson}
@@ -342,6 +366,95 @@ export function ScenarioDataBindingsEditor({
                         patch(index, { prefix: event.currentTarget.value || undefined })
                       }
                     />
+                    <Text size="sm" fw={600}>
+                      Преобразования по порядку
+                    </Text>
+                    {(binding.transforms ?? []).map((transform, transformIndex, transforms) => (
+                      <Group key={transformIndex} align="end" wrap="wrap">
+                        <NativeSelect
+                          label={`Преобразование ${transformIndex + 1} связи ${index + 1}`}
+                          value={transform.kind}
+                          data={DATA_BINDING_TRANSFORM_KINDS.map((kind) => ({
+                            value: kind,
+                            label: TRANSFORM_LABELS[kind],
+                          }))}
+                          style={{ flex: "1 1 240px", minWidth: "min(240px, 100%)" }}
+                          onChange={(event) =>
+                            patchTransforms(
+                              index,
+                              transforms.map((item, i) =>
+                                i === transformIndex
+                                  ? { kind: event.currentTarget.value as DataBindingTransformKind }
+                                  : item,
+                              ),
+                            )
+                          }
+                        />
+                        <Group wrap="nowrap">
+                          <Button
+                            variant="default"
+                            size="xs"
+                            px="xs"
+                            aria-label={`Поднять преобразование ${transformIndex + 1} связи ${index + 1}`}
+                            disabled={transformIndex === 0}
+                            onClick={() => {
+                              const next = [...transforms];
+                              [next[transformIndex - 1], next[transformIndex]] = [
+                                next[transformIndex]!,
+                                next[transformIndex - 1]!,
+                              ];
+                              patchTransforms(index, next);
+                            }}
+                          >
+                            <IconArrowUp size={16} />
+                          </Button>
+                          <Button
+                            variant="default"
+                            size="xs"
+                            px="xs"
+                            aria-label={`Опустить преобразование ${transformIndex + 1} связи ${index + 1}`}
+                            disabled={transformIndex === transforms.length - 1}
+                            onClick={() => {
+                              const next = [...transforms];
+                              [next[transformIndex], next[transformIndex + 1]] = [
+                                next[transformIndex + 1]!,
+                                next[transformIndex]!,
+                              ];
+                              patchTransforms(index, next);
+                            }}
+                          >
+                            <IconArrowDown size={16} />
+                          </Button>
+                          <Button
+                            variant="default"
+                            color="red"
+                            size="xs"
+                            px="xs"
+                            aria-label={`Удалить преобразование ${transformIndex + 1} связи ${index + 1}`}
+                            onClick={() =>
+                              patchTransforms(
+                                index,
+                                transforms.filter((_, i) => i !== transformIndex),
+                              )
+                            }
+                          >
+                            <IconTrash size={16} />
+                          </Button>
+                        </Group>
+                      </Group>
+                    ))}
+                    <Button
+                      variant="subtle"
+                      size="xs"
+                      leftSection={<IconPlus size={14} />}
+                      aria-label={`Добавить преобразование связи ${index + 1}`}
+                      disabled={(binding.transforms?.length ?? 0) >= 8}
+                      onClick={() =>
+                        patchTransforms(index, [...(binding.transforms ?? []), { kind: "trim" }])
+                      }
+                    >
+                      Добавить преобразование
+                    </Button>
                   </Stack>
                 </details>
                 {structureError ? (

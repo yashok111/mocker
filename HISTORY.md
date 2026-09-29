@@ -23,6 +23,51 @@ nobody said is what is NEXT and why exactly that. That role was carried by `HAND
 deleted in `a5818e2` as spent, and it moved nowhere: the next slice
 was designed outside the repository and did not appear in the repository at all.
 
+## Local branch — visual API next steps (2026-09-29)
+
+The `docs/` paths in this section refer to local plans and verification artifacts.
+
+On `feat/visual-api-next-steps`, all four stages are implemented and reviewed locally:
+local Path Item `$ref` works in HTTP mocks, concrete scenario aliases,
+inherited parameters, execution and exports; ordered binding transforms preserve
+exact JSON numbers and existing branch-exit/source visibility rules; field impact
+checks saved bindings, assertions and extracts against a proposed selected API,
+with conservative provenance-based findings. The event map has a local
+implementation over saved Kafka event metadata, including retry/DLQ and HTTP/state
+links. Final Go race checks, UI tests (1,280), builds and live HTTP/MCP/browser
+checks passed locally. Implementation and review were completed on the feature branch.
+The execution ledger is
+`docs/visual-api-next-steps-progress.md`.
+
+Canvas follow-up: all seven interactive graph types now share the sequence
+editor's left-button background panning and smooth wheel/pinch zoom. Fitted
+scales outside the usual wheel range no longer reverse the zoom gesture.
+Event-map links use obstacle-aware routing, explicit layers and label placement
+that accounts for cards and other labels. Verification and browser artifacts:
+`docs/canvas-routing-controls-plan.md`.
+
+A second event-map screenshot exposed shared edge trunks and foreign lines
+crossing labels. The event map now uses a global ELK orthogonal layout with
+separate attachment points and label bounds included in routing. X6 preserves
+the calculated paths and uses bridges at crossings. The expanded browser check
+measured foreign-line/label collisions 17 → 0 and shared long segments 36 → 0.
+Details and enlarged screenshots: `docs/event-map-layout-plan.md`.
+
+ELK is now shared by the event map, impact graph, schemas, resources, state
+diagrams and response rules. The common module handles async results, card and
+label dimensions, fixed field/condition ports, and exact X6 routes. Editable
+graphs apply positions explicitly; preview cancellation and manual positions
+are preserved. Schema/resource previews batch at most 100 commands and publish
+one document update. Routes are reconstructed from saved positions rather than
+adding geometry fields to the API document. The sequence timeline keeps its
+specialized layout. Integration notes: `docs/shared-elk-guide.md`.
+
+The event map also stops projecting sequence-only participants. In the demo,
+this removes the isolated Kafka participant while retaining the Kafka server
+connected to event channels. Event contract owners and real servers remain
+visible. The final UI suite passed 1,319 tests. Verification is recorded in
+`docs/shared-elk-plan.md`.
+
 ## The slice log
 
 **Shipped.** `P0` (authentication, workspaces, both planes, admin API) →

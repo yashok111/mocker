@@ -131,7 +131,12 @@ export function eventDependents(
     result.push(
       ...model.contracts.flatMap((contract) =>
         contract.operations
-          .filter((operation) => operation.channelId === id)
+          .filter(
+            (operation) =>
+              operation.channelId === id ||
+              operation.failureRoutes?.retryChannelId === id ||
+              operation.failureRoutes?.deadLetterChannelId === id,
+          )
           .map((operation) => `операция ${contract.name}/${operation.name}`),
       ),
     );

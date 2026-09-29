@@ -1,17 +1,17 @@
 import type { CellAttrs, EdgeLabel, GraphManual } from "@antv/x6";
 import { theme } from "@/theme/mantine";
+import { canvasInteractionOptions } from "./canvasControls";
 
 // X6 measures wrapping with canvas, where "inherit" is not a valid font family.
 // Use the actual SVG font so measured line widths match what the user sees.
 export const diagramFontFamily = theme.fontFamily ?? "sans-serif";
 
-export function diagramOptions(minScale = 0.15) {
+export function diagramOptions() {
   return {
     autoResize: true,
     background: { color: "#f5f7f4" },
     grid: { visible: true, size: 20, type: "dot", args: { color: "#d0d9cf", thickness: 1 } },
-    panning: { enabled: true, modifiers: "shift", eventTypes: ["leftMouseDown"] },
-    mousewheel: { enabled: true, modifiers: ["ctrl", "meta"], minScale, maxScale: 2 },
+    ...canvasInteractionOptions(),
   } satisfies Partial<GraphManual>;
 }
 

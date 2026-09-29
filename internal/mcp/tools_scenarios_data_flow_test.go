@@ -10,6 +10,41 @@ import (
 
 const dataBindingFixture = `{"id":"order-id","sourceMessageId":"create","sourcePointer":"/id","target":{"kind":"body","pointer":""}}`
 
+func TestDataBindingTransformsRoundTripThroughTools(t *testing.T) {
+	t.Parallel()
+	chain := `[{"kind":"trim"},{"kind":"to_integer"},{"kind":"to_string"}]`
+	binding := strings.TrimSuffix(dataBindingFixture, "}") + `,"transforms":` + chain + `}`
+	for _, name := range []string{"upsert_design_scenario_data_binding", "apply_design_scenario_commands"} {
+		args := `{"scenarioId":7,"expectedVersion":3,"messageId":"get","binding":` + binding + `}`
+		if name == "apply_design_scenario_commands" {
+			args = `{"scenarioId":7,"expectedVersion":3,"commands":[{"type":"upsert_data_binding","messageId":"get","binding":` + binding + `}]}`
+		}
+		calls := &recordingCaller{status: 200, body: []byte(`{}`)}
+		_, errMsg := callTool(t, calls, name, args)
+		if errMsg != "" || !strings.Contains(string(calls.sent), `"transforms":`+chain) {
+			t.Fatalf("%s lost ordered transforms: %s error=%s", name, calls.sent, errMsg)
+		}
+	}
+}
+
+func TestDataBindingTransformSchemasRejectMalformedBeforeDispatch(t *testing.T) {
+	t.Parallel()
+	for _, chain := range []string{`null`, `[null]`, `[{}]`, `[{"kind":"eval"}]`, `[{"kind":"trim","fallback":"x"}]`, `[` + strings.TrimSuffix(strings.Repeat(`{"kind":"trim"},`, 9), ",") + `]`} {
+		binding := strings.TrimSuffix(dataBindingFixture, "}") + `,"transforms":` + chain + `}`
+		for _, name := range []string{"upsert_design_scenario_data_binding", "apply_design_scenario_commands"} {
+			args := `{"scenarioId":7,"expectedVersion":3,"messageId":"get","binding":` + binding + `}`
+			if name == "apply_design_scenario_commands" {
+				args = `{"scenarioId":7,"expectedVersion":3,"commands":[{"type":"upsert_data_binding","messageId":"get","binding":` + binding + `}]}`
+			}
+			calls := &recordingCaller{status: 200, body: []byte(`{}`)}
+			_, errMsg := callTool(t, calls, name, args)
+			if errMsg == "" || calls.method != "" {
+				t.Fatalf("%s dispatched malformed transforms %s: %s", name, chain, errMsg)
+			}
+		}
+	}
+}
+
 func TestDataFlowToolsRoutesAndCommands(t *testing.T) {
 	t.Parallel()
 	for _, tt := range []struct{ name, args, path, command string }{

@@ -74,13 +74,20 @@ func eventModelSchema() map[string]any {
 		return map[string]any{"type": "string", "minLength": 1, "maxLength": 256, "pattern": "^[^\r\n\x00]+$"}
 	}
 	operation := eventEntitySchema([]string{"action", "channelId", "messageId"}, map[string]any{
-		"action":    map[string]any{"type": "string", "enum": []string{"send", "receive"}},
-		"channelId": designScenarioRunIDSchema(),
-		"messageId": designScenarioRunIDSchema(),
+		"action":        map[string]any{"type": "string", "enum": []string{"send", "receive"}},
+		"channelId":     designScenarioRunIDSchema(),
+		"messageId":     designScenarioRunIDSchema(),
+		"failureRoutes": eventFailureRoutesSchema(),
+		"apiLinks":      eventArraySchema(eventAPILinkSchema(), 100),
+		"stateLinks":    eventArraySchema(eventStateLinkSchema(), 100),
 		"kafka": designScenarioSchemaObject([]string{}, map[string]any{
 			"groupId": kafkaID(), "clientId": kafkaID(),
 		}),
 	})
+	operation["allOf"] = []any{map[string]any{
+		"if":   map[string]any{"required": []string{"failureRoutes"}},
+		"then": map[string]any{"properties": map[string]any{"action": map[string]any{"const": "receive"}}},
+	}}
 	contract := eventEntitySchema([]string{"participantId", "version", "operations"}, map[string]any{
 		"participantId": map[string]any{"type": "string", "minLength": 1, "maxLength": 50_000},
 		"version":       text(), "operations": eventArraySchema(operation, 2000),

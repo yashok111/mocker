@@ -20,6 +20,7 @@ func FinalizeImpactReport(ctx context.Context, report *ImpactReport) error {
 	report.Changes = []ImpactChange{}
 	report.Affected = []ImpactEntity{}
 	report.Evidence = []ImpactEvidence{}
+	report.FieldImpacts = []ImpactFieldImpact{}
 	report.Diagnostics = []ImpactDiagnostic{}
 	report.Coverage.TruncatedReasons = append([]string{}, source.Coverage.TruncatedReasons...)
 	budget := impactResponseBytes - 4096 // Snapshot fields, counts and the final limit diagnostic.
@@ -119,6 +120,22 @@ func FinalizeImpactReport(ctx context.Context, report *ImpactReport) error {
 		budget -= n
 		report.Evidence = append(report.Evidence, evidence)
 	}
+	for _, finding := range source.FieldImpacts {
+		if len(report.FieldImpacts) >= MaxImpactFieldFindings {
+			mark("scenario_fields")
+			break
+		}
+		n, err := size(finding)
+		if err != nil {
+			return err
+		}
+		if n > budget {
+			mark("output")
+			break
+		}
+		budget -= n
+		report.FieldImpacts = append(report.FieldImpacts, finding)
+	}
 	for _, diagnostic := range source.Diagnostics {
 		n, err := size(diagnostic)
 		if err != nil {
@@ -155,6 +172,7 @@ func FinalizeImpactReport(ctx context.Context, report *ImpactReport) error {
 	report.Coverage.ChangesReturned = len(report.Changes)
 	report.Coverage.EntitiesReturned = len(report.Affected)
 	report.Coverage.EvidenceReturned = len(report.Evidence)
+	report.Coverage.FieldImpactsReturned = len(report.FieldImpacts)
 	report.Coverage.ScenarioUsagesReturned = 0
 	for _, entity := range report.Affected {
 		if entity.Kind == "scenario_message" {

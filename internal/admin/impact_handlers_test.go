@@ -47,7 +47,7 @@ func TestImpactHTTPStrictInputsAndReadOnly(t *testing.T) {
 			if err := jsonx.Unmarshal(body, &report); err != nil {
 				t.Fatal(err)
 			}
-			if report.Changes == nil || report.Affected == nil || report.Evidence == nil || report.Diagnostics == nil || report.Coverage.TruncatedReasons == nil {
+			if report.Changes == nil || report.Affected == nil || report.Evidence == nil || report.FieldImpacts == nil || report.Diagnostics == nil || report.Coverage.TruncatedReasons == nil {
 				t.Fatalf("null arrays: %s", body)
 			}
 		}

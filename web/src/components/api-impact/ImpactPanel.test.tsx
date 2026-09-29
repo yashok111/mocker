@@ -170,4 +170,76 @@ describe("ImpactPanel", () => {
     await userEvent.click(screen.getByRole("button", { name: "Открыть текущий сценарий" }));
     expect(onScenario).toHaveBeenCalledWith(7);
   });
+
+  it("shows field findings and opens the current scenario with saved-revision context", async () => {
+    const report = reportFixture();
+    report.evidence = [];
+    report.fieldImpacts = [
+      {
+        id: "binding-source",
+        locator: {
+          pointer: "/messages/1",
+          scenarioId: 7,
+          scenarioName: "Покупка",
+          scenarioRevision: 9,
+          contractId: "orders",
+          pinnedRevisionId: 41,
+          mode: "linked",
+          messageId: "recipient",
+          operationKey: "GET /orders/{id}",
+          method: "GET",
+          path: "/orders/{id}",
+        },
+        operationMessageId: "source",
+        usageKind: "binding_source",
+        usagePointer: "/messages/1/execution/bindings/0/sourcePointer",
+        field: { kind: "response", pointer: "/id" },
+        before: { presence: "present", type: "string" },
+        after: { presence: "absent" },
+        verdict: "broken",
+        reasonCode: "field_removed",
+        explanation: "Источник связи больше не объявлен.",
+      },
+      {
+        id: "copy-review",
+        locator: {
+          pointer: "/messages/2",
+          scenarioId: 8,
+          scenarioName: "Черновик",
+          scenarioRevision: 3,
+          contractId: "copy",
+          pinnedRevisionId: 40,
+          mode: "copy",
+          messageId: "check",
+        },
+        operationMessageId: "check",
+        usageKind: "assertion",
+        usagePointer: "/messages/2/execution/assertions/0/pointer",
+        field: { kind: "response", pointer: "/status" },
+        before: { presence: "present", type: "string" },
+        after: { presence: "unknown" },
+        verdict: "review",
+        reasonCode: "schema_unknown",
+        explanation: "Схему копии нужно сравнить с предложением.",
+      },
+    ];
+    report.coverage.fieldUsagesChecked = 3;
+    report.coverage.fieldImpactsReturned = 2;
+    const onScenario = vi.fn();
+    route({ "POST /api/designs/12/impact": () => json(200, report) });
+    renderWithProviders(<ImpactPanel {...props} onScenario={onScenario} />);
+    await userEvent.click(screen.getByRole("button", { name: "Проанализировать" }));
+    expect(await screen.findByText("Источник связи больше не объявлен.")).toBeInTheDocument();
+    expect(screen.getByText("Схему копии нужно сравнить с предложением.")).toBeInTheDocument();
+    expect(screen.getByText("/messages/1/execution/bindings/0/sourcePointer")).toBeInTheDocument();
+    expect(
+      screen.getByText(/Источник связи · шаг recipient · поле шага source/),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Было: объявлено · строка · Стало: не объявлено")).toBeInTheDocument();
+    expect(screen.getByText(/Стало: не объявлено/)).toBeInTheDocument();
+    expect(screen.getByText(/Стало: неизвестно/)).toBeInTheDocument();
+    expect(screen.getByText(/В отчёте показана ревизия 9/)).toBeInTheDocument();
+    await userEvent.click(screen.getAllByRole("button", { name: "Открыть текущий сценарий" })[0]!);
+    expect(onScenario).toHaveBeenCalledWith(7);
+  });
 });

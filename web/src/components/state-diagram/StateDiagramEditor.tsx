@@ -10,6 +10,8 @@ import {
   UnstyledButton,
 } from "@mantine/core";
 import type { ApiDocument } from "../api-designer/documentModel";
+import { useDiagramLayout } from "../diagram/useDiagramLayout";
+import { applyStateLayout, stateLayoutInput } from "./layout";
 import {
   blankDiagram,
   newID,
@@ -73,6 +75,7 @@ function Editor({
   const [selection, setSelection] = useState<Selection>(null);
   const [active, setActive] = useState<{ signature: string; id?: string } | null>(null);
   const diagram = diagrams.find((d) => d.id === selectedID) ?? diagrams[0];
+  const automatic = useDiagramLayout(stateLayoutInput(diagram));
   const signature = JSON.stringify(diagram);
   function create(template: boolean) {
     const next = template ? orderTemplate() : blankDiagram();
@@ -202,14 +205,29 @@ function Editor({
               Удалить диаграмму
             </Button>
           </Group>
+          <Group gap="xs">
+            <Button
+              size="xs"
+              variant="default"
+              loading={automatic.pending}
+              disabled={!diagram.states.length || !automatic.layout}
+              onClick={() => {
+                if (automatic.layout) update(applyStateLayout(diagram, automatic.layout));
+              }}
+            >
+              Автораскладка
+            </Button>
+          </Group>
+          {automatic.error && <Alert color="red">{automatic.error}</Alert>}
           <Text size="xs" c="dimmed">
-            Перетаскивайте состояния. Соедините точки на фигурах или добавьте переход кнопкой. Shift
-            + перетаскивание — перемещение холста.
+            Перетаскивайте состояния. Соедините точки на фигурах или добавьте переход кнопкой.
+            Перетаскивание фона левой кнопкой — перемещение холста; колесо — масштаб.
           </Text>
           <div className={styles.workspace}>
             <div>
               <StateGraph
                 diagram={diagram}
+                layout={automatic.layout}
                 selection={selection}
                 activeState={active?.signature === signature ? active.id : undefined}
                 onSelect={setSelection}

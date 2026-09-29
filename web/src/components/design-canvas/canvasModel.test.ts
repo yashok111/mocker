@@ -246,6 +246,73 @@ describe("canvas contracts", () => {
     },
   };
 
+  it("imports two concrete aliases and resolves each binding without editing the source", () => {
+    const source: ApiDocument = {
+      paths: {
+        "/one": { $ref: "#/components/pathItems/Shared" },
+        "/two": { $ref: "#/components/pathItems/Shared" },
+      },
+      components: {
+        pathItems: { Shared: { get: { responses: { "200": { description: "ok" } } } } },
+      },
+    };
+    const original = structuredClone(source);
+    const imported = importContract("Shared", source);
+    const paths = imported.document.paths as Record<string, Record<string, unknown>>;
+    const one = (paths["/one"]!["x-mocker-canvas-operation-ids"] as Record<string, string>).get!;
+    const two = (paths["/two"]!["x-mocker-canvas-operation-ids"] as Record<string, string>).get!;
+    expect(one).toEqual(expect.any(String));
+    expect(two).not.toBe(one);
+    const canvas = { ...emptyCanvas(), contracts: [imported] };
+    expect(resolveOperation(canvas, { contractId: imported.id, operationKey: one })).toMatchObject({
+      location: { path: "/one", method: "get" },
+    });
+    expect(resolveOperation(canvas, { contractId: imported.id, operationKey: two })).toMatchObject({
+      location: { path: "/two", method: "get" },
+    });
+    expect(source).toEqual(original);
+  });
+
+  it("reuses a concrete inherited alias when creating a request binding", () => {
+    const contract = {
+      id: "shared",
+      name: "Shared",
+      document: {
+        paths: {
+          "/alias": {
+            $ref: "#/components/pathItems/Shared",
+            "x-mocker-canvas-operation-ids": { get: "alias" },
+          },
+        },
+        components: {
+          pathItems: { Shared: { get: { responses: { "200": { description: "ok" } } } } },
+        },
+      },
+    };
+    const canvas = {
+      ...emptyCanvas(),
+      contracts: [contract],
+      messages: [
+        {
+          id: "call",
+          fromId: "a",
+          toId: "b",
+          kind: "request" as const,
+          label: "GET /alias",
+          description: "",
+        },
+      ],
+    };
+    const updated = addLocalOperation(canvas, "call", {
+      method: "GET",
+      path: "/alias",
+      responseStatus: "default",
+      contractId: "shared",
+    });
+    expect(updated.messages[0]!.operation).toEqual({ contractId: "shared", operationKey: "alias" });
+    expect(updated.contracts).toBe(canvas.contracts);
+  });
+
   it("imports an independent clone and assigns a distinct stable key to every operation", () => {
     const imported = importContract("Заказы", sourceDocument, { designId: 7, revisionId: 11 });
     const paths = imported.document.paths as Record<

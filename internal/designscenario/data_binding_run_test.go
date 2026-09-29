@@ -68,12 +68,77 @@ func TestDataBindingTypedRuntime(t *testing.T) {
 	}
 }
 
+func TestDataBindingTransformsBeforeTargetAndTrace(t *testing.T) {
+	for _, tc := range []struct {
+		name, source, wantRequest, wantSource, wantTransformed string
+		target                                                 DataBindingTarget
+		transforms                                             []DataBindingTransform
+		prefix                                                 string
+	}{
+		{"integer body exact", `{"id":" 9007199254740993 "}`, `{"id":9007199254740993}`, `" 9007199254740993 "`, `9007199254740993`, DataBindingTarget{Kind: "body", Pointer: "/id"}, []DataBindingTransform{{Kind: "trim"}, {Kind: "to_integer"}}, ""},
+		{"integer path then prefix", `{"id":" 42 "}`, `item-42`, `" 42 "`, `42`, DataBindingTarget{Kind: "path", Name: "id"}, []DataBindingTransform{{Kind: "trim"}, {Kind: "to_integer"}}, "item-"},
+		{"number to exact string", `{"id":"9007199254740993"}`, `{"id":"9007199254740993"}`, `"9007199254740993"`, `"9007199254740993"`, DataBindingTarget{Kind: "body", Pointer: "/id"}, []DataBindingTransform{{Kind: "to_number"}, {Kind: "to_string"}}, ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			revision := runRevision()
+			config := revision.Document.Messages[1].Execution
+			config.Body = `{}`
+			config.Bindings = []DataBinding{{ID: "id", SourceMessageID: "login", SourcePointer: "/id", Target: tc.target, Prefix: tc.prefix, Transforms: tc.transforms}}
+			calls := 0
+			report := Run(t.Context(), revision, prepareTestRun(t, revision), func(_ context.Context, request StepRequest) (StepResponse, error) {
+				calls++
+				if calls == 1 {
+					return runResponse(tc.source), nil
+				}
+				got := request.Body
+				if tc.target.Kind == "path" {
+					got = request.PathParams[tc.target.Name]
+				}
+				if got != tc.wantRequest {
+					t.Fatalf("request value = %q, want %q", got, tc.wantRequest)
+				}
+				return runResponse(`{}`), nil
+			}, nil)
+			if report.Status != "passed" || calls != 2 {
+				t.Fatalf("status=%s calls=%d reason=%s", report.Status, calls, report.Reason)
+			}
+			result := report.Steps[1].BindingResults[0]
+			if result.ValueJSON != tc.wantSource || result.TransformedValueJSON == nil || *result.TransformedValueJSON != tc.wantTransformed {
+				t.Fatalf("trace = %+v", result)
+			}
+		})
+	}
+}
+
+func TestDataBindingTransformFailurePreventsRecipientDispatch(t *testing.T) {
+	for _, tc := range []struct {
+		source     string
+		transforms []DataBindingTransform
+	}{
+		{`{"id":"not-a-number"}`, []DataBindingTransform{{Kind: "to_number"}}},
+		{`{"id":null}`, []DataBindingTransform{{Kind: "to_string"}}},
+		{`{"id":{"x":1}}`, []DataBindingTransform{{Kind: "trim"}}},
+		{`{"id":" 42 "}`, []DataBindingTransform{{Kind: "to_integer"}}},
+	} {
+		revision := runRevision()
+		revision.Document.Messages[1].Execution.Bindings = []DataBinding{{ID: "id", SourceMessageID: "login", SourcePointer: "/id", Target: DataBindingTarget{Kind: "body"}, Transforms: tc.transforms}}
+		calls := 0
+		report := Run(t.Context(), revision, prepareTestRun(t, revision), func(_ context.Context, _ StepRequest) (StepResponse, error) {
+			calls++
+			return runResponse(tc.source), nil
+		}, nil)
+		if calls != 1 || report.Status != "failed" || strings.Contains(report.Reason, "not-a-number") || strings.Contains(report.Reason, " 42 ") {
+			t.Fatalf("status=%s calls=%d reason=%q", report.Status, calls, report.Reason)
+		}
+	}
+}
+
 func TestDataBindingLoopCurrentIterationAndClones(t *testing.T) {
 	t.Parallel()
 	r := runRevision()
 	r.Document.FormatVersion = 2
 	r.Document.Fragments = []Fragment{{ID: "loop", Kind: "loop", FromMessageID: "login", ToMessageID: "profile", Execution: &FragmentExecution{Iterations: 2}}}
-	r.Document.Messages[1].Execution.Bindings = []DataBinding{{ID: "id", SourceMessageID: "login", SourcePointer: "/id", Target: DataBindingTarget{Kind: "path", Name: "id"}}}
+	r.Document.Messages[1].Execution.Bindings = []DataBinding{{ID: "id", SourceMessageID: "login", SourcePointer: "/id", Target: DataBindingTarget{Kind: "path", Name: "id"}, Transforms: []DataBindingTransform{{Kind: "to_string"}}}}
 	initial := prepareTestRun(t, r)
 	calls := 0
 	received := []string{}
@@ -98,11 +163,15 @@ func TestDataBindingLoopCurrentIterationAndClones(t *testing.T) {
 			if len(step.BindingResults) > 0 {
 				step.BindingResults[0].SourceIterations[0].Iteration = 999
 				step.BindingResults[0].ValueJSON = "tampered"
+				if step.BindingResults[0].TransformedValueJSON != nil {
+					*step.BindingResults[0].TransformedValueJSON = "tampered"
+				}
 			}
 		}
 		update.Document.Messages[1].Execution.Bindings[0].ID = "tampered"
+		update.Document.Messages[1].Execution.Bindings[0].Transforms[0].Kind = "lower"
 	}
-	if report.Steps[3].BindingResults[0].SourceIterations[0].Iteration != 2 || report.Steps[3].BindingResults[0].ValueJSON != "43" || report.Document.Messages[1].Execution.Bindings[0].ID != "id" {
+	if report.Steps[3].BindingResults[0].SourceIterations[0].Iteration != 2 || report.Steps[3].BindingResults[0].ValueJSON != "43" || report.Steps[3].BindingResults[0].TransformedValueJSON == nil || *report.Steps[3].BindingResults[0].TransformedValueJSON != `"43"` || report.Document.Messages[1].Execution.Bindings[0].ID != "id" || report.Document.Messages[1].Execution.Bindings[0].Transforms[0].Kind != "to_string" {
 		t.Fatal("mutable snapshot alias")
 	}
 	// Even a passed source from another iteration is unavailable.

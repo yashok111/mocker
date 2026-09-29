@@ -58,6 +58,12 @@ func (r *Repo) ApplyCommands(ctx context.Context, id int64, input CommandsInput)
 
 func (r *Repo) applyCommand(ctx context.Context, tx *sql.Tx, document *Document, command Command, source string, ownerID *int64) error {
 	switch command.Type {
+	case "upsert_event_server", "remove_event_server", "upsert_event_channel", "remove_event_channel",
+		"upsert_event_message", "remove_event_message", "upsert_event_schema", "remove_event_schema",
+		"upsert_event_contract", "remove_event_contract", "upsert_event_operation", "remove_event_operation",
+		"set_event_failure_routes", "upsert_event_api_link", "remove_event_api_link",
+		"upsert_event_state_link", "remove_event_state_link":
+		return applyEventCommand(document, command)
 	case "upsert_data_binding", "remove_data_binding":
 		return applyDataBindingCommand(document, command)
 	case "set_title":

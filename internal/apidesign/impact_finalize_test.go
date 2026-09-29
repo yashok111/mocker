@@ -21,8 +21,45 @@ func TestFinalizeImpactRetainsIncompleteDiagnosticsAndEmptyArrays(t *testing.T) 
 	if report.Complete || len(report.Affected) != 1 || len(report.Diagnostics) != 1 || report.Diagnostics[0].EntityID != "unknown" {
 		t.Fatalf("lost unknown join: %+v", report)
 	}
-	if report.Changes == nil || report.Evidence == nil || report.Coverage.TruncatedReasons == nil {
+	if report.Changes == nil || report.Evidence == nil || report.FieldImpacts == nil || report.Coverage.TruncatedReasons == nil {
 		t.Fatal("nil arrays")
+	}
+}
+
+func TestFinalizeImpactBoundsFieldFindings(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name                    string
+		count, explanationBytes int
+		reason                  string
+	}{
+		{"field cap", MaxImpactFieldFindings + 1, 20, "scenario_fields"},
+		{"byte budget", 1000, 10000, "output"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			report := ImpactReport{ImpactAnalysis: ImpactAnalysis{Complete: true, Coverage: ImpactCoverage{FieldUsagesChecked: 9000}}}
+			for i := range tc.count {
+				report.FieldImpacts = append(report.FieldImpacts, ImpactFieldImpact{ID: fmt.Sprint(i), Explanation: strings.Repeat("x", tc.explanationBytes)})
+			}
+			if err := FinalizeImpactReport(t.Context(), &report); err != nil {
+				t.Fatal(err)
+			}
+			raw, err := jsonx.Marshal(report)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if report.Complete || !slices.Contains(report.Coverage.TruncatedReasons, tc.reason) || len(raw) > impactResponseBytes || len(report.FieldImpacts) > MaxImpactFieldFindings {
+				t.Fatalf("unbounded fields: bytes=%d coverage=%+v", len(raw), report.Coverage)
+			}
+			if len(report.FieldImpacts) == 0 || report.Coverage.FieldImpactsReturned != len(report.FieldImpacts) || report.Coverage.FieldUsagesChecked != 9000 {
+				t.Fatal("wrong field counts")
+			}
+			for i, finding := range report.FieldImpacts {
+				if finding.ID != fmt.Sprint(i) {
+					t.Fatal("did not retain stable prefix")
+				}
+			}
+		})
 	}
 }
 
@@ -76,5 +113,18 @@ func TestFinalizeImpactHonorsCancellation(t *testing.T) {
 	cancel()
 	if err := FinalizeImpactReport(ctx, &ImpactReport{}); err != context.Canceled {
 		t.Fatalf("cancel: %v", err)
+	}
+}
+
+func TestImpactFieldSelectorPreservesWholeBodyPointer(t *testing.T) {
+	t.Parallel()
+	for _, kind := range []string{"response", "body"} {
+		raw, err := jsonx.Marshal(ImpactFieldSelector{Kind: kind})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(string(raw), `"pointer":""`) {
+			t.Fatalf("whole %s pointer lost: %s", kind, raw)
+		}
 	}
 }

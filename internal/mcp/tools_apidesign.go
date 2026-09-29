@@ -18,7 +18,7 @@ import (
 // Publication deliberately has no tool: a UI session confirms the candidate.
 func addAPIDesignTools(s *sdk.Server, lb *loopback) {
 	addAPIDesignTool(s, lb, "analyze_api_design_impact", "POST /api/designs/{id}/impact",
-		"Analyzes an immutable fromRevisionId against exact JSON document text OR toRevisionId from the same API. Returns contract changes, dependency evidence, affected resources, state transitions and current saved scenario draft usages with their revisions. Read-only: no saves, normalization, publication or runs. complete describes dependency coverage, not proof of compatibility. Scenario links identify operation usage only; bindings/assertions/extracts are not validated. Copies may have been edited; pinned revisions can differ from the base.", true,
+		"Analyzes an immutable fromRevisionId against exact JSON document text OR toRevisionId from the same API. Returns contract changes, dependency evidence, affected resources, state transitions, and field findings for bindings, assertions and extracts in current saved scenario drafts. Field checks cover the selected API only; operation evidence alone does not identify a field change. Read-only: no saves, normalization, publication or runs. complete describes coverage within this scope, not proof of compatibility. A copy may have been edited, and pinned revisions can differ from the base; those field findings require review. Scenario links open the current scenario, which may differ from the saved revision in the report.", true,
 		func(in apiDesignImpactInput) (apiDesignCall, error) {
 			call, err := apiDesignRead(in.DesignID)
 			call.body = struct {

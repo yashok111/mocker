@@ -90,6 +90,7 @@ export function reportFixture(): ApiImpactReport {
         explanation: "Шаг использует затронутую операцию",
       },
     ],
+    fieldImpacts: [],
     diagnostics: [],
     coverage: {
       changesReturned: 3,
@@ -97,6 +98,8 @@ export function reportFixture(): ApiImpactReport {
       evidenceReturned: 2,
       scenariosScanned: 4,
       scenarioUsagesReturned: 1,
+      fieldUsagesChecked: 0,
+      fieldImpactsReturned: 0,
       truncatedReasons: [],
     },
   };

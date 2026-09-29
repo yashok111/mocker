@@ -148,6 +148,20 @@ it.each([
     0,
   ],
   ["event-contract", "events", "/eventModel/contracts/0/operations/1/name", "Название операции", 1],
+  [
+    "event-contract",
+    "events",
+    "/eventModel/contracts/0/operations/1/apiLinks/0",
+    "Операция API для связи",
+    1,
+  ],
+  [
+    "event-contract",
+    "events",
+    "/eventModel/contracts/0/operations/1/stateLinks/0",
+    "Переход для связи",
+    1,
+  ],
 ] as const)("focuses the %s diagnostic field at %s", async (kind, id, pointer, label, index) => {
   const document: CanvasDocument = {
     ...initial(),
@@ -216,4 +230,122 @@ it.each([
     />,
   );
   await waitFor(() => expect(screen.getAllByLabelText(label)[index]).toHaveFocus());
+});
+
+it("edits consumer-specific routes and embedded API/state links in the local document", async () => {
+  const document: CanvasDocument = {
+    ...initial(),
+    formatVersion: 3,
+    contracts: [
+      {
+        id: "http",
+        name: "Orders HTTP",
+        mode: "copy",
+        document: {
+          openapi: "3.1.0",
+          info: { title: "Orders", version: "1" },
+          paths: {
+            "/orders": {
+              post: {
+                "x-mocker-canvas-operation-id": "create-order",
+                responses: { "200": { description: "OK" } },
+              },
+            },
+          },
+          "x-mocker-state-diagrams": {
+            formatVersion: 1,
+            diagrams: [
+              {
+                id: "order",
+                name: "Order",
+                initialStateId: "new",
+                states: [{ id: "new", name: "New", x: 0, y: 0, terminal: false }],
+                transitions: [
+                  {
+                    id: "created",
+                    name: "Created",
+                    from: "new",
+                    to: "new",
+                    patchJSON: "{}",
+                    responseStatus: 200,
+                  },
+                ],
+              },
+            ],
+          },
+        },
+      },
+    ],
+    eventModel: {
+      servers: [],
+      schemas: [],
+      messages: [{ id: "created", name: "Created", description: "", examples: [] }],
+      channels: ["source", "retry", "dlq"].map((id) => ({
+        id,
+        name: id,
+        description: "",
+        address: id,
+        serverIds: [],
+        messageIds: ["created"],
+      })),
+      contracts: [
+        {
+          id: "events",
+          name: "Events",
+          description: "",
+          participantId: "orders",
+          version: "1",
+          operations: [
+            {
+              id: "receive",
+              name: "Receive",
+              description: "",
+              action: "receive",
+              channelId: "source",
+              messageId: "created",
+              kafka: { groupId: "billing" },
+            },
+          ],
+        },
+      ],
+    },
+  };
+  let latest = document;
+  function LocalEditor() {
+    const [value, setValue] = useState(document);
+    return (
+      <EventModelEditor
+        opened
+        document={value}
+        onChange={(next) => {
+          latest = next;
+          setValue(next);
+        }}
+        onClose={() => {}}
+        formStore={createFormDraftStore()}
+        target={{ kind: "event-contract", id: "events" }}
+      />
+    );
+  }
+  renderWithProviders(<LocalEditor />);
+  await userEvent.selectOptions(screen.getByLabelText("Retry topic"), "retry");
+  await userEvent.selectOptions(screen.getByLabelText("Dead-letter topic"), "dlq");
+  await userEvent.selectOptions(
+    screen.getByLabelText("Операция API для связи"),
+    JSON.stringify(["http", "create-order"]),
+  );
+  await userEvent.click(screen.getByRole("button", { name: "Добавить связь API" }));
+  await userEvent.selectOptions(
+    screen.getByLabelText("Переход для связи"),
+    JSON.stringify(["http", "order", "created"]),
+  );
+  await userEvent.click(screen.getByRole("button", { name: "Добавить связь с переходом" }));
+  expect(latest.eventModel?.contracts[0]?.operations[0]).toMatchObject({
+    kafka: { groupId: "billing" },
+    failureRoutes: { retryChannelId: "retry", deadLetterChannelId: "dlq" },
+    apiLinks: [{ contractId: "http", operationKey: "create-order" }],
+    stateLinks: [{ contractId: "http", diagramId: "order", transitionId: "created" }],
+  });
+  await userEvent.click(screen.getByRole("button", { name: "Удалить связь API" }));
+  expect(latest.eventModel?.contracts[0]?.operations[0]?.apiLinks).toEqual([]);
 });

@@ -1,6 +1,7 @@
 import { Graph } from "@antv/x6";
 import { useEffect, useRef } from "react";
 import DiagramViewport from "../diagram/DiagramViewport";
+import { installCanvasWheelZoom } from "../diagram/canvasControls";
 import { createInitialFit } from "../diagram/initialFit";
 import {
   diagramCardBody,
@@ -12,8 +13,12 @@ import {
 import type { Model } from "./model";
 import { resourceRelationRoute } from "./routing";
 import styles from "./ResourceMap.module.css";
+import { resourceCardHeight, resourceLayoutInput, RESOURCE_CARD_WIDTH } from "./layout";
+import { useDiagramLayout } from "../diagram/useDiagramLayout";
+import { applyDiagramRoutes } from "../diagram/elkX6";
+import { Alert } from "@mantine/core";
 
-const CARD_WIDTH = 220;
+const CARD_WIDTH = RESOURCE_CARD_WIDTH;
 const CARD_PADDING = 16;
 const ROW_HEIGHT = 24;
 
@@ -42,6 +47,8 @@ function updateRoutes(graph: Graph) {
         connectionPoint: "anchor",
       });
       edge.setVertices(route.vertices ?? route.waypoints ?? []);
+      edge.setConnector({ name: "rounded", args: { radius: 6 } });
+      edge.removeProp("defaultLabel");
       edge.setRouter(
         route.vertices === undefined
           ? {
@@ -75,8 +82,10 @@ type Props = {
   disabled: boolean;
   onSelect: (id: string) => void;
   onMove: (id: string, x: number, y: number) => void;
+  fitIdentity?: number;
 };
 export default function ResourceGraph(props: Props) {
+  const { layout, error } = useDiagramLayout(resourceLayoutInput(props.model));
   const host = useRef<HTMLElement>(null);
   const graphRef = useRef<Graph | null>(null);
   const current = useRef(props);
@@ -88,7 +97,7 @@ export default function ResourceGraph(props: Props) {
     if (!host.current) return;
     const graph = new Graph({
       container: host.current,
-      ...diagramOptions(0.2),
+      ...diagramOptions(),
       // Rebuilds reuse cell IDs; remove old SVG views before adding replacements.
       async: false,
       interacting: () => ({
@@ -101,6 +110,7 @@ export default function ResourceGraph(props: Props) {
       }),
     });
     graphRef.current = graph;
+    const removeWheelZoom = installCanvasWheelZoom(graph, host.current);
     const fit = createInitialFit(graph, host.current, 36);
     initialFit.current = fit;
     graph.on("node:click", ({ node }) =>
@@ -113,9 +123,10 @@ export default function ResourceGraph(props: Props) {
     // Re-evaluate sides and obstacles on live movement, before position saving.
     graph.on("node:change:position", () => updateRoutes(graph));
     graph.on("resize", () => {
-      fit();
+      fit(String(current.current.fitIdentity ?? 0));
     });
     return () => {
+      removeWheelZoom();
       graph.dispose();
       graphRef.current = null;
       initialFit.current = null;
@@ -131,7 +142,6 @@ export default function ResourceGraph(props: Props) {
       );
       const selected = props.selectedId === resource.id;
       const shownOperations = operationRows.slice(0, 4);
-      const rows = Math.max(1, shownOperations.length) + (operationRows.length > 4 ? 1 : 0);
       const text = {
         textAnchor: "start",
         textVerticalAnchor: "middle",
@@ -144,7 +154,7 @@ export default function ResourceGraph(props: Props) {
         x: resource.x,
         y: resource.y,
         width: CARD_WIDTH,
-        height: 76 + rows * ROW_HEIGHT,
+        height: resourceCardHeight(props.model, resource),
         markup: [
           { tagName: "rect", selector: "body" },
           { tagName: "text", selector: "title" },
@@ -249,18 +259,28 @@ export default function ResourceGraph(props: Props) {
       });
     }
     updateRoutes(graph);
-    initialFit.current?.();
   }, [props.model, props.selectedId]);
+  useEffect(() => {
+    if (layout && graphRef.current) applyDiagramRoutes(graphRef.current, layout);
+    initialFit.current?.(String(props.fitIdentity ?? 0));
+  }, [layout, props.model, props.selectedId, props.fitIdentity]);
   return (
-    <DiagramViewport
-      hostRef={host}
-      graphRef={graphRef}
-      className={styles.graph}
-      ariaHidden
-      zoomLabel="карту"
-      zoomStep={0.2}
-      fitPadding={36}
-      fitLabel="Уместить"
-    />
+    <>
+      {error && (
+        <Alert color="red" role="alert">
+          Не удалось рассчитать расположение ресурсов. Ручное редактирование доступно.
+        </Alert>
+      )}
+      <DiagramViewport
+        hostRef={host}
+        graphRef={graphRef}
+        className={styles.graph}
+        ariaHidden
+        zoomLabel="карту"
+        zoomStep={0.2}
+        fitPadding={36}
+        fitLabel="Уместить"
+      />
+    </>
   );
 }

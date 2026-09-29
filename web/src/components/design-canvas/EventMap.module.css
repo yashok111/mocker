@@ -1,0 +1,44 @@
+.graph {
+  height: 430px;
+  min-width: 0;
+}
+
+.list,
+.inspector {
+  display: grid;
+  gap: var(--mantine-spacing-xs);
+  min-width: 0;
+  padding: var(--mantine-spacing-sm);
+  border: 1px solid var(--mocker-border);
+  border-radius: var(--mantine-radius-md);
+}
+
+.listButton {
+  display: block;
+  width: 100%;
+  height: auto;
+  min-height: 32px;
+  padding: 6px 10px;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+
+.listButton :global(.mantine-Button-label) {
+  display: block;
+  white-space: normal;
+  text-align: left;
+}
+
+.listButton :global(.mantine-Button-inner) {
+  justify-content: flex-start;
+}
+
+.listButton[aria-pressed="true"] {
+  color: var(--mantine-color-teal-9);
+  background: var(--mantine-color-teal-0);
+}
+
+.pointer {
+  overflow-wrap: anywhere;
+  font-family: var(--mantine-font-family-monospace);
+}

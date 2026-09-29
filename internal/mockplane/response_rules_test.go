@@ -103,6 +103,46 @@ func TestResponseRuleExecution_BranchesPreserveBytesAndSkipEnvelope(t *testing.T
 	}
 }
 
+func TestResponseRuleExecution_BindsInheritedAlias(t *testing.T) {
+	rule := executionTestRule("GET")
+	rule.Binding.Path = "/one"
+	source := executionTestSource(t, rule)
+	var root map[string]any
+	if err := jsonx.Unmarshal(source.normalized, &root); err != nil {
+		t.Fatal(err)
+	}
+	paths := root["paths"].(map[string]any)
+	shared := paths["/widgets"]
+	delete(paths, "/widgets")
+	paths["/one"] = map[string]any{"$ref": "#/components/pathItems/Shared"}
+	paths["/two"] = map[string]any{"$ref": "#/components/pathItems/Shared"}
+	root["components"] = map[string]any{"pathItems": map[string]any{"Shared": shared}}
+	data, err := jsonx.Marshal(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	source.normalized = data
+	first, second := widgetsRoute(), widgetsRoute()
+	first.Path, first.CanonicalPath = "/one", "/one"
+	second.Path, second.CanonicalPath, second.OpRowID = "/two", "/two", 2
+	source.routes = []router.Route{first, second}
+	variant := widgetsVariant()
+	variant.OpPointer = "#/components/pathItems/Shared/get"
+	variant.SchemaPtr = "#/components/pathItems/Shared/get/responses/200/content/application~1json/schema"
+	other := variant
+	other.OpRowID = 2
+	source.variants = map[int64][]gen.ResponseVariant{1: {variant}, 2: {other}}
+	ws := widgetsWorkspace(7, domain.DefaultSettings())
+	sink := &fakeTrafficSink{}
+	p := trafficPlane(t, 1<<20, source, sink, ws)
+	req := httptest.NewRequest(http.MethodGet, "http://alex.mock.local/one", nil)
+	req.Header.Set("X-Branch", "first")
+	rec, _ := executionRequest(t, p, sink, req)
+	if rec.Code != 200 || rec.Header().Get("X-Rule") != "first" || rec.Body.String() != `{ "number": 1.0, "large": 9007199254740993 }` {
+		t.Fatalf("inherited response rule = %d %q headers=%v", rec.Code, rec.Body.String(), rec.Header())
+	}
+}
+
 func TestResponseRuleExecution_AcceptHEADAndBodylessStatuses(t *testing.T) {
 	for _, tc := range []struct {
 		name, method, accept string

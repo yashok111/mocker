@@ -58,6 +58,7 @@ import {
   ScenarioDataBindingsEditor,
   bindingTargetLabel,
   bindingFieldName,
+  bindingTransformLabel,
   targetKey,
 } from "./ScenarioDataBindingsEditor";
 import { useDataFlowAnalysis, type AnalyzeDataFlow } from "./useDataFlowAnalysis";
@@ -1799,6 +1800,9 @@ function StepResult({
             Переданные значения
           </Text>
           {step.bindingResults.map((binding) => {
+            const configuredBinding = document.messages
+              .find((message) => message.id === step.messageId)
+              ?.execution?.bindings?.find((item) => item.id === binding.bindingId);
             const target = binding.target;
             const values =
               target.kind === "path"
@@ -1820,7 +1824,7 @@ function StepResult({
               <div key={binding.bindingId} className={styles.bindingResult}>
                 <Text size="sm" className={styles.wrap}>
                   Передали {bindingFieldName(binding.target)}:{" "}
-                  <span>{value ?? binding.valueJson}</span>
+                  <span>{value ?? binding.transformedValueJson ?? binding.valueJson}</span>
                 </Text>
                 <details className={styles.disclosure}>
                   <summary>Откуда взялось значение</summary>
@@ -1838,6 +1842,22 @@ function StepResult({
                       )
                       .join("")}
                   </Text>
+                  <Text size="xs" ff="monospace" className={styles.wrap}>
+                    Исходное значение: {binding.valueJson}
+                  </Text>
+                  {binding.transformedValueJson !== undefined ? (
+                    <Text size="xs" ff="monospace" className={styles.wrap}>
+                      После преобразования: {binding.transformedValueJson}
+                    </Text>
+                  ) : null}
+                  {configuredBinding?.transforms?.length ? (
+                    <Text size="xs" c="dimmed" className={styles.wrap}>
+                      Преобразования:{" "}
+                      {configuredBinding.transforms
+                        .map((item) => bindingTransformLabel(item.kind))
+                        .join(" → ")}
+                    </Text>
+                  ) : null}
                 </details>
               </div>
             );

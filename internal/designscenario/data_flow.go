@@ -155,6 +155,12 @@ func analyzeDataFlow(document Document) DataFlowAnalysis {
 			if st == "unknown" || tt == "unknown" {
 				add(pointer, "тип не удалось определить: compatibility will be checked during execution", "warning")
 			}
+			projected, err := ProjectBindingType(st, b.Transforms)
+			if err != nil {
+				add(pointer+"/transforms", err.Error(), "error")
+				continue
+			}
+			st = projected
 			if b.Target.Kind != "body" {
 				if st == "object" || st == "array" || st == "null" {
 					add(pointer+"/sourcePointer", "text targets require a non-null scalar source", "error")

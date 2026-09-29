@@ -124,17 +124,9 @@ func operationKeys(raw []byte) map[string]bool {
 	if decoder.Decode(&value) != nil {
 		return keys
 	}
-	paths, _ := value["paths"].(map[string]any)
-	for path, item := range paths {
-		if !strings.HasPrefix(path, "/") {
-			continue
-		}
-		pathItem, _ := item.(map[string]any)
-		for _, method := range []string{"get", "put", "post", "patch", "delete", "options", "head", "trace"} {
-			operation, _ := pathItem[method].(map[string]any)
-			if key, ok := operation["x-mocker-canvas-operation-id"].(string); ok && key != "" {
-				keys[key] = true
-			}
+	for _, operation := range designscenario.ContractOperations(value) {
+		if operation.Key != "" {
+			keys[operation.Key] = true
 		}
 	}
 	return keys

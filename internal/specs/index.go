@@ -9,6 +9,7 @@ import (
 
 	"github.com/yashok111/mocker/internal/openapi"
 	"github.com/yashok111/mocker/internal/router"
+	"github.com/yashok111/mocker/internal/schemamodel"
 )
 
 // httpMethods lists the path-item keys that are HTTP operations, in a fixed
@@ -60,13 +61,23 @@ func Index(doc *openapi.Document, res *openapi.Resolver, rep *openapi.Report) ([
 			continue
 		}
 
+		pathPointer := "/paths/" + openapi.EscapePointerToken(p)
+		nodes, diagnostics := schemamodel.PathItems(doc.Root(), item, pathPointer)
+		for _, diagnostic := range diagnostics {
+			rep.Add("#"+diagnostic.Pointer, diagnostic.Code, diagnostic.Message)
+		}
+		byMethod := make(map[string]schemamodel.PathItemOperation)
+		for _, operation := range schemamodel.PathItemOperations(nodes) {
+			byMethod[operation.Method] = operation
+		}
 		for _, method := range httpMethods {
-			opRaw, present := item[method]
+			occurrence, present := byMethod[method]
 			if !present {
 				continue
 			}
 
-			pointer := "#/paths/" + openapi.EscapePointerToken(p) + "/" + method
+			opRaw := occurrence.Value
+			pointer := "#" + occurrence.Pointer
 			op := &Operation{
 				Method:        strings.ToUpper(method),
 				Path:          p,

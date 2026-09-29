@@ -4,9 +4,9 @@ import (
 	"cmp"
 	"context"
 	"fmt"
-	"maps"
 	"slices"
 	"strconv"
+	"strings"
 
 	"github.com/yashok111/mocker/internal/apidesign"
 )
@@ -14,11 +14,12 @@ import (
 // ImpactScenarioResult describes current saved drafts, independently of the API
 // snapshot transaction. Complete does not establish compatibility of step data.
 type ImpactScenarioResult struct {
-	Affected    []apidesign.ImpactEntity
-	Evidence    []apidesign.ImpactEvidence
-	Diagnostics []apidesign.ImpactDiagnostic
-	Coverage    apidesign.ImpactCoverage
-	Complete    bool
+	Affected     []apidesign.ImpactEntity
+	Evidence     []apidesign.ImpactEvidence
+	Diagnostics  []apidesign.ImpactDiagnostic
+	FieldImpacts []apidesign.ImpactFieldImpact
+	Coverage     apidesign.ImpactCoverage
+	Complete     bool
 }
 
 type impactOperationUsage struct {
@@ -43,6 +44,8 @@ type impactEmbeddedOperation struct {
 type impactUsageCollector struct {
 	ctx        context.Context
 	report     apidesign.ImpactReport
+	pair       apidesign.ImpactDocumentPair
+	baseValue  any
 	operations map[string][]impactOperationUsage
 	ambiguous  map[string]bool
 	result     ImpactScenarioResult
@@ -50,14 +53,14 @@ type impactUsageCollector struct {
 
 // ImpactUsages joins messages to operation evidence through their exact contract
 // source and stable key. It does not refresh or execute embedded contracts.
-func (r *Repo) ImpactUsages(ctx context.Context, report apidesign.ImpactReport) (ImpactScenarioResult, error) {
+func (r *Repo) ImpactUsages(ctx context.Context, report apidesign.ImpactReport, pair apidesign.ImpactDocumentPair) (ImpactScenarioResult, error) {
 	collector := impactUsageCollector{
-		ctx: ctx, report: report, operations: impactOperationUsages(report),
+		ctx: ctx, report: report, pair: pair, operations: impactOperationUsages(report),
 		ambiguous: impactAmbiguousOperationKeys(report),
 		result: ImpactScenarioResult{
 			Affected: []apidesign.ImpactEntity{}, Evidence: []apidesign.ImpactEvidence{},
-			Diagnostics: []apidesign.ImpactDiagnostic{},
-			Coverage:    apidesign.ImpactCoverage{TruncatedReasons: []string{}}, Complete: true,
+			Diagnostics: []apidesign.ImpactDiagnostic{}, FieldImpacts: []apidesign.ImpactFieldImpact{},
+			Coverage: apidesign.ImpactCoverage{TruncatedReasons: []string{}}, Complete: true,
 		},
 	}
 	if err := ctx.Err(); err != nil {
@@ -65,6 +68,9 @@ func (r *Repo) ImpactUsages(ctx context.Context, report apidesign.ImpactReport) 
 	}
 	if len(report.Changes) == 0 {
 		return collector.result, nil
+	}
+	if pair.Before != "" {
+		collector.baseValue, _ = decodeJSONValue([]byte(pair.Before))
 	}
 	read, err := r.readDesignUsageDrafts(ctx, collector.visit)
 	if err != nil {
@@ -77,6 +83,9 @@ func (r *Repo) ImpactUsages(ctx context.Context, report apidesign.ImpactReport) 
 	collector.result.Coverage.ScenarioUsagesReturned = len(collector.result.Affected)
 	collector.result.Coverage.EntitiesReturned = len(collector.result.Affected)
 	collector.result.Coverage.EvidenceReturned = len(collector.result.Evidence)
+	slices.SortFunc(collector.result.FieldImpacts, compareImpactFieldFindings)
+	collector.result.FieldImpacts = slices.CompactFunc(collector.result.FieldImpacts, func(a, b apidesign.ImpactFieldImpact) bool { return a.ID == b.ID })
+	collector.result.Coverage.FieldImpactsReturned = len(collector.result.FieldImpacts)
 	return collector.result, nil
 }
 
@@ -173,11 +182,10 @@ func (c *impactUsageCollector) visit(draft designUsageDraft) (bool, error) {
 			return true, nil
 		}
 	}
-	return false, nil
+	return c.visitFields(draft, contracts)
 }
 
-// Match the scenario resolver's direct paths operations. Inherited Path Items
-// cannot be confirmed by the runtime resolver and remain unknown here too.
+// Resolve concrete aliases with the same Path Item projection as data flow.
 func impactEmbeddedOperationKeys(
 	ctx context.Context,
 	contract Contract,
@@ -188,20 +196,15 @@ func impactEmbeddedOperationKeys(
 	if err != nil || root == nil {
 		return keys, true, nil
 	}
-	paths := object(root["paths"])
-	for _, path := range slices.Sorted(maps.Keys(paths)) {
+	for _, operation := range ContractOperations(root) {
 		if err := ctx.Err(); err != nil {
 			return nil, false, err
 		}
-		item := object(paths[path])
-		for _, method := range operationMethods {
-			operation := object(item[method])
-			if key := stringValue(operation[apidesign.OperationKey]); key != "" {
-				previous := keys[key]
-				keys[key] = impactEmbeddedOperation{
-					Count: previous.Count + 1, Pointer: "/paths/" + escapePointer(path) + "/" + method,
-					Method: method, Path: path,
-				}
+		if key := strings.TrimSpace(operation.Key); key != "" {
+			previous := keys[key]
+			keys[key] = impactEmbeddedOperation{
+				Count: previous.Count + 1, Pointer: "/paths/" + escapePointer(operation.Path) + "/" + operation.Method,
+				Method: operation.Method, Path: operation.Path,
 			}
 		}
 	}

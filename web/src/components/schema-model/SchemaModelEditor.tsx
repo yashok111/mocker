@@ -17,6 +17,9 @@ import {
 import SchemaGraph from "./SchemaGraph";
 import SchemaInspector from "./SchemaInspector";
 import styles from "./SchemaModel.module.css";
+import { layoutDiagram } from "../diagram/elkLayout";
+import { previewLayoutCommands } from "../diagram/previewLayout";
+import { schemaLayoutInput } from "./layout";
 
 type Props = {
   designId: number;
@@ -24,6 +27,7 @@ type Props = {
   blocked: boolean;
   formStore: FormDraftStore;
   onChange: (document: string) => void;
+  onLayoutPendingChange?: (pending: boolean) => void;
 };
 function describeSchemaModelFailure(reason: unknown): string {
   if (
@@ -44,7 +48,7 @@ function describeSchemaModelFailure(reason: unknown): string {
 }
 
 export default function SchemaModelEditor(props: Props) {
-  const { designId, document, blocked, formStore, onChange } = props;
+  const { designId, document, blocked, formStore, onChange, onLayoutPendingChange } = props;
   const snapshot = useSyncExternalStore(
     formStore.subscribe,
     formStore.getSnapshot,
@@ -66,18 +70,36 @@ export default function SchemaModelEditor(props: Props) {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [retry, setRetry] = useState(0);
+  const [layout, setLayout] = useState<{
+    source: string;
+    proposal?: { document: string; model: SchemaModel; diagnostics: ApiDesignDiagnostic[] };
+  }>();
+  const [layoutError, setLayoutError] = useState("");
+  const [layoutFit, setLayoutFit] = useState(0);
+  const layoutController = useRef<AbortController | null>(null);
+  const commandOwner = useRef<number | null>(null);
+  const commandSequence = useRef(0);
   const generation = useRef(0);
   const current = useRef(props);
   useEffect(() => {
     current.current = props;
   });
-  const model = result?.document === document ? result.model : undefined;
+  const layoutActive = layout?.source === document && !blocked;
+  const proposal = layoutActive ? layout.proposal : undefined;
+  const model = proposal?.model ?? (result?.document === document ? result.model : undefined);
   const pending = draft !== undefined;
   const otherDraft = snapshot.dirty && !pending;
 
   useEffect(() => {
     const controller = new AbortController();
     const token = ++generation.current;
+    layoutController.current?.abort();
+    layoutController.current = null;
+    // oxlint-disable-next-line react/set-state-in-effect -- A changed document invalidates the external layout proposal.
+    setLayout(undefined);
+    setLayoutError("");
+    commandOwner.current = null;
+    setBusy(false);
     if (!document || blocked) return;
     void previewSchemaModel(designId, { document }, { signal: controller.signal }).then(
       (response) => {
@@ -92,12 +114,18 @@ export default function SchemaModelEditor(props: Props) {
     );
     return () => {
       controller.abort();
+      layoutController.current?.abort();
       // oxlint-disable-next-line react-hooks/exhaustive-deps -- Increment the shared request generation to fence commands after unmount.
       generation.current++;
     };
   }, [designId, document, blocked, retry]);
+  useEffect(() => {
+    onLayoutPendingChange?.(layoutActive);
+  }, [layoutActive, onLayoutPendingChange]);
+  useEffect(() => () => onLayoutPendingChange?.(false), [onLayoutPendingChange]);
 
   function edit(next: Form) {
+    if (layoutActive) return;
     generation.current++;
     setForm(next);
     setError("");
@@ -107,6 +135,7 @@ export default function SchemaModelEditor(props: Props) {
     });
   }
   function select(selection: Selection) {
+    if (layoutActive) return;
     if (pending) {
       setError("Примените изменения или сбросьте ввод перед выбором другой схемы или поля.");
       return;
@@ -126,7 +155,7 @@ export default function SchemaModelEditor(props: Props) {
     if (selection.create) edit(next);
   }
   async function submit(commands: SchemaModelCommand[], nextSelection?: Selection) {
-    if (busy || blocked || otherDraft) return;
+    if (busy || blocked || otherDraft || layoutActive || commandOwner.current !== null) return;
     if (draft && draft.propertySource !== document) {
       setError(
         "Документ изменился после начала ввода. Скопируйте изменения и сбросьте ввод перед повторным применением.",
@@ -134,6 +163,8 @@ export default function SchemaModelEditor(props: Props) {
       return;
     }
     const token = ++generation.current;
+    const owner = ++commandSequence.current;
+    commandOwner.current = owner;
     setBusy(true);
     setError("");
     try {
@@ -158,8 +189,98 @@ export default function SchemaModelEditor(props: Props) {
     } catch (reason) {
       if (token === generation.current) setError(describeSchemaModelFailure(reason));
     } finally {
-      setBusy(false);
+      if (commandOwner.current === owner) {
+        commandOwner.current = null;
+        setBusy(false);
+      }
     }
+  }
+  async function arrange() {
+    if (
+      busy ||
+      blocked ||
+      pending ||
+      otherDraft ||
+      layoutActive ||
+      commandOwner.current !== null ||
+      !model?.schemas.length
+    )
+      return;
+    const token = ++generation.current;
+    const owner = ++commandSequence.current;
+    const controller = new AbortController();
+    commandOwner.current = owner;
+    layoutController.current = controller;
+    setBusy(true);
+    setLayout({ source: document });
+    setLayoutError("");
+    try {
+      const arranged = await layoutDiagram(schemaLayoutInput(model));
+      if (
+        controller.signal.aborted ||
+        generation.current !== token ||
+        current.current.document !== document
+      )
+        return;
+      const positions = new Map(arranged.nodes.map((node) => [node.id, node]));
+      const commands: SchemaModelCommand[] = model.schemas.map((schema, index) => {
+        const point = positions.get(`schema:${index}`)!;
+        return { kind: "move_schema", schemaName: schema.name, x: point.x, y: point.y };
+      });
+      const response = await previewLayoutCommands(
+        document,
+        commands,
+        async (document, commands, signal) => {
+          const response = await previewSchemaModel(designId, { document, commands }, { signal });
+          if (response.status !== 200) throw new Error("Не удалось проверить расположение схем.");
+          return response.data;
+        },
+        controller.signal,
+      );
+      if (
+        controller.signal.aborted ||
+        generation.current !== token ||
+        current.current.document !== document
+      )
+        return;
+      setLayout({ source: document, proposal: response });
+      setLayoutFit((identity) => identity + 1);
+    } catch (reason) {
+      if (controller.signal.aborted || generation.current !== token) return;
+      setLayout(undefined);
+      setLayoutError(describeSchemaModelFailure(reason));
+    } finally {
+      if (commandOwner.current === owner) {
+        commandOwner.current = null;
+        layoutController.current = null;
+        setBusy(false);
+      }
+    }
+  }
+  function cancelLayout() {
+    if (proposal) setLayoutFit((identity) => identity + 1);
+    generation.current++;
+    layoutController.current?.abort();
+    layoutController.current = null;
+    commandOwner.current = null;
+    setBusy(false);
+    setLayout(undefined);
+    setLayoutError("");
+  }
+  function applyLayout() {
+    if (!proposal || busy || layout?.source !== current.current.document || pending || otherDraft)
+      return;
+    generation.current++;
+    setLayout(undefined);
+    setResult(proposal);
+    if (form)
+      setForm(
+        makeForm(
+          form.selection,
+          proposal.model.schemas.find((schema) => schema.name === form.selection.schema),
+        ),
+      );
+    onChange(proposal.document);
   }
   function apply() {
     if (!form) return;
@@ -213,14 +334,50 @@ export default function SchemaModelEditor(props: Props) {
               * — обязательное поле. Связь: перетащите точку поля к схеме или выберите её в
               инспекторе.
             </Text>
-            <Button
-              size="xs"
-              disabled={pending || busy || !model}
-              onClick={() => select({ schema: "", create: true })}
-            >
-              Добавить схему
-            </Button>
+            <Group gap="xs">
+              <Button
+                size="xs"
+                variant="default"
+                disabled={pending || busy || layoutActive || !model?.schemas.length}
+                onClick={() => void arrange()}
+              >
+                Расставить схемы
+              </Button>
+              <Button
+                size="xs"
+                disabled={pending || busy || layoutActive || !model}
+                onClick={() => select({ schema: "", create: true })}
+              >
+                Добавить схему
+              </Button>
+            </Group>
           </Group>
+          {layoutActive && (
+            <Alert title="Расположение схем" color="blue">
+              <Stack gap="sm">
+                <Text size="sm">
+                  {proposal
+                    ? "Проверьте расположение на карте. Примените его, чтобы обновить черновик API."
+                    : "Подбираем расположение схем…"}
+                </Text>
+                <Group gap="xs">
+                  {proposal && (
+                    <Button size="xs" onClick={applyLayout}>
+                      Применить расположение
+                    </Button>
+                  )}
+                  <Button size="xs" variant="default" onClick={cancelLayout}>
+                    Отменить
+                  </Button>
+                </Group>
+              </Stack>
+            </Alert>
+          )}
+          {layoutError && (
+            <Alert color="red" role="alert">
+              {layoutError}
+            </Alert>
+          )}
           {pending && (
             <Alert color="yellow">
               Есть неприменённый ввод. Примените его или нажмите «Сбросить ввод» перед сохранением
@@ -260,11 +417,12 @@ export default function SchemaModelEditor(props: Props) {
                 <div>
                   <SchemaGraph
                     model={model}
+                    fitIdentity={layoutFit}
                     selection={form?.selection}
-                    disabled={pending || busy}
+                    disabled={pending || busy || layoutActive}
                     onSelect={select}
                     onMove={(schema, x, y) => {
-                      if (!pending) {
+                      if (!pending && !layoutActive) {
                         const moved = makeForm(
                           { schema },
                           model.schemas.find((s) => s.name === schema),
@@ -278,7 +436,7 @@ export default function SchemaModelEditor(props: Props) {
                       }
                     }}
                     onConnect={(schema, property, target) => {
-                      if (pending) return;
+                      if (pending || layoutActive) return;
                       try {
                         const linked = makeForm(
                           { schema, property },
@@ -332,7 +490,12 @@ export default function SchemaModelEditor(props: Props) {
                           <Button
                             size="compact-xs"
                             variant="subtle"
-                            disabled={pending || busy || !objectCompatible(schema.schemaJSON)}
+                            disabled={
+                              pending ||
+                              busy ||
+                              layoutActive ||
+                              !objectCompatible(schema.schemaJSON)
+                            }
                             onClick={() =>
                               select({ schema: schema.name, property: "", create: true })
                             }
@@ -363,35 +526,40 @@ export default function SchemaModelEditor(props: Props) {
                 </div>
                 <Stack gap="md">
                   {canInspect && form ? (
-                    <SchemaInspector
-                      form={pending ? form : makeForm(form.selection, selectedSchema)}
-                      model={model}
-                      busy={busy}
-                      pending={pending}
-                      onChange={edit}
-                      onApply={apply}
-                      onDiscard={() => {
-                        generation.current++;
-                        formStore.remove(DRAFT_KEY);
-                        setError("");
-                        setForm(undefined);
-                      }}
-                      onDelete={() => {
-                        if (!form.selection.create)
-                          void submit([
-                            {
-                              kind:
-                                form.selection.property === undefined
-                                  ? "delete_schema"
-                                  : "delete_property",
-                              schemaName: form.selection.schema,
-                              ...(form.selection.property === undefined
-                                ? {}
-                                : { propertyName: form.selection.property }),
-                            },
-                          ]);
-                      }}
-                    />
+                    <fieldset
+                      disabled={layoutActive}
+                      style={{ border: 0, margin: 0, padding: 0, minWidth: 0 }}
+                    >
+                      <SchemaInspector
+                        form={pending ? form : makeForm(form.selection, selectedSchema)}
+                        model={model}
+                        busy={busy}
+                        pending={pending}
+                        onChange={edit}
+                        onApply={apply}
+                        onDiscard={() => {
+                          generation.current++;
+                          formStore.remove(DRAFT_KEY);
+                          setError("");
+                          setForm(undefined);
+                        }}
+                        onDelete={() => {
+                          if (!form.selection.create)
+                            void submit([
+                              {
+                                kind:
+                                  form.selection.property === undefined
+                                    ? "delete_schema"
+                                    : "delete_property",
+                                schemaName: form.selection.schema,
+                                ...(form.selection.property === undefined
+                                  ? {}
+                                  : { propertyName: form.selection.property }),
+                              },
+                            ]);
+                        }}
+                      />
+                    </fieldset>
                   ) : (
                     <Text c="dimmed" size="sm">
                       Выберите схему или поле для редактирования.

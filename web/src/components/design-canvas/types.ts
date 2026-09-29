@@ -54,12 +54,26 @@ export type DataBindingTarget =
   | { kind: "path" | "query" | "header"; name: string }
   | { kind: "body"; pointer: string };
 
+export const DATA_BINDING_TRANSFORM_KINDS = [
+  "trim",
+  "lower",
+  "upper",
+  "to_string",
+  "to_number",
+  "to_integer",
+] as const;
+export type DataBindingTransformKind = (typeof DATA_BINDING_TRANSFORM_KINDS)[number];
+export interface DataBindingTransform {
+  kind: DataBindingTransformKind;
+}
+
 export interface DataBinding {
   id: string;
   sourceMessageId: string;
   sourcePointer: string;
   target: DataBindingTarget;
   prefix?: string;
+  transforms?: DataBindingTransform[];
 }
 
 export interface DataFlowField {

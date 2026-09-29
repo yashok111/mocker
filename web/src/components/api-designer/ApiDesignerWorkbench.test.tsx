@@ -609,10 +609,12 @@ describe("ApiDesignerWorkbench", () => {
       "POST /api/designs/12/resource-map/preview": () => {
         const body = JSON.parse(String(fetchMock.mock.calls.at(-1)?.[1]?.body));
         const next = JSON.parse(body.document);
-        const edited =
-          body.commands?.[0]?.kind === "auto_layout"
-            ? { ...next["x-mocker-resource-map"].resources[0], x: 480 }
-            : body.commands?.[0]?.resource;
+        let edited = next["x-mocker-resource-map"]?.resources[0];
+        for (const command of body.commands ?? []) {
+          if (command.kind === "upsert_resource") edited = command.resource;
+          if (command.kind === "move_resource" && command.resourceId === resource.id)
+            edited = { ...(edited ?? resource), x: command.x, y: command.y };
+        }
         if (edited)
           next["x-mocker-resource-map"] = { formatVersion: 1, resources: [edited], relations: [] };
         next.paths["/orders"].get["x-mocker-canvas-operation-id"] = key;
@@ -662,8 +664,20 @@ describe("ApiDesignerWorkbench", () => {
     );
     expect(saveBody.expectedVersion).toBe(1);
     expect(JSON.parse(saveBody.document)["x-mocker-resource-map"].resources[0].name).toBe("Заказы");
-    expect(JSON.parse(saveBody.document)["x-mocker-resource-map"].resources[0].x).toBe(480);
-    await userEvent.click(await screen.findByRole("button", { name: /Ресурс \/orders/ }));
+    const layoutCommand = fetchMock.mock.calls
+      .flatMap(([, init]) => JSON.parse(String(init?.body || "{}")).commands ?? [])
+      .filter((command) => command.kind === "move_resource")
+      .at(-1);
+    expect(layoutCommand).toMatchObject({
+      resourceId: resource.id,
+      x: expect.any(Number),
+      y: expect.any(Number),
+    });
+    expect(JSON.parse(saveBody.document)["x-mocker-resource-map"].resources[0]).toMatchObject({
+      x: layoutCommand.x,
+      y: layoutCommand.y,
+    });
+    await userEvent.click(await screen.findByRole("button", { name: /Ресурс Заказы/ }));
     await userEvent.click(screen.getByRole("button", { name: /\/orders · Список заказов/ }));
     expect(screen.getByRole("tab", { name: "Редактор" })).toHaveAttribute("aria-selected", "true");
   });

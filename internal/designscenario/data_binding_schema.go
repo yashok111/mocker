@@ -1,14 +1,111 @@
 package designscenario
 
 import (
+	"context"
 	"fmt"
 	"maps"
 	"slices"
 	"strconv"
 	"strings"
-
-	"github.com/yashok111/mocker/internal/apidesign"
 )
+
+// fieldAt distinguishes an undeclared field from a schema that cannot be
+// classified. Only a closed object can prove that a property is undeclared.
+func (s bindingSchema) fieldAt(ctx context.Context, value any, pointer string) (string, string) {
+	if !validExecutionPointer(pointer) {
+		return "unknown", ""
+	}
+	tokens := []string{}
+	if pointer != "" {
+		tokens = strings.Split(pointer[1:], "/")
+	}
+	if len(tokens) > maxDataFlowDepth {
+		return "unknown", ""
+	}
+	for _, token := range tokens {
+		if ctx.Err() != nil {
+			return "unknown", ""
+		}
+		node, ok := s.resolve(value)
+		if !ok {
+			return "unknown", ""
+		}
+		if impactUnsupportedFieldKeywords(node) {
+			return "unknown", ""
+		}
+		token = strings.ReplaceAll(strings.ReplaceAll(token, "~1", "/"), "~0", "~")
+		switch schemaType(node) {
+		case "object":
+			properties := object(node["properties"])
+			if next, found := properties[token]; found {
+				value = next
+				continue
+			}
+			if additional, closed := node["additionalProperties"].(bool); closed && !additional {
+				return "absent", ""
+			}
+			return "unknown", ""
+		case "array":
+			index, err := strconv.Atoi(token)
+			if err != nil || index < 0 || strconv.Itoa(index) != token {
+				return "unknown", ""
+			}
+			value = node["items"]
+		default:
+			return "unknown", ""
+		}
+	}
+	node, ok := s.resolve(value)
+	if !ok || impactUnsupportedFieldKeywords(node) || schemaType(node) == "unknown" {
+		return "unknown", ""
+	}
+	return "present", schemaType(node)
+}
+
+func impactUnsupportedFieldKeywords(node map[string]any) bool {
+	for _, key := range []string{"patternProperties", "unevaluatedProperties", "if", "then", "else", "dependentSchemas"} {
+		if _, exists := node[key]; exists {
+			return true
+		}
+	}
+	return false
+}
+
+func (s bindingSchema) responseField(ctx context.Context, pointer string) (string, string) {
+	if !s.available || s.uncertain || len(s.responses) == 0 {
+		return "unknown", ""
+	}
+	var presence, typ string
+	for _, response := range s.responses {
+		p, t := s.fieldAt(ctx, response, pointer)
+		if presence != "" && (presence != p || typ != t) {
+			return "unknown", ""
+		}
+		presence, typ = p, t
+	}
+	return presence, typ
+}
+
+func (s bindingSchema) targetField(ctx context.Context, target DataBindingTarget) (string, string) {
+	if !s.available || s.uncertain {
+		return "unknown", ""
+	}
+	if target.Kind == "body" {
+		if s.body == nil {
+			return "absent", ""
+		}
+		return s.fieldAt(ctx, s.body, target.Pointer)
+	}
+	name := target.Name
+	if target.Kind == "header" {
+		name = strings.ToLower(name)
+	}
+	value, exists := s.parameters[target.Kind+":"+name]
+	if !exists {
+		return "absent", ""
+	}
+	return s.fieldAt(ctx, value, "")
+}
 
 const maxDataFlowFields = 2000
 const maxDataFlowDepth = 20
@@ -136,6 +233,7 @@ func (s bindingSchema) targetType(target DataBindingTarget) string {
 type bindingOperation struct {
 	pathItem  map[string]any
 	operation map[string]any
+	uncertain bool
 }
 
 type bindingSchemaKey struct {
@@ -150,27 +248,31 @@ type bindingSchemaKey struct {
 // operation keys; persisted documents separately reject duplicate keys.
 func indexBindingOperations(root map[string]any) map[string]bindingOperation {
 	out := map[string]bindingOperation{}
-	resolver := bindingSchema{root: root}
-	paths := object(root["paths"])
-	for _, path := range slices.Sorted(maps.Keys(paths)) {
-		item, _ := resolver.resolve(paths[path])
-		for _, method := range operationMethods {
-			operation := object(item[method])
-			if operation == nil {
-				continue
-			}
-			key := stringValue(operation[apidesign.OperationKey])
-			if _, exists := out[key]; !exists {
-				out[key] = bindingOperation{pathItem: item, operation: operation}
-			}
+	for _, operation := range ContractOperations(root) {
+		if operation.Key == "" {
+			continue
+		}
+		if previous, exists := out[operation.Key]; exists {
+			previous.uncertain = true
+			out[operation.Key] = previous
+		} else {
+			out[operation.Key] = bindingOperation{pathItem: operation.Item, operation: operation.Operation, uncertain: operation.Uncertain}
 		}
 	}
 	return out
 }
 
 func bindingSchemas(document Document) []bindingSchema {
+	out, _ := bindingSchemasContext(context.Background(), document)
+	return out
+}
+
+func bindingSchemasContext(ctx context.Context, document Document) ([]bindingSchema, error) {
 	roots := map[string]map[string]any{}
 	for _, contract := range document.Contracts {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		value, _ := decodeJSONValue(contract.Document)
 		roots[contract.ID] = object(value)
 	}
@@ -178,6 +280,9 @@ func bindingSchemas(document Document) []bindingSchema {
 	cache := map[bindingSchemaKey]bindingSchema{}
 	out := make([]bindingSchema, len(document.Messages))
 	for i, message := range document.Messages {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		if message.Kind != "request" || message.Operation == nil {
 			continue
 		}
@@ -200,11 +305,11 @@ func bindingSchemas(document Document) []bindingSchema {
 		cache[key] = schema
 		out[i] = schema
 	}
-	return out
+	return out, nil
 }
 
 func resolveOperationBindingSchema(root map[string]any, operation bindingOperation, key bindingSchemaKey) bindingSchema {
-	s := bindingSchema{root: root, parameters: map[string]any{}, parameterRequired: map[string]bool{}}
+	s := bindingSchema{root: root, parameters: map[string]any{}, parameterRequired: map[string]bool{}, uncertain: operation.uncertain}
 	op := operation.operation
 	if op == nil {
 		s.uncertain = true

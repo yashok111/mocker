@@ -292,6 +292,7 @@ func (v *documentValidator) validateEventModel(document Document, participants m
 					}
 				}
 			}
+			v.validateEventOperationMetadata(op, operation, channels)
 		}
 	}
 	if operations > 2000 {
@@ -356,4 +357,52 @@ func intersects(a, b []string) bool {
 		}
 	}
 	return false
+}
+
+func (v *documentValidator) validateEventOperationMetadata(pointer string, operation EventOperation, channels map[string]EventChannel) {
+	if routes := operation.FailureRoutes; routes != nil {
+		if operation.Action != "receive" {
+			v.errorAt(pointer+"/failureRoutes", "только получатель может задавать маршруты ошибок")
+		}
+		for _, route := range []struct{ name, id string }{{"retryChannelId", routes.RetryChannelID}, {"deadLetterChannelId", routes.DeadLetterChannelID}} {
+			if route.id == "" {
+				continue
+			}
+			if route.id == operation.ChannelID {
+				v.errorAt(pointer+"/failureRoutes/"+route.name, "канал назначения совпадает с исходным")
+			} else if _, exists := channels[route.id]; !exists {
+				v.errorAt(pointer+"/failureRoutes/"+route.name, "канал назначения не существует")
+			}
+		}
+		if routes.RetryChannelID != "" && routes.RetryChannelID == routes.DeadLetterChannelID {
+			v.errorAt(pointer+"/failureRoutes/deadLetterChannelId", "каналы повтора и ошибок должны различаться")
+		}
+	}
+	if len(operation.APILinks) > 100 {
+		v.errorAt(pointer+"/apiLinks", "слишком много связей API")
+	}
+	seenAPI := map[EventAPILink]bool{}
+	for i, link := range operation.APILinks {
+		p := fmt.Sprintf("%s/apiLinks/%d", pointer, i)
+		v.checkText(p+"/contractId", link.ContractID, false)
+		v.checkText(p+"/operationKey", link.OperationKey, false)
+		if seenAPI[link] {
+			v.errorAt(p, "повторяющаяся связь API")
+		}
+		seenAPI[link] = true
+	}
+	if len(operation.StateLinks) > 100 {
+		v.errorAt(pointer+"/stateLinks", "слишком много связей состояний")
+	}
+	seenState := map[EventStateLink]bool{}
+	for i, link := range operation.StateLinks {
+		p := fmt.Sprintf("%s/stateLinks/%d", pointer, i)
+		v.checkText(p+"/contractId", link.ContractID, false)
+		v.checkText(p+"/diagramId", link.DiagramID, false)
+		v.checkText(p+"/transitionId", link.TransitionID, false)
+		if seenState[link] {
+			v.errorAt(p, "повторяющаяся связь состояний")
+		}
+		seenState[link] = true
+	}
 }

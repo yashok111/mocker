@@ -17,6 +17,16 @@ plugin (once item 6, then 4) as `A12` right after, and
 2.0, and deferred the last two. On 2026-09-04 endpoint functions (`A18`,
 below) were decided and gated.
 
+## Current local branch (2026-09-29)
+
+The visual API sequence in the local ledger `docs/visual-api-next-steps-progress.md` is complete
+on `feat/visual-api-next-steps`. Local Path Item references, ordered binding
+transforms and field impact are implemented and reviewed locally. The event map
+is also implemented, reviewed and verified locally. All six applicable graphs
+share ELK layout, and all seven canvases use common navigation controls.
+The `A18` recommendation below records the earlier backlog decision; it is not
+the current branch status.
+
 ## Decided and gated, not yet cut: endpoint functions (`A18`)
 
 The owner asked for endpoint LOGIC on 2026-09-04 — a sign-in that behaves

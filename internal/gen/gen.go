@@ -145,6 +145,7 @@ func (o Options) clock() func() time.Time {
 // Request is what the generator knows about the call being answered.
 type Request struct {
 	Method        string            // upper case
+	Path          string            // concrete OpenAPI path before router canonicalization
 	CanonicalPath string            // RELATIVE, {param} segments already replaced by {} — router.Route.CanonicalPath
 	PathParams    map[string]string // by parameter name, as captured by router.Match
 	Query         url.Values

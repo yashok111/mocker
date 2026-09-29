@@ -30,8 +30,8 @@ type ImportInput struct {
 }
 
 // ImportResult is what [Repo.Import] returns on success — including the
-// ErrDuplicate case, where Spec is the PRE-EXISTING row and nothing new was
-// written.
+// ErrDuplicate case, where Spec is the pre-existing immutable row. A repeat
+// import may add derived operation rows that an older index omitted.
 type ImportResult struct {
 	Spec *Spec
 	// Report is freshly computed by the same [openapi.Load] call Import used
@@ -134,6 +134,9 @@ func (r *Repo) PrepareImport(in ImportInput) (*PreparedImport, error) {
 func (r *Repo) ImportTx(ctx context.Context, tx *sql.Tx, p *PreparedImport) (*ImportResult, error) {
 	existing, err := scanSpec(tx.QueryRowContext(ctx, selectSpec+" WHERE hash = ?", p.hash))
 	if err == nil {
+		if _, err := r.insertMissingOperationsTx(ctx, tx, existing.ID, p.Operations, p.responses); err != nil {
+			return nil, err
+		}
 		return &ImportResult{Spec: existing, Report: p.Report}, ErrDuplicate
 	}
 	if !errors.Is(err, sql.ErrNoRows) {
@@ -165,8 +168,93 @@ func (r *Repo) Import(ctx context.Context, in ImportInput) (*ImportResult, error
 		return nil, err
 	}
 	var result *ImportResult
-	err = r.db.Write(ctx, func(tx *sql.Tx) error { var err error; result, err = r.ImportTx(ctx, tx, prepared); return err })
+	var duplicate bool
+	err = r.db.Write(ctx, func(tx *sql.Tx) error {
+		var importErr error
+		result, importErr = r.ImportTx(ctx, tx, prepared)
+		if errors.Is(importErr, ErrDuplicate) {
+			duplicate = true
+			return nil
+		}
+		return importErr
+	})
+	if err == nil && duplicate {
+		r.reportMu.Lock()
+		delete(r.reportCache, result.Spec.ID)
+		r.reportMu.Unlock()
+		return result, ErrDuplicate
+	}
 	return result, err
+}
+
+// insertMissingOperationsTx refreshes an immutable spec's derived index. Rows
+// already present keep their IDs and response/override rows; newly discovered
+// concrete paths receive their own operation and response rows atomically.
+func (r *Repo) insertMissingOperationsTx(ctx context.Context, tx *sql.Tx, specID int64, ops []*Operation, responses map[int][]*Response) (bool, error) {
+	rows, err := tx.QueryContext(ctx, `SELECT method, path, id FROM operations WHERE spec_id = ?`, specID)
+	if err != nil {
+		return false, fmt.Errorf("load indexed operations for spec %d: %w", specID, err)
+	}
+	type key struct{ method, path string }
+	existing := map[key]int64{}
+	for rows.Next() {
+		var method, path string
+		var id int64
+		if err := rows.Scan(&method, &path, &id); err != nil {
+			_ = rows.Close()
+			return false, err
+		}
+		existing[key{method, path}] = id
+	}
+	if err := rows.Err(); err != nil {
+		_ = rows.Close()
+		return false, err
+	}
+	if err := rows.Close(); err != nil {
+		return false, err
+	}
+	added := false
+	for _, op := range ops {
+		if _, ok := existing[key{op.Method, op.Path}]; !ok {
+			added = true
+			break
+		}
+	}
+	if !added {
+		return false, nil
+	}
+	var missing []*Operation
+	var missingIndices []int
+	for i, op := range ops {
+		if id, ok := existing[key{op.Method, op.Path}]; ok {
+			if _, err := tx.ExecContext(ctx, `UPDATE operations SET source_order = ? WHERE id = ? AND source_order <> ?`, op.SourceOrder, id, op.SourceOrder); err != nil {
+				return false, err
+			}
+			continue
+		}
+		missing = append(missing, op)
+		missingIndices = append(missingIndices, i)
+	}
+	for start := 0; start < len(missing); start += insertBatchSize {
+		end := min(start+insertBatchSize, len(missing))
+		ids, err := insertOperationsBatch(ctx, tx, specID, missing[start:end])
+		if err != nil {
+			return false, fmt.Errorf("insert missing operations %d-%d for spec %d: %w", start, end-1, specID, err)
+		}
+		var responseRows []responseRow
+		for j, id := range ids {
+			for _, response := range responses[missingIndices[start+j]] {
+				responseRows = append(responseRows, responseRow{opID: id, r: response})
+			}
+		}
+		if err := insertResponsesBatch(ctx, tx, responseRows); err != nil {
+			return false, err
+		}
+	}
+	if _, err := tx.ExecContext(ctx, `UPDATE workspaces SET revision = revision + 1, updated_at = ? WHERE spec_id = ?`, time.Now().UTC().Unix(), specID); err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 // Delete removes specID's spec row, cascading its operations and their

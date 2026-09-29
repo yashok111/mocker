@@ -1,8 +1,13 @@
-import { getOperation, listOperations, isRecord } from "../api-designer/documentModel";
+import { isRecord } from "../api-designer/documentModel";
 import { validateFragmentTree } from "./canvasFragments";
 import { OPERATION_KEY } from "./canvasModel";
+import { listCanvasOperations } from "./canvasOperations";
 import { isCanvasColor } from "./canvasColors";
-import { CANVAS_EXECUTION_LIMITS, MAX_PARTICIPANT_OFFSET_X } from "./types";
+import {
+  CANVAS_EXECUTION_LIMITS,
+  DATA_BINDING_TRANSFORM_KINDS,
+  MAX_PARTICIPANT_OFFSET_X,
+} from "./types";
 import type {
   CanvasContract,
   CanvasDocument,
@@ -208,7 +213,9 @@ export function validateDataBindings(value: unknown, path = "Передача д
     const at = `${path}[${index}]`;
     const binding = requireRecord(value, at);
     for (const key of Object.keys(binding))
-      if (!["id", "sourceMessageId", "sourcePointer", "target", "prefix"].includes(key))
+      if (
+        !["id", "sourceMessageId", "sourcePointer", "target", "prefix", "transforms"].includes(key)
+      )
         fail(`${at}.${key}: неизвестное поле`);
     const id = executionString(binding.id, `${at}.id`, 100, false);
     if (!/^[A-Za-z0-9_-]+$/.test(id)) fail(`${at}.id: используйте буквы, цифры, _ и -`);
@@ -217,6 +224,16 @@ export function validateDataBindings(value: unknown, path = "Передача д
     validatePointer(binding.sourcePointer, `${at}.sourcePointer`);
     if (binding.prefix !== undefined)
       executionString(binding.prefix, `${at}.prefix`, CANVAS_EXECUTION_LIMITS.value);
+    if (binding.transforms !== undefined) {
+      requireArray(binding.transforms, `${at}.transforms`, 8).forEach((raw, transformIndex) => {
+        const transformAt = `${at}.transforms[${transformIndex}]`;
+        const transform = requireRecord(raw, transformAt);
+        for (const key of Object.keys(transform))
+          if (key !== "kind") fail(`${transformAt}.${key}: неизвестное поле`);
+        if (!DATA_BINDING_TRANSFORM_KINDS.some((kind) => kind === transform.kind))
+          fail(`${transformAt}.kind: неизвестное преобразование`);
+      });
+    }
     const target = requireRecord(binding.target, `${at}.target`);
     const body = target.kind === "body";
     if (!["body", "path", "query", "header"].includes(String(target.kind)))
@@ -445,8 +462,7 @@ function validateContract(value: unknown, index: number): CanvasContract {
     }
   }
   const operationKeys = new Set<string>();
-  for (const location of listOperations(document)) {
-    const operationKey = getOperation(document, location)?.[OPERATION_KEY];
+  for (const { key: operationKey } of listCanvasOperations(document)) {
     if (operationKey === undefined) continue;
     const key = requireId(operationKey, `${path}.document.${OPERATION_KEY}`);
     if (operationKeys.has(key)) fail(`${path} содержит повторяющийся ${OPERATION_KEY}`);
@@ -574,6 +590,39 @@ function validateEventModel(value: unknown, document: Record<string, unknown>): 
                 );
             }
           }
+          if (operation.failureRoutes !== undefined) {
+            const routes = requireRecord(operation.failureRoutes, `${operationPath}.failureRoutes`);
+            if (operation.action !== "receive")
+              fail(`${operationPath}.failureRoutes допустимы только для receive`);
+            for (const field of ["retryChannelId", "deadLetterChannelId"] as const) {
+              if (routes[field] !== undefined)
+                requireEventId(routes[field], `${operationPath}.failureRoutes.${field}`);
+            }
+            if (
+              Object.keys(routes).some(
+                (key) => !["retryChannelId", "deadLetterChannelId"].includes(key),
+              )
+            )
+              fail(`${operationPath}.failureRoutes содержит неизвестное поле`);
+          }
+          for (const [field, keys] of [
+            ["apiLinks", ["contractId", "operationKey"]],
+            ["stateLinks", ["contractId", "diagramId", "transitionId"]],
+          ] as const) {
+            if (operation[field] === undefined) continue;
+            const links = requireArray(operation[field], `${operationPath}.${field}`, 100);
+            const pairs = new Set<string>();
+            for (const [linkIndex, rawLink] of links.entries()) {
+              const linkPath = `${operationPath}.${field}[${linkIndex}]`;
+              const link = requireRecord(rawLink, linkPath);
+              if (Object.keys(link).some((key) => !keys.includes(key as never)))
+                fail(`${linkPath} содержит неизвестное поле`);
+              const identity = keys.map((key) => requireId(link[key], `${linkPath}.${key}`));
+              const pair = JSON.stringify(identity);
+              if (pairs.has(pair)) fail(`${operationPath}.${field} содержит повторяющуюся ссылку`);
+              pairs.add(pair);
+            }
+          }
           requireEventId(operation.channelId, `${operationPath}.channelId`);
           requireEventId(operation.messageId, `${operationPath}.messageId`);
           return requireEventId(operation.id, `${operationPath}.id`);
@@ -631,6 +680,18 @@ function validateEventModel(value: unknown, document: Record<string, unknown>): 
       const path = `eventModel.contracts[${index}].operations[${operationIndex}]`;
       if (!channels.has(operation.channelId as string))
         fail(`${path}.channelId не ссылается на topic`);
+      if (operation.failureRoutes !== undefined) {
+        const routes = operation.failureRoutes as Record<string, string>;
+        for (const field of ["retryChannelId", "deadLetterChannelId"] as const) {
+          if (routes[field] === undefined) continue;
+          if (!channels.has(routes[field]!))
+            fail(`${path}.failureRoutes.${field} не ссылается на topic`);
+          if (routes[field] === operation.channelId)
+            fail(`${path}.failureRoutes.${field} совпадает с исходным topic`);
+        }
+        if (routes.retryChannelId && routes.retryChannelId === routes.deadLetterChannelId)
+          fail(`${path}.failureRoutes.deadLetterChannelId совпадает с retryChannelId`);
+      }
       if (!messages.has(operation.messageId as string))
         fail(`${path}.messageId не ссылается на тип события`);
       const referencedChannel = channelMap.get(operation.channelId as string);

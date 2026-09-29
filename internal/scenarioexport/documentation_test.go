@@ -64,7 +64,7 @@ func TestDocumentationDescribesDataBindingsWithoutExecutionValues(t *testing.T) 
 		t.Run(string(format), func(t *testing.T) {
 			rev := revisionFixture()
 			rev.Document.Messages[0].Execution = &designscenario.StepExecution{}
-			config := `{"enabled":true,"pathParams":{},"query":{},"headers":{},"body":"PRIVATE_BODY","assertions":[],"extract":[],"bindings":[{"id":"token","sourceMessageId":"login","sourcePointer":"/token","target":{"kind":"header","name":"Authorization"},"prefix":"PRIVATE_PREFIX"}]}`
+			config := `{"enabled":true,"pathParams":{},"query":{},"headers":{},"body":"PRIVATE_BODY","assertions":[],"extract":[],"bindings":[{"id":"token","sourceMessageId":"login","sourcePointer":"/token","target":{"kind":"header","name":"Authorization"},"prefix":"PRIVATE_PREFIX","transforms":[{"kind":"trim"},{"kind":"upper"}]}]}`
 			if err := jsonx.Unmarshal([]byte(config), rev.Document.Messages[0].Execution); err != nil {
 				t.Fatal(err)
 			}
@@ -72,7 +72,7 @@ func TestDocumentationDescribesDataBindingsWithoutExecutionValues(t *testing.T) 
 			if err != nil {
 				t.Fatal(err)
 			}
-			for _, text := range []string{"Передача данных", "login", "/token", "Authorization"} {
+			for _, text := range []string{"Передача данных", "login", "/token", "Authorization", "Преобразования", "trim → upper"} {
 				if !strings.Contains(artifact.Content, text) {
 					t.Fatalf("missing binding metadata %q", text)
 				}

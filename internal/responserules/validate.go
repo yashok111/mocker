@@ -10,6 +10,7 @@ import (
 
 	"github.com/yashok111/mocker/internal/jsonx"
 	"github.com/yashok111/mocker/internal/overrides"
+	"github.com/yashok111/mocker/internal/schemamodel"
 )
 
 var ErrRuleNotFound = errors.New("response rule not found")
@@ -124,16 +125,18 @@ func (v *validator) binding(root map[string]any) map[string]any {
 		bad()
 		return nil
 	}
-	if _, ok := item["$ref"]; ok {
-		v.add("unsupported_operation_ref", "error", "Path Item с $ref не поддерживается.", "/binding", "", "")
-		return nil
+	pointer := "/paths/" + strings.ReplaceAll(strings.ReplaceAll(b.Path, "~", "~0"), "/", "~1")
+	nodes, _ := schemamodel.PathItems(root, item, pointer)
+	for _, occurrence := range schemamodel.PathItemOperations(nodes) {
+		if occurrence.Method == strings.ToLower(b.Method) {
+			if operation, ok := occurrence.Value.(map[string]any); ok {
+				return operation
+			}
+			break
+		}
 	}
-	operation, ok := item[strings.ToLower(b.Method)].(map[string]any)
-	if !ok {
-		bad()
-		return nil
-	}
-	return operation
+	bad()
+	return nil
 }
 func (v *validator) nodes(operation map[string]any) error {
 	for i, n := range v.rule.Nodes {

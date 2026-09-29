@@ -248,23 +248,23 @@ func savedStepOperation(document designscenario.Document, messageID, raw string)
 			break
 		}
 	}
-	var root struct {
-		Paths map[string]map[string]jsonx.RawMessage `json:"paths"`
-	}
-	if err := jsonx.Unmarshal([]byte(raw), &root); err != nil {
+	var root map[string]any
+	decoder := jsonx.NewDecoder(strings.NewReader(raw))
+	decoder.UseNumber()
+	if err := decoder.Decode(&root); err != nil {
 		return "", "", err
 	}
-	for path, item := range root.Paths {
-		for _, method := range []string{"get", "post", "put", "patch", "delete", "options", "head", "trace"} {
-			var operation map[string]jsonx.RawMessage
-			if err := jsonx.Unmarshal(item[method], &operation); err != nil {
-				continue
+	var found *designscenario.ContractOperation
+	for _, operation := range designscenario.ContractOperations(root) {
+		if key != "" && operation.Key == key {
+			if found != nil {
+				return "", "", errors.New("ключ операции неоднозначен в закреплённой версии API")
 			}
-			var operationKey string
-			if err := jsonx.Unmarshal(operation[apidesign.OperationKey], &operationKey); err == nil && operationKey == key {
-				return strings.ToUpper(method), path, nil
-			}
+			found = new(operation)
 		}
+	}
+	if found != nil {
+		return strings.ToUpper(found.Method), found.Path, nil
 	}
 	return "", "", errors.New("операция отсутствует в закреплённой версии API")
 }

@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/yashok111/mocker/internal/jsonx"
 	"github.com/yashok111/mocker/internal/specs"
 )
 
@@ -39,9 +40,25 @@ func TestAnalyzeImpactReadsExactSnapshotsWithoutWrites(t *testing.T) {
 	}
 	prior := counts()
 	raw := " \n" + strings.Replace(base.Document, "9007199254740993", "9007199254740995", 1) + "\n"
-	local, err := r.AnalyzeImpact(ctx, d.Design.ID, ImpactInput{FromRevisionID: base.ID, Document: &raw})
+	local, pair, err := r.AnalyzeImpactWithDocuments(ctx, d.Design.ID, ImpactInput{FromRevisionID: base.ID, Document: &raw})
 	if err != nil {
 		t.Fatal(err)
+	}
+	if pair.Before != base.Document || pair.Proposed != raw {
+		t.Fatal("scenario comparison must use the exact API snapshots")
+	}
+	encoded, err := jsonx.Marshal(local)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var fields map[string]any
+	if err := jsonx.Unmarshal(encoded, &fields); err != nil {
+		t.Fatal(err)
+	}
+	for _, key := range []string{"Before", "Proposed", "before", "proposed", "document", "documents"} {
+		if _, ok := fields[key]; ok {
+			t.Fatalf("raw snapshot leaked into report: %s", key)
+		}
 	}
 	if local.FromRevisionID != base.ID || local.ToRevisionID != nil || local.Version != 2 || local.DesignID != d.Design.ID {
 		t.Fatalf("wrong snapshot: %+v", local)

@@ -10,6 +10,26 @@ approach that was tried and reverted, with the measurement.
 
 Not "forgotten" but deferred — so that a hole does not read as an oversight:
 
+## Visual API next steps — local branch boundaries (2026-09-29)
+
+- Path Item `$ref` resolves within the local document. External and anchor
+  references remain unsupported; resolution never fetches external documents.
+- Binding transforms run in order and preserve exact JSON numbers. Existing
+  branch-exit and source-visibility rules still apply. Standalone HTTP,
+  Postman and cURL exports report unsupported bindings.
+- Field impact checks a binding on another API's recipient when its source uses
+  the selected API. A definitive `broken` finding needs exact linked or pinned
+  provenance; copies, divergent pins, unsupported schemas and uncertain
+  operations require review. It does not prove full runtime compatibility or
+  traverse cross-API dependencies.
+- The event map is a bounded read-only projection of saved Kafka event metadata,
+  with addressable CAS commands, retry/DLQ routes and HTTP/state links. It does
+  not deliver messages, simulate retries, create topics, contact Kafka or change
+  AsyncAPI meaning. Limits are 5,000 nodes, 10,000 edges, 2,000 diagnostics and
+  4 MiB. The UI graph shows at most 120 nodes and 180 edges; paged lists expose
+  all returned items. Stage 4 is implemented and verified locally; delivery
+  simulation remains a separate future stage.
+
 ## P2 UI debt, scenarios, checkpoints, `schema_patch`
 
 - Monaco and the schema tree with live preview — together with the editor that

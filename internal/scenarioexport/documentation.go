@@ -312,6 +312,13 @@ func (s *Service) renderDocumentation(rev designscenario.Revision, format Format
 				}
 				w.paragraph("Источник: ", binding.SourceMessageID, " · JSON Pointer: ", binding.SourcePointer,
 					" → ", binding.Target.Kind, " ", target)
+				if len(binding.Transforms) > 0 {
+					kinds := make([]string, len(binding.Transforms))
+					for i, transform := range binding.Transforms {
+						kinds[i] = transform.Kind
+					}
+					w.paragraph("Преобразования: ", strings.Join(kinds, " → "))
+				}
 			}
 		}
 	}

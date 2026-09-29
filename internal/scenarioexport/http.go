@@ -172,17 +172,12 @@ func findSavedOperation(raw []byte, key string) (savedOperation, bool) {
 	if decoder.Decode(&root) != nil {
 		return savedOperation{}, false
 	}
-	paths, _ := root["paths"].(map[string]any)
 	var found savedOperation
 	count := 0
-	for path, itemValue := range paths {
-		item, _ := itemValue.(map[string]any)
-		for _, method := range []string{"get", "put", "post", "patch", "delete", "options", "head", "trace"} {
-			operation, _ := item[method].(map[string]any)
-			if operation["x-mocker-canvas-operation-id"] == key && key != "" && strings.HasPrefix(path, "/") {
-				count++
-				found = savedOperation{Method: strings.ToUpper(method), Path: path, Root: root, Item: item, Operation: operation}
-			}
+	for _, operation := range designscenario.ContractOperations(root) {
+		if operation.Key == key && key != "" {
+			count++
+			found = savedOperation{Method: strings.ToUpper(operation.Method), Path: operation.Path, Root: root, Item: operation.Item, Operation: operation.Operation}
 		}
 	}
 	return found, count == 1

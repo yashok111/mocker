@@ -13,6 +13,51 @@ func bindingRevision() Revision {
 	r.Document.Messages[1].Execution.Bindings = []DataBinding{{ID: "id", SourceMessageID: "login", SourcePointer: "/id", Target: DataBindingTarget{Kind: "path", Name: "id"}}}
 	return r
 }
+
+func TestDataFlowProjectsBindingTransformTypes(t *testing.T) {
+	for _, tc := range []struct {
+		name, sourceType, targetType, kind string
+		invalid                            bool
+	}{
+		{"string to integer", "string", "integer", "to_integer", false},
+		{"integer to number", "string", "number", "to_integer", false},
+		{"number to lower", "number", "string", "lower", true},
+		{"number conversion does not promise integer", "string", "integer", "to_number", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := bindingRevision()
+			r.Document.Messages[1].Execution.Bindings[0].Target = DataBindingTarget{Kind: "body", Pointer: "/id"}
+			r.Document.Messages[1].Execution.Bindings[0].Transforms = []DataBindingTransform{{Kind: tc.kind}}
+			r.Document.Contracts[0].Document = jsonx.RawMessage(fmt.Sprintf(`{"paths":{"/login":{"post":{"x-mocker-canvas-operation-id":"login","responses":{"200":{"content":{"application/json":{"schema":{"type":"object","properties":{"id":{"type":"%s"}}}}}}}}},"/profile":{"get":{"x-mocker-canvas-operation-id":"profile","requestBody":{"content":{"application/json":{"schema":{"type":"object","properties":{"id":{"type":"%s"}}}}}}}}}}`, tc.sourceType, tc.targetType))
+			analysis := AnalyzeDataFlow(r.Document)
+			invalid := false
+			for _, diagnostic := range analysis.Diagnostics {
+				invalid = invalid || diagnostic.Severity == "error"
+			}
+			if invalid != tc.invalid {
+				t.Fatalf("diagnostics = %+v", analysis.Diagnostics)
+			}
+			if _, err := PrepareRun(r, "id", "", "mcp", nil); (err != nil) != tc.invalid {
+				t.Fatalf("prepare error = %v; diagnostics = %+v", err, analysis.Diagnostics)
+			}
+		})
+	}
+}
+
+func TestDataFlowUnknownTransformSourceRemainsWarning(t *testing.T) {
+	r := bindingRevision()
+	r.Document.Messages[1].Execution.Bindings[0].Transforms = []DataBindingTransform{{Kind: "to_integer"}}
+	r.Document.Contracts[0].Document = jsonx.RawMessage(`{"paths":{"/login":{"post":{"x-mocker-canvas-operation-id":"login","responses":{"200":{"content":{"application/json":{"schema":{"$ref":"https://invalid.example/schema"}}}}}}},"/profile":{"get":{"x-mocker-canvas-operation-id":"profile","parameters":[{"in":"path","name":"id","schema":{"type":"integer"}}]}}}}`)
+	analysis := AnalyzeDataFlow(r.Document)
+	warn, failed := false, false
+	for _, diagnostic := range analysis.Diagnostics {
+		warn = warn || diagnostic.Severity == "warning"
+		failed = failed || diagnostic.Severity == "error"
+	}
+	if !warn || failed {
+		t.Fatalf("unknown source diagnostics = %+v", analysis.Diagnostics)
+	}
+}
 func TestDataFlowAvailability(t *testing.T) {
 	t.Parallel()
 	for _, test := range []struct {

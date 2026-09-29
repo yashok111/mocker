@@ -20,6 +20,8 @@ import { useGetApiDesignDiff } from "@/api/generated/api-designs/api-designs";
 import type {
   ApiImpactEntity,
   ApiImpactEvidence,
+  ApiImpactFieldImpact,
+  ApiImpactFieldState,
   ApiImpactLocator,
   ApiImpactReport,
 } from "@/api/generated/schemas";
@@ -130,9 +132,9 @@ export default function ImpactPanel(props: ImpactPanelProps) {
         </Alert>
       )}
       <Text size="xs" c="dimmed">
-        Проверяются зависимости контракта и использование операций в текущих сохранённых сценариях.
-        Совместимость конкретных bindings, assertions и extracts требует отдельной проверки. Анализ
-        ничего не сохраняет.
+        Проверяются зависимости контракта и поля, используемые связями, проверками и извлечениями в
+        текущих сохранённых сценариях. Проверка охватывает выбранный API и не доказывает поведение
+        живого сервера. Анализ ничего не сохраняет.
       </Text>
       {analysis.error && (
         <Alert color="red" role="alert">
@@ -210,9 +212,25 @@ function ImpactResult({
         проверки {reviewCount} · диагностик {report.diagnostics.length}
       </Text>
       <Text size="xs" c="dimmed">
-        Проверено сохранённых сценариев: {report.coverage.scenariosScanned}. Полнота зависимостей не
-        доказывает совместимость всех клиентов.
+        Проверено сохранённых сценариев: {report.coverage.scenariosScanned}; использований полей:{" "}
+        {report.coverage.fieldUsagesChecked}. Полнота зависимостей не доказывает совместимость всех
+        клиентов.
       </Text>
+      <Stack gap="xs" aria-label="Влияние на поля сценариев">
+        <Text fw={600}>Влияние на поля сценариев · {report.coverage.fieldImpactsReturned}</Text>
+        {report.fieldImpacts.length === 0 ? (
+          <Text size="sm">Изменений в проверенных полях сценариев не найдено.</Text>
+        ) : (
+          report.fieldImpacts.map((finding) => (
+            <FieldImpact
+              key={finding.id}
+              finding={finding}
+              fromRevisionId={report.fromRevisionId}
+              onScenario={props.onScenario}
+            />
+          ))
+        )}
+      </Stack>
       {!report.complete && (
         <Alert color="yellow" title="Результат неполный" aria-live="polite">
           Некоторые зависимости не удалось проверить. Найденные количества могут быть меньше полного
@@ -509,6 +527,83 @@ function Evidence({
   );
 }
 
+function FieldImpact({
+  finding,
+  fromRevisionId,
+  onScenario,
+}: {
+  finding: ApiImpactFieldImpact;
+  fromRevisionId: number;
+  onScenario: ImpactPanelProps["onScenario"];
+}) {
+  const owner = finding.locator.messageId;
+  const operation = finding.operationMessageId;
+  const selector =
+    finding.field.kind === "response" || finding.field.kind === "body"
+      ? `${fieldKindLabel[finding.field.kind]} ${finding.field.pointer || "/"}`
+      : `${fieldKindLabel[finding.field.kind]} ${finding.field.name ?? ""}`;
+  return (
+    <Paper withBorder p="sm">
+      <Group gap="xs">
+        <Badge color={finding.verdict === "broken" ? "red" : "yellow"}>
+          {finding.verdict === "broken" ? "Нарушено" : "Проверить"}
+        </Badge>
+        <Text size="sm" fw={600}>
+          {fieldUsageLabel[finding.usageKind]} · шаг {owner}
+          {operation !== owner ? ` · поле шага ${operation}` : ""}
+        </Text>
+      </Group>
+      <Text size="sm" mt="xs">
+        {selector}
+      </Text>
+      <Text size="sm">
+        Было: {fieldStateLabel(finding.before)} · Стало: {fieldStateLabel(finding.after)}
+      </Text>
+      <Text size="sm">{finding.explanation}</Text>
+      <Text size="xs" className={styles.pointer}>
+        {finding.usagePointer}
+      </Text>
+      <ScenarioLocator
+        locator={finding.locator}
+        fromRevisionId={fromRevisionId}
+        onScenario={onScenario}
+      />
+    </Paper>
+  );
+}
+
+const fieldUsageLabel: Record<ApiImpactFieldImpact["usageKind"], string> = {
+  binding_source: "Источник связи",
+  binding_target: "Назначение связи",
+  assertion: "Проверка ответа",
+  extract: "Извлечение значения",
+};
+const fieldKindLabel: Record<ApiImpactFieldImpact["field"]["kind"], string> = {
+  response: "Ответ",
+  body: "Тело запроса",
+  path: "Параметр пути",
+  query: "Параметр запроса",
+  header: "Заголовок",
+};
+const fieldPresenceLabel: Record<ApiImpactFieldState["presence"], string> = {
+  present: "объявлено",
+  absent: "не объявлено",
+  unknown: "неизвестно",
+};
+const fieldTypeLabel: Record<NonNullable<ApiImpactFieldState["type"]>, string> = {
+  string: "строка",
+  number: "число",
+  integer: "целое число",
+  boolean: "логический тип",
+  null: "null",
+  object: "объект",
+  array: "список",
+};
+
+function fieldStateLabel(state: ApiImpactFieldState) {
+  return `${fieldPresenceLabel[state.presence]}${state.type ? ` · ${fieldTypeLabel[state.type]}` : ""}`;
+}
+
 function ScenarioLocator({
   locator,
   fromRevisionId,
@@ -555,6 +650,7 @@ const limitLabel: Record<string, string> = {
   evidence: "Лимит причин",
   scenario_scan: "Лимит сценариев",
   scenario_usages: "Лимит использований в сценариях",
+  scenario_fields: "Лимит проверок полей сценариев",
   scenario_bytes: "Лимит объёма сценариев",
   output: "Лимит размера ответа",
 };

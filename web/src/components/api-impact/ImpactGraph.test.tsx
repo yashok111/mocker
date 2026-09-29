@@ -1,10 +1,12 @@
 import { MantineProvider } from "@mantine/core";
-import { act, render, screen } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import ImpactGraph from "./ImpactGraph";
 import { impactGraphModel } from "./model";
 import { reportFixture } from "./fixtures.test-support";
+import * as elk from "../diagram/elkLayout";
+import { impactLayoutInput } from "./layout";
 
 const state = vi.hoisted(() => ({
   resize: () => {},
@@ -47,20 +49,33 @@ afterEach(() => {
 });
 
 describe("ImpactGraph lifecycle", () => {
-  it("renders the reserved label segments instead of rerouting them through sibling labels", () => {
+  it("renders the calculated routes and exact label boxes after layout completes", async () => {
     const report = reportFixture();
     const model = impactGraphModel(report, report.changes[0]!);
+    const layout = await elk.layoutDiagram(impactLayoutInput(model));
     render(
       <MantineProvider>
         <ImpactGraph model={model} changeId="routes" />
       </MantineProvider>,
     );
+    expect(screen.getByText("Располагаем граф влияния…")).toBeInTheDocument();
+    await waitFor(() => expect(state.edges).toHaveLength(model.edges.length));
+    expect(screen.queryByText("Располагаем граф влияния…")).not.toBeInTheDocument();
     for (const [index, edge] of state.edges.entries()) {
-      const planned = model.edges[index]!;
+      const planned = layout.edges[index]!;
       expect(edge.router).toEqual({ name: "normal" });
-      expect(edge.vertices).toEqual(planned.vertices);
+      expect(edge.vertices).toEqual(planned.points.slice(1, -1));
       if (planned.label) {
-        expect(edge.labels).toEqual([expect.objectContaining({ position: planned.labelPosition })]);
+        expect(edge.labels).toEqual([
+          expect.objectContaining({
+            attrs: expect.objectContaining({
+              body: expect.objectContaining({
+                width: planned.label.width,
+                height: planned.label.height,
+              }),
+            }),
+          }),
+        ]);
       }
     }
     expect(state.edges).toHaveLength(model.edges.length);
@@ -77,7 +92,7 @@ describe("ImpactGraph lifecycle", () => {
       </MantineProvider>,
     );
     expect(state.options.interacting).toBe(false);
-    expect(state.fit).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(state.fit).toHaveBeenCalledTimes(1));
     await userEvent.click(screen.getByRole("button", { name: "Увеличить граф влияния" }));
     expect(state.zoom).toHaveBeenCalledWith(0.15);
     act(() => state.resize());
@@ -92,5 +107,21 @@ describe("ImpactGraph lifecycle", () => {
     expect(state.fit).toHaveBeenCalledTimes(2);
     view.unmount();
     expect(state.dispose).toHaveBeenCalledTimes(1);
+  });
+
+  it("reports a rejected layout and retains the evidence outside the empty graph", async () => {
+    vi.spyOn(elk, "layoutDiagram").mockRejectedValueOnce(new Error("ELK failed"));
+    const report = reportFixture();
+    render(
+      <MantineProvider>
+        <ImpactGraph model={impactGraphModel(report, report.changes[0]!)} changeId="failed" />
+      </MantineProvider>,
+    );
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Связи доступны в списке доказательств",
+    );
+    expect(screen.queryByText("Располагаем граф влияния…")).not.toBeInTheDocument();
+    expect(state.nodes).toEqual([]);
+    expect(state.edges).toEqual([]);
   });
 });

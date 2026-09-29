@@ -821,6 +821,61 @@ describe("execution data bindings", () => {
     expect(screen.getByLabelText("Параметр пути 1: значение")).toHaveValue("17");
   });
 
+  it("keeps unsaved transform edits across step selection and saves the ordered chain", async () => {
+    const handlers = bindingProps();
+    renderPanel(<ScenarioExecutionPanel {...handlers} />);
+    fireEvent.click(screen.getByRole("button", { name: /2. Продолжить/ }));
+    fireEvent.click(screen.getByText("Дополнительно"));
+    fireEvent.click(screen.getByRole("button", { name: "Добавить преобразование связи 1" }));
+    fireEvent.change(screen.getByLabelText("Преобразование 1 связи 1"), {
+      target: { value: "trim" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Добавить преобразование связи 1" }));
+    fireEvent.change(screen.getByLabelText("Преобразование 2 связи 1"), {
+      target: { value: "lower" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /1. Войти/ }));
+    fireEvent.click(screen.getByRole("button", { name: /2. Продолжить/ }));
+    fireEvent.click(screen.getByText("Дополнительно"));
+    expect(screen.getByLabelText("Преобразование 1 связи 1")).toHaveValue("trim");
+    expect(screen.getByLabelText("Преобразование 2 связи 1")).toHaveValue("lower");
+    fireEvent.click(screen.getByRole("button", { name: "Сохранить настройки" }));
+    expect(
+      handlers.onChangeDocument.mock.calls[0]![0].messages[1].execution.bindings[0],
+    ).toMatchObject({
+      ...binding,
+      transforms: [{ kind: "trim" }, { kind: "lower" }],
+    });
+  });
+
+  it("rechecks the edited transform chain and blocks execution on server diagnostics", async () => {
+    const handlers = bindingProps();
+    handlers.analyzeDataFlow.mockImplementation(async (document) => ({
+      messages: [],
+      bindings: [],
+      diagnostics: document.messages[1]?.execution?.bindings?.[0]?.transforms?.some(
+        (item) => item.kind === "lower",
+      )
+        ? [
+            {
+              pointer: "/messages/1/execution/bindings/0/transforms/0",
+              severity: "error" as const,
+              message: "Ожидался текст",
+            },
+          ]
+        : [],
+    }));
+    renderPanel(<ScenarioExecutionPanel {...handlers} />);
+    fireEvent.click(screen.getByRole("button", { name: /2. Продолжить/ }));
+    fireEvent.click(screen.getByText("Дополнительно"));
+    fireEvent.click(screen.getByRole("button", { name: "Добавить преобразование связи 1" }));
+    fireEvent.change(screen.getByLabelText("Преобразование 1 связи 1"), {
+      target: { value: "lower" },
+    });
+    await screen.findByText("Ошибка: Ожидался текст");
+    expect(screen.getByRole("button", { name: "Запустить" })).toBeDisabled();
+  });
+
   it("keeps contract rows in place when the user first enters a value in the second row", async () => {
     const handlers = bindingProps();
     handlers.analyzeDataFlow.mockResolvedValue({
@@ -945,5 +1000,53 @@ describe("execution data bindings", () => {
     expect(screen.getByText(/Источник: выполнение 2.*цикл loop: 2/)).toBeInTheDocument();
     expect(screen.getByText("9007199254740993")).toBeInTheDocument();
     expect(screen.queryByText('"first"')).not.toBeInTheDocument();
+  });
+
+  it("shows the sent value first and historical transform details on expansion", async () => {
+    const handlers = bindingProps();
+    handlers.document.messages[1]!.execution!.bindings![0]!.transforms = [
+      { kind: "trim" },
+      { kind: "lower" },
+    ];
+    const snapshot = { ...report(), document: structuredClone(handlers.document) };
+    handlers.document.messages[1]!.execution!.bindings![0]!.transforms = [{ kind: "upper" }];
+    snapshot.steps = [1, 2].map((occurrence) => ({
+      messageId: "next",
+      status: "passed" as const,
+      assertions: [],
+      occurrence,
+      request: {
+        revisionId: 42,
+        messageId: "next",
+        pathParams: {},
+        query: {},
+        headers: { Authorization: "Bearer abc" },
+        body: "",
+      },
+      bindingResults: [
+        {
+          bindingId: "token",
+          sourceMessageId: "login",
+          sourcePointer: "/token",
+          sourceOccurrence: occurrence,
+          target: binding.target,
+          valueJson: '" ABC "',
+          transformedValueJson: '"abc"',
+        },
+      ],
+    }));
+    handlers.listRuns.mockResolvedValue([snapshot]);
+    handlers.getRun.mockResolvedValue(snapshot);
+    renderPanel(<ScenarioExecutionPanel {...handlers} />);
+    fireEvent.click(screen.getByRole("tab", { name: /Результат/ }));
+    fireEvent.click(await screen.findByRole("button", { name: /Продолжить · повтор 2/ }));
+    expect(screen.getByText(/Передали Authorization:/)).toHaveTextContent("Bearer abc");
+    fireEvent.click(screen.getByText("Откуда взялось значение"));
+    expect(screen.getByText(/Исходное значение:.*" ABC "/)).toBeInTheDocument();
+    expect(screen.getByText(/После преобразования:.*"abc"/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/Преобразования:.*Убрать пробелы по краям.*Нижний регистр/),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/Преобразования:.*Верхний регистр/)).not.toBeInTheDocument();
   });
 });

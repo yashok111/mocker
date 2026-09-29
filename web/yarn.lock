@@ -3401,7 +3401,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"elkjs@npm:^0.9.3":
+"elkjs@npm:0.9.3, elkjs@npm:^0.9.3":
   version: 0.9.3
   resolution: "elkjs@npm:0.9.3"
   checksum: 10c0/caf544ff4fce8442d1d3dd6dface176c9b2fe26fc1e34f56122828e6eef7d2d7fe70d3202f9f3ecf0feb6287d4c8430949f483e63e450a7454bb39ccffab3808
@@ -4383,6 +4383,7 @@ __metadata:
     "@vitejs/plugin-react": "npm:6.0.5"
     arktype: "npm:2.2.3"
     dayjs: "npm:1.11.23"
+    elkjs: "npm:0.9.3"
     fflate: "npm:^0.8.3"
     happy-dom: "npm:20.14.0"
     marked: "npm:18.0.11"

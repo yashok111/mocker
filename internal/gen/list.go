@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/yashok111/mocker/internal/jsonx"
+	"github.com/yashok111/mocker/internal/schemamodel"
 )
 
 // list.go implements DESIGN §9's list contract — the seam declared (as a
@@ -439,9 +440,8 @@ func itemIdentitySchema(w *walker, itemSchema map[string]any) (idSchema map[stri
 	return m, true
 }
 
-// listFilters is rule 6: query parameters DECLARED IN THE SPEC (resolved
-// off v.OpPointer's own "parameters" — the operation object, not the
-// response) whose name also matches a property of the item schema. The
+// listFilters is rule 6: query parameters declared on the concrete Path Item
+// or operation whose name also matches a property of the item schema. The
 // recognized pagination keys are excluded even if a spec coincidentally
 // declares a same-named item property, so pagination bookkeeping never
 // doubles as an accidental filter.
@@ -470,15 +470,11 @@ func (w *walker) listFilters(v ResponseVariant, req Request, itemSchema map[stri
 	return filters
 }
 
-// declaredQueryParams resolves v.OpPointer (the OPERATION object itself,
-// e.g. "#/paths/~1api~1v1~1x/get" — not a response) and reads its own
-// "parameters" array, collecting the names of every "in": "query" entry.
-// Each entry is resolved through ResolveNode since OpenAPI commonly $refs
-// shared parameters (a "limit"/"offset" pair reused across every list
-// operation, say) rather than inlining them. Unresolvable, absent, or
-// malformed parameters are simply not counted as declared — never an
-// error, matching every other soft-decline in this package's query-time
-// introspection (gen.go's Headers has the identical shape of tolerance).
+// declaredQueryParams reads the concrete path's Path Item parameter chain
+// from farthest to nearest, then the physical operation at v.OpPointer.
+// Resolved parameters override earlier entries by (in, name). Direct gen
+// callers that omit Request.Path retain operation-only declarations.
+// Unresolvable or malformed entries are ignored at query time.
 func (w *walker) declaredQueryParams(v ResponseVariant) map[string]bool {
 	out := map[string]bool{}
 	if v.OpPointer == "" {
@@ -492,24 +488,45 @@ func (w *walker) declaredQueryParams(v ResponseVariant) map[string]bool {
 	if !ok {
 		return out
 	}
-	paramsRaw, ok := opObj["parameters"].([]any)
-	if !ok {
-		return out
+	type parameterKey struct{ in, name string }
+	parameters := map[parameterKey]map[string]any{}
+	add := func(raw any) {
+		entries, _ := raw.([]any)
+		for _, entry := range entries {
+			resolved, err := w.res.ResolveNode(entry)
+			if err != nil {
+				continue
+			}
+			parameter, ok := resolved.(map[string]any)
+			if !ok {
+				continue
+			}
+			in, _ := parameter["in"].(string)
+			name, _ := parameter["name"].(string)
+			if in != "" && name != "" {
+				parameters[parameterKey{in, name}] = parameter
+			}
+		}
 	}
-	for _, p := range paramsRaw {
-		resolvedP, perr := w.res.ResolveNode(p)
-		if perr != nil {
-			continue
+	if w.req.Path != "" {
+		if rawRoot, err := w.res.Resolve("#"); err == nil {
+			if root, ok := rawRoot.(map[string]any); ok {
+				if paths, ok := root["paths"].(map[string]any); ok {
+					if item, ok := paths[w.req.Path].(map[string]any); ok {
+						pointer := "/paths/" + strings.ReplaceAll(strings.ReplaceAll(w.req.Path, "~", "~0"), "/", "~1")
+						nodes, _ := schemamodel.PathItems(root, item, pointer)
+						for i := len(nodes) - 1; i >= 0; i-- {
+							add(nodes[i].Value["parameters"])
+						}
+					}
+				}
+			}
 		}
-		pm, ok := resolvedP.(map[string]any)
-		if !ok {
-			continue
-		}
-		if in, _ := pm["in"].(string); in != "query" {
-			continue
-		}
-		if name, _ := pm["name"].(string); name != "" {
-			out[name] = true
+	}
+	add(opObj["parameters"])
+	for key := range parameters {
+		if key.in == "query" {
+			out[key.name] = true
 		}
 	}
 	return out

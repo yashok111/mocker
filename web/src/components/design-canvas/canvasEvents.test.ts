@@ -180,4 +180,42 @@ describe("event model", () => {
       /контракт Orders events/,
     );
   });
+
+  it("blocks removal of a topic referenced by a consumer failure route", () => {
+    const document = createEventModel(scenario());
+    const model = document.eventModel!;
+    model.messages.push({ id: "created", name: "Created", description: "", examples: [] });
+    for (const id of ["source", "retry"]) {
+      model.channels.push({
+        id,
+        name: id,
+        description: "",
+        address: id,
+        serverIds: [],
+        messageIds: ["created"],
+      });
+    }
+    model.contracts.push({
+      id: "events",
+      name: "Events",
+      description: "",
+      participantId: "orders",
+      version: "1",
+      operations: [
+        {
+          id: "consume",
+          name: "Consume",
+          description: "",
+          action: "receive",
+          channelId: "source",
+          messageId: "created",
+          failureRoutes: { retryChannelId: "retry" },
+        },
+      ],
+    });
+    expect(eventDependents(document, "channels", "retry")).toContain("операция Events/Consume");
+    expect(() => removeEventEntity(document, "channels", "retry")).toThrow(
+      /операция Events\/Consume/,
+    );
+  });
 });

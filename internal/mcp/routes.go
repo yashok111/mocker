@@ -88,31 +88,34 @@ var toolRoutes = map[string][]string{
 
 	// Persisted sequence-design scenarios. All mutations use the same admin
 	// handlers as the UI; validation is a write-shaped read with no side effects.
-	"list_design_scenarios":                  {"GET /api/design-scenarios"},
-	"create_design_scenario":                 {"POST /api/design-scenarios"},
-	"get_design_scenario":                    {"GET /api/design-scenarios/{id}"},
-	"save_design_scenario_draft":             {"PUT /api/design-scenarios/{id}/draft"},
-	"apply_design_scenario_commands":         {"POST /api/design-scenarios/{id}/commands"},
-	"get_design_scenario_revision":           {"GET /api/design-scenarios/{id}/revisions/{rid}"},
-	"get_design_scenario_export_options":     {"GET /api/design-scenarios/{id}/revisions/{rid}/export-options"},
-	"export_design_scenario":                 {"GET /api/design-scenarios/{id}/revisions/{rid}/exports/{format}"},
-	"export_design_scenario_archive":         {"POST /api/design-scenarios/{id}/revisions/{rid}/archive"},
-	"get_design_scenario_diff":               {"GET /api/design-scenarios/{id}/diff"},
-	"restore_design_scenario_revision":       {"POST /api/design-scenarios/{id}/restore"},
-	"validate_design_scenario":               {"POST /api/design-scenarios/{id}/validate"},
-	"execute_design_scenario_step":           {"POST /api/design-scenarios/{id}/execute-step"},
-	"run_design_scenario":                    {"POST /api/design-scenarios/{id}/runs"},
-	"list_design_scenario_runs":              {"GET /api/design-scenarios/{id}/runs"},
-	"get_design_scenario_data_flow":          {"GET /api/design-scenarios/{id}/data-flow"},
-	"analyze_design_scenario_data_flow":      {"POST /api/design-scenarios/{id}/data-flow"},
-	"upsert_design_scenario_data_binding":    {"POST /api/design-scenarios/{id}/commands"},
-	"remove_design_scenario_data_binding":    {"POST /api/design-scenarios/{id}/commands"},
-	"suggest_design_scenario_tests":          {"GET /api/design-scenarios/{id}/test-suggestions"},
-	"get_design_scenario_coverage":           {"GET /api/design-scenarios/{id}/coverage"},
-	"set_design_scenario_fragment_execution": {"POST /api/design-scenarios/{id}/commands"},
-	"set_design_scenario_branch_execution":   {"POST /api/design-scenarios/{id}/commands"},
-	"get_design_scenario_run":                {"GET /api/design-scenarios/{id}/runs/{runId}"},
-	"cancel_design_scenario_run":             {"POST /api/design-scenarios/{id}/runs/{runId}/cancel"},
+	"list_design_scenarios":                    {"GET /api/design-scenarios"},
+	"create_design_scenario":                   {"POST /api/design-scenarios"},
+	"get_design_scenario":                      {"GET /api/design-scenarios/{id}"},
+	"save_design_scenario_draft":               {"PUT /api/design-scenarios/{id}/draft"},
+	"apply_design_scenario_commands":           {"POST /api/design-scenarios/{id}/commands"},
+	"get_design_scenario_revision":             {"GET /api/design-scenarios/{id}/revisions/{rid}"},
+	"get_design_scenario_export_options":       {"GET /api/design-scenarios/{id}/revisions/{rid}/export-options"},
+	"export_design_scenario":                   {"GET /api/design-scenarios/{id}/revisions/{rid}/exports/{format}"},
+	"export_design_scenario_archive":           {"POST /api/design-scenarios/{id}/revisions/{rid}/archive"},
+	"get_design_scenario_diff":                 {"GET /api/design-scenarios/{id}/diff"},
+	"restore_design_scenario_revision":         {"POST /api/design-scenarios/{id}/restore"},
+	"validate_design_scenario":                 {"POST /api/design-scenarios/{id}/validate"},
+	"execute_design_scenario_step":             {"POST /api/design-scenarios/{id}/execute-step"},
+	"run_design_scenario":                      {"POST /api/design-scenarios/{id}/runs"},
+	"list_design_scenario_runs":                {"GET /api/design-scenarios/{id}/runs"},
+	"get_design_scenario_data_flow":            {"GET /api/design-scenarios/{id}/data-flow"},
+	"analyze_design_scenario_data_flow":        {"POST /api/design-scenarios/{id}/data-flow"},
+	"get_design_scenario_event_map":            {"GET /api/design-scenarios/{id}/event-map"},
+	"analyze_design_scenario_event_map":        {"POST /api/design-scenarios/{id}/event-map"},
+	"apply_design_scenario_event_map_commands": {"POST /api/design-scenarios/{id}/commands"},
+	"upsert_design_scenario_data_binding":      {"POST /api/design-scenarios/{id}/commands"},
+	"remove_design_scenario_data_binding":      {"POST /api/design-scenarios/{id}/commands"},
+	"suggest_design_scenario_tests":            {"GET /api/design-scenarios/{id}/test-suggestions"},
+	"get_design_scenario_coverage":             {"GET /api/design-scenarios/{id}/coverage"},
+	"set_design_scenario_fragment_execution":   {"POST /api/design-scenarios/{id}/commands"},
+	"set_design_scenario_branch_execution":     {"POST /api/design-scenarios/{id}/commands"},
+	"get_design_scenario_run":                  {"GET /api/design-scenarios/{id}/runs/{runId}"},
+	"cancel_design_scenario_run":               {"POST /api/design-scenarios/{id}/runs/{runId}/cancel"},
 
 	// Versioned API authoring. Human publication is deliberately not MCP-accessible.
 	"list_state_diagrams":          {"GET /api/designs/{id}/state-diagrams"},
@@ -283,11 +286,11 @@ var toolRoutes = map[string][]string{
 // original persisted design-scenario tools, four server-run tools and three
 // scenario-export tools, eight state-diagram tools, twelve schema-model tools,
 // three control-flow/coverage tools, four data-binding tools, test suggestions,
-// ten resource-map tools and API impact analysis.
+// ten resource-map tools, API impact analysis and three event-map tools.
 // Pinned in routes_test.go so a tool
 // added without an entry here is caught by a test rather than by a 404 in
 // production.
-const toolCount = 141
+const toolCount = 144
 
 // toolPath resolves ONE call a tool makes into the (method, path) pair
 // loopback.do/call take.

@@ -42,6 +42,70 @@ func oasDoc(responsesJSON string) string {
 	}`
 }
 
+func TestIndexInheritedPathItemOperations(t *testing.T) {
+	const raw = `{"openapi":"3.0.3","info":{"title":"T","version":"1"},"paths":{
+	  "/one/{id}":{"$ref":"#/components/pathItems/A"},
+	  "/two/{id}":{"$ref":"#/components/pathItems/A"},
+	  "/escaped/{id}":{"$ref":"#/components/pathItems/A~1B"},
+	  "/override/{id}":{"$ref":"#/components/pathItems/A","get":{"operationId":"local","responses":{"201":{"description":"local"}}}}
+	},"components":{"pathItems":{
+	  "A":{"$ref":"#/components/pathItems/Shared"},
+	  "A/B":{"$ref":"#/components/pathItems/Shared"},
+	  "Shared":{"get":{"operationId":"shared","responses":{"200":{"description":"ok","content":{"application/json":{"schema":{"type":"object","properties":{"kind":{"type":"string","example":"shared"}}},"example":{"kind":"shared"}}}}}}}
+	}}}`
+	ops, responses, report := loadAndIndex(t, raw)
+	if len(ops) != 4 || report.Operations != 4 {
+		t.Fatalf("operations = %d, report = %d; want 4", len(ops), report.Operations)
+	}
+	want := map[string]struct {
+		pointer, schema string
+		status          int
+	}{
+		"/one/{id}":      {"#/components/pathItems/Shared/get", "#/components/pathItems/Shared/get/responses/200/content/application~1json/schema", 200},
+		"/two/{id}":      {"#/components/pathItems/Shared/get", "#/components/pathItems/Shared/get/responses/200/content/application~1json/schema", 200},
+		"/escaped/{id}":  {"#/components/pathItems/Shared/get", "#/components/pathItems/Shared/get/responses/200/content/application~1json/schema", 200},
+		"/override/{id}": {"#/paths/~1override~1{id}/get", "", 201},
+	}
+	for i, op := range ops {
+		expect, ok := want[op.Path]
+		if !ok || op.Method != "GET" || op.Pointer != expect.pointer {
+			t.Errorf("operation %d = %+v, expected path entry %+v", i, op, expect)
+			continue
+		}
+		if len(responses[i]) != 1 || responses[i][0].HTTPStatus != expect.status {
+			t.Errorf("responses for %s = %+v", op.Path, responses[i])
+			continue
+		}
+		if expect.schema != "" && (responses[i][0].SchemaPtr == nil || *responses[i][0].SchemaPtr != expect.schema) {
+			t.Errorf("schema for %s = %v, want %s", op.Path, responses[i][0].SchemaPtr, expect.schema)
+		}
+	}
+}
+
+func TestIndexBrokenPathItemReferencesRetainValidSiblings(t *testing.T) {
+	const raw = `{"openapi":"3.0.3","info":{"title":"T","version":"1"},"paths":{
+	  "/cycle":{"get":{"responses":{"200":{"description":"ok"}}},"$ref":"#/paths/~1cycle"},
+	  "/missing":{"post":{"responses":{"202":{"description":"ok"}}},"$ref":"#/components/pathItems/Absent"},
+	  "/invalid":{"get":{"responses":{"200":{"description":"ok"}}},"$ref":"#/components/schemas/Bad"},
+	  "/external":{"get":{"responses":{"200":{"description":"ok"}}},"$ref":"other.yaml#/Item"}
+	},"components":{"schemas":{"Bad":{"type":"object"}}}}`
+	ops, _, report := loadAndIndex(t, raw)
+	if len(ops) != 4 {
+		t.Fatalf("operations = %d, want four local siblings", len(ops))
+	}
+	for _, code := range []string{"path_item_ref_cycle", "path_item_ref_missing", "path_item_ref_invalid", "path_item_ref_unsupported"} {
+		found := false
+		for _, warning := range report.Warnings {
+			if warning.Code == code {
+				found = true
+			}
+		}
+		if !found {
+			t.Errorf("missing %s in %+v", code, report.Warnings)
+		}
+	}
+}
+
 func TestIndex_ResponseSelection(t *testing.T) {
 	tests := []struct {
 		name           string

@@ -1,6 +1,7 @@
 package mcp
 
 import (
+	"reflect"
 	"strings"
 	"testing"
 
@@ -18,12 +19,16 @@ func TestDataBindingsPersistedMCPAtomicHistoryAndReadOnlyAnalysis(t *testing.T) 
 	}
 	id := created.Scenario.ID
 	binding := designscenario.DataBinding{ID: "order-id", SourceMessageID: "create", SourcePointer: "/id", Target: designscenario.DataBindingTarget{Kind: "path", Name: "id"}}
+	binding.Transforms = []designscenario.DataBindingTransform{{Kind: "to_string"}, {Kind: "trim"}, {Kind: "to_integer"}}
 	var updated designscenario.Detail
 	if errMsg := callDesignScenarioTool(t, srv, "upsert_design_scenario_data_binding", map[string]any{"scenarioId": id, "expectedVersion": 1, "messageId": "get", "binding": binding}, &updated); errMsg != "" {
 		t.Fatal(errMsg)
 	}
 	if updated.Scenario.Version != 2 || updated.Draft.Document.Messages[1].Execution == nil || len(updated.Draft.Document.Messages[1].Execution.Bindings) != 1 {
 		t.Fatalf("binding lost: %+v", updated)
+	}
+	if !reflect.DeepEqual(updated.Draft.Document.Messages[1].Execution.Bindings[0].Transforms, binding.Transforms) {
+		t.Fatalf("ordered transforms lost: %+v", updated.Draft.Document.Messages[1].Execution.Bindings)
 	}
 	// Read a saved historical revision, and analyze an unsaved replacement without saving it.
 	for _, revisionID := range []int64{created.Draft.ID, updated.Draft.ID} {
@@ -62,6 +67,21 @@ func TestDataBindingsPersistedMCPAtomicHistoryAndReadOnlyAnalysis(t *testing.T) 
 	}
 	if readback.Scenario.Version != 2 || readback.Draft.ID != updated.Draft.ID || len(readback.Revisions) != 2 || len(readback.Draft.Document.Messages[1].Execution.Bindings) != 1 {
 		t.Fatalf("analysis or failed writes mutated document: %+v", readback)
+	}
+	if !reflect.DeepEqual(readback.Draft.Document.Messages[1].Execution.Bindings[0], binding) {
+		t.Fatalf("failed batch changed binding: %+v", readback.Draft.Document.Messages[1].Execution.Bindings)
+	}
+	// Structural transform rejection must also leave the immutable revision intact.
+	badBinding := map[string]any{"id": binding.ID, "sourceMessageId": "create", "sourcePointer": "/id", "target": map[string]any{"kind": "path", "name": "id"}, "transforms": []any{map[string]any{"kind": "eval"}}}
+	errMsg = callDesignScenarioTool(t, srv, "upsert_design_scenario_data_binding", map[string]any{"scenarioId": id, "expectedVersion": 2, "messageId": "get", "binding": badBinding}, &ignored)
+	if errMsg == "" {
+		t.Fatal("invalid transform succeeded")
+	}
+	if errMsg = callDesignScenarioTool(t, srv, "get_design_scenario", map[string]any{"scenarioId": id}, &readback); errMsg != "" {
+		t.Fatal(errMsg)
+	}
+	if readback.Scenario.Version != 2 || readback.Draft.ID != updated.Draft.ID {
+		t.Fatal("invalid transform changed revision")
 	}
 	if errMsg = callDesignScenarioTool(t, srv, "remove_design_scenario_data_binding", map[string]any{"scenarioId": id, "expectedVersion": 2, "messageId": "get", "id": "order-id"}, &readback); errMsg != "" {
 		t.Fatal(errMsg)

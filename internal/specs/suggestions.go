@@ -510,6 +510,7 @@ func (r *Repo) Rederive(ctx context.Context, specID int64) (RederiveResult, erro
 	rederivePreWriteHook()
 
 	var result RederiveResult
+	var refreshed bool
 	writeErr := r.db.Write(ctx, func(tx *sql.Tx) error {
 		curGen, curRows, err := newestGenerationSnapshot(ctx, tx, specID)
 		if err != nil {
@@ -517,6 +518,10 @@ func (r *Repo) Rederive(ctx context.Context, specID int64) (RederiveResult, erro
 		}
 		if curGen != prevGen {
 			return ErrStaleGeneration
+		}
+		refreshed, err = r.insertMissingOperationsTx(ctx, tx, specID, ops, resp)
+		if err != nil {
+			return err
 		}
 
 		if curGen == 0 {
@@ -545,6 +550,11 @@ func (r *Repo) Rederive(ctx context.Context, specID int64) (RederiveResult, erro
 	})
 	if writeErr != nil {
 		return RederiveResult{}, writeErr
+	}
+	if refreshed {
+		r.reportMu.Lock()
+		delete(r.reportCache, specID)
+		r.reportMu.Unlock()
 	}
 	return result, nil
 }
