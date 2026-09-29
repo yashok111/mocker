@@ -1,7 +1,12 @@
 package mcp
 
 import (
+	"archive/zip"
+	"bytes"
+	"crypto/sha256"
+	"encoding/base64"
 	"fmt"
+	"io/fs"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -14,6 +19,190 @@ import (
 	"github.com/yashok111/mocker/internal/scenarioexport"
 	"github.com/yashok111/mocker/internal/testauth"
 )
+
+func TestPostmanBindingsPersistedRESTAndMCP(t *testing.T) {
+	cfg := resourcesTestConfig(t)
+	srv, db := newResourcesTestServer(t, cfg)
+	repo := designscenario.NewRepo(db, cfg, apidesign.NewRepo(db, cfg))
+	const contract = `{
+		"openapi":"3.1.0","info":{"title":"Orders","version":"1"},
+		"servers":[{"url":"https://orders.example.test"}],
+		"paths":{
+			"/orders":{"post":{"x-mocker-canvas-operation-id":"create","responses":{"201":{"description":"Created","content":{"application/json":{"schema":{"type":"object","properties":{"id":{"type":"integer"},"token":{"type":"string"}}}}}}}}},
+			"/orders/{id}":{"patch":{"x-mocker-canvas-operation-id":"update","parameters":[
+				{"name":"id","in":"path","required":true,"schema":{"type":"integer"}},
+				{"name":"label","in":"query","schema":{"type":"string"}},
+				{"name":"Authorization","in":"header","schema":{"type":"string"}}
+			],"requestBody":{"required":true,"content":{"application/json":{"schema":{"type":"object","properties":{"orderId":{"type":"integer"},"literal":{"type":"integer"}}}}}},"responses":{"200":{"description":"Updated"}}}}
+		}
+	}`
+	document := designscenario.Document{
+		FormatVersion: 1, Title: "Bound orders",
+		Participants: []designscenario.Participant{{ID: "client", Name: "Client", Kind: "client"}, {ID: "orders", Name: "Orders", Kind: "service"}},
+		Contracts:    []designscenario.Contract{{ID: "api", Name: "Orders", Mode: "copy", Document: jsonx.RawMessage(contract)}},
+		Fragments:    []designscenario.Fragment{},
+		Messages: []designscenario.Message{
+			{
+				ID: "create", FromID: "client", ToID: "orders", Kind: "request", Label: "Create order",
+				Operation: &designscenario.OperationBinding{ContractID: "api", OperationKey: "create"},
+				Execution: &designscenario.StepExecution{
+					Enabled: true, ExpectedStatus: new(201),
+					PathParams: designscenario.ExecutionValues{}, Query: designscenario.ExecutionValues{}, Headers: designscenario.ExecutionValues{},
+					Assertions: []designscenario.ExecutionAssertion{}, Extract: []designscenario.ExecutionExtraction{},
+				},
+			},
+			{
+				ID: "update", FromID: "client", ToID: "orders", Kind: "request", Label: "Update order",
+				Operation: &designscenario.OperationBinding{ContractID: "api", OperationKey: "update"},
+				Execution: &designscenario.StepExecution{
+					Enabled: true, ExpectedStatus: new(200), Body: `{"orderId":0,"literal":9007199254740993}`,
+					PathParams: designscenario.ExecutionValues{}, Query: designscenario.ExecutionValues{}, Headers: designscenario.ExecutionValues{},
+					Assertions: []designscenario.ExecutionAssertion{}, Extract: []designscenario.ExecutionExtraction{},
+					Bindings: []designscenario.DataBinding{
+						{ID: "path-id", SourceMessageID: "create", SourcePointer: "/id", Target: designscenario.DataBindingTarget{Kind: "path", Name: "id"}},
+						{ID: "query-label", SourceMessageID: "create", SourcePointer: "/token", Target: designscenario.DataBindingTarget{Kind: "query", Name: "label"}, Transforms: []designscenario.DataBindingTransform{{Kind: "trim"}, {Kind: "lower"}}},
+						{ID: "header-token", SourceMessageID: "create", SourcePointer: "/token", Target: designscenario.DataBindingTarget{Kind: "header", Name: "Authorization"}, Prefix: "Bearer ", Transforms: []designscenario.DataBindingTransform{{Kind: "trim"}}},
+						{ID: "body-id", SourceMessageID: "create", SourcePointer: "/id", Target: designscenario.DataBindingTarget{Kind: "body", Pointer: "/orderId"}},
+					},
+				},
+			},
+		},
+	}
+	created, err := repo.Create(t.Context(), designscenario.CreateInput{Document: document, Source: "ui"})
+	if err != nil {
+		t.Fatalf("create binding fixture: %v", err)
+	}
+	before, err := repo.Detail(t.Context(), created.Scenario.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	revision := created.Draft
+	path := fmt.Sprintf("/api/design-scenarios/%d/revisions/%d", revision.ScenarioID, revision.ID)
+	handler := srv.Handler()
+	login := httptest.NewRequest("POST", "http://mocker.local/api/auth/login", strings.NewReader(fmt.Sprintf(`{"name":"Analyst","password":%q}`, testauth.Password)))
+	login.Header.Set("Content-Type", "application/json")
+	login.Header.Set("Origin", "http://mocker.local")
+	auth := httptest.NewRecorder()
+	handler.ServeHTTP(auth, login)
+	if auth.Code != http.StatusOK {
+		t.Fatal(auth.Body.String())
+	}
+	cookie := auth.Result().Cookies()[0]
+	var loginBody struct {
+		CSRFToken string `json:"csrfToken"`
+	}
+	if err := jsonx.Unmarshal(auth.Body.Bytes(), &loginBody); err != nil {
+		t.Fatal(err)
+	}
+	request := func(method, suffix, body string) *httptest.ResponseRecorder {
+		t.Helper()
+		r := httptest.NewRequest(method, "http://mocker.local"+path+suffix, strings.NewReader(body))
+		r.AddCookie(cookie)
+		r.Header.Set("Content-Type", "application/json")
+		r.Header.Set("Origin", "http://mocker.local")
+		r.Header.Set("X-CSRF-Token", loginBody.CSRFToken)
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, r)
+		return response
+	}
+	args := map[string]any{"scenarioId": revision.ScenarioID, "revisionId": revision.ID}
+	var restOptions, mcpOptions scenarioexport.OptionsResponse
+	response := request("GET", "/export-options", "")
+	if response.Code != http.StatusOK {
+		t.Fatalf("export options: %d %s", response.Code, response.Body.String())
+	}
+	if err := jsonx.Unmarshal(response.Body.Bytes(), &restOptions); err != nil {
+		t.Fatal(err)
+	}
+	if message := callDesignScenarioTool(t, srv, "get_design_scenario_export_options", args, &mcpOptions); message != "" {
+		t.Fatal(message)
+	}
+	if !reflect.DeepEqual(restOptions, mcpOptions) || restOptions.RevisionID != revision.ID || restOptions.SourceHash != revision.Hash {
+		t.Fatal("REST/MCP options differ or lost the saved revision")
+	}
+	ready := map[scenarioexport.Format]bool{}
+	for _, option := range restOptions.Options {
+		ready[option.Format] = option.Ready
+	}
+	if !ready[scenarioexport.Postman] || ready[scenarioexport.CURL] {
+		t.Fatalf("valid bindings must enable Postman and keep cURL blocked: %+v", restOptions.Options)
+	}
+	var restArtifact, mcpArtifact scenarioexport.Artifact
+	response = request("GET", "/exports/postman", "")
+	if response.Code != http.StatusOK {
+		t.Fatalf("Postman bindings: %d %s", response.Code, response.Body.String())
+	}
+	if err := jsonx.Unmarshal(response.Body.Bytes(), &restArtifact); err != nil {
+		t.Fatal(err)
+	}
+	args["format"] = "postman"
+	if message := callDesignScenarioTool(t, srv, "export_design_scenario", args, &mcpArtifact); message != "" {
+		t.Fatal(message)
+	}
+	if !reflect.DeepEqual(restArtifact, mcpArtifact) || restArtifact.RevisionID != revision.ID || restArtifact.SourceHash != revision.Hash {
+		t.Fatal("REST/MCP Postman artifacts differ or lost the saved revision")
+	}
+	var collection struct {
+		Info struct{ Schema string } `json:"info"`
+		Item []jsonx.RawMessage      `json:"item"`
+	}
+	if err := jsonx.Unmarshal([]byte(restArtifact.Content), &collection); err != nil {
+		t.Fatal(err)
+	}
+	if collection.Info.Schema != "https://schema.getpostman.com/json/collection/v2.1.0/collection.json" || len(collection.Item) != 2 {
+		t.Fatal("Postman export lost the two-step collection")
+	}
+	if !strings.Contains(restArtifact.Content, "9007199254740993") {
+		t.Fatal("Postman export rounded the authored JSON body")
+	}
+	var restArchive, mcpArchive scenarioexport.ArchiveArtifact
+	response = request("POST", "/archive", `{"items":[{"format":"postman"}]}`)
+	if response.Code != http.StatusOK {
+		t.Fatalf("Postman bindings archive: %d %s", response.Code, response.Body.String())
+	}
+	if err := jsonx.Unmarshal(response.Body.Bytes(), &restArchive); err != nil {
+		t.Fatal(err)
+	}
+	delete(args, "format")
+	args["items"] = []scenarioexport.Request{{Format: scenarioexport.Postman}}
+	if message := callDesignScenarioTool(t, srv, "export_design_scenario_archive", args, &mcpArchive); message != "" {
+		t.Fatal(message)
+	}
+	if !reflect.DeepEqual(restArchive, mcpArchive) || restArchive.RevisionID != revision.ID || restArchive.SourceHash != revision.Hash {
+		t.Fatal("REST/MCP Postman ZIP archives differ or lost the saved revision")
+	}
+	archiveBytes, err := base64.StdEncoding.DecodeString(restArchive.ContentBase64)
+	if err != nil {
+		t.Fatal(err)
+	}
+	archive, err := zip.NewReader(bytes.NewReader(archiveBytes), int64(len(archiveBytes)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(archive.File) != 2 || len(restArchive.Manifest.Files) != 1 {
+		t.Fatal("ZIP must contain the collection and manifest")
+	}
+	content, err := fs.ReadFile(archive, restArtifact.Filename)
+	if err != nil || string(content) != restArtifact.Content {
+		t.Fatalf("ZIP changed exported Postman bytes: %v", err)
+	}
+	entry := restArchive.Manifest.Files[0]
+	if entry.Path != restArtifact.Filename || entry.Format != "postman" || entry.Bytes != int64(len(content)) || entry.SHA256 != fmt.Sprintf("%x", sha256.Sum256(content)) || !reflect.DeepEqual(entry.Diagnostics, restArtifact.Diagnostics) {
+		t.Fatal("ZIP manifest does not describe the exported Postman bytes and diagnostics")
+	}
+	manifestBytes, err := fs.ReadFile(archive, "manifest.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var manifest scenarioexport.ArchiveManifest
+	if err := jsonx.Unmarshal(manifestBytes, &manifest); err != nil || !reflect.DeepEqual(manifest, restArchive.Manifest) {
+		t.Fatalf("ZIP and response manifests differ: %v", err)
+	}
+	after, err := repo.Detail(t.Context(), revision.ScenarioID)
+	if err != nil || !reflect.DeepEqual(before, after) {
+		t.Fatalf("export changed the saved binding scenario: %v", err)
+	}
+}
 
 func TestScenarioExportsPersistedRESTAndMCP(t *testing.T) {
 	cfg := resourcesTestConfig(t)

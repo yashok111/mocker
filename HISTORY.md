@@ -23,6 +23,29 @@ nobody said is what is NEXT and why exactly that. That role was carried by `HAND
 deleted in `a5818e2` as spent, and it moved nowhere: the next slice
 was designed outside the repository and did not appear in the repository at all.
 
+## Local branch — Postman data bindings (2026-09-29)
+
+`feat/postman-data-bindings` extends the existing Postman v2.1 exporter with
+response → path/query/header/body bindings. Preflight shares data-flow analysis
+and target schema resolution with the scenario runner. Required inputs supplied
+by bindings no longer block export, and invalid dependencies point to the exact
+binding. UI, REST, MCP and ZIP share this implementation.
+
+Generated scripts preserve numeric lexemes, JSON Pointer semantics and ordered
+transforms, including Go Unicode simple case mappings. Temporary response state
+is scoped to a collection run, checked against request order and iteration, and
+cleared on completion or failure. Only successful source steps publish values;
+missing pointers, failed checks and invalid values stop dependent requests.
+Existing JSON assertion/extraction limits, cURL bindings and exported fragments
+remain documented in `CARVE-OUTS.md`.
+
+Local Newman 6.2.2 verification sent six real HTTP requests over two iterations:
+IDs 9007199254740993 and 9007199254740995 stayed exact, as did fractional,
+exponential and negative-zero body values. A failing source prevented all
+dependent HTTP requests. Regression tests cover namespace collisions, precise
+types, Unicode, pointers, size limits, REST/MCP/ZIP parity and immutable revisions.
+Spec, plan and runnable QA artifacts are under `docs/postman-bindings-*`.
+
 ## Local branch — visual API next steps (2026-09-29)
 
 The `docs/` paths in this section refer to local plans and verification artifacts.

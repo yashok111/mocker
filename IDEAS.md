@@ -20,10 +20,16 @@ below) were decided and gated.
 ## Current local branch (2026-09-29)
 
 The visual API sequence in the local ledger `docs/visual-api-next-steps-progress.md` is complete
-on `feat/visual-api-next-steps`. Local Path Item references, ordered binding
+and merged into local `main` (`3597d58`). Local Path Item references, ordered binding
 transforms and field impact are implemented and reviewed locally. The event map
 is also implemented, reviewed and verified locally. All six applicable graphs
 share ELK layout, and all seven canvases use common navigation controls.
+The next slice, Postman response bindings, is implemented on
+`feat/postman-data-bindings`: linear HTTP chains carry precise values into
+path/query/header/body with the existing ordered transforms. UI, REST, MCP and
+ZIP use the same exporter. Local spec and checks: `docs/postman-bindings-spec.md`
+and `docs/postman-bindings-plan.md`. cURL bindings and exported control flow
+remain deferred (see `CARVE-OUTS.md`).
 The `A18` recommendation below records the earlier backlog decision; it is not
 the current branch status.
 

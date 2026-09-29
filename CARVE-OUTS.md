@@ -15,8 +15,14 @@ Not "forgotten" but deferred — so that a hole does not read as an oversight:
 - Path Item `$ref` resolves within the local document. External and anchor
   references remain unsupported; resolution never fetches external documents.
 - Binding transforms run in order and preserve exact JSON numbers. Existing
-  branch-exit and source-visibility rules still apply. Standalone HTTP,
-  Postman and cURL exports report unsupported bindings.
+  branch-exit and source-visibility rules still apply. Postman exports support
+  bindings in linear HTTP chains; run the complete collection in order through
+  Collection Runner or Newman. Standalone HTTP and cURL exports still report
+  unsupported bindings. Postman still excludes alt/opt/loop and Kafka execution.
+  Its existing JSON assertions/extractions accept safe integers only; bindings
+  preserve large integers, fractions, exponents and -0. Bound values containing
+  `{{` are rejected before sending because Postman would interpolate them again.
+  Response state is local to the collection run and cleared at its end.
 - Field impact checks a binding on another API's recipient when its source uses
   the selected API. A definitive `broken` finding needs exact linked or pinned
   provenance; copies, divergent pins, unsupported schemas and uncertain
@@ -1742,4 +1748,3 @@ schema operations exceed it (was 17), the worst ratio 1.18× (was ~2×); at 128 
 itself larger than the limit exceeds it **honestly**, instead of being truncated
 into invalid JSON or losing a required field. The measured numbers and the analysis of the
 `achievements` case are in the `Body` comment in `internal/gen/gen.go`.
-

@@ -22,6 +22,8 @@ var httpVariableName = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]{0,99}$`)
 type httpBase struct{ Name, URL string }
 type httpRequest struct {
 	Name, Method, Path, Base string
+	MessageID                string
+	BindingTypes             map[string]string
 	Execution                designscenario.StepExecution
 }
 type httpExport struct {
@@ -46,6 +48,12 @@ func (s *Service) prepareHTTP(rev designscenario.Revision, format Format) (httpE
 	if len(rev.Document.Fragments) > 0 {
 		add("execution_fragments_unsupported", "error", "Экспорт исполнения alt/opt/loop не поддерживается")
 	}
+	var bindingTypes map[string]map[string]string
+	if format == Postman {
+		var bindingDiagnostics []Diagnostic
+		bindingTypes, bindingDiagnostics = postmanBindingPreflight(rev.Document)
+		ds = append(ds, bindingDiagnostics...)
+	}
 	available := map[string]bool{}
 	for name := range out.Variables {
 		available[name] = true
@@ -69,9 +77,9 @@ func (s *Service) prepareHTTP(rev designscenario.Revision, format Format) (httpE
 		}
 		first := len(ds)
 		stepAdd := func(code, severity, message string) { add(code, severity, message) }
-		if m.Execution != nil && len(m.Execution.Bindings) > 0 {
+		if format == CURL && m.Kind == "request" && m.Execution != nil && m.Execution.Enabled && len(m.Execution.Bindings) > 0 {
 			stepAdd("data_bindings_unsupported", "error",
-				"Экспорт передачи данных между шагами пока не поддерживается; выполните сценарий в Mocker")
+				"cURL не поддерживает передачу данных между шагами; используйте Postman или выполните сценарий в Mocker")
 		}
 		if m.Execution != nil && !m.Execution.Enabled {
 			stepAdd("disabled_messages_omitted", "info", "Выключенный шаг пропущен")
@@ -99,6 +107,9 @@ func (s *Service) prepareHTTP(rev designscenario.Revision, format Format) (httpE
 					if m.Execution != nil {
 						config = *m.Execution
 					}
+					if format == Postman && len(config.Bindings) > 0 {
+						config = omitBoundHTTPInputs(config, stepAdd)
+					}
 					resolved := resolveHTTPExecution(config, out.Variables, available, dynamic, format, s.maxBytes, stepAdd)
 					validation := resolved
 					if format == Postman {
@@ -109,6 +120,9 @@ func (s *Service) prepareHTTP(rev designscenario.Revision, format Format) (httpE
 							}
 							return out.Variables[name]
 						})
+						if len(config.Bindings) > 0 {
+							validation = bindingHTTPValidation(validation)
+						}
 					}
 					validateHTTPInputs(op, validation, stepAdd)
 					server := savedBaseURL(op)
@@ -143,7 +157,7 @@ func (s *Service) prepareHTTP(rev designscenario.Revision, format Format) (httpE
 							stepAdd("postman_numeric_limits", "warning", "Postman остановит JSON-проверки и извлечения, если ответ содержит дробные числа, небезопасные целые числа или -0")
 						}
 					}
-					out.Requests = append(out.Requests, httpRequest{Name: m.Label, Method: op.Method, Path: op.Path, Base: baseName, Execution: resolved})
+					out.Requests = append(out.Requests, httpRequest{Name: m.Label, Method: op.Method, Path: op.Path, Base: baseName, MessageID: m.ID, BindingTypes: bindingTypes[m.ID], Execution: resolved})
 					for _, e := range config.Extract {
 						available[e.Name] = true
 						dynamic[e.Name] = true

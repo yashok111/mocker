@@ -155,9 +155,9 @@ func hasDiagnostic(ds []Diagnostic, code string) bool {
 	return false
 }
 
-func TestHTTPFormatsRejectDataBindings(t *testing.T) {
+func TestCURLRejectsDataBindings(t *testing.T) {
 	t.Parallel()
-	for _, format := range []Format{Postman, CURL} {
+	for _, format := range []Format{CURL} {
 		t.Run(string(format), func(t *testing.T) {
 			rev := httpFixture("https://example.test")
 			// Decode the public document shape so this regression also covers
