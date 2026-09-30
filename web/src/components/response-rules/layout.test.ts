@@ -38,6 +38,30 @@ function checkGeometry(rule: ResponseRule) {
 }
 
 describe("response-rule graph layout", () => {
+  it("summarizes result comparisons and existence without changing exact JSON text", () => {
+    const node = {
+      id: "check",
+      type: "condition",
+      name: "Проверка",
+      x: 0,
+      y: 0,
+      resultCondition: {
+        source: { source: "result", nodeId: "read", pointer: "/amount" },
+        op: "not_equals",
+        valueJSON: "9007199254740993",
+      },
+    };
+    expect(nodeSummary(node as never)).toBe("Результат: read /amount\nНе равно 9007199254740993");
+    expect(
+      nodeSummary({
+        ...node,
+        resultCondition: {
+          source: { source: "result", nodeId: "read", pointer: "/amount" },
+          op: "not_exists",
+        },
+      } as never),
+    ).toBe("Результат: read /amount\nНе существует");
+  });
   it("routes found and missing exits separately and describes entity reads", () => {
     const rule = headerTemplate();
     rule.nodes[1] = {

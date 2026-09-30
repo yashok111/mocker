@@ -10,18 +10,22 @@ import (
 const Extension = "x-mocker-response-rules"
 
 const (
-	MaxRules          = 20
-	MaxNodes          = 100
-	MaxEdges          = 200
-	MaxCommands       = 200
-	MaxGraphBytes     = 512 << 10
-	MaxExtensionBytes = 1 << 20
-	MaxBodyBytes      = 64 << 10
-	MaxBodyDepth      = 64
-	MaxFixtureBytes   = 128 << 10
-	MaxDiagnostics    = 200
-	MaxResultBytes    = 512 << 10
-	MaxDelayMs        = 30000
+	MaxRules                 = 20
+	MaxNodes                 = 100
+	MaxEdges                 = 200
+	MaxCommands              = 200
+	MaxExamples              = 20
+	MaxExamplesBytes         = 256 << 10
+	MaxGraphBytes            = 512 << 10
+	MaxExtensionBytes        = 1 << 20
+	MaxBodyBytes             = 64 << 10
+	MaxBodyDepth             = 64
+	MaxFixtureBytes          = 128 << 10
+	MaxDiagnostics           = 200
+	MaxResultBytes           = 512 << 10
+	MaxDelayMs               = 30000
+	MaxResultConditionDepth  = 4
+	MaxResultConditionLeaves = 16
 )
 
 type Envelope struct {
@@ -33,11 +37,17 @@ type Binding struct {
 	Path   string `json:"path"`
 }
 type Rule struct {
-	ID      string   `json:"id"`
-	Name    string   `json:"name"`
-	Binding *Binding `json:"binding,omitempty"`
-	Nodes   []Node   `json:"nodes"`
-	Edges   []Edge   `json:"edges"`
+	ID       string    `json:"id"`
+	Name     string    `json:"name"`
+	Binding  *Binding  `json:"binding,omitempty"`
+	Nodes    []Node    `json:"nodes"`
+	Edges    []Edge    `json:"edges"`
+	Examples []Example `json:"examples,omitempty"`
+}
+type Example struct {
+	ID      string  `json:"id"`
+	Name    string  `json:"name"`
+	Request Request `json:"request"`
 }
 type Field struct {
 	Name  string `json:"name"`
@@ -51,15 +61,16 @@ type Response struct {
 	BodyFrom  *ValueRef `json:"bodyFrom,omitempty"`
 }
 type Node struct {
-	ID        string               `json:"id"`
-	Type      string               `json:"type"`
-	Name      string               `json:"name"`
-	X         float64              `json:"x"`
-	Y         float64              `json:"y"`
-	Condition *overrides.Condition `json:"condition,omitempty"`
-	DelayMs   *int                 `json:"delayMs,omitempty"`
-	Response  *Response            `json:"response,omitempty"`
-	Entity    *EntityOperation     `json:"entity,omitempty"`
+	ID              string               `json:"id"`
+	Type            string               `json:"type"`
+	Name            string               `json:"name"`
+	X               float64              `json:"x"`
+	Y               float64              `json:"y"`
+	Condition       *overrides.Condition `json:"condition,omitempty"`
+	ResultCondition *ResultCondition     `json:"resultCondition,omitempty"`
+	DelayMs         *int                 `json:"delayMs,omitempty"`
+	Response        *Response            `json:"response,omitempty"`
+	Entity          *EntityOperation     `json:"entity,omitempty"`
 }
 type Edge struct {
 	ID   string `json:"id"`
@@ -81,6 +92,8 @@ type Command struct {
 	NodeID    string     `json:"nodeId,omitempty"`
 	EdgeID    string     `json:"edgeId,omitempty"`
 	Positions []Position `json:"positions,omitempty"`
+	Example   *Example   `json:"example,omitempty"`
+	ExampleID string     `json:"exampleId,omitempty"`
 }
 type Request struct {
 	Query    []Field         `json:"query"`
@@ -104,13 +117,35 @@ type Validation struct {
 	DiagnosticsTruncated bool         `json:"diagnosticsTruncated"`
 }
 type Step struct {
-	Step        int    `json:"step"`
-	NodeID      string `json:"nodeId"`
-	EdgeID      string `json:"edgeId,omitempty"`
-	Matched     *bool  `json:"matched,omitempty"`
-	DelayMs     *int   `json:"delayMs,omitempty"`
-	EntityFound *bool  `json:"entityFound,omitempty"`
-	EntityCount *int   `json:"entityCount,omitempty"`
+	Step            int                   `json:"step"`
+	NodeID          string                `json:"nodeId"`
+	EdgeID          string                `json:"edgeId,omitempty"`
+	Matched         *bool                 `json:"matched,omitempty"`
+	DelayMs         *int                  `json:"delayMs,omitempty"`
+	EntityFound     *bool                 `json:"entityFound,omitempty"`
+	EntityCount     *int                  `json:"entityCount,omitempty"`
+	ResultCondition *ResultConditionTrace `json:"resultCondition,omitempty"`
+}
+
+type ResultCondition struct {
+	Source    ValueRef          `json:"source,omitzero"`
+	Op        string            `json:"op,omitempty"`
+	ValueJSON *string           `json:"valueJSON,omitempty"`
+	ValueFrom *ValueRef         `json:"valueFrom,omitempty"`
+	All       []ResultCondition `json:"all,omitempty"`
+	Any       []ResultCondition `json:"any,omitempty"`
+}
+type ResultConditionTrace struct {
+	SourceNodeID   string                 `json:"sourceNodeId"`
+	Pointer        string                 `json:"pointer"`
+	Op             string                 `json:"op"`
+	Present        bool                   `json:"present"`
+	ActualJSON     *string                `json:"actualJSON,omitempty"`
+	ExpectedJSON   *string                `json:"expectedJSON,omitempty"`
+	ValueFrom      *ValueRef              `json:"valueFrom,omitempty"`
+	Matched        bool                   `json:"matched"`
+	Children       []ResultConditionTrace `json:"children,omitempty"`
+	ShortCircuited bool                   `json:"shortCircuited,omitzero"`
 }
 type Simulation struct {
 	Validation

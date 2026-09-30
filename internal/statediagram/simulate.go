@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"maps"
-	"math/big"
 	"strconv"
 	"strings"
 
@@ -128,61 +127,4 @@ func pointer(value any, p string) (any, bool) {
 	}
 	return value, true
 }
-func equal(a, b any) bool {
-	switch av := a.(type) {
-	case jsonx.Number:
-		bv, ok := b.(jsonx.Number)
-		if !ok {
-			return false
-		}
-		// Compare decimal significands and exponents without expanding powers:
-		// a compact 1e1000000000 must not allocate a billion-digit integer.
-		return canonicalNumber(string(av)) == canonicalNumber(string(bv))
-	case map[string]any:
-		bv, ok := b.(map[string]any)
-		if !ok || len(av) != len(bv) {
-			return false
-		}
-		for k, v := range av {
-			other, found := bv[k]
-			if !found || !equal(v, other) {
-				return false
-			}
-		}
-		return true
-	case []any:
-		bv, ok := b.([]any)
-		if !ok || len(av) != len(bv) {
-			return false
-		}
-		for i, v := range av {
-			if !equal(v, bv[i]) {
-				return false
-			}
-		}
-		return true
-	default:
-		return a == b
-	}
-}
-
-func canonicalNumber(raw string) string {
-	mantissa, exponent, hasExponent := strings.Cut(strings.ToLower(raw), "e")
-	power := new(big.Int)
-	if hasExponent {
-		power.SetString(exponent, 10)
-	}
-	sign := ""
-	if strings.HasPrefix(mantissa, "-") {
-		sign = "-"
-		mantissa = mantissa[1:]
-	}
-	whole, fraction, _ := strings.Cut(mantissa, ".")
-	digits := strings.TrimLeft(whole+fraction, "0")
-	if digits == "" {
-		return "0"
-	}
-	trimmed := strings.TrimRight(digits, "0")
-	power.Add(power, big.NewInt(int64(len(digits)-len(trimmed)-len(fraction))))
-	return sign + trimmed + "e" + power.String()
-}
+func equal(a, b any) bool { return jsonx.EqualValue(a, b) }

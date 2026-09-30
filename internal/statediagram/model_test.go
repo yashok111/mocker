@@ -73,6 +73,26 @@ func TestExactNumericEqualityWithoutExponentExpansion(t *testing.T) {
 	}
 }
 
+func TestStateGuardCompositeEqualityKeepsExactKindsAndNumbers(t *testing.T) {
+	t.Parallel()
+	d := orderDiagram()
+	d.Transitions[0].Guard = &Guard{Pointer: "/payload", EqualsJSON: `{"n":1e999999999999999999999999,"items":[null,9007199254740993,true]}`}
+	for _, tt := range []struct {
+		data     string
+		accepted bool
+	}{
+		{`{"payload":{"items":[null,9007199254740993,true],"n":10e999999999999999999999998}}`, true},
+		{`{"payload":{"items":[null,9007199254740992,true],"n":10e999999999999999999999998}}`, false},
+		{`{"payload":{"items":[null,"9007199254740993",true],"n":10e999999999999999999999998}}`, false},
+		{`{"payload":{"items":[null,9007199254740993,true]}}`, false},
+	} {
+		got, err := Simulate(d, nil, tt.data, []string{"pay"})
+		if err != nil || len(got.Steps) != 1 || got.Steps[0].Accepted != tt.accepted {
+			t.Fatalf("data=%s simulation=%+v err=%v", tt.data, got, err)
+		}
+	}
+}
+
 func TestInvalidModelsAndBoundedSimulation(t *testing.T) {
 	t.Parallel()
 	for _, tt := range []struct {

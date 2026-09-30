@@ -175,8 +175,7 @@ func (s *Server) evaluateResponseRule(w http.ResponseWriter, r *http.Request, si
 	fields := []string{"document"}
 	required := []string{}
 	if simulate {
-		fields = append(fields, "request")
-		required = append(required, "request")
+		fields = append(fields, "request", "exampleId")
 	}
 	body, ok := s.responseRuleBody(w, r, fields, required)
 	if !ok {
@@ -190,9 +189,21 @@ func (s *Server) evaluateResponseRule(w http.ResponseWriter, r *http.Request, si
 		}
 	}
 	var request responserules.Request
+	var exampleID string
 	if simulate {
-		if err := jsonx.Unmarshal(body["request"], &request); err != nil {
-			httpx.Err(w, 400, "simulation_invalid", err.Error())
+		requestRaw, hasRequest := body["request"]
+		exampleRaw, hasExample := body["exampleId"]
+		if hasRequest == hasExample {
+			s.responseRuleInvalid(w, "/request", "Требуется ровно одно из request и exampleId")
+			return
+		}
+		if hasRequest {
+			if err := jsonx.Unmarshal(requestRaw, &request); err != nil {
+				httpx.Err(w, 400, "simulation_invalid", err.Error())
+				return
+			}
+		} else if err := jsonx.Unmarshal(exampleRaw, &exampleID); err != nil || !responserules.ValidID(exampleID) {
+			s.responseRuleInvalid(w, "/exampleId", "Ожидается корректный ID примера")
 			return
 		}
 	}
@@ -203,6 +214,16 @@ func (s *Server) evaluateResponseRule(w http.ResponseWriter, r *http.Request, si
 	}
 	var result any
 	if simulate {
+		if exampleID != "" {
+			rule := slices.IndexFunc(resolved.Envelope.Rules, func(rule responserules.Rule) bool { return rule.ID == r.PathValue("rid") })
+			examples := resolved.Envelope.Rules[rule].Examples
+			i := slices.IndexFunc(examples, func(example responserules.Example) bool { return example.ID == exampleID })
+			if i < 0 {
+				s.designError(w, apidesign.ErrNotFound)
+				return
+			}
+			request = examples[i].Request
+		}
 		simulation, err := responserules.Simulate(r.Context(), resolved.Envelope, r.PathValue("rid"), resolved.Root, request)
 		if err != nil {
 			httpx.Err(w, 400, "simulation_invalid", err.Error())

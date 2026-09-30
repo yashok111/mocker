@@ -39,12 +39,11 @@ func required(name string, target any) wireField { return wireField{name, target
 func optional(name string, target any) wireField { return wireField{name, target, false} }
 
 // decodeObject enforces presence separately from Go zero values, including nulls.
+// Read object names before folding to a map so duplicates cannot silently
+// replace exact request text, a named example or a condition payload.
 func decodeObject(data []byte, fields ...wireField) error {
-	if len(bytes.TrimSpace(data)) == 0 || bytes.TrimSpace(data)[0] != '{' {
-		return invalid("", "ожидается объект")
-	}
-	var raw map[string]jsonx.RawMessage
-	if err := jsonx.Unmarshal(data, &raw); err != nil {
+	raw, err := decodeObjectFields(data)
+	if err != nil {
 		return err
 	}
 	known := make(map[string]bool, len(fields))
@@ -77,6 +76,43 @@ func decodeObject(data []byte, fields ...wireField) error {
 		}
 	}
 	return nil
+}
+
+func decodeObjectFields(data []byte) (map[string]jsonx.RawMessage, error) {
+	trimmed := bytes.TrimSpace(data)
+	if len(trimmed) == 0 || trimmed[0] != '{' {
+		return nil, invalid("", "ожидается объект")
+	}
+	if !jsonx.Valid(data) {
+		return nil, invalid("", "недопустимый JSON")
+	}
+	decoder := jsonx.NewDecoder(bytes.NewReader(data))
+	if _, err := decoder.Token(); err != nil {
+		return nil, err
+	}
+	fields := map[string]jsonx.RawMessage{}
+	for decoder.More() {
+		token, err := decoder.Token()
+		if err != nil {
+			return nil, err
+		}
+		name, ok := token.(string)
+		if !ok {
+			return nil, invalid("", "ожидается имя поля")
+		}
+		if _, duplicate := fields[name]; duplicate {
+			return nil, invalid("/"+name, "повторяющееся поле")
+		}
+		var raw jsonx.RawMessage
+		if err := decoder.Decode(&raw); err != nil {
+			return nil, err
+		}
+		fields[name] = raw
+	}
+	if _, err := decoder.Token(); err != nil {
+		return nil, err
+	}
+	return fields, nil
 }
 
 type wireArray[T any] []T
@@ -138,12 +174,14 @@ func (r *Rule) UnmarshalJSON(data []byte) error {
 	var v Rule
 	var nodes wireArray[Node]
 	var edges wireArray[Edge]
-	err = decodeObject(data, required("id", &v.ID), required("name", &v.Name), optional("binding", &v.Binding), required("nodes", &nodes), required("edges", &edges))
+	var examples wireArray[Example]
+	err = decodeObject(data, required("id", &v.ID), required("name", &v.Name), optional("binding", &v.Binding), required("nodes", &nodes), required("edges", &edges), optional("examples", &examples))
 	if err != nil {
 		return err
 	}
 	v.Nodes = nodes
 	v.Edges = edges
+	v.Examples = examples
 	if err := CheckStructure(v); err != nil {
 		return err
 	}
@@ -220,12 +258,12 @@ func (n *Node) UnmarshalJSON(data []byte) error {
 		return err
 	}
 	var v Node
-	var condition wireCondition
+	var condition *wireCondition
 	fields := []wireField{required("id", &v.ID), required("type", &v.Type), required("name", &v.Name), required("x", &v.X), required("y", &v.Y)}
 	switch tag.Type {
 	case "start", "fallback":
 	case "condition":
-		fields = append(fields, required("condition", &condition))
+		fields = append(fields, optional("condition", &condition), optional("resultCondition", &v.ResultCondition))
 	case "delay":
 		fields = append(fields, required("delayMs", &v.DelayMs))
 	case "response":
@@ -239,8 +277,13 @@ func (n *Node) UnmarshalJSON(data []byte) error {
 		return err
 	}
 	if tag.Type == "condition" {
-		c := overrides.Condition(condition)
-		v.Condition = &c
+		if (condition != nil) == (v.ResultCondition != nil) {
+			return invalid("/condition", "требуется ровно одно из condition и resultCondition")
+		}
+		if condition != nil {
+			c := overrides.Condition(*condition)
+			v.Condition = &c
+		}
 	}
 	*n = v
 	return nil
@@ -268,6 +311,10 @@ func (c *Command) UnmarshalJSON(data []byte) error {
 		fields = append(fields, required("edgeId", &v.EdgeID))
 	case "move_nodes":
 		fields = append(fields, required("positions", &positions))
+	case "add_example", "update_example":
+		fields = append(fields, required("example", &v.Example))
+	case "remove_example":
+		fields = append(fields, required("exampleId", &v.ExampleID))
 	default:
 		return invalid("/type", "неизвестная команда")
 	}
@@ -276,6 +323,9 @@ func (c *Command) UnmarshalJSON(data []byte) error {
 	}
 	if tag.Type == "move_nodes" {
 		v.Positions = positions
+	}
+	if tag.Type == "remove_example" && !ValidID(v.ExampleID) {
+		return invalid("/exampleId", "недопустимый ID примера")
 	}
 	*c = v
 	return nil
@@ -338,6 +388,9 @@ func CheckStructure(r Rule) error {
 	if r.Binding != nil && (!textBound(r.Binding.Path, 2048) || !textBound(r.Binding.Method, 256)) {
 		return invalid("/binding", "слишком длинная привязка")
 	}
+	if err := checkExamples(r.Examples); err != nil {
+		return at("/examples", err)
+	}
 	if r.Nodes == nil || len(r.Nodes) > MaxNodes {
 		return invalid("/nodes", "ожидается массив до 100 узлов")
 	}
@@ -386,15 +439,22 @@ func CheckStructure(r Rule) error {
 }
 func checkNode(n Node) error {
 	condition, delay, response := n.Condition != nil, n.DelayMs != nil, n.Response != nil
+	resultCondition := n.ResultCondition != nil
 	entity := n.Entity != nil
 	switch n.Type {
 	case "start", "fallback":
-		if condition || delay || response || entity {
+		if condition || resultCondition || delay || response || entity {
 			return invalid("", "лишние поля узла")
 		}
 	case "condition":
-		if !condition || delay || response || entity {
-			return invalid("/condition", "требуется только condition")
+		if condition == resultCondition || delay || response || entity {
+			return invalid("/condition", "требуется ровно одно из condition и resultCondition")
+		}
+		if resultCondition {
+			if err := checkResultCondition(*n.ResultCondition); err != nil {
+				return at("/resultCondition", err)
+			}
+			return nil
 		}
 		c := n.Condition
 		if !textBound(c.In, 256) || !textBound(c.Op, 256) || !textBound(c.Name, 256) || !textBound(c.Value, 4096) {
@@ -404,18 +464,18 @@ func checkNode(n Node) error {
 			return invalid("/condition/value", "exists не принимает value")
 		}
 	case "delay":
-		if !delay || condition || response || entity {
+		if !delay || condition || resultCondition || response || entity {
 			return invalid("/delayMs", "требуется только delayMs")
 		}
 	case "response":
-		if !response || condition || delay || entity {
+		if !response || condition || resultCondition || delay || entity {
 			return invalid("/response", "требуется только response")
 		}
 		if err := checkResponse(*n.Response); err != nil {
 			return at("/response", err)
 		}
 	case "entity_read", "entity_create", "entity_update":
-		if !entity || condition || delay || response {
+		if !entity || condition || resultCondition || delay || response {
 			return invalid("/entity", "требуется только entity")
 		}
 		return checkEntityOperation(n.Type, *n.Entity)

@@ -27,6 +27,9 @@ import {
 import { FieldRows } from "./RequestFixtureEditor";
 import EntityOperationEditor from "./EntityOperationEditor";
 import ValueRefEditor from "./ValueRefEditor";
+import ResultConditionEditor from "./ResultConditionEditor";
+import { resultConditionSources } from "./resultConditionSources";
+import { conditionReferences } from "./resultConditions";
 
 export const inspectorPointer = (id: string) => `/${EXTENSION}/$form/${id}`;
 type Props = {
@@ -69,6 +72,12 @@ export default function RuleInspector({
     let failure: string | undefined;
     try {
       checkRule(next);
+      for (const item of next.nodes)
+        if (item.type === "condition" && "resultCondition" in item) {
+          const sources = resultConditionSources(next, item.id);
+          for (const reference of conditionReferences(item.resultCondition))
+            failure = sources.unavailableReason(reference.nodeId) ?? failure;
+        }
     } catch {
       failure = "Проверьте обязательные поля, целые числа и ограничения размера.";
     }
@@ -152,6 +161,47 @@ export default function RuleInspector({
                 onChange={(event) => editNode({ ...node, name: event.currentTarget.value })}
               />
               {node.type === "condition" && (
+                <NativeSelect
+                  label="Режим условия"
+                  value={"resultCondition" in node ? "result" : "request"}
+                  data={[
+                    { value: "request", label: "Поле запроса" },
+                    { value: "result", label: "Результат узла сущности" },
+                  ]}
+                  onChange={(event) => {
+                    const base = {
+                      id: node.id,
+                      type: "condition" as const,
+                      name: node.name,
+                      x: node.x,
+                      y: node.y,
+                    };
+                    editNode(
+                      event.currentTarget.value === "result"
+                        ? {
+                            ...base,
+                            resultCondition: {
+                              source: { source: "result", nodeId: "", pointer: "" },
+                              op: "exists",
+                            },
+                          }
+                        : {
+                            ...base,
+                            condition: { in: "header", name: "Authorization", op: "exists" },
+                          },
+                    );
+                  }}
+                />
+              )}
+              {node.type === "condition" && "resultCondition" in node && (
+                <ResultConditionEditor
+                  value={node.resultCondition}
+                  rule={candidate}
+                  nodeId={node.id}
+                  onChange={(resultCondition) => editNode({ ...node, resultCondition })}
+                />
+              )}
+              {node.type === "condition" && "condition" in node && (
                 <>
                   <NativeSelect
                     label="Источник условия"

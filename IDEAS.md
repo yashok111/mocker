@@ -27,13 +27,22 @@ guards and data/state updates are atomic. Saved authoring and applied copies
 stay separate, with explicit reapply and independent published data. Reports
 and QA evidence live under `docs/entity-state-execution-*`.
 
+`feat/entity-result-conditions` adds equals/not-equals and presence conditions
+on previous entity results, nested JSON Pointers, exact numeric equality and
+ordering, comparison with another result, bounded AND/OR groups and recursive
+comparison traces. Named simulation examples persist with authored rules and
+can be run by exampleId through REST/MCP. Saved and applied copies remain
+separate. The slice is merged into local `main`; remote publication is separate.
+Specs, plans and verification artifacts remain local under
+`docs/entity-result-conditions-*` and `docs/entity-result-followups-*`.
+
 ## Remaining directions
 
 | Area | Remaining work |
 |---|---|
 | Scenario export | Postman branches/loops and cURL response data bindings |
 | Data flow | Using results beyond a conditional branch or loop |
-| Response rules | Conditions on entity fields and further entity operations |
+| Response rules | Further entity operations (next set not selected) |
 | Event map | Delivery simulation, retries and DLQ |
 | Impact analysis | Broader schema compatibility and dependencies across APIs |
 

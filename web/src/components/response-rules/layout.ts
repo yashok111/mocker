@@ -7,6 +7,7 @@ import {
   type ResponseRuleEdge,
   type ResponseRuleNode,
 } from "./model";
+import { conditionSummary } from "./resultConditions";
 
 export const CARD_WIDTH = 240;
 export const CARD_HEIGHT = 112;
@@ -225,6 +226,9 @@ export function nodeSummary(node: ResponseRuleNode): string {
     case "response":
       return `HTTP ${node.response.status} · ${node.response.mediaType}`;
     case "condition": {
+      if ("resultCondition" in node) {
+        return conditionSummary(node.resultCondition);
+      }
       const source =
         { query: "Query", header: "Заголовок", body: "Поле JSON" }[node.condition.in] ??
         node.condition.in;

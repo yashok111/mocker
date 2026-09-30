@@ -97,6 +97,7 @@ func (stdlib) NewEncoder(w io.Writer) Encoder { return json.NewEncoder(w) }
 type (
 	RawMessage  = json.RawMessage
 	Number      = json.Number
+	Token       = json.Token
 	Marshaler   = json.Marshaler
 	Unmarshaler = json.Unmarshaler
 )
@@ -112,6 +113,7 @@ type (
 // so a caller never names the backend's concrete type.
 type Decoder interface {
 	Decode(v any) error
+	Token() (Token, error)
 	DisallowUnknownFields()
 	UseNumber()
 	More() bool

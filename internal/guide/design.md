@@ -821,7 +821,7 @@ move without replacing a graph:
 their complete objects; node types are immutable. `remove_node` also removes
 incident edges. On conflict, reread and reconcile before retrying.
 
-Conditions reuse `equals|contains|exists` over query, header or a top-level JSON
+Request `condition` payloads reuse `equals|contains|exists` over query, header or a top-level JSON
 body field. Query matches any repeated value; header names ignore case and use
 the first value in fixture order. Empty query keys exist; empty header values
 do not. Body `exists` includes null/object/array values, while equals/contains
@@ -887,6 +887,93 @@ text, and final fixture rows with `key`, positional `scope` and `dataJSON`.
 Every simulation starts fresh; repeated creation allocates the same first ID.
 Fixtures support 100 families and 100 total rows. Creation replaces a supplied
 ID with the family sequence, shared across scopes. Number tokens stay exact.
+
+### Branch on an entity result
+
+A `type:"condition"` node has exactly one payload: request `condition` or
+`resultCondition`. To branch on a stored status after a get node named `read`,
+connect `read.found` to this node, then connect its `true` and `false` outputs:
+
+```json
+{"id":"paid","type":"condition","name":"Оплачен?","x":600,"y":100,"resultCondition":{"source":{"source":"result","nodeId":"read","pointer":"/status"},"op":"equals","valueJSON":"\"paid\""}}
+```
+
+The source is restricted to `result`; use an entity get/list/create/update
+producer that executes before the condition on every path. Get/update results
+require the producer's found branch on every path. Array order does not establish
+availability. Nested fields, escaped keys (`~0`, `~1`), canonical array indexes
+and the empty root JSON Pointer are supported.
+
+`equals` and `not_equals` require exactly one `valueJSON` containing one JSON
+scalar or null, or `valueFrom` selecting another result reference. Both producers
+must pass the same dominance/found checks; a missing RHS field also fails.
+Strings require JSON quotes; `"1"` and `1` have different types. Non-null type
+mismatches, containers and missing comparison fields are execution errors.
+Numbers compare exactly by mathematical value: `1`, `1.0` and `1e0` are equal;
+large integers and arbitrary exponents do not pass through float64. Request
+conditions retain their existing text comparison behavior.
+
+`exists` and `not_exists` forbid both `valueJSON` and `valueFrom` and check pointer presence, including
+objects and arrays. Explicit null is present; an absent field is not. Null equals
+only null, and comparing null with a scalar produces inequality. A missing row
+uses the entity node's existing missing port before this condition can execute.
+
+Simulation `trace[].resultCondition` reports `sourceNodeId`, `pointer`, `op`,
+`present`, exact `actualJSON` when present, and `expectedJSON` for comparisons.
+The step's `matched` and `edgeId` identify the decision. The same evaluator runs
+for fixture simulation and applied HTTP. Predicate errors return the existing
+`response_rule_failed` response without fallback; earlier successful writes
+retain the graph's existing per-write atomicity.
+
+`greater_than`, `greater_or_equal`, `less_than`, `less_or_equal` require JSON
+numbers on both sides. Decimal comparisons remain exact beyond 2^53 and for
+arbitrary exponents without expanding powers. There is no string/null coercion.
+
+Use `{"all":[...]}` for AND or `{"any":[...]}` for OR, with 2–16 children,
+at most sixteen total leaves and four levels counting the root. Groups are
+closed variants: no source/op/RHS beside all/any. Evaluation is left-to-right;
+AND stops on false, OR stops on true. Guard absent fields with an earlier
+existence term. Validation checks every reference, including skipped terms.
+
+```json
+{"all":[{"source":{"source":"result","nodeId":"read","pointer":"/total"},"op":"exists"},{"source":{"source":"result","nodeId":"read","pointer":"/total"},"op":"greater_or_equal","valueFrom":{"source":"result","nodeId":"readLimit","pointer":"/limit"}}]}
+```
+
+Leaf traces add `matched` and optional `valueFrom`; expectedJSON is captured RHS
+JSON or exact authored literal text. Group traces contain op=all/any, matched,
+children (only the evaluated prefix), and shortCircuited=true when children
+were skipped. Trace values are JSON text; never parse numbers into JS Number.
+
+### Persist named simulation examples
+
+A rule optionally contains `examples:[{id,name,request}]`. Requests have the
+same shape as explicit simulations (query/headers, optional path/bodyJSON and
+isolated entity fixtures). Names are nonblank, at most 200 UTF-8 bytes; IDs use
+existing rule-ID syntax and are unique per rule. Keep exact bodyJSON/dataJSON
+text. Limits: twenty examples, 128 KiB per request and 256 KiB compact examples
+per rule, within the existing 512 KiB rule / 1 MiB extension limits.
+
+Use create/save_response_rule with the COMPLETE rule, or atomic
+apply_response_rule_commands with add_example/update_example (complete example)
+and remove_example (exampleId). All writes need current expectedVersion.
+Cases are stored in authoring revisions, import/export and restores, and are
+omitted from applied execution copies. Example-only changes keep execution
+state current; reapply is a no-op. Invalid fixture shape is rejected on save;
+compatibility with the current graph/document is checked during simulation.
+
+```json
+{"designId":7,"ruleId":"paid","expectedVersion":9,"commands":[{"type":"add_example","example":{"id":"paid-order","name":"Оплаченный заказ","request":{"query":[],"headers":[],"path":[{"name":"id","value":"1"}],"entities":[{"family":"/orders","idField":"id","idType":"integer","rows":[{"key":"1","scope":[],"dataJSON":"{\"id\":1,\"status\":\"paid\"}"}]}]}}}]}
+```
+
+Run simulate_response_rule with exactly one request or exampleId. A named case
+is resolved from the same saved draft or optional exact proposed document as
+the graph. Missing exampleId returns 404; both/neither selection forms are
+invalid. To edit a case temporarily, read its request and pass explicit request.
+
+```json
+{"designId":7,"ruleId":"paid","exampleId":"paid-order"}
+```
+
 
 ### Apply a rule to the draft HTTP mock
 

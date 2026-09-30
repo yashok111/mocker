@@ -48,6 +48,9 @@ func nodeIndex(r *Rule, id string) int {
 func edgeIndex(r *Rule, id string) int {
 	return slices.IndexFunc(r.Edges, func(e Edge) bool { return e.ID == id })
 }
+func exampleIndex(r *Rule, id string) int {
+	return slices.IndexFunc(r.Examples, func(example Example) bool { return example.ID == id })
+}
 func apply(r *Rule, c Command) error {
 	switch c.Type {
 	case "set_rule":
@@ -109,6 +112,23 @@ func apply(r *Rule, c Command) error {
 			r.Nodes[j].X = p.X
 			r.Nodes[j].Y = p.Y
 		}
+	case "add_example":
+		if exampleIndex(r, c.Example.ID) >= 0 {
+			return invalid("/example/id", "пример уже существует")
+		}
+		r.Examples = append(r.Examples, *c.Example)
+	case "update_example":
+		i := exampleIndex(r, c.Example.ID)
+		if i < 0 {
+			return invalid("/example/id", "пример не найден")
+		}
+		r.Examples[i] = *c.Example
+	case "remove_example":
+		i := exampleIndex(r, c.ExampleID)
+		if i < 0 {
+			return invalid("/exampleId", "пример не найден")
+		}
+		r.Examples = slices.Delete(r.Examples, i, i+1)
 	}
 	return nil
 }

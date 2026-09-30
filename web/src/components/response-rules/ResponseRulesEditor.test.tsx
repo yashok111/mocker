@@ -38,6 +38,26 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 describe("response rule local authoring", () => {
+  it("writes examples into the same document buffer and recovers them in a fresh editor", async () => {
+    const mounted = renderWithProviders(
+      <Harness initial={writeRules(source, [headerTemplate()])} />,
+    );
+    await userEvent.click(screen.getByLabelText("Тело запроса JSON"));
+    await userEvent.clear(screen.getByLabelText("JSON запроса"));
+    await fill(screen.getByLabelText("JSON запроса"), " 9007199254740993 ");
+    await fill(screen.getByLabelText("Название примера"), "Точный запрос");
+    await userEvent.click(screen.getByRole("button", { name: "Добавить пример" }));
+    const saved = screen.getByTestId("document").textContent!;
+    const document = JSON.parse(saved);
+    expect(document["x-other"]).toBe(true);
+    const example = document[EXTENSION].rules[0].examples[0];
+    expect(example.request.bodyJSON).toBe(" 9007199254740993 ");
+    mounted.unmount();
+    renderWithProviders(<Harness initial={saved} />);
+    await userEvent.selectOptions(screen.getByLabelText("Сохранённый пример"), example.id);
+    expect(screen.getByLabelText("JSON запроса")).toHaveValue(" 9007199254740993 ");
+    expect(screen.getByLabelText("Название примера")).toHaveValue("Точный запрос");
+  });
   it.each(["entity_read", "entity_create", "entity_update"])(
     "creates and configures %s through the keyboard controls",
     async (type) => {
@@ -117,6 +137,32 @@ describe("response rule local authoring", () => {
     expect(screen.getByRole("alert")).toHaveTextContent(/Неверный формат/);
     expect(screen.queryByRole("button", { name: "Новое правило" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Открыть исходник" })).toBeEnabled();
+  });
+  it("blocks graph and example writes when raw predicates have duplicate keys", async () => {
+    const rule = headerTemplate();
+    const raw = writeRules(source, [rule]).replace(
+      '"op": "exists"',
+      '"op": "equals", "op": "exists"',
+    );
+    const onChange = vi.fn();
+    const onSource = vi.fn();
+    renderWithProviders(
+      <ResponseRulesEditor
+        designId={12}
+        document={raw}
+        blocked={null}
+        formStore={createFormDraftStore()}
+        onChange={onChange}
+        onSource={onSource}
+      />,
+    );
+    expect(screen.getByRole("alert")).toHaveTextContent(/Неверный формат/);
+    expect(screen.queryByRole("button", { name: "Новое правило" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Добавить пример" })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Открыть исходник" }));
+    expect(onSource).toHaveBeenCalledWith(`/${EXTENSION}`);
+    expect(onChange).not.toHaveBeenCalled();
+    expect(raw).toContain('"op": "equals", "op": "exists"');
   });
   it("previews layout without buffer writes, then applies, cancels and undoes positions", async () => {
     const rule = headerTemplate();

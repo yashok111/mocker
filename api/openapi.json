@@ -10331,6 +10331,100 @@
         },
         "description": "Structural authoring shape. Missing or empty predicate values and incomplete source/operator names produce semantic diagnostics, so saved drafts can still be read and edited."
       },
+      "ResponseRuleResultSource": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "source": {
+            "type": "string",
+            "const": "result"
+          },
+          "pointer": {
+            "type": "string",
+            "maxLength": 2048
+          },
+          "nodeId": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,80}$"
+          }
+        },
+        "required": [
+          "source",
+          "nodeId"
+        ],
+        "description": "Output captured from an earlier entity node in the same execution. The producer must dominate this condition; get/update references also require its found branch. Saved drafts may retain unavailable references until semantic validation."
+      },
+      "ResponseRuleResultComparisonCondition": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "source": {
+            "$ref": "#/components/schemas/ResponseRuleResultSource"
+          },
+          "op": {
+            "type": "string",
+            "enum": [
+              "equals",
+              "not_equals"
+            ]
+          },
+          "valueJSON": {
+            "type": "string",
+            "maxLength": 65536,
+            "pattern": "^[ \\t\\r\\n]*(null|true|false|-?(0|[1-9][0-9]*)(\\.[0-9]+)?([eE][+-]?[0-9]+)?|\"([^\"\\\\\\x00-\\x1F]|\\\\[\"\\\\/bfnrt]|\\\\u[0-9A-Fa-f]{4})*\")[ \\t\\r\\n]*$",
+            "description": "Exactly one JSON scalar or null, at most 65536 UTF-8 bytes. Authored spelling is preserved. Non-null kinds must match; numbers compare by exact decimal value without float64 conversion. A missing pointer or container is an execution error."
+          }
+        },
+        "required": [
+          "source",
+          "op",
+          "valueJSON"
+        ]
+      },
+      "ResponseRuleResultExistenceCondition": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "source": {
+            "$ref": "#/components/schemas/ResponseRuleResultSource"
+          },
+          "op": {
+            "type": "string",
+            "enum": [
+              "exists",
+              "not_exists"
+            ]
+          }
+        },
+        "required": [
+          "source",
+          "op"
+        ],
+        "description": "Tests pointer presence, including null, false, zero, empty strings and containers. valueJSON is forbidden, including explicit null."
+      },
+      "ResponseRuleResultCondition": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/ResponseRuleResultComparisonCondition"
+          },
+          {
+            "$ref": "#/components/schemas/ResponseRuleResultExistenceCondition"
+          },
+          {
+            "$ref": "#/components/schemas/ResponseRuleResultNumericCondition"
+          },
+          {
+            "$ref": "#/components/schemas/ResponseRuleResultReferenceCondition"
+          },
+          {
+            "$ref": "#/components/schemas/ResponseRuleResultAllCondition"
+          },
+          {
+            "$ref": "#/components/schemas/ResponseRuleResultAnyCondition"
+          }
+        ],
+        "description": "One leaf, AND (all) or OR (any). At most four levels including the root and sixteen leaves total (domain-enforced). Groups evaluate left to right with short circuit; every referenced producer must dominate on all paths."
+      },
       "ResponseRuleStartNode": {
         "type": "object",
         "additionalProperties": false,
@@ -10369,6 +10463,17 @@
         ]
       },
       "ResponseRuleConditionNode": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/ResponseRuleRequestConditionNode"
+          },
+          {
+            "$ref": "#/components/schemas/ResponseRuleResultConditionNode"
+          }
+        ],
+        "description": "Exactly one condition payload: legacy request condition or typed condition on a captured entity result."
+      },
+      "ResponseRuleRequestConditionNode": {
         "type": "object",
         "additionalProperties": false,
         "properties": {
@@ -10407,6 +10512,47 @@
           "x",
           "y",
           "condition"
+        ]
+      },
+      "ResponseRuleResultConditionNode": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,80}$"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "condition"
+            ]
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "x": {
+            "type": "number",
+            "minimum": -100000,
+            "maximum": 100000
+          },
+          "y": {
+            "type": "number",
+            "minimum": -100000,
+            "maximum": 100000
+          },
+          "resultCondition": {
+            "$ref": "#/components/schemas/ResponseRuleResultCondition"
+          }
+        },
+        "required": [
+          "id",
+          "type",
+          "name",
+          "x",
+          "y",
+          "resultCondition"
         ]
       },
       "ResponseRuleDelayNode": {
@@ -10614,6 +10760,14 @@
               "$ref": "#/components/schemas/ResponseRuleEdge"
             },
             "maxItems": 200
+          },
+          "examples": {
+            "type": "array",
+            "maxItems": 20,
+            "items": {
+              "$ref": "#/components/schemas/ResponseRuleExample"
+            },
+            "description": "Ordered named authoring-only simulations. Unique IDs, at most 256 KiB compact examples per rule; all requests preserve exact JSON text. Saving uses the whole-API version fence. Examples are omitted from applied execution copies."
           }
         },
         "required": [
@@ -10887,6 +11041,9 @@
           },
           "entityCount": {
             "type": "integer"
+          },
+          "resultCondition": {
+            "$ref": "#/components/schemas/ResponseRuleResultConditionTrace"
           }
         },
         "required": [
@@ -11183,6 +11340,15 @@
           },
           {
             "$ref": "#/components/schemas/ResponseRuleMoveNodesCommand"
+          },
+          {
+            "$ref": "#/components/schemas/ResponseRuleAddExampleCommand"
+          },
+          {
+            "$ref": "#/components/schemas/ResponseRuleUpdateExampleCommand"
+          },
+          {
+            "$ref": "#/components/schemas/ResponseRuleRemoveExampleCommand"
           }
         ],
         "discriminator": {
@@ -11255,20 +11421,15 @@
         "required": []
       },
       "SimulateResponseRuleRequest": {
-        "type": "object",
-        "additionalProperties": false,
-        "properties": {
-          "document": {
-            "type": "string",
-            "description": "Exact entire API document. Omitted loads saved draft. Present empty text and null are invalid. Proposal sources omit saved revision provenance."
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/ResponseRuleExplicitSimulationRequest"
           },
-          "request": {
-            "$ref": "#/components/schemas/ResponseRuleRequest"
+          {
+            "$ref": "#/components/schemas/ResponseRuleExampleSimulationRequest"
           }
-        },
-        "required": [
-          "request"
-        ]
+        ],
+        "description": "Supply exactly one request or exampleId. The named example is resolved in the same saved or proposed document snapshot as the graph. Missing examples return 404."
       },
       "ResponseRuleExecutionState": {
         "type": "object",
@@ -12617,6 +12778,512 @@
             "minimum": 1
           }
         }
+      },
+      "ResponseRuleResultNumericCondition": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "source": {
+            "$ref": "#/components/schemas/ResponseRuleResultSource"
+          },
+          "op": {
+            "type": "string",
+            "enum": [
+              "greater_than",
+              "greater_or_equal",
+              "less_than",
+              "less_or_equal"
+            ]
+          },
+          "valueJSON": {
+            "type": "string",
+            "maxLength": 65536,
+            "pattern": "^[ \\t\\r\\n]*-?(0|[1-9][0-9]*)(\\.[0-9]+)?([eE][+-]?[0-9]+)?[ \\t\\r\\n]*$"
+          }
+        },
+        "required": [
+          "source",
+          "op",
+          "valueJSON"
+        ],
+        "description": "Exact decimal ordering. Both operands must be JSON numbers; no coercion or exponent expansion."
+      },
+      "ResponseRuleResultReferenceCondition": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "source": {
+            "$ref": "#/components/schemas/ResponseRuleResultSource"
+          },
+          "op": {
+            "type": "string",
+            "enum": [
+              "equals",
+              "not_equals",
+              "greater_than",
+              "greater_or_equal",
+              "less_than",
+              "less_or_equal"
+            ]
+          },
+          "valueFrom": {
+            "$ref": "#/components/schemas/ResponseRuleResultSource"
+          }
+        },
+        "required": [
+          "source",
+          "op",
+          "valueFrom"
+        ]
+      },
+      "ResponseRuleResultConditionLevel4": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/ResponseRuleResultComparisonCondition"
+          },
+          {
+            "$ref": "#/components/schemas/ResponseRuleResultExistenceCondition"
+          },
+          {
+            "$ref": "#/components/schemas/ResponseRuleResultNumericCondition"
+          },
+          {
+            "$ref": "#/components/schemas/ResponseRuleResultReferenceCondition"
+          }
+        ]
+      },
+      "ResponseRuleResultConditionLevel3": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/ResponseRuleResultComparisonCondition"
+          },
+          {
+            "$ref": "#/components/schemas/ResponseRuleResultExistenceCondition"
+          },
+          {
+            "$ref": "#/components/schemas/ResponseRuleResultNumericCondition"
+          },
+          {
+            "$ref": "#/components/schemas/ResponseRuleResultReferenceCondition"
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "all": {
+                "type": "array",
+                "minItems": 2,
+                "maxItems": 16,
+                "items": {
+                  "$ref": "#/components/schemas/ResponseRuleResultConditionLevel4"
+                }
+              }
+            },
+            "required": [
+              "all"
+            ]
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "any": {
+                "type": "array",
+                "minItems": 2,
+                "maxItems": 16,
+                "items": {
+                  "$ref": "#/components/schemas/ResponseRuleResultConditionLevel4"
+                }
+              }
+            },
+            "required": [
+              "any"
+            ]
+          }
+        ]
+      },
+      "ResponseRuleResultConditionLevel2": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/ResponseRuleResultComparisonCondition"
+          },
+          {
+            "$ref": "#/components/schemas/ResponseRuleResultExistenceCondition"
+          },
+          {
+            "$ref": "#/components/schemas/ResponseRuleResultNumericCondition"
+          },
+          {
+            "$ref": "#/components/schemas/ResponseRuleResultReferenceCondition"
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "all": {
+                "type": "array",
+                "minItems": 2,
+                "maxItems": 16,
+                "items": {
+                  "$ref": "#/components/schemas/ResponseRuleResultConditionLevel3"
+                }
+              }
+            },
+            "required": [
+              "all"
+            ]
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "any": {
+                "type": "array",
+                "minItems": 2,
+                "maxItems": 16,
+                "items": {
+                  "$ref": "#/components/schemas/ResponseRuleResultConditionLevel3"
+                }
+              }
+            },
+            "required": [
+              "any"
+            ]
+          }
+        ]
+      },
+      "ResponseRuleResultAllCondition": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "all": {
+            "type": "array",
+            "minItems": 2,
+            "maxItems": 16,
+            "items": {
+              "$ref": "#/components/schemas/ResponseRuleResultConditionLevel2"
+            }
+          }
+        },
+        "required": [
+          "all"
+        ]
+      },
+      "ResponseRuleResultAnyCondition": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "any": {
+            "type": "array",
+            "minItems": 2,
+            "maxItems": 16,
+            "items": {
+              "$ref": "#/components/schemas/ResponseRuleResultConditionLevel2"
+            }
+          }
+        },
+        "required": [
+          "any"
+        ]
+      },
+      "ResponseRuleResultLeafTrace": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "sourceNodeId": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,80}$"
+          },
+          "pointer": {
+            "type": "string",
+            "maxLength": 2048
+          },
+          "op": {
+            "type": "string",
+            "enum": [
+              "equals",
+              "not_equals",
+              "exists",
+              "not_exists",
+              "greater_than",
+              "greater_or_equal",
+              "less_than",
+              "less_or_equal"
+            ]
+          },
+          "present": {
+            "type": "boolean"
+          },
+          "actualJSON": {
+            "type": "string",
+            "maxLength": 524288,
+            "description": "Exact captured JSON text when present, including \"null\". Missing pointers omit this field."
+          },
+          "expectedJSON": {
+            "type": "string",
+            "maxLength": 524288,
+            "description": "Exact authored literal text or captured right-hand result JSON. Omitted for existence operations."
+          },
+          "matched": {
+            "type": "boolean"
+          },
+          "valueFrom": {
+            "$ref": "#/components/schemas/ResponseRuleResultSource"
+          }
+        },
+        "required": [
+          "sourceNodeId",
+          "pointer",
+          "op",
+          "present"
+        ]
+      },
+      "ResponseRuleResultConditionTraceLevel4": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/ResponseRuleResultLeafTrace"
+          }
+        ]
+      },
+      "ResponseRuleResultConditionTraceLevel3": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/ResponseRuleResultLeafTrace"
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "op": {
+                "type": "string",
+                "enum": [
+                  "all",
+                  "any"
+                ]
+              },
+              "matched": {
+                "type": "boolean"
+              },
+              "children": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 16,
+                "items": {
+                  "$ref": "#/components/schemas/ResponseRuleResultConditionTraceLevel4"
+                }
+              },
+              "shortCircuited": {
+                "type": "boolean",
+                "const": true
+              }
+            },
+            "required": [
+              "op",
+              "matched",
+              "children"
+            ]
+          }
+        ]
+      },
+      "ResponseRuleResultConditionTraceLevel2": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/ResponseRuleResultLeafTrace"
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "op": {
+                "type": "string",
+                "enum": [
+                  "all",
+                  "any"
+                ]
+              },
+              "matched": {
+                "type": "boolean"
+              },
+              "children": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 16,
+                "items": {
+                  "$ref": "#/components/schemas/ResponseRuleResultConditionTraceLevel3"
+                }
+              },
+              "shortCircuited": {
+                "type": "boolean",
+                "const": true
+              }
+            },
+            "required": [
+              "op",
+              "matched",
+              "children"
+            ]
+          }
+        ]
+      },
+      "ResponseRuleResultConditionTrace": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/ResponseRuleResultLeafTrace"
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "op": {
+                "type": "string",
+                "enum": [
+                  "all",
+                  "any"
+                ]
+              },
+              "matched": {
+                "type": "boolean"
+              },
+              "children": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 16,
+                "items": {
+                  "$ref": "#/components/schemas/ResponseRuleResultConditionTraceLevel2"
+                }
+              },
+              "shortCircuited": {
+                "type": "boolean",
+                "const": true
+              }
+            },
+            "required": [
+              "op",
+              "matched",
+              "children"
+            ]
+          }
+        ]
+      },
+      "ResponseRuleExample": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,80}$"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 200,
+            "pattern": "\\S"
+          },
+          "request": {
+            "$ref": "#/components/schemas/ResponseRuleRequest"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "request"
+        ]
+      },
+      "ResponseRuleAddExampleCommand": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "add_example"
+            ]
+          },
+          "example": {
+            "$ref": "#/components/schemas/ResponseRuleExample"
+          }
+        },
+        "required": [
+          "type",
+          "example"
+        ]
+      },
+      "ResponseRuleUpdateExampleCommand": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "update_example"
+            ]
+          },
+          "example": {
+            "$ref": "#/components/schemas/ResponseRuleExample"
+          }
+        },
+        "required": [
+          "type",
+          "example"
+        ]
+      },
+      "ResponseRuleRemoveExampleCommand": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "remove_example"
+            ]
+          },
+          "exampleId": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,80}$"
+          }
+        },
+        "required": [
+          "type",
+          "exampleId"
+        ]
+      },
+      "ResponseRuleExplicitSimulationRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "document": {
+            "type": "string",
+            "description": "Exact entire API document. Omitted loads saved draft. Present empty text and null are invalid. Proposal sources omit saved revision provenance."
+          },
+          "request": {
+            "$ref": "#/components/schemas/ResponseRuleRequest"
+          },
+          "exampleId": {
+            "enum": []
+          }
+        },
+        "required": [
+          "request"
+        ]
+      },
+      "ResponseRuleExampleSimulationRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "document": {
+            "type": "string",
+            "description": "Exact entire API document. Omitted loads saved draft. Present empty text and null are invalid. Proposal sources omit saved revision provenance."
+          },
+          "exampleId": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,80}$"
+          },
+          "request": {
+            "enum": []
+          }
+        },
+        "required": [
+          "exampleId"
+        ]
       }
     }
   },

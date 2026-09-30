@@ -39,6 +39,67 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 describe("response rule simulation", () => {
+  it("shows exact result-comparison values and distinguishes missing fields from null", async () => {
+    route({
+      "POST /api/designs/12/response-rules/auth/simulate": () =>
+        json(200, {
+          ...result,
+          trace: [
+            {
+              step: 1,
+              nodeId: "auth",
+              matched: false,
+              edgeId: "e3",
+              resultCondition: {
+                sourceNodeId: "read",
+                pointer: "/n",
+                op: "not_equals",
+                present: true,
+                actualJSON: "9007199254740993",
+                expectedJSON: "9007199254740993",
+              },
+            },
+            {
+              step: 2,
+              nodeId: "slow",
+              matched: true,
+              edgeId: "e4",
+              resultCondition: {
+                sourceNodeId: "read",
+                pointer: "/optional",
+                op: "not_exists",
+                present: false,
+              },
+            },
+            {
+              step: 3,
+              nodeId: "ok",
+              matched: true,
+              resultCondition: {
+                sourceNodeId: "read",
+                pointer: "/nullable",
+                op: "exists",
+                present: true,
+                actualJSON: "null",
+              },
+            },
+          ],
+        }),
+    });
+    renderWithProviders(<SimulationPanel {...props} />);
+    await userEvent.click(screen.getByRole("button", { name: "Симулировать" }));
+    const trace = await screen.findByRole("list", { name: "Шаги симуляции" });
+    const steps = within(trace).getAllByRole("listitem");
+    expect(steps[0]).toHaveTextContent("Результат: read · /n · Не равно");
+    expect(steps[0]).toHaveTextContent("Фактическое JSON: 9007199254740993");
+    expect(steps[0]).toHaveTextContent("Ожидаемое JSON: 9007199254740993");
+    expect(steps[0]).toHaveTextContent("Условие: Нет");
+    expect(steps[0]).toHaveTextContent("Связь: e3");
+    expect(steps[1]).toHaveTextContent("Поле отсутствует");
+    expect(steps[1]).not.toHaveTextContent("Фактическое JSON:");
+    expect(steps[2]).toHaveTextContent("Поле присутствует");
+    expect(steps[2]).toHaveTextContent("Фактическое JSON: null");
+  });
   it("sends path and isolated entities with exact data, then shows raw outputs and final rows", async () => {
     const fetch = route({
       "POST /api/designs/12/response-rules/auth/simulate": () =>

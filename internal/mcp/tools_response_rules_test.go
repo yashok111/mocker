@@ -76,8 +76,9 @@ func TestResponseRuleToolsAdvertiseTypedSchemas(t *testing.T) {
 			Tools []struct {
 				Name        string `json:"name"`
 				InputSchema struct {
-					Required   []string                   `json:"required"`
-					Properties map[string]json.RawMessage `json:"properties"`
+					Required    []string                   `json:"required"`
+					Properties  map[string]json.RawMessage `json:"properties"`
+					Definitions map[string]json.RawMessage `json:"$defs"`
 				} `json:"inputSchema"`
 				Annotations struct {
 					ReadOnly    bool  `json:"readOnlyHint"`
@@ -102,8 +103,10 @@ func TestResponseRuleToolsAdvertiseTypedSchemas(t *testing.T) {
 		if tool.Name == "delete_response_rule" && (tool.Annotations.Destructive == nil || !*tool.Annotations.Destructive) {
 			t.Error("delete lacks destructive annotation")
 		}
-		if p := tool.InputSchema.Properties["commands"]; p != nil && (!strings.Contains(string(p), `"oneOf"`) || !strings.Contains(string(p), `"maxItems":200`)) {
-			t.Errorf("commands lack closed union and bounds: %s", p)
+		if p := tool.InputSchema.Properties["commands"]; p != nil {
+			if !strings.Contains(string(p), `"maxItems":200`) || !strings.Contains(string(p), `"$ref":"#/$defs/ResponseRuleCommand"`) || !strings.Contains(string(tool.InputSchema.Definitions["ResponseRuleCommand"]), `"oneOf"`) {
+				t.Errorf("commands lack referenced closed union and bounds: %s", p)
+			}
 		}
 	}
 	if seen != 8 {

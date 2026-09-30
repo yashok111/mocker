@@ -1,5 +1,15 @@
 import { useEffect, useEffectEvent, useLayoutEffect, useRef, useState } from "react";
-import { Alert, Badge, Button, Group, Stack, Text, UnstyledButton } from "@mantine/core";
+import {
+  Alert,
+  Badge,
+  Button,
+  Group,
+  NativeSelect,
+  Stack,
+  Text,
+  TextInput,
+  UnstyledButton,
+} from "@mantine/core";
 import {
   simulateResponseRule,
   validateResponseRule,
@@ -15,7 +25,8 @@ import { describeApiFailureDetailed } from "@/api/errors";
 import RequestFixtureEditor from "./RequestFixtureEditor";
 import EntitySimulationResults from "./EntitySimulationResults";
 import { createEvaluationGate, evaluationIdentity } from "./simulationState";
-import type { GraphSelection } from "./model";
+import { checkRule, newID, type GraphSelection } from "./model";
+import ResultConditionTrace from "./ResultConditionTrace";
 import styles from "./ResponseRules.module.css";
 
 type Props = {
@@ -27,6 +38,8 @@ type Props = {
   onSelect: (selection: GraphSelection) => void;
   onTrace: (trace: ResponseRuleStep[]) => void;
   onSource?: (pointer: string) => void;
+  onChangeRule?: (rule: ResponseRule) => boolean;
+  examplesBlocked?: string | null;
 };
 type Evaluation = ResponseRuleValidation | ResponseRuleSimulation;
 type State = {
@@ -37,8 +50,56 @@ type State = {
   error?: string;
 };
 export default function SimulationPanel(props: Props) {
-  // The parent keys the editor by API identity; the fixture remains in memory.
+  return <Panel key={`${props.designId}:${props.rule.id}`} {...props} />;
+}
+function Panel(props: Props) {
   const [request, setRequest] = useState<ResponseRuleRequest>({ query: [], headers: [] });
+  const [selectedExampleId, setSelectedExampleId] = useState("");
+  const [exampleName, setExampleName] = useState("");
+  const [exampleFailure, setExampleFailure] = useState<string | null>(null);
+  const examples = props.rule.examples ?? [];
+  const selectedExample = examples.find((example) => example.id === selectedExampleId);
+  const nameValid =
+    exampleName.trim().length > 0 && new TextEncoder().encode(exampleName).length <= 200;
+  let requestValid = true;
+  try {
+    checkRule({ ...props.rule, examples: [{ id: "candidate", name: "Проверка", request }] });
+  } catch {
+    requestValid = false;
+  }
+  const examplesDisabled = !!props.examplesBlocked || props.pendingForm || !props.onChangeRule;
+  function loadExample(id: string) {
+    const example = examples.find((item) => item.id === id);
+    setSelectedExampleId(example?.id ?? "");
+    setExampleName(example?.name ?? "");
+    if (example) setRequest(structuredClone(example.request));
+    setExampleFailure(null);
+  }
+  function storeExample(update: boolean) {
+    if (examplesDisabled || !nameValid || !requestValid || (update && !selectedExample)) return;
+    const example = {
+      id: update ? selectedExample!.id : newID(),
+      name: exampleName,
+      request: structuredClone(request),
+    };
+    const next = update
+      ? examples.map((item) => (item.id === example.id ? example : item))
+      : [...examples, example];
+    try {
+      const rule = { ...props.rule, examples: next };
+      checkRule(rule);
+      if (!props.onChangeRule?.(rule)) {
+        setExampleFailure("Не удалось изменить пример. Проверьте документ API.");
+        return;
+      }
+      setSelectedExampleId(example.id);
+      setExampleFailure(null);
+    } catch {
+      setExampleFailure(
+        "Пример превышает ограничения размера или содержит неверные данные запроса.",
+      );
+    }
+  }
   const [state, setState] = useState<State | null>(null);
   const [gate] = useState(createEvaluationGate);
   const controller = useRef<AbortController | null>(null);
@@ -107,7 +168,98 @@ export default function SimulationPanel(props: Props) {
   return (
     <section className={styles.simulation} aria-label="Проверка и симуляция">
       <div className={styles.simulationGrid}>
-        <RequestFixtureEditor value={request} onChange={setRequest} />
+        <Stack gap="sm">
+          <section aria-label="Сохранённые примеры">
+            <Stack gap="xs">
+              <NativeSelect
+                label="Сохранённый пример"
+                value={selectedExample?.id ?? ""}
+                data={[
+                  { value: "", label: "Новый пример / текущий запрос" },
+                  ...examples.map((example) => ({ value: example.id, label: example.name })),
+                ]}
+                onChange={(event) => loadExample(event.currentTarget.value)}
+              />
+              <TextInput
+                label="Название примера"
+                value={exampleName}
+                error={
+                  exampleName && !nameValid ? "Введите название до 200 байт UTF-8." : undefined
+                }
+                onChange={(event) => setExampleName(event.currentTarget.value)}
+              />
+              <Group gap="xs">
+                <Button
+                  size="xs"
+                  variant="default"
+                  disabled={
+                    examplesDisabled || !nameValid || !requestValid || examples.length >= 20
+                  }
+                  onClick={() => storeExample(false)}
+                >
+                  Добавить пример
+                </Button>
+                <Button
+                  size="xs"
+                  variant="default"
+                  disabled={examplesDisabled || !selectedExample || !nameValid || !requestValid}
+                  onClick={() => storeExample(true)}
+                >
+                  Обновить пример
+                </Button>
+                <Button
+                  size="xs"
+                  variant="subtle"
+                  disabled={!selectedExample}
+                  onClick={() => loadExample(selectedExampleId)}
+                >
+                  Загрузить пример заново
+                </Button>
+                <Button
+                  size="xs"
+                  variant="subtle"
+                  color="red"
+                  disabled={examplesDisabled || !selectedExample}
+                  onClick={() => {
+                    if (
+                      props.onChangeRule?.({
+                        ...props.rule,
+                        examples: examples.filter((example) => example.id !== selectedExampleId),
+                      })
+                    ) {
+                      setSelectedExampleId("");
+                      setExampleName("");
+                      setExampleFailure(null);
+                    }
+                  }}
+                >
+                  Удалить пример
+                </Button>
+              </Group>
+              <Text size="xs" c="dimmed">
+                Примеры сохраняются после сохранения черновика API. Загрузка создаёт копию запроса;
+                изменения копии попадут в пример по кнопке «Обновить пример».
+              </Text>
+              {props.examplesBlocked && (
+                <Text size="xs" c="dimmed">
+                  {props.examplesBlocked}
+                </Text>
+              )}
+              {!requestValid && (
+                <Text size="xs" c="red">
+                  Для сохранения примера проверьте JSON, обязательные поля и ограничения размера
+                  запроса.
+                </Text>
+              )}
+              {exampleFailure && (
+                <Alert color="red" role="alert">
+                  {exampleFailure}
+                </Alert>
+              )}
+            </Stack>
+          </section>
+          <RequestFixtureEditor value={request} onChange={setRequest} />
+        </Stack>
         <Stack gap="sm">
           <Group>
             <Button
@@ -209,6 +361,14 @@ export default function SimulationPanel(props: Props) {
                             ` · Сущность: ${step.entityFound ? "найдена" : "не найдена"}`}
                           {step.entityCount !== undefined && ` · Записей: ${step.entityCount}`}
                         </UnstyledButton>
+                        {step.resultCondition && (
+                          <>
+                            <ResultConditionTrace value={step.resultCondition} />
+                            {step.edgeId !== undefined && (
+                              <Text size="xs">Связь: {step.edgeId}</Text>
+                            )}
+                          </>
+                        )}
                       </li>
                     ))}
                   </ol>

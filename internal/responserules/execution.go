@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/yashok111/mocker/internal/jsonx"
 	"github.com/yashok111/mocker/internal/overrides"
 )
 
@@ -25,7 +26,15 @@ func DecodeExecution(root map[string]any) (Envelope, error) {
 		authoringShape[Extension] = value
 	}
 	env, err := Decode(authoringShape)
-	return env, executionError(err)
+	if err != nil {
+		return env, executionError(err)
+	}
+	for i, rule := range env.Rules {
+		if rule.Examples != nil {
+			return Envelope{}, invalid(fmt.Sprintf("/%s/rules/%d/examples", ExecutionExtension, i), "Примеры доступны только в авторском правиле")
+		}
+	}
+	return env, nil
 }
 
 func executionError(err error) error {
@@ -139,6 +148,7 @@ func (p *Program) EvaluateWithEntities(ctx context.Context, input EvaluationInpu
 		return Simulation{}, invalid("", "правило не скомпилировано")
 	}
 	result := Simulation{Validation: Validation{Valid: true, Diagnostics: []Diagnostic{}}, Trace: []Step{}}
+	traceBytes := 2
 	results := map[string]any{}
 	current := p.start
 	total := 0
@@ -154,7 +164,19 @@ func (p *Program) EvaluateWithEntities(ctx context.Context, input EvaluationInpu
 		port := "next"
 		switch n.Type {
 		case "condition":
-			matched := n.Condition.Match(input.Request)
+			var matched bool
+			if n.ResultCondition != nil {
+				var err error
+				matched, step.ResultCondition, err = evaluateResultCondition(ctx, *n.ResultCondition, results)
+				if err != nil {
+					if ctx.Err() != nil {
+						return Simulation{}, ctx.Err()
+					}
+					return Simulation{}, at(fmt.Sprintf("/nodes/%d/resultCondition", p.nodeOrder[n.ID]), err)
+				}
+			} else {
+				matched = n.Condition.Match(input.Request)
+			}
 			step.Matched = &matched
 			port = "false"
 			if matched {
@@ -184,7 +206,9 @@ func (p *Program) EvaluateWithEntities(ctx context.Context, input EvaluationInpu
 				return Simulation{}, err
 			}
 			result.Response = response
-			result.Trace = append(result.Trace, step)
+			if err := appendTraceStep(ctx, &result, step, &traceBytes); err != nil {
+				return Simulation{}, err
+			}
 			return boundedResult(result)
 		}
 		edge, ok := p.edges[n.ID][port]
@@ -192,8 +216,32 @@ func (p *Program) EvaluateWithEntities(ctx context.Context, input EvaluationInpu
 			return Simulation{}, invalid("", "путь не завершён")
 		}
 		step.EdgeID = edge.ID
-		result.Trace = append(result.Trace, step)
+		if err := appendTraceStep(ctx, &result, step, &traceBytes); err != nil {
+			return Simulation{}, err
+		}
 		current = edge.To
 	}
 	return Simulation{}, invalid("", "превышен предел 100 шагов")
+}
+
+// A group can repeat captured values many times in one step. Enforce the
+// accumulated trace cap before following another edge, not only at the final
+// response, so bounded output also bounds the retained execution trace.
+func appendTraceStep(ctx context.Context, result *Simulation, step Step, traceBytes *int) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	encoded, err := jsonx.Marshal(step)
+	if err != nil {
+		return err
+	}
+	*traceBytes += len(encoded) + 1
+	if *traceBytes > MaxResultBytes {
+		return invalid("", "результат превышает 512 КиБ")
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	result.Trace = append(result.Trace, step)
+	return nil
 }

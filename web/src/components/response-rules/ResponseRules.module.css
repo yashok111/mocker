@@ -83,6 +83,17 @@
   overflow-wrap: anywhere;
   font-size: 12px;
 }
+.conditionGroup {
+  border: 1px solid var(--mocker-border, #d6dfd6);
+  border-radius: 6px;
+  padding: 8px;
+  min-width: 0;
+}
+.conditionChild {
+  border-top: 1px solid var(--mocker-border, #d6dfd6);
+  padding-top: 8px;
+  min-width: 0;
+}
 @container response-rules (min-width: 1400px) {
   .workspace {
     grid-template-columns: minmax(0, 1fr) 290px;

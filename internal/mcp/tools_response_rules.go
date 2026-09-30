@@ -15,6 +15,7 @@ type responseRuleInput struct {
 	Commands        []responserules.Command `json:"commands,omitempty"`
 	Document        *string                 `json:"document,omitempty"`
 	Request         *responserules.Request  `json:"request,omitempty"`
+	ExampleID       string                  `json:"exampleId,omitempty"`
 }
 
 func addResponseRuleTools(s *sdk.Server, lb *loopback) {
@@ -25,12 +26,12 @@ func addResponseRuleTools(s *sdk.Server, lb *loopback) {
 	}{
 		{"list_response_rules", "GET", "", "Lists response-rule graphs in the API draft with design/version/revision identity. Authoring metadata only; no live mock behavior changes.", true},
 		{"get_response_rule", "GET", "/{rid}", "Reads one complete response-rule graph and API version. Read before editing; node and edge IDs are stable in separate namespaces.", true},
-		{"create_response_rule", "POST", "", "Creates a graph in the API draft, preserving unrelated fields. Incomplete graphs can be saved. Supply current expectedVersion; after a lost response, inspect list_response_rules before retrying.", false},
+		{"create_response_rule", "POST", "", "Creates a graph in the API draft, preserving unrelated fields. Incomplete graphs can be saved. Condition nodes require exactly one condition or resultCondition; result sources contain only source=result, nodeId and optional pointer. Supply current expectedVersion; after a lost response, inspect list_response_rules before retrying.", false},
 		{"save_response_rule", "PUT", "/{rid}", "Replaces one COMPLETE graph; rule.id must match ruleId. Requires current whole-API expectedVersion. On 409 reread and reconcile. Does not enable live execution.", false},
 		{"delete_response_rule", "DELETE", "/{rid}", "Removes one graph from the API draft, retaining revision history. Requires expectedVersion; conflicts must be reconciled.", false},
-		{"apply_response_rule_commands", "POST", "/{rid}/commands", "Applies an ordered atomic batch to one graph. Updates replace complete node/edge fields; remove_node also removes incident edges. set_rule without binding clears it. Requires current expectedVersion; no revision on failed batch.", false},
+		{"apply_response_rule_commands", "POST", "/{rid}/commands", "Applies an ordered atomic batch to one graph. Updates replace complete node/edge fields; remove_node also removes incident edges. Condition nodes accept mutually exclusive condition/resultCondition payloads. Result comparisons require exactly one exact valueJSON or valueFrom result reference; numeric ordering accepts only numbers. Groups all/any short-circuit left to right (four levels, sixteen leaves). exists/not_exists forbid both RHS fields. add_example/update_example replace complete id/name/request; remove_example takes exampleId. Examples are authoring metadata and do not require reapply. set_rule without binding clears it. Requires current expectedVersion; no revision on failed batch.", false},
 		{"validate_response_rule", "POST", "/{rid}/validate", "Validates a saved graph or one in exact proposed document text. Checks the selected graph and its binding conflicts; unrelated incomplete graphs do not block it. Returns diagnostics and source identity without saving or touching a mock.", true},
-		{"simulate_response_rule", "POST", "/{rid}/simulate", "Simulates a saved or proposed graph against ordered query/header/path rows, optional exact bodyJSON and isolated entity fixtures. Returns visited nodes/edges, predicate results, accumulated delay, response or fallback, exact entity output JSON text and final fixture rows. Predicate numbers compare by original JSON spelling; headers use the first case-insensitive value. Every run starts fresh without sleeping, HTTP or workspace/session/traffic mutation. Fallback does not calculate a generated HTTP response.", true},
+		{"simulate_response_rule", "POST", "/{rid}/simulate", "Simulates a saved or proposed graph. Supply exactly one request (ordered query/header/path rows, optional exact bodyJSON and isolated entity fixtures) or exampleId selecting a named case from the same document snapshot. Returns visited nodes/edges, predicate results, accumulated delay, response or fallback, exact entity output JSON text and final fixture rows. Legacy request predicates compare numeric text by original JSON spelling; headers use the first case-insensitive value. Result conditions compare typed scalars/null, support exact decimal equality and ordering against literals or other entity results, and test pointer presence including null. all/any evaluate left to right with short circuit; grouped trace contains only evaluated children. Their trace contains sourceNodeId, pointer, op, present and exact actualJSON/expectedJSON, while matched records the decision. Every run starts fresh without sleeping, HTTP or workspace/session/traffic mutation. Fallback does not calculate a generated HTTP response.", true},
 	} {
 		destructive := action.method == "DELETE"
 		// The raw adapter validates a typed schema before decoding original bytes.
@@ -72,6 +73,9 @@ func addResponseRuleTools(s *sdk.Server, lb *loopback) {
 			}
 			if in.Request != nil {
 				body["request"] = in.Request
+			}
+			if in.ExampleID != "" {
+				body["exampleId"] = in.ExampleID
 			}
 			out.body = body
 			return out, nil

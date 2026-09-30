@@ -16,6 +16,22 @@ export const nodeNames: Record<ResponseRuleNode["type"], string> = {
   entity_create: "Создание сущности",
   entity_update: "Изменение сущности",
 };
+export const resultConditionOpNames = {
+  equals: "Равно",
+  not_equals: "Не равно",
+  exists: "Существует",
+  not_exists: "Не существует",
+  greater_than: "Больше",
+  greater_or_equal: "Больше или равно",
+  less_than: "Меньше",
+  less_or_equal: "Меньше или равно",
+};
+export const numericResultConditionOps = new Set([
+  "greater_than",
+  "greater_or_equal",
+  "less_than",
+  "less_or_equal",
+]);
 export const portNames: Record<string, string> & Record<"next" | "true" | "false", string> = {
   next: "Далее",
   true: "Да",
@@ -89,6 +105,227 @@ function valueRef(value: unknown) {
   if (source === "result") text(value.nodeId, 80);
   if (value.pointer !== undefined) text(value.pointer, 2048);
 }
+// Inspect the number grammar as text: JSON.parse would round large integers and
+// turn valid, very large exponents into Infinity before admission.
+function trimJSONWhitespace(value: string): string {
+  let start = 0;
+  let end = value.length;
+  while (start < end && " \t\r\n".includes(value[start]!)) start += 1;
+  while (end > start && " \t\r\n".includes(value[end - 1]!)) end -= 1;
+  return value.slice(start, end);
+}
+export function isResultConditionNumberJSON(value: string): boolean {
+  return /^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$/.test(trimJSONWhitespace(value));
+}
+export function isResultConditionScalarJSON(value: string): boolean {
+  const scalar = trimJSONWhitespace(value);
+  if (/^(?:null|true|false|-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?)$/.test(scalar)) return true;
+  if (!scalar.startsWith('"')) return false;
+  try {
+    return typeof JSON.parse(scalar) === "string";
+  } catch {
+    return false;
+  }
+}
+function resultRef(value: unknown) {
+  object(value, ["source", "nodeId", "pointer"]);
+  if (value.source !== "result") fail();
+  text(value.nodeId, 80);
+  if (!/^[A-Za-z0-9_-]{1,80}$/.test(value.nodeId)) fail();
+  if (value.pointer !== undefined) {
+    text(value.pointer, 2048);
+    const pointer = value.pointer;
+    if (pointer !== "" && !pointer.startsWith("/")) fail();
+    for (let index = 0; index < pointer.length; index += 1) {
+      if (pointer[index] !== "~") continue;
+      index += 1;
+      if (pointer[index] !== "0" && pointer[index] !== "1") fail();
+    }
+  }
+}
+function resultCondition(value: unknown, depth = 1, budget = { leaves: 0 }) {
+  if (depth > 4) fail();
+  object(value, ["source", "op", "valueJSON", "valueFrom", "all", "any"]);
+  if (Object.hasOwn(value, "all") || Object.hasOwn(value, "any")) {
+    const key = Object.hasOwn(value, "all") ? "all" : "any";
+    object(value, [key]);
+    const children = value[key];
+    if (!Array.isArray(children) || children.length < 2 || children.length > 16) fail();
+    for (const child of children) resultCondition(child, depth + 1, budget);
+    return;
+  }
+  budget.leaves += 1;
+  if (budget.leaves > 16) fail();
+  object(value, ["source", "op", "valueJSON", "valueFrom"]);
+  resultRef(value.source);
+  if (value.op === "exists" || value.op === "not_exists") {
+    if (Object.hasOwn(value, "valueJSON") || Object.hasOwn(value, "valueFrom")) fail();
+  } else if (
+    value.op === "equals" ||
+    value.op === "not_equals" ||
+    numericResultConditionOps.has(String(value.op))
+  ) {
+    if (Object.hasOwn(value, "valueJSON") === Object.hasOwn(value, "valueFrom")) fail();
+    if (Object.hasOwn(value, "valueFrom")) resultRef(value.valueFrom);
+    else {
+      text(value.valueJSON, 65536);
+      if (
+        !(numericResultConditionOps.has(String(value.op))
+          ? isResultConditionNumberJSON(value.valueJSON)
+          : isResultConditionScalarJSON(value.valueJSON))
+      )
+        fail();
+    }
+  } else fail();
+}
+function jsonText(value: unknown, max: number) {
+  text(value, max);
+  let decoded: unknown;
+  try {
+    decoded = JSON.parse(value);
+  } catch {
+    fail();
+  }
+  checkJSONKeys(value);
+  return decoded;
+}
+function checkJSONKeys(value: string, extensionOnly = false) {
+  // Scan syntax that JSON.parse discards (duplicate keys) without touching
+  // numeric tokens. For whole documents, admit only our extension and its root
+  // key; unrelated OpenAPI objects keep their existing duplicate-key policy.
+  const stack: {
+    object: boolean;
+    key: boolean;
+    names: Set<string>;
+    property?: string;
+    checked: boolean;
+    depth: number;
+  }[] = [];
+  for (let index = 0; index < value.length; index += 1) {
+    const character = value[index];
+    if (character === '"') {
+      const start = index;
+      index += 1;
+      while (index < value.length && value[index] !== '"') {
+        if (value[index] === "\\") index += 1;
+        index += 1;
+      }
+      const parent = stack.at(-1);
+      if (parent?.object && parent.key) {
+        if (parent.checked || stack.length === 1) {
+          const name: string = JSON.parse(value.slice(start, index + 1));
+          if (parent.checked || name === EXTENSION) {
+            if (parent.names.has(name)) fail();
+            parent.names.add(name);
+          }
+          parent.property = name;
+        }
+        parent.key = false;
+      }
+    } else if (character === "{" || character === "[") {
+      const parent = stack.at(-1);
+      const checked =
+        !extensionOnly ||
+        !!parent?.checked ||
+        (stack.length === 1 && parent?.property === EXTENSION);
+      const depth = checked ? (parent?.checked ? parent.depth : 0) + 1 : 0;
+      if (depth > 64) fail();
+      stack.push({
+        object: character === "{",
+        key: character === "{",
+        names: new Set(),
+        checked,
+        depth,
+      });
+    } else if (character === "}" || character === "]") stack.pop();
+    else if (character === "," && stack.at(-1)?.object) stack.at(-1)!.key = true;
+  }
+}
+function requestFields(value: unknown, kind: "query" | "headers" | "path") {
+  fields(value);
+  const names = new Set<string>();
+  for (const field of value as { name: string; value: string }[]) {
+    if (
+      !field.name ||
+      (kind === "headers" && (!httpToken.test(field.name) || containsControl(field.value)))
+    )
+      fail();
+    if (kind === "path" && names.has(field.name)) fail();
+    names.add(field.name);
+  }
+}
+function exampleRequest(value: unknown) {
+  object(value, ["path", "query", "headers", "bodyJSON", "entities"]);
+  requestFields(value.query, "query");
+  requestFields(value.headers, "headers");
+  if (value.path !== undefined) requestFields(value.path, "path");
+  if (value.bodyJSON !== undefined) jsonText(value.bodyJSON, 65536);
+  if (value.entities !== undefined) {
+    if (!Array.isArray(value.entities) || value.entities.length > 100) fail();
+    const families = new Set<string>();
+    let totalRows = 0;
+    for (const entity of value.entities) {
+      object(entity, ["family", "idField", "idType", "rows"]);
+      text(entity.family, 2048);
+      text(entity.idField, 256);
+      if (
+        !entity.family ||
+        !entity.idField.trim() ||
+        !["integer", "string"].includes(String(entity.idType))
+      )
+        fail();
+      if (families.has(entity.family)) fail();
+      families.add(entity.family);
+      if (!entity.family.startsWith("/") || /[?#\\]/.test(entity.family)) fail();
+      const segments = entity.family.slice(1).split("/");
+      if (
+        segments.some(
+          (segment) =>
+            !segment ||
+            segment === "." ||
+            segment === ".." ||
+            (/[{}]/.test(segment) && segment !== "{}"),
+        )
+      )
+        fail();
+      const parents = segments.filter((segment) => segment === "{}").length;
+      if (parents > 3) fail();
+      if (!Array.isArray(entity.rows) || entity.rows.length > 100) fail();
+      totalRows += entity.rows.length;
+      if (totalRows > 100) fail();
+      const rows = new Set<string>();
+      for (const row of entity.rows) {
+        object(row, ["key", "scope", "dataJSON"]);
+        text(row.key, 128);
+        if (!/^[A-Za-z0-9._~-]{1,128}$/.test(row.key) || row.key === "." || row.key === "..")
+          fail();
+        if (entity.idType === "integer") {
+          if (!/^(?:0|-?[1-9]\d*)$/.test(row.key)) fail();
+          const key = BigInt(row.key);
+          if (key < -9223372036854775808n || key > 9223372036854775807n) fail();
+        }
+        if (!Array.isArray(row.scope) || row.scope.length !== parents) fail();
+        row.scope.forEach((parent) => text(parent, 4096));
+        const identity = JSON.stringify([row.key, row.scope]);
+        if (rows.has(identity)) fail();
+        rows.add(identity);
+        if (!isRecord(jsonText(row.dataJSON, 65536))) fail();
+      }
+    }
+  }
+  if (size(JSON.stringify(value)) > 128 * 1024) fail();
+}
+function examples(value: unknown) {
+  if (!Array.isArray(value)) fail();
+  ids(value, 20);
+  for (const example of value) {
+    object(example, ["id", "name", "request"]);
+    text(example.name, 200);
+    if (!example.name.trim()) fail();
+    exampleRequest(example.request);
+  }
+  if (size(JSON.stringify(value)) > 256 * 1024) fail();
+}
 const httpToken = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/;
 const managedHeaders = new Set([
   "content-type",
@@ -136,12 +373,13 @@ function safeResponse(response: Record<string, unknown>) {
   }
 }
 export function checkRule(value: unknown): asserts value is ResponseRule {
-  object(value, ["id", "name", "binding", "nodes", "edges"]);
+  object(value, ["id", "name", "binding", "nodes", "edges", "examples"]);
   text(value.name, 200);
   if (!Array.isArray(value.nodes) || !Array.isArray(value.edges)) fail();
   ids([value], 1);
   ids(value.nodes, 100);
   ids(value.edges, 200);
+  if (value.examples !== undefined) examples(value.examples);
   if (value.binding !== undefined) {
     object(value.binding, ["method", "path"]);
     text(value.binding.method, 32);
@@ -152,7 +390,7 @@ export function checkRule(value: unknown): asserts value is ResponseRule {
       fail();
     const extra =
       node.type === "condition"
-        ? ["condition"]
+        ? ["condition", "resultCondition"]
         : node.type === "response"
           ? ["response"]
           : node.type === "delay"
@@ -170,11 +408,15 @@ export function checkRule(value: unknown): asserts value is ResponseRule {
       )
         fail();
     if (node.type === "condition") {
-      object(node.condition, ["in", "name", "op", "value"]);
-      text(node.condition.in, 256);
-      text(node.condition.name, 256);
-      text(node.condition.op, 256);
-      if (node.condition.value !== undefined) text(node.condition.value, 4096);
+      if (Object.hasOwn(node, "condition") === Object.hasOwn(node, "resultCondition")) fail();
+      if (Object.hasOwn(node, "resultCondition")) resultCondition(node.resultCondition);
+      else {
+        object(node.condition, ["in", "name", "op", "value"]);
+        text(node.condition.in, 256);
+        text(node.condition.name, 256);
+        text(node.condition.op, 256);
+        if (node.condition.value !== undefined) text(node.condition.value, 4096);
+      }
     }
     if (node.type === "delay" && !Number.isSafeInteger(node.delayMs)) fail();
     if (node.type.startsWith("entity_")) {
@@ -210,6 +452,7 @@ export function checkRule(value: unknown): asserts value is ResponseRule {
   if (size(JSON.stringify(value)) > 512 * 1024) fail();
 }
 export function readRules(source: string): { document: ApiDocument; rules: ResponseRule[] } {
+  checkJSONKeys(source, true);
   const document: unknown = JSON.parse(source);
   if (!isRecord(document)) fail();
   const value = document[EXTENSION];

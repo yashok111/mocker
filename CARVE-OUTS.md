@@ -33,6 +33,19 @@ Not "forgotten" but deferred — so that a hole does not read as an oversight:
   writes. No graph-wide transaction or delete block is included. Existing caps,
   HTTP body capture, resource scope and
   fixed media admission still apply.
+- Entity-result conditions support scalar/null equality, numeric ordering,
+  result-to-result comparisons and AND/OR groups. Groups have two to sixteen
+  children, sixteen total leaves and at most four levels including the root.
+  Evaluation short-circuits left-to-right; all references still need producer
+  and found dominance. Ordering accepts only numbers; no coercion, expressions
+  or container equality. An evaluated missing field or incompatible non-null
+  scalar type fails execution. Explicit null is present. Exact decimal math
+  applies to result comparisons; legacy request conditions keep text semantics.
+- Named response-rule simulation examples are authoring metadata (twenty per
+  rule; 128 KiB per request, 256 KiB compact aggregate). They retain exact JSON
+  text and isolated fixture rows, and use ordinary version fencing/revisions.
+  They are excluded from applied copies and execution current/outdated checks.
+  No expected outcomes, batch runner or live-data fixture capture is included.
 - State diagrams execute applied copies against one entity at a time. State is
   a top-level string business field; keys come from detail path parameters.
   Bound POST/PUT/PATCH/DELETE transitions atomically check guards and update

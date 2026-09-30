@@ -1,5 +1,7 @@
 package mcp
 
+import "strconv"
+
 func responseRuleInputSchema(name string) map[string]any {
 	p := map[string]any{"designId": designScenarioPositiveIntegerSchema()}
 	required := []string{"designId"}
@@ -17,26 +19,51 @@ func responseRuleInputSchema(name string) map[string]any {
 		p["rule"] = responseRuleSchema()
 		required = append(required, "rule")
 	case "apply_response_rule_commands":
-		p["commands"] = responseRuleArraySchema(responseRuleCommandSchema(), 200)
+		p["commands"] = responseRuleArraySchema(map[string]any{"$ref": "#/$defs/ResponseRuleCommand"}, 200)
 		required = append(required, "commands")
 	case "validate_response_rule", "simulate_response_rule":
 		p["document"] = map[string]any{"type": "string", "description": "Exact proposed OpenAPI text; omission loads saved draft, empty is invalid."}
 		if name == "simulate_response_rule" {
-			p["request"] = designScenarioSchemaObject([]string{"query", "headers"}, map[string]any{
-				"query": responseRuleFieldsSchema(), "headers": responseRuleFieldsSchema(),
-				"bodyJSON": responseRuleTextSchema(65536), "path": responseRuleFieldsSchema(), "entities": responseRuleArraySchema(responseRuleEntityFixtureSchema(), 100),
-			})
-			required = append(required, "request")
+			p["request"] = responseRuleRequestSchema()
+			p["exampleId"] = responseRuleIDSchema()
 		}
 	}
-	return designScenarioSchemaObject(required, p)
+	schema := designScenarioSchemaObject(required, p)
+	if name == "simulate_response_rule" {
+		schema["oneOf"] = []any{map[string]any{"required": []string{"request"}}, map[string]any{"required": []string{"exampleId"}}}
+	}
+	if name == "create_response_rule" || name == "save_response_rule" || name == "apply_response_rule_commands" {
+		definitions := responseRulePredicateDefinitions()
+		if name == "apply_response_rule_commands" {
+			definitions["ResponseRuleCommand"] = responseRuleCommandVariants()
+		}
+		schema["$defs"] = definitions
+	}
+	return schema
 }
 
 func responseRuleSchema() map[string]any {
 	return designScenarioSchemaObject([]string{"id", "name", "nodes", "edges"}, map[string]any{
 		"id": responseRuleIDSchema(), "name": responseRuleTextSchema(200), "binding": responseRuleBindingSchema(),
-		"nodes": responseRuleArraySchema(responseRuleNodeSchema(), 100),
-		"edges": responseRuleArraySchema(responseRuleEdgeSchema(), 200),
+		"nodes":    responseRuleArraySchema(responseRuleNodeSchema(), 100),
+		"edges":    responseRuleArraySchema(responseRuleEdgeSchema(), 200),
+		"examples": responseRuleArraySchema(responseRuleExampleSchema(), 20),
+	})
+}
+
+func responseRuleRequestSchema() map[string]any {
+	return designScenarioSchemaObject([]string{"query", "headers"}, map[string]any{
+		"query": responseRuleFieldsSchema(), "headers": responseRuleFieldsSchema(),
+		"bodyJSON": responseRuleTextSchema(65536), "path": responseRuleFieldsSchema(),
+		"entities": responseRuleArraySchema(responseRuleEntityFixtureSchema(), 100),
+	})
+}
+
+func responseRuleExampleSchema() map[string]any {
+	name := responseRuleTextSchema(200)
+	name["pattern"] = `\S`
+	return designScenarioSchemaObject([]string{"id", "name", "request"}, map[string]any{
+		"id": responseRuleIDSchema(), "name": name, "request": responseRuleRequestSchema(),
 	})
 }
 
@@ -49,7 +76,7 @@ func responseRuleNodeSchema() map[string]any {
 		switch kind {
 		case "condition":
 			p["condition"] = responseRuleConditionSchema()
-			required = append(required, "condition")
+			p["resultCondition"] = map[string]any{"$ref": "#/$defs/ResultConditionLevel1"}
 		case "delay":
 			p["delayMs"] = map[string]any{"type": "integer"}
 			required = append(required, "delayMs")
@@ -65,7 +92,11 @@ func responseRuleNodeSchema() map[string]any {
 			p["entity"] = responseRuleEntityOperationSchema(kind)
 			required = append(required, "entity")
 		}
-		variants = append(variants, designScenarioSchemaObject(required, p))
+		node := designScenarioSchemaObject(required, p)
+		if kind == "condition" {
+			node["oneOf"] = []any{map[string]any{"required": []string{"condition"}}, map[string]any{"required": []string{"resultCondition"}}}
+		}
+		variants = append(variants, node)
 	}
 	return map[string]any{"oneOf": variants}
 }
@@ -77,6 +108,57 @@ func responseRuleConditionSchema() map[string]any {
 	})
 }
 
+// JSON text keeps exact numbers intact across tools, transport and UI. The
+// pattern checks the scalar grammar without converting the numeric value.
+const responseRuleScalarJSONPattern = `^[ \t\r\n]*(null|true|false|-?(0|[1-9][0-9]*)(\.[0-9]+)?([eE][+-]?[0-9]+)?|"([^"\\\x00-\x1F]|\\["\\/bfnrt]|\\u[0-9A-Fa-f]{4})*")[ \t\r\n]*$`
+const responseRuleNumberJSONPattern = `^[ \t\r\n]*-?(0|[1-9][0-9]*)(\.[0-9]+)?([eE][+-]?[0-9]+)?[ \t\r\n]*$`
+
+func responseRuleResultConditionSchema() map[string]any {
+	return map[string]any{"$ref": "#/$defs/ResultConditionLevel1", "$defs": responseRulePredicateDefinitions()}
+}
+
+func responseRulePredicateDefinitions() map[string]any {
+	source := designScenarioSchemaObject([]string{"source", "nodeId"}, map[string]any{
+		"source": map[string]any{"type": "string", "const": "result"},
+		"nodeId": responseRuleIDSchema(), "pointer": responseRuleTextSchema(2048),
+	})
+	comparison := designScenarioSchemaObject([]string{"source", "op", "valueJSON"}, map[string]any{
+		"source": source, "op": map[string]any{"type": "string", "enum": []string{"equals", "not_equals"}},
+		"valueJSON": map[string]any{"type": "string", "maxLength": 65536, "pattern": responseRuleScalarJSONPattern},
+	})
+	existence := designScenarioSchemaObject([]string{"source", "op"}, map[string]any{
+		"source": source, "op": map[string]any{"type": "string", "enum": []string{"exists", "not_exists"}},
+	})
+	orderingOps := []string{"greater_than", "greater_or_equal", "less_than", "less_or_equal"}
+	ordering := designScenarioSchemaObject([]string{"source", "op", "valueJSON"}, map[string]any{
+		"source": source, "op": map[string]any{"type": "string", "enum": orderingOps},
+		"valueJSON": map[string]any{"type": "string", "maxLength": 65536, "pattern": responseRuleNumberJSONPattern},
+	})
+	reference := designScenarioSchemaObject([]string{"source", "op", "valueFrom"}, map[string]any{
+		"source": source, "valueFrom": source,
+		"op": map[string]any{"type": "string", "enum": append([]string{"equals", "not_equals"}, orderingOps...)},
+	})
+	definitions := map[string]any{"ResultComparison": comparison, "ResultExistence": existence, "ResultOrdering": ordering, "ResultReference": reference}
+	// Finite referenced levels reject deep trees without repeating every leaf
+	// schema in every group and command. This also keeps tools/list compact.
+	for depth := 1; depth <= 4; depth++ {
+		variants := []any{}
+		for _, name := range []string{"ResultComparison", "ResultExistence", "ResultOrdering", "ResultReference"} {
+			variants = append(variants, map[string]any{"$ref": "#/$defs/" + name})
+		}
+		if depth < 4 {
+			child := map[string]any{"$ref": "#/$defs/ResultConditionLevel" + strconv.Itoa(depth+1)}
+			for _, key := range []string{"all", "any"} {
+				children := responseRuleArraySchema(child, 16)
+				children["minItems"] = 2
+				variants = append(variants, designScenarioSchemaObject([]string{key}, map[string]any{key: children}))
+			}
+		}
+		definitions["ResultConditionLevel"+strconv.Itoa(depth)] = map[string]any{"oneOf": variants}
+	}
+	return definitions
+}
+
 func responseRuleEdgeSchema() map[string]any {
 	return designScenarioSchemaObject([]string{"id", "from", "port", "to"}, map[string]any{
 		"id": responseRuleIDSchema(), "from": responseRuleIDSchema(), "to": responseRuleIDSchema(),
@@ -85,8 +167,14 @@ func responseRuleEdgeSchema() map[string]any {
 }
 
 func responseRuleCommandSchema() map[string]any {
+	schema := responseRuleCommandVariants()
+	schema["$defs"] = responseRulePredicateDefinitions()
+	return schema
+}
+
+func responseRuleCommandVariants() map[string]any {
 	variants := []any{}
-	for _, kind := range []string{"set_rule", "add_node", "update_node", "remove_node", "add_edge", "update_edge", "remove_edge", "move_nodes"} {
+	for _, kind := range []string{"set_rule", "add_node", "update_node", "remove_node", "add_edge", "update_edge", "remove_edge", "move_nodes", "add_example", "update_example", "remove_example"} {
 		p := map[string]any{"type": map[string]any{"type": "string", "const": kind}}
 		required := []string{"type"}
 		switch kind {
@@ -105,6 +193,12 @@ func responseRuleCommandSchema() map[string]any {
 		case "remove_edge":
 			p["edgeId"] = responseRuleIDSchema()
 			required = append(required, "edgeId")
+		case "add_example", "update_example":
+			p["example"] = responseRuleExampleSchema()
+			required = append(required, "example")
+		case "remove_example":
+			p["exampleId"] = responseRuleIDSchema()
+			required = append(required, "exampleId")
 		case "move_nodes":
 			p["positions"] = responseRuleArraySchema(designScenarioSchemaObject([]string{"nodeId", "x", "y"}, map[string]any{
 				"nodeId": responseRuleIDSchema(), "x": responseRuleCoordinateSchema(), "y": responseRuleCoordinateSchema(),

@@ -26,7 +26,8 @@ type ResponseRuleExecution struct {
 
 // ResponseRuleExecution reads authoring and applied copies from one immutable
 // revision. Equality includes labels and layout, so the status describes the
-// exact copied rule rather than only its possible response behavior.
+// exact copied executable rule rather than only its possible response behavior.
+// Authoring simulation examples are excluded from this comparison.
 func (r *Repo) ResponseRuleExecution(ctx context.Context, id int64) (ResponseRuleExecution, error) {
 	d, draft, err := r.responseRuleSnapshot(ctx, id)
 	if err != nil {
@@ -48,7 +49,7 @@ func (r *Repo) ResponseRuleExecution(ctx context.Context, id int64) (ResponseRul
 		state := "missing"
 		if i := slices.IndexFunc(authoring.Rules, func(rule responserules.Rule) bool { return rule.ID == copy.ID }); i >= 0 {
 			state = "outdated"
-			if reflect.DeepEqual(authoring.Rules[i], copy) {
+			if reflect.DeepEqual(responserules.ExecutionRule(authoring.Rules[i]), responserules.ExecutionRule(copy)) {
 				state = "current"
 			}
 		}
@@ -109,14 +110,15 @@ func (r *Repo) EditResponseRuleExecution(ctx context.Context, id, version int64,
 				}
 				return &InvalidError{Diagnostics: diagnostics}
 			}
-			if i >= 0 && reflect.DeepEqual(execution.Rules[i], authoring.Rules[source]) {
+			applied := responserules.ExecutionRule(authoring.Rules[source])
+			if i >= 0 && reflect.DeepEqual(execution.Rules[i], applied) {
 				result, err = detailTx(ctx, tx, id)
 				return err
 			}
 			if i < 0 {
-				execution.Rules = append(execution.Rules, authoring.Rules[source])
+				execution.Rules = append(execution.Rules, applied)
 			} else {
-				execution.Rules[i] = authoring.Rules[source]
+				execution.Rules[i] = applied
 			}
 			summary = "Apply response rule: " + ruleID
 		} else {

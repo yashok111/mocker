@@ -480,6 +480,8 @@ function Editor(props: ResponseRulesEditorProps & { parsed: ReturnType<typeof re
             onSelect={setSelection}
             onTrace={onTrace}
             onSource={props.onSource}
+            onChangeRule={(next) => !!update(next)}
+            examplesBlocked={blocked}
           />
         </>
       )}

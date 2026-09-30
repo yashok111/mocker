@@ -150,8 +150,10 @@ func (v *validator) nodes(operation map[string]any) error {
 		}
 		switch n.Type {
 		case "condition":
-			if err := overrides.ValidateConditions([]overrides.Condition{*n.Condition}); err != nil {
-				v.node(i, "invalid_condition", "Укажите источник, имя, оператор и значение условия.", "/condition")
+			if n.Condition != nil {
+				if err := overrides.ValidateConditions([]overrides.Condition{*n.Condition}); err != nil {
+					v.node(i, "invalid_condition", "Укажите источник, имя, оператор и значение условия.", "/condition")
+				}
 			}
 		case "delay":
 			if *n.DelayMs < 0 || *n.DelayMs > MaxDelayMs {

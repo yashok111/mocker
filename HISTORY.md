@@ -23,6 +23,61 @@ nobody said is what is NEXT and why exactly that. That role was carried by `HAND
 deleted in `a5818e2` as spent, and it moved nowhere: the next slice
 was designed outside the repository and did not appear in the repository at all.
 
+## Entity-result follow-ups (2026-09-30, local main)
+
+The `feat/entity-result-conditions` slice merged into local `main` includes all four
+owner-approved follow-ups: exact decimal ordering, comparing two captured entity
+results, bounded AND/OR groups, and named simulation examples persisted in the
+API's authored rule. FormatVersion remains 1. Numeric operators accept numbers
+only; group evaluation short-circuits left-to-right. Validation checks both
+operands in every leaf under producer/found dominance, including skipped leaves.
+Recursive trace records only evaluated children and exact operand JSON text.
+
+Examples use existing save/commands/CAS/revisions/import/export paths. They are
+omitted from applied copies and current/outdated comparison; example-only reapply
+creates no revision. REST/MCP simulations accept exactly one request or exampleId
+from the same saved/proposed snapshot. The editor offers recursive conditions,
+result RHS and named-case management through its existing document buffer.
+
+Strict duplicate-key admission is checked before full-document map conversion;
+MCP predicate schemas use finite referenced levels to keep tool descriptions
+compact. REST schemas generate a strict request/exampleId TypeScript union.
+Specs, plan, tests, reviews, final evidence and extended orders demo use the
+`docs/entity-result-followups-*` prefix. Scope excludes new entity operations,
+graph-wide transactions and arbitrary expressions. Remote publication is separate.
+
+## Conditions on entity results (2026-09-30, local main)
+
+`feat/entity-result-conditions` extends existing condition nodes with a mutually
+exclusive resultCondition payload. Captured entity get/list/create/update values
+are selected by JSON Pointer; equals/not_equals compare exact scalar/null values,
+and exists/not_exists distinguish an absent field from explicit null. Producers
+must dominate every consumer path, with found dominance for get/update. Missing
+comparison fields and incompatible non-null types fail execution.
+
+Exact number equality is shared through a leaf jsonx helper with state guards.
+Large neighboring integers, close fractions, arbitrary exponents and negative
+zero avoid float64. Legacy request conditions keep their text matching. The
+inspector preserves raw JSON and unavailable stored source selections; simulation
+reports actual/expected JSON, presence and the chosen edge. REST/MCP closed
+schemas and generated UI types preserve the condition payload XOR.
+
+Real SQLite HTTP and managed lifecycle regressions verify stored-value branching,
+save versus apply, stale CAS refusal and independent draft/published data. The
+full Go race suite passes 44 tested packages; UI suite/typecheck, vet/gofmt,
+UI lint/format and serialized production builds pass. golangci-lint is absent.
+Built-server/browser QA verifies exact trace, save/reload and reapply at desktop,
+tablet and mobile widths. Review found pointer backtracking and quadratic JSON
+whitespace trimming; linear scans and bounded regressions close both issues.
+Independent re-review has no remaining findings. The final UI suite passes
+1387 tests in 147 files. Review details are recorded in
+`docs/entity-result-conditions-review.md`; artifacts and the acceptance report
+use the `docs/entity-result-conditions-*` prefix.
+
+The initial slice excluded numeric ordering; the follow-ups above add it.
+Arbitrary expressions, further entity operations and a graph-wide transaction
+remain outside scope.
+
 ## Entity state diagrams in the HTTP mock (2026-09-30)
 
 `feat/entity-state-execution` stores each entity's lifecycle in a selected

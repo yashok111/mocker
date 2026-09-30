@@ -40,6 +40,9 @@ func (r *Repo) prepare(raw string) (*preparedDocument, error) {
 	}
 	root, err := decodeDocument(raw)
 	if err != nil {
+		if errors.Is(err, ErrInvalid) {
+			return nil, err
+		}
 		return nil, &InvalidError{Diagnostics: []Diagnostic{{Pointer: "", Message: err.Error(), Severity: "error"}}}
 	}
 	if _, err := statediagram.Decode(root); err != nil {
@@ -113,6 +116,9 @@ func decodeDocument(raw string) (map[string]any, error) {
 			return nil, err
 		}
 	}
+	if err := admitRawResponseRuleExtensions(data); err != nil {
+		return nil, err
+	}
 	decoder := jsonx.NewDecoder(bytes.NewReader(data))
 	decoder.UseNumber()
 	var root map[string]any
@@ -127,6 +133,48 @@ func decodeDocument(raw string) (map[string]any, error) {
 		return nil, fmt.Errorf("ожидается один документ")
 	}
 	return root, nil
+}
+
+// The generic document decoder collapses duplicate names. Admit raw rule
+// extensions first so predicate/ref ambiguity cannot disappear before their
+// strict codec runs. Other OpenAPI fields retain their established policy.
+func admitRawResponseRuleExtensions(data []byte) error {
+	trimmed := bytes.TrimSpace(data)
+	if len(trimmed) == 0 || trimmed[0] != '{' {
+		return nil
+	}
+	decoder := jsonx.NewDecoder(bytes.NewReader(data))
+	if _, err := decoder.Token(); err != nil {
+		return err
+	}
+	seen := map[string]bool{}
+	for decoder.More() {
+		token, err := decoder.Token()
+		if err != nil {
+			return err
+		}
+		var raw jsonx.RawMessage
+		if err := decoder.Decode(&raw); err != nil {
+			return err
+		}
+		switch token {
+		case responserules.Extension, responserules.ExecutionExtension:
+			name := token.(string)
+			if seen[name] {
+				return invalidField("/"+name, "повторяющееся расширение")
+			}
+			seen[name] = true
+			if name == responserules.Extension {
+				_, err = responserules.Decode(map[string]any{responserules.Extension: raw})
+			} else {
+				_, err = responserules.DecodeExecution(map[string]any{responserules.ExecutionExtension: raw})
+			}
+		}
+		if err != nil {
+			return responseRuleError(err)
+		}
+	}
+	return nil
 }
 
 type diagnosticSink func(string, string)

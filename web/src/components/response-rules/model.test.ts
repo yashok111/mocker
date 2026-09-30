@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { execFileSync } from "node:child_process";
 import {
   blankRule,
   headerTemplate,
@@ -12,6 +13,154 @@ import {
 
 const source = JSON.stringify({ openapi: "3.1.0", paths: {}, "x-neighbor": { keep: true } });
 describe("response rule document buffer", () => {
+  it("admits maximum-size scalar strings without rescanning interior whitespace", () => {
+    const probe = `
+      import { createServer } from "vite";
+      const server = await createServer({
+        configFile: false, root: process.cwd(), logLevel: "silent",
+        optimizeDeps: { noDiscovery: true, include: [] },
+        server: { middlewareMode: true, hmr: false, ws: false, watch: null },
+      });
+      try {
+        const { readRules } = await server.ssrLoadModule("/src/components/response-rules/model.ts");
+        const valueJSON = '"' + " ".repeat(65534) + '"';
+        const source = JSON.stringify({ "x-mocker-response-rules": { formatVersion: 1, rules: [{
+          id: "rule", name: "", edges: [], nodes: [{ id: "check", type: "condition", name: "", x: 0, y: 0,
+            resultCondition: { source: { source: "result", nodeId: "read" }, op: "equals", valueJSON },
+          }],
+        }] } });
+        const started = performance.now();
+        const admitted = readRules(source);
+        const milliseconds = performance.now() - started;
+        if (admitted.rules[0].nodes[0].resultCondition.valueJSON !== valueJSON)
+          throw new Error("Scalar string changed");
+        process.stdout.write(JSON.stringify({ milliseconds }));
+      } finally { await server.close(); }
+    `;
+    const output = execFileSync(process.execPath, ["--input-type=module", "--eval", probe], {
+      encoding: "utf8",
+      timeout: 3000,
+      killSignal: "SIGKILL",
+    });
+    expect(JSON.parse(output).milliseconds).toBeLessThan(250);
+  });
+  it("bounds admission of repeated pointer segments and rejects invalid escapes", () => {
+    // Load the real admission module in a killable process so a future
+    // backtracking regression cannot block the test worker or browser loop.
+    const probe = `
+      import { createServer } from "vite";
+      import { resolve } from "node:path";
+      const server = await createServer({
+        configFile: false,
+        root: process.cwd(),
+        logLevel: "silent",
+        optimizeDeps: { noDiscovery: true, include: [] },
+        resolve: { alias: { "@": resolve(process.cwd(), "src") } },
+        server: { middlewareMode: true, hmr: false, ws: false, watch: null },
+      });
+      try {
+        const { readRules } = await server.ssrLoadModule("/src/components/response-rules/model.ts");
+        const documentFor = (pointer) => JSON.stringify({
+          "x-mocker-response-rules": { formatVersion: 1, rules: [{
+            id: "rule", name: "", edges: [], nodes: [{
+              id: "check", type: "condition", name: "", x: 0, y: 0,
+              resultCondition: { source: { source: "result", nodeId: "read", pointer }, op: "exists" },
+            }],
+          }] },
+        });
+        const valid = "/".repeat(2048);
+        const admitted = readRules(documentFor(valid));
+        if (admitted.rules[0].nodes[0].resultCondition.source.pointer !== valid)
+          throw new Error("Valid empty pointer segments changed");
+        for (const pointer of ["/".repeat(32) + "~2", "/".repeat(2046) + "~2", "/".repeat(2047) + "~", "/".repeat(2049)]) {
+          let rejected = false;
+          try { readRules(documentFor(pointer)); }
+          catch { rejected = true; }
+          if (!rejected) throw new Error("Invalid or oversized pointer was accepted");
+        }
+        process.stdout.write("admitted-valid/rejected-invalid");
+      } finally { await server.close(); }
+    `;
+    expect(
+      execFileSync(process.execPath, ["--input-type=module", "--eval", probe], {
+        encoding: "utf8",
+        timeout: 3000,
+        killSignal: "SIGKILL",
+      }),
+    ).toBe("admitted-valid/rejected-invalid");
+  });
+  it.each(["9007199254740993", "1e999999999999999999999", "null", '"paid"', "false"])(
+    "roundtrips result predicates with exact scalar JSON %s",
+    (valueJSON) => {
+      const rule = {
+        ...blankRule(),
+        nodes: [
+          {
+            id: "check",
+            type: "condition",
+            name: "Проверка",
+            x: 0,
+            y: 0,
+            resultCondition: {
+              source: { source: "result", nodeId: "read", pointer: "/n" },
+              op: "equals",
+              valueJSON,
+            },
+          },
+        ],
+      } as unknown as ResponseRule;
+      expect(readRules(writeRules(source, [rule])).rules[0]).toEqual(rule);
+    },
+  );
+  it.each([
+    { source: { source: "result", nodeId: "read" }, op: "exists" },
+    { source: { source: "result", nodeId: "read", pointer: "/a~1b/~0/0" }, op: "not_exists" },
+  ])("admits result presence predicates without expected values", (resultCondition) => {
+    const rule = {
+      ...blankRule(),
+      nodes: [{ id: "check", type: "condition", name: "", x: 0, y: 0, resultCondition }],
+    } as unknown as ResponseRule;
+    expect(readRules(writeRules(source, [rule])).rules[0]).toEqual(rule);
+  });
+  it.each([
+    { source: { source: "body", pointer: "/n" }, op: "exists" },
+    { source: { source: "result", nodeId: "read", name: "unexpected" }, op: "exists" },
+    { source: { source: "result", nodeId: "read", pointer: "/bad~2escape" }, op: "exists" },
+    { source: { source: "result", nodeId: "read" }, op: "contains", valueJSON: '"a"' },
+    { source: { source: "result", nodeId: "read" }, op: "equals" },
+    { source: { source: "result", nodeId: "read" }, op: "exists", valueJSON: "null" },
+    { source: { source: "result", nodeId: "read" }, op: "not_exists", valueJSON: null },
+    ...["{}", "[]", "01", "undefined", "1 2", ""].map((valueJSON) => ({
+      source: { source: "result", nodeId: "read" },
+      op: "equals",
+      valueJSON,
+    })),
+  ])("refuses malformed result predicates", (resultCondition) => {
+    const rule = {
+      ...blankRule(),
+      nodes: [{ id: "check", type: "condition", name: "", x: 0, y: 0, resultCondition }],
+    };
+    expect(() =>
+      readRules(JSON.stringify({ [EXTENSION]: { formatVersion: 1, rules: [rule] } })),
+    ).toThrow();
+  });
+  it("refuses overlapping request/result payloads and result payloads on other nodes", () => {
+    const resultCondition = { source: { source: "result", nodeId: "read" }, op: "exists" };
+    const node = { id: "check", type: "condition", name: "", x: 0, y: 0, resultCondition };
+    for (const candidate of [
+      { ...node, condition: { in: "body", name: "n", op: "exists" } },
+      { ...node, type: "start" },
+      { ...node, resultCondition: null },
+    ]) {
+      expect(() =>
+        readRules(
+          JSON.stringify({
+            [EXTENSION]: { formatVersion: 1, rules: [{ ...blankRule(), nodes: [candidate] }] },
+          }),
+        ),
+      ).toThrow();
+    }
+  });
   it("roundtrips entity refs and dynamic response bodies without changing raw JSON numbers", () => {
     const rule = {
       ...blankRule(),
@@ -156,7 +305,7 @@ describe("response rule document buffer", () => {
     if (node.type === "response")
       node.response.mediaType = 'application/problem+json; charset="utf-8"';
     const condition = rule.nodes.find((item) => item.type === "condition")!;
-    if (condition.type === "condition")
+    if (condition.type === "condition" && "condition" in condition)
       condition.condition = { in: "body", name: "", op: "equals" };
     expect(readRules(writeRules(source, [rule])).rules).toEqual([rule]);
   });

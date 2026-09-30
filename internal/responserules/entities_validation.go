@@ -9,6 +9,9 @@ type nodeValueRef struct {
 
 func nodeValueRefs(n Node) []nodeValueRef {
 	refs := []nodeValueRef{}
+	if n.ResultCondition != nil {
+		refs = append(refs, resultConditionRefs(*n.ResultCondition, "/resultCondition", 1)...)
+	}
 	if n.Response != nil && n.Response.BodyFrom != nil {
 		refs = append(refs, nodeValueRef{*n.Response.BodyFrom, "/response/bodyFrom"})
 	}
@@ -24,6 +27,28 @@ func nodeValueRefs(n Node) []nodeValueRef {
 				refs = append(refs, nodeValueRef{r, fmt.Sprintf("/entity/scope/%d", i)})
 			}
 		}
+	}
+	return refs
+}
+
+func resultConditionRefs(c ResultCondition, pointer string, level int) []nodeValueRef {
+	if level > MaxResultConditionDepth {
+		return nil
+	}
+	if c.All != nil || c.Any != nil {
+		name, children := "all", c.All
+		if c.Any != nil {
+			name, children = "any", c.Any
+		}
+		refs := []nodeValueRef{}
+		for i, child := range children {
+			refs = append(refs, resultConditionRefs(child, fmt.Sprintf("%s/%s/%d", pointer, name, i), level+1)...)
+		}
+		return refs
+	}
+	refs := []nodeValueRef{{c.Source, pointer + "/source"}}
+	if c.ValueFrom != nil {
+		refs = append(refs, nodeValueRef{*c.ValueFrom, pointer + "/valueFrom"})
 	}
 	return refs
 }
