@@ -6,8 +6,8 @@ metadata:
   workflowVersion: "1"
   requiredModelSchemaVersions: "[]"
   requiredCapabilities: "[]"
-  guideSetId: "sha256:78d12f5701030ccfbcccf4969ceae196b97d20f2fe4262e10d9897fbde6b8d7f"
-  manifestHash: "sha256:78d12f5701030ccfbcccf4969ceae196b97d20f2fe4262e10d9897fbde6b8d7f"
+  guideSetId: "sha256:bed6895643e95b8de9162f074a8d52bb1dfebcfc28c0e4a4737d379a39d32412"
+  manifestHash: "sha256:bed6895643e95b8de9162f074a8d52bb1dfebcfc28c0e4a4737d379a39d32412"
 ---
 
 # mocker
@@ -70,9 +70,13 @@ uses the workspace procedure below; API design and saved sequences begin with
 its before-write compatibility handshake. The root routing workflow has no
 backend capability requirements, so legacy mock tasks remain usable. Backend
 project preparation must select a compatible pinned guide set before writes.
-Source graph import instead begins with `references/backend/import.md` or
-`get_guide {topic:"backend-import"}` and selects the complete pinned
-`mocker-backend-import` workflow before any import write.
+Source graph import/reimport or pinned structural comparison selects the installed
+`mocker-backend-import` leaf when available. Root-only installations use the
+generated compatibility copy `references/backend/import.md`, or discover
+`get_guide {topic:"backend-import"}`. Select that complete pinned workflow before
+any import write; its model/protocol/recovery/examples details come from the same
+selected server guide set. Mock response changes keep the workspace procedure and
+do not need source import or a full backend topic load.
 
 ## Mock workspace workflow
 

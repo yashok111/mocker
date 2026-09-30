@@ -112,7 +112,7 @@ ui-gen: ## Regenerate the API client from api/openapi.json (orval) and the route
 ui-lint: ## oxlint + oxfmt --check over web/
 	cd web && corepack yarn lint && corepack yarn format:check
 
-guide-sync: ## Generate content-addressed manifest and embedded guides from skills/mocker/
+guide-sync: ## Generate guides, aliases and manifests from canonical owners in skills/mocker/guide-sources.json
 	python3 scripts/guide-sync.py
 
 ui-test: ## vitest + tsc --noEmit over web/

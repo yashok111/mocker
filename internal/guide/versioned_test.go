@@ -120,26 +120,27 @@ func TestGuideSyncDetectsChangesAndGeneratesStableIdentity(t *testing.T) {
 	if err := os.WriteFile(scriptPath, script, 0600); err != nil {
 		t.Fatal(err)
 	}
-	err = filepath.WalkDir("../../skills/mocker", func(path string, entry os.DirEntry, walkErr error) error {
-		if walkErr != nil {
-			return walkErr
-		}
-		relative, err := filepath.Rel("../../skills/mocker", path)
-		if err != nil {
-			return err
-		}
-		target := filepath.Join(root, "skills/mocker", relative)
-		if entry.IsDir() {
-			return os.MkdirAll(target, 0700)
-		}
-		data, err := os.ReadFile(path)
-		if err != nil {
-			return err
-		}
-		return os.WriteFile(target, data, 0600)
-	})
+	declaration, err := os.ReadFile("../../skills/mocker/guide-sources.json")
 	if err != nil {
 		t.Fatal(err)
+	}
+	var sources guideSourceDeclarations
+	if err := json.Unmarshal(declaration, &sources); err != nil {
+		t.Fatal(err)
+	}
+	packages := map[string]bool{"mocker": true}
+	for _, source := range sources.Sources {
+		if source.Package != "" {
+			packages[source.Package] = true
+		}
+		for _, copy := range source.Copies {
+			packages[copy.Package] = true
+		}
+	}
+	for name := range packages {
+		if err := os.CopyFS(filepath.Join(root, "skills", name), os.DirFS(filepath.Join("../../skills", name))); err != nil {
+			t.Fatal(err)
+		}
 	}
 	run := func(args ...string) ([]byte, error) {
 		return exec.Command("python3", append([]string{scriptPath}, args...)...).CombinedOutput()

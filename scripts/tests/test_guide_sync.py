@@ -1,0 +1,337 @@
+"""Exercise the published guide generator in isolated repository trees."""
+
+import json
+import pathlib
+import shutil
+import subprocess
+import tempfile
+import unittest
+
+REPO = pathlib.Path(__file__).resolve().parents[2]
+
+
+def skill(name, workflow):
+    metadata = {
+        "workflowId": workflow["workflowId"],
+        "workflowVersion": workflow["workflowVersion"],
+        "requiredModelSchemaVersions": json.dumps(
+            workflow["requiredModelSchemaVersions"]
+        ),
+        "requiredCapabilities": json.dumps(workflow["requiredCapabilities"]),
+    }
+    fields = "\n".join(
+        f"  {key}: {json.dumps(value)}" for key, value in metadata.items()
+    )
+    return (
+        f"---\nname: {name}\ndescription: Isolated fixture workflow.\n"
+        f"metadata:\n{fields}\n---\n\n# {name}\n\nFixture instructions.\n"
+    )
+
+
+class GuideSyncPackagingTests(unittest.TestCase):
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temporary.cleanup)
+        self.root = pathlib.Path(self.temporary.name)
+        for directory in (
+            "scripts",
+            "skills/mocker",
+            "skills/mocker-backend-import",
+            "internal/guide",
+        ):
+            (self.root / directory).mkdir(parents=True)
+        self.script = self.root / "scripts/guide-sync.py"
+        shutil.copyfile(REPO / "scripts/guide-sync.py", self.script)
+        routing = {
+            "workflowId": "mocker-routing",
+            "workflowVersion": "1",
+            "entrypoint": "overview",
+            "requiredModelSchemaVersions": [],
+            "requiredCapabilities": [],
+        }
+        importing = {
+            "workflowId": "mocker-backend-import",
+            "workflowVersion": "2",
+            "entrypoint": "backend-import",
+            "requiredModelSchemaVersions": ["1"],
+            "requiredCapabilities": ["backend-source-import"],
+        }
+        self.leaf = self.root / "skills/mocker-backend-import/SKILL.md"
+        (self.root / "skills/mocker/SKILL.md").write_text(skill("mocker", routing))
+        self.leaf.write_text(skill("mocker-backend-import", importing))
+        self.declaration = self.root / "skills/mocker/guide-sources.json"
+        self.alias = self.root / "skills/mocker/references/backend/import.md"
+        self.declarations = {
+            "sources": [
+                {
+                    "topic": "overview",
+                    "source": "SKILL.md",
+                    "embedded": "overview.md",
+                    "workflowId": "mocker-routing",
+                },
+                {
+                    "topic": "backend-import",
+                    "package": "mocker-backend-import",
+                    "source": "SKILL.md",
+                    "embedded": "backend-import.md",
+                    "workflowId": "mocker-backend-import",
+                    "copies": [
+                        {"package": "mocker", "path": "references/backend/import.md"}
+                    ],
+                },
+            ],
+            "workflows": [routing, importing],
+        }
+
+    def run_sync(self, *arguments):
+        self.declaration.write_text(json.dumps(self.declarations))
+        return subprocess.run(
+            ["python3", str(self.script), *arguments],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+    def generated_files(self):
+        return {
+            path.relative_to(self.root).as_posix(): path.read_bytes()
+            for path in self.root.rglob("*")
+            if path.is_file() and path not in (self.script, self.declaration)
+        }
+
+    def generate(self):
+        result = self.run_sync()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        return result.stdout.strip()
+
+    def assert_invalid_without_changes(self, message):
+        self.declaration.write_text(json.dumps(self.declarations))
+        before = self.generated_files()
+        directories = {
+            p.relative_to(self.root) for p in self.root.rglob("*") if p.is_dir()
+        }
+        result = self.run_sync()
+        self.assertNotEqual(result.returncode, 0, result.stdout)
+        self.assertIn(message, result.stderr)
+        self.assertEqual(self.generated_files(), before)
+        self.assertEqual(
+            {p.relative_to(self.root) for p in self.root.rglob("*") if p.is_dir()},
+            directories,
+            "validation failure created output directories",
+        )
+
+    def test_leaf_and_legacy_copy_share_generated_identity(self):
+        identity = self.generate()
+        leaf = self.leaf.read_bytes()
+        self.assertEqual(leaf, self.alias.read_bytes())
+        self.assertEqual(
+            leaf, (self.root / "internal/guide/backend-import.md").read_bytes()
+        )
+        self.assertIn(f'guideSetId: "{identity}"'.encode(), leaf)
+        self.assertEqual(self.run_sync("--check").returncode, 0)
+
+    def test_default_package_preserves_root_only_declarations(self):
+        self.declarations["sources"] = self.declarations["sources"][:1]
+        self.declarations["workflows"] = self.declarations["workflows"][:1]
+        self.generate()
+        self.assertEqual(
+            (self.root / "skills/mocker/SKILL.md").read_bytes(),
+            (self.root / "internal/guide/overview.md").read_bytes(),
+        )
+        self.assertEqual(self.run_sync("--check").returncode, 0)
+
+    def test_repeat_generation_changes_no_bytes(self):
+        identity = self.generate()
+        before = self.generated_files()
+        self.assertEqual(self.generate(), identity)
+        self.assertEqual(self.generated_files(), before)
+
+    def test_source_change_changes_set_and_alias(self):
+        identity = self.generate()
+        self.leaf.write_text(self.leaf.read_text() + "\nChanged procedure.\n")
+        self.assertNotEqual(self.generate(), identity)
+        self.assertEqual(self.leaf.read_bytes(), self.alias.read_bytes())
+
+    def test_copy_declaration_changes_set_without_adding_topic(self):
+        identity = self.generate()
+        self.declarations["sources"][1]["copies"].append(
+            {"package": "mocker", "path": "references/second-import.md"}
+        )
+        self.assertNotEqual(self.generate(), identity)
+        manifest = json.loads((self.root / "internal/guide/manifest.json").read_text())
+        self.assertEqual(len(manifest["sources"]), 2)
+        self.assertEqual(len(manifest["workflows"][1]["topics"]), 1)
+
+    def test_check_detects_alias_drift_without_mutating_files(self):
+        self.generate()
+        self.alias.write_text("Drifted alias.\n")
+        before = self.generated_files()
+        result = self.run_sync("--check")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("references/backend/import.md", result.stderr)
+        self.assertEqual(self.generated_files(), before)
+
+    def test_missing_canonical_source_fails_before_output_changes(self):
+        self.generate()
+        self.leaf.unlink()
+        self.assert_invalid_without_changes("missing canonical source")
+
+    def test_metadata_mismatch_fails_before_output_changes(self):
+        self.generate()
+        self.leaf.write_text(
+            self.leaf.read_text().replace(
+                'workflowVersion: "2"', 'workflowVersion: "99"'
+            )
+        )
+        self.assert_invalid_without_changes("incorrect workflowVersion")
+
+    def test_duplicate_topic_fails_before_output_changes(self):
+        self.generate()
+        self.declarations["sources"][1]["topic"] = "overview"
+        self.assert_invalid_without_changes("duplicate topic")
+
+    def test_duplicate_embedded_destination_fails_before_output_changes(self):
+        self.generate()
+        self.declarations["sources"][1]["embedded"] = "overview.md"
+        self.assert_invalid_without_changes("destination collision")
+
+    def test_copy_cannot_alias_another_canonical_source(self):
+        self.generate()
+        self.declarations["sources"][1]["copies"][0]["path"] = "SKILL.md"
+        self.assert_invalid_without_changes("destination collision")
+
+    def test_copy_cannot_alias_itself_via_symlink(self):
+        self.generate()
+        link = self.root / "skills/mocker-backend-import/import-owner.md"
+        link.symlink_to(self.leaf)
+        self.declarations["sources"][1]["copies"][0]["package"] = (
+            "mocker-backend-import"
+        )
+        self.declarations["sources"][1]["copies"][0]["path"] = "import-owner.md"
+        self.assert_invalid_without_changes("destination collision")
+
+    def test_copy_cannot_be_declared_as_another_canonical_source(self):
+        self.generate()
+        self.declarations["sources"].append(
+            {
+                "topic": "duplicate-import",
+                "source": "references/backend/import.md",
+                "embedded": "duplicate-import.md",
+                "workflowId": "mocker-backend-import",
+            }
+        )
+        self.assert_invalid_without_changes("destination collision")
+
+    def test_output_file_cannot_also_be_another_outputs_directory(self):
+        self.generate()
+        self.declarations["sources"][1]["copies"] = [
+            {"package": "mocker", "path": "new-output.md"},
+            {"package": "mocker", "path": "new-output.md/nested.md"},
+        ]
+        self.assert_invalid_without_changes("destination collision")
+
+    def test_canonical_source_cannot_be_a_reserved_manifest(self):
+        self.generate()
+        self.declarations["sources"].append(
+            {
+                "topic": "reserved-source",
+                "source": "guide-manifest.json",
+                "embedded": "reserved-source.md",
+                "workflowId": "mocker-routing",
+            }
+        )
+        self.assert_invalid_without_changes("destination collision")
+
+    def test_copy_cannot_write_a_reserved_manifest(self):
+        self.generate()
+        self.declarations["sources"][1]["copies"][0]["path"] = "guide-manifest.json"
+        self.assert_invalid_without_changes("destination collision")
+
+    def test_copy_cannot_write_declaration_input(self):
+        self.generate()
+        self.declarations["sources"][1]["copies"][0]["path"] = "guide-sources.json"
+        self.assert_invalid_without_changes("destination collision")
+
+    def test_canonical_source_cannot_write_declaration_input(self):
+        self.generate()
+        self.declarations["sources"].append(
+            {
+                "topic": "reserved-source",
+                "source": "guide-sources.json",
+                "embedded": "reserved-source.md",
+                "workflowId": "mocker-routing",
+            }
+        )
+        self.assert_invalid_without_changes("destination collision")
+
+    def test_reserved_input_alias_is_detected_by_resolved_path(self):
+        self.generate()
+        link = self.root / "skills/mocker/declaration-alias.md"
+        link.symlink_to(self.declaration)
+        self.declarations["sources"][1]["copies"][0]["path"] = "declaration-alias.md"
+        self.assert_invalid_without_changes("destination collision")
+
+    def test_invalid_source_and_copy_paths_fail_before_output_changes(self):
+        self.generate()
+        for path in ("/absolute.md", "../escaped.md", "a/./bad.md", "a//bad.md", ""):
+            for target in ("source", "copy"):
+                with self.subTest(path=path, target=target):
+                    original = json.loads(json.dumps(self.declarations))
+                    if target == "source":
+                        self.declarations["sources"][1]["source"] = path
+                    else:
+                        self.declarations["sources"][1]["copies"][0]["path"] = path
+                    self.assert_invalid_without_changes("relative POSIX path")
+                    self.declarations = original
+
+    def test_invalid_package_names_fail_before_output_changes(self):
+        self.generate()
+        for package in ("../mocker", "Mocker", "mocker--import", "", "mocker/import"):
+            with self.subTest(package=package):
+                self.declarations["sources"][1]["package"] = package
+                self.assert_invalid_without_changes("invalid package")
+
+    def test_embedded_paths_are_plain_markdown_filenames(self):
+        self.generate()
+        for filename in (
+            "../escaped.md",
+            "/escaped.md",
+            "nested/topic.md",
+            "topic.json",
+        ):
+            with self.subTest(filename=filename):
+                self.declarations["sources"][1]["embedded"] = filename
+                self.assert_invalid_without_changes("plain .md filename")
+
+    def test_symlink_escape_fails_before_output_changes(self):
+        self.generate()
+        outside = self.root / "outside"
+        outside.mkdir()
+        (outside / "guide.md").write_text("# Outside\n")
+        link = self.root / "skills/mocker-backend-import/escape"
+        link.symlink_to(outside, target_is_directory=True)
+        self.declarations["sources"][1]["source"] = "escape/guide.md"
+        self.assert_invalid_without_changes("escapes package")
+
+    def test_embedded_symlink_escape_fails_before_output_changes(self):
+        self.generate()
+        outside = self.root / "outside.md"
+        outside.write_text("# Outside\n")
+        (self.root / "internal/guide/backend-import.md").unlink()
+        (self.root / "internal/guide/backend-import.md").symlink_to(outside)
+        self.assert_invalid_without_changes("escapes embedded directory")
+
+    def test_invalid_workflow_fails_before_output_changes(self):
+        self.generate()
+        self.declarations["workflows"][1]["entrypoint"] = "unavailable"
+        self.assert_invalid_without_changes("unknown entrypoint")
+
+    def test_missing_output_directories_are_created_only_after_validation(self):
+        shutil.rmtree(self.root / "internal/guide")
+        self.generate()
+        self.assertTrue(self.alias.is_file())
+        self.assertTrue((self.root / "internal/guide/manifest.json").is_file())
+
+
+if __name__ == "__main__":
+    unittest.main()

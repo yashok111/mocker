@@ -6,8 +6,8 @@ metadata:
   workflowVersion: "1"
   requiredModelSchemaVersions: "[\"1\"]"
   requiredCapabilities: "[\"backend-projects\",\"backend-project-metadata\",\"backend-revisions\"]"
-  guideSetId: "sha256:78d12f5701030ccfbcccf4969ceae196b97d20f2fe4262e10d9897fbde6b8d7f"
-  manifestHash: "sha256:78d12f5701030ccfbcccf4969ceae196b97d20f2fe4262e10d9897fbde6b8d7f"
+  guideSetId: "sha256:bed6895643e95b8de9162f074a8d52bb1dfebcfc28c0e4a4737d379a39d32412"
+  manifestHash: "sha256:bed6895643e95b8de9162f074a8d52bb1dfebcfc28c0e4a4737d379a39d32412"
 ---
 
 # Backend project preparation
@@ -17,10 +17,14 @@ metadata, list projects and revisions, and inspect the empty initial revision.
 Creation saves project version 1 and its first immutable revision atomically.
 Coverage is partial, its denominator is unknown, and the explicit pre-import
 gap means an empty revision cannot establish absence of backend behavior.
-Source snapshot import/reimport and pinned comparison use the separate `mocker-backend-import`
-workflow in `references/backend/import.md` or pinned `backend-import` topic.
+Source snapshot import/reimport and pinned comparison use the independently
+installable `mocker-backend-import` leaf, the root package's generated
+`references/backend/import.md` compatibility copy, or pinned `backend-import` topic.
 Select that complete workflow before import writes. This project-preparation
-procedure does not import sources. Jobs and proposals remain future functionality.
+procedure does not import sources. Import's backend-model/import-protocol/recovery/
+examples topics use its selected set and import identity; this backend-overview
+topic keeps the separate project-preparation identity. Jobs and proposals remain
+future functionality.
 
 ## Before the first write
 

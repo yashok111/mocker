@@ -46,6 +46,7 @@ func addGuideTools(s *sdk.Server) {
 			"assets); \"http\" (the same over curl for scripts and CI, plus MCP client config). " +
 			"For backend project preparation read \"backend-overview\" and pin guideSetId after capability discovery. Unknown guide sets fail explicitly. " +
 			"For source import, same-provider reconciliation and pinned revision comparison select the compatible \"backend-import\" workflow and its guideSetId. " +
+			"Load its shared topics progressively from that same set: \"backend-model\" for foundation records and evidence, \"backend-import-protocol\" before staging, \"backend-recovery\" before commit/resume, and \"backend-examples\" for worked fixtures. " +
 			"Static text: calls no admin route, reads no workspace, changes nothing.",
 		Annotations: &sdk.ToolAnnotations{ReadOnlyHint: true, IdempotentHint: true},
 	}, handleGetGuide)
@@ -54,7 +55,7 @@ func addGuideTools(s *sdk.Server) {
 // GetGuideInput is get_guide's input.
 type GetGuideInput struct {
 	GuideSetID string `json:"guideSetId,omitempty" jsonschema:"optional immutable guide set selector; unknown selectors fail explicitly"`
-	Topic      string `json:"topic,omitempty" jsonschema:"one of overview, tools, shapes, cookbook, http, design, functions, backend-overview, backend-import; omitted means overview"`
+	Topic      string `json:"topic,omitempty" jsonschema:"one of overview, tools, shapes, cookbook, http, design, functions, backend-overview, backend-import, backend-model, backend-import-protocol, backend-recovery, backend-examples; omitted means overview"`
 }
 
 // GetGuideOutput is get_guide's declared output.

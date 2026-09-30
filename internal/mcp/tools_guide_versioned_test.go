@@ -1,7 +1,9 @@
 package mcp
 
 import (
+	"crypto/sha256"
 	"encoding/json/v2"
+	"fmt"
 	"github.com/yashok111/mocker/internal/guide"
 	"strings"
 	"testing"
@@ -25,6 +27,60 @@ func TestGetGuideSelection(t *testing.T) {
 			t.Errorf("legacy %s: %#v, %v", topic, legacy, err)
 		}
 	}
+}
+
+func TestStandaloneImportReferencesThroughPinnedMCP(t *testing.T) {
+	for _, topic := range []string{"backend-import", "backend-model", "backend-import-protocol", "backend-recovery", "backend-examples"} {
+		out, message := callGuide(t, `{"topic":"`+topic+`","guideSetId":"`+guide.CurrentGuideSetID()+`"}`)
+		if message != "" {
+			t.Fatal(message)
+		}
+		wantHash := fmt.Sprintf("sha256:%x", sha256.Sum256([]byte(out.Markdown)))
+		if out.WorkflowID != "mocker-backend-import" || out.WorkflowVersion != "2" || out.GuideSetID != guide.CurrentGuideSetID() || out.ManifestHash != guide.CurrentGuideSetID() || out.ContentHash != wantHash {
+			t.Fatalf("pinned topic %s: %#v", topic, out)
+		}
+	}
+}
+
+func TestObsoleteB03GuideSetDoesNotSubstitutePackagedImport(t *testing.T) {
+	const previous = "sha256:78d12f5701030ccfbcccf4969ceae196b97d20f2fe4262e10d9897fbde6b8d7f"
+	_, _, err := handleGetGuide(t.Context(), nil, GetGuideInput{Topic: "backend-import", GuideSetID: previous})
+	if err == nil || !strings.Contains(err.Error(), "unknown guide set") {
+		t.Fatalf("obsolete B0.3 procedure substituted: %v", err)
+	}
+}
+
+func TestStandaloneImportTopicDiscovery(t *testing.T) {
+	handler := newTestEndpoint(t).Handler()
+	response := doMCP(t, handler, `{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}`, map[string]string{"Authorization": "Bearer " + testKey})
+	var envelope struct {
+		Result struct {
+			Tools []struct {
+				Name        string `json:"name"`
+				Description string `json:"description"`
+				InputSchema struct {
+					Properties map[string]struct {
+						Description string `json:"description"`
+					} `json:"properties"`
+				} `json:"inputSchema"`
+			} `json:"tools"`
+		} `json:"result"`
+	}
+	if err := json.Unmarshal(response.Body.Bytes(), &envelope); err != nil {
+		t.Fatal(err)
+	}
+	for _, tool := range envelope.Result.Tools {
+		if tool.Name != "get_guide" {
+			continue
+		}
+		for _, topic := range []string{"backend-import", "backend-model", "backend-import-protocol", "backend-recovery", "backend-examples"} {
+			if !strings.Contains(tool.Description, topic) || !strings.Contains(tool.InputSchema.Properties["topic"].Description, topic) {
+				t.Errorf("guide discovery omits %s", topic)
+			}
+		}
+		return
+	}
+	t.Fatal("get_guide discovery tool missing")
 }
 
 func TestGetGuideSelectionThroughTransport(t *testing.T) {

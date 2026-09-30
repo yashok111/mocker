@@ -1,42 +1,67 @@
 package guide
 
 import (
+	"cmp"
+	"encoding/json/v2"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 )
 
-// skillFiles maps each embedded copy to its owner under skills/mocker/.
-// The test walks up from the package directory, so it runs from `go test`
-// in any working directory the module allows.
-var skillFiles = map[string]string{
-	"overview.md": "SKILL.md",
-	"tools.md":    "references/tools.md",
-	"shapes.md":   "references/shapes.md",
-	"cookbook.md": "references/cookbook.md",
-	"http.md":     "references/http.md",
-	"design.md":   "references/design.md",
+type guideSourceDeclaration struct {
+	Topic    string `json:"topic"`
+	Package  string `json:"package"`
+	Source   string `json:"source"`
+	Embedded string `json:"embedded"`
+	Copies   []struct {
+		Package string `json:"package"`
+		Path    string `json:"path"`
+	} `json:"copies"`
 }
 
-// TestEmbeddedCopiesMatchTheSkill is the whole reason the copies are
-// allowed to exist: the skill directory is the one owner, and a copy that
-// drifts is a server telling an agent something the installed skill does
-// not. `make guide-sync` refreshes the copies.
+type guideSourceDeclarations struct {
+	Sources []guideSourceDeclaration `json:"sources"`
+}
+
+// Every source and compatibility alias follows the manifest's package owner,
+// so new topics do not require a second manually maintained parity table.
 func TestEmbeddedCopiesMatchTheSkill(t *testing.T) {
 	t.Parallel()
-	root := filepath.Join("..", "..", "skills", "mocker")
-	for embedded, source := range skillFiles {
-		want, err := os.ReadFile(filepath.Join(root, source))
+	raw, ok := Raw("manifest.json")
+	if !ok {
+		t.Fatal("embedded guide manifest missing")
+	}
+	var declarations guideSourceDeclarations
+	if err := json.Unmarshal([]byte(raw), &declarations); err != nil {
+		t.Fatal(err)
+	}
+	if len(declarations.Sources) == 0 {
+		t.Fatal("manifest declares no canonical guide sources")
+	}
+	root := filepath.Join("..", "..", "skills")
+	for _, source := range declarations.Sources {
+		owner := filepath.Join(root, cmp.Or(source.Package, "mocker"), source.Source)
+		want, err := os.ReadFile(owner)
 		if err != nil {
-			t.Fatalf("read %s: %v", source, err)
+			t.Fatalf("read %s: %v", owner, err)
 		}
-		got, ok := Raw(embedded)
+		got, ok := Raw(source.Embedded)
 		if !ok {
-			t.Fatalf("embedded %s missing", embedded)
+			t.Fatalf("embedded %s missing", source.Embedded)
 		}
 		if got != string(want) {
-			t.Errorf("internal/guide/%s differs from skills/mocker/%s — run `make guide-sync`", embedded, source)
+			t.Errorf("internal/guide/%s differs from %s — run `make guide-sync`", source.Embedded, owner)
+		}
+		for _, copy := range source.Copies {
+			alias := filepath.Join(root, copy.Package, copy.Path)
+			data, err := os.ReadFile(alias)
+			if err != nil {
+				t.Fatalf("read compatibility copy %s: %v", alias, err)
+			}
+			if string(data) != string(want) {
+				t.Errorf("compatibility copy %s differs from canonical %s", alias, owner)
+			}
 		}
 	}
 }

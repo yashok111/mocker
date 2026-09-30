@@ -50,8 +50,39 @@
     },
     {
       "topic": "backend-import",
-      "source": "references/backend/import.md",
+      "package": "mocker-backend-import",
+      "source": "SKILL.md",
       "embedded": "backend-import.md",
+      "workflowId": "mocker-backend-import",
+      "copies": [
+        {
+          "package": "mocker",
+          "path": "references/backend/import.md"
+        }
+      ]
+    },
+    {
+      "topic": "backend-model",
+      "source": "references/backend/model.md",
+      "embedded": "backend-model.md",
+      "workflowId": "mocker-backend-import"
+    },
+    {
+      "topic": "backend-import-protocol",
+      "source": "references/backend/import-protocol.md",
+      "embedded": "backend-import-protocol.md",
+      "workflowId": "mocker-backend-import"
+    },
+    {
+      "topic": "backend-recovery",
+      "source": "references/backend/recovery.md",
+      "embedded": "backend-recovery.md",
+      "workflowId": "mocker-backend-import"
+    },
+    {
+      "topic": "backend-examples",
+      "source": "references/backend/examples.md",
+      "embedded": "backend-examples.md",
       "workflowId": "mocker-backend-import"
     }
   ],

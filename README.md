@@ -17,14 +17,26 @@ it, it only gives a quick way in.
 | who | where |
 |---|---|
 | an operator at the admin panel | [`docs/USER-GUIDE.md`](docs/USER-GUIDE.md) (Russian, the product's language) — also rendered inside the panel at `/guide` |
-| an agent driving mocker over MCP | [`skills/mocker/`](skills/mocker/SKILL.md) — a skill: the mental model, the order of calls, the rules that bite, and five references (every tool, every document shape, a cookbook, the same over curl). The running server serves the identical text: `initialize` returns a short orientation in `instructions`, and the `get_guide` tool returns the skill by topic |
+| an agent driving mocker over MCP | [`mocker`](skills/mocker/SKILL.md) routes mock configuration, API design and backend project tasks; [`mocker-backend-import`](skills/mocker-backend-import/SKILL.md) independently supplies foundation source import/reconciliation and pinned comparison. The server serves the same procedures and focused references through `get_guide`; `initialize` gives a short orientation |
 | a script or CI job | [`skills/mocker/references/http.md`](skills/mocker/references/http.md) — login, CSRF, spec import, asset upload, the `/__mocker/state` calls a test suite makes |
 | someone changing mocker itself | [`CLAUDE.md`](CLAUDE.md), [`HISTORY.md`](HISTORY.md), [`CARVE-OUTS.md`](CARVE-OUTS.md), and `DESIGN.md` above |
 
-Install the skill into a frontend project so its agent knows mocker before the
-first call: `npx -y -p skills skills add <this repo> --skill mocker -a claude-code`
-(or copy `skills/mocker/` into `.claude/skills/`). [`docs/README.md`](docs/README.md)
-is the index.
+Install either skill or both into the repository where the agent works:
+
+```bash
+# Root only: mocks, API design, backend preparation and import routing.
+npx -y -p skills skills add /path/to/mocker --skill mocker -a claude-code
+# Import only: source-backed foundation import/reimport and pinned comparison.
+npx -y -p skills skills add /path/to/mocker --skill mocker-backend-import -a claude-code
+```
+
+Run both commands for the bundle. A client-neutral alternative is to copy the
+selected `skills/mocker/` and/or `skills/mocker-backend-import/` directory into
+your agent's recognized skill directory; import-only needs just its SKILL.md and
+loads model/protocol/recovery/examples from pinned server topics. A configured
+[MCP connection](skills/mocker/references/http.md) remains required: installing a skill does not install
+server capabilities. Agents without local skills can discover the same procedures
+through MCP. [`docs/README.md`](docs/README.md) is the index.
 
 ## What P0 does and what it does not yet
 

@@ -1,9 +1,11 @@
 // Package guide embeds the agent-facing documentation served by initialize
-// and get_guide. skills/mocker/ owns the guide texts and source declaration;
-// make guide-sync generates byte copies, metadata and an immutable manifest.
+// and get_guide. skills/mocker/guide-sources.json declares canonical owners under
+// skills/: the root package, its references and the standalone import package.
+// make guide-sync generates embedded and compatibility copies, metadata and an
+// immutable manifest. Edit declared owners rather than generated copies.
 // instructions.md is the small initialize-only orientation, maintained here.
 // Tests validate every declared source, generated metadata and content hash.
-// The source directory remains independently installable as an agent skill.
+// Root-only, import-only and combined installations share the served procedures.
 package guide
 
 import (
@@ -29,9 +31,16 @@ const (
 	// and a caller who has already found the shape is not the reader it is
 	// for.
 	TopicFunctions = "functions"
+	// Backend topics are loaded progressively from one selected guide set.
+	TopicBackendOverview       = "backend-overview"
+	TopicBackendImport         = "backend-import"
+	TopicBackendModel          = "backend-model"
+	TopicBackendImportProtocol = "backend-import-protocol"
+	TopicBackendRecovery       = "backend-recovery"
+	TopicBackendExamples       = "backend-examples"
 )
 
-//go:embed instructions.md overview.md tools.md shapes.md cookbook.md http.md design.md functions.md backend-overview.md backend-import.md manifest.json
+//go:embed instructions.md overview.md tools.md shapes.md cookbook.md http.md design.md functions.md backend-overview.md backend-import.md backend-model.md backend-import-protocol.md backend-recovery.md backend-examples.md manifest.json
 var files embed.FS
 
 // topicFiles maps a topic to its embedded file. overview.md is SKILL.md
@@ -39,20 +48,29 @@ var files embed.FS
 // tool result is not a skill file and the YAML block would be noise to the
 // model reading it.
 var topicFiles = map[string]string{
-	TopicOverview:      "overview.md",
-	TopicTools:         "tools.md",
-	TopicShapes:        "shapes.md",
-	TopicCookbook:      "cookbook.md",
-	TopicHTTP:          "http.md",
-	TopicDesign:        "design.md",
-	TopicFunctions:     "functions.md",
-	"backend-overview": "backend-overview.md",
-	"backend-import":   "backend-import.md",
+	TopicOverview:              "overview.md",
+	TopicTools:                 "tools.md",
+	TopicShapes:                "shapes.md",
+	TopicCookbook:              "cookbook.md",
+	TopicHTTP:                  "http.md",
+	TopicDesign:                "design.md",
+	TopicFunctions:             "functions.md",
+	TopicBackendOverview:       "backend-overview.md",
+	TopicBackendImport:         "backend-import.md",
+	TopicBackendModel:          "backend-model.md",
+	TopicBackendImportProtocol: "backend-import-protocol.md",
+	TopicBackendRecovery:       "backend-recovery.md",
+	TopicBackendExamples:       "backend-examples.md",
 }
 
 // Topics is the ordered list of topic names get_guide accepts.
 func Topics() []string {
-	return []string{TopicOverview, TopicTools, TopicShapes, TopicCookbook, TopicHTTP, TopicDesign, TopicFunctions, "backend-overview", "backend-import"}
+	return []string{
+		TopicOverview, TopicTools, TopicShapes, TopicCookbook, TopicHTTP,
+		TopicDesign, TopicFunctions, TopicBackendOverview, TopicBackendImport,
+		TopicBackendModel, TopicBackendImportProtocol, TopicBackendRecovery,
+		TopicBackendExamples,
+	}
 }
 
 // Instructions is the orientation text initialize returns to every MCP
@@ -71,7 +89,7 @@ func Topic(name string) (string, bool) {
 		return "", false
 	}
 	text := mustRead(file)
-	if name == TopicOverview || name == "backend-overview" || name == "backend-import" {
+	if name == TopicOverview || name == TopicBackendOverview || name == TopicBackendImport {
 		text = stripFrontmatter(text)
 	}
 	return text, true

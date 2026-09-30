@@ -203,3 +203,28 @@ unset.
 ```
 
 Claude Code: `claude mcp add --transport http mocker https://mocker.corp.internal/mcp --header "Authorization: Bearer <key>"`.
+
+## Install the procedure into the agent's repository
+
+Choose root-only for mock configuration, API design and backend project routing;
+import-only for foundation repository import/reconciliation and pinned revision
+comparison; or both packages:
+
+```bash
+npx -y -p skills skills add /path/to/mocker --skill mocker -a claude-code
+npx -y -p skills skills add /path/to/mocker --skill mocker-backend-import -a claude-code
+```
+
+Run both commands for the bundle. For any host, copying the selected
+`skills/mocker/` and/or `skills/mocker-backend-import/` directory into its recognized
+skill directory is also sufficient. Import-only needs just its SKILL.md; it loads
+backend-model/import-protocol/recovery/examples with get_guide and the selected
+guideSetId, with no neighboring root files. Root-only includes the generated import
+compatibility copy. All three choices select the same compatible import procedure.
+
+Keep the MCP connection above: installing local instructions does not install
+server capabilities or configure credentials. Without local skills, initialize
+points to get_guide for the same procedure. Backend writes first discover
+get_backend_capabilities, select exact workflow/version/set/hash and read related
+topics from that set. Legacy mock-response tasks use workspace tools directly;
+they do not require loading backend import references.
