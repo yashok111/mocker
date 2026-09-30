@@ -7,10 +7,12 @@ import (
 	"github.com/yashok111/mocker/internal/jsonx"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"testing"
 
 	"github.com/yashok111/mocker/internal/backendmodel"
+	"github.com/yashok111/mocker/internal/config"
 )
 
 func TestBackendImportRouteInventory(t *testing.T) {
@@ -55,7 +57,7 @@ func TestBackendImportReadsAndStrictTransport(t *testing.T) {
 	call("POST", base+"/graph/query", `{"revisionId":"`+p.CurrentRevisionID+`","recordType":"nodes","limit":500}`, 200)
 	call("GET", base+"/revisions/"+p.CurrentRevisionID+"/evidence", "", 200)
 	call("GET", base+"/revisions/"+p.CurrentRevisionID+"/coverage", "", 200)
-	for _, suffix := range []string{"?subjectId=x&subjectId=y", "?limit=501", "?limit=0", "?unknown=x", "?cursor=x&cursor=y"} {
+	for _, suffix := range []string{"?evidenceId=x", "?evidenceId=" + p.ID + "&evidenceId=" + p.ID, "?evidenceId=" + p.ID + "&subjectId=" + p.ID, "?evidenceId=" + p.ID + "&cursor=", "?subjectId=x&subjectId=y", "?limit=501", "?limit=0", "?unknown=x", "?cursor=x&cursor=y"} {
 		call("GET", base+"/revisions/"+p.CurrentRevisionID+"/evidence"+suffix, "", 400)
 	}
 	call("GET", base+"/revisions/"+p.CurrentRevisionID+"/coverage?unknown=x", "", 400)
@@ -183,6 +185,70 @@ func TestBackendImportLifecycleOverCallAsMCP(t *testing.T) {
 	second := transportImportFixture(result.Project)
 	second.IdempotencyKey = "reimport"
 	call("POST", base+"/imports", second, 409)
+	second.Mode = "reconcile"
+	second.RepositoryID = new(session.RepositoryID)
+	second.GraphScope = &backendmodel.GraphScope{Profile: backendmodel.GraphProfile, Status: "partial", Gaps: []string{"collector scope partial"}}
+	var repeated backendmodel.ImportSession
+	if err := json.Unmarshal(call("POST", base+"/imports", second, 200), &repeated); err != nil {
+		t.Fatal(err)
+	}
+	if repeated.RepositoryID != session.RepositoryID || repeated.SnapshotID == session.SnapshotID {
+		t.Fatalf("repeat identities: %+v", repeated)
+	}
+	var repeatedPreview backendmodel.ImportPreview
+	if err := json.Unmarshal(call("POST", base+"/imports/"+repeated.ID+"/preview", backendmodel.PreviewImportInput{ExpectedImportVersion: repeated.Version, BaseRevisionID: result.Revision.ID}, 200), &repeatedPreview); err != nil {
+		t.Fatal(err)
+	}
+	for _, recordType := range []string{"source", "identity", "deletion"} {
+		call("GET", base+"/imports/"+repeated.ID+"/changes?previewVersion="+strconv.FormatInt(repeatedPreview.Version, 10)+"&recordType="+recordType, nil, 200)
+	}
+	call("GET", base+"/imports/"+repeated.ID+"/changes?previewVersion="+strconv.FormatInt(repeatedPreview.Version-1, 10)+"&recordType=source", nil, 409)
+	// Reopen the same SQLite file and verify saved-preview pages remain pinned.
+	dataDir := s.cfg.DataDir
+	if err := s.db.Close(); err != nil {
+		t.Fatal(err)
+	}
+	s = loopbackTestServer(t, func(cfg *config.Config) { cfg.DataDir = dataDir })
+	call("GET", base+"/imports/"+repeated.ID+"/changes?previewVersion="+strconv.FormatInt(repeatedPreview.Version, 10)+"&recordType=source", nil, 200)
+	call("GET", base+"/imports/"+repeated.ID, nil, 200)
+
+	if repeatedPreview.State != "ready" || repeatedPreview.CandidateHash == nil {
+		t.Fatalf("repeat preview: %+v", repeatedPreview)
+	}
+	var repeatedResult backendmodel.ImportCommitResult
+	if err := json.Unmarshal(call("POST", base+"/imports/"+repeated.ID+"/commit", backendmodel.CommitImportInput{ExpectedVersion: result.Project.Version, ExpectedImportVersion: repeatedPreview.Version, CandidateHash: *repeatedPreview.CandidateHash, IdempotencyKey: "repeat-commit"}, 200), &repeatedResult); err != nil {
+		t.Fatal(err)
+	}
+	call("POST", base+"/revisions/compare", backendmodel.CompareRevisionsInput{FromRevisionID: result.Revision.ID, ToRevisionID: repeatedResult.Revision.ID}, 200)
+	status := call("GET", path, nil, 200)
+	var oldStatus backendmodel.ImportStatus
+	if err := json.Unmarshal(status, &oldStatus); err != nil {
+		t.Fatal(err)
+	}
+	if oldStatus.CommittedRevisionID == nil || *oldStatus.CommittedRevisionID != result.Revision.ID || oldStatus.Preview == nil {
+		t.Fatalf("original receipt/saved preview lost after head changed: %s", status)
+	}
+	// Accepted changes clear a saved preview and make its old page pin stale.
+	third := transportImportFixture(repeatedResult.Project)
+	third.Mode = "reconcile"
+	third.RepositoryID = new(session.RepositoryID)
+	third.GraphScope = second.GraphScope
+	third.IdempotencyKey = "clear-preview"
+	var cleared backendmodel.ImportSession
+	if err := json.Unmarshal(call("POST", base+"/imports", third, 200), &cleared); err != nil {
+		t.Fatal(err)
+	}
+	var clearPreview backendmodel.ImportPreview
+	if err := json.Unmarshal(call("POST", base+"/imports/"+cleared.ID+"/preview", backendmodel.PreviewImportInput{ExpectedImportVersion: cleared.Version, BaseRevisionID: repeatedResult.Revision.ID}, 200), &clearPreview); err != nil {
+		t.Fatal(err)
+	}
+	removeCommands := []backendmodel.ImportCommand{{Op: "remove", Remove: &backendmodel.ImportRemove{RecordType: "node", ExternalKey: "not-staged"}}}
+	removeHash, err := backendmodel.ImportBatchHash(removeCommands)
+	if err != nil {
+		t.Fatal(err)
+	}
+	call("PUT", base+"/imports/"+cleared.ID+"/batches/clear", backendmodel.ImportBatchInput{ExpectedImportVersion: clearPreview.Version, PayloadHash: removeHash, Commands: removeCommands}, 200)
+	call("GET", base+"/imports/"+cleared.ID+"/changes?previewVersion="+strconv.FormatInt(clearPreview.Version, 10)+"&recordType=source", nil, 409)
 	// A separate empty project exercises abort and its receipt without changing a head.
 	if err := json.Unmarshal(call("POST", "/api/backend-projects", backendmodel.CreateInput{Name: "Abort", IdempotencyKey: "abort-create"}, 201), &p); err != nil {
 		t.Fatal(err)
@@ -219,6 +285,8 @@ func validateBackendImportResponse(t *testing.T, method, path string, data []byt
 	}
 	if len(parts) == 6 && parts[3] == "imports" {
 		switch parts[5] {
+		case "changes":
+			name = "BackendImportChangesPage"
 		case "preview":
 			name = "BackendImportPreview"
 		case "commit":
@@ -226,6 +294,9 @@ func validateBackendImportResponse(t *testing.T, method, path string, data []byt
 		case "abort":
 			name = "BackendImportSession"
 		}
+	}
+	if len(parts) == 5 && parts[3] == "revisions" && parts[4] == "compare" {
+		name = "BackendRevisionComparison"
 	}
 	if len(parts) == 5 && parts[3] == "graph" {
 		name = "BackendGraphPage"
@@ -289,7 +360,7 @@ func TestBackendImportStrictRequiredAndNullableWireFields(t *testing.T) {
 		t.Fatal(err)
 	}
 	base := "/api/backend-projects/" + p.ID
-	for _, input := range []string{strings.Replace(string(valid), `"dirty":false,`, "", 1), strings.Replace(string(valid), `"limitations":[]`, `"limitations":null`, 1), strings.Replace(string(valid), `"commit":"abc"`, `"commit":null`, 1), strings.Replace(string(valid), `"expectedVersion":1`, `"expectedVersion":null`, 1)} {
+	for _, input := range []string{strings.Replace(string(valid), `"expectedVersion":1`, `"mode":null,"expectedVersion":1`, 1), strings.Replace(string(valid), `"expectedVersion":1`, `"mode":"","expectedVersion":1`, 1), strings.Replace(string(valid), `"dirty":false,`, "", 1), strings.Replace(string(valid), `"limitations":[]`, `"limitations":null`, 1), strings.Replace(string(valid), `"commit":"abc"`, `"commit":null`, 1), strings.Replace(string(valid), `"expectedVersion":1`, `"expectedVersion":null`, 1)} {
 		status, data, err := s.CallAsMCP(t.Context(), loopbackTestSrc(), "POST", base+"/imports", []byte(input))
 		if err != nil || status != 400 {
 			t.Fatalf("missing/nonnullable required member: %d %s %v", status, data, err)

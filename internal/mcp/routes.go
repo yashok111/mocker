@@ -51,6 +51,8 @@ import (
 var noRoute = []string{}
 
 var toolRoutes = map[string][]string{
+	"compare_backend_revisions":       {"POST /api/backend-projects/{id}/revisions/compare"},
+	"get_backend_import_changes":      {"GET /api/backend-projects/{id}/imports/{iid}/changes"},
 	"begin_backend_import":            {"POST /api/backend-projects/{id}/imports"},
 	"list_backend_imports":            {"GET /api/backend-projects/{id}/imports"},
 	"get_backend_import":              {"GET /api/backend-projects/{id}/imports/{iid}"},
@@ -311,7 +313,7 @@ var toolRoutes = map[string][]string{
 // Pinned in routes_test.go so a tool
 // added without an entry here is caught by a test rather than by a 404 in
 // production.
-const toolCount = 165
+const toolCount = 167
 
 // toolPath resolves ONE call a tool makes into the (method, path) pair
 // loopback.do/call take.

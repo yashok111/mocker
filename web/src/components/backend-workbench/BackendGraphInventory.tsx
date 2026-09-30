@@ -74,7 +74,7 @@ function useGraphPage(projectId: string, input: QueryBackendGraphRequest) {
   });
 }
 
-function LoadState({
+export function LoadState({
   query,
   label,
 }: {
@@ -96,7 +96,7 @@ function LoadState({
   );
 }
 
-function Pages({
+export function Pages({
   label,
   cursors,
   next,
@@ -207,6 +207,7 @@ function Inventory({ projectId, revisionId }: Props) {
               onClick={() => setSelection({ type: "node", id: node.id })}
             >
               {node.kind} · {node.name}
+              {node.freshness?.status === "stale" ? " · Устарело" : ""}
             </Button>
           ))}
           <Pages
@@ -244,6 +245,7 @@ function Inventory({ projectId, revisionId }: Props) {
             ) : (
               <>
                 <Text fw={600}>{selection.edge.kind}</Text>
+                <AssertionDetails record={selection.edge} />
                 <Code block style={wrap}>
                   {selection.edge.from} → {selection.edge.to}
                 </Code>
@@ -265,7 +267,7 @@ function Inventory({ projectId, revisionId }: Props) {
   );
 }
 
-function CoverageDetails({ data }: { data: BackendRevisionCoverage }) {
+export function CoverageDetails({ data }: { data: BackendRevisionCoverage }) {
   return (
     <Stack gap="sm">
       <Group>
@@ -279,6 +281,17 @@ function CoverageDetails({ data }: { data: BackendRevisionCoverage }) {
             : `Всего: ${data.coverage.denominator}.`}
         </Text>
       </Group>
+      {data.staleCounts && (
+        <Text size="sm">
+          Устаревшие: объекты {data.staleCounts.nodes} · связи {data.staleCounts.edges} · основания{" "}
+          {data.staleCounts.evidence}
+        </Text>
+      )}
+      {data.reconciliationGaps?.map((gap, index) => (
+        <Text key={`reconcile:${index}`} size="sm" style={wrap}>
+          {gap}
+        </Text>
+      ))}
       {data.coverage.gaps.map((gap, index) => (
         <Text key={index} size="sm" style={wrap}>
           {gap}
@@ -289,6 +302,11 @@ function CoverageDetails({ data }: { data: BackendRevisionCoverage }) {
         <div key={snapshot.id}>
           <Group gap="sm">
             <Text fw={600}>Снимок исходников</Text>
+            <Badge color="gray">
+              {snapshot.role === "retained_provenance"
+                ? "Историческое основание"
+                : "Основной снимок"}
+            </Badge>
             <Badge color={snapshot.consistency === "verified" ? "teal" : "yellow"}>
               {snapshot.consistency === "verified"
                 ? "Стабильность проверена агентом"
@@ -369,6 +387,7 @@ function NodeDetails({
               {node.id}
             </Text>
           </Group>
+          <AssertionDetails record={node} />
           <Code block style={wrap}>
             {JSON.stringify(node.attributes, null, 2)}
           </Code>
@@ -451,12 +470,17 @@ function Relationships({
   );
 }
 
-function EvidenceDetails({ projectId, revisionId, subjectId }: Props & { subjectId: string }) {
+function EvidenceDetails({
+  projectId,
+  revisionId,
+  subjectId,
+  evidenceId,
+}: Props & { subjectId?: string; evidenceId?: string }) {
   const [cursors, setCursors] = useState([""]);
   const query = useGetBackendEvidence(
     projectId,
     revisionId,
-    { subjectId, limit: 100, cursor: cursors.at(-1) ?? "" },
+    { ...(evidenceId ? { evidenceId } : { subjectId, cursor: cursors.at(-1) ?? "" }), limit: 100 },
     { query: { staleTime: Infinity, retry: false } },
   );
   const page = query.data?.status === 200 ? query.data.data : undefined;
@@ -471,6 +495,7 @@ function EvidenceDetails({ projectId, revisionId, subjectId }: Props & { subject
       )}
       {page?.items.map((evidence) => (
         <div key={evidence.id}>
+          <AssertionDetails record={evidence} />
           <Group gap="sm">
             <Badge color={evidence.status === "unresolved" ? "yellow" : "gray"}>
               {evidence.method} · {evidence.status}
@@ -515,6 +540,88 @@ function EvidenceDetails({ projectId, revisionId, subjectId }: Props & { subject
         busy={query.isFetching}
         setCursors={setCursors}
       />
+    </Stack>
+  );
+}
+
+function AssertionDetails({ record }: { record: Pick<BackendNode, "ownership" | "freshness"> }) {
+  return (
+    <Stack gap="xs">
+      {record.freshness && (
+        <>
+          <Badge color={record.freshness.status === "stale" ? "yellow" : "teal"}>
+            {record.freshness.status === "stale" ? "Устарело" : "Подтверждено в снимке"}
+          </Badge>
+          <Text size="sm" style={wrap}>
+            Причины: {record.freshness.reasons.join(", ") || "нет"}
+          </Text>
+          <Text size="xs" style={wrap}>
+            Подтверждающий снимок: {record.freshness.confirmedSnapshotId}
+          </Text>
+        </>
+      )}
+      {record.ownership && (
+        <Text size="xs" style={wrap}>
+          Владелец: {record.ownership.repositoryId} · {record.ownership.providerNamespace} ·{" "}
+          {record.ownership.profile}
+        </Text>
+      )}
+    </Stack>
+  );
+}
+
+export function BackendRecordInspector({
+  projectId,
+  revisionId,
+  recordType,
+  id,
+}: Props & { recordType: "node" | "edge" | "evidence"; id: string }) {
+  return (
+    <RecordInspector
+      key={`${projectId}:${revisionId}:${recordType}:${id}`}
+      projectId={projectId}
+      revisionId={revisionId}
+      recordType={recordType}
+      id={id}
+    />
+  );
+}
+
+function RecordInspector({
+  projectId,
+  revisionId,
+  recordType,
+  id,
+}: Props & { recordType: "node" | "edge" | "evidence"; id: string }) {
+  const [edge, setEdge] = useState<BackendEdge | null>(null);
+  if (recordType === "node" && !edge)
+    return (
+      <NodeDetails projectId={projectId} revisionId={revisionId} nodeId={id} onEdge={setEdge} />
+    );
+  if (recordType === "evidence")
+    return <EvidenceDetails projectId={projectId} revisionId={revisionId} evidenceId={id} />;
+  return <EdgeDetails projectId={projectId} revisionId={revisionId} id={edge?.id ?? id} />;
+}
+
+function EdgeDetails({ projectId, revisionId, id }: Props & { id: string }) {
+  const query = useGraphPage(projectId, { revisionId, recordType: "edges", id, limit: 1 });
+  const edge = query.data?.status === 200 ? query.data.data.edges[0] : undefined;
+  return (
+    <Stack>
+      <LoadState query={query} label="связи" />
+      {edge && (
+        <>
+          <Text fw={600}>{edge.kind}</Text>
+          <Code block style={wrap}>
+            {edge.from} → {edge.to}
+          </Code>
+          <AssertionDetails record={edge} />
+          <Code block style={wrap}>
+            {JSON.stringify(edge.attributes, null, 2)}
+          </Code>
+          <EvidenceDetails projectId={projectId} revisionId={revisionId} subjectId={edge.id} />
+        </>
+      )}
     </Stack>
   );
 }

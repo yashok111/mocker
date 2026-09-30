@@ -71,6 +71,9 @@ func (r *Repo) Imports(ctx context.Context, pid string, in ListInput) (*ImportPa
 		if err := json.Unmarshal([]byte(doc), &s); err != nil {
 			return nil, err
 		}
+		if s.Mode == "" {
+			s.Mode = "initial"
+		}
 		out.Items = append(out.Items, s)
 	}
 	return out, rows.Err()
@@ -89,12 +92,15 @@ func (r *Repo) Import(ctx context.Context, pid, sid string, in ListInput) (*Impo
 	if err != nil {
 		return nil, err
 	}
+	out := &ImportStatus{Session: *s, AcceptedBatches: []BatchSummary{}}
+	if err := loadSavedStatus(ctx, tx, out); err != nil {
+		return nil, err
+	}
 	rows, err := tx.QueryContext(ctx, `SELECT batch_id,payload_hash,accepted_version FROM backend_import_batches WHERE session_id=? AND batch_id>? ORDER BY batch_id LIMIT ?`, sid, after, limit+1)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	out := &ImportStatus{Session: *s, AcceptedBatches: []BatchSummary{}}
 	for rows.Next() {
 		var b BatchSummary
 		if err := rows.Scan(&b.BatchID, &b.PayloadHash, &b.AcceptedVersion); err != nil {
@@ -112,6 +118,14 @@ func (r *Repo) QueryGraph(ctx context.Context, pid string, in GraphQueryInput) (
 	if _, err := r.Revision(ctx, pid, in.RevisionID); err != nil {
 		return nil, err
 	}
+	if in.ID != "" && (!ValidID(in.ID) || in.Cursor != "" || in.Kind != "" || in.Search != "" || in.ParentID != "" || in.From != "" || in.To != "") {
+		return nil, invalid("id", "ID selector cannot be combined with filters or cursor")
+	}
+	coverage, err := r.RevisionCoverage(ctx, pid, in.RevisionID)
+	if err != nil {
+		return nil, err
+	}
+	metadata := RevisionState{Sources: coverage.Snapshots}
 	if !slices.Contains([]string{"nodes", "edges"}, in.RecordType) {
 		return nil, semantic("recordType", "Query must select nodes or edges")
 	}
@@ -148,7 +162,7 @@ func (r *Repo) QueryGraph(ctx context.Context, pid string, in GraphQueryInput) (
 	}
 	query := `SELECT document,id FROM backend_graph_records WHERE project_id=? AND revision_id=? AND record_type=? AND id>?`
 	args := []any{pid, in.RevisionID, typ, after}
-	for _, f := range []struct{ column, value string }{{"kind", in.Kind}, {"parent_id", in.ParentID}, {"from_id", in.From}, {"to_id", in.To}} {
+	for _, f := range []struct{ column, value string }{{"id", in.ID}, {"kind", in.Kind}, {"parent_id", in.ParentID}, {"from_id", in.From}, {"to_id", in.To}} {
 		if f.value != "" {
 			query += " AND " + f.column + "=?"
 			args = append(args, f.value)
@@ -182,12 +196,14 @@ func (r *Repo) QueryGraph(ctx context.Context, pid string, in GraphQueryInput) (
 			if err := json.Unmarshal([]byte(doc), &n); err != nil {
 				return nil, err
 			}
+			deriveMetadata(metadata, &n.Ownership, &n.Freshness)
 			out.Nodes = append(out.Nodes, n)
 		} else {
 			var e Edge
 			if err := json.Unmarshal([]byte(doc), &e); err != nil {
 				return nil, err
 			}
+			deriveMetadata(metadata, &e.Ownership, &e.Freshness)
 			out.Edges = append(out.Edges, e)
 		}
 		last = id
@@ -211,22 +227,38 @@ func (r *Repo) Node(ctx context.Context, pid, rid, nid string) (*Node, error) {
 	if err := json.Unmarshal([]byte(doc), &n); err != nil {
 		return nil, err
 	}
+	coverage, err := r.RevisionCoverage(ctx, pid, rid)
+	if err != nil {
+		return nil, err
+	}
+	deriveMetadata(RevisionState{Sources: coverage.Snapshots}, &n.Ownership, &n.Freshness)
 	return &n, nil
 }
 func (r *Repo) Evidence(ctx context.Context, pid, rid string, in EvidenceQueryInput) (*EvidencePage, error) {
 	if _, err := r.Revision(ctx, pid, rid); err != nil {
 		return nil, err
 	}
+	if in.EvidenceID != "" && (!ValidID(in.EvidenceID) || in.SubjectID != "" || in.Cursor != "") {
+		return nil, invalid("evidenceId", "Evidence selector cannot be combined with filters or cursor")
+	}
+	coverage, err := r.RevisionCoverage(ctx, pid, rid)
+	if err != nil {
+		return nil, err
+	}
 	if in.SubjectID != "" && !ValidID(in.SubjectID) {
 		return nil, semantic("subjectId", "Subject ID must be a UUID")
 	}
-	scope := rid + ":" + in.SubjectID
+	scope := rid + ":" + in.SubjectID + ":" + in.EvidenceID
 	limit, after, err := decodeGraphPage(in.Limit, in.Cursor, "evidence", pid, scope, true)
 	if err != nil {
 		return nil, err
 	}
 	query := `SELECT document,id FROM backend_graph_records WHERE project_id=? AND revision_id=? AND record_type='evidence' AND id>?`
 	args := []any{pid, rid, after}
+	if in.EvidenceID != "" {
+		query += ` AND id=?`
+		args = append(args, in.EvidenceID)
+	}
 	if in.SubjectID != "" {
 		query += ` AND subject_id=?`
 		args = append(args, in.SubjectID)
@@ -253,6 +285,7 @@ func (r *Repo) Evidence(ctx context.Context, pid, rid string, in EvidenceQueryIn
 		if err := json.Unmarshal([]byte(doc), &e); err != nil {
 			return nil, err
 		}
+		deriveMetadata(RevisionState{Sources: coverage.Snapshots}, &e.Ownership, &e.Freshness)
 		out.Items = append(out.Items, e)
 		last = id
 	}
@@ -266,7 +299,7 @@ func (r *Repo) RevisionCoverage(ctx context.Context, pid, rid string) (*Revision
 	var doc string
 	err = r.db.R.QueryRowContext(ctx, `SELECT document FROM backend_revision_sources WHERE revision_id=?`, rid).Scan(&doc)
 	if errors.Is(err, sql.ErrNoRows) {
-		return &RevisionCoverage{Coverage: rev.Coverage, Inventory: []InventoryItem{}, Snapshots: []SourceSnapshot{}}, nil
+		return &RevisionCoverage{Coverage: rev.Coverage, Inventory: []InventoryItem{}, Snapshots: []SourceSnapshot{}, ReconciliationGaps: []string{}}, nil
 	}
 	if err != nil {
 		return nil, err
@@ -274,6 +307,12 @@ func (r *Repo) RevisionCoverage(ctx context.Context, pid, rid string) (*Revision
 	var out RevisionCoverage
 	if err := json.Unmarshal([]byte(doc), &out); err != nil {
 		return nil, err
+	}
+	if len(out.Snapshots) == 1 && out.Snapshots[0].Role == "" {
+		out.Snapshots[0].Role = "primary"
+	}
+	if out.ReconciliationGaps == nil {
+		out.ReconciliationGaps = []string{}
 	}
 	return &out, nil
 }

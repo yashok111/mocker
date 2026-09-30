@@ -65,6 +65,8 @@ func TestGuideRequiredCapabilitiesHaveMCPTools(t *testing.T) {
 		"backend-revisions":        {"list_backend_revisions", "get_backend_revision"},
 		"backend-graph-query":      {"query_backend_graph", "get_backend_node", "get_backend_evidence", "get_backend_coverage"},
 		"backend-source-import":    {"begin_backend_import", "list_backend_imports", "get_backend_import", "put_backend_import_batch", "preview_backend_import", "commit_backend_import", "abort_backend_import"},
+		"backend-source-reconcile": {"begin_backend_import", "put_backend_import_batch", "preview_backend_import", "commit_backend_import", "get_backend_import_changes"},
+		"backend-revision-compare": {"compare_backend_revisions"},
 	}
 	if !inventory["get_backend_capabilities"] {
 		t.Error("workflow discovery tool is missing")
@@ -82,5 +84,20 @@ func TestGuideRequiredCapabilitiesHaveMCPTools(t *testing.T) {
 				}
 			}
 		}
+	}
+}
+
+func TestObsoleteImportGuideSetDoesNotSubstituteV2(t *testing.T) {
+	const previous = "sha256:6f352e4838720bf9447956681574dd16b64ef94f0d7a2700c512da5b9bc6c33f"
+	_, _, err := handleGetGuide(t.Context(), nil, GetGuideInput{Topic: "backend-import", GuideSetID: previous})
+	if err == nil || !strings.Contains(err.Error(), "unknown guide set") {
+		t.Fatalf("obsolete pinned guide silently substituted: %v", err)
+	}
+	_, out, err := handleGetGuide(t.Context(), nil, GetGuideInput{Topic: "backend-import", GuideSetID: guide.CurrentGuideSetID()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out.WorkflowVersion != "2" || out.WorkflowID != "mocker-backend-import" || out.GuideSetID != guide.CurrentGuideSetID() {
+		t.Fatalf("current import guide identity: %#v", out)
 	}
 }

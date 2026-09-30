@@ -42,12 +42,28 @@ afterEach(() => {
 });
 
 describe("customFetch", () => {
+  it("rejects unsafe saved-preview query version before fetching", async () => {
+    const fetch = mockFetch(jsonResponse(200, {}));
+    await expect(
+      customFetch(
+        "/api/backend-projects/p/imports/i/changes?previewVersion=9007199254740993&recordType=source",
+      ),
+    ).rejects.toThrow(/без потери точности/);
+    expect(fetch).not.toHaveBeenCalled();
+  });
   it.each([
     ["/api/backend-projects/p/imports/i", '{"session":{"version":9007199254740992}}'],
     [
       "/api/backend-projects/p/revisions/r/coverage",
       '{"inventory":[{"knownCount":9007199254740992}]}',
     ],
+    [
+      "/api/backend-projects/p/revisions/compare",
+      '{"summary":{"nodes":{"modified":9007199254740993}}}',
+    ],
+    ["/api/backend-projects/p/imports/i/changes", '{"previewVersion":9007199254740993}'],
+    ["/api/backend-projects/p/imports/i", '{"preview":{"sourceChangeCount":9007199254740993}}'],
+    ["/api/backend-projects/p/revisions/r/coverage", '{"staleCounts":{"edges":9007199254740993}}'],
     ["/api/backend-projects/p/imports/i/batches/b", '{"acceptedVersion":9007199254740992}'],
   ])("rejects unsafe import integers from %s", async (url, body) => {
     mockFetch(new Response(body, { status: 200 }));

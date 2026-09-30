@@ -137,3 +137,27 @@ func TestBackendVersionRemainsExactOverREST(t *testing.T) {
 		t.Fatalf("rounded version: %d %s %v", status, data, err)
 	}
 }
+
+func TestBackendCapabilitiesExposeReconciliationContract(t *testing.T) {
+	s := loopbackTestServer(t, nil)
+	status, data, err := s.CallAsMCP(t.Context(), loopbackTestSrc(), "GET", "/api/backend-projects/capabilities", nil)
+	if err != nil || status != 200 {
+		t.Fatalf("capabilities: %d %s %v", status, data, err)
+	}
+	var got struct {
+		ImportModes           []string `json:"importModes"`
+		ImportCommands        []string `json:"importCommands"`
+		ReconciliationProfile struct {
+			Version string `json:"version"`
+			Profile string `json:"profile"`
+			Scope   string `json:"scope"`
+		} `json:"reconciliationProfile"`
+		ComparisonVersion int64 `json:"comparisonVersion"`
+	}
+	if err := json.Unmarshal(data, &got); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(got.ImportModes, ",") != "initial,reconcile" || strings.Join(got.ImportCommands, ",") != "upsert_node,upsert_edge,upsert_evidence,remove,map_identity,delete_assertion" || got.ReconciliationProfile.Version != "1" || got.ReconciliationProfile.Profile != backendmodel.GraphProfile || got.ReconciliationProfile.Scope != "whole-repository" || got.ComparisonVersion != 1 {
+		t.Fatalf("missing reconciliation contract: %s", data)
+	}
+}

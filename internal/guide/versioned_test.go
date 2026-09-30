@@ -46,13 +46,13 @@ func TestImportWorkflowUsesPinnedAvailableTopics(t *testing.T) {
 			selected = workflow
 		}
 	}
-	if selected.Entrypoint != "backend-import" || selected.WorkflowVersion != "1" {
+	if selected.Entrypoint != "backend-import" || selected.WorkflowVersion != "2" {
 		t.Fatalf("source import workflow unavailable: %#v", selected)
 	}
 	if selected.GuideSetID != CurrentGuideSetID() || selected.ManifestHash != CurrentGuideSetID() {
 		t.Fatal("source import workflow cannot be pinned to the served guide set")
 	}
-	for _, required := range []string{"backend-projects", "backend-revisions", "backend-graph-query", "backend-source-import"} {
+	for _, required := range []string{"backend-projects", "backend-revisions", "backend-graph-query", "backend-source-import", "backend-source-reconcile", "backend-revision-compare"} {
 		if !slices.Contains(selected.RequiredCapabilities, required) {
 			t.Errorf("import workflow does not require %s", required)
 		}

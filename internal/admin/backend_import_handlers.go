@@ -24,7 +24,7 @@ func backendImportQuery(r *http.Request, maxLimit int, subject bool) (backendmod
 		return in, "", backendQueryError()
 	}
 	for key, values := range q {
-		if len(values) != 1 || (key != "limit" && key != "cursor" && !(subject && key == "subjectId")) {
+		if len(values) != 1 || (key != "limit" && key != "cursor" && !(subject && (key == "subjectId" || key == "evidenceId"))) {
 			return in, "", backendQueryError()
 		}
 	}
@@ -33,6 +33,9 @@ func backendImportQuery(r *http.Request, maxLimit int, subject bool) (backendmod
 		if err != nil || in.Limit < 1 || in.Limit > maxLimit {
 			return in, "", backendQueryError()
 		}
+	}
+	if values, ok := q["evidenceId"]; ok && (!backendmodel.ValidID(values[0]) || q.Has("subjectId") || q.Has("cursor")) {
+		return in, "", backendQueryError()
 	}
 	if values, ok := q["subjectId"]; ok && !backendmodel.ValidID(values[0]) {
 		return in, "", backendQueryError()
@@ -182,11 +185,15 @@ func (s *Server) handleQueryBackendGraph(w http.ResponseWriter, r *http.Request)
 	if in.RecordType == "edges" {
 		forbidden = []string{"search", "parentId"}
 	}
-	for _, key := range []string{"parentId", "from", "to"} {
+	for _, key := range []string{"id", "parentId", "from", "to"} {
 		if value, ok := raw[key]; ok {
 			var id string
 			if err := json.Unmarshal(value, &id); err != nil || !backendmodel.ValidID(id) {
-				s.backendError(w, &backendmodel.FaultError{Status: 422, Code: "backend_import_invalid", Message: "Selector must be a canonical UUID", Details: map[string]any{"path": "/" + key}})
+				status, code := 422, "backend_import_invalid"
+				if key == "id" {
+					status, code = 400, "backend_invalid"
+				}
+				s.backendError(w, &backendmodel.FaultError{Status: status, Code: code, Message: "Selector must be a canonical UUID", Details: map[string]any{"path": "/" + key}})
 				return
 			}
 		}
@@ -195,6 +202,15 @@ func (s *Server) handleQueryBackendGraph(w http.ResponseWriter, r *http.Request)
 		if _, ok := raw[key]; ok {
 			s.backendError(w, &backendmodel.FaultError{Status: 422, Code: "backend_import_invalid", Message: "Selector is unavailable for this recordType", Details: map[string]any{"path": "/" + key}})
 			return
+		}
+	}
+
+	if _, selected := raw["id"]; selected {
+		for _, key := range []string{"kind", "search", "parentId", "from", "to", "cursor"} {
+			if _, supplied := raw[key]; supplied {
+				s.backendError(w, backendQueryError())
+				return
+			}
 		}
 	}
 
@@ -264,7 +280,7 @@ func (s *Server) handleGetBackendEvidence(w http.ResponseWriter, r *http.Request
 		s.backendError(w, err)
 		return
 	}
-	out, err := s.backendRepo.Evidence(r.Context(), r.PathValue("id"), r.PathValue("rid"), backendmodel.EvidenceQueryInput{SubjectID: subject, Limit: in.Limit, Cursor: in.Cursor})
+	out, err := s.backendRepo.Evidence(r.Context(), r.PathValue("id"), r.PathValue("rid"), backendmodel.EvidenceQueryInput{EvidenceID: r.URL.Query().Get("evidenceId"), SubjectID: subject, Limit: in.Limit, Cursor: in.Cursor})
 	if err != nil {
 		s.backendError(w, err)
 		return
@@ -294,6 +310,10 @@ func (s *Server) backendImportBody(w http.ResponseWriter, r *http.Request, out a
 	if !s.backendBodyLimit(w, r, &raw, maxBytes) {
 		return false
 	}
+	return s.backendImportDecodedBody(w, raw, out)
+}
+
+func (s *Server) backendImportDecodedBody(w http.ResponseWriter, raw jsontext.Value, out any) bool {
 	if err := json.Unmarshal(raw, out, json.RejectUnknownMembers(true)); err != nil {
 		s.backendError(w, &backendmodel.FaultError{Status: 400, Code: "backend_invalid", Message: "Request must match the import schema"})
 		return false
@@ -318,6 +338,32 @@ func backendImportShape(raw jsontext.Value, typ reflect.Type, path string) error
 			return fmt.Errorf("%s must not be null", path)
 		}
 		return backendImportShape(raw, typ.Elem(), path)
+	}
+	if typ == reflect.TypeFor[backendmodel.BeginImportInput]() {
+		var fields map[string]jsontext.Value
+		if err := json.Unmarshal(raw, &fields); err != nil {
+			return err
+		}
+		if value, supplied := fields["mode"]; supplied {
+			var mode string
+			if err := json.Unmarshal(value, &mode); err != nil || (mode != "initial" && mode != "reconcile") {
+				return fmt.Errorf("%s/mode must be initial or reconcile", path)
+			}
+		}
+	}
+	if typ == reflect.TypeFor[backendmodel.ImportCommand]() {
+		var fields map[string]jsontext.Value
+		if err := json.Unmarshal(raw, &fields); err != nil {
+			return err
+		}
+		var op string
+		if err := json.Unmarshal(fields["op"], &op); err != nil {
+			return err
+		}
+		member := map[string]string{"upsert_node": "node", "upsert_edge": "edge", "upsert_evidence": "evidence", "remove": "remove", "map_identity": "identity", "delete_assertion": "deletion"}[op]
+		if member == "" || len(fields) != 2 || fields[member] == nil {
+			return fmt.Errorf("%s must contain only op and its command member", path)
+		}
 	}
 	bad := func() error { return fmt.Errorf("%s must match the import schema", path) }
 	if len(raw) == 0 {

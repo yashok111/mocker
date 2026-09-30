@@ -221,6 +221,8 @@ func (s *Server) routes() []route {
 		{"GET /api/backend-projects/{id}/revisions", s.handleListBackendRevisions, mcpAllow, cpRead},
 		{"GET /api/backend-projects/{id}/revisions/{rid}", s.handleGetBackendRevision, mcpAllow, cpRead},
 		{"POST /api/backend-projects/{id}/imports", s.handleBeginBackendImport, mcpAllow, cpAnotherLayer},
+		{"POST /api/backend-projects/{id}/revisions/compare", s.handleCompareBackendRevisions, mcpAllow, cpNeverTouchesLayer},
+		{"GET /api/backend-projects/{id}/imports/{iid}/changes", s.handleGetBackendImportChanges, mcpAllow, cpRead},
 		{"GET /api/backend-projects/{id}/imports", s.handleListBackendImports, mcpAllow, cpRead},
 		{"GET /api/backend-projects/{id}/imports/{iid}", s.handleGetBackendImport, mcpAllow, cpRead},
 		{"PUT /api/backend-projects/{id}/imports/{iid}/batches/{bid}", s.handlePutBackendImportBatch, mcpAllow, cpAnotherLayer},

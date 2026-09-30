@@ -27,6 +27,8 @@ import type { ApplyBackendProjectCommandsRequest } from "@/api/generated/schemas
 import { ApiFailure } from "@/api/client";
 import { describeApiFailureDetailed } from "@/api/errors";
 import { BackendGraphInventory } from "./BackendGraphInventory";
+import { BackendRevisionCompare } from "./BackendRevisionCompare";
+import { BackendImportReview } from "./BackendImportReview";
 
 export function BackendProjectPage({ projectId }: { projectId: string }) {
   return <BackendProjectDetail key={projectId} projectId={projectId} />;
@@ -39,6 +41,9 @@ function BackendProjectDetail({ projectId }: { projectId: string }) {
   const project = query.data?.status === 200 ? query.data.data : undefined;
   const [selectedRevisionId, setSelectedRevisionId] = useState<string | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [compareOpen, setCompareOpen] = useState(false);
+  const [importsOpen, setImportsOpen] = useState(false);
+  const [importsMounted, setImportsMounted] = useState(false);
   const [historyCursors, setHistoryCursors] = useState([""]);
   const historyCursor = historyCursors.at(-1) ?? "";
   const historyQuery = useListBackendRevisions(
@@ -212,6 +217,39 @@ function BackendProjectDetail({ projectId }: { projectId: string }) {
                 </Stack>
               </form>
             </Paper>
+          )}
+          <Group>
+            <Button
+              variant="default"
+              aria-expanded={compareOpen}
+              onClick={() => setCompareOpen((value) => !value)}
+            >
+              Сравнение ревизий
+            </Button>
+            <Button
+              variant="default"
+              aria-expanded={importsOpen}
+              onClick={() => {
+                setImportsMounted(true);
+                setImportsOpen((value) => !value);
+              }}
+            >
+              Проверить импорты
+            </Button>
+          </Group>
+          {compareOpen && (
+            <BackendRevisionCompare
+              projectId={projectId}
+              initialRevisionId={selectedRevisionId ?? project.currentRevisionId}
+            />
+          )}
+          {importsMounted && (
+            <div hidden={!importsOpen}>
+              <BackendImportReview
+                projectId={projectId}
+                currentRevisionId={project.currentRevisionId}
+              />
+            </div>
           )}
           {revisionQuery.isPending && <Loader aria-label="Загружаем ревизию модели" />}
           {revisionQuery.isError && (

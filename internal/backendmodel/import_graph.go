@@ -13,10 +13,17 @@ import (
 )
 
 type graphCandidate struct {
-	Nodes    []Node     `json:"nodes"`
-	Edges    []Edge     `json:"edges"`
-	Evidence []Evidence `json:"evidence"`
-	Coverage Coverage   `json:"coverage"`
+	Sources            []SourceSnapshot   `json:"sources"`
+	SourceChanges      []SourceChange     `json:"sourceChanges"`
+	IdentityDecisions  []IdentityDecision `json:"identityDecisions"`
+	DeletionDecisions  []DeletionDecision `json:"deletionDecisions"`
+	ComparisonSummary  *ComparisonSummary `json:"comparisonSummary"`
+	ReconciliationGaps []string           `json:"reconciliationGaps"`
+	StaleCounts        StaleCounts        `json:"staleCounts"`
+	Nodes              []Node             `json:"nodes"`
+	Edges              []Edge             `json:"edges"`
+	Evidence           []Evidence         `json:"evidence"`
+	Coverage           Coverage           `json:"coverage"`
 }
 
 func prepareGraph(ctx context.Context, q importReader, s *ImportSession) (*graphCandidate, []ImportDiagnostic, error) {
@@ -29,7 +36,22 @@ func prepareGraph(ctx context.Context, q importReader, s *ImportSession) (*graph
 	if err := validateInventory(s.Inventory); err != nil {
 		return nil, nil, err
 	}
+	base, err := loadRevisionState(ctx, q, s.ProjectID, s.BaseRevisionID)
+	if err != nil {
+		return nil, nil, err
+	}
 	ids := map[string]string{}
+	if s.Mode == "reconcile" {
+		for _, n := range base.Nodes {
+			ids["node\x00"+n.ExternalKey] = n.ID
+		}
+		for _, e := range base.Edges {
+			ids["edge\x00"+e.ExternalKey] = e.ID
+		}
+		for _, e := range base.Evidence {
+			ids["evidence\x00"+e.ExternalKey] = e.ID
+		}
+	}
 	rows, err := q.QueryContext(ctx, `SELECT record_type,external_key,id FROM backend_import_identities WHERE session_id=? ORDER BY id`, s.ID)
 	if err != nil {
 		return nil, nil, err
@@ -71,6 +93,17 @@ func prepareGraph(ctx context.Context, q importReader, s *ImportSession) (*graph
 		return nil, nil, err
 	}
 	present := map[string]bool{}
+	if s.Mode == "reconcile" {
+		for _, n := range base.Nodes {
+			present["node\x00"+n.ExternalKey] = true
+		}
+		for _, e := range base.Edges {
+			present["edge\x00"+e.ExternalKey] = true
+		}
+		for _, e := range base.Evidence {
+			present["evidence\x00"+e.ExternalKey] = true
+		}
+	}
 	for _, c := range commands {
 		typ, key, _ := commandAddress(c)
 		present[typ+"\x00"+key] = true
@@ -112,6 +145,9 @@ func prepareGraph(ctx context.Context, q importReader, s *ImportSession) (*graph
 			g.Evidence = append(g.Evidence, Evidence{ID: id, ExternalKey: e.ExternalKey, SubjectID: resolve(e.SubjectType, e.SubjectKey, "evidence/"+id+"/subjectId"), PropertyPath: e.PropertyPath, Method: e.Method, Status: e.Status, Source: e.Source, Explanation: e.Explanation, Snippet: e.Snippet})
 		}
 	}
+	if err := overlayGraph(ctx, q, s, base, g, commands, ids, &d); err != nil {
+		return nil, nil, err
+	}
 	nodes := map[string]Node{}
 	subjects := map[string][]string{}
 	properties := map[string]any{}
@@ -152,6 +188,7 @@ func prepareGraph(ctx context.Context, q importReader, s *ImportSession) (*graph
 		from, fok := nodes[e.From]
 		to, tok := nodes[e.To]
 		if !fok || !tok {
+			add("edges/"+e.ID, "Edge endpoints must survive in the final graph")
 			continue
 		}
 		valid := false
@@ -219,6 +256,7 @@ func prepareGraph(ctx context.Context, q importReader, s *ImportSession) (*graph
 		g.Coverage.Status = "partial"
 		g.Coverage.Gaps = append(g.Coverage.Gaps, "Unresolved nodes or evidence remain.")
 	}
+	finishReconciliation(s, g)
 	semantic, err := candidateJSON(s, g)
 	if err != nil {
 		return nil, nil, err
@@ -226,6 +264,15 @@ func prepareGraph(ctx context.Context, q importReader, s *ImportSession) (*graph
 	if len(g.Nodes) > MaxRevisionNodes || len(g.Edges) > MaxRevisionEdges || len(g.Evidence) > MaxRevisionEvidence || len(semantic) > MaxRevisionBytes {
 		return nil, nil, limitFault("Revision semantic limit exceeded")
 	}
+	slices.SortFunc(d, func(a, b ImportDiagnostic) int {
+		if a.Path != b.Path {
+			return strings.Compare(a.Path, b.Path)
+		}
+		if a.Code != b.Code {
+			return strings.Compare(a.Code, b.Code)
+		}
+		return strings.Compare(a.Message, b.Message)
+	})
 	return g, d, nil
 }
 func pointerExists(subject any, p string) bool {
@@ -315,7 +362,9 @@ func candidateJSON(s *ImportSession, g *graphCandidate) ([]byte, error) {
 		Manifest       SourceManifest  `json:"manifest"`
 		Inventory      []InventoryItem `json:"inventory"`
 		Graph          *graphCandidate `json:"graph"`
-	}{s.ProjectID, s.BaseRevisionID, s.Version, s.RepositoryID, s.SnapshotID, s.Manifest, s.Inventory, g})
+		GraphScope     *GraphScope     `json:"graphScope"`
+		Mode           string          `json:"mode"`
+	}{s.ProjectID, s.BaseRevisionID, s.Version, s.RepositoryID, s.SnapshotID, s.Manifest, s.Inventory, g, s.GraphScope, s.Mode})
 }
 func (r *Repo) PreviewImport(ctx context.Context, pid, sid string, in PreviewImportInput) (*ImportPreview, error) {
 	result := new(ImportPreview)
@@ -337,7 +386,8 @@ func (r *Repo) PreviewImport(ctx context.Context, pid, sid string, in PreviewImp
 		if in.BaseRevisionID != p.CurrentRevisionID {
 			return importConflict("backend_import_base_conflict", "Preview base must be the current revision", p.Version)
 		}
-		if err := requireEmptyBase(ctx, tx, pid, p.CurrentRevisionID); err != nil {
+		s.BaseRevisionID = in.BaseRevisionID
+		if err := requireImportBase(ctx, tx, s); err != nil {
 			return err
 		}
 		s.BaseRevisionID = in.BaseRevisionID
@@ -357,8 +407,11 @@ func (r *Repo) PreviewImport(ctx context.Context, pid, sid string, in PreviewImp
 			s.State = "ready"
 		}
 		s.UpdatedAt = time.Now().UTC()
-		*result = ImportPreview{SessionID: s.ID, Version: s.Version, State: s.State, CandidateHash: s.CandidateHash, Summary: ImportSummary{Nodes: int64(len(g.Nodes)), Edges: int64(len(g.Edges)), Evidence: int64(len(g.Evidence)), Unresolved: unresolvedCount(g)}, Diagnostics: diagnostics}
+		*result = ImportPreview{SessionID: s.ID, Version: s.Version, State: s.State, CandidateHash: s.CandidateHash, ComparisonSummary: g.ComparisonSummary, SourceChangeCount: int64(len(g.SourceChanges)), IdentityDecisionCount: int64(len(g.IdentityDecisions)), DeletionDecisionCount: int64(len(g.DeletionDecisions)), Summary: ImportSummary{Nodes: int64(len(g.Nodes)), Edges: int64(len(g.Edges)), Evidence: int64(len(g.Evidence)), Unresolved: unresolvedCount(g)}, Diagnostics: diagnostics}
 		if err := saveSession(ctx, tx, s); err != nil {
+			return err
+		}
+		if err := savePreview(ctx, tx, s, result, g); err != nil {
 			return err
 		}
 		return checkStaging(ctx, tx, pid, 0)
@@ -443,11 +496,11 @@ func (r *Repo) CommitImport(ctx context.Context, pid, sid string, in CommitImpor
 		if p.CurrentRevisionID != current.BaseRevisionID {
 			return importConflict("backend_import_base_conflict", "Current project revision changed", p.Version)
 		}
-		if err := requireEmptyBase(ctx, tx, pid, p.CurrentRevisionID); err != nil {
+		if err := requireImportBase(ctx, tx, current); err != nil {
 			return err
 		}
 		now := time.Now().UTC()
-		rev := Revision{ID: uuid.NewV7().String(), ProjectID: pid, ParentRevisionID: new(current.BaseRevisionID), SchemaVersion: SchemaVersion, SemanticHash: hashBytes(b), SourceSnapshotIDs: []string{current.SnapshotID}, ArtifactPins: []ArtifactPin{}, Coverage: g.Coverage, Author: "agent", Summary: "First source-backed foundation graph import", CreatedAt: now}
+		rev := Revision{ID: uuid.NewV7().String(), ProjectID: pid, ParentRevisionID: new(current.BaseRevisionID), SchemaVersion: SchemaVersion, SemanticHash: hashBytes(b), SourceSnapshotIDs: sourceIDs(g.Sources), ArtifactPins: []ArtifactPin{}, Coverage: g.Coverage, Author: "agent", Summary: "Source-backed foundation graph import", CreatedAt: now}
 		doc, err := json.Marshal(rev)
 		if err != nil {
 			return err
@@ -487,10 +540,23 @@ func (r *Repo) CommitImport(ctx context.Context, pid, sid string, in CommitImpor
 				return err
 			}
 		}
-		if _, err := tx.ExecContext(ctx, `INSERT INTO backend_repositories(id,project_id,logical_name) VALUES(?,?,?)`, current.RepositoryID, pid, current.Manifest.RepositoryName); err != nil {
+		if _, err := tx.ExecContext(ctx, `INSERT INTO backend_repositories(id,project_id,logical_name) VALUES(?,?,?) ON CONFLICT(id) DO NOTHING`, current.RepositoryID, pid, current.Manifest.RepositoryName); err != nil {
 			return err
 		}
-		coverage := RevisionCoverage{Coverage: g.Coverage, Inventory: current.Inventory, Snapshots: []SourceSnapshot{{ID: current.SnapshotID, RepositoryID: current.RepositoryID, ManifestHash: current.ManifestHash, Provider: current.Manifest.Provider, SnapshotManifest: current.Manifest.Snapshot}}}
+		if err := publishBindings(ctx, tx, current, g, rev.ID); err != nil {
+			return err
+		}
+		coverage := RevisionCoverage{Coverage: g.Coverage, Inventory: current.Inventory, Snapshots: g.Sources, StaleCounts: g.StaleCounts, ReconciliationGaps: g.ReconciliationGaps}
+		decisions, err := json.Marshal(struct {
+			Identity []IdentityDecision `json:"identity"`
+			Deletion []DeletionDecision `json:"deletion"`
+		}{g.IdentityDecisions, g.DeletionDecisions})
+		if err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx, `INSERT INTO backend_revision_decisions(revision_id,document) VALUES(?,?)`, rev.ID, string(decisions)); err != nil {
+			return err
+		}
 		sourceDoc, err := json.Marshal(coverage)
 		if err != nil {
 			return err
@@ -501,7 +567,9 @@ func (r *Repo) CommitImport(ctx context.Context, pid, sid string, in CommitImpor
 		p.Version++
 		p.CurrentRevisionID = rev.ID
 		p.UpdatedAt = now
-		p.Repositories = append(p.Repositories, Repository{ID: current.RepositoryID, LogicalName: current.Manifest.RepositoryName})
+		if current.Mode != "reconcile" {
+			p.Repositories = append(p.Repositories, Repository{ID: current.RepositoryID, LogicalName: current.Manifest.RepositoryName})
+		}
 		if _, err := tx.ExecContext(ctx, `UPDATE backend_projects SET version=?,current_revision_id=?,updated_at=? WHERE id=?`, p.Version, rev.ID, now.Format(time.RFC3339Nano), pid); err != nil {
 			return err
 		}

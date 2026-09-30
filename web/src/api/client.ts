@@ -175,6 +175,14 @@ function assertBackendSafeIntegers(value: unknown): void {
 }
 
 export const customFetch = async <T>(url: string, init: RequestInit = {}): Promise<T> => {
+  if (isBackendPath(url)) {
+    const query = url.split("?", 2)[1];
+    if (query) {
+      for (const value of new URLSearchParams(query).getAll("previewVersion")) {
+        if (/^-?\d+$/.test(value)) assertBackendSafeIntegers(parseBrowserSafeJson(value));
+      }
+    }
+  }
   if (isBackendPath(url) && typeof init.body === "string") {
     assertBackendSafeIntegers(parseBrowserSafeJson(init.body));
   }

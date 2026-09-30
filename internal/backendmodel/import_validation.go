@@ -203,7 +203,7 @@ func validateEvidence(e ImportEvidence, s *ImportSession) error {
 }
 func commandAddress(c ImportCommand) (string, string, error) {
 	count := 0
-	for _, ok := range []bool{c.Node != nil, c.Edge != nil, c.Evidence != nil, c.Remove != nil} {
+	for _, ok := range []bool{c.Node != nil, c.Edge != nil, c.Evidence != nil, c.Remove != nil, c.Identity != nil, c.Deletion != nil} {
 		if ok {
 			count++
 		}
@@ -224,6 +224,14 @@ func commandAddress(c ImportCommand) (string, string, error) {
 		if c.Evidence != nil {
 			return "evidence", c.Evidence.ExternalKey, nil
 		}
+	case "map_identity":
+		if c.Identity != nil && slices.Contains([]string{"node", "edge"}, c.Identity.RecordType) {
+			return c.Identity.RecordType, c.Identity.ToExternalKey, nil
+		}
+	case "delete_assertion":
+		if c.Deletion != nil && slices.Contains([]string{"node", "edge", "evidence"}, c.Deletion.RecordType) {
+			return c.Deletion.RecordType, c.Deletion.ExternalKey, nil
+		}
 	case "remove":
 		if c.Remove != nil && slices.Contains([]string{"node", "edge", "evidence"}, c.Remove.RecordType) {
 			return c.Remove.RecordType, c.Remove.ExternalKey, nil
@@ -240,6 +248,19 @@ func validateCommand(c ImportCommand, s *ImportSession) error {
 		return semantic("commands/externalKey", "External key must contain 1–200 non-control Unicode characters")
 	}
 	if c.Op == "remove" {
+		return nil
+	}
+	if c.Identity != nil {
+		x := c.Identity
+		if !externalKey(x.FromExternalKey) || x.FromExternalKey == x.ToExternalKey || !ValidID(x.ExpectedID) || !nonblank(x.Reason) || len(x.EvidenceKeys) == 0 {
+			return semantic("identity", "Mapping requires distinct valid keys, expectedId, reason and evidence")
+		}
+		return validateEvidenceKeys(x.EvidenceKeys)
+	}
+	if c.Deletion != nil {
+		if !ValidID(c.Deletion.ExpectedID) || !nonblank(c.Deletion.Reason) {
+			return semantic("deletion", "Deletion requires expectedId and reason")
+		}
 		return nil
 	}
 	switch typ {

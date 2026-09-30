@@ -6,8 +6,8 @@ metadata:
   workflowVersion: "1"
   requiredModelSchemaVersions: "[\"1\"]"
   requiredCapabilities: "[\"backend-projects\",\"backend-project-metadata\",\"backend-revisions\"]"
-  guideSetId: "sha256:6f352e4838720bf9447956681574dd16b64ef94f0d7a2700c512da5b9bc6c33f"
-  manifestHash: "sha256:6f352e4838720bf9447956681574dd16b64ef94f0d7a2700c512da5b9bc6c33f"
+  guideSetId: "sha256:78d12f5701030ccfbcccf4969ceae196b97d20f2fe4262e10d9897fbde6b8d7f"
+  manifestHash: "sha256:78d12f5701030ccfbcccf4969ceae196b97d20f2fe4262e10d9897fbde6b8d7f"
 ---
 
 # Backend project preparation
@@ -17,7 +17,7 @@ metadata, list projects and revisions, and inspect the empty initial revision.
 Creation saves project version 1 and its first immutable revision atomically.
 Coverage is partial, its denominator is unknown, and the explicit pre-import
 gap means an empty revision cannot establish absence of backend behavior.
-First source import and graph reads use the separate `mocker-backend-import`
+Source snapshot import/reimport and pinned comparison use the separate `mocker-backend-import`
 workflow in `references/backend/import.md` or pinned `backend-import` topic.
 Select that complete workflow before import writes. This project-preparation
 procedure does not import sources. Jobs and proposals remain future functionality.

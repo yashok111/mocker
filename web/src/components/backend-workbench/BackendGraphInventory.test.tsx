@@ -264,3 +264,50 @@ it("opens the evidence of a relationship separately from the node evidence", asy
   expect(await screen.findByText("Relationship inferred from call")).toBeInTheDocument();
   expect(screen.queryByText(evidence.explanation)).not.toBeInTheDocument();
 });
+
+it("shows retained ownership, stale reasons and provenance source role", async () => {
+  const ownership = { repositoryId, providerNamespace: "demo", profile: "foundation-graph-v1" };
+  const freshness = {
+    status: "stale",
+    confirmedSnapshotId: snapshotId,
+    reasons: ["not_reobserved", "source_changed"],
+  };
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (url: RequestInfo | URL, init?: RequestInit) => {
+      const path = new URL(String(url), "http://localhost");
+      if (path.pathname.endsWith("/coverage"))
+        return json(200, {
+          ...coverage,
+          staleCounts: { nodes: 1, edges: 0, evidence: 1 },
+          reconciliationGaps: ["Omitted assertions retained"],
+          snapshots: coverage.snapshots.map((snapshot) => ({
+            ...snapshot,
+            role: "retained_provenance",
+          })),
+        });
+      if (path.pathname.endsWith("/graph/query"))
+        return json(200, {
+          nodes:
+            JSON.parse(String(init?.body)).recordType === "nodes"
+              ? [{ ...node, ownership, freshness }]
+              : [],
+          edges: [],
+          nextCursor: "",
+        });
+      if (path.pathname.includes("/nodes/")) return json(200, { ...node, ownership, freshness });
+      if (path.pathname.endsWith("/evidence"))
+        return json(200, { items: [{ ...evidence, ownership, freshness }], nextCursor: "" });
+      return json(500, {});
+    }),
+  );
+  renderWithProviders(<BackendGraphInventory projectId={projectId} revisionId={revisionId} />);
+  expect(await screen.findByText("Историческое основание")).toBeInTheDocument();
+  expect(screen.getByText("Устаревшие: объекты 1 · связи 0 · основания 1")).toBeInTheDocument();
+  await userEvent.click(await screen.findByRole("button", { name: "Открыть объект ListOrders" }));
+  const inspector = await screen.findByRole("region", { name: "Инспектор объекта" });
+  expect(await within(inspector).findAllByText(/not_reobserved, source_changed/)).not.toHaveLength(
+    0,
+  );
+  expect(within(inspector).getAllByText(/demo · foundation-graph-v1/)).not.toHaveLength(0);
+});

@@ -1,20 +1,21 @@
 ---
 name: mocker
-description: Drive a mocker instance — configure mock workspaces and API designs, prepare backend projects, or import their first source-backed foundation graph with revision and evidence reads. Use for mocker, mock APIs for a frontend, backend project import, MOCKER_MCP_KEY, or `/__mocker/state`.
+description: Drive a mocker instance — configure mock workspaces and API designs, prepare backend projects, or reconcile source-backed foundation graphs with pinned comparison and evidence reads. Use for mocker, mock APIs for a frontend, backend project import, MOCKER_MCP_KEY, or `/__mocker/state`.
 metadata:
   workflowId: "mocker-routing"
   workflowVersion: "1"
   requiredModelSchemaVersions: "[]"
   requiredCapabilities: "[]"
-  guideSetId: "sha256:6f352e4838720bf9447956681574dd16b64ef94f0d7a2700c512da5b9bc6c33f"
-  manifestHash: "sha256:6f352e4838720bf9447956681574dd16b64ef94f0d7a2700c512da5b9bc6c33f"
+  guideSetId: "sha256:78d12f5701030ccfbcccf4969ceae196b97d20f2fe4262e10d9897fbde6b8d7f"
+  manifestHash: "sha256:78d12f5701030ccfbcccf4969ceae196b97d20f2fe4262e10d9897fbde6b8d7f"
 ---
 
 # mocker
 
 mocker provides OpenAPI mocks, API design, saved sequences and backend projects.
 Backend projects support metadata, immutable revisions and the first source-backed
-foundation graph import with evidence reads. Replacement import, ER/SQL,
+foundation graph import and explicit same-provider snapshot reconciliation with
+pinned structural comparison and evidence reads. Incremental import, ER/SQL,
 endpoint-flow and impact remain future work. For mocks, one OpenAPI
 spec is imported once; every WORKSPACE
 bound to it serves the spec's routes on its own host with deterministic
@@ -62,7 +63,7 @@ fields realistic without pinning the whole body.
 ## Classify the request first
 
 Before `list_workspaces`, classify the task as mock response configuration,
-API design, saved sequence, backend project preparation, or first source import. Mock configuration
+API design, saved sequence, backend project preparation, or source snapshot import/reimport. Mock configuration
 uses the workspace procedure below; API design and saved sequences begin with
 `references/design.md`. Backend project preparation begins with
 `references/backend/overview.md` or `get_guide {topic:"backend-overview"}` and

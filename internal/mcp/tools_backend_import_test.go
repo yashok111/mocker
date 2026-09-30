@@ -123,7 +123,7 @@ func TestBackendImportToolsPublishExactSchemasAndHints(t *testing.T) {
 	if err := json.Unmarshal(response.Body.Bytes(), &envelope); err != nil {
 		t.Fatal(err)
 	}
-	expected := map[string]bool{"begin_backend_import": false, "list_backend_imports": true, "get_backend_import": true, "put_backend_import_batch": false, "preview_backend_import": false, "commit_backend_import": false, "abort_backend_import": false, "query_backend_graph": true, "get_backend_node": true, "get_backend_evidence": true, "get_backend_coverage": true}
+	expected := map[string]bool{"begin_backend_import": false, "list_backend_imports": true, "get_backend_import": true, "put_backend_import_batch": false, "preview_backend_import": false, "commit_backend_import": false, "abort_backend_import": false, "query_backend_graph": true, "get_backend_node": true, "get_backend_evidence": true, "get_backend_coverage": true, "compare_backend_revisions": true, "get_backend_import_changes": true}
 	for _, tool := range envelope.Result.Tools {
 		readOnly, ok := expected[tool.Name]
 		if !ok {
@@ -207,7 +207,7 @@ func TestBackendImportMCPBodySchemasMatchOpenAPI(t *testing.T) {
 			return value
 		}
 	}
-	contracts := map[string]string{"begin_backend_import": "BeginBackendImportRequest", "put_backend_import_batch": "PutBackendImportBatchRequest", "preview_backend_import": "PreviewBackendImportRequest", "commit_backend_import": "CommitBackendImportRequest", "abort_backend_import": "AbortBackendImportRequest", "query_backend_graph": "QueryBackendGraphRequest"}
+	contracts := map[string]string{"begin_backend_import": "BeginBackendImportRequest", "put_backend_import_batch": "PutBackendImportBatchRequest", "preview_backend_import": "PreviewBackendImportRequest", "commit_backend_import": "CommitBackendImportRequest", "abort_backend_import": "AbortBackendImportRequest", "query_backend_graph": "QueryBackendGraphRequest", "compare_backend_revisions": "CompareBackendRevisionsRequest"}
 	for _, tool := range envelope.Result.Tools {
 		name, ok := contracts[tool.Name]
 		if !ok {
@@ -336,6 +336,76 @@ func TestBackendGraphSDKExplicitLimitBounds(t *testing.T) {
 			}
 		} else if message != "" || calls.method != "POST" {
 			t.Fatalf("valid/omitted limit rejected: %s %s", args, message)
+		}
+	}
+}
+
+func TestBackendReconcileReadToolsRawPins(t *testing.T) {
+	for _, tt := range []struct{ name, args, method, suffix string }{
+		{"compare_backend_revisions", `{"projectId":"` + backendTestID + `","fromRevisionId":"` + backendTestID + `","toRevisionId":"` + backendTestID + `","limit":500}`, "POST", "/revisions/compare"},
+		{"get_backend_import_changes", `{"projectId":"` + backendTestID + `","importId":"` + backendTestID + `","previewVersion":9007199254740993,"recordType":"identity","limit":500}`, "GET", "/imports/" + backendTestID + "/changes?limit=500&previewVersion=9007199254740993&recordType=identity"},
+		{"query_backend_graph", `{"projectId":"` + backendTestID + `","revisionId":"` + backendTestID + `","recordType":"edges","id":"` + backendTestID + `"}`, "POST", "/graph/query"},
+		{"get_backend_evidence", `{"projectId":"` + backendTestID + `","revisionId":"` + backendTestID + `","evidenceId":"` + backendTestID + `"}`, "GET", "/revisions/" + backendTestID + "/evidence?evidenceId=" + backendTestID},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			calls := &recordingCaller{status: 200, body: []byte(`{"sourceChangeCount":9007199254740995}`)}
+			out, message := callTool(t, calls, tt.name, tt.args)
+			if message != "" {
+				t.Fatal(message)
+			}
+			if calls.method != tt.method || calls.path != "/api/backend-projects/"+backendTestID+tt.suffix {
+				t.Fatalf("wrong route: %s %s", calls.method, calls.path)
+			}
+			if tt.name == "compare_backend_revisions" && (!strings.Contains(string(calls.sent), `"fromRevisionId"`) || !strings.Contains(string(calls.sent), `"toRevisionId"`)) {
+				t.Fatalf("body pins missing: %s", calls.sent)
+			}
+			if !strings.Contains(string(out), "9007199254740995") {
+				t.Fatalf("rounded output: %s", out)
+			}
+		})
+	}
+}
+
+func TestBackendReconcileCommandUnion(t *testing.T) {
+	validIdentity := `{"op":"map_identity","identity":{"recordType":"node","fromExternalKey":"old","toExternalKey":"new","expectedId":"` + backendTestID + `","reason":"same subject","evidenceKeys":["proof"]}}`
+	validDeletion := `{"op":"delete_assertion","deletion":{"recordType":"edge","externalKey":"old","expectedId":"` + backendTestID + `","reason":"removed"}}`
+	for _, tt := range []struct {
+		command string
+		valid   bool
+	}{
+		{validIdentity, true}, {validDeletion, true},
+		{strings.Replace(validIdentity, `"node"`, `"evidence"`, 1), false},
+		{strings.Replace(validIdentity, `"expectedId":"`+backendTestID+`"`, `"expectedId":null`, 1), false},
+		{strings.Replace(validIdentity, `"expectedId":"`+backendTestID+`"`, `"expectedId":"bad"`, 1), false},
+		{strings.Replace(validDeletion, `"deletion":{`, `"identity":{`, 1), false},
+		{strings.TrimSuffix(validDeletion, "}") + `,"remove":{"recordType":"edge","externalKey":"old"}}`, false},
+		{strings.Replace(validDeletion, `"reason":"removed"`, `"reason":"removed","reason":"again"`, 1), false},
+	} {
+		calls := &recordingCaller{status: 200, body: []byte(`{}`)}
+		args := `{"projectId":"` + backendTestID + `","importId":"` + backendTestID + `","batchId":"b","expectedImportVersion":9007199254740993,"payloadHash":"` + strings.Repeat("a", 64) + `","commands":[` + tt.command + `]}`
+		_, message := callTool(t, calls, "put_backend_import_batch", args)
+		if tt.valid && (message != "" || calls.method != "PUT") {
+			t.Fatalf("valid command rejected: %s %s", tt.command, message)
+		}
+		if !tt.valid && (message == "" || calls.method != "") {
+			t.Fatalf("invalid command reached admin: %s", tt.command)
+		}
+	}
+}
+
+func TestBackendReconcileReadToolSelectors(t *testing.T) {
+	for _, tt := range []struct{ name, args string }{
+		{"compare_backend_revisions", `{"projectId":"` + backendTestID + `","fromRevisionId":"` + backendTestID + `","toRevisionId":"` + backendTestID + `","limit":0}`},
+		{"compare_backend_revisions", `{"projectId":"` + backendTestID + `","fromRevisionId":"bad","toRevisionId":"` + backendTestID + `"}`},
+		{"get_backend_import_changes", `{"projectId":"` + backendTestID + `","importId":"` + backendTestID + `","previewVersion":9223372036854775808,"recordType":"source"}`},
+		{"get_backend_import_changes", `{"projectId":"` + backendTestID + `","importId":"` + backendTestID + `","previewVersion":null,"recordType":"source"}`},
+		{"get_backend_evidence", `{"projectId":"` + backendTestID + `","revisionId":"` + backendTestID + `","evidenceId":"` + backendTestID + `","subjectId":"` + backendTestID + `"}`},
+		{"query_backend_graph", `{"projectId":"` + backendTestID + `","revisionId":"` + backendTestID + `","recordType":"nodes","id":"` + backendTestID + `","search":""}`},
+	} {
+		calls := &recordingCaller{status: 200, body: []byte(`{}`)}
+		_, message := callTool(t, calls, tt.name, tt.args)
+		if message == "" || calls.method != "" {
+			t.Fatalf("invalid selector reached admin: %s %s", tt.name, tt.args)
 		}
 	}
 }

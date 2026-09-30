@@ -20,7 +20,7 @@ const (
 
 // Features lists only the currently implemented workbench operations.
 func Features() []string {
-	return []string{"backend-projects", "backend-project-metadata", "backend-revisions", "backend-graph-query", "backend-source-import"}
+	return []string{"backend-projects", "backend-project-metadata", "backend-revisions", "backend-graph-query", "backend-source-import", "backend-source-reconcile", "backend-revision-compare"}
 }
 
 type Repository struct {

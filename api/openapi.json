@@ -13679,7 +13679,11 @@
           "guideSetId",
           "limits",
           "supportedNodeKinds",
-          "supportedEdgeKinds"
+          "supportedEdgeKinds",
+          "importModes",
+          "importCommands",
+          "reconciliationProfile",
+          "comparisonVersion"
         ],
         "properties": {
           "modelSchemaVersions": {
@@ -13854,6 +13858,58 @@
             "items": {
               "$ref": "#/components/schemas/BackendEdgeKind"
             }
+          },
+          "importModes": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "initial",
+                "reconcile"
+              ]
+            }
+          },
+          "importCommands": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "upsert_node",
+                "upsert_edge",
+                "upsert_evidence",
+                "remove",
+                "map_identity",
+                "delete_assertion"
+              ]
+            }
+          },
+          "reconciliationProfile": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "version",
+              "profile",
+              "scope"
+            ],
+            "properties": {
+              "version": {
+                "type": "string",
+                "const": "1"
+              },
+              "profile": {
+                "type": "string",
+                "const": "foundation-graph-v1"
+              },
+              "scope": {
+                "type": "string",
+                "const": "whole-repository"
+              }
+            }
+          },
+          "comparisonVersion": {
+            "type": "integer",
+            "format": "int64",
+            "const": 1
           }
         }
       },
@@ -14215,6 +14271,13 @@
           },
           "provider": {
             "$ref": "#/components/schemas/BackendProvider"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "primary",
+              "retained_provenance"
+            ]
           }
         }
       },
@@ -14865,6 +14928,12 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "ownership": {
+                "$ref": "#/components/schemas/BackendAssertionOwnership"
+              },
+              "freshness": {
+                "$ref": "#/components/schemas/BackendAssertionFreshness"
               }
             }
           },
@@ -14915,6 +14984,12 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "ownership": {
+                "$ref": "#/components/schemas/BackendAssertionOwnership"
+              },
+              "freshness": {
+                "$ref": "#/components/schemas/BackendAssertionFreshness"
               }
             }
           },
@@ -14965,6 +15040,12 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "ownership": {
+                "$ref": "#/components/schemas/BackendAssertionOwnership"
+              },
+              "freshness": {
+                "$ref": "#/components/schemas/BackendAssertionFreshness"
               }
             }
           },
@@ -15015,6 +15096,12 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "ownership": {
+                "$ref": "#/components/schemas/BackendAssertionOwnership"
+              },
+              "freshness": {
+                "$ref": "#/components/schemas/BackendAssertionFreshness"
               }
             }
           },
@@ -15065,6 +15152,12 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "ownership": {
+                "$ref": "#/components/schemas/BackendAssertionOwnership"
+              },
+              "freshness": {
+                "$ref": "#/components/schemas/BackendAssertionFreshness"
               }
             }
           },
@@ -15115,6 +15208,12 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "ownership": {
+                "$ref": "#/components/schemas/BackendAssertionOwnership"
+              },
+              "freshness": {
+                "$ref": "#/components/schemas/BackendAssertionFreshness"
               }
             }
           },
@@ -15165,6 +15264,12 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "ownership": {
+                "$ref": "#/components/schemas/BackendAssertionOwnership"
+              },
+              "freshness": {
+                "$ref": "#/components/schemas/BackendAssertionFreshness"
               }
             }
           },
@@ -15215,6 +15320,12 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "ownership": {
+                "$ref": "#/components/schemas/BackendAssertionOwnership"
+              },
+              "freshness": {
+                "$ref": "#/components/schemas/BackendAssertionFreshness"
               }
             }
           },
@@ -15265,6 +15376,12 @@
                   "type": "string",
                   "format": "uuid"
                 }
+              },
+              "ownership": {
+                "$ref": "#/components/schemas/BackendAssertionOwnership"
+              },
+              "freshness": {
+                "$ref": "#/components/schemas/BackendAssertionFreshness"
               }
             }
           }
@@ -15360,6 +15477,12 @@
               "type": "string",
               "format": "uuid"
             }
+          },
+          "ownership": {
+            "$ref": "#/components/schemas/BackendAssertionOwnership"
+          },
+          "freshness": {
+            "$ref": "#/components/schemas/BackendAssertionFreshness"
           }
         }
       },
@@ -15493,6 +15616,12 @@
           "subjectId": {
             "type": "string",
             "format": "uuid"
+          },
+          "ownership": {
+            "$ref": "#/components/schemas/BackendAssertionOwnership"
+          },
+          "freshness": {
+            "$ref": "#/components/schemas/BackendAssertionFreshness"
           }
         }
       },
@@ -15586,6 +15715,40 @@
                 }
               }
             }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "op",
+              "identity"
+            ],
+            "properties": {
+              "op": {
+                "type": "string",
+                "const": "map_identity"
+              },
+              "identity": {
+                "$ref": "#/components/schemas/BackendImportIdentityMap"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "op",
+              "deletion"
+            ],
+            "properties": {
+              "op": {
+                "type": "string",
+                "const": "delete_assertion"
+              },
+              "deletion": {
+                "$ref": "#/components/schemas/BackendImportDeletion"
+              }
+            }
           }
         ]
       },
@@ -15626,8 +15789,58 @@
             },
             "minItems": 9,
             "maxItems": 9
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "initial",
+              "reconcile"
+            ]
+          },
+          "repositoryId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "graphScope": {
+            "$ref": "#/components/schemas/BackendGraphScope"
           }
-        }
+        },
+        "allOf": [
+          {
+            "if": {
+              "required": [
+                "mode"
+              ],
+              "properties": {
+                "mode": {
+                  "const": "reconcile"
+                }
+              }
+            },
+            "then": {
+              "required": [
+                "repositoryId",
+                "graphScope"
+              ]
+            },
+            "else": {
+              "not": {
+                "anyOf": [
+                  {
+                    "required": [
+                      "repositoryId"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "graphScope"
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        ]
       },
       "PutBackendImportBatchRequest": {
         "type": "object",
@@ -15825,6 +16038,23 @@
           "updatedAt": {
             "type": "string",
             "format": "date-time"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "initial",
+              "reconcile"
+            ]
+          },
+          "graphScope": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BackendGraphScope"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         }
       },
@@ -15894,6 +16124,27 @@
           },
           "nextCursor": {
             "type": "string"
+          },
+          "preview": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BackendImportPreview"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "committedRevisionId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         }
       },
@@ -16057,6 +16308,34 @@
             "items": {
               "$ref": "#/components/schemas/BackendImportDiagnostic"
             }
+          },
+          "comparisonSummary": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BackendComparisonSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sourceChangeCount": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "maximum": 9223372036854775807
+          },
+          "identityDecisionCount": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "maximum": 9223372036854775807
+          },
+          "deletionDecisionCount": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "maximum": 9223372036854775807
           }
         }
       },
@@ -16117,8 +16396,57 @@
               },
               "cursor": {
                 "type": "string"
+              },
+              "id": {
+                "type": "string",
+                "format": "uuid"
               }
-            }
+            },
+            "allOf": [
+              {
+                "if": {
+                  "required": [
+                    "id"
+                  ]
+                },
+                "then": {
+                  "not": {
+                    "anyOf": [
+                      {
+                        "required": [
+                          "kind"
+                        ]
+                      },
+                      {
+                        "required": [
+                          "search"
+                        ]
+                      },
+                      {
+                        "required": [
+                          "parentId"
+                        ]
+                      },
+                      {
+                        "required": [
+                          "from"
+                        ]
+                      },
+                      {
+                        "required": [
+                          "to"
+                        ]
+                      },
+                      {
+                        "required": [
+                          "cursor"
+                        ]
+                      }
+                    ]
+                  }
+                }
+              }
+            ]
           },
           {
             "type": "object",
@@ -16155,8 +16483,57 @@
               },
               "cursor": {
                 "type": "string"
+              },
+              "id": {
+                "type": "string",
+                "format": "uuid"
               }
-            }
+            },
+            "allOf": [
+              {
+                "if": {
+                  "required": [
+                    "id"
+                  ]
+                },
+                "then": {
+                  "not": {
+                    "anyOf": [
+                      {
+                        "required": [
+                          "kind"
+                        ]
+                      },
+                      {
+                        "required": [
+                          "search"
+                        ]
+                      },
+                      {
+                        "required": [
+                          "parentId"
+                        ]
+                      },
+                      {
+                        "required": [
+                          "from"
+                        ]
+                      },
+                      {
+                        "required": [
+                          "to"
+                        ]
+                      },
+                      {
+                        "required": [
+                          "cursor"
+                        ]
+                      }
+                    ]
+                  }
+                }
+              }
+            ]
           }
         ]
       },
@@ -16228,6 +16605,971 @@
             "items": {
               "$ref": "#/components/schemas/BackendSourceSnapshot"
             }
+          },
+          "staleCounts": {
+            "$ref": "#/components/schemas/BackendStaleCounts"
+          },
+          "reconciliationGaps": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "BackendGraphScope": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "profile",
+          "status",
+          "gaps"
+        ],
+        "properties": {
+          "profile": {
+            "type": "string",
+            "enum": [
+              "foundation-graph-v1"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "complete",
+              "partial"
+            ]
+          },
+          "gaps": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "BackendImportIdentityMap": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "recordType",
+          "fromExternalKey",
+          "toExternalKey",
+          "expectedId",
+          "reason",
+          "evidenceKeys"
+        ],
+        "properties": {
+          "recordType": {
+            "type": "string",
+            "enum": [
+              "node",
+              "edge"
+            ]
+          },
+          "fromExternalKey": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200,
+            "pattern": "^[^\\p{Cc}]+$"
+          },
+          "toExternalKey": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200,
+            "pattern": "^[^\\p{Cc}]+$"
+          },
+          "expectedId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1
+          },
+          "evidenceKeys": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200,
+              "pattern": "^[^\\p{Cc}]+$"
+            }
+          }
+        }
+      },
+      "BackendImportDeletion": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "recordType",
+          "externalKey",
+          "expectedId",
+          "reason"
+        ],
+        "properties": {
+          "recordType": {
+            "type": "string",
+            "enum": [
+              "node",
+              "edge",
+              "evidence"
+            ]
+          },
+          "externalKey": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200,
+            "pattern": "^[^\\p{Cc}]+$"
+          },
+          "expectedId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      },
+      "BackendAssertionOwnership": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "repositoryId",
+          "providerNamespace",
+          "profile"
+        ],
+        "properties": {
+          "repositoryId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "providerNamespace": {
+            "type": "string"
+          },
+          "profile": {
+            "type": "string"
+          }
+        }
+      },
+      "BackendAssertionFreshness": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "status",
+          "confirmedSnapshotId",
+          "reasons"
+        ],
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "current",
+              "stale"
+            ]
+          },
+          "confirmedSnapshotId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "reasons": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "not_reobserved",
+                "source_changed",
+                "source_unavailable",
+                "source_absent",
+                "dependency_stale"
+              ]
+            }
+          }
+        }
+      },
+      "BackendComparisonCounts": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "added",
+          "removed",
+          "modified"
+        ],
+        "properties": {
+          "added": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "maximum": 9223372036854775807
+          },
+          "removed": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "maximum": 9223372036854775807
+          },
+          "modified": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "maximum": 9223372036854775807
+          }
+        }
+      },
+      "BackendComparisonSummary": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "nodes",
+          "edges",
+          "evidence",
+          "sourceChanges",
+          "identityMappings",
+          "freshnessChanges"
+        ],
+        "properties": {
+          "nodes": {
+            "$ref": "#/components/schemas/BackendComparisonCounts"
+          },
+          "edges": {
+            "$ref": "#/components/schemas/BackendComparisonCounts"
+          },
+          "evidence": {
+            "$ref": "#/components/schemas/BackendComparisonCounts"
+          },
+          "sourceChanges": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "maximum": 9223372036854775807
+          },
+          "identityMappings": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "maximum": 9223372036854775807
+          },
+          "freshnessChanges": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "maximum": 9223372036854775807
+          }
+        }
+      },
+      "BackendStaleCounts": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "nodes",
+          "edges",
+          "evidence"
+        ],
+        "properties": {
+          "nodes": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "maximum": 9223372036854775807
+          },
+          "edges": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "maximum": 9223372036854775807
+          },
+          "evidence": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "maximum": 9223372036854775807
+          }
+        }
+      },
+      "BackendHistoricalEvidenceRef": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "revisionId",
+          "evidenceId"
+        ],
+        "properties": {
+          "revisionId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "evidenceId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
+      "BackendHistoricalSubjectRef": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "revisionId",
+          "recordType",
+          "id"
+        ],
+        "properties": {
+          "revisionId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "recordType": {
+            "type": "string",
+            "enum": [
+              "node",
+              "edge",
+              "evidence"
+            ]
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
+      "BackendStagedEvidenceRef": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "snapshotId",
+          "evidenceKey"
+        ],
+        "properties": {
+          "snapshotId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "evidenceKey": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200,
+            "pattern": "^[^\\p{Cc}]+$"
+          }
+        }
+      },
+      "BackendSourceFileSummary": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "snapshotId",
+          "path",
+          "contentHash",
+          "analysisStatus"
+        ],
+        "properties": {
+          "snapshotId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "path": {
+            "type": "string"
+          },
+          "contentHash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "analysisStatus": {
+            "type": "string",
+            "enum": [
+              "analyzed",
+              "excluded",
+              "unsupported"
+            ]
+          }
+        }
+      },
+      "BackendSourceChange": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "path",
+          "kind",
+          "additionConfirmed",
+          "deletionConfirmed",
+          "before",
+          "after"
+        ],
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "newly_observed",
+              "content_changed",
+              "analysis_changed",
+              "no_longer_observed"
+            ]
+          },
+          "additionConfirmed": {
+            "type": "boolean"
+          },
+          "deletionConfirmed": {
+            "type": "boolean"
+          },
+          "before": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BackendSourceFileSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "after": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BackendSourceFileSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      },
+      "BackendIdentityDecision": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "command",
+          "resolved",
+          "oldSubject",
+          "oldEvidenceRefs",
+          "evidenceRefs"
+        ],
+        "properties": {
+          "command": {
+            "$ref": "#/components/schemas/BackendImportIdentityMap"
+          },
+          "resolved": {
+            "type": "boolean"
+          },
+          "oldSubject": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BackendHistoricalSubjectRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "oldEvidenceRefs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendHistoricalEvidenceRef"
+            }
+          },
+          "evidenceRefs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendStagedEvidenceRef"
+            }
+          }
+        }
+      },
+      "BackendDeletionDecision": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "command",
+          "resolved",
+          "oldSubject",
+          "oldEvidenceRefs"
+        ],
+        "properties": {
+          "command": {
+            "$ref": "#/components/schemas/BackendImportDeletion"
+          },
+          "resolved": {
+            "type": "boolean"
+          },
+          "oldSubject": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BackendHistoricalSubjectRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "oldEvidenceRefs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendHistoricalEvidenceRef"
+            }
+          }
+        }
+      },
+      "BackendImportChangeItem": {
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "recordType",
+              "source"
+            ],
+            "properties": {
+              "recordType": {
+                "type": "string",
+                "const": "source"
+              },
+              "source": {
+                "$ref": "#/components/schemas/BackendSourceChange"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "recordType",
+              "identity"
+            ],
+            "properties": {
+              "recordType": {
+                "type": "string",
+                "const": "identity"
+              },
+              "identity": {
+                "$ref": "#/components/schemas/BackendIdentityDecision"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "recordType",
+              "deletion"
+            ],
+            "properties": {
+              "recordType": {
+                "type": "string",
+                "const": "deletion"
+              },
+              "deletion": {
+                "$ref": "#/components/schemas/BackendDeletionDecision"
+              }
+            }
+          }
+        ]
+      },
+      "BackendImportChangesPage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "sessionId",
+          "previewVersion",
+          "candidateHash",
+          "recordType",
+          "items",
+          "nextCursor"
+        ],
+        "properties": {
+          "sessionId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "previewVersion": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1,
+            "maximum": 9223372036854775807
+          },
+          "candidateHash": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "recordType": {
+            "type": "string",
+            "enum": [
+              "source",
+              "identity",
+              "deletion"
+            ]
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendImportChangeItem"
+            }
+          },
+          "nextCursor": {
+            "type": "string"
+          }
+        }
+      },
+      "BackendComparisonPin": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "revisionId",
+          "semanticHash",
+          "primarySnapshotId",
+          "manifestHash",
+          "sourceSnapshotIds"
+        ],
+        "properties": {
+          "revisionId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "semanticHash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "primarySnapshotId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "manifestHash": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sourceSnapshotIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        }
+      },
+      "BackendComparisonRef": {
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "projectId",
+              "revisionId",
+              "recordType",
+              "id"
+            ],
+            "properties": {
+              "projectId": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "revisionId": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "recordType": {
+                "type": "string",
+                "enum": [
+                  "node",
+                  "edge",
+                  "evidence"
+                ]
+              },
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "projectId",
+              "revisionId",
+              "recordType",
+              "snapshotId",
+              "path"
+            ],
+            "properties": {
+              "projectId": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "revisionId": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "recordType": {
+                "type": "string",
+                "enum": [
+                  "source"
+                ]
+              },
+              "snapshotId": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "path": {
+                "type": "string"
+              }
+            }
+          }
+        ]
+      },
+      "BackendComparisonItem": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "recordType",
+          "id",
+          "changeKinds",
+          "changedPaths",
+          "before",
+          "after",
+          "nameBefore",
+          "nameAfter",
+          "keyBefore",
+          "keyAfter",
+          "freshnessBefore",
+          "freshnessAfter"
+        ],
+        "properties": {
+          "recordType": {
+            "type": "string",
+            "enum": [
+              "node",
+              "edge",
+              "evidence",
+              "source",
+              "identity"
+            ]
+          },
+          "id": {
+            "type": "string"
+          },
+          "changeKinds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "added",
+                "removed",
+                "modified",
+                "identity_mapped",
+                "freshness_changed"
+              ]
+            }
+          },
+          "changedPaths": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "before": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BackendComparisonRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "after": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BackendComparisonRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "nameBefore": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "nameAfter": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "keyBefore": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "keyAfter": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "freshnessBefore": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BackendAssertionFreshness"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "freshnessAfter": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BackendAssertionFreshness"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      },
+      "BackendRevisionComparison": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "from",
+          "to",
+          "comparisonVersion",
+          "comparisonHash",
+          "summary",
+          "coverageBefore",
+          "coverageAfter",
+          "limitations",
+          "items",
+          "nextCursor"
+        ],
+        "properties": {
+          "from": {
+            "$ref": "#/components/schemas/BackendComparisonPin"
+          },
+          "to": {
+            "$ref": "#/components/schemas/BackendComparisonPin"
+          },
+          "comparisonVersion": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1,
+            "maximum": 9223372036854775807
+          },
+          "comparisonHash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/BackendComparisonSummary"
+          },
+          "coverageBefore": {
+            "$ref": "#/components/schemas/BackendCoverage"
+          },
+          "coverageAfter": {
+            "$ref": "#/components/schemas/BackendCoverage"
+          },
+          "limitations": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendComparisonItem"
+            }
+          },
+          "nextCursor": {
+            "type": "string"
+          }
+        }
+      },
+      "CompareBackendRevisionsRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "fromRevisionId",
+          "toRevisionId"
+        ],
+        "properties": {
+          "fromRevisionId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "toRevisionId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "recordType": {
+            "type": "string",
+            "enum": [
+              "node",
+              "edge",
+              "evidence",
+              "source",
+              "identity"
+            ]
+          },
+          "changeKind": {
+            "type": "string",
+            "enum": [
+              "added",
+              "removed",
+              "modified",
+              "identity_mapped",
+              "freshness_changed"
+            ]
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 500,
+            "default": 100
+          },
+          "cursor": {
+            "type": "string"
           }
         }
       }
@@ -29161,6 +30503,15 @@
               "type": "string",
               "format": "uuid"
             }
+          },
+          {
+            "name": "evidenceId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         ],
         "responses": {
@@ -29237,7 +30588,8 @@
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           }
-        }
+        },
+        "description": "Pinned evidenceId selector cannot combine with subjectId or cursor."
       }
     },
     "/api/backend-projects/{id}/revisions/{rid}/coverage": {
@@ -29279,6 +30631,269 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/BackendRevisionCoverage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed JSON, unknown or repeated selector, or malformed cursor.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unavailable project/session/revision/object.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "CAS, candidate/base, idempotency conflict, or backend_reimport_unsupported.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Published body/staging/revision limits exceeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid semantic input; details include paths.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/backend-projects/{id}/revisions/compare": {
+      "post": {
+        "tags": [
+          "backend-projects"
+        ],
+        "operationId": "compareBackendRevisions",
+        "summary": "compareBackendRevisions",
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendRevisionComparison"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed JSON, unknown or repeated selector, or malformed cursor.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unavailable project/session/revision/object.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "CAS, candidate/base, idempotency conflict, or backend_reimport_unsupported.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Published body/staging/revision limits exceeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid semantic input; details include paths.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CompareBackendRevisionsRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/backend-projects/{id}/imports/{iid}/changes": {
+      "get": {
+        "tags": [
+          "backend-projects"
+        ],
+        "operationId": "getBackendImportChanges",
+        "summary": "getBackendImportChanges",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "iid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "previewVersion",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1,
+              "maximum": 9223372036854775807
+            }
+          },
+          {
+            "name": "recordType",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "source",
+                "identity",
+                "deletion"
+              ]
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500,
+              "default": 100
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendImportChangesPage"
                 }
               }
             }

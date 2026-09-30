@@ -2,6 +2,7 @@ package backendmodel
 
 import (
 	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"time"
 )
 
@@ -55,6 +56,7 @@ type SourceManifest struct {
 	Snapshot       SnapshotManifest `json:"snapshot"`
 }
 type SourceSnapshot struct {
+	Role         string         `json:"role"`
 	ID           string         `json:"id"`
 	RepositoryID string         `json:"repositoryId"`
 	ManifestHash string         `json:"manifestHash"`
@@ -71,6 +73,9 @@ type InventoryItem struct {
 	Reason          string   `json:"reason"`
 }
 type BeginImportInput struct {
+	Mode            string          `json:"mode,omitempty"`
+	RepositoryID    *string         `json:"repositoryId,omitzero"`
+	GraphScope      *GraphScope     `json:"graphScope,omitzero"`
 	ExpectedVersion int64           `json:"expectedVersion"`
 	BaseRevisionID  string          `json:"baseRevisionId"`
 	IdempotencyKey  string          `json:"idempotencyKey"`
@@ -78,6 +83,11 @@ type BeginImportInput struct {
 	Inventory       []InventoryItem `json:"inventory"`
 }
 type ImportSession struct {
+	// Legacy receipts retain their original response shape. Ordinary session loads
+	// never set this field, so current reads expose the additive B0.3 metadata.
+	legacyReceiptJSON  string
+	Mode               string          `json:"mode"`
+	GraphScope         *GraphScope     `json:"graphScope"`
 	ID                 string          `json:"id"`
 	ProjectID          string          `json:"projectId"`
 	BaseRevisionID     string          `json:"baseRevisionId"`
@@ -93,6 +103,17 @@ type ImportSession struct {
 	CreatedAt          time.Time       `json:"createdAt"`
 	UpdatedAt          time.Time       `json:"updatedAt"`
 }
+
+// MarshalJSON preserves an acknowledged legacy response without changing the
+// current session representation or rewriting the stored receipt.
+func (s ImportSession) MarshalJSON() ([]byte, error) {
+	if s.legacyReceiptJSON != "" {
+		return []byte(s.legacyReceiptJSON), nil
+	}
+	type currentSession ImportSession
+	return json.Marshal(currentSession(s))
+}
+
 type ImportPage struct {
 	Items      []ImportSession `json:"items"`
 	NextCursor string          `json:"nextCursor"`
@@ -103,9 +124,11 @@ type BatchSummary struct {
 	AcceptedVersion int64  `json:"acceptedVersion"`
 }
 type ImportStatus struct {
-	Session         ImportSession  `json:"session"`
-	AcceptedBatches []BatchSummary `json:"acceptedBatches"`
-	NextCursor      string         `json:"nextCursor"`
+	Preview             *ImportPreview `json:"preview"`
+	CommittedRevisionID *string        `json:"committedRevisionId"`
+	Session             ImportSession  `json:"session"`
+	AcceptedBatches     []BatchSummary `json:"acceptedBatches"`
+	NextCursor          string         `json:"nextCursor"`
 }
 type RecordIdentity struct {
 	RecordType  string `json:"recordType"`
@@ -157,11 +180,13 @@ type ImportRemove struct {
 	ExternalKey string `json:"externalKey"`
 }
 type ImportCommand struct {
-	Op       string          `json:"op"`
-	Node     *ImportNode     `json:"node,omitzero"`
-	Edge     *ImportEdge     `json:"edge,omitzero"`
-	Evidence *ImportEvidence `json:"evidence,omitzero"`
-	Remove   *ImportRemove   `json:"remove,omitzero"`
+	Identity *ImportIdentityMap `json:"identity,omitzero"`
+	Deletion *ImportDeletion    `json:"deletion,omitzero"`
+	Op       string             `json:"op"`
+	Node     *ImportNode        `json:"node,omitzero"`
+	Edge     *ImportEdge        `json:"edge,omitzero"`
+	Evidence *ImportEvidence    `json:"evidence,omitzero"`
+	Remove   *ImportRemove      `json:"remove,omitzero"`
 }
 type ImportBatchInput struct {
 	ExpectedImportVersion int64           `json:"expectedImportVersion"`
@@ -184,12 +209,16 @@ type ImportDiagnostic struct {
 	Message string `json:"message"`
 }
 type ImportPreview struct {
-	SessionID     string             `json:"sessionId"`
-	Version       int64              `json:"version"`
-	State         string             `json:"state"`
-	CandidateHash *string            `json:"candidateHash"`
-	Summary       ImportSummary      `json:"summary"`
-	Diagnostics   []ImportDiagnostic `json:"diagnostics"`
+	ComparisonSummary     *ComparisonSummary `json:"comparisonSummary"`
+	SourceChangeCount     int64              `json:"sourceChangeCount"`
+	IdentityDecisionCount int64              `json:"identityDecisionCount"`
+	DeletionDecisionCount int64              `json:"deletionDecisionCount"`
+	SessionID             string             `json:"sessionId"`
+	Version               int64              `json:"version"`
+	State                 string             `json:"state"`
+	CandidateHash         *string            `json:"candidateHash"`
+	Summary               ImportSummary      `json:"summary"`
+	Diagnostics           []ImportDiagnostic `json:"diagnostics"`
 }
 type CommitImportInput struct {
 	ExpectedVersion       int64  `json:"expectedVersion"`
@@ -207,6 +236,8 @@ type AbortImportInput struct {
 	IdempotencyKey        string `json:"idempotencyKey"`
 }
 type Node struct {
+	Ownership   *AssertionOwnership       `json:"ownership,omitzero"`
+	Freshness   *AssertionFreshness       `json:"freshness,omitzero"`
 	ID          string                    `json:"id"`
 	ExternalKey string                    `json:"externalKey"`
 	Kind        string                    `json:"kind"`
@@ -216,6 +247,8 @@ type Node struct {
 	EvidenceIDs []string                  `json:"evidenceIds"`
 }
 type Edge struct {
+	Ownership   *AssertionOwnership       `json:"ownership,omitzero"`
+	Freshness   *AssertionFreshness       `json:"freshness,omitzero"`
 	ID          string                    `json:"id"`
 	ExternalKey string                    `json:"externalKey"`
 	Kind        string                    `json:"kind"`
@@ -225,17 +258,20 @@ type Edge struct {
 	EvidenceIDs []string                  `json:"evidenceIds"`
 }
 type Evidence struct {
-	ID           string         `json:"id"`
-	ExternalKey  string         `json:"externalKey"`
-	SubjectID    string         `json:"subjectId"`
-	PropertyPath *string        `json:"propertyPath,omitzero"`
-	Method       string         `json:"method"`
-	Status       string         `json:"status"`
-	Source       EvidenceSource `json:"source"`
-	Explanation  string         `json:"explanation"`
-	Snippet      *string        `json:"snippet,omitzero"`
+	Ownership    *AssertionOwnership `json:"ownership,omitzero"`
+	Freshness    *AssertionFreshness `json:"freshness,omitzero"`
+	ID           string              `json:"id"`
+	ExternalKey  string              `json:"externalKey"`
+	SubjectID    string              `json:"subjectId"`
+	PropertyPath *string             `json:"propertyPath,omitzero"`
+	Method       string              `json:"method"`
+	Status       string              `json:"status"`
+	Source       EvidenceSource      `json:"source"`
+	Explanation  string              `json:"explanation"`
+	Snippet      *string             `json:"snippet,omitzero"`
 }
 type GraphQueryInput struct {
+	ID         string `json:"id,omitempty"`
 	RevisionID string `json:"revisionId"`
 	RecordType string `json:"recordType"`
 	Kind       string `json:"kind,omitempty"`
@@ -252,16 +288,19 @@ type GraphPage struct {
 	NextCursor string `json:"nextCursor"`
 }
 type EvidenceQueryInput struct {
-	SubjectID string `json:"subjectId,omitempty"`
-	Limit     int    `json:"limit,omitzero"`
-	Cursor    string `json:"cursor,omitempty"`
+	EvidenceID string `json:"evidenceId,omitempty"`
+	SubjectID  string `json:"subjectId,omitempty"`
+	Limit      int    `json:"limit,omitzero"`
+	Cursor     string `json:"cursor,omitempty"`
 }
 type EvidencePage struct {
 	Items      []Evidence `json:"items"`
 	NextCursor string     `json:"nextCursor"`
 }
 type RevisionCoverage struct {
-	Coverage  Coverage         `json:"coverage"`
-	Inventory []InventoryItem  `json:"inventory"`
-	Snapshots []SourceSnapshot `json:"snapshots"`
+	StaleCounts        StaleCounts      `json:"staleCounts"`
+	ReconciliationGaps []string         `json:"reconciliationGaps"`
+	Coverage           Coverage         `json:"coverage"`
+	Inventory          []InventoryItem  `json:"inventory"`
+	Snapshots          []SourceSnapshot `json:"snapshots"`
 }
