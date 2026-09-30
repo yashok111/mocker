@@ -55,6 +55,7 @@ func registerTools(srv *sdk.Server, lb *loopback) {
 	addTransferTools(srv, lb)
 	addDesignTools(srv, lb)
 	addAPIDesignTools(srv, lb)
+	addBackendTools(srv, lb)
 	addStateDiagramTools(srv, lb)
 	addResponseRuleTools(srv, lb)
 	addResponseRuleExecutionTools(srv, lb)

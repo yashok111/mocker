@@ -213,6 +213,27 @@ func cpLabelled(label string) checkpointPolicy {
 // slice's context document for the full reasoning.
 func (s *Server) routes() []route {
 	return []route{
+		{"GET /api/backend-projects/capabilities", s.handleGetBackendCapabilities, mcpAllow, cpRead},
+		{"GET /api/backend-projects", s.handleListBackendProjects, mcpAllow, cpRead},
+		{"POST /api/backend-projects", s.handleCreateBackendProject, mcpAllow, cpAnotherLayer},
+		{"GET /api/backend-projects/{id}", s.handleGetBackendProject, mcpAllow, cpRead},
+		{"POST /api/backend-projects/{id}/commands", s.handleApplyBackendProjectCommands, mcpAllow, cpAnotherLayer},
+		{"GET /api/backend-projects/{id}/revisions", s.handleListBackendRevisions, mcpAllow, cpRead},
+		{"GET /api/backend-projects/{id}/revisions/{rid}", s.handleGetBackendRevision, mcpAllow, cpRead},
+		{"POST /api/backend-projects/{id}/imports", s.handleBeginBackendImport, mcpAllow, cpAnotherLayer},
+		{"GET /api/backend-projects/{id}/imports", s.handleListBackendImports, mcpAllow, cpRead},
+		{"GET /api/backend-projects/{id}/imports/{iid}", s.handleGetBackendImport, mcpAllow, cpRead},
+		{"PUT /api/backend-projects/{id}/imports/{iid}/batches/{bid}", s.handlePutBackendImportBatch, mcpAllow, cpAnotherLayer},
+		{"POST /api/backend-projects/{id}/imports/{iid}/preview", s.handlePreviewBackendImport, mcpAllow, cpAnotherLayer},
+		{"POST /api/backend-projects/{id}/imports/{iid}/commit", s.handleCommitBackendImport, mcpAllow, cpAnotherLayer},
+		{"POST /api/backend-projects/{id}/imports/{iid}/abort", s.handleAbortBackendImport, mcpAllow, cpAnotherLayer},
+		// Pinned graph queries are read-only POSTs with a body; like preview/archive,
+		// they never touch a workspace layer or create a checkpoint.
+		{"POST /api/backend-projects/{id}/graph/query", s.handleQueryBackendGraph, mcpAllow, cpNeverTouchesLayer},
+		{"GET /api/backend-projects/{id}/revisions/{rid}/nodes/{nid}", s.handleGetBackendNode, mcpAllow, cpRead},
+		{"GET /api/backend-projects/{id}/revisions/{rid}/evidence", s.handleGetBackendEvidence, mcpAllow, cpRead},
+		{"GET /api/backend-projects/{id}/revisions/{rid}/coverage", s.handleGetBackendCoverage, mcpAllow, cpRead},
+
 		{"GET /api/design-scenarios", s.handleListDesignScenarios, mcpAllow, cpRead},
 		{"POST /api/design-scenarios", s.handleCreateDesignScenario, mcpAllow, cpAnotherLayer},
 		{"GET /api/design-scenarios/{id}", s.handleGetDesignScenario, mcpAllow, cpRead},

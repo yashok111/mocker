@@ -4,7 +4,7 @@
 // error-parsing rules exist in exactly one place — a screen that reaches for
 // fetch directly is how a header silently goes missing on one request.
 
-import { parseBrowserSafeJson } from "./preciseJson";
+import { BrowserJsonPrecisionError, parseBrowserSafeJson } from "./preciseJson";
 
 // csrfToken lives at module scope, not as a call argument: the caller of a
 // generated endpoint has no reason to thread the token through every call
@@ -127,13 +127,11 @@ function parseJSON(text: string, requireBrowserSafeNumbers: boolean): unknown {
   }
 }
 
-const designScenarioPath = "/api/design-scenarios";
+const exactNumberPaths = ["/api/design-scenarios", "/api/backend-projects"];
 
-function isDesignScenarioResponse(url: string): boolean {
-  return (
-    url === designScenarioPath ||
-    url.startsWith(`${designScenarioPath}/`) ||
-    url.startsWith(`${designScenarioPath}?`)
+function requiresExactNumbers(url: string): boolean {
+  return exactNumberPaths.some(
+    (path) => url === path || url.startsWith(`${path}/`) || url.startsWith(`${path}?`),
   );
 }
 
@@ -159,7 +157,28 @@ const authFlowPaths = ["/api/auth/login", "/api/auth/logout", "/api/me", "/ready
 // `q.data.status === 200 ? q.data.data : …`, so a mutator that returned the
 // body alone would leave every hook's `.status` undefined and every screen
 // rendering empty despite 200s on the wire.
+function isBackendPath(url: string): boolean {
+  return (
+    url === "/api/backend-projects" ||
+    url.startsWith("/api/backend-projects/") ||
+    url.startsWith("/api/backend-projects?")
+  );
+}
+
+function assertBackendSafeIntegers(value: unknown): void {
+  if (typeof value === "number" && Number.isInteger(value) && !Number.isSafeInteger(value)) {
+    throw new BrowserJsonPrecisionError();
+  }
+  if (value !== null && typeof value === "object") {
+    for (const item of Object.values(value)) assertBackendSafeIntegers(item);
+  }
+}
+
 export const customFetch = async <T>(url: string, init: RequestInit = {}): Promise<T> => {
+  if (isBackendPath(url) && typeof init.body === "string") {
+    assertBackendSafeIntegers(parseBrowserSafeJson(init.body));
+  }
+
   const method = (init.method ?? "GET").toUpperCase();
   const headers = new Headers(init.headers);
   headers.set("Accept", "application/json");
@@ -196,7 +215,8 @@ export const customFetch = async <T>(url: string, init: RequestInit = {}): Promi
   // 204 (DELETE, logout) has no body at all; checking the status directly
   // says what is actually true instead of inferring it from an empty string.
   const text = res.status === 204 ? "" : await res.text();
-  const parsed = parseJSON(text, isDesignScenarioResponse(url));
+  const parsed = parseJSON(text, requiresExactNumbers(url));
+  if (isBackendPath(url)) assertBackendSafeIntegers(parsed);
 
   if (!res.ok) {
     const isAuthFlow = authFlowPaths.some((p) => url === p || url.startsWith(`${p}?`));

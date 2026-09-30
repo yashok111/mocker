@@ -17,6 +17,7 @@ import {
   IconBraces,
   IconChartArrowsVertical,
   IconChevronRight,
+  IconDatabase,
   IconFileCode,
   IconLayoutGrid,
   IconLogout,
@@ -86,6 +87,12 @@ export function AppShell({ user, children }: { user: UserView; children: ReactNo
   const globalLinks = [
     { to: "/", label: "Воркспейсы", icon: IconLayoutGrid, testId: "nav-workspaces" },
     { to: "/designs", label: "Проектирование API", icon: IconRoute, testId: "nav-designs" },
+    {
+      to: "/backend-projects",
+      label: "Бэкенд-проекты",
+      icon: IconDatabase,
+      testId: "nav-backend-projects",
+    },
     {
       to: "/design-scenarios",
       label: "Сценарии взаимодействия",

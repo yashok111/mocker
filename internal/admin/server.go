@@ -22,6 +22,7 @@ import (
 	"github.com/yashok111/mocker/internal/apidesign"
 	"github.com/yashok111/mocker/internal/assets"
 	"github.com/yashok111/mocker/internal/auth"
+	"github.com/yashok111/mocker/internal/backendmodel"
 	"github.com/yashok111/mocker/internal/checkpoints"
 	"github.com/yashok111/mocker/internal/config"
 	"github.com/yashok111/mocker/internal/customep"
@@ -82,6 +83,7 @@ type Server struct {
 	// a build outside this package's remit.
 	specsRepo   *specs.Repo
 	designsRepo *apidesign.Repo
+	backendRepo *backendmodel.Repo
 	// designScenariosRepo owns the persisted sequence-design canvas. Its name
 	// stays distinct from scenariosRepo, which is the pre-existing runtime
 	// workspace snapshot feature in internal/scenarios.
@@ -247,6 +249,7 @@ func New(cfg *config.Config, sessions *auth.Manager, ws *workspaces.Repo, db *st
 		log:         log,
 		specsRepo:   specsRepo,
 		designsRepo: designsRepo,
+		backendRepo: backendmodel.NewRepo(db),
 		designScenariosRepo: designscenario.NewRepo(
 			db,
 			cfg,

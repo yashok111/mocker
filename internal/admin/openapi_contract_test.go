@@ -208,7 +208,7 @@ func TestOpenAPIContract_declaresResetDataSchemas(t *testing.T) {
 	}
 }
 
-// TestMigrations_stillExactlyTwelveFiles is clause 32's other new assertion,
+// TestMigrations_stillExactlyFourteenFiles is clause 32's other new assertion,
 // updated by P3h: P3b through P3g added no `0003_` migration (D2 R3 — every
 // column those slices read or wrote existed since P0) and nothing anywhere
 // else in this tree counted that before. P3h is the first slice since
@@ -231,7 +231,7 @@ func TestOpenAPIContract_declaresResetDataSchemas(t *testing.T) {
 // three tables whole), ADD-only, no rebuild. The sequence-design canvas adds
 // `0011_design_scenarios.sql`, its aggregate and immutable revision tables;
 // `0012_design_scenario_runs.sql` adds persisted execution reports.
-func TestMigrations_stillExactlyTwelveFiles(t *testing.T) {
+func TestMigrations_stillExactlyFourteenFiles(t *testing.T) {
 	entries, err := os.ReadDir(filepath.FromSlash("../../internal/store/migrations"))
 	if err != nil {
 		t.Fatalf("read migrations dir: %v", err)
@@ -242,8 +242,8 @@ func TestMigrations_stillExactlyTwelveFiles(t *testing.T) {
 			sqlFiles = append(sqlFiles, e.Name())
 		}
 	}
-	if len(sqlFiles) != 12 {
-		t.Errorf("internal/store/migrations/ holds %d .sql files (%v), want exactly 12", len(sqlFiles), sqlFiles)
+	if len(sqlFiles) != 14 {
+		t.Errorf("internal/store/migrations/ holds %d .sql files (%v), want exactly 14", len(sqlFiles), sqlFiles)
 	}
 }
 

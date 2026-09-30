@@ -54,7 +54,7 @@ const HTTP_METHODS = ["get", "post", "put", "delete", "patch"] as const;
 // agree with anything that file said. Every test below that wants to name it
 // reads it from here, which is the one thing the old title did not do — it
 // said "64" while the assertion said 70, for four slices running.
-const ROUTE_COUNT = 134;
+const ROUTE_COUNT = 152;
 
 interface RouteInfo {
   method: string;
@@ -118,6 +118,20 @@ function loadRoutes(): RouteInfo[] {
 // has a caller. An exemption is a decision on the record and so is its
 // withdrawal, in this comment.
 const EXEMPT: Record<string, string> = {
+  "POST /api/backend-projects/{id}/imports":
+    "begin_backend_import starts a source import collected by a local agent; B0.2 UI inspects committed revisions.",
+  "GET /api/backend-projects/{id}/imports":
+    "list_backend_imports lets the collector recover durable import sessions through MCP.",
+  "GET /api/backend-projects/{id}/imports/{iid}":
+    "get_backend_import lets the collector resume staging and page accepted batch summaries through MCP.",
+  "PUT /api/backend-projects/{id}/imports/{iid}/batches/{bid}":
+    "put_backend_import_batch stages the local collector's records and recovers exact batch receipts through MCP.",
+  "POST /api/backend-projects/{id}/imports/{iid}/preview":
+    "preview_backend_import validates source staging and gives collector diagnostics through MCP.",
+  "POST /api/backend-projects/{id}/imports/{iid}/commit":
+    "commit_backend_import publishes the collector's candidate with CAS through MCP; no import editor is required in B0.2.",
+  "POST /api/backend-projects/{id}/imports/{iid}/abort":
+    "abort_backend_import lets the collector cancel durable staging through MCP.",
   "GET /api/designs/{id}/response-rules":
     "list_response_rules reads saved rules for MCP; the UI reads the shared API document buffer.",
   "GET /api/designs/{id}/response-rules/{rid}":

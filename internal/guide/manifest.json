@@ -1,0 +1,162 @@
+{
+  "sources": [
+    {
+      "topic": "overview",
+      "source": "SKILL.md",
+      "embedded": "overview.md",
+      "workflowId": "mocker-routing",
+      "sourceHash": "sha256:1f048b4315fa1b9532b7bf168937a2c37e5bbeea99d81b40821697a4b57f8025",
+      "contentHash": "sha256:ab07ce48323d74ca9c4178144ee818ef815d38b09c865d13c33f4a09b086d5c8"
+    },
+    {
+      "topic": "tools",
+      "source": "references/tools.md",
+      "embedded": "tools.md",
+      "workflowId": "mocker-routing",
+      "sourceHash": "sha256:61e6fa28da111ae7112e7f96ca78a291d6d832785505ef0e27859e77be5adb90",
+      "contentHash": "sha256:61e6fa28da111ae7112e7f96ca78a291d6d832785505ef0e27859e77be5adb90"
+    },
+    {
+      "topic": "shapes",
+      "source": "references/shapes.md",
+      "embedded": "shapes.md",
+      "workflowId": "mocker-routing",
+      "sourceHash": "sha256:34c6674d2afddc7ea0b1e64a65bbee42033561604f2661ff091d5286b7702875",
+      "contentHash": "sha256:34c6674d2afddc7ea0b1e64a65bbee42033561604f2661ff091d5286b7702875"
+    },
+    {
+      "topic": "cookbook",
+      "source": "references/cookbook.md",
+      "embedded": "cookbook.md",
+      "workflowId": "mocker-routing",
+      "sourceHash": "sha256:bd3ad67c28f611f8adf654868b379a70d17d1f169b42abc67f1cf7d055128d54",
+      "contentHash": "sha256:bd3ad67c28f611f8adf654868b379a70d17d1f169b42abc67f1cf7d055128d54"
+    },
+    {
+      "topic": "http",
+      "source": "references/http.md",
+      "embedded": "http.md",
+      "workflowId": "mocker-routing",
+      "sourceHash": "sha256:c0a3d9ef5d2755ee299ec244cb50d9a070e5e55ae41fc405616bc7385cb47b3e",
+      "contentHash": "sha256:c0a3d9ef5d2755ee299ec244cb50d9a070e5e55ae41fc405616bc7385cb47b3e"
+    },
+    {
+      "topic": "design",
+      "source": "references/design.md",
+      "embedded": "design.md",
+      "workflowId": "mocker-routing",
+      "sourceHash": "sha256:2323f40167d8f05a18d7c124da18a40037f2179175212bedea12f253d74e2cd5",
+      "contentHash": "sha256:2323f40167d8f05a18d7c124da18a40037f2179175212bedea12f253d74e2cd5"
+    },
+    {
+      "topic": "functions",
+      "source": "references/functions.md",
+      "embedded": "functions.md",
+      "workflowId": "mocker-routing",
+      "sourceHash": "sha256:6031fa9ba0f0079f1727306ebe4c0dfd9dbad84af08353e48648a71b009bc5a9",
+      "contentHash": "sha256:6031fa9ba0f0079f1727306ebe4c0dfd9dbad84af08353e48648a71b009bc5a9"
+    },
+    {
+      "topic": "backend-overview",
+      "source": "references/backend/overview.md",
+      "embedded": "backend-overview.md",
+      "workflowId": "mocker-backend-project",
+      "sourceHash": "sha256:fd9472c93af7376cce40e0890e73c348712e1e5b7fd73e487af7094c5d82e3d3",
+      "contentHash": "sha256:220705263ff9d2d67b88acdc7451a958a1cabd27ff58b2b19826c1618e38edd2"
+    },
+    {
+      "topic": "backend-import",
+      "source": "references/backend/import.md",
+      "embedded": "backend-import.md",
+      "workflowId": "mocker-backend-import",
+      "sourceHash": "sha256:e0192c68d0baa9b57fefe8a6c712a74b9eb88f43444f49e1970a56b7099ba60b",
+      "contentHash": "sha256:eca77e1dc65077bf4d2fe8c157ac229450716320a2bd60d442c1983bf3b21131"
+    }
+  ],
+  "workflows": [
+    {
+      "workflowId": "mocker-routing",
+      "workflowVersion": "1",
+      "entrypoint": "overview",
+      "requiredModelSchemaVersions": [],
+      "requiredCapabilities": [],
+      "guideSetId": "sha256:6f352e4838720bf9447956681574dd16b64ef94f0d7a2700c512da5b9bc6c33f",
+      "manifestHash": "sha256:6f352e4838720bf9447956681574dd16b64ef94f0d7a2700c512da5b9bc6c33f",
+      "topics": [
+        {
+          "topic": "overview",
+          "contentHash": "sha256:ab07ce48323d74ca9c4178144ee818ef815d38b09c865d13c33f4a09b086d5c8"
+        },
+        {
+          "topic": "tools",
+          "contentHash": "sha256:61e6fa28da111ae7112e7f96ca78a291d6d832785505ef0e27859e77be5adb90"
+        },
+        {
+          "topic": "shapes",
+          "contentHash": "sha256:34c6674d2afddc7ea0b1e64a65bbee42033561604f2661ff091d5286b7702875"
+        },
+        {
+          "topic": "cookbook",
+          "contentHash": "sha256:bd3ad67c28f611f8adf654868b379a70d17d1f169b42abc67f1cf7d055128d54"
+        },
+        {
+          "topic": "http",
+          "contentHash": "sha256:c0a3d9ef5d2755ee299ec244cb50d9a070e5e55ae41fc405616bc7385cb47b3e"
+        },
+        {
+          "topic": "design",
+          "contentHash": "sha256:2323f40167d8f05a18d7c124da18a40037f2179175212bedea12f253d74e2cd5"
+        },
+        {
+          "topic": "functions",
+          "contentHash": "sha256:6031fa9ba0f0079f1727306ebe4c0dfd9dbad84af08353e48648a71b009bc5a9"
+        }
+      ]
+    },
+    {
+      "workflowId": "mocker-backend-project",
+      "workflowVersion": "1",
+      "entrypoint": "backend-overview",
+      "requiredModelSchemaVersions": [
+        "1"
+      ],
+      "requiredCapabilities": [
+        "backend-projects",
+        "backend-project-metadata",
+        "backend-revisions"
+      ],
+      "guideSetId": "sha256:6f352e4838720bf9447956681574dd16b64ef94f0d7a2700c512da5b9bc6c33f",
+      "manifestHash": "sha256:6f352e4838720bf9447956681574dd16b64ef94f0d7a2700c512da5b9bc6c33f",
+      "topics": [
+        {
+          "topic": "backend-overview",
+          "contentHash": "sha256:220705263ff9d2d67b88acdc7451a958a1cabd27ff58b2b19826c1618e38edd2"
+        }
+      ]
+    },
+    {
+      "workflowId": "mocker-backend-import",
+      "workflowVersion": "1",
+      "entrypoint": "backend-import",
+      "requiredModelSchemaVersions": [
+        "1"
+      ],
+      "requiredCapabilities": [
+        "backend-projects",
+        "backend-revisions",
+        "backend-graph-query",
+        "backend-source-import"
+      ],
+      "guideSetId": "sha256:6f352e4838720bf9447956681574dd16b64ef94f0d7a2700c512da5b9bc6c33f",
+      "manifestHash": "sha256:6f352e4838720bf9447956681574dd16b64ef94f0d7a2700c512da5b9bc6c33f",
+      "topics": [
+        {
+          "topic": "backend-import",
+          "contentHash": "sha256:eca77e1dc65077bf4d2fe8c157ac229450716320a2bd60d442c1983bf3b21131"
+        }
+      ]
+    }
+  ],
+  "guideSetId": "sha256:6f352e4838720bf9447956681574dd16b64ef94f0d7a2700c512da5b9bc6c33f",
+  "manifestHash": "sha256:6f352e4838720bf9447956681574dd16b64ef94f0d7a2700c512da5b9bc6c33f"
+}

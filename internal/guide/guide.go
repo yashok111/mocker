@@ -1,22 +1,9 @@
-// Package guide embeds the agent-facing documentation of this product so
-// that a running server can hand it to an MCP client: a short orientation
-// returned in initialize's `instructions` field, and the full skill —
-// SKILL.md plus its five reference files — behind the get_guide tool
-// (internal/mcp/tools_guide.go).
-//
-// The ONE OWNER of the text is skills/mocker/ at the repository root: that
-// directory is what a human reads on the forge and what `skills add`
-// copies into a consumer project, so it has to stand on its own outside
-// this binary. go:embed cannot reach above its own package directory, so
-// the six files here are byte copies, and guide_test.go fails the build
-// the moment one of them drifts from its source — `make guide-sync`
-// refreshes them. instructions.md is the exception: it exists only to be
-// served at initialize and has no counterpart in the skill.
-//
-// Why a copy rather than moving the skill under internal/: a skill is
-// discovered by path (`<repo>/skills/<name>/SKILL.md`), and a documentation
-// directory a Go build tag governs is a documentation directory nobody
-// installs.
+// Package guide embeds the agent-facing documentation served by initialize
+// and get_guide. skills/mocker/ owns the guide texts and source declaration;
+// make guide-sync generates byte copies, metadata and an immutable manifest.
+// instructions.md is the small initialize-only orientation, maintained here.
+// Tests validate every declared source, generated metadata and content hash.
+// The source directory remains independently installable as an agent skill.
 package guide
 
 import (
@@ -25,7 +12,7 @@ import (
 )
 
 // Topic names, in the order get_guide reports them. "overview" is
-// SKILL.md's body; the other six are its references.
+// SKILL.md's body; the remaining topics are its references.
 const (
 	TopicOverview = "overview"
 	TopicTools    = "tools"
@@ -44,7 +31,7 @@ const (
 	TopicFunctions = "functions"
 )
 
-//go:embed instructions.md overview.md tools.md shapes.md cookbook.md http.md design.md functions.md
+//go:embed instructions.md overview.md tools.md shapes.md cookbook.md http.md design.md functions.md backend-overview.md backend-import.md manifest.json
 var files embed.FS
 
 // topicFiles maps a topic to its embedded file. overview.md is SKILL.md
@@ -52,18 +39,20 @@ var files embed.FS
 // tool result is not a skill file and the YAML block would be noise to the
 // model reading it.
 var topicFiles = map[string]string{
-	TopicOverview:  "overview.md",
-	TopicTools:     "tools.md",
-	TopicShapes:    "shapes.md",
-	TopicCookbook:  "cookbook.md",
-	TopicHTTP:      "http.md",
-	TopicDesign:    "design.md",
-	TopicFunctions: "functions.md",
+	TopicOverview:      "overview.md",
+	TopicTools:         "tools.md",
+	TopicShapes:        "shapes.md",
+	TopicCookbook:      "cookbook.md",
+	TopicHTTP:          "http.md",
+	TopicDesign:        "design.md",
+	TopicFunctions:     "functions.md",
+	"backend-overview": "backend-overview.md",
+	"backend-import":   "backend-import.md",
 }
 
 // Topics is the ordered list of topic names get_guide accepts.
 func Topics() []string {
-	return []string{TopicOverview, TopicTools, TopicShapes, TopicCookbook, TopicHTTP, TopicDesign, TopicFunctions}
+	return []string{TopicOverview, TopicTools, TopicShapes, TopicCookbook, TopicHTTP, TopicDesign, TopicFunctions, "backend-overview", "backend-import"}
 }
 
 // Instructions is the orientation text initialize returns to every MCP
@@ -82,7 +71,7 @@ func Topic(name string) (string, bool) {
 		return "", false
 	}
 	text := mustRead(file)
-	if name == TopicOverview {
+	if name == TopicOverview || name == "backend-overview" || name == "backend-import" {
 		text = stripFrontmatter(text)
 	}
 	return text, true

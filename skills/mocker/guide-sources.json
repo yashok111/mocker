@@ -1,0 +1,18 @@
+{
+  "sources": [
+    {"topic":"overview","source":"SKILL.md","embedded":"overview.md","workflowId":"mocker-routing"},
+    {"topic":"tools","source":"references/tools.md","embedded":"tools.md","workflowId":"mocker-routing"},
+    {"topic":"shapes","source":"references/shapes.md","embedded":"shapes.md","workflowId":"mocker-routing"},
+    {"topic":"cookbook","source":"references/cookbook.md","embedded":"cookbook.md","workflowId":"mocker-routing"},
+    {"topic":"http","source":"references/http.md","embedded":"http.md","workflowId":"mocker-routing"},
+    {"topic":"design","source":"references/design.md","embedded":"design.md","workflowId":"mocker-routing"},
+    {"topic":"functions","source":"references/functions.md","embedded":"functions.md","workflowId":"mocker-routing"},
+    {"topic":"backend-overview","source":"references/backend/overview.md","embedded":"backend-overview.md","workflowId":"mocker-backend-project"},
+    {"topic":"backend-import","source":"references/backend/import.md","embedded":"backend-import.md","workflowId":"mocker-backend-import"}
+  ],
+  "workflows": [
+    {"workflowId":"mocker-routing","workflowVersion":"1","entrypoint":"overview","requiredModelSchemaVersions":[],"requiredCapabilities":[]},
+    {"workflowId":"mocker-backend-project","workflowVersion":"1","entrypoint":"backend-overview","requiredModelSchemaVersions":["1"],"requiredCapabilities":["backend-projects","backend-project-metadata","backend-revisions"]},
+    {"workflowId":"mocker-backend-import","workflowVersion":"1","entrypoint":"backend-import","requiredModelSchemaVersions":["1"],"requiredCapabilities":["backend-projects","backend-revisions","backend-graph-query","backend-source-import"]}
+  ]
+}

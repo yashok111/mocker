@@ -2,7 +2,9 @@ package mcp
 
 import (
 	"encoding/json"
+	"github.com/yashok111/mocker/internal/guide"
 	"net/http"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -58,17 +60,14 @@ func TestGetGuide_defaultsToOverview(t *testing.T) {
 	if strings.Contains(out.Markdown, "\nname: mocker\n") {
 		t.Error("overview carries the skill frontmatter")
 	}
-	// A18 added "functions" as the seventh. The count is asserted rather
-	// than a floor for the reason it always was: a topic list that silently
-	// LOSES an entry is the failure this catches, and a >= would not.
-	if len(out.Topics) != 7 {
-		t.Errorf("topics = %v, want seven", out.Topics)
+	if !slices.Equal(out.Topics, guide.Topics()) {
+		t.Errorf("topics = %v; differs from guide inventory %v", out.Topics, guide.Topics())
 	}
 }
 
 func TestGetGuide_everyTopicAnswers(t *testing.T) {
 	t.Parallel()
-	for _, topic := range []string{"tools", "shapes", "cookbook", "http", "design", "functions", " Overview "} {
+	for _, topic := range []string{"tools", "shapes", "cookbook", "http", "design", "functions", "backend-overview", " Overview "} {
 		out, errMsg := callGuide(t, `{"topic":"`+topic+`"}`)
 		if errMsg != "" {
 			t.Errorf("topic %q: tool error: %s", topic, errMsg)

@@ -51,6 +51,24 @@ import (
 var noRoute = []string{}
 
 var toolRoutes = map[string][]string{
+	"begin_backend_import":            {"POST /api/backend-projects/{id}/imports"},
+	"list_backend_imports":            {"GET /api/backend-projects/{id}/imports"},
+	"get_backend_import":              {"GET /api/backend-projects/{id}/imports/{iid}"},
+	"put_backend_import_batch":        {"PUT /api/backend-projects/{id}/imports/{iid}/batches/{bid}"},
+	"preview_backend_import":          {"POST /api/backend-projects/{id}/imports/{iid}/preview"},
+	"commit_backend_import":           {"POST /api/backend-projects/{id}/imports/{iid}/commit"},
+	"abort_backend_import":            {"POST /api/backend-projects/{id}/imports/{iid}/abort"},
+	"query_backend_graph":             {"POST /api/backend-projects/{id}/graph/query"},
+	"get_backend_node":                {"GET /api/backend-projects/{id}/revisions/{rid}/nodes/{nid}"},
+	"get_backend_evidence":            {"GET /api/backend-projects/{id}/revisions/{rid}/evidence"},
+	"get_backend_coverage":            {"GET /api/backend-projects/{id}/revisions/{rid}/coverage"},
+	"get_backend_capabilities":        {"GET /api/backend-projects/capabilities"},
+	"list_backend_projects":           {"GET /api/backend-projects"},
+	"create_backend_project":          {"POST /api/backend-projects"},
+	"get_backend_project":             {"GET /api/backend-projects/{id}"},
+	"apply_backend_project_commands":  {"POST /api/backend-projects/{id}/commands"},
+	"list_backend_revisions":          {"GET /api/backend-projects/{id}/revisions"},
+	"get_backend_revision":            {"GET /api/backend-projects/{id}/revisions/{rid}"},
 	"list_response_rules":             {"GET /api/designs/{id}/response-rules"},
 	"get_response_rule":               {"GET /api/designs/{id}/response-rules/{rid}"},
 	"create_response_rule":            {"POST /api/designs/{id}/response-rules"},
@@ -293,7 +311,7 @@ var toolRoutes = map[string][]string{
 // Pinned in routes_test.go so a tool
 // added without an entry here is caught by a test rather than by a 404 in
 // production.
-const toolCount = 147
+const toolCount = 165
 
 // toolPath resolves ONE call a tool makes into the (method, path) pair
 // loopback.do/call take.

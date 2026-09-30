@@ -42,6 +42,37 @@ afterEach(() => {
 });
 
 describe("customFetch", () => {
+  it.each([
+    ["/api/backend-projects/p/imports/i", '{"session":{"version":9007199254740992}}'],
+    [
+      "/api/backend-projects/p/revisions/r/coverage",
+      '{"inventory":[{"knownCount":9007199254740992}]}',
+    ],
+    ["/api/backend-projects/p/imports/i/batches/b", '{"acceptedVersion":9007199254740992}'],
+  ])("rejects unsafe import integers from %s", async (url, body) => {
+    mockFetch(new Response(body, { status: 200 }));
+    await expect(customFetch(url)).rejects.toThrow(/без потери точности/);
+  });
+  it.each(["expectedVersion", "expectedImportVersion", "knownCount", "denominator"])(
+    "refuses an unsafe outbound %s before fetching",
+    async (field) => {
+      const fetch = mockFetch(jsonResponse(200, {}));
+      await expect(
+        customFetch("/api/backend-projects/p/imports", {
+          method: "POST",
+          body: JSON.stringify({ [field]: 9007199254740992 }),
+        }),
+      ).rejects.toThrow(/без потери точности/);
+      expect(fetch).not.toHaveBeenCalled();
+    },
+  );
+
+  it("rejects backend project versions that would lose precision in a browser", async () => {
+    mockFetch(new Response('{"version":9007199254740993}', { status: 200 }));
+    await expect(customFetch("/api/backend-projects/project-id", {})).rejects.toThrow(
+      /без потери точности/,
+    );
+  });
   it("returns orval's envelope, not the bare body", async () => {
     mockFetch(jsonResponse(200, { ok: true }));
 

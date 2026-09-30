@@ -1,11 +1,22 @@
 ---
 name: mocker
-description: Drive a mocker instance (an OpenAPI mock server with an MCP endpoint) — create workspaces, shape responses, force errors, confirm stateful resources, set up scenarios, read traffic, stream SSE/WebSocket, serve assets. Use when the user mentions mocker, a mock workspace, the mock API for a frontend, MOCKER_MCP_KEY, or `/__mocker/state`, or when a frontend needs a backend it can log into and test against before the real one exists.
+description: Drive a mocker instance — configure mock workspaces and API designs, prepare backend projects, or import their first source-backed foundation graph with revision and evidence reads. Use for mocker, mock APIs for a frontend, backend project import, MOCKER_MCP_KEY, or `/__mocker/state`.
+metadata:
+  workflowId: "mocker-routing"
+  workflowVersion: "1"
+  requiredModelSchemaVersions: "[]"
+  requiredCapabilities: "[]"
+  guideSetId: "sha256:6f352e4838720bf9447956681574dd16b64ef94f0d7a2700c512da5b9bc6c33f"
+  manifestHash: "sha256:6f352e4838720bf9447956681574dd16b64ef94f0d7a2700c512da5b9bc6c33f"
 ---
 
 # mocker
 
-A mock server on top of OpenAPI. One spec is imported once; every WORKSPACE
+mocker provides OpenAPI mocks, API design, saved sequences and backend projects.
+Backend projects support metadata, immutable revisions and the first source-backed
+foundation graph import with evidence reads. Replacement import, ER/SQL,
+endpoint-flow and impact remain future work. For mocks, one OpenAPI
+spec is imported once; every WORKSPACE
 bound to it serves the spec's routes on its own host with deterministic
 generated bodies, records what it served, and remembers what it is told to
 remember. The agent talks to it through MCP (`POST /mcp`, bearer key) — the
@@ -48,7 +59,21 @@ a Lua function, which is out of the guarantee entirely. Change the seed to get d
 longer lists; recipes (`faker`, `enum`, `now`, `jwt`, `ref`, …) make single
 fields realistic without pinning the whole body.
 
-## Start here
+## Classify the request first
+
+Before `list_workspaces`, classify the task as mock response configuration,
+API design, saved sequence, backend project preparation, or first source import. Mock configuration
+uses the workspace procedure below; API design and saved sequences begin with
+`references/design.md`. Backend project preparation begins with
+`references/backend/overview.md` or `get_guide {topic:"backend-overview"}` and
+its before-write compatibility handshake. The root routing workflow has no
+backend capability requirements, so legacy mock tasks remain usable. Backend
+project preparation must select a compatible pinned guide set before writes.
+Source graph import instead begins with `references/backend/import.md` or
+`get_guide {topic:"backend-import"}` and selects the complete pinned
+`mocker-backend-import` workflow before any import write.
+
+## Mock workspace workflow
 
 1. `get_server_config` once — the limits behind every 413 and refused draft. Then `list_workspaces` → `get_workspace` (slug, url, specId, editVersion).
 2. For workspace response changes, `find_operations {query}` → `opKey`s;

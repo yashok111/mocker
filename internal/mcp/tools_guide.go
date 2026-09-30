@@ -44,6 +44,7 @@ func addGuideTools(s *sdk.Server) {
 			"ordered recipes: stand up a workspace, make login work, force an error, shape a body, " +
 			"add a route, confirm a resource, scenarios, undo, streams, spec drift, debugging, " +
 			"assets); \"http\" (the same over curl for scripts and CI, plus MCP client config). " +
+			"For backend project preparation read \"backend-overview\" and pin guideSetId after capability discovery. Unknown guide sets fail explicitly. " +
 			"Static text: calls no admin route, reads no workspace, changes nothing.",
 		Annotations: &sdk.ToolAnnotations{ReadOnlyHint: true, IdempotentHint: true},
 	}, handleGetGuide)
@@ -51,17 +52,26 @@ func addGuideTools(s *sdk.Server) {
 
 // GetGuideInput is get_guide's input.
 type GetGuideInput struct {
-	Topic string `json:"topic,omitempty" jsonschema:"one of overview, tools, shapes, cookbook, http, design; omitted means overview"`
+	GuideSetID string `json:"guideSetId,omitempty" jsonschema:"optional immutable guide set selector; unknown selectors fail explicitly"`
+	Topic      string `json:"topic,omitempty" jsonschema:"one of overview, tools, shapes, cookbook, http, design, functions, backend-overview; omitted means overview"`
 }
 
 // GetGuideOutput is get_guide's declared output.
 type GetGuideOutput struct {
-	Topic    string   `json:"topic"`
-	Topics   []string `json:"topics"`
-	Markdown string   `json:"markdown"`
+	GuideSetID      string   `json:"guideSetId"`
+	ManifestHash    string   `json:"manifestHash"`
+	ContentHash     string   `json:"contentHash"`
+	WorkflowID      string   `json:"workflowId"`
+	WorkflowVersion string   `json:"workflowVersion"`
+	Topic           string   `json:"topic"`
+	Topics          []string `json:"topics"`
+	Markdown        string   `json:"markdown"`
 }
 
 func handleGetGuide(_ context.Context, _ *sdk.CallToolRequest, in GetGuideInput) (*sdk.CallToolResult, GetGuideOutput, error) {
+	if in.GuideSetID != "" && in.GuideSetID != guide.CurrentGuideSetID() {
+		return nil, GetGuideOutput{}, fmt.Errorf("get_guide: unknown guide set %q", in.GuideSetID)
+	}
 	topic := strings.ToLower(strings.TrimSpace(in.Topic))
 	if topic == "" {
 		topic = guide.TopicOverview
@@ -70,5 +80,18 @@ func handleGetGuide(_ context.Context, _ *sdk.CallToolRequest, in GetGuideInput)
 	if !ok {
 		return nil, GetGuideOutput{}, fmt.Errorf("get_guide: unknown topic %q; one of %s", in.Topic, strings.Join(guide.Topics(), ", "))
 	}
-	return nil, GetGuideOutput{Topic: topic, Topics: guide.Topics(), Markdown: text}, nil
+	workflow, ok := guide.WorkflowForTopic(topic)
+	if !ok {
+		return nil, GetGuideOutput{}, fmt.Errorf("get_guide: topic %q has no workflow metadata", topic)
+	}
+	contentHash := ""
+	for _, entry := range workflow.Topics {
+		if entry.Topic == topic {
+			contentHash = entry.ContentHash
+			break
+		}
+	}
+	return nil, GetGuideOutput{Topic: topic, Topics: guide.Topics(), Markdown: text,
+		GuideSetID: workflow.GuideSetID, ManifestHash: workflow.ManifestHash,
+		ContentHash: contentHash, WorkflowID: workflow.WorkflowID, WorkflowVersion: workflow.WorkflowVersion}, nil
 }

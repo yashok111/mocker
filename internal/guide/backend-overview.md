@@ -1,0 +1,92 @@
+---
+name: mocker-backend-project
+description: Prepare a backend project and inspect its immutable initial revision.
+metadata:
+  workflowId: "mocker-backend-project"
+  workflowVersion: "1"
+  requiredModelSchemaVersions: "[\"1\"]"
+  requiredCapabilities: "[\"backend-projects\",\"backend-project-metadata\",\"backend-revisions\"]"
+  guideSetId: "sha256:6f352e4838720bf9447956681574dd16b64ef94f0d7a2700c512da5b9bc6c33f"
+  manifestHash: "sha256:6f352e4838720bf9447956681574dd16b64ef94f0d7a2700c512da5b9bc6c33f"
+---
+
+# Backend project preparation
+
+This workflow prepares a backend project: create a project, read or update its
+metadata, list projects and revisions, and inspect the empty initial revision.
+Creation saves project version 1 and its first immutable revision atomically.
+Coverage is partial, its denominator is unknown, and the explicit pre-import
+gap means an empty revision cannot establish absence of backend behavior.
+First source import and graph reads use the separate `mocker-backend-import`
+workflow in `references/backend/import.md` or pinned `backend-import` topic.
+Select that complete workflow before import writes. This project-preparation
+procedure does not import sources. Jobs and proposals remain future functionality.
+
+## Before the first write
+
+Installed skill frontmatter stores workflow fields under `metadata` as strings.
+Decode requiredModelSchemaVersions and requiredCapabilities from their JSON-list
+strings before comparing them with the server manifest's typed arrays.
+
+1. Classify the request as backend project preparation. Read `get_server_config`
+   for general limits and call `get_backend_capabilities` for `modelSchemaVersions`,
+   `features`, `workflowVersions` and the advertised guide topics. Tool names
+   alone never establish compatibility.
+2. Select `mocker-backend-project`, workflow version `"1"`. A local leaf is
+   usable only on an exact match of workflowId, workflowVersion, guideSetId and
+   manifestHash with a server workflow, a nonempty intersection of
+   requiredModelSchemaVersions with modelSchemaVersions, and availability in features of
+   every requiredCapabilities entry: backend-projects, backend-project-metadata,
+   backend-revisions. Verify each needed local topic's contentHash against that
+   selected manifest before using it.
+3. A newer or older local workflow, missing local metadata, a mismatching hash,
+   or an unavailable local reference requires a full server fallback. Choose a
+   server workflow whose schema versions and capabilities this agent supports;
+   read its advertised entrypoint using
+   `get_guide {topic:selectedWorkflow.entrypoint,guideSetId:selectedWorkflow.guideSetId}`.
+   Use its entire procedure and recovery instructions. Read related topics with
+   the same selected guideSetId and verify workflow identity, manifestHash and
+   each returned contentHash. Do not mix an incompatible local leaf with server
+   instructions. No skill installation is needed for this fallback.
+4. Record workflowId, workflowVersion, guideSetId, manifestHash and instruction
+   source (`local` or `server`) for the task. Unknown guide sets fail explicitly;
+   do not silently substitute the latest set. A versionless overview is useful
+   for discovery only; subsequent backend topic reads must be pinned.
+5. If no compatible server workflow exists, explain the limitation and remain
+   read-only. Continue independent supported reads, without asking permission
+   to bypass compatibility. Recheck the selection after resume or a server
+   change before any further write. Preserve all previously returned IDs and
+   read current project/revision state before deciding what to do next.
+
+## Available tools and ordered procedure
+
+- `list_backend_projects`: discover existing projects before creation.
+- `get_backend_project`: read the chosen project's metadata and exact integer
+  version. Preserve int64 version values without floating-point conversion.
+- `create_backend_project`: submit `{name,idempotencyKey}` with a stable unique key,
+  retain its UUID project ID and returned revision ID, then read back the project.
+  Repositories remain empty; repository registration is not available.
+- `apply_backend_project_commands`: read first, then rename with
+  `{projectId,expectedVersion,idempotencyKey,commands:[{type:"rename_project",name}]}`.
+  Use the exact int64 version from that read and a unique command key.
+  Do not guess a version or use a revision ID as a project ID.
+- `list_backend_revisions` and `get_backend_revision`: inspect the project's
+  immutable revisions and their coverage gaps. Retain provenance and partial
+  coverage caveats in any answer; an empty revision is preparation only.
+
+For all writes, use the exact input shape advertised by the server tools.
+On a version conflict, read the error's currentVersion and re-read the project,
+reconcile the user's intended rename with the current name, then retry with the
+fresh expectedVersion and a new idempotencyKey. Stop if the concurrent change
+contradicts the user's intent. The initial revision
+is immutable and a metadata update does not create a new revision.
+
+Reads can be retried safely. Creation and command writes save idempotency
+receipts. After a timeout or disconnected response, retry the identical request
+with the identical idempotencyKey to recover the original result. Preserve the
+original key and payload after resume; never substitute a fresh creation key
+because that can create a duplicate project. Reusing a key with changed inputs
+is an idempotency conflict; resolve the existing receipt/request first. For a
+known compare-and-swap conflict, re-read and reconcile, then issue the newly
+formed command with a new key. A receipt replay returns the original result,
+which may be older than current state; read the project again for its live state.
