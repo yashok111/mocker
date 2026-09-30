@@ -66,11 +66,14 @@ func normalizeRequest(ctx context.Context, request Request) (overrides.Input, st
 
 // decodeBody retains number lexemes and rejects duplicates before map decoding.
 func decodeBody(ctx context.Context, text string) (any, error) {
+	return decodeJSONValue(ctx, text, MaxBodyBytes)
+}
+func decodeJSONValue(ctx context.Context, text string, limit int) (any, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	if len(text) > MaxBodyBytes || !utf8.ValidString(text) {
-		return nil, invalid("", "тело превышает 64 КиБ UTF-8")
+	if len(text) > limit || !utf8.ValidString(text) {
+		return nil, invalid("", "JSON превышает допустимый размер UTF-8")
 	}
 	s := bodyScanner{ctx: ctx, text: text}
 	if err := s.value(0); err != nil {

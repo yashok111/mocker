@@ -1,6 +1,7 @@
 import { Button, Checkbox, Group, Stack, Text, Textarea, TextInput } from "@mantine/core";
 import type { ResponseRuleField, ResponseRuleRequest } from "@/api/generated/schemas";
 import styles from "./ResponseRules.module.css";
+import EntityFixtureEditor from "./EntityFixtureEditor";
 
 export function FieldRows({
   rows,
@@ -79,6 +80,12 @@ export default function RequestFixtureEditor({
         первое значение. Пример хранится только до закрытия вкладки.
       </Text>
       <FieldRows
+        rows={value.path ?? []}
+        label="Параметр пути"
+        addLabel="Добавить параметр пути"
+        onChange={(path) => onChange({ ...value, path })}
+      />
+      <FieldRows
         rows={value.query}
         label="Query-параметр"
         addLabel="Добавить query-параметр"
@@ -111,6 +118,10 @@ export default function RequestFixtureEditor({
           onChange={(event) => onChange({ ...value, bodyJSON: event.currentTarget.value })}
         />
       )}
+      <EntityFixtureEditor
+        value={value.entities ?? []}
+        onChange={(entities) => onChange({ ...value, entities })}
+      />
     </Stack>
   );
 }

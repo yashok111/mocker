@@ -80,6 +80,8 @@ func Validate(ctx context.Context, env Envelope, ruleID string, root map[string]
 	if err := v.graph(); err != nil {
 		return Validation{}, err
 	}
+	v.entityReferences()
+	v.entityTerminals()
 	// Array order is authoritative; check code breaks ties within one object.
 	rank := func(d Diagnostic) int {
 		if d.NodeID != "" {
@@ -203,7 +205,7 @@ func (v *validator) graph() error {
 		}
 		if fromOK {
 			portCounts[from][e.Port]++
-			if !slices.Contains(ports(r.Nodes[from].Type), e.Port) {
+			if !slices.Contains(nodePorts(r.Nodes[from]), e.Port) {
 				v.edge(i, "invalid_port", "Порт не разрешён для этого типа узла.", "/port")
 			}
 			if portCounts[from][e.Port] > 1 {
@@ -219,7 +221,7 @@ func (v *validator) graph() error {
 		}
 	}
 	for i, n := range r.Nodes {
-		for _, port := range ports(n.Type) {
+		for _, port := range nodePorts(n) {
 			if portCounts[i][port] == 0 {
 				v.node(i, "missing_exit", "Соедините выход «"+port+"».", "")
 			}
@@ -395,15 +397,17 @@ func (v *validator) response(i int, n Node, operation map[string]any) error {
 	if response.Status < 200 || response.Status > 599 {
 		v.node(i, "invalid_response", "Статус должен быть от 200 до 599.", "/response/status")
 	}
-	if response.BodyJSON != nil {
+	if response.BodyJSON != nil || response.BodyFrom != nil {
 		if response.Status == 204 || response.Status == 205 || response.Status == 304 || v.rule.Binding != nil && v.rule.Binding.Method == "HEAD" {
 			v.node(i, "body_not_allowed", "Для этого статуса или HEAD тело должно отсутствовать.", "/response/bodyJSON")
 		}
-		if _, err := decodeBody(v.ctx, *response.BodyJSON); err != nil {
-			if v.ctx.Err() != nil {
-				return v.ctx.Err()
+		if response.BodyJSON != nil {
+			if _, err := decodeBody(v.ctx, *response.BodyJSON); err != nil {
+				if v.ctx.Err() != nil {
+					return v.ctx.Err()
+				}
+				v.node(i, "invalid_response", "Тело должно содержать одно корректное JSON-значение без повторяющихся ключей и с глубиной до 64.", "/response/bodyJSON")
 			}
-			v.node(i, "invalid_response", "Тело должно содержать одно корректное JSON-значение без повторяющихся ключей и с глубиной до 64.", "/response/bodyJSON")
 		}
 	}
 	if operation != nil && response.Status >= 200 && response.Status <= 599 {

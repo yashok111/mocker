@@ -2,7 +2,10 @@
 // and pure logical simulation.
 package responserules
 
-import "github.com/yashok111/mocker/internal/overrides"
+import (
+	"context"
+	"github.com/yashok111/mocker/internal/overrides"
+)
 
 const Extension = "x-mocker-response-rules"
 
@@ -41,10 +44,11 @@ type Field struct {
 	Value string `json:"value"`
 }
 type Response struct {
-	Status    int     `json:"status"`
-	MediaType string  `json:"mediaType"`
-	Headers   []Field `json:"headers"`
-	BodyJSON  *string `json:"bodyJSON,omitempty"`
+	Status    int       `json:"status"`
+	MediaType string    `json:"mediaType"`
+	Headers   []Field   `json:"headers"`
+	BodyJSON  *string   `json:"bodyJSON,omitempty"`
+	BodyFrom  *ValueRef `json:"bodyFrom,omitempty"`
 }
 type Node struct {
 	ID        string               `json:"id"`
@@ -55,6 +59,7 @@ type Node struct {
 	Condition *overrides.Condition `json:"condition,omitempty"`
 	DelayMs   *int                 `json:"delayMs,omitempty"`
 	Response  *Response            `json:"response,omitempty"`
+	Entity    *EntityOperation     `json:"entity,omitempty"`
 }
 type Edge struct {
 	ID   string `json:"id"`
@@ -78,9 +83,11 @@ type Command struct {
 	Positions []Position `json:"positions,omitempty"`
 }
 type Request struct {
-	Query    []Field `json:"query"`
-	Headers  []Field `json:"headers"`
-	BodyJSON *string `json:"bodyJSON,omitempty"`
+	Query    []Field         `json:"query"`
+	Headers  []Field         `json:"headers"`
+	BodyJSON *string         `json:"bodyJSON,omitempty"`
+	Path     []Field         `json:"path,omitempty"`
+	Entities []EntityFixture `json:"entities,omitempty"`
 }
 type Diagnostic struct {
 	Code     string `json:"code"`
@@ -97,18 +104,74 @@ type Validation struct {
 	DiagnosticsTruncated bool         `json:"diagnosticsTruncated"`
 }
 type Step struct {
-	Step    int    `json:"step"`
-	NodeID  string `json:"nodeId"`
-	EdgeID  string `json:"edgeId,omitempty"`
-	Matched *bool  `json:"matched,omitempty"`
-	DelayMs *int   `json:"delayMs,omitempty"`
+	Step        int    `json:"step"`
+	NodeID      string `json:"nodeId"`
+	EdgeID      string `json:"edgeId,omitempty"`
+	Matched     *bool  `json:"matched,omitempty"`
+	DelayMs     *int   `json:"delayMs,omitempty"`
+	EntityFound *bool  `json:"entityFound,omitempty"`
+	EntityCount *int   `json:"entityCount,omitempty"`
 }
 type Simulation struct {
 	Validation
-	InputHash      string    `json:"inputHash"`
-	Outcome        string    `json:"outcome"`
-	Trace          []Step    `json:"trace"`
-	TerminalNodeID string    `json:"terminalNodeId,omitempty"`
-	TotalDelayMs   *int      `json:"totalDelayMs,omitempty"`
-	Response       *Response `json:"response,omitempty"`
+	InputHash      string            `json:"inputHash"`
+	Outcome        string            `json:"outcome"`
+	Trace          []Step            `json:"trace"`
+	TerminalNodeID string            `json:"terminalNodeId,omitempty"`
+	TotalDelayMs   *int              `json:"totalDelayMs,omitempty"`
+	Response       *Response         `json:"response,omitempty"`
+	Results        map[string]string `json:"results,omitempty"`
+	Entities       []EntityFixture   `json:"entities,omitempty"`
+}
+
+// ValueRef preserves literal JSON as text across the browser boundary.
+type ValueRef struct {
+	Source    string  `json:"source"`
+	ValueJSON *string `json:"valueJSON,omitempty"`
+	Name      string  `json:"name,omitempty"`
+	NodeID    string  `json:"nodeId,omitempty"`
+	Pointer   string  `json:"pointer,omitempty"`
+}
+type EntityOperation struct {
+	Family    string      `json:"family"`
+	Operation string      `json:"operation,omitempty"`
+	Scope     *[]ValueRef `json:"scope,omitempty"`
+	Key       *ValueRef   `json:"key,omitempty"`
+	Data      *ValueRef   `json:"data,omitempty"`
+}
+type EntityFixtureRow struct {
+	Key      string   `json:"key"`
+	Scope    []string `json:"scope"`
+	DataJSON string   `json:"dataJSON"`
+}
+type EntityFixture struct {
+	Family  string             `json:"family"`
+	IDField string             `json:"idField"`
+	IDType  string             `json:"idType"`
+	Rows    []EntityFixtureRow `json:"rows"`
+}
+type EntityTarget struct {
+	Family string
+	Scope  []string
+}
+type EntityResult struct {
+	Found bool
+	Value any
+}
+type EntityExecutor interface {
+	Read(context.Context, EntityTarget, *string) (EntityResult, error)
+	Create(context.Context, EntityTarget, map[string]any) (EntityResult, error)
+	Update(context.Context, EntityTarget, string, map[string]any) (EntityResult, error)
+}
+type EvaluationInput struct {
+	Request overrides.Input
+	Path    map[string]string
+}
+type EvaluationOptions struct {
+	Entities EntityExecutor
+	Delay    func(context.Context, int) error
+}
+type EntityAdmission struct {
+	MediaType string
+	NoBody    bool
 }

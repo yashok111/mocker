@@ -13,6 +13,7 @@ import type {
 } from "@/api/generated/schemas";
 import { describeApiFailureDetailed } from "@/api/errors";
 import RequestFixtureEditor from "./RequestFixtureEditor";
+import EntitySimulationResults from "./EntitySimulationResults";
 import { createEvaluationGate, evaluationIdentity } from "./simulationState";
 import type { GraphSelection } from "./model";
 import styles from "./ResponseRules.module.css";
@@ -204,6 +205,9 @@ export default function SimulationPanel(props: Props) {
                           {step.matched !== undefined &&
                             ` · Условие: ${step.matched ? "Да" : "Нет"}`}
                           {step.delayMs !== undefined && ` · ${step.delayMs} мс`}
+                          {step.entityFound !== undefined &&
+                            ` · Сущность: ${step.entityFound ? "найдена" : "не найдена"}`}
+                          {step.entityCount !== undefined && ` · Записей: ${step.entityCount}`}
                         </UnstyledButton>
                       </li>
                     ))}
@@ -225,11 +229,11 @@ export default function SimulationPanel(props: Props) {
                         <Text size="sm">Без тела ответа</Text>
                       )}
                       <Text size="xs" c="dimmed">
-                        Схема тела и согласование Accept не проверяются. Ответ 201 не создаёт
-                        сущность.
+                        Схема тела и согласование Accept не проверяются.
                       </Text>
                     </section>
                   )}
+                  <EntitySimulationResults simulation={simulation} rule={props.rule} />
                 </>
               )}
               <details className={styles.identity}>

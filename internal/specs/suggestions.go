@@ -206,7 +206,17 @@ func (r *Repo) backfillSuggestions(ctx context.Context, specID int64) error {
 // forbids. [suggestionsExist] asks a different question ("has this spec
 // EVER been derived") and keeps no predicate at all (§D4.5).
 func (r *Repo) listSuggestions(ctx context.Context, specID int64) ([]*ResourceSuggestion, error) {
-	rows, err := r.db.R.QueryContext(ctx, `
+	return suggestionsIn(ctx, r.db.R, specID)
+}
+
+// SuggestionsTx reads the current derived generation inside an import's
+// transaction. Unlike EnsureSuggestions, it never starts a lazy backfill.
+func (r *Repo) SuggestionsTx(ctx context.Context, tx *sql.Tx, specID int64) ([]*ResourceSuggestion, error) {
+	return suggestionsIn(ctx, tx, specID)
+}
+
+func suggestionsIn(ctx context.Context, q dbQuerier, specID int64) ([]*ResourceSuggestion, error) {
+	rows, err := q.QueryContext(ctx, `
 		SELECT spec_id, route_family, name, id_field, entity_schema, wrapper, confidence
 		FROM resource_suggestions
 		WHERE spec_id = ? AND route_family != ?

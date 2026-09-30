@@ -10218,6 +10218,9 @@
             "type": "string",
             "maxLength": 65536,
             "description": "Exact JSON text, at most 65536 UTF-8 bytes and depth 64. Duplicate object keys and trailing data are invalid. Absence means no body; null is forbidden."
+          },
+          "bodyFrom": {
+            "$ref": "#/components/schemas/ResponseRuleValueRef"
           }
         },
         "required": [
@@ -10225,7 +10228,13 @@
           "mediaType",
           "headers"
         ],
-        "description": "Static response. Semantic validation requires status 200..599 and no body for 204/205/304 or bound HEAD. Unsafe media types and response headers are rejected even on save."
+        "description": "Static response. Semantic validation requires status 200..599 and no body for 204/205/304 or bound HEAD. Unsafe media types and response headers are rejected even on save.",
+        "not": {
+          "required": [
+            "bodyJSON",
+            "bodyFrom"
+          ]
+        }
       },
       "ResponseRuleCondition": {
         "type": "object",
@@ -10482,6 +10491,15 @@
           },
           {
             "$ref": "#/components/schemas/ResponseRuleFallbackNode"
+          },
+          {
+            "$ref": "#/components/schemas/ResponseRuleEntityReadNode"
+          },
+          {
+            "$ref": "#/components/schemas/ResponseRuleEntityCreateNode"
+          },
+          {
+            "$ref": "#/components/schemas/ResponseRuleEntityUpdateNode"
           }
         ],
         "discriminator": {
@@ -10656,6 +10674,20 @@
             "type": "string",
             "maxLength": 65536,
             "description": "Exact JSON text, at most 65536 UTF-8 bytes and depth 64. Duplicate object keys and trailing data are invalid. Absence means no body; null is forbidden."
+          },
+          "path": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ResponseRuleField"
+            },
+            "maxItems": 100
+          },
+          "entities": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ResponseRuleEntityFixture"
+            },
+            "maxItems": 100
           }
         },
         "required": [
@@ -10796,6 +10828,12 @@
             "type": "integer",
             "minimum": 0,
             "maximum": 30000
+          },
+          "entityFound": {
+            "type": "boolean"
+          },
+          "entityCount": {
+            "type": "integer"
           }
         },
         "required": [
@@ -10852,6 +10890,21 @@
           },
           "response": {
             "$ref": "#/components/schemas/ResponseRuleResponse"
+          },
+          "results": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string",
+              "maxLength": 524288
+            },
+            "description": "Entity outputs keyed by node ID, each encoded as exact JSON text."
+          },
+          "entities": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ResponseRuleEntityFixture"
+            },
+            "maxItems": 100
           }
         },
         "required": [
@@ -11992,6 +12045,421 @@
             "$ref": "#/components/schemas/DesignScenarioDocument"
           }
         }
+      },
+      "ResponseRuleValueRef": {
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "source": {
+                "type": "string",
+                "const": "literal"
+              },
+              "valueJSON": {
+                "type": "string",
+                "maxLength": 65536
+              }
+            },
+            "required": [
+              "source",
+              "valueJSON"
+            ]
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "source": {
+                "type": "string",
+                "const": "path"
+              },
+              "name": {
+                "type": "string",
+                "maxLength": 256
+              }
+            },
+            "required": [
+              "source",
+              "name"
+            ]
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "source": {
+                "type": "string",
+                "const": "query"
+              },
+              "name": {
+                "type": "string",
+                "maxLength": 256
+              }
+            },
+            "required": [
+              "source",
+              "name"
+            ]
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "source": {
+                "type": "string",
+                "const": "header"
+              },
+              "name": {
+                "type": "string",
+                "maxLength": 256
+              }
+            },
+            "required": [
+              "source",
+              "name"
+            ]
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "source": {
+                "type": "string",
+                "const": "body"
+              },
+              "pointer": {
+                "type": "string",
+                "maxLength": 2048
+              }
+            },
+            "required": [
+              "source"
+            ]
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "source": {
+                "type": "string",
+                "const": "result"
+              },
+              "pointer": {
+                "type": "string",
+                "maxLength": 2048
+              },
+              "nodeId": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_-]{1,80}$"
+              }
+            },
+            "required": [
+              "source",
+              "nodeId"
+            ]
+          }
+        ],
+        "discriminator": {
+          "propertyName": "source"
+        }
+      },
+      "ResponseRuleEntityOperation": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "family": {
+            "type": "string",
+            "maxLength": 2048
+          },
+          "operation": {
+            "type": "string",
+            "enum": [
+              "get",
+              "list"
+            ]
+          },
+          "scope": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ResponseRuleValueRef"
+            },
+            "maxItems": 3
+          },
+          "key": {
+            "$ref": "#/components/schemas/ResponseRuleValueRef"
+          },
+          "data": {
+            "$ref": "#/components/schemas/ResponseRuleValueRef"
+          }
+        },
+        "required": [
+          "family"
+        ]
+      },
+      "ResponseRuleEntityFixtureRow": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "key": {
+            "type": "string",
+            "maxLength": 128
+          },
+          "scope": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "maxLength": 4096
+            },
+            "maxItems": 3
+          },
+          "dataJSON": {
+            "type": "string",
+            "maxLength": 65536
+          }
+        },
+        "required": [
+          "key",
+          "scope",
+          "dataJSON"
+        ]
+      },
+      "ResponseRuleEntityFixture": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "family": {
+            "type": "string",
+            "maxLength": 2048
+          },
+          "idField": {
+            "type": "string",
+            "maxLength": 256
+          },
+          "idType": {
+            "type": "string",
+            "enum": [
+              "integer",
+              "string"
+            ]
+          },
+          "rows": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ResponseRuleEntityFixtureRow"
+            },
+            "maxItems": 100
+          }
+        },
+        "required": [
+          "family",
+          "idField",
+          "idType",
+          "rows"
+        ]
+      },
+      "ResponseRuleEntityReadNode": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,80}$"
+          },
+          "type": {
+            "type": "string",
+            "const": "entity_read"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "x": {
+            "type": "number",
+            "minimum": -100000,
+            "maximum": 100000
+          },
+          "y": {
+            "type": "number",
+            "minimum": -100000,
+            "maximum": 100000
+          },
+          "entity": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ResponseRuleEntityOperation"
+              },
+              {
+                "oneOf": [
+                  {
+                    "properties": {
+                      "operation": {
+                        "const": "get"
+                      }
+                    },
+                    "required": [
+                      "operation",
+                      "key"
+                    ],
+                    "not": {
+                      "required": [
+                        "data"
+                      ]
+                    }
+                  },
+                  {
+                    "properties": {
+                      "operation": {
+                        "const": "list"
+                      }
+                    },
+                    "required": [
+                      "operation"
+                    ],
+                    "not": {
+                      "anyOf": [
+                        {
+                          "required": [
+                            "key"
+                          ]
+                        },
+                        {
+                          "required": [
+                            "data"
+                          ]
+                        }
+                      ]
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "type",
+          "name",
+          "x",
+          "y",
+          "entity"
+        ]
+      },
+      "ResponseRuleEntityCreateNode": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,80}$"
+          },
+          "type": {
+            "type": "string",
+            "const": "entity_create"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "x": {
+            "type": "number",
+            "minimum": -100000,
+            "maximum": 100000
+          },
+          "y": {
+            "type": "number",
+            "minimum": -100000,
+            "maximum": 100000
+          },
+          "entity": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ResponseRuleEntityOperation"
+              },
+              {
+                "required": [
+                  "data"
+                ],
+                "not": {
+                  "anyOf": [
+                    {
+                      "required": [
+                        "operation"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "key"
+                      ]
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "type",
+          "name",
+          "x",
+          "y",
+          "entity"
+        ]
+      },
+      "ResponseRuleEntityUpdateNode": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,80}$"
+          },
+          "type": {
+            "type": "string",
+            "const": "entity_update"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "x": {
+            "type": "number",
+            "minimum": -100000,
+            "maximum": 100000
+          },
+          "y": {
+            "type": "number",
+            "minimum": -100000,
+            "maximum": 100000
+          },
+          "entity": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ResponseRuleEntityOperation"
+              },
+              {
+                "required": [
+                  "key",
+                  "data"
+                ],
+                "not": {
+                  "required": [
+                    "operation"
+                  ]
+                }
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "type",
+          "name",
+          "x",
+          "y",
+          "entity"
+        ]
       }
     }
   },

@@ -2,6 +2,7 @@ import { canvasTextMeasurer } from "../design-canvas/canvasText";
 import { diagramFontFamily } from "../diagram/presentation";
 import {
   portNames,
+  ports,
   type ResponseRule,
   type ResponseRuleEdge,
   type ResponseRuleNode,
@@ -46,7 +47,9 @@ export function segmentHits(a: Point, b: Point, box: Box): boolean {
 
 export function portY(node: ResponseRuleNode, port: string): number {
   return (
-    node.y + CARD_HEIGHT * (node.type === "condition" ? (port === "true" ? 1 / 3 : 2 / 3) : 1 / 2)
+    node.y +
+    CARD_HEIGHT *
+      (ports(node).length === 2 ? (port === "true" || port === "found" ? 1 / 3 : 2 / 3) : 1 / 2)
   );
 }
 
@@ -105,13 +108,17 @@ export function buildRoutes(rule: ResponseRule): RuleRoute[] {
     if (!source || !target) continue;
     const start = { x: source.x + CARD_WIDTH, y: portY(source, edge.port) };
     const end = { x: target.x, y: target.y + CARD_HEIGHT / 2 };
-    const text = edge.port === "true" || edge.port === "false" ? portNames[edge.port] : undefined;
+    const text = edge.port !== "next" ? portNames[edge.port] : undefined;
     const width = text ? Math.ceil(measure(text)) + 20 : 0;
     const obstacles = [...boxes, ...routes.flatMap((route) => (route.label ? [route.label] : []))];
     const gap = end.x - start.x;
     // Saved diagrams may have a gap of only 40px. A fixed 96px departure
     // enters the target card and gives Manhattan an impossible waypoint.
-    const laneX = start.x + (gap > 0 ? Math.min(gap / 2, edge.port === "false" ? 124 : 96) : 18);
+    const laneX =
+      start.x +
+      (gap > 0
+        ? Math.min(gap / 2, edge.port === "false" || edge.port === "missing" ? 124 : 96)
+        : 18);
     const clearance = gap > 0 ? Math.min(18, gap / 3) : 18;
     const outside = [
       Math.min(...obstacles.map((box) => box.y)) - 42,
@@ -203,6 +210,12 @@ function labelOnPath(
 
 export function nodeSummary(node: ResponseRuleNode): string {
   switch (node.type) {
+    case "entity_read":
+      return `${node.entity.operation === "list" ? "Список" : "По ключу"} · ${node.entity.family || "Выберите семейство"}`;
+    case "entity_create":
+      return `Создать · ${node.entity.family || "Выберите семейство"}`;
+    case "entity_update":
+      return `Изменить поля · ${node.entity.family || "Выберите семейство"}`;
     case "start":
       return "Входящий запрос";
     case "fallback":

@@ -7,7 +7,6 @@ import (
 	"net/url"
 	"regexp"
 	"slices"
-	"strconv"
 	"strings"
 
 	"github.com/yashok111/mocker/internal/designscenario"
@@ -146,15 +145,6 @@ func (s *Service) prepareHTTP(rev designscenario.Revision, format Format) (httpE
 						}
 						if len(config.Assertions) > 0 {
 							stepAdd("json_assertions_omitted", "warning", "cURL не проверяет JSON-ответы")
-						}
-					} else {
-						for _, a := range config.Assertions {
-							if !safeAssertion(a.Equals) {
-								stepAdd("assertion_number_unsupported", "error", "Postman поддерживает в проверках только целые JSON-числа от -9007199254740991 до 9007199254740991, кроме -0")
-							}
-						}
-						if len(config.Assertions)+len(config.Extract) > 0 {
-							stepAdd("postman_numeric_limits", "warning", "Postman остановит JSON-проверки и извлечения, если ответ содержит дробные числа, небезопасные целые числа или -0")
 						}
 					}
 					out.Requests = append(out.Requests, httpRequest{Name: m.Label, Method: op.Method, Path: op.Path, Base: baseName, MessageID: m.ID, BindingTypes: bindingTypes[m.ID], Execution: resolved})
@@ -398,40 +388,6 @@ func savedBaseURL(op savedOperation) string {
 		}
 	}
 	return ""
-}
-
-func safeAssertion(raw []byte) bool {
-	decoder := jsonx.NewDecoder(bytes.NewReader(raw))
-	decoder.UseNumber()
-	var v any
-	if decoder.Decode(&v) != nil {
-		return false
-	}
-	var safe func(any) bool
-	safe = func(v any) bool {
-		switch v := v.(type) {
-		case jsonx.Number:
-			if string(v) == "-0" {
-				return false
-			}
-			n, e := strconv.ParseInt(string(v), 10, 64)
-			return e == nil && n >= -9007199254740991 && n <= 9007199254740991
-		case []any:
-			for _, x := range v {
-				if !safe(x) {
-					return false
-				}
-			}
-		case map[string]any:
-			for _, x := range v {
-				if !safe(x) {
-					return false
-				}
-			}
-		}
-		return true
-	}
-	return safe(v)
 }
 
 func concretePath(path string, values designscenario.ExecutionValues) string {

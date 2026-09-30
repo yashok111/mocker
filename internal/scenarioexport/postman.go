@@ -150,72 +150,6 @@ func postmanFlows(prepared httpExport) []*postmanFlow {
 	return flows
 }
 
-const postmanJSON = `
-function scalarString(value) {
-  let result = '';
-  for (let i = 0; i < value.length; i++) {
-    const code = value.charCodeAt(i);
-    if (code >= 0xD800 && code <= 0xDBFF) {
-      const next = value.charCodeAt(i + 1);
-      if (next >= 0xDC00 && next <= 0xDFFF) { result += value[i] + value[++i]; continue; }
-      result += '\uFFFD';
-    } else if (code >= 0xDC00 && code <= 0xDFFF) { result += '\uFFFD'; }
-    else { result += value[i]; }
-  }
-  return result;
-}
-function normalizeJSON(value) {
-  if (typeof value === 'string') return scalarString(value);
-  if (Array.isArray(value)) return value.map(normalizeJSON);
-  if (value !== null && typeof value === 'object') {
-    const result = {};
-    for (const key of Object.keys(value)) {
-      Object.defineProperty(result, scalarString(key), {value: normalizeJSON(value[key]), enumerable: true, configurable: true});
-    }
-    return result;
-  }
-  return value;
-}
-function compareKeys(left, right) {
-  const a = Array.from(left), b = Array.from(right);
-  for (let i = 0; i < Math.min(a.length, b.length); i++) {
-    const difference = a[i].codePointAt(0) - b[i].codePointAt(0);
-    if (difference !== 0) return difference;
-  }
-  return a.length - b.length;
-}
-function goJSONString(value) {
-  return JSON.stringify(value).replace(/[<>&\u2028\u2029]/g, c => '\\u' + c.charCodeAt(0).toString(16).padStart(4, '0'));
-}
-function goJSON(value) {
-  if (value === null || typeof value !== 'object') return goJSONString(value);
-  if (Array.isArray(value)) return '[' + value.map(goJSON).join(',') + ']';
-  return '{' + Object.keys(value).sort(compareKeys).map(key => goJSONString(key) + ':' + goJSON(value[key])).join(',') + '}';
-}
-function readPointer(value, pointer) {
-  if (pointer === '') return value;
-  for (const raw of pointer.slice(1).split('/')) {
-    const key = raw.replace(/~1/g, '/').replace(/~0/g, '~');
-    if (Array.isArray(value) && !/^(0|[1-9][0-9]*)$/.test(key)) throw new Error('Missing JSON Pointer: ' + pointer);
-    if (value === null || typeof value !== 'object' || !Object.prototype.hasOwnProperty.call(value, key)) throw new Error('Missing JSON Pointer: ' + pointer);
-    value = value[key];
-  }
-  return value;
-}
-function exactResponse() {
-  const text = pm.response.text();
-  // Inspect numeric lexemes before JSON.parse can round them. Restrict to the
-  // exact integer subset; this also protects numbers nested in objects/arrays.
-  const tokens = text.replace(/"(?:[^"\\]|\\[\s\S])*"/g, '""').match(/-?[0-9]+(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?/g) || [];
-  for (const token of tokens) {
-    if (token === '-0' || !/^-?(0|[1-9][0-9]*)$/.test(token) || !Number.isSafeInteger(Number(token))) {
-      throw new Error('Postman JSON assertions/extractions require safe integer numbers other than -0');
-    }
-  }
-  return normalizeJSON(JSON.parse(text));
-}
-`
-
 func (s *Service) renderPostman(title string, prepared httpExport) ([]byte, error) {
 	variables := []any{}
 	for _, name := range slices.Sorted(maps.Keys(prepared.Variables)) {
@@ -314,7 +248,7 @@ func (s *Service) postmanTestScript(request httpRequest, flow *postmanFlow) (str
 	}
 	hasJSON := len(request.Execution.Assertions)+len(request.Execution.Extract) > 0
 	if hasJSON {
-		out.WriteString(postmanJSON)
+		out.WriteString(postmanBindingRuntime(nil))
 	}
 	// pm.test captures assertion errors instead of throwing them to the script.
 	// Stop the collection inside its callback, before that error is swallowed.
@@ -325,7 +259,7 @@ func (s *Service) postmanTestScript(request httpRequest, flow *postmanFlow) (str
 		out.WriteString("pm.expect(pm.response.code).to.be.within(200, 299);\n")
 	}
 	if hasJSON {
-		out.WriteString("const response = exactResponse();\n")
+		out.WriteString("const response = postmanJSONRuntime.parse(pm.response.text());\n")
 	}
 	for _, assertion := range request.Execution.Assertions {
 		if err := s.CheckResponse([]string{assertion.Pointer, string(assertion.Equals)}); err != nil {
@@ -333,7 +267,7 @@ func (s *Service) postmanTestScript(request httpRequest, flow *postmanFlow) (str
 		}
 		pointer, _ := jsonx.Marshal(assertion.Pointer)
 		expected, _ := jsonx.Marshal(string(assertion.Equals))
-		fmt.Fprintf(&out, "pm.expect(readPointer(response, %s)).to.deep.equal(normalizeJSON(JSON.parse(%s)));\n", pointer, expected)
+		fmt.Fprintf(&out, "pm.expect(postmanJSONRuntime.equal(postmanJSONRuntime.readPointer(response, %s), postmanJSONRuntime.parse(%s))).to.equal(true);\n", pointer, expected)
 	}
 	if len(request.Execution.Extract) > 0 {
 		// Match the runner's atomic variable update: a missing later pointer must
@@ -345,7 +279,7 @@ func (s *Service) postmanTestScript(request httpRequest, flow *postmanFlow) (str
 			}
 			name, _ := jsonx.Marshal(extraction.Name)
 			pointer, _ := jsonx.Marshal(extraction.Pointer)
-			fmt.Fprintf(&out, "{ const value = readPointer(response, %s); extracted.push([%s, typeof value === 'string' ? value : goJSON(value)]); }\n", pointer, name)
+			fmt.Fprintf(&out, "{ const value = postmanJSONRuntime.readPointer(response, %s); extracted.push([%s, typeof value === 'string' ? value : postmanJSONRuntime.stringify(value)]); }\n", pointer, name)
 		}
 	}
 	if flow != nil {

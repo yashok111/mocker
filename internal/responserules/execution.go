@@ -73,15 +73,18 @@ func CompileExecution(ctx context.Context, root map[string]any) (map[string]*Pro
 // Program is an immutable validated graph. Its maps and payloads are private;
 // Evaluate neither modifies request input nor returns aliases to stored payloads.
 type Program struct {
-	id    string
-	start string
-	nodes map[string]Node
-	edges map[string]map[string]Edge
+	id        string
+	start     string
+	nodes     map[string]Node
+	edges     map[string]map[string]Edge
+	admission *EntityAdmission
+	nodeOrder map[string]int
 }
 
 func newProgram(rule Rule) *Program {
-	p := &Program{id: rule.ID, nodes: make(map[string]Node, len(rule.Nodes)), edges: map[string]map[string]Edge{}}
-	for _, n := range rule.Nodes {
+	p := &Program{id: rule.ID, nodes: make(map[string]Node, len(rule.Nodes)), edges: map[string]map[string]Edge{}, nodeOrder: map[string]int{}}
+	for i, n := range rule.Nodes {
+		p.nodeOrder[n.ID] = i
 		p.nodes[n.ID] = n
 		if n.Type == "start" {
 			p.start = n.ID
@@ -93,6 +96,7 @@ func newProgram(rule Rule) *Program {
 		}
 		p.edges[edge.From][edge.Port] = edge
 	}
+	p.admission, _ = entityAdmission(rule)
 	return p
 }
 
@@ -125,6 +129,9 @@ func LiveInput(ctx context.Context, query url.Values, header http.Header, body [
 
 // Evaluate follows exactly one bounded path without waiting or mutating state.
 func (p *Program) Evaluate(ctx context.Context, input overrides.Input) (Simulation, error) {
+	return p.EvaluateWithEntities(ctx, EvaluationInput{Request: input}, EvaluationOptions{})
+}
+func (p *Program) EvaluateWithEntities(ctx context.Context, input EvaluationInput, options EvaluationOptions) (Simulation, error) {
 	if err := ctx.Err(); err != nil {
 		return Simulation{}, err
 	}
@@ -132,6 +139,7 @@ func (p *Program) Evaluate(ctx context.Context, input overrides.Input) (Simulati
 		return Simulation{}, invalid("", "правило не скомпилировано")
 	}
 	result := Simulation{Validation: Validation{Valid: true, Diagnostics: []Diagnostic{}}, Trace: []Step{}}
+	results := map[string]any{}
 	current := p.start
 	total := 0
 	for i := 0; i < MaxNodes; i++ {
@@ -146,7 +154,7 @@ func (p *Program) Evaluate(ctx context.Context, input overrides.Input) (Simulati
 		port := "next"
 		switch n.Type {
 		case "condition":
-			matched := n.Condition.Match(input)
+			matched := n.Condition.Match(input.Request)
 			step.Matched = &matched
 			port = "false"
 			if matched {
@@ -156,19 +164,26 @@ func (p *Program) Evaluate(ctx context.Context, input overrides.Input) (Simulati
 			delay := *n.DelayMs
 			total += delay
 			step.DelayMs = &delay
+			if options.Delay != nil {
+				if err := options.Delay(ctx, delay); err != nil {
+					return Simulation{}, err
+				}
+			}
+		case "entity_read", "entity_create", "entity_update":
+			var err error
+			port, err = recordEntityStep(ctx, n, fmt.Sprintf("/nodes/%d", p.nodeOrder[n.ID]), input, options, results, &result, &step)
+			if err != nil {
+				return Simulation{}, err
+			}
 		case "response", "fallback":
 			result.Outcome = n.Type
 			result.TerminalNodeID = n.ID
 			result.TotalDelayMs = &total
-			if n.Response != nil {
-				response := *n.Response
-				response.Headers = append([]Field{}, response.Headers...)
-				if response.BodyJSON != nil {
-					body := *response.BodyJSON
-					response.BodyJSON = &body
-				}
-				result.Response = &response
+			response, err := evaluatedResponse(ctx, n, fmt.Sprintf("/nodes/%d", p.nodeOrder[n.ID]), input, results)
+			if err != nil {
+				return Simulation{}, err
 			}
+			result.Response = response
 			result.Trace = append(result.Trace, step)
 			return boundedResult(result)
 		}

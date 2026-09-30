@@ -31,7 +31,7 @@ export function ruleLayoutInput(rule?: ResponseRule): DiagramLayoutInput {
         target: `node:${edge.to}`,
         ...(ports(ids.get(edge.from)!).includes(edge.port) ? { sourcePort: edge.port } : {}),
         ...(ids.get(edge.to)!.type === "start" ? {} : { targetPort: "in" }),
-        ...(edge.port === "true" || edge.port === "false"
+        ...(edge.port !== "next"
           ? { label: measureDiagramLabel(portNames[edge.port]!, 110, 1) }
           : {}),
       })),

@@ -12,18 +12,30 @@ export const nodeNames: Record<ResponseRuleNode["type"], string> = {
   delay: "Задержка",
   response: "Ответ",
   fallback: "Стандартная обработка",
+  entity_read: "Чтение сущностей",
+  entity_create: "Создание сущности",
+  entity_update: "Изменение сущности",
 };
 export const portNames: Record<string, string> & Record<"next" | "true" | "false", string> = {
   next: "Далее",
   true: "Да",
   false: "Нет",
+  found: "Найдена",
+  missing: "Не найдена",
 };
 export function ports(node: ResponseRuleNode): ResponseRuleEdge["port"][] {
-  return node.type === "condition"
-    ? ["true", "false"]
-    : node.type === "start" || node.type === "delay"
-      ? ["next"]
-      : [];
+  if (node.type === "condition") return ["true", "false"];
+  if (
+    node.type === "entity_update" ||
+    (node.type === "entity_read" && node.entity.operation === "get")
+  )
+    return ["found", "missing"];
+  return node.type === "start" ||
+    node.type === "delay" ||
+    node.type === "entity_create" ||
+    node.type === "entity_read"
+    ? ["next"]
+    : [];
 }
 const size = (value: string) => new TextEncoder().encode(value).length;
 function fail(): never {
@@ -58,6 +70,24 @@ function fields(value: unknown) {
     text(field.name, 256);
     text(field.value, 4096);
   }
+}
+function valueRef(value: unknown) {
+  object(value, ["source", "valueJSON", "name", "nodeId", "pointer"]);
+  const source = value.source;
+  if (!["literal", "path", "query", "header", "body", "result"].includes(String(source))) fail();
+  const allowed =
+    source === "literal"
+      ? ["source", "valueJSON"]
+      : source === "result"
+        ? ["source", "nodeId", "pointer"]
+        : source === "body"
+          ? ["source", "pointer"]
+          : ["source", "name"];
+  object(value, allowed);
+  if (source === "literal") text(value.valueJSON, 65536);
+  if (["path", "query", "header"].includes(String(source))) text(value.name, 256);
+  if (source === "result") text(value.nodeId, 80);
+  if (value.pointer !== undefined) text(value.pointer, 2048);
 }
 const httpToken = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/;
 const managedHeaders = new Set([
@@ -127,7 +157,9 @@ export function checkRule(value: unknown): asserts value is ResponseRule {
           ? ["response"]
           : node.type === "delay"
             ? ["delayMs"]
-            : [];
+            : node.type.startsWith("entity_")
+              ? ["entity"]
+              : [];
     object(node, ["id", "type", "name", "x", "y", ...extra]);
     text(node.name, 200);
     for (const coordinate of [node.x, node.y])
@@ -145,13 +177,28 @@ export function checkRule(value: unknown): asserts value is ResponseRule {
       if (node.condition.value !== undefined) text(node.condition.value, 4096);
     }
     if (node.type === "delay" && !Number.isSafeInteger(node.delayMs)) fail();
+    if (node.type.startsWith("entity_")) {
+      object(node.entity, ["family", "operation", "scope", "key", "data"]);
+      text(node.entity.family, 2048);
+      if (node.entity.operation !== undefined) text(node.entity.operation, 256);
+      if (node.entity.scope !== undefined) {
+        if (!Array.isArray(node.entity.scope) || node.entity.scope.length > 3) fail();
+        node.entity.scope.forEach(valueRef);
+      }
+      if (node.entity.key !== undefined) valueRef(node.entity.key);
+      if (node.entity.data !== undefined) valueRef(node.entity.data);
+    }
     if (node.type === "response") {
-      object(node.response, ["status", "mediaType", "headers", "bodyJSON"]);
+      object(node.response, ["status", "mediaType", "headers", "bodyJSON", "bodyFrom"]);
       if (!Number.isSafeInteger(node.response.status)) fail();
       text(node.response.mediaType, 4096);
       fields(node.response.headers);
       safeResponse(node.response);
       if (node.response.bodyJSON !== undefined) text(node.response.bodyJSON, 65536);
+      if (node.response.bodyFrom !== undefined) {
+        if (node.response.bodyJSON !== undefined) fail();
+        valueRef(node.response.bodyFrom);
+      }
     }
   }
   for (const edge of value.edges) {
@@ -194,6 +241,24 @@ export function removeNode(rule: ResponseRule, id: string): ResponseRule {
 export function makeNode(type: ResponseRuleNode["type"], x = 40, y = 40): ResponseRuleNode {
   const base = { id: newID(), name: nodeNames[type], x, y };
   switch (type) {
+    case "entity_read":
+      return {
+        ...base,
+        type,
+        entity: { family: "", operation: "get", key: { source: "path", name: "id" } },
+      };
+    case "entity_create":
+      return { ...base, type, entity: { family: "", data: { source: "body", pointer: "" } } };
+    case "entity_update":
+      return {
+        ...base,
+        type,
+        entity: {
+          family: "",
+          key: { source: "path", name: "id" },
+          data: { source: "body", pointer: "" },
+        },
+      };
     case "condition":
       return { ...base, type, condition: { in: "header", name: "Authorization", op: "exists" } };
     case "delay":

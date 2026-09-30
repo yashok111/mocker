@@ -1,8 +1,89 @@
 import { describe, expect, it } from "vitest";
-import { blankRule, headerTemplate, readRules, writeRules, removeNode, EXTENSION } from "./model";
+import {
+  blankRule,
+  headerTemplate,
+  readRules,
+  writeRules,
+  removeNode,
+  EXTENSION,
+  ports,
+  type ResponseRule,
+} from "./model";
 
 const source = JSON.stringify({ openapi: "3.1.0", paths: {}, "x-neighbor": { keep: true } });
 describe("response rule document buffer", () => {
+  it("roundtrips entity refs and dynamic response bodies without changing raw JSON numbers", () => {
+    const rule = {
+      ...blankRule(),
+      nodes: [
+        {
+          id: "create",
+          type: "entity_create",
+          name: "Создать",
+          x: 0,
+          y: 0,
+          entity: {
+            family: "/orders",
+            scope: [],
+            data: { source: "literal", valueJSON: '{"n":9007199254740993}' },
+          },
+        },
+        {
+          id: "response",
+          type: "response",
+          name: "Ответ",
+          x: 400,
+          y: 0,
+          response: {
+            status: 201,
+            mediaType: "application/json",
+            headers: [],
+            bodyFrom: { source: "result", nodeId: "create", pointer: "" },
+          },
+        },
+      ],
+      edges: [],
+    } as unknown as ResponseRule;
+    expect(readRules(writeRules(source, [rule])).rules[0]).toEqual(rule);
+  });
+  it("offers missing branches for single records and next for list/create", () => {
+    const node = {
+      id: "read",
+      name: "Читать",
+      x: 0,
+      y: 0,
+      type: "entity_read",
+      entity: { family: "/orders", operation: "get", key: { source: "path", name: "id" } },
+    };
+    expect(ports(node as never)).toEqual(["found", "missing"]);
+    expect(ports({ ...node, entity: { family: "/orders", operation: "list" } } as never)).toEqual([
+      "next",
+    ]);
+    expect(ports({ ...node, type: "entity_create" } as never)).toEqual(["next"]);
+    expect(ports({ ...node, type: "entity_update" } as never)).toEqual(["found", "missing"]);
+  });
+  it.each([
+    { source: "literal", valueJSON: "1", unknown: true },
+    { source: "result", nodeId: "create", pointer: 42 },
+    { source: "body", pointer: "/n", valueJSON: "2" },
+  ])("refuses malformed value references", (data) => {
+    const rule = {
+      ...blankRule(),
+      nodes: [
+        {
+          id: "create",
+          name: "",
+          x: 0,
+          y: 0,
+          type: "entity_create",
+          entity: { family: "/orders", data },
+        },
+      ],
+    };
+    expect(() =>
+      readRules(JSON.stringify({ [EXTENSION]: { formatVersion: 1, rules: [rule] } })),
+    ).toThrow();
+  });
   it("creates stable blank and header graphs without changing neighboring fields", () => {
     const blank = blankRule();
     const header = headerTemplate();

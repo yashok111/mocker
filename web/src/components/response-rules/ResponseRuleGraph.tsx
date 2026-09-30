@@ -105,7 +105,13 @@ export default function ResponseRuleGraph(props: Props) {
         port = edge.getSourcePortId();
       graph.removeEdge(edge);
       if (current.current.blocked || !from?.startsWith("node:") || !to?.startsWith("node:")) return;
-      if (port === "next" || port === "true" || port === "false")
+      if (
+        port === "next" ||
+        port === "true" ||
+        port === "false" ||
+        port === "found" ||
+        port === "missing"
+      )
         current.current.onConnect(from.slice(5), port, to.slice(5));
     });
     return () => {

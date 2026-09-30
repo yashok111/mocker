@@ -69,13 +69,9 @@ type EntityStore interface {
 	Get(ctx context.Context, resourceID int64, base, scope resources.ScopeKey, entityKey string) (resources.Entity, bool, error)
 	Create(ctx context.Context, resourceID int64, base, scope resources.ScopeKey, idField, idType string, data map[string]any) (resources.Entity, error)
 	Delete(ctx context.Context, resourceID int64, base, scope resources.ScopeKey, entityKey string) (bool, error)
-	// Patch is *resources.Repo's fifth method, admitted for A19: a Lua
-	// function's `mock.entities.update`, a shallow merge read and written
-	// inside one write transaction (the Repo method's comment says why it
-	// is not Get-then-Set here). The mock plane's own HTTP verbs do not call
-	// it — a mock has no PATCH on an entity; CARVE-OUTS — so this seam has
-	// exactly one caller here, the Lua host. found is false when there is no
-	// such row, and nothing was written.
+	// Patch performs the atomic shallow update used by Lua and visual entity
+	// blocks. Ordinary resource HTTP verbs do not call it. found is false
+	// when the row is absent, and nothing was written.
 	Patch(ctx context.Context, resourceID int64, base, scope resources.ScopeKey, entityKey, idField, idType string, patch map[string]any) (resources.Entity, bool, error)
 }
 

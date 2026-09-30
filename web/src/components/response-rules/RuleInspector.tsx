@@ -25,6 +25,8 @@ import {
   type GraphSelection,
 } from "./model";
 import { FieldRows } from "./RequestFixtureEditor";
+import EntityOperationEditor from "./EntityOperationEditor";
+import ValueRefEditor from "./ValueRefEditor";
 
 export const inspectorPointer = (id: string) => `/${EXTENSION}/$form/${id}`;
 type Props = {
@@ -231,6 +233,16 @@ export default function RuleInspector({
                   }
                 />
               )}
+              {(node.type === "entity_read" ||
+                node.type === "entity_create" ||
+                node.type === "entity_update") && (
+                <EntityOperationEditor
+                  node={node}
+                  rule={candidate}
+                  document={document}
+                  onChange={editNode}
+                />
+              )}
               {node.type === "response" && (
                 <>
                   <NumberInput
@@ -270,16 +282,50 @@ export default function RuleInspector({
                   />
                   <Checkbox
                     label="Тело ответа JSON"
-                    checked={node.response.bodyJSON !== undefined}
+                    checked={
+                      node.response.bodyJSON !== undefined || node.response.bodyFrom !== undefined
+                    }
                     onChange={(event) => {
                       if (event.currentTarget.checked)
                         editNode({ ...node, response: { ...node.response, bodyJSON: "null" } });
                       else {
-                        const { bodyJSON: _, ...response } = node.response;
+                        const { bodyJSON: _, bodyFrom: _from, ...response } = node.response;
                         editNode({ ...node, response });
                       }
                     }}
                   />
+                  {(node.response.bodyJSON !== undefined ||
+                    node.response.bodyFrom !== undefined) && (
+                    <NativeSelect
+                      label="Источник тела ответа"
+                      value={node.response.bodyFrom !== undefined ? "reference" : "literal"}
+                      data={[
+                        { value: "literal", label: "JSON ответа" },
+                        { value: "reference", label: "Значение из запроса или сущности" },
+                      ]}
+                      onChange={(event) => {
+                        const { bodyJSON: _, bodyFrom: _from, ...response } = node.response;
+                        editNode({
+                          ...node,
+                          response:
+                            event.currentTarget.value === "reference"
+                              ? { ...response, bodyFrom: { source: "body", pointer: "" } }
+                              : { ...response, bodyJSON: "null" },
+                        });
+                      }}
+                    />
+                  )}
+                  {node.response.bodyFrom !== undefined && (
+                    <ValueRefEditor
+                      value={node.response.bodyFrom}
+                      label="значение тела ответа"
+                      sourceLabel="Источник значения тела ответа"
+                      rule={candidate}
+                      onChange={(bodyFrom) =>
+                        editNode({ ...node, response: { ...node.response, bodyFrom } })
+                      }
+                    />
+                  )}
                   {node.response.bodyJSON !== undefined && (
                     <Textarea
                       label="JSON ответа"

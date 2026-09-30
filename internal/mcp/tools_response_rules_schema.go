@@ -24,7 +24,7 @@ func responseRuleInputSchema(name string) map[string]any {
 		if name == "simulate_response_rule" {
 			p["request"] = designScenarioSchemaObject([]string{"query", "headers"}, map[string]any{
 				"query": responseRuleFieldsSchema(), "headers": responseRuleFieldsSchema(),
-				"bodyJSON": responseRuleTextSchema(65536),
+				"bodyJSON": responseRuleTextSchema(65536), "path": responseRuleFieldsSchema(), "entities": responseRuleArraySchema(responseRuleEntityFixtureSchema(), 100),
 			})
 			required = append(required, "request")
 		}
@@ -42,7 +42,7 @@ func responseRuleSchema() map[string]any {
 
 func responseRuleNodeSchema() map[string]any {
 	variants := []any{}
-	for _, kind := range []string{"start", "condition", "delay", "response", "fallback"} {
+	for _, kind := range []string{"start", "condition", "delay", "response", "fallback", "entity_read", "entity_create", "entity_update"} {
 		p := map[string]any{"id": responseRuleIDSchema(), "name": responseRuleTextSchema(200),
 			"type": map[string]any{"type": "string", "const": kind}, "x": responseRuleCoordinateSchema(), "y": responseRuleCoordinateSchema()}
 		required := []string{"id", "type", "name", "x", "y"}
@@ -54,11 +54,16 @@ func responseRuleNodeSchema() map[string]any {
 			p["delayMs"] = map[string]any{"type": "integer"}
 			required = append(required, "delayMs")
 		case "response":
-			p["response"] = designScenarioSchemaObject([]string{"status", "mediaType", "headers"}, map[string]any{
+			response := designScenarioSchemaObject([]string{"status", "mediaType", "headers"}, map[string]any{
 				"status": map[string]any{"type": "integer"}, "mediaType": responseRuleTextSchema(4096),
-				"headers": responseRuleFieldsSchema(), "bodyJSON": responseRuleTextSchema(65536),
+				"headers": responseRuleFieldsSchema(), "bodyJSON": responseRuleTextSchema(65536), "bodyFrom": responseRuleValueRefSchema(),
 			})
+			response["not"] = map[string]any{"required": []string{"bodyJSON", "bodyFrom"}}
+			p["response"] = response
 			required = append(required, "response")
+		case "entity_read", "entity_create", "entity_update":
+			p["entity"] = responseRuleEntityOperationSchema(kind)
+			required = append(required, "entity")
 		}
 		variants = append(variants, designScenarioSchemaObject(required, p))
 	}
@@ -137,4 +142,55 @@ func responseRuleTextSchema(maxLength int) map[string]any {
 
 func responseRuleArraySchema(items any, maxItems int) map[string]any {
 	return map[string]any{"type": "array", "items": items, "maxItems": maxItems}
+}
+
+func responseRuleValueRefSchema() map[string]any {
+	variants := []any{}
+	for _, source := range []string{"literal", "path", "query", "header", "body", "result"} {
+		p := map[string]any{"source": map[string]any{"type": "string", "const": source}}
+		required := []string{"source"}
+		switch source {
+		case "literal":
+			p["valueJSON"] = responseRuleTextSchema(65536)
+			required = append(required, "valueJSON")
+		case "path", "query", "header":
+			p["name"] = responseRuleTextSchema(256)
+			required = append(required, "name")
+		case "body":
+			p["pointer"] = responseRuleTextSchema(2048)
+		case "result":
+			p["pointer"] = responseRuleTextSchema(2048)
+			p["nodeId"] = responseRuleIDSchema()
+			required = append(required, "nodeId")
+		}
+		variants = append(variants, designScenarioSchemaObject(required, p))
+	}
+	return map[string]any{"oneOf": variants}
+}
+func responseRuleEntityOperationSchema(kind string) map[string]any {
+	if kind == "entity_read" {
+		return map[string]any{"oneOf": []any{responseRuleEntityOperationSchema("get"), responseRuleEntityOperationSchema("list")}}
+	}
+	p := map[string]any{"family": responseRuleTextSchema(2048), "scope": responseRuleArraySchema(responseRuleValueRefSchema(), 3)}
+	required := []string{"family"}
+	switch kind {
+	case "get", "list":
+		p["operation"] = map[string]any{"type": "string", "const": kind}
+		required = append(required, "operation")
+		if kind == "get" {
+			p["key"] = responseRuleValueRefSchema()
+			required = append(required, "key")
+		}
+	case "entity_create":
+		p["data"] = responseRuleValueRefSchema()
+		required = append(required, "data")
+	case "entity_update":
+		p["key"], p["data"] = responseRuleValueRefSchema(), responseRuleValueRefSchema()
+		required = append(required, "key", "data")
+	}
+	return designScenarioSchemaObject(required, p)
+}
+func responseRuleEntityFixtureSchema() map[string]any {
+	row := designScenarioSchemaObject([]string{"key", "scope", "dataJSON"}, map[string]any{"key": responseRuleTextSchema(128), "scope": responseRuleArraySchema(responseRuleTextSchema(4096), 3), "dataJSON": responseRuleTextSchema(65536)})
+	return designScenarioSchemaObject([]string{"family", "idField", "idType", "rows"}, map[string]any{"family": responseRuleTextSchema(2048), "idField": responseRuleTextSchema(256), "idType": map[string]any{"type": "string", "enum": []string{"integer", "string"}}, "rows": responseRuleArraySchema(row, 100)})
 }

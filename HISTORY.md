@@ -23,7 +23,37 @@ nobody said is what is NEXT and why exactly that. That role was carried by `HAND
 deleted in `a5818e2` as spent, and it moved nowhere: the next slice
 was designed outside the repository and did not appear in the repository at all.
 
-## Local branch — Postman data bindings (2026-09-29)
+## Postman precision and visual entities (2026-09-30)
+
+`feat/postman-precision-entity-rules` removes the safe-integer restriction from
+Postman JSON assertions and extraction. The shared lossless runtime compares
+numbers by decimal value, including arbitrary exponents, and retains original
+number tokens during extraction. Failed checks or missing values stop the chain
+before publishing variables. Regression coverage and a Newman 6.2.2 run verified
+large integers, close fractions, exponent notation and negative zero.
+
+Visual response rules gain entity get/list/create/shallow update blocks, request
+and prior-result references, and response `bodyFrom`. Simulation uses isolated
+fixtures and returns exact JSON text. Applied HTTP graphs resolve the current
+workspace's family/base/path scope and call existing atomic entity operations.
+Write admission and ordinary delays precede mutations; shadowed graphs do no
+entity work. Earlier successful writes survive a later graph error.
+
+Managed API save/publication projects the applied families and their ancestors
+without generating or copying rows. Draft and published data remain separate;
+unapply retains dormant rows for later reapply/restore. Incompatible identity
+changes fail atomically. Local specs, plans, review and QA artifacts live under
+`docs/postman-precision-*` and `docs/response-rule-entities-*`.
+
+Final local checks passed: the full Go race bar (44 tested packages), full UI
+suite (145 files / 1333 tests), typecheck, vet/gofmt, UI lint and both production
+builds. Browser checks covered 1440/768/375 pixels. Real HTTP verified empty
+managed datasets, exact create/read/update, refused/missing requests, separate
+draft/published data and dormant-row reactivation. Review findings on inherited
+fixture scope and strict schemas were resolved; managed projection review found
+no remaining defects. Optional golangci-lint was unavailable.
+
+## Postman data bindings (2026-09-29, merged in 6144220)
 
 `feat/postman-data-bindings` extends the existing Postman v2.1 exporter with
 response → path/query/header/body bindings. Preflight shares data-flow analysis
@@ -36,8 +66,8 @@ transforms, including Go Unicode simple case mappings. Temporary response state
 is scoped to a collection run, checked against request order and iteration, and
 cleared on completion or failure. Only successful source steps publish values;
 missing pointers, failed checks and invalid values stop dependent requests.
-Existing JSON assertion/extraction limits, cURL bindings and exported fragments
-remain documented in `CARVE-OUTS.md`.
+Current cURL bindings and exported-fragment limits remain documented in
+`CARVE-OUTS.md`; numeric assertion/extraction limits were removed by the next slice.
 
 Local Newman 6.2.2 verification sent six real HTTP requests over two iterations:
 IDs 9007199254740993 and 9007199254740995 stayed exact, as did fractional,

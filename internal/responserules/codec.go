@@ -185,7 +185,7 @@ func (e *Edge) UnmarshalJSON(data []byte) error {
 func (r *Response) UnmarshalJSON(data []byte) error {
 	var v Response
 	var headers wireArray[Field]
-	if err := decodeObject(data, required("status", &v.Status), required("mediaType", &v.MediaType), required("headers", &headers), optional("bodyJSON", &v.BodyJSON)); err != nil {
+	if err := decodeObject(data, required("status", &v.Status), required("mediaType", &v.MediaType), required("headers", &headers), optional("bodyJSON", &v.BodyJSON), optional("bodyFrom", &v.BodyFrom)); err != nil {
 		return err
 	}
 	v.Headers = headers
@@ -230,6 +230,8 @@ func (n *Node) UnmarshalJSON(data []byte) error {
 		fields = append(fields, required("delayMs", &v.DelayMs))
 	case "response":
 		fields = append(fields, required("response", &v.Response))
+	case "entity_read", "entity_create", "entity_update":
+		fields = append(fields, required("entity", &v.Entity))
 	default:
 		return invalid("/type", "неизвестный тип узла")
 	}
@@ -285,12 +287,15 @@ func (r *Request) UnmarshalJSON(data []byte) error {
 		return err
 	}
 	var v Request
-	var query, headers wireArray[Field]
-	if err := decodeObject(data, required("query", &query), required("headers", &headers), optional("bodyJSON", &v.BodyJSON)); err != nil {
+	var query, headers, path wireArray[Field]
+	var entities wireArray[EntityFixture]
+	if err := decodeObject(data, required("query", &query), required("headers", &headers), optional("bodyJSON", &v.BodyJSON), optional("path", &path), optional("entities", &entities)); err != nil {
 		return err
 	}
 	v.Query = query
 	v.Headers = headers
+	v.Path = path
+	v.Entities = entities
 	*r = v
 	return nil
 }
@@ -381,13 +386,14 @@ func CheckStructure(r Rule) error {
 }
 func checkNode(n Node) error {
 	condition, delay, response := n.Condition != nil, n.DelayMs != nil, n.Response != nil
+	entity := n.Entity != nil
 	switch n.Type {
 	case "start", "fallback":
-		if condition || delay || response {
+		if condition || delay || response || entity {
 			return invalid("", "лишние поля узла")
 		}
 	case "condition":
-		if !condition || delay || response {
+		if !condition || delay || response || entity {
 			return invalid("/condition", "требуется только condition")
 		}
 		c := n.Condition
@@ -398,22 +404,35 @@ func checkNode(n Node) error {
 			return invalid("/condition/value", "exists не принимает value")
 		}
 	case "delay":
-		if !delay || condition || response {
+		if !delay || condition || response || entity {
 			return invalid("/delayMs", "требуется только delayMs")
 		}
 	case "response":
-		if !response || condition || delay {
+		if !response || condition || delay || entity {
 			return invalid("/response", "требуется только response")
 		}
 		if err := checkResponse(*n.Response); err != nil {
 			return at("/response", err)
 		}
+	case "entity_read", "entity_create", "entity_update":
+		if !entity || condition || delay || response {
+			return invalid("/entity", "требуется только entity")
+		}
+		return checkEntityOperation(n.Type, *n.Entity)
 	default:
 		return invalid("/type", "неизвестный тип узла")
 	}
 	return nil
 }
 func checkResponse(r Response) error {
+	if r.BodyFrom != nil {
+		if r.BodyJSON != nil {
+			return invalid("/bodyFrom", "источники тела взаимоисключающие")
+		}
+		if err := checkValueRef(*r.BodyFrom); err != nil {
+			return at("/bodyFrom", err)
+		}
+	}
 	if err := checkFieldValue(r.MediaType); err != nil {
 		return at("/mediaType", err)
 	}

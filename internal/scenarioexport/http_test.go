@@ -284,24 +284,22 @@ process.stdout.write(JSON.stringify(output));`
 	return result
 }
 
-func TestPostmanRejectsUnsafeJSONNumbersBeforeRounding(t *testing.T) {
+func TestPostmanPreservesExactJSONNumbers(t *testing.T) {
 	for _, value := range []string{"9007199254740993", "9007199254740991.1", "0.10000000000000001", "1e999", "-0"} {
 		t.Run(value, func(t *testing.T) {
 			rev := httpFixture("https://example.test")
 			rev.Document.Messages[0].Execution.Assertions = []designscenario.ExecutionAssertion{{Pointer: "/id", Equals: jsonx.RawMessage(value)}}
-			_, err := New(validContract, 1<<20).Export(rev, Request{Format: "postman"})
-			blocked, ok := errors.AsType[*BlockedError](err)
-			if !ok || !hasDiagnostic(blocked.Diagnostics, "assertion_number_unsupported") {
-				t.Fatal(err)
-			}
-			rev.Document.Messages[0].Execution.Assertions[0].Equals = jsonx.RawMessage("1")
+			rev.Document.Messages[0].Execution.Extract = []designscenario.ExecutionExtraction{{Name: "created", Pointer: "/id"}}
 			a, err := New(validContract, 1<<20).Export(rev, Request{Format: "postman"})
 			if err != nil {
 				t.Fatal(err)
 			}
+			if hasDiagnostic(a.Diagnostics, "postman_numeric_limits") {
+				t.Fatal("exact numbers retain obsolete limits", a.Diagnostics)
+			}
 			result := runPostman(t, a.Content, `{"id":`+value+`}`)
-			if !strings.Contains(result["error"].(string), "safe integer") {
-				t.Fatal("response rounded", result)
+			if result["error"] != "" || result["created"] != value {
+				t.Fatalf("numeric assertion or extraction changed %s: %+v", value, result)
 			}
 		})
 	}
@@ -506,7 +504,7 @@ func TestPostmanExtractionMatchesGoSerializationInNextRequest(t *testing.T) {
 	}
 }
 
-func TestPostmanRejectsNegativeZeroBeforeLosingLexeme(t *testing.T) {
+func TestPostmanExtractsNegativeZeroWithoutLosingLexeme(t *testing.T) {
 	rev := httpFixture("https://example.test")
 	rev.Document.Messages[0].Execution.Extract = []designscenario.ExecutionExtraction{{Name: "created", Pointer: "/id"}}
 	artifact, err := New(validContract, 1<<20).Export(rev, Request{Format: Postman})
@@ -514,8 +512,8 @@ func TestPostmanRejectsNegativeZeroBeforeLosingLexeme(t *testing.T) {
 		t.Fatal(err)
 	}
 	result := runPostman(t, artifact.Content, `{"id":-0}`)
-	if result["error"] == "" {
-		t.Fatal("negative zero silently normalized", result)
+	if result["error"] != "" || result["created"] != "-0" {
+		t.Fatal("negative zero changed", result)
 	}
 }
 

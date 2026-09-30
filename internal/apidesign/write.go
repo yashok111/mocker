@@ -107,6 +107,9 @@ func (r *Repo) CreateTx(ctx context.Context, tx *sql.Tx, in CreateInput) (*Detai
 	if _, err = tx.ExecContext(ctx, "UPDATE api_designs SET draft_revision_id=? WHERE id=?", revisionID, id); err != nil {
 		return nil, err
 	}
+	if err = r.projectRuleEntitiesTx(ctx, tx, draft.ID, specID, prepared.document); err != nil {
+		return nil, err
+	}
 	return detailTx(ctx, tx, id)
 }
 
@@ -187,6 +190,9 @@ func (r *Repo) SaveTx(ctx context.Context, tx *sql.Tx, id int64, in SaveInput) (
 		return nil, err
 	}
 	if err = bindWorkspace(ctx, tx, d.DraftWorkspaceID, specID, now); err != nil {
+		return nil, err
+	}
+	if err = r.projectRuleEntitiesTx(ctx, tx, d.DraftWorkspaceID, specID, p.document); err != nil {
 		return nil, err
 	}
 	return detailTx(ctx, tx, id)
@@ -330,6 +336,13 @@ func (r *Repo) Publish(ctx context.Context, id, reviewID, expected int64, source
 		}
 		now := time.Now().Unix()
 		if err = bindWorkspace(ctx, tx, d.PublishedWorkspaceID, specID, now); err != nil {
+			return err
+		}
+		revision, err := getRevision(ctx, tx, id, review.RevisionID)
+		if err != nil {
+			return err
+		}
+		if err = r.projectRuleEntitiesTx(ctx, tx, d.PublishedWorkspaceID, specID, revision.Document); err != nil {
 			return err
 		}
 		row, err := tx.ExecContext(ctx, `INSERT INTO api_design_releases(design_id,revision_id,review_id,number,created_at) SELECT ?,?,?,COALESCE(MAX(number),0)+1,? FROM api_design_releases WHERE design_id=?`, id, review.RevisionID, reviewID, now, id)

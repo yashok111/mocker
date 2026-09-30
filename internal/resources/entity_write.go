@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/yashok111/mocker/internal/gen"
@@ -196,7 +197,11 @@ func (r *Repo) Patch(ctx context.Context, resourceID int64, base, scope ScopeKey
 		found = true
 
 		merged := map[string]any{}
-		if err := jsonx.Unmarshal([]byte(oldData), &merged); err != nil {
+		// A patch must preserve untouched numeric fields, including values
+		// outside float64's range. The stored JSON is the source of truth.
+		decoder := jsonx.NewDecoder(strings.NewReader(oldData))
+		decoder.UseNumber()
+		if err := decoder.Decode(&merged); err != nil {
 			return fmt.Errorf("decode entity %q on resource %d: %w", entityKey, resourceID, err)
 		}
 		for k, v := range patch {

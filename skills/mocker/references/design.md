@@ -264,6 +264,10 @@ Open **Получить результат** after saving:
   per-service base URLs before running it. Supported explicit status/JSON Pointer
   assertions and response extractions become Postman scripts. Failed checks
   stop the collection before extracting values or sending the next request.
+  JSON assertions compare numbers exactly by mathematical value, so `1`, `1.0`
+  and `1e0` are equal. Large integers, close fractions and arbitrary exponents
+  stay distinct when their values differ. Extracted values retain their original
+  number tokens, including -0; JSON Pointer traversal uses the same lossless parser.
 - cURL exports a POSIX shell file with saved input values and separate base URL
   variables. It checks the expected status (2xx by default), but does not run
   JSON body assertions or extract response values;
@@ -725,8 +729,9 @@ The `x-mocker-response-rules` extension contains `{formatVersion:1,rules:[]}`.
 A rule has stable `id`, `name`, optional `binding:{method,path}`, `nodes` and
 `edges`. Methods are uppercase and paths are exact direct OpenAPI operation
 paths; Path Item `$ref` bindings are reported unsupported. Nodes are `start`,
-`condition`, `delay`, `response` and `fallback`; condition exits are `true` and
-`false`, other nonterminal exits are `next`.
+`condition`, `delay`, `response`, `fallback`, `entity_read`, `entity_create` and
+`entity_update`. Conditions exit through `true`/`false`; entity get/update use
+`found`/`missing`; list/create and other nonterminal nodes use `next`.
 
 Read `get_api_design` for the current version and choose an existing operation.
 For an API with `GET /orders`, call `create_response_rule` with:
@@ -793,8 +798,58 @@ responses/fallbacks. Incomplete graphs remain saveable; unrelated incomplete
 rules do not block selected-rule simulation. Duplicate operation bindings do.
 Body texts are ≤64 KiB; total delay on every path is ≤30000 ms and is calculated
 without sleeping. Static responses support 200–599, JSON media types and safe
-headers. 204/205/304 and HEAD require absent body. Simulation has no entity,
-session, traffic or revision side effects, and 201 does not create an entity.
+headers. 204/205/304 and HEAD require absent body. Simulation uses isolated
+entity fixtures, with no workspace, session, traffic or revision side effects.
+A static 201 response creates no entity.
+
+### Entity blocks and fixture simulation
+
+An entity node has `entity:{family,scope?,operation?,key?,data?}`. Use canonical
+family paths such as `/orders` or `/orgs/{}/orders`. `entity_read` requires
+`operation:"get"` with `key`, or `operation:"list"` without key. Create requires
+`data`; update requires `key` and `data` and merges fields shallowly. Get/update
+must connect both found/missing ports; a missing row writes nothing.
+
+Value references use one source: `literal` with exact `valueJSON`, `path|query|header`
+with `name`, `body` with optional JSON `pointer`, or `result` with `nodeId` and
+optional pointer. An empty pointer selects the complete value. Keys and scope
+need scalar values; data needs an object. Omitted scope inherits the path tuple
+at the target family's depth; explicit scope is an array of value references.
+Result producers must precede the consumer on every path; get/update object
+results are available only on their found branch. A response uses either
+`bodyJSON` or `bodyFrom`, for example `{"source":"result","nodeId":"create"}`.
+
+For a `POST /orders` binding, replace the graph with these nodes and edges:
+
+```json
+{
+  "nodes":[
+    {"id":"start","type":"start","name":"Запрос","x":40,"y":100},
+    {"id":"create","type":"entity_create","name":"Создать заказ","x":460,"y":100,
+     "entity":{"family":"/orders","data":{"source":"body"}}},
+    {"id":"created","type":"response","name":"Создано","x":880,"y":100,
+     "response":{"status":201,"mediaType":"application/json","headers":[],
+                 "bodyFrom":{"source":"result","nodeId":"create"}}}
+  ],
+  "edges":[
+    {"id":"a","from":"start","port":"next","to":"create"},
+    {"id":"b","from":"create","port":"next","to":"created"}
+  ]
+}
+```
+
+Supply fixtures to `simulate_response_rule`:
+
+```json
+{"designId":1,"ruleId":"create-order","request":{"query":[],"headers":[],"path":[],"bodyJSON":"{\"amount\":9007199254740993}","entities":[{"family":"/orders","idField":"id","idType":"integer","rows":[]}]}}
+```
+
+The result contains response JSON, `results` mapping node IDs to exact JSON
+text, and final fixture rows with `key`, positional `scope` and `dataJSON`.
+Every simulation starts fresh; repeated creation allocates the same first ID.
+Fixtures support 100 families and 100 total rows. Creation replaces a supplied
+ID with the family sequence, shared across scopes. Number tokens stay exact.
+
 ### Apply a rule to the draft HTTP mock
 
 Save the source graph, read the current API version, then call:
@@ -824,6 +879,23 @@ precedence. Even an active delay-only override masks the whole spec graph;
 OverrideOn=false exposes it. Otherwise graph response precedes Lua, generation,
 assets and resource writes. A static response, including 201, creates no entity
 and bypasses response envelopes; fallback continues ordinary handling.
+
+Applying entity graphs prepares empty datasets for the referenced API resource
+families and their ancestors. Each family must be identifiable from the API's
+collection/detail schemas. Draft and reviewed published datasets are separate;
+publication copies configuration and retains each workspace's own entity rows.
+Removing execution makes unused datasets dormant; reapply/restore preserves
+their IDs and sequence counters. Standard resource reads/deletes remain active
+for those families, with POST takeover only for the supported bare entity form.
+Applying a family with a changed ID field/type or scope depth fails against its
+retained dataset; restore compatible identity before reactivating it.
+
+Entity blocks perform real reads and writes through the current workspace's
+family roster and base/path scope. Update is an atomic shallow merge. The graph
+has no shared transaction: later failure or cancellation retains earlier writes.
+All write paths must finish with responses sharing one media type and body
+admission class; fallback after a write is refused. Accept admission and ordinary
+delay occur before mutations; shadowed graphs do no entity work.
 
 Live delays are real: session delay wins, otherwise graph delay adds to effective
 workspace/scenario delay, capped at 30 seconds. Cancellation stops waiting.

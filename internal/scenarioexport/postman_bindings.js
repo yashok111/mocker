@@ -1,7 +1,7 @@
 // Private numeric tokens preserve JSON lexemes without exposing object fields
-// that a JSON Pointer could accidentally traverse. All helpers are isolated
-// from the collection's ordinary assertion/extraction JSON implementation.
-const applyPostmanBindings = (() => {
+// that a JSON Pointer could accidentally traverse. Bindings, assertions and
+// extractions share the same lossless parser, pointers and serializer.
+const postmanJSONRuntime = (() => {
   const numbers = new WeakMap();
   const caseRanges = /*GO_CASE_RANGES*/[];
   const maxDepth = 10000;
@@ -174,6 +174,54 @@ const applyPostmanBindings = (() => {
     }
     return {found: true, value};
   }
+  function readPointer(root, pointer) {
+    const selected = read(root, pointer);
+    if (!selected.found) throw new Error('Missing JSON Pointer: ' + pointer);
+    return selected.value;
+  }
+  function normalizeNumber(raw) {
+    // Keep the exponent as an arbitrary integer; never expand powers of ten.
+    const parts = raw.toLowerCase().split('e');
+    let coefficient = parts[0], exponent = BigInt(parts[1] || '0');
+    const negative = coefficient[0] === '-';
+    if (negative) coefficient = coefficient.slice(1);
+    const dot = coefficient.indexOf('.');
+    if (dot >= 0) {
+      exponent -= BigInt(coefficient.length - dot - 1);
+      coefficient = coefficient.slice(0, dot) + coefficient.slice(dot + 1);
+    }
+    coefficient = coefficient.replace(/^0+/, '');
+    if (!coefficient) return {coefficient: '0', exponent: BigInt(0)};
+    const trimmed = coefficient.replace(/0+$/, '');
+    exponent += BigInt(coefficient.length - trimmed.length);
+    return {coefficient: (negative ? '-' : '') + trimmed, exponent};
+  }
+  function equal(left, right) {
+    // Iteration covers the decoder's full nesting limit without JS recursion.
+    const stack = [[left, right]];
+    while (stack.length) {
+      const [a, b] = stack.pop();
+      if (numbers.has(a) || numbers.has(b)) {
+        if (!numbers.has(a) || !numbers.has(b)) return false;
+        const x = normalizeNumber(numbers.get(a)), y = normalizeNumber(numbers.get(b));
+        if (x.coefficient !== y.coefficient || x.exponent !== y.exponent) return false;
+      } else if (a !== b) {
+        if (Array.isArray(a)) {
+          if (!Array.isArray(b) || a.length !== b.length) return false;
+          for (let i = 0; i < a.length; i++) stack.push([a[i], b[i]]);
+        } else {
+          if (!object(a) || !object(b)) return false;
+          const keys = Object.keys(a);
+          if (keys.length !== Object.keys(b).length) return false;
+          for (const key of keys) {
+            if (!own(b, key)) return false;
+            stack.push([a[key], b[key]]);
+          }
+        }
+      }
+    }
+    return true;
+  }
   function write(root, pointer, value) {
     if (!validPointer(pointer)) throw new Error('invalid target JSON Pointer');
     if (pointer === '') return value;
@@ -233,7 +281,7 @@ const applyPostmanBindings = (() => {
     try { return parse(raw); }
     catch (error) { throw new Error(reason + (error.message.includes('nesting') ? ': ' + error.message : '')); }
   }
-  return function applyPostmanBindings(source, responses) {
+  function applyBindings(source, responses) {
     let body = null, bodyDecoded = false, lastBodyBinding;
     for (const binding of source.bindings || []) {
       try {
@@ -278,5 +326,7 @@ const applyPostmanBindings = (() => {
         source.body = encoded;
       } catch (error) { throw new Error('binding ' + quote(lastBodyBinding) + ': ' + error.message); }
     }
-  };
+  }
+  return Object.freeze({parse, readPointer, stringify, equal, applyBindings});
 })();
+const applyPostmanBindings = postmanJSONRuntime.applyBindings;

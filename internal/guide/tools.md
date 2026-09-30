@@ -214,7 +214,7 @@ live mock. See `design.md` for a complete recipe and predicate semantics.
 | `delete_response_rule` | Remove a graph | `designId*`, `ruleId*`, `expectedVersion*` | API detail | Revision history is retained. |
 | `apply_response_rule_commands` | Ordered atomic graph edits | `designId*`, `ruleId*`, `expectedVersion*`, `commands*` (≤200) | API detail | set_rule, add/update/remove_node, add/update/remove_edge, move_nodes. Failed batches save nothing. |
 | `validate_response_rule` | Check selected graph and binding | `designId*`, `ruleId*`, `document?` | valid, diagnostics[], diagnosticsTruncated, source | Exact proposed document or saved draft. No writes. |
-| `simulate_response_rule` | Evaluate an explicit sample request | `designId*`, `ruleId*`, `document?`, `request*` | validation, source, inputHash, outcome, trace[], terminalNodeId?, totalDelayMs?, response? | Ordered query/header rows; optional bodyJSON text. No sleeping or HTTP/entity/session effects. Fallback has no concrete response. |
+| `simulate_response_rule` | Evaluate an explicit sample request | `designId*`, `ruleId*`, `document?`, `request*` | validation, source, inputHash, outcome, trace[], terminalNodeId?, totalDelayMs?, response?, results?, entities? | Ordered query/header/path rows, optional exact bodyJSON and isolated entity fixtures. Results are exact JSON text; final fixture rows are returned. Every run starts fresh without sleeping, HTTP or workspace/session effects. Fallback has no concrete response. |
 
 Every write fences the whole API version; reread and reconcile a 409. Evaluation
 allows an unsaved rule ID when `document` contains that rule. Explicit null or

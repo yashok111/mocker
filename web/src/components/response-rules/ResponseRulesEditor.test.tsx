@@ -38,6 +38,26 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 describe("response rule local authoring", () => {
+  it.each(["entity_read", "entity_create", "entity_update"])(
+    "creates and configures %s through the keyboard controls",
+    async (type) => {
+      renderWithProviders(<Harness />);
+      await userEvent.click(screen.getByRole("button", { name: "Новое правило" }));
+      await userEvent.selectOptions(screen.getByLabelText("Тип нового узла"), type);
+      await userEvent.click(screen.getByRole("button", { name: "Добавить узел" }));
+      await fill(screen.getByLabelText("Семейство сущностей"), "/orders");
+      await userEvent.click(screen.getByRole("button", { name: "Применить свойства" }));
+      const saved = JSON.parse(screen.getByTestId("document").textContent!)[EXTENSION].rules[0];
+      const node = saved.nodes.find((item: { type: string }) => item.type === type);
+      expect(node.entity.family).toBe("/orders");
+      await userEvent.selectOptions(screen.getByLabelText("Из узла"), node.id);
+      const outputs = within(screen.getByLabelText("Выход"))
+        .getAllByRole("option")
+        .map((option) => (option as HTMLOptionElement).value);
+      expect(outputs).toEqual(type === "entity_create" ? ["next"] : ["found", "missing"]);
+      expect(JSON.parse(screen.getByTestId("document").textContent!)["x-other"]).toBe(true);
+    },
+  );
   it("creates, binds, edits and cancels within the common buffer without API writes", async () => {
     const fetch = vi.fn();
     vi.stubGlobal("fetch", fetch);

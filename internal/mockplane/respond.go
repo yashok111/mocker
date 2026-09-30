@@ -20,6 +20,7 @@
 package mockplane
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -168,8 +169,17 @@ func (p *Plane) serveGenerated(w http.ResponseWriter, r *http.Request, ws *works
 		return // request context ended while parked: nothing written yet
 	}
 
-	ruleResult, err := p.evaluateResponseRule(r, rt, route, overrideActive, liveEffect)
+	var rowDelayMs *int
+	if overrideActive {
+		rowDelayMs = row.DelayMs
+	}
+	baseDelay := effectiveDelayMs(liveEffect.DelayMs, rowDelayMs, rt.settings.DelayMs)
+	ruleResult, err := p.evaluateResponseRule(r, rt, route, m, base, overrideActive, liveEffect, baseDelay)
 	if err != nil {
+		if errors.Is(err, errResponseRuleNotAcceptable) {
+			httpx.Err(w, http.StatusNotAcceptable, "not_acceptable", "response rule media type is excluded by Accept")
+			return
+		}
 		if r.Context().Err() == nil {
 			p.log.Error("evaluate response rule", "workspace", ws.Slug, "method", route.Method, "path", route.Path)
 			httpx.Err(w, http.StatusInternalServerError, "response_rule_failed", "response rule evaluation failed")
@@ -182,13 +192,13 @@ func (p *Plane) serveGenerated(w http.ResponseWriter, r *http.Request, ws *works
 	// rowDelayMs stays nil except when overrideActive actually gates a real
 	// row (effectiveDelayMs's own doc comment on why this is the caller's
 	// job, not that function's).
-	var rowDelayMs *int
-	if overrideActive {
-		rowDelayMs = row.DelayMs
-	}
 	delayMs := responseRuleDelayMs(liveEffect.DelayMs, rowDelayMs, rt.settings.DelayMs, ruleResult)
-	if !awaitDelay(r.Context(), delayMs) {
-		return // context canceled/timed out mid-sleep: nothing left to write
+	// Entity evaluation already paid ordinary and selected graph delays.
+	// Static/fallback/shadowed paths retain their existing single wait.
+	if ruleResult == nil || !rt.responseRules[overrides.OpKey(route.Method, route.Path)].HasEntities() {
+		if !awaitDelay(r.Context(), delayMs) {
+			return // context canceled/timed out mid-sleep: nothing left to write
+		}
 	}
 	if ruleResult != nil && ruleResult.Response != nil {
 		p.writeResponseRule(w, r, ws, route, *ruleResult.Response)

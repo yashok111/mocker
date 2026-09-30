@@ -1,6 +1,8 @@
 package mockplane
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -9,6 +11,7 @@ import (
 	"github.com/yashok111/mocker/internal/httpx"
 	"github.com/yashok111/mocker/internal/livestate"
 	"github.com/yashok111/mocker/internal/overrides"
+	"github.com/yashok111/mocker/internal/resources"
 	"github.com/yashok111/mocker/internal/responserules"
 	"github.com/yashok111/mocker/internal/router"
 	"github.com/yashok111/mocker/internal/workspaces"
@@ -18,7 +21,9 @@ import (
 // masks the whole graph, even if that row only sets a delay or a when clause.
 // The caller has already applied session state and resolved a pause exactly
 // once; a fallback must return to that same request without repeating either.
-func (p *Plane) evaluateResponseRule(r *http.Request, rt *runtime, route *router.Route, overrideActive bool, effect livestate.Effect) (*responserules.Simulation, error) {
+var errResponseRuleNotAcceptable = errors.New("response rule media type is not acceptable")
+
+func (p *Plane) evaluateResponseRule(r *http.Request, rt *runtime, route *router.Route, m *router.Match, base resources.ScopeKey, overrideActive bool, effect livestate.Effect, baseDelay int) (*responserules.Simulation, error) {
 	program := rt.responseRules[overrides.OpKey(route.Method, route.Path)]
 	if program == nil {
 		return nil, nil
@@ -38,7 +43,37 @@ func (p *Plane) evaluateResponseRule(r *http.Request, rt *runtime, route *router
 	if err != nil {
 		return nil, err
 	}
-	result, err := program.Evaluate(r.Context(), input)
+	var result responserules.Simulation
+	if program.HasEntities() {
+		if admission := program.EntityAdmission(); admission != nil && !admission.NoBody && !acceptable(r.Header.Get("Accept"), admission.MediaType) {
+			markResponseRule(r, "", "response_rule_not_acceptable", false)
+			return nil, errResponseRuleNotAcceptable
+		}
+		// An explicit entity write inherits Lua's ordering: ordinary delay
+		// and fixed response admission precede the first store operation.
+		if !awaitDelay(r.Context(), baseDelay) {
+			return nil, r.Context().Err()
+		}
+		maximum := int(maxSimulatedDelay / time.Millisecond)
+		paid := min(maximum, max(0, baseDelay))
+		delay := func(ctx context.Context, ms int) error {
+			// A session delay replaces the graph/workspace delay just as it
+			// does for static response rules; otherwise cap their total.
+			if effect.DelayMs > 0 {
+				return ctx.Err()
+			}
+			wait := min(maximum-paid, max(0, ms))
+			if !awaitDelay(ctx, wait) {
+				return ctx.Err()
+			}
+			paid += wait
+			return nil
+		}
+		host := &responseRuleEntityHost{resolver: luaHost{p: p, rt: rt, base: base, outer: routeOuterValues(route, m)}}
+		result, err = program.EvaluateWithEntities(r.Context(), responserules.EvaluationInput{Request: input, Path: m.Params}, responserules.EvaluationOptions{Entities: host, Delay: delay})
+	} else {
+		result, err = program.EvaluateWithEntities(r.Context(), responserules.EvaluationInput{Request: input, Path: m.Params}, responserules.EvaluationOptions{})
+	}
 	if err != nil {
 		markResponseRule(r, "", "response_rule_failed", false)
 		return nil, err

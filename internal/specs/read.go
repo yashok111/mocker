@@ -339,7 +339,16 @@ func (r *Repo) Responses(ctx context.Context, operationID int64) ([]*Response, e
 // document order forward since SQLite row order is not itself guaranteed
 // stable across scans.
 func (r *Repo) Routes(ctx context.Context, specID int64) ([]router.Route, error) {
-	rows, err := r.db.R.QueryContext(ctx, `
+	return routesIn(ctx, r.db.R, specID)
+}
+
+// RoutesTx reads an imported index before the caller's transaction commits.
+func (r *Repo) RoutesTx(ctx context.Context, tx *sql.Tx, specID int64) ([]router.Route, error) {
+	return routesIn(ctx, tx, specID)
+}
+
+func routesIn(ctx context.Context, q dbQuerier, specID int64) ([]router.Route, error) {
+	rows, err := q.QueryContext(ctx, `
 		SELECT id, method, path, canonical_path, operation_id, source_order
 		FROM operations
 		WHERE spec_id = ?
@@ -397,7 +406,16 @@ func (r *Repo) Routes(ctx context.Context, specID int64) ([]router.Route, error)
 // to do about Degraded (answer an empty 200 instead of generating a body)
 // is the generator's job, not this query's.
 func (r *Repo) Variants(ctx context.Context, specID int64) (map[int64][]gen.ResponseVariant, error) {
-	rows, err := r.db.R.QueryContext(ctx, `
+	return variantsIn(ctx, r.db.R, specID)
+}
+
+// VariantsTx reads response variants in the same transaction as an import.
+func (r *Repo) VariantsTx(ctx context.Context, tx *sql.Tx, specID int64) (map[int64][]gen.ResponseVariant, error) {
+	return variantsIn(ctx, tx, specID)
+}
+
+func variantsIn(ctx context.Context, q dbQuerier, specID int64) (map[int64][]gen.ResponseVariant, error) {
+	rows, err := q.QueryContext(ctx, `
 		SELECT o.id, r.selector, r.http_status, r.is_default, r.media_type, r.schema_ptr,
 		       o.pointer, o.parse_error
 		FROM operation_responses r

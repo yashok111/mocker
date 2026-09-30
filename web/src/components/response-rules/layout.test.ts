@@ -6,6 +6,7 @@ import {
   CARD_WIDTH,
   intersects,
   segmentHits,
+  nodeSummary,
 } from "./layout";
 import { headerTemplate, type ResponseRule } from "./model";
 
@@ -37,6 +38,24 @@ function checkGeometry(rule: ResponseRule) {
 }
 
 describe("response-rule graph layout", () => {
+  it("routes found and missing exits separately and describes entity reads", () => {
+    const rule = headerTemplate();
+    rule.nodes[1] = {
+      id: "auth",
+      type: "entity_read",
+      name: "Заказ",
+      x: 380,
+      y: 150,
+      entity: { family: "/orders", operation: "get", key: { source: "path", name: "id" } },
+    };
+    rule.edges[1]!.port = "found";
+    rule.edges[2]!.port = "missing";
+    const routes = checkGeometry(autoLayout(rule));
+    expect(routes[1]!.points[0]!.y).not.toBe(routes[2]!.points[0]!.y);
+    expect(routes[1]!.label?.text).toBe("Найдена");
+    expect(routes[2]!.label?.text).toBe("Не найдена");
+    expect(nodeSummary(rule.nodes[1]!)).toContain("/orders");
+  });
   it("routes the saved demo's 40/60px gaps without an obstacle-router fallback", () => {
     const rule = headerTemplate();
     const positions = [

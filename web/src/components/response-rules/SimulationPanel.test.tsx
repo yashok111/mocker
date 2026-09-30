@@ -1,9 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import { MantineProvider } from "@mantine/core";
 import userEvent from "@testing-library/user-event";
 import { renderWithProviders } from "@/test/render";
 import { json, route } from "@/test/http";
+import { fill } from "@/test/user";
 import SimulationPanel from "./SimulationPanel";
 import { headerTemplate } from "./model";
 const rule = { ...headerTemplate(), id: "auth" };
@@ -38,6 +39,64 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 describe("response rule simulation", () => {
+  it("sends path and isolated entities with exact data, then shows raw outputs and final rows", async () => {
+    const fetch = route({
+      "POST /api/designs/12/response-rules/auth/simulate": () =>
+        json(200, {
+          ...result,
+          trace: [{ step: 1, nodeId: "read", entityFound: true }],
+          results: { read: '{"n":9007199254740993}' },
+          entities: [
+            {
+              family: "/orders",
+              idField: "id",
+              idType: "integer",
+              rows: [{ key: "1", scope: [], dataJSON: '{"id":1,"n":9007199254740993}' }],
+            },
+          ],
+        }),
+    });
+    renderWithProviders(<SimulationPanel {...props} />);
+    await userEvent.click(screen.getByRole("button", { name: "Добавить параметр пути" }));
+    await fill(screen.getByLabelText("Параметр пути 1"), "id");
+    await fill(screen.getByLabelText("Значение: параметр пути 1"), "1");
+    await userEvent.click(screen.getByRole("button", { name: "Добавить семейство примера" }));
+    await fill(screen.getByLabelText("Семейство примера 1"), "/orders");
+    await userEvent.click(screen.getByRole("button", { name: "Добавить запись: семейство 1" }));
+    await fill(screen.getByLabelText("Ключ записи 1.1"), "1");
+    await userEvent.clear(screen.getByLabelText("JSON записи 1.1"));
+    await fill(screen.getByLabelText("JSON записи 1.1"), '{"id":1,"n":9007199254740993}');
+    await userEvent.click(screen.getByRole("button", { name: "Симулировать" }));
+    expect(
+      await within(screen.getByRole("region", { name: "Результаты узлов" })).findByText(
+        '{"n":9007199254740993}',
+      ),
+    ).toBeInTheDocument();
+    expect(
+      within(screen.getByRole("region", { name: "Сущности после симуляции" })).getByText(
+        '{"id":1,"n":9007199254740993}',
+      ),
+    ).toBeInTheDocument();
+    const sent = JSON.parse(String(fetch.mock.calls[0]?.[1]?.body));
+    expect(sent.request.path).toEqual([{ name: "id", value: "1" }]);
+    expect(sent.request.entities).toEqual([
+      {
+        family: "/orders",
+        idField: "id",
+        idType: "integer",
+        rows: [{ key: "1", scope: [], dataJSON: '{"id":1,"n":9007199254740993}' }],
+      },
+    ]);
+    expect(screen.getByRole("list", { name: "Шаги симуляции" })).toHaveTextContent(
+      "Сущность: найдена",
+    );
+    await fill(screen.getByLabelText("Семейство примера 1"), "changed");
+    expect(screen.queryByRole("region", { name: "Результаты узлов" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("region", { name: "Сущности после симуляции" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText(/Результат устарел/)).toBeInTheDocument();
+  });
   it("sends the exact source and ordered fixture, and renders raw JSON as escaped text", async () => {
     const fetch = route({
       "POST /api/designs/12/response-rules/auth/simulate": () => json(200, result),

@@ -19,10 +19,20 @@ Not "forgotten" but deferred — so that a hole does not read as an oversight:
   bindings in linear HTTP chains; run the complete collection in order through
   Collection Runner or Newman. Standalone HTTP and cURL exports still report
   unsupported bindings. Postman still excludes alt/opt/loop and Kafka execution.
-  Its existing JSON assertions/extractions accept safe integers only; bindings
-  preserve large integers, fractions, exponents and -0. Bound values containing
+  JSON assertions compare numbers exactly by value, including large integers,
+  fractions and arbitrary exponents. Extraction and bindings preserve original
+  number spellings, including -0. Bound values containing
   `{{` are rejected before sending because Postman would interpolate them again.
   Response state is local to the collection run and cleared at its end.
+- Visual response rules support entity get/list/create/shallow update and exact
+  result references. Fixture simulation starts from isolated supplied rows on
+  every run. Applied graphs in managed API workspaces activate identifiable
+  families from the API and their ancestors with empty initial datasets;
+  draft and published entities stay separate. Unapply retains dormant rows.
+  Each write is atomic; later graph failure or cancellation retains earlier
+  writes. No graph-wide transaction, delete block, or entity state-machine
+  execution is included. Existing caps, HTTP body capture, resource scope and
+  fixed media admission still apply.
 - Field impact checks a binding on another API's recipient when its source uses
   the selected API. A definitive `broken` finding needs exact linked or pinned
   provenance; copies, divergent pins, unsupported schemas and uncertain

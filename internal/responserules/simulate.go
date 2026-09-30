@@ -27,9 +27,20 @@ func Simulate(ctx context.Context, env Envelope, ruleID string, root map[string]
 			break
 		}
 	}
-	result, err = newProgram(rule).Evaluate(ctx, input)
+	host, err := newFixtureEntities(ctx, request, rule.Binding)
 	if err != nil {
 		return Simulation{}, err
+	}
+	path, err := fixturePath(request)
+	if err != nil {
+		return Simulation{}, err
+	}
+	result, err = newProgram(rule).EvaluateWithEntities(ctx, EvaluationInput{Request: input, Path: path}, EvaluationOptions{Entities: host})
+	if err != nil {
+		return Simulation{}, err
+	}
+	if request.Entities != nil {
+		result.Entities = host.families
 	}
 	result.Validation = validation
 	result.InputHash = hash

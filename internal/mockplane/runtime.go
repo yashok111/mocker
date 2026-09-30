@@ -308,6 +308,10 @@ func (p *Plane) buildRuntime(ctx context.Context, ws *workspaces.Workspace, draf
 	if err != nil {
 		return nil, err
 	}
+	resourcesByFamily, err = p.responseRuleResources(ctx, ws, resourcesByFamily, spec.responseRules)
+	if err != nil {
+		return nil, fmt.Errorf("load managed resource roster for workspace %d: %w", ws.ID, err)
+	}
 
 	// Step 9: ONE sorted table, spec routes and custom routes together —
 	// see runtimeFor's own doc comment on step 9 for why that must be a
