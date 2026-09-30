@@ -9,36 +9,7 @@ import (
 	"github.com/yashok111/mocker/internal/jsonx"
 	"github.com/yashok111/mocker/internal/resources"
 	"github.com/yashok111/mocker/internal/responserules"
-	"github.com/yashok111/mocker/internal/router"
-	"github.com/yashok111/mocker/internal/workspaces"
 )
-
-// Managed designs retain dormant entity rows across unapply and restore.
-// Only currently applied targets and their ancestors enter the HTTP roster.
-func (p *Plane) responseRuleResources(ctx context.Context, ws *workspaces.Workspace, rows map[string]*resources.Resource, programs map[string]*responserules.Program) (map[string]*resources.Resource, error) {
-	source, ok := p.src.(managedWorkspaceSource)
-	if !ok {
-		return rows, nil
-	}
-	designID, err := source.ManagedDesign(ctx, ws.ID)
-	if err != nil {
-		return nil, err
-	}
-	if designID == 0 {
-		return rows, nil
-	}
-	active := map[string]*resources.Resource{}
-	for _, program := range programs {
-		for _, target := range program.EntityFamilies() {
-			for family := target; family != ""; family = router.ParentFamily(family) {
-				if row := rows[family]; row != nil {
-					active[family] = row
-				}
-			}
-		}
-	}
-	return active, nil
-}
 
 // The Lua host already owns the request roster and scope policy for explicit
 // entity operations. Reusing its resolver keeps visual rules on those same

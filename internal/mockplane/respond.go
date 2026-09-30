@@ -174,6 +174,9 @@ func (p *Plane) serveGenerated(w http.ResponseWriter, r *http.Request, ws *works
 		rowDelayMs = row.DelayMs
 	}
 	baseDelay := effectiveDelayMs(liveEffect.DelayMs, rowDelayMs, rt.settings.DelayMs)
+	if p.serveStateDiagram(w, r, ws, rt, route, m, base, overrideActive, liveEffect, baseDelay) {
+		return
+	}
 	ruleResult, err := p.evaluateResponseRule(r, rt, route, m, base, overrideActive, liveEffect, baseDelay)
 	if err != nil {
 		if errors.Is(err, errResponseRuleNotAcceptable) {

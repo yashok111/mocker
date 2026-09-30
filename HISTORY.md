@@ -23,6 +23,37 @@ nobody said is what is NEXT and why exactly that. That role was carried by `HAND
 deleted in `a5818e2` as spent, and it moved nowhere: the next slice
 was designed outside the repository and did not appear in the repository at all.
 
+## Entity state diagrams in the HTTP mock (2026-09-30)
+
+`feat/entity-state-execution` stores each entity's lifecycle in a selected
+top-level field. State values remain separate from stable graph IDs. Applied
+copies under `x-mocker-state-diagrams-execution` compile bounded per-operation
+programs; authoring changes require explicit reapplication. CAS apply/unapply,
+orphan removal and current/outdated/missing status are available in REST, MCP
+and the state inspector. State authoring MCP now also preserves exact integer
+version fences through the existing raw adapter.
+
+HTTP selection and exact guards run against the latest row inside the existing
+writer transaction. A shallow patch, target state and pinned identity commit
+together. Concurrent one-way transitions have one winner; refusals, cancellation
+and limits roll back. The response is committed raw JSON, including numbers
+outside float64's range. Admission/delay precede mutation; higher-layer overrides
+mask the program. No-body statuses still persist state. Simulation shares the
+selector while retaining isolated legacy behavior.
+
+Managed projection and runtime rosters use the union of state and response-rule
+families plus ancestors. Draft and published datasets remain separate; unapply
+retains dormant rows. Independent review caught orphan child transitions after
+parent deletion; a top-down HTTP ancestor check and real SQLite regression close
+that path. Both backend and domain/UI reviews have no open findings.
+
+Verification: all 44 Go packages passed the uncached full race bar; full go vet,
+gofmt and diff checks passed. UI typecheck, build, lint and formatting passed;
+146 test files / 1351 tests passed. Optional golangci-lint is absent locally.
+Built-server QA verified exact numbers, concurrent200/409, applied-copy isolation,
+reapply retention and separate draft/published entities. Browser evidence and
+local spec/plan/review reports live under `docs/entity-state-execution-*`.
+
 ## Postman precision and visual entities (2026-09-30)
 
 `feat/postman-precision-entity-rules` removes the safe-integer restriction from

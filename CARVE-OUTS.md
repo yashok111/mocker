@@ -30,9 +30,19 @@ Not "forgotten" but deferred — so that a hole does not read as an oversight:
   families from the API and their ancestors with empty initial datasets;
   draft and published entities stay separate. Unapply retains dormant rows.
   Each write is atomic; later graph failure or cancellation retains earlier
-  writes. No graph-wide transaction, delete block, or entity state-machine
-  execution is included. Existing caps, HTTP body capture, resource scope and
+  writes. No graph-wide transaction or delete block is included. Existing caps,
+  HTTP body capture, resource scope and
   fixed media admission still apply.
+- State diagrams execute applied copies against one entity at a time. State is
+  a top-level string business field; keys come from detail path parameters.
+  Bound POST/PUT/PATCH/DELETE transitions atomically check guards and update
+  data/state while preserving ID. No body/query key selectors, nested state
+  field, async action or multi-entity transaction is included. Missing state
+  fields imply the initial state; unknown revised values conflict until data is
+  deliberately updated. Source edits/deletion do not replace/remove applied
+  copies. Unapply retains dormant data; publication retains independent data.
+  Parent admission uses the ordinary HTTP ancestor walk before the write; its
+  reads are separate from the child entity's atomic transition transaction.
 - Field impact checks a binding on another API's recipient when its source uses
   the selected API. A definitive `broken` finding needs exact linked or pinned
   provenance; copies, divergent pins, unsupported schemas and uncertain

@@ -35,7 +35,7 @@ export default function StateSimulation({
     [],
   );
   const proposal = { diagram, document: JSON.stringify(document) };
-  const state = result?.stateId ?? diagram.initialStateId;
+  const state = result?.stateId ?? (diagram.entity ? undefined : diagram.initialStateId);
   async function evaluate(ids: string[], validation = false) {
     const ticket = ++epoch.current;
     setBusy(true);
@@ -95,6 +95,12 @@ export default function StateSimulation({
       <Text size="sm" c="dimmed" mb="md">
         Выберите действие и проследите изменения состояния и данных.
       </Text>
+      {diagram.entity && (
+        <Text size="sm" c="dimmed" mb="md">
+          Состояние берётся из поля «{diagram.entity.stateField}» начальных данных. Если поле
+          отсутствует, используется начальное состояние. Симуляция изменяет только данные прогона.
+        </Text>
+      )}
       <div className={styles.simulationGrid}>
         <Stack gap="sm">
           <Textarea

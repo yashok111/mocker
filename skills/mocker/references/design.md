@@ -120,7 +120,7 @@ extension value. Do not decode a workspace opKey or substitute OpenAPI
 operationId. Use `create_operation` only when creating a new method/path;
 it refuses an operation that already exists. Use `bind_operation` to reuse one.
 
-## State diagrams: visual authoring and simulation
+## State diagrams: authoring, simulation and HTTP execution
 
 Open an API project and select **Состояния**. Create an empty diagram or use
 **Пример заказа**. Move states on the canvas, connect their ports, or use the
@@ -132,7 +132,7 @@ saves the diagrams together with the API draft.
 A transition optionally binds to a method/path in this API. Its guard compares
 an entity-data JSON Pointer to `equalsJSON` (missing differs from JSON null).
 `patchJSON` is a JSON object shallow-merged after an accepted transition;
-`responseStatus` is the simulated response, not a network response. Removing or
+`responseStatus` is also the live response status when the diagram is applied. Removing or
 renaming a bound API operation requires repairing the binding. An unbound
 transition remains usable as a descriptive business action.
 
@@ -145,8 +145,38 @@ stops the trace without applying its patch. Editing a diagram or seed resets the
 local run; late responses from an older proposal are discarded.
 
 Simulation performs no HTTP mock calls, writes no entity data and saves no
-revision. State diagrams describe and simulate lifecycle behavior only; they do
-not install executable state machines in HTTP mocks.
+revision. To execute a saved diagram, configure its `entity` with a canonical
+`family`, the detail path `keyParam`, and a top-level `stateField`, such as
+`status`. Each state can have a business `value`; omission uses its stable graph
+ID. Missing state fields mean the initial state. Configured simulation reads
+that field from input data and updates it on accepted steps; unconfigured
+diagrams retain their initial-state simulation.
+
+**Применить к моку** copies the saved diagram to
+`x-mocker-state-diagrams-execution`. It changes the draft mock immediately;
+normal review/publication transfers that copy to the published mock. Every
+source edit requires reapplication. Execution status is `current`, `outdated`
+or `missing`; deleted authoring diagrams leave their applied copies active
+until explicitly removed. Unsaved inspector edits block application.
+
+Bound POST/PUT/PATCH/DELETE transitions select from the entity's latest state,
+check exact guards, merge `patchJSON`, set the target state value and pin the
+entity ID in one writer transaction. The success body is the committed entity
+JSON; 204/205/304 return no body. Body-bearing statuses must declare JSON.
+Missing entities or ancestors return 404. Invalid, terminal or unavailable
+states and failed guards return typed 409 conflicts without writing. Accept
+admission and delay precede mutation. Concurrent one-way transitions have one
+winner. State cannot use the ID field. Operations cannot be shared across
+applied diagrams or an applied response rule; source states in one diagram may
+share an operation. Higher-layer overrides and session forced statuses mask
+execution. Simulation and unbound descriptive transitions remain separate.
+
+Applied families and ancestors have independent draft/published datasets.
+Application does not seed or reset rows. Unapply keeps dormant rows; reapply
+and restore retain them. Changing state values may make old data invalid until
+it is deliberately updated. Keys come only from detail path parameters; state
+fields are top-level strings. No body/query key selectors, async delivery or
+graph-wide multi-entity transaction is provided.
 
 The authored OpenAPI extension `x-mocker-state-diagrams` stores
 `{formatVersion:1, diagrams:[...]}`. Existing draft history, diff, restore and
@@ -169,11 +199,19 @@ transitions/diagram, 100 simulated actions and 64 KiB per JSON value/data object
   applies an atomic batch. Kinds: `upsert_state` with a complete `state`,
   `remove_state` with `id`, `upsert_transition` with a complete `transition`,
   `remove_transition` with `id`, and `settings` with `name` and/or
-  `initialStateId`. Removing a state removes its incident transitions and clears
+  `initialStateId`, `entity`, or `clearEntity:true`. Set `entity` and `clearEntity`
+  separately. Removing a state removes its incident transitions and clears
   its initial-state selection. Upserts replace complete objects.
 - `validate_state_diagram {designId,diagramId}` checks the saved model.
+- `get_state_diagram_execution {designId}` lists frozen applied copies and their
+  version/revision identity, entity configuration and operation count.
+- `apply_state_diagram {designId,diagramId,expectedVersion}` copies a valid saved
+  source. Reapply after edits; reconcile 409 conflicts before retrying.
+- `unapply_state_diagram {designId,diagramId,expectedVersion}` removes an applied
+  copy, including an orphan. An already-absent copy still checks the version.
 - `simulate_state_diagram {designId,diagramId,dataJSON,transitionIds}` replays
-  from the initial state; an empty action array inspects the initial run.
+  from the input entity field when configured, otherwise the initial state;
+  an empty action array inspects the starting state.
   Both evaluate tools accept optional `diagram` and `document` to evaluate an
   unsaved proposal. `document` is the full proposed OpenAPI text for bindings;
   omission resolves bindings against the current saved draft. Both tools are

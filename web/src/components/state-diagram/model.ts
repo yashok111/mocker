@@ -18,7 +18,7 @@ function text(value: unknown): value is string {
 }
 function checkDiagram(value: unknown): asserts value is StateDiagram {
   if (!isRecord(value)) throw new Error("Ожидается объект диаграммы.");
-  keys(value, ["id", "name", "initialStateId", "states", "transitions"]);
+  keys(value, ["id", "name", "initialStateId", "states", "transitions", "entity"]);
   if (
     !text(value.id) ||
     !text(value.name) ||
@@ -29,9 +29,19 @@ function checkDiagram(value: unknown): asserts value is StateDiagram {
     throw new Error("Неверная структура диаграммы.");
   if (value.states.length > 100 || value.transitions.length > 300)
     throw new Error("Лимит: 100 состояний и 300 переходов.");
+  if (value.entity !== undefined) {
+    if (!isRecord(value.entity)) throw new Error("Неверные настройки сущности.");
+    keys(value.entity, ["family", "keyParam", "stateField"]);
+    if (
+      !text(value.entity.family) ||
+      !text(value.entity.keyParam) ||
+      !text(value.entity.stateField)
+    )
+      throw new Error("Неверные настройки сущности.");
+  }
   for (const s of value.states) {
     if (!isRecord(s)) throw new Error("Неверное состояние.");
-    keys(s, ["id", "name", "x", "y", "terminal"]);
+    keys(s, ["id", "name", "x", "y", "terminal", "value"]);
     if (
       !text(s.id) ||
       !text(s.name) ||
@@ -42,6 +52,11 @@ function checkDiagram(value: unknown): asserts value is StateDiagram {
       typeof s.terminal !== "boolean"
     )
       throw new Error("Неверное состояние.");
+    if (
+      s.value !== undefined &&
+      (!text(s.value) || s.value === "" || new TextEncoder().encode(s.value).length > 256)
+    )
+      throw new Error("Значение состояния должно быть непустой строкой до 256 байт.");
   }
   for (const t of value.transitions) {
     if (!isRecord(t)) throw new Error("Неверный переход.");

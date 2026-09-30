@@ -4,6 +4,7 @@ import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { renderWithProviders } from "@/test/render";
 import { json, route } from "@/test/http";
+import { fill } from "@/test/user";
 import type { ApiDocument } from "../api-designer/documentModel";
 import StateDiagramEditor from "./StateDiagramEditor";
 import { orderTemplate, writeDiagrams, EXTENSION } from "./model";
@@ -33,6 +34,51 @@ function Harness({ initial = api }: { initial?: ApiDocument }) {
 }
 
 describe("state diagram authoring", () => {
+  it("edits and clears entity settings and values while preserving state IDs", async () => {
+    const diagram = orderTemplate();
+    renderWithProviders(<Harness initial={writeDiagrams(api, [diagram])} />);
+    await userEvent.click(screen.getByLabelText("Исполнять переходы для сущности"));
+    await fill(screen.getByLabelText("Семейство сущностей"), "/orders");
+    await fill(screen.getByLabelText("Параметр ключа сущности"), "orderId");
+    await fill(screen.getByLabelText("Поле состояния"), "status");
+    expect(screen.getByText(/Отсутствующее поле состояния/)).toBeInTheDocument();
+    await userEvent.click(
+      within(screen.getByRole("region", { name: "Состояния" })).getByRole("button", {
+        name: /Создан/,
+      }),
+    );
+    await fill(screen.getByLabelText("Значение состояния в данных"), "new");
+    let saved = JSON.parse(screen.getByTestId("document").textContent!)[EXTENSION].diagrams[0];
+    expect(saved.entity).toEqual({ family: "/orders", keyParam: "orderId", stateField: "status" });
+    expect(saved.states[0]).toMatchObject({ id: "created", value: "new" });
+    expect(saved.transitions[0].from).toBe("created");
+    await userEvent.clear(screen.getByLabelText("Значение состояния в данных"));
+    saved = JSON.parse(screen.getByTestId("document").textContent!)[EXTENSION].diagrams[0];
+    expect(saved.states[0]).not.toHaveProperty("value");
+    await userEvent.selectOptions(screen.getByLabelText("Диаграмма состояний"), diagram.id);
+    await userEvent.click(screen.getByLabelText("Исполнять переходы для сущности"));
+    saved = JSON.parse(screen.getByTestId("document").textContent!)[EXTENSION].diagrams[0];
+    expect(saved).not.toHaveProperty("entity");
+  });
+  it("uses configured simulation state and raw result data from the pure endpoint", async () => {
+    const diagram = {
+      ...orderTemplate(),
+      id: "order",
+      entity: { family: "/orders", keyParam: "orderId", stateField: "status" },
+    };
+    const dataJSON = '{"status":"paid","amount":9007199254740993}';
+    route({
+      "POST /api/designs/12/state-diagrams/order/simulate": () =>
+        json(200, { stateId: "paid", dataJSON, steps: [], diagnostics: [] }),
+    });
+    renderWithProviders(<Harness initial={writeDiagrams(api, [diagram])} />);
+    expect(screen.getByText(/Состояние берётся из поля/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Начать заново" }));
+    expect((await screen.findByLabelText("Данные после перехода")).textContent).toBe(dataJSON);
+    expect(
+      within(screen.getByRole("region", { name: "Симуляция диаграммы" })).getByText("Оплачен"),
+    ).toBeInTheDocument();
+  });
   it("applies automatic layout as one document change while preserving state and transition data", async () => {
     const diagram = orderTemplate();
     const initial = writeDiagrams(api, [diagram]);

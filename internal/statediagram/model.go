@@ -10,8 +10,10 @@ import (
 	"math"
 	"regexp"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/yashok111/mocker/internal/jsonx"
+	"github.com/yashok111/mocker/internal/router"
 )
 
 const Extension = "x-mocker-state-diagrams"
@@ -24,14 +26,22 @@ type Envelope struct {
 	FormatVersion int       `json:"formatVersion"`
 	Diagrams      []Diagram `json:"diagrams"`
 }
+type EntityBinding struct {
+	Family     string `json:"family"`
+	KeyParam   string `json:"keyParam"`
+	StateField string `json:"stateField"`
+}
+
 type Diagram struct {
-	ID             string       `json:"id"`
-	Name           string       `json:"name"`
-	InitialStateID string       `json:"initialStateId"`
-	States         []State      `json:"states"`
-	Transitions    []Transition `json:"transitions"`
+	Entity         *EntityBinding `json:"entity,omitempty"`
+	ID             string         `json:"id"`
+	Name           string         `json:"name"`
+	InitialStateID string         `json:"initialStateId"`
+	States         []State        `json:"states"`
+	Transitions    []Transition   `json:"transitions"`
 }
 type State struct {
+	Value    *string `json:"value,omitempty"`
 	ID       string  `json:"id"`
 	Name     string  `json:"name"`
 	X        float64 `json:"x"`
@@ -98,6 +108,11 @@ func Decode(root map[string]any) (Envelope, error) {
 }
 
 func CheckStructure(d Diagram) error {
+	if d.Entity != nil {
+		if err := checkEntity(*d.Entity); err != nil {
+			return err
+		}
+	}
 	if !ValidID(d.ID) || strings.TrimSpace(d.Name) == "" || len(d.Name) > 240 {
 		return fmt.Errorf("у диаграммы нужны id и название до 240 байт")
 	}
@@ -130,6 +145,9 @@ func CheckStructure(d Diagram) error {
 	return nil
 }
 func checkState(s State) error {
+	if s.Value != nil && !validStateValue(*s.Value) {
+		return fmt.Errorf("неверное значение состояния %q: нужна непустая UTF-8 строка до 256 байт", s.ID)
+	}
 	if !ValidID(s.ID) || strings.TrimSpace(s.Name) == "" || len(s.Name) > 240 {
 		return fmt.Errorf("неверное состояние %q: id или название", s.ID)
 	}
@@ -203,4 +221,70 @@ func Object(raw string) (map[string]any, error) {
 		return nil, fmt.Errorf("ожидается JSON-объект")
 	}
 	return object, nil
+}
+
+func validStateValue(value string) bool {
+	return value != "" && len(value) <= 256 && utf8.ValidString(value)
+}
+func checkEntity(e EntityBinding) error {
+	if !validFamily(e.Family) {
+		return fmt.Errorf("неверная каноническая семья сущности %q", e.Family)
+	}
+	if !validStateValue(e.KeyParam) || strings.TrimSpace(e.KeyParam) == "" || strings.ContainsAny(e.KeyParam, "/{ }") {
+		return fmt.Errorf("неверный параметр ключа сущности")
+	}
+	if !validStateValue(e.StateField) || strings.TrimSpace(e.StateField) == "" {
+		return fmt.Errorf("неверное поле состояния сущности")
+	}
+	return nil
+}
+func effectiveValue(s State) string {
+	if s.Value != nil {
+		return *s.Value
+	}
+	return s.ID
+}
+
+// Typed decoders retain optional value presence and reject unknown fields in
+// every caller, including direct MCP decoding.
+func (s *State) UnmarshalJSON(data []byte) error {
+	type plain State
+	var v plain
+	if err := decodeStrict(data, &v); err != nil {
+		return err
+	}
+	var raw map[string]jsonx.RawMessage
+	if err := jsonx.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	if value, ok := raw["value"]; ok && bytes.Equal(bytes.TrimSpace(value), []byte("null")) {
+		return fmt.Errorf("значение состояния не может быть null")
+	}
+	*s = State(v)
+	return nil
+}
+func (d *Diagram) UnmarshalJSON(data []byte) error {
+	type plain Diagram
+	var v plain
+	if err := decodeStrict(data, &v); err != nil {
+		return err
+	}
+	var raw map[string]jsonx.RawMessage
+	if err := jsonx.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	if entity, ok := raw["entity"]; ok && bytes.Equal(bytes.TrimSpace(entity), []byte("null")) {
+		return fmt.Errorf("привязка сущности не может быть null")
+	}
+	*d = Diagram(v)
+	return nil
+}
+func decodeStrict(data []byte, target any) error {
+	decoder := jsonx.NewDecoder(bytes.NewReader(data))
+	decoder.DisallowUnknownFields()
+	return decoder.Decode(target)
+}
+
+func validFamily(family string) bool {
+	return family != "" && strings.HasPrefix(family, "/") && len(family) <= 2048 && utf8.ValidString(family) && family == router.CanonicalPath(family) && !strings.ContainsAny(family, "?#") && !strings.Contains(family, "//") && !strings.HasSuffix(family, "/") && !strings.ContainsAny(strings.ReplaceAll(family, "{}", ""), "{}")
 }

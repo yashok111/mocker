@@ -161,6 +161,20 @@ func (r *Repo) Set(ctx context.Context, resourceID int64, base, scope ScopeKey, 
 // What it does not do: insert (not found is the answer), raise seq (the key
 // already exists), validate against entity_schema (neither door does, R23).
 func (r *Repo) Patch(ctx context.Context, resourceID int64, base, scope ScopeKey, entityKey, idField, idType string, patch map[string]any) (Entity, bool, error) {
+	return r.patchComputed(ctx, resourceID, base, scope, entityKey, idField, idType, func(map[string]any) (map[string]any, error) {
+		return patch, nil
+	})
+}
+
+// PatchComputed selects a shallow patch from the latest stored object under the
+// same writer that commits it. The callback must be pure and bounded, must not
+// mutate its input, and must not call the database. Keeping this seam independent
+// of the selector's domain lets entity guards share Patch's ID pinning and caps.
+func (r *Repo) PatchComputed(ctx context.Context, resourceID int64, base, scope ScopeKey, entityKey, idField, idType string, choose func(map[string]any) (map[string]any, error)) (Entity, bool, error) {
+	return r.patchComputed(ctx, resourceID, base, scope, entityKey, idField, idType, choose)
+}
+
+func (r *Repo) patchComputed(ctx context.Context, resourceID int64, base, scope ScopeKey, entityKey, idField, idType string, choose func(map[string]any) (map[string]any, error)) (Entity, bool, error) {
 	totalCap := r.entityByteCap()
 
 	callerCtx := ctx
@@ -203,6 +217,13 @@ func (r *Repo) Patch(ctx context.Context, resourceID int64, base, scope ScopeKey
 		decoder.UseNumber()
 		if err := decoder.Decode(&merged); err != nil {
 			return fmt.Errorf("decode entity %q on resource %d: %w", entityKey, resourceID, err)
+		}
+		patch, err := choose(merged)
+		if err != nil {
+			return err
+		}
+		if err := wctx.Err(); err != nil {
+			return err
 		}
 		for k, v := range patch {
 			merged[k] = v

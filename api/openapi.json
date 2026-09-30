@@ -7701,6 +7701,12 @@
           },
           "terminal": {
             "type": "boolean"
+          },
+          "value": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256,
+            "description": "Stored state value; absent uses the graph state id."
           }
         },
         "required": [
@@ -7821,6 +7827,9 @@
             "items": {
               "$ref": "#/components/schemas/StateDiagramTransition"
             }
+          },
+          "entity": {
+            "$ref": "#/components/schemas/StateDiagramEntityBinding"
           }
         },
         "required": [
@@ -7884,12 +7893,56 @@
           },
           "initialStateId": {
             "type": "string"
+          },
+          "entity": {
+            "$ref": "#/components/schemas/StateDiagramEntityBinding"
+          },
+          "clearEntity": {
+            "type": "boolean"
           }
         },
         "required": [
           "kind"
         ],
-        "additionalProperties": false
+        "additionalProperties": false,
+        "allOf": [
+          {
+            "not": {
+              "required": [
+                "entity",
+                "clearEntity"
+              ],
+              "properties": {
+                "clearEntity": {
+                  "const": true
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "anyOf": [
+                {
+                  "required": [
+                    "entity"
+                  ]
+                },
+                {
+                  "required": [
+                    "clearEntity"
+                  ]
+                }
+              ]
+            },
+            "then": {
+              "properties": {
+                "kind": {
+                  "const": "settings"
+                }
+              }
+            }
+          }
+        ]
       },
       "StateDiagramWriteRequest": {
         "type": "object",
@@ -12460,6 +12513,110 @@
           "y",
           "entity"
         ]
+      },
+      "StateDiagramEntityBinding": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "family",
+          "keyParam",
+          "stateField"
+        ],
+        "properties": {
+          "family": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2048
+          },
+          "keyParam": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "stateField": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          }
+        }
+      },
+      "StateDiagramExecutionState": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "diagramId",
+          "name",
+          "entity",
+          "state",
+          "operationCount"
+        ],
+        "properties": {
+          "diagramId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "entity": {
+            "$ref": "#/components/schemas/StateDiagramEntityBinding"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "current",
+              "outdated",
+              "missing"
+            ]
+          },
+          "operationCount": {
+            "type": "integer",
+            "minimum": 1
+          }
+        }
+      },
+      "StateDiagramExecution": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "designId",
+          "version",
+          "revisionId",
+          "diagrams"
+        ],
+        "properties": {
+          "designId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "version": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "revisionId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "diagrams": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StateDiagramExecutionState"
+            }
+          }
+        }
+      },
+      "StateDiagramExecutionInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "expectedVersion"
+        ],
+        "properties": {
+          "expectedVersion": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          }
+        }
       }
     }
   },
@@ -23228,6 +23385,413 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/AnalyzeDesignScenarioEventMapRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/designs/{id}/state-diagram-execution": {
+      "get": {
+        "tags": [
+          "state-diagrams"
+        ],
+        "operationId": "getStateDiagramExecution",
+        "summary": "Read applied entity state diagrams",
+        "description": "Reads immutable execution copies and compares them with saved authoring diagrams. State is current, outdated, or missing. Does not change entity data.",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "Structural admission error (design_invalid), malformed request, or simulation_invalid fixture. No state is changed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "$ref": "#/components/schemas/ApiDesignInvalidDetails"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "description": "design_conflict: current version and draft revision. No write was applied.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "$ref": "#/components/schemas/ApiDesignConflictDetails"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "413": {
+            "$ref": "#/components/responses/PayloadTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          },
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StateDiagramExecution"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1
+            }
+          }
+        ]
+      }
+    },
+    "/api/designs/{id}/state-diagrams/{did}/execution": {
+      "put": {
+        "tags": [
+          "state-diagrams"
+        ],
+        "operationId": "applyStateDiagramExecution",
+        "summary": "Apply entity state diagram to draft mock",
+        "description": "Uses whole-API expectedVersion. Copies a saved valid entity state diagram into execution, or removes the applied copy including an orphan. Reapply copies later authoring edits. Repeating an identical action checks CAS. Entity data is retained; published behavior changes through normal review/publication.",
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfToken": []
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "Structural admission error (design_invalid), malformed request, or simulation_invalid fixture. No state is changed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "$ref": "#/components/schemas/ApiDesignInvalidDetails"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "description": "design_conflict: current version and draft revision. No write was applied.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "$ref": "#/components/schemas/ApiDesignConflictDetails"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "413": {
+            "$ref": "#/components/responses/PayloadTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          },
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiDesignDetail"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "did",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{1,80}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StateDiagramExecutionInput"
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "state-diagrams"
+        ],
+        "operationId": "unapplyStateDiagramExecution",
+        "summary": "Remove entity state diagram from draft mock",
+        "description": "Uses whole-API expectedVersion. Copies a saved valid entity state diagram into execution, or removes the applied copy including an orphan. Reapply copies later authoring edits. Repeating an identical action checks CAS. Entity data is retained; published behavior changes through normal review/publication.",
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfToken": []
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "Structural admission error (design_invalid), malformed request, or simulation_invalid fixture. No state is changed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "$ref": "#/components/schemas/ApiDesignInvalidDetails"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "description": "design_conflict: current version and draft revision. No write was applied.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "$ref": "#/components/schemas/ApiDesignConflictDetails"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "413": {
+            "$ref": "#/components/responses/PayloadTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          },
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiDesignDetail"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "did",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{1,80}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StateDiagramExecutionInput"
               }
             }
           }

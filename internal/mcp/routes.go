@@ -59,6 +59,9 @@ var toolRoutes = map[string][]string{
 	"apply_response_rule_commands":    {"POST /api/designs/{id}/response-rules/{rid}/commands"},
 	"validate_response_rule":          {"POST /api/designs/{id}/response-rules/{rid}/validate"},
 	"simulate_response_rule":          {"POST /api/designs/{id}/response-rules/{rid}/simulate"},
+	"get_state_diagram_execution":     {"GET /api/designs/{id}/state-diagram-execution"},
+	"apply_state_diagram":             {"PUT /api/designs/{id}/state-diagrams/{did}/execution"},
+	"unapply_state_diagram":           {"DELETE /api/designs/{id}/state-diagrams/{did}/execution"},
 	"get_response_rule_execution":     {"GET /api/designs/{id}/response-rule-execution"},
 	"apply_response_rule":             {"PUT /api/designs/{id}/response-rules/{rid}/execution"},
 	"unapply_response_rule":           {"DELETE /api/designs/{id}/response-rules/{rid}/execution"},
@@ -290,7 +293,7 @@ var toolRoutes = map[string][]string{
 // Pinned in routes_test.go so a tool
 // added without an entry here is caught by a test rather than by a 404 in
 // production.
-const toolCount = 144
+const toolCount = 147
 
 // toolPath resolves ONE call a tool makes into the (method, path) pair
 // loopback.do/call take.

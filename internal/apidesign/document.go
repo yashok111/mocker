@@ -57,6 +57,12 @@ func (r *Repo) prepare(raw string) (*preparedDocument, error) {
 	if _, err := responserules.CompileExecution(context.Background(), root); err != nil {
 		return nil, responseRuleError(err)
 	}
+	if _, err := statediagram.CompileExecution(context.Background(), root); err != nil {
+		if field, ok := errors.AsType[*statediagram.FieldError](err); ok {
+			return nil, invalidField(field.Pointer, field.Message)
+		}
+		return nil, invalidField("/"+statediagram.ExecutionExtension, err.Error())
+	}
 	diagnostics := validateRoot(root)
 	if len(diagnostics) > 0 {
 		return nil, &InvalidError{Diagnostics: diagnostics}

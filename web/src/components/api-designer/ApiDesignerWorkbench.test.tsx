@@ -7,6 +7,7 @@ import { renderInRouter } from "@/test/render";
 import { json, route } from "@/test/http";
 import { reportFixture } from "../api-impact/fixtures.test-support";
 import { headerTemplate, writeRules } from "../response-rules/model";
+import { orderTemplate, writeDiagrams } from "../state-diagram/model";
 import type {
   ApiDesignDetail,
   ApiDesignReview,
@@ -46,6 +47,403 @@ afterEach(() => {
 });
 
 describe("ApiDesignerWorkbench", () => {
+  it("state execution: applies the saved state diagram and removes it with the resulting version fence", async () => {
+    let current = stateDiagramDetail();
+    let applied = false;
+    const fetchMock = route({
+      "GET /api/designs/12": () => json(200, current),
+      "GET /api/designs/12/diff?fromRevisionId=41&toRevisionId=41": () =>
+        json(200, diffFixture(current)),
+      "GET /api/designs/12/diff?fromRevisionId=41&toRevisionId=42": () =>
+        json(200, diffFixture(current)),
+      "GET /api/designs/12/diff?fromRevisionId=41&toRevisionId=43": () =>
+        json(200, diffFixture(current)),
+      "GET /api/designs/12/state-diagram-execution": () =>
+        json(200, stateExecutionFixture(current, applied ? "current" : null)),
+      "PUT /api/designs/12/state-diagrams/order/execution": () => {
+        current = stateDiagramDetail({ version: 2, revisionId: 42 }, true);
+        applied = true;
+        return json(200, current);
+      },
+      "DELETE /api/designs/12/state-diagrams/order/execution": () => {
+        current = stateDiagramDetail({ version: 3, revisionId: 43 });
+        applied = false;
+        return json(200, current);
+      },
+    });
+    renderInRouter(<ApiDesignerWorkbench id={12} />);
+    await userEvent.click(await screen.findByRole("tab", { name: "Состояния" }));
+    const apply = await screen.findByRole("button", { name: "Применить к моку" });
+    await waitFor(() => expect(apply).toBeEnabled());
+    await userEvent.click(apply);
+    const remove = await screen.findByRole("button", {
+      name: "Снять применение: Жизненный цикл заказа",
+    });
+    await waitFor(() => expect(remove).toBeEnabled());
+    expect(screen.getByText("Черновик · версия 2")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Сохранить черновик" })).toBeDisabled();
+    await userEvent.click(remove);
+    await screen.findByText("Черновик · версия 3");
+    await waitFor(() =>
+      expect(screen.queryByRole("button", { name: /Снять применение:/ })).not.toBeInTheDocument(),
+    );
+    const writes = fetchMock.mock.calls.filter(
+      ([url, init]) => String(url).endsWith("/execution") && init?.method !== "GET",
+    );
+    expect(writes.map(([, init]) => [init?.method, JSON.parse(String(init?.body))])).toEqual([
+      ["PUT", { expectedVersion: 1 }],
+      ["DELETE", { expectedVersion: 2 }],
+    ]);
+  });
+
+  it("state execution: blocks runtime mutations for unsaved diagram edits", async () => {
+    const detail = stateDiagramDetail();
+    const fetchMock = route({
+      "GET /api/designs/12": () => json(200, detail),
+      "GET /api/designs/12/diff?fromRevisionId=41&toRevisionId=41": () =>
+        json(200, diffFixture(detail)),
+      "GET /api/designs/12/state-diagram-execution": () =>
+        json(200, stateExecutionFixture(detail, "outdated")),
+    });
+    renderInRouter(<ApiDesignerWorkbench id={12} />);
+    await userEvent.click(await screen.findByRole("tab", { name: "Состояния" }));
+    const apply = await screen.findByRole("button", { name: "Применить повторно" });
+    const remove = screen.getByRole("button", { name: "Снять применение: Жизненный цикл заказа" });
+    await waitFor(() => expect(apply).toBeEnabled());
+    await userEvent.type(screen.getByLabelText("Название диаграммы"), " изменено");
+    expect(apply).toBeDisabled();
+    expect(remove).toBeDisabled();
+    expect(
+      fetchMock.mock.calls.filter(
+        ([, init]) => init?.method === "PUT" || init?.method === "DELETE",
+      ),
+    ).toEqual([]);
+  });
+
+  it("state execution: lets an orphan execution copy be removed when no authoring diagrams remain", async () => {
+    const detail = detailFixture();
+    let removed = false;
+    const fetchMock = route({
+      "GET /api/designs/12": () => json(200, detail),
+      "GET /api/designs/12/diff?fromRevisionId=41&toRevisionId=41": () =>
+        json(200, diffFixture(detail)),
+      "GET /api/designs/12/diff?fromRevisionId=41&toRevisionId=42": () =>
+        json(200, diffFixture(detail)),
+      "GET /api/designs/12/state-diagram-execution": () =>
+        json(
+          200,
+          stateExecutionFixture(
+            removed ? detailFixture({ version: 2, revisionId: 42 }) : detail,
+            removed ? null : "missing",
+          ),
+        ),
+      "DELETE /api/designs/12/state-diagrams/order/execution": () => {
+        removed = true;
+        return json(200, detailFixture({ version: 2, revisionId: 42 }));
+      },
+    });
+    renderInRouter(<ApiDesignerWorkbench id={12} />);
+    await userEvent.click(await screen.findByRole("tab", { name: "Состояния" }));
+    const remove = await screen.findByRole("button", {
+      name: "Снять применение: Жизненный цикл заказа",
+    });
+    await waitFor(() => expect(remove).toBeEnabled());
+    expect(screen.getByText("Исходная диаграмма удалена")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Применить к моку" })).not.toBeInTheDocument();
+    await userEvent.click(remove);
+    await waitFor(() =>
+      expect(fetchMock.mock.calls.some(([, init]) => init?.method === "DELETE")).toBe(true),
+    );
+    await screen.findByText("Черновик · версия 2");
+  });
+
+  it("state execution: preserves the old base when API text changes while a diagram is being applied", async () => {
+    let current = stateDiagramDetail();
+    const fetchMock = route({
+      "GET /api/designs/12": () => json(200, current),
+      "GET /api/designs/12/diff?fromRevisionId=41&toRevisionId=41": () =>
+        json(200, diffFixture(current)),
+      "GET /api/designs/12/diff?fromRevisionId=41&toRevisionId=42": () =>
+        json(200, diffFixture(current)),
+      "GET /api/designs/12/state-diagram-execution": () =>
+        json(200, stateExecutionFixture(current, current.design.version > 1 ? "current" : null)),
+      "PUT /api/designs/12/draft": () =>
+        json(409, { error: { code: "design_conflict", message: "Changed" } }),
+    });
+    const finish = deferStateExecution(fetchMock);
+    renderInRouter(<ApiDesignerWorkbench id={12} />);
+    await userEvent.click(await screen.findByRole("tab", { name: "Состояния" }));
+    const apply = await screen.findByRole("button", { name: "Применить к моку" });
+    await waitFor(() => expect(apply).toBeEnabled());
+    await userEvent.click(apply);
+    await userEvent.click(screen.getByRole("tab", { name: "Редактор" }));
+    await userEvent.click(screen.getByRole("radio", { name: "Исходник" }));
+    const source = screen.getByRole("textbox", { name: "Исходник OpenAPI" });
+    await userEvent.clear(source);
+    source.focus();
+    const edited = current.draft.document.replace(
+      '"title": "Заказы API"',
+      '"title": "Локальные правки"',
+    );
+    await userEvent.paste(edited);
+    current = stateDiagramDetail({ version: 2, revisionId: 42 }, true);
+    finish(json(200, current));
+    await screen.findByText("На сервере появилась версия 2");
+    expect(source).toHaveValue(edited);
+    await userEvent.type(screen.getByLabelText("Описание изменения"), "Локальная правка");
+    await userEvent.click(screen.getByRole("button", { name: "Сохранить черновик" }));
+    await waitFor(() =>
+      expect(
+        fetchMock.mock.calls.some(
+          ([url, init]) => String(url).endsWith("/draft") && init?.method === "PUT",
+        ),
+      ).toBe(true),
+    );
+    const save = fetchMock.mock.calls.find(
+      ([url, init]) => String(url).endsWith("/draft") && init?.method === "PUT",
+    );
+    expect(JSON.parse(String(save?.[1]?.body)).expectedVersion).toBe(1);
+    expect(JSON.parse(localStorage.getItem("mocker:api-design:12:draft")!).baseVersion).toBe(1);
+  });
+
+  it("state execution: does not replace newer detail cache with an older activation response", async () => {
+    let current = stateDiagramDetail();
+    const fetchMock = route({
+      "GET /api/designs/12": () => json(200, current),
+      "GET /api/designs/12/diff?fromRevisionId=41&toRevisionId=41": () =>
+        json(200, diffFixture(current)),
+      "GET /api/designs/12/diff?fromRevisionId=41&toRevisionId=43": () =>
+        json(200, diffFixture(current)),
+      "GET /api/designs/12/state-diagram-execution": () =>
+        json(200, stateExecutionFixture(current, current.design.version > 1 ? "outdated" : null)),
+    });
+    const finish = deferStateExecution(fetchMock);
+    const { queryClient } = renderInRouter(<ApiDesignerWorkbench id={12} />);
+    await userEvent.click(await screen.findByRole("tab", { name: "Состояния" }));
+    const apply = await screen.findByRole("button", { name: "Применить к моку" });
+    await waitFor(() => expect(apply).toBeEnabled());
+    await userEvent.click(apply);
+    current = stateDiagramDetail({ version: 3, revisionId: 43 }, true);
+    queryClient.setQueryData(["/api/designs/12"], {
+      status: 200,
+      data: current,
+      headers: new Headers(),
+    });
+    await screen.findByText("Черновик · версия 3");
+    finish(json(200, stateDiagramDetail({ version: 2, revisionId: 42 }, true)));
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Применить повторно" })).toBeEnabled(),
+    );
+    expect(screen.getByText("Черновик · версия 3")).toBeInTheDocument();
+    expect(
+      queryClient.getQueryData<{ data: ApiDesignDetail }>(["/api/designs/12"])?.data.design.version,
+    ).toBe(3);
+  });
+
+  it("state execution: accepts a matching polled activation result without creating a local conflict", async () => {
+    let current = stateDiagramDetail();
+    const fetchMock = route({
+      "GET /api/designs/12": () => json(200, current),
+      "GET /api/designs/12/diff?fromRevisionId=41&toRevisionId=41": () =>
+        json(200, diffFixture(current)),
+      "GET /api/designs/12/diff?fromRevisionId=41&toRevisionId=42": () =>
+        json(200, diffFixture(current)),
+      "GET /api/designs/12/state-diagram-execution": () =>
+        json(200, stateExecutionFixture(current, current.design.version > 1 ? "current" : null)),
+    });
+    const finish = deferStateExecution(fetchMock);
+    const { queryClient } = renderInRouter(<ApiDesignerWorkbench id={12} />);
+    await userEvent.click(await screen.findByRole("tab", { name: "Состояния" }));
+    const apply = await screen.findByRole("button", { name: "Применить к моку" });
+    await waitFor(() => expect(apply).toBeEnabled());
+    await userEvent.click(apply);
+    current = stateDiagramDetail({ version: 2, revisionId: 42 }, true);
+    queryClient.setQueryData(["/api/designs/12"], {
+      status: 200,
+      data: current,
+      headers: new Headers(),
+    });
+    await screen.findByText("Черновик · версия 2");
+    finish(json(200, current));
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Применить повторно" })).toBeEnabled(),
+    );
+    expect(screen.queryByText("На сервере появилась версия 2")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Сохранить черновик" })).toBeDisabled();
+  });
+
+  it("state execution: keeps the editor usable and blocks another apply after a version conflict", async () => {
+    const detail = stateDiagramDetail();
+    route({
+      "GET /api/designs/12": () => json(200, detail),
+      "GET /api/designs/12/diff?fromRevisionId=41&toRevisionId=41": () =>
+        json(200, diffFixture(detail)),
+      "GET /api/designs/12/state-diagram-execution": () =>
+        json(200, stateExecutionFixture(detail, null)),
+      "PUT /api/designs/12/state-diagrams/order/execution": () =>
+        json(409, { error: { code: "design_conflict", message: "Changed" } }),
+    });
+    renderInRouter(<ApiDesignerWorkbench id={12} />);
+    await userEvent.click(await screen.findByRole("tab", { name: "Состояния" }));
+    const apply = await screen.findByRole("button", { name: "Применить к моку" });
+    await waitFor(() => expect(apply).toBeEnabled());
+    await userEvent.click(apply);
+    await screen.findByText("Конфликт версий");
+    expect(apply).toBeDisabled();
+    expect(screen.getByLabelText("Название диаграммы")).toHaveValue("Жизненный цикл заказа");
+  });
+
+  it("state execution: ignores an activation response after switching to another API", async () => {
+    const first = stateDiagramDetail();
+    const second = detailFixture({ title: "Другой API" });
+    second.design.id = 13;
+    second.design.name = "Другой API";
+    second.draft.designId = 13;
+    const fetchMock = route({
+      "GET /api/designs/12": () => json(200, first),
+      "GET /api/designs/13": () => json(200, second),
+      "GET /api/designs/12/diff?fromRevisionId=41&toRevisionId=41": () =>
+        json(200, diffFixture(first)),
+      "GET /api/designs/13/diff?fromRevisionId=41&toRevisionId=41": () =>
+        json(200, diffFixture(second)),
+      "GET /api/designs/12/state-diagram-execution": () =>
+        json(200, stateExecutionFixture(first, null)),
+      "GET /api/designs/13/state-diagram-execution": () =>
+        json(200, { ...stateExecutionFixture(second, null), designId: 13 }),
+    });
+    const finish = deferStateExecution(fetchMock);
+    function Switcher() {
+      const [id, setId] = useState(12);
+      return (
+        <>
+          <button onClick={() => setId(13)}>Другой API</button>
+          <ApiDesignerWorkbench id={id} />
+        </>
+      );
+    }
+    const { queryClient } = renderInRouter(<Switcher />);
+    await userEvent.click(await screen.findByRole("tab", { name: "Состояния" }));
+    const apply = await screen.findByRole("button", { name: "Применить к моку" });
+    await waitFor(() => expect(apply).toBeEnabled());
+    await userEvent.click(apply);
+    await userEvent.click(screen.getByRole("button", { name: "Другой API" }));
+    await screen.findByRole("heading", { name: "Другой API", level: 1 });
+    finish(json(200, stateDiagramDetail({ version: 2, revisionId: 42 }, true)));
+    await userEvent.click(screen.getByRole("tab", { name: "Состояния" }));
+    await screen.findByText("Спроектируйте жизненный цикл сущности");
+    expect(
+      queryClient.getQueryData<{ data: ApiDesignDetail }>(["/api/designs/13"])?.data.design.id,
+    ).toBe(13);
+    expect(screen.queryByRole("button", { name: /Снять применение:/ })).not.toBeInTheDocument();
+  });
+  it("state execution: reapplies the saved source and displays current copy status", async () => {
+    let current = stateDiagramDetail();
+    let applied = false;
+    const fetchMock = route({
+      "GET /api/designs/12": () => json(200, current),
+      "GET /api/designs/12/diff?fromRevisionId=41&toRevisionId=41": () =>
+        json(200, diffFixture(current)),
+      "GET /api/designs/12/diff?fromRevisionId=41&toRevisionId=42": () =>
+        json(200, diffFixture(current)),
+      "GET /api/designs/12/state-diagram-execution": () =>
+        json(200, stateExecutionFixture(current, applied ? "current" : "outdated")),
+      "PUT /api/designs/12/state-diagrams/order/execution": () => {
+        current = stateDiagramDetail({ version: 2, revisionId: 42 }, true);
+        applied = true;
+        return json(200, current);
+      },
+    });
+    renderInRouter(<ApiDesignerWorkbench id={12} />);
+    await userEvent.click(await screen.findByRole("tab", { name: "Состояния" }));
+    const apply = await screen.findByRole("button", { name: "Применить повторно" });
+    await waitFor(() => expect(apply).toBeEnabled());
+    expect(screen.getByText("Есть изменения для повторного применения")).toBeInTheDocument();
+    await userEvent.click(apply);
+    await screen.findByText("Совпадает с сохранённой диаграммой");
+    const write = fetchMock.mock.calls.find(([, init]) => init?.method === "PUT");
+    expect(JSON.parse(String(write?.[1]?.body))).toEqual({ expectedVersion: 1 });
+  });
+
+  it("state execution: blocks removal while another inspector form has pending edits", async () => {
+    const detail = stateDiagramDetail();
+    const fetchMock = route({
+      "GET /api/designs/12": () => json(200, detail),
+      "GET /api/designs/12/diff?fromRevisionId=41&toRevisionId=41": () =>
+        json(200, diffFixture(detail)),
+      "GET /api/designs/12/state-diagram-execution": () =>
+        json(200, stateExecutionFixture(detail, "outdated")),
+    });
+    renderInRouter(<ApiDesignerWorkbench id={12} />);
+    await userEvent.click(await screen.findByRole("tab", { name: "Редактор" }));
+    await userEvent.type(await screen.findByLabelText("Требования security (JSON)"), "invalid");
+    await userEvent.click(screen.getByRole("tab", { name: "Состояния" }));
+    const remove = await screen.findByRole("button", {
+      name: "Снять применение: Жизненный цикл заказа",
+    });
+    expect(remove).toBeDisabled();
+    expect(screen.getByText(/примените или отмените изменения форм/)).toBeInTheDocument();
+    expect(
+      fetchMock.mock.calls.filter(
+        ([, init]) => init?.method === "PUT" || init?.method === "DELETE",
+      ),
+    ).toEqual([]);
+  });
+
+  it("state execution: preserves form drafts created while applying a diagram", async () => {
+    let current = stateDiagramDetail();
+    const fetchMock = route({
+      "GET /api/designs/12": () => json(200, current),
+      "GET /api/designs/12/diff?fromRevisionId=41&toRevisionId=41": () =>
+        json(200, diffFixture(current)),
+      "GET /api/designs/12/diff?fromRevisionId=41&toRevisionId=42": () =>
+        json(200, diffFixture(current)),
+      "GET /api/designs/12/state-diagram-execution": () =>
+        json(200, stateExecutionFixture(current, current.design.version > 1 ? "current" : null)),
+    });
+    const finish = deferStateExecution(fetchMock);
+    renderInRouter(<ApiDesignerWorkbench id={12} />);
+    await userEvent.click(await screen.findByRole("tab", { name: "Состояния" }));
+    const apply = await screen.findByRole("button", { name: "Применить к моку" });
+    await waitFor(() => expect(apply).toBeEnabled());
+    await userEvent.click(apply);
+    await userEvent.click(screen.getByRole("tab", { name: "Редактор" }));
+    const field = await screen.findByLabelText("Требования security (JSON)");
+    await userEvent.clear(field);
+    field.focus();
+    await userEvent.paste('[{"bearer":');
+    current = stateDiagramDetail({ version: 2, revisionId: 42 }, true);
+    finish(json(200, current));
+    await screen.findByText("На сервере появилась версия 2");
+    expect(field).toHaveValue('[{"bearer":');
+    await waitFor(() => {
+      const saved = JSON.parse(localStorage.getItem("mocker:api-design:12:draft")!);
+      expect(saved.baseVersion).toBe(1);
+      expect(saved.formDrafts).toContain("bearer");
+    });
+  });
+
+  it.each([
+    { version: 0, revisionId: 41 },
+    { version: 1, revisionId: 40 },
+  ])("state execution: waits for matching version and revision %j", async (fence) => {
+    const detail = stateDiagramDetail();
+    route({
+      "GET /api/designs/12": () => json(200, detail),
+      "GET /api/designs/12/diff?fromRevisionId=41&toRevisionId=41": () =>
+        json(200, diffFixture(detail)),
+      "GET /api/designs/12/state-diagram-execution": () =>
+        json(200, {
+          ...stateExecutionFixture(detail, "current"),
+          version: fence.version,
+          revisionId: fence.revisionId,
+        }),
+    });
+    renderInRouter(<ApiDesignerWorkbench id={12} />);
+    await userEvent.click(await screen.findByRole("tab", { name: "Состояния" }));
+    expect(await screen.findByRole("button", { name: "Применить к моку" })).toBeDisabled();
+    expect(screen.getByText("Ожидаем актуальное состояние диаграмм мока.")).toBeInTheDocument();
+  });
+
   it("applies the saved response rule and removes it with the resulting version fence", async () => {
     let current = responseRuleDetail();
     let applied = false;
@@ -1604,4 +2002,70 @@ async function waitForStoredDraft(): Promise<void> {
   await vi.waitFor(() => {
     expect(localStorage.getItem("mocker:api-design:12:draft")).toContain("Буфер в браузере");
   });
+}
+
+function stateDiagramDetail(options: DetailOptions = {}, applied = false) {
+  const detail = detailFixture(options);
+  const diagram = {
+    ...orderTemplate(),
+    id: "order",
+    entity: { family: "/orders", keyParam: "orderId", stateField: "status" },
+  };
+  const document = JSON.parse(detail.draft.document);
+  document.paths["/orders/{orderId}/pay"] = {
+    post: {
+      responses: {
+        "200": {
+          description: "OK",
+          content: { "application/json": { schema: { type: "object" } } },
+        },
+      },
+    },
+  };
+  diagram.transitions[0]!.binding = { method: "post", path: "/orders/{orderId}/pay" };
+  detail.draft.document = JSON.stringify(writeDiagrams(document, [diagram]), null, 2);
+  if (applied) {
+    const saved = JSON.parse(detail.draft.document);
+    saved["x-mocker-state-diagrams-execution"] = { formatVersion: 1, diagrams: [diagram] };
+    detail.draft.document = JSON.stringify(saved, null, 2);
+  }
+  return detail;
+}
+
+function stateExecutionFixture(
+  detail: ApiDesignDetail,
+  state: "current" | "outdated" | "missing" | null,
+) {
+  return {
+    designId: detail.design.id,
+    version: detail.design.version,
+    revisionId: detail.draft.id,
+    diagrams:
+      state === null
+        ? []
+        : [
+            {
+              diagramId: "order",
+              name: "Жизненный цикл заказа",
+              entity: { family: "/orders", keyParam: "orderId", stateField: "status" },
+              state,
+              operationCount: 1,
+            },
+          ],
+  };
+}
+
+function deferStateExecution(fetchMock: ReturnType<typeof route>) {
+  const initial = fetchMock.getMockImplementation()!;
+  let finish: (response: Response) => void = () => {
+    throw new Error("Execution request has not started");
+  };
+  fetchMock.mockImplementation((input, init) => {
+    if (String(input).endsWith("/state-diagrams/order/execution") && init?.method === "PUT")
+      return new Promise<Response>((resolve) => {
+        finish = resolve;
+      });
+    return initial(input, init);
+  });
+  return (response: Response) => finish(response);
 }

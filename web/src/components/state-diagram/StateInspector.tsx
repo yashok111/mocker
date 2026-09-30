@@ -53,6 +53,17 @@ export default function StateInspector({
           maxLength={80}
           onChange={(e) => update({ name: e.currentTarget.value })}
         />
+        <TextInput
+          label="Значение состояния в данных"
+          description={`Пустое поле использует ID: ${state.id}`}
+          value={state.value ?? ""}
+          maxLength={256}
+          onChange={(e) => {
+            const value = e.currentTarget.value;
+            if (new TextEncoder().encode(value).length <= 256)
+              update({ value: value || undefined });
+          }}
+        />
         <Checkbox
           label="Начальное состояние"
           checked={diagram.initialStateId === state.id}
@@ -261,6 +272,62 @@ export default function StateInspector({
         data={[{ value: "", label: "Выберите состояние" }, ...stateOptions]}
         onChange={(e) => onChange({ ...diagram, initialStateId: e.currentTarget.value })}
       />
+      <Checkbox
+        label="Исполнять переходы для сущности"
+        checked={diagram.entity !== undefined}
+        onChange={(e) =>
+          onChange({
+            ...diagram,
+            entity: e.currentTarget.checked
+              ? { family: "", keyParam: "", stateField: "" }
+              : undefined,
+          })
+        }
+      />
+      {diagram.entity && (
+        <>
+          <TextInput
+            label="Семейство сущностей"
+            description="Канонический путь, например /orders или /teams/{}/orders"
+            value={diagram.entity.family}
+            maxLength={2048}
+            onChange={(e) =>
+              onChange({
+                ...diagram,
+                entity: { ...diagram.entity!, family: e.currentTarget.value },
+              })
+            }
+          />
+          <TextInput
+            label="Параметр ключа сущности"
+            description="Параметр пути сразу после семейства, например orderId"
+            value={diagram.entity.keyParam}
+            maxLength={256}
+            onChange={(e) =>
+              onChange({
+                ...diagram,
+                entity: { ...diagram.entity!, keyParam: e.currentTarget.value },
+              })
+            }
+          />
+          <TextInput
+            label="Поле состояния"
+            description="Поле верхнего уровня в JSON сущности, например status"
+            value={diagram.entity.stateField}
+            maxLength={256}
+            onChange={(e) =>
+              onChange({
+                ...diagram,
+                entity: { ...diagram.entity!, stateField: e.currentTarget.value },
+              })
+            }
+          />
+          <Text size="xs" c="dimmed">
+            Отсутствующее поле состояния означает начальное состояние. null, неверный тип и
+            неизвестное значение приводят к конфликту. После сохранения примените диаграмму к моку.
+          </Text>
+        </>
+      )}
       <Text size="sm" c="dimmed">
         Выберите состояние или стрелку, чтобы настроить переходы и операции API.
       </Text>

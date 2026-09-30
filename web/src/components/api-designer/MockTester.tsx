@@ -150,10 +150,5 @@ export function MockTester({
 
 function formatMockBody(result: MockResponse): string {
   if (result.body === "") return "(пустое тело)";
-  if (!result.headers.get("Content-Type")?.includes("json")) return result.body;
-  try {
-    return JSON.stringify(JSON.parse(result.body), null, 2);
-  } catch {
-    return result.body;
-  }
+  return result.body;
 }

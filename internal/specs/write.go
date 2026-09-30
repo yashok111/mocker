@@ -14,6 +14,7 @@ import (
 
 	"github.com/yashok111/mocker/internal/openapi"
 	"github.com/yashok111/mocker/internal/responserules"
+	"github.com/yashok111/mocker/internal/statediagram"
 )
 
 // ImportInput is what a caller supplies to [Repo.Import]. Everything else
@@ -112,6 +113,9 @@ func (r *Repo) PrepareImport(in ImportInput) (*PreparedImport, error) {
 	// Validate here as well as in the design editor so imports cannot bypass
 	// the graph safety gate. Passive authoring metadata remains unrestricted.
 	if _, err := responserules.CompileExecution(context.Background(), doc.Root()); err != nil {
+		return nil, fmt.Errorf("%w: %w", ErrNotADocument, err)
+	}
+	if _, err := statediagram.CompileExecution(context.Background(), doc.Root()); err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrNotADocument, err)
 	}
 	resolver := openapi.NewResolver(doc, openapi.DefaultRefBudget)

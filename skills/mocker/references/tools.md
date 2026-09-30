@@ -228,6 +228,24 @@ empty document is invalid. Request data and traces are not persisted.
 | `apply_response_rule` | Copy saved valid graph into draft HTTP execution | `designId`, `ruleId`, `expectedVersion` | API detail |
 | `unapply_response_rule` | Remove execution copy, retaining authoring and published revision | `designId`, `ruleId`, `expectedVersion` | API detail |
 
+### State diagram execution
+
+| Tool | Action | Inputs | Result |
+|---|---|---|---|
+| `get_state_diagram_execution` | List frozen applied copies and current/outdated/missing status | `designId*` | designId, version, revisionId, diagrams[] with entity and operationCount |
+| `apply_state_diagram` | Copy a valid saved diagram into draft HTTP execution | `designId*`, `diagramId*`, `expectedVersion*` | API detail |
+| `unapply_state_diagram` | Remove a copy, including an orphan, retaining stored entities | `designId*`, `diagramId*`, `expectedVersion*` | API detail |
+
+Use `list_state_diagrams` and `get_state_diagram` before editing. Create/save
+requires a complete diagram and whole-API `expectedVersion`.
+`apply_state_diagram_commands` accepts settings with `entity` or
+`clearEntity:true`, plus the existing state/transition commands. State `value`
+is the persisted business string; omission uses its graph ID. Authoring saves
+do not replace applied copies. `validate_state_diagram` and
+`simulate_state_diagram` remain pure. Reapply explicitly after source edits;
+review/publication updates the published HTTP mock. See `design` for binding,
+admission, exact guards and data isolation rules.
+
 These actions use whole-API CAS. Save source edits first; reapply to update the
 executable copy. Removing an authoring graph does not remove its execution copy.
 Draft behavior changes immediately; published behavior changes through existing

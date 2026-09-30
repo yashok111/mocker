@@ -24,6 +24,7 @@ import {
 import StateGraph from "./StateGraph";
 import StateInspector from "./StateInspector";
 import StateSimulation from "./StateSimulation";
+import ExecutionPanel, { type ExecutionControls } from "./ExecutionPanel";
 import styles from "./StateDiagram.module.css";
 
 export default function StateDiagramEditor({
@@ -31,45 +32,66 @@ export default function StateDiagramEditor({
   document,
   blocked,
   onChange,
+  execution,
 }: {
   designId: number;
   document: ApiDocument | null;
   blocked: boolean;
   onChange: (d: ApiDocument) => void;
+  execution?: ExecutionControls;
 }) {
   if (!document)
     return (
-      <Alert color="yellow">Исправьте JSON в редакторе, чтобы открыть диаграммы состояний.</Alert>
+      <Stack>
+        <Alert color="yellow">Исправьте JSON в редакторе, чтобы открыть диаграммы состояний.</Alert>
+        {execution && <ExecutionPanel execution={execution} />}
+      </Stack>
     );
   if (blocked)
     return (
-      <Alert color="yellow">
-        Завершите редактирование формы. Если документ содержит числа вне точности JavaScript,
-        используйте исходник или MCP.
-      </Alert>
+      <Stack>
+        <Alert color="yellow">
+          Завершите редактирование формы. Если документ содержит числа вне точности JavaScript,
+          используйте исходник или MCP.
+        </Alert>
+        {execution && <ExecutionPanel execution={execution} />}
+      </Stack>
     );
   let diagrams: StateDiagram[];
   try {
     diagrams = readDiagrams(document);
   } catch (e) {
     return (
-      <Alert color="red" role="alert">
-        {e instanceof Error ? e.message : "Неверный формат диаграмм"}
-      </Alert>
+      <Stack>
+        <Alert color="red" role="alert">
+          {e instanceof Error ? e.message : "Неверный формат диаграмм"}
+        </Alert>
+        {execution && <ExecutionPanel execution={execution} />}
+      </Stack>
     );
   }
-  return <Editor designId={designId} document={document} diagrams={diagrams} onChange={onChange} />;
+  return (
+    <Editor
+      designId={designId}
+      document={document}
+      diagrams={diagrams}
+      onChange={onChange}
+      execution={execution}
+    />
+  );
 }
 function Editor({
   designId,
   document,
   diagrams,
   onChange,
+  execution,
 }: {
   designId: number;
   document: ApiDocument;
   diagrams: StateDiagram[];
   onChange: (d: ApiDocument) => void;
+  execution?: ExecutionControls;
 }) {
   const [selectedID, setSelectedID] = useState("");
   const [selection, setSelection] = useState<Selection>(null);
@@ -124,6 +146,7 @@ function Editor({
   }
   return (
     <Stack className={styles.root} gap="md" data-testid="state-diagram-editor">
+      {execution && <ExecutionPanel execution={execution} diagramId={diagram?.id} />}
       <Group justify="space-between" align="end">
         {diagram ? (
           <NativeSelect

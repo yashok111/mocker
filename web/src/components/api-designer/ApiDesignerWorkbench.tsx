@@ -73,6 +73,12 @@ import {
   useGetResponseRuleExecution,
   useUnapplyResponseRule,
 } from "@/api/generated/response-rules/response-rules";
+import {
+  getGetStateDiagramExecutionQueryKey,
+  useApplyStateDiagramExecution,
+  useGetStateDiagramExecution,
+  useUnapplyStateDiagramExecution,
+} from "@/api/generated/state-diagrams/state-diagrams";
 import type {
   ApiDesignChange,
   ApiDesignChangeSet,
@@ -410,22 +416,41 @@ function Workbench({ id, reviewId }: { id: number; reviewId?: number }): ReactEl
     },
   });
   const execution = executionQuery.data?.status === 200 ? executionQuery.data.data : null;
+  const applyStateDiagram = useApplyStateDiagramExecution();
+  const unapplyStateDiagram = useUnapplyStateDiagramExecution();
+  const stateExecutionQuery = useGetStateDiagramExecution(id, {
+    query: {
+      queryKey: [...getGetStateDiagramExecutionQueryKey(id), detail?.design.version ?? 0],
+      enabled: detail !== null && view === "states",
+      refetchInterval: POLL_MS,
+      retry: false,
+    },
+  });
+  const stateExecution =
+    stateExecutionQuery.data?.status === 200 ? stateExecutionQuery.data.data : null;
+  const stateExecutionMatchesDetail =
+    stateExecution?.designId === id &&
+    stateExecution.version === detail?.design.version &&
+    stateExecution.revisionId === detail?.draft.id;
   const executionMatchesDetail =
     execution?.designId === id &&
     execution.version === detail?.design.version &&
     execution.revisionId === detail?.draft.id;
   useEffect(() => {
-    if (execution?.designId === id && execution.version > (detail?.design.version ?? 0)) {
+    if (
+      (execution?.designId === id && execution.version > (detail?.design.version ?? 0)) ||
+      (stateExecution?.designId === id && stateExecution.version > (detail?.design.version ?? 0))
+    ) {
       void queryClient.invalidateQueries({ queryKey: getGetApiDesignQueryKey(id) });
     }
-  }, [detail?.design.version, execution, id, queryClient]);
-  const executionBlocked =
+  }, [detail?.design.version, execution, stateExecution, id, queryClient]);
+  const executionMutationBlocked =
     conflict ||
     externalDetail !== null ||
     (detail !== null && detail.design.version !== baseVersion)
       ? "Сначала разрешите конфликт с серверной версией API."
       : dirty
-        ? "Сохраните изменения API и примените или отмените изменения форм перед применением правила."
+        ? "Сохраните изменения API и примените или отмените изменения форм перед применением к моку."
         : executionPending ||
             save.isPending ||
             restoreRevision.isPending ||
@@ -434,13 +459,26 @@ function Workbench({ id, reviewId }: { id: number; reviewId?: number }): ReactEl
             requestReview.isPending ||
             publishReview.isPending
           ? "Дождитесь завершения изменения API."
-          : !executionMatchesDetail
-            ? "Ожидаем актуальное состояние правил мока."
-            : null;
+          : null;
+  const executionBlocked =
+    executionMutationBlocked ??
+    (!executionMatchesDetail ? "Ожидаем актуальное состояние правил мока." : null);
+  const stateExecutionBlocked =
+    executionMutationBlocked ??
+    (!stateExecutionMatchesDetail ? "Ожидаем актуальное состояние диаграмм мока." : null);
 
-  async function changeExecution(ruleId: string, apply: boolean): Promise<void> {
+  async function changeExecution(
+    itemId: string,
+    apply: boolean,
+    kind: "rule" | "state" = "rule",
+  ): Promise<void> {
     const request = executionRequest.current;
-    if (executionBlocked || request.busy || !request.alive) return;
+    if (
+      (kind === "state" ? stateExecutionBlocked : executionBlocked) ||
+      request.busy ||
+      !request.alive
+    )
+      return;
     request.busy = true;
     const generation = ++request.generation;
     const submittedDocument = bufferRef.current;
@@ -449,13 +487,18 @@ function Workbench({ id, reviewId }: { id: number; reviewId?: number }): ReactEl
     setExecutionPending(true);
     setExecutionError(null);
     try {
-      const variables = { id, rid: ruleId, data: { expectedVersion: baseVersion } };
-      const response = apply
-        ? await applyRule.mutateAsync(variables)
-        : await unapplyRule.mutateAsync(variables);
+      const data = { expectedVersion: baseVersion };
+      const response =
+        kind === "state"
+          ? apply
+            ? await applyStateDiagram.mutateAsync({ id, did: itemId, data })
+            : await unapplyStateDiagram.mutateAsync({ id, did: itemId, data })
+          : apply
+            ? await applyRule.mutateAsync({ id, rid: itemId, data })
+            : await unapplyRule.mutateAsync({ id, rid: itemId, data });
       if (!isCurrent()) return;
       if (response.status !== 200 || response.data.design.id !== id) {
-        throw new Error("Не удалось обновить применение правила");
+        throw new Error("Не удалось обновить применение к моку");
       }
       const key = getGetApiDesignQueryKey(id);
       await queryClient.cancelQueries({ queryKey: key });
@@ -479,6 +522,7 @@ function Workbench({ id, reviewId }: { id: number; reviewId?: number }): ReactEl
         queryClient.setQueryData(key, response);
       }
       void queryClient.invalidateQueries({ queryKey: getGetResponseRuleExecutionQueryKey(id) });
+      void queryClient.invalidateQueries({ queryKey: getGetStateDiagramExecutionQueryKey(id) });
     } catch (error) {
       if (!isCurrent()) return;
       setExecutionError(describeApiFailureDetailed(error));
@@ -1061,6 +1105,22 @@ function Workbench({ id, reviewId }: { id: number; reviewId?: number }): ReactEl
                     designId={id}
                     document={parsed.document}
                     blocked={formDraft.dirty || unsafeNumber}
+                    execution={{
+                      data: stateExecutionMatchesDetail ? stateExecution : null,
+                      blocked: stateExecutionBlocked,
+                      pending: executionPending,
+                      error:
+                        executionError ??
+                        (stateExecutionQuery.isError
+                          ? describeApiFailureDetailed(stateExecutionQuery.error)
+                          : null),
+                      onApply: (diagramId) => void changeExecution(diagramId, true, "state"),
+                      onRemove: (diagramId) => void changeExecution(diagramId, false, "state"),
+                      onRefresh: () => {
+                        void detailQuery.refetch();
+                        void stateExecutionQuery.refetch();
+                      },
+                    }}
                     onChange={(next) => setBuffer(JSON.stringify(next, null, 2))}
                   />
                 </Suspense>

@@ -1,6 +1,8 @@
 package statediagram
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"maps"
 	"math/big"
@@ -40,10 +42,13 @@ func Simulate(d Diagram, root map[string]any, dataJSON string, transitions []str
 	if err != nil {
 		return out, err
 	}
-	states := map[string]State{}
-	for _, s := range d.States {
-		states[s.ID] = s
+	states, values := stateMaps(d)
+	current, err := currentState(d.InitialStateID, d.Entity, values, data)
+	if err != nil {
+		out.Diagnostics = append(out.Diagnostics, Diagnostic{Severity: "error", ElementID: d.ID, Message: err.Error()})
+		return out, nil
 	}
+	out.StateID = current
 	byID := map[string]Transition{}
 	for _, tr := range d.Transitions {
 		byID[tr.ID] = tr
@@ -51,19 +56,20 @@ func Simulate(d Diagram, root map[string]any, dataJSON string, transitions []str
 	for _, id := range transitions {
 		tr, found := byID[id]
 		step := Step{TransitionID: id, From: out.StateID, To: out.StateID, DataJSON: out.DataJSON}
-		switch {
-		case !found:
-			step.Reason = "Переход не найден"
-		case states[out.StateID].Terminal:
-			step.Reason = "Достигнуто конечное состояние"
-		case tr.From != out.StateID:
-			step.Reason = "Переход недоступен из текущего состояния"
-		case !guardPasses(tr.Guard, data):
-			step.Reason = "Условие перехода не выполнено"
-		default:
-			patch, _ := Object(tr.PatchJSON)
+
+		selection, selectErr := advance(context.Background(), out.StateID, tr, found, states, data, d.Entity)
+		if selectErr != nil {
+			if conflict, ok := errors.AsType[*TransitionError](selectErr); ok {
+				step.Reason = conflict.Message
+				if !found {
+					step.Reason = "Переход не найден"
+				}
+			} else {
+				return out, selectErr
+			}
+		} else {
 			next := maps.Clone(data)
-			maps.Copy(next, patch)
+			maps.Copy(next, selection.Patch)
 			encoded, err := jsonx.Marshal(next)
 			if err != nil {
 				return out, err
@@ -72,11 +78,11 @@ func Simulate(d Diagram, root map[string]any, dataJSON string, transitions []str
 				return out, fmt.Errorf("данные после перехода превышают 64 КиБ")
 			}
 			data = next
-			out.StateID = tr.To
+			out.StateID = selection.ToStateID
 			out.DataJSON = string(encoded)
 			step.Accepted = true
-			step.To = tr.To
-			step.ResponseStatus = tr.ResponseStatus
+			step.To = selection.ToStateID
+			step.ResponseStatus = selection.ResponseStatus
 			step.DataJSON = out.DataJSON
 		}
 		out.Steps = append(out.Steps, step)

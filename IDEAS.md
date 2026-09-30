@@ -21,6 +21,12 @@ typecheck, lint and production builds passed. The slice is merged into local
 `main`; remote publication is separate. Specs, plans and reports are under `docs/postman-precision-*`
 and `docs/response-rule-entities-*`.
 
+`feat/entity-state-execution` connects applied state diagrams to real entity
+HTTP transitions. State lives in a selected business field; selection, exact
+guards and data/state updates are atomic. Saved authoring and applied copies
+stay separate, with explicit reapply and independent published data. Reports
+and QA evidence live under `docs/entity-state-execution-*`.
+
 ## Remaining directions
 
 | Area | Remaining work |
@@ -28,16 +34,15 @@ and `docs/response-rule-entities-*`.
 | Scenario export | Postman branches/loops and cURL response data bindings |
 | Data flow | Using results beyond a conditional branch or loop |
 | Response rules | Conditions on entity fields and further entity operations |
-| State diagrams | Execution in the HTTP mock with state per entity |
 | Event map | Delivery simulation, retries and DLQ |
 | Impact analysis | Broader schema compatibility and dependencies across APIs |
 
 ## Recommendation
 
-Next, connect state diagrams to real HTTP execution and entity state. The
-entity blocks supply the underlying persistence operations. Postman control
-flow and data flow beyond branch/loop boundaries require explicit execution
-and visibility rules before export can share the runner's semantics.
+Next, support branches and loops in Postman exports using the runner's control
+flow. Data flow beyond branch/loop boundaries needs explicit result visibility
+rules before the runner and exports can share that behavior. Event delivery
+simulation remains the next separate runtime feature.
 
 ## Deferred (the owner's call, 2026-09-03: «отложим на потом»)
 

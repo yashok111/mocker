@@ -22,6 +22,7 @@ import (
 	"github.com/yashok111/mocker/internal/resources"
 	"github.com/yashok111/mocker/internal/responserules"
 	"github.com/yashok111/mocker/internal/router"
+	"github.com/yashok111/mocker/internal/statediagram"
 	"github.com/yashok111/mocker/internal/workspaces"
 )
 
@@ -55,6 +56,7 @@ type runtime struct {
 	// Only explicit immutable execution copies participate in serving. The
 	// authoring extension remains passive, even when the draft spec changes.
 	responseRules map[string]*responserules.Program
+	stateDiagrams map[string]*statediagram.Program
 	// resolver is the one the generator walks nested $refs through (the
 	// spec's, or the skeleton's when no spec is bound). Kept on the runtime
 	// since A19 because mock.generate must chase a ROOT $ref and check the
@@ -308,7 +310,7 @@ func (p *Plane) buildRuntime(ctx context.Context, ws *workspaces.Workspace, draf
 	if err != nil {
 		return nil, err
 	}
-	resourcesByFamily, err = p.responseRuleResources(ctx, ws, resourcesByFamily, spec.responseRules)
+	resourcesByFamily, err = p.executionResources(ctx, ws, resourcesByFamily, spec.responseRules, spec.stateDiagrams)
 	if err != nil {
 		return nil, fmt.Errorf("load managed resource roster for workspace %d: %w", ws.ID, err)
 	}
@@ -346,6 +348,7 @@ func (p *Plane) buildRuntime(ctx context.Context, ws *workspaces.Workspace, draf
 		routes:         allRoutes,
 		resources:      resourcesByFamily,
 		responseRules:  spec.responseRules,
+		stateDiagrams:  spec.stateDiagrams,
 	}, nil
 }
 
@@ -420,6 +423,7 @@ type specLayer struct {
 	routes         []router.Route
 	patchedSchemas map[patchedSchemaKey]map[string]any
 	responseRules  map[string]*responserules.Program
+	stateDiagrams  map[string]*statediagram.Program
 }
 
 // buildGeneratorForWorkspace is phase 2: the document, its resolver, the
@@ -478,6 +482,10 @@ func (p *Plane) buildGeneratorForWorkspace(ctx context.Context, ws *workspaces.W
 	if err != nil {
 		return specLayer{}, fmt.Errorf("compile response rules for spec %d: %w", specID, err)
 	}
+	stateDiagrams, err := statediagram.CompileExecution(ctx, root)
+	if err != nil {
+		return specLayer{}, fmt.Errorf("compile state diagrams for spec %d: %w", specID, err)
+	}
 
 	// D1/D2(6): the patch is parsed AND APPLIED here — the TAIL of this
 	// function, after specRoutes is loaded and before it returns — because
@@ -496,6 +504,7 @@ func (p *Plane) buildGeneratorForWorkspace(ctx context.Context, ws *workspaces.W
 		routes:         specRoutes,
 		patchedSchemas: patchedSchemas,
 		responseRules:  responseRules,
+		stateDiagrams:  stateDiagrams,
 	}, nil
 }
 

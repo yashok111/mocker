@@ -16,7 +16,16 @@ func Validate(d Diagram, root map[string]any) []Diagnostic {
 	if _, ok := states[d.InitialStateID]; !ok {
 		add("error", d.ID, "Выберите существующее начальное состояние")
 	}
-	paths, _ := root["paths"].(map[string]any)
+	if d.Entity != nil {
+		values := map[string]string{}
+		for _, state := range d.States {
+			value := effectiveValue(state)
+			if previous, ok := values[value]; ok {
+				add("error", state.ID, "Значение состояния уже используется состоянием "+previous)
+			}
+			values[value] = state.ID
+		}
+	}
 	for _, tr := range d.Transitions {
 		source, ok := states[tr.From]
 		if !ok {
@@ -28,10 +37,17 @@ func Validate(d Diagram, root map[string]any) []Diagnostic {
 		if source.Terminal {
 			add("error", tr.ID, "У конечного состояния не может быть исходящих переходов")
 		}
+		if d.Entity != nil {
+			patch, _ := Object(tr.PatchJSON)
+			if value, present := patch[d.Entity.StateField]; present {
+				if target, ok := states[tr.To]; ok && value != effectiveValue(target) {
+					add("error", tr.ID, "Изменения поля состояния должны совпадать со значением целевого состояния")
+				}
+			}
+		}
 		if tr.Binding != nil {
-			item, _ := paths[tr.Binding.Path].(map[string]any)
-			if operation, ok := item[tr.Binding.Method].(map[string]any); !ok || operation == nil {
-				add("error", tr.ID, "Связанная операция API не найдена: "+tr.Binding.Method+" "+tr.Binding.Path)
+			if _, err := boundOperation(root, *tr.Binding); err != nil {
+				add("error", tr.ID, err.Error())
 			}
 		} else {
 			add("warning", tr.ID, "Переход не привязан к операции API")
