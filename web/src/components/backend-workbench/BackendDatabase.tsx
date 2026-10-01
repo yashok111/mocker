@@ -16,9 +16,11 @@ import type { BackendNode } from "@/api/generated/schemas";
 import { CoverageDetails, LoadState, Pages } from "./BackendGraphInventory";
 import { BackendDatabaseInspector } from "./BackendDatabaseInspector";
 import { BackendDatabaseGraph } from "./BackendDatabaseGraph";
+import { BackendDatabaseProposal, type ProposalView } from "./BackendDatabaseProposal";
 import {
   databaseButtonStyles,
   databaseKey,
+  databaseTarget,
   databaseStatus,
   databaseWrap,
   datastoreScope,
@@ -30,11 +32,26 @@ import {
 } from "./backendDatabaseReads";
 import { cardinalityText } from "./backendDatabaseLayout";
 
-export function BackendDatabase(props: { projectId: string; revisionId: string }) {
+export function BackendDatabase(props: {
+  projectId: string;
+  revisionId: string;
+  repositoryId?: string;
+  onDirty?: (dirty: boolean) => void;
+}) {
   return <DatabaseDiscovery key={`${props.projectId}:${props.revisionId}`} {...props} />;
 }
 
-function DatabaseDiscovery({ projectId, revisionId }: { projectId: string; revisionId: string }) {
+function DatabaseDiscovery({
+  projectId,
+  revisionId,
+  repositoryId,
+  onDirty,
+}: {
+  projectId: string;
+  revisionId: string;
+  repositoryId?: string;
+  onDirty?: (dirty: boolean) => void;
+}) {
   const key = ["backend-database-discovery", projectId, revisionId];
   useDatabaseCancellation(key);
   const query = useQuery({
@@ -45,6 +62,7 @@ function DatabaseDiscovery({ projectId, revisionId }: { projectId: string; revis
     retry: false,
   });
   const [datastore, setDatastore] = useState("");
+  const [dirty, setDirty] = useState(false);
   const datastores =
     query.data?.nodes.filter(
       (node) => node.kind === "datastore" && "relational" in node.attributes,
@@ -67,12 +85,25 @@ function DatabaseDiscovery({ projectId, revisionId }: { projectId: string; revis
               label="Хранилище базы данных"
               data={datastores.map((node) => ({ value: node.id, label: node.name }))}
               value={selected.id}
-              onChange={(event) => setDatastore(event.currentTarget.value)}
+              onChange={(event) => {
+                if (
+                  !dirty ||
+                  window.confirm("Есть несохранённые команды. Перейти к другому хранилищу?")
+                ) {
+                  setDirty(false);
+                  setDatastore(event.currentTarget.value);
+                }
+              }}
             />
             <DatabaseFacets
               key={selected.id}
               projectId={projectId}
               revisionId={revisionId}
+              repositoryId={repositoryId}
+              onDirty={(value) => {
+                setDirty(value);
+                onDirty?.(value);
+              }}
               datastoreId={selected.id}
               nodes={datastoreScope(query.data!.nodes, selected.id)}
             />
@@ -85,30 +116,125 @@ function DatabaseDiscovery({ projectId, revisionId }: { projectId: string; revis
 
 function DatabaseFacets({
   nodes,
+  repositoryId,
+  onDirty,
   ...context
-}: Omit<DatabaseContext, "facetKey"> & { nodes: BackendNode[] }) {
+}: Omit<DatabaseContext, "facetKey"> & {
+  nodes: BackendNode[];
+  repositoryId?: string;
+  onDirty: (dirty: boolean) => void;
+}) {
   const facets = [...new Set(nodes.flatMap((node) => Object.keys(relationalFacets(node))))].sort();
   const [selected, setSelected] = useState(
     facets.find((key) => nodes.some((node) => relationalFacets(node)[key]?.sourceKind === "sql")) ??
       facets[0] ??
       "",
   );
+  const [dirty, setDirty] = useState(false);
   return (
     <>
       <NativeSelect
         label="Источник схемы"
         value={selected}
-        onChange={(event) => setSelected(event.currentTarget.value)}
+        onChange={(event) => {
+          if (
+            !dirty ||
+            window.confirm("Есть несохранённые команды. Перейти к другому источнику?")
+          ) {
+            setDirty(false);
+            onDirty(false);
+            setSelected(event.currentTarget.value);
+          }
+        }}
         data={facets}
       />
       {selected && (
-        <DatabaseLists key={selected} context={{ ...context, facetKey: selected }} nodes={nodes} />
+        <DatabaseFacetWorkspace
+          key={selected}
+          context={{ ...context, facetKey: selected }}
+          nodes={nodes}
+          repositoryId={repositoryId}
+          onDirty={(value) => {
+            setDirty(value);
+            onDirty(value);
+          }}
+        />
       )}
     </>
   );
 }
 
-function DatabaseLists({ context, nodes }: { context: DatabaseContext; nodes: BackendNode[] }) {
+function DatabaseFacetWorkspace({
+  context,
+  nodes,
+  repositoryId,
+  onDirty,
+}: {
+  context: DatabaseContext;
+  nodes: BackendNode[];
+  repositoryId?: string;
+  onDirty: (dirty: boolean) => void;
+}) {
+  const [view, setView] = useState<ProposalView | null>(null);
+  const [initialColumnId, setInitialColumnId] = useState<string>();
+  const effective: DatabaseContext = view
+    ? {
+        ...context,
+        revisionId: view.baseRevisionId,
+        proposal: { proposalId: view.proposalId, proposalRevisionId: view.proposalRevisionId },
+      }
+    : context;
+  const needsBaseline = effective.revisionId !== context.revisionId;
+  const baselineKey = [...databaseKey(effective), "baseline-objects"];
+  useDatabaseCancellation(baselineKey);
+  const baseline = useQuery({
+    queryKey: baselineKey,
+    queryFn: ({ signal }) =>
+      readDatabaseGraph(
+        effective.projectId,
+        { revisionId: effective.revisionId, recordType: "nodes" },
+        signal,
+      ),
+    enabled: needsBaseline,
+    staleTime: Infinity,
+    retry: false,
+  });
+  const selectedNodes = needsBaseline
+    ? baseline.data && datastoreScope(baseline.data.nodes, effective.datastoreId)
+    : nodes;
+  return (
+    <>
+      {repositoryId && (
+        <BackendDatabaseProposal
+          context={context}
+          repositoryId={repositoryId}
+          onView={setView}
+          onDirty={onDirty}
+          initialColumnId={initialColumnId}
+        />
+      )}
+      {needsBaseline && <LoadState query={baseline} label="объекты основания предложения" />}
+      {selectedNodes && (
+        <DatabaseLists
+          key={view ? `${view.proposalId}:${view.proposalRevisionId}` : "source"}
+          context={effective}
+          nodes={selectedNodes}
+          onRequireColumn={repositoryId ? setInitialColumnId : undefined}
+        />
+      )}
+    </>
+  );
+}
+
+function DatabaseLists({
+  context,
+  nodes,
+  onRequireColumn,
+}: {
+  context: DatabaseContext;
+  nodes: BackendNode[];
+  onRequireColumn?: (columnId: string) => void;
+}) {
   const key = databaseKey(context);
   useDatabaseCancellation(key);
   const [draft, setDraft] = useState("");
@@ -124,7 +250,7 @@ function DatabaseLists({ context, nodes }: { context: DatabaseContext; nodes: Ba
   const origin = useRef<HTMLElement | null>(null);
   const fallback = useRef<HTMLHeadingElement>(null);
   const tablesInput = {
-    revisionId: context.revisionId,
+    ...databaseTarget(context),
     datastoreId: context.datastoreId,
     facetKey: context.facetKey,
     recordType: "tables" as const,
@@ -133,7 +259,7 @@ function DatabaseLists({ context, nodes }: { context: DatabaseContext; nodes: Ba
     ...(search ? { search } : {}),
   };
   const relationshipsInput = {
-    revisionId: context.revisionId,
+    ...databaseTarget(context),
     datastoreId: context.datastoreId,
     facetKey: context.facetKey,
     recordType: "relationships" as const,
@@ -176,10 +302,12 @@ function DatabaseLists({ context, nodes }: { context: DatabaseContext; nodes: Ba
   }
   return (
     <Stack gap="md" style={{ minWidth: 0 }}>
+      {context.proposal && <Text fw={600}>Предложенная схема · проверки не выполнены</Text>}
       {tablePage && (
         <>
           <Text component="output">
-            Состояние источника: {databaseStatus(tablePage.facetStatus)}
+            {context.proposal ? "Состояние основания" : "Состояние источника"}:{" "}
+            {databaseStatus(tablePage.facetStatus)}
           </Text>
           {tablePage.limitations.map((text) => (
             <Text key={text} style={databaseWrap}>
@@ -324,6 +452,7 @@ function DatabaseLists({ context, nodes }: { context: DatabaseContext; nodes: Ba
                 >
                   FK {edge.edgeId} · {databaseStatus(edge.status)}
                 </Button>
+                {edge.runtimeStatus && <Badge>{databaseStatus(edge.runtimeStatus)}</Badge>}
                 <Button
                   variant="subtle"
                   styles={databaseButtonStyles}
@@ -420,6 +549,7 @@ function DatabaseLists({ context, nodes }: { context: DatabaseContext; nodes: Ba
           selection={selection}
           onSelect={select}
           onClose={close}
+          onRequireColumn={onRequireColumn}
         />
       )}
       <Badge variant="light">Схема исходников; данные и исполнение базы не проверялись</Badge>

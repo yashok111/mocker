@@ -26,9 +26,14 @@ import (
 func TestBackendRelationalRealSDKFixtureExample(t *testing.T) {
 	for _, dialect := range []string{"postgresql", "sqlite"} {
 		t.Run(dialect, func(t *testing.T) {
-			server, _ := newResourcesTestServer(t, resourcesTestConfig(t))
+			cfg := resourcesTestConfig(t)
+			server, db := newResourcesTestServer(t, cfg)
 			captures := []map[string]jsontext.Value{}
-			if directory := os.Getenv("MOCKER_B11_TASK4_CAPTURE_DIR"); directory != "" {
+			directory := os.Getenv("MOCKER_B11_TASK4_CAPTURE_DIR")
+			if directory == "" {
+				directory = os.Getenv("MOCKER_B12_TASK4_CAPTURE_DIR")
+			}
+			if directory != "" {
 				t.Cleanup(func() {
 					if t.Failed() {
 						return
@@ -52,6 +57,9 @@ func TestBackendRelationalRealSDKFixtureExample(t *testing.T) {
 				return raw
 			}
 			responseContracts := map[string]string{"begin_backend_import": "BackendImportSession", "put_backend_import_batch": "BackendBatchReceipt", "preview_backend_import": "BackendImportPreview", "commit_backend_import": "BackendImportCommitResult", "query_backend_database": "BackendDatabasePage", "query_backend_graph": "BackendGraphPage", "get_backend_node": "BackendNode", "get_backend_evidence": "BackendEvidencePage"}
+			for tool, schema := range map[string]string{"create_backend_proposal": "BackendProposalDetail", "get_backend_proposal": "BackendProposalDetail", "list_backend_proposals": "BackendProposalPage", "preview_backend_proposal_commands": "BackendProposalPreview", "apply_backend_proposal_commands": "BackendProposalApplyResult"} {
+				responseContracts[tool] = schema
+			}
 			call := func(name string, input map[string]any, out any) []byte {
 				t.Helper()
 				raw, msg := callTool(t, server, name, string(encode(input)))
@@ -60,6 +68,9 @@ func TestBackendRelationalRealSDKFixtureExample(t *testing.T) {
 				}
 				captures = append(captures, map[string]jsontext.Value{"tool": encode(name), "arguments": encode(input), "response": jsontext.Value(raw)})
 				if name := responseContracts[name]; name != "" {
+					if name == "BackendNode" && input["proposal"] != nil {
+						name = "BackendProposalNodeRead"
+					}
 					schema, err := api.BackendSchema(name)
 					if err != nil {
 						t.Fatal(err)
@@ -250,6 +261,12 @@ func TestBackendRelationalRealSDKFixtureExample(t *testing.T) {
 			}
 			batch(&s, "v1", original)
 			first := commit(s, "v1-commit")
+			proposalSDKFixtureExample(t, dialect, p, ids, call, func() {
+				if err := db.Close(); err != nil {
+					t.Fatal(err)
+				}
+				server, db = newResourcesTestServer(t, cfg)
+			})
 			for _, record := range []string{"nodes", "edges"} {
 				call("query_backend_graph", map[string]any{"projectId": p.ID, "revisionId": first.Revision.ID, "recordType": record}, nil)
 			}

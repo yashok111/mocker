@@ -583,4 +583,807 @@ V2 committed revision `01a0f4e1-80e0-7f78-8d1b-b96d88fca034`. Its later read at 
 
 ### Inspection-only design request
 
-For a request to design/apply NOT NULL or an FK, state that typed database proposals/edits and apply/data/writer-check criteria are unavailable in B1.1. Provide supported inspection at explicit pins with actual proof and unknowns. Do not invent proposal tools, DDL execution, endpoint readers, lineage or impact. Root-only, either leaf alone, bundle and server-only use the same verified procedures and actual topic owners.
+For typed schema designs use the separately negotiated database2 procedure.
+Source import3 examples above keep their original protocol and CAS.
+
+## Actual SDK proposal examples: PostgreSQL and SQLite
+
+These are actual responses from the deterministic SDK fixture import, create,
+preview, apply, pinned reads and restart receipt replay. The SQL/Go fixture files
+were read as bytes and never executed. IDs below belong to those example runs;
+use IDs returned by your own baseline reads. Both examples leave source records
+and project/source pointers unchanged. Every data/writer/migration check remains
+unverified. Root, either leaf alone, bundle and server-only load the same pinned
+procedures with the actual topic owners.
+
+### postgresql: nullable legacy_note to desired NOT NULL
+
+`create_backend_proposal` input after choosing the exact source baseline:
+
+```json
+{
+  "idempotencyKey": "proposal-create",
+  "projectId": "01a0f7ed-5926-74f9-84a9-4703b7b4ce1b",
+  "name": "Require users",
+  "baseRevisionId": "01a0f7ed-a479-78a3-b4c2-e0318bea27bc",
+  "repositoryId": "01a0f7ed-5c70-7f06-9514-f0bbeeaf8056",
+  "datastoreId": "01a0f7ed-9725-73eb-8e9b-ad26a5547bf5",
+  "facetKey": "sql"
+}
+```
+
+`preview_backend_proposal_commands` input (no mutation yet):
+
+```json
+{
+  "expectedVersion": 1,
+  "draftRevisionId": "01a0f7ed-ad02-7343-9470-bc1b7c6fa149",
+  "commands": [
+    {
+      "type": "alter_column",
+      "commandId": "require-user",
+      "reason": "Require legacy notes after backfill",
+      "columnId": "01a0f7ed-974c-75a9-86b1-31fd4aa8fcbf",
+      "nullable": false
+    }
+  ],
+  "projectId": "01a0f7ed-5926-74f9-84a9-4703b7b4ce1b",
+  "proposalId": "01a0f7ed-ad02-7333-aa4f-b967371c52da"
+}
+```
+
+Actual preview response; its hash is bound to this exact draft and command:
+
+```json
+{
+  "proposalId": "01a0f7ed-ad02-7333-aa4f-b967371c52da",
+  "baseRevisionId": "01a0f7ed-a479-78a3-b4c2-e0318bea27bc",
+  "baseSemanticHash": "7203cee5fbfd06cd79d572228fb40a4133be452fd8c323283ac781377fba7194",
+  "draftRevisionId": "01a0f7ed-ad02-7343-9470-bc1b7c6fa149",
+  "draftHash": "c9a24d4f029fb4673243b77c49681288ab0adc9771c1c6155b402c410b5327bd",
+  "expectedVersion": 1,
+  "candidateHash": "9c9f0ee16aea27c153e9a67388f31d5aa4729fced64baa5ab4386e455e5d8a59",
+  "candidateGraphHash": "ef6fad3daace09ccc6c334a9ca817e52e0fa5f147165d3ef23a6bc6c0bb66233",
+  "changes": [
+    {
+      "type": "alter_column",
+      "commandId": "require-user",
+      "subjectId": "01a0f7ed-974c-75a9-86b1-31fd4aa8fcbf",
+      "before": {
+        "nullable": {
+          "status": "known",
+          "value": true
+        }
+      },
+      "after": {
+        "nullable": {
+          "status": "known",
+          "value": false
+        }
+      },
+      "generatedIds": {}
+    }
+  ],
+  "criteria": [
+    {
+      "key": "required:3e07f95cfe0c4b3b6f50b78e8f63497600cee07252606e135d466e1b63ff9042:existing_data",
+      "kind": "existing_data",
+      "targetIds": [
+        "01a0f7ed-974c-75a9-86b1-31fd4aa8fcbf"
+      ],
+      "description": "Check existing nulls and backfill before enforcing NOT NULL",
+      "origin": "required",
+      "status": "unverified",
+      "commandId": "require-user"
+    },
+    {
+      "key": "required:3e07f95cfe0c4b3b6f50b78e8f63497600cee07252606e135d466e1b63ff9042:writers",
+      "kind": "writers",
+      "targetIds": [
+        "01a0f7ed-974c-75a9-86b1-31fd4aa8fcbf"
+      ],
+      "description": "Identify all writers and verify omission/null handling; writer coverage is unknown",
+      "origin": "required",
+      "status": "unverified",
+      "commandId": "require-user"
+    },
+    {
+      "key": "required:3e07f95cfe0c4b3b6f50b78e8f63497600cee07252606e135d466e1b63ff9042:migration_plan",
+      "kind": "migration_plan",
+      "targetIds": [
+        "01a0f7ed-974c-75a9-86b1-31fd4aa8fcbf"
+      ],
+      "description": "Review migration, rollout and rollback against the pinned baseline",
+      "origin": "required",
+      "status": "unverified",
+      "commandId": "require-user"
+    }
+  ],
+  "diagnostics": [],
+  "limitations": [
+    "Existing data, writer inventory and migration feasibility are unverified; runtime enforcement and impact analysis are unavailable"
+  ]
+}
+```
+
+`apply_backend_proposal_commands` input using that preview and its own retained key:
+
+```json
+{
+  "commands": [
+    {
+      "type": "alter_column",
+      "commandId": "require-user",
+      "reason": "Require legacy notes after backfill",
+      "columnId": "01a0f7ed-974c-75a9-86b1-31fd4aa8fcbf",
+      "nullable": false
+    }
+  ],
+  "idempotencyKey": "save-require-user",
+  "projectId": "01a0f7ed-5926-74f9-84a9-4703b7b4ce1b",
+  "proposalId": "01a0f7ed-ad02-7333-aa4f-b967371c52da",
+  "expectedVersion": 1,
+  "draftRevisionId": "01a0f7ed-ad02-7343-9470-bc1b7c6fa149",
+  "candidateHash": "9c9f0ee16aea27c153e9a67388f31d5aa4729fced64baa5ab4386e455e5d8a59"
+}
+```
+
+Read the acknowledged revision with `get_backend_node`:
+
+```json
+{
+  "projectId": "01a0f7ed-5926-74f9-84a9-4703b7b4ce1b",
+  "proposal": {
+    "proposalId": "01a0f7ed-ad02-7333-aa4f-b967371c52da",
+    "proposalRevisionId": "01a0f7ed-bb74-7f6c-b27d-b39e67327548"
+  },
+  "nodeId": "01a0f7ed-974c-75a9-86b1-31fd4aa8fcbf"
+}
+```
+
+Exact value at `proposalProjection.sourceRecord.attributes.facets.sql.nullable`:
+
+```json
+{
+  "status": "known",
+  "value": true
+}
+```
+
+Exact value at `proposalProjection.effectiveFacet.values.nullable`:
+
+```json
+{
+  "status": "known",
+  "value": false
+}
+```
+
+Exact value at `proposalProjection.effectiveFacet.propertyOrigins["/nullable"]`:
+
+```json
+{
+  "kind": "intent",
+  "commandId": "require-user",
+  "reason": "Require legacy notes after backfill",
+  "evidenceIds": []
+}
+```
+
+### postgresql: complete ordered FK and rollout criterion
+
+The next preview uses the acknowledged proposal version/draft. It creates a
+separate desired membership FK with ordered tenant/user pairs:
+
+```json
+{
+  "projectId": "01a0f7ed-5926-74f9-84a9-4703b7b4ce1b",
+  "proposalId": "01a0f7ed-ad02-7333-aa4f-b967371c52da",
+  "expectedVersion": 2,
+  "draftRevisionId": "01a0f7ed-bb74-7f6c-b27d-b39e67327548",
+  "commands": [
+    {
+      "type": "alter_constraint",
+      "commandId": "membership",
+      "reason": "Retain user membership",
+      "action": "create",
+      "name": "designed_membership_fk",
+      "tableId": "01a0f7ed-9738-7e5e-bced-821f9e32b74a",
+      "targetTableId": "01a0f7ed-9729-74f9-8808-9c4ec5c5d4f1",
+      "columnPairs": [
+        {
+          "fromColumnId": "01a0f7ed-973c-707e-b482-a7557003b1e2",
+          "toColumnId": "01a0f7ed-972c-7533-800b-06b4ee402966"
+        },
+        {
+          "fromColumnId": "01a0f7ed-9742-786a-970b-9ec021e04bb7",
+          "toColumnId": "01a0f7ed-972f-7581-8d4e-41f29c0f2277"
+        }
+      ],
+      "updateAction": "no_action",
+      "deleteAction": "restrict",
+      "matchType": "simple",
+      "deferrable": false,
+      "initiallyDeferred": false
+    }
+  ]
+}
+```
+
+Actual preview change, including stable designed constraint/reference IDs:
+
+```json
+{
+  "type": "alter_constraint",
+  "commandId": "membership",
+  "subjectId": "a7d5d0cd-2ae0-59c4-8973-9e70591b551b",
+  "before": {},
+  "after": {
+    "columnPairs": [
+      {
+        "fromColumnId": "01a0f7ed-973c-707e-b482-a7557003b1e2",
+        "toColumnId": "01a0f7ed-972c-7533-800b-06b4ee402966"
+      },
+      {
+        "fromColumnId": "01a0f7ed-9742-786a-970b-9ec021e04bb7",
+        "toColumnId": "01a0f7ed-972f-7581-8d4e-41f29c0f2277"
+      }
+    ],
+    "deleteAction": {
+      "status": "known",
+      "value": "restrict"
+    },
+    "matchType": {
+      "status": "known",
+      "value": "simple"
+    },
+    "updateAction": {
+      "status": "known",
+      "value": "no_action"
+    }
+  },
+  "generatedIds": {
+    "constraintId": "a7d5d0cd-2ae0-59c4-8973-9e70591b551b",
+    "edgeId": "66b018f0-ed90-5c84-8387-0178158ea413"
+  }
+}
+```
+
+The pinned ER read after apply returns status:proposed and
+runtimeStatus:unverified. Bounds retain inherited uniqueness and any limitations.
+Expression, conditional, stale or incomplete uniqueness cannot establish a global
+key. Proposed FK intent does not prove orphan-free data or action safety.
+
+The following authored migration-plan criterion supplements required checks:
+
+```json
+{
+  "projectId": "01a0f7ed-5926-74f9-84a9-4703b7b4ce1b",
+  "proposalId": "01a0f7ed-ad02-7333-aa4f-b967371c52da",
+  "expectedVersion": 3,
+  "draftRevisionId": "01a0f7ed-da03-7753-a3f8-ad7124c384e3",
+  "commands": [
+    {
+      "commandId": "rollout",
+      "reason": "Capture rollout planning",
+      "criteria": [
+        {
+          "key": "rollback",
+          "kind": "migration_plan",
+          "targetIds": [
+            "01a0f7ed-9738-7e5e-bced-821f9e32b74a"
+          ],
+          "description": "Review rollout and rollback before implementation"
+        }
+      ],
+      "type": "set_criteria"
+    }
+  ]
+}
+```
+
+Actual saved criteria are all unverified:
+
+```json
+[
+  {
+    "key": "required:3e07f95cfe0c4b3b6f50b78e8f63497600cee07252606e135d466e1b63ff9042:existing_data",
+    "kind": "existing_data",
+    "targetIds": [
+      "01a0f7ed-974c-75a9-86b1-31fd4aa8fcbf"
+    ],
+    "description": "Check existing nulls and backfill before enforcing NOT NULL",
+    "origin": "required",
+    "status": "unverified",
+    "commandId": "require-user"
+  },
+  {
+    "key": "required:3e07f95cfe0c4b3b6f50b78e8f63497600cee07252606e135d466e1b63ff9042:writers",
+    "kind": "writers",
+    "targetIds": [
+      "01a0f7ed-974c-75a9-86b1-31fd4aa8fcbf"
+    ],
+    "description": "Identify all writers and verify omission/null handling; writer coverage is unknown",
+    "origin": "required",
+    "status": "unverified",
+    "commandId": "require-user"
+  },
+  {
+    "key": "required:3e07f95cfe0c4b3b6f50b78e8f63497600cee07252606e135d466e1b63ff9042:migration_plan",
+    "kind": "migration_plan",
+    "targetIds": [
+      "01a0f7ed-974c-75a9-86b1-31fd4aa8fcbf"
+    ],
+    "description": "Review migration, rollout and rollback against the pinned baseline",
+    "origin": "required",
+    "status": "unverified",
+    "commandId": "require-user"
+  },
+  {
+    "key": "required:bf5cf59e356652253268c604cbf8df8cfdb03a4a0d32b27ad158e581709c80e4:referential_integrity",
+    "kind": "referential_integrity",
+    "targetIds": [
+      "a7d5d0cd-2ae0-59c4-8973-9e70591b551b",
+      "01a0f7ed-9738-7e5e-bced-821f9e32b74a",
+      "01a0f7ed-9729-74f9-8808-9c4ec5c5d4f1"
+    ],
+    "description": "Check existing orphan rows and ordered pair values before enforcing the FK",
+    "origin": "required",
+    "status": "unverified",
+    "commandId": "membership"
+  },
+  {
+    "key": "required:bf5cf59e356652253268c604cbf8df8cfdb03a4a0d32b27ad158e581709c80e4:target_uniqueness",
+    "kind": "target_uniqueness",
+    "targetIds": [
+      "a7d5d0cd-2ae0-59c4-8973-9e70591b551b",
+      "01a0f7ed-9738-7e5e-bced-821f9e32b74a",
+      "01a0f7ed-9729-74f9-8808-9c4ec5c5d4f1"
+    ],
+    "description": "Verify actual target uniqueness and FK enforcement against the selected baseline",
+    "origin": "required",
+    "status": "unverified",
+    "commandId": "membership"
+  },
+  {
+    "key": "required:bf5cf59e356652253268c604cbf8df8cfdb03a4a0d32b27ad158e581709c80e4:writers",
+    "kind": "writers",
+    "targetIds": [
+      "a7d5d0cd-2ae0-59c4-8973-9e70591b551b",
+      "01a0f7ed-9738-7e5e-bced-821f9e32b74a",
+      "01a0f7ed-9729-74f9-8808-9c4ec5c5d4f1"
+    ],
+    "description": "Identify every source/target writer and verify update/delete actions; writer coverage is unknown",
+    "origin": "required",
+    "status": "unverified",
+    "commandId": "membership"
+  },
+  {
+    "key": "required:bf5cf59e356652253268c604cbf8df8cfdb03a4a0d32b27ad158e581709c80e4:migration_plan",
+    "kind": "migration_plan",
+    "targetIds": [
+      "a7d5d0cd-2ae0-59c4-8973-9e70591b551b",
+      "01a0f7ed-9738-7e5e-bced-821f9e32b74a",
+      "01a0f7ed-9729-74f9-8808-9c4ec5c5d4f1"
+    ],
+    "description": "Review FK migration, rollout and rollback against the pinned baseline",
+    "origin": "required",
+    "status": "unverified",
+    "commandId": "membership"
+  },
+  {
+    "key": "rollback",
+    "kind": "migration_plan",
+    "targetIds": [
+      "01a0f7ed-9738-7e5e-bced-821f9e32b74a"
+    ],
+    "description": "Review rollout and rollback before implementation",
+    "origin": "authored",
+    "status": "unverified",
+    "commandId": "rollout"
+  }
+]
+```
+
+After those later saves and a database restart, replaying the original
+NOT NULL apply request/key returned byte-for-byte the original receipt.
+Creation replay also returned its original acknowledgement. Reading the old
+proposal revision still returned its immutable original draft; current CAS
+version was 4. A later source head is reported as baseOutdated, without rebasing
+the proposal. Ready/rebase belongs to B4; measured checks and impact are later.
+
+### sqlite: nullable legacy_note to desired NOT NULL
+
+`create_backend_proposal` input after choosing the exact source baseline:
+
+```json
+{
+  "idempotencyKey": "proposal-create",
+  "projectId": "01a0f7ee-8c95-76e9-8a92-8ab9cac36b17",
+  "name": "Require users",
+  "baseRevisionId": "01a0f7ee-d8f9-743d-b97a-a73461e7c9b3",
+  "repositoryId": "01a0f7ee-9003-7697-90f6-bfa0f849ca79",
+  "datastoreId": "01a0f7ee-cb9f-7e9b-87bb-75c730f459d4",
+  "facetKey": "sql"
+}
+```
+
+`preview_backend_proposal_commands` input (no mutation yet):
+
+```json
+{
+  "expectedVersion": 1,
+  "draftRevisionId": "01a0f7ee-e173-71ba-a1f6-07ea0d5c353e",
+  "commands": [
+    {
+      "type": "alter_column",
+      "commandId": "require-user",
+      "reason": "Require legacy notes after backfill",
+      "columnId": "01a0f7ee-cbc5-77e3-b97c-7dfaf87d468b",
+      "nullable": false
+    }
+  ],
+  "projectId": "01a0f7ee-8c95-76e9-8a92-8ab9cac36b17",
+  "proposalId": "01a0f7ee-e173-71b2-aa04-e1bf1c0ec9e9"
+}
+```
+
+Actual preview response; its hash is bound to this exact draft and command:
+
+```json
+{
+  "proposalId": "01a0f7ee-e173-71b2-aa04-e1bf1c0ec9e9",
+  "baseRevisionId": "01a0f7ee-d8f9-743d-b97a-a73461e7c9b3",
+  "baseSemanticHash": "3d08a0a78244e72d3c50cb0bb4c3644f3359e1b10a4cc6e403a56eadb7bdbfc3",
+  "draftRevisionId": "01a0f7ee-e173-71ba-a1f6-07ea0d5c353e",
+  "draftHash": "7bdaa877a41c6783236b8e015282d1a63566fdfb5ea69fd1741727f9f8f77405",
+  "expectedVersion": 1,
+  "candidateHash": "73e95b6fe3ba818d175bd330c03d89b6f737bcf74d9b6a43f79db0b754aa5cf8",
+  "candidateGraphHash": "e728151dd3a79bff4b7e3ee41ca20426445b53c49f0149a3d049a2ad86d2eb32",
+  "changes": [
+    {
+      "type": "alter_column",
+      "commandId": "require-user",
+      "subjectId": "01a0f7ee-cbc5-77e3-b97c-7dfaf87d468b",
+      "before": {
+        "nullable": {
+          "status": "known",
+          "value": true
+        }
+      },
+      "after": {
+        "nullable": {
+          "status": "known",
+          "value": false
+        }
+      },
+      "generatedIds": {}
+    }
+  ],
+  "criteria": [
+    {
+      "key": "required:3e07f95cfe0c4b3b6f50b78e8f63497600cee07252606e135d466e1b63ff9042:existing_data",
+      "kind": "existing_data",
+      "targetIds": [
+        "01a0f7ee-cbc5-77e3-b97c-7dfaf87d468b"
+      ],
+      "description": "Check existing nulls and backfill before enforcing NOT NULL",
+      "origin": "required",
+      "status": "unverified",
+      "commandId": "require-user"
+    },
+    {
+      "key": "required:3e07f95cfe0c4b3b6f50b78e8f63497600cee07252606e135d466e1b63ff9042:writers",
+      "kind": "writers",
+      "targetIds": [
+        "01a0f7ee-cbc5-77e3-b97c-7dfaf87d468b"
+      ],
+      "description": "Identify all writers and verify omission/null handling; writer coverage is unknown",
+      "origin": "required",
+      "status": "unverified",
+      "commandId": "require-user"
+    },
+    {
+      "key": "required:3e07f95cfe0c4b3b6f50b78e8f63497600cee07252606e135d466e1b63ff9042:migration_plan",
+      "kind": "migration_plan",
+      "targetIds": [
+        "01a0f7ee-cbc5-77e3-b97c-7dfaf87d468b"
+      ],
+      "description": "Review migration, rollout and rollback against the pinned baseline",
+      "origin": "required",
+      "status": "unverified",
+      "commandId": "require-user"
+    }
+  ],
+  "diagnostics": [],
+  "limitations": [
+    "Existing data, writer inventory and migration feasibility are unverified; runtime enforcement and impact analysis are unavailable"
+  ]
+}
+```
+
+`apply_backend_proposal_commands` input using that preview and its own retained key:
+
+```json
+{
+  "draftRevisionId": "01a0f7ee-e173-71ba-a1f6-07ea0d5c353e",
+  "candidateHash": "73e95b6fe3ba818d175bd330c03d89b6f737bcf74d9b6a43f79db0b754aa5cf8",
+  "commands": [
+    {
+      "type": "alter_column",
+      "commandId": "require-user",
+      "reason": "Require legacy notes after backfill",
+      "columnId": "01a0f7ee-cbc5-77e3-b97c-7dfaf87d468b",
+      "nullable": false
+    }
+  ],
+  "idempotencyKey": "save-require-user",
+  "projectId": "01a0f7ee-8c95-76e9-8a92-8ab9cac36b17",
+  "proposalId": "01a0f7ee-e173-71b2-aa04-e1bf1c0ec9e9",
+  "expectedVersion": 1
+}
+```
+
+Read the acknowledged revision with `get_backend_node`:
+
+```json
+{
+  "proposal": {
+    "proposalId": "01a0f7ee-e173-71b2-aa04-e1bf1c0ec9e9",
+    "proposalRevisionId": "01a0f7ee-f020-7a8f-b8af-d9ed84d86a62"
+  },
+  "nodeId": "01a0f7ee-cbc5-77e3-b97c-7dfaf87d468b",
+  "projectId": "01a0f7ee-8c95-76e9-8a92-8ab9cac36b17"
+}
+```
+
+Exact value at `proposalProjection.sourceRecord.attributes.facets.sql.nullable`:
+
+```json
+{
+  "status": "known",
+  "value": true
+}
+```
+
+Exact value at `proposalProjection.effectiveFacet.values.nullable`:
+
+```json
+{
+  "status": "known",
+  "value": false
+}
+```
+
+Exact value at `proposalProjection.effectiveFacet.propertyOrigins["/nullable"]`:
+
+```json
+{
+  "kind": "intent",
+  "commandId": "require-user",
+  "reason": "Require legacy notes after backfill",
+  "evidenceIds": []
+}
+```
+
+### sqlite: complete ordered FK and rollout criterion
+
+The next preview uses the acknowledged proposal version/draft. It creates a
+separate desired membership FK with ordered tenant/user pairs:
+
+```json
+{
+  "proposalId": "01a0f7ee-e173-71b2-aa04-e1bf1c0ec9e9",
+  "expectedVersion": 2,
+  "draftRevisionId": "01a0f7ee-f020-7a8f-b8af-d9ed84d86a62",
+  "commands": [
+    {
+      "type": "alter_constraint",
+      "commandId": "membership",
+      "reason": "Retain user membership",
+      "action": "create",
+      "name": "designed_membership_fk",
+      "tableId": "01a0f7ee-cbb2-7eb8-b266-a6b56e679a0d",
+      "targetTableId": "01a0f7ee-cba3-7d26-a56f-6c4506a52bd4",
+      "columnPairs": [
+        {
+          "fromColumnId": "01a0f7ee-cbb6-703d-8ba4-51dda0eb6cf4",
+          "toColumnId": "01a0f7ee-cba6-7cc8-a8eb-87ff6155732e"
+        },
+        {
+          "fromColumnId": "01a0f7ee-cbbc-7191-9aa5-ab8bb009a720",
+          "toColumnId": "01a0f7ee-cba9-7d91-8502-ba686f6043e7"
+        }
+      ],
+      "updateAction": "no_action",
+      "deleteAction": "restrict",
+      "matchType": "simple",
+      "deferrable": false,
+      "initiallyDeferred": false
+    }
+  ],
+  "projectId": "01a0f7ee-8c95-76e9-8a92-8ab9cac36b17"
+}
+```
+
+Actual preview change, including stable designed constraint/reference IDs:
+
+```json
+{
+  "type": "alter_constraint",
+  "commandId": "membership",
+  "subjectId": "3c6ca83e-d403-5ebb-a351-3b7852681ad9",
+  "before": {},
+  "after": {
+    "columnPairs": [
+      {
+        "fromColumnId": "01a0f7ee-cbb6-703d-8ba4-51dda0eb6cf4",
+        "toColumnId": "01a0f7ee-cba6-7cc8-a8eb-87ff6155732e"
+      },
+      {
+        "fromColumnId": "01a0f7ee-cbbc-7191-9aa5-ab8bb009a720",
+        "toColumnId": "01a0f7ee-cba9-7d91-8502-ba686f6043e7"
+      }
+    ],
+    "deleteAction": {
+      "status": "known",
+      "value": "restrict"
+    },
+    "matchType": {
+      "status": "known",
+      "value": "simple"
+    },
+    "updateAction": {
+      "status": "known",
+      "value": "no_action"
+    }
+  },
+  "generatedIds": {
+    "constraintId": "3c6ca83e-d403-5ebb-a351-3b7852681ad9",
+    "edgeId": "c9fb4dab-8b05-5fb4-b1de-b6bc228e0687"
+  }
+}
+```
+
+The pinned ER read after apply returns status:proposed and
+runtimeStatus:unverified. Bounds retain inherited uniqueness and any limitations.
+Expression, conditional, stale or incomplete uniqueness cannot establish a global
+key. Proposed FK intent does not prove orphan-free data or action safety.
+
+The following authored migration-plan criterion supplements required checks:
+
+```json
+{
+  "commands": [
+    {
+      "type": "set_criteria",
+      "commandId": "rollout",
+      "reason": "Capture rollout planning",
+      "criteria": [
+        {
+          "key": "rollback",
+          "kind": "migration_plan",
+          "targetIds": [
+            "01a0f7ee-cbb2-7eb8-b266-a6b56e679a0d"
+          ],
+          "description": "Review rollout and rollback before implementation"
+        }
+      ]
+    }
+  ],
+  "projectId": "01a0f7ee-8c95-76e9-8a92-8ab9cac36b17",
+  "proposalId": "01a0f7ee-e173-71b2-aa04-e1bf1c0ec9e9",
+  "expectedVersion": 3,
+  "draftRevisionId": "01a0f7ef-0f67-78d9-881b-ec2e008aceec"
+}
+```
+
+Actual saved criteria are all unverified:
+
+```json
+[
+  {
+    "key": "required:3e07f95cfe0c4b3b6f50b78e8f63497600cee07252606e135d466e1b63ff9042:existing_data",
+    "kind": "existing_data",
+    "targetIds": [
+      "01a0f7ee-cbc5-77e3-b97c-7dfaf87d468b"
+    ],
+    "description": "Check existing nulls and backfill before enforcing NOT NULL",
+    "origin": "required",
+    "status": "unverified",
+    "commandId": "require-user"
+  },
+  {
+    "key": "required:3e07f95cfe0c4b3b6f50b78e8f63497600cee07252606e135d466e1b63ff9042:writers",
+    "kind": "writers",
+    "targetIds": [
+      "01a0f7ee-cbc5-77e3-b97c-7dfaf87d468b"
+    ],
+    "description": "Identify all writers and verify omission/null handling; writer coverage is unknown",
+    "origin": "required",
+    "status": "unverified",
+    "commandId": "require-user"
+  },
+  {
+    "key": "required:3e07f95cfe0c4b3b6f50b78e8f63497600cee07252606e135d466e1b63ff9042:migration_plan",
+    "kind": "migration_plan",
+    "targetIds": [
+      "01a0f7ee-cbc5-77e3-b97c-7dfaf87d468b"
+    ],
+    "description": "Review migration, rollout and rollback against the pinned baseline",
+    "origin": "required",
+    "status": "unverified",
+    "commandId": "require-user"
+  },
+  {
+    "key": "required:bf5cf59e356652253268c604cbf8df8cfdb03a4a0d32b27ad158e581709c80e4:referential_integrity",
+    "kind": "referential_integrity",
+    "targetIds": [
+      "3c6ca83e-d403-5ebb-a351-3b7852681ad9",
+      "01a0f7ee-cbb2-7eb8-b266-a6b56e679a0d",
+      "01a0f7ee-cba3-7d26-a56f-6c4506a52bd4"
+    ],
+    "description": "Check existing orphan rows and ordered pair values before enforcing the FK",
+    "origin": "required",
+    "status": "unverified",
+    "commandId": "membership"
+  },
+  {
+    "key": "required:bf5cf59e356652253268c604cbf8df8cfdb03a4a0d32b27ad158e581709c80e4:target_uniqueness",
+    "kind": "target_uniqueness",
+    "targetIds": [
+      "3c6ca83e-d403-5ebb-a351-3b7852681ad9",
+      "01a0f7ee-cbb2-7eb8-b266-a6b56e679a0d",
+      "01a0f7ee-cba3-7d26-a56f-6c4506a52bd4"
+    ],
+    "description": "Verify actual target uniqueness and FK enforcement against the selected baseline",
+    "origin": "required",
+    "status": "unverified",
+    "commandId": "membership"
+  },
+  {
+    "key": "required:bf5cf59e356652253268c604cbf8df8cfdb03a4a0d32b27ad158e581709c80e4:writers",
+    "kind": "writers",
+    "targetIds": [
+      "3c6ca83e-d403-5ebb-a351-3b7852681ad9",
+      "01a0f7ee-cbb2-7eb8-b266-a6b56e679a0d",
+      "01a0f7ee-cba3-7d26-a56f-6c4506a52bd4"
+    ],
+    "description": "Identify every source/target writer and verify update/delete actions; writer coverage is unknown",
+    "origin": "required",
+    "status": "unverified",
+    "commandId": "membership"
+  },
+  {
+    "key": "required:bf5cf59e356652253268c604cbf8df8cfdb03a4a0d32b27ad158e581709c80e4:migration_plan",
+    "kind": "migration_plan",
+    "targetIds": [
+      "3c6ca83e-d403-5ebb-a351-3b7852681ad9",
+      "01a0f7ee-cbb2-7eb8-b266-a6b56e679a0d",
+      "01a0f7ee-cba3-7d26-a56f-6c4506a52bd4"
+    ],
+    "description": "Review FK migration, rollout and rollback against the pinned baseline",
+    "origin": "required",
+    "status": "unverified",
+    "commandId": "membership"
+  },
+  {
+    "key": "rollback",
+    "kind": "migration_plan",
+    "targetIds": [
+      "01a0f7ee-cbb2-7eb8-b266-a6b56e679a0d"
+    ],
+    "description": "Review rollout and rollback before implementation",
+    "origin": "authored",
+    "status": "unverified",
+    "commandId": "rollout"
+  }
+]
+```
+
+After those later saves and a database restart, replaying the original
+NOT NULL apply request/key returned byte-for-byte the original receipt.
+Creation replay also returned its original acknowledgement. Reading the old
+proposal revision still returned its immutable original draft; current CAS
+version was 4. A later source head is reported as baseOutdated, without rebasing
+the proposal. Ready/rebase belongs to B4; measured checks and impact are later.

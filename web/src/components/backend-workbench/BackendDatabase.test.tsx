@@ -11,8 +11,78 @@ import type {
   BackendRevisionCoverage,
 } from "@/api/generated/schemas";
 import { BackendDatabase } from "./BackendDatabase";
+import { proposalDetail } from "./backendProposalTestFixtures";
 
 vi.mock("./BackendDatabaseGraph", () => ({ BackendDatabaseGraph: () => <div>ER canvas</div> }));
+
+it("uses old baseline objects when a proposal is selected under a newer source head", async () => {
+  const user = userEvent.setup();
+  const migration: BackendNode = {
+    id: "new-migration",
+    externalKey: "migration:new",
+    kind: "migration",
+    name: "003_column_change",
+    parentId: "db",
+    evidenceIds: ["proof"],
+    attributes: {
+      facets: {
+        sql: {
+          ...common,
+          sourceKind: "migration",
+          order: { status: "known", value: 3 },
+          parentIds: [],
+          definition: "ALTER TABLE orders ADD COLUMN note text;",
+          changes: [],
+          derivationStatus: "complete",
+        },
+      },
+    },
+  };
+  const currentNodes = [...nodes, migration];
+  const original = fakeServer({
+    graph: (input) =>
+      input.recordType === "nodes"
+        ? json(200, {
+            nodes: input.revisionId === "base" ? nodes : currentNodes,
+            edges: [],
+            nextCursor: "",
+          })
+        : undefined,
+  });
+  vi.stubGlobal("fetch", async (url: RequestInfo | URL, init?: RequestInit) => {
+    const pathname = new URL(String(url), "http://localhost").pathname;
+    if (pathname.endsWith("/proposals"))
+      return json(200, { items: [proposalDetail.proposal], nextCursor: "" });
+    if (pathname.endsWith("/proposals/proposal"))
+      return json(200, {
+        ...proposalDetail,
+        baseOutdated: true,
+        currentSourceRevisionId: "current",
+      });
+    return original(url, init);
+  });
+  renderWithProviders(
+    <BackendDatabase projectId="project" revisionId="current" repositoryId="repository" />,
+  );
+  expect(
+    await screen.findByRole("button", { name: "Открыть миграцию 003_column_change" }),
+  ).toBeInTheDocument();
+  await screen.findByRole("option", { name: "Required users" });
+  await user.selectOptions(screen.getByLabelText("Предложение изменений"), "proposal");
+  await screen.findByText(/Источник обновился/);
+  await waitFor(() =>
+    expect(
+      screen.queryByRole("button", { name: "Открыть миграцию 003_column_change" }),
+    ).not.toBeInTheDocument(),
+  );
+  const objects = await screen.findByLabelText("Хранилище и другие объекты схемы");
+  expect(
+    within(objects).getByRole("button", { name: "Открыть хранилище Orders" }),
+  ).toBeInTheDocument();
+  expect(
+    within(objects).queryByRole("button", { name: "Открыть миграцию 003_column_change" }),
+  ).not.toBeInTheDocument();
+});
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.restoreAllMocks();

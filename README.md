@@ -17,7 +17,7 @@ it, it only gives a quick way in.
 | who | where |
 |---|---|
 | an operator at the admin panel | [`docs/USER-GUIDE.md`](docs/USER-GUIDE.md) (Russian, the product's language) — also rendered inside the panel at `/guide` |
-| an agent driving mocker over MCP | [`mocker`](skills/mocker/SKILL.md) routes mock configuration, API design and backend project tasks; [`mocker-backend-import`](skills/mocker-backend-import/SKILL.md) independently supplies foundation or relational source import/reconciliation and pinned comparison; [`mocker-backend-database`](skills/mocker-backend-database/SKILL.md) supplies pinned database/ER, drift and evidence inspection. The server serves the same procedures and focused references through `get_guide`; `initialize` gives a short orientation |
+| an agent driving mocker over MCP | [`mocker`](skills/mocker/SKILL.md) routes mock configuration, API design and backend project tasks; [`mocker-backend-import`](skills/mocker-backend-import/SKILL.md) independently supplies foundation or relational source import/reconciliation and pinned comparison; [`mocker-backend-database`](skills/mocker-backend-database/SKILL.md) supplies pinned database/ER inspection and typed NULL/NOT NULL or FK proposals with preview/apply and unverified criteria. The server serves the same procedures and focused references through `get_guide`; `initialize` gives a short orientation |
 | a script or CI job | [`skills/mocker/references/http.md`](skills/mocker/references/http.md) — login, CSRF, spec import, asset upload, the `/__mocker/state` calls a test suite makes |
 | someone changing mocker itself | [`CLAUDE.md`](CLAUDE.md), [`HISTORY.md`](HISTORY.md), [`CARVE-OUTS.md`](CARVE-OUTS.md), and `DESIGN.md` above |
 
@@ -28,7 +28,7 @@ Choose root-only, either leaf alone, or the three-package bundle in the reposito
 npx -y -p skills skills add /path/to/mocker --skill mocker -a claude-code
 # Import only: source-backed foundation or relational import/reimport and pinned comparison.
 npx -y -p skills skills add /path/to/mocker --skill mocker-backend-import -a claude-code
-# Inspection only: pinned database/ER, facet drift, coverage and evidence.
+# Database inspection and typed schema proposals with pinned preview/apply.
 npx -y -p skills skills add /path/to/mocker --skill mocker-backend-database -a claude-code
 ```
 
@@ -41,8 +41,9 @@ selected immutable guide set and verifies each topic's actual workflow owner. A 
 server capabilities. Agents without local skills can discover the same procedures
 through MCP. Relational tasks require compatible schema2/profile/capabilities; a
 foundation-only fallback does not qualify. PostgreSQL/SQLite definitions are
-source data; no inspected SQL, migration or application executes. Typed database
-edits/proposals remain B1.2, and endpoint lineage/impact are unavailable.
+source data; no inspected SQL, migration or application executes. Typed database proposals require database workflow2 and proposal-relational-v1
+view support. Existing data, writers and migration execution remain unverified;
+endpoint lineage and impact are unavailable.
 [`docs/README.md`](docs/README.md) is the index.
 
 ## What P0 does and what it does not yet

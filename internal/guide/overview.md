@@ -6,8 +6,8 @@ metadata:
   workflowVersion: "1"
   requiredModelSchemaVersions: "[]"
   requiredCapabilities: "[]"
-  guideSetId: "sha256:7b39ceb9b6f7089c14356d2d9f70068abaa63f72e23edc3293307d66dbe7ebc8"
-  manifestHash: "sha256:7b39ceb9b6f7089c14356d2d9f70068abaa63f72e23edc3293307d66dbe7ebc8"
+  guideSetId: "sha256:54ad47e9cec57296780d3ef881fa90d192c4bb467fcdcde124bd7df8692776de"
+  manifestHash: "sha256:54ad47e9cec57296780d3ef881fa90d192c4bb467fcdcde124bd7df8692776de"
 ---
 
 # mocker
@@ -17,7 +17,7 @@ mocker provides OpenAPI mocks, API design, saved sequences and backend projects.
 Backend projects support metadata, immutable revisions and the first source-backed
 foundation or PostgreSQL/SQLite relational source-facet import, explicit
 same-provider snapshot reconciliation and pinned database/ER, structural
-comparison and evidence reads. Typed database edits/proposals remain B1.2;
+comparison and evidence reads. Typed NULL/NOT NULL and FK proposals use separate pinned preview/apply and unverified criteria;
 endpoint-flow/lineage, incremental import and impact remain future work. For mocks, one OpenAPI
 spec is imported once; every WORKSPACE
 bound to it serves the spec's routes on its own host with deterministic
@@ -66,7 +66,7 @@ fields realistic without pinning the whole body.
 
 Before `list_workspaces`, classify the task as mock response configuration,
 API design, saved sequence, backend project preparation, source snapshot
-import/reimport, or pinned database/schema inspection. Mock configuration
+import/reimport, pinned database/schema inspection, or typed database proposal design. Mock configuration
 uses the workspace procedure below; API design and saved sequences begin with
 `references/design.md`. Backend project preparation begins with
 `references/backend/overview.md` or `get_guide {topic:"backend-overview"}` and
@@ -80,14 +80,16 @@ generated compatibility copy `references/backend/import.md`, or discover
 any import write; its model/protocol/recovery/examples details come from the same
 selected server guide set. A relational import requires schema2/profile/capability
 support; a foundation-only compatible fallback cannot write a database task.
-Database/ER inspection selects the independent `mocker-backend-database` leaf,
+Database/ER inspection and proposal design select the independent `mocker-backend-database` leaf,
 the generated root alias `references/backend/database-workflow.md`, or advertised
 `backend-database` entrypoint. Select its complete compatible pinned procedure,
 then load database-reference/model/recovery only as needed. Shared topics have
 one canonical workflow owner; explicitly select/verify that owner's supported
 identity in this same global set and check its returned tuple/contentHash.
-Database proposals/typed NOT NULL or FK edits are unavailable in B1.1; inspect
-the existing declaration without inventing proposal tools or executing DDL.
+Before any proposal write select database workflow2, proposal-relational-v1 view,
+exact guide set/hash and proposal/edit capabilities. Workflow1 is inspection-only;
+a complete compatible server fallback is required for mismatched local metadata.
+No compatible set means no proposal writes. Source import stays on import3.
 Mock response changes keep the workspace procedure and
 do not need source import or a full backend topic load.
 

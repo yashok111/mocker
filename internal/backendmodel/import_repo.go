@@ -160,12 +160,12 @@ func stagingBytes(ctx context.Context, tx *sql.Tx, pid string) (int64, error) {
       (SELECT COALESCE(SUM(length(a.external_key)+length(a.source_key)+128),0) FROM backend_import_aliases a JOIN backend_import_sessions s ON s.id=a.session_id WHERE s.project_id=?)`, pid, pid, pid).Scan(&extra)
 	return n + extra, err
 }
-func checkStaging(ctx context.Context, tx *sql.Tx, pid string, reserved int64) error {
+func (r *Repo) checkStaging(ctx context.Context, tx *sql.Tx, pid string, reserved int64) error {
 	n, err := stagingBytes(ctx, tx, pid)
 	if err != nil {
 		return err
 	}
-	if n+reserved > MaxProjectStagingBytes {
+	if n+r.db.TransientBytes("backend:"+pid)+reserved > MaxProjectStagingBytes {
 		return limitFault("Project staging byte limit exceeded")
 	}
 	return nil
@@ -229,7 +229,7 @@ func (r *Repo) BeginImport(ctx context.Context, pid string, in BeginImportInput)
 		if err != nil {
 			return err
 		}
-		return checkStaging(ctx, tx, pid, int64(len(b)))
+		return r.checkStaging(ctx, tx, pid, int64(len(b)))
 	})
 	if err != nil {
 		return nil, err
@@ -380,7 +380,7 @@ func (r *Repo) PutImportBatch(ctx context.Context, pid, sid, bid string, in Impo
 		if total+int64(len(manifestBytes)+len(inventoryBytes)) > MaxRevisionBytes {
 			return limitFault("Revision semantic byte limit exceeded")
 		}
-		return checkStaging(ctx, tx, pid, 0)
+		return r.checkStaging(ctx, tx, pid, 0)
 	})
 	if err != nil {
 		return nil, err
@@ -412,7 +412,7 @@ func (r *Repo) AbortImport(ctx context.Context, pid, sid string, in AbortImportI
 			return err
 		}
 		b, _ := json.Marshal(result)
-		return checkStaging(ctx, tx, pid, int64(len(b)))
+		return r.checkStaging(ctx, tx, pid, int64(len(b)))
 	})
 	if err != nil {
 		return nil, err

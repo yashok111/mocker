@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   getBackendEvidence,
+  getBackendProposalEvidence,
   queryBackendGraph,
 } from "@/api/generated/backend-projects/backend-projects";
 import type {
@@ -19,6 +20,8 @@ import type {
   BackendMigrationFacet,
   BackendRoutineFacet,
   BackendReferenceFacet,
+  BackendProposalProjectedNode,
+  BackendProposalProjectedEdge,
 } from "@/api/generated/schemas";
 
 export type DatabaseContext = {
@@ -26,7 +29,10 @@ export type DatabaseContext = {
   revisionId: string;
   datastoreId: string;
   facetKey: string;
+  proposal?: { proposalId: string; proposalRevisionId: string };
 };
+export const databaseTarget = (context: DatabaseContext) =>
+  context.proposal ? { proposal: context.proposal } : { revisionId: context.revisionId };
 export type DatabaseSelection = { type: "node" | "edge"; id: string; revisionId?: string };
 type Facet =
   | BackendDatastoreFacet
@@ -46,6 +52,7 @@ export const databaseKey = (context: DatabaseContext) =>
     context.revisionId,
     context.datastoreId,
     context.facetKey,
+    ...(context.proposal ? [context.proposal.proposalId, context.proposal.proposalRevisionId] : []),
   ] as const;
 
 export function useDatabaseCancellation(key: readonly string[]) {
@@ -75,6 +82,8 @@ export async function readDatabaseGraph(
 ) {
   const nodes: BackendNode[] = [],
     edges: BackendEdge[] = [],
+    proposalNodes: BackendProposalProjectedNode[] = [],
+    proposalEdges: BackendProposalProjectedEdge[] = [],
     seen = new Set<string>();
   let cursor = "";
   do {
@@ -88,11 +97,15 @@ export async function readDatabaseGraph(
     if (response.status !== 200) throw new Error("Не удалось загрузить полный список объектов");
     nodes.push(...response.data.nodes);
     edges.push(...response.data.edges);
+    if (response.data.proposalProjection) {
+      proposalNodes.push(...response.data.proposalProjection.nodes);
+      proposalEdges.push(...response.data.proposalProjection.edges);
+    }
     cursor = response.data.nextCursor;
     if (cursor && seen.has(cursor)) throw new Error("Повтор страницы: список объектов неполон");
     seen.add(cursor);
   } while (cursor);
-  return { nodes, edges };
+  return { nodes, edges, proposalNodes, proposalEdges };
 }
 
 export async function readDatabaseEvidence(
@@ -105,12 +118,16 @@ export async function readDatabaseEvidence(
   let cursor = "";
   do {
     signal.throwIfAborted();
-    const response = await getBackendEvidence(
-      context.projectId,
-      context.revisionId,
-      { subjectId, limit: 500, ...(cursor ? { cursor } : {}) },
-      { signal },
-    );
+    const params = { subjectId, limit: 500, ...(cursor ? { cursor } : {}) };
+    const response = context.proposal
+      ? await getBackendProposalEvidence(
+          context.projectId,
+          context.proposal.proposalId,
+          context.proposal.proposalRevisionId,
+          params,
+          { signal },
+        )
+      : await getBackendEvidence(context.projectId, context.revisionId, params, { signal });
     signal.throwIfAborted();
     if (response.status !== 200) throw new Error("Основания загружены не полностью");
     items.push(...response.data.items);
@@ -160,6 +177,8 @@ export function databaseStatus(status: string) {
         explicit: "Явно объявлено",
         inferred: "Предположение",
         unresolved: "Цель не установлена",
+        proposed: "Предложено",
+        unverified: "Не проверено",
       } as Record<string, string>
     )[status] ?? status
   );

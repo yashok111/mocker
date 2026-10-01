@@ -167,16 +167,19 @@ func (s *Server) handleGetBackendCapabilities(w http.ResponseWriter, r *http.Req
 		return
 	}
 	httpx.JSON(w, 200, map[string]any{
-		"modelSchemaVersions":   backendmodel.SupportedModelSchemaVersions(),
-		"workflowVersions":      guide.BackendWorkflows(),
-		"features":              append(backendmodel.Features(), "backend-relational-import", "backend-database-query", "backend-database-er"),
-		"providerProfiles":      []string{backendmodel.GraphProfile, backendmodel.RelationalProfile},
-		"supportedNodeKinds":    backendmodel.SupportedNodeKindsForProfile(backendmodel.RelationalProfile),
-		"supportedEdgeKinds":    backendmodel.SupportedEdgeKindsForProfile(backendmodel.RelationalProfile),
-		"guideSetId":            guide.CurrentGuideSetID(),
-		"importModes":           []string{"initial", "reconcile"},
-		"importCommands":        []string{"upsert_node", "upsert_edge", "upsert_evidence", "remove", "map_identity", "delete_assertion"},
-		"reconciliationProfile": map[string]string{"version": "1", "profile": backendmodel.GraphProfile, "scope": "whole-repository"},
+		"modelSchemaVersions":      backendmodel.SupportedModelSchemaVersions(),
+		"workflowVersions":         guide.BackendWorkflows(),
+		"features":                 append(backendmodel.Features(), "backend-relational-import", "backend-database-query", "backend-database-er", "backend-db-proposals", "backend-db-typed-edits"),
+		"providerProfiles":         []string{backendmodel.GraphProfile, backendmodel.RelationalProfile},
+		"supportedNodeKinds":       backendmodel.SupportedNodeKindsForProfile(backendmodel.RelationalProfile),
+		"supportedEdgeKinds":       backendmodel.SupportedEdgeKindsForProfile(backendmodel.RelationalProfile),
+		"guideSetId":               guide.CurrentGuideSetID(),
+		"viewSchemaVersions":       []string{backendmodel.ProposalDocumentVersion},
+		"proposalDocumentVersions": []string{backendmodel.ProposalDocumentVersion},
+		"proposalCommands":         []map[string]string{{"type": "alter_column", "property": "nullable"}, {"type": "alter_constraint", "action": "create", "constraintKind": "foreign_key"}, {"type": "alter_constraint", "action": "update", "constraintKind": "foreign_key"}, {"type": "set_criteria"}},
+		"importModes":              []string{"initial", "reconcile"},
+		"importCommands":           []string{"upsert_node", "upsert_edge", "upsert_evidence", "remove", "map_identity", "delete_assertion"},
+		"reconciliationProfile":    map[string]string{"version": "1", "profile": backendmodel.GraphProfile, "scope": "whole-repository"},
 		"profileCapabilities": []map[string]any{
 			{"profile": backendmodel.GraphProfile, "modelSchemaVersions": []string{backendmodel.SchemaVersion}, "nodeKinds": backendmodel.SupportedNodeKindsForProfile(backendmodel.GraphProfile), "edgeKinds": backendmodel.SupportedEdgeKindsForProfile(backendmodel.GraphProfile), "importModes": []string{"initial", "reconcile"}},
 			{"profile": backendmodel.RelationalProfile, "modelSchemaVersions": []string{backendmodel.RelationalSchemaVersion}, "nodeKinds": backendmodel.SupportedNodeKindsForProfile(backendmodel.RelationalProfile), "edgeKinds": backendmodel.SupportedEdgeKindsForProfile(backendmodel.RelationalProfile), "importModes": []string{"initial", "reconcile"}},
@@ -193,6 +196,11 @@ func (s *Server) handleGetBackendCapabilities(w http.ResponseWriter, r *http.Req
 			"maxRevisionNodes": backendmodel.MaxRevisionNodes, "maxRevisionEdges": backendmodel.MaxRevisionEdges, "maxRevisionEvidence": backendmodel.MaxRevisionEvidence,
 			"maxRevisionPayloadBytes": backendmodel.MaxRevisionBytes, "maxProjectStagingBytes": backendmodel.MaxProjectStagingBytes,
 			"maxOpenImportSessions": backendmodel.MaxOpenImportSessions, "defaultGraphPageSize": backendmodel.DefaultGraphPageSize, "maxGraphPageSize": backendmodel.MaxGraphPageSize,
-			"maxRelationalFacets": backendmodel.MaxRelationalFacets, "maxRelationalOrderedColumns": backendmodel.MaxRelationalOrderedColumns, "maxRelationalIndexTerms": backendmodel.MaxRelationalIndexTerms, "maxRelationalNativeBytes": backendmodel.MaxRelationalNativeBytes, "maxRelationalReferences": backendmodel.MaxRelationalReferences, "defaultDatabasePageSize": backendmodel.DefaultGraphPageSize, "maxDatabasePageSize": backendmodel.MaxGraphPageSize},
+			"maxRelationalFacets": backendmodel.MaxRelationalFacets, "maxRelationalOrderedColumns": backendmodel.MaxRelationalOrderedColumns, "maxRelationalIndexTerms": backendmodel.MaxRelationalIndexTerms, "maxRelationalNativeBytes": backendmodel.MaxRelationalNativeBytes, "maxRelationalReferences": backendmodel.MaxRelationalReferences, "defaultDatabasePageSize": backendmodel.DefaultGraphPageSize, "maxDatabasePageSize": backendmodel.MaxGraphPageSize,
+			"maxProposalCommands":                  backendmodel.MaxProposalCommands,
+			"maxProposalBatchBytes":                min(s.cfg.MaxBody, int64(backendmodel.MaxProposalCommandBytes)),
+			"maxProposalAuthoredCriteria":          backendmodel.MaxProposalCriteria,
+			"maxProposalReasonBytes":               backendmodel.MaxProposalTextBytes,
+			"maxProposalCriterionDescriptionBytes": backendmodel.MaxProposalTextBytes},
 	})
 }

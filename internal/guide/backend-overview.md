@@ -6,8 +6,8 @@ metadata:
   workflowVersion: "1"
   requiredModelSchemaVersions: "[\"1\"]"
   requiredCapabilities: "[\"backend-projects\",\"backend-project-metadata\",\"backend-revisions\"]"
-  guideSetId: "sha256:7b39ceb9b6f7089c14356d2d9f70068abaa63f72e23edc3293307d66dbe7ebc8"
-  manifestHash: "sha256:7b39ceb9b6f7089c14356d2d9f70068abaa63f72e23edc3293307d66dbe7ebc8"
+  guideSetId: "sha256:54ad47e9cec57296780d3ef881fa90d192c4bb467fcdcde124bd7df8692776de"
+  manifestHash: "sha256:54ad47e9cec57296780d3ef881fa90d192c4bb467fcdcde124bd7df8692776de"
 ---
 
 # Backend project preparation
@@ -25,13 +25,13 @@ Select that complete workflow before import writes. This project-preparation
 procedure does not import sources. Import's backend-model/import-protocol/recovery/
 examples topics use its selected set and import owner identity; relational
 imports additionally load the database-reference topic through the supported
-database v1 owner in that same global set. Database inspection selects the
+database v2 owner in that same global set. Database inspection selects the
 independent database leaf or pinned backend-database entrypoint. Every shared
 topic is verified against its actual canonical owner manifest/tuple/contentHash;
 this backend-overview topic keeps the project-preparation identity. Project
 preparation still requires schema1, including its empty initial revision; it
 need not require schema2 to prepare a project. Database typed edits/proposals
-remain B1.2; jobs are future functionality.
+use the separately selected database2 workflow; measured writer checks, lineage, impact and jobs remain future functionality.
 
 ## Before the first write
 

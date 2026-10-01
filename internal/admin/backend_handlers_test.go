@@ -35,6 +35,7 @@ func TestBackendCapabilitiesAdvertiseUsableWorkflow(t *testing.T) {
 	if err != nil || status != 200 {
 		t.Fatalf("capabilities: %d %s %v", status, data, err)
 	}
+	validateBackendImportResponse(t, "GET", "/api/backend-projects/capabilities", data)
 	var caps struct {
 		Features   []string         `json:"features"`
 		Workflows  []guide.Workflow `json:"workflowVersions"`

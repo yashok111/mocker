@@ -37,7 +37,7 @@ func addBackendImportTools(s *sdk.Server, lb *loopback) {
 		{"get_backend_coverage", "GET /api/backend-projects/{id}/revisions/{rid}/coverage", "Reads inventory gaps, coverage and source snapshots at a pinned immutable revision. Unknown denominator and partial coverage do not claim execution or test coverage.", `{"type":"object","additionalProperties":false,"required":["projectId","revisionId"],"properties":{"projectId":{"type":"string","format":"uuid"},"revisionId":{"type":"string","format":"uuid"}}}`, true, true},
 	} {
 		var inputSchema map[string]any
-		contract := map[string]string{"begin_backend_import": "BeginBackendImportRequest", "put_backend_import_batch": "PutBackendImportBatchRequest", "query_backend_database": "QueryBackendDatabaseRequest"}[spec.name]
+		contract := map[string]string{"begin_backend_import": "BeginBackendImportRequest", "put_backend_import_batch": "PutBackendImportBatchRequest", "query_backend_database": "QueryBackendDatabaseRequest", "query_backend_graph": "QueryBackendGraphRequest"}[spec.name]
 		if contract != "" {
 			var err error
 			inputSchema, err = api.BackendSchema(contract)
@@ -55,6 +55,10 @@ func addBackendImportTools(s *sdk.Server, lb *loopback) {
 			if err := decoder.Decode(&inputSchema); err != nil {
 				panic(err)
 			}
+		}
+
+		if spec.name == "get_backend_node" || spec.name == "get_backend_evidence" || spec.name == "get_backend_coverage" {
+			backendReadToolTarget(inputSchema)
 		}
 		inputSchema["type"] = "object"
 		tool := &sdk.Tool{Name: spec.name, Description: spec.description, InputSchema: inputSchema, Annotations: &sdk.ToolAnnotations{ReadOnlyHint: spec.readOnly, IdempotentHint: spec.idempotent}}
@@ -106,8 +110,21 @@ func addBackendImportTool(s *sdk.Server, lb *loopback, tool *sdk.Tool, route str
 				return designScenarioToolErrorResult(fmt.Errorf("evidenceId cannot combine with cursor")), nil
 			}
 		}
+
+		selectedRoute := route
+		var selectedProposal *backendmodel.ProposalReadTarget
+		if raw, supplied := in["proposal"]; supplied {
+			selectedProposal = new(backendmodel.ProposalReadTarget)
+			if err := json.Unmarshal(raw, selectedProposal); err != nil {
+				return designScenarioToolErrorResult(err), nil
+			}
+			if tool.Name == "get_backend_node" || tool.Name == "get_backend_evidence" || tool.Name == "get_backend_coverage" {
+				selectedRoute = "GET /api/backend-projects/{id}/proposals/{pid}/revisions/{prid}/" + map[string]string{"get_backend_node": "nodes/{nid}", "get_backend_evidence": "evidence", "get_backend_coverage": "coverage"}[tool.Name]
+				delete(in, "proposal")
+			}
+		}
 		var params []any
-		for _, key := range []string{"projectId", "importId", "revisionId", "nodeId", "batchId"} {
+		for _, key := range []string{"projectId", "importId", "proposalId", "revisionId", "nodeId", "batchId"} {
 			raw, ok := in[key]
 			if !ok {
 				continue
@@ -132,14 +149,17 @@ func addBackendImportTool(s *sdk.Server, lb *loopback, tool *sdk.Tool, route str
 				}
 			}
 			params = append(params, value)
+			if key == "projectId" && selectedProposal != nil && selectedRoute != route {
+				params = append(params, selectedProposal.ProposalID, selectedProposal.ProposalRevisionID)
+			}
 			delete(in, key)
 		}
-		method, path := toolPath(tool.Name, route, params...)
+		method, path := toolPath(tool.Name, selectedRoute, params...)
 		var body []byte
 		var err error
 		if method == "GET" {
 			q := url.Values{}
-			for _, key := range []string{"limit", "cursor", "subjectId", "evidenceId", "previewVersion", "recordType"} {
+			for _, key := range []string{"limit", "cursor", "subjectId", "evidenceId", "previewVersion", "recordType", "baseRevisionId", "status", "proposalRevisionId"} {
 				if raw, ok := in[key]; ok {
 					if key == "limit" || key == "previewVersion" {
 						var value int64
@@ -202,7 +222,7 @@ func compileBackendImportToolSchema(tool *sdk.Tool) (*jsonschema.Schema, error) 
 
 // Path parameters join each strict request union without weakening body schemas.
 func backendToolPathSchema(schema map[string]any, ids []string) {
-	if alternatives, ok := schema["oneOf"].([]any); ok {
+	if alternatives, ok := schema["oneOf"].([]any); ok && schema["properties"] == nil {
 		for _, alternative := range alternatives {
 			backendToolPathSchema(alternative.(map[string]any), ids)
 		}

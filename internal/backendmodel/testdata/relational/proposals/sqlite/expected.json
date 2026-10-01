@@ -1,0 +1,9 @@
+{
+  "nullableColumnKey":"column:orders:user_id",
+  "nullable":false,
+  "nativeType":"INTEGER",
+  "requiredCriteria":7,
+  "supplementalCriteria":1,
+  "commandIds":["require-user","membership","rollout"],
+  "pairKeys":[["column:orders:tenant_id","column:users:tenant_id"],["column:orders:user_id","column:users:id"]]
+}

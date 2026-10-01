@@ -118,7 +118,7 @@ whole-repository combined graph under the same sole provider, not one provider
 per SQL/ORM facet. Provider profiles are exactly foundation plus relational.
 A proven SQL/ORM match shares one stable subject; names alone never merge objects.
 For exact fields and ER semantics load `backend-database-reference` from the same
-set after selecting/verifying the supported database v1 owner identity.
+set after selecting/verifying the supported database v2 owner identity.
 
 A facet is a stable map entry keyed by facetKey (1–200 printable characters),
 with sourceKind sql/orm/migration, dialect postgresql/sqlite, analysisStatus
@@ -183,3 +183,13 @@ prove absence. Pair fields are leftFacetKey/rightFacetKey/status/changedPaths/
 definitionDifferent, with lexical facet-pair order and sorted facet-relative
 JSON Pointer paths. Source/proof/freshness/completeness metadata is not a semantic
 changedPath; native-definition differences use their separate flag.
+
+## Desired database views
+
+Proposal document/view proposal-relational-v1 carries intent over an immutable
+source schema2 baseline. It is never import data or source schema3. Shared reads
+select exclusive source revisionId or exact proposal/proposalRevisionId. Keep
+sourceRecord, desired effectiveFacet, propertyOrigins and unverified criteria
+separate. New designed objects have no sourceRecord or source evidence. Read the
+verified database2 reference for commands, projection and ER assumptions. Import3
+continues to mutate only source snapshots with its original receipts and CAS.

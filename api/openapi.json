@@ -13666,6 +13666,12 @@
             "items": {
               "$ref": "#/components/schemas/BackendGuideTopic"
             }
+          },
+          "requiredViewSchemaVersions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         }
       },
@@ -13687,7 +13693,10 @@
           "comparisonVersion",
           "profileCapabilities",
           "profileExtensions",
-          "reconciliationProfiles"
+          "reconciliationProfiles",
+          "viewSchemaVersions",
+          "proposalDocumentVersions",
+          "proposalCommands"
         ],
         "properties": {
           "modelSchemaVersions": {
@@ -13745,7 +13754,12 @@
               "maxRelationalNativeBytes",
               "maxRelationalReferences",
               "defaultDatabasePageSize",
-              "maxDatabasePageSize"
+              "maxDatabasePageSize",
+              "maxProposalCommands",
+              "maxProposalBatchBytes",
+              "maxProposalAuthoredCriteria",
+              "maxProposalReasonBytes",
+              "maxProposalCriterionDescriptionBytes"
             ],
             "properties": {
               "maxNameLength": {
@@ -13897,6 +13911,36 @@
                 "format": "int64",
                 "minimum": 1,
                 "maximum": 9223372036854775807
+              },
+              "maxProposalCommands": {
+                "type": "integer",
+                "format": "int64",
+                "minimum": 1,
+                "maximum": 9223372036854775807
+              },
+              "maxProposalBatchBytes": {
+                "type": "integer",
+                "format": "int64",
+                "minimum": 1,
+                "maximum": 9223372036854775807
+              },
+              "maxProposalAuthoredCriteria": {
+                "type": "integer",
+                "format": "int64",
+                "minimum": 1,
+                "maximum": 9223372036854775807
+              },
+              "maxProposalReasonBytes": {
+                "type": "integer",
+                "format": "int64",
+                "minimum": 1,
+                "maximum": 9223372036854775807
+              },
+              "maxProposalCriterionDescriptionBytes": {
+                "type": "integer",
+                "format": "int64",
+                "minimum": 1,
+                "maximum": 9223372036854775807
               }
             }
           },
@@ -13980,6 +14024,126 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/BackendReconciliationProfile"
+            }
+          },
+          "viewSchemaVersions": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "proposal-relational-v1"
+              ]
+            }
+          },
+          "proposalDocumentVersions": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "proposal-relational-v1"
+              ]
+            }
+          },
+          "proposalCommands": {
+            "type": "array",
+            "items": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "type",
+                    "property"
+                  ],
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "enum": [
+                        "alter_column"
+                      ]
+                    },
+                    "property": {
+                      "type": "string",
+                      "enum": [
+                        "nullable"
+                      ]
+                    }
+                  }
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "type",
+                    "action",
+                    "constraintKind"
+                  ],
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "enum": [
+                        "alter_constraint"
+                      ]
+                    },
+                    "action": {
+                      "type": "string",
+                      "enum": [
+                        "create"
+                      ]
+                    },
+                    "constraintKind": {
+                      "type": "string",
+                      "enum": [
+                        "foreign_key"
+                      ]
+                    }
+                  }
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "type",
+                    "action",
+                    "constraintKind"
+                  ],
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "enum": [
+                        "alter_constraint"
+                      ]
+                    },
+                    "action": {
+                      "type": "string",
+                      "enum": [
+                        "update"
+                      ]
+                    },
+                    "constraintKind": {
+                      "type": "string",
+                      "enum": [
+                        "foreign_key"
+                      ]
+                    }
+                  }
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "type"
+                  ],
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "enum": [
+                        "set_criteria"
+                      ]
+                    }
+                  }
+                }
+              ]
             }
           }
         }
@@ -17408,8 +17572,8 @@
             "type": "object",
             "additionalProperties": false,
             "required": [
-              "revisionId",
-              "recordType"
+              "recordType",
+              "revisionId"
             ],
             "properties": {
               "revisionId": {
@@ -17442,6 +17606,10 @@
               "id": {
                 "type": "string",
                 "format": "uuid"
+              },
+              "proposal": {
+                "type": "null",
+                "description": "This member must be omitted; source and proposal selectors are exclusive."
               }
             },
             "allOf": [
@@ -17488,14 +17656,113 @@
                   }
                 }
               }
-            ]
+            ],
+            "not": {
+              "required": [
+                "proposal"
+              ]
+            }
           },
           {
             "type": "object",
             "additionalProperties": false,
             "required": [
-              "revisionId",
-              "recordType"
+              "recordType",
+              "proposal"
+            ],
+            "properties": {
+              "revisionId": {
+                "type": "null",
+                "description": "This member must be omitted; source and proposal selectors are exclusive."
+              },
+              "recordType": {
+                "const": "nodes",
+                "type": "string"
+              },
+              "kind": {
+                "type": "string"
+              },
+              "search": {
+                "type": "string"
+              },
+              "parentId": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "limit": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 500,
+                "default": 100
+              },
+              "cursor": {
+                "type": "string"
+              },
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "proposal": {
+                "$ref": "#/components/schemas/BackendProposalReadTarget"
+              }
+            },
+            "allOf": [
+              {
+                "if": {
+                  "required": [
+                    "id"
+                  ]
+                },
+                "then": {
+                  "not": {
+                    "anyOf": [
+                      {
+                        "required": [
+                          "kind"
+                        ]
+                      },
+                      {
+                        "required": [
+                          "search"
+                        ]
+                      },
+                      {
+                        "required": [
+                          "parentId"
+                        ]
+                      },
+                      {
+                        "required": [
+                          "from"
+                        ]
+                      },
+                      {
+                        "required": [
+                          "to"
+                        ]
+                      },
+                      {
+                        "required": [
+                          "cursor"
+                        ]
+                      }
+                    ]
+                  }
+                }
+              }
+            ],
+            "not": {
+              "required": [
+                "revisionId"
+              ]
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "recordType",
+              "revisionId"
             ],
             "properties": {
               "revisionId": {
@@ -17529,6 +17796,10 @@
               "id": {
                 "type": "string",
                 "format": "uuid"
+              },
+              "proposal": {
+                "type": "null",
+                "description": "This member must be omitted; source and proposal selectors are exclusive."
               }
             },
             "allOf": [
@@ -17575,7 +17846,107 @@
                   }
                 }
               }
-            ]
+            ],
+            "not": {
+              "required": [
+                "proposal"
+              ]
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "recordType",
+              "proposal"
+            ],
+            "properties": {
+              "revisionId": {
+                "type": "null",
+                "description": "This member must be omitted; source and proposal selectors are exclusive."
+              },
+              "recordType": {
+                "const": "edges",
+                "type": "string"
+              },
+              "kind": {
+                "type": "string"
+              },
+              "from": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "to": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "limit": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 500,
+                "default": 100
+              },
+              "cursor": {
+                "type": "string"
+              },
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "proposal": {
+                "$ref": "#/components/schemas/BackendProposalReadTarget"
+              }
+            },
+            "allOf": [
+              {
+                "if": {
+                  "required": [
+                    "id"
+                  ]
+                },
+                "then": {
+                  "not": {
+                    "anyOf": [
+                      {
+                        "required": [
+                          "kind"
+                        ]
+                      },
+                      {
+                        "required": [
+                          "search"
+                        ]
+                      },
+                      {
+                        "required": [
+                          "parentId"
+                        ]
+                      },
+                      {
+                        "required": [
+                          "from"
+                        ]
+                      },
+                      {
+                        "required": [
+                          "to"
+                        ]
+                      },
+                      {
+                        "required": [
+                          "cursor"
+                        ]
+                      }
+                    ]
+                  }
+                }
+              }
+            ],
+            "not": {
+              "required": [
+                "revisionId"
+              ]
+            }
           }
         ]
       },
@@ -17602,6 +17973,16 @@
           },
           "nextCursor": {
             "type": "string"
+          },
+          "viewSchemaVersion": {
+            "type": "string",
+            "const": "proposal-relational-v1"
+          },
+          "proposalPins": {
+            "$ref": "#/components/schemas/BackendProposalReadPins"
+          },
+          "proposalProjection": {
+            "$ref": "#/components/schemas/BackendProposalGraphProjection"
           }
         }
       },
@@ -17621,6 +18002,13 @@
           },
           "nextCursor": {
             "type": "string"
+          },
+          "viewSchemaVersion": {
+            "type": "string",
+            "const": "proposal-relational-v1"
+          },
+          "proposalPins": {
+            "$ref": "#/components/schemas/BackendProposalReadPins"
           }
         }
       },
@@ -17656,6 +18044,13 @@
             "items": {
               "type": "string"
             }
+          },
+          "viewSchemaVersion": {
+            "type": "string",
+            "const": "proposal-relational-v1"
+          },
+          "proposalPins": {
+            "$ref": "#/components/schemas/BackendProposalReadPins"
           }
         }
       },
@@ -22578,10 +22973,10 @@
             "type": "object",
             "additionalProperties": false,
             "required": [
-              "revisionId",
               "datastoreId",
               "facetKey",
-              "recordType"
+              "recordType",
+              "revisionId"
             ],
             "properties": {
               "revisionId": {
@@ -22616,17 +23011,79 @@
                 "type": "string",
                 "description": "UTF-8 at most 1024 bytes; empty filter is equivalent to omission.",
                 "maxLength": 1024
+              },
+              "proposal": {
+                "type": "null",
+                "description": "This member must be omitted; source and proposal selectors are exclusive."
               }
+            },
+            "not": {
+              "required": [
+                "proposal"
+              ]
             }
           },
           {
             "type": "object",
             "additionalProperties": false,
             "required": [
-              "revisionId",
               "datastoreId",
               "facetKey",
-              "recordType"
+              "recordType",
+              "proposal"
+            ],
+            "properties": {
+              "revisionId": {
+                "type": "null",
+                "description": "This member must be omitted; source and proposal selectors are exclusive."
+              },
+              "datastoreId": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "facetKey": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200,
+                "pattern": "^[^\\p{Cc}]+$"
+              },
+              "recordType": {
+                "type": "string",
+                "const": "tables"
+              },
+              "limit": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 500,
+                "default": 100
+              },
+              "cursor": {
+                "type": "string",
+                "maxLength": 1024
+              },
+              "search": {
+                "type": "string",
+                "description": "UTF-8 at most 1024 bytes; empty filter is equivalent to omission.",
+                "maxLength": 1024
+              },
+              "proposal": {
+                "$ref": "#/components/schemas/BackendProposalReadTarget"
+              }
+            },
+            "not": {
+              "required": [
+                "revisionId"
+              ]
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "datastoreId",
+              "facetKey",
+              "recordType",
+              "revisionId"
             ],
             "properties": {
               "revisionId": {
@@ -22660,7 +23117,68 @@
               "tableId": {
                 "type": "string",
                 "format": "uuid"
+              },
+              "proposal": {
+                "type": "null",
+                "description": "This member must be omitted; source and proposal selectors are exclusive."
               }
+            },
+            "not": {
+              "required": [
+                "proposal"
+              ]
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "datastoreId",
+              "facetKey",
+              "recordType",
+              "proposal"
+            ],
+            "properties": {
+              "revisionId": {
+                "type": "null",
+                "description": "This member must be omitted; source and proposal selectors are exclusive."
+              },
+              "datastoreId": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "facetKey": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200,
+                "pattern": "^[^\\p{Cc}]+$"
+              },
+              "recordType": {
+                "type": "string",
+                "const": "relationships"
+              },
+              "limit": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 500,
+                "default": 100
+              },
+              "cursor": {
+                "type": "string",
+                "maxLength": 1024
+              },
+              "tableId": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "proposal": {
+                "$ref": "#/components/schemas/BackendProposalReadTarget"
+              }
+            },
+            "not": {
+              "required": [
+                "revisionId"
+              ]
             }
           }
         ]
@@ -22828,7 +23346,8 @@
               "explicit",
               "inferred",
               "unresolved",
-              "stale"
+              "stale",
+              "proposed"
             ]
           },
           "targetReason": {
@@ -22836,6 +23355,13 @@
               "string",
               "null"
             ]
+          },
+          "runtimeStatus": {
+            "type": "string",
+            "const": "unverified"
+          },
+          "effectiveFacet": {
+            "$ref": "#/components/schemas/BackendProposalEffectiveFacet"
           }
         }
       },
@@ -22917,6 +23443,13 @@
           },
           "nextCursor": {
             "type": "string"
+          },
+          "viewSchemaVersion": {
+            "type": "string",
+            "const": "proposal-relational-v1"
+          },
+          "proposalPins": {
+            "$ref": "#/components/schemas/BackendProposalReadPins"
           }
         }
       },
@@ -23021,6 +23554,1966 @@
             }
           }
         ]
+      },
+      "BackendProposalReadTarget": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "proposalId",
+          "proposalRevisionId"
+        ],
+        "properties": {
+          "proposalId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "proposalRevisionId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
+      "BackendProposalReadPins": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "proposalId",
+          "proposalRevisionId",
+          "proposalSemanticHash",
+          "baseRevisionId",
+          "baseSemanticHash",
+          "repositoryId",
+          "datastoreId",
+          "facetKey",
+          "effectiveGraphHash"
+        ],
+        "properties": {
+          "proposalId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "proposalRevisionId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "proposalSemanticHash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "baseRevisionId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "baseSemanticHash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "repositoryId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "datastoreId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "facetKey": {
+            "type": "string"
+          },
+          "effectiveGraphHash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          }
+        }
+      },
+      "BackendProposal": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "projectId",
+          "version",
+          "name",
+          "status",
+          "baseRevisionId",
+          "baseSemanticHash",
+          "repositoryId",
+          "datastoreId",
+          "facetKey",
+          "draftRevisionId",
+          "draftHash",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "projectId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "version": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1,
+            "maximum": 9223372036854775807
+          },
+          "name": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "const": "draft"
+          },
+          "baseRevisionId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "baseSemanticHash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "repositoryId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "datastoreId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "facetKey": {
+            "type": "string"
+          },
+          "draftRevisionId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "draftHash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "CreateBackendProposalRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "baseRevisionId",
+          "repositoryId",
+          "datastoreId",
+          "facetKey",
+          "idempotencyKey"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "baseRevisionId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "repositoryId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "datastoreId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "facetKey": {
+            "type": "string"
+          },
+          "idempotencyKey": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "pattern": "^[!-~]+$"
+          }
+        }
+      },
+      "BackendProposalCriterionInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "key",
+          "kind",
+          "targetIds",
+          "description"
+        ],
+        "properties": {
+          "key": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "pattern": "^[!-~]+$"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "existing_data",
+              "writers",
+              "referential_integrity",
+              "target_uniqueness",
+              "migration_plan"
+            ]
+          },
+          "targetIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "minItems": 1,
+            "uniqueItems": true,
+            "maxItems": 50000
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096,
+            "description": "Nonblank UTF-8; at most 4096 bytes."
+          }
+        }
+      },
+      "BackendProposalCriterion": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "key",
+          "kind",
+          "targetIds",
+          "description",
+          "origin",
+          "status",
+          "commandId"
+        ],
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "existing_data",
+              "writers",
+              "referential_integrity",
+              "target_uniqueness",
+              "migration_plan"
+            ]
+          },
+          "targetIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096,
+            "description": "Nonblank UTF-8; at most 4096 bytes."
+          },
+          "origin": {
+            "type": "string",
+            "enum": [
+              "required",
+              "authored"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "const": "unverified"
+          },
+          "commandId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "pattern": "^[!-~]+$"
+          }
+        }
+      },
+      "BackendProposalCommand": {
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "commandId",
+              "reason",
+              "type",
+              "columnId",
+              "nullable"
+            ],
+            "properties": {
+              "commandId": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128,
+                "pattern": "^[!-~]+$"
+              },
+              "reason": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 4096,
+                "description": "Nonblank UTF-8; at most 4096 bytes."
+              },
+              "type": {
+                "type": "string",
+                "const": "alter_column"
+              },
+              "columnId": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "nullable": {
+                "type": "boolean"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "commandId",
+              "reason",
+              "type",
+              "action",
+              "targetTableId",
+              "columnPairs",
+              "updateAction",
+              "deleteAction",
+              "matchType",
+              "deferrable",
+              "initiallyDeferred",
+              "name",
+              "tableId"
+            ],
+            "properties": {
+              "commandId": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128,
+                "pattern": "^[!-~]+$"
+              },
+              "reason": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 4096,
+                "description": "Nonblank UTF-8; at most 4096 bytes."
+              },
+              "type": {
+                "type": "string",
+                "const": "alter_constraint"
+              },
+              "action": {
+                "type": "string",
+                "const": "create"
+              },
+              "targetTableId": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "columnPairs": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/BackendDatabaseColumnPair"
+                },
+                "minItems": 1,
+                "maxItems": 64
+              },
+              "updateAction": {
+                "type": "string",
+                "enum": [
+                  "no_action",
+                  "restrict",
+                  "cascade",
+                  "set_null",
+                  "set_default"
+                ]
+              },
+              "deleteAction": {
+                "type": "string",
+                "enum": [
+                  "no_action",
+                  "restrict",
+                  "cascade",
+                  "set_null",
+                  "set_default"
+                ]
+              },
+              "matchType": {
+                "type": "string",
+                "enum": [
+                  "simple",
+                  "full",
+                  "partial"
+                ]
+              },
+              "deferrable": {
+                "type": "boolean"
+              },
+              "initiallyDeferred": {
+                "type": "boolean"
+              },
+              "name": {
+                "type": "string",
+                "minLength": 1
+              },
+              "tableId": {
+                "type": "string",
+                "format": "uuid"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "commandId",
+              "reason",
+              "type",
+              "action",
+              "targetTableId",
+              "columnPairs",
+              "updateAction",
+              "deleteAction",
+              "matchType",
+              "deferrable",
+              "initiallyDeferred",
+              "constraintId"
+            ],
+            "properties": {
+              "commandId": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128,
+                "pattern": "^[!-~]+$"
+              },
+              "reason": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 4096,
+                "description": "Nonblank UTF-8; at most 4096 bytes."
+              },
+              "type": {
+                "type": "string",
+                "const": "alter_constraint"
+              },
+              "action": {
+                "type": "string",
+                "const": "update"
+              },
+              "targetTableId": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "columnPairs": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/BackendDatabaseColumnPair"
+                },
+                "minItems": 1,
+                "maxItems": 64
+              },
+              "updateAction": {
+                "type": "string",
+                "enum": [
+                  "no_action",
+                  "restrict",
+                  "cascade",
+                  "set_null",
+                  "set_default"
+                ]
+              },
+              "deleteAction": {
+                "type": "string",
+                "enum": [
+                  "no_action",
+                  "restrict",
+                  "cascade",
+                  "set_null",
+                  "set_default"
+                ]
+              },
+              "matchType": {
+                "type": "string",
+                "enum": [
+                  "simple",
+                  "full",
+                  "partial"
+                ]
+              },
+              "deferrable": {
+                "type": "boolean"
+              },
+              "initiallyDeferred": {
+                "type": "boolean"
+              },
+              "constraintId": {
+                "type": "string",
+                "format": "uuid"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "commandId",
+              "reason",
+              "type",
+              "criteria"
+            ],
+            "properties": {
+              "commandId": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128,
+                "pattern": "^[!-~]+$"
+              },
+              "reason": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 4096,
+                "description": "Nonblank UTF-8; at most 4096 bytes."
+              },
+              "type": {
+                "type": "string",
+                "const": "set_criteria"
+              },
+              "criteria": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/BackendProposalCriterionInput"
+                },
+                "maxItems": 100
+              }
+            }
+          }
+        ]
+      },
+      "PreviewBackendProposalCommandsRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "expectedVersion",
+          "draftRevisionId",
+          "commands"
+        ],
+        "properties": {
+          "expectedVersion": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1,
+            "maximum": 9223372036854775807
+          },
+          "draftRevisionId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "commands": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendProposalCommand"
+            },
+            "minItems": 1,
+            "maxItems": 100
+          }
+        }
+      },
+      "ApplyBackendProposalCommandsRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "expectedVersion",
+          "draftRevisionId",
+          "commands",
+          "candidateHash",
+          "idempotencyKey"
+        ],
+        "properties": {
+          "expectedVersion": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1,
+            "maximum": 9223372036854775807
+          },
+          "draftRevisionId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "commands": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendProposalCommand"
+            },
+            "minItems": 1,
+            "maxItems": 100
+          },
+          "candidateHash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "idempotencyKey": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "pattern": "^[!-~]+$"
+          }
+        }
+      },
+      "BackendProposalBasis": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "revisionId",
+          "semanticHash",
+          "subjectId",
+          "facetKey"
+        ],
+        "properties": {
+          "revisionId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "semanticHash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "subjectId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "facetKey": {
+            "type": "string"
+          }
+        }
+      },
+      "BackendProposalPropertyOrigin": {
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "base",
+              "property",
+              "evidenceIds"
+            ],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "source"
+              },
+              "base": {
+                "$ref": "#/components/schemas/BackendProposalBasis"
+              },
+              "property": {
+                "type": "string"
+              },
+              "evidenceIds": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "commandId",
+              "reason",
+              "evidenceIds"
+            ],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "intent"
+              },
+              "commandId": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128,
+                "pattern": "^[!-~]+$"
+              },
+              "reason": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 4096,
+                "description": "Nonblank UTF-8; at most 4096 bytes."
+              },
+              "evidenceIds": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            }
+          }
+        ]
+      },
+      "BackendProposalFacetValues": {
+        "anyOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "qualifiedName",
+              "nativeDefinition",
+              "databaseName"
+            ],
+            "properties": {
+              "qualifiedName": {
+                "type": "string",
+                "minLength": 1
+              },
+              "nativeDefinition": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "Literal UTF-8 source text; at most 65536 UTF-8 bytes, enforced atomically by the domain."
+              },
+              "databaseName": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "qualifiedName",
+              "nativeDefinition"
+            ],
+            "properties": {
+              "qualifiedName": {
+                "type": "string",
+                "minLength": 1
+              },
+              "nativeDefinition": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "Literal UTF-8 source text; at most 65536 UTF-8 bytes, enforced atomically by the domain."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "qualifiedName",
+              "nativeDefinition",
+              "columnsStatus",
+              "constraintsStatus"
+            ],
+            "properties": {
+              "qualifiedName": {
+                "type": "string",
+                "minLength": 1
+              },
+              "nativeDefinition": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "Literal UTF-8 source text; at most 65536 UTF-8 bytes, enforced atomically by the domain."
+              },
+              "columnsStatus": {
+                "type": "string",
+                "enum": [
+                  "complete",
+                  "partial",
+                  "unsupported"
+                ]
+              },
+              "constraintsStatus": {
+                "type": "string",
+                "enum": [
+                  "complete",
+                  "partial",
+                  "unsupported"
+                ]
+              }
+            },
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "columnsStatus": {
+                      "enum": [
+                        "partial",
+                        "unsupported"
+                      ]
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "gaps": {
+                      "minItems": 1
+                    }
+                  }
+                }
+              },
+              {
+                "if": {
+                  "properties": {
+                    "constraintsStatus": {
+                      "enum": [
+                        "partial",
+                        "unsupported"
+                      ]
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "gaps": {
+                      "minItems": 1
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "nativeType",
+              "typeFamily",
+              "nullable",
+              "defaultExpression",
+              "generatedExpression",
+              "identity",
+              "ordinal"
+            ],
+            "properties": {
+              "nativeType": {
+                "$ref": "#/components/schemas/BackendKnownNativeString"
+              },
+              "typeFamily": {
+                "$ref": "#/components/schemas/BackendKnownTypeFamily"
+              },
+              "nullable": {
+                "$ref": "#/components/schemas/BackendKnownBoolean"
+              },
+              "defaultExpression": {
+                "$ref": "#/components/schemas/BackendKnownNullableNativeString"
+              },
+              "generatedExpression": {
+                "$ref": "#/components/schemas/BackendKnownNullableNativeString"
+              },
+              "identity": {
+                "$ref": "#/components/schemas/BackendKnownNullableNativeString"
+              },
+              "ordinal": {
+                "$ref": "#/components/schemas/BackendKnownOrdinal"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "constraintKind",
+              "columnIds",
+              "expression",
+              "nativeDefinition",
+              "deferrable",
+              "initiallyDeferred"
+            ],
+            "properties": {
+              "constraintKind": {
+                "type": "string",
+                "enum": [
+                  "primary_key",
+                  "unique",
+                  "check",
+                  "foreign_key"
+                ]
+              },
+              "columnIds": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "maxItems": 64,
+                "uniqueItems": true
+              },
+              "expression": {
+                "$ref": "#/components/schemas/BackendKnownNullableNativeString"
+              },
+              "nativeDefinition": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "Literal UTF-8 source text; at most 65536 UTF-8 bytes, enforced atomically by the domain."
+              },
+              "deferrable": {
+                "$ref": "#/components/schemas/BackendKnownNullableBoolean"
+              },
+              "initiallyDeferred": {
+                "$ref": "#/components/schemas/BackendKnownNullableBoolean"
+              }
+            },
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "constraintKind": {
+                      "enum": [
+                        "primary_key",
+                        "unique",
+                        "foreign_key"
+                      ]
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "columnIds": {
+                      "minItems": 1
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "terms",
+              "unique",
+              "predicate",
+              "method",
+              "nativeDefinition"
+            ],
+            "properties": {
+              "terms": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/BackendIndexTerm"
+                },
+                "minItems": 1,
+                "maxItems": 64
+              },
+              "unique": {
+                "$ref": "#/components/schemas/BackendKnownBoolean"
+              },
+              "predicate": {
+                "$ref": "#/components/schemas/BackendKnownNullableNativeString"
+              },
+              "method": {
+                "$ref": "#/components/schemas/BackendKnownNullableNativeString"
+              },
+              "nativeDefinition": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "Literal UTF-8 source text; at most 65536 UTF-8 bytes, enforced atomically by the domain."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "qualifiedName",
+              "definition",
+              "dependencyIds",
+              "materialized",
+              "dependenciesStatus"
+            ],
+            "properties": {
+              "qualifiedName": {
+                "type": "string",
+                "minLength": 1
+              },
+              "definition": {
+                "type": "string",
+                "description": "Literal UTF-8 source text; at most 65536 UTF-8 bytes, enforced atomically by the domain."
+              },
+              "dependencyIds": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "maxItems": 500,
+                "uniqueItems": true
+              },
+              "materialized": {
+                "type": "boolean"
+              },
+              "dependenciesStatus": {
+                "type": "string",
+                "enum": [
+                  "complete",
+                  "partial",
+                  "unsupported"
+                ]
+              }
+            },
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "dependenciesStatus": {
+                      "enum": [
+                        "partial",
+                        "unsupported"
+                      ]
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "gaps": {
+                      "minItems": 1
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "order",
+              "parentIds",
+              "definition",
+              "changes",
+              "derivationStatus"
+            ],
+            "properties": {
+              "order": {
+                "$ref": "#/components/schemas/BackendKnownMigrationOrder"
+              },
+              "parentIds": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "maxItems": 500,
+                "uniqueItems": true
+              },
+              "definition": {
+                "type": "string",
+                "description": "Literal UTF-8 source text; at most 65536 UTF-8 bytes, enforced atomically by the domain."
+              },
+              "changes": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/BackendMigrationChange"
+                },
+                "maxItems": 500
+              },
+              "derivationStatus": {
+                "type": "string",
+                "enum": [
+                  "complete",
+                  "partial",
+                  "unsupported"
+                ]
+              }
+            },
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "derivationStatus": {
+                      "enum": [
+                        "partial",
+                        "unsupported"
+                      ]
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "gaps": {
+                      "minItems": 1
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "qualifiedName",
+              "definition",
+              "dependencyIds",
+              "routineKind",
+              "bodyStatus"
+            ],
+            "properties": {
+              "qualifiedName": {
+                "type": "string",
+                "minLength": 1
+              },
+              "definition": {
+                "type": "string",
+                "description": "Literal UTF-8 source text; at most 65536 UTF-8 bytes, enforced atomically by the domain."
+              },
+              "dependencyIds": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "maxItems": 500,
+                "uniqueItems": true
+              },
+              "routineKind": {
+                "type": "string",
+                "enum": [
+                  "procedure",
+                  "function",
+                  "trigger"
+                ]
+              },
+              "bodyStatus": {
+                "type": "string",
+                "enum": [
+                  "complete",
+                  "partial",
+                  "unsupported"
+                ]
+              }
+            },
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "bodyStatus": {
+                      "enum": [
+                        "partial",
+                        "unsupported"
+                      ]
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "gaps": {
+                      "minItems": 1
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "columnPairs",
+              "updateAction",
+              "deleteAction",
+              "matchType"
+            ],
+            "properties": {
+              "columnPairs": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/BackendReferenceColumnPair"
+                },
+                "maxItems": 64
+              },
+              "updateAction": {
+                "$ref": "#/components/schemas/BackendKnownReferentialAction"
+              },
+              "deleteAction": {
+                "$ref": "#/components/schemas/BackendKnownReferentialAction"
+              },
+              "matchType": {
+                "$ref": "#/components/schemas/BackendKnownMatchType"
+              },
+              "targetReason": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "columnPairs": {
+                      "maxItems": 0
+                    }
+                  }
+                },
+                "then": {
+                  "required": [
+                    "targetReason"
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "BackendProposalEffectiveFacet": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "origin",
+          "proposalId",
+          "proposalRevisionId",
+          "facetKey",
+          "subjectId",
+          "base",
+          "values",
+          "propertyOrigins",
+          "basisEvidenceIds",
+          "limitations"
+        ],
+        "properties": {
+          "origin": {
+            "type": "string",
+            "const": "proposal"
+          },
+          "proposalId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "proposalRevisionId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "facetKey": {
+            "type": "string"
+          },
+          "subjectId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "base": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BackendProposalBasis"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "values": {
+            "$ref": "#/components/schemas/BackendProposalFacetValues"
+          },
+          "propertyOrigins": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/BackendProposalPropertyOrigin"
+            }
+          },
+          "basisEvidenceIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "limitations": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "BackendProposalOverlay": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "subjectId",
+          "recordType",
+          "kind",
+          "facetKey",
+          "base",
+          "values",
+          "propertyOrigins",
+          "commandId",
+          "reason"
+        ],
+        "properties": {
+          "subjectId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "recordType": {
+            "type": "string",
+            "enum": [
+              "node",
+              "edge"
+            ]
+          },
+          "kind": {
+            "type": "string"
+          },
+          "facetKey": {
+            "type": "string"
+          },
+          "base": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BackendProposalBasis"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "values": {
+            "$ref": "#/components/schemas/BackendProposalFacetValues"
+          },
+          "propertyOrigins": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/BackendProposalPropertyOrigin"
+            }
+          },
+          "commandId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "pattern": "^[!-~]+$"
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096,
+            "description": "Nonblank UTF-8; at most 4096 bytes."
+          },
+          "name": {
+            "type": "string"
+          },
+          "parentId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "fromId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "toId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
+      "BackendProposalProjectedNode": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "kind",
+          "name",
+          "parentId",
+          "sourceRecord",
+          "effectiveFacet"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "parentId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sourceRecord": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BackendNode"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "effectiveFacet": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BackendProposalEffectiveFacet"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      },
+      "BackendProposalProjectedEdge": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "kind",
+          "from",
+          "to",
+          "sourceRecord",
+          "effectiveFacet"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "from": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "to": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "sourceRecord": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BackendEdge"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "effectiveFacet": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BackendProposalEffectiveFacet"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      },
+      "BackendProposalGraphProjection": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "nodes",
+          "edges"
+        ],
+        "properties": {
+          "nodes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendProposalProjectedNode"
+            }
+          },
+          "edges": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendProposalProjectedEdge"
+            }
+          }
+        }
+      },
+      "BackendProposalNodeRead": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "viewSchemaVersion",
+          "proposalPins",
+          "proposalProjection"
+        ],
+        "properties": {
+          "viewSchemaVersion": {
+            "type": "string",
+            "const": "proposal-relational-v1"
+          },
+          "proposalPins": {
+            "$ref": "#/components/schemas/BackendProposalReadPins"
+          },
+          "proposalProjection": {
+            "$ref": "#/components/schemas/BackendProposalProjectedNode"
+          }
+        }
+      },
+      "BackendProposalRevisionSummary": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "parentRevisionId",
+          "semanticHash",
+          "author",
+          "summary",
+          "createdAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "parentRevisionId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "semanticHash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "author": {
+            "type": "string"
+          },
+          "summary": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "BackendProposalRevision": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "proposalId",
+          "parentRevisionId",
+          "documentVersion",
+          "semanticHash",
+          "baseRevisionId",
+          "baseSemanticHash",
+          "sourceSnapshotIds",
+          "artifactPins",
+          "commands",
+          "overlays",
+          "criteria",
+          "author",
+          "summary",
+          "createdAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "proposalId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "parentRevisionId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "documentVersion": {
+            "type": "string",
+            "const": "proposal-relational-v1"
+          },
+          "semanticHash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "baseRevisionId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "baseSemanticHash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "sourceSnapshotIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "artifactPins": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendArtifactPin"
+            }
+          },
+          "commands": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendProposalCommand"
+            }
+          },
+          "overlays": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendProposalOverlay"
+            }
+          },
+          "criteria": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendProposalCriterion"
+            }
+          },
+          "author": {
+            "type": "string"
+          },
+          "summary": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "BackendProposalChange": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "type",
+          "commandId",
+          "subjectId",
+          "before",
+          "after",
+          "generatedIds"
+        ],
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "alter_column",
+              "alter_constraint",
+              "set_criteria"
+            ]
+          },
+          "commandId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "pattern": "^[!-~]+$"
+          },
+          "subjectId": {
+            "type": "string"
+          },
+          "before": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "after": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "generatedIds": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        }
+      },
+      "BackendProposalDiagnostic": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "code",
+          "commandId",
+          "property",
+          "affectedIds",
+          "message"
+        ],
+        "properties": {
+          "code": {
+            "type": "string",
+            "const": "backend_proposal_invalid"
+          },
+          "commandId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "pattern": "^[!-~]+$"
+          },
+          "property": {
+            "type": "string"
+          },
+          "affectedIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "message": {
+            "type": "string"
+          }
+        }
+      },
+      "BackendProposalPreview": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "proposalId",
+          "baseRevisionId",
+          "baseSemanticHash",
+          "draftRevisionId",
+          "draftHash",
+          "expectedVersion",
+          "candidateHash",
+          "candidateGraphHash",
+          "changes",
+          "criteria",
+          "diagnostics",
+          "limitations"
+        ],
+        "properties": {
+          "proposalId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "baseRevisionId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "baseSemanticHash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "draftRevisionId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "draftHash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "expectedVersion": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1,
+            "maximum": 9223372036854775807
+          },
+          "candidateHash": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "candidateGraphHash": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "changes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendProposalChange"
+            }
+          },
+          "criteria": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendProposalCriterion"
+            }
+          },
+          "diagnostics": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendProposalDiagnostic"
+            }
+          },
+          "limitations": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "BackendProposalApplyResult": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "proposal",
+          "revision",
+          "changes",
+          "criteria",
+          "candidateGraphHash"
+        ],
+        "properties": {
+          "proposal": {
+            "$ref": "#/components/schemas/BackendProposal"
+          },
+          "revision": {
+            "$ref": "#/components/schemas/BackendProposalRevision"
+          },
+          "changes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendProposalChange"
+            }
+          },
+          "criteria": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendProposalCriterion"
+            }
+          },
+          "candidateGraphHash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          }
+        }
+      },
+      "BackendProposalDetail": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "proposal",
+          "revision",
+          "history",
+          "nextCursor",
+          "lastApplyReceipt",
+          "baseOutdated",
+          "currentSourceRevisionId",
+          "currentSourceSemanticHash",
+          "effectiveGraphHash"
+        ],
+        "properties": {
+          "proposal": {
+            "$ref": "#/components/schemas/BackendProposal"
+          },
+          "revision": {
+            "$ref": "#/components/schemas/BackendProposalRevision"
+          },
+          "history": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendProposalRevisionSummary"
+            }
+          },
+          "nextCursor": {
+            "type": "string"
+          },
+          "lastApplyReceipt": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BackendProposalApplyResult"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "baseOutdated": {
+            "type": "boolean"
+          },
+          "currentSourceRevisionId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "currentSourceSemanticHash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "effectiveGraphHash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          }
+        }
+      },
+      "BackendProposalPage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "items",
+          "nextCursor"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendProposal"
+            }
+          },
+          "nextCursor": {
+            "type": "string"
+          }
+        }
       }
     }
   },
@@ -36529,6 +39022,1093 @@
           }
         },
         "description": "Read-only source-model table/FK projection at an exact revision/datastore/facet; no runtime introspection or writes."
+      }
+    },
+    "/api/backend-projects/{id}/proposals": {
+      "get": {
+        "tags": [
+          "backend-projects"
+        ],
+        "operationId": "listBackendProposals",
+        "summary": "listBackendProposals",
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500,
+              "default": 100
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 1024
+            }
+          },
+          {
+            "name": "baseRevisionId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "const": "draft"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendProposalPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "description": "Pinned isolated draft proposal; source records and runtime verification remain unchanged."
+      },
+      "post": {
+        "tags": [
+          "backend-projects"
+        ],
+        "operationId": "createBackendProposal",
+        "summary": "createBackendProposal",
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendProposalDetail"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateBackendProposalRequest"
+              }
+            }
+          }
+        },
+        "description": "Pinned isolated draft proposal; source records and runtime verification remain unchanged."
+      }
+    },
+    "/api/backend-projects/{id}/proposals/{pid}": {
+      "get": {
+        "tags": [
+          "backend-projects"
+        ],
+        "operationId": "getBackendProposal",
+        "summary": "getBackendProposal",
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "pid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500,
+              "default": 100
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 1024
+            }
+          },
+          {
+            "name": "proposalRevisionId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendProposalDetail"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "description": "Pinned isolated draft proposal; source records and runtime verification remain unchanged."
+      }
+    },
+    "/api/backend-projects/{id}/proposals/{pid}/preview": {
+      "post": {
+        "tags": [
+          "backend-projects"
+        ],
+        "operationId": "previewBackendProposalCommands",
+        "summary": "previewBackendProposalCommands",
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "pid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendProposalPreview"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PreviewBackendProposalCommandsRequest"
+              }
+            }
+          }
+        },
+        "description": "Pinned isolated draft proposal; source records and runtime verification remain unchanged."
+      }
+    },
+    "/api/backend-projects/{id}/proposals/{pid}/commands": {
+      "post": {
+        "tags": [
+          "backend-projects"
+        ],
+        "operationId": "applyBackendProposalCommands",
+        "summary": "applyBackendProposalCommands",
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "pid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendProposalApplyResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApplyBackendProposalCommandsRequest"
+              }
+            }
+          }
+        },
+        "description": "Pinned isolated draft proposal; source records and runtime verification remain unchanged."
+      }
+    },
+    "/api/backend-projects/{id}/proposals/{pid}/revisions/{prid}/nodes/{nid}": {
+      "get": {
+        "tags": [
+          "backend-projects"
+        ],
+        "operationId": "getBackendProposalNode",
+        "summary": "getBackendProposalNode",
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "pid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "prid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "nid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendProposalNodeRead"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "description": "Pinned isolated draft proposal; source records and runtime verification remain unchanged."
+      }
+    },
+    "/api/backend-projects/{id}/proposals/{pid}/revisions/{prid}/evidence": {
+      "get": {
+        "tags": [
+          "backend-projects"
+        ],
+        "operationId": "getBackendProposalEvidence",
+        "summary": "getBackendProposalEvidence",
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "pid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "prid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500,
+              "default": 100
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 1024
+            }
+          },
+          {
+            "name": "subjectId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "evidenceId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendEvidencePage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "description": "Pinned isolated draft proposal; source records and runtime verification remain unchanged."
+      }
+    },
+    "/api/backend-projects/{id}/proposals/{pid}/revisions/{prid}/coverage": {
+      "get": {
+        "tags": [
+          "backend-projects"
+        ],
+        "operationId": "getBackendProposalCoverage",
+        "summary": "getBackendProposalCoverage",
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "pid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "prid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendRevisionCoverage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "description": "Pinned isolated draft proposal; source records and runtime verification remain unchanged."
       }
     }
   }

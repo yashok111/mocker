@@ -116,14 +116,18 @@ func (r *Repo) Import(ctx context.Context, pid, sid string, in ListInput) (*Impo
 	return out, rows.Err()
 }
 func (r *Repo) QueryGraph(ctx context.Context, pid string, in GraphQueryInput) (*GraphPage, error) {
-	revision, err := r.Revision(ctx, pid, in.RevisionID)
+	target, err := r.resolveBackendTarget(ctx, pid, BackendReadTarget{RevisionID: in.RevisionID, Proposal: in.Proposal})
+	if err != nil {
+		return nil, err
+	}
+	revision, err := r.Revision(ctx, pid, target.revisionID)
 	if err != nil {
 		return nil, err
 	}
 	if in.ID != "" && (!ValidID(in.ID) || in.Cursor != "" || in.Kind != "" || in.Search != "" || in.ParentID != "" || in.From != "" || in.To != "") {
 		return nil, invalid("id", "ID selector cannot be combined with filters or cursor")
 	}
-	coverage, err := r.RevisionCoverage(ctx, pid, in.RevisionID)
+	coverage, err := r.RevisionCoverage(ctx, pid, target.revisionID)
 	if err != nil {
 		return nil, err
 	}
@@ -161,6 +165,12 @@ func (r *Repo) QueryGraph(ctx context.Context, pid string, in GraphQueryInput) (
 	scopeInput.Cursor = ""
 	scopeInput.Limit = 0
 	scope, err := requestDigest(scopeInput)
+	if target.pins != nil {
+		scope, err = requestDigest(struct {
+			Query GraphQueryInput
+			Pins  *ProposalReadPins
+		}{scopeInput, target.pins})
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -168,8 +178,17 @@ func (r *Repo) QueryGraph(ctx context.Context, pid string, in GraphQueryInput) (
 	if err != nil {
 		return nil, err
 	}
-	query := `SELECT document,id FROM backend_graph_records WHERE project_id=? AND revision_id=? AND record_type=? AND id>?`
-	args := []any{pid, in.RevisionID, typ, after}
+	records, args, err := target.graphRecords(pid, typ)
+	if err != nil {
+		return nil, err
+	}
+	prefix, table := "", records
+	if target.proposal != nil {
+		prefix, table = records, "records"
+		args = append(args, pid, target.revisionID, typ)
+	}
+	query := prefix + `SELECT document,id FROM ` + table + ` WHERE project_id=? AND revision_id=? AND record_type=? AND id>?`
+	args = append(args, after)
 	for _, f := range []struct{ column, value string }{{"id", in.ID}, {"kind", in.Kind}, {"parent_id", in.ParentID}, {"from_id", in.From}, {"to_id", in.To}} {
 		if f.value != "" {
 			query += " AND " + f.column + "=?"
@@ -188,6 +207,10 @@ func (r *Repo) QueryGraph(ctx context.Context, pid string, in GraphQueryInput) (
 	}
 	defer rows.Close()
 	out := &GraphPage{Nodes: []Node{}, Edges: []Edge{}}
+	if target.proposal != nil {
+		out.ViewSchemaVersion, out.ProposalPins = ProposalDocumentVersion, target.pins
+		out.ProposalProjection = &ProposalGraphProjection{Nodes: []ProposalProjectedNode{}, Edges: []ProposalProjectedEdge{}}
+	}
 	count := 0
 	last := ""
 	for rows.Next() {
@@ -202,7 +225,22 @@ func (r *Repo) QueryGraph(ctx context.Context, pid string, in GraphQueryInput) (
 			out.NextCursor = encodeGraphPage("graph", pid, scope, last)
 			break
 		}
-		if typ == "node" {
+		if doc == "" {
+			overlay := target.overlay(id)
+			if typ == "node" {
+				projected, err := projectProposalNode(*target.proposal, new(target.draft.ID), nil, overlay)
+				if err != nil {
+					return nil, err
+				}
+				out.ProposalProjection.Nodes = append(out.ProposalProjection.Nodes, *projected)
+			} else {
+				projected, err := projectProposalEdge(*target.proposal, new(target.draft.ID), nil, overlay)
+				if err != nil {
+					return nil, err
+				}
+				out.ProposalProjection.Edges = append(out.ProposalProjection.Edges, *projected)
+			}
+		} else if typ == "node" {
 			var n Node
 			if err := json.Unmarshal([]byte(doc), &n); err != nil {
 				return nil, err
@@ -215,6 +253,13 @@ func (r *Repo) QueryGraph(ctx context.Context, pid string, in GraphQueryInput) (
 				}
 			}
 			out.Nodes = append(out.Nodes, n)
+			if target.proposal != nil {
+				projected, err := projectProposalNode(*target.proposal, new(target.draft.ID), &n, target.overlay(n.ID))
+				if err != nil {
+					return nil, err
+				}
+				out.ProposalProjection.Nodes = append(out.ProposalProjection.Nodes, *projected)
+			}
 		} else {
 			var e Edge
 			if err := json.Unmarshal([]byte(doc), &e); err != nil {
@@ -228,6 +273,13 @@ func (r *Repo) QueryGraph(ctx context.Context, pid string, in GraphQueryInput) (
 				}
 			}
 			out.Edges = append(out.Edges, e)
+			if target.proposal != nil {
+				projected, err := projectProposalEdge(*target.proposal, new(target.draft.ID), &e, target.overlay(e.ID))
+				if err != nil {
+					return nil, err
+				}
+				out.ProposalProjection.Edges = append(out.ProposalProjection.Edges, *projected)
+			}
 		}
 		last = id
 		count++
@@ -268,6 +320,9 @@ func (r *Repo) Node(ctx context.Context, pid, rid, nid string) (*Node, error) {
 	return &n, nil
 }
 func (r *Repo) Evidence(ctx context.Context, pid, rid string, in EvidenceQueryInput) (*EvidencePage, error) {
+	return r.evidence(ctx, pid, rid, in, rid+":"+in.SubjectID+":"+in.EvidenceID)
+}
+func (r *Repo) evidence(ctx context.Context, pid, rid string, in EvidenceQueryInput, scope string) (*EvidencePage, error) {
 	if _, err := r.Revision(ctx, pid, rid); err != nil {
 		return nil, err
 	}
@@ -281,7 +336,6 @@ func (r *Repo) Evidence(ctx context.Context, pid, rid string, in EvidenceQueryIn
 	if in.SubjectID != "" && !ValidID(in.SubjectID) {
 		return nil, semantic("subjectId", "Subject ID must be a UUID")
 	}
-	scope := rid + ":" + in.SubjectID + ":" + in.EvidenceID
 	limit, after, err := decodeGraphPage(in.Limit, in.Cursor, "evidence", pid, scope, true)
 	if err != nil {
 		return nil, err

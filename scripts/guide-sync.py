@@ -109,6 +109,17 @@ def validate_workflows(declarations, sources):
                 not isinstance(item, str) or not item for item in workflow[field]
             ):
                 raise SystemExit(f"workflow {identity}: {field} must be a string list")
+        if "requiredViewSchemaVersions" in workflow and (
+            not isinstance(workflow["requiredViewSchemaVersions"], list)
+            or not workflow["requiredViewSchemaVersions"]
+            or any(
+                not isinstance(item, str) or not item
+                for item in workflow["requiredViewSchemaVersions"]
+            )
+        ):
+            raise SystemExit(
+                f"workflow {identity}: requiredViewSchemaVersions must be a nonempty string list"
+            )
         entrypoint = workflow["entrypoint"]
         if entrypoint not in sources:
             raise SystemExit(f"workflow {identity}: unknown entrypoint {entrypoint}")
@@ -177,7 +188,15 @@ def validate_metadata(text, workflow):
     for name in ("workflowId", "workflowVersion"):
         if fields.get(name) != workflow[name]:
             raise SystemExit(f"entrypoint {workflow['entrypoint']}: incorrect {name}")
-    for name in ("requiredModelSchemaVersions", "requiredCapabilities"):
+    for name in (
+        "requiredModelSchemaVersions",
+        "requiredCapabilities",
+        *(
+            ["requiredViewSchemaVersions"]
+            if "requiredViewSchemaVersions" in workflow
+            else []
+        ),
+    ):
         try:
             items = json.loads(fields.get(name, ""))
         except (json.JSONDecodeError, TypeError):

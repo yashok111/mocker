@@ -126,6 +126,8 @@ func TestGuideRequiredCapabilitiesHaveMCPTools(t *testing.T) {
 		"backend-relational-import": {"begin_backend_import", "put_backend_import_batch", "preview_backend_import", "commit_backend_import"},
 		"backend-database-query":    {"query_backend_database"},
 		"backend-database-er":       {"query_backend_database", "get_backend_node", "get_backend_evidence", "get_backend_coverage"},
+		"backend-db-proposals":      {"list_backend_proposals", "create_backend_proposal", "get_backend_proposal"},
+		"backend-db-typed-edits":    {"preview_backend_proposal_commands", "apply_backend_proposal_commands"},
 	}
 	if !inventory["get_backend_capabilities"] {
 		t.Error("workflow discovery tool is missing")

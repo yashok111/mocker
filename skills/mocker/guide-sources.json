@@ -154,7 +154,7 @@
     },
     {
       "workflowId": "mocker-backend-database",
-      "workflowVersion": "1",
+      "workflowVersion": "2",
       "entrypoint": "backend-database",
       "requiredModelSchemaVersions": [
         "2"
@@ -164,7 +164,12 @@
         "backend-revisions",
         "backend-graph-query",
         "backend-database-query",
-        "backend-database-er"
+        "backend-database-er",
+        "backend-db-proposals",
+        "backend-db-typed-edits"
+      ],
+      "requiredViewSchemaVersions": [
+        "proposal-relational-v1"
       ]
     }
   ]

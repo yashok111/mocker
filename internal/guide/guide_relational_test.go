@@ -16,8 +16,8 @@ func TestRelationalGuideTopicsHaveServedOwnerAndBody(t *testing.T) {
 	for _, item := range []struct {
 		topic, owner, version string
 	}{
-		{topic: "backend-database", owner: "mocker-backend-database", version: "1"},
-		{topic: "backend-database-reference", owner: "mocker-backend-database", version: "1"},
+		{topic: "backend-database", owner: "mocker-backend-database", version: "2"},
+		{topic: "backend-database-reference", owner: "mocker-backend-database", version: "2"},
 		{topic: "backend-profile-go-sql", owner: "mocker-backend-import", version: "3"},
 	} {
 		t.Run(item.topic, func(t *testing.T) {
@@ -74,10 +74,10 @@ func TestRelationalGuideWorkflowRequirements(t *testing.T) {
 			},
 		},
 		{
-			entrypoint: "backend-database", owner: "mocker-backend-database", version: "1",
+			entrypoint: "backend-database", owner: "mocker-backend-database", version: "2",
 			schemas: []string{"2"},
 			capabilities: []string{
-				"backend-projects", "backend-revisions", "backend-graph-query", "backend-database-query", "backend-database-er",
+				"backend-projects", "backend-revisions", "backend-graph-query", "backend-database-query", "backend-database-er", "backend-db-proposals", "backend-db-typed-edits",
 			},
 		},
 	} {

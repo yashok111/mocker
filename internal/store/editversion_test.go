@@ -77,8 +77,8 @@ func TestMigrate_backfillLeavesNoLiveCollision(t *testing.T) {
 	if err != nil {
 		t.Fatalf("schema version: %v", err)
 	}
-	if v != 15 {
-		t.Fatalf("schema version = %d, want 15", v)
+	if v != 16 {
+		t.Fatalf("schema version = %d, want 16", v)
 	}
 
 	for _, ws := range []int64{ws1, ws2} {

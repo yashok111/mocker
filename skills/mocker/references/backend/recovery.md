@@ -139,3 +139,21 @@ unsafe JavaScript integer recursively and show precision failure; do not round
 and then initiate extension/commit or present a rounded column ordinal. Restart
 recovery preserves schema1 history and schema2/profile decisions, with historical
 proof still read through its exact revision/snapshot.
+
+## Proposal recovery
+
+Proposal create/apply uses a separate retained exact request and idempotencyKey.
+Before a new mutation after restart/update select a compatible database2 workflow,
+view proposal-relational-v1, exact set/hash and proposal/edit capabilities. For an
+uncertain acknowledgement retry the identical request/key three times with
+1/2/4-second backoff, then preserve request, key, proposal and base/draft pins as
+a recovery checkpoint. The original receipt wins before stale CAS, command
+history or later quota/compatibility checks. Never replace its pins or key.
+
+A known CAS/preview conflict reports current proposal version/draft/hash. Reread
+and explicitly reconcile commands, then preview and apply a new request/key.
+Do not patch only expectedVersion or use project CAS. A new source head leaves
+the proposal baseline intact and reports baseOutdated. Historical graph cursors
+remain pinned; history-list continuation after a save must restart. Wrong ownership
+or designed-object source evidence gives404. Unsupported ready/rebase/impact
+remains a later boundary. These rules do not alter import3 batch/commit recovery.

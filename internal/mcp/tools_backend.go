@@ -27,6 +27,7 @@ type backendToolInput struct {
 
 func addBackendTools(s *sdk.Server, lb *loopback) {
 	addBackendImportTools(s, lb)
+	addBackendProposalTools(s, lb)
 	const base = "/api/backend-projects"
 	id := map[string]any{"type": "string", "format": "uuid"}
 	name := map[string]any{"type": "string", "minLength": 1, "maxLength": backendmodel.MaxNameLength}

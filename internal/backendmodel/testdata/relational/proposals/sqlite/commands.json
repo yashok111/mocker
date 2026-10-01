@@ -1,0 +1,5 @@
+[
+  {"type":"alter_column","commandId":"require-user","reason":"Orders require a user","columnId":"@column:orders:user_id@","nullable":false},
+  {"type":"alter_constraint","commandId":"membership","reason":"Retain user membership","action":"create","name":"designed_membership_fk","tableId":"@table:orders@","targetTableId":"@table:users@","columnPairs":[{"fromColumnId":"@column:orders:tenant_id@","toColumnId":"@column:users:tenant_id@"},{"fromColumnId":"@column:orders:user_id@","toColumnId":"@column:users:id@"}],"updateAction":"no_action","deleteAction":"restrict","matchType":"simple","deferrable":false,"initiallyDeferred":false},
+  {"type":"set_criteria","commandId":"rollout","reason":"Capture rollout planning","criteria":[{"key":"rollback","kind":"migration_plan","targetIds":["@table:orders@"],"description":"Review rollout and rollback before implementation"}]}
+]

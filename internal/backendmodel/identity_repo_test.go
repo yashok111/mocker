@@ -65,12 +65,12 @@ func TestIdentityUpgradePreservesBytesAndCommittedAllocations(t *testing.T) {
 	out := commitStaged(t, r, p, s, b.AcceptedVersion, "commit")
 	// Restore the legacy schema/data shape, then run the actual production migration.
 	err = db.Write(t.Context(), func(tx *sql.Tx) error {
-		for _, table := range []string{"backend_import_aliases", "backend_identity_bindings", "backend_import_decisions", "backend_import_previews", "backend_revision_decisions"} {
+		for _, table := range []string{"backend_proposal_revisions", "backend_proposals", "backend_import_aliases", "backend_identity_bindings", "backend_import_decisions", "backend_import_previews", "backend_revision_decisions"} {
 			if _, err := tx.ExecContext(t.Context(), "DROP TABLE "+table); err != nil {
 				return err
 			}
 		}
-		for _, query := range []string{`UPDATE backend_import_sessions SET document=json_remove(document,'$.mode','$.graphScope')`, `UPDATE backend_graph_records SET document=json_remove(document,'$.ownership','$.freshness')`, `UPDATE backend_revision_sources SET document=json_remove(document,'$.staleCounts','$.reconciliationGaps','$.snapshots[0].role')`, `PRAGMA user_version=14`} {
+		for _, query := range []string{`DROP INDEX backend_revision_owner`, `DROP INDEX backend_repository_owner`, `UPDATE backend_import_sessions SET document=json_remove(document,'$.mode','$.graphScope')`, `UPDATE backend_graph_records SET document=json_remove(document,'$.ownership','$.freshness')`, `UPDATE backend_revision_sources SET document=json_remove(document,'$.staleCounts','$.reconciliationGaps','$.snapshots[0].role')`, `PRAGMA user_version=14`} {
 			if _, err := tx.ExecContext(t.Context(), query); err != nil {
 				return err
 			}

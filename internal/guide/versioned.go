@@ -20,6 +20,7 @@ type Workflow struct {
 	Entrypoint                  string          `json:"entrypoint"`
 	RequiredModelSchemaVersions []string        `json:"requiredModelSchemaVersions"`
 	RequiredCapabilities        []string        `json:"requiredCapabilities"`
+	RequiredViewSchemaVersions  []string        `json:"requiredViewSchemaVersions,omitempty"`
 	Topics                      []TopicMetadata `json:"topics"`
 }
 
@@ -45,6 +46,7 @@ func CurrentGuideSetID() string { return currentManifest.GuideSetID }
 func cloneWorkflow(w Workflow) Workflow {
 	w.RequiredModelSchemaVersions = slices.Clone(w.RequiredModelSchemaVersions)
 	w.RequiredCapabilities = slices.Clone(w.RequiredCapabilities)
+	w.RequiredViewSchemaVersions = slices.Clone(w.RequiredViewSchemaVersions)
 	w.Topics = slices.Clone(w.Topics)
 	return w
 }

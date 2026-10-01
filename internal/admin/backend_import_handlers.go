@@ -263,7 +263,7 @@ func (s *Server) handleGetBackendNode(w http.ResponseWriter, r *http.Request) {
 	if !s.backendNoQuery(w, r) {
 		return
 	}
-	out, err := s.backendRepo.Node(r.Context(), r.PathValue("id"), r.PathValue("rid"), r.PathValue("nid"))
+	out, err := s.backendRepo.ReadNode(r.Context(), r.PathValue("id"), backendRouteReadTarget(r), r.PathValue("nid"))
 	if err != nil {
 		s.backendError(w, err)
 		return
@@ -280,7 +280,7 @@ func (s *Server) handleGetBackendEvidence(w http.ResponseWriter, r *http.Request
 		s.backendError(w, err)
 		return
 	}
-	out, err := s.backendRepo.Evidence(r.Context(), r.PathValue("id"), r.PathValue("rid"), backendmodel.EvidenceQueryInput{EvidenceID: r.URL.Query().Get("evidenceId"), SubjectID: subject, Limit: in.Limit, Cursor: in.Cursor})
+	out, err := s.backendRepo.ReadEvidence(r.Context(), r.PathValue("id"), backendRouteReadTarget(r), backendmodel.EvidenceQueryInput{EvidenceID: r.URL.Query().Get("evidenceId"), SubjectID: subject, Limit: in.Limit, Cursor: in.Cursor})
 	if err != nil {
 		s.backendError(w, err)
 		return
@@ -295,7 +295,7 @@ func (s *Server) handleGetBackendCoverage(w http.ResponseWriter, r *http.Request
 	if !s.backendNoQuery(w, r) {
 		return
 	}
-	out, err := s.backendRepo.RevisionCoverage(r.Context(), r.PathValue("id"), r.PathValue("rid"))
+	out, err := s.backendRepo.ReadCoverage(r.Context(), r.PathValue("id"), backendRouteReadTarget(r))
 	if err != nil {
 		s.backendError(w, err)
 		return

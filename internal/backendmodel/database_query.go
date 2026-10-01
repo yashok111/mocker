@@ -1,7 +1,6 @@
 package backendmodel
 
 import (
-	"bytes"
 	"context"
 	"encoding/json/jsontext"
 	"encoding/json/v2"
@@ -13,14 +12,15 @@ import (
 )
 
 type DatabaseQueryInput struct {
-	RevisionID                  string `json:"revisionId"`
-	DatastoreID                 string `json:"datastoreId"`
-	FacetKey                    string `json:"facetKey"`
-	RecordType                  string `json:"recordType"`
-	Search                      string `json:"search,omitempty"`
-	TableID                     string `json:"tableId,omitempty"`
-	Limit                       int    `json:"limit,omitzero"`
-	Cursor                      string `json:"cursor,omitempty"`
+	RevisionID                  string              `json:"revisionId,omitempty"`
+	Proposal                    *ProposalReadTarget `json:"proposal,omitzero"`
+	DatastoreID                 string              `json:"datastoreId"`
+	FacetKey                    string              `json:"facetKey"`
+	RecordType                  string              `json:"recordType"`
+	Search                      string              `json:"search,omitempty"`
+	TableID                     string              `json:"tableId,omitempty"`
+	Limit                       int                 `json:"limit,omitzero"`
+	Cursor                      string              `json:"cursor,omitempty"`
 	searchPresent, tablePresent bool
 }
 
@@ -31,27 +31,10 @@ func (in *DatabaseQueryInput) UnmarshalJSON(b []byte) error {
 	if err != nil {
 		return invalid("body", "Expected a strict database query object")
 	}
-	if err := relationalFields(m, []string{"revisionId", "datastoreId", "facetKey", "recordType"}, []string{"search", "tableId", "limit", "cursor"}); err != nil {
-		return invalid("body", err.Error())
-	}
-	for key, raw := range m {
-		raw = bytes.TrimSpace(raw)
-		if key == "limit" {
-			var limit int
-			if string(raw) == "null" || json.Unmarshal(raw, &limit) != nil || limit < 1 || limit > MaxGraphPageSize {
-				return invalid("limit", "limit must be between 1 and 500")
-			}
-			continue
-		}
-		var value string
-		if len(raw) == 0 || raw[0] != '"' || json.Unmarshal(raw, &value) != nil {
-			return invalid(key, "Expected a string")
-		}
-	}
 	type input DatabaseQueryInput
 	var decoded input
-	if err := json.Unmarshal(b, &decoded, json.RejectUnknownMembers(true)); err != nil {
-		return invalid("body", err.Error())
+	if err := decodeReadQuery(b, []string{"datastoreId", "facetKey", "recordType"}, []string{"search", "tableId", "limit", "cursor"}, &decoded); err != nil {
+		return err
 	}
 	*in = DatabaseQueryInput(decoded)
 	_, in.searchPresent = m["search"]
@@ -101,6 +84,8 @@ type TableItem struct {
 	DriftStatus   string   `json:"driftStatus"`
 }
 type RelationshipItem struct {
+	RuntimeStatus     string               `json:"runtimeStatus,omitempty"`
+	EffectiveFacet    *EffectiveFacet      `json:"effectiveFacet,omitzero"`
 	EdgeID            string               `json:"edgeId"`
 	ConstraintID      string               `json:"constraintId"`
 	SourceTableID     string               `json:"sourceTableId"`
@@ -113,6 +98,8 @@ type RelationshipItem struct {
 	TargetReason      *string              `json:"targetReason"`
 }
 type DatabasePage struct {
+	ViewSchemaVersion string             `json:"viewSchemaVersion,omitempty"`
+	ProposalPins      *ProposalReadPins  `json:"proposalPins,omitzero"`
 	ProjectID         string             `json:"projectId"`
 	RevisionID        string             `json:"revisionId"`
 	SemanticHash      string             `json:"semanticHash"`
@@ -128,6 +115,7 @@ type DatabasePage struct {
 }
 
 type databaseProjection struct {
+	proposal      *resolvedBackendTarget
 	in            DatabaseQueryInput
 	nodes         map[string]Node
 	children      map[string][]Node
@@ -171,7 +159,7 @@ func (p *databaseProjection) observe(id string) *relationalFacet {
 		p.limitation("Missing selected facet proof for " + id)
 		return nil
 	}
-	if f.Freshness.Status == "stale" {
+	if f.Freshness != nil && f.Freshness.Status == "stale" {
 		p.stale("Stale selected facet for " + id)
 	}
 	if f.AnalysisStatus != "complete" || f.ColumnsStatus != "" && f.ColumnsStatus != "complete" || f.ConstraintsStatus != "" && f.ConstraintsStatus != "complete" {
@@ -218,7 +206,15 @@ func (r *Repo) QueryDatabase(ctx context.Context, pid string, in DatabaseQueryIn
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	if !ValidID(in.RevisionID) || !ValidID(in.DatastoreID) {
+	target, err := r.resolveBackendTarget(ctx, pid, BackendReadTarget{RevisionID: in.RevisionID, Proposal: in.Proposal})
+	if err != nil {
+		return nil, err
+	}
+	if target.proposal != nil && (in.DatastoreID != target.proposal.DatastoreID || in.FacetKey != target.proposal.FacetKey) {
+		return nil, invalid("selection", "Proposal datastore and facet must match its baseline selection")
+	}
+	in.RevisionID = target.revisionID
+	if !ValidID(in.DatastoreID) {
 		return nil, notFound()
 	}
 	if !externalKey(in.FacetKey) {
@@ -240,7 +236,28 @@ func (r *Repo) QueryDatabase(ctx context.Context, pid string, in DatabaseQueryIn
 	if err != nil {
 		return nil, err
 	}
-	p := &databaseProjection{in: in, nodes: map[string]Node{}, children: map[string][]Node{}, facets: map[string]map[string]*relationalFacet{}, evidence: map[string]Evidence{}, stores: map[string]string{}, observed: map[string]bool{}, limitations: map[string]bool{}, uniqueResults: map[string]databaseUniqueness{}}
+	p := &databaseProjection{proposal: target, in: in, nodes: map[string]Node{}, children: map[string][]Node{}, facets: map[string]map[string]*relationalFacet{}, evidence: map[string]Evidence{}, stores: map[string]string{}, observed: map[string]bool{}, limitations: map[string]bool{}, uniqueResults: map[string]databaseUniqueness{}}
+	if target.proposal != nil {
+		state.Nodes = append([]Node{}, state.Nodes...)
+		state.Edges = append([]Edge{}, state.Edges...)
+		for _, o := range target.draft.Overlays {
+			if o.Base == nil {
+				if o.RecordType == "node" {
+					state.Nodes = append(state.Nodes, Node{ID: o.SubjectID, Kind: o.Kind, Name: o.Name, ParentID: o.ParentID})
+				} else {
+					state.Edges = append(state.Edges, Edge{ID: o.SubjectID, Kind: o.Kind, From: o.FromID, To: o.ToID})
+				}
+			} else if o.RecordType == "edge" {
+				for i := range state.Edges {
+					if state.Edges[i].ID == o.SubjectID {
+						state.Edges[i].From, state.Edges[i].To = o.FromID, o.ToID
+					}
+				}
+			}
+		}
+		slices.SortFunc(state.Nodes, func(a, b Node) int { return strings.Compare(a.ID, b.ID) })
+		slices.SortFunc(state.Edges, func(a, b Edge) int { return strings.Compare(a.ID, b.ID) })
+	}
 	for _, n := range state.Nodes {
 		if err := ctx.Err(); err != nil {
 			return nil, err
@@ -295,6 +312,9 @@ func (r *Repo) QueryDatabase(ctx context.Context, pid string, in DatabaseQueryIn
 	}
 	p.page = &DatabasePage{ProjectID: pid, RevisionID: in.RevisionID, SemanticHash: state.Revision.SemanticHash, DatastoreID: in.DatastoreID, FacetKey: in.FacetKey, RecordType: in.RecordType, Coverage: *coverage, FacetStatus: "current", Limitations: []string{}, TableItems: []TableItem{}, RelationshipItems: []RelationshipItem{}}
 	decode := func(id, kind string, attrs map[string]jsontext.Value, edge bool) error {
+		if o := target.overlay(id); o != nil && o.Base == nil {
+			return nil
+		}
 		if !relationalSubject(kind, attrs, edge) {
 			return nil
 		}
@@ -346,6 +366,27 @@ func (r *Repo) QueryDatabase(ctx context.Context, pid string, in DatabaseQueryIn
 				return nil, err
 			}
 		}
+	}
+	if target.proposal != nil {
+		for _, o := range target.draft.Overlays {
+			raw, err := json.Marshal(o.Values)
+			if err != nil {
+				return nil, err
+			}
+			f := &relationalFacet{}
+			if err := json.Unmarshal(raw, f); err != nil {
+				return nil, err
+			}
+			if source := p.selected(o.SubjectID); source != nil {
+				f.relationalFacetCommon = source.relationalFacetCommon
+			}
+			if p.facets[o.SubjectID] == nil {
+				p.facets[o.SubjectID] = map[string]*relationalFacet{}
+			}
+			p.facets[o.SubjectID][in.FacetKey] = f
+		}
+		p.page.ViewSchemaVersion, p.page.ProposalPins = ProposalDocumentVersion, target.pins
+		p.page.Limitations = append(p.page.Limitations, "Desired structure; existing data, writers and runtime enforcement are unverified")
 	}
 	p.observe(in.DatastoreID)
 	for _, n := range state.Nodes {
@@ -413,6 +454,15 @@ func (r *Repo) QueryDatabase(ctx context.Context, pid string, in DatabaseQueryIn
 	if err != nil {
 		return nil, err
 	}
+	if target.pins != nil {
+		scope, err = requestDigest(struct {
+			SourceScope string
+			Pins        *ProposalReadPins
+		}{scope, target.pins})
+		if err != nil {
+			return nil, err
+		}
+	}
 	limit, after, err := decodeGraphPage(in.Limit, in.Cursor, "database", pid, scope, true)
 	if err != nil {
 		return nil, err
@@ -447,9 +497,14 @@ func (p *databaseProjection) relationship(e Edge, f, cf *relationalFacet) Relati
 	if f.TargetReason != "" {
 		item.TargetReason = new(f.TargetReason)
 	}
-	if p.proofStale(f) || p.proofStale(cf) {
+	designed := p.proposal != nil && p.proposal.proposal != nil
+	declared := p.proofCurrent(f) && p.proofCurrent(cf)
+	if designed && p.proposal.overlay(e.ID) != nil && p.proposal.overlay(e.From) != nil {
+		declared = true
+	}
+	if !designed && (p.proofStale(f) || p.proofStale(cf)) {
 		item.Status = "stale"
-	} else if !p.proofCurrent(f) || !p.proofCurrent(cf) {
+	} else if !declared {
 		item.Status = "inferred"
 	}
 	missing := p.observe(item.SourceTableID) == nil
@@ -468,7 +523,7 @@ func (p *databaseProjection) relationship(e Edge, f, cf *relationalFacet) Relati
 			if col == nil {
 				missing = true
 			}
-			if !p.proofCurrent(col) {
+			if !p.propertyCurrent(id, "/nullable") {
 				currentColumns = false
 			}
 		}
@@ -484,7 +539,7 @@ func (p *databaseProjection) relationship(e Edge, f, cf *relationalFacet) Relati
 		limitation := "Current explicit selected FK/table/column proof unavailable for " + e.ID
 		item.SourceCardinality.Basis = append(item.SourceCardinality.Basis, limitation)
 		item.TargetCardinality.Basis = append(item.TargetCardinality.Basis, limitation)
-		return item
+		return p.projectRelationship(item, e)
 	}
 	item.SourceCardinality.Min = new(int64(0))
 	item.SourceCardinality.Basis = append(item.SourceCardinality.Basis, "Declared relationship "+e.ID+" does not require a source row for every target")
@@ -504,7 +559,13 @@ func (p *databaseProjection) relationship(e Edge, f, cf *relationalFacet) Relati
 	allNotNull, nullable, unknown := true, false, false
 	for _, id := range fromColumns {
 		n := p.selected(id).Nullable
-		item.TargetCardinality.Basis = append(item.TargetCardinality.Basis, "Selected source column "+id+" nullable "+n.Status+" "+string(n.Value)+" with evidence "+strings.Join(p.selected(id).EvidenceIDs, ","))
+		basis := "Selected source column " + id + " nullable " + n.Status + " " + string(n.Value) + " with evidence " + strings.Join(p.selected(id).EvidenceIDs, ",")
+		if designed {
+			if overlay := p.proposal.overlay(id); overlay != nil && overlay.PropertyOrigins["/nullable"].Kind == "intent" {
+				basis = "Desired column " + id + " nullable " + string(n.Value) + " from command " + overlay.PropertyOrigins["/nullable"].CommandID + "; runtime is unverified"
+			}
+		}
+		item.TargetCardinality.Basis = append(item.TargetCardinality.Basis, basis)
 		if scalarBool(n, true) {
 			nullable = true
 			allNotNull = false
@@ -518,11 +579,15 @@ func (p *databaseProjection) relationship(e Edge, f, cf *relationalFacet) Relati
 		if nullable {
 			item.TargetCardinality.Min = new(int64(0))
 		}
-		item.TargetCardinality.Basis = append(item.TargetCardinality.Basis, "Current explicit nondeferrable MATCH SIMPLE "+e.From+" with selected source nullability")
+		basis := "Current explicit nondeferrable MATCH SIMPLE " + e.From + " with selected source nullability"
+		if designed {
+			basis = "Designed nondeferrable MATCH SIMPLE " + e.From + " with desired nullability; runtime enforcement is unverified"
+		}
+		item.TargetCardinality.Basis = append(item.TargetCardinality.Basis, basis)
 	} else {
 		item.TargetCardinality.Basis = append(item.TargetCardinality.Basis, "Minimum unknown: selected nullability, nondeferrable MATCH SIMPLE enforcement or target key is not established for "+e.ID)
 	}
-	return item
+	return p.projectRelationship(item, e)
 }
 func scalarBool(s *relationalScalar, want bool) bool {
 	return s != nil && s.Status == "known" && string(s.Value) == fmt.Sprint(want)

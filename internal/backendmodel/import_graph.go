@@ -451,7 +451,7 @@ func (r *Repo) PreviewImport(ctx context.Context, pid, sid string, in PreviewImp
 		if err := savePreview(ctx, tx, s, result, g); err != nil {
 			return err
 		}
-		return checkStaging(ctx, tx, pid, 0)
+		return r.checkStaging(ctx, tx, pid, 0)
 	})
 	if err != nil {
 		return nil, err
@@ -618,7 +618,7 @@ func (r *Repo) CommitImport(ctx context.Context, pid, sid string, in CommitImpor
 		}
 		*result = ImportCommitResult{Project: *p, Revision: rev, SessionID: sid}
 		response, _ := json.Marshal(result)
-		return checkStaging(ctx, tx, pid, int64(len(response)))
+		return r.checkStaging(ctx, tx, pid, int64(len(response)))
 	})
 	if err != nil {
 		return nil, err

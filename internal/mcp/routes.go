@@ -51,20 +51,26 @@ import (
 var noRoute = []string{}
 
 var toolRoutes = map[string][]string{
-	"compare_backend_revisions":       {"POST /api/backend-projects/{id}/revisions/compare"},
-	"get_backend_import_changes":      {"GET /api/backend-projects/{id}/imports/{iid}/changes"},
-	"begin_backend_import":            {"POST /api/backend-projects/{id}/imports"},
-	"list_backend_imports":            {"GET /api/backend-projects/{id}/imports"},
-	"get_backend_import":              {"GET /api/backend-projects/{id}/imports/{iid}"},
-	"put_backend_import_batch":        {"PUT /api/backend-projects/{id}/imports/{iid}/batches/{bid}"},
-	"preview_backend_import":          {"POST /api/backend-projects/{id}/imports/{iid}/preview"},
-	"commit_backend_import":           {"POST /api/backend-projects/{id}/imports/{iid}/commit"},
-	"abort_backend_import":            {"POST /api/backend-projects/{id}/imports/{iid}/abort"},
-	"query_backend_database":          {"POST /api/backend-projects/{id}/database/query"},
-	"query_backend_graph":             {"POST /api/backend-projects/{id}/graph/query"},
-	"get_backend_node":                {"GET /api/backend-projects/{id}/revisions/{rid}/nodes/{nid}"},
-	"get_backend_evidence":            {"GET /api/backend-projects/{id}/revisions/{rid}/evidence"},
-	"get_backend_coverage":            {"GET /api/backend-projects/{id}/revisions/{rid}/coverage"},
+	"compare_backend_revisions":         {"POST /api/backend-projects/{id}/revisions/compare"},
+	"get_backend_import_changes":        {"GET /api/backend-projects/{id}/imports/{iid}/changes"},
+	"begin_backend_import":              {"POST /api/backend-projects/{id}/imports"},
+	"list_backend_imports":              {"GET /api/backend-projects/{id}/imports"},
+	"get_backend_import":                {"GET /api/backend-projects/{id}/imports/{iid}"},
+	"put_backend_import_batch":          {"PUT /api/backend-projects/{id}/imports/{iid}/batches/{bid}"},
+	"preview_backend_import":            {"POST /api/backend-projects/{id}/imports/{iid}/preview"},
+	"commit_backend_import":             {"POST /api/backend-projects/{id}/imports/{iid}/commit"},
+	"abort_backend_import":              {"POST /api/backend-projects/{id}/imports/{iid}/abort"},
+	"query_backend_database":            {"POST /api/backend-projects/{id}/database/query"},
+	"query_backend_graph":               {"POST /api/backend-projects/{id}/graph/query"},
+	"get_backend_node":                  {"GET /api/backend-projects/{id}/revisions/{rid}/nodes/{nid}", "GET /api/backend-projects/{id}/proposals/{pid}/revisions/{prid}/nodes/{nid}"},
+	"get_backend_evidence":              {"GET /api/backend-projects/{id}/revisions/{rid}/evidence", "GET /api/backend-projects/{id}/proposals/{pid}/revisions/{prid}/evidence"},
+	"get_backend_coverage":              {"GET /api/backend-projects/{id}/revisions/{rid}/coverage", "GET /api/backend-projects/{id}/proposals/{pid}/revisions/{prid}/coverage"},
+	"list_backend_proposals":            {"GET /api/backend-projects/{id}/proposals"},
+	"create_backend_proposal":           {"POST /api/backend-projects/{id}/proposals"},
+	"get_backend_proposal":              {"GET /api/backend-projects/{id}/proposals/{pid}"},
+	"preview_backend_proposal_commands": {"POST /api/backend-projects/{id}/proposals/{pid}/preview"},
+	"apply_backend_proposal_commands":   {"POST /api/backend-projects/{id}/proposals/{pid}/commands"},
+
 	"get_backend_capabilities":        {"GET /api/backend-projects/capabilities"},
 	"list_backend_projects":           {"GET /api/backend-projects"},
 	"create_backend_project":          {"POST /api/backend-projects"},
@@ -314,7 +320,8 @@ var toolRoutes = map[string][]string{
 // Pinned in routes_test.go so a tool
 // added without an entry here is caught by a test rather than by a 404 in
 // production.
-const toolCount = 168
+// B1.2 adds five isolated database proposal operations.
+const toolCount = 173
 
 // toolPath resolves ONE call a tool makes into the (method, path) pair
 // loopback.do/call take.

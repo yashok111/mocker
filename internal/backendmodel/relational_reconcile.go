@@ -601,8 +601,7 @@ func validateRelationalGraph(ctx context.Context, q importReader, s *ImportSessi
 			source := []string{}
 			for _, pair := range f.ColumnPairs {
 				source = append(source, pair.FromColumnID)
-				a, b := nodes[pair.FromColumnID], nodes[pair.ToColumnID]
-				if a.Kind != "column" || b.Kind != "column" || a.ParentID == nil || b.ParentID == nil || *a.ParentID != *from.ParentID || *b.ParentID != e.To {
+				if !relationalPairParents(nodes, *from.ParentID, e.To, DatabaseColumnPair{FromColumnID: pair.FromColumnID, ToColumnID: pair.ToColumnID}) {
 					add("edges/"+e.ID, "FK pair columns must belong to source and destination tables")
 				}
 			}

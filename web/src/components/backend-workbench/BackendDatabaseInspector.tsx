@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { getBackendNode } from "@/api/generated/backend-projects/backend-projects";
 import type { BackendEdge, BackendNode, BackendFacetComparison } from "@/api/generated/schemas";
 import { LoadState } from "./BackendGraphInventory";
+import { BackendDatabaseProposalInspector } from "./BackendDatabaseProposalInspector";
 import {
   databaseButtonStyles,
   databaseKey,
@@ -22,13 +23,23 @@ type Props = {
   selection: DatabaseSelection;
   onSelect: (selection: DatabaseSelection) => void;
   onClose: () => void;
+  onRequireColumn?: (columnId: string) => void;
 };
 
-export function BackendDatabaseInspector({
+export function BackendDatabaseInspector({ ...props }: Props) {
+  return props.context.proposal ? (
+    <BackendDatabaseProposalInspector {...props} />
+  ) : (
+    <SourceDatabaseInspector {...props} />
+  );
+}
+
+function SourceDatabaseInspector({
   context: original,
   selection,
   onSelect,
   onClose,
+  onRequireColumn,
 }: Props) {
   const context = { ...original, revisionId: selection.revisionId ?? original.revisionId };
   const key = [...databaseKey(context), "inspector", selection.type, selection.id];
@@ -84,6 +95,11 @@ export function BackendDatabaseInspector({
         {record && (
           <>
             <Badge>{record.kind}</Badge>
+            {record.kind === "column" && onRequireColumn && (
+              <Button onClick={() => onRequireColumn(record.id)}>
+                Сделать обязательной в предложении
+              </Button>
+            )}
             {"from" in record && (
               <Group>
                 <Button

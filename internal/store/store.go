@@ -26,6 +26,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 
 	_ "modernc.org/sqlite" // database/sql driver "sqlite"
 )
@@ -55,7 +56,9 @@ type DB struct {
 	// defeats the serialisation the writer pool provides.
 	R *sql.DB
 
-	path string
+	path           string
+	transientMu    sync.Mutex
+	transientBytes map[string]int64
 }
 
 // Open prepares the data directory, opens both pools and verifies the file is

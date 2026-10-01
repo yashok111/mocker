@@ -279,21 +279,25 @@ type Evidence struct {
 	Snippet      *string             `json:"snippet,omitzero"`
 }
 type GraphQueryInput struct {
-	ID         string `json:"id,omitempty"`
-	RevisionID string `json:"revisionId"`
-	RecordType string `json:"recordType"`
-	Kind       string `json:"kind,omitempty"`
-	Search     string `json:"search,omitempty"`
-	ParentID   string `json:"parentId,omitempty"`
-	From       string `json:"from,omitempty"`
-	To         string `json:"to,omitempty"`
-	Limit      int    `json:"limit,omitzero"`
-	Cursor     string `json:"cursor,omitempty"`
+	ID         string              `json:"id,omitempty"`
+	RevisionID string              `json:"revisionId,omitempty"`
+	Proposal   *ProposalReadTarget `json:"proposal,omitzero"`
+	RecordType string              `json:"recordType"`
+	Kind       string              `json:"kind,omitempty"`
+	Search     string              `json:"search,omitempty"`
+	ParentID   string              `json:"parentId,omitempty"`
+	From       string              `json:"from,omitempty"`
+	To         string              `json:"to,omitempty"`
+	Limit      int                 `json:"limit,omitzero"`
+	Cursor     string              `json:"cursor,omitempty"`
 }
 type GraphPage struct {
-	Nodes      []Node `json:"nodes"`
-	Edges      []Edge `json:"edges"`
-	NextCursor string `json:"nextCursor"`
+	ViewSchemaVersion  string                   `json:"viewSchemaVersion,omitempty"`
+	ProposalPins       *ProposalReadPins        `json:"proposalPins,omitzero"`
+	ProposalProjection *ProposalGraphProjection `json:"proposalProjection,omitzero"`
+	Nodes              []Node                   `json:"nodes"`
+	Edges              []Edge                   `json:"edges"`
+	NextCursor         string                   `json:"nextCursor"`
 }
 type EvidenceQueryInput struct {
 	EvidenceID string `json:"evidenceId,omitempty"`
@@ -302,13 +306,17 @@ type EvidenceQueryInput struct {
 	Cursor     string `json:"cursor,omitempty"`
 }
 type EvidencePage struct {
-	Items      []Evidence `json:"items"`
-	NextCursor string     `json:"nextCursor"`
+	ViewSchemaVersion string            `json:"viewSchemaVersion,omitempty"`
+	ProposalPins      *ProposalReadPins `json:"proposalPins,omitzero"`
+	Items             []Evidence        `json:"items"`
+	NextCursor        string            `json:"nextCursor"`
 }
 type RevisionCoverage struct {
-	StaleCounts        StaleCounts      `json:"staleCounts"`
-	ReconciliationGaps []string         `json:"reconciliationGaps"`
-	Coverage           Coverage         `json:"coverage"`
-	Inventory          []InventoryItem  `json:"inventory"`
-	Snapshots          []SourceSnapshot `json:"snapshots"`
+	ViewSchemaVersion  string            `json:"viewSchemaVersion,omitempty"`
+	ProposalPins       *ProposalReadPins `json:"proposalPins,omitzero"`
+	StaleCounts        StaleCounts       `json:"staleCounts"`
+	ReconciliationGaps []string          `json:"reconciliationGaps"`
+	Coverage           Coverage          `json:"coverage"`
+	Inventory          []InventoryItem   `json:"inventory"`
+	Snapshots          []SourceSnapshot  `json:"snapshots"`
 }

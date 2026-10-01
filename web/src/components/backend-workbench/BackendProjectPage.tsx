@@ -13,7 +13,7 @@ import {
   Title,
 } from "@mantine/core";
 import { IconArrowLeft } from "@tabler/icons-react";
-import { useNavigate } from "@tanstack/react-router";
+import { useBlocker, useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   getGetBackendProjectQueryKey,
@@ -41,6 +41,14 @@ function BackendProjectDetail({ projectId }: { projectId: string }) {
   const query = useGetBackendProject(projectId);
   const project = query.data?.status === 200 ? query.data.data : undefined;
   const [selectedRevisionId, setSelectedRevisionId] = useState<string | null>(null);
+  const [databaseDirty, setDatabaseDirty] = useState(false);
+  useBlocker({
+    shouldBlockFn: () =>
+      databaseDirty &&
+      !window.confirm("В предложении есть несохранённые изменения. Покинуть проект?"),
+    enableBeforeUnload: databaseDirty,
+    withResolver: false,
+  });
   const [historyOpen, setHistoryOpen] = useState(false);
   const [compareOpen, setCompareOpen] = useState(false);
   const [importsOpen, setImportsOpen] = useState(false);
@@ -264,7 +272,15 @@ function BackendProjectDetail({ projectId }: { projectId: string }) {
           {revision && (
             <>
               {revision.schemaVersion === "2" && (
-                <BackendDatabase projectId={projectId} revisionId={revision.id} />
+                <BackendDatabase
+                  projectId={projectId}
+                  revisionId={revision.id}
+                  repositoryId={project.repositories[0]?.id}
+                  onDirty={(dirty) => {
+                    setDatabaseDirty(dirty);
+                    if (dirty) setSelectedRevisionId((current) => current ?? revision.id);
+                  }}
+                />
               )}
               {revision.sourceSnapshotIds.length > 0 ? (
                 <BackendGraphInventory
@@ -327,7 +343,17 @@ function BackendProjectDetail({ projectId }: { projectId: string }) {
                         variant={item.id === revision.id ? "light" : "subtle"}
                         w="fit-content"
                         maw="100%"
-                        onClick={() => setSelectedRevisionId(item.id)}
+                        onClick={() => {
+                          if (
+                            !databaseDirty ||
+                            window.confirm(
+                              "В предложении есть несохранённые изменения. Открыть другую ревизию источника?",
+                            )
+                          ) {
+                            setDatabaseDirty(false);
+                            setSelectedRevisionId(item.id);
+                          }
+                        }}
                         aria-label={`Открыть ревизию ${item.id}`}
                       >
                         {new Date(item.createdAt).toLocaleString("ru-RU")}

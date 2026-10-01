@@ -2,7 +2,7 @@
 
 
 Load as `backend-database-reference` from the selected global guideSetId. Its
-canonical owner is `mocker-backend-database` v1. Import v3 explicitly selects
+canonical owner is `mocker-backend-database` v2. Import v3 explicitly selects
 that supported owner in the same set and verifies the actual returned owner
 workflow/version/set/manifestHash/contentHash against the owner's manifest.
 Do not expect this topic to return import identity. For shared UUID/provenance/
@@ -163,7 +163,8 @@ reads, refused as import data, unstored and excluded from semanticHash.
 
 The MCP operation `query_backend_database` and REST
 `POST /api/backend-projects/{id}/database/query` are read-only. The operationId
-is queryBackendDatabase. Required MCP input is projectId/revisionId/datastoreId/
+is queryBackendDatabase. Required MCP input is projectId plus exactly one target (revisionId or
+proposal:{proposalId,proposalRevisionId}), datastoreId/
 facetKey/recordType; recordType is tables or relationships. search is optional
 only for tables; tableId is optional only for relationships and selects either
 FK endpoint. Omit optional limit for default100; max500. limit0, wrong selector
@@ -233,7 +234,7 @@ stays visible. A join table remains itself plus its two FKs, not a synthetic
 physical N:M edge. ER arrows do not identify readers, joins, transactions or
 parameters; those are B2 work.
 
-## B1.1 limits and unavailable actions
+## Limits and later actions
 
 Use advertised limits: 16 facets/subject, 64 ordered constraint/FK columns,
 64 index terms, 64KiB UTF-8 per native type/definition/expression and
@@ -243,7 +244,55 @@ never truncate. They are validation bounds, not measured performance claims.
 Canvas visibility is at most 200 tables/600 FKs with explicit scope counts; the
 paginated list, relationship table and inspector preserve full read access.
 
-Database proposals, typed targeted edits, preview/apply NOT NULL/FK changes and
-data/writer criteria are unavailable until B1.2. Do not name proposal tools as
-available or execute DDL. Live collection, endpoint lineage, full proposals/
-impact/provider migration and saved views are later work. B1.1 does not close B1.
+Live collection, endpoint lineage, measured data/writer checks, ready/rebase,
+impact, provider migration and saved views remain later work.
+
+## Proposal documents and property provenance
+
+`proposal-relational-v1` is a desired view/document, separate from source schema2.
+Create pins project/repository/base revision and hash/datastore/facet. A proposal
+has its own positive int64 version and immutable draft history. Only draft status
+is supported. Imported graph rows, provider identities, source receipts and the
+project source pointer remain intact. There is no live database mutation.
+
+Read responses add viewSchemaVersion/proposalPins/proposalProjection. Ordinary
+nodes/edges remain source records. A projected node/edge pairs sourceRecord with
+an effectiveFacet; new designed constraint/reference IDs have sourceRecord:null.
+Values retain typed known/unknown semantics. Each propertyOrigin is source with
+baseline/property/evidence pins, or intent with commandId/reason and no invented
+source evidence. Inherited uniqueness remains source basis; changing nullability
+or FK intent does not refresh source facts or stale evidence.
+
+All proposal ER relationships use status:proposed and runtimeStatus:unverified.
+Bounds describe desired participation under the stated baseline assumptions.
+They do not prove that runtime enforcement or existing rows match the proposal.
+Partial, stale, inferred, expression or conditional uniqueness remains limited.
+Off-page targets retain UUIDs and can be read at the exact proposal revision.
+Evidence/coverage resolves the pinned source baseline with explicit proposal pins;
+a new designed subject evidence read returns404. Explain its intent provenance.
+
+Strict commands (every command requires commandId and nonblank reason):
+
+- `{type:"alter_column",columnId,nullable:<boolean>}`; no other column property.
+- `{type:"alter_constraint",action:"create",name,tableId,targetTableId,
+  columnPairs:[{fromColumnId,toColumnId}],updateAction,deleteAction,matchType,
+  deferrable,initiallyDeferred}`; update replaces name/tableId with constraintId.
+  Source and target tables/columns must belong to the pinned selection. Pair order
+  is meaningful. Restrict dialect features to actual declared PostgreSQL/SQLite
+  support; preview validates the final batch, including SET NULL/nullability.
+- `{type:"set_criteria",criteria:[{key,kind,targetIds,description}]}` replaces
+  authored criteria only. Allowed authored kinds are existing_data, writers,
+  referential_integrity, target_uniqueness and migration_plan. Required criteria
+  cannot be removed; all statuses stay unverified.
+
+Preview returns proposal/base/draft pins, expectedVersion, candidateHash and
+candidateGraphHash (nullable for invalid desired state), changes, criteria,
+diagnostics and limitations. Apply adds the candidateHash and idempotencyKey to
+that exact input and returns proposal/revision/changes/criteria/candidateGraphHash.
+On get, revision is the selected immutable revision; proposal contains current
+CAS pins. History is paginated and get may include lastApplyReceipt/baseOutdated.
+
+Limits add 100 commands/1MiB per proposal batch, 100 authored criteria, and
+4096 UTF-8 bytes per reason/description. Existing 64-pair/reference, graph,
+semantic payload and shared 512MiB project transient limits still apply. No
+truncation, extra open-proposal cap or performance claim is implied.

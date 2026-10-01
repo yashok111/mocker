@@ -54,7 +54,7 @@ const HTTP_METHODS = ["get", "post", "put", "delete", "patch"] as const;
 // agree with anything that file said. Every test below that wants to name it
 // reads it from here, which is the one thing the old title did not do — it
 // said "64" while the assertion said 70, for four slices running.
-const ROUTE_COUNT = 155;
+const ROUTE_COUNT = 163;
 
 interface RouteInfo {
   method: string;
@@ -296,6 +296,8 @@ describe("web/src API coverage", () => {
     // Saved/candidate data-flow analysis adds GET and POST operations, 111 -> 113.
     // B1.1 adds POST /api/backend-projects/{id}/database/query for the
     // revision-pinned relational inspector, 154 -> 155.
+    // B1.2 adds five proposal operations and three pinned node/evidence/coverage
+    // read aliases, 155 -> 163.
     // This count is OPERATIONS (method + path), not `paths` keys — a
     // 48-to-51 edit that instead counted paths would silently undercount.
     expect(routes).toHaveLength(ROUTE_COUNT);

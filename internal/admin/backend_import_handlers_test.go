@@ -312,6 +312,36 @@ func validateBackendImportResponse(t *testing.T, method, path string, data []byt
 			name = "BackendEvidencePage"
 		}
 	}
+
+	if len(parts) >= 4 && parts[3] == "proposals" {
+		if len(parts) == 4 {
+			if method == "GET" {
+				name = "BackendProposalPage"
+			} else {
+				name = "BackendProposalDetail"
+			}
+		}
+		if len(parts) == 5 {
+			name = "BackendProposalDetail"
+		}
+		if len(parts) == 6 {
+			if parts[5] == "preview" {
+				name = "BackendProposalPreview"
+			} else {
+				name = "BackendProposalApplyResult"
+			}
+		}
+		if len(parts) == 8 {
+			if parts[7] == "coverage" {
+				name = "BackendRevisionCoverage"
+			} else if parts[7] == "evidence" {
+				name = "BackendEvidencePage"
+			}
+		}
+		if len(parts) == 9 {
+			name = "BackendProposalNodeRead"
+		}
+	}
 	if name == "" {
 		return
 	}

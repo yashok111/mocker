@@ -6,8 +6,8 @@ metadata:
   workflowVersion: "3"
   requiredModelSchemaVersions: "[\"1\",\"2\"]"
   requiredCapabilities: "[\"backend-projects\",\"backend-revisions\",\"backend-graph-query\",\"backend-source-import\",\"backend-source-reconcile\",\"backend-revision-compare\",\"backend-relational-import\",\"backend-database-query\",\"backend-database-er\"]"
-  guideSetId: "sha256:7b39ceb9b6f7089c14356d2d9f70068abaa63f72e23edc3293307d66dbe7ebc8"
-  manifestHash: "sha256:7b39ceb9b6f7089c14356d2d9f70068abaa63f72e23edc3293307d66dbe7ebc8"
+  guideSetId: "sha256:54ad47e9cec57296780d3ef881fa90d192c4bb467fcdcde124bd7df8692776de"
+  manifestHash: "sha256:54ad47e9cec57296780d3ef881fa90d192c4bb467fcdcde124bd7df8692776de"
 ---
 
 # Source graph import and reconciliation
@@ -62,11 +62,11 @@ Fetch shared topics with `get_guide {topic,guideSetId:selected.guideSetId}`:
 | `backend-recovery` | import v3 | Before commit, or after timeout/conflict/resume. |
 | `backend-examples` | import v3 | When a concrete fixture or recovery sequence is needed. |
 | `backend-profile-go-sql` | import v3 | For Go, SQL, ORM and migration source extraction. |
-| `backend-database-reference` | database v1 | For relational record details, pinned ER, drift and unknown cardinality. |
+| `backend-database-reference` | database v2 | For relational record details, pinned ER, drift and unknown cardinality. |
 
 For an import-owned topic, verify the returned tuple/contentHash against the
 selected import manifest. For `backend-database-reference`, explicitly select
-the advertised supported `mocker-backend-database` v1 identity whose guideSetId
+the advertised supported `mocker-backend-database` v2 identity whose guideSetId
 and manifestHash are the same global set; verify schema2 and its required
 capabilities, then verify the returned actual database owner tuple/contentHash
 against that owner's manifest. A topic is not import-owned because import uses it.

@@ -64,6 +64,7 @@ func TestCrossOwnerRelationalGuideSDKUsesAdvertisedPinnedSet(t *testing.T) {
 	}
 	var capabilities struct {
 		ModelSchemaVersions []string         `json:"modelSchemaVersions"`
+		ViewSchemaVersions  []string         `json:"viewSchemaVersions"`
 		Features            []string         `json:"features"`
 		WorkflowVersions    []guide.Workflow `json:"workflowVersions"`
 	}
@@ -79,6 +80,11 @@ func TestCrossOwnerRelationalGuideSDKUsesAdvertisedPinnedSet(t *testing.T) {
 				t.Errorf("workflow %s requires unserved schema %s", workflow.WorkflowID, required)
 			}
 		}
+		for _, required := range workflow.RequiredViewSchemaVersions {
+			if !slices.Contains(capabilities.ViewSchemaVersions, required) {
+				t.Errorf("workflow %s requires unserved view %s", workflow.WorkflowID, required)
+			}
+		}
 		for _, required := range workflow.RequiredCapabilities {
 			if !slices.Contains(capabilities.Features, required) {
 				t.Errorf("workflow %s requires unserved capability %s", workflow.WorkflowID, required)
@@ -88,8 +94,8 @@ func TestCrossOwnerRelationalGuideSDKUsesAdvertisedPinnedSet(t *testing.T) {
 	for _, item := range []struct {
 		topic, owner, version string
 	}{
-		{topic: "backend-database", owner: "mocker-backend-database", version: "1"},
-		{topic: "backend-database-reference", owner: "mocker-backend-database", version: "1"},
+		{topic: "backend-database", owner: "mocker-backend-database", version: "2"},
+		{topic: "backend-database-reference", owner: "mocker-backend-database", version: "2"},
 		{topic: "backend-model", owner: "mocker-backend-import", version: "3"},
 		{topic: "backend-recovery", owner: "mocker-backend-import", version: "3"},
 		{topic: "backend-profile-go-sql", owner: "mocker-backend-import", version: "3"},
