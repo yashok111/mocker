@@ -1,0 +1,10 @@
+.host {
+  height: 400px;
+  min-width: 0;
+}
+
+@media (max-width: 480px) {
+  .host {
+    height: 320px;
+  }
+}

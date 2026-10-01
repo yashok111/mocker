@@ -130,6 +130,79 @@ class GuideSyncPackagingTests(unittest.TestCase):
         self.assertIn(f'guideSetId: "{identity}"'.encode(), leaf)
         self.assertEqual(self.run_sync("--check").returncode, 0)
 
+    def load_published_relational_sources(self):
+        self.declarations = json.loads(
+            (REPO / "skills/mocker/guide-sources.json").read_text()
+        )
+        for source in self.declarations["sources"]:
+            relative = (
+                pathlib.Path("skills")
+                / source.get("package", "mocker")
+                / source["source"]
+            )
+            destination = self.root / relative
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(REPO / relative, destination)
+
+    def test_relational_leaves_and_shared_topics_have_distinct_owners(self):
+        self.load_published_relational_sources()
+        self.generate()
+        manifest = json.loads((self.root / "internal/guide/manifest.json").read_text())
+        self.assertEqual(len(manifest["sources"]), 16)
+        workflows = {w["workflowId"]: w for w in manifest["workflows"]}
+        self.assertEqual(len(workflows), 4)
+        importing = workflows["mocker-backend-import"]
+        database = workflows["mocker-backend-database"]
+        self.assertEqual(importing["workflowVersion"], "3")
+        self.assertEqual(importing["requiredModelSchemaVersions"], ["1", "2"])
+        self.assertEqual(database["requiredModelSchemaVersions"], ["2"])
+        self.assertIn(
+            "backend-database-reference",
+            [topic["topic"] for topic in database["topics"]],
+        )
+        self.assertIn(
+            "backend-model", [topic["topic"] for topic in importing["topics"]]
+        )
+        leaf = (self.root / "skills/mocker-backend-database/SKILL.md").read_bytes()
+        self.assertEqual(
+            leaf,
+            (
+                self.root / "skills/mocker/references/backend/database-workflow.md"
+            ).read_bytes(),
+        )
+        self.assertEqual(
+            leaf, (self.root / "internal/guide/backend-database.md").read_bytes()
+        )
+        self.assertNotEqual(
+            leaf,
+            (self.root / "skills/mocker/references/backend/database.md").read_bytes(),
+        )
+        self.assertEqual(self.run_sync("--check").returncode, 0)
+
+    def test_shared_database_reference_changes_both_leaf_identities(self):
+        self.load_published_relational_sources()
+        previous = self.generate()
+        reference = self.root / "skills/mocker/references/backend/database.md"
+        reference.write_text(reference.read_text() + "\nChanged inspection guidance.\n")
+        current = self.generate()
+        self.assertNotEqual(current, previous)
+        for package in ("mocker", "mocker-backend-import", "mocker-backend-database"):
+            text = (self.root / "skills" / package / "SKILL.md").read_text()
+            self.assertIn(f'guideSetId: "{current}"', text)
+            self.assertNotIn(f'guideSetId: "{previous}"', text)
+        self.assertEqual(self.run_sync("--check").returncode, 0)
+
+    def test_database_alias_cannot_overwrite_shared_reference(self):
+        self.load_published_relational_sources()
+        self.generate()
+        database = next(
+            source
+            for source in self.declarations["sources"]
+            if source["topic"] == "backend-database"
+        )
+        database["copies"][0]["path"] = "references/backend/database.md"
+        self.assert_invalid_without_changes("destination collision")
+
     def test_default_package_preserves_root_only_declarations(self):
         self.declarations["sources"] = self.declarations["sources"][:1]
         self.declarations["workflows"] = self.declarations["workflows"][:1]

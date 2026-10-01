@@ -13453,7 +13453,8 @@
           "schemaVersion": {
             "type": "string",
             "enum": [
-              "1"
+              "1",
+              "2"
             ]
           },
           "semanticHash": {
@@ -13683,7 +13684,10 @@
           "importModes",
           "importCommands",
           "reconciliationProfile",
-          "comparisonVersion"
+          "comparisonVersion",
+          "profileCapabilities",
+          "profileExtensions",
+          "reconciliationProfiles"
         ],
         "properties": {
           "modelSchemaVersions": {
@@ -13734,7 +13738,14 @@
               "maxProjectStagingBytes",
               "maxOpenImportSessions",
               "defaultGraphPageSize",
-              "maxGraphPageSize"
+              "maxGraphPageSize",
+              "maxRelationalFacets",
+              "maxRelationalOrderedColumns",
+              "maxRelationalIndexTerms",
+              "maxRelationalNativeBytes",
+              "maxRelationalReferences",
+              "defaultDatabasePageSize",
+              "maxDatabasePageSize"
             ],
             "properties": {
               "maxNameLength": {
@@ -13844,6 +13855,48 @@
                 "format": "int64",
                 "minimum": 1,
                 "maximum": 9223372036854775807
+              },
+              "maxRelationalFacets": {
+                "type": "integer",
+                "format": "int64",
+                "minimum": 1,
+                "maximum": 9223372036854775807
+              },
+              "maxRelationalOrderedColumns": {
+                "type": "integer",
+                "format": "int64",
+                "minimum": 1,
+                "maximum": 9223372036854775807
+              },
+              "maxRelationalIndexTerms": {
+                "type": "integer",
+                "format": "int64",
+                "minimum": 1,
+                "maximum": 9223372036854775807
+              },
+              "maxRelationalNativeBytes": {
+                "type": "integer",
+                "format": "int64",
+                "minimum": 1,
+                "maximum": 9223372036854775807
+              },
+              "maxRelationalReferences": {
+                "type": "integer",
+                "format": "int64",
+                "minimum": 1,
+                "maximum": 9223372036854775807
+              },
+              "defaultDatabasePageSize": {
+                "type": "integer",
+                "format": "int64",
+                "minimum": 1,
+                "maximum": 9223372036854775807
+              },
+              "maxDatabasePageSize": {
+                "type": "integer",
+                "format": "int64",
+                "minimum": 1,
+                "maximum": 9223372036854775807
               }
             }
           },
@@ -13910,6 +13963,24 @@
             "type": "integer",
             "format": "int64",
             "const": 1
+          },
+          "profileCapabilities": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendProfileCapability"
+            }
+          },
+          "profileExtensions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendProfileExtension"
+            }
+          },
+          "reconciliationProfiles": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendReconciliationProfile"
+            }
           }
         }
       },
@@ -13963,7 +14034,14 @@
           "symbol",
           "http_operation",
           "handler",
-          "unresolved_target"
+          "unresolved_target",
+          "db_schema",
+          "table",
+          "column",
+          "constraint",
+          "index",
+          "view",
+          "migration"
         ]
       },
       "BackendEdgeKind": {
@@ -13972,7 +14050,8 @@
           "contains",
           "handles",
           "calls",
-          "derived_from"
+          "derived_from",
+          "references"
         ]
       },
       "BackendProvider": {
@@ -14334,48 +14413,58 @@
         }
       },
       "BackendDatastoreAttributes": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": [],
-        "properties": {
-          "description": {
-            "type": [
-              "string",
-              "null"
-            ]
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/BackendDatastoreLegacyAttributes"
           },
-          "technology": {
-            "type": [
-              "string",
-              "null"
-            ]
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "relational"
+            ],
+            "properties": {
+              "description": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "technology": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "relational": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "facets"
+                ],
+                "properties": {
+                  "facets": {
+                    "type": "object",
+                    "minProperties": 1,
+                    "maxProperties": 16,
+                    "propertyNames": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200,
+                      "pattern": "^[^\\p{Cc}]+$"
+                    },
+                    "additionalProperties": {
+                      "$ref": "#/components/schemas/BackendDatastoreFacet"
+                    }
+                  }
+                }
+              }
+            }
           }
-        }
+        ]
       },
       "BackendSymbolAttributes": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": [],
-        "properties": {
-          "description": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "language": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "qualifiedName": {
-            "type": [
-              "string",
-              "null"
-            ]
-          }
-        }
+        "$ref": "#/components/schemas/BackendRoutineAttributes"
       },
       "BackendHttpOperationAttributes": {
         "type": "object",
@@ -14678,7 +14767,7 @@
                 "minLength": 1
               },
               "attributes": {
-                "$ref": "#/components/schemas/BackendDatastoreAttributes"
+                "$ref": "#/components/schemas/BackendDatastoreAttributesInput"
               },
               "parentKey": {
                 "type": "string",
@@ -14723,7 +14812,7 @@
                 "minLength": 1
               },
               "attributes": {
-                "$ref": "#/components/schemas/BackendSymbolAttributes"
+                "$ref": "#/components/schemas/BackendRoutineAttributesInput"
               },
               "parentKey": {
                 "type": "string",
@@ -14859,6 +14948,321 @@
               },
               "attributes": {
                 "$ref": "#/components/schemas/BackendUnresolvedTargetAttributes"
+              },
+              "parentKey": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200,
+                "pattern": "^[^\\p{Cc}]+$"
+              },
+              "evidenceKeys": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200,
+                  "pattern": "^[^\\p{Cc}]+$"
+                }
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "externalKey",
+              "kind",
+              "name",
+              "attributes",
+              "evidenceKeys"
+            ],
+            "properties": {
+              "externalKey": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200,
+                "pattern": "^[^\\p{Cc}]+$"
+              },
+              "kind": {
+                "type": "string",
+                "const": "db_schema"
+              },
+              "name": {
+                "type": "string",
+                "minLength": 1
+              },
+              "attributes": {
+                "$ref": "#/components/schemas/BackendDatabaseSchemaAttributesInput"
+              },
+              "parentKey": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200,
+                "pattern": "^[^\\p{Cc}]+$"
+              },
+              "evidenceKeys": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200,
+                  "pattern": "^[^\\p{Cc}]+$"
+                }
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "externalKey",
+              "kind",
+              "name",
+              "attributes",
+              "evidenceKeys"
+            ],
+            "properties": {
+              "externalKey": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200,
+                "pattern": "^[^\\p{Cc}]+$"
+              },
+              "kind": {
+                "type": "string",
+                "const": "table"
+              },
+              "name": {
+                "type": "string",
+                "minLength": 1
+              },
+              "attributes": {
+                "$ref": "#/components/schemas/BackendTableAttributesInput"
+              },
+              "parentKey": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200,
+                "pattern": "^[^\\p{Cc}]+$"
+              },
+              "evidenceKeys": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200,
+                  "pattern": "^[^\\p{Cc}]+$"
+                }
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "externalKey",
+              "kind",
+              "name",
+              "attributes",
+              "evidenceKeys"
+            ],
+            "properties": {
+              "externalKey": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200,
+                "pattern": "^[^\\p{Cc}]+$"
+              },
+              "kind": {
+                "type": "string",
+                "const": "column"
+              },
+              "name": {
+                "type": "string",
+                "minLength": 1
+              },
+              "attributes": {
+                "$ref": "#/components/schemas/BackendColumnAttributesInput"
+              },
+              "parentKey": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200,
+                "pattern": "^[^\\p{Cc}]+$"
+              },
+              "evidenceKeys": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200,
+                  "pattern": "^[^\\p{Cc}]+$"
+                }
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "externalKey",
+              "kind",
+              "name",
+              "attributes",
+              "evidenceKeys"
+            ],
+            "properties": {
+              "externalKey": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200,
+                "pattern": "^[^\\p{Cc}]+$"
+              },
+              "kind": {
+                "type": "string",
+                "const": "constraint"
+              },
+              "name": {
+                "type": "string",
+                "minLength": 1
+              },
+              "attributes": {
+                "$ref": "#/components/schemas/BackendConstraintAttributesInput"
+              },
+              "parentKey": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200,
+                "pattern": "^[^\\p{Cc}]+$"
+              },
+              "evidenceKeys": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200,
+                  "pattern": "^[^\\p{Cc}]+$"
+                }
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "externalKey",
+              "kind",
+              "name",
+              "attributes",
+              "evidenceKeys"
+            ],
+            "properties": {
+              "externalKey": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200,
+                "pattern": "^[^\\p{Cc}]+$"
+              },
+              "kind": {
+                "type": "string",
+                "const": "index"
+              },
+              "name": {
+                "type": "string",
+                "minLength": 1
+              },
+              "attributes": {
+                "$ref": "#/components/schemas/BackendIndexAttributesInput"
+              },
+              "parentKey": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200,
+                "pattern": "^[^\\p{Cc}]+$"
+              },
+              "evidenceKeys": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200,
+                  "pattern": "^[^\\p{Cc}]+$"
+                }
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "externalKey",
+              "kind",
+              "name",
+              "attributes",
+              "evidenceKeys"
+            ],
+            "properties": {
+              "externalKey": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200,
+                "pattern": "^[^\\p{Cc}]+$"
+              },
+              "kind": {
+                "type": "string",
+                "const": "view"
+              },
+              "name": {
+                "type": "string",
+                "minLength": 1
+              },
+              "attributes": {
+                "$ref": "#/components/schemas/BackendViewAttributesInput"
+              },
+              "parentKey": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200,
+                "pattern": "^[^\\p{Cc}]+$"
+              },
+              "evidenceKeys": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200,
+                  "pattern": "^[^\\p{Cc}]+$"
+                }
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "externalKey",
+              "kind",
+              "name",
+              "attributes",
+              "evidenceKeys"
+            ],
+            "properties": {
+              "externalKey": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200,
+                "pattern": "^[^\\p{Cc}]+$"
+              },
+              "kind": {
+                "type": "string",
+                "const": "migration"
+              },
+              "name": {
+                "type": "string",
+                "minLength": 1
+              },
+              "attributes": {
+                "$ref": "#/components/schemas/BackendMigrationAttributesInput"
               },
               "parentKey": {
                 "type": "string",
@@ -14934,6 +15338,9 @@
               },
               "freshness": {
                 "$ref": "#/components/schemas/BackendAssertionFreshness"
+              },
+              "facetComparison": {
+                "$ref": "#/components/schemas/BackendFacetComparison"
               }
             }
           },
@@ -14990,6 +15397,9 @@
               },
               "freshness": {
                 "$ref": "#/components/schemas/BackendAssertionFreshness"
+              },
+              "facetComparison": {
+                "$ref": "#/components/schemas/BackendFacetComparison"
               }
             }
           },
@@ -15046,6 +15456,9 @@
               },
               "freshness": {
                 "$ref": "#/components/schemas/BackendAssertionFreshness"
+              },
+              "facetComparison": {
+                "$ref": "#/components/schemas/BackendFacetComparison"
               }
             }
           },
@@ -15102,6 +15515,9 @@
               },
               "freshness": {
                 "$ref": "#/components/schemas/BackendAssertionFreshness"
+              },
+              "facetComparison": {
+                "$ref": "#/components/schemas/BackendFacetComparison"
               }
             }
           },
@@ -15158,6 +15574,9 @@
               },
               "freshness": {
                 "$ref": "#/components/schemas/BackendAssertionFreshness"
+              },
+              "facetComparison": {
+                "$ref": "#/components/schemas/BackendFacetComparison"
               }
             }
           },
@@ -15189,7 +15608,7 @@
                 "minLength": 1
               },
               "attributes": {
-                "$ref": "#/components/schemas/BackendSymbolAttributes"
+                "$ref": "#/components/schemas/BackendRoutineAttributes"
               },
               "id": {
                 "type": "string",
@@ -15214,6 +15633,9 @@
               },
               "freshness": {
                 "$ref": "#/components/schemas/BackendAssertionFreshness"
+              },
+              "facetComparison": {
+                "$ref": "#/components/schemas/BackendFacetComparison"
               }
             }
           },
@@ -15270,6 +15692,9 @@
               },
               "freshness": {
                 "$ref": "#/components/schemas/BackendAssertionFreshness"
+              },
+              "facetComparison": {
+                "$ref": "#/components/schemas/BackendFacetComparison"
               }
             }
           },
@@ -15326,6 +15751,9 @@
               },
               "freshness": {
                 "$ref": "#/components/schemas/BackendAssertionFreshness"
+              },
+              "facetComparison": {
+                "$ref": "#/components/schemas/BackendFacetComparison"
               }
             }
           },
@@ -15382,109 +15810,652 @@
               },
               "freshness": {
                 "$ref": "#/components/schemas/BackendAssertionFreshness"
+              },
+              "facetComparison": {
+                "$ref": "#/components/schemas/BackendFacetComparison"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "externalKey",
+              "kind",
+              "name",
+              "attributes",
+              "id",
+              "parentId",
+              "evidenceIds"
+            ],
+            "properties": {
+              "externalKey": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200,
+                "pattern": "^[^\\p{Cc}]+$"
+              },
+              "kind": {
+                "type": "string",
+                "const": "db_schema"
+              },
+              "name": {
+                "type": "string",
+                "minLength": 1
+              },
+              "attributes": {
+                "$ref": "#/components/schemas/BackendDatabaseSchemaAttributes"
+              },
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "parentId": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "uuid"
+              },
+              "evidenceIds": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              },
+              "ownership": {
+                "$ref": "#/components/schemas/BackendAssertionOwnership"
+              },
+              "freshness": {
+                "$ref": "#/components/schemas/BackendAssertionFreshness"
+              },
+              "facetComparison": {
+                "$ref": "#/components/schemas/BackendFacetComparison"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "externalKey",
+              "kind",
+              "name",
+              "attributes",
+              "id",
+              "parentId",
+              "evidenceIds"
+            ],
+            "properties": {
+              "externalKey": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200,
+                "pattern": "^[^\\p{Cc}]+$"
+              },
+              "kind": {
+                "type": "string",
+                "const": "table"
+              },
+              "name": {
+                "type": "string",
+                "minLength": 1
+              },
+              "attributes": {
+                "$ref": "#/components/schemas/BackendTableAttributes"
+              },
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "parentId": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "uuid"
+              },
+              "evidenceIds": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              },
+              "ownership": {
+                "$ref": "#/components/schemas/BackendAssertionOwnership"
+              },
+              "freshness": {
+                "$ref": "#/components/schemas/BackendAssertionFreshness"
+              },
+              "facetComparison": {
+                "$ref": "#/components/schemas/BackendFacetComparison"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "externalKey",
+              "kind",
+              "name",
+              "attributes",
+              "id",
+              "parentId",
+              "evidenceIds"
+            ],
+            "properties": {
+              "externalKey": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200,
+                "pattern": "^[^\\p{Cc}]+$"
+              },
+              "kind": {
+                "type": "string",
+                "const": "column"
+              },
+              "name": {
+                "type": "string",
+                "minLength": 1
+              },
+              "attributes": {
+                "$ref": "#/components/schemas/BackendColumnAttributes"
+              },
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "parentId": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "uuid"
+              },
+              "evidenceIds": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              },
+              "ownership": {
+                "$ref": "#/components/schemas/BackendAssertionOwnership"
+              },
+              "freshness": {
+                "$ref": "#/components/schemas/BackendAssertionFreshness"
+              },
+              "facetComparison": {
+                "$ref": "#/components/schemas/BackendFacetComparison"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "externalKey",
+              "kind",
+              "name",
+              "attributes",
+              "id",
+              "parentId",
+              "evidenceIds"
+            ],
+            "properties": {
+              "externalKey": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200,
+                "pattern": "^[^\\p{Cc}]+$"
+              },
+              "kind": {
+                "type": "string",
+                "const": "constraint"
+              },
+              "name": {
+                "type": "string",
+                "minLength": 1
+              },
+              "attributes": {
+                "$ref": "#/components/schemas/BackendConstraintAttributes"
+              },
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "parentId": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "uuid"
+              },
+              "evidenceIds": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              },
+              "ownership": {
+                "$ref": "#/components/schemas/BackendAssertionOwnership"
+              },
+              "freshness": {
+                "$ref": "#/components/schemas/BackendAssertionFreshness"
+              },
+              "facetComparison": {
+                "$ref": "#/components/schemas/BackendFacetComparison"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "externalKey",
+              "kind",
+              "name",
+              "attributes",
+              "id",
+              "parentId",
+              "evidenceIds"
+            ],
+            "properties": {
+              "externalKey": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200,
+                "pattern": "^[^\\p{Cc}]+$"
+              },
+              "kind": {
+                "type": "string",
+                "const": "index"
+              },
+              "name": {
+                "type": "string",
+                "minLength": 1
+              },
+              "attributes": {
+                "$ref": "#/components/schemas/BackendIndexAttributes"
+              },
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "parentId": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "uuid"
+              },
+              "evidenceIds": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              },
+              "ownership": {
+                "$ref": "#/components/schemas/BackendAssertionOwnership"
+              },
+              "freshness": {
+                "$ref": "#/components/schemas/BackendAssertionFreshness"
+              },
+              "facetComparison": {
+                "$ref": "#/components/schemas/BackendFacetComparison"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "externalKey",
+              "kind",
+              "name",
+              "attributes",
+              "id",
+              "parentId",
+              "evidenceIds"
+            ],
+            "properties": {
+              "externalKey": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200,
+                "pattern": "^[^\\p{Cc}]+$"
+              },
+              "kind": {
+                "type": "string",
+                "const": "view"
+              },
+              "name": {
+                "type": "string",
+                "minLength": 1
+              },
+              "attributes": {
+                "$ref": "#/components/schemas/BackendViewAttributes"
+              },
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "parentId": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "uuid"
+              },
+              "evidenceIds": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              },
+              "ownership": {
+                "$ref": "#/components/schemas/BackendAssertionOwnership"
+              },
+              "freshness": {
+                "$ref": "#/components/schemas/BackendAssertionFreshness"
+              },
+              "facetComparison": {
+                "$ref": "#/components/schemas/BackendFacetComparison"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "externalKey",
+              "kind",
+              "name",
+              "attributes",
+              "id",
+              "parentId",
+              "evidenceIds"
+            ],
+            "properties": {
+              "externalKey": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200,
+                "pattern": "^[^\\p{Cc}]+$"
+              },
+              "kind": {
+                "type": "string",
+                "const": "migration"
+              },
+              "name": {
+                "type": "string",
+                "minLength": 1
+              },
+              "attributes": {
+                "$ref": "#/components/schemas/BackendMigrationAttributes"
+              },
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "parentId": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "uuid"
+              },
+              "evidenceIds": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              },
+              "ownership": {
+                "$ref": "#/components/schemas/BackendAssertionOwnership"
+              },
+              "freshness": {
+                "$ref": "#/components/schemas/BackendAssertionFreshness"
+              },
+              "facetComparison": {
+                "$ref": "#/components/schemas/BackendFacetComparison"
               }
             }
           }
         ]
       },
       "BackendEdgeInput": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": [
-          "externalKey",
-          "kind",
-          "fromKey",
-          "toKey",
-          "attributes",
-          "evidenceKeys"
-        ],
-        "properties": {
-          "externalKey": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 200,
-            "pattern": "^[^\\p{Cc}]+$"
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "externalKey",
+              "kind",
+              "fromKey",
+              "toKey",
+              "attributes",
+              "evidenceKeys"
+            ],
+            "properties": {
+              "externalKey": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200,
+                "pattern": "^[^\\p{Cc}]+$"
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "contains",
+                  "handles",
+                  "calls",
+                  "derived_from"
+                ]
+              },
+              "fromKey": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200,
+                "pattern": "^[^\\p{Cc}]+$"
+              },
+              "toKey": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200,
+                "pattern": "^[^\\p{Cc}]+$"
+              },
+              "attributes": {
+                "$ref": "#/components/schemas/BackendEdgeAttributes"
+              },
+              "evidenceKeys": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200,
+                  "pattern": "^[^\\p{Cc}]+$"
+                }
+              }
+            }
           },
-          "kind": {
-            "$ref": "#/components/schemas/BackendEdgeKind"
-          },
-          "fromKey": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 200,
-            "pattern": "^[^\\p{Cc}]+$"
-          },
-          "toKey": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 200,
-            "pattern": "^[^\\p{Cc}]+$"
-          },
-          "attributes": {
-            "$ref": "#/components/schemas/BackendEdgeAttributes"
-          },
-          "evidenceKeys": {
-            "type": "array",
-            "items": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 200,
-              "pattern": "^[^\\p{Cc}]+$"
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "externalKey",
+              "kind",
+              "fromKey",
+              "toKey",
+              "attributes",
+              "evidenceKeys"
+            ],
+            "properties": {
+              "externalKey": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200,
+                "pattern": "^[^\\p{Cc}]+$"
+              },
+              "kind": {
+                "type": "string",
+                "const": "references"
+              },
+              "fromKey": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200,
+                "pattern": "^[^\\p{Cc}]+$"
+              },
+              "toKey": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200,
+                "pattern": "^[^\\p{Cc}]+$"
+              },
+              "attributes": {
+                "$ref": "#/components/schemas/BackendReferenceAttributesInput"
+              },
+              "evidenceKeys": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200,
+                  "pattern": "^[^\\p{Cc}]+$"
+                }
+              }
             }
           }
-        }
+        ]
       },
       "BackendEdge": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": [
-          "id",
-          "externalKey",
-          "kind",
-          "from",
-          "to",
-          "attributes",
-          "evidenceIds"
-        ],
-        "properties": {
-          "id": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "externalKey": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 200,
-            "pattern": "^[^\\p{Cc}]+$"
-          },
-          "kind": {
-            "$ref": "#/components/schemas/BackendEdgeKind"
-          },
-          "from": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "to": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "attributes": {
-            "$ref": "#/components/schemas/BackendEdgeAttributes"
-          },
-          "evidenceIds": {
-            "type": "array",
-            "items": {
-              "type": "string",
-              "format": "uuid"
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "externalKey",
+              "kind",
+              "from",
+              "to",
+              "attributes",
+              "evidenceIds"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "externalKey": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200,
+                "pattern": "^[^\\p{Cc}]+$"
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "contains",
+                  "handles",
+                  "calls",
+                  "derived_from"
+                ]
+              },
+              "from": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "to": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "attributes": {
+                "$ref": "#/components/schemas/BackendEdgeAttributes"
+              },
+              "evidenceIds": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              },
+              "ownership": {
+                "$ref": "#/components/schemas/BackendAssertionOwnership"
+              },
+              "freshness": {
+                "$ref": "#/components/schemas/BackendAssertionFreshness"
+              },
+              "facetComparison": {
+                "$ref": "#/components/schemas/BackendFacetComparison"
+              }
             }
           },
-          "ownership": {
-            "$ref": "#/components/schemas/BackendAssertionOwnership"
-          },
-          "freshness": {
-            "$ref": "#/components/schemas/BackendAssertionFreshness"
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "externalKey",
+              "kind",
+              "from",
+              "to",
+              "attributes",
+              "evidenceIds"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "externalKey": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200,
+                "pattern": "^[^\\p{Cc}]+$"
+              },
+              "kind": {
+                "type": "string",
+                "const": "references"
+              },
+              "from": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "to": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "attributes": {
+                "$ref": "#/components/schemas/BackendReferenceAttributes"
+              },
+              "evidenceIds": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              },
+              "ownership": {
+                "$ref": "#/components/schemas/BackendAssertionOwnership"
+              },
+              "freshness": {
+                "$ref": "#/components/schemas/BackendAssertionFreshness"
+              },
+              "facetComparison": {
+                "$ref": "#/components/schemas/BackendFacetComparison"
+              }
+            }
           }
-        }
+        ]
       },
       "BackendEvidenceInput": {
         "type": "object",
@@ -15803,6 +16774,17 @@
           },
           "graphScope": {
             "$ref": "#/components/schemas/BackendGraphScope"
+          },
+          "profile": {
+            "type": "string",
+            "enum": [
+              "foundation-graph-v1",
+              "relational-graph-v1"
+            ],
+            "default": "foundation-graph-v1"
+          },
+          "profileExtension": {
+            "$ref": "#/components/schemas/BackendProfileExtension"
           }
         },
         "allOf": [
@@ -15835,8 +16817,34 @@
                     "required": [
                       "graphScope"
                     ]
+                  },
+                  {
+                    "required": [
+                      "profileExtension"
+                    ]
                   }
                 ]
+              }
+            }
+          },
+          {
+            "if": {
+              "required": [
+                "profileExtension"
+              ]
+            },
+            "then": {
+              "required": [
+                "profile",
+                "mode"
+              ],
+              "properties": {
+                "profile": {
+                  "const": "relational-graph-v1"
+                },
+                "mode": {
+                  "const": "reconcile"
+                }
               }
             }
           }
@@ -16054,6 +17062,23 @@
               {
                 "type": "null"
               }
+            ]
+          },
+          "profileExtension": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BackendProfileExtension"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "profile": {
+            "type": "string",
+            "enum": [
+              "foundation-graph-v1",
+              "relational-graph-v1"
             ]
           }
         }
@@ -16336,6 +17361,23 @@
             "format": "int64",
             "minimum": 0,
             "maximum": 9223372036854775807
+          },
+          "profileExtension": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BackendProfileExtension"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "modelSchemaVersion": {
+            "type": "string",
+            "enum": [
+              "1",
+              "2"
+            ]
           }
         }
       },
@@ -16629,7 +17671,8 @@
           "profile": {
             "type": "string",
             "enum": [
-              "foundation-graph-v1"
+              "foundation-graph-v1",
+              "relational-graph-v1"
             ]
           },
           "status": {
@@ -17572,6 +18615,4412 @@
             "type": "string"
           }
         }
+      },
+      "BackendProfileExtension": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "fromProfile",
+          "toProfile"
+        ],
+        "properties": {
+          "fromProfile": {
+            "type": "string",
+            "const": "foundation-graph-v1"
+          },
+          "toProfile": {
+            "type": "string",
+            "const": "relational-graph-v1"
+          }
+        }
+      },
+      "BackendKnownNativeString": {
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "status",
+              "value"
+            ],
+            "properties": {
+              "status": {
+                "const": "known",
+                "type": "string"
+              },
+              "value": {
+                "type": "string",
+                "description": "Literal UTF-8 source text; at most 65536 UTF-8 bytes, enforced atomically by the domain."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "status",
+              "reason"
+            ],
+            "properties": {
+              "status": {
+                "const": "unknown",
+                "type": "string"
+              },
+              "reason": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        ]
+      },
+      "BackendKnownNullableNativeString": {
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "status",
+              "value"
+            ],
+            "properties": {
+              "status": {
+                "const": "known",
+                "type": "string"
+              },
+              "value": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "Literal UTF-8 source text; at most 65536 UTF-8 bytes, enforced atomically by the domain."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "status",
+              "reason"
+            ],
+            "properties": {
+              "status": {
+                "const": "unknown",
+                "type": "string"
+              },
+              "reason": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        ]
+      },
+      "BackendKnownBoolean": {
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "status",
+              "value"
+            ],
+            "properties": {
+              "status": {
+                "const": "known",
+                "type": "string"
+              },
+              "value": {
+                "type": "boolean"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "status",
+              "reason"
+            ],
+            "properties": {
+              "status": {
+                "const": "unknown",
+                "type": "string"
+              },
+              "reason": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        ]
+      },
+      "BackendKnownNullableBoolean": {
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "status",
+              "value"
+            ],
+            "properties": {
+              "status": {
+                "const": "known",
+                "type": "string"
+              },
+              "value": {
+                "type": [
+                  "boolean",
+                  "null"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "status",
+              "reason"
+            ],
+            "properties": {
+              "status": {
+                "const": "unknown",
+                "type": "string"
+              },
+              "reason": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        ]
+      },
+      "BackendKnownOrdinal": {
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "status",
+              "value"
+            ],
+            "properties": {
+              "status": {
+                "const": "known",
+                "type": "string"
+              },
+              "value": {
+                "type": "integer",
+                "format": "int64",
+                "minimum": 1,
+                "maximum": 9223372036854775807
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "status",
+              "reason"
+            ],
+            "properties": {
+              "status": {
+                "const": "unknown",
+                "type": "string"
+              },
+              "reason": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        ]
+      },
+      "BackendKnownMigrationOrder": {
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "status",
+              "value"
+            ],
+            "properties": {
+              "status": {
+                "const": "known",
+                "type": "string"
+              },
+              "value": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "int64",
+                "minimum": 0,
+                "maximum": 9223372036854775807
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "status",
+              "reason"
+            ],
+            "properties": {
+              "status": {
+                "const": "unknown",
+                "type": "string"
+              },
+              "reason": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        ]
+      },
+      "BackendKnownTypeFamily": {
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "status",
+              "value"
+            ],
+            "properties": {
+              "status": {
+                "const": "known",
+                "type": "string"
+              },
+              "value": {
+                "type": "string",
+                "enum": [
+                  "boolean",
+                  "integer",
+                  "decimal",
+                  "float",
+                  "string",
+                  "binary",
+                  "date",
+                  "time",
+                  "timestamp",
+                  "json",
+                  "uuid",
+                  "array",
+                  "other"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "status",
+              "reason"
+            ],
+            "properties": {
+              "status": {
+                "const": "unknown",
+                "type": "string"
+              },
+              "reason": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        ]
+      },
+      "BackendKnownReferentialAction": {
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "status",
+              "value"
+            ],
+            "properties": {
+              "status": {
+                "const": "known",
+                "type": "string"
+              },
+              "value": {
+                "type": "string",
+                "enum": [
+                  "no_action",
+                  "restrict",
+                  "cascade",
+                  "set_null",
+                  "set_default"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "status",
+              "reason"
+            ],
+            "properties": {
+              "status": {
+                "const": "unknown",
+                "type": "string"
+              },
+              "reason": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        ]
+      },
+      "BackendKnownMatchType": {
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "status",
+              "value"
+            ],
+            "properties": {
+              "status": {
+                "const": "known",
+                "type": "string"
+              },
+              "value": {
+                "type": "string",
+                "enum": [
+                  "simple",
+                  "full",
+                  "partial"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "status",
+              "reason"
+            ],
+            "properties": {
+              "status": {
+                "const": "unknown",
+                "type": "string"
+              },
+              "reason": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        ]
+      },
+      "BackendRelationalFreshness": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "status",
+          "confirmedSnapshotId",
+          "reasons"
+        ],
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "current",
+              "stale"
+            ]
+          },
+          "confirmedSnapshotId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "reasons": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "BackendDatastoreFacetInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "sourceKind",
+          "dialect",
+          "analysisStatus",
+          "gaps",
+          "evidenceKeys",
+          "qualifiedName",
+          "nativeDefinition",
+          "databaseName"
+        ],
+        "properties": {
+          "sourceKind": {
+            "type": "string",
+            "enum": [
+              "sql",
+              "orm",
+              "migration"
+            ]
+          },
+          "dialect": {
+            "type": "string",
+            "enum": [
+              "postgresql",
+              "sqlite"
+            ]
+          },
+          "analysisStatus": {
+            "type": "string",
+            "enum": [
+              "complete",
+              "partial",
+              "unsupported"
+            ]
+          },
+          "gaps": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "evidenceKeys": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200,
+              "pattern": "^[^\\p{Cc}]+$"
+            },
+            "minItems": 1,
+            "uniqueItems": true
+          },
+          "qualifiedName": {
+            "type": "string",
+            "minLength": 1
+          },
+          "nativeDefinition": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Literal UTF-8 source text; at most 65536 UTF-8 bytes, enforced atomically by the domain."
+          },
+          "databaseName": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "analysisStatus": {
+                  "enum": [
+                    "partial",
+                    "unsupported"
+                  ]
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "gaps": {
+                  "minItems": 1
+                }
+              }
+            }
+          }
+        ]
+      },
+      "BackendDatastoreLegacyAttributes": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [],
+        "properties": {
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "technology": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "BackendDatastoreAttributesInput": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/BackendDatastoreLegacyAttributes"
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "relational"
+            ],
+            "properties": {
+              "description": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "technology": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "relational": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "facets"
+                ],
+                "properties": {
+                  "facets": {
+                    "type": "object",
+                    "minProperties": 1,
+                    "maxProperties": 16,
+                    "propertyNames": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200,
+                      "pattern": "^[^\\p{Cc}]+$"
+                    },
+                    "additionalProperties": {
+                      "$ref": "#/components/schemas/BackendDatastoreFacetInput"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "BackendDatabaseSchemaFacetInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "sourceKind",
+          "dialect",
+          "analysisStatus",
+          "gaps",
+          "evidenceKeys",
+          "qualifiedName",
+          "nativeDefinition"
+        ],
+        "properties": {
+          "sourceKind": {
+            "type": "string",
+            "enum": [
+              "sql",
+              "orm",
+              "migration"
+            ]
+          },
+          "dialect": {
+            "type": "string",
+            "enum": [
+              "postgresql",
+              "sqlite"
+            ]
+          },
+          "analysisStatus": {
+            "type": "string",
+            "enum": [
+              "complete",
+              "partial",
+              "unsupported"
+            ]
+          },
+          "gaps": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "evidenceKeys": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200,
+              "pattern": "^[^\\p{Cc}]+$"
+            },
+            "minItems": 1,
+            "uniqueItems": true
+          },
+          "qualifiedName": {
+            "type": "string",
+            "minLength": 1
+          },
+          "nativeDefinition": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Literal UTF-8 source text; at most 65536 UTF-8 bytes, enforced atomically by the domain."
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "analysisStatus": {
+                  "enum": [
+                    "partial",
+                    "unsupported"
+                  ]
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "gaps": {
+                  "minItems": 1
+                }
+              }
+            }
+          }
+        ]
+      },
+      "BackendDatabaseSchemaAttributesInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "facets"
+        ],
+        "properties": {
+          "facets": {
+            "type": "object",
+            "minProperties": 1,
+            "maxProperties": 16,
+            "propertyNames": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200,
+              "pattern": "^[^\\p{Cc}]+$"
+            },
+            "additionalProperties": {
+              "$ref": "#/components/schemas/BackendDatabaseSchemaFacetInput"
+            }
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "BackendTableFacetInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "sourceKind",
+          "dialect",
+          "analysisStatus",
+          "gaps",
+          "evidenceKeys",
+          "qualifiedName",
+          "nativeDefinition",
+          "columnsStatus",
+          "constraintsStatus"
+        ],
+        "properties": {
+          "sourceKind": {
+            "type": "string",
+            "enum": [
+              "sql",
+              "orm",
+              "migration"
+            ]
+          },
+          "dialect": {
+            "type": "string",
+            "enum": [
+              "postgresql",
+              "sqlite"
+            ]
+          },
+          "analysisStatus": {
+            "type": "string",
+            "enum": [
+              "complete",
+              "partial",
+              "unsupported"
+            ]
+          },
+          "gaps": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "evidenceKeys": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200,
+              "pattern": "^[^\\p{Cc}]+$"
+            },
+            "minItems": 1,
+            "uniqueItems": true
+          },
+          "qualifiedName": {
+            "type": "string",
+            "minLength": 1
+          },
+          "nativeDefinition": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Literal UTF-8 source text; at most 65536 UTF-8 bytes, enforced atomically by the domain."
+          },
+          "columnsStatus": {
+            "type": "string",
+            "enum": [
+              "complete",
+              "partial",
+              "unsupported"
+            ]
+          },
+          "constraintsStatus": {
+            "type": "string",
+            "enum": [
+              "complete",
+              "partial",
+              "unsupported"
+            ]
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "analysisStatus": {
+                  "enum": [
+                    "partial",
+                    "unsupported"
+                  ]
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "gaps": {
+                  "minItems": 1
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "columnsStatus": {
+                  "enum": [
+                    "partial",
+                    "unsupported"
+                  ]
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "gaps": {
+                  "minItems": 1
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "constraintsStatus": {
+                  "enum": [
+                    "partial",
+                    "unsupported"
+                  ]
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "gaps": {
+                  "minItems": 1
+                }
+              }
+            }
+          }
+        ]
+      },
+      "BackendTableAttributesInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "facets"
+        ],
+        "properties": {
+          "facets": {
+            "type": "object",
+            "minProperties": 1,
+            "maxProperties": 16,
+            "propertyNames": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200,
+              "pattern": "^[^\\p{Cc}]+$"
+            },
+            "additionalProperties": {
+              "$ref": "#/components/schemas/BackendTableFacetInput"
+            }
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "BackendColumnFacetInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "sourceKind",
+          "dialect",
+          "analysisStatus",
+          "gaps",
+          "evidenceKeys",
+          "nativeType",
+          "typeFamily",
+          "nullable",
+          "defaultExpression",
+          "generatedExpression",
+          "identity",
+          "ordinal"
+        ],
+        "properties": {
+          "sourceKind": {
+            "type": "string",
+            "enum": [
+              "sql",
+              "orm",
+              "migration"
+            ]
+          },
+          "dialect": {
+            "type": "string",
+            "enum": [
+              "postgresql",
+              "sqlite"
+            ]
+          },
+          "analysisStatus": {
+            "type": "string",
+            "enum": [
+              "complete",
+              "partial",
+              "unsupported"
+            ]
+          },
+          "gaps": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "evidenceKeys": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200,
+              "pattern": "^[^\\p{Cc}]+$"
+            },
+            "minItems": 1,
+            "uniqueItems": true
+          },
+          "nativeType": {
+            "$ref": "#/components/schemas/BackendKnownNativeString"
+          },
+          "typeFamily": {
+            "$ref": "#/components/schemas/BackendKnownTypeFamily"
+          },
+          "nullable": {
+            "$ref": "#/components/schemas/BackendKnownBoolean"
+          },
+          "defaultExpression": {
+            "$ref": "#/components/schemas/BackendKnownNullableNativeString"
+          },
+          "generatedExpression": {
+            "$ref": "#/components/schemas/BackendKnownNullableNativeString"
+          },
+          "identity": {
+            "$ref": "#/components/schemas/BackendKnownNullableNativeString"
+          },
+          "ordinal": {
+            "$ref": "#/components/schemas/BackendKnownOrdinal"
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "analysisStatus": {
+                  "enum": [
+                    "partial",
+                    "unsupported"
+                  ]
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "gaps": {
+                  "minItems": 1
+                }
+              }
+            }
+          }
+        ]
+      },
+      "BackendColumnAttributesInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "facets"
+        ],
+        "properties": {
+          "facets": {
+            "type": "object",
+            "minProperties": 1,
+            "maxProperties": 16,
+            "propertyNames": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200,
+              "pattern": "^[^\\p{Cc}]+$"
+            },
+            "additionalProperties": {
+              "$ref": "#/components/schemas/BackendColumnFacetInput"
+            }
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "BackendConstraintFacetInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "sourceKind",
+          "dialect",
+          "analysisStatus",
+          "gaps",
+          "evidenceKeys",
+          "constraintKind",
+          "columnKeys",
+          "expression",
+          "nativeDefinition",
+          "deferrable",
+          "initiallyDeferred"
+        ],
+        "properties": {
+          "sourceKind": {
+            "type": "string",
+            "enum": [
+              "sql",
+              "orm",
+              "migration"
+            ]
+          },
+          "dialect": {
+            "type": "string",
+            "enum": [
+              "postgresql",
+              "sqlite"
+            ]
+          },
+          "analysisStatus": {
+            "type": "string",
+            "enum": [
+              "complete",
+              "partial",
+              "unsupported"
+            ]
+          },
+          "gaps": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "evidenceKeys": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200,
+              "pattern": "^[^\\p{Cc}]+$"
+            },
+            "minItems": 1,
+            "uniqueItems": true
+          },
+          "constraintKind": {
+            "type": "string",
+            "enum": [
+              "primary_key",
+              "unique",
+              "check",
+              "foreign_key"
+            ]
+          },
+          "columnKeys": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200,
+              "pattern": "^[^\\p{Cc}]+$"
+            },
+            "maxItems": 64,
+            "uniqueItems": true
+          },
+          "expression": {
+            "$ref": "#/components/schemas/BackendKnownNullableNativeString"
+          },
+          "nativeDefinition": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Literal UTF-8 source text; at most 65536 UTF-8 bytes, enforced atomically by the domain."
+          },
+          "deferrable": {
+            "$ref": "#/components/schemas/BackendKnownNullableBoolean"
+          },
+          "initiallyDeferred": {
+            "$ref": "#/components/schemas/BackendKnownNullableBoolean"
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "analysisStatus": {
+                  "enum": [
+                    "partial",
+                    "unsupported"
+                  ]
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "gaps": {
+                  "minItems": 1
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "constraintKind": {
+                  "enum": [
+                    "primary_key",
+                    "unique",
+                    "foreign_key"
+                  ]
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "columnKeys": {
+                  "minItems": 1
+                }
+              }
+            }
+          }
+        ]
+      },
+      "BackendConstraintAttributesInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "facets"
+        ],
+        "properties": {
+          "facets": {
+            "type": "object",
+            "minProperties": 1,
+            "maxProperties": 16,
+            "propertyNames": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200,
+              "pattern": "^[^\\p{Cc}]+$"
+            },
+            "additionalProperties": {
+              "$ref": "#/components/schemas/BackendConstraintFacetInput"
+            }
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "BackendIndexTermInput": {
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "columnKey",
+              "direction",
+              "nulls"
+            ],
+            "properties": {
+              "columnKey": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200,
+                "pattern": "^[^\\p{Cc}]+$"
+              },
+              "direction": {
+                "type": "string",
+                "enum": [
+                  "asc",
+                  "desc",
+                  "unknown"
+                ]
+              },
+              "nulls": {
+                "type": "string",
+                "enum": [
+                  "first",
+                  "last",
+                  "unknown"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "expression",
+              "direction",
+              "nulls"
+            ],
+            "properties": {
+              "expression": {
+                "type": "string",
+                "description": "Literal UTF-8 source text; at most 65536 UTF-8 bytes, enforced atomically by the domain."
+              },
+              "direction": {
+                "type": "string",
+                "enum": [
+                  "asc",
+                  "desc",
+                  "unknown"
+                ]
+              },
+              "nulls": {
+                "type": "string",
+                "enum": [
+                  "first",
+                  "last",
+                  "unknown"
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "BackendIndexFacetInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "sourceKind",
+          "dialect",
+          "analysisStatus",
+          "gaps",
+          "evidenceKeys",
+          "terms",
+          "unique",
+          "predicate",
+          "method",
+          "nativeDefinition"
+        ],
+        "properties": {
+          "sourceKind": {
+            "type": "string",
+            "enum": [
+              "sql",
+              "orm",
+              "migration"
+            ]
+          },
+          "dialect": {
+            "type": "string",
+            "enum": [
+              "postgresql",
+              "sqlite"
+            ]
+          },
+          "analysisStatus": {
+            "type": "string",
+            "enum": [
+              "complete",
+              "partial",
+              "unsupported"
+            ]
+          },
+          "gaps": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "evidenceKeys": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200,
+              "pattern": "^[^\\p{Cc}]+$"
+            },
+            "minItems": 1,
+            "uniqueItems": true
+          },
+          "terms": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendIndexTermInput"
+            },
+            "minItems": 1,
+            "maxItems": 64
+          },
+          "unique": {
+            "$ref": "#/components/schemas/BackendKnownBoolean"
+          },
+          "predicate": {
+            "$ref": "#/components/schemas/BackendKnownNullableNativeString"
+          },
+          "method": {
+            "$ref": "#/components/schemas/BackendKnownNullableNativeString"
+          },
+          "nativeDefinition": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Literal UTF-8 source text; at most 65536 UTF-8 bytes, enforced atomically by the domain."
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "analysisStatus": {
+                  "enum": [
+                    "partial",
+                    "unsupported"
+                  ]
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "gaps": {
+                  "minItems": 1
+                }
+              }
+            }
+          }
+        ]
+      },
+      "BackendIndexAttributesInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "facets"
+        ],
+        "properties": {
+          "facets": {
+            "type": "object",
+            "minProperties": 1,
+            "maxProperties": 16,
+            "propertyNames": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200,
+              "pattern": "^[^\\p{Cc}]+$"
+            },
+            "additionalProperties": {
+              "$ref": "#/components/schemas/BackendIndexFacetInput"
+            }
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "BackendViewFacetInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "sourceKind",
+          "dialect",
+          "analysisStatus",
+          "gaps",
+          "evidenceKeys",
+          "qualifiedName",
+          "definition",
+          "dependencyKeys",
+          "materialized",
+          "dependenciesStatus"
+        ],
+        "properties": {
+          "sourceKind": {
+            "type": "string",
+            "enum": [
+              "sql",
+              "orm",
+              "migration"
+            ]
+          },
+          "dialect": {
+            "type": "string",
+            "enum": [
+              "postgresql",
+              "sqlite"
+            ]
+          },
+          "analysisStatus": {
+            "type": "string",
+            "enum": [
+              "complete",
+              "partial",
+              "unsupported"
+            ]
+          },
+          "gaps": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "evidenceKeys": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200,
+              "pattern": "^[^\\p{Cc}]+$"
+            },
+            "minItems": 1,
+            "uniqueItems": true
+          },
+          "qualifiedName": {
+            "type": "string",
+            "minLength": 1
+          },
+          "definition": {
+            "type": "string",
+            "description": "Literal UTF-8 source text; at most 65536 UTF-8 bytes, enforced atomically by the domain."
+          },
+          "dependencyKeys": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200,
+              "pattern": "^[^\\p{Cc}]+$"
+            },
+            "maxItems": 500,
+            "uniqueItems": true
+          },
+          "materialized": {
+            "type": "boolean"
+          },
+          "dependenciesStatus": {
+            "type": "string",
+            "enum": [
+              "complete",
+              "partial",
+              "unsupported"
+            ]
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "analysisStatus": {
+                  "enum": [
+                    "partial",
+                    "unsupported"
+                  ]
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "gaps": {
+                  "minItems": 1
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "dependenciesStatus": {
+                  "enum": [
+                    "partial",
+                    "unsupported"
+                  ]
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "gaps": {
+                  "minItems": 1
+                }
+              }
+            }
+          }
+        ]
+      },
+      "BackendViewAttributesInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "facets"
+        ],
+        "properties": {
+          "facets": {
+            "type": "object",
+            "minProperties": 1,
+            "maxProperties": 16,
+            "propertyNames": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200,
+              "pattern": "^[^\\p{Cc}]+$"
+            },
+            "additionalProperties": {
+              "$ref": "#/components/schemas/BackendViewFacetInput"
+            }
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "BackendMigrationCandidateTargetInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "objectKey"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "candidate"
+          },
+          "objectKey": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200,
+            "pattern": "^[^\\p{Cc}]+$"
+          }
+        }
+      },
+      "BackendMigrationHistoricalTarget": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "revisionId",
+          "objectId"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "historical"
+          },
+          "revisionId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "objectId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
+      "BackendMigrationSourceOnlyTarget": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "externalKey",
+          "expectedKind",
+          "qualifiedName",
+          "reason"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "source_only"
+          },
+          "externalKey": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200,
+            "pattern": "^[^\\p{Cc}]+$"
+          },
+          "expectedKind": {
+            "type": "string",
+            "enum": [
+              "datastore",
+              "db_schema",
+              "table",
+              "column",
+              "constraint",
+              "index",
+              "view",
+              "migration",
+              "symbol"
+            ]
+          },
+          "qualifiedName": {
+            "type": "string",
+            "minLength": 1
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      },
+      "BackendMigrationTargetInput": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/BackendMigrationCandidateTargetInput"
+          },
+          {
+            "$ref": "#/components/schemas/BackendMigrationHistoricalTarget"
+          },
+          {
+            "$ref": "#/components/schemas/BackendMigrationSourceOnlyTarget"
+          }
+        ]
+      },
+      "BackendMigrationChangeInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "target",
+          "operation",
+          "description"
+        ],
+        "properties": {
+          "target": {
+            "$ref": "#/components/schemas/BackendMigrationTargetInput"
+          },
+          "operation": {
+            "type": "string",
+            "enum": [
+              "create",
+              "alter",
+              "drop",
+              "unknown"
+            ]
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      },
+      "BackendMigrationFacetInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "sourceKind",
+          "dialect",
+          "analysisStatus",
+          "gaps",
+          "evidenceKeys",
+          "order",
+          "parentKeys",
+          "definition",
+          "changes",
+          "derivationStatus"
+        ],
+        "properties": {
+          "sourceKind": {
+            "type": "string",
+            "enum": [
+              "sql",
+              "orm",
+              "migration"
+            ]
+          },
+          "dialect": {
+            "type": "string",
+            "enum": [
+              "postgresql",
+              "sqlite"
+            ]
+          },
+          "analysisStatus": {
+            "type": "string",
+            "enum": [
+              "complete",
+              "partial",
+              "unsupported"
+            ]
+          },
+          "gaps": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "evidenceKeys": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200,
+              "pattern": "^[^\\p{Cc}]+$"
+            },
+            "minItems": 1,
+            "uniqueItems": true
+          },
+          "order": {
+            "$ref": "#/components/schemas/BackendKnownMigrationOrder"
+          },
+          "parentKeys": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200,
+              "pattern": "^[^\\p{Cc}]+$"
+            },
+            "maxItems": 500,
+            "uniqueItems": true
+          },
+          "definition": {
+            "type": "string",
+            "description": "Literal UTF-8 source text; at most 65536 UTF-8 bytes, enforced atomically by the domain."
+          },
+          "changes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendMigrationChangeInput"
+            },
+            "maxItems": 500
+          },
+          "derivationStatus": {
+            "type": "string",
+            "enum": [
+              "complete",
+              "partial",
+              "unsupported"
+            ]
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "analysisStatus": {
+                  "enum": [
+                    "partial",
+                    "unsupported"
+                  ]
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "gaps": {
+                  "minItems": 1
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "derivationStatus": {
+                  "enum": [
+                    "partial",
+                    "unsupported"
+                  ]
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "gaps": {
+                  "minItems": 1
+                }
+              }
+            }
+          }
+        ]
+      },
+      "BackendMigrationAttributesInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "facets"
+        ],
+        "properties": {
+          "facets": {
+            "type": "object",
+            "minProperties": 1,
+            "maxProperties": 16,
+            "propertyNames": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200,
+              "pattern": "^[^\\p{Cc}]+$"
+            },
+            "additionalProperties": {
+              "$ref": "#/components/schemas/BackendMigrationFacetInput"
+            }
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "BackendRoutineFacetInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "sourceKind",
+          "dialect",
+          "analysisStatus",
+          "gaps",
+          "evidenceKeys",
+          "qualifiedName",
+          "definition",
+          "dependencyKeys",
+          "routineKind",
+          "bodyStatus"
+        ],
+        "properties": {
+          "sourceKind": {
+            "type": "string",
+            "enum": [
+              "sql",
+              "orm",
+              "migration"
+            ]
+          },
+          "dialect": {
+            "type": "string",
+            "enum": [
+              "postgresql",
+              "sqlite"
+            ]
+          },
+          "analysisStatus": {
+            "type": "string",
+            "enum": [
+              "complete",
+              "partial",
+              "unsupported"
+            ]
+          },
+          "gaps": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "evidenceKeys": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200,
+              "pattern": "^[^\\p{Cc}]+$"
+            },
+            "minItems": 1,
+            "uniqueItems": true
+          },
+          "qualifiedName": {
+            "type": "string",
+            "minLength": 1
+          },
+          "definition": {
+            "type": "string",
+            "description": "Literal UTF-8 source text; at most 65536 UTF-8 bytes, enforced atomically by the domain."
+          },
+          "dependencyKeys": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200,
+              "pattern": "^[^\\p{Cc}]+$"
+            },
+            "maxItems": 500,
+            "uniqueItems": true
+          },
+          "routineKind": {
+            "type": "string",
+            "enum": [
+              "procedure",
+              "function",
+              "trigger"
+            ]
+          },
+          "bodyStatus": {
+            "type": "string",
+            "enum": [
+              "complete",
+              "partial",
+              "unsupported"
+            ]
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "analysisStatus": {
+                  "enum": [
+                    "partial",
+                    "unsupported"
+                  ]
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "gaps": {
+                  "minItems": 1
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "bodyStatus": {
+                  "enum": [
+                    "partial",
+                    "unsupported"
+                  ]
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "gaps": {
+                  "minItems": 1
+                }
+              }
+            }
+          }
+        ]
+      },
+      "BackendRoutineLegacyAttributes": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [],
+        "properties": {
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "language": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "qualifiedName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "BackendRoutineAttributesInput": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/BackendRoutineLegacyAttributes"
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "databaseRoutine"
+            ],
+            "properties": {
+              "description": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "language": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "qualifiedName": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "databaseRoutine": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "facets"
+                ],
+                "properties": {
+                  "facets": {
+                    "type": "object",
+                    "minProperties": 1,
+                    "maxProperties": 16,
+                    "propertyNames": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200,
+                      "pattern": "^[^\\p{Cc}]+$"
+                    },
+                    "additionalProperties": {
+                      "$ref": "#/components/schemas/BackendRoutineFacetInput"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "BackendReferenceColumnPairInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "fromColumnKey",
+          "toColumnKey"
+        ],
+        "properties": {
+          "fromColumnKey": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200,
+            "pattern": "^[^\\p{Cc}]+$"
+          },
+          "toColumnKey": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200,
+            "pattern": "^[^\\p{Cc}]+$"
+          }
+        }
+      },
+      "BackendReferenceFacetInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "sourceKind",
+          "dialect",
+          "analysisStatus",
+          "gaps",
+          "evidenceKeys",
+          "columnPairs",
+          "updateAction",
+          "deleteAction",
+          "matchType"
+        ],
+        "properties": {
+          "sourceKind": {
+            "type": "string",
+            "enum": [
+              "sql",
+              "orm",
+              "migration"
+            ]
+          },
+          "dialect": {
+            "type": "string",
+            "enum": [
+              "postgresql",
+              "sqlite"
+            ]
+          },
+          "analysisStatus": {
+            "type": "string",
+            "enum": [
+              "complete",
+              "partial",
+              "unsupported"
+            ]
+          },
+          "gaps": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "evidenceKeys": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200,
+              "pattern": "^[^\\p{Cc}]+$"
+            },
+            "minItems": 1,
+            "uniqueItems": true
+          },
+          "columnPairs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendReferenceColumnPairInput"
+            },
+            "maxItems": 64
+          },
+          "updateAction": {
+            "$ref": "#/components/schemas/BackendKnownReferentialAction"
+          },
+          "deleteAction": {
+            "$ref": "#/components/schemas/BackendKnownReferentialAction"
+          },
+          "matchType": {
+            "$ref": "#/components/schemas/BackendKnownMatchType"
+          },
+          "targetReason": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "analysisStatus": {
+                  "enum": [
+                    "partial",
+                    "unsupported"
+                  ]
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "gaps": {
+                  "minItems": 1
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "columnPairs": {
+                  "maxItems": 0
+                }
+              }
+            },
+            "then": {
+              "required": [
+                "targetReason"
+              ]
+            }
+          }
+        ]
+      },
+      "BackendReferenceAttributesInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "facets"
+        ],
+        "properties": {
+          "facets": {
+            "type": "object",
+            "minProperties": 1,
+            "maxProperties": 16,
+            "propertyNames": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200,
+              "pattern": "^[^\\p{Cc}]+$"
+            },
+            "additionalProperties": {
+              "$ref": "#/components/schemas/BackendReferenceFacetInput"
+            }
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "BackendDatastoreFacet": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "sourceKind",
+          "dialect",
+          "analysisStatus",
+          "gaps",
+          "evidenceIds",
+          "freshness",
+          "sourceSnapshotId",
+          "qualifiedName",
+          "nativeDefinition",
+          "databaseName"
+        ],
+        "properties": {
+          "sourceKind": {
+            "type": "string",
+            "enum": [
+              "sql",
+              "orm",
+              "migration"
+            ]
+          },
+          "dialect": {
+            "type": "string",
+            "enum": [
+              "postgresql",
+              "sqlite"
+            ]
+          },
+          "analysisStatus": {
+            "type": "string",
+            "enum": [
+              "complete",
+              "partial",
+              "unsupported"
+            ]
+          },
+          "gaps": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "evidenceIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "minItems": 1,
+            "uniqueItems": true
+          },
+          "freshness": {
+            "$ref": "#/components/schemas/BackendRelationalFreshness"
+          },
+          "sourceSnapshotId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "qualifiedName": {
+            "type": "string",
+            "minLength": 1
+          },
+          "nativeDefinition": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Literal UTF-8 source text; at most 65536 UTF-8 bytes, enforced atomically by the domain."
+          },
+          "databaseName": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "analysisStatus": {
+                  "enum": [
+                    "partial",
+                    "unsupported"
+                  ]
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "gaps": {
+                  "minItems": 1
+                }
+              }
+            }
+          }
+        ]
+      },
+      "BackendDatabaseSchemaFacet": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "sourceKind",
+          "dialect",
+          "analysisStatus",
+          "gaps",
+          "evidenceIds",
+          "freshness",
+          "sourceSnapshotId",
+          "qualifiedName",
+          "nativeDefinition"
+        ],
+        "properties": {
+          "sourceKind": {
+            "type": "string",
+            "enum": [
+              "sql",
+              "orm",
+              "migration"
+            ]
+          },
+          "dialect": {
+            "type": "string",
+            "enum": [
+              "postgresql",
+              "sqlite"
+            ]
+          },
+          "analysisStatus": {
+            "type": "string",
+            "enum": [
+              "complete",
+              "partial",
+              "unsupported"
+            ]
+          },
+          "gaps": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "evidenceIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "minItems": 1,
+            "uniqueItems": true
+          },
+          "freshness": {
+            "$ref": "#/components/schemas/BackendRelationalFreshness"
+          },
+          "sourceSnapshotId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "qualifiedName": {
+            "type": "string",
+            "minLength": 1
+          },
+          "nativeDefinition": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Literal UTF-8 source text; at most 65536 UTF-8 bytes, enforced atomically by the domain."
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "analysisStatus": {
+                  "enum": [
+                    "partial",
+                    "unsupported"
+                  ]
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "gaps": {
+                  "minItems": 1
+                }
+              }
+            }
+          }
+        ]
+      },
+      "BackendDatabaseSchemaAttributes": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "facets"
+        ],
+        "properties": {
+          "facets": {
+            "type": "object",
+            "minProperties": 1,
+            "maxProperties": 16,
+            "propertyNames": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200,
+              "pattern": "^[^\\p{Cc}]+$"
+            },
+            "additionalProperties": {
+              "$ref": "#/components/schemas/BackendDatabaseSchemaFacet"
+            }
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "BackendTableFacet": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "sourceKind",
+          "dialect",
+          "analysisStatus",
+          "gaps",
+          "evidenceIds",
+          "freshness",
+          "sourceSnapshotId",
+          "qualifiedName",
+          "nativeDefinition",
+          "columnsStatus",
+          "constraintsStatus"
+        ],
+        "properties": {
+          "sourceKind": {
+            "type": "string",
+            "enum": [
+              "sql",
+              "orm",
+              "migration"
+            ]
+          },
+          "dialect": {
+            "type": "string",
+            "enum": [
+              "postgresql",
+              "sqlite"
+            ]
+          },
+          "analysisStatus": {
+            "type": "string",
+            "enum": [
+              "complete",
+              "partial",
+              "unsupported"
+            ]
+          },
+          "gaps": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "evidenceIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "minItems": 1,
+            "uniqueItems": true
+          },
+          "freshness": {
+            "$ref": "#/components/schemas/BackendRelationalFreshness"
+          },
+          "sourceSnapshotId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "qualifiedName": {
+            "type": "string",
+            "minLength": 1
+          },
+          "nativeDefinition": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Literal UTF-8 source text; at most 65536 UTF-8 bytes, enforced atomically by the domain."
+          },
+          "columnsStatus": {
+            "type": "string",
+            "enum": [
+              "complete",
+              "partial",
+              "unsupported"
+            ]
+          },
+          "constraintsStatus": {
+            "type": "string",
+            "enum": [
+              "complete",
+              "partial",
+              "unsupported"
+            ]
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "analysisStatus": {
+                  "enum": [
+                    "partial",
+                    "unsupported"
+                  ]
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "gaps": {
+                  "minItems": 1
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "columnsStatus": {
+                  "enum": [
+                    "partial",
+                    "unsupported"
+                  ]
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "gaps": {
+                  "minItems": 1
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "constraintsStatus": {
+                  "enum": [
+                    "partial",
+                    "unsupported"
+                  ]
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "gaps": {
+                  "minItems": 1
+                }
+              }
+            }
+          }
+        ]
+      },
+      "BackendTableAttributes": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "facets"
+        ],
+        "properties": {
+          "facets": {
+            "type": "object",
+            "minProperties": 1,
+            "maxProperties": 16,
+            "propertyNames": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200,
+              "pattern": "^[^\\p{Cc}]+$"
+            },
+            "additionalProperties": {
+              "$ref": "#/components/schemas/BackendTableFacet"
+            }
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "BackendColumnFacet": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "sourceKind",
+          "dialect",
+          "analysisStatus",
+          "gaps",
+          "evidenceIds",
+          "freshness",
+          "sourceSnapshotId",
+          "nativeType",
+          "typeFamily",
+          "nullable",
+          "defaultExpression",
+          "generatedExpression",
+          "identity",
+          "ordinal"
+        ],
+        "properties": {
+          "sourceKind": {
+            "type": "string",
+            "enum": [
+              "sql",
+              "orm",
+              "migration"
+            ]
+          },
+          "dialect": {
+            "type": "string",
+            "enum": [
+              "postgresql",
+              "sqlite"
+            ]
+          },
+          "analysisStatus": {
+            "type": "string",
+            "enum": [
+              "complete",
+              "partial",
+              "unsupported"
+            ]
+          },
+          "gaps": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "evidenceIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "minItems": 1,
+            "uniqueItems": true
+          },
+          "freshness": {
+            "$ref": "#/components/schemas/BackendRelationalFreshness"
+          },
+          "sourceSnapshotId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "nativeType": {
+            "$ref": "#/components/schemas/BackendKnownNativeString"
+          },
+          "typeFamily": {
+            "$ref": "#/components/schemas/BackendKnownTypeFamily"
+          },
+          "nullable": {
+            "$ref": "#/components/schemas/BackendKnownBoolean"
+          },
+          "defaultExpression": {
+            "$ref": "#/components/schemas/BackendKnownNullableNativeString"
+          },
+          "generatedExpression": {
+            "$ref": "#/components/schemas/BackendKnownNullableNativeString"
+          },
+          "identity": {
+            "$ref": "#/components/schemas/BackendKnownNullableNativeString"
+          },
+          "ordinal": {
+            "$ref": "#/components/schemas/BackendKnownOrdinal"
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "analysisStatus": {
+                  "enum": [
+                    "partial",
+                    "unsupported"
+                  ]
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "gaps": {
+                  "minItems": 1
+                }
+              }
+            }
+          }
+        ]
+      },
+      "BackendColumnAttributes": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "facets"
+        ],
+        "properties": {
+          "facets": {
+            "type": "object",
+            "minProperties": 1,
+            "maxProperties": 16,
+            "propertyNames": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200,
+              "pattern": "^[^\\p{Cc}]+$"
+            },
+            "additionalProperties": {
+              "$ref": "#/components/schemas/BackendColumnFacet"
+            }
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "BackendConstraintFacet": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "sourceKind",
+          "dialect",
+          "analysisStatus",
+          "gaps",
+          "evidenceIds",
+          "freshness",
+          "sourceSnapshotId",
+          "constraintKind",
+          "columnIds",
+          "expression",
+          "nativeDefinition",
+          "deferrable",
+          "initiallyDeferred"
+        ],
+        "properties": {
+          "sourceKind": {
+            "type": "string",
+            "enum": [
+              "sql",
+              "orm",
+              "migration"
+            ]
+          },
+          "dialect": {
+            "type": "string",
+            "enum": [
+              "postgresql",
+              "sqlite"
+            ]
+          },
+          "analysisStatus": {
+            "type": "string",
+            "enum": [
+              "complete",
+              "partial",
+              "unsupported"
+            ]
+          },
+          "gaps": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "evidenceIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "minItems": 1,
+            "uniqueItems": true
+          },
+          "freshness": {
+            "$ref": "#/components/schemas/BackendRelationalFreshness"
+          },
+          "sourceSnapshotId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "constraintKind": {
+            "type": "string",
+            "enum": [
+              "primary_key",
+              "unique",
+              "check",
+              "foreign_key"
+            ]
+          },
+          "columnIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "maxItems": 64,
+            "uniqueItems": true
+          },
+          "expression": {
+            "$ref": "#/components/schemas/BackendKnownNullableNativeString"
+          },
+          "nativeDefinition": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Literal UTF-8 source text; at most 65536 UTF-8 bytes, enforced atomically by the domain."
+          },
+          "deferrable": {
+            "$ref": "#/components/schemas/BackendKnownNullableBoolean"
+          },
+          "initiallyDeferred": {
+            "$ref": "#/components/schemas/BackendKnownNullableBoolean"
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "analysisStatus": {
+                  "enum": [
+                    "partial",
+                    "unsupported"
+                  ]
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "gaps": {
+                  "minItems": 1
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "constraintKind": {
+                  "enum": [
+                    "primary_key",
+                    "unique",
+                    "foreign_key"
+                  ]
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "columnIds": {
+                  "minItems": 1
+                }
+              }
+            }
+          }
+        ]
+      },
+      "BackendConstraintAttributes": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "facets"
+        ],
+        "properties": {
+          "facets": {
+            "type": "object",
+            "minProperties": 1,
+            "maxProperties": 16,
+            "propertyNames": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200,
+              "pattern": "^[^\\p{Cc}]+$"
+            },
+            "additionalProperties": {
+              "$ref": "#/components/schemas/BackendConstraintFacet"
+            }
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "BackendIndexTerm": {
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "columnId",
+              "direction",
+              "nulls"
+            ],
+            "properties": {
+              "columnId": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "direction": {
+                "type": "string",
+                "enum": [
+                  "asc",
+                  "desc",
+                  "unknown"
+                ]
+              },
+              "nulls": {
+                "type": "string",
+                "enum": [
+                  "first",
+                  "last",
+                  "unknown"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "expression",
+              "direction",
+              "nulls"
+            ],
+            "properties": {
+              "expression": {
+                "type": "string",
+                "description": "Literal UTF-8 source text; at most 65536 UTF-8 bytes, enforced atomically by the domain."
+              },
+              "direction": {
+                "type": "string",
+                "enum": [
+                  "asc",
+                  "desc",
+                  "unknown"
+                ]
+              },
+              "nulls": {
+                "type": "string",
+                "enum": [
+                  "first",
+                  "last",
+                  "unknown"
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "BackendIndexFacet": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "sourceKind",
+          "dialect",
+          "analysisStatus",
+          "gaps",
+          "evidenceIds",
+          "freshness",
+          "sourceSnapshotId",
+          "terms",
+          "unique",
+          "predicate",
+          "method",
+          "nativeDefinition"
+        ],
+        "properties": {
+          "sourceKind": {
+            "type": "string",
+            "enum": [
+              "sql",
+              "orm",
+              "migration"
+            ]
+          },
+          "dialect": {
+            "type": "string",
+            "enum": [
+              "postgresql",
+              "sqlite"
+            ]
+          },
+          "analysisStatus": {
+            "type": "string",
+            "enum": [
+              "complete",
+              "partial",
+              "unsupported"
+            ]
+          },
+          "gaps": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "evidenceIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "minItems": 1,
+            "uniqueItems": true
+          },
+          "freshness": {
+            "$ref": "#/components/schemas/BackendRelationalFreshness"
+          },
+          "sourceSnapshotId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "terms": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendIndexTerm"
+            },
+            "minItems": 1,
+            "maxItems": 64
+          },
+          "unique": {
+            "$ref": "#/components/schemas/BackendKnownBoolean"
+          },
+          "predicate": {
+            "$ref": "#/components/schemas/BackendKnownNullableNativeString"
+          },
+          "method": {
+            "$ref": "#/components/schemas/BackendKnownNullableNativeString"
+          },
+          "nativeDefinition": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Literal UTF-8 source text; at most 65536 UTF-8 bytes, enforced atomically by the domain."
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "analysisStatus": {
+                  "enum": [
+                    "partial",
+                    "unsupported"
+                  ]
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "gaps": {
+                  "minItems": 1
+                }
+              }
+            }
+          }
+        ]
+      },
+      "BackendIndexAttributes": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "facets"
+        ],
+        "properties": {
+          "facets": {
+            "type": "object",
+            "minProperties": 1,
+            "maxProperties": 16,
+            "propertyNames": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200,
+              "pattern": "^[^\\p{Cc}]+$"
+            },
+            "additionalProperties": {
+              "$ref": "#/components/schemas/BackendIndexFacet"
+            }
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "BackendViewFacet": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "sourceKind",
+          "dialect",
+          "analysisStatus",
+          "gaps",
+          "evidenceIds",
+          "freshness",
+          "sourceSnapshotId",
+          "qualifiedName",
+          "definition",
+          "dependencyIds",
+          "materialized",
+          "dependenciesStatus"
+        ],
+        "properties": {
+          "sourceKind": {
+            "type": "string",
+            "enum": [
+              "sql",
+              "orm",
+              "migration"
+            ]
+          },
+          "dialect": {
+            "type": "string",
+            "enum": [
+              "postgresql",
+              "sqlite"
+            ]
+          },
+          "analysisStatus": {
+            "type": "string",
+            "enum": [
+              "complete",
+              "partial",
+              "unsupported"
+            ]
+          },
+          "gaps": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "evidenceIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "minItems": 1,
+            "uniqueItems": true
+          },
+          "freshness": {
+            "$ref": "#/components/schemas/BackendRelationalFreshness"
+          },
+          "sourceSnapshotId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "qualifiedName": {
+            "type": "string",
+            "minLength": 1
+          },
+          "definition": {
+            "type": "string",
+            "description": "Literal UTF-8 source text; at most 65536 UTF-8 bytes, enforced atomically by the domain."
+          },
+          "dependencyIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "maxItems": 500,
+            "uniqueItems": true
+          },
+          "materialized": {
+            "type": "boolean"
+          },
+          "dependenciesStatus": {
+            "type": "string",
+            "enum": [
+              "complete",
+              "partial",
+              "unsupported"
+            ]
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "analysisStatus": {
+                  "enum": [
+                    "partial",
+                    "unsupported"
+                  ]
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "gaps": {
+                  "minItems": 1
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "dependenciesStatus": {
+                  "enum": [
+                    "partial",
+                    "unsupported"
+                  ]
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "gaps": {
+                  "minItems": 1
+                }
+              }
+            }
+          }
+        ]
+      },
+      "BackendViewAttributes": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "facets"
+        ],
+        "properties": {
+          "facets": {
+            "type": "object",
+            "minProperties": 1,
+            "maxProperties": 16,
+            "propertyNames": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200,
+              "pattern": "^[^\\p{Cc}]+$"
+            },
+            "additionalProperties": {
+              "$ref": "#/components/schemas/BackendViewFacet"
+            }
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "BackendMigrationCandidateTarget": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "objectId"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "candidate"
+          },
+          "objectId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
+      "BackendMigrationTarget": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/BackendMigrationCandidateTarget"
+          },
+          {
+            "$ref": "#/components/schemas/BackendMigrationHistoricalTarget"
+          },
+          {
+            "$ref": "#/components/schemas/BackendMigrationSourceOnlyTarget"
+          }
+        ]
+      },
+      "BackendMigrationChange": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "target",
+          "operation",
+          "description"
+        ],
+        "properties": {
+          "target": {
+            "$ref": "#/components/schemas/BackendMigrationTarget"
+          },
+          "operation": {
+            "type": "string",
+            "enum": [
+              "create",
+              "alter",
+              "drop",
+              "unknown"
+            ]
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      },
+      "BackendMigrationFacet": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "sourceKind",
+          "dialect",
+          "analysisStatus",
+          "gaps",
+          "evidenceIds",
+          "freshness",
+          "sourceSnapshotId",
+          "order",
+          "parentIds",
+          "definition",
+          "changes",
+          "derivationStatus"
+        ],
+        "properties": {
+          "sourceKind": {
+            "type": "string",
+            "enum": [
+              "sql",
+              "orm",
+              "migration"
+            ]
+          },
+          "dialect": {
+            "type": "string",
+            "enum": [
+              "postgresql",
+              "sqlite"
+            ]
+          },
+          "analysisStatus": {
+            "type": "string",
+            "enum": [
+              "complete",
+              "partial",
+              "unsupported"
+            ]
+          },
+          "gaps": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "evidenceIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "minItems": 1,
+            "uniqueItems": true
+          },
+          "freshness": {
+            "$ref": "#/components/schemas/BackendRelationalFreshness"
+          },
+          "sourceSnapshotId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "order": {
+            "$ref": "#/components/schemas/BackendKnownMigrationOrder"
+          },
+          "parentIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "maxItems": 500,
+            "uniqueItems": true
+          },
+          "definition": {
+            "type": "string",
+            "description": "Literal UTF-8 source text; at most 65536 UTF-8 bytes, enforced atomically by the domain."
+          },
+          "changes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendMigrationChange"
+            },
+            "maxItems": 500
+          },
+          "derivationStatus": {
+            "type": "string",
+            "enum": [
+              "complete",
+              "partial",
+              "unsupported"
+            ]
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "analysisStatus": {
+                  "enum": [
+                    "partial",
+                    "unsupported"
+                  ]
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "gaps": {
+                  "minItems": 1
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "derivationStatus": {
+                  "enum": [
+                    "partial",
+                    "unsupported"
+                  ]
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "gaps": {
+                  "minItems": 1
+                }
+              }
+            }
+          }
+        ]
+      },
+      "BackendMigrationAttributes": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "facets"
+        ],
+        "properties": {
+          "facets": {
+            "type": "object",
+            "minProperties": 1,
+            "maxProperties": 16,
+            "propertyNames": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200,
+              "pattern": "^[^\\p{Cc}]+$"
+            },
+            "additionalProperties": {
+              "$ref": "#/components/schemas/BackendMigrationFacet"
+            }
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "BackendRoutineFacet": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "sourceKind",
+          "dialect",
+          "analysisStatus",
+          "gaps",
+          "evidenceIds",
+          "freshness",
+          "sourceSnapshotId",
+          "qualifiedName",
+          "definition",
+          "dependencyIds",
+          "routineKind",
+          "bodyStatus"
+        ],
+        "properties": {
+          "sourceKind": {
+            "type": "string",
+            "enum": [
+              "sql",
+              "orm",
+              "migration"
+            ]
+          },
+          "dialect": {
+            "type": "string",
+            "enum": [
+              "postgresql",
+              "sqlite"
+            ]
+          },
+          "analysisStatus": {
+            "type": "string",
+            "enum": [
+              "complete",
+              "partial",
+              "unsupported"
+            ]
+          },
+          "gaps": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "evidenceIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "minItems": 1,
+            "uniqueItems": true
+          },
+          "freshness": {
+            "$ref": "#/components/schemas/BackendRelationalFreshness"
+          },
+          "sourceSnapshotId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "qualifiedName": {
+            "type": "string",
+            "minLength": 1
+          },
+          "definition": {
+            "type": "string",
+            "description": "Literal UTF-8 source text; at most 65536 UTF-8 bytes, enforced atomically by the domain."
+          },
+          "dependencyIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "maxItems": 500,
+            "uniqueItems": true
+          },
+          "routineKind": {
+            "type": "string",
+            "enum": [
+              "procedure",
+              "function",
+              "trigger"
+            ]
+          },
+          "bodyStatus": {
+            "type": "string",
+            "enum": [
+              "complete",
+              "partial",
+              "unsupported"
+            ]
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "analysisStatus": {
+                  "enum": [
+                    "partial",
+                    "unsupported"
+                  ]
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "gaps": {
+                  "minItems": 1
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "bodyStatus": {
+                  "enum": [
+                    "partial",
+                    "unsupported"
+                  ]
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "gaps": {
+                  "minItems": 1
+                }
+              }
+            }
+          }
+        ]
+      },
+      "BackendRoutineAttributes": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/BackendRoutineLegacyAttributes"
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "databaseRoutine"
+            ],
+            "properties": {
+              "description": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "language": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "qualifiedName": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "databaseRoutine": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "facets"
+                ],
+                "properties": {
+                  "facets": {
+                    "type": "object",
+                    "minProperties": 1,
+                    "maxProperties": 16,
+                    "propertyNames": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200,
+                      "pattern": "^[^\\p{Cc}]+$"
+                    },
+                    "additionalProperties": {
+                      "$ref": "#/components/schemas/BackendRoutineFacet"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "BackendReferenceColumnPair": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "fromColumnId",
+          "toColumnId"
+        ],
+        "properties": {
+          "fromColumnId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "toColumnId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
+      "BackendReferenceFacet": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "sourceKind",
+          "dialect",
+          "analysisStatus",
+          "gaps",
+          "evidenceIds",
+          "freshness",
+          "sourceSnapshotId",
+          "columnPairs",
+          "updateAction",
+          "deleteAction",
+          "matchType"
+        ],
+        "properties": {
+          "sourceKind": {
+            "type": "string",
+            "enum": [
+              "sql",
+              "orm",
+              "migration"
+            ]
+          },
+          "dialect": {
+            "type": "string",
+            "enum": [
+              "postgresql",
+              "sqlite"
+            ]
+          },
+          "analysisStatus": {
+            "type": "string",
+            "enum": [
+              "complete",
+              "partial",
+              "unsupported"
+            ]
+          },
+          "gaps": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "evidenceIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "minItems": 1,
+            "uniqueItems": true
+          },
+          "freshness": {
+            "$ref": "#/components/schemas/BackendRelationalFreshness"
+          },
+          "sourceSnapshotId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "columnPairs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendReferenceColumnPair"
+            },
+            "maxItems": 64
+          },
+          "updateAction": {
+            "$ref": "#/components/schemas/BackendKnownReferentialAction"
+          },
+          "deleteAction": {
+            "$ref": "#/components/schemas/BackendKnownReferentialAction"
+          },
+          "matchType": {
+            "$ref": "#/components/schemas/BackendKnownMatchType"
+          },
+          "targetReason": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "analysisStatus": {
+                  "enum": [
+                    "partial",
+                    "unsupported"
+                  ]
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "gaps": {
+                  "minItems": 1
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "columnPairs": {
+                  "maxItems": 0
+                }
+              }
+            },
+            "then": {
+              "required": [
+                "targetReason"
+              ]
+            }
+          }
+        ]
+      },
+      "BackendReferenceAttributes": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "facets"
+        ],
+        "properties": {
+          "facets": {
+            "type": "object",
+            "minProperties": 1,
+            "maxProperties": 16,
+            "propertyNames": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200,
+              "pattern": "^[^\\p{Cc}]+$"
+            },
+            "additionalProperties": {
+              "$ref": "#/components/schemas/BackendReferenceFacet"
+            }
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "BackendFacetPairDifference": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "leftFacetKey",
+          "rightFacetKey",
+          "status",
+          "changedPaths",
+          "definitionDifferent"
+        ],
+        "properties": {
+          "leftFacetKey": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200,
+            "pattern": "^[^\\p{Cc}]+$"
+          },
+          "rightFacetKey": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200,
+            "pattern": "^[^\\p{Cc}]+$"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "consistent",
+              "different",
+              "unknown"
+            ]
+          },
+          "changedPaths": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "definitionDifferent": {
+            "type": "boolean"
+          }
+        }
+      },
+      "BackendFacetComparison": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "status",
+          "pairs"
+        ],
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "consistent",
+              "different",
+              "unknown"
+            ]
+          },
+          "pairs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendFacetPairDifference"
+            }
+          }
+        }
+      },
+      "QueryBackendDatabaseRequest": {
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "revisionId",
+              "datastoreId",
+              "facetKey",
+              "recordType"
+            ],
+            "properties": {
+              "revisionId": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "datastoreId": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "facetKey": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200,
+                "pattern": "^[^\\p{Cc}]+$"
+              },
+              "recordType": {
+                "type": "string",
+                "const": "tables"
+              },
+              "limit": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 500,
+                "default": 100
+              },
+              "cursor": {
+                "type": "string",
+                "maxLength": 1024
+              },
+              "search": {
+                "type": "string",
+                "description": "UTF-8 at most 1024 bytes; empty filter is equivalent to omission.",
+                "maxLength": 1024
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "revisionId",
+              "datastoreId",
+              "facetKey",
+              "recordType"
+            ],
+            "properties": {
+              "revisionId": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "datastoreId": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "facetKey": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200,
+                "pattern": "^[^\\p{Cc}]+$"
+              },
+              "recordType": {
+                "type": "string",
+                "const": "relationships"
+              },
+              "limit": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 500,
+                "default": 100
+              },
+              "cursor": {
+                "type": "string",
+                "maxLength": 1024
+              },
+              "tableId": {
+                "type": "string",
+                "format": "uuid"
+              }
+            }
+          }
+        ]
+      },
+      "BackendDatabaseColumnPair": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "fromColumnId",
+          "toColumnId"
+        ],
+        "properties": {
+          "fromColumnId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "toColumnId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
+      "BackendCardinality": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "min",
+          "max",
+          "basis"
+        ],
+        "properties": {
+          "min": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "max": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "1",
+              "many",
+              null
+            ]
+          },
+          "basis": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "BackendDatabaseTableItem": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "tableId",
+          "schemaId",
+          "qualifiedName",
+          "columnCount",
+          "facetKeys",
+          "driftStatus"
+        ],
+        "properties": {
+          "tableId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "schemaId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "qualifiedName": {
+            "type": "string"
+          },
+          "columnCount": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "maximum": 9223372036854775807
+          },
+          "facetKeys": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200,
+              "pattern": "^[^\\p{Cc}]+$"
+            }
+          },
+          "driftStatus": {
+            "type": "string",
+            "enum": [
+              "consistent",
+              "different",
+              "unknown"
+            ]
+          }
+        }
+      },
+      "BackendDatabaseRelationshipItem": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "edgeId",
+          "constraintId",
+          "sourceTableId",
+          "targetTableId",
+          "columnPairs",
+          "evidenceIds",
+          "sourceCardinality",
+          "targetCardinality",
+          "status",
+          "targetReason"
+        ],
+        "properties": {
+          "edgeId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "constraintId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "sourceTableId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "targetTableId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "columnPairs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendDatabaseColumnPair"
+            }
+          },
+          "evidenceIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "sourceCardinality": {
+            "$ref": "#/components/schemas/BackendCardinality"
+          },
+          "targetCardinality": {
+            "$ref": "#/components/schemas/BackendCardinality"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "explicit",
+              "inferred",
+              "unresolved",
+              "stale"
+            ]
+          },
+          "targetReason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "BackendDatabasePage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "projectId",
+          "revisionId",
+          "semanticHash",
+          "datastoreId",
+          "facetKey",
+          "recordType",
+          "coverage",
+          "facetStatus",
+          "limitations",
+          "tableItems",
+          "relationshipItems",
+          "nextCursor"
+        ],
+        "properties": {
+          "projectId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "revisionId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "semanticHash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "datastoreId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "facetKey": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200,
+            "pattern": "^[^\\p{Cc}]+$"
+          },
+          "recordType": {
+            "type": "string",
+            "enum": [
+              "tables",
+              "relationships"
+            ]
+          },
+          "coverage": {
+            "$ref": "#/components/schemas/BackendRevisionCoverage"
+          },
+          "facetStatus": {
+            "type": "string",
+            "enum": [
+              "current",
+              "stale",
+              "unknown"
+            ]
+          },
+          "limitations": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "tableItems": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendDatabaseTableItem"
+            }
+          },
+          "relationshipItems": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendDatabaseRelationshipItem"
+            }
+          },
+          "nextCursor": {
+            "type": "string"
+          }
+        }
+      },
+      "BackendProfileCapability": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "profile",
+          "modelSchemaVersions",
+          "nodeKinds",
+          "edgeKinds",
+          "importModes"
+        ],
+        "properties": {
+          "profile": {
+            "type": "string",
+            "enum": [
+              "foundation-graph-v1",
+              "relational-graph-v1"
+            ]
+          },
+          "modelSchemaVersions": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "1",
+                "2"
+              ]
+            }
+          },
+          "nodeKinds": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendNodeKind"
+            }
+          },
+          "edgeKinds": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendEdgeKind"
+            }
+          },
+          "importModes": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "initial",
+                "reconcile"
+              ]
+            }
+          }
+        }
+      },
+      "BackendReconciliationProfile": {
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "version",
+              "profile",
+              "scope"
+            ],
+            "properties": {
+              "version": {
+                "type": "string",
+                "const": "1"
+              },
+              "profile": {
+                "type": "string",
+                "const": "foundation-graph-v1"
+              },
+              "scope": {
+                "type": "string",
+                "const": "whole-repository"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "version",
+              "profile",
+              "scope"
+            ],
+            "properties": {
+              "version": {
+                "type": "string",
+                "const": "1"
+              },
+              "profile": {
+                "type": "string",
+                "const": "relational-graph-v1"
+              },
+              "scope": {
+                "type": "string",
+                "const": "whole-repository-combined-graph"
+              }
+            }
+          }
+        ]
       }
     }
   },
@@ -30962,6 +36411,124 @@
             "$ref": "#/components/responses/Unauthorized"
           }
         }
+      }
+    },
+    "/api/backend-projects/{id}/database/query": {
+      "post": {
+        "tags": [
+          "backend-projects"
+        ],
+        "operationId": "queryBackendDatabase",
+        "summary": "Inspect a pinned relational database facet",
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendDatabasePage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/QueryBackendDatabaseRequest"
+              }
+            }
+          }
+        },
+        "description": "Read-only source-model table/FK projection at an exact revision/datastore/facet; no runtime introspection or writes."
       }
     }
   }

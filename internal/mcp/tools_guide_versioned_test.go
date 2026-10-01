@@ -30,13 +30,13 @@ func TestGetGuideSelection(t *testing.T) {
 }
 
 func TestStandaloneImportReferencesThroughPinnedMCP(t *testing.T) {
-	for _, topic := range []string{"backend-import", "backend-model", "backend-import-protocol", "backend-recovery", "backend-examples"} {
+	for _, topic := range []string{"backend-import", "backend-model", "backend-import-protocol", "backend-recovery", "backend-examples", "backend-profile-go-sql"} {
 		out, message := callGuide(t, `{"topic":"`+topic+`","guideSetId":"`+guide.CurrentGuideSetID()+`"}`)
 		if message != "" {
 			t.Fatal(message)
 		}
 		wantHash := fmt.Sprintf("sha256:%x", sha256.Sum256([]byte(out.Markdown)))
-		if out.WorkflowID != "mocker-backend-import" || out.WorkflowVersion != "2" || out.GuideSetID != guide.CurrentGuideSetID() || out.ManifestHash != guide.CurrentGuideSetID() || out.ContentHash != wantHash {
+		if out.WorkflowID != "mocker-backend-import" || out.WorkflowVersion != "3" || out.GuideSetID != guide.CurrentGuideSetID() || out.ManifestHash != guide.CurrentGuideSetID() || out.ContentHash != wantHash {
 			t.Fatalf("pinned topic %s: %#v", topic, out)
 		}
 	}
@@ -116,13 +116,16 @@ func TestGuideRequiredCapabilitiesHaveMCPTools(t *testing.T) {
 		inventory[tool.Name] = true
 	}
 	implementations := map[string][]string{
-		"backend-projects":         {"list_backend_projects", "create_backend_project", "get_backend_project"},
-		"backend-project-metadata": {"apply_backend_project_commands"},
-		"backend-revisions":        {"list_backend_revisions", "get_backend_revision"},
-		"backend-graph-query":      {"query_backend_graph", "get_backend_node", "get_backend_evidence", "get_backend_coverage"},
-		"backend-source-import":    {"begin_backend_import", "list_backend_imports", "get_backend_import", "put_backend_import_batch", "preview_backend_import", "commit_backend_import", "abort_backend_import"},
-		"backend-source-reconcile": {"begin_backend_import", "put_backend_import_batch", "preview_backend_import", "commit_backend_import", "get_backend_import_changes"},
-		"backend-revision-compare": {"compare_backend_revisions"},
+		"backend-projects":          {"list_backend_projects", "create_backend_project", "get_backend_project"},
+		"backend-project-metadata":  {"apply_backend_project_commands"},
+		"backend-revisions":         {"list_backend_revisions", "get_backend_revision"},
+		"backend-graph-query":       {"query_backend_graph", "get_backend_node", "get_backend_evidence", "get_backend_coverage"},
+		"backend-source-import":     {"begin_backend_import", "list_backend_imports", "get_backend_import", "put_backend_import_batch", "preview_backend_import", "commit_backend_import", "abort_backend_import"},
+		"backend-source-reconcile":  {"begin_backend_import", "put_backend_import_batch", "preview_backend_import", "commit_backend_import", "get_backend_import_changes"},
+		"backend-revision-compare":  {"compare_backend_revisions"},
+		"backend-relational-import": {"begin_backend_import", "put_backend_import_batch", "preview_backend_import", "commit_backend_import"},
+		"backend-database-query":    {"query_backend_database"},
+		"backend-database-er":       {"query_backend_database", "get_backend_node", "get_backend_evidence", "get_backend_coverage"},
 	}
 	if !inventory["get_backend_capabilities"] {
 		t.Error("workflow discovery tool is missing")
@@ -143,7 +146,7 @@ func TestGuideRequiredCapabilitiesHaveMCPTools(t *testing.T) {
 	}
 }
 
-func TestObsoleteImportGuideSetDoesNotSubstituteV2(t *testing.T) {
+func TestObsoleteImportGuideSetDoesNotSubstituteV3(t *testing.T) {
 	const previous = "sha256:6f352e4838720bf9447956681574dd16b64ef94f0d7a2700c512da5b9bc6c33f"
 	_, _, err := handleGetGuide(t.Context(), nil, GetGuideInput{Topic: "backend-import", GuideSetID: previous})
 	if err == nil || !strings.Contains(err.Error(), "unknown guide set") {
@@ -153,7 +156,7 @@ func TestObsoleteImportGuideSetDoesNotSubstituteV2(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if out.WorkflowVersion != "2" || out.WorkflowID != "mocker-backend-import" || out.GuideSetID != guide.CurrentGuideSetID() {
+	if out.WorkflowVersion != "3" || out.WorkflowID != "mocker-backend-import" || out.GuideSetID != guide.CurrentGuideSetID() {
 		t.Fatalf("current import guide identity: %#v", out)
 	}
 }

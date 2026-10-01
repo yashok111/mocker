@@ -5,6 +5,7 @@ import (
 	"encoding/json/v2"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -68,6 +69,15 @@ func TestEmbeddedCopiesMatchTheSkill(t *testing.T) {
 
 func TestTopics(t *testing.T) {
 	t.Parallel()
+	want := []string{
+		"overview", "tools", "shapes", "cookbook", "http", "design", "functions",
+		"backend-overview", "backend-import", "backend-model", "backend-import-protocol",
+		"backend-recovery", "backend-examples", "backend-database",
+		"backend-database-reference", "backend-profile-go-sql",
+	}
+	if !slices.Equal(Topics(), want) {
+		t.Errorf("served topics = %v; want complete ordered inventory %v", Topics(), want)
+	}
 	for _, name := range Topics() {
 		text, ok := Topic(name)
 		if !ok || strings.TrimSpace(text) == "" {

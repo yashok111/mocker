@@ -1,0 +1,3458 @@
+{
+  "format": "orders-relational-expectations-v1",
+  "authoring": "Independent hand-authored source facts and acceptance expectations; never importer/projector output.",
+  "fixture": {
+    "dialect": "sqlite",
+    "version": "v2",
+    "profile": "relational-graph-v1",
+    "modelSchemaVersion": "2",
+    "repositoryName": "orders-fixture",
+    "providerNamespace": "orders-fixtures",
+    "sourceOnly": true
+  },
+  "facetConventions": {
+    "sql": {
+      "sourceKind": "sql",
+      "dialect": "sqlite"
+    },
+    "orm": {
+      "sourceKind": "orm",
+      "dialect": "sqlite"
+    },
+    "migration": {
+      "sourceKind": "migration",
+      "dialect": "sqlite"
+    }
+  },
+  "nodes": {
+    "database:orders": {
+      "kind": "datastore",
+      "name": "orders_fixture",
+      "facets": {
+        "sql": {
+          "databaseName": "orders_fixture",
+          "qualifiedName": "orders_fixture",
+          "nativeDefinition": null
+        }
+      }
+    },
+    "schema:main": {
+      "kind": "db_schema",
+      "parentKey": "database:orders",
+      "name": "main",
+      "facets": {
+        "sql": {
+          "qualifiedName": "main",
+          "nativeDefinition": null
+        }
+      }
+    },
+    "table:users": {
+      "kind": "table",
+      "parentKey": "schema:main",
+      "name": "users",
+      "selectedColumnKeys": {
+        "sql": [
+          "column:users:tenant_id",
+          "column:users:id",
+          "column:users:email",
+          "column:users:deleted_at"
+        ],
+        "orm": [
+          "column:users:tenant_id",
+          "column:users:id",
+          "column:users:email",
+          "column:users:deleted_at"
+        ]
+      },
+      "facets": {
+        "sql": {
+          "qualifiedName": "main.users",
+          "columnsStatus": "complete",
+          "constraintsStatus": "complete",
+          "gaps": []
+        },
+        "orm": {
+          "qualifiedName": "main.users",
+          "columnsStatus": "complete",
+          "constraintsStatus": "partial",
+          "gaps": [
+            "Static ORM declarations omit SQL CHECK, partial/expression indexes and declared enforcement details."
+          ]
+        }
+      },
+      "sourceLocations": {
+        "sql": {
+          "path": "sqlite/v2/schema.sql",
+          "startLine": 6,
+          "endLine": 6,
+          "quote": "CREATE TABLE main.users ("
+        },
+        "orm": {
+          "path": "sqlite/v2/models.go",
+          "startLine": 40,
+          "endLine": 40,
+          "quote": "return \"main.users\""
+        }
+      },
+      "nativeDefinitionSource": {
+        "path": "sqlite/v2/schema.sql",
+        "startLine": 6,
+        "endLine": 13,
+        "startQuote": "CREATE TABLE main.users (",
+        "endQuote": ");",
+        "comparison": "verbatim UTF-8 bytes with final newline"
+      }
+    },
+    "column:users:tenant_id": {
+      "kind": "column",
+      "name": "tenant_id",
+      "parentKey": "table:users",
+      "facets": {
+        "sql": {
+          "nativeType": {
+            "status": "known",
+            "value": "INTEGER"
+          },
+          "typeFamily": {
+            "status": "known",
+            "value": "integer"
+          },
+          "nullable": {
+            "status": "known",
+            "value": false
+          },
+          "defaultExpression": {
+            "status": "known",
+            "value": null
+          },
+          "generatedExpression": {
+            "status": "known",
+            "value": null
+          },
+          "identity": {
+            "status": "known",
+            "value": null
+          },
+          "ordinal": {
+            "status": "known",
+            "value": 1
+          }
+        },
+        "orm": {
+          "nativeType": {
+            "status": "known",
+            "value": "INTEGER"
+          },
+          "typeFamily": {
+            "status": "known",
+            "value": "integer"
+          },
+          "nullable": {
+            "status": "known",
+            "value": false
+          },
+          "defaultExpression": {
+            "status": "known",
+            "value": null
+          },
+          "generatedExpression": {
+            "status": "known",
+            "value": null
+          },
+          "identity": {
+            "status": "known",
+            "value": null
+          },
+          "ordinal": {
+            "status": "known",
+            "value": 1
+          }
+        }
+      },
+      "sourceLocations": {
+        "sql": {
+          "path": "sqlite/v2/schema.sql",
+          "startLine": 7,
+          "endLine": 7,
+          "quote": "    tenant_id INTEGER"
+        },
+        "orm": {
+          "path": "sqlite/v2/models.go",
+          "startLine": 6,
+          "endLine": 6,
+          "quote": "column:tenant_id;"
+        }
+      }
+    },
+    "column:users:id": {
+      "kind": "column",
+      "name": "id",
+      "parentKey": "table:users",
+      "facets": {
+        "sql": {
+          "nativeType": {
+            "status": "known",
+            "value": "INTEGER"
+          },
+          "typeFamily": {
+            "status": "known",
+            "value": "integer"
+          },
+          "nullable": {
+            "status": "known",
+            "value": false
+          },
+          "defaultExpression": {
+            "status": "known",
+            "value": null
+          },
+          "generatedExpression": {
+            "status": "known",
+            "value": null
+          },
+          "identity": {
+            "status": "known",
+            "value": null
+          },
+          "ordinal": {
+            "status": "known",
+            "value": 2
+          }
+        },
+        "orm": {
+          "nativeType": {
+            "status": "known",
+            "value": "INTEGER"
+          },
+          "typeFamily": {
+            "status": "known",
+            "value": "integer"
+          },
+          "nullable": {
+            "status": "known",
+            "value": false
+          },
+          "defaultExpression": {
+            "status": "known",
+            "value": null
+          },
+          "generatedExpression": {
+            "status": "known",
+            "value": null
+          },
+          "identity": {
+            "status": "known",
+            "value": null
+          },
+          "ordinal": {
+            "status": "known",
+            "value": 2
+          }
+        }
+      },
+      "sourceLocations": {
+        "sql": {
+          "path": "sqlite/v2/schema.sql",
+          "startLine": 8,
+          "endLine": 8,
+          "quote": "    id INTEGER"
+        },
+        "orm": {
+          "path": "sqlite/v2/models.go",
+          "startLine": 7,
+          "endLine": 7,
+          "quote": "column:id;"
+        }
+      }
+    },
+    "column:users:email": {
+      "kind": "column",
+      "name": "email",
+      "parentKey": "table:users",
+      "facets": {
+        "sql": {
+          "nativeType": {
+            "status": "known",
+            "value": "TEXT"
+          },
+          "typeFamily": {
+            "status": "known",
+            "value": "string"
+          },
+          "nullable": {
+            "status": "known",
+            "value": false
+          },
+          "defaultExpression": {
+            "status": "known",
+            "value": null
+          },
+          "generatedExpression": {
+            "status": "known",
+            "value": null
+          },
+          "identity": {
+            "status": "known",
+            "value": null
+          },
+          "ordinal": {
+            "status": "known",
+            "value": 3
+          }
+        },
+        "orm": {
+          "nativeType": {
+            "status": "known",
+            "value": "TEXT"
+          },
+          "typeFamily": {
+            "status": "known",
+            "value": "string"
+          },
+          "nullable": {
+            "status": "known",
+            "value": false
+          },
+          "defaultExpression": {
+            "status": "known",
+            "value": null
+          },
+          "generatedExpression": {
+            "status": "known",
+            "value": null
+          },
+          "identity": {
+            "status": "known",
+            "value": null
+          },
+          "ordinal": {
+            "status": "known",
+            "value": 3
+          }
+        }
+      },
+      "sourceLocations": {
+        "sql": {
+          "path": "sqlite/v2/schema.sql",
+          "startLine": 9,
+          "endLine": 9,
+          "quote": "    email TEXT"
+        },
+        "orm": {
+          "path": "sqlite/v2/models.go",
+          "startLine": 8,
+          "endLine": 8,
+          "quote": "column:email;"
+        }
+      }
+    },
+    "column:users:deleted_at": {
+      "kind": "column",
+      "name": "deleted_at",
+      "parentKey": "table:users",
+      "facets": {
+        "sql": {
+          "nativeType": {
+            "status": "known",
+            "value": "TEXT"
+          },
+          "typeFamily": {
+            "status": "known",
+            "value": "string"
+          },
+          "nullable": {
+            "status": "known",
+            "value": true
+          },
+          "defaultExpression": {
+            "status": "known",
+            "value": null
+          },
+          "generatedExpression": {
+            "status": "known",
+            "value": null
+          },
+          "identity": {
+            "status": "known",
+            "value": null
+          },
+          "ordinal": {
+            "status": "known",
+            "value": 4
+          }
+        },
+        "orm": {
+          "nativeType": {
+            "status": "known",
+            "value": "TEXT"
+          },
+          "typeFamily": {
+            "status": "known",
+            "value": "string"
+          },
+          "nullable": {
+            "status": "known",
+            "value": true
+          },
+          "defaultExpression": {
+            "status": "known",
+            "value": null
+          },
+          "generatedExpression": {
+            "status": "known",
+            "value": null
+          },
+          "identity": {
+            "status": "known",
+            "value": null
+          },
+          "ordinal": {
+            "status": "known",
+            "value": 4
+          }
+        }
+      },
+      "sourceLocations": {
+        "sql": {
+          "path": "sqlite/v2/schema.sql",
+          "startLine": 10,
+          "endLine": 10,
+          "quote": "    deleted_at TEXT"
+        },
+        "orm": {
+          "path": "sqlite/v2/models.go",
+          "startLine": 9,
+          "endLine": 9,
+          "quote": "column:deleted_at;"
+        }
+      }
+    },
+    "table:orders": {
+      "kind": "table",
+      "parentKey": "schema:main",
+      "name": "orders",
+      "selectedColumnKeys": {
+        "sql": [
+          "column:orders:tenant_id",
+          "column:orders:id",
+          "column:orders:user_id",
+          "column:orders:state",
+          "column:orders:total",
+          "column:orders:created_at"
+        ],
+        "orm": [
+          "column:orders:tenant_id",
+          "column:orders:id",
+          "column:orders:user_id",
+          "column:orders:state",
+          "column:orders:total",
+          "column:orders:created_at"
+        ]
+      },
+      "facets": {
+        "sql": {
+          "qualifiedName": "main.orders",
+          "columnsStatus": "complete",
+          "constraintsStatus": "complete",
+          "gaps": []
+        },
+        "orm": {
+          "qualifiedName": "main.orders",
+          "columnsStatus": "complete",
+          "constraintsStatus": "partial",
+          "gaps": [
+            "Static ORM declarations omit SQL CHECK, partial/expression indexes and declared enforcement details."
+          ]
+        },
+        "migration": {
+          "qualifiedName": "main.orders",
+          "columnsStatus": "partial",
+          "constraintsStatus": "partial",
+          "analysisStatus": "partial",
+          "gaps": [
+            "Migration 002 changes schema through an unsupported dynamic operation; subsequent handled changes cannot prove the derived orders schema complete."
+          ]
+        }
+      },
+      "sourceLocations": {
+        "sql": {
+          "path": "sqlite/v2/schema.sql",
+          "startLine": 15,
+          "endLine": 15,
+          "quote": "CREATE TABLE main.orders ("
+        },
+        "orm": {
+          "path": "sqlite/v2/models.go",
+          "startLine": 41,
+          "endLine": 41,
+          "quote": "return \"main.orders\""
+        }
+      },
+      "nativeDefinitionSource": {
+        "path": "sqlite/v2/schema.sql",
+        "startLine": 15,
+        "endLine": 28,
+        "startQuote": "CREATE TABLE main.orders (",
+        "endQuote": ");",
+        "comparison": "verbatim UTF-8 bytes with final newline"
+      }
+    },
+    "column:orders:tenant_id": {
+      "kind": "column",
+      "name": "tenant_id",
+      "parentKey": "table:orders",
+      "facets": {
+        "sql": {
+          "nativeType": {
+            "status": "known",
+            "value": "INTEGER"
+          },
+          "typeFamily": {
+            "status": "known",
+            "value": "integer"
+          },
+          "nullable": {
+            "status": "known",
+            "value": false
+          },
+          "defaultExpression": {
+            "status": "known",
+            "value": null
+          },
+          "generatedExpression": {
+            "status": "known",
+            "value": null
+          },
+          "identity": {
+            "status": "known",
+            "value": null
+          },
+          "ordinal": {
+            "status": "known",
+            "value": 1
+          }
+        },
+        "orm": {
+          "nativeType": {
+            "status": "known",
+            "value": "INTEGER"
+          },
+          "typeFamily": {
+            "status": "known",
+            "value": "integer"
+          },
+          "nullable": {
+            "status": "known",
+            "value": false
+          },
+          "defaultExpression": {
+            "status": "known",
+            "value": null
+          },
+          "generatedExpression": {
+            "status": "known",
+            "value": null
+          },
+          "identity": {
+            "status": "known",
+            "value": null
+          },
+          "ordinal": {
+            "status": "known",
+            "value": 1
+          }
+        }
+      },
+      "sourceLocations": {
+        "sql": {
+          "path": "sqlite/v2/schema.sql",
+          "startLine": 16,
+          "endLine": 16,
+          "quote": "    tenant_id INTEGER"
+        },
+        "orm": {
+          "path": "sqlite/v2/models.go",
+          "startLine": 13,
+          "endLine": 13,
+          "quote": "column:tenant_id;"
+        }
+      }
+    },
+    "column:orders:id": {
+      "kind": "column",
+      "name": "id",
+      "parentKey": "table:orders",
+      "facets": {
+        "sql": {
+          "nativeType": {
+            "status": "known",
+            "value": "INTEGER"
+          },
+          "typeFamily": {
+            "status": "known",
+            "value": "integer"
+          },
+          "nullable": {
+            "status": "known",
+            "value": false
+          },
+          "defaultExpression": {
+            "status": "known",
+            "value": null
+          },
+          "generatedExpression": {
+            "status": "known",
+            "value": null
+          },
+          "identity": {
+            "status": "known",
+            "value": null
+          },
+          "ordinal": {
+            "status": "known",
+            "value": 2
+          }
+        },
+        "orm": {
+          "nativeType": {
+            "status": "known",
+            "value": "INTEGER"
+          },
+          "typeFamily": {
+            "status": "known",
+            "value": "integer"
+          },
+          "nullable": {
+            "status": "known",
+            "value": false
+          },
+          "defaultExpression": {
+            "status": "known",
+            "value": null
+          },
+          "generatedExpression": {
+            "status": "known",
+            "value": null
+          },
+          "identity": {
+            "status": "known",
+            "value": null
+          },
+          "ordinal": {
+            "status": "known",
+            "value": 2
+          }
+        }
+      },
+      "sourceLocations": {
+        "sql": {
+          "path": "sqlite/v2/schema.sql",
+          "startLine": 17,
+          "endLine": 17,
+          "quote": "    id INTEGER"
+        },
+        "orm": {
+          "path": "sqlite/v2/models.go",
+          "startLine": 14,
+          "endLine": 14,
+          "quote": "column:id;"
+        }
+      }
+    },
+    "column:orders:user_id": {
+      "kind": "column",
+      "name": "user_id",
+      "parentKey": "table:orders",
+      "facets": {
+        "sql": {
+          "nativeType": {
+            "status": "known",
+            "value": "INTEGER"
+          },
+          "typeFamily": {
+            "status": "known",
+            "value": "integer"
+          },
+          "nullable": {
+            "status": "known",
+            "value": false
+          },
+          "defaultExpression": {
+            "status": "known",
+            "value": null
+          },
+          "generatedExpression": {
+            "status": "known",
+            "value": null
+          },
+          "identity": {
+            "status": "known",
+            "value": null
+          },
+          "ordinal": {
+            "status": "known",
+            "value": 3
+          }
+        },
+        "orm": {
+          "nativeType": {
+            "status": "known",
+            "value": "INTEGER"
+          },
+          "typeFamily": {
+            "status": "known",
+            "value": "integer"
+          },
+          "nullable": {
+            "status": "known",
+            "value": true
+          },
+          "defaultExpression": {
+            "status": "known",
+            "value": null
+          },
+          "generatedExpression": {
+            "status": "known",
+            "value": null
+          },
+          "identity": {
+            "status": "known",
+            "value": null
+          },
+          "ordinal": {
+            "status": "known",
+            "value": 3
+          }
+        }
+      },
+      "sourceLocations": {
+        "sql": {
+          "path": "sqlite/v2/schema.sql",
+          "startLine": 18,
+          "endLine": 18,
+          "quote": "    user_id INTEGER"
+        },
+        "orm": {
+          "path": "sqlite/v2/models.go",
+          "startLine": 15,
+          "endLine": 15,
+          "quote": "column:user_id;"
+        }
+      }
+    },
+    "column:orders:state": {
+      "kind": "column",
+      "name": "state",
+      "parentKey": "table:orders",
+      "facets": {
+        "sql": {
+          "nativeType": {
+            "status": "known",
+            "value": "TEXT"
+          },
+          "typeFamily": {
+            "status": "known",
+            "value": "string"
+          },
+          "nullable": {
+            "status": "known",
+            "value": false
+          },
+          "defaultExpression": {
+            "status": "known",
+            "value": "'draft'"
+          },
+          "generatedExpression": {
+            "status": "known",
+            "value": null
+          },
+          "identity": {
+            "status": "known",
+            "value": null
+          },
+          "ordinal": {
+            "status": "known",
+            "value": 4
+          }
+        },
+        "orm": {
+          "nativeType": {
+            "status": "known",
+            "value": "TEXT"
+          },
+          "typeFamily": {
+            "status": "known",
+            "value": "string"
+          },
+          "nullable": {
+            "status": "known",
+            "value": false
+          },
+          "defaultExpression": {
+            "status": "known",
+            "value": "'pending'"
+          },
+          "generatedExpression": {
+            "status": "known",
+            "value": null
+          },
+          "identity": {
+            "status": "known",
+            "value": null
+          },
+          "ordinal": {
+            "status": "known",
+            "value": 4
+          }
+        }
+      },
+      "sourceLocations": {
+        "sql": {
+          "path": "sqlite/v2/schema.sql",
+          "startLine": 19,
+          "endLine": 19,
+          "quote": "    state TEXT"
+        },
+        "orm": {
+          "path": "sqlite/v2/models.go",
+          "startLine": 16,
+          "endLine": 16,
+          "quote": "column:state;"
+        }
+      },
+      "identity": {
+        "sameAs": {
+          "fixtureVersion": "v1",
+          "externalKey": "column:orders:status"
+        },
+        "requiresExplicitMapBeforeUpsert": true
+      }
+    },
+    "column:orders:total": {
+      "kind": "column",
+      "name": "total",
+      "parentKey": "table:orders",
+      "facets": {
+        "sql": {
+          "nativeType": {
+            "status": "known",
+            "value": "NUMERIC(18,2)"
+          },
+          "typeFamily": {
+            "status": "known",
+            "value": "decimal"
+          },
+          "nullable": {
+            "status": "known",
+            "value": false
+          },
+          "defaultExpression": {
+            "status": "known",
+            "value": "0"
+          },
+          "generatedExpression": {
+            "status": "known",
+            "value": null
+          },
+          "identity": {
+            "status": "known",
+            "value": null
+          },
+          "ordinal": {
+            "status": "known",
+            "value": 5
+          }
+        },
+        "orm": {
+          "nativeType": {
+            "status": "known",
+            "value": "DECIMAL(12,2)"
+          },
+          "typeFamily": {
+            "status": "known",
+            "value": "decimal"
+          },
+          "nullable": {
+            "status": "known",
+            "value": false
+          },
+          "defaultExpression": {
+            "status": "known",
+            "value": "0"
+          },
+          "generatedExpression": {
+            "status": "known",
+            "value": null
+          },
+          "identity": {
+            "status": "known",
+            "value": null
+          },
+          "ordinal": {
+            "status": "known",
+            "value": 5
+          }
+        }
+      },
+      "sourceLocations": {
+        "sql": {
+          "path": "sqlite/v2/schema.sql",
+          "startLine": 20,
+          "endLine": 20,
+          "quote": "    total NUMERIC(18,2)"
+        },
+        "orm": {
+          "path": "sqlite/v2/models.go",
+          "startLine": 17,
+          "endLine": 17,
+          "quote": "column:total;"
+        }
+      }
+    },
+    "column:orders:created_at": {
+      "kind": "column",
+      "name": "created_at",
+      "parentKey": "table:orders",
+      "facets": {
+        "sql": {
+          "nativeType": {
+            "status": "known",
+            "value": "TEXT"
+          },
+          "typeFamily": {
+            "status": "known",
+            "value": "string"
+          },
+          "nullable": {
+            "status": "known",
+            "value": false
+          },
+          "defaultExpression": {
+            "status": "known",
+            "value": "CURRENT_TIMESTAMP"
+          },
+          "generatedExpression": {
+            "status": "known",
+            "value": null
+          },
+          "identity": {
+            "status": "known",
+            "value": null
+          },
+          "ordinal": {
+            "status": "known",
+            "value": 6
+          }
+        },
+        "orm": {
+          "nativeType": {
+            "status": "known",
+            "value": "TEXT"
+          },
+          "typeFamily": {
+            "status": "known",
+            "value": "string"
+          },
+          "nullable": {
+            "status": "known",
+            "value": false
+          },
+          "defaultExpression": {
+            "status": "unknown",
+            "reason": "autoCreateTime declares application timestamp behavior, not a SQL DEFAULT."
+          },
+          "generatedExpression": {
+            "status": "known",
+            "value": null
+          },
+          "identity": {
+            "status": "known",
+            "value": null
+          },
+          "ordinal": {
+            "status": "known",
+            "value": 6
+          }
+        }
+      },
+      "sourceLocations": {
+        "sql": {
+          "path": "sqlite/v2/schema.sql",
+          "startLine": 21,
+          "endLine": 21,
+          "quote": "    created_at TEXT"
+        },
+        "orm": {
+          "path": "sqlite/v2/models.go",
+          "startLine": 18,
+          "endLine": 18,
+          "quote": "column:created_at;"
+        }
+      }
+    },
+    "table:order_items": {
+      "kind": "table",
+      "parentKey": "schema:main",
+      "name": "order_items",
+      "selectedColumnKeys": {
+        "sql": [
+          "column:order_items:tenant_id",
+          "column:order_items:order_id",
+          "column:order_items:line_no",
+          "column:order_items:sku",
+          "column:order_items:quantity"
+        ],
+        "orm": [
+          "column:order_items:tenant_id",
+          "column:order_items:order_id",
+          "column:order_items:line_no",
+          "column:order_items:sku",
+          "column:order_items:quantity"
+        ]
+      },
+      "facets": {
+        "sql": {
+          "qualifiedName": "main.order_items",
+          "columnsStatus": "complete",
+          "constraintsStatus": "complete",
+          "gaps": []
+        },
+        "orm": {
+          "qualifiedName": "main.order_items",
+          "columnsStatus": "complete",
+          "constraintsStatus": "partial",
+          "gaps": [
+            "Static ORM declarations omit SQL CHECK, partial/expression indexes and declared enforcement details."
+          ]
+        }
+      },
+      "sourceLocations": {
+        "sql": {
+          "path": "sqlite/v2/schema.sql",
+          "startLine": 30,
+          "endLine": 30,
+          "quote": "CREATE TABLE main.order_items ("
+        },
+        "orm": {
+          "path": "sqlite/v2/models.go",
+          "startLine": 42,
+          "endLine": 42,
+          "quote": "return \"main.order_items\""
+        }
+      },
+      "nativeDefinitionSource": {
+        "path": "sqlite/v2/schema.sql",
+        "startLine": 30,
+        "endLine": 41,
+        "startQuote": "CREATE TABLE main.order_items (",
+        "endQuote": ");",
+        "comparison": "verbatim UTF-8 bytes with final newline"
+      }
+    },
+    "column:order_items:tenant_id": {
+      "kind": "column",
+      "name": "tenant_id",
+      "parentKey": "table:order_items",
+      "facets": {
+        "sql": {
+          "nativeType": {
+            "status": "known",
+            "value": "INTEGER"
+          },
+          "typeFamily": {
+            "status": "known",
+            "value": "integer"
+          },
+          "nullable": {
+            "status": "known",
+            "value": false
+          },
+          "defaultExpression": {
+            "status": "known",
+            "value": null
+          },
+          "generatedExpression": {
+            "status": "known",
+            "value": null
+          },
+          "identity": {
+            "status": "known",
+            "value": null
+          },
+          "ordinal": {
+            "status": "known",
+            "value": 1
+          }
+        },
+        "orm": {
+          "nativeType": {
+            "status": "known",
+            "value": "INTEGER"
+          },
+          "typeFamily": {
+            "status": "known",
+            "value": "integer"
+          },
+          "nullable": {
+            "status": "known",
+            "value": false
+          },
+          "defaultExpression": {
+            "status": "known",
+            "value": null
+          },
+          "generatedExpression": {
+            "status": "known",
+            "value": null
+          },
+          "identity": {
+            "status": "known",
+            "value": null
+          },
+          "ordinal": {
+            "status": "known",
+            "value": 1
+          }
+        }
+      },
+      "sourceLocations": {
+        "sql": {
+          "path": "sqlite/v2/schema.sql",
+          "startLine": 31,
+          "endLine": 31,
+          "quote": "    tenant_id INTEGER"
+        },
+        "orm": {
+          "path": "sqlite/v2/models.go",
+          "startLine": 23,
+          "endLine": 23,
+          "quote": "column:tenant_id;"
+        }
+      }
+    },
+    "column:order_items:order_id": {
+      "kind": "column",
+      "name": "order_id",
+      "parentKey": "table:order_items",
+      "facets": {
+        "sql": {
+          "nativeType": {
+            "status": "known",
+            "value": "INTEGER"
+          },
+          "typeFamily": {
+            "status": "known",
+            "value": "integer"
+          },
+          "nullable": {
+            "status": "known",
+            "value": false
+          },
+          "defaultExpression": {
+            "status": "known",
+            "value": null
+          },
+          "generatedExpression": {
+            "status": "known",
+            "value": null
+          },
+          "identity": {
+            "status": "known",
+            "value": null
+          },
+          "ordinal": {
+            "status": "known",
+            "value": 2
+          }
+        },
+        "orm": {
+          "nativeType": {
+            "status": "known",
+            "value": "INTEGER"
+          },
+          "typeFamily": {
+            "status": "known",
+            "value": "integer"
+          },
+          "nullable": {
+            "status": "known",
+            "value": false
+          },
+          "defaultExpression": {
+            "status": "known",
+            "value": null
+          },
+          "generatedExpression": {
+            "status": "known",
+            "value": null
+          },
+          "identity": {
+            "status": "known",
+            "value": null
+          },
+          "ordinal": {
+            "status": "known",
+            "value": 2
+          }
+        }
+      },
+      "sourceLocations": {
+        "sql": {
+          "path": "sqlite/v2/schema.sql",
+          "startLine": 32,
+          "endLine": 32,
+          "quote": "    order_id INTEGER"
+        },
+        "orm": {
+          "path": "sqlite/v2/models.go",
+          "startLine": 24,
+          "endLine": 24,
+          "quote": "column:order_id;"
+        }
+      }
+    },
+    "column:order_items:line_no": {
+      "kind": "column",
+      "name": "line_no",
+      "parentKey": "table:order_items",
+      "facets": {
+        "sql": {
+          "nativeType": {
+            "status": "known",
+            "value": "INTEGER"
+          },
+          "typeFamily": {
+            "status": "known",
+            "value": "integer"
+          },
+          "nullable": {
+            "status": "known",
+            "value": false
+          },
+          "defaultExpression": {
+            "status": "known",
+            "value": null
+          },
+          "generatedExpression": {
+            "status": "known",
+            "value": null
+          },
+          "identity": {
+            "status": "known",
+            "value": null
+          },
+          "ordinal": {
+            "status": "known",
+            "value": 3
+          }
+        },
+        "orm": {
+          "nativeType": {
+            "status": "known",
+            "value": "INTEGER"
+          },
+          "typeFamily": {
+            "status": "known",
+            "value": "integer"
+          },
+          "nullable": {
+            "status": "known",
+            "value": false
+          },
+          "defaultExpression": {
+            "status": "known",
+            "value": null
+          },
+          "generatedExpression": {
+            "status": "known",
+            "value": null
+          },
+          "identity": {
+            "status": "known",
+            "value": null
+          },
+          "ordinal": {
+            "status": "known",
+            "value": 3
+          }
+        }
+      },
+      "sourceLocations": {
+        "sql": {
+          "path": "sqlite/v2/schema.sql",
+          "startLine": 33,
+          "endLine": 33,
+          "quote": "    line_no INTEGER"
+        },
+        "orm": {
+          "path": "sqlite/v2/models.go",
+          "startLine": 25,
+          "endLine": 25,
+          "quote": "column:line_no;"
+        }
+      }
+    },
+    "column:order_items:sku": {
+      "kind": "column",
+      "name": "sku",
+      "parentKey": "table:order_items",
+      "facets": {
+        "sql": {
+          "nativeType": {
+            "status": "known",
+            "value": "TEXT"
+          },
+          "typeFamily": {
+            "status": "known",
+            "value": "string"
+          },
+          "nullable": {
+            "status": "known",
+            "value": false
+          },
+          "defaultExpression": {
+            "status": "known",
+            "value": null
+          },
+          "generatedExpression": {
+            "status": "known",
+            "value": null
+          },
+          "identity": {
+            "status": "known",
+            "value": null
+          },
+          "ordinal": {
+            "status": "known",
+            "value": 4
+          }
+        },
+        "orm": {
+          "nativeType": {
+            "status": "known",
+            "value": "TEXT"
+          },
+          "typeFamily": {
+            "status": "known",
+            "value": "string"
+          },
+          "nullable": {
+            "status": "known",
+            "value": false
+          },
+          "defaultExpression": {
+            "status": "known",
+            "value": null
+          },
+          "generatedExpression": {
+            "status": "known",
+            "value": null
+          },
+          "identity": {
+            "status": "known",
+            "value": null
+          },
+          "ordinal": {
+            "status": "known",
+            "value": 4
+          }
+        }
+      },
+      "sourceLocations": {
+        "sql": {
+          "path": "sqlite/v2/schema.sql",
+          "startLine": 34,
+          "endLine": 34,
+          "quote": "    sku TEXT"
+        },
+        "orm": {
+          "path": "sqlite/v2/models.go",
+          "startLine": 26,
+          "endLine": 26,
+          "quote": "column:sku;"
+        }
+      }
+    },
+    "column:order_items:quantity": {
+      "kind": "column",
+      "name": "quantity",
+      "parentKey": "table:order_items",
+      "facets": {
+        "sql": {
+          "nativeType": {
+            "status": "known",
+            "value": "INTEGER"
+          },
+          "typeFamily": {
+            "status": "known",
+            "value": "integer"
+          },
+          "nullable": {
+            "status": "known",
+            "value": false
+          },
+          "defaultExpression": {
+            "status": "known",
+            "value": "1"
+          },
+          "generatedExpression": {
+            "status": "known",
+            "value": null
+          },
+          "identity": {
+            "status": "known",
+            "value": null
+          },
+          "ordinal": {
+            "status": "known",
+            "value": 5
+          }
+        },
+        "orm": {
+          "nativeType": {
+            "status": "known",
+            "value": "INTEGER"
+          },
+          "typeFamily": {
+            "status": "known",
+            "value": "integer"
+          },
+          "nullable": {
+            "status": "known",
+            "value": false
+          },
+          "defaultExpression": {
+            "status": "known",
+            "value": "1"
+          },
+          "generatedExpression": {
+            "status": "known",
+            "value": null
+          },
+          "identity": {
+            "status": "known",
+            "value": null
+          },
+          "ordinal": {
+            "status": "known",
+            "value": 5
+          }
+        }
+      },
+      "sourceLocations": {
+        "sql": {
+          "path": "sqlite/v2/schema.sql",
+          "startLine": 35,
+          "endLine": 35,
+          "quote": "    quantity INTEGER"
+        },
+        "orm": {
+          "path": "sqlite/v2/models.go",
+          "startLine": 27,
+          "endLine": 27,
+          "quote": "column:quantity;"
+        }
+      }
+    },
+    "table:payments": {
+      "kind": "table",
+      "parentKey": "schema:main",
+      "name": "payments",
+      "selectedColumnKeys": {
+        "sql": [
+          "column:payments:tenant_id",
+          "column:payments:id",
+          "column:payments:order_id",
+          "column:payments:amount",
+          "column:payments:received_at"
+        ],
+        "orm": [
+          "column:payments:tenant_id",
+          "column:payments:id",
+          "column:payments:order_id",
+          "column:payments:amount",
+          "column:payments:received_at"
+        ]
+      },
+      "facets": {
+        "sql": {
+          "qualifiedName": "main.payments",
+          "columnsStatus": "complete",
+          "constraintsStatus": "complete",
+          "gaps": []
+        },
+        "orm": {
+          "qualifiedName": "main.payments",
+          "columnsStatus": "complete",
+          "constraintsStatus": "partial",
+          "gaps": [
+            "Static ORM declarations omit SQL CHECK, partial/expression indexes and declared enforcement details."
+          ]
+        }
+      },
+      "sourceLocations": {
+        "sql": {
+          "path": "sqlite/v2/schema.sql",
+          "startLine": 43,
+          "endLine": 43,
+          "quote": "CREATE TABLE main.payments ("
+        },
+        "orm": {
+          "path": "sqlite/v2/models.go",
+          "startLine": 43,
+          "endLine": 43,
+          "quote": "return \"main.payments\""
+        }
+      },
+      "nativeDefinitionSource": {
+        "path": "sqlite/v2/schema.sql",
+        "startLine": 43,
+        "endLine": 55,
+        "startQuote": "CREATE TABLE main.payments (",
+        "endQuote": ");",
+        "comparison": "verbatim UTF-8 bytes with final newline"
+      }
+    },
+    "column:payments:tenant_id": {
+      "kind": "column",
+      "name": "tenant_id",
+      "parentKey": "table:payments",
+      "facets": {
+        "sql": {
+          "nativeType": {
+            "status": "known",
+            "value": "INTEGER"
+          },
+          "typeFamily": {
+            "status": "known",
+            "value": "integer"
+          },
+          "nullable": {
+            "status": "known",
+            "value": false
+          },
+          "defaultExpression": {
+            "status": "known",
+            "value": null
+          },
+          "generatedExpression": {
+            "status": "known",
+            "value": null
+          },
+          "identity": {
+            "status": "known",
+            "value": null
+          },
+          "ordinal": {
+            "status": "known",
+            "value": 1
+          }
+        },
+        "orm": {
+          "nativeType": {
+            "status": "known",
+            "value": "INTEGER"
+          },
+          "typeFamily": {
+            "status": "known",
+            "value": "integer"
+          },
+          "nullable": {
+            "status": "known",
+            "value": false
+          },
+          "defaultExpression": {
+            "status": "known",
+            "value": null
+          },
+          "generatedExpression": {
+            "status": "known",
+            "value": null
+          },
+          "identity": {
+            "status": "known",
+            "value": null
+          },
+          "ordinal": {
+            "status": "known",
+            "value": 1
+          }
+        }
+      },
+      "sourceLocations": {
+        "sql": {
+          "path": "sqlite/v2/schema.sql",
+          "startLine": 44,
+          "endLine": 44,
+          "quote": "    tenant_id INTEGER"
+        },
+        "orm": {
+          "path": "sqlite/v2/models.go",
+          "startLine": 32,
+          "endLine": 32,
+          "quote": "column:tenant_id;"
+        }
+      }
+    },
+    "column:payments:id": {
+      "kind": "column",
+      "name": "id",
+      "parentKey": "table:payments",
+      "facets": {
+        "sql": {
+          "nativeType": {
+            "status": "known",
+            "value": "INTEGER"
+          },
+          "typeFamily": {
+            "status": "known",
+            "value": "integer"
+          },
+          "nullable": {
+            "status": "known",
+            "value": false
+          },
+          "defaultExpression": {
+            "status": "known",
+            "value": null
+          },
+          "generatedExpression": {
+            "status": "known",
+            "value": null
+          },
+          "identity": {
+            "status": "known",
+            "value": null
+          },
+          "ordinal": {
+            "status": "known",
+            "value": 2
+          }
+        },
+        "orm": {
+          "nativeType": {
+            "status": "known",
+            "value": "INTEGER"
+          },
+          "typeFamily": {
+            "status": "known",
+            "value": "integer"
+          },
+          "nullable": {
+            "status": "known",
+            "value": false
+          },
+          "defaultExpression": {
+            "status": "known",
+            "value": null
+          },
+          "generatedExpression": {
+            "status": "known",
+            "value": null
+          },
+          "identity": {
+            "status": "known",
+            "value": null
+          },
+          "ordinal": {
+            "status": "known",
+            "value": 2
+          }
+        }
+      },
+      "sourceLocations": {
+        "sql": {
+          "path": "sqlite/v2/schema.sql",
+          "startLine": 45,
+          "endLine": 45,
+          "quote": "    id INTEGER"
+        },
+        "orm": {
+          "path": "sqlite/v2/models.go",
+          "startLine": 33,
+          "endLine": 33,
+          "quote": "column:id;"
+        }
+      }
+    },
+    "column:payments:order_id": {
+      "kind": "column",
+      "name": "order_id",
+      "parentKey": "table:payments",
+      "facets": {
+        "sql": {
+          "nativeType": {
+            "status": "known",
+            "value": "INTEGER"
+          },
+          "typeFamily": {
+            "status": "known",
+            "value": "integer"
+          },
+          "nullable": {
+            "status": "known",
+            "value": true
+          },
+          "defaultExpression": {
+            "status": "known",
+            "value": null
+          },
+          "generatedExpression": {
+            "status": "known",
+            "value": null
+          },
+          "identity": {
+            "status": "known",
+            "value": null
+          },
+          "ordinal": {
+            "status": "known",
+            "value": 3
+          }
+        },
+        "orm": {
+          "nativeType": {
+            "status": "known",
+            "value": "INTEGER"
+          },
+          "typeFamily": {
+            "status": "known",
+            "value": "integer"
+          },
+          "nullable": {
+            "status": "known",
+            "value": true
+          },
+          "defaultExpression": {
+            "status": "known",
+            "value": null
+          },
+          "generatedExpression": {
+            "status": "known",
+            "value": null
+          },
+          "identity": {
+            "status": "known",
+            "value": null
+          },
+          "ordinal": {
+            "status": "known",
+            "value": 3
+          }
+        }
+      },
+      "sourceLocations": {
+        "sql": {
+          "path": "sqlite/v2/schema.sql",
+          "startLine": 46,
+          "endLine": 46,
+          "quote": "    order_id INTEGER"
+        },
+        "orm": {
+          "path": "sqlite/v2/models.go",
+          "startLine": 34,
+          "endLine": 34,
+          "quote": "column:order_id;"
+        }
+      }
+    },
+    "column:payments:amount": {
+      "kind": "column",
+      "name": "amount",
+      "parentKey": "table:payments",
+      "facets": {
+        "sql": {
+          "nativeType": {
+            "status": "known",
+            "value": "NUMERIC(18,2)"
+          },
+          "typeFamily": {
+            "status": "known",
+            "value": "decimal"
+          },
+          "nullable": {
+            "status": "known",
+            "value": false
+          },
+          "defaultExpression": {
+            "status": "known",
+            "value": null
+          },
+          "generatedExpression": {
+            "status": "known",
+            "value": null
+          },
+          "identity": {
+            "status": "known",
+            "value": null
+          },
+          "ordinal": {
+            "status": "known",
+            "value": 4
+          }
+        },
+        "orm": {
+          "nativeType": {
+            "status": "known",
+            "value": "DECIMAL(12,2)"
+          },
+          "typeFamily": {
+            "status": "known",
+            "value": "decimal"
+          },
+          "nullable": {
+            "status": "known",
+            "value": false
+          },
+          "defaultExpression": {
+            "status": "known",
+            "value": null
+          },
+          "generatedExpression": {
+            "status": "known",
+            "value": null
+          },
+          "identity": {
+            "status": "known",
+            "value": null
+          },
+          "ordinal": {
+            "status": "known",
+            "value": 4
+          }
+        }
+      },
+      "sourceLocations": {
+        "sql": {
+          "path": "sqlite/v2/schema.sql",
+          "startLine": 47,
+          "endLine": 47,
+          "quote": "    amount NUMERIC(18,2)"
+        },
+        "orm": {
+          "path": "sqlite/v2/models.go",
+          "startLine": 35,
+          "endLine": 35,
+          "quote": "column:amount;"
+        }
+      }
+    },
+    "column:payments:received_at": {
+      "kind": "column",
+      "name": "received_at",
+      "parentKey": "table:payments",
+      "facets": {
+        "sql": {
+          "nativeType": {
+            "status": "known",
+            "value": "TEXT"
+          },
+          "typeFamily": {
+            "status": "known",
+            "value": "string"
+          },
+          "nullable": {
+            "status": "known",
+            "value": false
+          },
+          "defaultExpression": {
+            "status": "known",
+            "value": "CURRENT_TIMESTAMP"
+          },
+          "generatedExpression": {
+            "status": "known",
+            "value": null
+          },
+          "identity": {
+            "status": "known",
+            "value": null
+          },
+          "ordinal": {
+            "status": "known",
+            "value": 5
+          }
+        },
+        "orm": {
+          "nativeType": {
+            "status": "known",
+            "value": "TEXT"
+          },
+          "typeFamily": {
+            "status": "known",
+            "value": "string"
+          },
+          "nullable": {
+            "status": "known",
+            "value": false
+          },
+          "defaultExpression": {
+            "status": "unknown",
+            "reason": "autoCreateTime declares application timestamp behavior, not a SQL DEFAULT."
+          },
+          "generatedExpression": {
+            "status": "known",
+            "value": null
+          },
+          "identity": {
+            "status": "known",
+            "value": null
+          },
+          "ordinal": {
+            "status": "known",
+            "value": 5
+          }
+        }
+      },
+      "sourceLocations": {
+        "sql": {
+          "path": "sqlite/v2/schema.sql",
+          "startLine": 48,
+          "endLine": 48,
+          "quote": "    received_at TEXT"
+        },
+        "orm": {
+          "path": "sqlite/v2/models.go",
+          "startLine": 36,
+          "endLine": 36,
+          "quote": "column:received_at;"
+        }
+      }
+    },
+    "constraint:users:pk": {
+      "kind": "constraint",
+      "name": "users_pk",
+      "parentKey": "table:users",
+      "facets": {
+        "sql": {
+          "constraintKind": "primary_key",
+          "columnKeys": [
+            "column:users:tenant_id",
+            "column:users:id"
+          ],
+          "expression": {
+            "status": "known",
+            "value": null
+          },
+          "deferrable": {
+            "status": "known",
+            "value": null
+          },
+          "initiallyDeferred": {
+            "status": "known",
+            "value": null
+          }
+        },
+        "orm": {
+          "constraintKind": "primary_key",
+          "columnKeys": [
+            "column:users:tenant_id",
+            "column:users:id"
+          ],
+          "expression": {
+            "status": "known",
+            "value": null
+          },
+          "deferrable": {
+            "status": "known",
+            "value": null
+          },
+          "initiallyDeferred": {
+            "status": "known",
+            "value": null
+          }
+        }
+      },
+      "sourceLocations": {
+        "sql": {
+          "path": "sqlite/v2/schema.sql",
+          "startLine": 11,
+          "endLine": 11,
+          "quote": "CONSTRAINT users_pk "
+        },
+        "orm": {
+          "path": "sqlite/v2/models.go",
+          "startLine": 5,
+          "endLine": 10,
+          "startQuote": "type User struct",
+          "endQuote": "}",
+          "comparison": "verbatim UTF-8 bytes with final newline"
+        }
+      }
+    },
+    "constraint:users:email_unique": {
+      "kind": "constraint",
+      "name": "users_email_unique",
+      "parentKey": "table:users",
+      "facets": {
+        "sql": {
+          "constraintKind": "unique",
+          "columnKeys": [
+            "column:users:tenant_id",
+            "column:users:email"
+          ],
+          "expression": {
+            "status": "known",
+            "value": null
+          },
+          "deferrable": {
+            "status": "known",
+            "value": null
+          },
+          "initiallyDeferred": {
+            "status": "known",
+            "value": null
+          }
+        },
+        "orm": {
+          "constraintKind": "unique",
+          "columnKeys": [
+            "column:users:tenant_id",
+            "column:users:email"
+          ],
+          "expression": {
+            "status": "known",
+            "value": null
+          },
+          "deferrable": {
+            "status": "known",
+            "value": null
+          },
+          "initiallyDeferred": {
+            "status": "known",
+            "value": null
+          }
+        }
+      },
+      "sourceLocations": {
+        "sql": {
+          "path": "sqlite/v2/schema.sql",
+          "startLine": 12,
+          "endLine": 12,
+          "quote": "CONSTRAINT users_email_unique "
+        },
+        "orm": {
+          "path": "sqlite/v2/models.go",
+          "startLine": 5,
+          "endLine": 10,
+          "startQuote": "type User struct",
+          "endQuote": "}",
+          "comparison": "verbatim UTF-8 bytes with final newline"
+        }
+      }
+    },
+    "constraint:orders:pk": {
+      "kind": "constraint",
+      "name": "orders_pk",
+      "parentKey": "table:orders",
+      "facets": {
+        "sql": {
+          "constraintKind": "primary_key",
+          "columnKeys": [
+            "column:orders:tenant_id",
+            "column:orders:id"
+          ],
+          "expression": {
+            "status": "known",
+            "value": null
+          },
+          "deferrable": {
+            "status": "known",
+            "value": null
+          },
+          "initiallyDeferred": {
+            "status": "known",
+            "value": null
+          }
+        },
+        "orm": {
+          "constraintKind": "primary_key",
+          "columnKeys": [
+            "column:orders:tenant_id",
+            "column:orders:id"
+          ],
+          "expression": {
+            "status": "known",
+            "value": null
+          },
+          "deferrable": {
+            "status": "known",
+            "value": null
+          },
+          "initiallyDeferred": {
+            "status": "known",
+            "value": null
+          }
+        }
+      },
+      "sourceLocations": {
+        "sql": {
+          "path": "sqlite/v2/schema.sql",
+          "startLine": 22,
+          "endLine": 22,
+          "quote": "CONSTRAINT orders_pk "
+        },
+        "orm": {
+          "path": "sqlite/v2/models.go",
+          "startLine": 12,
+          "endLine": 20,
+          "startQuote": "type Order struct",
+          "endQuote": "}",
+          "comparison": "verbatim UTF-8 bytes with final newline"
+        }
+      }
+    },
+    "constraint:orders:user_fk": {
+      "kind": "constraint",
+      "name": "orders_user_fk",
+      "parentKey": "table:orders",
+      "facets": {
+        "sql": {
+          "constraintKind": "foreign_key",
+          "columnKeys": [
+            "column:orders:tenant_id",
+            "column:orders:user_id"
+          ],
+          "expression": {
+            "status": "known",
+            "value": null
+          },
+          "deferrable": {
+            "status": "known",
+            "value": false
+          },
+          "initiallyDeferred": {
+            "status": "known",
+            "value": false
+          }
+        },
+        "orm": {
+          "constraintKind": "foreign_key",
+          "columnKeys": [
+            "column:orders:tenant_id",
+            "column:orders:user_id"
+          ],
+          "expression": {
+            "status": "known",
+            "value": null
+          },
+          "deferrable": {
+            "status": "unknown",
+            "reason": "ORM relationship declaration omits deferrability."
+          },
+          "initiallyDeferred": {
+            "status": "unknown",
+            "reason": "ORM relationship declaration omits initial deferral."
+          }
+        }
+      },
+      "sourceLocations": {
+        "sql": {
+          "path": "sqlite/v2/schema.sql",
+          "startLine": 23,
+          "endLine": 23,
+          "quote": "CONSTRAINT orders_user_fk "
+        },
+        "orm": {
+          "path": "sqlite/v2/models.go",
+          "startLine": 12,
+          "endLine": 20,
+          "startQuote": "type Order struct",
+          "endQuote": "}",
+          "comparison": "verbatim UTF-8 bytes with final newline"
+        }
+      }
+    },
+    "constraint:orders:total_check": {
+      "kind": "constraint",
+      "name": "orders_total_check",
+      "parentKey": "table:orders",
+      "facets": {
+        "sql": {
+          "constraintKind": "check",
+          "columnKeys": [],
+          "expression": {
+            "status": "known",
+            "value": "total >= 0"
+          },
+          "deferrable": {
+            "status": "known",
+            "value": null
+          },
+          "initiallyDeferred": {
+            "status": "known",
+            "value": null
+          }
+        }
+      },
+      "sourceLocations": {
+        "sql": {
+          "path": "sqlite/v2/schema.sql",
+          "startLine": 26,
+          "endLine": 26,
+          "quote": "CONSTRAINT orders_total_check "
+        }
+      }
+    },
+    "constraint:orders:state_check": {
+      "kind": "constraint",
+      "name": "orders_state_check",
+      "parentKey": "table:orders",
+      "facets": {
+        "sql": {
+          "constraintKind": "check",
+          "columnKeys": [],
+          "expression": {
+            "status": "known",
+            "value": "state IN ('draft', 'paid', 'cancelled')"
+          },
+          "deferrable": {
+            "status": "known",
+            "value": null
+          },
+          "initiallyDeferred": {
+            "status": "known",
+            "value": null
+          }
+        }
+      },
+      "sourceLocations": {
+        "sql": {
+          "path": "sqlite/v2/schema.sql",
+          "startLine": 27,
+          "endLine": 27,
+          "quote": "CONSTRAINT orders_state_check "
+        }
+      }
+    },
+    "constraint:order_items:pk": {
+      "kind": "constraint",
+      "name": "order_items_pk",
+      "parentKey": "table:order_items",
+      "facets": {
+        "sql": {
+          "constraintKind": "primary_key",
+          "columnKeys": [
+            "column:order_items:tenant_id",
+            "column:order_items:order_id",
+            "column:order_items:line_no"
+          ],
+          "expression": {
+            "status": "known",
+            "value": null
+          },
+          "deferrable": {
+            "status": "known",
+            "value": null
+          },
+          "initiallyDeferred": {
+            "status": "known",
+            "value": null
+          }
+        },
+        "orm": {
+          "constraintKind": "primary_key",
+          "columnKeys": [
+            "column:order_items:tenant_id",
+            "column:order_items:order_id",
+            "column:order_items:line_no"
+          ],
+          "expression": {
+            "status": "known",
+            "value": null
+          },
+          "deferrable": {
+            "status": "known",
+            "value": null
+          },
+          "initiallyDeferred": {
+            "status": "known",
+            "value": null
+          }
+        }
+      },
+      "sourceLocations": {
+        "sql": {
+          "path": "sqlite/v2/schema.sql",
+          "startLine": 36,
+          "endLine": 36,
+          "quote": "CONSTRAINT order_items_pk "
+        },
+        "orm": {
+          "path": "sqlite/v2/models.go",
+          "startLine": 22,
+          "endLine": 29,
+          "startQuote": "type OrderItem struct",
+          "endQuote": "}",
+          "comparison": "verbatim UTF-8 bytes with final newline"
+        }
+      }
+    },
+    "constraint:order_items:order_fk": {
+      "kind": "constraint",
+      "name": "order_items_order_fk",
+      "parentKey": "table:order_items",
+      "facets": {
+        "sql": {
+          "constraintKind": "foreign_key",
+          "columnKeys": [
+            "column:order_items:tenant_id",
+            "column:order_items:order_id"
+          ],
+          "expression": {
+            "status": "known",
+            "value": null
+          },
+          "deferrable": {
+            "status": "known",
+            "value": false
+          },
+          "initiallyDeferred": {
+            "status": "known",
+            "value": false
+          }
+        },
+        "orm": {
+          "constraintKind": "foreign_key",
+          "columnKeys": [
+            "column:order_items:tenant_id",
+            "column:order_items:order_id"
+          ],
+          "expression": {
+            "status": "known",
+            "value": null
+          },
+          "deferrable": {
+            "status": "unknown",
+            "reason": "ORM relationship declaration omits deferrability."
+          },
+          "initiallyDeferred": {
+            "status": "unknown",
+            "reason": "ORM relationship declaration omits initial deferral."
+          }
+        }
+      },
+      "sourceLocations": {
+        "sql": {
+          "path": "sqlite/v2/schema.sql",
+          "startLine": 37,
+          "endLine": 37,
+          "quote": "CONSTRAINT order_items_order_fk "
+        },
+        "orm": {
+          "path": "sqlite/v2/models.go",
+          "startLine": 22,
+          "endLine": 29,
+          "startQuote": "type OrderItem struct",
+          "endQuote": "}",
+          "comparison": "verbatim UTF-8 bytes with final newline"
+        }
+      }
+    },
+    "constraint:order_items:quantity_check": {
+      "kind": "constraint",
+      "name": "order_items_quantity_check",
+      "parentKey": "table:order_items",
+      "facets": {
+        "sql": {
+          "constraintKind": "check",
+          "columnKeys": [],
+          "expression": {
+            "status": "known",
+            "value": "quantity > 0"
+          },
+          "deferrable": {
+            "status": "known",
+            "value": null
+          },
+          "initiallyDeferred": {
+            "status": "known",
+            "value": null
+          }
+        }
+      },
+      "sourceLocations": {
+        "sql": {
+          "path": "sqlite/v2/schema.sql",
+          "startLine": 40,
+          "endLine": 40,
+          "quote": "CONSTRAINT order_items_quantity_check "
+        }
+      }
+    },
+    "constraint:payments:pk": {
+      "kind": "constraint",
+      "name": "payments_pk",
+      "parentKey": "table:payments",
+      "facets": {
+        "sql": {
+          "constraintKind": "primary_key",
+          "columnKeys": [
+            "column:payments:tenant_id",
+            "column:payments:id"
+          ],
+          "expression": {
+            "status": "known",
+            "value": null
+          },
+          "deferrable": {
+            "status": "known",
+            "value": null
+          },
+          "initiallyDeferred": {
+            "status": "known",
+            "value": null
+          }
+        },
+        "orm": {
+          "constraintKind": "primary_key",
+          "columnKeys": [
+            "column:payments:tenant_id",
+            "column:payments:id"
+          ],
+          "expression": {
+            "status": "known",
+            "value": null
+          },
+          "deferrable": {
+            "status": "known",
+            "value": null
+          },
+          "initiallyDeferred": {
+            "status": "known",
+            "value": null
+          }
+        }
+      },
+      "sourceLocations": {
+        "sql": {
+          "path": "sqlite/v2/schema.sql",
+          "startLine": 49,
+          "endLine": 49,
+          "quote": "CONSTRAINT payments_pk "
+        },
+        "orm": {
+          "path": "sqlite/v2/models.go",
+          "startLine": 31,
+          "endLine": 38,
+          "startQuote": "type Payment struct",
+          "endQuote": "}",
+          "comparison": "verbatim UTF-8 bytes with final newline"
+        }
+      }
+    },
+    "constraint:payments:order_unique": {
+      "kind": "constraint",
+      "name": "payments_order_unique",
+      "parentKey": "table:payments",
+      "facets": {
+        "sql": {
+          "constraintKind": "unique",
+          "columnKeys": [
+            "column:payments:tenant_id",
+            "column:payments:order_id"
+          ],
+          "expression": {
+            "status": "known",
+            "value": null
+          },
+          "deferrable": {
+            "status": "known",
+            "value": null
+          },
+          "initiallyDeferred": {
+            "status": "known",
+            "value": null
+          }
+        },
+        "orm": {
+          "constraintKind": "unique",
+          "columnKeys": [
+            "column:payments:tenant_id",
+            "column:payments:order_id"
+          ],
+          "expression": {
+            "status": "known",
+            "value": null
+          },
+          "deferrable": {
+            "status": "known",
+            "value": null
+          },
+          "initiallyDeferred": {
+            "status": "known",
+            "value": null
+          }
+        }
+      },
+      "sourceLocations": {
+        "sql": {
+          "path": "sqlite/v2/schema.sql",
+          "startLine": 50,
+          "endLine": 50,
+          "quote": "CONSTRAINT payments_order_unique "
+        },
+        "orm": {
+          "path": "sqlite/v2/models.go",
+          "startLine": 31,
+          "endLine": 38,
+          "startQuote": "type Payment struct",
+          "endQuote": "}",
+          "comparison": "verbatim UTF-8 bytes with final newline"
+        }
+      }
+    },
+    "constraint:payments:order_fk": {
+      "kind": "constraint",
+      "name": "payments_order_fk",
+      "parentKey": "table:payments",
+      "facets": {
+        "sql": {
+          "constraintKind": "foreign_key",
+          "columnKeys": [
+            "column:payments:tenant_id",
+            "column:payments:order_id"
+          ],
+          "expression": {
+            "status": "known",
+            "value": null
+          },
+          "deferrable": {
+            "status": "known",
+            "value": false
+          },
+          "initiallyDeferred": {
+            "status": "known",
+            "value": false
+          }
+        },
+        "orm": {
+          "constraintKind": "foreign_key",
+          "columnKeys": [
+            "column:payments:tenant_id",
+            "column:payments:order_id"
+          ],
+          "expression": {
+            "status": "known",
+            "value": null
+          },
+          "deferrable": {
+            "status": "unknown",
+            "reason": "ORM relationship declaration omits deferrability."
+          },
+          "initiallyDeferred": {
+            "status": "unknown",
+            "reason": "ORM relationship declaration omits initial deferral."
+          }
+        }
+      },
+      "sourceLocations": {
+        "sql": {
+          "path": "sqlite/v2/schema.sql",
+          "startLine": 51,
+          "endLine": 51,
+          "quote": "CONSTRAINT payments_order_fk "
+        },
+        "orm": {
+          "path": "sqlite/v2/models.go",
+          "startLine": 31,
+          "endLine": 38,
+          "startQuote": "type Payment struct",
+          "endQuote": "}",
+          "comparison": "verbatim UTF-8 bytes with final newline"
+        }
+      }
+    },
+    "constraint:payments:amount_check": {
+      "kind": "constraint",
+      "name": "payments_amount_check",
+      "parentKey": "table:payments",
+      "facets": {
+        "sql": {
+          "constraintKind": "check",
+          "columnKeys": [],
+          "expression": {
+            "status": "known",
+            "value": "amount >= 0"
+          },
+          "deferrable": {
+            "status": "known",
+            "value": null
+          },
+          "initiallyDeferred": {
+            "status": "known",
+            "value": null
+          }
+        }
+      },
+      "sourceLocations": {
+        "sql": {
+          "path": "sqlite/v2/schema.sql",
+          "startLine": 54,
+          "endLine": 54,
+          "quote": "CONSTRAINT payments_amount_check "
+        }
+      }
+    },
+    "index:users:email_active_idx": {
+      "kind": "index",
+      "name": "users_email_active_idx",
+      "parentKey": "table:users",
+      "facets": {
+        "sql": {
+          "terms": [
+            {
+              "columnKey": "column:users:tenant_id",
+              "direction": "asc",
+              "nulls": "unknown"
+            },
+            {
+              "expression": "lower(email)",
+              "direction": "desc",
+              "nulls": "unknown"
+            }
+          ],
+          "unique": {
+            "status": "known",
+            "value": true
+          },
+          "predicate": {
+            "status": "known",
+            "value": "deleted_at IS NULL"
+          },
+          "method": {
+            "status": "known",
+            "value": null
+          }
+        }
+      },
+      "sourceLocations": {
+        "sql": {
+          "path": "sqlite/v2/schema.sql",
+          "startLine": 57,
+          "endLine": 57,
+          "quote": "INDEX users_email_active_idx"
+        }
+      }
+    },
+    "index:orders:state_idx": {
+      "kind": "index",
+      "name": "orders_state_idx",
+      "parentKey": "table:orders",
+      "facets": {
+        "sql": {
+          "terms": [
+            {
+              "columnKey": "column:orders:state",
+              "direction": "asc",
+              "nulls": "unknown"
+            }
+          ],
+          "unique": {
+            "status": "known",
+            "value": false
+          },
+          "predicate": {
+            "status": "known",
+            "value": null
+          },
+          "method": {
+            "status": "known",
+            "value": null
+          }
+        }
+      },
+      "sourceLocations": {
+        "sql": {
+          "path": "sqlite/v2/schema.sql",
+          "startLine": 59,
+          "endLine": 59,
+          "quote": "INDEX orders_state_idx"
+        }
+      }
+    },
+    "view:order_summaries": {
+      "kind": "view",
+      "name": "order_summaries",
+      "parentKey": "schema:main",
+      "facets": {
+        "sql": {
+          "qualifiedName": "main.order_summaries",
+          "materialized": false,
+          "dependencyKeys": [
+            "table:orders",
+            "column:orders:tenant_id",
+            "column:orders:id",
+            "column:orders:state",
+            "column:orders:total"
+          ],
+          "dependenciesStatus": "complete",
+          "gaps": []
+        }
+      },
+      "sourceLocations": {
+        "sql": {
+          "path": "sqlite/v2/schema.sql",
+          "startLine": 61,
+          "endLine": 61,
+          "quote": "CREATE VIEW main.order_summaries AS"
+        }
+      },
+      "nativeDefinitionSource": {
+        "path": "sqlite/v2/schema.sql",
+        "startLine": 61,
+        "endLine": 63,
+        "startQuote": "CREATE VIEW main.order_summaries AS",
+        "endQuote": "WHERE",
+        "comparison": "verbatim UTF-8 bytes with final newline"
+      }
+    },
+    "symbol:orders:touch_trigger": {
+      "kind": "symbol",
+      "name": "orders_touch",
+      "parentKey": "table:orders",
+      "facets": {
+        "sql": {
+          "routineKind": "trigger",
+          "qualifiedName": "main.orders_touch",
+          "dependencyKeys": [
+            "table:orders"
+          ],
+          "bodyStatus": "unsupported",
+          "analysisStatus": "unsupported",
+          "gaps": [
+            "Trigger body behavior is retained as native source and is not analyzed or executed."
+          ]
+        }
+      },
+      "sourceLocations": {
+        "sql": {
+          "path": "sqlite/v2/schema.sql",
+          "startLine": 65,
+          "endLine": 65,
+          "quote": "CREATE TRIGGER main.orders_touch"
+        }
+      },
+      "nativeDefinitionSource": {
+        "path": "sqlite/v2/schema.sql",
+        "startLine": 65,
+        "endLine": 68,
+        "startQuote": "CREATE TRIGGER main.orders_touch",
+        "endQuote": "END;",
+        "comparison": "verbatim UTF-8 bytes with final newline"
+      }
+    },
+    "migration:001_initial": {
+      "kind": "migration",
+      "name": "001_initial",
+      "parentKey": "database:orders",
+      "facets": {
+        "migration": {
+          "order": {
+            "status": "known",
+            "value": 1
+          },
+          "parentKeys": [],
+          "derivationStatus": "complete",
+          "changes": [
+            {
+              "target": {
+                "kind": "candidate",
+                "objectKey": "table:users"
+              },
+              "operation": "create",
+              "description": "Declare users."
+            },
+            {
+              "target": {
+                "kind": "candidate",
+                "objectKey": "table:orders"
+              },
+              "operation": "create",
+              "description": "Declare orders."
+            },
+            {
+              "target": {
+                "kind": "candidate",
+                "objectKey": "table:order_items"
+              },
+              "operation": "create",
+              "description": "Declare order_items."
+            },
+            {
+              "target": {
+                "kind": "candidate",
+                "objectKey": "table:payments"
+              },
+              "operation": "create",
+              "description": "Declare payments."
+            },
+            {
+              "target": {
+                "kind": "historical",
+                "revisionPin": "v1",
+                "objectKey": "column:orders:legacy_note"
+              },
+              "operation": "create",
+              "description": "Declare the legacy field in the original schema."
+            },
+            {
+              "target": {
+                "kind": "historical",
+                "revisionPin": "v1",
+                "objectKey": "index:orders:legacy_note_idx"
+              },
+              "operation": "create",
+              "description": "Declare the original legacy_note index."
+            },
+            {
+              "target": {
+                "kind": "candidate",
+                "objectKey": "index:users:email_active_idx"
+              },
+              "operation": "create",
+              "description": "Declare the partial expression index."
+            },
+            {
+              "target": {
+                "kind": "candidate",
+                "objectKey": "index:orders:state_idx"
+              },
+              "operation": "create",
+              "description": "Declare the status/state index."
+            },
+            {
+              "target": {
+                "kind": "candidate",
+                "objectKey": "view:order_summaries"
+              },
+              "operation": "create",
+              "description": "Declare the order summary view."
+            },
+            {
+              "target": {
+                "kind": "candidate",
+                "objectKey": "symbol:orders:touch_trigger"
+              },
+              "operation": "create",
+              "description": "Declare the trigger without analyzing its body."
+            },
+            {
+              "target": {
+                "kind": "source_only",
+                "externalKey": "column:orders:scratch_status",
+                "expectedKind": "column",
+                "qualifiedName": "main.orders.scratch_status",
+                "reason": "Created and dropped in 001 before the first imported active schema."
+              },
+              "operation": "create",
+              "description": "Add transient scratch field."
+            },
+            {
+              "target": {
+                "kind": "source_only",
+                "externalKey": "column:orders:scratch_status",
+                "expectedKind": "column",
+                "qualifiedName": "main.orders.scratch_status",
+                "reason": "Created and dropped in 001 before the first imported active schema."
+              },
+              "operation": "drop",
+              "description": "Drop transient scratch field before first import."
+            }
+          ],
+          "gaps": []
+        }
+      },
+      "sourceLocations": {
+        "migration": {
+          "path": "sqlite/v2/migrations/001_initial.sql",
+          "startLine": 6,
+          "endLine": 6,
+          "quote": "CREATE TABLE"
+        }
+      },
+      "nativeDefinitionSource": {
+        "path": "sqlite/v2/migrations/001_initial.sql",
+        "startLine": 1,
+        "endLine": 74,
+        "comparison": "verbatim complete file bytes"
+      }
+    },
+    "migration:002_unsupported": {
+      "kind": "migration",
+      "name": "002_unsupported",
+      "parentKey": "database:orders",
+      "facets": {
+        "migration": {
+          "order": {
+            "status": "known",
+            "value": 2
+          },
+          "parentKeys": [
+            "migration:001_initial"
+          ],
+          "derivationStatus": "unsupported",
+          "analysisStatus": "unsupported",
+          "changes": [
+            {
+              "target": {
+                "kind": "candidate",
+                "objectKey": "table:orders"
+              },
+              "operation": "unknown",
+              "description": "Unsupported dynamic schema mutation may affect orders."
+            }
+          ],
+          "gaps": [
+            "Unsupported dynamic mutation of orders prevents a complete migration-derived schema."
+          ]
+        }
+      },
+      "sourceLocations": {
+        "migration": {
+          "path": "sqlite/v2/migrations/002_unsupported.sql",
+          "startLine": 4,
+          "endLine": 4,
+          "quote": "UPDATE sqlite_schema"
+        }
+      },
+      "nativeDefinitionSource": {
+        "path": "sqlite/v2/migrations/002_unsupported.sql",
+        "startLine": 1,
+        "endLine": 7,
+        "comparison": "verbatim complete file bytes"
+      }
+    },
+    "migration:003_column_change": {
+      "kind": "migration",
+      "name": "003_column_change",
+      "parentKey": "database:orders",
+      "facets": {
+        "migration": {
+          "order": {
+            "status": "known",
+            "value": 3
+          },
+          "parentKeys": [
+            "migration:002_unsupported"
+          ],
+          "derivationStatus": "partial",
+          "analysisStatus": "partial",
+          "changes": [
+            {
+              "target": {
+                "kind": "candidate",
+                "objectKey": "column:orders:state"
+              },
+              "operation": "alter",
+              "description": "Rename status to state."
+            },
+            {
+              "target": {
+                "kind": "historical",
+                "revisionPin": "v1",
+                "objectKey": "column:orders:legacy_note"
+              },
+              "operation": "drop",
+              "description": "Remove legacy_note without keeping an active column."
+            },
+            {
+              "target": {
+                "kind": "historical",
+                "revisionPin": "v1",
+                "objectKey": "index:orders:legacy_note_idx"
+              },
+              "operation": "drop",
+              "description": "Drop the dependent index."
+            },
+            {
+              "target": {
+                "kind": "candidate",
+                "objectKey": "constraint:order_items:order_fk"
+              },
+              "operation": "alter",
+              "description": "Change DELETE CASCADE to DELETE RESTRICT."
+            },
+            {
+              "target": {
+                "kind": "candidate",
+                "objectKey": "view:order_summaries"
+              },
+              "operation": "alter",
+              "description": "Repair renamed and removed column dependencies."
+            }
+          ],
+          "gaps": [
+            "Handled 003 changes depend on unsupported 002; the derived schema remains incomplete."
+          ]
+        }
+      },
+      "sourceLocations": {
+        "migration": {
+          "path": "sqlite/v2/migrations/003_column_change.sql",
+          "startLine": 4,
+          "endLine": 4,
+          "quote": "RENAME COLUMN status TO state"
+        }
+      },
+      "nativeDefinitionSource": {
+        "path": "sqlite/v2/migrations/003_column_change.sql",
+        "startLine": 1,
+        "endLine": 24,
+        "comparison": "verbatim complete file bytes"
+      }
+    }
+  },
+  "edges": {
+    "references:orders:user_fk": {
+      "kind": "references",
+      "fromKey": "constraint:orders:user_fk",
+      "toKey": "table:users",
+      "facets": {
+        "sql": {
+          "columnPairs": [
+            {
+              "fromColumnKey": "column:orders:tenant_id",
+              "toColumnKey": "column:users:tenant_id"
+            },
+            {
+              "fromColumnKey": "column:orders:user_id",
+              "toColumnKey": "column:users:id"
+            }
+          ],
+          "updateAction": {
+            "status": "known",
+            "value": "cascade"
+          },
+          "deleteAction": {
+            "status": "known",
+            "value": "restrict"
+          },
+          "matchType": {
+            "status": "known",
+            "value": "simple"
+          }
+        },
+        "orm": {
+          "columnPairs": [
+            {
+              "fromColumnKey": "column:orders:tenant_id",
+              "toColumnKey": "column:users:tenant_id"
+            },
+            {
+              "fromColumnKey": "column:orders:user_id",
+              "toColumnKey": "column:users:id"
+            }
+          ],
+          "updateAction": {
+            "status": "known",
+            "value": "cascade"
+          },
+          "deleteAction": {
+            "status": "known",
+            "value": "cascade"
+          },
+          "matchType": {
+            "status": "unknown",
+            "reason": "ORM relationship declaration omits MATCH semantics."
+          }
+        }
+      },
+      "declaredEvidenceRequired": true
+    },
+    "references:order_items:order_fk": {
+      "kind": "references",
+      "fromKey": "constraint:order_items:order_fk",
+      "toKey": "table:orders",
+      "facets": {
+        "sql": {
+          "columnPairs": [
+            {
+              "fromColumnKey": "column:order_items:tenant_id",
+              "toColumnKey": "column:orders:tenant_id"
+            },
+            {
+              "fromColumnKey": "column:order_items:order_id",
+              "toColumnKey": "column:orders:id"
+            }
+          ],
+          "updateAction": {
+            "status": "known",
+            "value": "cascade"
+          },
+          "deleteAction": {
+            "status": "known",
+            "value": "restrict"
+          },
+          "matchType": {
+            "status": "known",
+            "value": "simple"
+          }
+        },
+        "orm": {
+          "columnPairs": [
+            {
+              "fromColumnKey": "column:order_items:tenant_id",
+              "toColumnKey": "column:orders:tenant_id"
+            },
+            {
+              "fromColumnKey": "column:order_items:order_id",
+              "toColumnKey": "column:orders:id"
+            }
+          ],
+          "updateAction": {
+            "status": "known",
+            "value": "cascade"
+          },
+          "deleteAction": {
+            "status": "known",
+            "value": "cascade"
+          },
+          "matchType": {
+            "status": "unknown",
+            "reason": "ORM relationship declaration omits MATCH semantics."
+          }
+        }
+      },
+      "declaredEvidenceRequired": true
+    },
+    "references:payments:order_fk": {
+      "kind": "references",
+      "fromKey": "constraint:payments:order_fk",
+      "toKey": "table:orders",
+      "facets": {
+        "sql": {
+          "columnPairs": [
+            {
+              "fromColumnKey": "column:payments:tenant_id",
+              "toColumnKey": "column:orders:tenant_id"
+            },
+            {
+              "fromColumnKey": "column:payments:order_id",
+              "toColumnKey": "column:orders:id"
+            }
+          ],
+          "updateAction": {
+            "status": "known",
+            "value": "no_action"
+          },
+          "deleteAction": {
+            "status": "known",
+            "value": "no_action"
+          },
+          "matchType": {
+            "status": "known",
+            "value": "simple"
+          }
+        },
+        "orm": {
+          "columnPairs": [
+            {
+              "fromColumnKey": "column:payments:tenant_id",
+              "toColumnKey": "column:orders:tenant_id"
+            },
+            {
+              "fromColumnKey": "column:payments:order_id",
+              "toColumnKey": "column:orders:id"
+            }
+          ],
+          "updateAction": {
+            "status": "known",
+            "value": "no_action"
+          },
+          "deleteAction": {
+            "status": "known",
+            "value": "no_action"
+          },
+          "matchType": {
+            "status": "unknown",
+            "reason": "ORM relationship declaration omits MATCH semantics."
+          }
+        }
+      },
+      "declaredEvidenceRequired": true
+    }
+  },
+  "cardinality": {
+    "references:orders:user_fk": {
+      "sql": {
+        "targetCardinality": {
+          "min": 1,
+          "max": "1"
+        },
+        "sourceCardinality": {
+          "min": 0,
+          "max": "many"
+        },
+        "basisKeys": [
+          "constraint:orders:user_fk",
+          "constraint:users:pk",
+          "column:orders:tenant_id",
+          "column:orders:user_id"
+        ],
+        "limitations": [],
+        "meaning": "Declared source enforcement only; users are not required to have an order."
+      },
+      "orm": {
+        "targetCardinality": {
+          "min": null,
+          "max": "1"
+        },
+        "sourceCardinality": {
+          "min": 0,
+          "max": null
+        },
+        "limitations": [
+          "ORM deferrability and MATCH are unknown; incomplete ORM constraints do not establish nonunique reverse maximum."
+        ]
+      }
+    },
+    "references:order_items:order_fk": {
+      "sql": {
+        "targetCardinality": {
+          "min": 1,
+          "max": "1"
+        },
+        "sourceCardinality": {
+          "min": 0,
+          "max": "many"
+        },
+        "basisKeys": [
+          "constraint:order_items:order_fk",
+          "constraint:orders:pk",
+          "constraint:order_items:pk"
+        ],
+        "limitations": [],
+        "meaning": "The three-column item PK does not make the two-column FK source set unique."
+      },
+      "orm": {
+        "targetCardinality": {
+          "min": null,
+          "max": "1"
+        },
+        "sourceCardinality": {
+          "min": 0,
+          "max": null
+        },
+        "limitations": [
+          "ORM deferrability and MATCH are unknown; incomplete ORM constraints do not establish nonunique reverse maximum."
+        ]
+      }
+    },
+    "references:payments:order_fk": {
+      "sql": {
+        "targetCardinality": {
+          "min": 0,
+          "max": "1"
+        },
+        "sourceCardinality": {
+          "min": 0,
+          "max": "1"
+        },
+        "basisKeys": [
+          "constraint:payments:order_fk",
+          "constraint:orders:pk",
+          "constraint:payments:order_unique",
+          "column:payments:order_id"
+        ],
+        "limitations": [],
+        "meaning": "MATCH SIMPLE nullable order_id permits no target; the complete source UNIQUE makes reverse maximum one."
+      },
+      "orm": {
+        "targetCardinality": {
+          "min": null,
+          "max": "1"
+        },
+        "sourceCardinality": {
+          "min": 0,
+          "max": "1"
+        },
+        "limitations": [
+          "ORM deferrability and MATCH are unknown; incomplete ORM constraints do not establish nonunique reverse maximum."
+        ]
+      }
+    }
+  },
+  "nativeAssertions": {
+    "moneyNativeType": "NUMERIC(18,2)",
+    "sqliteMoneyAffinity": "NUMERIC",
+    "knownNullIsNoDefault": {
+      "subjectKey": "column:payments:amount",
+      "facetKey": "sql"
+    },
+    "knownFalseNullable": {
+      "subjectKey": "column:orders:user_id",
+      "facetKey": "sql"
+    },
+    "unknownDefault": {
+      "subjectKey": "column:orders:created_at",
+      "facetKey": "orm"
+    },
+    "storedDefinitionsAreVerbatim": true
+  },
+  "drift": {
+    "knownDifferences": [
+      {
+        "subjectKey": "column:orders:user_id",
+        "leftFacetKey": "sql",
+        "rightFacetKey": "orm",
+        "changedPaths": [
+          "/nullable"
+        ],
+        "left": false,
+        "right": true
+      },
+      {
+        "subjectKey": "column:orders:state",
+        "leftFacetKey": "sql",
+        "rightFacetKey": "orm",
+        "changedPaths": [
+          "/defaultExpression"
+        ],
+        "left": "'draft'",
+        "right": "'pending'"
+      },
+      {
+        "subjectKey": "column:orders:total",
+        "leftFacetKey": "sql",
+        "rightFacetKey": "orm",
+        "changedPaths": [
+          "/nativeType"
+        ],
+        "left": "NUMERIC(18,2)",
+        "right": "DECIMAL(12,2)"
+      },
+      {
+        "subjectKey": "column:payments:amount",
+        "leftFacetKey": "sql",
+        "rightFacetKey": "orm",
+        "changedPaths": [
+          "/nativeType"
+        ],
+        "left": "NUMERIC(18,2)",
+        "right": "DECIMAL(12,2)"
+      },
+      {
+        "subjectKey": "references:orders:user_fk",
+        "leftFacetKey": "sql",
+        "rightFacetKey": "orm",
+        "changedPaths": [
+          "/deleteAction"
+        ],
+        "left": "restrict",
+        "right": "cascade"
+      },
+      {
+        "subjectKey": "references:order_items:order_fk",
+        "leftFacetKey": "sql",
+        "rightFacetKey": "orm",
+        "changedPaths": [
+          "/deleteAction"
+        ],
+        "left": "restrict",
+        "right": "cascade"
+      }
+    ],
+    "unknownComparisons": [
+      {
+        "subjectKey": "column:orders:created_at",
+        "property": "defaultExpression"
+      },
+      {
+        "subjectKey": "column:payments:received_at",
+        "property": "defaultExpression"
+      },
+      {
+        "subjectKey": "table:orders",
+        "leftFacetKey": "sql",
+        "rightFacetKey": "migration",
+        "reason": "Migration-derived dependent state remains incomplete."
+      }
+    ],
+    "definitionDifferenceIsNotSqlSemanticEquivalence": true
+  },
+  "sourceHistory": {
+    "transientTarget": {
+      "kind": "source_only",
+      "externalKey": "column:orders:scratch_status",
+      "expectedKind": "column",
+      "qualifiedName": "main.orders.scratch_status",
+      "reason": "Created and dropped in 001 before the first imported active schema."
+    },
+    "activeKeyForbidden": "column:orders:scratch_status",
+    "graphUuidAllocated": false,
+    "operationsPreserved": [
+      "create",
+      "drop"
+    ],
+    "initialLegacyCreateTarget": {
+      "kind": "historical",
+      "revisionPin": "v1",
+      "objectKey": "column:orders:legacy_note"
+    }
+  },
+  "reconcile": {
+    "mappedKeys": [
+      {
+        "from": "column:orders:status",
+        "to": "column:orders:state",
+        "sameUuid": true,
+        "mapBeforeTargetUpsert": true
+      }
+    ],
+    "deletedKeys": [
+      "column:orders:legacy_note",
+      "index:orders:legacy_note_idx"
+    ],
+    "repairedReferences": [
+      "index:orders:state_idx",
+      "view:order_summaries",
+      "migration:001_initial",
+      "migration:003_column_change"
+    ],
+    "oldRevisionReadable": true,
+    "migrationHistoryPins": [
+      "v1"
+    ]
+  },
+  "coverage": {
+    "sqlDeclaredSchema": "complete",
+    "ormDeclaredColumns": "complete",
+    "ormConstraints": "partial",
+    "migrationDerivedOrders": "partial",
+    "triggerBody": "unsupported",
+    "runtimeDatabaseObserved": false
+  },
+  "sourceFiles": [
+    {
+      "path": "sqlite/v2/migrations/001_initial.sql",
+      "sha256": "59583bfc138582e2a87140398c632d1056abb95c45841d26a1b7841ddd14bf9c",
+      "bytes": 2994,
+      "lineCount": 74
+    },
+    {
+      "path": "sqlite/v2/migrations/002_unsupported.sql",
+      "sha256": "37715c2c3ab52aa8a3e7e3b8cd589ac6de7acfef457cfec996945609181b8c80",
+      "bytes": 356,
+      "lineCount": 7
+    },
+    {
+      "path": "sqlite/v2/migrations/003_column_change.sql",
+      "sha256": "b17183c20efd6bd62814012119e098e60d981498c63475311f41265e3770aea8",
+      "bytes": 1154,
+      "lineCount": 24
+    },
+    {
+      "path": "sqlite/v2/models.go",
+      "sha256": "a9f130b72c4f080992f78ff193495f15fe227b62de99b85ffb34fb353ff75a84",
+      "bytes": 2415,
+      "lineCount": 43
+    },
+    {
+      "path": "sqlite/v2/schema.sql",
+      "sha256": "52818b602f979db0025fb8392928d6d1da87d9df0b759745678a48cab06feac1",
+      "bytes": 2709,
+      "lineCount": 68
+    }
+  ]
+}

@@ -1,6 +1,9 @@
 # Import recovery and pinned reads
 
-Use this topic from the selected `mocker-backend-import` guide set before commit
+
+This topic is canonically import v3-owned. Database v1 readers explicitly select
+its supported import owner in the same global set and verify the actual returned
+owner tuple/contentHash. Use it from the selected set before commit
 and whenever a response is lost, a session resumes, or CAS fails. Recheck selected
 workflow identity after a server change without discarding original receipts.
 
@@ -11,12 +14,14 @@ and UUID mapping. Persist entire mutation inputs and their original keys:
 
 | Operation | Fields that an exact replay preserves |
 |---|---|
-| Begin | expectedVersion, baseRevisionId, mode, repositoryId/graphScope when used, manifest, inventory, idempotencyKey. |
+| Begin | expectedVersion, baseRevisionId, mode/profile including omission, profileExtension/repositoryId/graphScope when used, manifest, inventory, idempotencyKey and path IDs. |
 | Batch | batchId, expectedImportVersion, payloadHash, exact commands and path IDs. |
 | Commit | expectedVersion, expectedImportVersion, candidateHash, idempotencyKey and path IDs. |
 | Abort | expectedImportVersion, idempotencyKey and path IDs. |
 
-The server resolves existing receipts before CAS. A lost response therefore
+The server resolves existing receipts before compatibility/profile checks and CAS.
+Keep original schema1 receipt shapes and absent members absent; new profile fields
+are not retroactively inserted into executed legacy requests. A lost response therefore
 replays with the same complete input and same key, even after versions/head have
 advanced. Batch retries keep the same batchId/hash/commands/original version.
 An old key with a changed payload conflicts. Never compensate for timeout by
@@ -107,3 +112,30 @@ Source refs identify snapshot/path; unknown partial absence is not removed sourc
 Report source consistency, stale counts and gaps on both sides using their pinned
 coverage. A structural diff proves neither runtime behavior, impact safety,
 proposal conformance nor B0 completion.
+
+## Relational read pins and precision
+
+`query_backend_database` is a read-only B1.1 operation. It requires exact
+projectId/revisionId/datastoreId/facetKey/recordType. Tables may use search;
+relationships may use tableId to select either endpoint. Default page 100/max500;
+explicit limit0, mixed selectors, foreign pins/cursors or unknown fields fail.
+A cursor binds project, revision, semanticHash, datastore, facet, record type and
+filters. Save them all. A read timeout may retry the same pin/cursor safely.
+Changing any selector restarts from a fresh first page; never use an old result
+or layout to overwrite a new selection. No read implicitly resolves a new head.
+Schema1/no relational descriptor returns backend_relational_unavailable (422),
+not empty complete ER; missing IDs in that pin return 404.
+
+Database query pages retain target IDs for off-page tables. Open their node,
+children, constraints, outgoing references and evidence at the same revision;
+page graph/evidence results fully as needed. Selected-facet absence is a concrete
+projection limitation, not object deletion. Table counts and relationship
+cardinalities retain their source/unknown/stale basis. A canvas page limit is not
+schema coverage. See the verified database-owned backend-database-reference.
+
+Preserve exact int64 versions, ordinal/order and counts through REST/MCP and
+request storage. Do not parse through floating point. Browser clients reject any
+unsafe JavaScript integer recursively and show precision failure; do not round
+and then initiate extension/commit or present a rounded column ordinal. Restart
+recovery preserves schema1 history and schema2/profile decisions, with historical
+proof still read through its exact revision/snapshot.

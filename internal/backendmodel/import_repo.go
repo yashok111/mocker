@@ -34,6 +34,7 @@ func loadSession(ctx context.Context, q importReader, pid, sid string) (*ImportS
 	if s.Mode == "" {
 		s.Mode = "initial"
 	}
+	s.Profile = selectedProfile(s.Profile)
 	return &s, nil
 }
 func saveSession(ctx context.Context, tx *sql.Tx, s *ImportSession) error {
@@ -108,9 +109,12 @@ func readImportReceipt(ctx context.Context, q importReader, scope, key, hash str
 	if err := json.Unmarshal([]byte(response), result); err != nil {
 		return true, err
 	}
-	if session, ok := result.(*ImportSession); ok && session.Mode == "" {
+	if session, ok := result.(*ImportSession); ok {
 		session.legacyReceiptJSON = response
-		session.Mode = "initial"
+		if session.Mode == "" {
+			session.Mode = "initial"
+		}
+		session.Profile = selectedProfile(session.Profile)
 	}
 	return true, nil
 }
@@ -193,7 +197,7 @@ func (r *Repo) BeginImport(ctx context.Context, pid string, in BeginImportInput)
 		if in.RepositoryID != nil {
 			repositoryID = *in.RepositoryID
 		}
-		baseSession := &ImportSession{ProjectID: pid, BaseRevisionID: in.BaseRevisionID, RepositoryID: repositoryID, Manifest: in.Manifest, Mode: mode, GraphScope: in.GraphScope}
+		baseSession := &ImportSession{ProjectID: pid, BaseRevisionID: in.BaseRevisionID, RepositoryID: repositoryID, Manifest: in.Manifest, Mode: mode, GraphScope: in.GraphScope, Profile: selectedProfile(in.Profile), ProfileExtension: in.ProfileExtension}
 		if err := requireImportBase(ctx, tx, baseSession); err != nil {
 			return err
 		}
@@ -216,7 +220,7 @@ func (r *Repo) BeginImport(ctx context.Context, pid string, in BeginImportInput)
 			return err
 		}
 		now := time.Now().UTC()
-		*result = ImportSession{ID: uuid.NewV7().String(), ProjectID: pid, BaseRevisionID: in.BaseRevisionID, Mode: mode, GraphScope: in.GraphScope, RepositoryID: repositoryID, SnapshotID: uuid.NewV7().String(), ManifestHash: mh, Manifest: in.Manifest, Inventory: in.Inventory, State: "collecting", Version: 1, CreatedAt: now, UpdatedAt: now}
+		*result = ImportSession{ID: uuid.NewV7().String(), ProjectID: pid, BaseRevisionID: in.BaseRevisionID, Mode: mode, GraphScope: in.GraphScope, Profile: selectedProfile(in.Profile), ProfileExtension: in.ProfileExtension, RepositoryID: repositoryID, SnapshotID: uuid.NewV7().String(), ManifestHash: mh, Manifest: in.Manifest, Inventory: in.Inventory, State: "collecting", Version: 1, CreatedAt: now, UpdatedAt: now}
 		b, err := json.Marshal(result)
 		if err != nil {
 			return err

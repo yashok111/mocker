@@ -74,6 +74,7 @@ func (r *Repo) Imports(ctx context.Context, pid string, in ListInput) (*ImportPa
 		if s.Mode == "" {
 			s.Mode = "initial"
 		}
+		s.Profile = selectedProfile(s.Profile)
 		out.Items = append(out.Items, s)
 	}
 	return out, rows.Err()
@@ -115,7 +116,8 @@ func (r *Repo) Import(ctx context.Context, pid, sid string, in ListInput) (*Impo
 	return out, rows.Err()
 }
 func (r *Repo) QueryGraph(ctx context.Context, pid string, in GraphQueryInput) (*GraphPage, error) {
-	if _, err := r.Revision(ctx, pid, in.RevisionID); err != nil {
+	revision, err := r.Revision(ctx, pid, in.RevisionID)
+	if err != nil {
 		return nil, err
 	}
 	if in.ID != "" && (!ValidID(in.ID) || in.Cursor != "" || in.Kind != "" || in.Search != "" || in.ParentID != "" || in.From != "" || in.To != "") {
@@ -137,6 +139,12 @@ func (r *Repo) QueryGraph(ctx context.Context, pid string, in GraphQueryInput) (
 	if in.RecordType == "edges" {
 		kinds = SupportedEdgeKinds()
 		typ = "edge"
+	}
+	if revision.SchemaVersion == "2" {
+		kinds = SupportedNodeKindsForProfile(RelationalProfile)
+		if typ == "edge" {
+			kinds = SupportedEdgeKindsForProfile(RelationalProfile)
+		}
 	}
 	if in.Kind != "" && !slices.Contains(kinds, in.Kind) {
 		return nil, semantic("kind", "Unsupported kind filter")
@@ -183,6 +191,9 @@ func (r *Repo) QueryGraph(ctx context.Context, pid string, in GraphQueryInput) (
 	count := 0
 	last := ""
 	for rows.Next() {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		var doc, id string
 		if err := rows.Scan(&doc, &id); err != nil {
 			return nil, err
@@ -197,6 +208,12 @@ func (r *Repo) QueryGraph(ctx context.Context, pid string, in GraphQueryInput) (
 				return nil, err
 			}
 			deriveMetadata(metadata, &n.Ownership, &n.Freshness)
+			if revision.SchemaVersion == "2" {
+				n.FacetComparison, err = CompareRelationalFacets(n.Kind, n.Attributes, false)
+				if err != nil {
+					return nil, err
+				}
+			}
 			out.Nodes = append(out.Nodes, n)
 		} else {
 			var e Edge
@@ -204,6 +221,12 @@ func (r *Repo) QueryGraph(ctx context.Context, pid string, in GraphQueryInput) (
 				return nil, err
 			}
 			deriveMetadata(metadata, &e.Ownership, &e.Freshness)
+			if revision.SchemaVersion == "2" {
+				e.FacetComparison, err = CompareRelationalFacets(e.Kind, e.Attributes, true)
+				if err != nil {
+					return nil, err
+				}
+			}
 			out.Edges = append(out.Edges, e)
 		}
 		last = id
@@ -232,6 +255,16 @@ func (r *Repo) Node(ctx context.Context, pid, rid, nid string) (*Node, error) {
 		return nil, err
 	}
 	deriveMetadata(RevisionState{Sources: coverage.Snapshots}, &n.Ownership, &n.Freshness)
+	revision, err := r.Revision(ctx, pid, rid)
+	if err != nil {
+		return nil, err
+	}
+	if revision.SchemaVersion == "2" {
+		n.FacetComparison, err = CompareRelationalFacets(n.Kind, n.Attributes, false)
+		if err != nil {
+			return nil, err
+		}
+	}
 	return &n, nil
 }
 func (r *Repo) Evidence(ctx context.Context, pid, rid string, in EvidenceQueryInput) (*EvidencePage, error) {

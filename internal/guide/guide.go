@@ -1,11 +1,12 @@
 // Package guide embeds the agent-facing documentation served by initialize
 // and get_guide. skills/mocker/guide-sources.json declares canonical owners under
-// skills/: the root package, its references and the standalone import package.
+// skills/: the root package, its references and the standalone import/database
+// packages.
 // make guide-sync generates embedded and compatibility copies, metadata and an
 // immutable manifest. Edit declared owners rather than generated copies.
 // instructions.md is the small initialize-only orientation, maintained here.
 // Tests validate every declared source, generated metadata and content hash.
-// Root-only, import-only and combined installations share the served procedures.
+// Root, standalone leaf and bundle installations share the served procedures.
 package guide
 
 import (
@@ -32,15 +33,19 @@ const (
 	// for.
 	TopicFunctions = "functions"
 	// Backend topics are loaded progressively from one selected guide set.
-	TopicBackendOverview       = "backend-overview"
-	TopicBackendImport         = "backend-import"
-	TopicBackendModel          = "backend-model"
-	TopicBackendImportProtocol = "backend-import-protocol"
-	TopicBackendRecovery       = "backend-recovery"
-	TopicBackendExamples       = "backend-examples"
+	TopicBackendOverview          = "backend-overview"
+	TopicBackendImport            = "backend-import"
+	TopicBackendModel             = "backend-model"
+	TopicBackendImportProtocol    = "backend-import-protocol"
+	TopicBackendRecovery          = "backend-recovery"
+	TopicBackendExamples          = "backend-examples"
+	TopicBackendDatabase          = "backend-database"
+	TopicBackendDatabaseReference = "backend-database-reference"
+	TopicBackendProfileGoSQL      = "backend-profile-go-sql"
 )
 
 //go:embed instructions.md overview.md tools.md shapes.md cookbook.md http.md design.md functions.md backend-overview.md backend-import.md backend-model.md backend-import-protocol.md backend-recovery.md backend-examples.md manifest.json
+//go:embed backend-database.md backend-database-reference.md backend-profile-go-sql.md
 var files embed.FS
 
 // topicFiles maps a topic to its embedded file. overview.md is SKILL.md
@@ -48,19 +53,22 @@ var files embed.FS
 // tool result is not a skill file and the YAML block would be noise to the
 // model reading it.
 var topicFiles = map[string]string{
-	TopicOverview:              "overview.md",
-	TopicTools:                 "tools.md",
-	TopicShapes:                "shapes.md",
-	TopicCookbook:              "cookbook.md",
-	TopicHTTP:                  "http.md",
-	TopicDesign:                "design.md",
-	TopicFunctions:             "functions.md",
-	TopicBackendOverview:       "backend-overview.md",
-	TopicBackendImport:         "backend-import.md",
-	TopicBackendModel:          "backend-model.md",
-	TopicBackendImportProtocol: "backend-import-protocol.md",
-	TopicBackendRecovery:       "backend-recovery.md",
-	TopicBackendExamples:       "backend-examples.md",
+	TopicOverview:                 "overview.md",
+	TopicTools:                    "tools.md",
+	TopicShapes:                   "shapes.md",
+	TopicCookbook:                 "cookbook.md",
+	TopicHTTP:                     "http.md",
+	TopicDesign:                   "design.md",
+	TopicFunctions:                "functions.md",
+	TopicBackendOverview:          "backend-overview.md",
+	TopicBackendImport:            "backend-import.md",
+	TopicBackendModel:             "backend-model.md",
+	TopicBackendImportProtocol:    "backend-import-protocol.md",
+	TopicBackendRecovery:          "backend-recovery.md",
+	TopicBackendExamples:          "backend-examples.md",
+	TopicBackendDatabase:          "backend-database.md",
+	TopicBackendDatabaseReference: "backend-database-reference.md",
+	TopicBackendProfileGoSQL:      "backend-profile-go-sql.md",
 }
 
 // Topics is the ordered list of topic names get_guide accepts.
@@ -69,7 +77,8 @@ func Topics() []string {
 		TopicOverview, TopicTools, TopicShapes, TopicCookbook, TopicHTTP,
 		TopicDesign, TopicFunctions, TopicBackendOverview, TopicBackendImport,
 		TopicBackendModel, TopicBackendImportProtocol, TopicBackendRecovery,
-		TopicBackendExamples,
+		TopicBackendExamples, TopicBackendDatabase, TopicBackendDatabaseReference,
+		TopicBackendProfileGoSQL,
 	}
 }
 
@@ -89,7 +98,8 @@ func Topic(name string) (string, bool) {
 		return "", false
 	}
 	text := mustRead(file)
-	if name == TopicOverview || name == TopicBackendOverview || name == TopicBackendImport {
+	switch name {
+	case TopicOverview, TopicBackendOverview, TopicBackendImport, TopicBackendDatabase:
 		text = stripFrontmatter(text)
 	}
 	return text, true

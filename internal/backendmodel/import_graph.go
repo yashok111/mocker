@@ -145,6 +145,22 @@ func prepareGraph(ctx context.Context, q importReader, s *ImportSession) (*graph
 			g.Evidence = append(g.Evidence, Evidence{ID: id, ExternalKey: e.ExternalKey, SubjectID: resolve(e.SubjectType, e.SubjectKey, "evidence/"+id+"/subjectId"), PropertyPath: e.PropertyPath, Method: e.Method, Status: e.Status, Source: e.Source, Explanation: e.Explanation, Snippet: e.Snippet})
 		}
 	}
+	if selectedProfile(s.Profile) == RelationalProfile {
+		for i := range g.Nodes {
+			n := &g.Nodes[i]
+			n.Attributes, err = resolveRelationalAttributes(n.Kind, n.Attributes, false, s, resolve)
+			if err != nil {
+				return nil, nil, err
+			}
+		}
+		for i := range g.Edges {
+			e := &g.Edges[i]
+			e.Attributes, err = resolveRelationalAttributes(e.Kind, e.Attributes, true, s, resolve)
+			if err != nil {
+				return nil, nil, err
+			}
+		}
+	}
 	if err := overlayGraph(ctx, q, s, base, g, commands, ids, &d); err != nil {
 		return nil, nil, err
 	}
@@ -195,6 +211,11 @@ func prepareGraph(ctx context.Context, q importReader, s *ImportSession) (*graph
 		switch e.Kind {
 		case "contains":
 			valid = slices.Contains([]string{"system", "service", "module"}, from.Kind) || slices.Contains([]string{"external_system", "datastore"}, from.Kind) && slices.Contains([]string{"module", "symbol", "handler"}, to.Kind)
+			if selectedProfile(s.Profile) == RelationalProfile {
+				if relationalValid, applies := relationalContains(from, to); applies {
+					valid = relationalValid
+				}
+			}
 			if _, ok := parents[e.To]; ok {
 				add("edges/"+e.ID, "A node may have only one incoming contains edge")
 			}
@@ -203,6 +224,8 @@ func prepareGraph(ctx context.Context, q importReader, s *ImportSession) (*graph
 			valid = from.Kind == "http_operation" && slices.Contains([]string{"handler", "symbol", "unresolved_target"}, to.Kind)
 		case "calls":
 			valid = slices.Contains([]string{"symbol", "handler"}, from.Kind) && slices.Contains([]string{"symbol", "handler", "external_system", "unresolved_target"}, to.Kind)
+		case "references":
+			valid = selectedProfile(s.Profile) == RelationalProfile && from.Kind == "constraint" && (to.Kind == "table" || to.Kind == "unresolved_target")
 		case "derived_from":
 			valid = slices.Contains([]string{"symbol", "module", "unresolved_target"}, to.Kind)
 		}
@@ -235,6 +258,11 @@ func prepareGraph(ctx context.Context, q importReader, s *ImportSession) (*graph
 		if !visit(n.ID) {
 			add("nodes/"+n.ID, "Contains hierarchy must be acyclic")
 			break
+		}
+	}
+	if selectedProfile(s.Profile) == RelationalProfile {
+		if err := validateRelationalGraph(ctx, q, s, g, &d); err != nil {
+			return nil, nil, err
 		}
 	}
 	g.Coverage = Coverage{Status: "complete", KnownObjects: int64(len(g.Nodes)), Gaps: []string{}}
@@ -353,7 +381,7 @@ func unresolvedCount(g *graphCandidate) int64 {
 	return n
 }
 func candidateJSON(s *ImportSession, g *graphCandidate) ([]byte, error) {
-	return canonicalJSON(struct {
+	foundation, err := canonicalJSON(struct {
 		ProjectID      string          `json:"projectId"`
 		BaseRevisionID string          `json:"baseRevisionId"`
 		Version        int64           `json:"version"`
@@ -365,6 +393,15 @@ func candidateJSON(s *ImportSession, g *graphCandidate) ([]byte, error) {
 		GraphScope     *GraphScope     `json:"graphScope"`
 		Mode           string          `json:"mode"`
 	}{s.ProjectID, s.BaseRevisionID, s.Version, s.RepositoryID, s.SnapshotID, s.Manifest, s.Inventory, g, s.GraphScope, s.Mode})
+	if err != nil || selectedProfile(s.Profile) == GraphProfile {
+		return foundation, err
+	}
+	return canonicalJSON(struct {
+		ModelSchemaVersion string                  `json:"modelSchemaVersion"`
+		Profile            string                  `json:"profile"`
+		ProfileExtension   *ImportProfileExtension `json:"profileExtension"`
+		Candidate          jsontext.Value          `json:"candidate"`
+	}{modelSchemaVersion(s.Profile), s.Profile, s.ProfileExtension, foundation})
 }
 func (r *Repo) PreviewImport(ctx context.Context, pid, sid string, in PreviewImportInput) (*ImportPreview, error) {
 	result := new(ImportPreview)
@@ -407,7 +444,7 @@ func (r *Repo) PreviewImport(ctx context.Context, pid, sid string, in PreviewImp
 			s.State = "ready"
 		}
 		s.UpdatedAt = time.Now().UTC()
-		*result = ImportPreview{SessionID: s.ID, Version: s.Version, State: s.State, CandidateHash: s.CandidateHash, ComparisonSummary: g.ComparisonSummary, SourceChangeCount: int64(len(g.SourceChanges)), IdentityDecisionCount: int64(len(g.IdentityDecisions)), DeletionDecisionCount: int64(len(g.DeletionDecisions)), Summary: ImportSummary{Nodes: int64(len(g.Nodes)), Edges: int64(len(g.Edges)), Evidence: int64(len(g.Evidence)), Unresolved: unresolvedCount(g)}, Diagnostics: diagnostics}
+		*result = ImportPreview{ModelSchemaVersion: modelSchemaVersion(s.Profile), ProfileExtension: s.ProfileExtension, SessionID: s.ID, Version: s.Version, State: s.State, CandidateHash: s.CandidateHash, ComparisonSummary: g.ComparisonSummary, SourceChangeCount: int64(len(g.SourceChanges)), IdentityDecisionCount: int64(len(g.IdentityDecisions)), DeletionDecisionCount: int64(len(g.DeletionDecisions)), Summary: ImportSummary{Nodes: int64(len(g.Nodes)), Edges: int64(len(g.Edges)), Evidence: int64(len(g.Evidence)), Unresolved: unresolvedCount(g)}, Diagnostics: diagnostics}
 		if err := saveSession(ctx, tx, s); err != nil {
 			return err
 		}
@@ -500,7 +537,7 @@ func (r *Repo) CommitImport(ctx context.Context, pid, sid string, in CommitImpor
 			return err
 		}
 		now := time.Now().UTC()
-		rev := Revision{ID: uuid.NewV7().String(), ProjectID: pid, ParentRevisionID: new(current.BaseRevisionID), SchemaVersion: SchemaVersion, SemanticHash: hashBytes(b), SourceSnapshotIDs: sourceIDs(g.Sources), ArtifactPins: []ArtifactPin{}, Coverage: g.Coverage, Author: "agent", Summary: "Source-backed foundation graph import", CreatedAt: now}
+		rev := Revision{ID: uuid.NewV7().String(), ProjectID: pid, ParentRevisionID: new(current.BaseRevisionID), SchemaVersion: modelSchemaVersion(current.Profile), SemanticHash: hashBytes(b), SourceSnapshotIDs: sourceIDs(g.Sources), ArtifactPins: []ArtifactPin{}, Coverage: g.Coverage, Author: "agent", Summary: "Source-backed foundation graph import", CreatedAt: now}
 		doc, err := json.Marshal(rev)
 		if err != nil {
 			return err

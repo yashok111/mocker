@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"encoding/json/v2"
 	"errors"
-	"slices"
 	"uuid"
 )
 
@@ -17,6 +16,9 @@ func validateImportMode(in BeginImportInput) error {
 	if in.Mode != "" && in.Mode != "initial" && in.Mode != "reconcile" {
 		return semantic("mode", "Mode must be initial or reconcile")
 	}
+	if err := validateImportProfile(in); err != nil {
+		return err
+	}
 	if in.Mode != "reconcile" {
 		if in.RepositoryID != nil || in.GraphScope != nil {
 			return reconciliationFault("backend_unsupported_scope", "Initial mode cannot specify reconciliation fields")
@@ -27,7 +29,7 @@ func validateImportMode(in BeginImportInput) error {
 		return reconciliationFault("backend_unsupported_scope", "Reconcile requires repositoryId and graphScope")
 	}
 	g := in.GraphScope
-	if g.Profile != GraphProfile || g.Status != "complete" && g.Status != "partial" || g.Status == "complete" && len(g.Gaps) != 0 || g.Status == "partial" && len(g.Gaps) == 0 {
+	if g.Profile != selectedProfile(in.Profile) || g.Status != "complete" && g.Status != "partial" || g.Status == "complete" && len(g.Gaps) != 0 || g.Status == "partial" && len(g.Gaps) == 0 {
 		return reconciliationFault("backend_unsupported_scope", "Unsupported graph scope or inconsistent gaps")
 	}
 	for _, gap := range g.Gaps {
@@ -62,14 +64,7 @@ func requireImportBase(ctx context.Context, q importReader, s *ImportSession) er
 	if name != s.Manifest.RepositoryName {
 		return reconciliationFault("backend_unsupported_scope", "Repository name must match the selected repository")
 	}
-	a, b := primary.Provider, s.Manifest.Provider
-	ap, bp := slices.Clone(a.Profiles), slices.Clone(b.Profiles)
-	slices.Sort(ap)
-	slices.Sort(bp)
-	if a.Name != b.Name || a.Version != b.Version || a.Namespace != b.Namespace || a.Method != b.Method || !slices.Equal(slices.Compact(ap), slices.Compact(bp)) {
-		return reconciliationFault("backend_incompatible_provider", "Provider identity, version, method and profiles must match the base")
-	}
-	return nil
+	return requireProviderProfile(state, s, primary.Provider)
 }
 
 type identityBinding struct{ ID, State string }

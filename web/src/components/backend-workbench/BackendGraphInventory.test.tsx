@@ -12,6 +12,25 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+it("keeps relational type filters out of schema1 inventories", async () => {
+  fakeServer();
+  renderWithProviders(<BackendGraphInventory projectId={projectId} revisionId={revisionId} />);
+  const types = screen.getByRole("combobox", { name: "Тип объекта" });
+  expect(within(types).queryByRole("option", { name: "column" })).not.toBeInTheDocument();
+});
+
+it("offers relational type filters for schema2 inventories", async () => {
+  fakeServer();
+  renderWithProviders(
+    <BackendGraphInventory projectId={projectId} revisionId={revisionId} schemaVersion="2" />,
+  );
+  expect(
+    within(screen.getByRole("combobox", { name: "Тип объекта" })).getByRole("option", {
+      name: "column",
+    }),
+  ).toBeInTheDocument();
+});
+
 const projectId = "0197aaf9-5555-7000-8000-000000000001";
 const revisionId = "0197aaf9-5555-7000-8000-000000000002";
 const nodeId = "0197aaf9-5555-7000-8000-000000000003";

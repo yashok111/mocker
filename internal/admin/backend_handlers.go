@@ -167,22 +167,32 @@ func (s *Server) handleGetBackendCapabilities(w http.ResponseWriter, r *http.Req
 		return
 	}
 	httpx.JSON(w, 200, map[string]any{
-		"modelSchemaVersions":   []string{backendmodel.SchemaVersion},
+		"modelSchemaVersions":   backendmodel.SupportedModelSchemaVersions(),
 		"workflowVersions":      guide.BackendWorkflows(),
-		"features":              backendmodel.Features(),
-		"providerProfiles":      []string{backendmodel.GraphProfile},
-		"supportedNodeKinds":    backendmodel.SupportedNodeKinds(),
-		"supportedEdgeKinds":    backendmodel.SupportedEdgeKinds(),
+		"features":              append(backendmodel.Features(), "backend-relational-import", "backend-database-query", "backend-database-er"),
+		"providerProfiles":      []string{backendmodel.GraphProfile, backendmodel.RelationalProfile},
+		"supportedNodeKinds":    backendmodel.SupportedNodeKindsForProfile(backendmodel.RelationalProfile),
+		"supportedEdgeKinds":    backendmodel.SupportedEdgeKindsForProfile(backendmodel.RelationalProfile),
 		"guideSetId":            guide.CurrentGuideSetID(),
 		"importModes":           []string{"initial", "reconcile"},
 		"importCommands":        []string{"upsert_node", "upsert_edge", "upsert_evidence", "remove", "map_identity", "delete_assertion"},
 		"reconciliationProfile": map[string]string{"version": "1", "profile": backendmodel.GraphProfile, "scope": "whole-repository"},
-		"comparisonVersion":     int64(1),
+		"profileCapabilities": []map[string]any{
+			{"profile": backendmodel.GraphProfile, "modelSchemaVersions": []string{backendmodel.SchemaVersion}, "nodeKinds": backendmodel.SupportedNodeKindsForProfile(backendmodel.GraphProfile), "edgeKinds": backendmodel.SupportedEdgeKindsForProfile(backendmodel.GraphProfile), "importModes": []string{"initial", "reconcile"}},
+			{"profile": backendmodel.RelationalProfile, "modelSchemaVersions": []string{backendmodel.RelationalSchemaVersion}, "nodeKinds": backendmodel.SupportedNodeKindsForProfile(backendmodel.RelationalProfile), "edgeKinds": backendmodel.SupportedEdgeKindsForProfile(backendmodel.RelationalProfile), "importModes": []string{"initial", "reconcile"}},
+		},
+		"profileExtensions": []backendmodel.ImportProfileExtension{{FromProfile: backendmodel.GraphProfile, ToProfile: backendmodel.RelationalProfile}},
+		"reconciliationProfiles": []map[string]string{
+			{"version": "1", "profile": backendmodel.GraphProfile, "scope": "whole-repository"},
+			{"version": "1", "profile": backendmodel.RelationalProfile, "scope": "whole-repository-combined-graph"},
+		},
+		"comparisonVersion": int64(1),
 		"limits": map[string]any{"maxNameLength": backendmodel.MaxNameLength, "maxIdempotencyKeyLength": backendmodel.MaxKeyLength, "defaultPageSize": backendmodel.DefaultPageSize, "maxPageSize": backendmodel.MaxPageSize, "maxCommands": 1, "maxBodyBytes": s.cfg.MaxBody,
 			"maxImportBatchCommands": backendmodel.MaxImportCommands, "maxImportBatchBytes": min(s.cfg.MaxBody, int64(backendmodel.MaxImportBatchBytes)),
 			"maxManifestFiles": backendmodel.MaxManifestFiles, "maxSnippetBytes": backendmodel.MaxEvidenceSnippetBytes,
 			"maxRevisionNodes": backendmodel.MaxRevisionNodes, "maxRevisionEdges": backendmodel.MaxRevisionEdges, "maxRevisionEvidence": backendmodel.MaxRevisionEvidence,
 			"maxRevisionPayloadBytes": backendmodel.MaxRevisionBytes, "maxProjectStagingBytes": backendmodel.MaxProjectStagingBytes,
-			"maxOpenImportSessions": backendmodel.MaxOpenImportSessions, "defaultGraphPageSize": backendmodel.DefaultGraphPageSize, "maxGraphPageSize": backendmodel.MaxGraphPageSize},
+			"maxOpenImportSessions": backendmodel.MaxOpenImportSessions, "defaultGraphPageSize": backendmodel.DefaultGraphPageSize, "maxGraphPageSize": backendmodel.MaxGraphPageSize,
+			"maxRelationalFacets": backendmodel.MaxRelationalFacets, "maxRelationalOrderedColumns": backendmodel.MaxRelationalOrderedColumns, "maxRelationalIndexTerms": backendmodel.MaxRelationalIndexTerms, "maxRelationalNativeBytes": backendmodel.MaxRelationalNativeBytes, "maxRelationalReferences": backendmodel.MaxRelationalReferences, "defaultDatabasePageSize": backendmodel.DefaultGraphPageSize, "maxDatabasePageSize": backendmodel.MaxGraphPageSize},
 	})
 }

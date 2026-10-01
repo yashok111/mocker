@@ -6,11 +6,12 @@ metadata:
   workflowVersion: "1"
   requiredModelSchemaVersions: "[\"1\"]"
   requiredCapabilities: "[\"backend-projects\",\"backend-project-metadata\",\"backend-revisions\"]"
-  guideSetId: "sha256:bed6895643e95b8de9162f074a8d52bb1dfebcfc28c0e4a4737d379a39d32412"
-  manifestHash: "sha256:bed6895643e95b8de9162f074a8d52bb1dfebcfc28c0e4a4737d379a39d32412"
+  guideSetId: "sha256:7b39ceb9b6f7089c14356d2d9f70068abaa63f72e23edc3293307d66dbe7ebc8"
+  manifestHash: "sha256:7b39ceb9b6f7089c14356d2d9f70068abaa63f72e23edc3293307d66dbe7ebc8"
 ---
 
 # Backend project preparation
+
 
 This workflow prepares a backend project: create a project, read or update its
 metadata, list projects and revisions, and inspect the empty initial revision.
@@ -22,9 +23,15 @@ installable `mocker-backend-import` leaf, the root package's generated
 `references/backend/import.md` compatibility copy, or pinned `backend-import` topic.
 Select that complete workflow before import writes. This project-preparation
 procedure does not import sources. Import's backend-model/import-protocol/recovery/
-examples topics use its selected set and import identity; this backend-overview
-topic keeps the separate project-preparation identity. Jobs and proposals remain
-future functionality.
+examples topics use its selected set and import owner identity; relational
+imports additionally load the database-reference topic through the supported
+database v1 owner in that same global set. Database inspection selects the
+independent database leaf or pinned backend-database entrypoint. Every shared
+topic is verified against its actual canonical owner manifest/tuple/contentHash;
+this backend-overview topic keeps the project-preparation identity. Project
+preparation still requires schema1, including its empty initial revision; it
+need not require schema2 to prepare a project. Database typed edits/proposals
+remain B1.2; jobs are future functionality.
 
 ## Before the first write
 
@@ -38,8 +45,8 @@ strings before comparing them with the server manifest's typed arrays.
    alone never establish compatibility.
 2. Select `mocker-backend-project`, workflow version `"1"`. A local leaf is
    usable only on an exact match of workflowId, workflowVersion, guideSetId and
-   manifestHash with a server workflow, a nonempty intersection of
-   requiredModelSchemaVersions with modelSchemaVersions, and availability in features of
+   manifestHash with a server workflow, support for every
+   requiredModelSchemaVersions entry in modelSchemaVersions, and availability in features of
    every requiredCapabilities entry: backend-projects, backend-project-metadata,
    backend-revisions. Verify each needed local topic's contentHash against that
    selected manifest before using it.

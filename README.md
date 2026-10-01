@@ -17,26 +17,33 @@ it, it only gives a quick way in.
 | who | where |
 |---|---|
 | an operator at the admin panel | [`docs/USER-GUIDE.md`](docs/USER-GUIDE.md) (Russian, the product's language) — also rendered inside the panel at `/guide` |
-| an agent driving mocker over MCP | [`mocker`](skills/mocker/SKILL.md) routes mock configuration, API design and backend project tasks; [`mocker-backend-import`](skills/mocker-backend-import/SKILL.md) independently supplies foundation source import/reconciliation and pinned comparison. The server serves the same procedures and focused references through `get_guide`; `initialize` gives a short orientation |
+| an agent driving mocker over MCP | [`mocker`](skills/mocker/SKILL.md) routes mock configuration, API design and backend project tasks; [`mocker-backend-import`](skills/mocker-backend-import/SKILL.md) independently supplies foundation or relational source import/reconciliation and pinned comparison; [`mocker-backend-database`](skills/mocker-backend-database/SKILL.md) supplies pinned database/ER, drift and evidence inspection. The server serves the same procedures and focused references through `get_guide`; `initialize` gives a short orientation |
 | a script or CI job | [`skills/mocker/references/http.md`](skills/mocker/references/http.md) — login, CSRF, spec import, asset upload, the `/__mocker/state` calls a test suite makes |
 | someone changing mocker itself | [`CLAUDE.md`](CLAUDE.md), [`HISTORY.md`](HISTORY.md), [`CARVE-OUTS.md`](CARVE-OUTS.md), and `DESIGN.md` above |
 
-Install either skill or both into the repository where the agent works:
+Choose root-only, either leaf alone, or the three-package bundle in the repository where the agent works:
 
 ```bash
-# Root only: mocks, API design, backend preparation and import routing.
+# Root only: mocks, API design and backend preparation/import/inspection routing.
 npx -y -p skills skills add /path/to/mocker --skill mocker -a claude-code
-# Import only: source-backed foundation import/reimport and pinned comparison.
+# Import only: source-backed foundation or relational import/reimport and pinned comparison.
 npx -y -p skills skills add /path/to/mocker --skill mocker-backend-import -a claude-code
+# Inspection only: pinned database/ER, facet drift, coverage and evidence.
+npx -y -p skills skills add /path/to/mocker --skill mocker-backend-database -a claude-code
 ```
 
-Run both commands for the bundle. A client-neutral alternative is to copy the
-selected `skills/mocker/` and/or `skills/mocker-backend-import/` directory into
-your agent's recognized skill directory; import-only needs just its SKILL.md and
-loads model/protocol/recovery/examples from pinned server topics. A configured
+Run all three commands for the bundle. A client-neutral alternative is to copy
+the selected package directories under `skills/` into your agent's recognized
+skill directory. Either leaf needs only its own SKILL.md, without a neighboring
+root package; it loads needed shared details through pinned server topics in one
+selected immutable guide set and verifies each topic's actual workflow owner. A configured
 [MCP connection](skills/mocker/references/http.md) remains required: installing a skill does not install
 server capabilities. Agents without local skills can discover the same procedures
-through MCP. [`docs/README.md`](docs/README.md) is the index.
+through MCP. Relational tasks require compatible schema2/profile/capabilities; a
+foundation-only fallback does not qualify. PostgreSQL/SQLite definitions are
+source data; no inspected SQL, migration or application executes. Typed database
+edits/proposals remain B1.2, and endpoint lineage/impact are unavailable.
+[`docs/README.md`](docs/README.md) is the index.
 
 ## What P0 does and what it does not yet
 

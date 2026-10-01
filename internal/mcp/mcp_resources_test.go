@@ -305,7 +305,7 @@ func TestResourceTools_wholeLifecycleThroughRealStore(t *testing.T) {
 }
 
 // TestToolsList_hasCurrentSurfaceAndIrreversibilityWarning is the other
-// half of clause 34: tools/list returns the current 167-tool surface, and
+// half of clause 34: tools/list returns the current 168-tool surface, and
 // reset_resource_data's PUBLISHED
 // description carries the irreversibility warning D7 requires. This does
 // not need the real-store fixture above — a description is static
@@ -328,8 +328,8 @@ func TestToolsList_hasCurrentSurfaceAndIrreversibilityWarning(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &env); err != nil {
 		t.Fatalf("decode tools/list: %v; body=%s", err, rec.Body.String())
 	}
-	if len(env.Result.Tools) != 167 {
-		t.Errorf("tools/list returned %d tools, want 167", len(env.Result.Tools))
+	if len(env.Result.Tools) != 168 {
+		t.Errorf("tools/list returned %d tools, want 168", len(env.Result.Tools))
 	}
 	var found bool
 	for _, tool := range env.Result.Tools {

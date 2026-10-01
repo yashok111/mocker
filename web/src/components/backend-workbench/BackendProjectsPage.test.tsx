@@ -7,6 +7,10 @@ import { BackendProjectPage } from "./BackendProjectPage";
 import { renderInRouter } from "@/test/render";
 import { json, route } from "@/test/http";
 
+// Canvas behavior has its own graph suite; keep these project workflows
+// independent of X6's browser rendering and package entry point.
+vi.mock("./BackendDatabaseGraph", () => ({ BackendDatabaseGraph: () => <div>ER canvas</div> }));
+
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.restoreAllMocks();

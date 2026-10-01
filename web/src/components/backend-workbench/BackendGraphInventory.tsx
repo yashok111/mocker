@@ -40,6 +40,13 @@ const kinds = [
   "http_operation",
   "handler",
   "unresolved_target",
+  "db_schema",
+  "table",
+  "column",
+  "constraint",
+  "index",
+  "view",
+  "migration",
 ];
 const categories: Record<string, string> = {
   files: "Файлы",
@@ -58,7 +65,7 @@ const statuses: Record<string, string> = {
   unsupported: "Не поддерживается",
   excluded: "Исключено",
 };
-type Props = { projectId: string; revisionId: string };
+type Props = { projectId: string; revisionId: string; schemaVersion?: string };
 type Selection = { type: "node"; id: string } | { type: "edge"; edge: BackendEdge };
 
 export function BackendGraphInventory(props: Props) {
@@ -132,7 +139,7 @@ export function Pages({
   );
 }
 
-function Inventory({ projectId, revisionId }: Props) {
+function Inventory({ projectId, revisionId, schemaVersion }: Props) {
   const coverageQuery = useGetBackendCoverage(projectId, revisionId, {
     query: { staleTime: Infinity, retry: false },
   });
@@ -183,7 +190,21 @@ function Inventory({ projectId, revisionId }: Props) {
             onChange={(event) => setKindDraft(event.currentTarget.value)}
             data={[
               { value: "", label: "Все типы" },
-              ...kinds.map((kind) => ({ value: kind, label: kind })),
+              ...kinds
+                .filter(
+                  (kind) =>
+                    schemaVersion === "2" ||
+                    ![
+                      "db_schema",
+                      "table",
+                      "column",
+                      "constraint",
+                      "index",
+                      "view",
+                      "migration",
+                    ].includes(kind),
+                )
+                .map((kind) => ({ value: kind, label: kind })),
             ]}
             style={{ flex: "1 1 180px" }}
           />

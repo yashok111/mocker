@@ -84,6 +84,31 @@
       "source": "references/backend/examples.md",
       "embedded": "backend-examples.md",
       "workflowId": "mocker-backend-import"
+    },
+    {
+      "topic": "backend-database",
+      "package": "mocker-backend-database",
+      "source": "SKILL.md",
+      "embedded": "backend-database.md",
+      "workflowId": "mocker-backend-database",
+      "copies": [
+        {
+          "package": "mocker",
+          "path": "references/backend/database-workflow.md"
+        }
+      ]
+    },
+    {
+      "topic": "backend-database-reference",
+      "source": "references/backend/database.md",
+      "embedded": "backend-database-reference.md",
+      "workflowId": "mocker-backend-database"
+    },
+    {
+      "topic": "backend-profile-go-sql",
+      "source": "references/backend/profiles/go-sql.md",
+      "embedded": "backend-profile-go-sql.md",
+      "workflowId": "mocker-backend-import"
     }
   ],
   "workflows": [
@@ -109,10 +134,11 @@
     },
     {
       "workflowId": "mocker-backend-import",
-      "workflowVersion": "2",
+      "workflowVersion": "3",
       "entrypoint": "backend-import",
       "requiredModelSchemaVersions": [
-        "1"
+        "1",
+        "2"
       ],
       "requiredCapabilities": [
         "backend-projects",
@@ -120,7 +146,25 @@
         "backend-graph-query",
         "backend-source-import",
         "backend-source-reconcile",
-        "backend-revision-compare"
+        "backend-revision-compare",
+        "backend-relational-import",
+        "backend-database-query",
+        "backend-database-er"
+      ]
+    },
+    {
+      "workflowId": "mocker-backend-database",
+      "workflowVersion": "1",
+      "entrypoint": "backend-database",
+      "requiredModelSchemaVersions": [
+        "2"
+      ],
+      "requiredCapabilities": [
+        "backend-projects",
+        "backend-revisions",
+        "backend-graph-query",
+        "backend-database-query",
+        "backend-database-er"
       ]
     }
   ]

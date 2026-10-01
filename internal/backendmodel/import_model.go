@@ -73,38 +73,42 @@ type InventoryItem struct {
 	Reason          string   `json:"reason"`
 }
 type BeginImportInput struct {
-	Mode            string          `json:"mode,omitempty"`
-	RepositoryID    *string         `json:"repositoryId,omitzero"`
-	GraphScope      *GraphScope     `json:"graphScope,omitzero"`
-	ExpectedVersion int64           `json:"expectedVersion"`
-	BaseRevisionID  string          `json:"baseRevisionId"`
-	IdempotencyKey  string          `json:"idempotencyKey"`
-	Manifest        SourceManifest  `json:"manifest"`
-	Inventory       []InventoryItem `json:"inventory"`
+	Profile          string                  `json:"profile,omitempty"`
+	ProfileExtension *ImportProfileExtension `json:"profileExtension,omitzero"`
+	Mode             string                  `json:"mode,omitempty"`
+	RepositoryID     *string                 `json:"repositoryId,omitzero"`
+	GraphScope       *GraphScope             `json:"graphScope,omitzero"`
+	ExpectedVersion  int64                   `json:"expectedVersion"`
+	BaseRevisionID   string                  `json:"baseRevisionId"`
+	IdempotencyKey   string                  `json:"idempotencyKey"`
+	Manifest         SourceManifest          `json:"manifest"`
+	Inventory        []InventoryItem         `json:"inventory"`
 }
 type ImportSession struct {
-	// Legacy receipts retain their original response shape. Ordinary session loads
-	// never set this field, so current reads expose the additive B0.3 metadata.
+	// Acknowledged receipts retain their original response bytes. Ordinary session
+	// loads never set this field, so current reads expose the additive metadata.
 	legacyReceiptJSON  string
-	Mode               string          `json:"mode"`
-	GraphScope         *GraphScope     `json:"graphScope"`
-	ID                 string          `json:"id"`
-	ProjectID          string          `json:"projectId"`
-	BaseRevisionID     string          `json:"baseRevisionId"`
-	RepositoryID       string          `json:"repositoryId"`
-	SnapshotID         string          `json:"snapshotId"`
-	ManifestHash       string          `json:"manifestHash"`
-	Manifest           SourceManifest  `json:"manifest"`
-	Inventory          []InventoryItem `json:"inventory"`
-	State              string          `json:"state"`
-	Version            int64           `json:"version"`
-	CandidateHash      *string         `json:"candidateHash"`
-	AcceptedBatchCount int64           `json:"acceptedBatchCount"`
-	CreatedAt          time.Time       `json:"createdAt"`
-	UpdatedAt          time.Time       `json:"updatedAt"`
+	Profile            string                  `json:"profile"`
+	ProfileExtension   *ImportProfileExtension `json:"profileExtension,omitzero"`
+	Mode               string                  `json:"mode"`
+	GraphScope         *GraphScope             `json:"graphScope"`
+	ID                 string                  `json:"id"`
+	ProjectID          string                  `json:"projectId"`
+	BaseRevisionID     string                  `json:"baseRevisionId"`
+	RepositoryID       string                  `json:"repositoryId"`
+	SnapshotID         string                  `json:"snapshotId"`
+	ManifestHash       string                  `json:"manifestHash"`
+	Manifest           SourceManifest          `json:"manifest"`
+	Inventory          []InventoryItem         `json:"inventory"`
+	State              string                  `json:"state"`
+	Version            int64                   `json:"version"`
+	CandidateHash      *string                 `json:"candidateHash"`
+	AcceptedBatchCount int64                   `json:"acceptedBatchCount"`
+	CreatedAt          time.Time               `json:"createdAt"`
+	UpdatedAt          time.Time               `json:"updatedAt"`
 }
 
-// MarshalJSON preserves an acknowledged legacy response without changing the
+// MarshalJSON preserves an acknowledged response without changing the
 // current session representation or rewriting the stored receipt.
 func (s ImportSession) MarshalJSON() ([]byte, error) {
 	if s.legacyReceiptJSON != "" {
@@ -209,16 +213,18 @@ type ImportDiagnostic struct {
 	Message string `json:"message"`
 }
 type ImportPreview struct {
-	ComparisonSummary     *ComparisonSummary `json:"comparisonSummary"`
-	SourceChangeCount     int64              `json:"sourceChangeCount"`
-	IdentityDecisionCount int64              `json:"identityDecisionCount"`
-	DeletionDecisionCount int64              `json:"deletionDecisionCount"`
-	SessionID             string             `json:"sessionId"`
-	Version               int64              `json:"version"`
-	State                 string             `json:"state"`
-	CandidateHash         *string            `json:"candidateHash"`
-	Summary               ImportSummary      `json:"summary"`
-	Diagnostics           []ImportDiagnostic `json:"diagnostics"`
+	ModelSchemaVersion    string                  `json:"modelSchemaVersion"`
+	ProfileExtension      *ImportProfileExtension `json:"profileExtension,omitzero"`
+	ComparisonSummary     *ComparisonSummary      `json:"comparisonSummary"`
+	SourceChangeCount     int64                   `json:"sourceChangeCount"`
+	IdentityDecisionCount int64                   `json:"identityDecisionCount"`
+	DeletionDecisionCount int64                   `json:"deletionDecisionCount"`
+	SessionID             string                  `json:"sessionId"`
+	Version               int64                   `json:"version"`
+	State                 string                  `json:"state"`
+	CandidateHash         *string                 `json:"candidateHash"`
+	Summary               ImportSummary           `json:"summary"`
+	Diagnostics           []ImportDiagnostic      `json:"diagnostics"`
 }
 type CommitImportInput struct {
 	ExpectedVersion       int64  `json:"expectedVersion"`
@@ -236,26 +242,28 @@ type AbortImportInput struct {
 	IdempotencyKey        string `json:"idempotencyKey"`
 }
 type Node struct {
-	Ownership   *AssertionOwnership       `json:"ownership,omitzero"`
-	Freshness   *AssertionFreshness       `json:"freshness,omitzero"`
-	ID          string                    `json:"id"`
-	ExternalKey string                    `json:"externalKey"`
-	Kind        string                    `json:"kind"`
-	Name        string                    `json:"name"`
-	ParentID    *string                   `json:"parentId"`
-	Attributes  map[string]jsontext.Value `json:"attributes"`
-	EvidenceIDs []string                  `json:"evidenceIds"`
+	FacetComparison *FacetComparison          `json:"facetComparison,omitzero"`
+	Ownership       *AssertionOwnership       `json:"ownership,omitzero"`
+	Freshness       *AssertionFreshness       `json:"freshness,omitzero"`
+	ID              string                    `json:"id"`
+	ExternalKey     string                    `json:"externalKey"`
+	Kind            string                    `json:"kind"`
+	Name            string                    `json:"name"`
+	ParentID        *string                   `json:"parentId"`
+	Attributes      map[string]jsontext.Value `json:"attributes"`
+	EvidenceIDs     []string                  `json:"evidenceIds"`
 }
 type Edge struct {
-	Ownership   *AssertionOwnership       `json:"ownership,omitzero"`
-	Freshness   *AssertionFreshness       `json:"freshness,omitzero"`
-	ID          string                    `json:"id"`
-	ExternalKey string                    `json:"externalKey"`
-	Kind        string                    `json:"kind"`
-	From        string                    `json:"from"`
-	To          string                    `json:"to"`
-	Attributes  map[string]jsontext.Value `json:"attributes"`
-	EvidenceIDs []string                  `json:"evidenceIds"`
+	FacetComparison *FacetComparison          `json:"facetComparison,omitzero"`
+	Ownership       *AssertionOwnership       `json:"ownership,omitzero"`
+	Freshness       *AssertionFreshness       `json:"freshness,omitzero"`
+	ID              string                    `json:"id"`
+	ExternalKey     string                    `json:"externalKey"`
+	Kind            string                    `json:"kind"`
+	From            string                    `json:"from"`
+	To              string                    `json:"to"`
+	Attributes      map[string]jsontext.Value `json:"attributes"`
+	EvidenceIDs     []string                  `json:"evidenceIds"`
 }
 type Evidence struct {
 	Ownership    *AssertionOwnership `json:"ownership,omitzero"`

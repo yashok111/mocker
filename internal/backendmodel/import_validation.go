@@ -266,7 +266,7 @@ func validateCommand(c ImportCommand, s *ImportSession) error {
 	switch typ {
 	case "node":
 		n := c.Node
-		if !slices.Contains(SupportedNodeKinds(), n.Kind) {
+		if !slices.Contains(SupportedNodeKindsForProfile(s.Profile), n.Kind) {
 			return semantic("node/kind", "Unsupported node kind")
 		}
 		if !nonblank(n.Name) {
@@ -275,19 +275,31 @@ func validateCommand(c ImportCommand, s *ImportSession) error {
 		if n.ParentKey != nil && !externalKey(*n.ParentKey) {
 			return semantic("node/parentKey", "Invalid parent key")
 		}
-		if err := validateAttributes(n.Kind, n.Attributes, false); err != nil {
+		validator := validateAttributes
+		if selectedProfile(s.Profile) == RelationalProfile {
+			validator = func(kind string, attrs map[string]jsontext.Value, edge bool) error {
+				return validateRelationalAttributes(kind, attrs, edge, false)
+			}
+		}
+		if err := validator(n.Kind, n.Attributes, false); err != nil {
 			return err
 		}
 		return validateEvidenceKeys(n.EvidenceKeys)
 	case "edge":
 		e := c.Edge
-		if !slices.Contains(SupportedEdgeKinds(), e.Kind) {
+		if !slices.Contains(SupportedEdgeKindsForProfile(s.Profile), e.Kind) {
 			return semantic("edge/kind", "Unsupported edge kind")
 		}
 		if !externalKey(e.FromKey) || !externalKey(e.ToKey) {
 			return semantic("edge", "Valid endpoint keys are required")
 		}
-		if err := validateAttributes(e.Kind, e.Attributes, true); err != nil {
+		validator := validateAttributes
+		if selectedProfile(s.Profile) == RelationalProfile {
+			validator = func(kind string, attrs map[string]jsontext.Value, edge bool) error {
+				return validateRelationalAttributes(kind, attrs, edge, false)
+			}
+		}
+		if err := validator(e.Kind, e.Attributes, true); err != nil {
 			return err
 		}
 		return validateEvidenceKeys(e.EvidenceKeys)

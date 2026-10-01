@@ -15,7 +15,7 @@ import (
 
 func TestVersionedWorkflowContract(t *testing.T) {
 	workflows := BackendWorkflows()
-	if len(workflows) != 2 {
+	if len(workflows) != 3 {
 		t.Fatalf("workflows = %#v", workflows)
 	}
 	w := workflows[0]
@@ -46,18 +46,18 @@ func TestImportWorkflowUsesPinnedAvailableTopics(t *testing.T) {
 			selected = workflow
 		}
 	}
-	if selected.Entrypoint != "backend-import" || selected.WorkflowVersion != "2" {
+	if selected.Entrypoint != "backend-import" || selected.WorkflowVersion != "3" {
 		t.Fatalf("source import workflow unavailable: %#v", selected)
 	}
 	if selected.GuideSetID != CurrentGuideSetID() || selected.ManifestHash != CurrentGuideSetID() {
 		t.Fatal("source import workflow cannot be pinned to the served guide set")
 	}
-	for _, required := range []string{"backend-projects", "backend-revisions", "backend-graph-query", "backend-source-import", "backend-source-reconcile", "backend-revision-compare"} {
+	for _, required := range []string{"backend-projects", "backend-revisions", "backend-graph-query", "backend-source-import", "backend-source-reconcile", "backend-revision-compare", "backend-relational-import", "backend-database-query", "backend-database-er"} {
 		if !slices.Contains(selected.RequiredCapabilities, required) {
 			t.Errorf("import workflow does not require %s", required)
 		}
 	}
-	if !slices.Contains(selected.RequiredModelSchemaVersions, "1") || len(selected.Topics) == 0 {
+	if !slices.Equal(selected.RequiredModelSchemaVersions, []string{"1", "2"}) || len(selected.Topics) == 0 {
 		t.Fatal("import workflow has no supported schema or procedure")
 	}
 	for _, topic := range selected.Topics {
@@ -208,7 +208,7 @@ func TestGuideSyncDetectsChangesAndGeneratesStableIdentity(t *testing.T) {
 
 func TestSkillFrontmatterInstallationContract(t *testing.T) {
 	allowed := map[string]bool{"name": true, "description": true, "license": true, "allowed-tools": true, "metadata": true}
-	for _, topic := range []string{"overview", "backend-overview", "backend-import"} {
+	for _, topic := range []string{"overview", "backend-overview", "backend-import", "backend-database"} {
 		t.Run(topic, func(t *testing.T) {
 			raw, ok := Raw(topic + ".md")
 			if !ok {

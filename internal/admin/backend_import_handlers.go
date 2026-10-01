@@ -344,6 +344,12 @@ func backendImportShape(raw jsontext.Value, typ reflect.Type, path string) error
 		if err := json.Unmarshal(raw, &fields); err != nil {
 			return err
 		}
+		if value, supplied := fields["profile"]; supplied {
+			var profile string
+			if err := json.Unmarshal(value, &profile); err != nil || (profile != backendmodel.GraphProfile && profile != backendmodel.RelationalProfile) {
+				return fmt.Errorf("%s/profile must select a supported import profile", path)
+			}
+		}
 		if value, supplied := fields["mode"]; supplied {
 			var mode string
 			if err := json.Unmarshal(value, &mode); err != nil || (mode != "initial" && mode != "reconcile") {

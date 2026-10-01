@@ -153,7 +153,8 @@ func comparisonRecords(ctx context.Context, state RevisionState, typ string) (ma
 	attributes := func(values map[string]jsontext.Value) (map[string]any, error) {
 		out := map[string]any{}
 		for key, value := range values {
-			var decoded any
+			// Preserve exact int64/number lexemes inside schema2 typed facets.
+			var decoded jsontext.Value
 			if err := json.Unmarshal(value, &decoded); err != nil {
 				return nil, err
 			}

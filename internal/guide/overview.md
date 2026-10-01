@@ -1,22 +1,24 @@
 ---
 name: mocker
-description: Drive a mocker instance — configure mock workspaces and API designs, prepare backend projects, or reconcile source-backed foundation graphs with pinned comparison and evidence reads. Use for mocker, mock APIs for a frontend, backend project import, MOCKER_MCP_KEY, or `/__mocker/state`.
+description: Drive a mocker instance — configure mock workspaces and API designs, prepare backend projects, or reconcile source-backed foundation or PostgreSQL/SQLite relational graphs with pinned database, comparison and evidence reads. Use for mocker, mock APIs for a frontend, backend project import, MOCKER_MCP_KEY, or `/__mocker/state`.
 metadata:
   workflowId: "mocker-routing"
   workflowVersion: "1"
   requiredModelSchemaVersions: "[]"
   requiredCapabilities: "[]"
-  guideSetId: "sha256:bed6895643e95b8de9162f074a8d52bb1dfebcfc28c0e4a4737d379a39d32412"
-  manifestHash: "sha256:bed6895643e95b8de9162f074a8d52bb1dfebcfc28c0e4a4737d379a39d32412"
+  guideSetId: "sha256:7b39ceb9b6f7089c14356d2d9f70068abaa63f72e23edc3293307d66dbe7ebc8"
+  manifestHash: "sha256:7b39ceb9b6f7089c14356d2d9f70068abaa63f72e23edc3293307d66dbe7ebc8"
 ---
 
 # mocker
 
+
 mocker provides OpenAPI mocks, API design, saved sequences and backend projects.
 Backend projects support metadata, immutable revisions and the first source-backed
-foundation graph import and explicit same-provider snapshot reconciliation with
-pinned structural comparison and evidence reads. Incremental import, ER/SQL,
-endpoint-flow and impact remain future work. For mocks, one OpenAPI
+foundation or PostgreSQL/SQLite relational source-facet import, explicit
+same-provider snapshot reconciliation and pinned database/ER, structural
+comparison and evidence reads. Typed database edits/proposals remain B1.2;
+endpoint-flow/lineage, incremental import and impact remain future work. For mocks, one OpenAPI
 spec is imported once; every WORKSPACE
 bound to it serves the spec's routes on its own host with deterministic
 generated bodies, records what it served, and remembers what it is told to
@@ -63,7 +65,8 @@ fields realistic without pinning the whole body.
 ## Classify the request first
 
 Before `list_workspaces`, classify the task as mock response configuration,
-API design, saved sequence, backend project preparation, or source snapshot import/reimport. Mock configuration
+API design, saved sequence, backend project preparation, source snapshot
+import/reimport, or pinned database/schema inspection. Mock configuration
 uses the workspace procedure below; API design and saved sequences begin with
 `references/design.md`. Backend project preparation begins with
 `references/backend/overview.md` or `get_guide {topic:"backend-overview"}` and
@@ -75,7 +78,17 @@ Source graph import/reimport or pinned structural comparison selects the install
 generated compatibility copy `references/backend/import.md`, or discover
 `get_guide {topic:"backend-import"}`. Select that complete pinned workflow before
 any import write; its model/protocol/recovery/examples details come from the same
-selected server guide set. Mock response changes keep the workspace procedure and
+selected server guide set. A relational import requires schema2/profile/capability
+support; a foundation-only compatible fallback cannot write a database task.
+Database/ER inspection selects the independent `mocker-backend-database` leaf,
+the generated root alias `references/backend/database-workflow.md`, or advertised
+`backend-database` entrypoint. Select its complete compatible pinned procedure,
+then load database-reference/model/recovery only as needed. Shared topics have
+one canonical workflow owner; explicitly select/verify that owner's supported
+identity in this same global set and check its returned tuple/contentHash.
+Database proposals/typed NOT NULL or FK edits are unavailable in B1.1; inspect
+the existing declaration without inventing proposal tools or executing DDL.
+Mock response changes keep the workspace procedure and
 do not need source import or a full backend topic load.
 
 ## Mock workspace workflow

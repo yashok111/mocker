@@ -1,4 +1,10 @@
-# Foundation import examples
+# Import and pinned database examples
+
+This topic is import3-owned. Verify its actual import workflow identity/contentHash
+in the selected global guide set. Database1 inspection may load it through that
+owner without starting import writes. The foundation procedure below remains
+schema1; the relational captures afterward use schema2. SQL/ORM/migration input
+is source data and is never executed.
 
 These excerpts use the same two-version Go foundation fixture as the B0.3
 protocol checks. They run through the unchanged MCP contract. `tool(name,input)`
@@ -188,3 +194,393 @@ stale evidence records. coverage3.coverage.status is partial; snapshots include
 primary and retained_provenance. Old handler evidence stays pinned to r2's source.
 Missing main.go is unknown source absence, not deletion. Final answer names these
 gaps and consistency instead of claiming executed behavior or full reconstruction.
+
+## PostgreSQL and SQLite: captured source imports
+
+The static fixture sources are under
+`internal/backendmodel/testdata/relational/orders/{postgresql,sqlite}/{v1,v2}/`:
+`schema.sql`, `models.go` and ordered `migrations/*.sql`. They are declarations,
+including unsupported bodies and a create→drop source_only target, not SQL to run.
+The complete authored command bundles are the adjacent `commands.json` inputs;
+substitute the returned session/history tokens as the executable example does in
+`internal/mcp/tools_backend_relational_example_test.go`. Do not use expected.json
+as import data. Provider/repository/manifest hashes come from those exact inputs.
+Use the ordered import protocol, not a partial request excerpt as a begin input.
+
+The following are actual Task4 MCP SDK capture excerpts from isolated fixture
+stores, after cold begin→batch→ready preview→commit. IDs/hashes identify those
+fixture runs only; for another server use its returned IDs and source hashes.
+No guideSetId is inferred from these data revision pins: select/verify the current
+advertised guide set first and pin every related guide read to that same set.
+Selected response fields are shown; omitted coverage/limitations are still part
+of the full response and must accompany an answer.
+
+### Postgresql fixture: exact read pins
+
+Ready preview: schema 2, 48 nodes, 50 edges and 141 evidence. The commit and identical lost-response replay returned revision `01a0f4e1-7969-770e-bb3f-5e7f461bb988`. Four tables and three physical FK relationships were read at that revision; unsupported migration/body coverage remains disclosed.
+
+`query_backend_database` input:
+
+```json
+{
+  "projectId": "01a0f4e1-72d0-79fb-840a-8472b0ef5ef9",
+  "revisionId": "01a0f4e1-7969-770e-bb3f-5e7f461bb988",
+  "datastoreId": "01a0f4e1-786b-788b-98b8-4368f1508d17",
+  "facetKey": "sql",
+  "recordType": "tables"
+}
+```
+
+Selected table-page fields and its first complete TableItem:
+
+```json
+{
+  "projectId": "01a0f4e1-72d0-79fb-840a-8472b0ef5ef9",
+  "revisionId": "01a0f4e1-7969-770e-bb3f-5e7f461bb988",
+  "semanticHash": "95951ebad2e8557668e0e439ac02599642ff5257800ced4f1f161d283466594a",
+  "datastoreId": "01a0f4e1-786b-788b-98b8-4368f1508d17",
+  "facetKey": "sql",
+  "recordType": "tables",
+  "facetStatus": "current",
+  "nextCursor": "",
+  "tableItems": [
+    {
+      "tableId": "01a0f4e1-786b-7ab4-a240-d57949761c40",
+      "schemaId": "01a0f4e1-786b-794b-bfb0-07625bf77f59",
+      "qualifiedName": "public.users",
+      "columnCount": 4,
+      "facetKeys": [
+        "orm",
+        "sql"
+      ],
+      "driftStatus": "unknown"
+    }
+  ],
+  "relationshipItems": []
+}
+```
+
+This excerpt shows one item, not the complete table inventory. The actual page has four; tableItems is populated and relationshipItems empty. Keep this revision for node/graph/evidence reads, and fully page any larger result.
+
+### Sqlite fixture: exact read pins
+
+Ready preview: schema 2, 47 nodes, 49 edges and 139 evidence. The commit and identical lost-response replay returned revision `01a0f4e1-88ac-7c51-9228-98e8e929145d`. Four tables and three physical FK relationships were read at that revision; unsupported migration/body coverage remains disclosed.
+
+`query_backend_database` input:
+
+```json
+{
+  "facetKey": "sql",
+  "recordType": "tables",
+  "projectId": "01a0f4e1-82d2-768f-aebf-d90b8bda7df6",
+  "revisionId": "01a0f4e1-88ac-7c51-9228-98e8e929145d",
+  "datastoreId": "01a0f4e1-87ad-780c-9000-7cec0b796898"
+}
+```
+
+Selected table-page fields and its first complete TableItem:
+
+```json
+{
+  "projectId": "01a0f4e1-82d2-768f-aebf-d90b8bda7df6",
+  "revisionId": "01a0f4e1-88ac-7c51-9228-98e8e929145d",
+  "semanticHash": "92280b25f86b4e2851186715d5bd624da362f6ae49d609015529c77059db2592",
+  "datastoreId": "01a0f4e1-87ad-780c-9000-7cec0b796898",
+  "facetKey": "sql",
+  "recordType": "tables",
+  "facetStatus": "current",
+  "nextCursor": "",
+  "tableItems": [
+    {
+      "tableId": "01a0f4e1-87ad-7a4d-af57-37a7a778920e",
+      "schemaId": "01a0f4e1-87ad-78d0-a596-13518f821961",
+      "qualifiedName": "main.users",
+      "columnCount": 4,
+      "facetKeys": [
+        "orm",
+        "sql"
+      ],
+      "driftStatus": "unknown"
+    }
+  ],
+  "relationshipItems": []
+}
+```
+
+This excerpt shows one item, not the complete table inventory. The actual page has four; tableItems is populated and relationshipItems empty. Keep this revision for node/graph/evidence reads, and fully page any larger result.
+
+### Ordered composite FK and participation
+
+The PostgreSQL SQL orders→users relationship below is a complete captured RelationshipItem. Pair order is tenant_id→tenant_id, user_id→id. sourceCardinality means source rows per target; targetCardinality means target rows per source. Its explicit source min0 does not require every user to have an order.
+
+```json
+{
+  "edgeId": "01a0f4e1-786f-752f-b96a-2fc746765406",
+  "constraintId": "01a0f4e1-786e-76c8-9d50-0edebce9c147",
+  "sourceTableId": "01a0f4e1-786c-725e-9695-9a88bd4cef9f",
+  "targetTableId": "01a0f4e1-786b-7ab4-a240-d57949761c40",
+  "columnPairs": [
+    {
+      "fromColumnId": "01a0f4e1-786c-73ef-9bde-d2bbd9ecd896",
+      "toColumnId": "01a0f4e1-786b-7c5a-9d7b-75f947a6aaa8"
+    },
+    {
+      "fromColumnId": "01a0f4e1-786c-7770-9ac5-0c4a1349d50b",
+      "toColumnId": "01a0f4e1-786b-7ddb-a873-748b2d3ad824"
+    }
+  ],
+  "evidenceIds": [
+    "01a0f4e1-786a-7c35-bd52-ef0ff60c4725"
+  ],
+  "sourceCardinality": {
+    "min": 0,
+    "max": "many",
+    "basis": [
+      "Declared relationship 01a0f4e1-786f-752f-b96a-2fc746765406 does not require a source row for every target",
+      "Current explicit nonmatching global key 01a0f4e1-786e-753f-9765-ed3ecb77e1ad with evidence 01a0f4e1-7869-796c-ab6d-073cb6adfc71",
+      "Complete selected constraint inventory for 01a0f4e1-786c-725e-9695-9a88bd4cef9f has no matching global unique key"
+    ]
+  },
+  "targetCardinality": {
+    "min": 1,
+    "max": "1",
+    "basis": [
+      "Current explicit complete key 01a0f4e1-786e-7208-89f4-3be9120109fa with evidence 01a0f4e1-7869-759d-8412-f35b225c4843",
+      "Current explicit nonmatching global key 01a0f4e1-786e-737c-a5e6-b30f34fbbfe6 with evidence 01a0f4e1-7869-7799-9188-f76926d19a0d",
+      "Selected source column 01a0f4e1-786c-73ef-9bde-d2bbd9ecd896 nullable known false with evidence 01a0f4e1-7866-7947-933f-59b3e829d82e",
+      "Selected source column 01a0f4e1-786c-7770-9ac5-0c4a1349d50b nullable known false with evidence 01a0f4e1-7866-7d2f-b46d-898b7f02ac33",
+      "Current explicit nondeferrable MATCH SIMPLE 01a0f4e1-786e-76c8-9d50-0edebce9c147 with selected source nullability"
+    ]
+  },
+  "status": "explicit",
+  "targetReason": null
+}
+```
+
+A join table stays a physical table plus its FK edges; no synthetic N:M relationship is added. Matching complete current target uniqueness can prove max1 independently of the minimum. Conditional/expression indices do not establish a global column-only key.
+
+### Unknown minimum with an independently proved maximum
+
+These additional ORM examples were captured through real public MCP HTTP calls in the Task4 preliminary run, separately from the SDK captures above. They are source-only inspection examples, not final frozen-binary acceptance. SQL-only datastore/schema descriptors still have ORM facets on descendants; discover those facets through the whole pinned hierarchy. Each captured ORM page reports facetStatus unknown, but a complete current explicit target key proves max1 while MATCH/deferrability leaves min unknown.
+
+postgresql — exact request and selected response fields:
+
+```json
+{
+  "projectId": "01a0f4f3-d32a-7b43-bd5a-bb44100b3095",
+  "revisionId": "01a0f4f3-d467-7dae-9184-56f26af8eafa",
+  "datastoreId": "01a0f4f3-d41f-7a6e-81e7-562682ba1df2",
+  "facetKey": "orm",
+  "recordType": "relationships",
+  "limit": 500
+}
+```
+
+```json
+{
+  "revisionId": "01a0f4f3-d467-7dae-9184-56f26af8eafa",
+  "semanticHash": "f8a4f96d5180f9c36eb2492dceabc54f49979e68fc24443884ddd2b0d07d3496",
+  "facetKey": "orm",
+  "facetStatus": "unknown",
+  "relationshipItems": [
+    {
+      "edgeId": "01a0f4f3-d424-71df-8ef5-f2fcc49bbf05",
+      "targetCardinality": {
+        "min": null,
+        "max": "1",
+        "basis": [
+          "Current explicit complete key 01a0f4f3-d422-7c04-bb16-c09f19a91427 with evidence 01a0f4f3-d41d-74c8-b304-ee0ee826f061",
+          "Current explicit nonmatching global key 01a0f4f3-d422-7d95-8f19-4c7cbdb13926 with evidence 01a0f4f3-d41d-76c0-a8a1-c52e436b7d74",
+          "Missing selected key proof 01a0f4f3-d424-7570-83c6-caeb646ec067",
+          "Selected source column 01a0f4f3-d420-786e-8b54-f5be7a170285 nullable known false with evidence 01a0f4f3-d41a-7f3f-ae93-0c7f9f210885",
+          "Selected source column 01a0f4f3-d420-7c62-acac-4b2ddfc67e05 nullable known true with evidence 01a0f4f3-d41b-72ed-9f8b-71f78cb1df4f",
+          "Minimum unknown: selected nullability, nondeferrable MATCH SIMPLE enforcement or target key is not established for 01a0f4f3-d424-71df-8ef5-f2fcc49bbf05"
+        ]
+      }
+    }
+  ]
+}
+```
+
+The full page also reports missing selected facet/key proofs and incomplete ORM analysis. Keep each basis proof/limitation; an unknown minimum does not erase the separately established maximum.
+
+sqlite — exact request and selected response fields:
+
+```json
+{
+  "projectId": "01a0f4f3-d629-7a56-9b13-941945aae81e",
+  "revisionId": "01a0f4f3-d74b-78f9-8250-6da0d87e2e1e",
+  "datastoreId": "01a0f4f3-d707-7e4d-9dde-97d7ba2d1b90",
+  "facetKey": "orm",
+  "recordType": "relationships",
+  "limit": 500
+}
+```
+
+```json
+{
+  "revisionId": "01a0f4f3-d74b-78f9-8250-6da0d87e2e1e",
+  "semanticHash": "a3796ce3496a1c801ea90e63b3e7d74008660c82f8740b23ba1c9fb773a8625c",
+  "facetKey": "orm",
+  "facetStatus": "unknown",
+  "relationshipItems": [
+    {
+      "edgeId": "01a0f4f3-d70c-7056-a2ad-571210113e3b",
+      "targetCardinality": {
+        "min": null,
+        "max": "1",
+        "basis": [
+          "Current explicit complete key 01a0f4f3-d70a-7c87-bf23-9fa80456aa89 with evidence 01a0f4f3-d705-7b1a-a192-a5ce1cb0f920",
+          "Current explicit nonmatching global key 01a0f4f3-d70a-7e14-aec2-089ba7bde04e with evidence 01a0f4f3-d705-7d02-94c2-81b0092b0edf",
+          "Missing selected key proof 01a0f4f3-d70c-738d-84cf-cbf7f211a9c8",
+          "Selected source column 01a0f4f3-d708-7bbe-a26b-f59a98c58fbc nullable known false with evidence 01a0f4f3-d703-753f-abb4-c1dc179d8ca4",
+          "Selected source column 01a0f4f3-d708-7f12-ae40-b898983c31be nullable known true with evidence 01a0f4f3-d703-7bd2-a983-8f2fc3282701",
+          "Minimum unknown: selected nullability, nondeferrable MATCH SIMPLE enforcement or target key is not established for 01a0f4f3-d70c-7056-a2ad-571210113e3b"
+        ]
+      }
+    }
+  ]
+}
+```
+
+The full page also reports missing selected facet/key proofs and incomplete ORM analysis. Keep each basis proof/limitation; an unknown minimum does not erase the separately established maximum.
+
+### SQL/ORM drift with pinned evidence
+
+At PostgreSQL revision `01a0f4e1-7969-770e-bb3f-5e7f461bb988`, column `01a0f4e1-786c-7a9f-a061-dfdfa09fa46e` (`column:orders:total`) has SQL nativeType `numeric(18,2)` and ORM `numeric(12,2)`. SQLite retains its own `NUMERIC(18,2)` versus ORM `DECIMAL(12,2)` native strings. The captured PostgreSQL comparison and SQL evidence excerpt are:
+
+```json
+{
+  "id": "01a0f4e1-786c-7a9f-a061-dfdfa09fa46e",
+  "facetComparison": {
+    "status": "different",
+    "pairs": [
+      {
+        "leftFacetKey": "orm",
+        "rightFacetKey": "sql",
+        "status": "different",
+        "changedPaths": [
+          "/nativeType"
+        ],
+        "definitionDifferent": false
+      }
+    ]
+  }
+}
+```
+
+```json
+{
+  "id": "01a0f4e1-7867-72c4-96f2-f4211d90fad7",
+  "subjectId": "01a0f4e1-786c-7a9f-a061-dfdfa09fa46e",
+  "propertyPath": "/attributes/facets/sql",
+  "status": "explicit",
+  "source": {
+    "repositoryId": "01a0f4e1-732e-7ff7-ad8a-6cc87bab3a8c",
+    "snapshotId": "01a0f4e1-732f-7106-852c-cef37fc4e4f9",
+    "file": "postgresql/v1/schema.sql",
+    "contentHash": "902c33120041178dc4bcca6cbbd512d696e6ee3c8c346f12eb390c028e4adc88",
+    "startLine": 20,
+    "endLine": 20
+  }
+}
+```
+
+Pair fields are leftFacetKey/rightFacetKey; changedPaths sort as facet-relative JSON Pointers. A known contradiction remains different despite unrelated unknowns. definitionDifferent is separate from semantic property paths. Do not use source/completeness/freshness metadata as changed properties or interpret text inequality as SQL-equivalence analysis.
+
+### Partial omission retains old facet snapshots
+
+The SDK partial snapshot refreshed only table:orders SQL, then committed revision `01a0f4e1-7dca-7acc-83cf-67e3b534a3f0`. The omitted status column `01a0f4e1-786c-78e1-8704-d1553270b80c` retained both SQL and ORM claims, including different known DEFAULT values, at the original source snapshot:
+
+```json
+{
+  "id": "01a0f4e1-786c-78e1-8704-d1553270b80c",
+  "externalKey": "column:orders:status",
+  "freshness": {
+    "status": "stale",
+    "confirmedSnapshotId": "01a0f4e1-732f-7106-852c-cef37fc4e4f9",
+    "reasons": [
+      "not_reobserved"
+    ]
+  },
+  "attributes": {
+    "facets": {
+      "sql": {
+        "sourceSnapshotId": "01a0f4e1-732f-7106-852c-cef37fc4e4f9",
+        "freshness": {
+          "status": "stale",
+          "confirmedSnapshotId": "01a0f4e1-732f-7106-852c-cef37fc4e4f9",
+          "reasons": [
+            "not_reobserved"
+          ]
+        },
+        "defaultExpression": {
+          "value": "'draft'",
+          "status": "known"
+        }
+      },
+      "orm": {
+        "sourceSnapshotId": "01a0f4e1-732f-7106-852c-cef37fc4e4f9",
+        "freshness": {
+          "status": "stale",
+          "confirmedSnapshotId": "01a0f4e1-732f-7106-852c-cef37fc4e4f9",
+          "reasons": [
+            "not_reobserved"
+          ]
+        },
+        "defaultExpression": {
+          "status": "known",
+          "value": "'pending'"
+        }
+      }
+    }
+  }
+}
+```
+
+This is a selected-field excerpt of a retained node. Partial scope/stale evidence keeps coverage partial; omission never removes a facet or subject. A metadata-only datastore/routine upsert omitting its entire optional descriptor likewise retains committed facets and old proof stale alongside new metadata. Explicit null/malformed descriptors fail.
+
+For a shared-proof collision, save the unresolved diagnostics and null candidateHash; do not commit. In a new addressed batch send `op:"remove"` with `remove:{recordType:"evidence",externalKey:oldProofKey}` to remove the conflicting staged evidence, then upsert the subject/facet using a distinct current proof key and upsert that current proof. The server retains old proof needed by omitted facets and restores the union. Repreview at the accepted version; commit only ready. Alternatively explicitly reassert every facet that needs the proof. This repair is a protocol recipe, not a fabricated captured response.
+
+For endpoint conflict, an FK edge cannot retarget omitted facets. Reassert all edge facets with valid current pairs/proof, or use distinct stable edge keys for differing physical targets and explicitly retain/delete the old one under the deletion gates. No name-based retarget or inferred cascade.
+
+### Explicit rename before target allocation
+
+The captured v2 map batch changed `column:orders:status` to `column:orders:state`, preserving `01a0f4e1-786c-78e1-8704-d1553270b80c`. It ran before the target upsert. Complete actual mapping command and response:
+
+```json
+{
+  "identity": {
+    "recordType": "node",
+    "fromExternalKey": "column:orders:status",
+    "toExternalKey": "column:orders:state",
+    "expectedId": "01a0f4e1-786c-78e1-8704-d1553270b80c",
+    "reason": "Explicit source rename",
+    "evidenceKeys": [
+      "proof:v2:column:orders:state:sql"
+    ]
+  },
+  "op": "map_identity"
+}
+```
+
+```json
+{
+  "batchId": "mapping",
+  "payloadHash": "0e64a3c320286ed0ad4634493a11103fac89c01668e74b4ed25bff761378ba45",
+  "acceptedVersion": 2,
+  "identities": [
+    {
+      "recordType": "node",
+      "externalKey": "column:orders:state",
+      "id": "01a0f4e1-786c-78e1-8704-d1553270b80c"
+    }
+  ]
+}
+```
+
+V2 committed revision `01a0f4e1-80e0-7f78-8d1b-b96d88fca034`. Its later read at the original v1 pin still returned the original semanticHash and four-table page. The complete v2 bundle proves legacy_note/index deletion, repairs the view/index dependencies, and pins retained migration CREATE targets to their old immutable revision. source_only create→drop creates no active UUID. Never delete from a partial inventory or unavailable prior proof.
+
+### Inspection-only design request
+
+For a request to design/apply NOT NULL or an FK, state that typed database proposals/edits and apply/data/writer-check criteria are unavailable in B1.1. Provide supported inspection at explicit pins with actual proof and unknowns. Do not invent proposal tools, DDL execution, endpoint readers, lineage or impact. Root-only, either leaf alone, bundle and server-only use the same verified procedures and actual topic owners.

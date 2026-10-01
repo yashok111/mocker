@@ -29,6 +29,7 @@ import { describeApiFailureDetailed } from "@/api/errors";
 import { BackendGraphInventory } from "./BackendGraphInventory";
 import { BackendRevisionCompare } from "./BackendRevisionCompare";
 import { BackendImportReview } from "./BackendImportReview";
+import { BackendDatabase } from "./BackendDatabase";
 
 export function BackendProjectPage({ projectId }: { projectId: string }) {
   return <BackendProjectDetail key={projectId} projectId={projectId} />;
@@ -262,11 +263,15 @@ function BackendProjectDetail({ projectId }: { projectId: string }) {
           )}
           {revision && (
             <>
+              {revision.schemaVersion === "2" && (
+                <BackendDatabase projectId={projectId} revisionId={revision.id} />
+              )}
               {revision.sourceSnapshotIds.length > 0 ? (
                 <BackendGraphInventory
                   key={`${projectId}:${revision.id}`}
                   projectId={projectId}
                   revisionId={revision.id}
+                  schemaVersion={revision.schemaVersion}
                 />
               ) : (
                 <Paper withBorder p="lg">

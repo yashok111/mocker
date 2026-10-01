@@ -124,6 +124,9 @@ func loadSavedStatus(ctx context.Context, q importReader, out *ImportStatus) err
 		if err := json.Unmarshal([]byte(doc), out.Preview); err != nil {
 			return err
 		}
+		if out.Preview.ModelSchemaVersion == "" {
+			out.Preview.ModelSchemaVersion = modelSchemaVersion(out.Session.Profile)
+		}
 	} else if !errors.Is(err, sql.ErrNoRows) {
 		return err
 	}

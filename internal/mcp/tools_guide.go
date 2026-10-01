@@ -45,8 +45,9 @@ func addGuideTools(s *sdk.Server) {
 			"add a route, confirm a resource, scenarios, undo, streams, spec drift, debugging, " +
 			"assets); \"http\" (the same over curl for scripts and CI, plus MCP client config). " +
 			"For backend project preparation read \"backend-overview\" and pin guideSetId after capability discovery. Unknown guide sets fail explicitly. " +
-			"For source import, same-provider reconciliation and pinned revision comparison select the compatible \"backend-import\" workflow and its guideSetId. " +
-			"Load its shared topics progressively from that same set: \"backend-model\" for foundation records and evidence, \"backend-import-protocol\" before staging, \"backend-recovery\" before commit/resume, and \"backend-examples\" for worked fixtures. " +
+			"For source import, same-provider reconciliation and pinned revision comparison select the compatible \"backend-import\" workflow and its guideSetId. Relational import requires schema2 and every declared capability; foundation-only fallback cannot perform a relational task. " +
+			"Load shared topics progressively from that same set: \"backend-model\" for records and evidence, \"backend-import-protocol\" before staging, \"backend-recovery\" before commit/resume, \"backend-examples\" for worked fixtures, and \"backend-profile-go-sql\" for the relational source profile. " +
+			"For read-only database inspection select \"backend-database\" and load \"backend-database-reference\" as needed. Those topics belong to the database workflow; model/recovery/profile topics belong to import. Verify each actual owner's advertised identity, all required schemas/capabilities and topic hash in the same guideSetId/manifestHash. Database proposals and edits are unavailable. " +
 			"Static text: calls no admin route, reads no workspace, changes nothing.",
 		Annotations: &sdk.ToolAnnotations{ReadOnlyHint: true, IdempotentHint: true},
 	}, handleGetGuide)
@@ -55,7 +56,7 @@ func addGuideTools(s *sdk.Server) {
 // GetGuideInput is get_guide's input.
 type GetGuideInput struct {
 	GuideSetID string `json:"guideSetId,omitempty" jsonschema:"optional immutable guide set selector; unknown selectors fail explicitly"`
-	Topic      string `json:"topic,omitempty" jsonschema:"one of overview, tools, shapes, cookbook, http, design, functions, backend-overview, backend-import, backend-model, backend-import-protocol, backend-recovery, backend-examples; omitted means overview"`
+	Topic      string `json:"topic,omitempty" jsonschema:"one of overview, tools, shapes, cookbook, http, design, functions, backend-overview, backend-import, backend-model, backend-import-protocol, backend-recovery, backend-examples, backend-database, backend-database-reference, backend-profile-go-sql; omitted means overview"`
 }
 
 // GetGuideOutput is get_guide's declared output.

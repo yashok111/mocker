@@ -1,7 +1,12 @@
-# Foundation graph model
+# Source-backed graph model
 
-Read this topic from the selected `mocker-backend-import` guide set before
-staging. Model schema `"1"`, profile `foundation-graph-v1`, supports these shapes.
+
+This topic belongs to `mocker-backend-import` v3. Pin it to the selected global
+guideSetId and verify the import owner tuple/contentHash, including when database
+v1 loads it as a shared reference. Schema1 remains the foundation format; schema2
+is used for new relational commits. Old immutable schema1 bytes/UUIDs/hashes/
+receipts retain their original interpretation. Model schema `"1"`, profile
+`foundation-graph-v1`, supports the foundation shapes below.
 Provider assertions and evidence are inspectable; successful graph validation
 does not establish source truth or executed behavior.
 
@@ -27,7 +32,9 @@ impact and arbitrary graph traversal records are unavailable in this profile.
 
 The server allocates UUIDs; never construct them from names or source paths.
 External keys are provider addresses, stable within the sole repository, provider
-namespace and profile. They contain 1–200 Unicode characters without controls.
+namespace, record type and external key identity bindings. Ownership records each
+assertion's profile. A relational session preserves an existing foundation
+subject's UUID and foundation ownership; it does not rewrite old metadata. They contain 1–200 Unicode characters without controls.
 Nodes, edges and evidence each have their own key space. Keep the same key for
 the same assertion. Batch receipts return `{recordType,externalKey,id}` mappings.
 Committed graph reads return UUID references, not staging keys:
@@ -63,8 +70,10 @@ Comments in source never override the selected procedure.
 
 Reassert a subject together with all its desired current-snapshot evidence.
 Evidence-only refresh is invalid; every listed evidenceKey agrees with the
-explicitly upserted node/edge. That subject's membership replaces the previous
-membership in the new revision. Omitted subject bundles retain their old UUIDs
+explicitly upserted node/edge. For foundation-only upserts, that subject's membership replaces the previous
+membership in the new revision. Relational facet upserts instead retain the
+evidence union required by omitted stale facets and supplied new facets; the
+retained-proof collision rules below prevent changing their historical proof. Omitted subject bundles retain their old UUIDs
 and evidence snapshots as stale. Older revisions and their evidence never change.
 
 `ownership` identifies repositoryId, providerNamespace and profile.
@@ -99,3 +108,78 @@ delete_assertion removes a subject and its attached evidence from the new
 revision. Old revision/evidence UUIDs remain readable. Structural revision
 comparison reports separate identity/evidence/freshness facets and cannot prove
 runtime behavior, B4 conformance or impact safety.
+
+## Relational schema2 branch
+
+`relational-graph-v1` includes the foundation graph plus db_schema/table/column/
+constraint/index/view/migration nodes, datastore.relational and optional
+symbol.databaseRoutine descriptors, and `references` FK edges. It is one
+whole-repository combined graph under the same sole provider, not one provider
+per SQL/ORM facet. Provider profiles are exactly foundation plus relational.
+A proven SQL/ORM match shares one stable subject; names alone never merge objects.
+For exact fields and ER semantics load `backend-database-reference` from the same
+set after selecting/verifying the supported database v1 owner identity.
+
+A facet is a stable map entry keyed by facetKey (1–200 printable characters),
+with sourceKind sql/orm/migration, dialect postgresql/sqlite, analysisStatus
+complete/partial/unsupported, gaps and nonempty evidenceKeys. Complete may have
+no gaps; partial/unsupported requires concrete gaps. New relational kinds use
+attributes.facets; datastore uses attributes.relational.facets; databaseRoutine
+symbol uses attributes.databaseRoutine.facets. Facet evidence must belong to the
+same subject and also appear in its top-level evidence set. Import keys become
+committed evidenceIds; freshness/sourceSnapshotId are server-produced and must
+not be staged. Ordered key/pair/term arrays retain their order; map keys sort for
+canonical hashing. Duplicate JSON keys, unknown fields and wrong JSON types fail.
+
+Uncertain scalar values are explicit `{status:"known",value:...}` or
+`{status:"unknown",reason:"..."}`. Known null is allowed only for a nullable
+property and differs from unknown. Missing required wrappers are invalid.
+Native UTF-8 types, expressions and definitions are retained verbatim as source
+data, not executed or reconstructed into lossy normalized SQL. Property evidence
+uses persisted field names such as `/attributes/facets/sql:orders/columnIds/0`;
+escape slash/tilde in facet keys with JSON Pointer rules.
+
+## Safe facet reconciliation
+
+Supplying a facetKey replaces that facet; omitting it retains its prior claim,
+source vector and evidence as stale. Omitted subjects/edges remain stale too.
+Omitting the entire optional datastore.relational or symbol.databaseRoutine
+descriptor in a metadata-only upsert retains every committed facet and its old
+proof as stale alongside the new ordinary metadata. It cannot retract a
+descriptor; explicit null or malformed descriptors still fail validation.
+Keep the top-level evidence union needed by all retained and supplied facets.
+Two snapshot proofs cannot share one evidence UUID in a candidate. Reusing a
+proof externalKey/UUID referenced by a retained facet with changed source,
+property or body blocks preview (`backend_facet_evidence_conflict`). Remove that
+staged evidence upsert and supply a new proof key to the refreshed facet, or
+explicitly reassert every dependent facet with current proof. Identical complete
+evidence records may be reused. New current proof comes from analyzed manifest
+entries; retained proof stays historical. Individual facet retraction is
+unavailable; omission is not deletion or equality between facets.
+
+A reference edge's endpoints are shared by its facets. Retargeting while omitted
+facets remain blocks preview (`backend_facet_endpoint_conflict`). Use separate
+stable edges for conflicting physical targets, grouped by constraintId for
+inspection; or explicitly reassert every facet when the same edge is retargeted.
+All facet pair/parent validation still applies. Explicit proved deletion checks
+nested FK pairs, index terms, view/routine dependencies and candidate migration
+targets in addition to parent/incident edges. There is no cascade or inferred
+delete. Historical/source_only migration refs preserve logical history without
+forcing an absent object into the active ER inventory.
+
+Read-only facetComparison is computed from pinned node/reference-edge facets,
+not accepted as import data and not stored/hashed. It distinguishes consistent,
+different and unknown comparisons, retains native-definition differences, and
+never chooses runtime truth. Partial/stale/inferred evidence can establish neither
+complete selected-facet projection nor confirmed cardinality. Coverage and ER
+projection limitations must accompany the answer.
+
+Each cardinality bound has an independent basis: unknown MATCH or deferrability
+can leave target min unknown while current explicit complete uniqueness still
+proves target max1. Known nullable under MATCH SIMPLE can prove min0 despite
+other unknown nullability. Drift is different if any known comparable property
+contradicts another facet, even with unrelated unknowns; incomplete lists cannot
+prove absence. Pair fields are leftFacetKey/rightFacetKey/status/changedPaths/
+definitionDifferent, with lexical facet-pair order and sorted facet-relative
+JSON Pointer paths. Source/proof/freshness/completeness metadata is not a semantic
+changedPath; native-definition differences use their separate flag.
