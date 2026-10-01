@@ -276,6 +276,11 @@ func validateCommand(c ImportCommand, s *ImportSession) error {
 			return semantic("node/parentKey", "Invalid parent key")
 		}
 		validator := validateAttributes
+		if selectedProfile(s.Profile) == RuntimeProfile {
+			validator = func(kind string, attrs map[string]jsontext.Value, edge bool) error {
+				return validateRuntimeAttributes(kind, attrs, edge, false)
+			}
+		}
 		if selectedProfile(s.Profile) == RelationalProfile {
 			validator = func(kind string, attrs map[string]jsontext.Value, edge bool) error {
 				return validateRelationalAttributes(kind, attrs, edge, false)
@@ -294,6 +299,11 @@ func validateCommand(c ImportCommand, s *ImportSession) error {
 			return semantic("edge", "Valid endpoint keys are required")
 		}
 		validator := validateAttributes
+		if selectedProfile(s.Profile) == RuntimeProfile {
+			validator = func(kind string, attrs map[string]jsontext.Value, edge bool) error {
+				return validateRuntimeAttributes(kind, attrs, edge, false)
+			}
+		}
 		if selectedProfile(s.Profile) == RelationalProfile {
 			validator = func(kind string, attrs map[string]jsontext.Value, edge bool) error {
 				return validateRelationalAttributes(kind, attrs, edge, false)

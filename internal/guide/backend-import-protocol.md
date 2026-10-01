@@ -1,7 +1,7 @@
 # Source import protocol
 
 
-This topic belongs to import v3; verify its owner identity/contentHash in the
+This topic belongs to import v4; verify its owner identity/contentHash in the
 selected immutable global set before staging. Use its `backend-model` for record semantics and `backend-recovery`
 before commit or any retry. Select compatibility before the first write.
 
@@ -26,8 +26,9 @@ inventory item: {category,status,knownCount,denominator,discoverySource,gaps,rea
 contentHash is 64 lowercase hexadecimal SHA-256 characters, without `sha256:`.
 capturedAt is a valid timestamp. provider method uses a supported evidence method,
 profiles is exactly `["foundation-graph-v1"]` for foundation-selected work or
-exactly foundation plus relational for relational-selected work (set order does
-not matter); limitations states extraction limits.
+exactly foundation plus relational for relational-selected work, or exactly
+foundation/relational/runtime-flow-v1 for runtime work (set order does not
+matter); limitations states extraction limits.
 Each file is unique; excluded/unsupported files require a reason. Snippets are
 optional sanitized UTF-8 within the advertised bound. The server does not verify
 local source stability. Never label unchecked source verified; a dirty tree's
@@ -93,7 +94,7 @@ current source or assign it new capture hashes.
 
 ```text
 {projectId,expectedVersion,baseRevisionId,idempotencyKey,
- mode?:"initial"|"reconcile",profile?:"foundation-graph-v1"|"relational-graph-v1",
+ mode?:"initial"|"reconcile",profile?:"foundation-graph-v1"|"relational-graph-v1"|"runtime-flow-v1",
  profileExtension?,repositoryId?,graphScope?,manifest,inventory}
 ```
 
@@ -392,7 +393,8 @@ To reconcile a foundation-only base into relational schema2, send:
 This excerpt is fixture-only and is not a full begin request. Keep the sole
 repository UUID/name and exact provider name/version/namespace/method. Retain all
 prior profiles and add only relational. No second repository/provider, changed
-provider version/method/namespace, downgrade or other extension is allowed.
+provider version/method/namespace or downgrade is allowed; the separate explicit
+relational→runtime extension is described below.
 Repeated extension against an already relational base is invalid; subsequent
 relational reconcile omits profileExtension and requires exact compatibility.
 Changing a profile on an open session requires a new session, never reinterpretation
@@ -440,3 +442,45 @@ from candidate and available history, including first-import create then drop.
 It requires migration proof and allocates no active UUID. Unknown order,
 unsupported operations or incomplete dependencies remain gaps; no DDL replay
 establishes a derived state. A missing facet/source never retracts a claim.
+
+
+## Runtime source profile and audit
+
+For initial source3, select profile:"runtime-flow-v1" and provider profiles exactly
+foundation-graph-v1/relational-graph-v1/runtime-flow-v1; no repositoryId,
+graphScope or profileExtension. To extend a committed schema2 source, use ordinary
+same-repository/provider whole-scope reconcile with matching graphScope.profile
+and profileExtension:{fromProfile:"relational-graph-v1",toProfile:"runtime-flow-v1"}.
+Preserve the exact prior provider name/version/namespace/method and add only the
+runtime profile. Later source3 reconcile requires the same exact profile set and
+omits extension. Foundation→relational remains available; direct foundation→
+runtime, downgrade, automatic provider migration and proposal→source fail.
+Schema1/2 history and receipt bytes stay unchanged; omitted old records stay stale
+at original snapshots and proofs instead of gaining new UUIDs/current claims.
+
+Select inspect1 in this same global set and verify backend-flow-reference before
+staging schema3. Its typed flow/step/query/transaction and control/access/boundary
+shapes use external Keys on import and Ids after preview. Keep entry/exits in the
+owning flow; local transaction membership does not propagate to callees. Calls
+have explicit candidates and unresolved remainder; table/view-level access keeps
+unknown columnScope and its reason. Never infer columns from SQL text or native
+names. Known runtime records/edges need source proof with analyzed file hash and
+paired physical line bounds, and each asserted candidate/outcome has edge proof.
+
+The existing local audit gate applies to every new control/call/access assertion,
+expression, native query/body and source span in actual saved accepted payloads.
+Audit complete physical source boundaries independently of the extractor against
+captured bytes, not reconstructed commands. Keep unknowns for unsupported scope;
+ready validation does not establish source truth. A passing final audit remains
+bound to accepted batches/receipts and final candidate/preview/base/project CAS
+before first publication. Lost/uncertain commit replays its original complete
+request/key/CAS first, even after source/head/audit changes.
+
+Normal reconcile retains omitted steps/transitions/accesses stale. Explicit
+assertion deletion must clear all surviving parent, entry/exit, transaction,
+call and access references plus the usual complete scope/inventory/proof gates.
+An authorized focused gap investigation changes source analysis focus, not the
+whole-scope import protocol. Unavailable/inconclusive source retains unknowns
+and produces a concrete limitation, never an empty progress commit. Requery the
+new acknowledged source revision through inspect1; imported witnesses still do
+not establish execution, all writers, field lineage, atomicity or impact.

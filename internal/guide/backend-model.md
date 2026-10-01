@@ -1,11 +1,12 @@
 # Source-backed graph model
 
 
-This topic belongs to `mocker-backend-import` v3. Pin it to the selected global
+This topic belongs to `mocker-backend-import` v4. Pin it to the selected global
 guideSetId and verify the import owner tuple/contentHash, including when database
-v1 loads it as a shared reference. Schema1 remains the foundation format; schema2
-is used for new relational commits. Old immutable schema1 bytes/UUIDs/hashes/
-receipts retain their original interpretation. Model schema `"1"`, profile
+or inspect1 loads it as a shared reference. Schema1 remains the foundation format;
+schema2 is relational and schema3 adds typed source flow/query/access records.
+Old immutable schema1/2 bytes/UUIDs/hashes/receipts keep their interpretation.
+Model schema `"1"`, profile
 `foundation-graph-v1`, supports the foundation shapes below.
 Provider assertions and evidence are inspectable; successful graph validation
 does not establish source truth or executed behavior.
@@ -118,7 +119,7 @@ whole-repository combined graph under the same sole provider, not one provider
 per SQL/ORM facet. Provider profiles are exactly foundation plus relational.
 A proven SQL/ORM match shares one stable subject; names alone never merge objects.
 For exact fields and ER semantics load `backend-database-reference` from the same
-set after selecting/verifying the supported database v2 owner identity.
+set after selecting/verifying the supported database v3 owner identity.
 
 A facet is a stable map entry keyed by facetKey (1–200 printable characters),
 with sourceKind sql/orm/migration, dialect postgresql/sqlite, analysisStatus
@@ -191,5 +192,5 @@ source schema2 baseline. It is never import data or source schema3. Shared reads
 select exclusive source revisionId or exact proposal/proposalRevisionId. Keep
 sourceRecord, desired effectiveFacet, propertyOrigins and unverified criteria
 separate. New designed objects have no sourceRecord or source evidence. Read the
-verified database2 reference for commands, projection and ER assumptions. Import3
+verified database3 reference for commands, projection and ER assumptions. Import3
 continues to mutate only source snapshots with its original receipts and CAS.

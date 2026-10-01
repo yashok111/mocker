@@ -6,8 +6,8 @@ metadata:
   workflowVersion: "1"
   requiredModelSchemaVersions: "[]"
   requiredCapabilities: "[]"
-  guideSetId: "sha256:54ad47e9cec57296780d3ef881fa90d192c4bb467fcdcde124bd7df8692776de"
-  manifestHash: "sha256:54ad47e9cec57296780d3ef881fa90d192c4bb467fcdcde124bd7df8692776de"
+  guideSetId: "sha256:a6c5d49005adc09a69aaa1ab94f08078d58c9f075a064cd6077c7976490967ce"
+  manifestHash: "sha256:a6c5d49005adc09a69aaa1ab94f08078d58c9f075a064cd6077c7976490967ce"
 ---
 
 # mocker
@@ -18,7 +18,8 @@ Backend projects support metadata, immutable revisions and the first source-back
 foundation or PostgreSQL/SQLite relational source-facet import, explicit
 same-provider snapshot reconciliation and pinned database/ER, structural
 comparison and evidence reads. Typed NULL/NOT NULL and FK proposals use separate pinned preview/apply and unverified criteria;
-endpoint-flow/lineage, incremental import and impact remain future work. For mocks, one OpenAPI
+source schema3 adds pinned endpoint flows and imported scoped data accesses;
+field lineage, incremental import and impact remain unavailable. For mocks, one OpenAPI
 spec is imported once; every WORKSPACE
 bound to it serves the spec's routes on its own host with deterministic
 generated bodies, records what it served, and remembers what it is told to
@@ -66,7 +67,7 @@ fields realistic without pinning the whole body.
 
 Before `list_workspaces`, classify the task as mock response configuration,
 API design, saved sequence, backend project preparation, source snapshot
-import/reimport, pinned database/schema inspection, or typed database proposal design. Mock configuration
+import/reimport, pinned database/schema inspection, typed database proposal design, or source flow/data-access inspection. Mock configuration
 uses the workspace procedure below; API design and saved sequences begin with
 `references/design.md`. Backend project preparation begins with
 `references/backend/overview.md` or `get_guide {topic:"backend-overview"}` and
@@ -86,10 +87,17 @@ the generated root alias `references/backend/database-workflow.md`, or advertise
 then load database-reference/model/recovery only as needed. Shared topics have
 one canonical workflow owner; explicitly select/verify that owner's supported
 identity in this same global set and check its returned tuple/contentHash.
-Before any proposal write select database workflow2, proposal-relational-v1 view,
+Before any proposal write select database workflow3, proposal-relational-v1 view,
 exact guide set/hash and proposal/edit capabilities. Workflow1 is inspection-only;
 a complete compatible server fallback is required for mismatched local metadata.
-No compatible set means no proposal writes. Source import stays on import3.
+No compatible set means no proposal writes. Source import selects import4, including runtime-flow-v1/schema3 only on explicit
+compatible initial import or relational→runtime extension. Flow/access questions
+select mocker-backend-inspect, references/backend/inspect.md or backend-inspect
+from the advertised set; load flow-reference/analysis progressively under their
+actual inspect1 owner. Ordinary inspection performs no writes. An explicitly
+requested resolvable source gap uses the selected import4 whole-scope reconcile,
+independent source audit and commit procedure. Unavailable source keeps its
+unknown with a concrete reason and no empty progress revision.
 Mock response changes keep the workspace procedure and
 do not need source import or a full backend topic load.
 

@@ -44,7 +44,7 @@ func TestStandaloneImportPackageOwnsServedEntrypoint(t *testing.T) {
 	for _, topic := range []string{"backend-import", "backend-model", "backend-import-protocol", "backend-recovery", "backend-examples", "backend-profile-go-sql"} {
 		t.Run(topic, func(t *testing.T) {
 			workflow, ok := WorkflowForTopic(topic)
-			if !ok || workflow.WorkflowID != "mocker-backend-import" || workflow.WorkflowVersion != "3" || workflow.GuideSetID != CurrentGuideSetID() {
+			if !ok || workflow.WorkflowID != "mocker-backend-import" || workflow.WorkflowVersion != "4" || workflow.GuideSetID != CurrentGuideSetID() {
 				t.Fatalf("standalone reference has no compatible served identity: %s", topic)
 			}
 			markdown, ok := Topic(topic)
@@ -87,7 +87,7 @@ func TestStandaloneSkillMetadataAndIsolation(t *testing.T) {
 	}
 	for key, want := range map[string]string{
 		"workflowId":      "mocker-backend-import",
-		"workflowVersion": "3",
+		"workflowVersion": "4",
 		"guideSetId":      workflow.GuideSetID,
 		"manifestHash":    workflow.ManifestHash,
 	} {
@@ -96,11 +96,11 @@ func TestStandaloneSkillMetadataAndIsolation(t *testing.T) {
 		}
 	}
 	for key, want := range map[string][]string{
-		"requiredModelSchemaVersions": {"1", "2"},
+		"requiredModelSchemaVersions": {"1", "2", "3"},
 		"requiredCapabilities": {
 			"backend-projects", "backend-revisions", "backend-graph-query", "backend-source-import",
 			"backend-source-reconcile", "backend-revision-compare", "backend-relational-import",
-			"backend-database-query", "backend-database-er",
+			"backend-database-query", "backend-database-er", "backend-runtime-flow-import", "backend-flow-query", "backend-data-access-query",
 		},
 	} {
 		var got []string
@@ -155,9 +155,9 @@ func TestStandaloneDatabasePackageOwnsServedEntrypoint(t *testing.T) {
 	for _, item := range []struct {
 		topic, owner, version string
 	}{
-		{topic: "backend-database-reference", owner: "mocker-backend-database", version: "2"},
-		{topic: "backend-model", owner: "mocker-backend-import", version: "3"},
-		{topic: "backend-recovery", owner: "mocker-backend-import", version: "3"},
+		{topic: "backend-database-reference", owner: "mocker-backend-database", version: "3"},
+		{topic: "backend-model", owner: "mocker-backend-import", version: "4"},
+		{topic: "backend-recovery", owner: "mocker-backend-import", version: "4"},
 	} {
 		workflow, ok := WorkflowForTopic(item.topic)
 		if !ok || workflow.WorkflowID != item.owner || workflow.WorkflowVersion != item.version {
@@ -186,7 +186,8 @@ func TestGuideInstallationModesKeepOnePinnedSet(t *testing.T) {
 		{name: "root-only", packages: []string{"mocker"}},
 		{name: "import-only", packages: []string{"mocker-backend-import"}},
 		{name: "database-only", packages: []string{"mocker-backend-database"}},
-		{name: "bundle", packages: []string{"mocker", "mocker-backend-import", "mocker-backend-database"}},
+		{name: "inspect-only", packages: []string{"mocker-backend-inspect"}},
+		{name: "bundle", packages: []string{"mocker", "mocker-backend-import", "mocker-backend-database", "mocker-backend-inspect"}},
 		{name: "server-only", packages: []string{}},
 	} {
 		t.Run(item.name, func(t *testing.T) {
@@ -203,12 +204,15 @@ func TestGuideInstallationModesKeepOnePinnedSet(t *testing.T) {
 				{topic: "overview", pkg: "mocker", path: "SKILL.md"},
 				{topic: "backend-import", pkg: "mocker-backend-import", path: "SKILL.md"},
 				{topic: "backend-database", pkg: "mocker-backend-database", path: "SKILL.md"},
+				{topic: "backend-inspect", pkg: "mocker-backend-inspect", path: "SKILL.md"},
 			} {
 				path := filepath.Join(root, entry.pkg, entry.path)
 				if !slices.Contains(item.packages, entry.pkg) && slices.Contains(item.packages, "mocker") {
 					switch entry.topic {
 					case "backend-import":
 						path = filepath.Join(root, "mocker/references/backend/import.md")
+					case "backend-inspect":
+						path = filepath.Join(root, "mocker/references/backend/inspect.md")
 					case "backend-database":
 						path = filepath.Join(root, "mocker/references/backend/database-workflow.md")
 					}
@@ -222,6 +226,7 @@ func TestGuideInstallationModesKeepOnePinnedSet(t *testing.T) {
 			for _, topic := range []string{
 				"overview", "backend-import", "backend-database", "backend-database-reference",
 				"backend-profile-go-sql", "backend-model", "backend-recovery",
+				"backend-inspect", "backend-flow-reference", "backend-analysis",
 			} {
 				owner, ok := WorkflowForTopic(topic)
 				if !ok || owner.GuideSetID != CurrentGuideSetID() || owner.ManifestHash != CurrentGuideSetID() {
@@ -301,6 +306,7 @@ func TestSkillEntrypointContextBudgets(t *testing.T) {
 		{"../../skills/mocker/SKILL.md", 250},
 		{"../../skills/mocker-backend-import/SKILL.md", 200},
 		{"../../skills/mocker-backend-database/SKILL.md", 200},
+		{"../../skills/mocker-backend-inspect/SKILL.md", 200},
 	} {
 		data, err := os.ReadFile(item.path)
 		if err != nil {

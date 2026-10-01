@@ -271,7 +271,7 @@ func (r *Repo) QueryDatabase(ctx context.Context, pid string, in DatabaseQueryIn
 	if !ok {
 		return nil, notFound()
 	}
-	if state.Revision.SchemaVersion != "2" || ds.Kind != "datastore" || !relationalSubject(ds.Kind, ds.Attributes, false) {
+	if !isRelationalSchema(state.Revision.SchemaVersion) || ds.Kind != "datastore" || !relationalSubject(ds.Kind, ds.Attributes, false) {
 		return nil, &FaultError{Status: 422, Code: "backend_relational_unavailable", Message: "Pinned revision has no relational datastore descriptor"}
 	}
 	var store func(string) string

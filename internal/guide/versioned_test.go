@@ -15,7 +15,7 @@ import (
 
 func TestVersionedWorkflowContract(t *testing.T) {
 	workflows := BackendWorkflows()
-	if len(workflows) != 3 {
+	if len(workflows) != 4 {
 		t.Fatalf("workflows = %#v", workflows)
 	}
 	w := workflows[0]
@@ -46,7 +46,7 @@ func TestImportWorkflowUsesPinnedAvailableTopics(t *testing.T) {
 			selected = workflow
 		}
 	}
-	if selected.Entrypoint != "backend-import" || selected.WorkflowVersion != "3" {
+	if selected.Entrypoint != "backend-import" || selected.WorkflowVersion != "4" {
 		t.Fatalf("source import workflow unavailable: %#v", selected)
 	}
 	if selected.GuideSetID != CurrentGuideSetID() || selected.ManifestHash != CurrentGuideSetID() {
@@ -57,7 +57,7 @@ func TestImportWorkflowUsesPinnedAvailableTopics(t *testing.T) {
 			t.Errorf("import workflow does not require %s", required)
 		}
 	}
-	if !slices.Equal(selected.RequiredModelSchemaVersions, []string{"1", "2"}) || len(selected.Topics) == 0 {
+	if !slices.Equal(selected.RequiredModelSchemaVersions, []string{"1", "2", "3"}) || len(selected.Topics) == 0 {
 		t.Fatal("import workflow has no supported schema or procedure")
 	}
 	for _, topic := range selected.Topics {
@@ -208,7 +208,7 @@ func TestGuideSyncDetectsChangesAndGeneratesStableIdentity(t *testing.T) {
 
 func TestSkillFrontmatterInstallationContract(t *testing.T) {
 	allowed := map[string]bool{"name": true, "description": true, "license": true, "allowed-tools": true, "metadata": true}
-	for _, topic := range []string{"overview", "backend-overview", "backend-import", "backend-database"} {
+	for _, topic := range []string{"overview", "backend-overview", "backend-import", "backend-database", "backend-inspect"} {
 		t.Run(topic, func(t *testing.T) {
 			raw, ok := Raw(topic + ".md")
 			if !ok {

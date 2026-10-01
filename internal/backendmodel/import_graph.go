@@ -145,7 +145,7 @@ func prepareGraph(ctx context.Context, q importReader, s *ImportSession) (*graph
 			g.Evidence = append(g.Evidence, Evidence{ID: id, ExternalKey: e.ExternalKey, SubjectID: resolve(e.SubjectType, e.SubjectKey, "evidence/"+id+"/subjectId"), PropertyPath: e.PropertyPath, Method: e.Method, Status: e.Status, Source: e.Source, Explanation: e.Explanation, Snippet: e.Snippet})
 		}
 	}
-	if selectedProfile(s.Profile) == RelationalProfile {
+	if hasRelationalProfile(selectedProfile(s.Profile)) {
 		for i := range g.Nodes {
 			n := &g.Nodes[i]
 			n.Attributes, err = resolveRelationalAttributes(n.Kind, n.Attributes, false, s, resolve)
@@ -156,6 +156,22 @@ func prepareGraph(ctx context.Context, q importReader, s *ImportSession) (*graph
 		for i := range g.Edges {
 			e := &g.Edges[i]
 			e.Attributes, err = resolveRelationalAttributes(e.Kind, e.Attributes, true, s, resolve)
+			if err != nil {
+				return nil, nil, err
+			}
+		}
+	}
+	if selectedProfile(s.Profile) == RuntimeProfile {
+		for i := range g.Nodes {
+			n := &g.Nodes[i]
+			n.Attributes, err = resolveRuntimeAttributes(n.Kind, n.Attributes, false, resolve)
+			if err != nil {
+				return nil, nil, err
+			}
+		}
+		for i := range g.Edges {
+			e := &g.Edges[i]
+			e.Attributes, err = resolveRuntimeAttributes(e.Kind, e.Attributes, true, resolve)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -211,7 +227,7 @@ func prepareGraph(ctx context.Context, q importReader, s *ImportSession) (*graph
 		switch e.Kind {
 		case "contains":
 			valid = slices.Contains([]string{"system", "service", "module"}, from.Kind) || slices.Contains([]string{"external_system", "datastore"}, from.Kind) && slices.Contains([]string{"module", "symbol", "handler"}, to.Kind)
-			if selectedProfile(s.Profile) == RelationalProfile {
+			if hasRelationalProfile(selectedProfile(s.Profile)) {
 				if relationalValid, applies := relationalContains(from, to); applies {
 					valid = relationalValid
 				}
@@ -225,9 +241,14 @@ func prepareGraph(ctx context.Context, q importReader, s *ImportSession) (*graph
 		case "calls":
 			valid = slices.Contains([]string{"symbol", "handler"}, from.Kind) && slices.Contains([]string{"symbol", "handler", "external_system", "unresolved_target"}, to.Kind)
 		case "references":
-			valid = selectedProfile(s.Profile) == RelationalProfile && from.Kind == "constraint" && (to.Kind == "table" || to.Kind == "unresolved_target")
+			valid = hasRelationalProfile(selectedProfile(s.Profile)) && from.Kind == "constraint" && (to.Kind == "table" || to.Kind == "unresolved_target")
 		case "derived_from":
 			valid = slices.Contains([]string{"symbol", "module", "unresolved_target"}, to.Kind)
+		}
+		if selectedProfile(s.Profile) == RuntimeProfile {
+			if runtimeValid, applies := runtimeEndpoints(e, from, to); applies {
+				valid = runtimeValid
+			}
 		}
 		if !valid {
 			add("edges/"+e.ID, "Edge kind does not support these endpoint kinds")
@@ -260,8 +281,13 @@ func prepareGraph(ctx context.Context, q importReader, s *ImportSession) (*graph
 			break
 		}
 	}
-	if selectedProfile(s.Profile) == RelationalProfile {
+	if hasRelationalProfile(selectedProfile(s.Profile)) {
 		if err := validateRelationalGraph(ctx, q, s, g, &d); err != nil {
+			return nil, nil, err
+		}
+	}
+	if selectedProfile(s.Profile) == RuntimeProfile {
+		if err := validateRuntimeGraph(ctx, q, s, g, &d); err != nil {
 			return nil, nil, err
 		}
 	}

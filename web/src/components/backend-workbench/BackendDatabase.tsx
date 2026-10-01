@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import {
   Badge,
   Button,
@@ -31,13 +31,21 @@ import {
   type DatabaseSelection,
 } from "./backendDatabaseReads";
 import { cardinalityText } from "./backendDatabaseLayout";
+import { usePinnedValue, type BackendSourcePin } from "./backendFlowReads";
 
-export function BackendDatabase(props: {
-  projectId: string;
-  revisionId: string;
-  repositoryId?: string;
-  onDirty?: (dirty: boolean) => void;
-}) {
+type SourceNavigation = {
+  pin?: BackendSourcePin;
+  onFlowNavigate?: (pin: BackendSourcePin) => void;
+};
+
+export function BackendDatabase(
+  props: SourceNavigation & {
+    projectId: string;
+    revisionId: string;
+    repositoryId?: string;
+    onDirty?: (dirty: boolean) => void;
+  },
+) {
   return <DatabaseDiscovery key={`${props.projectId}:${props.revisionId}`} {...props} />;
 }
 
@@ -46,7 +54,9 @@ function DatabaseDiscovery({
   revisionId,
   repositoryId,
   onDirty,
-}: {
+  pin,
+  onFlowNavigate,
+}: SourceNavigation & {
   projectId: string;
   revisionId: string;
   repositoryId?: string;
@@ -61,13 +71,13 @@ function DatabaseDiscovery({
     staleTime: Infinity,
     retry: false,
   });
-  const [datastore, setDatastore] = useState("");
+  const [datastore, setDatastore] = usePinnedValue(pin?.datastoreId, pin?.datastoreId ?? "");
   const [dirty, setDirty] = useState(false);
   const datastores =
     query.data?.nodes.filter(
       (node) => node.kind === "datastore" && "relational" in node.attributes,
     ) ?? [];
-  const selected = datastores.find((node) => node.id === datastore) ?? datastores[0];
+  const selected = datastore ? datastores.find((node) => node.id === datastore) : datastores[0];
   return (
     <Paper withBorder p="md" style={{ minWidth: 0 }}>
       <Stack aria-label="База данных">
@@ -78,6 +88,12 @@ function DatabaseDiscovery({
         <LoadState query={query} label="схемы" />
         {query.data && datastores.length === 0 && (
           <Text>Реляционная схема в этой ревизии отсутствует</Text>
+        )}
+        {query.data && datastore && !selected && (
+          <Text component="output">
+            Выбранное хранилище {datastore} отсутствует в этой ревизии; другая схема не
+            подставляется.
+          </Text>
         )}
         {selected && (
           <>
@@ -106,6 +122,8 @@ function DatabaseDiscovery({
               }}
               datastoreId={selected.id}
               nodes={datastoreScope(query.data!.nodes, selected.id)}
+              pin={pin}
+              onFlowNavigate={onFlowNavigate}
             />
           </>
         )}
@@ -118,15 +136,25 @@ function DatabaseFacets({
   nodes,
   repositoryId,
   onDirty,
+  pin,
+  onFlowNavigate,
   ...context
-}: Omit<DatabaseContext, "facetKey"> & {
-  nodes: BackendNode[];
-  repositoryId?: string;
-  onDirty: (dirty: boolean) => void;
-}) {
-  const facets = [...new Set(nodes.flatMap((node) => Object.keys(relationalFacets(node))))].sort();
-  const [selected, setSelected] = useState(
-    facets.find((key) => nodes.some((node) => relationalFacets(node)[key]?.sourceKind === "sql")) ??
+}: SourceNavigation &
+  Omit<DatabaseContext, "facetKey"> & {
+    nodes: BackendNode[];
+    repositoryId?: string;
+    onDirty: (dirty: boolean) => void;
+  }) {
+  const facets = useMemo(
+    () => [...new Set(nodes.flatMap((node) => Object.keys(relationalFacets(node))))].sort(),
+    [nodes],
+  );
+  const [selected, setSelected] = usePinnedValue(
+    pin?.facetKey,
+    pin?.facetKey ??
+      facets.find((key) =>
+        nodes.some((node) => relationalFacets(node)[key]?.sourceKind === "sql"),
+      ) ??
       facets[0] ??
       "",
   );
@@ -146,14 +174,23 @@ function DatabaseFacets({
             setSelected(event.currentTarget.value);
           }
         }}
-        data={facets}
+        data={
+          facets.includes(selected) || !selected
+            ? facets
+            : [{ value: selected, label: `${selected} · источник отсутствует` }, ...facets]
+        }
       />
-      {selected && (
+      {selected && !facets.includes(selected) && (
+        <Text component="output">Выбранный источник схемы отсутствует в этой ревизии.</Text>
+      )}
+      {selected && facets.includes(selected) && (
         <DatabaseFacetWorkspace
           key={selected}
           context={{ ...context, facetKey: selected }}
           nodes={nodes}
           repositoryId={repositoryId}
+          pin={pin}
+          onFlowNavigate={onFlowNavigate}
           onDirty={(value) => {
             setDirty(value);
             onDirty(value);
@@ -169,13 +206,18 @@ function DatabaseFacetWorkspace({
   nodes,
   repositoryId,
   onDirty,
-}: {
+  pin,
+  onFlowNavigate,
+}: SourceNavigation & {
   context: DatabaseContext;
   nodes: BackendNode[];
   repositoryId?: string;
   onDirty: (dirty: boolean) => void;
 }) {
-  const [view, setView] = useState<ProposalView | null>(null);
+  const [view, setView] = usePinnedValue<ProposalView | null>(
+    JSON.stringify([pin?.dataNodeId, pin?.revisionId, context.revisionId]),
+    null,
+  );
   const [initialColumnId, setInitialColumnId] = useState<string>();
   const effective: DatabaseContext = view
     ? {
@@ -220,6 +262,8 @@ function DatabaseFacetWorkspace({
           context={effective}
           nodes={selectedNodes}
           onRequireColumn={repositoryId ? setInitialColumnId : undefined}
+          pin={pin}
+          onFlowNavigate={onFlowNavigate}
         />
       )}
     </>
@@ -230,7 +274,9 @@ function DatabaseLists({
   context,
   nodes,
   onRequireColumn,
-}: {
+  pin,
+  onFlowNavigate,
+}: SourceNavigation & {
   context: DatabaseContext;
   nodes: BackendNode[];
   onRequireColumn?: (columnId: string) => void;
@@ -246,7 +292,10 @@ function DatabaseLists({
     label: string;
   } | null>(null);
   const tableId = relationshipTable?.value ?? "";
-  const [selection, setSelection] = useState<DatabaseSelection | null>(null);
+  const [selection, setSelection] = usePinnedValue<DatabaseSelection | null>(
+    JSON.stringify([pin?.dataNodeId, pin?.revisionId, context.revisionId]),
+    pin?.dataNodeId ? { type: "node", id: pin.dataNodeId } : null,
+  );
   const origin = useRef<HTMLElement | null>(null);
   const fallback = useRef<HTMLHeadingElement>(null);
   const tablesInput = {
@@ -550,6 +599,7 @@ function DatabaseLists({
           onSelect={select}
           onClose={close}
           onRequireColumn={onRequireColumn}
+          onFlowNavigate={onFlowNavigate}
         />
       )}
       <Badge variant="light">Схема исходников; данные и исполнение базы не проверялись</Badge>

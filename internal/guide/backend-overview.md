@@ -6,8 +6,8 @@ metadata:
   workflowVersion: "1"
   requiredModelSchemaVersions: "[\"1\"]"
   requiredCapabilities: "[\"backend-projects\",\"backend-project-metadata\",\"backend-revisions\"]"
-  guideSetId: "sha256:54ad47e9cec57296780d3ef881fa90d192c4bb467fcdcde124bd7df8692776de"
-  manifestHash: "sha256:54ad47e9cec57296780d3ef881fa90d192c4bb467fcdcde124bd7df8692776de"
+  guideSetId: "sha256:a6c5d49005adc09a69aaa1ab94f08078d58c9f075a064cd6077c7976490967ce"
+  manifestHash: "sha256:a6c5d49005adc09a69aaa1ab94f08078d58c9f075a064cd6077c7976490967ce"
 ---
 
 # Backend project preparation
@@ -25,13 +25,15 @@ Select that complete workflow before import writes. This project-preparation
 procedure does not import sources. Import's backend-model/import-protocol/recovery/
 examples topics use its selected set and import owner identity; relational
 imports additionally load the database-reference topic through the supported
-database v2 owner in that same global set. Database inspection selects the
+database v3 owner in that same global set. Database inspection selects the
 independent database leaf or pinned backend-database entrypoint. Every shared
 topic is verified against its actual canonical owner manifest/tuple/contentHash;
 this backend-overview topic keeps the project-preparation identity. Project
 preparation still requires schema1, including its empty initial revision; it
 need not require schema2 to prepare a project. Database typed edits/proposals
-use the separately selected database2 workflow; measured writer checks, lineage, impact and jobs remain future functionality.
+use the separately selected database3 workflow. Source flow/data-access questions
+select inspect1 at backend-inspect in this same set; ordinary inspection writes
+nothing. Field lineage, impact, measured writer checks and jobs are unavailable.
 
 ## Before the first write
 

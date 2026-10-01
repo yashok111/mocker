@@ -135,7 +135,7 @@ func overlayGraph(ctx context.Context, q importReader, s *ImportSession, base *R
 		g.Evidence[i].Ownership = owner
 		g.Evidence[i].Freshness = current()
 	}
-	if selectedProfile(s.Profile) == RelationalProfile {
+	if hasRelationalProfile(selectedProfile(s.Profile)) {
 		assignRelationalOwnership(base, g, s)
 	}
 	if s.Mode != "reconcile" {
@@ -161,7 +161,7 @@ func overlayGraph(ctx context.Context, q importReader, s *ImportSession, base *R
 	}
 	owned := map[string]bool{}
 	checkOwner := func(typ, id string, o *AssertionOwnership) {
-		valid := o != nil && o.RepositoryID == s.RepositoryID && o.ProviderNamespace == s.Manifest.Provider.Namespace && (o.Profile == GraphProfile || selectedProfile(s.Profile) == RelationalProfile && o.Profile == RelationalProfile)
+		valid := o != nil && o.RepositoryID == s.RepositoryID && o.ProviderNamespace == s.Manifest.Provider.Namespace && (o.Profile == GraphProfile || hasRelationalProfile(selectedProfile(s.Profile)) && o.Profile == RelationalProfile || selectedProfile(s.Profile) == RuntimeProfile && o.Profile == RuntimeProfile)
 		owned[typ+"\x00"+id] = valid
 		if !valid {
 			add("backend_unsupported_scope", typ+"/"+id, "Base assertion belongs to another ownership partition")
@@ -258,7 +258,7 @@ func overlayGraph(ctx context.Context, q importReader, s *ImportSession, base *R
 			g.Evidence = append(g.Evidence, e)
 		}
 	}
-	if selectedProfile(s.Profile) == RelationalProfile {
+	if hasRelationalProfile(selectedProfile(s.Profile)) {
 		overlayRelationalFacets(base, g, submitted, diagnostics)
 	}
 	refs := func(id string) []HistoricalEvidenceRef {
@@ -383,14 +383,14 @@ func overlayGraph(ctx context.Context, q importReader, s *ImportSession, base *R
 					break
 				}
 			}
-			if selectedProfile(s.Profile) == RelationalProfile {
+			if hasRelationalProfile(selectedProfile(s.Profile)) {
 				for _, subject := range g.Nodes {
-					if !deleted["node\x00"+subject.ID] && relationalActiveReferenceTo(subject.Kind, subject.Attributes, false, n.ID) {
+					if !deleted["node\x00"+subject.ID] && sourceActiveReferenceTo(subject.Kind, subject.Attributes, false, n.ID) {
 						dangling = true
 					}
 				}
 				for _, subject := range g.Edges {
-					if !deleted["edge\x00"+subject.ID] && relationalActiveReferenceTo(subject.Kind, subject.Attributes, true, n.ID) {
+					if !deleted["edge\x00"+subject.ID] && sourceActiveReferenceTo(subject.Kind, subject.Attributes, true, n.ID) {
 						dangling = true
 					}
 				}
@@ -430,7 +430,7 @@ func overlayGraph(ctx context.Context, q importReader, s *ImportSession, base *R
 		add("backend_unsafe_deletion", "inventory", "Complete inventory counts must match the manifest and submitted endpoint/datastore contributions")
 	}
 	propagateStaleness(g)
-	if selectedProfile(s.Profile) == RelationalProfile {
+	if hasRelationalProfile(selectedProfile(s.Profile)) {
 		for i := range g.Evidence {
 			if g.Evidence[i].Freshness != nil {
 				g.Evidence[i].Freshness.ConfirmedSnapshotID = g.Evidence[i].Source.SnapshotID
@@ -512,7 +512,7 @@ func propagateStaleness(g *graphCandidate) {
 	dependents := map[string][]string{}
 	for _, n := range g.Nodes {
 		fresh[n.ID] = n.Freshness
-		if refs, err := relationalReferences(n.Kind, n.Attributes, false, true); err == nil {
+		if refs, err := sourceAttributeReferences(n.Kind, n.Attributes, false, true); err == nil {
 			for _, ref := range refs {
 				if ref.Kind != "evidence" && ref.HistoricalRevisionID == "" {
 					dependents[ref.ID] = append(dependents[ref.ID], n.ID)
@@ -525,7 +525,7 @@ func propagateStaleness(g *graphCandidate) {
 	}
 	for _, e := range g.Edges {
 		fresh[e.ID] = e.Freshness
-		if refs, err := relationalReferences(e.Kind, e.Attributes, true, true); err == nil {
+		if refs, err := sourceAttributeReferences(e.Kind, e.Attributes, true, true); err == nil {
 			for _, ref := range refs {
 				if ref.Kind != "evidence" && ref.HistoricalRevisionID == "" {
 					dependents[ref.ID] = append(dependents[ref.ID], e.ID)

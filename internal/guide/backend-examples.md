@@ -1,6 +1,6 @@
 # Import and pinned database examples
 
-This topic is import3-owned. Verify its actual import workflow identity/contentHash
+This topic is import4-owned. Verify its actual import workflow identity/contentHash
 in the selected global guide set. Database1 inspection may load it through that
 owner without starting import writes. The foundation procedure below remains
 schema1; the relational captures afterward use schema2. SQL/ORM/migration input
@@ -583,8 +583,8 @@ V2 committed revision `01a0f4e1-80e0-7f78-8d1b-b96d88fca034`. Its later read at 
 
 ### Inspection-only design request
 
-For typed schema designs use the separately negotiated database2 procedure.
-Source import3 examples above keep their original protocol and CAS.
+For typed schema designs use the separately negotiated database3 procedure.
+Source import4 examples above keep their original protocol and CAS.
 
 ## Actual SDK proposal examples: PostgreSQL and SQLite
 

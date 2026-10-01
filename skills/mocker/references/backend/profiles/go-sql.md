@@ -2,7 +2,7 @@
 
 
 Load `backend-profile-go-sql` only for this source family, pinned to the selected
-import v3 owner identity/global guideSetId. Read database-reference through its
+import v4 owner identity/global guideSetId. Read database-reference through its
 supported database v1 owner in that same set for exact relational types.
 
 Inventory source files before collecting assertions. Read Go declarations,
@@ -85,3 +85,17 @@ retained stale facets/evidence and selected-facet limitations. Inspect drift as
 explicit known differences, with native-definition changes separate. Unknown
 cardinality stays unknown. SQL/ORM agreement does not establish runtime data,
 endpoint access or impact safety.
+
+
+## Go HTTP flow and SQL access source scope
+
+Runtime source3 adds imported net/http handlers, flow steps, call candidates,
+query definitions and explicit table/column accesses. Read backend-flow-reference
+and backend-analysis under inspect1 in this same set for exact shapes and limits.
+Capture Go/query text as original source bytes and physical spans; do not launch
+the service, package scripts, SQL or migrations. Dynamic dispatch gets candidate
+proof plus an unresolved remainder when scope is partial/unknown. A table-level
+unknown-column operation stays possible for a selected column, never a confirmed
+reader/writer of every column. Preserve local begin/commit/rollback source edges,
+unknown connection/isolation and boundaries without claiming all-path atomicity.
+The ordinary import4 source audit/reconcile/replay rules apply unchanged.

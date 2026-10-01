@@ -47,6 +47,10 @@ const kinds = [
   "index",
   "view",
   "migration",
+  "flow",
+  "flow_step",
+  "query",
+  "transaction",
 ];
 const categories: Record<string, string> = {
   files: "Файлы",
@@ -193,16 +197,18 @@ function Inventory({ projectId, revisionId, schemaVersion }: Props) {
               ...kinds
                 .filter(
                   (kind) =>
-                    schemaVersion === "2" ||
-                    ![
-                      "db_schema",
-                      "table",
-                      "column",
-                      "constraint",
-                      "index",
-                      "view",
-                      "migration",
-                    ].includes(kind),
+                    (!["flow", "flow_step", "query", "transaction"].includes(kind) ||
+                      schemaVersion === "3") &&
+                    (["2", "3"].includes(schemaVersion ?? "") ||
+                      ![
+                        "db_schema",
+                        "table",
+                        "column",
+                        "constraint",
+                        "index",
+                        "view",
+                        "migration",
+                      ].includes(kind)),
                 )
                 .map((kind) => ({ value: kind, label: kind })),
             ]}

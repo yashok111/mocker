@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Alert,
   Badge,
@@ -30,21 +30,39 @@ import { BackendGraphInventory } from "./BackendGraphInventory";
 import { BackendRevisionCompare } from "./BackendRevisionCompare";
 import { BackendImportReview } from "./BackendImportReview";
 import { BackendDatabase } from "./BackendDatabase";
+import { BackendFlow } from "./BackendFlow";
+import { usePinnedValue, type BackendSourcePin } from "./backendFlowReads";
 
-export function BackendProjectPage({ projectId }: { projectId: string }) {
-  return <BackendProjectDetail key={projectId} projectId={projectId} />;
+type ProjectPageProps = {
+  projectId: string;
+  sourcePin?: BackendSourcePin;
+  onSourceNavigate?: (pin: BackendSourcePin) => void;
+};
+
+export function BackendProjectPage(props: ProjectPageProps) {
+  return <BackendProjectDetail key={props.projectId} {...props} />;
 }
 
-function BackendProjectDetail({ projectId }: { projectId: string }) {
+function BackendProjectDetail({ projectId, sourcePin, onSourceNavigate }: ProjectPageProps) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const query = useGetBackendProject(projectId);
   const project = query.data?.status === 200 ? query.data.data : undefined;
-  const [selectedRevisionId, setSelectedRevisionId] = useState<string | null>(null);
+  const [selectedRevisionId, setSelectedRevisionId] = usePinnedValue<string | null>(
+    sourcePin?.revisionId,
+    sourcePin?.revisionId ?? null,
+  );
+  const pinIdentity = JSON.stringify(sourcePin ?? {});
+  const [pin, setPin] = usePinnedValue<BackendSourcePin>(pinIdentity, sourcePin ?? {});
   const [databaseDirty, setDatabaseDirty] = useState(false);
   useBlocker({
-    shouldBlockFn: () =>
+    shouldBlockFn: ({ current, next }) =>
       databaseDirty &&
+      !(
+        current.pathname === next.pathname &&
+        "revisionId" in next.search &&
+        next.search.revisionId === selectedRevisionId
+      ) &&
       !window.confirm("В предложении есть несохранённые изменения. Покинуть проект?"),
     enableBeforeUnload: databaseDirty,
     withResolver: false,
@@ -69,6 +87,19 @@ function BackendProjectDetail({ projectId }: { projectId: string }) {
     },
   );
   const revision = revisionQuery.data?.status === 200 ? revisionQuery.data.data : undefined;
+  if (revision?.schemaVersion === "3" && selectedRevisionId === null) {
+    setSelectedRevisionId(revision.id);
+    setPin({ ...pin, revisionId: revision.id });
+  }
+  useEffect(() => {
+    if (revision?.schemaVersion === "3" && !sourcePin?.revisionId && pin.revisionId === revision.id)
+      onSourceNavigate?.(pin);
+  }, [revision?.id, revision?.schemaVersion, sourcePin?.revisionId, pin, onSourceNavigate]);
+  function navigateSource(value: BackendSourcePin) {
+    setPin(value);
+    if (value.revisionId) setSelectedRevisionId(value.revisionId);
+    onSourceNavigate?.(value);
+  }
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState("");
   const [baseVersion, setBaseVersion] = useState(0);
@@ -271,14 +302,42 @@ function BackendProjectDetail({ projectId }: { projectId: string }) {
           )}
           {revision && (
             <>
-              {revision.schemaVersion === "2" && (
+              {["2", "3"].includes(revision.schemaVersion) && (
                 <BackendDatabase
                   projectId={projectId}
                   revisionId={revision.id}
                   repositoryId={project.repositories[0]?.id}
+                  pin={pin}
+                  onFlowNavigate={
+                    revision.schemaVersion === "3"
+                      ? (value) => {
+                          navigateSource(value);
+                          requestAnimationFrame(() =>
+                            document
+                              .querySelector<HTMLElement>('[aria-label="Flow исходников"] h2')
+                              ?.focus(),
+                          );
+                        }
+                      : undefined
+                  }
                   onDirty={(dirty) => {
                     setDatabaseDirty(dirty);
                     if (dirty) setSelectedRevisionId((current) => current ?? revision.id);
+                  }}
+                />
+              )}
+              {revision.schemaVersion === "3" && (
+                <BackendFlow
+                  projectId={projectId}
+                  revisionId={revision.id}
+                  pin={pin}
+                  onPinChange={navigateSource}
+                  onDatabaseNavigate={() => {
+                    requestAnimationFrame(() =>
+                      document
+                        .querySelector<HTMLElement>('[aria-label="База данных"]')
+                        ?.scrollIntoView({ block: "start" }),
+                    );
                   }}
                 />
               )}
@@ -352,6 +411,7 @@ function BackendProjectDetail({ projectId }: { projectId: string }) {
                           ) {
                             setDatabaseDirty(false);
                             setSelectedRevisionId(item.id);
+                            navigateSource({ revisionId: item.id });
                           }
                         }}
                         aria-label={`Открыть ревизию ${item.id}`}

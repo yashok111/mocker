@@ -1,0 +1,655 @@
+import { useRef, useState } from "react";
+import {
+  Alert,
+  Badge,
+  Button,
+  Group,
+  NativeSelect,
+  Paper,
+  Stack,
+  Text,
+  TextInput,
+  Title,
+} from "@mantine/core";
+import type { BackendFlowPage, QueryBackendFlowRequest } from "@/api/generated/schemas";
+import { CoverageDetails, LoadState, Pages } from "./BackendGraphInventory";
+import { BackendFlowGraph } from "./BackendFlowGraph";
+import { BackendFlowInspector } from "./BackendFlowInspector";
+import { databaseButtonStyles, databaseStatus, databaseWrap } from "./backendDatabaseReads";
+import {
+  flowPageOf,
+  useFlowPage,
+  type BackendSourcePin,
+  type FlowSelection,
+} from "./backendFlowReads";
+import { flowStepContext, flowTransitionLabel } from "./backendFlowLayout";
+
+type Props = {
+  projectId: string;
+  revisionId: string;
+  pin?: BackendSourcePin;
+  onPinChange?: (pin: BackendSourcePin) => void;
+  onDatabaseNavigate?: (pin: BackendSourcePin) => void;
+};
+
+export function BackendFlow(props: Props) {
+  return <FlowWorkspace key={`${props.projectId}:${props.revisionId}`} {...props} />;
+}
+
+function FlowWorkspace({
+  projectId,
+  revisionId,
+  pin: externalPin,
+  onPinChange,
+  onDatabaseNavigate,
+}: Props) {
+  const [localPin, setPin] = useState<BackendSourcePin>(externalPin ?? {});
+  const pin = externalPin ?? localPin;
+  const [draft, setDraft] = useState("");
+  const [search, setSearch] = useState("");
+  const [cursors, setCursors] = useState([""]);
+  const origin = useRef<HTMLElement | null>(null);
+  const heading = useRef<HTMLHeadingElement>(null);
+  const query = useFlowPage(projectId, {
+    revisionId,
+    view: "entrypoints",
+    search,
+    limit: 100,
+    cursor: cursors.at(-1) ?? "",
+  });
+  const page = flowPageOf(query.data, "entrypoints");
+  const selection: FlowSelection | null = pin.recordId
+    ? { type: pin.recordType ?? "node", id: pin.recordId }
+    : null;
+  function update(next: BackendSourcePin) {
+    const value = { ...next, revisionId };
+    setPin(value);
+    onPinChange?.(value);
+  }
+  function select(value: FlowSelection, trigger?: HTMLElement) {
+    origin.current = trigger ?? origin.current;
+    update({ ...pin, recordId: value.id, recordType: value.type });
+  }
+  function close() {
+    update({ ...pin, recordId: undefined, recordType: undefined });
+    (origin.current?.isConnected ? origin.current : heading.current)?.focus();
+  }
+  const callbacks = {
+    onSelect: select,
+    onFlow: (entrypointId: string | undefined, flowId: string) =>
+      update({ ...pin, entrypointId, flowId, recordId: undefined, recordType: undefined }),
+    onDatabase: (dataNodeId: string, datastoreId: string, facetKey: string) => {
+      const value = { ...pin, revisionId, dataNodeId, datastoreId, facetKey };
+      update(value);
+      onDatabaseNavigate?.(value);
+    },
+  };
+  return (
+    <Paper withBorder p="md" style={{ minWidth: 0 }}>
+      <Stack aria-label="Flow исходников" gap="md">
+        <Title order={2} ref={heading} tabIndex={-1}>
+          Flow
+        </Title>
+        <Text size="sm" c="dimmed" style={databaseWrap}>
+          Статическая модель исходников · только чтение · ревизия {revisionId}
+        </Text>
+        <Text size="sm">
+          Шаги и переходы описывают исходный код. Списки упорядочены по идентификаторам; порядок
+          выполнения по ним не устанавливается.
+        </Text>
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            setSearch(draft.trim());
+            setCursors([""]);
+          }}
+        >
+          <Group align="flex-end">
+            <TextInput
+              label="Endpoint или имя операции"
+              value={draft}
+              onChange={(event) => setDraft(event.currentTarget.value)}
+              style={{ flex: "1 1 220px" }}
+            />
+            <Button type="submit">Найти точки входа</Button>
+          </Group>
+        </form>
+        <LoadState query={query} label="точек входа" />
+        {page && (
+          <>
+            <FlowNotice page={page} />
+            <Text component="output" aria-live="polite">
+              На странице: {page.entrypointItems.length} точек входа
+              {page.nextCursor ? "; есть следующие страницы" : "; последняя страница"}
+            </Text>
+            {page.entrypointItems.length === 0 && (
+              <Text>
+                Точки входа не найдены в выбранной странице и области анализа; покрытие может быть
+                неполным.
+              </Text>
+            )}
+            <Stack aria-label="Точки входа Flow" gap="xs">
+              {page.entrypointItems.map((item) => (
+                <Paper key={item.operation.id} withBorder p="sm">
+                  <Stack gap="xs">
+                    <Button
+                      variant="default"
+                      h="auto"
+                      styles={databaseButtonStyles}
+                      aria-label={`Открыть Flow ${item.operation.name}`}
+                      aria-pressed={pin.entrypointId === item.operation.id}
+                      onClick={() =>
+                        update({
+                          ...pin,
+                          entrypointId: item.operation.id,
+                          flowId: item.flowIds[0],
+                          recordId: undefined,
+                          recordType: undefined,
+                        })
+                      }
+                    >
+                      {item.operation.name}
+                    </Button>
+                    <Group>
+                      <Button
+                        variant="subtle"
+                        onClick={(event) =>
+                          select({ type: "node", id: item.operation.id }, event.currentTarget)
+                        }
+                      >
+                        Исходная операция
+                      </Button>
+                      {item.flowIds.map((flowId) => (
+                        <Button
+                          key={flowId}
+                          variant="subtle"
+                          h="auto"
+                          styles={databaseButtonStyles}
+                          onClick={() => callbacks.onFlow(item.operation.id, flowId)}
+                        >
+                          Flow {flowId}
+                        </Button>
+                      ))}
+                      {item.handlerIds.map((id) => (
+                        <Button
+                          key={id}
+                          variant="subtle"
+                          h="auto"
+                          styles={databaseButtonStyles}
+                          onClick={(event) => select({ type: "node", id }, event.currentTarget)}
+                        >
+                          Handler {id}
+                        </Button>
+                      ))}
+                    </Group>
+                    {!item.flowIds.length && (
+                      <Text size="sm">Flow этой операции не установлен.</Text>
+                    )}
+                    {item.unresolvedHandles.map((edge) => (
+                      <Button
+                        key={edge.id}
+                        variant="subtle"
+                        h="auto"
+                        styles={databaseButtonStyles}
+                        onClick={(event) =>
+                          select({ type: "edge", id: edge.id }, event.currentTarget)
+                        }
+                      >
+                        Неразрешённый handler: {edge.to}
+                      </Button>
+                    ))}
+                    {item.limitations.map((text) => (
+                      <Text key={text} size="sm" style={databaseWrap}>
+                        {text}
+                      </Text>
+                    ))}
+                  </Stack>
+                </Paper>
+              ))}
+            </Stack>
+            <Pages
+              label="точки входа"
+              cursors={cursors}
+              setCursors={setCursors}
+              busy={query.isFetching}
+              next={page.nextCursor}
+            />
+          </>
+        )}
+        {pin.flowId && (
+          <FlowSteps
+            key={pin.flowId}
+            projectId={projectId}
+            revisionId={revisionId}
+            flowId={pin.flowId}
+            onSelect={select}
+          />
+        )}
+        {pin.entrypointId && (
+          <FlowAccesses
+            key={`forward:${pin.entrypointId}`}
+            projectId={projectId}
+            revisionId={revisionId}
+            selector={{ entrypointId: pin.entrypointId }}
+            {...callbacks}
+          />
+        )}
+        {pin.dataNodeId && (
+          <FlowAccesses
+            key={`reverse:${pin.dataNodeId}`}
+            projectId={projectId}
+            revisionId={revisionId}
+            selector={{ dataNodeId: pin.dataNodeId }}
+            {...callbacks}
+          />
+        )}
+        {selection && (
+          <BackendFlowInspector
+            key={`${selection.type}:${selection.id}`}
+            projectId={projectId}
+            revisionId={revisionId}
+            selection={selection}
+            onSelect={select}
+            onClose={close}
+          />
+        )}
+      </Stack>
+    </Paper>
+  );
+}
+
+function FlowNotice({ page }: { page: BackendFlowPage }) {
+  return (
+    <Stack gap="xs">
+      <Text size="sm" style={databaseWrap}>
+        Покрытие инвентаря ревизии: {databaseStatus(page.coverage.coverage.status)} · объектов{" "}
+        {page.coverage.coverage.knownObjects}
+        {page.coverage.coverage.denominator === null
+          ? "; всего неизвестно"
+          : ` / ${page.coverage.coverage.denominator}`}
+      </Text>
+      <details>
+        <summary style={{ ...databaseWrap, cursor: "pointer", padding: "4px 0" }}>
+          Подробности инвентаря ревизии
+        </summary>
+        <CoverageDetails data={page.coverage} />
+      </details>
+      {page.truncated && (
+        <Alert color="yellow" aria-live="polite">
+          Поиск ограничен: {page.truncationReasons.join(", ")}. Результат неполон; отсутствие записи
+          не доказывает отсутствие доступа.
+        </Alert>
+      )}
+      {page.limitations.map((text) => (
+        <Text key={text} size="sm" style={databaseWrap}>
+          {text}
+        </Text>
+      ))}
+    </Stack>
+  );
+}
+
+function FlowSteps({
+  projectId,
+  revisionId,
+  flowId,
+  onSelect,
+}: {
+  projectId: string;
+  revisionId: string;
+  flowId: string;
+  onSelect: (selection: FlowSelection, trigger?: HTMLElement) => void;
+}) {
+  const [stepCursors, setStepCursors] = useState([""]);
+  const [transitionCursors, setTransitionCursors] = useState([""]);
+  const steps = useFlowPage(projectId, {
+    revisionId,
+    view: "steps",
+    flowId,
+    limit: 500,
+    cursor: stepCursors.at(-1) ?? "",
+  });
+  const transitions = useFlowPage(projectId, {
+    revisionId,
+    view: "transitions",
+    flowId,
+    limit: 500,
+    cursor: transitionCursors.at(-1) ?? "",
+  });
+  const stepPage = flowPageOf(steps.data, "steps");
+  const transitionPage = flowPageOf(transitions.data, "transitions");
+  const transactions = new Map<string, string[]>();
+  for (const node of stepPage?.stepItems ?? []) {
+    if (
+      "transactionContext" in node.attributes &&
+      node.attributes.transactionContext.status === "known"
+    ) {
+      const id = node.attributes.transactionContext.transactionId;
+      transactions.set(id, [...(transactions.get(id) ?? []), node.id]);
+    }
+  }
+  return (
+    <Stack gap="md">
+      <Group>
+        <Title order={3}>Шаги Flow</Title>
+        <Button
+          variant="subtle"
+          h="auto"
+          styles={databaseButtonStyles}
+          onClick={(event) => onSelect({ type: "node", id: flowId }, event.currentTarget)}
+        >
+          Описание Flow {flowId}
+        </Button>
+      </Group>
+      <LoadState query={steps} label="шагов" />
+      {stepPage && (
+        <>
+          <FlowNotice page={stepPage} />
+          <Text component="output" aria-live="polite">
+            На странице: {stepPage.stepItems.length} шагов
+            {stepPage.nextCursor ? "; есть следующие страницы" : "; последняя страница"}
+          </Text>
+          {transactions.size > 0 && (
+            <Stack aria-label="Локальные группы транзакций" gap="xs">
+              <Text size="sm">
+                Локальные группы текущей страницы flow; границы соединения и завершения доступны в
+                исходном объекте транзакции.
+              </Text>
+              {[...transactions].map(([id, steps]) => (
+                <Group key={id}>
+                  <Button
+                    variant="subtle"
+                    h="auto"
+                    styles={databaseButtonStyles}
+                    onClick={(event) => onSelect({ type: "node", id }, event.currentTarget)}
+                  >
+                    Транзакция {id}
+                  </Button>
+                  <Text size="sm">Шагов на странице: {steps.length}</Text>
+                </Group>
+              ))}
+            </Stack>
+          )}
+          {stepPage.stepItems.length === 0 && (
+            <Text>Шаги в этой области не найдены; анализ может быть неполным.</Text>
+          )}
+          <Stack aria-label="Шаги Flow" gap="xs">
+            {stepPage.stepItems.map((node) => (
+              <Paper key={node.id} withBorder p="sm">
+                <Stack gap="xs">
+                  <Button
+                    variant="default"
+                    h="auto"
+                    py="sm"
+                    styles={databaseButtonStyles}
+                    aria-label={`Открыть шаг ${node.name}`}
+                    onClick={(event) =>
+                      onSelect({ type: "node", id: node.id }, event.currentTarget)
+                    }
+                  >
+                    {node.name} ·{" "}
+                    {"stepKind" in node.attributes ? node.attributes.stepKind : node.kind} ·{" "}
+                    {"analysisStatus" in node.attributes
+                      ? databaseStatus(String(node.attributes.analysisStatus))
+                      : "Неизвестно"}
+                  </Button>
+                  {flowStepContext(node).map((text) => (
+                    <Text key={text} size="sm" style={databaseWrap}>
+                      {text}
+                    </Text>
+                  ))}
+                  {"gaps" in node.attributes &&
+                    node.attributes.gaps.map((gap) => (
+                      <Text key={gap} size="sm" style={databaseWrap}>
+                        {gap}
+                      </Text>
+                    ))}
+                </Stack>
+              </Paper>
+            ))}
+          </Stack>
+          <Pages
+            label="шаги"
+            cursors={stepCursors}
+            setCursors={setStepCursors}
+            busy={steps.isFetching}
+            next={stepPage.nextCursor}
+          />
+        </>
+      )}
+      <Title order={3}>Переходы Flow</Title>
+      <LoadState query={transitions} label="переходов" />
+      {transitionPage && (
+        <>
+          <FlowNotice page={transitionPage} />
+          <Text component="output" aria-live="polite">
+            На странице: {transitionPage.transitionItems.length} переходов
+            {transitionPage.nextCursor ? "; есть следующие страницы" : "; последняя страница"}
+          </Text>
+          {transitionPage.transitionItems.length === 0 && (
+            <Text>Переходы в этой области не найдены; анализ может быть неполным.</Text>
+          )}
+          <Stack aria-label="Переходы Flow" gap="xs">
+            {transitionPage.transitionItems.map((edge) => (
+              <Paper key={edge.id} withBorder p="sm">
+                <Stack gap="xs">
+                  <Button
+                    variant="subtle"
+                    h="auto"
+                    styles={databaseButtonStyles}
+                    onClick={(event) =>
+                      onSelect({ type: "edge", id: edge.id }, event.currentTarget)
+                    }
+                  >
+                    Переход {flowTransitionLabel(edge)} · {edge.id}
+                  </Button>
+                  <Group>
+                    {[edge.from, edge.to].map((id) => (
+                      <Button
+                        key={id}
+                        variant="subtle"
+                        h="auto"
+                        styles={databaseButtonStyles}
+                        onClick={(event) => onSelect({ type: "node", id }, event.currentTarget)}
+                      >
+                        Шаг {id}
+                        {!stepPage?.stepItems.some((node) => node.id === id)
+                          ? " · вне текущей страницы"
+                          : ""}
+                      </Button>
+                    ))}
+                  </Group>
+                </Stack>
+              </Paper>
+            ))}
+          </Stack>
+          <Pages
+            label="переходы"
+            cursors={transitionCursors}
+            setCursors={setTransitionCursors}
+            busy={transitions.isFetching}
+            next={transitionPage.nextCursor}
+          />
+        </>
+      )}
+      {stepPage && transitionPage && (
+        <BackendFlowGraph
+          nodes={stepPage.stepItems}
+          edges={transitionPage.transitionItems}
+          onSelect={onSelect}
+        />
+      )}
+    </Stack>
+  );
+}
+
+function FlowAccesses({
+  projectId,
+  revisionId,
+  selector,
+  onSelect,
+  onFlow,
+  onDatabase,
+}: {
+  projectId: string;
+  revisionId: string;
+  selector: { entrypointId: string } | { dataNodeId: string };
+  onSelect: (selection: FlowSelection, trigger?: HTMLElement) => void;
+  onFlow: (entrypointId: string | undefined, flowId: string) => void;
+  onDatabase: (dataNodeId: string, datastoreId: string, facetKey: string) => void;
+}) {
+  const [kind, setKind] = useState<"" | "reads" | "writes" | "deletes">("");
+  const [cursors, setCursors] = useState([""]);
+  const input: QueryBackendFlowRequest = {
+    revisionId,
+    view: "accesses",
+    ...selector,
+    ...(kind ? { accessKind: kind } : {}),
+    limit: 100,
+    cursor: cursors.at(-1) ?? "",
+  };
+  const query = useFlowPage(projectId, input);
+  const page = flowPageOf(query.data, "accesses");
+  const reverse = "dataNodeId" in selector;
+  return (
+    <Stack
+      gap="sm"
+      aria-label={reverse ? "Обратные доступы к данным" : "Доступы endpoint к данным"}
+    >
+      <Title order={3}>
+        {reverse ? `Чтения и записи ${selector.dataNodeId}` : "Доступы к данным endpoint"}
+      </Title>
+      <NativeSelect
+        label={reverse ? "Тип обратного доступа" : "Тип доступа endpoint"}
+        value={kind}
+        data={[
+          { value: "", label: "Все доступы" },
+          { value: "reads", label: "Чтения" },
+          { value: "writes", label: "Записи" },
+          { value: "deletes", label: "Удаления" },
+        ]}
+        onChange={(event) => {
+          setKind(event.currentTarget.value as typeof kind);
+          setCursors([""]);
+        }}
+      />
+      <LoadState query={query} label={reverse ? "обратных доступов" : "доступов endpoint"} />
+      {page && (
+        <>
+          <FlowNotice page={page} />
+          <Text component="output" aria-live="polite">
+            На странице: {page.accessItems.length} доступов
+            {page.nextCursor ? "; есть следующие страницы" : "; последняя страница"}
+          </Text>
+          {page.accessItems.length === 0 && (
+            <Text>
+              Доступы в этой области не найдены. Неполное покрытие и ограничения поиска сохраняют
+              неизвестность.
+            </Text>
+          )}
+          {page.accessItems.map((item) => (
+            <Paper
+              key={`${item.accessEdgeId}:${item.entrypointId ?? "unattached"}`}
+              withBorder
+              p="sm"
+            >
+              <Stack gap="xs">
+                <Group>
+                  <Badge color={item.relation === "possible" ? "yellow" : "blue"}>
+                    {item.relation === "possible" ? "Возможная связь" : "Прямая связь"}
+                  </Badge>
+                  <Badge>{databaseStatus(item.status)}</Badge>
+                  <Text size="sm">
+                    {item.accessKind} · {item.accessMode}
+                  </Text>
+                </Group>
+                {!item.entrypointId && <Text>Доступ не привязан к endpoint; путь неизвестен.</Text>}
+                <Group>
+                  <Button
+                    variant="subtle"
+                    h="auto"
+                    styles={databaseButtonStyles}
+                    onClick={(event) =>
+                      onSelect({ type: "node", id: item.queryId }, event.currentTarget)
+                    }
+                  >
+                    Исходный запрос {item.queryId}
+                  </Button>
+                  <Button
+                    variant="subtle"
+                    h="auto"
+                    styles={databaseButtonStyles}
+                    onClick={(event) =>
+                      onSelect({ type: "edge", id: item.accessEdgeId }, event.currentTarget)
+                    }
+                  >
+                    Основания доступа
+                  </Button>
+                  <Button
+                    variant="default"
+                    h="auto"
+                    styles={databaseButtonStyles}
+                    onClick={() => onDatabase(item.targetId, item.datastoreId, item.facetKey)}
+                  >
+                    Открыть объект базы данных {item.targetId}
+                  </Button>
+                  {item.flowId && (
+                    <Button
+                      variant="subtle"
+                      h="auto"
+                      styles={databaseButtonStyles}
+                      onClick={() => onFlow(item.entrypointId ?? undefined, item.flowId!)}
+                    >
+                      Открыть связанный Flow {item.flowId}
+                    </Button>
+                  )}
+                </Group>
+                {item.pathNodeIds.length > 0 && (
+                  <details>
+                    <summary>Один подтверждающий путь · {item.pathEdgeIds.length} связей</summary>
+                    <Stack gap="xs">
+                      {item.pathNodeIds.map((id, index) => (
+                        <Button
+                          key={`${index}:${id}`}
+                          variant="subtle"
+                          h="auto"
+                          styles={databaseButtonStyles}
+                          onClick={(event) => onSelect({ type: "node", id }, event.currentTarget)}
+                        >
+                          Объект пути {id}
+                        </Button>
+                      ))}
+                      {item.pathEdgeIds.map((id, index) => (
+                        <Button
+                          key={`${index}:${id}`}
+                          variant="subtle"
+                          h="auto"
+                          styles={databaseButtonStyles}
+                          onClick={(event) => onSelect({ type: "edge", id }, event.currentTarget)}
+                        >
+                          Связь пути {id}
+                        </Button>
+                      ))}
+                    </Stack>
+                  </details>
+                )}
+                {item.limitations.map((text) => (
+                  <Text key={text} size="sm" style={databaseWrap}>
+                    {text}
+                  </Text>
+                ))}
+              </Stack>
+            </Paper>
+          ))}
+          <Pages
+            label={reverse ? "обратные доступы" : "доступы endpoint"}
+            cursors={cursors}
+            setCursors={setCursors}
+            busy={query.isFetching}
+            next={page.nextCursor}
+          />
+        </>
+      )}
+    </Stack>
+  );
+}

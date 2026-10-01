@@ -109,6 +109,31 @@
       "source": "references/backend/profiles/go-sql.md",
       "embedded": "backend-profile-go-sql.md",
       "workflowId": "mocker-backend-import"
+    },
+    {
+      "topic": "backend-inspect",
+      "package": "mocker-backend-inspect",
+      "source": "SKILL.md",
+      "embedded": "backend-inspect.md",
+      "workflowId": "mocker-backend-inspect",
+      "copies": [
+        {
+          "package": "mocker",
+          "path": "references/backend/inspect.md"
+        }
+      ]
+    },
+    {
+      "topic": "backend-flow-reference",
+      "source": "references/backend/flow.md",
+      "embedded": "backend-flow-reference.md",
+      "workflowId": "mocker-backend-inspect"
+    },
+    {
+      "topic": "backend-analysis",
+      "source": "references/backend/analysis.md",
+      "embedded": "backend-analysis.md",
+      "workflowId": "mocker-backend-inspect"
     }
   ],
   "workflows": [
@@ -134,11 +159,12 @@
     },
     {
       "workflowId": "mocker-backend-import",
-      "workflowVersion": "3",
+      "workflowVersion": "4",
       "entrypoint": "backend-import",
       "requiredModelSchemaVersions": [
         "1",
-        "2"
+        "2",
+        "3"
       ],
       "requiredCapabilities": [
         "backend-projects",
@@ -149,15 +175,19 @@
         "backend-revision-compare",
         "backend-relational-import",
         "backend-database-query",
-        "backend-database-er"
+        "backend-database-er",
+        "backend-runtime-flow-import",
+        "backend-flow-query",
+        "backend-data-access-query"
       ]
     },
     {
       "workflowId": "mocker-backend-database",
-      "workflowVersion": "2",
+      "workflowVersion": "3",
       "entrypoint": "backend-database",
       "requiredModelSchemaVersions": [
-        "2"
+        "2",
+        "3"
       ],
       "requiredCapabilities": [
         "backend-projects",
@@ -166,10 +196,27 @@
         "backend-database-query",
         "backend-database-er",
         "backend-db-proposals",
-        "backend-db-typed-edits"
+        "backend-db-typed-edits",
+        "backend-flow-query",
+        "backend-data-access-query"
       ],
       "requiredViewSchemaVersions": [
         "proposal-relational-v1"
+      ]
+    },
+    {
+      "workflowId": "mocker-backend-inspect",
+      "workflowVersion": "1",
+      "entrypoint": "backend-inspect",
+      "requiredModelSchemaVersions": [
+        "3"
+      ],
+      "requiredCapabilities": [
+        "backend-projects",
+        "backend-revisions",
+        "backend-graph-query",
+        "backend-flow-query",
+        "backend-data-access-query"
       ]
     }
   ]

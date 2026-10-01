@@ -6,6 +6,7 @@ import {
   getBackendProposalNode,
 } from "@/api/generated/backend-projects/backend-projects";
 import { CoverageDetails, LoadState } from "./BackendGraphInventory";
+import type { BackendSourcePin } from "./backendFlowReads";
 import {
   databaseKey,
   databaseTarget,
@@ -23,11 +24,13 @@ export function BackendDatabaseProposalInspector({
   selection,
   onSelect,
   onClose,
+  onFlowNavigate,
 }: {
   context: DatabaseContext;
   selection: DatabaseSelection;
   onSelect: (selection: DatabaseSelection) => void;
   onClose: () => void;
+  onFlowNavigate?: (pin: BackendSourcePin) => void;
 }) {
   const target = context.proposal!;
   const key = [...databaseKey(context), "proposal-inspector", selection.type, selection.id];
@@ -139,6 +142,23 @@ export function BackendDatabaseProposalInspector({
         {value && (
           <>
             <Badge>Желаемая структура · не проверена</Badge>
+            {onFlowNavigate &&
+              value.sourceRecord &&
+              ["table", "column", "view"].includes(value.kind) && (
+                <Button
+                  variant="default"
+                  onClick={() =>
+                    onFlowNavigate({
+                      revisionId: context.revisionId,
+                      dataNodeId: value.sourceRecord!.id,
+                      datastoreId: context.datastoreId,
+                      facetKey: context.facetKey,
+                    })
+                  }
+                >
+                  Чтения и записи в Flow основания предложения
+                </Button>
+              )}
             {desiredNullable?.status === "known" && (
               <Badge>
                 {desiredNullable.value === false ? "Желаемое NOT NULL" : "Желаемое NULL"}

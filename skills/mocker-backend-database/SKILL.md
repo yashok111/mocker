@@ -3,12 +3,12 @@ name: mocker-backend-database
 description: Inspect a pinned source-backed PostgreSQL or SQLite database model, ordered columns/FKs, facet drift, coverage and evidence in mocker. Use for database/ER/schema inspection; import uses mocker-backend-import and design typed NULL/NOT NULL and FK proposals with pinned preview/apply and unverified criteria.
 metadata:
   workflowId: "mocker-backend-database"
-  workflowVersion: "2"
-  requiredModelSchemaVersions: "[\"2\"]"
+  workflowVersion: "3"
+  requiredModelSchemaVersions: "[\"2\",\"3\"]"
   requiredViewSchemaVersions: "[\"proposal-relational-v1\"]"
-  requiredCapabilities: "[\"backend-projects\",\"backend-revisions\",\"backend-graph-query\",\"backend-database-query\",\"backend-database-er\",\"backend-db-proposals\",\"backend-db-typed-edits\"]"
-  guideSetId: "sha256:54ad47e9cec57296780d3ef881fa90d192c4bb467fcdcde124bd7df8692776de"
-  manifestHash: "sha256:54ad47e9cec57296780d3ef881fa90d192c4bb467fcdcde124bd7df8692776de"
+  requiredCapabilities: "[\"backend-projects\",\"backend-revisions\",\"backend-graph-query\",\"backend-database-query\",\"backend-database-er\",\"backend-db-proposals\",\"backend-db-typed-edits\",\"backend-flow-query\",\"backend-data-access-query\"]"
+  guideSetId: "sha256:a6c5d49005adc09a69aaa1ab94f08078d58c9f075a064cd6077c7976490967ce"
+  manifestHash: "sha256:a6c5d49005adc09a69aaa1ab94f08078d58c9f075a064cd6077c7976490967ce"
 ---
 
 # Pinned database inspection and proposals
@@ -23,7 +23,8 @@ or who reads a column. This leaf needs no neighboring root package.
 ## Select and verify the read procedure
 
 Call `get_server_config` and `get_backend_capabilities`. Select an advertised
-supported `mocker-backend-database` workflow with schema2, database-query/ER and
+supported `mocker-backend-database` workflow3 with schemas2/3, database-query/ER,
+source flow/access reads and
 all its required capabilities and proposal-relational-v1 view support. Tool-name matches or a schema1-only set cannot
 supply relational inspection. Decode installed schema/capability metadata from
 its JSON-list strings. Use local text only on an exact workflowId/version/set/
@@ -39,11 +40,11 @@ Load `backend-database-reference` from the same guideSetId and verify its databa
 owner tuple/contentHash against the selected manifest. Load `backend-model` when
 record/freshness semantics are needed and `backend-recovery` on read failures,
 resume or selector changes. Those two topics are canonically import-owned:
-explicitly select the supported advertised `mocker-backend-import` v3 identity
+explicitly select the supported advertised `mocker-backend-import` v4 identity
 with that same global guideSetId/manifestHash, check its declared requirements,
 and verify each returned actual owner tuple/contentHash against its manifest.
 This selects a reference owner, without starting import writes. Never assert that
-an import-owned topic belongs to database v2. Unknown sets fail; do not substitute
+an import-owned topic belongs to database v3. Unknown sets fail; do not substitute
 latest or read a neighboring root directory. No model/protocol/example bulk load
 is required for a straightforward already-pinned table inspection.
 
@@ -78,11 +79,17 @@ is required for a straightforward already-pinned table inspection.
    between explicit known facets and separate native-definition differences.
    Missing selected-facet proofs are limitations, not absence. Canvas limits or
    one query page do not prove full schema coverage.
+6. For imported readers/writers select inspect1 in this same set, verify its
+   schema3/profile/capabilities and flow-reference/analysis topics, then page
+   query_backend_flow view:accesses at this exact source revision and dataNodeId.
+   Schema2 flow reads are unavailable. Whole-table unknown-column accesses are
+   possible, never confirmed column accesses. Open each query/witness proof;
+   report coverage/truncation and unknown/unattached callers honestly.
 
 ## Typed proposal procedure
 
-Before the first design write select database workflow2, exact guideSetId and
-manifestHash, model schema2, view `proposal-relational-v1`, and both
+Before the first design write select database workflow3, exact guideSetId and
+manifestHash, source schemas2/3, view `proposal-relational-v1`, and both
 `backend-db-proposals` and `backend-db-typed-edits`. An inspection-only workflow1
 or matching tool names is insufficient. If local metadata differs, fetch and
 follow the entire compatible server workflow. If no compatible set exists,
@@ -118,7 +125,7 @@ perform supported reads and report that proposal writes are unavailable.
    move the baseline. Data/backfill, writers, uniqueness/orphans/actions and the
    migration plan are unverified requirements, never executed verification.
 
-Load `backend-examples` only when needed, under its actual import3 owner in the
+Load `backend-examples` only when needed, under its actual import4 owner in the
 same selected global set. After restart or server update renegotiate before new
 writes while retaining existing request/key/checkpoint. On uncertain create/apply
 retry the exact request/key at most three times with 1/2/4-second backoff, then
@@ -128,8 +135,11 @@ reread, reconcile commands explicitly and preview again with a new apply key.
 Replacing only expectedVersion is forbidden. Historical cursor continuation is
 invalidated by a later save; restart the history page rather than mixing drafts.
 
-Ready/rebase belongs to B4. Live collection, endpoint lineage/writers, measured
-checks, impact and provider migration are later work. Report those boundaries
+Proposal flow navigation returns to its exact source base revisionId, with no
+proposal selector on query_backend_flow. Imported scoped accesses do not verify
+all writers or existing data and cannot demonstrate proposed runtime behavior.
+Ready/rebase, field lineage, live collection, measured checks, impact and provider
+migration are unavailable. Report those boundaries
 without creating jobs or using import/project commands as a schema edit engine.
 
 All reads retain exact int64 tokens. A client that cannot preserve an integer

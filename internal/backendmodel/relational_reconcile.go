@@ -283,6 +283,7 @@ func overlayRelationalFacets(base *RevisionState, g *graphCandidate, submitted m
 func assignRelationalOwnership(base *RevisionState, g *graphCandidate, s *ImportSession) {
 	old := map[string]*AssertionOwnership{}
 	current := map[string]*AssertionOwnership{}
+	nodes := map[string]Node{}
 	for _, n := range base.Nodes {
 		old[n.ID] = n.Ownership
 	}
@@ -293,10 +294,14 @@ func assignRelationalOwnership(base *RevisionState, g *graphCandidate, s *Import
 		n := &g.Nodes[i]
 		n.Ownership = relationalOwnership(n.Kind, n.Attributes, false, s, old[n.ID])
 		current[n.ID] = n.Ownership
+		nodes[n.ID] = *n
 	}
 	for i := range g.Edges {
 		e := &g.Edges[i]
 		e.Ownership = relationalOwnership(e.Kind, e.Attributes, true, s, old[e.ID])
+		if selectedProfile(s.Profile) == RuntimeProfile && old[e.ID] == nil && (runtimeSubject(nodes[e.From].Kind, false) || runtimeSubject(nodes[e.To].Kind, false)) {
+			e.Ownership.Profile = RuntimeProfile
+		}
 		current[e.ID] = e.Ownership
 	}
 	for i := range g.Evidence {
@@ -313,6 +318,9 @@ func relationalOwnership(kind string, attrs map[string]jsontext.Value, edge bool
 	profile := GraphProfile
 	if relationalSubject(kind, attrs, edge) {
 		profile = RelationalProfile
+	}
+	if selectedProfile(s.Profile) == RuntimeProfile && runtimeSubject(kind, edge) {
+		profile = RuntimeProfile
 	}
 	return &AssertionOwnership{RepositoryID: s.RepositoryID, ProviderNamespace: s.Manifest.Provider.Namespace, Profile: profile}
 }

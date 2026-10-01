@@ -16,9 +16,9 @@ func TestRelationalGuideTopicsHaveServedOwnerAndBody(t *testing.T) {
 	for _, item := range []struct {
 		topic, owner, version string
 	}{
-		{topic: "backend-database", owner: "mocker-backend-database", version: "2"},
-		{topic: "backend-database-reference", owner: "mocker-backend-database", version: "2"},
-		{topic: "backend-profile-go-sql", owner: "mocker-backend-import", version: "3"},
+		{topic: "backend-database", owner: "mocker-backend-database", version: "3"},
+		{topic: "backend-database-reference", owner: "mocker-backend-database", version: "3"},
+		{topic: "backend-profile-go-sql", owner: "mocker-backend-import", version: "4"},
 	} {
 		t.Run(item.topic, func(t *testing.T) {
 			t.Parallel()
@@ -57,7 +57,7 @@ func TestRelationalGuideTopicsHaveServedOwnerAndBody(t *testing.T) {
 func TestRelationalGuideWorkflowRequirements(t *testing.T) {
 	t.Parallel()
 	workflows := BackendWorkflows()
-	if len(workflows) != 3 {
+	if len(workflows) != 4 {
 		t.Errorf("backend discovery offers %d workflows; project, import and database are required", len(workflows))
 	}
 	for _, item := range []struct {
@@ -65,19 +65,19 @@ func TestRelationalGuideWorkflowRequirements(t *testing.T) {
 		schemas, capabilities      []string
 	}{
 		{
-			entrypoint: "backend-import", owner: "mocker-backend-import", version: "3",
-			schemas: []string{"1", "2"},
+			entrypoint: "backend-import", owner: "mocker-backend-import", version: "4",
+			schemas: []string{"1", "2", "3"},
 			capabilities: []string{
 				"backend-projects", "backend-revisions", "backend-graph-query", "backend-source-import",
 				"backend-source-reconcile", "backend-revision-compare", "backend-relational-import",
-				"backend-database-query", "backend-database-er",
+				"backend-database-query", "backend-database-er", "backend-runtime-flow-import", "backend-flow-query", "backend-data-access-query",
 			},
 		},
 		{
-			entrypoint: "backend-database", owner: "mocker-backend-database", version: "2",
-			schemas: []string{"2"},
+			entrypoint: "backend-database", owner: "mocker-backend-database", version: "3",
+			schemas: []string{"2", "3"},
 			capabilities: []string{
-				"backend-projects", "backend-revisions", "backend-graph-query", "backend-database-query", "backend-database-er", "backend-db-proposals", "backend-db-typed-edits",
+				"backend-projects", "backend-revisions", "backend-graph-query", "backend-database-query", "backend-database-er", "backend-db-proposals", "backend-db-typed-edits", "backend-flow-query", "backend-data-access-query",
 			},
 		},
 	} {
@@ -123,8 +123,8 @@ func TestGlobalGuideSetHasOneOwnerForEveryServedTopic(t *testing.T) {
 	if err := json.Unmarshal([]byte(raw), &manifest); err != nil {
 		t.Fatal(err)
 	}
-	if len(manifest.Workflows) != 4 {
-		t.Fatalf("global guide set has %d owners; want routing/project/import/database", len(manifest.Workflows))
+	if len(manifest.Workflows) != 5 {
+		t.Fatalf("global guide set has %d owners; want routing/project/import/database/inspect", len(manifest.Workflows))
 	}
 	want := map[string]string{
 		"overview": "mocker-routing", "tools": "mocker-routing", "shapes": "mocker-routing",
@@ -134,6 +134,7 @@ func TestGlobalGuideSetHasOneOwnerForEveryServedTopic(t *testing.T) {
 		"backend-import-protocol": "mocker-backend-import", "backend-recovery": "mocker-backend-import",
 		"backend-examples": "mocker-backend-import", "backend-profile-go-sql": "mocker-backend-import",
 		"backend-database": "mocker-backend-database", "backend-database-reference": "mocker-backend-database",
+		"backend-inspect": "mocker-backend-inspect", "backend-flow-reference": "mocker-backend-inspect", "backend-analysis": "mocker-backend-inspect",
 	}
 	seen := make(map[string]string)
 	for _, owner := range manifest.Workflows {

@@ -5,6 +5,7 @@ import { getBackendNode } from "@/api/generated/backend-projects/backend-project
 import type { BackendEdge, BackendNode, BackendFacetComparison } from "@/api/generated/schemas";
 import { LoadState } from "./BackendGraphInventory";
 import { BackendDatabaseProposalInspector } from "./BackendDatabaseProposalInspector";
+import type { BackendSourcePin } from "./backendFlowReads";
 import {
   databaseButtonStyles,
   databaseKey,
@@ -24,6 +25,7 @@ type Props = {
   onSelect: (selection: DatabaseSelection) => void;
   onClose: () => void;
   onRequireColumn?: (columnId: string) => void;
+  onFlowNavigate?: (pin: BackendSourcePin) => void;
 };
 
 export function BackendDatabaseInspector({ ...props }: Props) {
@@ -40,6 +42,7 @@ function SourceDatabaseInspector({
   onSelect,
   onClose,
   onRequireColumn,
+  onFlowNavigate,
 }: Props) {
   const context = { ...original, revisionId: selection.revisionId ?? original.revisionId };
   const key = [...databaseKey(context), "inspector", selection.type, selection.id];
@@ -95,6 +98,21 @@ function SourceDatabaseInspector({
         {record && (
           <>
             <Badge>{record.kind}</Badge>
+            {onFlowNavigate && ["table", "column", "view"].includes(record.kind) && (
+              <Button
+                variant="default"
+                onClick={() =>
+                  onFlowNavigate({
+                    revisionId: context.revisionId,
+                    dataNodeId: record.id,
+                    datastoreId: context.datastoreId,
+                    facetKey: context.facetKey,
+                  })
+                }
+              >
+                Чтения и записи в исходном Flow
+              </Button>
+            )}
             {record.kind === "column" && onRequireColumn && (
               <Button onClick={() => onRequireColumn(record.id)}>
                 Сделать обязательной в предложении
@@ -524,7 +542,13 @@ function ConstraintReferences({
   );
 }
 
-function DatabaseEvidence({ context, subjectId }: { context: DatabaseContext; subjectId: string }) {
+export function DatabaseEvidence({
+  context,
+  subjectId,
+}: {
+  context: DatabaseContext;
+  subjectId: string;
+}) {
   const query = useQuery({
     queryKey: [...databaseKey(context), "proof", subjectId],
     queryFn: ({ signal }) => readDatabaseEvidence(context, subjectId, signal),

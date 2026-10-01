@@ -99,7 +99,7 @@ func TestBackendRelationalCapabilities(t *testing.T) {
 	if err := json.Unmarshal(raw, &capabilities); err != nil {
 		t.Fatal(err)
 	}
-	if strings.Join(capabilities.ModelSchemaVersions, ",") != "1,2" || strings.Join(capabilities.ProviderProfiles, ",") != "foundation-graph-v1,relational-graph-v1" || len(capabilities.ProfileCapabilities) != 2 || len(capabilities.ProfileExtensions) != 1 {
+	if strings.Join(capabilities.ModelSchemaVersions, ",") != "1,2,3" || strings.Join(capabilities.ProviderProfiles, ",") != "foundation-graph-v1,relational-graph-v1,runtime-flow-v1" || len(capabilities.ProfileCapabilities) != 3 || len(capabilities.ProfileExtensions) != 2 {
 		t.Fatalf("incomplete profile advertisement: %s", raw)
 	}
 	for name, want := range map[string]int64{"maxRelationalFacets": 16, "maxRelationalOrderedColumns": 64, "maxRelationalIndexTerms": 64, "maxRelationalNativeBytes": 65536, "maxRelationalReferences": 500, "defaultDatabasePageSize": 100, "maxDatabasePageSize": 500} {

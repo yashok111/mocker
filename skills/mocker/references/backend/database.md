@@ -2,11 +2,11 @@
 
 
 Load as `backend-database-reference` from the selected global guideSetId. Its
-canonical owner is `mocker-backend-database` v2. Import v3 explicitly selects
+canonical owner is `mocker-backend-database` v3. Import v4 explicitly selects
 that supported owner in the same set and verifies the actual returned owner
 workflow/version/set/manifestHash/contentHash against the owner's manifest.
 Do not expect this topic to return import identity. For shared UUID/provenance/
-recovery semantics, model/recovery topics keep import v3 ownership.
+recovery semantics, model/recovery topics keep import v4 ownership.
 
 ## Declared source model
 
@@ -244,12 +244,19 @@ never truncate. They are validation bounds, not measured performance claims.
 Canvas visibility is at most 200 tables/600 FKs with explicit scope counts; the
 paginated list, relationship table and inspector preserve full read access.
 
-Live collection, endpoint lineage, measured data/writer checks, ready/rebase,
-impact, provider migration and saved views remain later work.
+Source schema3 supports imported scoped endpoint accesses through inspect1 and
+query_backend_flow. Select that owner in this same set, then page accesses at
+the exact source revision with dataNodeId; table-level unknown-column access is
+possible, never a confirmed column reader/writer. Open query/edge/witness proof.
+Source2 flow inspection is unavailable. DB proposals keep their exact source base
+for flow navigation; no proposal selector is accepted by the flow query.
+Imported accesses do not verify all writers, data/backfill or proposed behavior.
+Live collection, field lineage, measured data/writer checks, ready/rebase,
+impact, provider migration and saved views remain unavailable.
 
 ## Proposal documents and property provenance
 
-`proposal-relational-v1` is a desired view/document, separate from source schema2.
+`proposal-relational-v1` is a desired view/document, separate from source schemas2/3.
 Create pins project/repository/base revision and hash/datastore/facet. A proposal
 has its own positive int64 version and immutable draft history. Only draft status
 is supported. Imported graph rows, provider identities, source receipts and the

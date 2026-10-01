@@ -3,11 +3,11 @@ name: mocker-backend-import
 description: Import foundation or PostgreSQL/SQLite relational source facets into mocker, safely reconcile a same-provider snapshot, or compare pinned revisions and evidence. Use for repository reconstruction/import/reimport; mock response changes use the mocker workspace workflow.
 metadata:
   workflowId: "mocker-backend-import"
-  workflowVersion: "3"
-  requiredModelSchemaVersions: "[\"1\",\"2\"]"
-  requiredCapabilities: "[\"backend-projects\",\"backend-revisions\",\"backend-graph-query\",\"backend-source-import\",\"backend-source-reconcile\",\"backend-revision-compare\",\"backend-relational-import\",\"backend-database-query\",\"backend-database-er\"]"
-  guideSetId: "sha256:54ad47e9cec57296780d3ef881fa90d192c4bb467fcdcde124bd7df8692776de"
-  manifestHash: "sha256:54ad47e9cec57296780d3ef881fa90d192c4bb467fcdcde124bd7df8692776de"
+  workflowVersion: "4"
+  requiredModelSchemaVersions: "[\"1\",\"2\",\"3\"]"
+  requiredCapabilities: "[\"backend-projects\",\"backend-revisions\",\"backend-graph-query\",\"backend-source-import\",\"backend-source-reconcile\",\"backend-revision-compare\",\"backend-relational-import\",\"backend-database-query\",\"backend-database-er\",\"backend-runtime-flow-import\",\"backend-flow-query\",\"backend-data-access-query\"]"
+  guideSetId: "sha256:a6c5d49005adc09a69aaa1ab94f08078d58c9f075a064cd6077c7976490967ce"
+  manifestHash: "sha256:a6c5d49005adc09a69aaa1ab94f08078d58c9f075a064cd6077c7976490967ce"
 ---
 
 # Source graph import and reconciliation
@@ -18,21 +18,21 @@ relational SQL/ORM/migration facets are source claims with evidence, not runtime
 observations. Relational import retains native definitions, ordered keys/FKs,
 unknowns and contradictions without choosing a truth by name. This workflow does
 not execute the inspected application, package scripts, SQL, migrations or bodies.
-Proposals and typed database edits are B1.2; endpoint/query lineage is B2; impact,
-incremental scopes and general provider migration remain unavailable.
+Runtime source flows/query accesses use schema3; DB edits remain separate draft
+proposals. Field lineage, impact, incremental scopes and provider migration are
+unavailable. No source claim is executed application behavior.
 
 ## Select a compatible complete procedure before writes
 
-Call `get_server_config` and `get_backend_capabilities`. Classify this task as
-foundation-only or relational before selecting a workflow. Decode installed
-metadata's schema/capability JSON-list strings. This leaf targets
-`mocker-backend-import` v3, requires server support for schemas 1 and 2 and all
-listed capabilities, and uses `foundation-graph-v1` or `relational-graph-v1`.
-Verify advertised tools, per-profile kinds and profile-transition support too.
-Matching tool names or any schema-list intersection alone cannot qualify a
-relational task: schema2, both profiles and the relational capabilities must be
-supported. A plain foundation task may instead select an advertised compatible
-v2/schema1 foundation procedure and follow its complete action/recovery order.
+Call `get_server_config` and `get_backend_capabilities`. Classify foundation,
+relational or runtime-flow work. Decode installed schema/capability JSON lists.
+This leaf targets import4, schemas1/2/3 and all listed capabilities. Verify tools,
+per-profile kinds and transitions: foundation-graph-v1, relational-graph-v1,
+runtime-flow-v1. Matching tools or partial schema intersection cannot qualify.
+Runtime work requires schema3 and runtime import/flow/access capabilities;
+relational requires schema2 and its capabilities. A narrower task may use a
+complete advertised compatible older procedure; never strip facets/flow records
+or auto-upgrade a provider to force compatibility.
 
 Use installed text only if workflowId, workflowVersion, guideSetId and
 manifestHash exactly match the selected advertised identity, and each local
@@ -42,7 +42,7 @@ complete compatible server entrypoint with
 identity, manifestHash and contentHash; follow that entire procedure. Record the
 selected tuple and instruction source (`local` or `server`). Older/newer/missing
 local metadata or a missing reference requires this fallback. Do not mix steps
-from incompatible workflows. With no compatible relational set, report the
+from incompatible workflows. With no compatible set for the selected task, report the
 limitation and continue only independent supported reads; do not strip facets,
 auto-upgrade a provider or write a relational task through a foundation guide.
 
@@ -57,22 +57,20 @@ Fetch shared topics with `get_guide {topic,guideSetId:selected.guideSetId}`:
 
 | Topic | Owner in this set | Read when |
 |---|---|---|
-| `backend-model` | import v3 | Before staging: stable identity, foundation/relational shapes, evidence and coverage. |
-| `backend-import-protocol` | import v3 | Before staging: source inventory, profile decision, exact mutations, deletion gates. |
-| `backend-recovery` | import v3 | Before commit, or after timeout/conflict/resume. |
-| `backend-examples` | import v3 | When a concrete fixture or recovery sequence is needed. |
-| `backend-profile-go-sql` | import v3 | For Go, SQL, ORM and migration source extraction. |
-| `backend-database-reference` | database v2 | For relational record details, pinned ER, drift and unknown cardinality. |
+| `backend-model` | import v4 | Before staging: identity, proof, freshness and schema1/2 records. |
+| `backend-import-protocol` | import v4 | Before staging: source inventory, profile decision, exact mutations, deletion gates. |
+| `backend-recovery` | import v4 | Before commit, or after timeout/conflict/resume. |
+| `backend-examples` | import v4 | When a concrete fixture or recovery sequence is needed. |
+| `backend-profile-go-sql` | import v4 | For Go, SQL, ORM and migration source extraction. |
+| `backend-database-reference` | database v3 | For relational details, pinned ER, drift and unknown bounds. |
+| `backend-flow-reference` / `backend-analysis` | inspect v1 | For schema3 records, flow/access reads and bounded source certainty. |
 
-For an import-owned topic, verify the returned tuple/contentHash against the
-selected import manifest. For `backend-database-reference`, explicitly select
-the advertised supported `mocker-backend-database` v2 identity whose guideSetId
-and manifestHash are the same global set; verify schema2 and its required
-capabilities, then verify the returned actual database owner tuple/contentHash
-against that owner's manifest. A topic is not import-owned because import uses it.
-If project creation is needed, select the supported `mocker-backend-project`
-procedure at `backend-overview` in the same set and verify its own identity before
-its writes. Resume the selected import procedure afterward.
+Verify import-owned topics against this manifest. For database or inspect topics,
+select the advertised supported database3 or inspect1 owner in this same global
+set/hash, check all its schemas/capabilities and verify the returned actual owner
+tuple/contentHash. A dependency is not import-owned because import uses it.
+Project creation selects project1 at backend-overview in this set before its
+writes; return to the selected import procedure afterward.
 
 ## Ordered import workflow
 
@@ -89,20 +87,17 @@ Before first commit, independently check every asserted typed scalar/expression 
    only after that check. Keep a local ledger of discovered declarations/changes,
    exact source spans, subject/facet keys and handled or incomplete scope/reasons.
    Report all nine inventory categories and honest gaps.
-3. Decide the profile explicitly. Omitted `profile` is foundation; omitted `mode`
-   is initial. Foundation initial/reconcile keeps schema1 behavior and accepts
-   only foundation records. Relational initial sets `profile:"relational-graph-v1"`
-   and provider profiles exactly foundation plus relational; it has no
-   repositoryId, graphScope or profileExtension. Relational reconcile has
-   `graphScope.profile` equal to the selected profile and whole-repository combined
-   graph scope. To extend a foundation-only base, explicitly set
-   `profileExtension:{fromProfile:"foundation-graph-v1",toProfile:"relational-graph-v1"}`
-   with the same repositoryName and provider name/version/namespace/method, prior
-   profiles retained and only relational added. No downgrade or other migration
-   is available. After a successful extension, reconcile omits profileExtension
-   and requires exact provider compatibility. Failed/aborted/conflicting work
-   publishes no extension. New relational commits use schema2; schema1 history,
-   UUIDs, hashes, source bytes and original receipts stay unchanged.
+3. Select profile explicitly; omitted profile/mode means foundation/initial.
+   Initial relational uses exactly foundation+relational profiles (schema2);
+   initial runtime uses exactly foundation+relational+runtime (schema3), without
+   repositoryId/graphScope/profileExtension. Reconcile uses the same sole
+   repository/provider identity and whole scope with graphScope.profile matching.
+   Permitted explicit extensions are foundation→relational or relational→runtime,
+   with profileExtension.fromProfile/toProfile naming those exact profiles and
+   only the next profile added. Direct foundation→runtime, downgrade and other
+   provider migrations fail. Later reconcile omits extension and requires exact
+   profiles. Failed work publishes no extension; old UUIDs/hashes/bytes/receipts
+   stay unchanged. Load protocol for exact profile inputs and new typed proof.
 4. Save the entire `begin_backend_import` input and stable idempotencyKey before
    sending. Retain projectId, exact expectedVersion/baseRevisionId, mode/profile,
    extension if selected, manifest and inventory, and reconcile repository/scope.
@@ -113,7 +108,7 @@ Before first commit, independently check every asserted typed scalar/expression 
    separate with gaps. Changed node/edge key requires a separate `map_identity`
    batch before target allocation/upsert, with expectedId from the pinned base.
    Facet maps use stable facetKeys; key references resolve to UUID fields at
-   preview. Relational omitted facets, including an entire optional descriptor,
+   preview, including flow entry/exits, local transaction context and datastores. Relational omitted facets, including an entire optional descriptor,
    retain stale proof; verify the server-restored union for retained and new
    facets. Stage new current proof keys without restaging old proof under a new
    snapshot. Changed proof cannot reuse
@@ -141,8 +136,8 @@ Before first commit, independently check every asserted typed scalar/expression 
 8. Stop before commit. Read recovery and prospective project CAS metadata. Follow
    the protocol's Local audit gate on actual saved submitted payloads and accepted
    receipts, never regenerated commands. Independently compare every asserted
-   typed scalar/expression with captured original source, including complete
-   nested delimiters; full native-unit fidelity and proof hashes alone cannot
+   typed scalar/expression, control/call/access claim and physical source span
+   with captured original source, including complete nested delimiters; full native-unit fidelity and proof hashes alone cannot
    establish these values. Check full native boundaries, exact proof bytes/ranges/
    membership and every ledger declaration's known/unknown/body/dependency/derived
    scope. Repair unsupported extraction or preserve unknown with its concrete gap
@@ -178,13 +173,15 @@ Before first commit, independently check every asserted typed scalar/expression 
     ordered columns/FKs/native definitions/evidence. Return project URL
     `/backend-projects/{projectId}`, revision ID, selected facet, source consistency,
     coverage/gaps/stale counts, unresolved objects and drift/unknown limitations.
+    Flow/access answers select inspect1 in this set and query the exact source3
+    committed pin, page relevant results and open each record proof.
 
 ## Deletion, replay and comparison boundaries
 
 Absence never deletes, even with complete graph scope. `delete_assertion` needs
 verified whole matching provider/profile/scope, complete matching files/endpoints/
 datastores inventory, all prior proof paths analyzed or proven absent, and every
-incident/parent/nested reference removed or explicitly rebound in the candidate.
+incident/parent/nested entry/exit/context/call/access reference removed or rebound.
 Excluded/unavailable proof forbids deletion. Historical migration pins preserve
 old changes without keeping a dropped object active; source_only targets preserve
 logical source history without allocating an ER UUID. Individual facet retraction
@@ -195,5 +192,5 @@ input and key/version/hash. Receipts resolve before compatibility and CAS and
 return original state, including legacy responses; then read current state.
 Staging and identity reservations survive restart. Comparison names both exact
 committed revisions and opens before/after proof at its own pin. It reports
-structural/identity/evidence/freshness changes, never runtime enforcement, reader
-lineage, impact safety, proposal conformance or B1 completion.
+structural/identity/evidence/freshness changes. Imported scoped readers/writers
+do not prove field lineage, impact safety, runtime or proposal conformance.

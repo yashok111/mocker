@@ -144,10 +144,10 @@ func (r *Repo) QueryGraph(ctx context.Context, pid string, in GraphQueryInput) (
 		kinds = SupportedEdgeKinds()
 		typ = "edge"
 	}
-	if revision.SchemaVersion == "2" {
-		kinds = SupportedNodeKindsForProfile(RelationalProfile)
+	if isRelationalSchema(revision.SchemaVersion) {
+		kinds = SupportedNodeKindsForProfile(profileForSchema(revision.SchemaVersion))
 		if typ == "edge" {
-			kinds = SupportedEdgeKindsForProfile(RelationalProfile)
+			kinds = SupportedEdgeKindsForProfile(profileForSchema(revision.SchemaVersion))
 		}
 	}
 	if in.Kind != "" && !slices.Contains(kinds, in.Kind) {
@@ -246,7 +246,7 @@ func (r *Repo) QueryGraph(ctx context.Context, pid string, in GraphQueryInput) (
 				return nil, err
 			}
 			deriveMetadata(metadata, &n.Ownership, &n.Freshness)
-			if revision.SchemaVersion == "2" {
+			if isRelationalSchema(revision.SchemaVersion) {
 				n.FacetComparison, err = CompareRelationalFacets(n.Kind, n.Attributes, false)
 				if err != nil {
 					return nil, err
@@ -266,7 +266,7 @@ func (r *Repo) QueryGraph(ctx context.Context, pid string, in GraphQueryInput) (
 				return nil, err
 			}
 			deriveMetadata(metadata, &e.Ownership, &e.Freshness)
-			if revision.SchemaVersion == "2" {
+			if isRelationalSchema(revision.SchemaVersion) {
 				e.FacetComparison, err = CompareRelationalFacets(e.Kind, e.Attributes, true)
 				if err != nil {
 					return nil, err
@@ -311,7 +311,7 @@ func (r *Repo) Node(ctx context.Context, pid, rid, nid string) (*Node, error) {
 	if err != nil {
 		return nil, err
 	}
-	if revision.SchemaVersion == "2" {
+	if isRelationalSchema(revision.SchemaVersion) {
 		n.FacetComparison, err = CompareRelationalFacets(n.Kind, n.Attributes, false)
 		if err != nil {
 			return nil, err

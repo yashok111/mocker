@@ -1,0 +1,29 @@
+package orders
+
+// Inert source fixture. Imported as text; never executed by tests or Mocker.
+// The registry binds an HTTP operation to its business handler. Its HTTP
+// decoding/response adapter is outside this captured source scope.
+type HTTPRegistry interface {
+    Handle(pattern string, handler func(context.Context, *sql.DB, int64, string) error)
+}
+
+func registerCancel(registry HTTPRegistry) {
+    registry.Handle("POST /orders/{id}/cancel", cancelOrder)
+}
+
+func cancelOrder(ctx context.Context, db *sql.DB, id int64, status string) error {
+    tx, err := db.BeginTx(ctx, nil)
+    if err != nil { return err }
+    query := "UPDATE orders SET status = $1 WHERE id = $2 RETURNING status"
+    err = tx.QueryRowContext(ctx, query, status, id).Scan(&status)
+    if err != nil {
+        tx.Rollback()
+        return err
+    }
+    return tx.Commit()
+}
+
+func inspectAllOrders(ctx context.Context, db *sql.DB) {
+    // Caller and concrete result columns are outside this captured scope.
+    db.QueryContext(ctx, "SELECT * FROM orders")
+}

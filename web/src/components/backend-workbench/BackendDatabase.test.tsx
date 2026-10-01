@@ -11,6 +11,7 @@ import type {
   BackendRevisionCoverage,
 } from "@/api/generated/schemas";
 import { BackendDatabase } from "./BackendDatabase";
+import { BackendDatabaseProposalInspector } from "./BackendDatabaseProposalInspector";
 import { proposalDetail } from "./backendProposalTestFixtures";
 
 vi.mock("./BackendDatabaseGraph", () => ({ BackendDatabaseGraph: () => <div>ER canvas</div> }));
@@ -86,6 +87,92 @@ it("uses old baseline objects when a proposal is selected under a newer source h
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
+});
+
+it("links table accesses to the selected immutable source revision", async () => {
+  const onFlowNavigate = vi.fn();
+  fakeServer();
+  renderWithProviders(
+    <BackendDatabase
+      projectId="project"
+      revisionId="frozen-source"
+      onFlowNavigate={onFlowNavigate}
+    />,
+  );
+  await userEvent.click(
+    await screen.findByRole("button", { name: "Открыть таблицу public.orders" }),
+  );
+  await userEvent.click(
+    await screen.findByRole("button", { name: "Чтения и записи в исходном Flow" }),
+  );
+  expect(onFlowNavigate).toHaveBeenCalledWith({
+    revisionId: "frozen-source",
+    dataNodeId: "orders",
+    datastoreId: "db",
+    facetKey: "sql",
+  });
+});
+
+it("keeps an unavailable datastore URL selection explicit instead of substituting another source", async () => {
+  fakeServer();
+  renderWithProviders(
+    <BackendDatabase
+      projectId="project"
+      revisionId="frozen-source"
+      pin={{ revisionId: "frozen-source", datastoreId: "missing" }}
+    />,
+  );
+  expect(await screen.findByText(/Выбранное хранилище missing отсутствует/)).toBeInTheDocument();
+  expect(
+    screen.queryByRole("button", { name: "Открыть таблицу public.orders" }),
+  ).not.toBeInTheDocument();
+});
+
+it("links a proposed table to source Flow at its exact baseline without a proposal selector", async () => {
+  const onFlowNavigate = vi.fn();
+  vi.stubGlobal("fetch", async (url: string) => {
+    if (url.includes("/nodes/"))
+      return json(200, {
+        proposalProjection: {
+          kind: "table",
+          id: "orders",
+          name: "Proposed orders",
+          sourceRecord: nodes.find((node) => node.id === "orders"),
+        },
+      });
+    if (url.includes("/coverage")) return json(200, coverage);
+    if (url.includes("/evidence")) return json(200, { items: [], nextCursor: "" });
+    return json(200, {
+      nodes: [],
+      edges: [],
+      nextCursor: "",
+      proposalProjection: { nodes: [], edges: [] },
+    });
+  });
+  renderWithProviders(
+    <BackendDatabaseProposalInspector
+      context={{
+        projectId: "project",
+        revisionId: "old-baseline",
+        datastoreId: "db",
+        facetKey: "sql",
+        proposal: { proposalId: "proposal", proposalRevisionId: "draft" },
+      }}
+      selection={{ type: "node", id: "orders" }}
+      onSelect={() => {}}
+      onClose={() => {}}
+      onFlowNavigate={onFlowNavigate}
+    />,
+  );
+  await userEvent.click(
+    await screen.findByRole("button", { name: "Чтения и записи в Flow основания предложения" }),
+  );
+  expect(onFlowNavigate).toHaveBeenCalledWith({
+    revisionId: "old-baseline",
+    dataNodeId: "orders",
+    datastoreId: "db",
+    facetKey: "sql",
+  });
 });
 
 const common = {

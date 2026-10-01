@@ -56,7 +56,7 @@ func BackendWorkflows() []Workflow {
 	var result []Workflow
 	for _, w := range currentManifest.Workflows {
 		switch w.WorkflowID {
-		case "mocker-backend-project", "mocker-backend-import", "mocker-backend-database":
+		case "mocker-backend-project", "mocker-backend-import", "mocker-backend-database", "mocker-backend-inspect":
 			result = append(result, cloneWorkflow(w))
 		}
 	}

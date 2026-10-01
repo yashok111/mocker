@@ -70,7 +70,7 @@ func proposalBase(ctx context.Context, q importReader, pid string, in CreateProp
 	if err != nil {
 		return nil, err
 	}
-	if state.Revision.SchemaVersion != "2" || len(state.Sources) == 0 {
+	if !isRelationalSchema(state.Revision.SchemaVersion) || len(state.Sources) == 0 {
 		return nil, relationalUnavailable()
 	}
 	p, err := scanProject(q.QueryRowContext(ctx, `SELECT `+projectColumns+` FROM backend_projects WHERE id=?`, pid))

@@ -148,14 +148,14 @@ class GuideSyncPackagingTests(unittest.TestCase):
         self.load_published_relational_sources()
         self.generate()
         manifest = json.loads((self.root / "internal/guide/manifest.json").read_text())
-        self.assertEqual(len(manifest["sources"]), 16)
+        self.assertEqual(len(manifest["sources"]), 19)
         workflows = {w["workflowId"]: w for w in manifest["workflows"]}
-        self.assertEqual(len(workflows), 4)
+        self.assertEqual(len(workflows), 5)
         importing = workflows["mocker-backend-import"]
         database = workflows["mocker-backend-database"]
-        self.assertEqual(importing["workflowVersion"], "3")
-        self.assertEqual(importing["requiredModelSchemaVersions"], ["1", "2"])
-        self.assertEqual(database["requiredModelSchemaVersions"], ["2"])
+        self.assertEqual(importing["workflowVersion"], "4")
+        self.assertEqual(importing["requiredModelSchemaVersions"], ["1", "2", "3"])
+        self.assertEqual(database["requiredModelSchemaVersions"], ["2", "3"])
         self.assertIn(
             "backend-database-reference",
             [topic["topic"] for topic in database["topics"]],
@@ -179,6 +179,22 @@ class GuideSyncPackagingTests(unittest.TestCase):
         )
         self.assertEqual(self.run_sync("--check").returncode, 0)
 
+    def test_runtime_inspect_leaf_and_references_have_one_pinned_owner(self):
+        self.load_published_relational_sources()
+        identity = self.generate()
+        manifest = json.loads((self.root / "internal/guide/manifest.json").read_text())
+        owner = next(w for w in manifest["workflows"] if w["workflowId"] == "mocker-backend-inspect")
+        self.assertEqual(owner["workflowVersion"], "1")
+        self.assertEqual(owner["requiredModelSchemaVersions"], ["3"])
+        self.assertEqual(owner["guideSetId"], identity)
+        self.assertEqual({t["topic"] for t in owner["topics"]}, {"backend-inspect", "backend-flow-reference", "backend-analysis"})
+        leaf = (self.root / "skills/mocker-backend-inspect/SKILL.md").read_bytes()
+        self.assertEqual(leaf, (self.root / "skills/mocker/references/backend/inspect.md").read_bytes())
+        self.assertEqual(leaf, (self.root / "internal/guide/backend-inspect.md").read_bytes())
+        for capability in ("backend-flow-query", "backend-data-access-query"):
+            self.assertIn(capability, owner["requiredCapabilities"])
+        self.assertEqual(self.run_sync("--check").returncode, 0)
+
     def test_shared_database_reference_changes_both_leaf_identities(self):
         self.load_published_relational_sources()
         previous = self.generate()
@@ -186,7 +202,7 @@ class GuideSyncPackagingTests(unittest.TestCase):
         reference.write_text(reference.read_text() + "\nChanged inspection guidance.\n")
         current = self.generate()
         self.assertNotEqual(current, previous)
-        for package in ("mocker", "mocker-backend-import", "mocker-backend-database"):
+        for package in ("mocker", "mocker-backend-import", "mocker-backend-database", "mocker-backend-inspect"):
             text = (self.root / "skills" / package / "SKILL.md").read_text()
             self.assertIn(f'guideSetId: "{current}"', text)
             self.assertNotIn(f'guideSetId: "{previous}"', text)

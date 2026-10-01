@@ -18,6 +18,8 @@ func SupportedNodeKindsForProfile(profile string) []string {
 		return SupportedNodeKinds()
 	case RelationalProfile:
 		return append(SupportedNodeKinds(), "db_schema", "table", "column", "constraint", "index", "view", "migration")
+	case RuntimeProfile:
+		return append(SupportedNodeKindsForProfile(RelationalProfile), "flow", "flow_step", "query", "transaction")
 	default:
 		return nil
 	}
@@ -29,12 +31,16 @@ func SupportedEdgeKindsForProfile(profile string) []string {
 		return SupportedEdgeKinds()
 	case RelationalProfile:
 		return append(SupportedEdgeKinds(), "references")
+	case RuntimeProfile:
+		return append(SupportedEdgeKindsForProfile(RelationalProfile), "next", "branch", "error", "returns", "reads", "writes", "deletes", "begins", "commits", "rolls_back")
 	default:
 		return nil
 	}
 }
 
-func SupportedModelSchemaVersions() []string { return []string{SchemaVersion, RelationalSchemaVersion} }
+func SupportedModelSchemaVersions() []string {
+	return []string{SchemaVersion, RelationalSchemaVersion, RuntimeSchemaVersion}
+}
 
 func selectedProfile(profile string) string {
 	if profile == "" {
@@ -44,6 +50,9 @@ func selectedProfile(profile string) string {
 }
 
 func modelSchemaVersion(profile string) string {
+	if profile == RuntimeProfile {
+		return RuntimeSchemaVersion
+	}
 	if profile == RelationalProfile {
 		return RelationalSchemaVersion
 	}
@@ -58,22 +67,40 @@ func profileSet(profiles []string) []string {
 
 func validateImportProfile(in BeginImportInput) error {
 	profile := selectedProfile(in.Profile)
-	if profile != GraphProfile && profile != RelationalProfile {
+	if profile != GraphProfile && !hasRelationalProfile(profile) {
 		return reconciliationFault("backend_unsupported_scope", "Unsupported import profile")
 	}
-	if in.ProfileExtension != nil && (in.Mode != "reconcile" || profile != RelationalProfile || in.ProfileExtension.FromProfile != GraphProfile || in.ProfileExtension.ToProfile != RelationalProfile) {
-		return reconciliationFault("backend_unsupported_scope", "Only an explicit foundation to relational reconciliation extension is supported")
+	if in.ProfileExtension != nil {
+		x := in.ProfileExtension
+		valid := profile == RelationalProfile && x.FromProfile == GraphProfile && x.ToProfile == RelationalProfile || profile == RuntimeProfile && x.FromProfile == RelationalProfile && x.ToProfile == RuntimeProfile
+		if in.Mode != "reconcile" || !valid {
+			return reconciliationFault("backend_unsupported_scope", "Profile extension requires the explicit adjacent source profile transition")
+		}
 	}
 	if in.Mode != "reconcile" && profile == RelationalProfile && (len(in.Manifest.Provider.Profiles) != 2 || !slices.Equal(profileSet(in.Manifest.Provider.Profiles), profileSet([]string{GraphProfile, RelationalProfile}))) {
 		return reconciliationFault("backend_incompatible_provider", "Relational initial imports require exactly the foundation and relational profiles")
+	}
+	if in.Mode != "reconcile" && profile == RuntimeProfile && (len(in.Manifest.Provider.Profiles) != 3 || !slices.Equal(profileSet(in.Manifest.Provider.Profiles), profileSet([]string{GraphProfile, RelationalProfile, RuntimeProfile}))) {
+		return reconciliationFault("backend_incompatible_provider", "Runtime initial imports require exactly foundation, relational and runtime profiles")
 	}
 	return nil
 }
 
 func requireProviderProfile(state *RevisionState, s *ImportSession, prior SourceProvider) error {
 	profile := selectedProfile(s.Profile)
-	if state.Revision.SchemaVersion == RelationalSchemaVersion && profile != RelationalProfile {
+	if state.Revision.SchemaVersion == RuntimeSchemaVersion && profile != RuntimeProfile {
+		return reconciliationFault("backend_unsupported_scope", "A runtime source base requires the runtime profile")
+	}
+	if state.Revision.SchemaVersion == RelationalSchemaVersion && !hasRelationalProfile(profile) {
 		return reconciliationFault("backend_unsupported_scope", "A relational base requires the relational profile")
+	}
+	if profile == RuntimeProfile {
+		if s.ProfileExtension == nil && state.Revision.SchemaVersion != RuntimeSchemaVersion {
+			return reconciliationFault("backend_unsupported_scope", "A relational base requires an explicit runtime profile extension")
+		}
+		if s.ProfileExtension != nil && (state.Revision.SchemaVersion != RelationalSchemaVersion || slices.Contains(prior.Profiles, RuntimeProfile)) {
+			return reconciliationFault("backend_unsupported_scope", "Runtime extension requires a relational source base")
+		}
 	}
 	if profile == RelationalProfile {
 		if s.ProfileExtension == nil && state.Revision.SchemaVersion != RelationalSchemaVersion {
@@ -86,7 +113,7 @@ func requireProviderProfile(state *RevisionState, s *ImportSession, prior Source
 	current := s.Manifest.Provider
 	profiles := prior.Profiles
 	if s.ProfileExtension != nil {
-		profiles = append(slices.Clone(profiles), RelationalProfile)
+		profiles = append(slices.Clone(profiles), s.ProfileExtension.ToProfile)
 	}
 	if prior.Name != current.Name || prior.Version != current.Version || prior.Namespace != current.Namespace || prior.Method != current.Method || !slices.Equal(profileSet(profiles), profileSet(current.Profiles)) {
 		return reconciliationFault("backend_incompatible_provider", "Provider identity, version, method and declared profiles must match the selected transition")

@@ -10,8 +10,8 @@ import (
 func TestDatabaseProposalWorkflowNegotiation(t *testing.T) {
 	workflows := BackendWorkflows()
 	i := slices.IndexFunc(workflows, func(w Workflow) bool { return w.WorkflowID == "mocker-backend-database" })
-	if i < 0 || workflows[i].WorkflowVersion != "2" {
-		t.Fatal("proposal writes require a separately selectable database workflow2")
+	if i < 0 || workflows[i].WorkflowVersion != "3" {
+		t.Fatal("proposal writes require a separately selectable database workflow3")
 	}
 	w := workflows[i]
 	for _, capability := range []string{"backend-db-proposals", "backend-db-typed-edits"} {
@@ -31,10 +31,10 @@ func TestDatabaseProposalWorkflowNegotiation(t *testing.T) {
 	if err := json.Unmarshal(fields["requiredViewSchemaVersions"], &views); err != nil || !slices.Equal(views, []string{"proposal-relational-v1"}) {
 		t.Fatalf("view negotiation missing: %s %v", raw, err)
 	}
-	// Model/recovery/examples keep their import3 owner in this exact set.
+	// Model/recovery/examples keep their import4 owner in this exact set.
 	for _, topic := range []string{"backend-model", "backend-recovery", "backend-examples"} {
 		owner, ok := WorkflowForTopic(topic)
-		if !ok || owner.WorkflowID != "mocker-backend-import" || owner.WorkflowVersion != "3" || owner.GuideSetID != w.GuideSetID {
+		if !ok || owner.WorkflowID != "mocker-backend-import" || owner.WorkflowVersion != "4" || owner.GuideSetID != w.GuideSetID {
 			t.Fatalf("shared owner changed for %s", topic)
 		}
 	}
