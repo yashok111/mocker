@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useContext, useEffect, useRef, useState } from "react";
 import {
   Alert,
   Badge,
@@ -29,6 +29,7 @@ import type {
   BackendProposalCriterionInput,
   CreateBackendProposalRequest,
 } from "@/api/generated/schemas";
+import { BackendSavedViewContext } from "./backendSavedViewState";
 import { BackendDatabaseEditForm } from "./BackendDatabaseEditForm";
 import { readProposalRecovery, writeProposalRecovery } from "./backendProposalRecovery";
 import {
@@ -59,6 +60,7 @@ export function BackendDatabaseProposal({
   onView?: (view: ProposalView | null) => void;
   onDirty?: (dirty: boolean) => void;
   initialColumnId?: string;
+  initialView?: ProposalView;
 }) {
   const { context, repositoryId } = props;
   return (
@@ -75,18 +77,21 @@ function DatabaseProposalControls({
   onView,
   onDirty,
   initialColumnId,
+  initialView,
 }: {
   context: DatabaseContext;
   repositoryId: string;
   onView?: (view: ProposalView | null) => void;
   onDirty?: (dirty: boolean) => void;
   initialColumnId?: string;
+  initialView?: ProposalView;
 }) {
   const client = useQueryClient();
+  const savedViewSession = useContext(BackendSavedViewContext);
   const recoveryKey = `backend-proposal-create:${context.projectId}:${context.revisionId}:${repositoryId}:${context.datastoreId}:${context.facetKey}`;
   const listKey = ["backend-proposals", context.projectId, context.datastoreId, context.facetKey];
-  const [selected, setSelected] = useState("");
-  const [revision, setRevision] = useState("");
+  const [selected, setSelected] = useState(initialView?.proposalId ?? "");
+  const [revision, setRevision] = useState(initialView?.proposalRevisionId ?? "");
   const [name, setName] = useState("");
   const [error, setError] = useState("");
   const [creating, setCreating] = useState(false);
@@ -185,8 +190,8 @@ function DatabaseProposalControls({
   }, [value, onView]);
   function switchTo(id: string, revisionId = "") {
     if (
-      dirty.current &&
-      !window.confirm("В буфере есть несохранённые команды. Перейти и оставить их?")
+      (dirty.current || savedViewSession?.dirty || savedViewSession?.pending) &&
+      !window.confirm("Есть несохранённые команды или изменения вида. Перейти и оставить их?")
     )
       return;
     dirty.current = false;

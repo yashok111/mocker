@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useContext, useMemo, useRef, useState } from "react";
 import {
   Badge,
   Button,
@@ -32,6 +32,11 @@ import {
 } from "./backendDatabaseReads";
 import { cardinalityText } from "./backendDatabaseLayout";
 import { usePinnedValue, type BackendSourcePin } from "./backendFlowReads";
+import {
+  BackendSavedViewContext,
+  useWorkspaceSavedState,
+  type SavedViewState,
+} from "./backendSavedViewState";
 
 type SourceNavigation = {
   pin?: BackendSourcePin;
@@ -46,7 +51,13 @@ export function BackendDatabase(
     onDirty?: (dirty: boolean) => void;
   },
 ) {
-  return <DatabaseDiscovery key={`${props.projectId}:${props.revisionId}`} {...props} />;
+  const session = useContext(BackendSavedViewContext);
+  return (
+    <DatabaseDiscovery
+      key={`${props.projectId}:${props.revisionId}:${session?.restoreGeneration ?? 0}`}
+      {...props}
+    />
+  );
 }
 
 function DatabaseDiscovery({
@@ -73,6 +84,7 @@ function DatabaseDiscovery({
   });
   const [datastore, setDatastore] = usePinnedValue(pin?.datastoreId, pin?.datastoreId ?? "");
   const [dirty, setDirty] = useState(false);
+  const savedViewSession = useContext(BackendSavedViewContext);
   const datastores =
     query.data?.nodes.filter(
       (node) => node.kind === "datastore" && "relational" in node.attributes,
@@ -103,8 +115,10 @@ function DatabaseDiscovery({
               value={selected.id}
               onChange={(event) => {
                 if (
-                  !dirty ||
-                  window.confirm("Есть несохранённые команды. Перейти к другому хранилищу?")
+                  !(dirty || savedViewSession?.dirty || savedViewSession?.pending) ||
+                  window.confirm(
+                    "Есть несохранённые команды или изменения вида. Перейти к другому хранилищу?",
+                  )
                 ) {
                   setDirty(false);
                   setDatastore(event.currentTarget.value);
@@ -159,6 +173,7 @@ function DatabaseFacets({
       "",
   );
   const [dirty, setDirty] = useState(false);
+  const savedViewSession = useContext(BackendSavedViewContext);
   return (
     <>
       <NativeSelect
@@ -166,8 +181,10 @@ function DatabaseFacets({
         value={selected}
         onChange={(event) => {
           if (
-            !dirty ||
-            window.confirm("Есть несохранённые команды. Перейти к другому источнику?")
+            !(dirty || savedViewSession?.dirty || savedViewSession?.pending) ||
+            window.confirm(
+              "Есть несохранённые команды или изменения вида. Перейти к другому источнику?",
+            )
           ) {
             setDirty(false);
             onDirty(false);
@@ -214,9 +231,17 @@ function DatabaseFacetWorkspace({
   repositoryId?: string;
   onDirty: (dirty: boolean) => void;
 }) {
+  const savedSession = useContext(BackendSavedViewContext);
+  const savedProposal =
+    savedSession?.saved?.state.kind === "database" && "proposal" in savedSession.saved.target
+      ? {
+          ...savedSession.saved.target.proposal,
+          baseRevisionId: savedSession.saved.pins.revisionId,
+        }
+      : null;
   const [view, setView] = usePinnedValue<ProposalView | null>(
     JSON.stringify([pin?.dataNodeId, pin?.revisionId, context.revisionId]),
-    null,
+    savedProposal,
   );
   const [initialColumnId, setInitialColumnId] = useState<string>();
   const effective: DatabaseContext = view
@@ -253,6 +278,7 @@ function DatabaseFacetWorkspace({
           onView={setView}
           onDirty={onDirty}
           initialColumnId={initialColumnId}
+          initialView={savedProposal ?? undefined}
         />
       )}
       {needsBaseline && <LoadState query={baseline} label="объекты основания предложения" />}
@@ -283,19 +309,50 @@ function DatabaseLists({
 }) {
   const key = databaseKey(context);
   useDatabaseCancellation(key);
-  const [draft, setDraft] = useState("");
-  const [search, setSearch] = useState("");
+  const workspace = useWorkspaceSavedState<Extract<SavedViewState, { kind: "database" }>>(
+    databaseTarget(context),
+    {
+      kind: "database",
+      scope: { datastoreId: context.datastoreId, facetKey: context.facetKey },
+      filters: { search: "" },
+      selection: pin?.dataNodeId ? { recordType: "node", id: pin.dataNodeId } : null,
+      positions: [],
+      collapsedGroupIds: [],
+    },
+    JSON.stringify([pin?.dataNodeId, pin?.recordId, pin?.recordType]),
+  );
+  const state = workspace.state;
+  const [draft, setDraft] = useState(state.filters.search);
+  const search = state.filters.search;
   const [tableCursors, setTableCursors] = useState([""]);
   const [relationshipCursors, setRelationshipCursors] = useState([""]);
-  const [relationshipTable, setRelationshipTable] = useState<{
-    value: string;
-    label: string;
-  } | null>(null);
-  const tableId = relationshipTable?.value ?? "";
-  const [selection, setSelection] = usePinnedValue<DatabaseSelection | null>(
-    JSON.stringify([pin?.dataNodeId, pin?.revisionId, context.revisionId]),
-    pin?.dataNodeId ? { type: "node", id: pin.dataNodeId } : null,
-  );
+  const tableId = state.filters.relationshipTableId ?? "";
+  const [relationshipLabel, setRelationshipLabel] = useState(tableId);
+  const relationshipTable = tableId ? { value: tableId, label: relationshipLabel } : null;
+  const setRelationshipTable = (value: { value: string; label: string } | null) => {
+    setRelationshipLabel(value?.label ?? "");
+    const { relationshipTableId: _old, ...filters } = state.filters;
+    workspace.onStateChange({
+      ...state,
+      selection: null,
+      filters: { ...filters, ...(value ? { relationshipTableId: value.value } : {}) },
+    });
+  };
+  const [historicalSelection, setHistoricalSelection] = useState<DatabaseSelection | null>(null);
+  const selection: DatabaseSelection | null =
+    historicalSelection ??
+    (state.selection ? { type: state.selection.recordType, id: state.selection.id } : null);
+  const setSelection = (selection: DatabaseSelection | null) => {
+    if (selection?.revisionId && selection.revisionId !== context.revisionId) {
+      setHistoricalSelection(selection);
+      return;
+    }
+    setHistoricalSelection(null);
+    workspace.onStateChange({
+      ...state,
+      selection: selection ? { recordType: selection.type, id: selection.id } : null,
+    });
+  };
   const origin = useRef<HTMLElement | null>(null);
   const fallback = useRef<HTMLHeadingElement>(null);
   const tablesInput = {
@@ -351,6 +408,43 @@ function DatabaseLists({
   }
   return (
     <Stack gap="md" style={{ minWidth: 0 }}>
+      {workspace.canCapture && (
+        <Button
+          variant="default"
+          disabled={!!historicalSelection || workspace.captureDisabled}
+          onClick={workspace.capture}
+        >
+          Сохранить эту базу данных
+        </Button>
+      )}
+      {historicalSelection && (
+        <Text size="sm">
+          Инспектор показывает историческую ссылку другой ревизии. Закройте его, чтобы сохранить вид
+          выбранного источника.
+        </Text>
+      )}
+      <Stack gap="xs" aria-label="Группы схем базы данных">
+        {nodes
+          .filter((node) => node.kind === "db_schema" && relationalFacets(node)[context.facetKey])
+          .map((node) => (
+            <Button
+              key={node.id}
+              variant="default"
+              aria-expanded={!state.collapsedGroupIds.includes(node.id)}
+              onClick={() =>
+                workspace.onStateChange({
+                  ...state,
+                  collapsedGroupIds: state.collapsedGroupIds.includes(node.id)
+                    ? state.collapsedGroupIds.filter((id) => id !== node.id)
+                    : [...state.collapsedGroupIds, node.id],
+                })
+              }
+            >
+              {state.collapsedGroupIds.includes(node.id) ? "Развернуть" : "Свернуть"} схему{" "}
+              {node.name}
+            </Button>
+          ))}
+      </Stack>
       {context.proposal && <Text fw={600}>Предложенная схема · проверки не выполнены</Text>}
       {tablePage && (
         <>
@@ -398,9 +492,12 @@ function DatabaseLists({
       <form
         onSubmit={(event) => {
           event.preventDefault();
-          setSearch(draft.trim());
+          workspace.onStateChange({
+            ...state,
+            filters: { ...state.filters, search: draft.trim() },
+            selection: null,
+          });
           setTableCursors([""]);
-          setSelection(null);
         }}
       >
         <Group align="flex-end">
@@ -467,7 +564,6 @@ function DatabaseLists({
               : null,
           );
           setRelationshipCursors([""]);
-          setSelection(null);
         }}
       />
       <LoadState query={relationships} label="внешних ключей" />
@@ -589,6 +685,13 @@ function DatabaseLists({
           tables={tablePage.tableItems}
           relationships={relationshipPage.relationshipItems}
           onSelect={select}
+          positions={state.positions}
+          collapsedGroupIds={state.collapsedGroupIds}
+          onPositionsChange={(positions) => workspace.onStateChange({ ...state, positions })}
+          onCollapsedGroupsChange={(collapsedGroupIds) =>
+            workspace.onStateChange({ ...state, collapsedGroupIds })
+          }
+          onPreview={workspace.preview}
         />
       )}
       {selection && (

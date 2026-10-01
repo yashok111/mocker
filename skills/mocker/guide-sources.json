@@ -183,7 +183,7 @@
     },
     {
       "workflowId": "mocker-backend-database",
-      "workflowVersion": "3",
+      "workflowVersion": "4",
       "entrypoint": "backend-database",
       "requiredModelSchemaVersions": [
         "2",
@@ -198,15 +198,17 @@
         "backend-db-proposals",
         "backend-db-typed-edits",
         "backend-flow-query",
-        "backend-data-access-query"
+        "backend-data-access-query",
+        "backend-saved-views"
       ],
       "requiredViewSchemaVersions": [
-        "proposal-relational-v1"
+        "proposal-relational-v1",
+        "saved-view-v1"
       ]
     },
     {
       "workflowId": "mocker-backend-inspect",
-      "workflowVersion": "1",
+      "workflowVersion": "2",
       "entrypoint": "backend-inspect",
       "requiredModelSchemaVersions": [
         "3"
@@ -216,7 +218,11 @@
         "backend-revisions",
         "backend-graph-query",
         "backend-flow-query",
-        "backend-data-access-query"
+        "backend-data-access-query",
+        "backend-saved-views"
+      ],
+      "requiredViewSchemaVersions": [
+        "saved-view-v1"
       ]
     }
   ]

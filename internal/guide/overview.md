@@ -6,8 +6,8 @@ metadata:
   workflowVersion: "1"
   requiredModelSchemaVersions: "[]"
   requiredCapabilities: "[]"
-  guideSetId: "sha256:a6c5d49005adc09a69aaa1ab94f08078d58c9f075a064cd6077c7976490967ce"
-  manifestHash: "sha256:a6c5d49005adc09a69aaa1ab94f08078d58c9f075a064cd6077c7976490967ce"
+  guideSetId: "sha256:66502d122afa64656c57f74e1eb6ef5ad5dfe5396870f6278a348901a2b32589"
+  manifestHash: "sha256:66502d122afa64656c57f74e1eb6ef5ad5dfe5396870f6278a348901a2b32589"
 ---
 
 # mocker
@@ -87,14 +87,14 @@ the generated root alias `references/backend/database-workflow.md`, or advertise
 then load database-reference/model/recovery only as needed. Shared topics have
 one canonical workflow owner; explicitly select/verify that owner's supported
 identity in this same global set and check its returned tuple/contentHash.
-Before any proposal write select database workflow3, proposal-relational-v1 view,
+Before any proposal write select database workflow4, proposal-relational-v1 view,
 exact guide set/hash and proposal/edit capabilities. Workflow1 is inspection-only;
 a complete compatible server fallback is required for mismatched local metadata.
 No compatible set means no proposal writes. Source import selects import4, including runtime-flow-v1/schema3 only on explicit
 compatible initial import or relational→runtime extension. Flow/access questions
 select mocker-backend-inspect, references/backend/inspect.md or backend-inspect
 from the advertised set; load flow-reference/analysis progressively under their
-actual inspect1 owner. Ordinary inspection performs no writes. An explicitly
+actual inspect2 owner. Ordinary inspection performs no writes. An explicitly
 requested resolvable source gap uses the selected import4 whole-scope reconcile,
 independent source audit and commit procedure. Unavailable source keeps its
 unknown with a concrete reason and no empty progress revision.
@@ -166,3 +166,12 @@ initial-variable variants. Run selected cases with `run_design_scenario`, a
 fresh runId and the returned revisionId/name/variables, then verify the actual
 controlFlow and refresh coverage. Generation is read-only; unresolved paths
 include reasons. See `references/design.md` for the workflow and limits.
+
+Saved Flow/Database presentation tasks select inspect2/database4 respectively,
+requiring backend-saved-views and saved-view-v1 in that same pinned set. Read the
+saved version before model reads, preserve exact targets and both URL viewId/
+viewVersion, and use the owner's complete saved-view example. Create/save are
+explicit presentation writes with retained exact keys/requests and old-version
+CAS. Failed saved reads have no head fallback. Proposal intent/unknown runtime
+checks stay explicit; layouts/collapse infer no source behavior or field lineage.
+Source import continues to select import4. Live agent acceptance remains deferred.

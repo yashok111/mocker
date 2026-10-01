@@ -1,4 +1,6 @@
 import { afterEach, expect, it, vi } from "vitest";
+import { useState } from "react";
+import userEvent from "@testing-library/user-event";
 import { act, render, screen } from "@testing-library/react";
 import { MantineProvider } from "@mantine/core";
 import type { BackendDatabaseTableItem } from "@/api/generated/schemas";
@@ -11,6 +13,7 @@ const state = vi.hoisted(() => ({
     options: Record<string, unknown>;
     dispose: ReturnType<typeof vi.fn>;
     addNode: ReturnType<typeof vi.fn>;
+    events: Record<string, (value: unknown) => void>;
   }[],
 }));
 vi.mock("../diagram/elkLayout", () => ({
@@ -30,10 +33,18 @@ vi.mock("@antv/x6", () => ({
     dispose = vi.fn();
     addNode = vi.fn();
     addEdge = vi.fn();
-    on = vi.fn();
+    events: Record<string, (value: unknown) => void> = {};
+    on = vi.fn((name: string, callback: (value: unknown) => void) => {
+      this.events[name] = callback;
+    });
     getNodes = () => [];
     constructor(options: Record<string, unknown>) {
-      state.graphs.push({ options, dispose: this.dispose, addNode: this.addNode });
+      state.graphs.push({
+        options,
+        dispose: this.dispose,
+        addNode: this.addNode,
+        events: this.events,
+      });
     }
   },
 }));
@@ -82,7 +93,12 @@ it("discards late layout from a prior context even when table geometry IDs match
   expect(state.graphs).toHaveLength(1);
   const graph = state.graphs[0];
   if (!graph) throw new Error("Expected current graph instance");
-  expect(graph.options.interacting).toBe(false);
+  expect(graph.options.interacting).toMatchObject({
+    nodeMovable: true,
+    edgeMovable: false,
+    vertexMovable: false,
+    magnetConnectable: false,
+  });
   expect(graph.addNode).toHaveBeenCalledWith(
     expect.objectContaining({ label: expect.stringContaining("new-caption") }),
   );
@@ -90,4 +106,73 @@ it("discards late layout from a prior context even when table geometry IDs match
   expect(state.graphs).toHaveLength(1);
   view.unmount();
   expect(graph.dispose).toHaveBeenCalledOnce();
+});
+
+it("moves by keyboard and drag, previews/cancels/applies ELK, retains off-page coordinates and undoes independently of groups", async () => {
+  function Harness() {
+    const [positions, setPositions] = useState([
+      { nodeId: "same-id", x: 100, y: 40 },
+      { nodeId: "offpage", x: -10, y: 50 },
+    ]);
+    const [preview, setPreview] = useState(false);
+    const [groups, setGroups] = useState<string[]>([]);
+    return (
+      <>
+        <BackendDatabaseGraph
+          tables={[table]}
+          relationships={[]}
+          onSelect={() => {}}
+          positions={positions}
+          onPositionsChange={setPositions}
+          collapsedGroupIds={groups}
+          onCollapsedGroupsChange={setGroups}
+          onPreview={setPreview}
+        />
+        <button disabled={preview}>Persist layout</button>
+        <button onClick={() => setGroups(["other-schema"])}>Other group</button>
+        <output data-testid="coordinates">{JSON.stringify(positions)}</output>
+        <output data-testid="groups">{JSON.stringify(groups)}</output>
+      </>
+    );
+  }
+  render(<Harness />, {
+    wrapper: ({ children }) => <MantineProvider env="test">{children}</MantineProvider>,
+  });
+  const request = state.pending[0]!;
+  await act(async () => request.resolve(result(request.input)));
+  expect(state.graphs.at(-1)?.addNode).toHaveBeenCalledWith(
+    expect.objectContaining({ x: 100, y: 40 }),
+  );
+  const move = screen.getByRole("button", { name: "Вправо карточку ER" });
+  move.focus();
+  await userEvent.keyboard("{Enter}");
+  expect(screen.getByTestId("coordinates")).toHaveTextContent('"x":120');
+  expect(screen.getByTestId("coordinates")).toHaveTextContent('"nodeId":"offpage"');
+  await userEvent.click(screen.getByRole("button", { name: "Предпросмотр автораскладки" }));
+  expect(screen.getByRole("button", { name: "Persist layout" })).toBeDisabled();
+  expect(state.graphs.at(-1)?.addNode).toHaveBeenCalledWith(
+    expect.objectContaining({ x: 0, y: 0 }),
+  );
+  await userEvent.click(screen.getByRole("button", { name: "Отменить предпросмотр" }));
+  expect(screen.getByRole("button", { name: "Persist layout" })).toBeEnabled();
+  expect(state.graphs.at(-1)?.addNode).toHaveBeenCalledWith(
+    expect.objectContaining({ x: 120, y: 40 }),
+  );
+  await userEvent.click(screen.getByRole("button", { name: "Предпросмотр автораскладки" }));
+  await userEvent.click(screen.getByRole("button", { name: "Применить расположение" }));
+  expect(screen.getByTestId("coordinates")).toHaveTextContent(
+    '[{"nodeId":"offpage","x":-10,"y":50}]',
+  );
+  await userEvent.click(screen.getByRole("button", { name: "Other group" }));
+  await userEvent.click(screen.getByRole("button", { name: "Отменить расположение" }));
+  expect(screen.getByTestId("groups")).toHaveTextContent('["other-schema"]');
+  expect(screen.getByTestId("coordinates")).toHaveTextContent('"x":120');
+  await act(async () =>
+    state.graphs
+      .at(-1)
+      ?.events["node:moved"]?.({ node: { id: "same-id", position: () => ({ x: 200, y: -40 }) } }),
+  );
+  expect(screen.getByTestId("coordinates")).toHaveTextContent('"x":200,"y":-40');
+  await userEvent.click(screen.getByRole("button", { name: "Отменить расположение" }));
+  expect(screen.getByTestId("coordinates")).toHaveTextContent('"x":120,"y":40');
 });

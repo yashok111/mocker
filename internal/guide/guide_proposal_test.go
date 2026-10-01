@@ -10,11 +10,11 @@ import (
 func TestDatabaseProposalWorkflowNegotiation(t *testing.T) {
 	workflows := BackendWorkflows()
 	i := slices.IndexFunc(workflows, func(w Workflow) bool { return w.WorkflowID == "mocker-backend-database" })
-	if i < 0 || workflows[i].WorkflowVersion != "3" {
-		t.Fatal("proposal writes require a separately selectable database workflow3")
+	if i < 0 || workflows[i].WorkflowVersion != "4" {
+		t.Fatal("proposal writes require a separately selectable database workflow4")
 	}
 	w := workflows[i]
-	for _, capability := range []string{"backend-db-proposals", "backend-db-typed-edits"} {
+	for _, capability := range []string{"backend-db-proposals", "backend-db-typed-edits", "backend-saved-views"} {
 		if !slices.Contains(w.RequiredCapabilities, capability) {
 			t.Fatalf("workflow can write without %s", capability)
 		}
@@ -28,7 +28,7 @@ func TestDatabaseProposalWorkflowNegotiation(t *testing.T) {
 		t.Fatal(err)
 	}
 	var views []string
-	if err := json.Unmarshal(fields["requiredViewSchemaVersions"], &views); err != nil || !slices.Equal(views, []string{"proposal-relational-v1"}) {
+	if err := json.Unmarshal(fields["requiredViewSchemaVersions"], &views); err != nil || !slices.Equal(views, []string{"proposal-relational-v1", "saved-view-v1"}) {
 		t.Fatalf("view negotiation missing: %s %v", raw, err)
 	}
 	// Model/recovery/examples keep their import4 owner in this exact set.

@@ -6,8 +6,8 @@ metadata:
   workflowVersion: "4"
   requiredModelSchemaVersions: "[\"1\",\"2\",\"3\"]"
   requiredCapabilities: "[\"backend-projects\",\"backend-revisions\",\"backend-graph-query\",\"backend-source-import\",\"backend-source-reconcile\",\"backend-revision-compare\",\"backend-relational-import\",\"backend-database-query\",\"backend-database-er\",\"backend-runtime-flow-import\",\"backend-flow-query\",\"backend-data-access-query\"]"
-  guideSetId: "sha256:a6c5d49005adc09a69aaa1ab94f08078d58c9f075a064cd6077c7976490967ce"
-  manifestHash: "sha256:a6c5d49005adc09a69aaa1ab94f08078d58c9f075a064cd6077c7976490967ce"
+  guideSetId: "sha256:66502d122afa64656c57f74e1eb6ef5ad5dfe5396870f6278a348901a2b32589"
+  manifestHash: "sha256:66502d122afa64656c57f74e1eb6ef5ad5dfe5396870f6278a348901a2b32589"
 ---
 
 # Source graph import and reconciliation
@@ -62,11 +62,11 @@ Fetch shared topics with `get_guide {topic,guideSetId:selected.guideSetId}`:
 | `backend-recovery` | import v4 | Before commit, or after timeout/conflict/resume. |
 | `backend-examples` | import v4 | When a concrete fixture or recovery sequence is needed. |
 | `backend-profile-go-sql` | import v4 | For Go, SQL, ORM and migration source extraction. |
-| `backend-database-reference` | database v3 | For relational details, pinned ER, drift and unknown bounds. |
-| `backend-flow-reference` / `backend-analysis` | inspect v1 | For schema3 records, flow/access reads and bounded source certainty. |
+| `backend-database-reference` | database v4 | For relational details, pinned ER, drift and unknown bounds. |
+| `backend-flow-reference` / `backend-analysis` | inspect v2 | For schema3 records, flow/access reads and bounded source certainty. |
 
 Verify import-owned topics against this manifest. For database or inspect topics,
-select the advertised supported database3 or inspect1 owner in this same global
+select the advertised supported database4 or inspect2 owner in this same global
 set/hash, check all its schemas/capabilities and verify the returned actual owner
 tuple/contentHash. A dependency is not import-owned because import uses it.
 Project creation selects project1 at backend-overview in this set before its
@@ -173,7 +173,7 @@ Before first commit, independently check every asserted typed scalar/expression 
     ordered columns/FKs/native definitions/evidence. Return project URL
     `/backend-projects/{projectId}`, revision ID, selected facet, source consistency,
     coverage/gaps/stale counts, unresolved objects and drift/unknown limitations.
-    Flow/access answers select inspect1 in this set and query the exact source3
+    Flow/access answers select inspect2 in this set and query the exact source3
     committed pin, page relevant results and open each record proof.
 
 ## Deletion, replay and comparison boundaries

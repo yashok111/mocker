@@ -232,7 +232,7 @@ func TestOpenAPIContract_declaresResetDataSchemas(t *testing.T) {
 // `0011_design_scenarios.sql`, its aggregate and immutable revision tables;
 // `0012_design_scenario_runs.sql` adds persisted execution reports.
 // `0016_backend_proposals.sql` adds isolated immutable database proposal drafts.
-func TestMigrations_stillExactlySixteenFiles(t *testing.T) {
+func TestMigrations_stillExactlySeventeenFiles(t *testing.T) {
 	entries, err := os.ReadDir(filepath.FromSlash("../../internal/store/migrations"))
 	if err != nil {
 		t.Fatalf("read migrations dir: %v", err)
@@ -243,8 +243,8 @@ func TestMigrations_stillExactlySixteenFiles(t *testing.T) {
 			sqlFiles = append(sqlFiles, e.Name())
 		}
 	}
-	if len(sqlFiles) != 16 {
-		t.Errorf("internal/store/migrations/ holds %d .sql files (%v), want exactly 16", len(sqlFiles), sqlFiles)
+	if len(sqlFiles) != 17 {
+		t.Errorf("internal/store/migrations/ holds %d .sql files (%v), want exactly 17", len(sqlFiles), sqlFiles)
 	}
 }
 

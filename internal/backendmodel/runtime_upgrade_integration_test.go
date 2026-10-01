@@ -161,7 +161,7 @@ func TestRuntimeUpgradePreservesOldDocumentsAndReceipts(t *testing.T) {
 	}
 	r = NewRepo(reopened)
 	version, err := reopened.SchemaVersion(t.Context())
-	if err != nil || version != 16 {
+	if err != nil || version != 17 {
 		t.Fatalf("unexpected migration %d %v", version, err)
 	}
 	after := proposalSourceBytes(t, r)

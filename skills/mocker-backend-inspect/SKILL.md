@@ -3,11 +3,12 @@ name: mocker-backend-inspect
 description: Inspect a pinned source-backed HTTP endpoint flow, branches, queries, transaction boundaries or imported table/column readers and writers in mocker. Use for backend flow and data-access questions or an explicitly requested blocking source gap investigation.
 metadata:
   workflowId: "mocker-backend-inspect"
-  workflowVersion: "1"
+  workflowVersion: "2"
   requiredModelSchemaVersions: "[\"3\"]"
-  requiredCapabilities: "[\"backend-projects\",\"backend-revisions\",\"backend-graph-query\",\"backend-flow-query\",\"backend-data-access-query\"]"
-  guideSetId: "sha256:a6c5d49005adc09a69aaa1ab94f08078d58c9f075a064cd6077c7976490967ce"
-  manifestHash: "sha256:a6c5d49005adc09a69aaa1ab94f08078d58c9f075a064cd6077c7976490967ce"
+  requiredViewSchemaVersions: "[\"saved-view-v1\"]"
+  requiredCapabilities: "[\"backend-projects\",\"backend-revisions\",\"backend-graph-query\",\"backend-flow-query\",\"backend-data-access-query\",\"backend-saved-views\"]"
+  guideSetId: "sha256:66502d122afa64656c57f74e1eb6ef5ad5dfe5396870f6278a348901a2b32589"
+  manifestHash: "sha256:66502d122afa64656c57f74e1eb6ef5ad5dfe5396870f6278a348901a2b32589"
 ---
 
 # Pinned source flow and data-access inspection
@@ -21,10 +22,12 @@ leaf loads shared references from the server and needs no neighboring package.
 ## Negotiate the complete procedure
 
 Call `get_server_config` and `get_backend_capabilities`. Select the advertised
-supported `mocker-backend-inspect` workflow1 with schema3, `runtime-flow-v1`, all
+supported `mocker-backend-inspect` workflow2 with schema3, `runtime-flow-v1`, all
 listed capabilities and `query_backend_flow`. Decode installed metadata's schema
 and capability JSON-list strings. Matching tools or a partial schema intersection
-cannot qualify a flow task. This workflow has no released older inspect version.
+cannot qualify a flow task. Inspect workflow1 was released for source inspection;
+this set advertises workflow2 with saved-view support. Older local workflow1 text
+requires the complete compatible workflow2 server fallback for saved-view tasks.
 
 Use installed text only when workflowId/version/guideSetId/manifestHash match the
 selected advertised tuple and each needed local topic contentHash matches its
@@ -41,11 +44,11 @@ Load details progressively from this same immutable guideSetId:
 
 | Topic | Actual owner | Read when |
 |---|---|---|
-| `backend-flow-reference` | inspect1 | Before the first flow/access query; strict variants, typed records and pagination. |
-| `backend-analysis` | inspect1 | For witnesses, uncertainty, truncation or a blocking gap. |
+| `backend-flow-reference` | inspect2 | Before the first flow/access query; strict variants, typed records and pagination. |
+| `backend-analysis` | inspect2 | For witnesses, uncertainty, truncation or a blocking gap. |
 | `backend-model` | import4 | When identity, proof, freshness or coverage needs explanation. |
 | `backend-recovery` | import4 | On resume/read failure, or before authorized import publication. |
-| `backend-database-reference` | database3 | For selected SQL/ORM facets and relational bounds. |
+| `backend-database-reference` | database4 | For selected SQL/ORM facets and relational bounds. |
 | `backend-import` | import4 | Only when an authorized source update is justified. |
 
 Verify own topics against the selected inspect manifest. For a shared topic,
@@ -86,7 +89,7 @@ retaining saved pins, original requests and receipts.
    graph edges and `get_backend_evidence` at the same revision. Read complete
    native text, source path/hash/paired physical lines and property evidence.
    Merged witness evidence IDs do not replace each record's proof. For database
-   detail select database3 in this set and retain datastoreId/facetKey explicitly.
+   detail select database4 in this set and retain datastoreId/facetKey explicitly.
 7. Answer with project/revision/hash, selected start/data/facet, witness IDs,
    evidence and the inspected scope. Distinguish explicit/inferred/stale/
    unresolved status, direct/possible relations, source coverage, local boundary
@@ -117,3 +120,25 @@ import workflow never authorizes a mutation. No scheduler or live collector is
 part of this procedure. Lost/uncertain writes replay their exact original
 complete inputs/CAS/keys before new work, even if the source, head or audit has
 changed; use the selected import recovery, never guess publication success.
+
+## Save and reopen a Flow presentation when requested
+
+Before saved-view writes require inspect2, `backend-saved-views` and
+`saved-view-v1` in the selected global set. Ordinary inspection still writes
+nothing. Use the saved-view contract/example in `backend-flow-reference` under
+this inspect2 owner. List `list_backend_saved_views {projectId,kind:"flow"}`,
+create from the exact source pin and complete submitted presentation, then retain
+returned viewId/version/pins. Reopen with `get_backend_saved_view
+{projectId,viewId,version}` before graph/flow/evidence reads; use only its target
+and state. Missing, foreign or failed saved pins never fall back to source head.
+Sharing includes both viewId and viewVersion. Open-latest resolves once and then
+pins that returned version. Reset query cursors to the first page on reopen;
+off-page selection/coordinates remain available when their page is shown.
+
+Save uses the opened expectedVersion, never current head/version guessed from a
+list. Retain the exact request/key on timeout/network/5xx; retry it unchanged
+before another save. A409 preserves local state: explicitly reload/reconcile or
+create a new view with a new key. Kind/target are immutable; another source or
+proposal requires save-as-new. Coordinates and real known transaction collapse
+change canvas presentation only. No path, transaction guarantee or field lineage
+is inferred. Ordinary-agent acceptance and live agent evaluation remain deferred.

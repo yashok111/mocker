@@ -16,8 +16,8 @@ func TestRelationalGuideTopicsHaveServedOwnerAndBody(t *testing.T) {
 	for _, item := range []struct {
 		topic, owner, version string
 	}{
-		{topic: "backend-database", owner: "mocker-backend-database", version: "3"},
-		{topic: "backend-database-reference", owner: "mocker-backend-database", version: "3"},
+		{topic: "backend-database", owner: "mocker-backend-database", version: "4"},
+		{topic: "backend-database-reference", owner: "mocker-backend-database", version: "4"},
 		{topic: "backend-profile-go-sql", owner: "mocker-backend-import", version: "4"},
 	} {
 		t.Run(item.topic, func(t *testing.T) {
@@ -74,10 +74,10 @@ func TestRelationalGuideWorkflowRequirements(t *testing.T) {
 			},
 		},
 		{
-			entrypoint: "backend-database", owner: "mocker-backend-database", version: "3",
+			entrypoint: "backend-database", owner: "mocker-backend-database", version: "4",
 			schemas: []string{"2", "3"},
 			capabilities: []string{
-				"backend-projects", "backend-revisions", "backend-graph-query", "backend-database-query", "backend-database-er", "backend-db-proposals", "backend-db-typed-edits", "backend-flow-query", "backend-data-access-query",
+				"backend-projects", "backend-revisions", "backend-graph-query", "backend-database-query", "backend-database-er", "backend-db-proposals", "backend-db-typed-edits", "backend-flow-query", "backend-data-access-query", "backend-saved-views",
 			},
 		},
 	} {

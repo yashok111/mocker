@@ -30,7 +30,8 @@ export function flowStepContext(node: BackendNode): string[] {
 export function buildFlowScene(nodes: BackendNode[], edges: BackendEdge[]) {
   const visible = nodes.slice(0, 200);
   const ids = new Set(visible.map((node) => node.id));
-  const eligible = edges.filter((edge) => ids.has(edge.from) && ids.has(edge.to)).slice(0, 600);
+  const matching = edges.filter((edge) => ids.has(edge.from) && ids.has(edge.to));
+  const eligible = matching.slice(0, 600);
   const rendered = new Set(eligible.map((edge) => edge.id));
   const input: DiagramLayoutInput = {
     nodes: visible.map((node) => ({ id: node.id, width: 260, height: 120 })),
@@ -46,6 +47,8 @@ export function buildFlowScene(nodes: BackendNode[], edges: BackendEdge[]) {
     nodes: visible,
     edges: eligible,
     excludedNodes: nodes.length - visible.length,
+    excludedEdges: Math.max(0, matching.length - 600),
+    excludedEndpoints: edges.length - matching.length,
     boundaries: edges.filter((edge) => !rendered.has(edge.id)),
   };
 }

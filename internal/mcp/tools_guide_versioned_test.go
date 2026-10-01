@@ -126,6 +126,7 @@ func TestGuideRequiredCapabilitiesHaveMCPTools(t *testing.T) {
 		"backend-relational-import":   {"begin_backend_import", "put_backend_import_batch", "preview_backend_import", "commit_backend_import"},
 		"backend-database-query":      {"query_backend_database"},
 		"backend-database-er":         {"query_backend_database", "get_backend_node", "get_backend_evidence", "get_backend_coverage"},
+		"backend-saved-views":         {"list_backend_saved_views", "create_backend_saved_view", "get_backend_saved_view", "save_backend_saved_view"},
 		"backend-db-proposals":        {"list_backend_proposals", "create_backend_proposal", "get_backend_proposal"},
 		"backend-db-typed-edits":      {"preview_backend_proposal_commands", "apply_backend_proposal_commands"},
 		"backend-runtime-flow-import": {"begin_backend_import", "put_backend_import_batch", "preview_backend_import", "commit_backend_import"},

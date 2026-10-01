@@ -1,6 +1,6 @@
 # Source flow model and pinned reads
 
-Canonical owner: `mocker-backend-inspect` workflow1. Select/verify this owner's
+Canonical owner: `mocker-backend-inspect` workflow2. Select/verify this owner's
 identity and contentHash in the same global guide set before using the topic.
 Source schema3 and `runtime-flow-v1` extend relational source records. They do
 not describe runtime observation or the effect of a database proposal.
@@ -123,3 +123,59 @@ length. Shared flow/returns do not reset hop depth. Refused expansion records it
 truncation reason even when another route succeeds. Witness choice is shortest,
 then lexicographic among admitted admissible paths; it is not a runtime stack.
 Page size defaults100/max500 and does not change traversal or witnesses.
+
+## Pinned saved Flow views
+
+Require inspect2, `backend-saved-views` and document `saved-view-v1`. Four tools:
+`list_backend_saved_views`, `create_backend_saved_view`, `get_backend_saved_view`,
+`save_backend_saved_view`. Read-only list/get are idempotent; create/save use
+retained idempotency keys. A SavedView is an immutable version with id/projectId,
+name, version, target, server-derived pins, full state and original timestamps.
+GET version is a positive exact int64; browsers reject unsafe JS integers.
+
+The state is exactly `{kind:"flow",scope:{entrypointId?,flowId?,dataNodeId?},
+filters:{search,accessKind,reverseAccessKind},selection,positions,collapsedGroupIds}`.
+Access kinds are empty/reads/writes/deletes independently. selection is null or
+`{recordType:"node"|"edge",id}`. Positions are `{nodeId,x,y}` for real steps of
+selected flow; collapsed groups are real transactions with known membership in
+that flow. Without flowId both arrays are empty. Omit absent optional UUIDs.
+Search means submitted text; draft text and cursors are not saved. Coordinates
+are finite within ±1000000; arrays have unique IDs, at most200 each. Name/search
+limits are200 characters; view documents/requests are bounded at128KiB.
+
+Fixture-bound example: substitute exact UUIDs read at the source3 pin; preserve
+this complete state for the first create and version1 read.
+
+```json
+{
+  "projectId": "<project-uuid>", "name": "Cancel orders",
+  "target": {"revisionId": "<source3-revision-uuid>"},
+  "state": {
+    "kind": "flow",
+    "scope": {"entrypointId": "<operation-uuid>", "flowId": "<flow-uuid>", "dataNodeId": "<table-uuid>"},
+    "filters": {"search": "cancel", "accessKind": "writes", "reverseAccessKind": "reads"},
+    "selection": {"recordType": "node", "id": "<step-uuid>"},
+    "positions": [{"nodeId": "<step-uuid>", "x": 320, "y": -20}],
+    "collapsedGroupIds": ["<known-transaction-uuid>"]
+  },
+  "idempotencyKey": "flow-view-create-1"
+}
+```
+
+1. `list_backend_saved_views {projectId,kind:"flow",limit:50}`; page with the same
+   kind/limit. Create using the object above; retain response version1 and pins.
+2. Save with `{projectId,viewId,name:"Cancel orders arranged",state:<complete
+   updated state>,expectedVersion:1,idempotencyKey:"flow-view-save-2"}`. Retain this
+   exact object until acknowledged. On a lost response retry this identical
+   object/key, even if another save advanced the view. The replay is version2.
+3. `get_backend_saved_view {projectId,viewId,version:1}` returns the first original
+   presentation and exact source, even after reimport. Query from its target/state.
+4. A new save using version1 and a new key after version2 exists gives409
+   `backend_version_conflict` with currentVersion2. Keep edits and explicitly
+   reload or save-as-new; changing only expectedVersion is forbidden.
+
+Manual/ELK layout and collapse hide only canvas members/incident edges. Lists,
+inspectors and stored off-page coordinates persist; no synthetic edge/node or
+transaction atomicity claim appears. Canvas caps200nodes/600edges are distinct
+from collapse and pagination. Preview is local and Save is disabled until Apply
+or Cancel; one-step undo restores coordinates independently of collapse.

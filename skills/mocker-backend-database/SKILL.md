@@ -3,12 +3,12 @@ name: mocker-backend-database
 description: Inspect a pinned source-backed PostgreSQL or SQLite database model, ordered columns/FKs, facet drift, coverage and evidence in mocker. Use for database/ER/schema inspection; import uses mocker-backend-import and design typed NULL/NOT NULL and FK proposals with pinned preview/apply and unverified criteria.
 metadata:
   workflowId: "mocker-backend-database"
-  workflowVersion: "3"
+  workflowVersion: "4"
   requiredModelSchemaVersions: "[\"2\",\"3\"]"
-  requiredViewSchemaVersions: "[\"proposal-relational-v1\"]"
-  requiredCapabilities: "[\"backend-projects\",\"backend-revisions\",\"backend-graph-query\",\"backend-database-query\",\"backend-database-er\",\"backend-db-proposals\",\"backend-db-typed-edits\",\"backend-flow-query\",\"backend-data-access-query\"]"
-  guideSetId: "sha256:a6c5d49005adc09a69aaa1ab94f08078d58c9f075a064cd6077c7976490967ce"
-  manifestHash: "sha256:a6c5d49005adc09a69aaa1ab94f08078d58c9f075a064cd6077c7976490967ce"
+  requiredViewSchemaVersions: "[\"proposal-relational-v1\",\"saved-view-v1\"]"
+  requiredCapabilities: "[\"backend-projects\",\"backend-revisions\",\"backend-graph-query\",\"backend-database-query\",\"backend-database-er\",\"backend-db-proposals\",\"backend-db-typed-edits\",\"backend-flow-query\",\"backend-data-access-query\",\"backend-saved-views\"]"
+  guideSetId: "sha256:66502d122afa64656c57f74e1eb6ef5ad5dfe5396870f6278a348901a2b32589"
+  manifestHash: "sha256:66502d122afa64656c57f74e1eb6ef5ad5dfe5396870f6278a348901a2b32589"
 ---
 
 # Pinned database inspection and proposals
@@ -23,9 +23,9 @@ or who reads a column. This leaf needs no neighboring root package.
 ## Select and verify the read procedure
 
 Call `get_server_config` and `get_backend_capabilities`. Select an advertised
-supported `mocker-backend-database` workflow3 with schemas2/3, database-query/ER,
+supported `mocker-backend-database` workflow4 with schemas2/3, database-query/ER,
 source flow/access reads and
-all its required capabilities and proposal-relational-v1 view support. Tool-name matches or a schema1-only set cannot
+all its required capabilities, backend-saved-views, and proposal-relational-v1/saved-view-v1 view support. Tool-name matches or a schema1-only set cannot
 supply relational inspection. Decode installed schema/capability metadata from
 its JSON-list strings. Use local text only on an exact workflowId/version/set/
 manifestHash match and matching topic contentHash. Otherwise fetch the complete
@@ -44,7 +44,7 @@ explicitly select the supported advertised `mocker-backend-import` v4 identity
 with that same global guideSetId/manifestHash, check its declared requirements,
 and verify each returned actual owner tuple/contentHash against its manifest.
 This selects a reference owner, without starting import writes. Never assert that
-an import-owned topic belongs to database v3. Unknown sets fail; do not substitute
+an import-owned topic belongs to database v4. Unknown sets fail; do not substitute
 latest or read a neighboring root directory. No model/protocol/example bulk load
 is required for a straightforward already-pinned table inspection.
 
@@ -79,7 +79,7 @@ is required for a straightforward already-pinned table inspection.
    between explicit known facets and separate native-definition differences.
    Missing selected-facet proofs are limitations, not absence. Canvas limits or
    one query page do not prove full schema coverage.
-6. For imported readers/writers select inspect1 in this same set, verify its
+6. For imported readers/writers select inspect2 in this same set, verify its
    schema3/profile/capabilities and flow-reference/analysis topics, then page
    query_backend_flow view:accesses at this exact source revision and dataNodeId.
    Schema2 flow reads are unavailable. Whole-table unknown-column accesses are
@@ -88,7 +88,7 @@ is required for a straightforward already-pinned table inspection.
 
 ## Typed proposal procedure
 
-Before the first design write select database workflow3, exact guideSetId and
+Before the first design write select database workflow4, exact guideSetId and
 manifestHash, source schemas2/3, view `proposal-relational-v1`, and both
 `backend-db-proposals` and `backend-db-typed-edits`. An inspection-only workflow1
 or matching tool names is insufficient. If local metadata differs, fetch and
@@ -153,3 +153,26 @@ current explicit unique key still proves max1. A known nullable source under
 MATCH SIMPLE can prove min0 despite another unknown nullable value.
 Missing/inferred/stale proof cannot confirm the affected bound. A join table
 remains a table with its FKs.
+
+## Save and reopen a Database presentation when requested
+
+Require database4, `backend-saved-views`, `saved-view-v1` and the existing source/
+proposal versions before writes. Use the complete example/contract in
+`backend-database-reference` under this database4 owner. List source/proposal
+Database views, create from revisionId or the exact proposal target, and retain
+all returned pins. A saved proposal retains its immutable proposalRevisionId,
+source base, desired intent, unverified checks and base-outdated warning after
+source or draft advancement. Read the saved version first and only then issue
+Database/graph/node reads from that target. Never initialize it from current draft
+or substitute another scope when the saved read fails.
+
+The whole submitted presentation includes search, relationshipTableId, selection
+(including designed FK edges), manual positions and real schema collapsed IDs.
+Saving does not apply proposal commands, mutate source or verify the database.
+Reopen starts the first query page and retains other-page coordinates/selection.
+Sharing uses viewId plus viewVersion. Save appends using that opened version's
+expectedVersion; retain exact input/key for uncertain retries.409 keeps local
+changes and requires explicit reload or save-as-new; never update only CAS.
+Changing kind/target requires a new view. Preview/layout/collapse do not invent
+relationships or evidence. Ordinary-agent acceptance and live agent evaluation
+remain deferred; public SDK/REST examples are verification of the interface.

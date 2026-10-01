@@ -427,9 +427,9 @@ func TestAutoCheckpointPolicy_pinsEveryMutatingRoute(t *testing.T) {
 		cpGroupNeverTouchesLayer: 38, // Includes read-only event-map analysis and pinned backend graph/database/flow queries.
 		// Rows in another aggregate: runtime scenarios, checkpoints, API
 		// designs, four persisted design-scenario writes, run start/cancel, and four state-diagram writes.
-		cpGroupAnotherLayer: 40, // Includes backend metadata, import writes and proposal create/apply.
+		cpGroupAnotherLayer: 42, // Includes backend metadata, import writes, proposal create/apply and saved-view create/save.
 		// Every GET in the table.
-		cpGroupRead: 69, // Includes source reads and proposal list/get plus three pinned read aliases.
+		cpGroupRead: 71, // Includes source reads, proposal and saved-view list/get, plus three pinned read aliases.
 	}
 
 	byPattern := checkpointPolicyByPattern(t)
@@ -497,8 +497,9 @@ func TestAutoCheckpointPolicy_pinsEveryMutatingRoute(t *testing.T) {
 			mutating = append(mutating, rt.pattern)
 		}
 	}
-	if len(mutating) != 95 {
-		t.Fatalf("routes() registers %d mutating patterns, want 95", len(mutating))
+	// Saved-view create/save append presentation versions in their own aggregate.
+	if len(mutating) != 97 {
+		t.Fatalf("routes() registers %d mutating patterns, want 97", len(mutating))
 	}
 
 	// The two halves the group counts alone cannot state: a mutating route

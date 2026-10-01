@@ -1,6 +1,6 @@
 # Bounded source analysis and blocking gaps
 
-This topic belongs to `mocker-backend-inspect` workflow1. Load and verify it
+This topic belongs to `mocker-backend-inspect` workflow2. Load and verify it
 against that actual owner's manifest in the selected immutable global guide set.
 It explains static source scope; no durable analysis job or impact engine runs.
 

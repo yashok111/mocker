@@ -124,7 +124,7 @@ func addBackendImportTool(s *sdk.Server, lb *loopback, tool *sdk.Tool, route str
 			}
 		}
 		var params []any
-		for _, key := range []string{"projectId", "importId", "proposalId", "revisionId", "nodeId", "batchId"} {
+		for _, key := range []string{"projectId", "importId", "proposalId", "viewId", "revisionId", "nodeId", "batchId"} {
 			raw, ok := in[key]
 			if !ok {
 				continue
@@ -159,9 +159,9 @@ func addBackendImportTool(s *sdk.Server, lb *loopback, tool *sdk.Tool, route str
 		var err error
 		if method == "GET" {
 			q := url.Values{}
-			for _, key := range []string{"limit", "cursor", "subjectId", "evidenceId", "previewVersion", "recordType", "baseRevisionId", "status", "proposalRevisionId"} {
+			for _, key := range []string{"limit", "cursor", "subjectId", "evidenceId", "previewVersion", "recordType", "baseRevisionId", "status", "proposalRevisionId", "kind", "version"} {
 				if raw, ok := in[key]; ok {
-					if key == "limit" || key == "previewVersion" {
+					if key == "limit" || key == "previewVersion" || key == "version" {
 						var value int64
 						if err := json.Unmarshal(raw, &value); err != nil {
 							return designScenarioToolErrorResult(err), nil

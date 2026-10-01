@@ -15,7 +15,7 @@ function Page() {
     <BackendProjectPage
       projectId={projectId}
       sourcePin={pin}
-      onSourceNavigate={(search) => void navigate({ search, replace: false })}
+      onSourceNavigate={(search, replace) => void navigate({ search, replace: replace ?? false })}
     />
   );
 }

@@ -42,8 +42,8 @@ func TestRelationalProfileEmptyStoreReopen(t *testing.T) {
 		t.Fatalf("empty revision changed on reopen: %s, %v", after, err)
 	}
 	var schema int
-	if err := reopened.R.QueryRowContext(t.Context(), `PRAGMA user_version`).Scan(&schema); err != nil || schema != 16 {
-		t.Fatalf("schema16 compatibility: %d, %v", schema, err)
+	if err := reopened.R.QueryRowContext(t.Context(), `PRAGMA user_version`).Scan(&schema); err != nil || schema != 17 {
+		t.Fatalf("schema17 compatibility: %d, %v", schema, err)
 	}
 	in := relationalInput(firstImportFixture(p), false)
 	s, err := r.BeginImport(t.Context(), p.ID, in)

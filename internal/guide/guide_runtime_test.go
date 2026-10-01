@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 )
 
@@ -14,10 +15,10 @@ func TestRuntimeGuideOwnersAndRequirements(t *testing.T) {
 		topic, owner, version string
 	}{
 		{"backend-import", "mocker-backend-import", "4"},
-		{"backend-database", "mocker-backend-database", "3"},
-		{"backend-inspect", "mocker-backend-inspect", "1"},
-		{"backend-flow-reference", "mocker-backend-inspect", "1"},
-		{"backend-analysis", "mocker-backend-inspect", "1"},
+		{"backend-database", "mocker-backend-database", "4"},
+		{"backend-inspect", "mocker-backend-inspect", "2"},
+		{"backend-flow-reference", "mocker-backend-inspect", "2"},
+		{"backend-analysis", "mocker-backend-inspect", "2"},
 	} {
 		owner, ok := WorkflowForTopic(item.topic)
 		if !ok || owner.WorkflowID != item.owner || owner.WorkflowVersion != item.version {
@@ -35,6 +36,18 @@ func TestRuntimeGuideOwnersAndRequirements(t *testing.T) {
 		index := slices.IndexFunc(owner.Topics, func(entry TopicMetadata) bool { return entry.Topic == item.topic })
 		if !ok || index < 0 || owner.Topics[index].ContentHash != fmt.Sprintf("sha256:%x", sha256.Sum256([]byte(body))) {
 			t.Fatalf("topic %s cannot be verified against its actual owner", item.topic)
+		}
+		if item.topic == "backend-import" && !strings.Contains(body, "| `backend-flow-reference` / `backend-analysis` | inspect v2 |") {
+			t.Fatal("import dependency table names a different inspect owner")
+		}
+		if item.topic == "backend-inspect" && (!strings.Contains(body, "Inspect workflow1 was released") || strings.Contains(body, "no released older inspect version")) {
+			t.Fatal("inspect2 misstates the released inspect1 history")
+		}
+	}
+	for _, topic := range []string{"backend-inspect", "backend-database"} {
+		owner, _ := WorkflowForTopic(topic)
+		if !slices.Contains(owner.RequiredCapabilities, "backend-saved-views") || !slices.Contains(owner.RequiredViewSchemaVersions, "saved-view-v1") {
+			t.Fatalf("%s can save views without its capability and document version", topic)
 		}
 	}
 	importer, _ := WorkflowForTopic("backend-import")

@@ -300,3 +300,22 @@ Run a returned case through `run_design_scenario` with its revisionId, name,
 variables and a fresh unique runId. Poll and compare actual controlFlow with
 targets; reread coverage. The preview does not execute HTTP or change coverage.
 See `design.md` for limits and the complete workflow.
+
+## Backend saved views
+
+Select inspect2 for source Flow or database4 for source/proposal Database in one
+verified guideSetId/manifestHash. Require backend-saved-views and saved-view-v1;
+import4 remains the source import owner. Saving presentation requires an explicit
+request and does not import/apply/execute source, SQL or migrations.
+
+| Tool | Purpose | Input |
+|---|---|---|
+| `list_backend_saved_views` | Current kind/name/version summaries; stable ID pagination | `projectId*`, `kind` flow/database, `limit`1–100, `cursor` |
+| `create_backend_saved_view` | New immutable target/kind binding and version1 | `projectId*`, `name*`, `target*`, full `state*`, retained `idempotencyKey*` |
+| `get_backend_saved_view` | Exact immutable saved version, or resolve latest once | `projectId*`, `viewId*`, positive exact `version` |
+| `save_backend_saved_view` | Append presentation with CAS; exact retry after uncertain reply | `projectId*`, `viewId*`, `name*`, full `state*`, `expectedVersion*`, retained `idempotencyKey*` |
+
+Reopen resolves saved target/state before model reads. Share viewId/viewVersion;
+failed saved pins never fall back to heads.409 preserves changes and needs
+explicit reload/reconcile or save-as-new. See backend-flow-reference under
+inspect2 and backend-database-reference under database4 for complete examples.

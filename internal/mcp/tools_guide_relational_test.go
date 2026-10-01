@@ -94,8 +94,8 @@ func TestCrossOwnerRelationalGuideSDKUsesAdvertisedPinnedSet(t *testing.T) {
 	for _, item := range []struct {
 		topic, owner, version string
 	}{
-		{topic: "backend-database", owner: "mocker-backend-database", version: "3"},
-		{topic: "backend-database-reference", owner: "mocker-backend-database", version: "3"},
+		{topic: "backend-database", owner: "mocker-backend-database", version: "4"},
+		{topic: "backend-database-reference", owner: "mocker-backend-database", version: "4"},
 		{topic: "backend-model", owner: "mocker-backend-import", version: "4"},
 		{topic: "backend-recovery", owner: "mocker-backend-import", version: "4"},
 		{topic: "backend-profile-go-sql", owner: "mocker-backend-import", version: "4"},

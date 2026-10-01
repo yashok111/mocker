@@ -51,6 +51,10 @@ import (
 var noRoute = []string{}
 
 var toolRoutes = map[string][]string{
+	"list_backend_saved_views":          {"GET /api/backend-projects/{id}/saved-views"},
+	"create_backend_saved_view":         {"POST /api/backend-projects/{id}/saved-views"},
+	"get_backend_saved_view":            {"GET /api/backend-projects/{id}/saved-views/{vid}"},
+	"save_backend_saved_view":           {"POST /api/backend-projects/{id}/saved-views/{vid}/save"},
 	"compare_backend_revisions":         {"POST /api/backend-projects/{id}/revisions/compare"},
 	"get_backend_import_changes":        {"GET /api/backend-projects/{id}/imports/{iid}/changes"},
 	"begin_backend_import":              {"POST /api/backend-projects/{id}/imports"},
@@ -322,7 +326,7 @@ var toolRoutes = map[string][]string{
 // added without an entry here is caught by a test rather than by a 404 in
 // production.
 // B1.2 adds five isolated database proposal operations.
-const toolCount = 174
+const toolCount = 178
 
 // toolPath resolves ONE call a tool makes into the (method, path) pair
 // loopback.do/call take.

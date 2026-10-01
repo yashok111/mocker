@@ -1,5 +1,5 @@
 import { Graph } from "@antv/x6";
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Alert, Button, Stack, Text } from "@mantine/core";
 import type { BackendNode, BackendEdge } from "@/api/generated/schemas";
 import DiagramViewport from "../diagram/DiagramViewport";
@@ -18,17 +18,41 @@ import { databaseButtonStyles } from "./backendDatabaseReads";
 import type { FlowSelection } from "./backendFlowReads";
 import styles from "./BackendFlowGraph.module.css";
 
+import type { SavedLayoutProps } from "./backendSavedViewState";
+import { useSavedViewLayout, collapseFlowScene } from "./backendSavedViewLayout";
+import { SavedViewLayoutControls } from "./BackendSavedViews";
+
 export function BackendFlowGraph({
   nodes,
   edges,
   onSelect,
-}: {
+  positions: externalPositions,
+  collapsedGroupIds = [],
+  onPositionsChange,
+  onPreview,
+}: Partial<SavedLayoutProps> & {
+  onPreview?: (value: boolean) => void;
   nodes: BackendNode[];
   edges: BackendEdge[];
   onSelect: (selection: FlowSelection) => void;
 }) {
-  const scene = useMemo(() => buildFlowScene(nodes, edges), [nodes, edges]);
+  const collapsed = useMemo(
+    () => collapseFlowScene(nodes, edges, collapsedGroupIds),
+    [nodes, edges, collapsedGroupIds],
+  );
+  const scene = useMemo(() => buildFlowScene(collapsed.nodes, collapsed.edges), [collapsed]);
   const geometry = useDiagramLayout(scene.input);
+  const [localPositions, setLocalPositions] = useState<SavedLayoutProps["positions"]>([]);
+  const layout = useSavedViewLayout(
+    geometry.layout,
+    externalPositions ?? localPositions,
+    onPositionsChange ?? setLocalPositions,
+    onPreview,
+  );
+  const movement = useRef(layout.move);
+  useEffect(() => {
+    movement.current = layout.move;
+  });
   const host = useRef<HTMLElement>(null);
   const graphRef = useRef<Graph | null>(null);
   const callback = useRef(onSelect);
@@ -36,19 +60,28 @@ export function BackendFlowGraph({
     callback.current = onSelect;
   });
   useEffect(() => {
-    if (!host.current || !geometry.layout) return;
+    if (!host.current || !layout.display) return;
     const graph = new Graph({
       container: host.current,
       ...diagramOptions(),
       async: false,
-      interacting: false,
+      interacting: {
+        nodeMovable: !layout.preview,
+        edgeMovable: false,
+        edgeLabelMovable: false,
+        arrowheadMovable: false,
+        vertexMovable: false,
+        vertexAddable: false,
+        vertexDeletable: false,
+        magnetConnectable: false,
+      },
       connecting: { allowBlank: false, allowEdge: false, allowNode: false },
-      translating: { restrict: true },
+      translating: { restrict: false },
     });
     graphRef.current = graph;
     const stopWheel = installCanvasWheelZoom(graph, host.current);
     const fit = createInitialFit(graph, host.current);
-    for (const node of geometry.layout.nodes) {
+    for (const node of layout.display.nodes) {
       const record = scene.nodes.find((item) => item.id === node.id)!;
       const stepKind = "stepKind" in record.attributes ? record.attributes.stepKind : record.kind;
       graph.addNode({
@@ -66,16 +99,26 @@ export function BackendFlowGraph({
         },
       });
     }
-    for (const edge of geometry.layout.edges)
+    for (const edge of layout.display.edges)
       graph.addEdge({
         id: edge.id,
         source: edge.source,
         target: edge.target,
         attrs: { line: diagramEdgeLine() },
       });
-    applyDiagramRoutes(graph, geometry.layout);
+    applyDiagramRoutes(graph, layout.display);
     graph.on("node:click", ({ node }) => callback.current({ type: "node", id: node.id }));
     graph.on("edge:click", ({ edge }) => callback.current({ type: "edge", id: edge.id }));
+    graph.on("node:moved", ({ node }) => {
+      const point = node.position();
+      if (!movement.current(node.id, point.x, point.y)) {
+        const previous = layout.display?.nodes.find((item) => item.id === node.id);
+        if (previous) {
+          node.position(previous.x, previous.y);
+          applyDiagramRoutes(graph, layout.display!);
+        }
+      }
+    });
     graph.on("resize", () => fit());
     fit();
     return () => {
@@ -83,14 +126,23 @@ export function BackendFlowGraph({
       graph.dispose();
       graphRef.current = null;
     };
-  }, [geometry.layout, scene]);
+  }, [layout.display, scene, layout.preview]);
   return (
     <Stack gap="xs" style={{ minWidth: 0 }}>
+      <SavedViewLayoutControls
+        layout={layout}
+        label="Flow"
+        names={new Map(scene.nodes.map((node) => [node.id, node.name]))}
+      />
+      <Text size="sm" component="output">
+        Свёрнуто на текущих страницах: {collapsed.hiddenNodes} карточек, {collapsed.hiddenEdges}{" "}
+        связей. Списки и инспектор сохраняют все записи; координаты других страниц сохранены.
+      </Text>
       <Text size="sm" component="output">
         Canvas текущих страниц: {scene.nodes.length} шагов, {scene.edges.length} переходов. За
-        пределами canvas: {scene.excludedNodes} шагов по лимиту, {scene.boundaries.length}{" "}
-        переходов. Списки выше содержат все записи текущих страниц; другие страницы загружаются
-        отдельно.
+        пределами canvas: {scene.excludedNodes} шагов по лимиту, {scene.excludedEdges} переходов по
+        лимиту, {scene.excludedEndpoints} переходов без обоих шагов на текущем canvas. Списки выше
+        содержат все записи текущих страниц; другие страницы загружаются отдельно.
       </Text>
       {scene.boundaries.map((edge) => (
         <Button

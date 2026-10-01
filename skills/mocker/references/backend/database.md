@@ -2,7 +2,7 @@
 
 
 Load as `backend-database-reference` from the selected global guideSetId. Its
-canonical owner is `mocker-backend-database` v3. Import v4 explicitly selects
+canonical owner is `mocker-backend-database` v4. Import v4 explicitly selects
 that supported owner in the same set and verifies the actual returned owner
 workflow/version/set/manifestHash/contentHash against the owner's manifest.
 Do not expect this topic to return import identity. For shared UUID/provenance/
@@ -244,7 +244,7 @@ never truncate. They are validation bounds, not measured performance claims.
 Canvas visibility is at most 200 tables/600 FKs with explicit scope counts; the
 paginated list, relationship table and inspector preserve full read access.
 
-Source schema3 supports imported scoped endpoint accesses through inspect1 and
+Source schema3 supports imported scoped endpoint accesses through inspect2 and
 query_backend_flow. Select that owner in this same set, then page accesses at
 the exact source revision with dataNodeId; table-level unknown-column access is
 possible, never a confirmed column reader/writer. Open query/edge/witness proof.
@@ -252,7 +252,7 @@ Source2 flow inspection is unavailable. DB proposals keep their exact source bas
 for flow navigation; no proposal selector is accepted by the flow query.
 Imported accesses do not verify all writers, data/backfill or proposed behavior.
 Live collection, field lineage, measured data/writer checks, ready/rebase,
-impact, provider migration and saved views remain unavailable.
+impact and provider migration remain unavailable. Saved views persist presentation and exact pins only.
 
 ## Proposal documents and property provenance
 
@@ -303,3 +303,64 @@ Limits add 100 commands/1MiB per proposal batch, 100 authored criteria, and
 4096 UTF-8 bytes per reason/description. Existing 64-pair/reference, graph,
 semantic payload and shared 512MiB project transient limits still apply. No
 truncation, extra open-proposal cap or performance claim is implied.
+
+## Pinned saved Database views and executable SDK example
+
+Require database4, `backend-saved-views` and `saved-view-v1`, preserving source
+schemas2/3 and proposal-relational-v1 requirements. List/get/create/save use the
+four `*_backend_saved_view[s]` tools; no delete or rebind exists. GET resolves an
+exact immutable saved version before reading its source/proposal model. Share
+both viewId and viewVersion. A missing/foreign/network-failed pin is an error,
+never a reason to use current source/draft. Source/proposal heads and project
+versions are unaffected. Returned server-derived pins retain the exact source
+hash and all proposal baseline/effective hashes.
+
+Fixture-bound source example (UUIDs come from the imported PostgreSQL or SQLite
+orders fixture, never names):
+
+```json
+{
+  "projectId": "<project-uuid>", "name": "Orders ER",
+  "target": {"revisionId": "<source-revision-uuid>"},
+  "state": {
+    "kind": "database",
+    "scope": {"datastoreId": "<datastore-uuid>", "facetKey": "sql"},
+    "filters": {"search": "orders", "relationshipTableId": "<orders-table-uuid>"},
+    "selection": {"recordType": "node", "id": "<orders-table-uuid>"},
+    "positions": [{"nodeId": "<orders-table-uuid>", "x": 320, "y": -20}],
+    "collapsedGroupIds": ["<schema-uuid>"]
+  },
+  "idempotencyKey": "database-view-create-1"
+}
+```
+
+1. `list_backend_saved_views {projectId,kind:"database",limit:50}`, then
+   `create_backend_saved_view` with this exact complete object. Retain version1.
+2. Change the selected presentation and call `save_backend_saved_view` with
+   `{projectId,viewId,name:"Orders ER arranged",state:<complete updated state>,
+   expectedVersion:1,idempotencyKey:"database-view-save-2"}`. No target on save.
+3. Simulate a lost response by discarding its acknowledgement; retry the exact
+   original request/key. It returns byte-for-byte version2, even after later saves.
+4. `get_backend_saved_view {projectId,viewId,version:1}` returns original filters,
+   selection/coordinates/collapse and target. Use target with
+   query_backend_database and reset cursors. Reimport cannot move this source pin.
+5. Save from version1 with a new key after version2 exists:409
+   backend_version_conflict/currentVersion2. Preserve edits; explicitly reload and
+   reconcile or create a new view. Never silently overwrite or replace only CAS.
+
+For a proposal use target `{proposal:{proposalId,proposalRevisionId}}`, omit
+revisionId, and select designed FK with `{recordType:"edge",id:<designed-edge>}`.
+Its effective IDs are valid and have no invented source evidence. The saved
+scope must remain creation-bound; source DB scopes can change when validated.
+Old versions remain pinned after source/draft advancement. Intent, checks and
+base-outdated warnings continue to describe the exact old proposal.
+
+Positions name selected-facet tables, including off-page tables; collapsed IDs
+name real db_schema memberships. Collapse hides canvas cards and incident FKs,
+keeps lists/inspectors/coordinates, and creates no synthetic relations.200cards/
+600edges and query pagination are separate limits. Manual graph coordinates and
+local ELK preview/apply/cancel/one-step undo carry no semantic changes; Save is
+disabled during preview. Name/search limits200characters; finite x/y within
+±1000000, unique nonnull arrays at most200, request128KiB. Never save unfinished
+search drafts, cursors, graph bodies, source text or credentials. Ordinary-agent
+acceptance and live agent evaluation remain deferred.

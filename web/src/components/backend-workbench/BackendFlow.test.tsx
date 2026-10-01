@@ -299,3 +299,52 @@ it("cancels late pages when the immutable source selection changes", async () =>
   ).not.toBeInTheDocument();
   expect(screen.getByText(/ревизия new-source/)).toBeInTheDocument();
 });
+
+it("keeps long transaction collapse captions shrinkable and wrapped inside a375px workspace", async () => {
+  const transactionId = "00000000-0000-0000-0000-000000000003";
+  const name = "Orders transaction with a long source name repeated for narrow layout";
+  route({
+    "POST /api/backend-projects/project/flow/query": ({ body }) => {
+      const input = body as Record<string, unknown>;
+      return json(
+        200,
+        page(
+          input,
+          input.view === "entrypoints"
+            ? { entrypointItems: [] }
+            : input.view === "steps"
+              ? {
+                  stepItems: [
+                    {
+                      ...node("step"),
+                      attributes: {
+                        ...node("step").attributes,
+                        transactionContext: { status: "known", transactionId },
+                      },
+                    },
+                  ],
+                }
+              : { transitionItems: [] },
+        ),
+      );
+    },
+    "POST /api/backend-projects/project/graph/query": () =>
+      json(200, {
+        nodes: [{ ...operation, id: transactionId, kind: "transaction", name, parentId: "flow" }],
+        edges: [],
+        nextCursor: "",
+      }),
+  });
+  renderWithProviders(
+    <div style={{ width: 375 }}>
+      <BackendFlow projectId="project" revisionId="source" pin={{ flowId: "flow" }} />
+    </div>,
+  );
+  const collapse = await screen.findByRole("button", {
+    name: `Свернуть транзакцию ${name} · ${transactionId}`,
+  });
+  expect(collapse).toHaveStyle({ minWidth: "0", maxWidth: "100%", height: "auto" });
+  const label = collapse.querySelector(".mantine-Button-label");
+  expect(label).toHaveStyle({ whiteSpace: "normal", overflowWrap: "anywhere" });
+  expect(collapse).toHaveAccessibleName(`Свернуть транзакцию ${name} · ${transactionId}`);
+});

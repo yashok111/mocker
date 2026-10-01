@@ -1,10 +1,12 @@
 import { useQuery } from "@tanstack/react-query";
-import { useState, type Dispatch, type SetStateAction } from "react";
+import { useCallback, useState, type Dispatch, type SetStateAction } from "react";
 import { queryBackendFlow } from "@/api/generated/backend-projects/backend-projects";
 import type { BackendFlowPage, QueryBackendFlowRequest } from "@/api/generated/schemas";
 import { useDatabaseCancellation } from "./backendDatabaseReads";
 
 export type BackendSourcePin = {
+  viewId?: string;
+  viewVersion?: number;
   revisionId?: string;
   entrypointId?: string;
   flowId?: string;
@@ -24,15 +26,16 @@ export function usePinnedValue<Value>(
   const [state, setState] = useState({ identity, value: initialValue });
   if (state.identity !== identity) setState({ identity, value: initialValue });
   const value = state.identity === identity ? state.value : initialValue;
-  return [
-    value,
-    (next) =>
+  const update = useCallback(
+    (next: SetStateAction<Value>) =>
       setState((previous) => ({
         identity,
         value:
           typeof next === "function" ? (next as (value: Value) => Value)(previous.value) : next,
       })),
-  ];
+    [identity],
+  );
+  return [value, update];
 }
 
 export function parseBackendSourcePin(search: Record<string, unknown>): BackendSourcePin {
@@ -51,6 +54,22 @@ export function parseBackendSourcePin(search: Record<string, unknown>): BackendS
   }
   if (search.recordType === "node" || search.recordType === "edge")
     pin.recordType = search.recordType;
+  if (search.viewId !== undefined) {
+    pin.viewId = typeof search.viewId === "string" ? search.viewId : "invalid";
+    if (search.viewVersion !== undefined) {
+      const raw = search.viewVersion;
+      const value =
+        typeof raw === "number"
+          ? raw
+          : typeof raw === "string" && /^[1-9][0-9]*$/.test(raw)
+            ? Number(raw)
+            : 0;
+      pin.viewVersion = Number.isSafeInteger(value) && value > 0 ? value : 0;
+    }
+  } else if (search.viewVersion !== undefined) {
+    pin.viewId = "invalid";
+    pin.viewVersion = 0;
+  }
   return pin;
 }
 

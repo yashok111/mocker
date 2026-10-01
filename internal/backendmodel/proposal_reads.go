@@ -79,6 +79,10 @@ type resolvedBackendTarget struct {
 }
 
 func (r *Repo) resolveBackendTarget(ctx context.Context, pid string, in BackendReadTarget) (*resolvedBackendTarget, error) {
+	return resolveBackendTarget(ctx, r.db.R, pid, in)
+}
+
+func resolveBackendTarget(ctx context.Context, q importReader, pid string, in BackendReadTarget) (*resolvedBackendTarget, error) {
 	if (in.RevisionID == "") == (in.Proposal == nil) {
 		return nil, invalid("target", "Select exactly one source revision or pinned proposal")
 	}
@@ -91,11 +95,11 @@ func (r *Repo) resolveBackendTarget(ctx context.Context, pid string, in BackendR
 	if !ValidID(in.Proposal.ProposalID) || !ValidID(in.Proposal.ProposalRevisionID) {
 		return nil, notFound()
 	}
-	p, err := loadProposal(ctx, r.db.R, pid, in.Proposal.ProposalID)
+	p, err := loadProposal(ctx, q, pid, in.Proposal.ProposalID)
 	if err != nil {
 		return nil, err
 	}
-	draft, err := loadProposalRevision(ctx, r.db.R, p.ID, in.Proposal.ProposalRevisionID)
+	draft, err := loadProposalRevision(ctx, q, p.ID, in.Proposal.ProposalRevisionID)
 	if err != nil {
 		return nil, err
 	}

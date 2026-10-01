@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useContext, useRef, useState } from "react";
 import {
   Alert,
   Badge,
@@ -11,11 +11,18 @@ import {
   TextInput,
   Title,
 } from "@mantine/core";
+import { useQuery } from "@tanstack/react-query";
 import type { BackendFlowPage, QueryBackendFlowRequest } from "@/api/generated/schemas";
 import { CoverageDetails, LoadState, Pages } from "./BackendGraphInventory";
 import { BackendFlowGraph } from "./BackendFlowGraph";
 import { BackendFlowInspector } from "./BackendFlowInspector";
-import { databaseButtonStyles, databaseStatus, databaseWrap } from "./backendDatabaseReads";
+import {
+  databaseButtonStyles,
+  databaseStatus,
+  databaseWrap,
+  readDatabaseGraph,
+  useDatabaseCancellation,
+} from "./backendDatabaseReads";
 import {
   flowPageOf,
   useFlowPage,
@@ -23,6 +30,12 @@ import {
   type FlowSelection,
 } from "./backendFlowReads";
 import { flowStepContext, flowTransitionLabel } from "./backendFlowLayout";
+import {
+  BackendSavedViewContext,
+  useWorkspaceSavedState,
+  type SavedViewState,
+  type SavedLayoutProps,
+} from "./backendSavedViewState";
 
 type Props = {
   projectId: string;
@@ -33,7 +46,13 @@ type Props = {
 };
 
 export function BackendFlow(props: Props) {
-  return <FlowWorkspace key={`${props.projectId}:${props.revisionId}`} {...props} />;
+  const session = useContext(BackendSavedViewContext);
+  return (
+    <FlowWorkspace
+      key={`${props.projectId}:${props.revisionId}:${session?.restoreGeneration ?? 0}`}
+      {...props}
+    />
+  );
 }
 
 function FlowWorkspace({
@@ -44,9 +63,44 @@ function FlowWorkspace({
   onDatabaseNavigate,
 }: Props) {
   const [localPin, setPin] = useState<BackendSourcePin>(externalPin ?? {});
-  const pin = externalPin ?? localPin;
-  const [draft, setDraft] = useState("");
-  const [search, setSearch] = useState("");
+  const initialPin = externalPin ?? localPin;
+  const workspace = useWorkspaceSavedState<Extract<SavedViewState, { kind: "flow" }>>(
+    { revisionId },
+    {
+      kind: "flow",
+      scope: {
+        ...(initialPin.entrypointId ? { entrypointId: initialPin.entrypointId } : {}),
+        ...(initialPin.flowId ? { flowId: initialPin.flowId } : {}),
+        ...(initialPin.dataNodeId ? { dataNodeId: initialPin.dataNodeId } : {}),
+      },
+      filters: { search: "", accessKind: "", reverseAccessKind: "" },
+      selection: initialPin.recordId
+        ? { recordType: initialPin.recordType ?? "node", id: initialPin.recordId }
+        : null,
+      positions: [],
+      collapsedGroupIds: [],
+    },
+    JSON.stringify([
+      externalPin?.entrypointId,
+      externalPin?.flowId,
+      externalPin?.dataNodeId,
+      externalPin?.recordId,
+      externalPin?.recordType,
+    ]),
+  );
+  const state = workspace.state;
+  const pin = {
+    revisionId: initialPin.revisionId,
+    viewId: initialPin.viewId,
+    viewVersion: initialPin.viewVersion,
+    datastoreId: initialPin.datastoreId,
+    facetKey: initialPin.facetKey,
+    ...state.scope,
+    recordId: state.selection?.id,
+    recordType: state.selection?.recordType,
+  };
+  const [draft, setDraft] = useState(state.filters.search);
+  const search = state.filters.search;
   const [cursors, setCursors] = useState([""]);
   const origin = useRef<HTMLElement | null>(null);
   const heading = useRef<HTMLHeadingElement>(null);
@@ -64,6 +118,18 @@ function FlowWorkspace({
   function update(next: BackendSourcePin) {
     const value = { ...next, revisionId };
     setPin(value);
+    workspace.onStateChange({
+      ...state,
+      scope: {
+        ...(value.entrypointId ? { entrypointId: value.entrypointId } : {}),
+        ...(value.flowId ? { flowId: value.flowId } : {}),
+        ...(value.dataNodeId ? { dataNodeId: value.dataNodeId } : {}),
+      },
+      selection: value.recordId
+        ? { recordType: value.recordType ?? "node", id: value.recordId }
+        : null,
+      ...(value.flowId !== state.scope.flowId ? { positions: [], collapsedGroupIds: [] } : {}),
+    });
     onPinChange?.(value);
   }
   function select(value: FlowSelection, trigger?: HTMLElement) {
@@ -90,6 +156,15 @@ function FlowWorkspace({
         <Title order={2} ref={heading} tabIndex={-1}>
           Flow
         </Title>
+        {workspace.canCapture && (
+          <Button
+            variant="default"
+            disabled={workspace.captureDisabled}
+            onClick={workspace.capture}
+          >
+            Сохранить этот Flow
+          </Button>
+        )}
         <Text size="sm" c="dimmed" style={databaseWrap}>
           Статическая модель исходников · только чтение · ревизия {revisionId}
         </Text>
@@ -100,7 +175,10 @@ function FlowWorkspace({
         <form
           onSubmit={(event) => {
             event.preventDefault();
-            setSearch(draft.trim());
+            workspace.onStateChange({
+              ...state,
+              filters: { ...state.filters, search: draft.trim() },
+            });
             setCursors([""]);
           }}
         >
@@ -223,6 +301,13 @@ function FlowWorkspace({
             revisionId={revisionId}
             flowId={pin.flowId}
             onSelect={select}
+            positions={state.positions}
+            collapsedGroupIds={state.collapsedGroupIds}
+            onPositionsChange={(positions) => workspace.onStateChange({ ...state, positions })}
+            onCollapsedGroupsChange={(collapsedGroupIds) =>
+              workspace.onStateChange({ ...state, collapsedGroupIds })
+            }
+            onPreview={workspace.preview}
           />
         )}
         {pin.entrypointId && (
@@ -231,6 +316,10 @@ function FlowWorkspace({
             projectId={projectId}
             revisionId={revisionId}
             selector={{ entrypointId: pin.entrypointId }}
+            kind={state.filters.accessKind}
+            onKindChange={(accessKind) =>
+              workspace.onStateChange({ ...state, filters: { ...state.filters, accessKind } })
+            }
             {...callbacks}
           />
         )}
@@ -240,6 +329,13 @@ function FlowWorkspace({
             projectId={projectId}
             revisionId={revisionId}
             selector={{ dataNodeId: pin.dataNodeId }}
+            kind={state.filters.reverseAccessKind}
+            onKindChange={(reverseAccessKind) =>
+              workspace.onStateChange({
+                ...state,
+                filters: { ...state.filters, reverseAccessKind },
+              })
+            }
             {...callbacks}
           />
         )}
@@ -294,7 +390,13 @@ function FlowSteps({
   revisionId,
   flowId,
   onSelect,
-}: {
+  positions,
+  collapsedGroupIds,
+  onPositionsChange,
+  onCollapsedGroupsChange,
+  onPreview,
+}: SavedLayoutProps & {
+  onPreview?: (value: boolean) => void;
   projectId: string;
   revisionId: string;
   flowId: string;
@@ -328,6 +430,20 @@ function FlowSteps({
       transactions.set(id, [...(transactions.get(id) ?? []), node.id]);
     }
   }
+  const groupKey = ["backend-flow-transactions", projectId, revisionId, flowId];
+  useDatabaseCancellation(groupKey);
+  const groupNames = useQuery({
+    queryKey: groupKey,
+    enabled: transactions.size > 0,
+    retry: false,
+    staleTime: Infinity,
+    queryFn: ({ signal }) =>
+      readDatabaseGraph(
+        projectId,
+        { revisionId, recordType: "nodes", kind: "transaction", parentId: flowId },
+        signal,
+      ),
+  });
   return (
     <Stack gap="md">
       <Group>
@@ -355,7 +471,7 @@ function FlowSteps({
                 Локальные группы текущей страницы flow; границы соединения и завершения доступны в
                 исходном объекте транзакции.
               </Text>
-              {[...transactions].map(([id, steps]) => (
+              {[...transactions].map(([id, steps], index) => (
                 <Group key={id}>
                   <Button
                     variant="subtle"
@@ -363,9 +479,37 @@ function FlowSteps({
                     styles={databaseButtonStyles}
                     onClick={(event) => onSelect({ type: "node", id }, event.currentTarget)}
                   >
-                    Транзакция {id}
+                    {groupNames.data?.nodes.find((node) => node.id === id)?.name ??
+                      `Локальная транзакция ${index + 1}`}
+                    <Text component="span" size="xs" c="dimmed">
+                      {" "}
+                      · {id}
+                    </Text>
                   </Button>
                   <Text size="sm">Шагов на странице: {steps.length}</Text>
+                  <Button
+                    variant="default"
+                    h="auto"
+                    py="sm"
+                    styles={{
+                      ...databaseButtonStyles,
+                      inner: { minWidth: 0, maxWidth: "100%" },
+                      label: { ...databaseWrap, whiteSpace: "normal" },
+                    }}
+                    aria-expanded={!collapsedGroupIds.includes(id)}
+                    onClick={() =>
+                      onCollapsedGroupsChange(
+                        collapsedGroupIds.includes(id)
+                          ? collapsedGroupIds.filter((value) => value !== id)
+                          : [...collapsedGroupIds, id],
+                      )
+                    }
+                  >
+                    {collapsedGroupIds.includes(id) ? "Развернуть" : "Свернуть"} транзакцию{" "}
+                    {groupNames.data?.nodes.find((node) => node.id === id)?.name ??
+                      `Локальная транзакция ${index + 1}`}{" "}
+                    · {id}
+                  </Button>
                 </Group>
               ))}
             </Stack>
@@ -477,6 +621,11 @@ function FlowSteps({
           nodes={stepPage.stepItems}
           edges={transitionPage.transitionItems}
           onSelect={onSelect}
+          positions={positions}
+          collapsedGroupIds={collapsedGroupIds}
+          onPositionsChange={onPositionsChange}
+          onCollapsedGroupsChange={onCollapsedGroupsChange}
+          onPreview={onPreview}
         />
       )}
     </Stack>
@@ -490,7 +639,11 @@ function FlowAccesses({
   onSelect,
   onFlow,
   onDatabase,
+  kind,
+  onKindChange,
 }: {
+  kind: "" | "reads" | "writes" | "deletes";
+  onKindChange: (kind: "" | "reads" | "writes" | "deletes") => void;
   projectId: string;
   revisionId: string;
   selector: { entrypointId: string } | { dataNodeId: string };
@@ -498,7 +651,6 @@ function FlowAccesses({
   onFlow: (entrypointId: string | undefined, flowId: string) => void;
   onDatabase: (dataNodeId: string, datastoreId: string, facetKey: string) => void;
 }) {
-  const [kind, setKind] = useState<"" | "reads" | "writes" | "deletes">("");
   const [cursors, setCursors] = useState([""]);
   const input: QueryBackendFlowRequest = {
     revisionId,
@@ -529,7 +681,7 @@ function FlowAccesses({
           { value: "deletes", label: "Удаления" },
         ]}
         onChange={(event) => {
-          setKind(event.currentTarget.value as typeof kind);
+          onKindChange(event.currentTarget.value as typeof kind);
           setCursors([""]);
         }}
       />

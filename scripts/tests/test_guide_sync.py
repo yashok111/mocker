@@ -184,14 +184,20 @@ class GuideSyncPackagingTests(unittest.TestCase):
         identity = self.generate()
         manifest = json.loads((self.root / "internal/guide/manifest.json").read_text())
         owner = next(w for w in manifest["workflows"] if w["workflowId"] == "mocker-backend-inspect")
-        self.assertEqual(owner["workflowVersion"], "1")
+        self.assertEqual(owner["workflowVersion"], "2")
         self.assertEqual(owner["requiredModelSchemaVersions"], ["3"])
         self.assertEqual(owner["guideSetId"], identity)
         self.assertEqual({t["topic"] for t in owner["topics"]}, {"backend-inspect", "backend-flow-reference", "backend-analysis"})
         leaf = (self.root / "skills/mocker-backend-inspect/SKILL.md").read_bytes()
         self.assertEqual(leaf, (self.root / "skills/mocker/references/backend/inspect.md").read_bytes())
         self.assertEqual(leaf, (self.root / "internal/guide/backend-inspect.md").read_bytes())
-        for capability in ("backend-flow-query", "backend-data-access-query"):
+        importer = (self.root / "skills/mocker-backend-import/SKILL.md").read_text()
+        self.assertIn("| `backend-flow-reference` / `backend-analysis` | inspect v2 |", importer)
+        inspector = leaf.decode()
+        self.assertIn("Inspect workflow1 was released", inspector)
+        self.assertNotIn("no released older inspect version", inspector)
+        self.assertEqual(owner["requiredViewSchemaVersions"], ["saved-view-v1"])
+        for capability in ("backend-flow-query", "backend-data-access-query", "backend-saved-views"):
             self.assertIn(capability, owner["requiredCapabilities"])
         self.assertEqual(self.run_sync("--check").returncode, 0)
 
