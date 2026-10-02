@@ -1,4 +1,7 @@
-import { useEffect, useRef } from "react";
+import { BackendValueInspector } from "./BackendValueInspector";
+import type { BackendLineageValueRef } from "@/api/generated/schemas";
+import { BackendValueSeeds } from "./BackendLineageActions";
+import { useEffect, useRef, useState } from "react";
 import { Badge, Button, Code, Group, Paper, Stack, Text, Title } from "@mantine/core";
 import { useQuery } from "@tanstack/react-query";
 import { getBackendNode } from "@/api/generated/backend-projects/backend-projects";
@@ -21,6 +24,7 @@ import {
 
 type Props = {
   context: DatabaseContext;
+  valueRef?: BackendLineageValueRef;
   selection: DatabaseSelection;
   onSelect: (selection: DatabaseSelection) => void;
   onClose: () => void;
@@ -43,7 +47,9 @@ function SourceDatabaseInspector({
   onClose,
   onRequireColumn,
   onFlowNavigate,
+  valueRef,
 }: Props) {
+  const [valueSelection, setValueSelection] = useState<BackendLineageValueRef>();
   const context = { ...original, revisionId: selection.revisionId ?? original.revisionId };
   const key = [...databaseKey(context), "inspector", selection.type, selection.id];
   useDatabaseCancellation(key);
@@ -98,6 +104,24 @@ function SourceDatabaseInspector({
         {record && (
           <>
             <Badge>{record.kind}</Badge>
+            {"name" in record && (
+              <BackendValueSeeds
+                projectId={context.projectId}
+                revisionId={context.revisionId}
+                node={record}
+                selected={valueRef}
+                onValueSelect={setValueSelection}
+              />
+            )}
+            {valueSelection && (
+              <BackendValueInspector
+                key={JSON.stringify(valueSelection)}
+                projectId={context.projectId}
+                revisionId={context.revisionId}
+                value={valueSelection}
+                onClose={() => setValueSelection(undefined)}
+              />
+            )}
             {onFlowNavigate && ["table", "column", "view"].includes(record.kind) && (
               <Button
                 variant="default"
@@ -141,6 +165,18 @@ function SourceDatabaseInspector({
                   Открыть цель {record.to}
                 </Button>
               </Group>
+            )}
+            {"parentId" in record && record.parentId && (
+              <Button
+                variant="subtle"
+                h="auto"
+                styles={databaseButtonStyles}
+                onClick={() =>
+                  onSelect({ type: "node", id: record.parentId!, revisionId: context.revisionId })
+                }
+              >
+                Открыть владельца значения {record.parentId}
+              </Button>
             )}
             <FacetComparison comparison={record.facetComparison} />
             <RecordFacets record={record} context={context} onSelect={onSelect} />

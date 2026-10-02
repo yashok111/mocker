@@ -299,8 +299,11 @@ func assignRelationalOwnership(base *RevisionState, g *graphCandidate, s *Import
 	for i := range g.Edges {
 		e := &g.Edges[i]
 		e.Ownership = relationalOwnership(e.Kind, e.Attributes, true, s, old[e.ID])
-		if selectedProfile(s.Profile) == RuntimeProfile && old[e.ID] == nil && (runtimeSubject(nodes[e.From].Kind, false) || runtimeSubject(nodes[e.To].Kind, false)) {
+		if hasRuntimeProfile(selectedProfile(s.Profile)) && old[e.ID] == nil && (runtimeSubject(nodes[e.From].Kind, false) || runtimeSubject(nodes[e.To].Kind, false)) {
 			e.Ownership.Profile = RuntimeProfile
+		}
+		if selectedProfile(s.Profile) == LineageProfile && old[e.ID] == nil && (lineageSubject(nodes[e.From].Kind, false) || lineageSubject(nodes[e.To].Kind, false)) {
+			e.Ownership.Profile = LineageProfile
 		}
 		current[e.ID] = e.Ownership
 	}
@@ -319,8 +322,11 @@ func relationalOwnership(kind string, attrs map[string]jsontext.Value, edge bool
 	if relationalSubject(kind, attrs, edge) {
 		profile = RelationalProfile
 	}
-	if selectedProfile(s.Profile) == RuntimeProfile && runtimeSubject(kind, edge) {
+	if hasRuntimeProfile(selectedProfile(s.Profile)) && runtimeSubject(kind, edge) {
 		profile = RuntimeProfile
+	}
+	if selectedProfile(s.Profile) == LineageProfile && lineageSubject(kind, edge) {
+		profile = LineageProfile
 	}
 	return &AssertionOwnership{RepositoryID: s.RepositoryID, ProviderNamespace: s.Manifest.Provider.Namespace, Profile: profile}
 }

@@ -424,7 +424,7 @@ func TestAutoCheckpointPolicy_pinsEveryMutatingRoute(t *testing.T) {
 		// (D7.3), P6b's endpoint preview (D13), P6c's close and push
 		// (D9), A6's two asset writes (D3), A11's two entity writes,
 		// P4b's import and fork, then design-scenario validation, execution and archive, plus state-diagram validation and simulation — twenty-six.
-		cpGroupNeverTouchesLayer: 38, // Includes read-only event-map analysis and pinned backend graph/database/flow queries.
+		cpGroupNeverTouchesLayer: 39, // Includes read-only event-map analysis and pinned backend graph/database/flow/lineage queries.
 		// Rows in another aggregate: runtime scenarios, checkpoints, API
 		// designs, four persisted design-scenario writes, run start/cancel, and four state-diagram writes.
 		cpGroupAnotherLayer: 42, // Includes backend metadata, import writes, proposal create/apply and saved-view create/save.
@@ -498,8 +498,8 @@ func TestAutoCheckpointPolicy_pinsEveryMutatingRoute(t *testing.T) {
 		}
 	}
 	// Saved-view create/save append presentation versions in their own aggregate.
-	if len(mutating) != 97 {
-		t.Fatalf("routes() registers %d mutating patterns, want 97", len(mutating))
+	if len(mutating) != 98 {
+		t.Fatalf("routes() registers %d mutating patterns, want 98", len(mutating))
 	}
 
 	// The two halves the group counts alone cannot state: a mutating route

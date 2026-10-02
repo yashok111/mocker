@@ -120,6 +120,60 @@ class GuideSyncPackagingTests(unittest.TestCase):
             "validation failure created output directories",
         )
 
+    def test_stale_live_owner_fails_before_output_changes(self):
+        self.load_published_relational_sources()
+        self.generate()
+        topic = self.root / "skills/mocker/references/backend/profiles/go-sql.md"
+        original = topic.read_text()
+        for label in (
+            "database v1",
+            "database1",
+            "database workflow1",
+            "`mocker-backend-database` workflow1",
+        ):
+            with self.subTest(label=label):
+                topic.write_text(original.replace("database v5", label))
+                self.assert_invalid_without_changes(
+                    "stale live guide owner database1; expected database5"
+                )
+        topic.write_text(original)
+
+    def test_stale_owner_dependency_table_fails_before_output_changes(self):
+        self.load_published_relational_sources()
+        self.generate()
+        topic = self.root / "skills/mocker-backend-import/SKILL.md"
+        topic.write_text(
+            topic.read_text().replace(
+                "| mocker-backend-inspect | 3 |", "| mocker-backend-inspect | 1 |"
+            )
+        )
+        self.assert_invalid_without_changes(
+            "stale live guide owner inspect1; expected inspect3"
+        )
+
+    def test_explicit_historical_owner_preserves_prose(self):
+        self.generate()
+        historical = (
+            "Historical import1 was released earlier. <!-- guide-owner-history -->"
+        )
+        self.leaf.write_text(
+            self.leaf.read_text()
+            + "\n"
+            + historical
+            + "\nOpaque dataBase64 identifier.\n"
+        )
+        self.generate()
+        self.assertIn(historical, self.alias.read_text())
+
+    def test_unmarked_historical_owner_is_rejected(self):
+        self.generate()
+        self.leaf.write_text(
+            self.leaf.read_text() + "\nHistorical import1 was released earlier.\n"
+        )
+        self.assert_invalid_without_changes(
+            "stale live guide owner import1; expected import2"
+        )
+
     def test_leaf_and_legacy_copy_share_generated_identity(self):
         identity = self.generate()
         leaf = self.leaf.read_bytes()
@@ -153,9 +207,9 @@ class GuideSyncPackagingTests(unittest.TestCase):
         self.assertEqual(len(workflows), 5)
         importing = workflows["mocker-backend-import"]
         database = workflows["mocker-backend-database"]
-        self.assertEqual(importing["workflowVersion"], "4")
-        self.assertEqual(importing["requiredModelSchemaVersions"], ["1", "2", "3"])
-        self.assertEqual(database["requiredModelSchemaVersions"], ["2", "3"])
+        self.assertEqual(importing["workflowVersion"], "5")
+        self.assertEqual(importing["requiredModelSchemaVersions"], ["1", "2", "3", "4"])
+        self.assertEqual(database["requiredModelSchemaVersions"], ["2", "3", "4"])
         self.assertIn(
             "backend-database-reference",
             [topic["topic"] for topic in database["topics"]],
@@ -183,21 +237,39 @@ class GuideSyncPackagingTests(unittest.TestCase):
         self.load_published_relational_sources()
         identity = self.generate()
         manifest = json.loads((self.root / "internal/guide/manifest.json").read_text())
-        owner = next(w for w in manifest["workflows"] if w["workflowId"] == "mocker-backend-inspect")
-        self.assertEqual(owner["workflowVersion"], "2")
-        self.assertEqual(owner["requiredModelSchemaVersions"], ["3"])
+        owner = next(
+            w
+            for w in manifest["workflows"]
+            if w["workflowId"] == "mocker-backend-inspect"
+        )
+        self.assertEqual(owner["workflowVersion"], "3")
+        self.assertEqual(owner["requiredModelSchemaVersions"], ["3", "4"])
         self.assertEqual(owner["guideSetId"], identity)
-        self.assertEqual({t["topic"] for t in owner["topics"]}, {"backend-inspect", "backend-flow-reference", "backend-analysis"})
+        self.assertEqual(
+            {t["topic"] for t in owner["topics"]},
+            {"backend-inspect", "backend-flow-reference", "backend-analysis"},
+        )
         leaf = (self.root / "skills/mocker-backend-inspect/SKILL.md").read_bytes()
-        self.assertEqual(leaf, (self.root / "skills/mocker/references/backend/inspect.md").read_bytes())
-        self.assertEqual(leaf, (self.root / "internal/guide/backend-inspect.md").read_bytes())
+        self.assertEqual(
+            leaf,
+            (self.root / "skills/mocker/references/backend/inspect.md").read_bytes(),
+        )
+        self.assertEqual(
+            leaf, (self.root / "internal/guide/backend-inspect.md").read_bytes()
+        )
         importer = (self.root / "skills/mocker-backend-import/SKILL.md").read_text()
-        self.assertIn("| `backend-flow-reference` / `backend-analysis` | inspect v2 |", importer)
+        self.assertIn(
+            "| `backend-flow-reference` / `backend-analysis` | inspect v3 |", importer
+        )
         inspector = leaf.decode()
         self.assertIn("Inspect workflow1 was released", inspector)
         self.assertNotIn("no released older inspect version", inspector)
         self.assertEqual(owner["requiredViewSchemaVersions"], ["saved-view-v1"])
-        for capability in ("backend-flow-query", "backend-data-access-query", "backend-saved-views"):
+        for capability in (
+            "backend-flow-query",
+            "backend-data-access-query",
+            "backend-saved-views",
+        ):
             self.assertIn(capability, owner["requiredCapabilities"])
         self.assertEqual(self.run_sync("--check").returncode, 0)
 
@@ -208,7 +280,12 @@ class GuideSyncPackagingTests(unittest.TestCase):
         reference.write_text(reference.read_text() + "\nChanged inspection guidance.\n")
         current = self.generate()
         self.assertNotEqual(current, previous)
-        for package in ("mocker", "mocker-backend-import", "mocker-backend-database", "mocker-backend-inspect"):
+        for package in (
+            "mocker",
+            "mocker-backend-import",
+            "mocker-backend-database",
+            "mocker-backend-inspect",
+        ):
             text = (self.root / "skills" / package / "SKILL.md").read_text()
             self.assertIn(f'guideSetId: "{current}"', text)
             self.assertNotIn(f'guideSetId: "{previous}"', text)

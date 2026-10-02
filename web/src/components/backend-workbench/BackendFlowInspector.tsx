@@ -1,4 +1,7 @@
-import { useEffect, useRef } from "react";
+import type { BackendLineageValueRef } from "@/api/generated/schemas";
+import { BackendValueSeeds } from "./BackendLineageActions";
+import { BackendAPIFields } from "./BackendAPIFields";
+import { useEffect, useRef, useState } from "react";
 import { Badge, Button, Code, Group, Paper, Stack, Text, Title } from "@mantine/core";
 import { useQuery } from "@tanstack/react-query";
 import { getBackendNode } from "@/api/generated/backend-projects/backend-projects";
@@ -19,13 +22,22 @@ export function BackendFlowInspector({
   selection,
   onSelect,
   onClose,
+  selectedValue,
 }: {
   projectId: string;
   revisionId: string;
   selection: FlowSelection;
   onSelect: (selection: FlowSelection) => void;
+  selectedValue?: BackendLineageValueRef;
   onClose: () => void;
 }) {
+  const [valueSelection, setValueSelection] = useState<BackendLineageValueRef | undefined>(
+    selectedValue,
+  );
+  const selectValue = (ref: BackendLineageValueRef) => {
+    setValueSelection(ref);
+    if (ref.nodeId !== selection.id) onSelect({ type: "node", id: ref.nodeId, valueRef: ref });
+  };
   const key = ["backend-flow-inspector", projectId, revisionId, selection.type, selection.id];
   useDatabaseCancellation(key);
   const heading = useRef<HTMLHeadingElement>(null);
@@ -157,6 +169,41 @@ export function BackendFlowInspector({
                   установлена.
                 </Text>
               </>
+            )}
+            {"name" in record && (
+              <BackendValueSeeds
+                projectId={projectId}
+                revisionId={revisionId}
+                node={record}
+                selected={valueSelection}
+                onValueSelect={selectValue}
+              />
+            )}
+            {record.kind === "http_operation" && (
+              <BackendAPIFields
+                projectId={projectId}
+                revisionId={revisionId}
+                operationId={record.id}
+                onValueSelect={selectValue}
+              />
+            )}
+            {valueSelection && (
+              <Text fw={600} style={databaseWrap}>
+                Выбранное значение:{" "}
+                {valueSelection.kind === "port"
+                  ? `${valueSelection.collection} · ${valueSelection.portKey}`
+                  : valueSelection.kind === "column"
+                    ? `колонка · ${valueSelection.facetKey}`
+                    : "поле API"}
+              </Text>
+            )}
+            {"parentId" in record && record.parentId && (
+              <Button
+                variant="subtle"
+                onClick={() => onSelect({ type: "node", id: record.parentId! })}
+              >
+                Открыть владельца значения {record.parentId}
+              </Button>
             )}
             <details>
               <summary>Свойства, порты и ограничения</summary>

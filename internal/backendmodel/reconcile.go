@@ -161,7 +161,7 @@ func overlayGraph(ctx context.Context, q importReader, s *ImportSession, base *R
 	}
 	owned := map[string]bool{}
 	checkOwner := func(typ, id string, o *AssertionOwnership) {
-		valid := o != nil && o.RepositoryID == s.RepositoryID && o.ProviderNamespace == s.Manifest.Provider.Namespace && (o.Profile == GraphProfile || hasRelationalProfile(selectedProfile(s.Profile)) && o.Profile == RelationalProfile || selectedProfile(s.Profile) == RuntimeProfile && o.Profile == RuntimeProfile)
+		valid := o != nil && o.RepositoryID == s.RepositoryID && o.ProviderNamespace == s.Manifest.Provider.Namespace && (o.Profile == GraphProfile || hasRelationalProfile(selectedProfile(s.Profile)) && o.Profile == RelationalProfile || hasRuntimeProfile(selectedProfile(s.Profile)) && o.Profile == RuntimeProfile || selectedProfile(s.Profile) == LineageProfile && o.Profile == LineageProfile)
 		owned[typ+"\x00"+id] = valid
 		if !valid {
 			add("backend_unsupported_scope", typ+"/"+id, "Base assertion belongs to another ownership partition")
@@ -428,6 +428,9 @@ func overlayGraph(ctx context.Context, q importReader, s *ImportSession, base *R
 	}
 	if !inventoryCountsValid(s, commands) {
 		add("backend_unsafe_deletion", "inventory", "Complete inventory counts must match the manifest and submitted endpoint/datastore contributions")
+	}
+	if selectedProfile(s.Profile) == LineageProfile {
+		markLineageEndpointStaleness(g)
 	}
 	propagateStaleness(g)
 	if hasRelationalProfile(selectedProfile(s.Profile)) {

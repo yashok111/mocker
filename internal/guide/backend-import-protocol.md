@@ -1,7 +1,7 @@
 # Source import protocol
 
 
-This topic belongs to import v4; verify its owner identity/contentHash in the
+This topic belongs to import v5; verify its owner identity/contentHash in the
 selected immutable global set before staging. Use its `backend-model` for record semantics and `backend-recovery`
 before commit or any retry. Select compatibility before the first write.
 
@@ -458,7 +458,7 @@ runtime, downgrade, automatic provider migration and proposal→source fail.
 Schema1/2 history and receipt bytes stay unchanged; omitted old records stay stale
 at original snapshots and proofs instead of gaining new UUIDs/current claims.
 
-Select inspect1 in this same global set and verify backend-flow-reference before
+Select inspect3 in this same global set and verify backend-flow-reference before
 staging schema3. Its typed flow/step/query/transaction and control/access/boundary
 shapes use external Keys on import and Ids after preview. Keep entry/exits in the
 owning flow; local transaction membership does not propagate to callees. Calls
@@ -482,5 +482,5 @@ call and access references plus the usual complete scope/inventory/proof gates.
 An authorized focused gap investigation changes source analysis focus, not the
 whole-scope import protocol. Unavailable/inconclusive source retains unknowns
 and produces a concrete limitation, never an empty progress commit. Requery the
-new acknowledged source revision through inspect1; imported witnesses still do
-not establish execution, all writers, field lineage, atomicity or impact.
+new acknowledged source revision through inspect3; imported witnesses still do
+not establish execution, all writers, atomicity or impact.

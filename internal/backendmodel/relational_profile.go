@@ -18,6 +18,8 @@ func SupportedNodeKindsForProfile(profile string) []string {
 		return SupportedNodeKinds()
 	case RelationalProfile:
 		return append(SupportedNodeKinds(), "db_schema", "table", "column", "constraint", "index", "view", "migration")
+	case LineageProfile:
+		return append(SupportedNodeKindsForProfile(RuntimeProfile), "api_field", "field_mapping")
 	case RuntimeProfile:
 		return append(SupportedNodeKindsForProfile(RelationalProfile), "flow", "flow_step", "query", "transaction")
 	default:
@@ -31,6 +33,8 @@ func SupportedEdgeKindsForProfile(profile string) []string {
 		return SupportedEdgeKinds()
 	case RelationalProfile:
 		return append(SupportedEdgeKinds(), "references")
+	case LineageProfile:
+		return SupportedEdgeKindsForProfile(RuntimeProfile)
 	case RuntimeProfile:
 		return append(SupportedEdgeKindsForProfile(RelationalProfile), "next", "branch", "error", "returns", "reads", "writes", "deletes", "begins", "commits", "rolls_back")
 	default:
@@ -39,7 +43,7 @@ func SupportedEdgeKindsForProfile(profile string) []string {
 }
 
 func SupportedModelSchemaVersions() []string {
-	return []string{SchemaVersion, RelationalSchemaVersion, RuntimeSchemaVersion}
+	return []string{SchemaVersion, RelationalSchemaVersion, RuntimeSchemaVersion, LineageSchemaVersion}
 }
 
 func selectedProfile(profile string) string {
@@ -50,6 +54,9 @@ func selectedProfile(profile string) string {
 }
 
 func modelSchemaVersion(profile string) string {
+	if profile == LineageProfile {
+		return LineageSchemaVersion
+	}
 	if profile == RuntimeProfile {
 		return RuntimeSchemaVersion
 	}
@@ -72,7 +79,7 @@ func validateImportProfile(in BeginImportInput) error {
 	}
 	if in.ProfileExtension != nil {
 		x := in.ProfileExtension
-		valid := profile == RelationalProfile && x.FromProfile == GraphProfile && x.ToProfile == RelationalProfile || profile == RuntimeProfile && x.FromProfile == RelationalProfile && x.ToProfile == RuntimeProfile
+		valid := profile == RelationalProfile && x.FromProfile == GraphProfile && x.ToProfile == RelationalProfile || profile == RuntimeProfile && x.FromProfile == RelationalProfile && x.ToProfile == RuntimeProfile || profile == LineageProfile && x.FromProfile == RuntimeProfile && x.ToProfile == LineageProfile
 		if in.Mode != "reconcile" || !valid {
 			return reconciliationFault("backend_unsupported_scope", "Profile extension requires the explicit adjacent source profile transition")
 		}
@@ -83,12 +90,29 @@ func validateImportProfile(in BeginImportInput) error {
 	if in.Mode != "reconcile" && profile == RuntimeProfile && (len(in.Manifest.Provider.Profiles) != 3 || !slices.Equal(profileSet(in.Manifest.Provider.Profiles), profileSet([]string{GraphProfile, RelationalProfile, RuntimeProfile}))) {
 		return reconciliationFault("backend_incompatible_provider", "Runtime initial imports require exactly foundation, relational and runtime profiles")
 	}
+	if in.Mode != "reconcile" && profile == LineageProfile && !sourceProfilesMatch(LineageSchemaVersion, in.Manifest.Provider.Profiles) {
+		return reconciliationFault("backend_incompatible_provider", "Lineage initial imports require exactly foundation, relational, runtime and lineage profiles")
+	}
 	return nil
 }
 
 func requireProviderProfile(state *RevisionState, s *ImportSession, prior SourceProvider) error {
 	profile := selectedProfile(s.Profile)
-	if state.Revision.SchemaVersion == RuntimeSchemaVersion && profile != RuntimeProfile {
+	if state.Revision.SchemaVersion == LineageSchemaVersion && profile != LineageProfile {
+		return reconciliationFault("backend_unsupported_scope", "A lineage source base requires the lineage profile")
+	}
+	if profile == LineageProfile {
+		if !sourceProfilesMatch(LineageSchemaVersion, s.Manifest.Provider.Profiles) {
+			return reconciliationFault("backend_incompatible_provider", "Lineage requires exactly four provider profiles")
+		}
+		if s.ProfileExtension == nil && state.Revision.SchemaVersion != LineageSchemaVersion {
+			return reconciliationFault("backend_unsupported_scope", "Lineage requires an explicit runtime profile extension")
+		}
+		if s.ProfileExtension != nil && (state.Revision.SchemaVersion != RuntimeSchemaVersion || slices.Contains(prior.Profiles, LineageProfile)) {
+			return reconciliationFault("backend_unsupported_scope", "Lineage extension requires a runtime source base")
+		}
+	}
+	if state.Revision.SchemaVersion == RuntimeSchemaVersion && !hasRuntimeProfile(profile) {
 		return reconciliationFault("backend_unsupported_scope", "A runtime source base requires the runtime profile")
 	}
 	if state.Revision.SchemaVersion == RelationalSchemaVersion && !hasRelationalProfile(profile) {

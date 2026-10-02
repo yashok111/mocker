@@ -1,0 +1,2010 @@
+[
+  {
+    "op": "upsert_node",
+    "node": {
+      "externalKey": "http",
+      "kind": "http_operation",
+      "name": "http",
+      "attributes": {
+        "method": "POST",
+        "path": "/orders"
+      },
+      "evidenceKeys": [
+        "proof:http"
+      ]
+    }
+  },
+  {
+    "op": "upsert_evidence",
+    "evidence": {
+      "externalKey": "proof:http",
+      "subjectType": "node",
+      "subjectKey": "http",
+      "method": "agent",
+      "status": "explicit",
+      "source": {
+        "repositoryId": "@repositoryId@",
+        "snapshotId": "@snapshotId@",
+        "file": "source.go.txt",
+        "contentHash": "5fbc7deb9707b036ccc6cc6303de8d61c9a8b7e4adb4e05958f28e4e6df32f4c",
+        "startLine": 1,
+        "endLine": 13
+      }
+    }
+  },
+  {
+    "op": "upsert_node",
+    "node": {
+      "externalKey": "handler",
+      "kind": "handler",
+      "name": "handler",
+      "attributes": {
+        "language": "go"
+      },
+      "evidenceKeys": [
+        "proof:handler"
+      ]
+    }
+  },
+  {
+    "op": "upsert_evidence",
+    "evidence": {
+      "externalKey": "proof:handler",
+      "subjectType": "node",
+      "subjectKey": "handler",
+      "method": "agent",
+      "status": "explicit",
+      "source": {
+        "repositoryId": "@repositoryId@",
+        "snapshotId": "@snapshotId@",
+        "file": "source.go.txt",
+        "contentHash": "5fbc7deb9707b036ccc6cc6303de8d61c9a8b7e4adb4e05958f28e4e6df32f4c",
+        "startLine": 1,
+        "endLine": 13
+      }
+    }
+  },
+  {
+    "op": "upsert_edge",
+    "edge": {
+      "externalKey": "handles",
+      "kind": "handles",
+      "fromKey": "http",
+      "toKey": "handler",
+      "attributes": {},
+      "evidenceKeys": [
+        "proof:handles"
+      ]
+    }
+  },
+  {
+    "op": "upsert_evidence",
+    "evidence": {
+      "externalKey": "proof:handles",
+      "subjectType": "edge",
+      "subjectKey": "handles",
+      "method": "agent",
+      "status": "explicit",
+      "source": {
+        "repositoryId": "@repositoryId@",
+        "snapshotId": "@snapshotId@",
+        "file": "source.go.txt",
+        "contentHash": "5fbc7deb9707b036ccc6cc6303de8d61c9a8b7e4adb4e05958f28e4e6df32f4c",
+        "startLine": 1,
+        "endLine": 13
+      }
+    }
+  },
+  {
+    "op": "upsert_node",
+    "node": {
+      "externalKey": "flow",
+      "kind": "flow",
+      "name": "flow",
+      "attributes": {
+        "analysisStatus": "complete",
+        "gaps": [],
+        "entryStepKey": "input",
+        "exitStepKeys": [
+          "input"
+        ],
+        "exitStatus": "complete"
+      },
+      "evidenceKeys": [
+        "proof:flow"
+      ],
+      "parentKey": "handler"
+    }
+  },
+  {
+    "op": "upsert_evidence",
+    "evidence": {
+      "externalKey": "proof:flow",
+      "subjectType": "node",
+      "subjectKey": "flow",
+      "method": "agent",
+      "status": "explicit",
+      "source": {
+        "repositoryId": "@repositoryId@",
+        "snapshotId": "@snapshotId@",
+        "file": "source.go.txt",
+        "contentHash": "5fbc7deb9707b036ccc6cc6303de8d61c9a8b7e4adb4e05958f28e4e6df32f4c",
+        "startLine": 1,
+        "endLine": 13
+      }
+    }
+  },
+  {
+    "op": "upsert_edge",
+    "edge": {
+      "externalKey": "contains:flow",
+      "kind": "contains",
+      "fromKey": "handler",
+      "toKey": "flow",
+      "attributes": {},
+      "evidenceKeys": [
+        "proof:contains:flow"
+      ]
+    }
+  },
+  {
+    "op": "upsert_evidence",
+    "evidence": {
+      "externalKey": "proof:contains:flow",
+      "subjectType": "edge",
+      "subjectKey": "contains:flow",
+      "method": "agent",
+      "status": "explicit",
+      "source": {
+        "repositoryId": "@repositoryId@",
+        "snapshotId": "@snapshotId@",
+        "file": "source.go.txt",
+        "contentHash": "5fbc7deb9707b036ccc6cc6303de8d61c9a8b7e4adb4e05958f28e4e6df32f4c",
+        "startLine": 1,
+        "endLine": 13
+      }
+    }
+  },
+  {
+    "op": "upsert_node",
+    "node": {
+      "externalKey": "input",
+      "kind": "flow_step",
+      "name": "input",
+      "attributes": {
+        "analysisStatus": "complete",
+        "gaps": [],
+        "stepKind": "input",
+        "inputs": [
+          {
+            "key": "opaque/~0",
+            "name": "opaque/~0",
+            "nativeType": {
+              "status": "known",
+              "value": "integer"
+            }
+          }
+        ],
+        "outputs": [],
+        "transactionContext": {
+          "status": "none",
+          "reason": "No local transaction"
+        },
+        "nativeText": "Request shape"
+      },
+      "evidenceKeys": [
+        "proof:input"
+      ],
+      "parentKey": "flow"
+    }
+  },
+  {
+    "op": "upsert_evidence",
+    "evidence": {
+      "externalKey": "proof:input",
+      "subjectType": "node",
+      "subjectKey": "input",
+      "method": "agent",
+      "status": "explicit",
+      "source": {
+        "repositoryId": "@repositoryId@",
+        "snapshotId": "@snapshotId@",
+        "file": "source.go.txt",
+        "contentHash": "5fbc7deb9707b036ccc6cc6303de8d61c9a8b7e4adb4e05958f28e4e6df32f4c",
+        "startLine": 1,
+        "endLine": 13
+      }
+    }
+  },
+  {
+    "op": "upsert_edge",
+    "edge": {
+      "externalKey": "contains:input",
+      "kind": "contains",
+      "fromKey": "flow",
+      "toKey": "input",
+      "attributes": {},
+      "evidenceKeys": [
+        "proof:contains:input"
+      ]
+    }
+  },
+  {
+    "op": "upsert_evidence",
+    "evidence": {
+      "externalKey": "proof:contains:input",
+      "subjectType": "edge",
+      "subjectKey": "contains:input",
+      "method": "agent",
+      "status": "explicit",
+      "source": {
+        "repositoryId": "@repositoryId@",
+        "snapshotId": "@snapshotId@",
+        "file": "source.go.txt",
+        "contentHash": "5fbc7deb9707b036ccc6cc6303de8d61c9a8b7e4adb4e05958f28e4e6df32f4c",
+        "startLine": 1,
+        "endLine": 13
+      }
+    }
+  },
+  {
+    "op": "upsert_node",
+    "node": {
+      "externalKey": "query",
+      "kind": "query",
+      "name": "query",
+      "attributes": {
+        "analysisStatus": "complete",
+        "gaps": [],
+        "dialect": "sqlite",
+        "nativeDefinition": "Static SQL shape only",
+        "parameters": [
+          {
+            "key": "user-id",
+            "name": "user-id",
+            "nativeType": {
+              "status": "known",
+              "value": "integer"
+            }
+          }
+        ],
+        "results": [
+          {
+            "key": "amount",
+            "name": "amount",
+            "nativeType": {
+              "status": "known",
+              "value": "integer"
+            }
+          },
+          {
+            "key": "tax",
+            "name": "tax",
+            "nativeType": {
+              "status": "known",
+              "value": "integer"
+            }
+          }
+        ],
+        "columnScope": "complete"
+      },
+      "evidenceKeys": [
+        "proof:query"
+      ],
+      "parentKey": "handler"
+    }
+  },
+  {
+    "op": "upsert_evidence",
+    "evidence": {
+      "externalKey": "proof:query",
+      "subjectType": "node",
+      "subjectKey": "query",
+      "method": "agent",
+      "status": "explicit",
+      "source": {
+        "repositoryId": "@repositoryId@",
+        "snapshotId": "@snapshotId@",
+        "file": "source.go.txt",
+        "contentHash": "5fbc7deb9707b036ccc6cc6303de8d61c9a8b7e4adb4e05958f28e4e6df32f4c",
+        "startLine": 1,
+        "endLine": 13
+      }
+    }
+  },
+  {
+    "op": "upsert_edge",
+    "edge": {
+      "externalKey": "contains:query",
+      "kind": "contains",
+      "fromKey": "handler",
+      "toKey": "query",
+      "attributes": {},
+      "evidenceKeys": [
+        "proof:contains:query"
+      ]
+    }
+  },
+  {
+    "op": "upsert_evidence",
+    "evidence": {
+      "externalKey": "proof:contains:query",
+      "subjectType": "edge",
+      "subjectKey": "contains:query",
+      "method": "agent",
+      "status": "explicit",
+      "source": {
+        "repositoryId": "@repositoryId@",
+        "snapshotId": "@snapshotId@",
+        "file": "source.go.txt",
+        "contentHash": "5fbc7deb9707b036ccc6cc6303de8d61c9a8b7e4adb4e05958f28e4e6df32f4c",
+        "startLine": 1,
+        "endLine": 13
+      }
+    }
+  },
+  {
+    "op": "upsert_node",
+    "node": {
+      "externalKey": "database:orders",
+      "kind": "datastore",
+      "name": "database:orders",
+      "attributes": {
+        "relational": {
+          "facets": {
+            "sql": {
+              "sourceKind": "sql",
+              "dialect": "sqlite",
+              "evidenceKeys": [
+                "proof:database:orders"
+              ],
+              "analysisStatus": "complete",
+              "gaps": [],
+              "databaseName": "orders",
+              "qualifiedName": "orders",
+              "nativeDefinition": null
+            }
+          }
+        }
+      },
+      "evidenceKeys": [
+        "proof:database:orders"
+      ]
+    }
+  },
+  {
+    "op": "upsert_evidence",
+    "evidence": {
+      "externalKey": "proof:database:orders",
+      "subjectType": "node",
+      "subjectKey": "database:orders",
+      "method": "agent",
+      "status": "explicit",
+      "source": {
+        "repositoryId": "@repositoryId@",
+        "snapshotId": "@snapshotId@",
+        "file": "source.go.txt",
+        "contentHash": "5fbc7deb9707b036ccc6cc6303de8d61c9a8b7e4adb4e05958f28e4e6df32f4c",
+        "startLine": 1,
+        "endLine": 13
+      },
+      "propertyPath": "/attributes/relational/facets/sql"
+    }
+  },
+  {
+    "op": "upsert_node",
+    "node": {
+      "externalKey": "schema:main",
+      "kind": "db_schema",
+      "name": "schema:main",
+      "attributes": {
+        "facets": {
+          "sql": {
+            "sourceKind": "sql",
+            "dialect": "sqlite",
+            "evidenceKeys": [
+              "proof:schema:main"
+            ],
+            "analysisStatus": "complete",
+            "gaps": [],
+            "qualifiedName": "main",
+            "nativeDefinition": null
+          }
+        }
+      },
+      "evidenceKeys": [
+        "proof:schema:main"
+      ],
+      "parentKey": "database:orders"
+    }
+  },
+  {
+    "op": "upsert_evidence",
+    "evidence": {
+      "externalKey": "proof:schema:main",
+      "subjectType": "node",
+      "subjectKey": "schema:main",
+      "method": "agent",
+      "status": "explicit",
+      "source": {
+        "repositoryId": "@repositoryId@",
+        "snapshotId": "@snapshotId@",
+        "file": "source.go.txt",
+        "contentHash": "5fbc7deb9707b036ccc6cc6303de8d61c9a8b7e4adb4e05958f28e4e6df32f4c",
+        "startLine": 1,
+        "endLine": 13
+      },
+      "propertyPath": "/attributes/facets/sql"
+    }
+  },
+  {
+    "op": "upsert_edge",
+    "edge": {
+      "externalKey": "contains:schema:main",
+      "kind": "contains",
+      "fromKey": "database:orders",
+      "toKey": "schema:main",
+      "attributes": {},
+      "evidenceKeys": [
+        "proof:contains:schema:main"
+      ]
+    }
+  },
+  {
+    "op": "upsert_evidence",
+    "evidence": {
+      "externalKey": "proof:contains:schema:main",
+      "subjectType": "edge",
+      "subjectKey": "contains:schema:main",
+      "method": "agent",
+      "status": "explicit",
+      "source": {
+        "repositoryId": "@repositoryId@",
+        "snapshotId": "@snapshotId@",
+        "file": "source.go.txt",
+        "contentHash": "5fbc7deb9707b036ccc6cc6303de8d61c9a8b7e4adb4e05958f28e4e6df32f4c",
+        "startLine": 1,
+        "endLine": 13
+      }
+    }
+  },
+  {
+    "op": "upsert_node",
+    "node": {
+      "externalKey": "table:orders",
+      "kind": "table",
+      "name": "table:orders",
+      "attributes": {
+        "facets": {
+          "sql": {
+            "sourceKind": "sql",
+            "dialect": "sqlite",
+            "evidenceKeys": [
+              "proof:table:orders"
+            ],
+            "analysisStatus": "complete",
+            "gaps": [],
+            "qualifiedName": "main.orders",
+            "nativeDefinition": "CREATE TABLE orders (user_id INTEGER, amount INTEGER, tax INTEGER);",
+            "columnsStatus": "complete",
+            "constraintsStatus": "complete"
+          }
+        }
+      },
+      "evidenceKeys": [
+        "proof:table:orders"
+      ],
+      "parentKey": "schema:main"
+    }
+  },
+  {
+    "op": "upsert_evidence",
+    "evidence": {
+      "externalKey": "proof:table:orders",
+      "subjectType": "node",
+      "subjectKey": "table:orders",
+      "method": "agent",
+      "status": "explicit",
+      "source": {
+        "repositoryId": "@repositoryId@",
+        "snapshotId": "@snapshotId@",
+        "file": "source.go.txt",
+        "contentHash": "5fbc7deb9707b036ccc6cc6303de8d61c9a8b7e4adb4e05958f28e4e6df32f4c",
+        "startLine": 1,
+        "endLine": 13
+      },
+      "propertyPath": "/attributes/facets/sql"
+    }
+  },
+  {
+    "op": "upsert_edge",
+    "edge": {
+      "externalKey": "contains:table:orders",
+      "kind": "contains",
+      "fromKey": "schema:main",
+      "toKey": "table:orders",
+      "attributes": {},
+      "evidenceKeys": [
+        "proof:contains:table:orders"
+      ]
+    }
+  },
+  {
+    "op": "upsert_evidence",
+    "evidence": {
+      "externalKey": "proof:contains:table:orders",
+      "subjectType": "edge",
+      "subjectKey": "contains:table:orders",
+      "method": "agent",
+      "status": "explicit",
+      "source": {
+        "repositoryId": "@repositoryId@",
+        "snapshotId": "@snapshotId@",
+        "file": "source.go.txt",
+        "contentHash": "5fbc7deb9707b036ccc6cc6303de8d61c9a8b7e4adb4e05958f28e4e6df32f4c",
+        "startLine": 1,
+        "endLine": 13
+      }
+    }
+  },
+  {
+    "op": "upsert_node",
+    "node": {
+      "externalKey": "column:orders:user_id",
+      "kind": "column",
+      "name": "column:orders:user_id",
+      "attributes": {
+        "facets": {
+          "sql": {
+            "sourceKind": "sql",
+            "dialect": "sqlite",
+            "evidenceKeys": [
+              "proof:column:orders:user_id"
+            ],
+            "analysisStatus": "complete",
+            "gaps": [],
+            "nativeType": {
+              "status": "known",
+              "value": "INTEGER"
+            },
+            "typeFamily": {
+              "status": "known",
+              "value": "integer"
+            },
+            "nullable": {
+              "status": "known",
+              "value": false
+            },
+            "defaultExpression": {
+              "status": "known",
+              "value": null
+            },
+            "generatedExpression": {
+              "status": "known",
+              "value": null
+            },
+            "identity": {
+              "status": "known",
+              "value": null
+            },
+            "ordinal": {
+              "status": "known",
+              "value": 1
+            }
+          }
+        }
+      },
+      "evidenceKeys": [
+        "proof:column:orders:user_id"
+      ],
+      "parentKey": "table:orders"
+    }
+  },
+  {
+    "op": "upsert_evidence",
+    "evidence": {
+      "externalKey": "proof:column:orders:user_id",
+      "subjectType": "node",
+      "subjectKey": "column:orders:user_id",
+      "method": "agent",
+      "status": "explicit",
+      "source": {
+        "repositoryId": "@repositoryId@",
+        "snapshotId": "@snapshotId@",
+        "file": "source.go.txt",
+        "contentHash": "5fbc7deb9707b036ccc6cc6303de8d61c9a8b7e4adb4e05958f28e4e6df32f4c",
+        "startLine": 1,
+        "endLine": 13
+      },
+      "propertyPath": "/attributes/facets/sql"
+    }
+  },
+  {
+    "op": "upsert_edge",
+    "edge": {
+      "externalKey": "contains:column:orders:user_id",
+      "kind": "contains",
+      "fromKey": "table:orders",
+      "toKey": "column:orders:user_id",
+      "attributes": {},
+      "evidenceKeys": [
+        "proof:contains:column:orders:user_id"
+      ]
+    }
+  },
+  {
+    "op": "upsert_evidence",
+    "evidence": {
+      "externalKey": "proof:contains:column:orders:user_id",
+      "subjectType": "edge",
+      "subjectKey": "contains:column:orders:user_id",
+      "method": "agent",
+      "status": "explicit",
+      "source": {
+        "repositoryId": "@repositoryId@",
+        "snapshotId": "@snapshotId@",
+        "file": "source.go.txt",
+        "contentHash": "5fbc7deb9707b036ccc6cc6303de8d61c9a8b7e4adb4e05958f28e4e6df32f4c",
+        "startLine": 1,
+        "endLine": 13
+      }
+    }
+  },
+  {
+    "op": "upsert_node",
+    "node": {
+      "externalKey": "column:orders:amount",
+      "kind": "column",
+      "name": "column:orders:amount",
+      "attributes": {
+        "facets": {
+          "sql": {
+            "sourceKind": "sql",
+            "dialect": "sqlite",
+            "evidenceKeys": [
+              "proof:column:orders:amount"
+            ],
+            "analysisStatus": "complete",
+            "gaps": [],
+            "nativeType": {
+              "status": "known",
+              "value": "INTEGER"
+            },
+            "typeFamily": {
+              "status": "known",
+              "value": "integer"
+            },
+            "nullable": {
+              "status": "known",
+              "value": false
+            },
+            "defaultExpression": {
+              "status": "known",
+              "value": null
+            },
+            "generatedExpression": {
+              "status": "known",
+              "value": null
+            },
+            "identity": {
+              "status": "known",
+              "value": null
+            },
+            "ordinal": {
+              "status": "known",
+              "value": 2
+            }
+          }
+        }
+      },
+      "evidenceKeys": [
+        "proof:column:orders:amount"
+      ],
+      "parentKey": "table:orders"
+    }
+  },
+  {
+    "op": "upsert_evidence",
+    "evidence": {
+      "externalKey": "proof:column:orders:amount",
+      "subjectType": "node",
+      "subjectKey": "column:orders:amount",
+      "method": "agent",
+      "status": "explicit",
+      "source": {
+        "repositoryId": "@repositoryId@",
+        "snapshotId": "@snapshotId@",
+        "file": "source.go.txt",
+        "contentHash": "5fbc7deb9707b036ccc6cc6303de8d61c9a8b7e4adb4e05958f28e4e6df32f4c",
+        "startLine": 1,
+        "endLine": 13
+      },
+      "propertyPath": "/attributes/facets/sql"
+    }
+  },
+  {
+    "op": "upsert_edge",
+    "edge": {
+      "externalKey": "contains:column:orders:amount",
+      "kind": "contains",
+      "fromKey": "table:orders",
+      "toKey": "column:orders:amount",
+      "attributes": {},
+      "evidenceKeys": [
+        "proof:contains:column:orders:amount"
+      ]
+    }
+  },
+  {
+    "op": "upsert_evidence",
+    "evidence": {
+      "externalKey": "proof:contains:column:orders:amount",
+      "subjectType": "edge",
+      "subjectKey": "contains:column:orders:amount",
+      "method": "agent",
+      "status": "explicit",
+      "source": {
+        "repositoryId": "@repositoryId@",
+        "snapshotId": "@snapshotId@",
+        "file": "source.go.txt",
+        "contentHash": "5fbc7deb9707b036ccc6cc6303de8d61c9a8b7e4adb4e05958f28e4e6df32f4c",
+        "startLine": 1,
+        "endLine": 13
+      }
+    }
+  },
+  {
+    "op": "upsert_node",
+    "node": {
+      "externalKey": "column:orders:tax",
+      "kind": "column",
+      "name": "column:orders:tax",
+      "attributes": {
+        "facets": {
+          "sql": {
+            "sourceKind": "sql",
+            "dialect": "sqlite",
+            "evidenceKeys": [
+              "proof:column:orders:tax"
+            ],
+            "analysisStatus": "complete",
+            "gaps": [],
+            "nativeType": {
+              "status": "known",
+              "value": "INTEGER"
+            },
+            "typeFamily": {
+              "status": "known",
+              "value": "integer"
+            },
+            "nullable": {
+              "status": "known",
+              "value": false
+            },
+            "defaultExpression": {
+              "status": "known",
+              "value": null
+            },
+            "generatedExpression": {
+              "status": "known",
+              "value": null
+            },
+            "identity": {
+              "status": "known",
+              "value": null
+            },
+            "ordinal": {
+              "status": "known",
+              "value": 3
+            }
+          }
+        }
+      },
+      "evidenceKeys": [
+        "proof:column:orders:tax"
+      ],
+      "parentKey": "table:orders"
+    }
+  },
+  {
+    "op": "upsert_evidence",
+    "evidence": {
+      "externalKey": "proof:column:orders:tax",
+      "subjectType": "node",
+      "subjectKey": "column:orders:tax",
+      "method": "agent",
+      "status": "explicit",
+      "source": {
+        "repositoryId": "@repositoryId@",
+        "snapshotId": "@snapshotId@",
+        "file": "source.go.txt",
+        "contentHash": "5fbc7deb9707b036ccc6cc6303de8d61c9a8b7e4adb4e05958f28e4e6df32f4c",
+        "startLine": 1,
+        "endLine": 13
+      },
+      "propertyPath": "/attributes/facets/sql"
+    }
+  },
+  {
+    "op": "upsert_edge",
+    "edge": {
+      "externalKey": "contains:column:orders:tax",
+      "kind": "contains",
+      "fromKey": "table:orders",
+      "toKey": "column:orders:tax",
+      "attributes": {},
+      "evidenceKeys": [
+        "proof:contains:column:orders:tax"
+      ]
+    }
+  },
+  {
+    "op": "upsert_evidence",
+    "evidence": {
+      "externalKey": "proof:contains:column:orders:tax",
+      "subjectType": "edge",
+      "subjectKey": "contains:column:orders:tax",
+      "method": "agent",
+      "status": "explicit",
+      "source": {
+        "repositoryId": "@repositoryId@",
+        "snapshotId": "@snapshotId@",
+        "file": "source.go.txt",
+        "contentHash": "5fbc7deb9707b036ccc6cc6303de8d61c9a8b7e4adb4e05958f28e4e6df32f4c",
+        "startLine": 1,
+        "endLine": 13
+      }
+    }
+  },
+  {
+    "op": "upsert_node",
+    "node": {
+      "externalKey": "request",
+      "kind": "api_field",
+      "name": "request",
+      "attributes": {
+        "analysisStatus": "complete",
+        "gaps": [],
+        "direction": "request",
+        "location": "body",
+        "selector": {
+          "kind": "body",
+          "path": [
+            {
+              "property": "userId"
+            }
+          ]
+        },
+        "mediaType": "application/json",
+        "nativeType": {
+          "status": "known",
+          "value": "integer"
+        }
+      },
+      "evidenceKeys": [
+        "proof:request"
+      ],
+      "parentKey": "http"
+    }
+  },
+  {
+    "op": "upsert_evidence",
+    "evidence": {
+      "externalKey": "proof:request",
+      "subjectType": "node",
+      "subjectKey": "request",
+      "method": "agent",
+      "status": "explicit",
+      "source": {
+        "repositoryId": "@repositoryId@",
+        "snapshotId": "@snapshotId@",
+        "file": "source.go.txt",
+        "contentHash": "5fbc7deb9707b036ccc6cc6303de8d61c9a8b7e4adb4e05958f28e4e6df32f4c",
+        "startLine": 1,
+        "endLine": 13
+      }
+    }
+  },
+  {
+    "op": "upsert_edge",
+    "edge": {
+      "externalKey": "contains:request",
+      "kind": "contains",
+      "fromKey": "http",
+      "toKey": "request",
+      "attributes": {},
+      "evidenceKeys": [
+        "proof:contains:request"
+      ]
+    }
+  },
+  {
+    "op": "upsert_evidence",
+    "evidence": {
+      "externalKey": "proof:contains:request",
+      "subjectType": "edge",
+      "subjectKey": "contains:request",
+      "method": "agent",
+      "status": "explicit",
+      "source": {
+        "repositoryId": "@repositoryId@",
+        "snapshotId": "@snapshotId@",
+        "file": "source.go.txt",
+        "contentHash": "5fbc7deb9707b036ccc6cc6303de8d61c9a8b7e4adb4e05958f28e4e6df32f4c",
+        "startLine": 1,
+        "endLine": 13
+      }
+    }
+  },
+  {
+    "op": "upsert_node",
+    "node": {
+      "externalKey": "response",
+      "kind": "api_field",
+      "name": "response",
+      "attributes": {
+        "analysisStatus": "complete",
+        "gaps": [],
+        "direction": "response",
+        "location": "body",
+        "selector": {
+          "kind": "body",
+          "path": [
+            {
+              "property": "total"
+            }
+          ]
+        },
+        "mediaType": "application/json",
+        "nativeType": {
+          "status": "known",
+          "value": "integer"
+        },
+        "responseStatus": "200"
+      },
+      "evidenceKeys": [
+        "proof:response"
+      ],
+      "parentKey": "http"
+    }
+  },
+  {
+    "op": "upsert_evidence",
+    "evidence": {
+      "externalKey": "proof:response",
+      "subjectType": "node",
+      "subjectKey": "response",
+      "method": "agent",
+      "status": "explicit",
+      "source": {
+        "repositoryId": "@repositoryId@",
+        "snapshotId": "@snapshotId@",
+        "file": "source.go.txt",
+        "contentHash": "5fbc7deb9707b036ccc6cc6303de8d61c9a8b7e4adb4e05958f28e4e6df32f4c",
+        "startLine": 1,
+        "endLine": 13
+      }
+    }
+  },
+  {
+    "op": "upsert_edge",
+    "edge": {
+      "externalKey": "contains:response",
+      "kind": "contains",
+      "fromKey": "http",
+      "toKey": "response",
+      "attributes": {},
+      "evidenceKeys": [
+        "proof:contains:response"
+      ]
+    }
+  },
+  {
+    "op": "upsert_evidence",
+    "evidence": {
+      "externalKey": "proof:contains:response",
+      "subjectType": "edge",
+      "subjectKey": "contains:response",
+      "method": "agent",
+      "status": "explicit",
+      "source": {
+        "repositoryId": "@repositoryId@",
+        "snapshotId": "@snapshotId@",
+        "file": "source.go.txt",
+        "contentHash": "5fbc7deb9707b036ccc6cc6303de8d61c9a8b7e4adb4e05958f28e4e6df32f4c",
+        "startLine": 1,
+        "endLine": 13
+      }
+    }
+  },
+  {
+    "op": "upsert_node",
+    "node": {
+      "externalKey": "kind",
+      "kind": "api_field",
+      "name": "kind",
+      "attributes": {
+        "analysisStatus": "complete",
+        "gaps": [],
+        "direction": "response",
+        "location": "body",
+        "selector": {
+          "kind": "body",
+          "path": [
+            {
+              "property": "kind"
+            }
+          ]
+        },
+        "mediaType": "application/json",
+        "nativeType": {
+          "status": "known",
+          "value": "integer"
+        },
+        "responseStatus": "200"
+      },
+      "evidenceKeys": [
+        "proof:kind"
+      ],
+      "parentKey": "http"
+    }
+  },
+  {
+    "op": "upsert_evidence",
+    "evidence": {
+      "externalKey": "proof:kind",
+      "subjectType": "node",
+      "subjectKey": "kind",
+      "method": "agent",
+      "status": "explicit",
+      "source": {
+        "repositoryId": "@repositoryId@",
+        "snapshotId": "@snapshotId@",
+        "file": "source.go.txt",
+        "contentHash": "5fbc7deb9707b036ccc6cc6303de8d61c9a8b7e4adb4e05958f28e4e6df32f4c",
+        "startLine": 1,
+        "endLine": 13
+      }
+    }
+  },
+  {
+    "op": "upsert_edge",
+    "edge": {
+      "externalKey": "contains:kind",
+      "kind": "contains",
+      "fromKey": "http",
+      "toKey": "kind",
+      "attributes": {},
+      "evidenceKeys": [
+        "proof:contains:kind"
+      ]
+    }
+  },
+  {
+    "op": "upsert_evidence",
+    "evidence": {
+      "externalKey": "proof:contains:kind",
+      "subjectType": "edge",
+      "subjectKey": "contains:kind",
+      "method": "agent",
+      "status": "explicit",
+      "source": {
+        "repositoryId": "@repositoryId@",
+        "snapshotId": "@snapshotId@",
+        "file": "source.go.txt",
+        "contentHash": "5fbc7deb9707b036ccc6cc6303de8d61c9a8b7e4adb4e05958f28e4e6df32f4c",
+        "startLine": 1,
+        "endLine": 13
+      }
+    }
+  },
+  {
+    "op": "upsert_node",
+    "node": {
+      "externalKey": "token",
+      "kind": "api_field",
+      "name": "token",
+      "attributes": {
+        "analysisStatus": "complete",
+        "gaps": [],
+        "direction": "response",
+        "location": "body",
+        "selector": {
+          "kind": "body",
+          "path": [
+            {
+              "property": "token"
+            }
+          ]
+        },
+        "mediaType": "application/json",
+        "nativeType": {
+          "status": "known",
+          "value": "string"
+        },
+        "responseStatus": "200"
+      },
+      "evidenceKeys": [
+        "proof:token"
+      ],
+      "parentKey": "http"
+    }
+  },
+  {
+    "op": "upsert_evidence",
+    "evidence": {
+      "externalKey": "proof:token",
+      "subjectType": "node",
+      "subjectKey": "token",
+      "method": "agent",
+      "status": "explicit",
+      "source": {
+        "repositoryId": "@repositoryId@",
+        "snapshotId": "@snapshotId@",
+        "file": "source.go.txt",
+        "contentHash": "5fbc7deb9707b036ccc6cc6303de8d61c9a8b7e4adb4e05958f28e4e6df32f4c",
+        "startLine": 1,
+        "endLine": 13
+      }
+    }
+  },
+  {
+    "op": "upsert_edge",
+    "edge": {
+      "externalKey": "contains:token",
+      "kind": "contains",
+      "fromKey": "http",
+      "toKey": "token",
+      "attributes": {},
+      "evidenceKeys": [
+        "proof:contains:token"
+      ]
+    }
+  },
+  {
+    "op": "upsert_evidence",
+    "evidence": {
+      "externalKey": "proof:contains:token",
+      "subjectType": "edge",
+      "subjectKey": "contains:token",
+      "method": "agent",
+      "status": "explicit",
+      "source": {
+        "repositoryId": "@repositoryId@",
+        "snapshotId": "@snapshotId@",
+        "file": "source.go.txt",
+        "contentHash": "5fbc7deb9707b036ccc6cc6303de8d61c9a8b7e4adb4e05958f28e4e6df32f4c",
+        "startLine": 1,
+        "endLine": 13
+      }
+    }
+  },
+  {
+    "op": "upsert_node",
+    "node": {
+      "externalKey": "m01-request",
+      "kind": "field_mapping",
+      "name": "m01-request",
+      "attributes": {
+        "analysisStatus": "complete",
+        "gaps": [],
+        "sources": [
+          {
+            "kind": "api_field",
+            "nodeKey": "request"
+          }
+        ],
+        "destination": {
+          "kind": "port",
+          "nodeKey": "input",
+          "collection": "inputs",
+          "portKey": "opaque/~0"
+        },
+        "transform": {
+          "kind": "copy",
+          "description": "Explicit copy dependency shape",
+          "redacted": false
+        }
+      },
+      "evidenceKeys": [
+        "proof:m01-request"
+      ],
+      "parentKey": "input"
+    }
+  },
+  {
+    "op": "upsert_evidence",
+    "evidence": {
+      "externalKey": "proof:m01-request",
+      "subjectType": "node",
+      "subjectKey": "m01-request",
+      "method": "agent",
+      "status": "explicit",
+      "source": {
+        "repositoryId": "@repositoryId@",
+        "snapshotId": "@snapshotId@",
+        "file": "source.go.txt",
+        "contentHash": "5fbc7deb9707b036ccc6cc6303de8d61c9a8b7e4adb4e05958f28e4e6df32f4c",
+        "startLine": 1,
+        "endLine": 13
+      }
+    }
+  },
+  {
+    "op": "upsert_edge",
+    "edge": {
+      "externalKey": "contains:m01-request",
+      "kind": "contains",
+      "fromKey": "input",
+      "toKey": "m01-request",
+      "attributes": {},
+      "evidenceKeys": [
+        "proof:contains:m01-request"
+      ]
+    }
+  },
+  {
+    "op": "upsert_evidence",
+    "evidence": {
+      "externalKey": "proof:contains:m01-request",
+      "subjectType": "edge",
+      "subjectKey": "contains:m01-request",
+      "method": "agent",
+      "status": "explicit",
+      "source": {
+        "repositoryId": "@repositoryId@",
+        "snapshotId": "@snapshotId@",
+        "file": "source.go.txt",
+        "contentHash": "5fbc7deb9707b036ccc6cc6303de8d61c9a8b7e4adb4e05958f28e4e6df32f4c",
+        "startLine": 1,
+        "endLine": 13
+      }
+    }
+  },
+  {
+    "op": "upsert_node",
+    "node": {
+      "externalKey": "m02-parameter",
+      "kind": "field_mapping",
+      "name": "m02-parameter",
+      "attributes": {
+        "analysisStatus": "complete",
+        "gaps": [],
+        "sources": [
+          {
+            "kind": "port",
+            "nodeKey": "input",
+            "collection": "inputs",
+            "portKey": "opaque/~0"
+          }
+        ],
+        "destination": {
+          "kind": "port",
+          "nodeKey": "query",
+          "collection": "parameters",
+          "portKey": "user-id"
+        },
+        "transform": {
+          "kind": "copy",
+          "description": "Explicit copy dependency shape",
+          "redacted": false
+        }
+      },
+      "evidenceKeys": [
+        "proof:m02-parameter"
+      ],
+      "parentKey": "query"
+    }
+  },
+  {
+    "op": "upsert_evidence",
+    "evidence": {
+      "externalKey": "proof:m02-parameter",
+      "subjectType": "node",
+      "subjectKey": "m02-parameter",
+      "method": "agent",
+      "status": "explicit",
+      "source": {
+        "repositoryId": "@repositoryId@",
+        "snapshotId": "@snapshotId@",
+        "file": "source.go.txt",
+        "contentHash": "5fbc7deb9707b036ccc6cc6303de8d61c9a8b7e4adb4e05958f28e4e6df32f4c",
+        "startLine": 1,
+        "endLine": 13
+      }
+    }
+  },
+  {
+    "op": "upsert_edge",
+    "edge": {
+      "externalKey": "contains:m02-parameter",
+      "kind": "contains",
+      "fromKey": "query",
+      "toKey": "m02-parameter",
+      "attributes": {},
+      "evidenceKeys": [
+        "proof:contains:m02-parameter"
+      ]
+    }
+  },
+  {
+    "op": "upsert_evidence",
+    "evidence": {
+      "externalKey": "proof:contains:m02-parameter",
+      "subjectType": "edge",
+      "subjectKey": "contains:m02-parameter",
+      "method": "agent",
+      "status": "explicit",
+      "source": {
+        "repositoryId": "@repositoryId@",
+        "snapshotId": "@snapshotId@",
+        "file": "source.go.txt",
+        "contentHash": "5fbc7deb9707b036ccc6cc6303de8d61c9a8b7e4adb4e05958f28e4e6df32f4c",
+        "startLine": 1,
+        "endLine": 13
+      }
+    }
+  },
+  {
+    "op": "upsert_node",
+    "node": {
+      "externalKey": "m03-write",
+      "kind": "field_mapping",
+      "name": "m03-write",
+      "attributes": {
+        "analysisStatus": "complete",
+        "gaps": [],
+        "sources": [
+          {
+            "kind": "port",
+            "nodeKey": "query",
+            "collection": "parameters",
+            "portKey": "user-id"
+          }
+        ],
+        "destination": {
+          "kind": "column",
+          "nodeKey": "column:orders:user_id",
+          "facetKey": "sql"
+        },
+        "transform": {
+          "kind": "copy",
+          "description": "Explicit copy dependency shape",
+          "redacted": false
+        }
+      },
+      "evidenceKeys": [
+        "proof:m03-write"
+      ],
+      "parentKey": "query"
+    }
+  },
+  {
+    "op": "upsert_evidence",
+    "evidence": {
+      "externalKey": "proof:m03-write",
+      "subjectType": "node",
+      "subjectKey": "m03-write",
+      "method": "agent",
+      "status": "explicit",
+      "source": {
+        "repositoryId": "@repositoryId@",
+        "snapshotId": "@snapshotId@",
+        "file": "source.go.txt",
+        "contentHash": "5fbc7deb9707b036ccc6cc6303de8d61c9a8b7e4adb4e05958f28e4e6df32f4c",
+        "startLine": 1,
+        "endLine": 13
+      }
+    }
+  },
+  {
+    "op": "upsert_edge",
+    "edge": {
+      "externalKey": "contains:m03-write",
+      "kind": "contains",
+      "fromKey": "query",
+      "toKey": "m03-write",
+      "attributes": {},
+      "evidenceKeys": [
+        "proof:contains:m03-write"
+      ]
+    }
+  },
+  {
+    "op": "upsert_evidence",
+    "evidence": {
+      "externalKey": "proof:contains:m03-write",
+      "subjectType": "edge",
+      "subjectKey": "contains:m03-write",
+      "method": "agent",
+      "status": "explicit",
+      "source": {
+        "repositoryId": "@repositoryId@",
+        "snapshotId": "@snapshotId@",
+        "file": "source.go.txt",
+        "contentHash": "5fbc7deb9707b036ccc6cc6303de8d61c9a8b7e4adb4e05958f28e4e6df32f4c",
+        "startLine": 1,
+        "endLine": 13
+      }
+    }
+  },
+  {
+    "op": "upsert_node",
+    "node": {
+      "externalKey": "m04-amount",
+      "kind": "field_mapping",
+      "name": "m04-amount",
+      "attributes": {
+        "analysisStatus": "complete",
+        "gaps": [],
+        "sources": [
+          {
+            "kind": "column",
+            "nodeKey": "column:orders:amount",
+            "facetKey": "sql"
+          }
+        ],
+        "destination": {
+          "kind": "port",
+          "nodeKey": "query",
+          "collection": "results",
+          "portKey": "amount"
+        },
+        "transform": {
+          "kind": "copy",
+          "description": "Explicit copy dependency shape",
+          "redacted": false
+        }
+      },
+      "evidenceKeys": [
+        "proof:m04-amount"
+      ],
+      "parentKey": "query"
+    }
+  },
+  {
+    "op": "upsert_evidence",
+    "evidence": {
+      "externalKey": "proof:m04-amount",
+      "subjectType": "node",
+      "subjectKey": "m04-amount",
+      "method": "agent",
+      "status": "explicit",
+      "source": {
+        "repositoryId": "@repositoryId@",
+        "snapshotId": "@snapshotId@",
+        "file": "source.go.txt",
+        "contentHash": "5fbc7deb9707b036ccc6cc6303de8d61c9a8b7e4adb4e05958f28e4e6df32f4c",
+        "startLine": 1,
+        "endLine": 13
+      }
+    }
+  },
+  {
+    "op": "upsert_edge",
+    "edge": {
+      "externalKey": "contains:m04-amount",
+      "kind": "contains",
+      "fromKey": "query",
+      "toKey": "m04-amount",
+      "attributes": {},
+      "evidenceKeys": [
+        "proof:contains:m04-amount"
+      ]
+    }
+  },
+  {
+    "op": "upsert_evidence",
+    "evidence": {
+      "externalKey": "proof:contains:m04-amount",
+      "subjectType": "edge",
+      "subjectKey": "contains:m04-amount",
+      "method": "agent",
+      "status": "explicit",
+      "source": {
+        "repositoryId": "@repositoryId@",
+        "snapshotId": "@snapshotId@",
+        "file": "source.go.txt",
+        "contentHash": "5fbc7deb9707b036ccc6cc6303de8d61c9a8b7e4adb4e05958f28e4e6df32f4c",
+        "startLine": 1,
+        "endLine": 13
+      }
+    }
+  },
+  {
+    "op": "upsert_node",
+    "node": {
+      "externalKey": "m05-tax",
+      "kind": "field_mapping",
+      "name": "m05-tax",
+      "attributes": {
+        "analysisStatus": "complete",
+        "gaps": [],
+        "sources": [
+          {
+            "kind": "column",
+            "nodeKey": "column:orders:tax",
+            "facetKey": "sql"
+          }
+        ],
+        "destination": {
+          "kind": "port",
+          "nodeKey": "query",
+          "collection": "results",
+          "portKey": "tax"
+        },
+        "transform": {
+          "kind": "copy",
+          "description": "Explicit copy dependency shape",
+          "redacted": false
+        }
+      },
+      "evidenceKeys": [
+        "proof:m05-tax"
+      ],
+      "parentKey": "query"
+    }
+  },
+  {
+    "op": "upsert_evidence",
+    "evidence": {
+      "externalKey": "proof:m05-tax",
+      "subjectType": "node",
+      "subjectKey": "m05-tax",
+      "method": "agent",
+      "status": "explicit",
+      "source": {
+        "repositoryId": "@repositoryId@",
+        "snapshotId": "@snapshotId@",
+        "file": "source.go.txt",
+        "contentHash": "5fbc7deb9707b036ccc6cc6303de8d61c9a8b7e4adb4e05958f28e4e6df32f4c",
+        "startLine": 1,
+        "endLine": 13
+      }
+    }
+  },
+  {
+    "op": "upsert_edge",
+    "edge": {
+      "externalKey": "contains:m05-tax",
+      "kind": "contains",
+      "fromKey": "query",
+      "toKey": "m05-tax",
+      "attributes": {},
+      "evidenceKeys": [
+        "proof:contains:m05-tax"
+      ]
+    }
+  },
+  {
+    "op": "upsert_evidence",
+    "evidence": {
+      "externalKey": "proof:contains:m05-tax",
+      "subjectType": "edge",
+      "subjectKey": "contains:m05-tax",
+      "method": "agent",
+      "status": "explicit",
+      "source": {
+        "repositoryId": "@repositoryId@",
+        "snapshotId": "@snapshotId@",
+        "file": "source.go.txt",
+        "contentHash": "5fbc7deb9707b036ccc6cc6303de8d61c9a8b7e4adb4e05958f28e4e6df32f4c",
+        "startLine": 1,
+        "endLine": 13
+      }
+    }
+  },
+  {
+    "op": "upsert_node",
+    "node": {
+      "externalKey": "m06-total",
+      "kind": "field_mapping",
+      "name": "m06-total",
+      "attributes": {
+        "analysisStatus": "complete",
+        "gaps": [],
+        "sources": [
+          {
+            "kind": "port",
+            "nodeKey": "query",
+            "collection": "results",
+            "portKey": "amount"
+          },
+          {
+            "kind": "port",
+            "nodeKey": "query",
+            "collection": "results",
+            "portKey": "tax"
+          }
+        ],
+        "destination": {
+          "kind": "api_field",
+          "nodeKey": "response"
+        },
+        "transform": {
+          "kind": "aggregate",
+          "description": "Explicit aggregate dependency shape",
+          "redacted": false
+        }
+      },
+      "evidenceKeys": [
+        "proof:m06-total"
+      ],
+      "parentKey": "query"
+    }
+  },
+  {
+    "op": "upsert_evidence",
+    "evidence": {
+      "externalKey": "proof:m06-total",
+      "subjectType": "node",
+      "subjectKey": "m06-total",
+      "method": "agent",
+      "status": "explicit",
+      "source": {
+        "repositoryId": "@repositoryId@",
+        "snapshotId": "@snapshotId@",
+        "file": "source.go.txt",
+        "contentHash": "5fbc7deb9707b036ccc6cc6303de8d61c9a8b7e4adb4e05958f28e4e6df32f4c",
+        "startLine": 1,
+        "endLine": 13
+      }
+    }
+  },
+  {
+    "op": "upsert_edge",
+    "edge": {
+      "externalKey": "contains:m06-total",
+      "kind": "contains",
+      "fromKey": "query",
+      "toKey": "m06-total",
+      "attributes": {},
+      "evidenceKeys": [
+        "proof:contains:m06-total"
+      ]
+    }
+  },
+  {
+    "op": "upsert_evidence",
+    "evidence": {
+      "externalKey": "proof:contains:m06-total",
+      "subjectType": "edge",
+      "subjectKey": "contains:m06-total",
+      "method": "agent",
+      "status": "explicit",
+      "source": {
+        "repositoryId": "@repositoryId@",
+        "snapshotId": "@snapshotId@",
+        "file": "source.go.txt",
+        "contentHash": "5fbc7deb9707b036ccc6cc6303de8d61c9a8b7e4adb4e05958f28e4e6df32f4c",
+        "startLine": 1,
+        "endLine": 13
+      }
+    }
+  },
+  {
+    "op": "upsert_node",
+    "node": {
+      "externalKey": "m07-alternative",
+      "kind": "field_mapping",
+      "name": "m07-alternative",
+      "attributes": {
+        "analysisStatus": "complete",
+        "gaps": [],
+        "sources": [
+          {
+            "kind": "port",
+            "nodeKey": "query",
+            "collection": "results",
+            "portKey": "amount"
+          }
+        ],
+        "destination": {
+          "kind": "api_field",
+          "nodeKey": "response"
+        },
+        "transform": {
+          "kind": "copy",
+          "description": "Explicit copy dependency shape",
+          "redacted": false
+        }
+      },
+      "evidenceKeys": [
+        "proof:m07-alternative"
+      ],
+      "parentKey": "query"
+    }
+  },
+  {
+    "op": "upsert_evidence",
+    "evidence": {
+      "externalKey": "proof:m07-alternative",
+      "subjectType": "node",
+      "subjectKey": "m07-alternative",
+      "method": "agent",
+      "status": "explicit",
+      "source": {
+        "repositoryId": "@repositoryId@",
+        "snapshotId": "@snapshotId@",
+        "file": "source.go.txt",
+        "contentHash": "5fbc7deb9707b036ccc6cc6303de8d61c9a8b7e4adb4e05958f28e4e6df32f4c",
+        "startLine": 1,
+        "endLine": 13
+      }
+    }
+  },
+  {
+    "op": "upsert_edge",
+    "edge": {
+      "externalKey": "contains:m07-alternative",
+      "kind": "contains",
+      "fromKey": "query",
+      "toKey": "m07-alternative",
+      "attributes": {},
+      "evidenceKeys": [
+        "proof:contains:m07-alternative"
+      ]
+    }
+  },
+  {
+    "op": "upsert_evidence",
+    "evidence": {
+      "externalKey": "proof:contains:m07-alternative",
+      "subjectType": "edge",
+      "subjectKey": "contains:m07-alternative",
+      "method": "agent",
+      "status": "explicit",
+      "source": {
+        "repositoryId": "@repositoryId@",
+        "snapshotId": "@snapshotId@",
+        "file": "source.go.txt",
+        "contentHash": "5fbc7deb9707b036ccc6cc6303de8d61c9a8b7e4adb4e05958f28e4e6df32f4c",
+        "startLine": 1,
+        "endLine": 13
+      }
+    }
+  },
+  {
+    "op": "upsert_node",
+    "node": {
+      "externalKey": "m08-constant",
+      "kind": "field_mapping",
+      "name": "m08-constant",
+      "attributes": {
+        "analysisStatus": "complete",
+        "gaps": [],
+        "sources": [],
+        "destination": {
+          "kind": "api_field",
+          "nodeKey": "kind"
+        },
+        "transform": {
+          "kind": "constant",
+          "description": "Explicit constant dependency shape",
+          "redacted": false
+        }
+      },
+      "evidenceKeys": [
+        "proof:m08-constant"
+      ],
+      "parentKey": "query"
+    }
+  },
+  {
+    "op": "upsert_evidence",
+    "evidence": {
+      "externalKey": "proof:m08-constant",
+      "subjectType": "node",
+      "subjectKey": "m08-constant",
+      "method": "agent",
+      "status": "explicit",
+      "source": {
+        "repositoryId": "@repositoryId@",
+        "snapshotId": "@snapshotId@",
+        "file": "source.go.txt",
+        "contentHash": "5fbc7deb9707b036ccc6cc6303de8d61c9a8b7e4adb4e05958f28e4e6df32f4c",
+        "startLine": 1,
+        "endLine": 13
+      }
+    }
+  },
+  {
+    "op": "upsert_edge",
+    "edge": {
+      "externalKey": "contains:m08-constant",
+      "kind": "contains",
+      "fromKey": "query",
+      "toKey": "m08-constant",
+      "attributes": {},
+      "evidenceKeys": [
+        "proof:contains:m08-constant"
+      ]
+    }
+  },
+  {
+    "op": "upsert_evidence",
+    "evidence": {
+      "externalKey": "proof:contains:m08-constant",
+      "subjectType": "edge",
+      "subjectKey": "contains:m08-constant",
+      "method": "agent",
+      "status": "explicit",
+      "source": {
+        "repositoryId": "@repositoryId@",
+        "snapshotId": "@snapshotId@",
+        "file": "source.go.txt",
+        "contentHash": "5fbc7deb9707b036ccc6cc6303de8d61c9a8b7e4adb4e05958f28e4e6df32f4c",
+        "startLine": 1,
+        "endLine": 13
+      }
+    }
+  },
+  {
+    "op": "upsert_node",
+    "node": {
+      "externalKey": "m09-cycle",
+      "kind": "field_mapping",
+      "name": "m09-cycle",
+      "attributes": {
+        "analysisStatus": "complete",
+        "gaps": [],
+        "sources": [
+          {
+            "kind": "api_field",
+            "nodeKey": "response"
+          }
+        ],
+        "destination": {
+          "kind": "port",
+          "nodeKey": "query",
+          "collection": "results",
+          "portKey": "amount"
+        },
+        "transform": {
+          "kind": "compute",
+          "description": "Explicit compute dependency shape",
+          "redacted": false
+        }
+      },
+      "evidenceKeys": [
+        "proof:m09-cycle"
+      ],
+      "parentKey": "query"
+    }
+  },
+  {
+    "op": "upsert_evidence",
+    "evidence": {
+      "externalKey": "proof:m09-cycle",
+      "subjectType": "node",
+      "subjectKey": "m09-cycle",
+      "method": "agent",
+      "status": "explicit",
+      "source": {
+        "repositoryId": "@repositoryId@",
+        "snapshotId": "@snapshotId@",
+        "file": "source.go.txt",
+        "contentHash": "5fbc7deb9707b036ccc6cc6303de8d61c9a8b7e4adb4e05958f28e4e6df32f4c",
+        "startLine": 1,
+        "endLine": 13
+      }
+    }
+  },
+  {
+    "op": "upsert_edge",
+    "edge": {
+      "externalKey": "contains:m09-cycle",
+      "kind": "contains",
+      "fromKey": "query",
+      "toKey": "m09-cycle",
+      "attributes": {},
+      "evidenceKeys": [
+        "proof:contains:m09-cycle"
+      ]
+    }
+  },
+  {
+    "op": "upsert_evidence",
+    "evidence": {
+      "externalKey": "proof:contains:m09-cycle",
+      "subjectType": "edge",
+      "subjectKey": "contains:m09-cycle",
+      "method": "agent",
+      "status": "explicit",
+      "source": {
+        "repositoryId": "@repositoryId@",
+        "snapshotId": "@snapshotId@",
+        "file": "source.go.txt",
+        "contentHash": "5fbc7deb9707b036ccc6cc6303de8d61c9a8b7e4adb4e05958f28e4e6df32f4c",
+        "startLine": 1,
+        "endLine": 13
+      }
+    }
+  },
+  {
+    "op": "upsert_node",
+    "node": {
+      "externalKey": "m10-unknown",
+      "kind": "field_mapping",
+      "name": "m10-unknown",
+      "attributes": {
+        "analysisStatus": "partial",
+        "gaps": [
+          "Sensitive implementation not analyzed; inputs are explicit"
+        ],
+        "sources": [
+          {
+            "kind": "api_field",
+            "nodeKey": "response"
+          },
+          {
+            "kind": "api_field",
+            "nodeKey": "request"
+          }
+        ],
+        "destination": {
+          "kind": "api_field",
+          "nodeKey": "token"
+        },
+        "transform": {
+          "kind": "unknown_transform",
+          "description": "Explicit unknown_transform dependency shape",
+          "redacted": true
+        }
+      },
+      "evidenceKeys": [
+        "proof:m10-unknown"
+      ],
+      "parentKey": "query"
+    }
+  },
+  {
+    "op": "upsert_evidence",
+    "evidence": {
+      "externalKey": "proof:m10-unknown",
+      "subjectType": "node",
+      "subjectKey": "m10-unknown",
+      "method": "agent",
+      "status": "explicit",
+      "source": {
+        "repositoryId": "@repositoryId@",
+        "snapshotId": "@snapshotId@",
+        "file": "source.go.txt",
+        "contentHash": "5fbc7deb9707b036ccc6cc6303de8d61c9a8b7e4adb4e05958f28e4e6df32f4c",
+        "startLine": 1,
+        "endLine": 13
+      }
+    }
+  },
+  {
+    "op": "upsert_edge",
+    "edge": {
+      "externalKey": "contains:m10-unknown",
+      "kind": "contains",
+      "fromKey": "query",
+      "toKey": "m10-unknown",
+      "attributes": {},
+      "evidenceKeys": [
+        "proof:contains:m10-unknown"
+      ]
+    }
+  },
+  {
+    "op": "upsert_evidence",
+    "evidence": {
+      "externalKey": "proof:contains:m10-unknown",
+      "subjectType": "edge",
+      "subjectKey": "contains:m10-unknown",
+      "method": "agent",
+      "status": "explicit",
+      "source": {
+        "repositoryId": "@repositoryId@",
+        "snapshotId": "@snapshotId@",
+        "file": "source.go.txt",
+        "contentHash": "5fbc7deb9707b036ccc6cc6303de8d61c9a8b7e4adb4e05958f28e4e6df32f4c",
+        "startLine": 1,
+        "endLine": 13
+      }
+    }
+  }
+]

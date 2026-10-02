@@ -1,0 +1,74 @@
+{
+  "request": {
+    "kind": "api_field",
+    "nodeKey": "request"
+  },
+  "input": {
+    "kind": "port",
+    "nodeKey": "input",
+    "collection": "inputs",
+    "portKey": "opaque/~0"
+  },
+  "parameter": {
+    "kind": "port",
+    "nodeKey": "query",
+    "collection": "parameters",
+    "portKey": "user-id"
+  },
+  "amountColumn": {
+    "kind": "column",
+    "nodeKey": "column:orders:amount",
+    "facetKey": "sql"
+  },
+  "taxColumn": {
+    "kind": "column",
+    "nodeKey": "column:orders:tax",
+    "facetKey": "sql"
+  },
+  "response": {
+    "kind": "api_field",
+    "nodeKey": "response"
+  },
+  "aggregateSources": [
+    {
+      "kind": "port",
+      "nodeKey": "query",
+      "collection": "results",
+      "portKey": "amount"
+    },
+    {
+      "kind": "port",
+      "nodeKey": "query",
+      "collection": "results",
+      "portKey": "tax"
+    }
+  ],
+  "mappingKeys": [
+    "m01-request",
+    "m02-parameter",
+    "m03-write",
+    "m04-amount",
+    "m05-tax",
+    "m06-total",
+    "m07-alternative",
+    "m08-constant",
+    "m09-cycle",
+    "m10-unknown"
+  ],
+  "requestColumnWitness": [
+    "m01-request",
+    "m02-parameter",
+    "m03-write"
+  ],
+  "amountResponseWitness": [
+    "m04-amount",
+    "m06-total"
+  ],
+  "reverseTaxWitness": [
+    "m06-total",
+    "m05-tax"
+  ],
+  "constant": "m08-constant",
+  "cycle": "m09-cycle",
+  "unknown": "m10-unknown"
+}

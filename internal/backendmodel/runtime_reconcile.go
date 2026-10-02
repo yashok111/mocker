@@ -47,6 +47,9 @@ func runtimeReferences(kind string, attrs map[string]jsontext.Value, edge, persi
 }
 
 func sourceAttributeReferences(kind string, attrs map[string]jsontext.Value, edge, persisted bool) ([]relationalReference, error) {
+	if lineageSubject(kind, edge) {
+		return lineageReferences(kind, attrs, edge, persisted)
+	}
 	if runtimeSubject(kind, edge) {
 		return runtimeReferences(kind, attrs, edge, persisted)
 	}
@@ -56,7 +59,7 @@ func sourceAttributeReferences(kind string, attrs map[string]jsontext.Value, edg
 func sourceActiveReferenceTo(kind string, attrs map[string]jsontext.Value, edge bool, id string) bool {
 	refs, err := sourceAttributeReferences(kind, attrs, edge, true)
 	if err != nil {
-		return runtimeSubject(kind, edge) || relationalSubject(kind, attrs, edge)
+		return lineageSubject(kind, edge) || runtimeSubject(kind, edge) || relationalSubject(kind, attrs, edge)
 	}
 	return slices.ContainsFunc(refs, func(ref relationalReference) bool {
 		return ref.Kind != "evidence" && ref.HistoricalRevisionID == "" && ref.ID == id

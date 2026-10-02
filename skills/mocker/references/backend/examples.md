@@ -1,7 +1,7 @@
 # Import and pinned database examples
 
-This topic is import4-owned. Verify its actual import workflow identity/contentHash
-in the selected global guide set. Database1 inspection may load it through that
+This topic is import5-owned. Verify its actual import workflow identity/contentHash
+in the selected global guide set. Database5 inspection may load it through that
 owner without starting import writes. The foundation procedure below remains
 schema1; the relational captures afterward use schema2. SQL/ORM/migration input
 is source data and is never executed.
@@ -583,8 +583,8 @@ V2 committed revision `01a0f4e1-80e0-7f78-8d1b-b96d88fca034`. Its later read at 
 
 ### Inspection-only design request
 
-For typed schema designs use the separately negotiated database3 procedure.
-Source import4 examples above keep their original protocol and CAS.
+For typed schema designs use the separately negotiated database5 procedure.
+Source import5 examples above keep their original protocol and CAS.
 
 ## Actual SDK proposal examples: PostgreSQL and SQLite
 
@@ -1387,3 +1387,100 @@ Creation replay also returned its original acknowledgement. Reading the old
 proposal revision still returned its immutable original draft; current CAS
 version was 4. A later source head is reported as baseOutdated, without rebasing
 the proposal. Ready/rebase belongs to B4; measured checks and impact are later.
+
+## Public MCP source4 import → lineage query fixture
+
+Select import5 and inspect3 with complete requirements in one verified guide
+set; load backend-model, backend-import-protocol, backend-recovery and the
+inspect3 flow/analysis references. This example is exercised by
+`internal/mcp/tools_backend_lineage_example_test.go`,
+`TestBackendLineageRealSDKGuideFixtureExample` through actual SDK tool calls.
+The independent bundle is `internal/backendmodel/testdata/lineage/orders/`:
+source.go.txt, commands.json and expected.json. Read source bytes as inert data;
+never run source, SQL or migrations. expected.json is an oracle, not import data.
+Use an isolated fixture project and retain every full write input/key/receipt.
+
+With the earlier sha/sorted helpers and configured tool connection, Node.js
+can load this fixture using the following ordered procedure. Begin input is
+complete; actual IDs/hashes/versions always come from responses.
+
+```javascript
+const fs = require('node:fs');
+const root = 'internal/backendmodel/testdata/lineage/orders/';
+let lineageProject = await tool('create_backend_project',
+  {name:'Lineage fixture',idempotencyKey:'lineage-example-create'});
+const sourceHash = sha(fs.readFileSync(root+'source.go.txt'));
+const lineageInventory = ['files','endpoints','datastores','migrations',
+  'producers','consumers','jobs','contracts','tests'].map(category => {
+    const captured = ['files','endpoints','datastores'].includes(category);
+    return {category,status:captured?'complete':'unsupported',knownCount:captured?1:0,
+      denominator:captured?1:null,discoverySource:'source fixture',gaps:[],
+      reason:captured?'':'Outside captured fixture'};
+  });
+const lineageBegin = {projectId:lineageProject.id,expectedVersion:lineageProject.version,
+  baseRevisionId:lineageProject.currentRevisionId,idempotencyKey:'lineage-example-begin',
+  mode:'initial',profile:'field-lineage-v1',inventory:lineageInventory,
+  manifest:{repositoryName:'orders',provider:{name:'orders-fixture',version:'1',
+    namespace:'lineage-fixture',method:'agent',profiles:['foundation-graph-v1',
+      'relational-graph-v1','runtime-flow-v1','field-lineage-v1'],
+    limitations:['Static bounded fixture']},snapshot:{dirty:false,consistency:'verified',
+      capturedAt:'2026-10-01T12:00:00Z',files:[{path:'source.go.txt',contentHash:sourceHash,
+        fileType:'go',analysisStatus:'analyzed'}]}}};
+const lineageSession = await tool('begin_backend_import',lineageBegin);
+const lineageCommands = JSON.parse(fs.readFileSync(root+'commands.json','utf8')
+  .replaceAll('@repositoryId@',lineageSession.repositoryId)
+  .replaceAll('@snapshotId@',lineageSession.snapshotId));
+const lineageBatch = {projectId:lineageProject.id,importId:lineageSession.id,
+  batchId:'lineage-example',expectedImportVersion:lineageSession.version,
+  payloadHash:sha(JSON.stringify(sorted(lineageCommands))),commands:lineageCommands};
+const lineageReceipt = await tool('put_backend_import_batch',lineageBatch);
+const lineageIds = Object.fromEntries(lineageReceipt.identities
+  .filter(x=>x.recordType==='node').map(x=>[x.externalKey,x.id]));
+const lineagePreview = await tool('preview_backend_import',{projectId:lineageProject.id,
+  importId:lineageSession.id,expectedImportVersion:lineageReceipt.acceptedVersion,
+  baseRevisionId:lineageProject.currentRevisionId});
+if (lineagePreview.state !== 'ready' || !lineagePreview.candidateHash)
+  throw Error('Inspect and repair preview; no commit');
+// Independently audit every source assertion/proof at this ready tuple first.
+const lineageCommit = {projectId:lineageProject.id,importId:lineageSession.id,
+  expectedVersion:lineageProject.version,expectedImportVersion:lineagePreview.version,
+  candidateHash:lineagePreview.candidateHash,idempotencyKey:'lineage-example-commit'};
+const lineageResult = await tool('commit_backend_import',lineageCommit);
+const lineagePin = lineageResult.revision.id;
+const requestSeed = {kind:'api_field',nodeId:lineageIds.request};
+const amountSeed = {kind:'column',nodeId:lineageIds['column:orders:amount'],facetKey:'sql'};
+const responseSeed = {kind:'api_field',nodeId:lineageIds.response};
+async function lineagePages(seed,direction) {
+  let cursor='', items=[];
+  do {
+    const input = {projectId:lineageProject.id,revisionId:lineagePin,seed,direction,
+      maxDepth:8,limit:1,...(cursor?{cursor}:{})};
+    const page = await tool('query_backend_lineage',input);
+    // Verify project/revision/semanticHash/complete seed/direction before display.
+    // Retain page.coverage, truncated, truncationReasons and limitations.
+    items.push(...page.items); cursor=page.nextCursor;
+  } while(cursor);
+  return items;
+}
+const requestMappings = await lineagePages(requestSeed,'forward');
+const amountMappings = await lineagePages(amountSeed,'forward');
+const responseOrigins = await lineagePages(responseSeed,'reverse');
+const unknownBoundary = await lineagePages(
+  {kind:'api_field',nodeId:lineageIds.token},'reverse');
+```
+
+Expected request→column witness: m01-request,m02-parameter,m03-write;
+amount column→response: m04-amount,m06-total; reverse tax witness:
+m06-total,m05-tax (use receipt UUIDs). m06-total retains both ordered query
+results amount then tax; forward arrival through amount does not reach tax as a
+co-input. Reverse expands both. m10-unknown remains a boundary with its complete
+destination/inputs visible. The constant is m08-constant; unknown with zero
+inputs is still unknown, never relabeled constant. Static fixture includes cycle
+and alternative mappings, not runtime execution or every possible path.
+
+On uncertain commit replay lineageCommit unchanged and require original receipt;
+never replace CAS/key with today's head. Evidence/owner/value inspector reads use
+lineagePin and complete facet/collection/opaque portKey. Redacted shape/explanation
+must omit sensitive constants and samples; source-local API field identity does
+not resolve B24 external API pins. Old foundation/relational examples above keep
+their source1/2 formats and ordinary workflow; source3 flow examples stay source3.

@@ -1,3 +1,4 @@
+import { BackendValueInspector } from "./BackendValueInspector";
 import { useContext, useRef, useState } from "react";
 import {
   Alert,
@@ -62,6 +63,7 @@ function FlowWorkspace({
   onPinChange,
   onDatabaseNavigate,
 }: Props) {
+  const [selectedValue, setSelectedValue] = useState<FlowSelection["valueRef"]>();
   const [localPin, setPin] = useState<BackendSourcePin>(externalPin ?? {});
   const initialPin = externalPin ?? localPin;
   const workspace = useWorkspaceSavedState<Extract<SavedViewState, { kind: "flow" }>>(
@@ -115,6 +117,11 @@ function FlowWorkspace({
   const selection: FlowSelection | null = pin.recordId
     ? { type: pin.recordType ?? "node", id: pin.recordId }
     : null;
+  const activeValue =
+    selection?.type === "node" && selectedValue?.nodeId === selection.id
+      ? selectedValue
+      : undefined;
+  if (selectedValue && !activeValue) setSelectedValue(undefined);
   function update(next: BackendSourcePin) {
     const value = { ...next, revisionId };
     setPin(value);
@@ -133,6 +140,7 @@ function FlowWorkspace({
     onPinChange?.(value);
   }
   function select(value: FlowSelection, trigger?: HTMLElement) {
+    setSelectedValue(value.valueRef);
     origin.current = trigger ?? origin.current;
     update({ ...pin, recordId: value.id, recordType: value.type });
   }
@@ -339,15 +347,26 @@ function FlowWorkspace({
             {...callbacks}
           />
         )}
-        {selection && (
-          <BackendFlowInspector
-            key={`${selection.type}:${selection.id}`}
+        {selection && activeValue?.kind === "column" ? (
+          <BackendValueInspector
+            key={JSON.stringify(activeValue)}
             projectId={projectId}
             revisionId={revisionId}
-            selection={selection}
-            onSelect={select}
+            value={activeValue}
             onClose={close}
           />
+        ) : (
+          selection && (
+            <BackendFlowInspector
+              key={`${selection.type}:${selection.id}`}
+              projectId={projectId}
+              revisionId={revisionId}
+              selection={selection}
+              selectedValue={activeValue}
+              onSelect={select}
+              onClose={close}
+            />
+          )
         )}
       </Stack>
     </Paper>

@@ -36,7 +36,7 @@ func TestStandaloneImportReferencesThroughPinnedMCP(t *testing.T) {
 			t.Fatal(message)
 		}
 		wantHash := fmt.Sprintf("sha256:%x", sha256.Sum256([]byte(out.Markdown)))
-		if out.WorkflowID != "mocker-backend-import" || out.WorkflowVersion != "4" || out.GuideSetID != guide.CurrentGuideSetID() || out.ManifestHash != guide.CurrentGuideSetID() || out.ContentHash != wantHash {
+		if out.WorkflowID != "mocker-backend-import" || out.WorkflowVersion != "5" || out.GuideSetID != guide.CurrentGuideSetID() || out.ManifestHash != guide.CurrentGuideSetID() || out.ContentHash != wantHash {
 			t.Fatalf("pinned topic %s: %#v", topic, out)
 		}
 	}
@@ -116,22 +116,24 @@ func TestGuideRequiredCapabilitiesHaveMCPTools(t *testing.T) {
 		inventory[tool.Name] = true
 	}
 	implementations := map[string][]string{
-		"backend-projects":            {"list_backend_projects", "create_backend_project", "get_backend_project"},
-		"backend-project-metadata":    {"apply_backend_project_commands"},
-		"backend-revisions":           {"list_backend_revisions", "get_backend_revision"},
-		"backend-graph-query":         {"query_backend_graph", "get_backend_node", "get_backend_evidence", "get_backend_coverage"},
-		"backend-source-import":       {"begin_backend_import", "list_backend_imports", "get_backend_import", "put_backend_import_batch", "preview_backend_import", "commit_backend_import", "abort_backend_import"},
-		"backend-source-reconcile":    {"begin_backend_import", "put_backend_import_batch", "preview_backend_import", "commit_backend_import", "get_backend_import_changes"},
-		"backend-revision-compare":    {"compare_backend_revisions"},
-		"backend-relational-import":   {"begin_backend_import", "put_backend_import_batch", "preview_backend_import", "commit_backend_import"},
-		"backend-database-query":      {"query_backend_database"},
-		"backend-database-er":         {"query_backend_database", "get_backend_node", "get_backend_evidence", "get_backend_coverage"},
-		"backend-saved-views":         {"list_backend_saved_views", "create_backend_saved_view", "get_backend_saved_view", "save_backend_saved_view"},
-		"backend-db-proposals":        {"list_backend_proposals", "create_backend_proposal", "get_backend_proposal"},
-		"backend-db-typed-edits":      {"preview_backend_proposal_commands", "apply_backend_proposal_commands"},
-		"backend-runtime-flow-import": {"begin_backend_import", "put_backend_import_batch", "preview_backend_import", "commit_backend_import"},
-		"backend-flow-query":          {"query_backend_flow"},
-		"backend-data-access-query":   {"query_backend_flow"},
+		"backend-projects":             {"list_backend_projects", "create_backend_project", "get_backend_project"},
+		"backend-project-metadata":     {"apply_backend_project_commands"},
+		"backend-revisions":            {"list_backend_revisions", "get_backend_revision"},
+		"backend-graph-query":          {"query_backend_graph", "get_backend_node", "get_backend_evidence", "get_backend_coverage"},
+		"backend-source-import":        {"begin_backend_import", "list_backend_imports", "get_backend_import", "put_backend_import_batch", "preview_backend_import", "commit_backend_import", "abort_backend_import"},
+		"backend-source-reconcile":     {"begin_backend_import", "put_backend_import_batch", "preview_backend_import", "commit_backend_import", "get_backend_import_changes"},
+		"backend-revision-compare":     {"compare_backend_revisions"},
+		"backend-relational-import":    {"begin_backend_import", "put_backend_import_batch", "preview_backend_import", "commit_backend_import"},
+		"backend-database-query":       {"query_backend_database"},
+		"backend-database-er":          {"query_backend_database", "get_backend_node", "get_backend_evidence", "get_backend_coverage"},
+		"backend-saved-views":          {"list_backend_saved_views", "create_backend_saved_view", "get_backend_saved_view", "save_backend_saved_view"},
+		"backend-db-proposals":         {"list_backend_proposals", "create_backend_proposal", "get_backend_proposal"},
+		"backend-db-typed-edits":       {"preview_backend_proposal_commands", "apply_backend_proposal_commands"},
+		"backend-runtime-flow-import":  {"begin_backend_import", "put_backend_import_batch", "preview_backend_import", "commit_backend_import"},
+		"backend-flow-query":           {"query_backend_flow"},
+		"backend-data-access-query":    {"query_backend_flow"},
+		"backend-field-lineage-import": {"begin_backend_import", "put_backend_import_batch", "preview_backend_import", "commit_backend_import"},
+		"backend-field-lineage-query":  {"query_backend_lineage"},
 	}
 	if !inventory["get_backend_capabilities"] {
 		t.Error("workflow discovery tool is missing")
@@ -162,7 +164,7 @@ func TestObsoleteImportGuideSetDoesNotSubstituteV4(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if out.WorkflowVersion != "4" || out.WorkflowID != "mocker-backend-import" || out.GuideSetID != guide.CurrentGuideSetID() {
+	if out.WorkflowVersion != "5" || out.WorkflowID != "mocker-backend-import" || out.GuideSetID != guide.CurrentGuideSetID() {
 		t.Fatalf("current import guide identity: %#v", out)
 	}
 }

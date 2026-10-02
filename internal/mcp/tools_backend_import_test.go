@@ -123,7 +123,7 @@ func TestBackendImportToolsPublishExactSchemasAndHints(t *testing.T) {
 	if err := json.Unmarshal(response.Body.Bytes(), &envelope); err != nil {
 		t.Fatal(err)
 	}
-	expected := map[string]bool{"begin_backend_import": false, "list_backend_imports": true, "get_backend_import": true, "put_backend_import_batch": false, "preview_backend_import": false, "commit_backend_import": false, "abort_backend_import": false, "query_backend_graph": true, "query_backend_database": true, "get_backend_node": true, "get_backend_evidence": true, "get_backend_coverage": true, "compare_backend_revisions": true, "get_backend_import_changes": true}
+	expected := map[string]bool{"query_backend_lineage": true, "begin_backend_import": false, "list_backend_imports": true, "get_backend_import": true, "put_backend_import_batch": false, "preview_backend_import": false, "commit_backend_import": false, "abort_backend_import": false, "query_backend_graph": true, "query_backend_database": true, "get_backend_node": true, "get_backend_evidence": true, "get_backend_coverage": true, "compare_backend_revisions": true, "get_backend_import_changes": true}
 	for _, tool := range envelope.Result.Tools {
 		readOnly, ok := expected[tool.Name]
 		if !ok {
@@ -207,7 +207,7 @@ func TestBackendImportMCPBodySchemasMatchOpenAPI(t *testing.T) {
 			return value
 		}
 	}
-	contracts := map[string]string{"begin_backend_import": "BeginBackendImportRequest", "put_backend_import_batch": "PutBackendImportBatchRequest", "preview_backend_import": "PreviewBackendImportRequest", "commit_backend_import": "CommitBackendImportRequest", "abort_backend_import": "AbortBackendImportRequest", "query_backend_graph": "QueryBackendGraphRequest", "query_backend_database": "QueryBackendDatabaseRequest", "compare_backend_revisions": "CompareBackendRevisionsRequest"}
+	contracts := map[string]string{"query_backend_lineage": "QueryBackendLineageRequest", "begin_backend_import": "BeginBackendImportRequest", "put_backend_import_batch": "PutBackendImportBatchRequest", "preview_backend_import": "PreviewBackendImportRequest", "commit_backend_import": "CommitBackendImportRequest", "abort_backend_import": "AbortBackendImportRequest", "query_backend_graph": "QueryBackendGraphRequest", "query_backend_database": "QueryBackendDatabaseRequest", "compare_backend_revisions": "CompareBackendRevisionsRequest"}
 	for _, tool := range envelope.Result.Tools {
 		name, ok := contracts[tool.Name]
 		if !ok {

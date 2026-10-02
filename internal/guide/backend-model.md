@@ -1,11 +1,11 @@
 # Source-backed graph model
 
 
-This topic belongs to `mocker-backend-import` v4. Pin it to the selected global
+This topic belongs to `mocker-backend-import` v5. Pin it to the selected global
 guideSetId and verify the import owner tuple/contentHash, including when database
-or inspect1 loads it as a shared reference. Schema1 remains the foundation format;
-schema2 is relational and schema3 adds typed source flow/query/access records.
-Old immutable schema1/2 bytes/UUIDs/hashes/receipts keep their interpretation.
+or inspect3 loads it as a shared reference. Schema1 remains the foundation format;
+schema2 is relational and schema3 adds typed source flow/query/access records; source4 adds explicit field lineage.
+Old immutable schema1/2/3 bytes/UUIDs/hashes/receipts keep their interpretation.
 Model schema `"1"`, profile
 `foundation-graph-v1`, supports the foundation shapes below.
 Provider assertions and evidence are inspectable; successful graph validation
@@ -119,7 +119,7 @@ whole-repository combined graph under the same sole provider, not one provider
 per SQL/ORM facet. Provider profiles are exactly foundation plus relational.
 A proven SQL/ORM match shares one stable subject; names alone never merge objects.
 For exact fields and ER semantics load `backend-database-reference` from the same
-set after selecting/verifying the supported database v3 owner identity.
+set after selecting/verifying the supported database v5 owner identity.
 
 A facet is a stable map entry keyed by facetKey (1–200 printable characters),
 with sourceKind sql/orm/migration, dialect postgresql/sqlite, analysisStatus
@@ -192,5 +192,67 @@ source schema2 baseline. It is never import data or source schema3. Shared reads
 select exclusive source revisionId or exact proposal/proposalRevisionId. Keep
 sourceRecord, desired effectiveFacet, propertyOrigins and unverified criteria
 separate. New designed objects have no sourceRecord or source evidence. Read the
-verified database3 reference for commands, projection and ER assumptions. Import3
+verified database5 reference for commands, projection and ER assumptions. Import5
 continues to mutate only source snapshots with its original receipts and CAS.
+
+## Source4 explicit field lineage
+
+Profile field-lineage-v1 requires the exact foundation, relational, runtime and
+lineage profile set. Initial source4 uses all four; source3 can explicitly
+reconcile runtime-flow-v1→field-lineage-v1. No skipped upgrade or downgrade.
+Source1–3 formats, hashes, UUIDs and receipts keep their original meaning.
+Source4 remains eligible for existing database/flow, proposals and saved views.
+
+ValueRef is a strict exclusive union:
+
+| kind | Persisted/query address | Import address |
+|---|---|---|
+| column | nodeId UUID + facetKey | nodeKey + facetKey |
+| port | nodeId UUID + collection + portKey | nodeKey + collection + portKey |
+| api_field | nodeId UUID | nodeKey |
+
+Columns require an existing column and selected facet. Ports select flow_step
+inputs/outputs or query parameters/results; portKey is opaque, never a UUID,
+array index or JSON Pointer. All address components survive and define equality.
+Unknown fields, nulls, duplicate members and mixed variants fail. Tables and
+unresolved_target cannot substitute for unknown field identity.
+
+field_mapping belongs to a flow_step/query with one matching contains edge.
+Attributes are ordered unique sources, one destination, transform
+{kind,description,redacted}, analysisStatus and gaps. Preserve input order and
+all co-inputs; never split an aggregate into independent asserted mappings.
+copy/rename require one source; flatten/enum_map/aggregate/compute require1–64;
+constant requires zero; unknown_transform permits0–64. Zero-source unknown means
+unresolved inputs, not a constant; reverse lookup or direct inspection finds it.
+Multiple mappings to one destination remain separate alternatives; cycles are
+allowed. Names, types, calls and table access never infer lineage.
+
+Complete analysis has no gaps; partial/unsupported requires gaps. Unknown
+transforms must be partial/unsupported; unsupported requires unknown_transform.
+Mapping/value/owner/contains/facet proof and freshness are all relevant. Native
+text/comments/SQL are inert data, never executed. For sensitive transformations
+keep operation shape and a generic description, set redacted:true and omit secret
+constants, lookup tables and samples. Redaction is a provider claim, not automatic
+secret detection. Bounds:64sources/mapping,100000nested refs/revision including
+all destinations and retained mappings; existing graph/batch quotas still apply.
+Never trim sources to fit a limit.
+
+api_field belongs to http_operation with one contains edge. Its strict attrs
+include direction request/response, location path/query/header/cookie/body,
+selector name or structural body path, nativeType known/unknown, analysisStatus
+and gaps. Response allows body/header and requires exact responseStatus100–599,
+1XX–5XX or default. Request forbids responseStatus. Body requires lowercase
+mediaType token/token without parameters and path0–32segments, each exactly
+{property:string} or {items:true}; empty selects root. Nonbody requires a name
+selector and forbids mediaType; header names are lowercase HTTP tokens. Unknown
+status/media is a gap, never guessed identity. Operation+direction+location+
+selector+status+media is unique (≤500fields/operation), while stable UUID binding
+uses the provider external key. Shape membership does not establish mapping.
+External API/schema revision pin resolution is deferred to B24.
+
+Reconcile retains omitted mappings/API fields stale. Removed node/facet/port
+requires updating or explicitly deleting all surviving mappings in the same
+candidate; a stale mapping still cannot reference a nonexistent value. Changing
+port keys requires explicit repair, never name/position rebinding. Stale endpoint
+proof propagates even after mapping refresh. Compare source mapping/API nodes
+without claiming behavioral impact; old pinned revisions remain readable.

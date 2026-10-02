@@ -6,15 +6,17 @@ const (
 )
 
 func hasRelationalProfile(profile string) bool {
-	return profile == RelationalProfile || profile == RuntimeProfile
+	return profile == RelationalProfile || hasRuntimeProfile(profile)
 }
 
 func isRelationalSchema(schema string) bool {
-	return schema == RelationalSchemaVersion || schema == RuntimeSchemaVersion
+	return schema == RelationalSchemaVersion || isRuntimeSchema(schema)
 }
 
 func profileForSchema(schema string) string {
 	switch schema {
+	case LineageSchemaVersion:
+		return LineageProfile
 	case RuntimeSchemaVersion:
 		return RuntimeProfile
 	case RelationalSchemaVersion:

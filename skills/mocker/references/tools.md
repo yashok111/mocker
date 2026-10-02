@@ -303,9 +303,9 @@ See `design.md` for limits and the complete workflow.
 
 ## Backend saved views
 
-Select inspect2 for source Flow or database4 for source/proposal Database in one
+Select inspect3 for source Flow or database5 for source/proposal Database in one
 verified guideSetId/manifestHash. Require backend-saved-views and saved-view-v1;
-import4 remains the source import owner. Saving presentation requires an explicit
+import5 remains the source import owner. Saving presentation requires an explicit
 request and does not import/apply/execute source, SQL or migrations.
 
 | Tool | Purpose | Input |
@@ -318,4 +318,24 @@ request and does not import/apply/execute source, SQL or migrations.
 Reopen resolves saved target/state before model reads. Share viewId/viewVersion;
 failed saved pins never fall back to heads.409 preserves changes and needs
 explicit reload/reconcile or save-as-new. See backend-flow-reference under
-inspect2 and backend-database-reference under database4 for complete examples.
+inspect3 and backend-database-reference under database5 for complete examples.
+
+## Backend source4 field lineage
+
+Import5 owns source4 field-lineage-v1 import; inspect3 owns pinned lineage reads;
+database5 routes column actions to inspect3. Select compatible complete owners
+in one verified guideSetId/manifestHash. Existing source1–3 operations, DB
+proposals and saved-view-v1 retain their established contracts.
+
+| Tool | Purpose | Input |
+|---|---|---|
+| query_backend_lineage | Read-only/idempotent explicit static dependencies | projectId*, revisionId* (source4), seed* (full ValueRef), direction* forward/reverse, maxDepth1–32/default8, limit1–100/default50, cursor |
+
+Column seed needs nodeId+facetKey; port needs nodeId+collection+opaque portKey;
+api_field needs nodeId. Import refs instead use nodeKey. No proposal or mixed
+variant is accepted. Continue cursors only with identical request/pins. Entire
+mapping cards preserve all ordered sources, destination, transform/redaction,
+evidence and explicit boundaries. Zero-input unknown is not constant. Empty
+results never prove no dependency. Pagination differs from global traversal
+truncation and source coverage. No source code/SQL execution, latest fallback or
+B24 external API-pin resolution is provided; load inspect3 flow/analysis topics.

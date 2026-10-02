@@ -1,7 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, useState, type Dispatch, type SetStateAction } from "react";
 import { queryBackendFlow } from "@/api/generated/backend-projects/backend-projects";
-import type { BackendFlowPage, QueryBackendFlowRequest } from "@/api/generated/schemas";
+import type {
+  BackendFlowPage,
+  QueryBackendFlowRequest,
+  BackendLineageValueRef,
+} from "@/api/generated/schemas";
 import { useDatabaseCancellation } from "./backendDatabaseReads";
 
 export type BackendSourcePin = {
@@ -16,7 +20,11 @@ export type BackendSourcePin = {
   datastoreId?: string;
   facetKey?: string;
 };
-export type FlowSelection = { type: "node" | "edge"; id: string };
+export type FlowSelection = {
+  type: "node" | "edge";
+  id: string;
+  valueRef?: BackendLineageValueRef;
+};
 
 // Synchronize URL selections before committing a render with the previous source.
 export function usePinnedValue<Value>(

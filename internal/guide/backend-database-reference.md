@@ -2,11 +2,11 @@
 
 
 Load as `backend-database-reference` from the selected global guideSetId. Its
-canonical owner is `mocker-backend-database` v4. Import v4 explicitly selects
+canonical owner is `mocker-backend-database` v5. Import v5 explicitly selects
 that supported owner in the same set and verifies the actual returned owner
 workflow/version/set/manifestHash/contentHash against the owner's manifest.
 Do not expect this topic to return import identity. For shared UUID/provenance/
-recovery semantics, model/recovery topics keep import v4 ownership.
+recovery semantics, model/recovery topics keep import v5 ownership.
 
 ## Declared source model
 
@@ -244,19 +244,19 @@ never truncate. They are validation bounds, not measured performance claims.
 Canvas visibility is at most 200 tables/600 FKs with explicit scope counts; the
 paginated list, relationship table and inspector preserve full read access.
 
-Source schema3 supports imported scoped endpoint accesses through inspect2 and
+Source schema3/4 supports imported scoped endpoint accesses through inspect3 and
 query_backend_flow. Select that owner in this same set, then page accesses at
 the exact source revision with dataNodeId; table-level unknown-column access is
 possible, never a confirmed column reader/writer. Open query/edge/witness proof.
 Source2 flow inspection is unavailable. DB proposals keep their exact source base
 for flow navigation; no proposal selector is accepted by the flow query.
 Imported accesses do not verify all writers, data/backfill or proposed behavior.
-Live collection, field lineage, measured data/writer checks, ready/rebase,
+Live collection, measured data/writer checks, ready/rebase,
 impact and provider migration remain unavailable. Saved views persist presentation and exact pins only.
 
 ## Proposal documents and property provenance
 
-`proposal-relational-v1` is a desired view/document, separate from source schemas2/3.
+`proposal-relational-v1` is a desired view/document, separate from source schemas2/3/4.
 Create pins project/repository/base revision and hash/datastore/facet. A proposal
 has its own positive int64 version and immutable draft history. Only draft status
 is supported. Imported graph rows, provider identities, source receipts and the
@@ -306,7 +306,7 @@ truncation, extra open-proposal cap or performance claim is implied.
 
 ## Pinned saved Database views and executable SDK example
 
-Require database4, `backend-saved-views` and `saved-view-v1`, preserving source
+Require database5, `backend-saved-views` and `saved-view-v1`, preserving source
 schemas2/3 and proposal-relational-v1 requirements. List/get/create/save use the
 four `*_backend_saved_view[s]` tools; no delete or rebind exists. GET resolves an
 exact immutable saved version before reading its source/proposal model. Share
@@ -364,3 +364,16 @@ disabled during preview. Name/search limits200characters; finite x/y within
 ±1000000, unique nonnull arrays at most200, request128KiB. Never save unfinished
 search drafts, cursors, graph bodies, source text or credentials. Ordinary-agent
 acceptance and live agent evaluation remain deferred.
+
+## Source4 column lineage belongs to inspect3
+
+Database5 reads source2/3/4 and existing proposal-relational-v1/saved-view-v1.
+For source4 lineage select inspect3 in the same guideSetId/manifestHash, verify
+its schema3/4 and field-lineage-v1 support, all required capabilities including
+backend-field-lineage-query, and actual flow-reference/analysis topic hashes.
+Use exact {kind:"column",nodeId,facetKey}, revisionId and reverse for origins or
+forward for downstream. Preserve facet identity, ordered co-inputs, unknown
+boundary destination/actions, coverage and truncation. Do not issue lineage for
+source2/3 or proposals; an exact source-base navigation does not turn designed
+intent into source lineage. No SQL/application/migration execution or latest-pin
+fallback. Query procedure and evidence interpretation belong to inspect3.

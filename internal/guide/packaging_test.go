@@ -44,7 +44,7 @@ func TestStandaloneImportPackageOwnsServedEntrypoint(t *testing.T) {
 	for _, topic := range []string{"backend-import", "backend-model", "backend-import-protocol", "backend-recovery", "backend-examples", "backend-profile-go-sql"} {
 		t.Run(topic, func(t *testing.T) {
 			workflow, ok := WorkflowForTopic(topic)
-			if !ok || workflow.WorkflowID != "mocker-backend-import" || workflow.WorkflowVersion != "4" || workflow.GuideSetID != CurrentGuideSetID() {
+			if !ok || workflow.WorkflowID != "mocker-backend-import" || workflow.WorkflowVersion != "5" || workflow.GuideSetID != CurrentGuideSetID() {
 				t.Fatalf("standalone reference has no compatible served identity: %s", topic)
 			}
 			markdown, ok := Topic(topic)
@@ -87,7 +87,7 @@ func TestStandaloneSkillMetadataAndIsolation(t *testing.T) {
 	}
 	for key, want := range map[string]string{
 		"workflowId":      "mocker-backend-import",
-		"workflowVersion": "4",
+		"workflowVersion": "5",
 		"guideSetId":      workflow.GuideSetID,
 		"manifestHash":    workflow.ManifestHash,
 	} {
@@ -96,11 +96,11 @@ func TestStandaloneSkillMetadataAndIsolation(t *testing.T) {
 		}
 	}
 	for key, want := range map[string][]string{
-		"requiredModelSchemaVersions": {"1", "2", "3"},
+		"requiredModelSchemaVersions": {"1", "2", "3", "4"},
 		"requiredCapabilities": {
 			"backend-projects", "backend-revisions", "backend-graph-query", "backend-source-import",
 			"backend-source-reconcile", "backend-revision-compare", "backend-relational-import",
-			"backend-database-query", "backend-database-er", "backend-runtime-flow-import", "backend-flow-query", "backend-data-access-query",
+			"backend-database-query", "backend-database-er", "backend-runtime-flow-import", "backend-flow-query", "backend-data-access-query", "backend-field-lineage-import", "backend-field-lineage-query",
 		},
 	} {
 		var got []string
@@ -155,9 +155,9 @@ func TestStandaloneDatabasePackageOwnsServedEntrypoint(t *testing.T) {
 	for _, item := range []struct {
 		topic, owner, version string
 	}{
-		{topic: "backend-database-reference", owner: "mocker-backend-database", version: "4"},
-		{topic: "backend-model", owner: "mocker-backend-import", version: "4"},
-		{topic: "backend-recovery", owner: "mocker-backend-import", version: "4"},
+		{topic: "backend-database-reference", owner: "mocker-backend-database", version: "5"},
+		{topic: "backend-model", owner: "mocker-backend-import", version: "5"},
+		{topic: "backend-recovery", owner: "mocker-backend-import", version: "5"},
 	} {
 		workflow, ok := WorkflowForTopic(item.topic)
 		if !ok || workflow.WorkflowID != item.owner || workflow.WorkflowVersion != item.version {

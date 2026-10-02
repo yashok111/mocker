@@ -6,8 +6,8 @@ metadata:
   workflowVersion: "1"
   requiredModelSchemaVersions: "[\"1\"]"
   requiredCapabilities: "[\"backend-projects\",\"backend-project-metadata\",\"backend-revisions\"]"
-  guideSetId: "sha256:66502d122afa64656c57f74e1eb6ef5ad5dfe5396870f6278a348901a2b32589"
-  manifestHash: "sha256:66502d122afa64656c57f74e1eb6ef5ad5dfe5396870f6278a348901a2b32589"
+  guideSetId: "sha256:c32a1a1d0ee261f265e254cf46f7e5cb2fe630b0a51dc0cdfb57a5e630813e1f"
+  manifestHash: "sha256:c32a1a1d0ee261f265e254cf46f7e5cb2fe630b0a51dc0cdfb57a5e630813e1f"
 ---
 
 # Backend project preparation
@@ -25,15 +25,15 @@ Select that complete workflow before import writes. This project-preparation
 procedure does not import sources. Import's backend-model/import-protocol/recovery/
 examples topics use its selected set and import owner identity; relational
 imports additionally load the database-reference topic through the supported
-database v3 owner in that same global set. Database inspection selects the
+database v5 owner in that same global set. Database inspection selects the
 independent database leaf or pinned backend-database entrypoint. Every shared
 topic is verified against its actual canonical owner manifest/tuple/contentHash;
 this backend-overview topic keeps the project-preparation identity. Project
 preparation still requires schema1, including its empty initial revision; it
 need not require schema2 to prepare a project. Database typed edits/proposals
-use the separately selected database3 workflow. Source flow/data-access questions
-select inspect1 at backend-inspect in this same set; ordinary inspection writes
-nothing. Field lineage, impact, measured writer checks and jobs are unavailable.
+use the separately selected database5 workflow. Source flow/data-access questions
+select inspect3 at backend-inspect in this same set; ordinary inspection writes
+nothing. Source4 field lineage selects inspect3 with field-lineage-v1 and backend-field-lineage-query. Impact, measured writer checks and jobs remain unavailable.
 
 ## Before the first write
 

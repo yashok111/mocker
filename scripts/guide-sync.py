@@ -207,6 +207,53 @@ def validate_metadata(text, workflow):
             raise SystemExit(f"entrypoint {workflow['entrypoint']}: incorrect {name}")
 
 
+# Recognizable current owner declarations are checked against the declaration
+# source of truth. Historical owner prose must opt out on its exact line.
+OWNER_DECLARATION = re.compile(
+    r"(?<![\w-])(?:mocker-backend-)?([Ii]mport|[Ii]nspect|[Dd]atabase)`?"
+    r"(?:\s+(?:v|workflow)\s*|)([0-9]+)\b",
+)
+OWNER_TABLE = re.compile(
+    r"^\s*\|\s*mocker-backend-(import|inspect|database)\s*\|\s*([0-9]+)\s*\|",
+    re.IGNORECASE,
+)
+
+
+def validate_owner_references(text, workflows, path):
+    """Fail closed for recognizable live owner labels, before any output writes.
+
+    This deliberately does not interpret generic 'workflow1' without an owner,
+    inferred multiline context, unversioned labels or arbitrary prose. The
+    same-line history marker exempts explicitly historical version prose only.
+    """
+    versions = {
+        w["workflowId"].removeprefix("mocker-backend-"): w["workflowVersion"]
+        for w in workflows
+        if w["workflowId"]
+        in {
+            "mocker-backend-import",
+            "mocker-backend-inspect",
+            "mocker-backend-database",
+        }
+    }
+    for number, line in enumerate(body(text).splitlines(), 1):
+        if "<!-- guide-owner-history -->" in line:
+            continue
+        matches = list(OWNER_DECLARATION.finditer(line))
+        table = OWNER_TABLE.match(line)
+        if table:
+            matches.append(table)
+        for match in matches:
+            owner, version = match.groups()
+            owner = owner.lower()
+            expected = versions.get(owner)
+            if version != expected:
+                raise SystemExit(
+                    f"{path}:{number}: stale live guide owner {owner}{version}; "
+                    f"expected {owner}{expected or ' (unavailable)'}"
+                )
+
+
 def generate(check: bool) -> None:
     declaration_path = package_path("mocker", "guide-sources.json")
     declarations = json.loads(declaration_path.read_text())
@@ -261,6 +308,9 @@ def generate(check: bool) -> None:
         if not canonical_path.is_file():
             raise SystemExit(f"missing canonical source: {canonical_path}")
         text = without_identity(canonical_path.read_text())
+        validate_owner_references(
+            text, workflow_declarations, canonical_path.relative_to(ROOT)
+        )
         texts[source["topic"]] = text
         sources.append(
             dict(

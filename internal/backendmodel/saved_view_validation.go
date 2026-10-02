@@ -23,7 +23,7 @@ func resolveSavedReferences(ctx context.Context, q importReader, pid string, in 
 		return nil, err
 	}
 	pins := &SavedViewPins{RevisionID: state.Revision.ID, SemanticHash: state.Revision.SemanticHash, Proposal: target.pins}
-	if s.Flow != nil && (target.proposal != nil || state.Revision.SchemaVersion != RuntimeSchemaVersion) {
+	if s.Flow != nil && (target.proposal != nil || !isRuntimeSchema(state.Revision.SchemaVersion)) {
 		return nil, savedUnsupported()
 	}
 	if s.Database != nil && !isRelationalSchema(state.Revision.SchemaVersion) {

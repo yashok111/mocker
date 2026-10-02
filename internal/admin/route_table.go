@@ -245,6 +245,7 @@ func (s *Server) routes() []route {
 		// Pinned graph queries are read-only POSTs with a body; like preview/archive,
 		// they never touch a workspace layer or create a checkpoint.
 		{"POST /api/backend-projects/{id}/database/query", s.handleQueryBackendDatabase, mcpAllow, cpNeverTouchesLayer},
+		{"POST /api/backend-projects/{id}/lineage/query", s.handleQueryBackendLineage, mcpAllow, cpNeverTouchesLayer},
 		{"POST /api/backend-projects/{id}/flow/query", s.handleQueryBackendFlow, mcpAllow, cpNeverTouchesLayer},
 		{"POST /api/backend-projects/{id}/graph/query", s.handleQueryBackendGraph, mcpAllow, cpNeverTouchesLayer},
 		{"GET /api/backend-projects/{id}/revisions/{rid}/nodes/{nid}", s.handleGetBackendNode, mcpAllow, cpRead},

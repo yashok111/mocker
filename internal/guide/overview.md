@@ -6,8 +6,8 @@ metadata:
   workflowVersion: "1"
   requiredModelSchemaVersions: "[]"
   requiredCapabilities: "[]"
-  guideSetId: "sha256:66502d122afa64656c57f74e1eb6ef5ad5dfe5396870f6278a348901a2b32589"
-  manifestHash: "sha256:66502d122afa64656c57f74e1eb6ef5ad5dfe5396870f6278a348901a2b32589"
+  guideSetId: "sha256:c32a1a1d0ee261f265e254cf46f7e5cb2fe630b0a51dc0cdfb57a5e630813e1f"
+  manifestHash: "sha256:c32a1a1d0ee261f265e254cf46f7e5cb2fe630b0a51dc0cdfb57a5e630813e1f"
 ---
 
 # mocker
@@ -19,7 +19,7 @@ foundation or PostgreSQL/SQLite relational source-facet import, explicit
 same-provider snapshot reconciliation and pinned database/ER, structural
 comparison and evidence reads. Typed NULL/NOT NULL and FK proposals use separate pinned preview/apply and unverified criteria;
 source schema3 adds pinned endpoint flows and imported scoped data accesses;
-field lineage, incremental import and impact remain unavailable. For mocks, one OpenAPI
+source4 adds explicit field lineage through inspect3; incremental import and impact remain unavailable. For mocks, one OpenAPI
 spec is imported once; every WORKSPACE
 bound to it serves the spec's routes on its own host with deterministic
 generated bodies, records what it served, and remembers what it is told to
@@ -87,15 +87,15 @@ the generated root alias `references/backend/database-workflow.md`, or advertise
 then load database-reference/model/recovery only as needed. Shared topics have
 one canonical workflow owner; explicitly select/verify that owner's supported
 identity in this same global set and check its returned tuple/contentHash.
-Before any proposal write select database workflow4, proposal-relational-v1 view,
+Before any proposal write select database workflow5, proposal-relational-v1 view,
 exact guide set/hash and proposal/edit capabilities. Workflow1 is inspection-only;
 a complete compatible server fallback is required for mismatched local metadata.
-No compatible set means no proposal writes. Source import selects import4, including runtime-flow-v1/schema3 only on explicit
+No compatible set means no proposal writes. Source import selects import5, including runtime-flow-v1/schema3 only on explicit
 compatible initial import or relational→runtime extension. Flow/access questions
 select mocker-backend-inspect, references/backend/inspect.md or backend-inspect
 from the advertised set; load flow-reference/analysis progressively under their
-actual inspect2 owner. Ordinary inspection performs no writes. An explicitly
-requested resolvable source gap uses the selected import4 whole-scope reconcile,
+actual inspect3 owner. Ordinary inspection performs no writes. An explicitly
+requested resolvable source gap uses the selected import5 whole-scope reconcile,
 independent source audit and commit procedure. Unavailable source keeps its
 unknown with a concrete reason and no empty progress revision.
 Mock response changes keep the workspace procedure and
@@ -167,11 +167,11 @@ fresh runId and the returned revisionId/name/variables, then verify the actual
 controlFlow and refresh coverage. Generation is read-only; unresolved paths
 include reasons. See `references/design.md` for the workflow and limits.
 
-Saved Flow/Database presentation tasks select inspect2/database4 respectively,
+Saved Flow/Database presentation tasks select inspect3/database5 respectively,
 requiring backend-saved-views and saved-view-v1 in that same pinned set. Read the
 saved version before model reads, preserve exact targets and both URL viewId/
 viewVersion, and use the owner's complete saved-view example. Create/save are
 explicit presentation writes with retained exact keys/requests and old-version
 CAS. Failed saved reads have no head fallback. Proposal intent/unknown runtime
 checks stay explicit; layouts/collapse infer no source behavior or field lineage.
-Source import continues to select import4. Live agent acceptance remains deferred.
+Source import continues to select import5. Live agent acceptance remains deferred.

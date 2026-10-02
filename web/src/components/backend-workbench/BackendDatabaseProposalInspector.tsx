@@ -134,6 +134,9 @@ export function BackendDatabaseProposalInspector({
           Предложение: {target.proposalId} · черновик: {target.proposalRevisionId} · база:{" "}
           {context.revisionId}
         </Text>
+        <Text size="sm">
+          Происхождение значения доступно только в снимке source4; предложения не поддерживаются.
+        </Text>
         <LoadState query={record} label="предложенного объекта" />
         <Title order={4}>Полнота основания</Title>
         <Text size="sm">Покрытие исходной ревизии; проверки предложения не выполнены.</Text>

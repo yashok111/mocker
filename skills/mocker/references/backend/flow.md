@@ -1,8 +1,8 @@
 # Source flow model and pinned reads
 
-Canonical owner: `mocker-backend-inspect` workflow2. Select/verify this owner's
+Canonical owner: `mocker-backend-inspect` workflow3. Select/verify this owner's
 identity and contentHash in the same global guide set before using the topic.
-Source schema3 and `runtime-flow-v1` extend relational source records. They do
+Source schema3/4 and `runtime-flow-v1` extend relational source records. They do
 not describe runtime observation or the effect of a database proposal.
 
 ## Strict source records
@@ -72,7 +72,7 @@ entry/exit/context/parent/call/access references and all existing deletion gates
 
 ## query_backend_flow
 
-Required on every variant: projectId, exact source schema3 revisionId, view.
+Required on every variant: projectId, exact source schema3/4 revisionId, view.
 Optional limit/cursor retain exact pins. No proposal selector is accepted.
 
 | view | Selectors | Item array |
@@ -126,7 +126,7 @@ Page size defaults100/max500 and does not change traversal or witnesses.
 
 ## Pinned saved Flow views
 
-Require inspect2, `backend-saved-views` and document `saved-view-v1`. Four tools:
+Require inspect3, `backend-saved-views` and document `saved-view-v1`. Four tools:
 `list_backend_saved_views`, `create_backend_saved_view`, `get_backend_saved_view`,
 `save_backend_saved_view`. Read-only list/get are idempotent; create/save use
 retained idempotency keys. A SavedView is an immutable version with id/projectId,
@@ -179,3 +179,46 @@ inspectors and stored off-page coordinates persist; no synthetic edge/node or
 transaction atomicity claim appears. Canvas caps200nodes/600edges are distinct
 from collapse and pagination. Preview is local and Save is disabled until Apply
 or Cancel; one-step undo restores coordinates independently of collapse.
+
+## query_backend_lineage (inspect3)
+
+Require source4, field-lineage-v1 and backend-field-lineage-query in the selected
+inspect3 set. Existing flow/access reads remain source3/4; source1/2 refuse them.
+Lineage refuses source1–3 and proposals with422, rather than an empty answer.
+
+Input: projectId, exact revisionId, complete seed ValueRef, direction
+forward/reverse; maxDepth1–32/default8, limit1–100/default50 and optional cursor.
+ValueRefs are column {kind,nodeId,facetKey}, port
+{kind,nodeId,collection,portKey}, api_field {kind,nodeId}. Unknown/mixed/proposal
+members and malformed refs/options/cursors return400; missing project/revision/
+node returns404. Retain opaque portKey and collection, and never substitute latest.
+
+Response carries projectId,revisionId,semanticHash,policy,seed,direction,items,
+nextCursor,coverage,truncated,truncationReasons,limitations,visitedValueCount and
+examinedMappingCount. Each item contains the entire mapping node, via, depth,
+witnessMappingIds,status,expansion,expandedValues,reasons,requiresReview. Check
+returned project/revision/seed/direction before exposing data. Inspect every
+ordered source, destination, transform description/redacted flag and evidence.
+
+Deterministic BFS emits each mapping once with one first shortest witness;
+first mapping depth1, final order(depth,mappingId). Forward follows destination
+only, without treating co-inputs as reached; reverse follows every ordered source.
+Known constants terminate normally. Unknown/stale/unresolved boundaries retain
+the full mapping and destination for pinned inspector navigation; starting an
+independent query there does not prove a through path. Known partial/inferred
+claims and redacted known transforms may expand with propagated review/status.
+
+Traversal bounds:5000visited full values,5000examined mappings,20000incidences;
+maxDepth counts mappings. Response truncation reasons value_limit,mapping_limit,
+reference_limit,depth_limit are separate from pagination. At depth limit only
+values with further mappings cause a boundary/truncation; terminal values and
+constants remain terminal. Cycle-safe traversal does not unroll execution.
+
+Continue nextCursor with identical project/revision/hash/policy/full seed/
+direction/normalized maxDepth/limit. Reset after any change. Every page carries
+global analysis limits and pinned revision coverage; a final empty cursor does
+not erase truncation. Empty means no imported mapping in this scope. Loaded
+mapping count is not whole-source coverage. Cancel previous reads on project/
+revision/seed changes and discard mismatched late responses. Pin evidence,
+owner, column facet and exact port navigation to the same revision. Lineage
+panel state is transient; existing saved-view-v1 remains unchanged.

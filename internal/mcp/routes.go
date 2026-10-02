@@ -65,6 +65,7 @@ var toolRoutes = map[string][]string{
 	"commit_backend_import":             {"POST /api/backend-projects/{id}/imports/{iid}/commit"},
 	"abort_backend_import":              {"POST /api/backend-projects/{id}/imports/{iid}/abort"},
 	"query_backend_database":            {"POST /api/backend-projects/{id}/database/query"},
+	"query_backend_lineage":             {"POST /api/backend-projects/{id}/lineage/query"},
 	"query_backend_flow":                {"POST /api/backend-projects/{id}/flow/query"},
 	"query_backend_graph":               {"POST /api/backend-projects/{id}/graph/query"},
 	"get_backend_node":                  {"GET /api/backend-projects/{id}/revisions/{rid}/nodes/{nid}", "GET /api/backend-projects/{id}/proposals/{pid}/revisions/{prid}/nodes/{nid}"},
@@ -326,7 +327,7 @@ var toolRoutes = map[string][]string{
 // added without an entry here is caught by a test rather than by a 404 in
 // production.
 // B1.2 adds five isolated database proposal operations.
-const toolCount = 178
+const toolCount = 179
 
 // toolPath resolves ONE call a tool makes into the (method, path) pair
 // loopback.do/call take.

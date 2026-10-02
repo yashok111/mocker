@@ -224,14 +224,19 @@ function BackendProjectDetail({
     },
   );
   const revision = revisionQuery.data?.status === 200 ? revisionQuery.data.data : undefined;
-  if (revision?.schemaVersion === "3" && selectedRevisionId === null) {
+  if (revision && ["3", "4"].includes(revision.schemaVersion) && selectedRevisionId === null) {
     setSelectedRevisionId(revision.id);
     setPin({ ...pin, revisionId: revision.id });
   }
   useEffect(() => {
-    if (revision?.schemaVersion === "3" && !sourcePin?.revisionId && pin.revisionId === revision.id)
+    if (
+      revision &&
+      ["3", "4"].includes(revision.schemaVersion) &&
+      !sourcePin?.revisionId &&
+      pin.revisionId === revision.id
+    )
       onSourceNavigate?.(pin);
-  }, [revision?.id, revision?.schemaVersion, sourcePin?.revisionId, pin, onSourceNavigate]);
+  }, [revision, sourcePin?.revisionId, pin, onSourceNavigate]);
   function navigateSource(value: BackendSourcePin) {
     setPin(value);
     if (value.revisionId) setSelectedRevisionId(value.revisionId);
@@ -445,14 +450,14 @@ function BackendProjectDetail({
             )}
             {revision && (
               <>
-                {["2", "3"].includes(revision.schemaVersion) && (
+                {["2", "3", "4"].includes(revision.schemaVersion) && (
                   <BackendDatabase
                     projectId={projectId}
                     revisionId={revision.id}
                     repositoryId={project.repositories[0]?.id}
                     pin={pin}
                     onFlowNavigate={
-                      revision.schemaVersion === "3"
+                      ["3", "4"].includes(revision.schemaVersion)
                         ? (value) => {
                             navigateSource(value);
                             requestAnimationFrame(() =>
@@ -469,7 +474,7 @@ function BackendProjectDetail({
                     }}
                   />
                 )}
-                {revision.schemaVersion === "3" && (
+                {["3", "4"].includes(revision.schemaVersion) && (
                   <BackendFlow
                     projectId={projectId}
                     revisionId={revision.id}

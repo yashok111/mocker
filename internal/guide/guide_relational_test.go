@@ -16,9 +16,9 @@ func TestRelationalGuideTopicsHaveServedOwnerAndBody(t *testing.T) {
 	for _, item := range []struct {
 		topic, owner, version string
 	}{
-		{topic: "backend-database", owner: "mocker-backend-database", version: "4"},
-		{topic: "backend-database-reference", owner: "mocker-backend-database", version: "4"},
-		{topic: "backend-profile-go-sql", owner: "mocker-backend-import", version: "4"},
+		{topic: "backend-database", owner: "mocker-backend-database", version: "5"},
+		{topic: "backend-database-reference", owner: "mocker-backend-database", version: "5"},
+		{topic: "backend-profile-go-sql", owner: "mocker-backend-import", version: "5"},
 	} {
 		t.Run(item.topic, func(t *testing.T) {
 			t.Parallel()
@@ -65,19 +65,19 @@ func TestRelationalGuideWorkflowRequirements(t *testing.T) {
 		schemas, capabilities      []string
 	}{
 		{
-			entrypoint: "backend-import", owner: "mocker-backend-import", version: "4",
-			schemas: []string{"1", "2", "3"},
+			entrypoint: "backend-import", owner: "mocker-backend-import", version: "5",
+			schemas: []string{"1", "2", "3", "4"},
 			capabilities: []string{
 				"backend-projects", "backend-revisions", "backend-graph-query", "backend-source-import",
 				"backend-source-reconcile", "backend-revision-compare", "backend-relational-import",
-				"backend-database-query", "backend-database-er", "backend-runtime-flow-import", "backend-flow-query", "backend-data-access-query",
+				"backend-database-query", "backend-database-er", "backend-runtime-flow-import", "backend-flow-query", "backend-data-access-query", "backend-field-lineage-import", "backend-field-lineage-query",
 			},
 		},
 		{
-			entrypoint: "backend-database", owner: "mocker-backend-database", version: "4",
-			schemas: []string{"2", "3"},
+			entrypoint: "backend-database", owner: "mocker-backend-database", version: "5",
+			schemas: []string{"2", "3", "4"},
 			capabilities: []string{
-				"backend-projects", "backend-revisions", "backend-graph-query", "backend-database-query", "backend-database-er", "backend-db-proposals", "backend-db-typed-edits", "backend-flow-query", "backend-data-access-query", "backend-saved-views",
+				"backend-projects", "backend-revisions", "backend-graph-query", "backend-database-query", "backend-database-er", "backend-db-proposals", "backend-db-typed-edits", "backend-flow-query", "backend-data-access-query", "backend-saved-views", "backend-field-lineage-query",
 			},
 		},
 	} {

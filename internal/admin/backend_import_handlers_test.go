@@ -342,8 +342,31 @@ func validateBackendImportResponse(t *testing.T, method, path string, data []byt
 			name = "BackendProposalNodeRead"
 		}
 	}
+	if len(parts) == 3 && parts[2] == "capabilities" {
+		name = "BackendCapabilities"
+	}
+	if len(parts) == 5 && parts[3] == "revisions" && parts[4] != "compare" {
+		name = "BackendRevision"
+	}
+	if len(parts) == 5 && parts[4] == "query" {
+		switch parts[3] {
+		case "lineage":
+			name = "BackendLineagePage"
+		case "flow":
+			name = "BackendFlowPage"
+		case "database":
+			name = "BackendDatabasePage"
+		}
+	}
+	if len(parts) >= 4 && parts[3] == "saved-views" {
+		if len(parts) == 4 && method == "GET" {
+			name = "BackendSavedViewPage"
+		} else {
+			name = "BackendSavedView"
+		}
+	}
 	if name == "" {
-		return
+		t.Fatalf("No response schema selected for %s %s", method, path)
 	}
 	raw, err := os.ReadFile(specPath)
 	if err != nil {

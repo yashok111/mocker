@@ -130,7 +130,7 @@ func addBackendImportTool(s *sdk.Server, lb *loopback, tool *sdk.Tool, route str
 				continue
 			}
 			// revisionId pins graph/database query bodies rather than their paths.
-			if key == "revisionId" && (tool.Name == "query_backend_graph" || tool.Name == "query_backend_database" || tool.Name == "query_backend_flow") {
+			if key == "revisionId" && (tool.Name == "query_backend_graph" || tool.Name == "query_backend_database" || tool.Name == "query_backend_flow" || tool.Name == "query_backend_lineage") {
 				continue
 			}
 			var value string

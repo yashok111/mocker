@@ -188,7 +188,7 @@ func projectRuntimeFlow(ctx context.Context, state *RevisionState, in FlowQueryI
 		return nil, notFound()
 	}
 	source := primarySource(*state)
-	if state.Revision.SchemaVersion != RuntimeSchemaVersion || source == nil || len(source.Provider.Profiles) != 3 || !slices.Contains(source.Provider.Profiles, GraphProfile) || !slices.Contains(source.Provider.Profiles, RelationalProfile) || !slices.Contains(source.Provider.Profiles, RuntimeProfile) {
+	if !isRuntimeSchema(state.Revision.SchemaVersion) || source == nil || !sourceProfilesMatch(state.Revision.SchemaVersion, source.Provider.Profiles) {
 		return nil, &FaultError{Status: 422, Code: "backend_unsupported_scope", Message: "Flow reads require a pinned runtime-flow source revision"}
 	}
 	page := &FlowPage{ProjectID: state.Revision.ProjectID, RevisionID: state.Revision.ID, SemanticHash: state.Revision.SemanticHash, View: in.View, Coverage: RevisionCoverage{Coverage: state.Revision.Coverage, Snapshots: slices.Clone(state.Sources), Inventory: slices.Clone(state.Inventory), ReconciliationGaps: []string{}}, Limitations: []string{}, TruncationReasons: []string{}}

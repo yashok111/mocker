@@ -161,7 +161,7 @@ func prepareGraph(ctx context.Context, q importReader, s *ImportSession) (*graph
 			}
 		}
 	}
-	if selectedProfile(s.Profile) == RuntimeProfile {
+	if hasRuntimeProfile(selectedProfile(s.Profile)) {
 		for i := range g.Nodes {
 			n := &g.Nodes[i]
 			n.Attributes, err = resolveRuntimeAttributes(n.Kind, n.Attributes, false, resolve)
@@ -172,6 +172,15 @@ func prepareGraph(ctx context.Context, q importReader, s *ImportSession) (*graph
 		for i := range g.Edges {
 			e := &g.Edges[i]
 			e.Attributes, err = resolveRuntimeAttributes(e.Kind, e.Attributes, true, resolve)
+			if err != nil {
+				return nil, nil, err
+			}
+		}
+	}
+	if selectedProfile(s.Profile) == LineageProfile {
+		for i := range g.Nodes {
+			n := &g.Nodes[i]
+			n.Attributes, err = resolveLineageAttributes(n.Kind, n.Attributes, resolve)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -245,9 +254,14 @@ func prepareGraph(ctx context.Context, q importReader, s *ImportSession) (*graph
 		case "derived_from":
 			valid = slices.Contains([]string{"symbol", "module", "unresolved_target"}, to.Kind)
 		}
-		if selectedProfile(s.Profile) == RuntimeProfile {
+		if hasRuntimeProfile(selectedProfile(s.Profile)) {
 			if runtimeValid, applies := runtimeEndpoints(e, from, to); applies {
 				valid = runtimeValid
+			}
+		}
+		if selectedProfile(s.Profile) == LineageProfile && e.Kind == "contains" {
+			if lineageValid, applies := lineageContains(from, to); applies {
+				valid = lineageValid
 			}
 		}
 		if !valid {
@@ -286,8 +300,13 @@ func prepareGraph(ctx context.Context, q importReader, s *ImportSession) (*graph
 			return nil, nil, err
 		}
 	}
-	if selectedProfile(s.Profile) == RuntimeProfile {
+	if hasRuntimeProfile(selectedProfile(s.Profile)) {
 		if err := validateRuntimeGraph(ctx, q, s, g, &d); err != nil {
+			return nil, nil, err
+		}
+	}
+	if selectedProfile(s.Profile) == LineageProfile {
+		if err := validateLineageGraph(ctx, s, g, &d); err != nil {
 			return nil, nil, err
 		}
 	}

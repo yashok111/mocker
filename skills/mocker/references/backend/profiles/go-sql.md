@@ -2,8 +2,8 @@
 
 
 Load `backend-profile-go-sql` only for this source family, pinned to the selected
-import v4 owner identity/global guideSetId. Read database-reference through its
-supported database v1 owner in that same set for exact relational types.
+import v5 owner identity/global guideSetId. Read database-reference through its
+supported database v5 owner in that same verified set for exact relational types.
 
 Inventory source files before collecting assertions. Read Go declarations,
 SQL/DDL, ORM metadata and ordered migration source as data. Never launch the
@@ -91,11 +91,11 @@ endpoint access or impact safety.
 
 Runtime source3 adds imported net/http handlers, flow steps, call candidates,
 query definitions and explicit table/column accesses. Read backend-flow-reference
-and backend-analysis under inspect2 in this same set for exact shapes and limits.
+and backend-analysis under inspect3 in this same set for exact shapes and limits.
 Capture Go/query text as original source bytes and physical spans; do not launch
 the service, package scripts, SQL or migrations. Dynamic dispatch gets candidate
 proof plus an unresolved remainder when scope is partial/unknown. A table-level
 unknown-column operation stays possible for a selected column, never a confirmed
 reader/writer of every column. Preserve local begin/commit/rollback source edges,
 unknown connection/isolation and boundaries without claiming all-path atomicity.
-The ordinary import4 source audit/reconcile/replay rules apply unchanged.
+The ordinary import5 source audit/reconcile/replay rules apply unchanged.

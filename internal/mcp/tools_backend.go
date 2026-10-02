@@ -28,6 +28,7 @@ type backendToolInput struct {
 func addBackendTools(s *sdk.Server, lb *loopback) {
 	addBackendImportTools(s, lb)
 	addBackendFlowTools(s, lb)
+	addBackendLineageTools(s, lb)
 	addBackendProposalTools(s, lb)
 	addBackendSavedViewTools(s, lb)
 	const base = "/api/backend-projects"

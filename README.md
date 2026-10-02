@@ -43,16 +43,22 @@ selected immutable guide set and verifies each topic's actual workflow owner. A 
 server capabilities. Agents without local skills can discover the same procedures
 through MCP. Relational tasks require compatible schema2/profile/capabilities; a
 foundation-only fallback does not qualify. PostgreSQL/SQLite definitions are
-source data; no inspected SQL, migration or application executes. Typed database proposals require database workflow3 and proposal-relational-v1
-view support. Source schema3/runtime-flow-v1 adds pinned endpoint steps, branches, queries and
-local transaction boundaries through inspect1 and query_backend_flow. Imported
-readers/writers are scoped source claims with proof and explicit uncertainty;
-whole-table unknown-column accesses remain possible for a selected column.
+source data; no inspected SQL, migration or application executes. Typed database
+proposals select the advertised compatible database workflow with
+proposal-relational-v1 view support. Source schema3/4 retains pinned endpoint
+steps, branches, queries and local transaction boundaries through the inspect
+workflow and query_backend_flow. Imported readers/writers are scoped source
+claims with proof and explicit uncertainty; whole-table unknown-column accesses
+remain possible for a selected column. Source4/field-lineage-v1 adds explicit
+ordered value mappings and pinned forward/reverse query_backend_lineage reads.
+Unknown boundaries, partial coverage and redacted transformations remain visible;
+API fields are source-local identities, with external API pins still deferred.
+Saved views retain exact source pins for Flow, source or proposal pins for Database,
+and their own view-version pins through saved-view-v1; reopening never falls back to head.
 Ordinary inspection performs no writes. An explicitly requested resolvable gap
 uses normal whole-scope reconcile, source audit and commit; unavailable source
 retains its unknown without an empty progress revision. Existing data, all writers,
-atomicity and migration execution remain unverified; field lineage and impact
-are unavailable.
+atomicity, application/migration execution and impact remain unverified or unavailable.
 [`docs/README.md`](docs/README.md) is the index.
 
 ## What P0 does and what it does not yet

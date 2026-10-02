@@ -130,7 +130,9 @@ it("keeps an unavailable datastore URL selection explicit instead of substitutin
 
 it("links a proposed table to source Flow at its exact baseline without a proposal selector", async () => {
   const onFlowNavigate = vi.fn();
+  const requests: string[] = [];
   vi.stubGlobal("fetch", async (url: string) => {
+    requests.push(url);
     if (url.includes("/nodes/"))
       return json(200, {
         proposalProjection: {
@@ -166,6 +168,15 @@ it("links a proposed table to source Flow at its exact baseline without a propos
   );
   await userEvent.click(
     await screen.findByRole("button", { name: "Чтения и записи в Flow основания предложения" }),
+  );
+  expect(
+    within(screen.getByLabelText("Инспектор базы данных")).getByText(
+      "Происхождение значения доступно только в снимке source4; предложения не поддерживаются.",
+    ),
+  ).toBeVisible();
+  expect(requests.some((url) => url.includes("/lineage/query"))).toBe(false);
+  expect(requests.some((url) => url.includes("/api/backend-projects/project/revisions/"))).toBe(
+    false,
   );
   expect(onFlowNavigate).toHaveBeenCalledWith({
     revisionId: "old-baseline",

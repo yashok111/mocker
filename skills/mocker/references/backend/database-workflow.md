@@ -3,12 +3,12 @@ name: mocker-backend-database
 description: Inspect a pinned source-backed PostgreSQL or SQLite database model, ordered columns/FKs, facet drift, coverage and evidence in mocker. Use for database/ER/schema inspection; import uses mocker-backend-import and design typed NULL/NOT NULL and FK proposals with pinned preview/apply and unverified criteria.
 metadata:
   workflowId: "mocker-backend-database"
-  workflowVersion: "4"
-  requiredModelSchemaVersions: "[\"2\",\"3\"]"
+  workflowVersion: "5"
+  requiredModelSchemaVersions: "[\"2\",\"3\",\"4\"]"
   requiredViewSchemaVersions: "[\"proposal-relational-v1\",\"saved-view-v1\"]"
-  requiredCapabilities: "[\"backend-projects\",\"backend-revisions\",\"backend-graph-query\",\"backend-database-query\",\"backend-database-er\",\"backend-db-proposals\",\"backend-db-typed-edits\",\"backend-flow-query\",\"backend-data-access-query\",\"backend-saved-views\"]"
-  guideSetId: "sha256:66502d122afa64656c57f74e1eb6ef5ad5dfe5396870f6278a348901a2b32589"
-  manifestHash: "sha256:66502d122afa64656c57f74e1eb6ef5ad5dfe5396870f6278a348901a2b32589"
+  requiredCapabilities: "[\"backend-projects\",\"backend-revisions\",\"backend-graph-query\",\"backend-database-query\",\"backend-database-er\",\"backend-db-proposals\",\"backend-db-typed-edits\",\"backend-flow-query\",\"backend-data-access-query\",\"backend-saved-views\",\"backend-field-lineage-query\"]"
+  guideSetId: "sha256:c32a1a1d0ee261f265e254cf46f7e5cb2fe630b0a51dc0cdfb57a5e630813e1f"
+  manifestHash: "sha256:c32a1a1d0ee261f265e254cf46f7e5cb2fe630b0a51dc0cdfb57a5e630813e1f"
 ---
 
 # Pinned database inspection and proposals
@@ -23,7 +23,7 @@ or who reads a column. This leaf needs no neighboring root package.
 ## Select and verify the read procedure
 
 Call `get_server_config` and `get_backend_capabilities`. Select an advertised
-supported `mocker-backend-database` workflow4 with schemas2/3, database-query/ER,
+supported `mocker-backend-database` workflow5 with schemas2/3/4, database-query/ER,
 source flow/access reads and
 all its required capabilities, backend-saved-views, and proposal-relational-v1/saved-view-v1 view support. Tool-name matches or a schema1-only set cannot
 supply relational inspection. Decode installed schema/capability metadata from
@@ -40,11 +40,11 @@ Load `backend-database-reference` from the same guideSetId and verify its databa
 owner tuple/contentHash against the selected manifest. Load `backend-model` when
 record/freshness semantics are needed and `backend-recovery` on read failures,
 resume or selector changes. Those two topics are canonically import-owned:
-explicitly select the supported advertised `mocker-backend-import` v4 identity
+explicitly select the supported advertised `mocker-backend-import` v5 identity
 with that same global guideSetId/manifestHash, check its declared requirements,
 and verify each returned actual owner tuple/contentHash against its manifest.
 This selects a reference owner, without starting import writes. Never assert that
-an import-owned topic belongs to database v4. Unknown sets fail; do not substitute
+an import-owned topic belongs to database v5. Unknown sets fail; do not substitute
 latest or read a neighboring root directory. No model/protocol/example bulk load
 is required for a straightforward already-pinned table inspection.
 
@@ -79,8 +79,8 @@ is required for a straightforward already-pinned table inspection.
    between explicit known facets and separate native-definition differences.
    Missing selected-facet proofs are limitations, not absence. Canvas limits or
    one query page do not prove full schema coverage.
-6. For imported readers/writers select inspect2 in this same set, verify its
-   schema3/profile/capabilities and flow-reference/analysis topics, then page
+6. For imported readers/writers select inspect3 in this same set, verify its
+   schema3/4/profile/capabilities and flow-reference/analysis topics, then page
    query_backend_flow view:accesses at this exact source revision and dataNodeId.
    Schema2 flow reads are unavailable. Whole-table unknown-column accesses are
    possible, never confirmed column accesses. Open each query/witness proof;
@@ -88,8 +88,8 @@ is required for a straightforward already-pinned table inspection.
 
 ## Typed proposal procedure
 
-Before the first design write select database workflow4, exact guideSetId and
-manifestHash, source schemas2/3, view `proposal-relational-v1`, and both
+Before the first design write select database workflow5, exact guideSetId and
+manifestHash, source schemas2/3/4/4, view `proposal-relational-v1`, and both
 `backend-db-proposals` and `backend-db-typed-edits`. An inspection-only workflow1
 or matching tool names is insufficient. If local metadata differs, fetch and
 follow the entire compatible server workflow. If no compatible set exists,
@@ -125,7 +125,7 @@ perform supported reads and report that proposal writes are unavailable.
    move the baseline. Data/backfill, writers, uniqueness/orphans/actions and the
    migration plan are unverified requirements, never executed verification.
 
-Load `backend-examples` only when needed, under its actual import4 owner in the
+Load `backend-examples` only when needed, under its actual import5 owner in the
 same selected global set. After restart or server update renegotiate before new
 writes while retaining existing request/key/checkpoint. On uncertain create/apply
 retry the exact request/key at most three times with 1/2/4-second backoff, then
@@ -138,7 +138,7 @@ invalidated by a later save; restart the history page rather than mixing drafts.
 Proposal flow navigation returns to its exact source base revisionId, with no
 proposal selector on query_backend_flow. Imported scoped accesses do not verify
 all writers or existing data and cannot demonstrate proposed runtime behavior.
-Ready/rebase, field lineage, live collection, measured checks, impact and provider
+Ready/rebase, live collection, measured checks, impact and provider
 migration are unavailable. Report those boundaries
 without creating jobs or using import/project commands as a schema edit engine.
 
@@ -156,9 +156,9 @@ remains a table with its FKs.
 
 ## Save and reopen a Database presentation when requested
 
-Require database4, `backend-saved-views`, `saved-view-v1` and the existing source/
+Require database5, `backend-saved-views`, `saved-view-v1` and the existing source/
 proposal versions before writes. Use the complete example/contract in
-`backend-database-reference` under this database4 owner. List source/proposal
+`backend-database-reference` under this database5 owner. List source/proposal
 Database views, create from revisionId or the exact proposal target, and retain
 all returned pins. A saved proposal retains its immutable proposalRevisionId,
 source base, desired intent, unverified checks and base-outdated warning after
@@ -176,3 +176,25 @@ changes and requires explicit reload or save-as-new; never update only CAS.
 Changing kind/target requires a new view. Preview/layout/collapse do not invent
 relationships or evidence. Ordinary-agent acceptance and live agent evaluation
 remain deferred; public SDK/REST examples are verification of the interface.
+
+## Column lineage delegates to inspect3
+
+Database5 supports source2/3/4 with unchanged proposal/saved-view contracts.
+For lineage select inspect3 in this same guideSetId/manifestHash with source4,
+field-lineage-v1 and all inspect3 requirements. Verify its flow/analysis topics.
+Pass exact `{kind:"column",nodeId,facetKey}` and source revision; reverse means
+origin, forward downstream. Preserve facet and unknown boundary target/actions.
+Follow inspect3's full query procedure; database5 does not own lineage. Source2/3
+and proposals refuse it; source-base navigation does not prove designed behavior.
+No SQL/code execution or latest fallback.
+
+## Owner dependency requirements in this guide set
+
+Verify complete owners in the same guideSetId/manifestHash; lineage additionally requires source4/field-lineage-v1. Reference selection starts no writes.
+
+| Owner | Exact version | Model versions | View versions | Required capabilities |
+|---|---|---|---|---|
+| mocker-backend-project | 1 | 1 |  | backend-projects, backend-project-metadata, backend-revisions |
+| mocker-backend-import | 5 | 1,2,3,4 |  | backend-projects, backend-revisions, backend-graph-query, backend-source-import, backend-source-reconcile, backend-revision-compare, backend-relational-import, backend-database-query, backend-database-er, backend-runtime-flow-import, backend-flow-query, backend-data-access-query, backend-field-lineage-import, backend-field-lineage-query |
+| mocker-backend-database | 5 | 2,3,4 | proposal-relational-v1,saved-view-v1 | backend-projects, backend-revisions, backend-graph-query, backend-database-query, backend-database-er, backend-db-proposals, backend-db-typed-edits, backend-flow-query, backend-data-access-query, backend-saved-views, backend-field-lineage-query |
+| mocker-backend-inspect | 3 | 3,4 | saved-view-v1 | backend-projects, backend-revisions, backend-graph-query, backend-flow-query, backend-data-access-query, backend-saved-views, backend-field-lineage-query |

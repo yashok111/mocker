@@ -1,0 +1,13 @@
+// Static source fixture only. Never execute this file or its SQL descriptions.
+// POST /orders request body has userId; response body has total and token.
+// request.userId -> input.inputs[opaque/~0] -> query.parameters[user-id]
+// query.parameters[user-id] -> orders.user_id (explicit write mapping).
+// orders.amount -> query.results[amount]; orders.tax -> query.results[tax].
+// query.results[amount] + query.results[tax] -> response.total (aggregate).
+// A branch can copy query.results[amount] to response.total independently.
+// A generic constant populates response.kind; no literal secret is retained.
+// response.total -> query.results[amount] models an explicit source cycle.
+// response.total and request.userId feed an unknown transform to response.token.
+// The transform is redacted; all described inputs remain visible.
+// SQL shape: orders(user_id INTEGER, amount INTEGER, tax INTEGER).
+// Source declarations are static dependency observations, not execution traces.

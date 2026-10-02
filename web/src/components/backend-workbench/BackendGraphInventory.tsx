@@ -1,3 +1,7 @@
+import { BackendAPIFields } from "./BackendAPIFields";
+import { BackendValueInspector } from "./BackendValueInspector";
+import { BackendValueSeeds } from "./BackendLineageActions";
+import type { BackendLineageValueRef } from "@/api/generated/schemas";
 import { useState } from "react";
 import {
   Alert,
@@ -51,6 +55,8 @@ const kinds = [
   "flow_step",
   "query",
   "transaction",
+  "api_field",
+  "field_mapping",
 ];
 const categories: Record<string, string> = {
   files: "Файлы",
@@ -198,8 +204,9 @@ function Inventory({ projectId, revisionId, schemaVersion }: Props) {
                 .filter(
                   (kind) =>
                     (!["flow", "flow_step", "query", "transaction"].includes(kind) ||
-                      schemaVersion === "3") &&
-                    (["2", "3"].includes(schemaVersion ?? "") ||
+                      schemaVersion === "3" ||
+                      schemaVersion === "4") &&
+                    (["2", "3", "4"].includes(schemaVersion ?? "") ||
                       ![
                         "db_schema",
                         "table",
@@ -396,6 +403,7 @@ function NodeDetails({
   nodeId,
   onEdge,
 }: Props & { nodeId: string; onEdge: (edge: BackendEdge) => void }) {
+  const [selectedValue, setSelectedValue] = useState<BackendLineageValueRef>();
   const query = useGetBackendNode(projectId, revisionId, nodeId, {
     query: { staleTime: Infinity, retry: false },
   });
@@ -415,6 +423,29 @@ function NodeDetails({
             </Text>
           </Group>
           <AssertionDetails record={node} />
+          <BackendValueSeeds
+            projectId={projectId}
+            revisionId={revisionId}
+            node={node}
+            onValueSelect={setSelectedValue}
+          />
+          {node.kind === "http_operation" && (
+            <BackendAPIFields
+              projectId={projectId}
+              revisionId={revisionId}
+              operationId={node.id}
+              onValueSelect={setSelectedValue}
+            />
+          )}
+          {selectedValue && (
+            <BackendValueInspector
+              key={JSON.stringify(selectedValue)}
+              projectId={projectId}
+              revisionId={revisionId}
+              value={selectedValue}
+              onClose={() => setSelectedValue(undefined)}
+            />
+          )}
           <Code block style={wrap}>
             {JSON.stringify(node.attributes, null, 2)}
           </Code>

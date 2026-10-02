@@ -10,7 +10,7 @@ vi.mock("./BackendFlowGraph", () => ({ BackendFlowGraph: () => <div>Flow canvas<
 
 afterEach(() => vi.unstubAllGlobals());
 
-it.each(["1", "2", "3"])(
+it.each(["1", "2", "3", "4"])(
   "presents the imported schema%s revision inventory and gates Database by schema version",
   async (schemaVersion) => {
     const id = "0197aaf9-5555-7000-8000-000000000001";
@@ -28,7 +28,7 @@ it.each(["1", "2", "3"])(
           id,
           name: "Импортированный проект",
           version: 2,
-          currentRevisionId: schemaVersion === "3" ? newerId : rid,
+          currentRevisionId: ["3", "4"].includes(schemaVersion) ? newerId : rid,
           repositories: [],
           capabilities: [],
           createdAt: "2026-09-30T10:00:00Z",
@@ -93,7 +93,7 @@ it.each(["1", "2", "3"])(
     renderInRouter(
       <BackendProjectPage
         projectId={id}
-        sourcePin={schemaVersion === "3" ? { revisionId: rid } : undefined}
+        sourcePin={["3", "4"].includes(schemaVersion) ? { revisionId: rid } : undefined}
       />,
     );
     expect(
@@ -102,7 +102,7 @@ it.each(["1", "2", "3"])(
     expect(screen.queryByText(/Импорт исходников пока недоступен/)).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Сравнение ревизий" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Проверить импорты" })).toBeInTheDocument();
-    if (["2", "3"].includes(schemaVersion)) {
+    if (["2", "3", "4"].includes(schemaVersion)) {
       expect(await screen.findByRole("heading", { name: "База данных" })).toBeInTheDocument();
       expect(
         await screen.findByText("Реляционная схема в этой ревизии отсутствует"),
@@ -113,7 +113,7 @@ it.each(["1", "2", "3"])(
     } else {
       expect(screen.queryByRole("heading", { name: "База данных" })).not.toBeInTheDocument();
     }
-    if (schemaVersion === "3")
+    if (["3", "4"].includes(schemaVersion))
       expect(await screen.findByRole("heading", { name: "Flow" })).toBeInTheDocument();
     else expect(screen.queryByRole("heading", { name: "Flow" })).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Сравнение ревизий" }));
