@@ -12,6 +12,8 @@ import (
 )
 
 type designScenarioService interface {
+	ExportTransfer(context.Context, []int64, bool) (designscenario.TransferBundle, error)
+	ImportTransfer(context.Context, designscenario.TransferBundle, bool) (designscenario.TransferResult, error)
 	List(context.Context) ([]designscenario.Scenario, error)
 	ResourceMapUsages(context.Context, int64) ([]designscenario.ResourceMapUsage, bool, error)
 	ImpactUsages(context.Context, apidesign.ImpactReport, apidesign.ImpactDocumentPair) (designscenario.ImpactScenarioResult, error)

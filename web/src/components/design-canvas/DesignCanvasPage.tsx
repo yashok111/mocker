@@ -58,6 +58,7 @@ import { useCanvasDraft, type CanvasDraftController } from "./useCanvasDraft";
 import { designScenarioKeys, useCreateDesignScenario } from "./designScenarioApi";
 import { messageLabels, participantLabels } from "./labels";
 import type { CanvasContract, CanvasDocument, CanvasSelection } from "./types";
+import { ScenarioMockerExport } from "./ScenarioMockerExport";
 import classes from "./DesignCanvas.module.css";
 
 const SequenceGraph = lazy(() => import("./SequenceGraph"));
@@ -418,6 +419,10 @@ export function DesignCanvasEditor({
                     ? "Есть несохранённые изменения"
                     : "Локальный прототип")}
             </Text>
+            <ScenarioMockerExport
+              document={document}
+              formDrafts={{ all: draft.formStore.serialize() }}
+            />
             {persistence?.actions}
             {!persistence?.automatic ? (
               <Button

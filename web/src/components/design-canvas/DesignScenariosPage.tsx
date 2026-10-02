@@ -25,6 +25,9 @@ import {
   useListDesignScenarios,
 } from "./designScenarioApi";
 
+import { ScenarioMockerBatchExport } from "./ScenarioMockerBatchExport";
+import { ScenarioMockerImport } from "./ScenarioMockerImport";
+
 export function DesignScenariosPage(): ReactElement {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -62,9 +65,13 @@ export function DesignScenariosPage(): ReactElement {
             Проектируйте последовательности, связанные API и рабочие draft-моки.
           </Text>
         </div>
-        <Button leftSection={<IconPlus size={17} />} onClick={() => setCreateOpened(true)}>
-          Новый сценарий
-        </Button>
+        <Group>
+          <ScenarioMockerImport />
+          <ScenarioMockerBatchExport scenarios={scenarios} />
+          <Button leftSection={<IconPlus size={17} />} onClick={() => setCreateOpened(true)}>
+            Новый сценарий
+          </Button>
+        </Group>
       </Group>
 
       {query.isPending ? <Loader aria-label="Загружаем сценарии" /> : null}

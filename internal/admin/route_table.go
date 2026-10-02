@@ -256,6 +256,8 @@ func (s *Server) routes() []route {
 		{"GET /api/backend-projects/{id}/revisions/{rid}/evidence", s.handleGetBackendEvidence, mcpAllow, cpRead},
 		{"GET /api/backend-projects/{id}/revisions/{rid}/coverage", s.handleGetBackendCoverage, mcpAllow, cpRead},
 
+		{"POST /api/design-scenarios/transfer-export", s.handleExportScenarioTransfer, mcpAllow, cpNeverTouchesLayer},
+		{"POST /api/design-scenarios/transfer-import", s.handleImportScenarioTransfer, mcpAllow, cpAnotherLayer},
 		{"GET /api/design-scenarios", s.handleListDesignScenarios, mcpAllow, cpRead},
 		{"POST /api/design-scenarios", s.handleCreateDesignScenario, mcpAllow, cpAnotherLayer},
 		{"GET /api/design-scenarios/{id}", s.handleGetDesignScenario, mcpAllow, cpRead},

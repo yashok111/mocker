@@ -46,6 +46,13 @@ func EqualValue(a, b any) bool {
 	}
 }
 
+// CanonicalNumber returns a compact decimal token for a valid JSON number.
+// Equivalent spellings share a token without floating-point rounding or
+// expanding enormous exponents. Like EqualValue, it treats -0 as zero.
+func CanonicalNumber(number Number) Number {
+	return Number(canonicalNumber(string(number)))
+}
+
 func canonicalNumber(raw string) string {
 	number := normalizeNumber(raw)
 	if number.digits == "" {

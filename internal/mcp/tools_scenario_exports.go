@@ -6,6 +6,7 @@ import (
 
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/yashok111/mocker/internal/designscenario"
 	"github.com/yashok111/mocker/internal/scenarioexport"
 )
 
@@ -22,7 +23,26 @@ type scenarioArchiveInput struct {
 	Items      []scenarioexport.Request `json:"items"`
 }
 
+type scenarioTransferExportInput struct {
+	ScenarioIDs    []int64 `json:"scenarioIds"`
+	IncludeHistory bool    `json:"includeHistory"`
+}
+type scenarioTransferImportInput struct {
+	Bundle designscenario.TransferBundle `json:"bundle"`
+	Relink bool                          `json:"relink"`
+}
+
 func addScenarioExportTools(s *sdk.Server, lb *loopback) {
+	addDesignScenarioTool(s, lb, "export_design_scenarios_file", "POST /api/design-scenarios/transfer-export",
+		"Exports 1–20 saved scenarios as one restorable .mocker JSON package, optionally including immutable history (up to 200 revisions each). Limit 2 MB. Includes request headers, bodies and variables. Does not modify scenarios or APIs.", true,
+		func(in scenarioTransferExportInput) (designScenarioCall, error) {
+			return designScenarioCall{body: in}, nil
+		})
+	addDesignScenarioTool(s, lb, "import_design_scenarios_file", "POST /api/design-scenarios/transfer-import",
+		"Atomically creates new scenarios and their history from a .mocker package. Foreign IDs are ignored. relink optionally pins exact unambiguous matching API snapshots on this server; unmatched contracts remain copies. Existing APIs are never modified. Not idempotent: inspect list_design_scenarios after a lost response before retrying.", false,
+		func(in scenarioTransferImportInput) (designScenarioCall, error) {
+			return designScenarioCall{body: in}, nil
+		})
 	addDesignScenarioTool(s, lb, "export_design_scenario_archive", "POST /api/design-scenarios/{id}/revisions/{rid}/archive",
 		"Exports 1–32 unique selections from one immutable saved scenario revision as ZIP. Each item has format and optionally contractId (required for OpenAPI and AsyncAPI). Server formats: plantuml, mermaid, openapi-json, openapi-yaml, asyncapi-json, asyncapi-yaml, postman, curl, markdown, html. SVG/PNG/PDF are browser-only. Decode contentBase64 into ZIP bytes; manifest v1 records exact byte lengths, SHA-256 and diagnostics. ZIP contains artifacts, not a restorable project. Any failed item cancels the archive. Does not modify resources, execute requests or publish.", true,
 		func(in scenarioArchiveInput) (designScenarioCall, error) {

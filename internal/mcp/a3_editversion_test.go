@@ -549,8 +549,8 @@ func containsStr(list []string, want string) bool {
 // own tools/list test only logs the count (t.Logf, "not a check" per D13's
 // own text). Later groups grew the surface to 74; the persisted sequence
 // designer adds ten, persisted runs four and scenario exports three state diagrams eight and schema model twelve, plus control-flow/coverage three, data bindings four, test suggestions and ten resource-map tools reached 174 tools. Saved views,
-// lineage and four exact API artifact tools now bring the surface to 183.
-func TestToolSurfaceStaysAt183(t *testing.T) {
+// lineage, four exact API artifact tools and two scenario transfer tools bring the surface to 185.
+func TestToolSurfaceStaysAt185(t *testing.T) {
 	t.Parallel()
 	h := newTestEndpoint(t).Handler()
 	rec := doMCP(t, h, `{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}`,
@@ -563,7 +563,7 @@ func TestToolSurfaceStaysAt183(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &env); err != nil {
 		t.Fatalf("decode tools/list: %v; body=%s", err, rec.Body.String())
 	}
-	if len(env.Result.Tools) != 183 {
-		t.Errorf("tools/list returned %d tools, want 183 including database proposals, saved views, lineage and four exact API artifact tools", len(env.Result.Tools))
+	if len(env.Result.Tools) != 185 {
+		t.Errorf("tools/list returned %d tools, want 185 including database proposals, saved views, lineage, four exact API artifact tools and two scenario transfer tools", len(env.Result.Tools))
 	}
 }

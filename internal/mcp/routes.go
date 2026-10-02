@@ -134,6 +134,8 @@ var toolRoutes = map[string][]string{
 	"save_design_scenario_draft":               {"PUT /api/design-scenarios/{id}/draft"},
 	"apply_design_scenario_commands":           {"POST /api/design-scenarios/{id}/commands"},
 	"get_design_scenario_revision":             {"GET /api/design-scenarios/{id}/revisions/{rid}"},
+	"export_design_scenarios_file":             {"POST /api/design-scenarios/transfer-export"},
+	"import_design_scenarios_file":             {"POST /api/design-scenarios/transfer-import"},
 	"get_design_scenario_export_options":       {"GET /api/design-scenarios/{id}/revisions/{rid}/export-options"},
 	"export_design_scenario":                   {"GET /api/design-scenarios/{id}/revisions/{rid}/exports/{format}"},
 	"export_design_scenario_archive":           {"POST /api/design-scenarios/{id}/revisions/{rid}/archive"},
@@ -332,7 +334,7 @@ var toolRoutes = map[string][]string{
 // production.
 // B1.2 adds five isolated database proposal operations. B24 adds four exact
 // API artifact snapshot/query/preview/apply operations.
-const toolCount = 183
+const toolCount = 185
 
 // toolPath resolves ONE call a tool makes into the (method, path) pair
 // loopback.do/call take.

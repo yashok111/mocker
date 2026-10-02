@@ -36399,6 +36399,154 @@
             "description": "Exact immutable raw owner document bytes represented as a string. Hash is SHA-256 of these UTF-8 bytes, without hydrated operation keys."
           }
         }
+      },
+      "ScenarioTransferRevision": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "document",
+          "formDrafts",
+          "summary",
+          "source",
+          "createdAt"
+        ],
+        "properties": {
+          "document": {
+            "$ref": "#/components/schemas/DesignScenarioDocument"
+          },
+          "formDrafts": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "summary": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "ui",
+              "mcp"
+            ]
+          },
+          "createdAt": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          }
+        }
+      },
+      "ScenarioTransferScenario": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "revisions"
+        ],
+        "properties": {
+          "revisions": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 200,
+            "items": {
+              "$ref": "#/components/schemas/ScenarioTransferRevision"
+            }
+          }
+        }
+      },
+      "ScenarioTransferBundle": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "formatVersion",
+          "scenarios"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "mocker.scenarios"
+            ]
+          },
+          "formatVersion": {
+            "type": "integer",
+            "enum": [
+              1
+            ]
+          },
+          "scenarios": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 20,
+            "items": {
+              "$ref": "#/components/schemas/ScenarioTransferScenario"
+            }
+          }
+        }
+      },
+      "ExportScenarioTransferRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "scenarioIds",
+          "includeHistory"
+        ],
+        "properties": {
+          "scenarioIds": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 20,
+            "uniqueItems": true,
+            "items": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1
+            }
+          },
+          "includeHistory": {
+            "type": "boolean"
+          }
+        }
+      },
+      "ImportScenarioTransferRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "bundle",
+          "relink"
+        ],
+        "properties": {
+          "bundle": {
+            "$ref": "#/components/schemas/ScenarioTransferBundle"
+          },
+          "relink": {
+            "type": "boolean"
+          }
+        }
+      },
+      "ScenarioTransferResult": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "scenarios",
+          "linkedContracts",
+          "copiedContracts"
+        ],
+        "properties": {
+          "scenarios": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DesignScenario"
+            }
+          },
+          "linkedContracts": {
+            "type": "integer"
+          },
+          "copiedContracts": {
+            "type": "integer"
+          }
+        }
       }
     }
   },
@@ -52185,6 +52333,248 @@
             }
           }
         ]
+      }
+    },
+    "/api/design-scenarios/transfer-export": {
+      "post": {
+        "tags": [
+          "design-scenarios"
+        ],
+        "operationId": "exportScenarioTransfer",
+        "summary": "Export a coherent package of scenarios with optional history",
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfToken": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExportScenarioTransferRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "400": {
+            "description": "design_scenario_invalid: document or command diagnostics.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "$ref": "#/components/schemas/DesignScenarioInvalidDetails"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "413": {
+            "$ref": "#/components/responses/PayloadTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          },
+          "409": {
+            "description": "design_scenario_conflict: current scenario or linked API version. No write was applied.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "$ref": "#/components/schemas/DesignScenarioConflictDetails"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScenarioTransferBundle"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/design-scenarios/transfer-import": {
+      "post": {
+        "tags": [
+          "design-scenarios"
+        ],
+        "operationId": "importScenarioTransfer",
+        "summary": "Atomically import new scenarios and history; optionally relink exact unambiguous API snapshots",
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfToken": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImportScenarioTransferRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "400": {
+            "description": "design_scenario_invalid: document or command diagnostics.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "$ref": "#/components/schemas/DesignScenarioInvalidDetails"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "413": {
+            "$ref": "#/components/responses/PayloadTooLarge"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          },
+          "409": {
+            "description": "design_scenario_conflict: current scenario or linked API version. No write was applied.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "$ref": "#/components/schemas/DesignScenarioConflictDetails"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScenarioTransferResult"
+                }
+              }
+            }
+          }
+        }
       }
     }
   }

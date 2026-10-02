@@ -6,6 +6,8 @@ import { fill } from "@/test/user";
 import { json, route } from "@/test/http";
 import { DesignCanvasPage } from "./DesignCanvasPage";
 import { STORAGE_KEY, parseSavedCanvas, serializeSavedCanvas } from "./canvasStorage";
+import * as exportFiles from "./scenarioExportFiles";
+import { parseMockerScenario } from "./scenarioMockerFile";
 import { exampleCanvas, importContract, resolveOperation } from "./canvasModel";
 
 vi.mock("./SequenceGraph", () => ({ default: () => <div data-testid="sequence-graph" /> }));
@@ -22,6 +24,20 @@ async function addFromCanvasMenu(name: string): Promise<void> {
 }
 
 describe("DesignCanvasPage", () => {
+  it("exports unsaved editor changes in a portable scenario file", async () => {
+    const download = vi.spyOn(exportFiles, "downloadScenarioBlob").mockImplementation(() => {});
+    renderInRouter(<DesignCanvasPage />);
+    const title = await screen.findByRole("textbox", { name: "Название сценария" });
+    await userEvent.clear(title);
+    await userEvent.type(title, "Несохранённая диаграмма");
+    await userEvent.click(screen.getByRole("button", { name: "Экспорт .mocker" }));
+    await userEvent.click(screen.getByRole("button", { name: "Скачать .mocker" }));
+    expect(download).toHaveBeenCalledOnce();
+    const parsed = parseMockerScenario(await download.mock.calls[0]![0].text());
+    expect(parsed.document.title).toBe("Несохранённая диаграмма");
+    expect(parsed.document.messages.length).toBeGreaterThan(0);
+    expect(parsed.formDrafts.all).toBe("{}");
+  });
   it("clears pending execution buffers for a deleted fragment and its descendant", async () => {
     const document = exampleCanvas();
     document.formatVersion = 2;

@@ -113,3 +113,16 @@ func TestScenarioArchiveToolReadOnlyAnnotations(t *testing.T) {
 	}
 	t.Fatal("archive tool not registered")
 }
+
+func TestScenarioTransferToolsRoutePackages(t *testing.T) {
+	for _, tc := range []struct{ name, args, path string }{
+		{"export_design_scenarios_file", `{"scenarioIds":[1,2],"includeHistory":true}`, "/api/design-scenarios/transfer-export"},
+		{"import_design_scenarios_file", `{"bundle":{"kind":"mocker.scenarios","formatVersion":1,"scenarios":[]},"relink":true}`, "/api/design-scenarios/transfer-import"},
+	} {
+		calls := &recordingCaller{status: 200, body: []byte(`{}`)}
+		_, message := callTool(t, calls, tc.name, tc.args)
+		if message != "" || calls.method != "POST" || calls.path != tc.path {
+			t.Fatalf("%s: %s %s %s", tc.name, message, calls.method, calls.path)
+		}
+	}
+}
