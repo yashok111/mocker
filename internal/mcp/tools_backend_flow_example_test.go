@@ -23,6 +23,7 @@ func TestBackendFlowRealSDKSourceFixture(t *testing.T) {
 	for _, dialect := range []string{"postgresql", "sqlite"} {
 		t.Run(dialect, func(t *testing.T) {
 			server, _ := newResourcesTestServer(t, resourcesTestConfig(t))
+			fixture := newToolFixture(server)
 			captures := []map[string]jsontext.Value{}
 			if directory := os.Getenv("MOCKER_B21_SDK_CAPTURE_DIR"); directory != "" {
 				t.Cleanup(func() {
@@ -46,33 +47,39 @@ func TestBackendFlowRealSDKSourceFixture(t *testing.T) {
 				}
 				return b
 			}
+			responseValidators := map[string]*jsonschema.Schema{}
 			call := func(name string, input map[string]any, out any) []byte {
 				t.Helper()
-				raw, msg := callTool(t, server, name, string(encode(input)))
+				raw, msg := fixture.Call(t, name, string(encode(input)))
 				if msg != "" {
 					t.Fatalf("%s: %s", name, msg)
 				}
 				captures = append(captures, map[string]jsontext.Value{"tool": encode(name), "arguments": encode(input), "response": raw})
 				if name == "query_backend_flow" {
-					schema, e := api.BackendSchema("BackendFlowPage")
-					if e != nil {
-						t.Fatal(e)
-					}
-					compiler := jsonschema.NewCompiler()
-					if e = compiler.AddResource("https://mocker.invalid/flow", schema); e != nil {
-						t.Fatal(e)
-					}
-					compiled, e := compiler.Compile("https://mocker.invalid/flow")
-					if e != nil {
-						t.Fatal(e)
+					const schemaName = "BackendFlowPage"
+					compiled := responseValidators[schemaName]
+					if compiled == nil {
+						schema, e := api.BackendSchema("BackendFlowPage")
+						if e != nil {
+							t.Fatal(e)
+						}
+						compiler := jsonschema.NewCompiler()
+						if e = compiler.AddResource("https://mocker.invalid/flow", schema); e != nil {
+							t.Fatal(e)
+						}
+						compiled, e = compiler.Compile("https://mocker.invalid/flow")
+						if e != nil {
+							t.Fatal(e)
+						}
+						responseValidators[schemaName] = compiled
 					}
 					decoder := jsonx.NewDecoder(bytes.NewReader(raw))
 					decoder.UseNumber()
 					var value any
-					if e = decoder.Decode(&value); e != nil {
+					if e := decoder.Decode(&value); e != nil {
 						t.Fatal(e)
 					}
-					if e = compiled.Validate(value); e != nil {
+					if e := compiled.Validate(value); e != nil {
 						t.Fatalf("flow response schema: %v", e)
 					}
 				}

@@ -28,6 +28,7 @@ func TestBackendRelationalRealSDKFixtureExample(t *testing.T) {
 		t.Run(dialect, func(t *testing.T) {
 			cfg := resourcesTestConfig(t)
 			server, db := newResourcesTestServer(t, cfg)
+			fixture := newToolFixture(server)
 			captures := []map[string]jsontext.Value{}
 			directory := os.Getenv("MOCKER_B11_TASK4_CAPTURE_DIR")
 			if directory == "" {
@@ -60,9 +61,10 @@ func TestBackendRelationalRealSDKFixtureExample(t *testing.T) {
 			for tool, schema := range map[string]string{"create_backend_proposal": "BackendProposalDetail", "get_backend_proposal": "BackendProposalDetail", "list_backend_proposals": "BackendProposalPage", "preview_backend_proposal_commands": "BackendProposalPreview", "apply_backend_proposal_commands": "BackendProposalApplyResult"} {
 				responseContracts[tool] = schema
 			}
+			responseValidators := map[string]*jsonschema.Schema{}
 			call := func(name string, input map[string]any, out any) []byte {
 				t.Helper()
-				raw, msg := callTool(t, server, name, string(encode(input)))
+				raw, msg := fixture.Call(t, name, string(encode(input)))
 				if msg != "" {
 					t.Fatalf("%s: %s", name, msg)
 				}
@@ -71,17 +73,21 @@ func TestBackendRelationalRealSDKFixtureExample(t *testing.T) {
 					if name == "BackendNode" && input["proposal"] != nil {
 						name = "BackendProposalNodeRead"
 					}
-					schema, err := api.BackendSchema(name)
-					if err != nil {
-						t.Fatal(err)
-					}
-					compiler := jsonschema.NewCompiler()
-					if err := compiler.AddResource("https://mocker.invalid/response", schema); err != nil {
-						t.Fatal(err)
-					}
-					compiled, err := compiler.Compile("https://mocker.invalid/response")
-					if err != nil {
-						t.Fatal(err)
+					compiled := responseValidators[name]
+					if compiled == nil {
+						schema, err := api.BackendSchema(name)
+						if err != nil {
+							t.Fatal(err)
+						}
+						compiler := jsonschema.NewCompiler()
+						if err := compiler.AddResource("https://mocker.invalid/response", schema); err != nil {
+							t.Fatal(err)
+						}
+						compiled, err = compiler.Compile("https://mocker.invalid/response")
+						if err != nil {
+							t.Fatal(err)
+						}
+						responseValidators[name] = compiled
 					}
 					decoder := jsonx.NewDecoder(bytes.NewReader(raw))
 					decoder.UseNumber()
@@ -247,7 +253,7 @@ func TestBackendRelationalRealSDKFixtureExample(t *testing.T) {
 					t.Fatal(err)
 				}
 				input := map[string]any{"projectId": p.ID, "importId": s.ID, "batchId": tc.name, "expectedImportVersion": s.Version, "payloadHash": hash, "commands": commands}
-				_, msg := callTool(t, server, "put_backend_import_batch", string(encode(input)))
+				_, msg := fixture.Call(t, "put_backend_import_batch", string(encode(input)))
 				if msg == "" {
 					t.Fatalf("%s malformed batch accepted by SDK", tc.name)
 				}
@@ -266,6 +272,7 @@ func TestBackendRelationalRealSDKFixtureExample(t *testing.T) {
 					t.Fatal(err)
 				}
 				server, db = newResourcesTestServer(t, cfg)
+				fixture = newToolFixture(server)
 			})
 			for _, record := range []string{"nodes", "edges"} {
 				call("query_backend_graph", map[string]any{"projectId": p.ID, "revisionId": first.Revision.ID, "recordType": record}, nil)

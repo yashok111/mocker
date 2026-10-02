@@ -159,6 +159,7 @@ func TestBackendArtifactToolsPublicParity(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	handler := New(server, testKey, testConfig(), nil).Handler()
 	var lastText string
 	call := func(name string, input any, out any) []byte {
 		t.Helper()
@@ -166,7 +167,6 @@ func TestBackendArtifactToolsPublicParity(t *testing.T) {
 		if e != nil {
 			t.Fatal(e)
 		}
-		handler := New(server, testKey, testConfig(), nil).Handler()
 		rec := doMCP(t, handler, `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"`+name+`","arguments":`+string(raw)+`}}`, map[string]string{"Authorization": "Bearer " + testKey})
 		var env struct {
 			Result struct {
@@ -421,6 +421,7 @@ func TestBackendArtifactApplyReservationCompactMCP(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	handler := New(server, testKey, testConfig(), nil).Handler()
 	var lastText string
 	call := func(name string, input any, out any) []byte {
 		t.Helper()
@@ -428,7 +429,6 @@ func TestBackendArtifactApplyReservationCompactMCP(t *testing.T) {
 		if e != nil {
 			t.Fatal(e)
 		}
-		handler := New(server, testKey, testConfig(), nil).Handler()
 		rec := doMCP(t, handler, `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"`+name+`","arguments":`+string(raw)+`}}`, map[string]string{"Authorization": "Bearer " + testKey})
 		var env struct {
 			Result struct {
@@ -587,6 +587,7 @@ func TestBackendArtifactApplyReservationConfiguredMCP(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	handler := New(server, testKey, testConfig(), nil).Handler()
 	var lastText string
 	call := func(name string, input any, out any) []byte {
 		t.Helper()
@@ -594,7 +595,6 @@ func TestBackendArtifactApplyReservationConfiguredMCP(t *testing.T) {
 		if e != nil {
 			t.Fatal(e)
 		}
-		handler := New(server, testKey, testConfig(), nil).Handler()
 		rec := doMCP(t, handler, `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"`+name+`","arguments":`+string(raw)+`}}`, map[string]string{"Authorization": "Bearer " + testKey})
 		var env struct {
 			Result struct {

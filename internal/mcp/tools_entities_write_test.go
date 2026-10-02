@@ -13,8 +13,20 @@ import (
 
 func callTool(t *testing.T, calls Caller, name, args string) (json.RawMessage, string) {
 	t.Helper()
-	h := New(calls, testKey, testConfig(), nil).Handler()
-	rec := doMCP(t, h,
+	return newToolFixture(calls).Call(t, name, args)
+}
+
+type toolFixture struct {
+	handler http.Handler
+}
+
+func newToolFixture(calls Caller) *toolFixture {
+	return &toolFixture{handler: New(calls, testKey, testConfig(), nil).Handler()}
+}
+
+func (fixture *toolFixture) Call(t *testing.T, name, args string) (json.RawMessage, string) {
+	t.Helper()
+	rec := doMCP(t, fixture.handler,
 		`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"`+name+`","arguments":`+args+`}}`,
 		map[string]string{"Authorization": "Bearer " + testKey})
 	if rec.Code != http.StatusOK {
