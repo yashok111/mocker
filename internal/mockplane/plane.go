@@ -39,6 +39,7 @@ type Source interface {
 
 // Plane serves the mock plane for whichever workspace a request resolves to.
 type Plane struct {
+	proxy ProxySource
 	cfg   *config.Config
 	src   Source
 	specs SpecSource
@@ -254,7 +255,7 @@ func (p *Plane) ServeSlug(w http.ResponseWriter, r *http.Request, slug string) {
 // Resource and session stores retain their usual runtime behavior.
 func (p *Plane) ServeWorkspace(w http.ResponseWriter, r *http.Request, ws *workspaces.Workspace) {
 	p.recovered(func(w http.ResponseWriter, r *http.Request) {
-		p.serveWorkspace(w, r, ws, false)
+		p.serveWorkspace(w, r.WithContext(context.WithValue(r.Context(), noProxyKey{}, true)), ws, false)
 	}).ServeHTTP(w, r)
 }
 

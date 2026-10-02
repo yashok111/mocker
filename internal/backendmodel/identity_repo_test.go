@@ -65,7 +65,7 @@ func TestIdentityUpgradePreservesBytesAndCommittedAllocations(t *testing.T) {
 	out := commitStaged(t, r, p, s, b.AcceptedVersion, "commit")
 	// Restore the legacy schema/data shape, then run the actual production migration.
 	err = db.Write(t.Context(), func(tx *sql.Tx) error {
-		for _, table := range []string{"backend_revision_api_artifacts", "backend_saved_view_versions", "backend_saved_views", "backend_proposal_revisions", "backend_proposals", "backend_import_aliases", "backend_identity_bindings", "backend_import_decisions", "backend_import_previews", "backend_revision_decisions"} {
+		for _, table := range []string{"proxy_recordings", "proxy_configs", "proxy_versions", "backend_revision_api_artifacts", "backend_saved_view_versions", "backend_saved_views", "backend_proposal_revisions", "backend_proposals", "backend_import_aliases", "backend_identity_bindings", "backend_import_decisions", "backend_import_previews", "backend_revision_decisions"} {
 			if _, err := tx.ExecContext(t.Context(), "DROP TABLE "+table); err != nil {
 				return err
 			}

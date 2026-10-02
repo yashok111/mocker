@@ -10,6 +10,28 @@ approach that was tried and reverted, with the measurement.
 
 Not "forgotten" but deferred — so that a hole does not read as an oversight:
 
+## HTTP record proxy (2026-10-02)
+
+The owner resumed proxy work with “делай все”. The old v1 proxy exclusion in
+DESIGN is historical; the implemented scope is HTTP passthrough and JSON
+record/replay, UI, per-operation rules and optional confirmed-entity capture.
+
+- No CONNECT, WebSocket/SSE forwarding or temporal sequence replay.
+- Replay stores status, Content-Type and a redacted JSON body; other upstream
+  response headers, cookies and binary/compressed bodies are not replayed.
+  Live passthrough forwards bounded responses, including non-JSON bodies.
+- Recording has its own request-keyed store instead of writing one pinned
+  override per operation. This preserves path/query/body/header variants and
+  avoids a runtime revision bump on each response.
+- Upstream configuration and recordings are local operational data. They are
+  not copied by workspace fork/export, scenario checkpoints or immutable
+  execution snapshots. Entity rows retain their existing export/checkpoint rules.
+- Entity capture upserts successful GET responses into confirmed families;
+  it does not infer schemas, confirm families or delete rows omitted by a list.
+  Storage limits can stop a batch after earlier rows were saved; response
+  headers report the count and partial/refused outcome. Clearing recordings
+  leaves those entities intact.
+
 ## Visual API next steps — local branch boundaries (2026-09-29)
 
 - Path Item `$ref` resolves within the local document. External and anchor

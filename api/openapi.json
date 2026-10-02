@@ -36547,6 +36547,198 @@
             "type": "integer"
           }
         }
+      },
+      "ProxyConfig": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "version": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "off",
+              "passthrough",
+              "record",
+              "replay"
+            ]
+          },
+          "upstream": {
+            "type": "string",
+            "maxLength": 2048
+          },
+          "timeoutSeconds": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 120
+          },
+          "forwardAuth": {
+            "type": "boolean"
+          },
+          "forwardCookies": {
+            "type": "boolean"
+          },
+          "overwrite": {
+            "type": "string",
+            "enum": [
+              "first",
+              "last"
+            ]
+          },
+          "captureEntities": {
+            "type": "boolean"
+          },
+          "operations": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string",
+              "enum": [
+                "default",
+                "mock",
+                "proxy"
+              ]
+            },
+            "description": "Keys are METHOD /relative/path/{parameter}; mock overrides workspace mode, proxy enables passthrough even when workspace mode is off."
+          }
+        },
+        "required": [
+          "version",
+          "mode",
+          "upstream",
+          "timeoutSeconds",
+          "forwardAuth",
+          "forwardCookies",
+          "overwrite",
+          "captureEntities",
+          "operations"
+        ]
+      },
+      "ProxyView": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "config": {
+            "$ref": "#/components/schemas/ProxyConfig"
+          },
+          "allowedOrigins": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "config",
+          "allowedOrigins"
+        ]
+      },
+      "ProxyRecording": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "method": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "status": {
+            "type": "integer"
+          },
+          "contentType": {
+            "type": "string"
+          },
+          "redacted": {
+            "type": "boolean"
+          },
+          "createdAt": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "updatedAt": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "bodyText": {
+            "type": "string",
+            "description": "Exact redacted JSON text, preserving numeric precision; empty for an empty response."
+          }
+        },
+        "required": [
+          "id",
+          "method",
+          "path",
+          "status",
+          "contentType",
+          "redacted",
+          "createdAt",
+          "updatedAt",
+          "bodyText"
+        ]
+      },
+      "ProxyRecordingsView": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProxyRecording"
+            }
+          }
+        },
+        "required": [
+          "items"
+        ]
+      },
+      "ProxyDeleteRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "version": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "required": [
+          "version"
+        ]
+      },
+      "ProxyClearRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "version": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "confirmSlug": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "version",
+          "confirmSlug"
+        ]
+      },
+      "ProxyMutationResult": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "ok"
+        ]
       }
     }
   },
@@ -52571,6 +52763,327 @@
                 "schema": {
                   "$ref": "#/components/schemas/ScenarioTransferResult"
                 }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/workspaces/{id}/proxy": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/workspaceId"
+        }
+      ],
+      "get": {
+        "tags": [
+          "proxy"
+        ],
+        "operationId": "getWorkspaceProxy",
+        "summary": "getWorkspaceProxy",
+        "description": "Installation-local live proxy control. Not copied by workspace export, fork, scenario snapshots or immutable execution. Replay never contacts upstream. Writes use the proxy config version, not workspace editVersion.",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProxyView"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          },
+          "409": {
+            "description": "Proxy configuration changed; reload version and retry.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "proxy"
+        ],
+        "operationId": "putWorkspaceProxy",
+        "summary": "putWorkspaceProxy",
+        "description": "Installation-local live proxy control. Not copied by workspace export, fork, scenario snapshots or immutable execution. Replay never contacts upstream. Writes use the proxy config version, not workspace editVersion.",
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfToken": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProxyView"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          },
+          "409": {
+            "description": "Proxy configuration changed; reload version and retry.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProxyConfig"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/workspaces/{id}/proxy/recordings": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/workspaceId"
+        }
+      ],
+      "get": {
+        "tags": [
+          "proxy"
+        ],
+        "operationId": "listProxyRecordings",
+        "summary": "listProxyRecordings",
+        "description": "Installation-local live proxy control. Not copied by workspace export, fork, scenario snapshots or immutable execution. Replay never contacts upstream. Writes use the proxy config version, not workspace editVersion.",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProxyRecordingsView"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          },
+          "409": {
+            "description": "Proxy configuration changed; reload version and retry.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/workspaces/{id}/proxy/recordings/{rid}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/workspaceId"
+        },
+        {
+          "name": "rid",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          }
+        }
+      ],
+      "delete": {
+        "tags": [
+          "proxy"
+        ],
+        "operationId": "deleteProxyRecording",
+        "summary": "deleteProxyRecording",
+        "description": "Installation-local live proxy control. Not copied by workspace export, fork, scenario snapshots or immutable execution. Replay never contacts upstream. Writes use the proxy config version, not workspace editVersion.",
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfToken": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProxyMutationResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          },
+          "409": {
+            "description": "Proxy configuration changed; reload version and retry.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProxyDeleteRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/workspaces/{id}/proxy/recordings/clear": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/workspaceId"
+        }
+      ],
+      "post": {
+        "tags": [
+          "proxy"
+        ],
+        "operationId": "clearProxyRecordings",
+        "summary": "clearProxyRecordings",
+        "description": "Installation-local live proxy control. Not copied by workspace export, fork, scenario snapshots or immutable execution. Replay never contacts upstream. Writes use the proxy config version, not workspace editVersion.",
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfToken": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProxyMutationResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          },
+          "409": {
+            "description": "Proxy configuration changed; reload version and retry.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProxyClearRequest"
               }
             }
           }

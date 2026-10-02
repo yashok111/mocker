@@ -55,30 +55,14 @@ simulation remains the next separate runtime feature.
 
 ## Deferred (the owner's call, 2026-09-03: «отложим на потом»)
 
-Both are real, neither is next. Each is written with what it would take
-so the next session prices it from here, not from scratch.
+Record-proxy was resumed by the owner on 2026-10-02. Isolation remains deferred.
 
-1. **Record-proxy** — a workspace mode that reverse-proxies to the real
-   API and writes what came back as pinned overrides (and, for families,
-   as entity rows). A mock of a live backend in a minute. Estimated 2026-09-03
-   at two to three days WITH a gate: the client and its policy (~1 day —
-   what to forward and strip of the headers each way, a body limit,
-   timeouts, TLS and a corporate CA, no redirects; the upstream comes only
-   from workspace settings under a host allowlist, never from the request,
-   because the mock plane is unauthenticated and would otherwise be an
-   SSRF pivot into the customer's network — §15 gains a section), the
-   branch in `serveGenerated` and the recording (~1 day — a per-workspace
-   mode `record` | `replay` | `passthrough`; an operation writes a pinned
-   override through `overrides.Repo.Put`, a family writes rows through
-   `resources.Repo.Set`, every body through the traffic log's redaction,
-   auth routes never; first-wins or last-wins is a decision; a revision
-   bump per recorded response discards the runtime cache per request in
-   `record`), the gate, tests and the four documents (~1 day). What
-   exists: `internal/probe`'s discipline (381 lines, not a proxy — only
-   the rules carry over), the pinned variant's `body`/`mediaType`/
-   `headers`, A11's entity write, the redaction. MCP-only, no screen. The
-   questions to answer BEFORE the gate: whose CA, which hosts, what
-   happens to the customer's cookies inside recorded bodies.
+1. **Record-proxy** — implemented on `feat/record-proxy` (2026-10-02):
+   HTTP passthrough, record/replay, per-operation policy, UI/REST/MCP and
+   optional capture into confirmed entities. Request-keyed recordings are
+   separate from pinned overrides, so concrete IDs/query/body/header variants
+   do not overwrite one another and recording does not invalidate runtime
+   caches. Remaining deliberate boundaries are listed in `CARVE-OUTS.md`.
 2. **Isolation** (`P5`) — users, roles, workspace ownership. A policy
    decision about the network before it is code; touches `internal/auth`,
    every handler's identity check and the MCP identity.

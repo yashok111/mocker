@@ -1,4 +1,4 @@
-import { useRef, type ReactElement } from "react";
+import { useRef, useState, type ReactElement } from "react";
 import { Alert, Anchor, Button, Group, Loader, Stack, Text } from "@mantine/core";
 import { IconAlertTriangle } from "@tabler/icons-react";
 import { useNavigate } from "@tanstack/react-router";
@@ -8,6 +8,7 @@ import { ConnectPanel } from "./ConnectPanel";
 import { AuthPresetPanel } from "./AuthPresetPanel";
 import { SettingsPanel } from "./SettingsPanel";
 import { TransferPanel } from "./TransferPanel";
+import { ProxyPanel } from "./ProxyPanel";
 import { DriftPanel } from "./DriftPanel";
 import type { ServerConfigView } from "@/api/generated/schemas";
 import classes from "./WorkspaceEntry.module.css";
@@ -28,6 +29,7 @@ export function WorkspaceOverview({
 }): ReactElement {
   const workspace = useGetWorkspace(id);
   const navigate = useNavigate();
+  const [proxyOpen, setProxyOpen] = useState(false);
   const settingsRef = useRef<HTMLDetailsElement>(null);
 
   return (
@@ -99,6 +101,19 @@ export function WorkspaceOverview({
           ) : null}
           <ConnectPanel workspace={workspace.data.data} config={config} />
           <div className={classes.advanced}>
+            <details
+              className={classes.disclosure}
+              onToggle={(event) => setProxyOpen(event.currentTarget.open)}
+            >
+              <summary>
+                <span>
+                  Прокси и запись ответов<small>Реальный API и воспроизведение без сети</small>
+                </span>
+              </summary>
+              <div className={classes.disclosureBody}>
+                {proxyOpen && <ProxyPanel id={id} slug={workspace.data.data.slug} />}
+              </div>
+            </details>
             <details
               className={classes.disclosure}
               ref={settingsRef}

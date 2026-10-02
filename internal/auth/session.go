@@ -17,11 +17,12 @@ import (
 	"unicode"
 
 	"github.com/yashok111/mocker/internal/config"
+	"github.com/yashok111/mocker/internal/domain"
 	"github.com/yashok111/mocker/internal/store"
 )
 
 // cookieName is the one cookie the admin plane sets.
-const cookieName = "mocker_session"
+const cookieName = domain.AdminSessionCookieName
 
 // sessionTTL bounds how long a session survives without a fresh login
 // (DESIGN §15): long enough nobody re-authenticates mid-task, short enough

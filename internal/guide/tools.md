@@ -53,6 +53,31 @@ workspace bound to the spec.
 | `fork_workspace` | A copy inside this installation | `workspaceId*`, `name`, `slug`, `includeData` (default true) | workspace{id, slug, url, …} | Copies configuration, scenarios (the active one stays active), assets and — unless `includeData:false` — entity rows. Not checkpoints, not traffic. The source is untouched (no revision bump). `forkedFrom` on the copy. Not idempotent. |
 | `export_openapi` | The workspace as ONE OpenAPI 3.1 document — the design's deliverable (DESIGN §34.4) | `workspaceId*` | `document` — the OpenAPI document as ONE JSON STRING, exactly the bytes served (pass it to `import_spec` unchanged) | Base = the bound spec (an empty 3.1 skeleton when none); delta = custom endpoints (a new operation, or the base operation REPLACED at an equal canonical shape), `schemaPatch` written inline, pinned bodies as `examples`, `routeOff` as `deprecated: true` (never deleted), `overrideOn: false` rows omitted, `sse`/`ws` rows as GET operations. `info.version` ends in `-draft.<revision>`. Re-imports through `import_spec`; the accept step and its non-optional cleanup — `design.md`. |
 
+## HTTP proxy and recorded responses
+
+| tool | purpose | input | output | gotchas |
+|---|---|---|---|---|
+| `get_workspace_proxy` | Read local proxy controls and allowed origins | `workspaceId`* | `config`, `allowedOrigins[]` | `config.version` is independent of workspace `editVersion`. |
+| `set_workspace_proxy` | Replace local proxy controls | `workspaceId`*, `config`* | `config`, `allowedOrigins[]` | Echo version. Full config: `mode`, `upstream`, `timeoutSeconds`, `forwardAuth`, `forwardCookies`, `overwrite`, `captureEntities`, `operations`. |
+| `list_proxy_recordings` | Inspect recorded redacted JSON responses | `workspaceId`* | `items[]` with id/method/path/status/contentType/bodyText/redacted/timestamps | `bodyText` preserves exact JSON numbers. Up to 500 responses / 32 MiB; no request credentials, query values or bodies. |
+| `delete_proxy_recording` | Delete one response | `workspaceId`*, `recordingId`*, `version`* | `ok` | Advances config version; reload before another mutation. |
+| `clear_proxy_recordings` | Clear all recorded responses | `workspaceId`*, `version`*, `confirmSlug`* | `ok` | Does not delete captured entity rows. |
+
+Modes: `off`, `passthrough`, `record`, `replay`; replay never calls upstream.
+`operations` maps `METHOD /relative/path/{parameter}` to `default`, `mock` or
+`proxy`. A proxy rule in off mode enables passthrough; a mock rule always stays
+local. `overwrite` is `first` or `last`; timeout is 1..120 seconds. Forwarding
+credentials/cookies and entity capture are explicit boolean options. Mocker's
+own session and CSRF credentials are always stripped. Only exact origins in
+`MOCKER_PROXY_ALLOWLIST` can receive network traffic. Saved responses match the
+request path, query, body and end-to-end headers, including application credentials.
+Authentication and non-JSON responses are not recorded. Replay includes status,
+Content-Type and the redacted body. Entity capture upserts successful GETs into
+confirmed families and can stop at existing storage limits; check the mock
+response's `X-Mocker-Entities-Imported` and `X-Mocker-Entities-Result` headers.
+These live controls and recordings do not travel in workspace exports/forks or
+scenario snapshots and are not used by immutable scenario execution.
+
 ## Operations (the spec's routes) and overrides
 
 | tool | purpose | input | output | gotchas |

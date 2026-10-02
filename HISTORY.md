@@ -23,6 +23,55 @@ nobody said is what is NEXT and why exactly that. That role was carried by `HAND
 deleted in `a5818e2` as spent, and it moved nowhere: the next slice
 was designed outside the repository and did not appear in the repository at all.
 
+## HTTP record proxy (2026-10-02)
+
+Independent review follow-up: all three P2 findings are fixed and both reviewers
+confirmed closure. Proxy responses now have a bounded write deadline covering
+upload, upstream wait and delivery, so server WriteTimeout cannot truncate a
+valid long request or its 504. Replay fences config version inside its read
+transaction, refusing a recycled workspace ID with 409. ProxyPanel remounts
+all local state on workspace change, including unsaved drafts and open records.
+Regression tests reproduce the original failures before the fixes.
+
+Implemented on `feat/record-proxy` after the owner resumed the deferred item.
+The workspace overview now configures off/passthrough/record/replay, exact
+upstream URL, per-operation mock/proxy choices, credential forwarding,
+first/last recording policy and optional capture into confirmed entities.
+Five admin routes and five MCP tools expose the same behavior (180 HTTP
+operations, 190 tools). Migration 0019 adds local controls, request-keyed
+recordings and a monotonic config-version allocator.
+
+Recordings preserve status, Content-Type and redacted JSON, with 500-row / 32 MiB
+body quotas. End-to-end headers, request path/query/body and credentials are
+part of identity; only the digest is persisted for matching. `bodyText` lets
+UI and MCP inspect exact JSON numbers without JavaScript rounding. Recording
+uses a separate store instead of operation overrides, preserving request
+variants without invalidating the compiled runtime on each response.
+
+Outgoing requests use an exact origin allowlist, checked DNS-to-IP dialing,
+verified system/optional corporate TLS roots, no redirects or environment
+proxy, bounded bodies and timeouts. Even with cookie forwarding enabled,
+admin session cookies and CSRF tokens never leave mocker. HEAD inherits the
+matched GET operation policy, and unsolicited upstream upgrades are refused.
+Replay is network-free. Entity capture uses existing scope/ID/cap rules and
+reports partial completion. Export/fork/checkpoints and immutable executions
+exclude these local operational controls; see `CARVE-OUTS.md` for boundaries.
+
+Review regressions fixed before completion: secret redaction rounded large
+numbers; replay identity omitted tenant/conditional headers; path routing
+could forward admin credentials; null operation maps broke the response
+schema; recycled workspace IDs reused config versions; request size middleware
+was reported as 400 instead of 413; HEAD lost its GET policy and length.
+
+Validation: complete Go package suite, race checks for affected server paths,
+1694 frontend tests across 186 files, frontend typecheck/build, go vet and
+zero golangci-lint findings on the complete change patch (including new files).
+The broader Go lint run still reports pre-existing findings; frontend lint
+has existing warnings and the production bundle has the existing size warning.
+Real HTTP and browser checks exercised record → upstream shutdown → replay,
+entity capture, operation mock policy, inspection/clear/delete and exact
+`9007199254740993` display. Local spec/plan/report are under `docs/record-proxy-*`.
+
 ## Entity-result follow-ups (2026-09-30, local main)
 
 The `feat/entity-result-conditions` slice merged into local `main` includes all four

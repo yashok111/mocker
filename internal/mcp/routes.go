@@ -51,6 +51,11 @@ import (
 var noRoute = []string{}
 
 var toolRoutes = map[string][]string{
+	"get_workspace_proxy":               {"GET /api/workspaces/{id}/proxy"},
+	"set_workspace_proxy":               {"PUT /api/workspaces/{id}/proxy"},
+	"list_proxy_recordings":             {"GET /api/workspaces/{id}/proxy/recordings"},
+	"delete_proxy_recording":            {"DELETE /api/workspaces/{id}/proxy/recordings/{rid}"},
+	"clear_proxy_recordings":            {"POST /api/workspaces/{id}/proxy/recordings/clear"},
 	"query_backend_api_artifacts":       {"POST /api/backend-projects/{id}/api-artifacts/query"},
 	"preview_backend_api_pins":          {"POST /api/backend-projects/{id}/api-artifacts/preview"},
 	"apply_backend_api_pins":            {"POST /api/backend-projects/{id}/api-artifacts/commands"},
@@ -334,7 +339,7 @@ var toolRoutes = map[string][]string{
 // production.
 // B1.2 adds five isolated database proposal operations. B24 adds four exact
 // API artifact snapshot/query/preview/apply operations.
-const toolCount = 185
+const toolCount = 190
 
 // toolPath resolves ONE call a tool makes into the (method, path) pair
 // loopback.do/call take.

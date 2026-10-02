@@ -31,6 +31,7 @@ import (
 	"github.com/yashok111/mocker/internal/mcp"
 	"github.com/yashok111/mocker/internal/mockplane"
 	"github.com/yashok111/mocker/internal/overrides"
+	"github.com/yashok111/mocker/internal/recordproxy"
 	"github.com/yashok111/mocker/internal/resources"
 	"github.com/yashok111/mocker/internal/scenarios"
 	"github.com/yashok111/mocker/internal/server"
@@ -349,6 +350,7 @@ func (a *app) wireMockPlane() {
 	resourcesRepo := resources.NewRepo(a.db, a.specRepo, a.cfg.MaxResponse, a.cfg.TrafficMaxBody, int64(a.cfg.MaxEntities))
 	a.mockPlane.SetResources(resourcesRepo)
 	a.mockPlane.SetEntities(resourcesRepo)
+	a.mockPlane.SetProxy(recordproxy.NewService(recordproxy.NewRepo(a.db), a.cfg))
 	// A6 (DESIGN §32): the mock plane's read-only view of uploaded assets —
 	// its own *assets.Repo over the one *store.DB, the same two caps
 	// internal/admin's instance enforces on write. Left unwired, the asset

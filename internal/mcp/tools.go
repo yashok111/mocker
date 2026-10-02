@@ -53,6 +53,7 @@ func registerTools(srv *sdk.Server, lb *loopback) {
 	addAssetTools(srv, lb)
 	addSpecTools(srv, lb)
 	addTransferTools(srv, lb)
+	addProxyTools(srv, lb)
 	addDesignTools(srv, lb)
 	addAPIDesignTools(srv, lb)
 	addBackendTools(srv, lb)

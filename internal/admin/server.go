@@ -17,8 +17,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/yashok111/mocker/internal/jsonx"
-
 	"github.com/yashok111/mocker/internal/apidesign"
 	"github.com/yashok111/mocker/internal/assets"
 	"github.com/yashok111/mocker/internal/auth"
@@ -28,7 +26,9 @@ import (
 	"github.com/yashok111/mocker/internal/customep"
 	"github.com/yashok111/mocker/internal/designscenario"
 	"github.com/yashok111/mocker/internal/httpx"
+	"github.com/yashok111/mocker/internal/jsonx"
 	"github.com/yashok111/mocker/internal/overrides"
+	"github.com/yashok111/mocker/internal/recordproxy"
 	"github.com/yashok111/mocker/internal/resources"
 	"github.com/yashok111/mocker/internal/scenarios"
 	"github.com/yashok111/mocker/internal/specs"
@@ -71,11 +71,12 @@ const readyzTimeout = 2 * time.Second
 
 // Server holds the admin plane's dependencies and builds its HTTP handler.
 type Server struct {
-	cfg      *config.Config
-	sessions *auth.Manager
-	ws       *workspaces.Repo
-	db       *store.DB
-	log      *slog.Logger
+	proxyRepo *recordproxy.Repo
+	cfg       *config.Config
+	sessions  *auth.Manager
+	ws        *workspaces.Repo
+	db        *store.DB
+	log       *slog.Logger
 
 	// specsRepo is constructed internally from db and cfg rather than taken
 	// as a New parameter: New's signature is shared with cmd/mocker/main.go,
@@ -244,6 +245,7 @@ func New(cfg *config.Config, sessions *auth.Manager, ws *workspaces.Repo, db *st
 	designsRepo := apidesign.NewRepo(db, cfg)
 	backendRepo := backendmodel.NewRepo(db)
 	s := &Server{
+		proxyRepo:           recordproxy.NewRepo(db),
 		cfg:                 cfg,
 		sessions:            sessions,
 		ws:                  ws,

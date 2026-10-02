@@ -444,6 +444,11 @@ func (s *Server) routes() []route {
 		// SHOWN and EDITED before anything is written, which needs a preview call
 		// (GET, writes nothing) and a separate apply call (POST, writes exactly
 		// the operator-approved list) rather than one route that does both.
+		{"GET /api/workspaces/{id}/proxy", s.handleGetProxy, mcpAllow, cpRead},
+		{"PUT /api/workspaces/{id}/proxy", s.handlePutProxy, mcpAllow, cpNeverTouchesLayer},
+		{"GET /api/workspaces/{id}/proxy/recordings", s.handleListProxyRecordings, mcpAllow, cpRead},
+		{"DELETE /api/workspaces/{id}/proxy/recordings/{rid}", s.handleDeleteProxyRecording, mcpAllow, cpNeverTouchesLayer},
+		{"POST /api/workspaces/{id}/proxy/recordings/clear", s.handleClearProxyRecordings, mcpAllow, cpNeverTouchesLayer},
 		{"GET /api/workspaces/{id}/operations", s.handleListOperations, mcpAllow, cpRead},
 		{"GET /api/workspaces/{id}/operations/{opKey}", s.handleGetOperation, mcpAllow, cpRead},
 		{"PUT /api/workspaces/{id}/operations/{opKey}", s.handlePutOperation, mcpAllow, cpLabelled("правка операции")},

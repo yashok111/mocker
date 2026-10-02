@@ -21,7 +21,6 @@ import (
 	"time"
 
 	"github.com/yashok111/mocker/internal/jsonx"
-
 	"github.com/yashok111/mocker/internal/overrides"
 )
 
@@ -147,6 +146,7 @@ func captureRequestBody(w http.ResponseWriter, r *http.Request, capBytes int64) 
 	// comparing against Content-Length.
 	consumed, err := io.ReadAll(io.LimitReader(r.Body, capBytes+1))
 	if err != nil {
+		r.Body = &failedRequestBody{ReadCloser: r.Body, err: err}
 		return nil, err
 	}
 
@@ -281,3 +281,11 @@ func overridesInputFor(r *http.Request) overrides.Input {
 	}
 	return in
 }
+
+// A failed capture must not forward the unread tail as a complete request.
+type failedRequestBody struct {
+	io.ReadCloser
+	err error
+}
+
+func (b *failedRequestBody) Read([]byte) (int, error) { return 0, b.err }

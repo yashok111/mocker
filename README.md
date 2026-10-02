@@ -549,6 +549,85 @@ still answers a diagnostic `404` (`internal/server`). That is a deliberate
 cut of this very slice — path mode for the UI is the first thing the next one
 does (P1d-2) — not a forgotten case.
 
+## Proxy and recorded responses
+
+To connect a workspace to a real HTTP API, enable its exact origin on the server:
+
+```dotenv
+MOCKER_PROXY_ALLOWLIST=https://api.example.com
+MOCKER_PROXY_CA_FILE=
+```
+
+`MOCKER_PROXY_CA_FILE` optionally points to a PEM file with corporate CA
+certificates; system trust stays enabled. In Docker, mount that file read-only
+and use its container path. An empty allowlist disables outgoing proxy requests.
+Origins include the scheme and port; wildcard hosts are not supported.
+
+Open a workspace's overview → **Прокси и запись ответов**, enter the upstream URL
+(optionally with a base path), and choose a mode:
+
+| Mode | Behavior |
+|---|---|
+| Моки по умолчанию (`off`) | Existing mock behavior; an explicit operation proxy rule can still opt in. |
+| Прокси (`passthrough`) | Forward to upstream without keeping a response. |
+| Прокси и запись (`record`) | Forward and store complete JSON responses after secret-field redaction. |
+| Воспроизведение без сети (`replay`) | Return the matching recording; a miss is `404 proxy_replay_miss`, without any network fallback. |
+
+Operation rules use `METHOD /relative/path/{parameter}`. A `mock` rule keeps
+that operation local; a `proxy` rule follows the workspace's proxy/replay mode
+and enables passthrough when the workspace mode is off. Disabled operations
+remain disabled. Proxy operations bypass response rules, state diagrams and
+session directives. Reserved control routes and CORS preflights stay local.
+
+Responses match by upstream and credential-forwarding options, method, concrete
+escaped path, query, request body and end-to-end request headers. JSON object
+key order and whitespace are normalized without rounding numbers; other bodies
+match byte-for-byte. Different credentials or tenant headers produce different
+recordings. Only the request digest and method/path are stored; request bodies,
+query values and credentials are not part of recording metadata.
+
+Authorization/API keys and cookies require separate opt-ins. Mocker's own admin
+session cookie and CSRF token are always removed. Upstream `Set-Cookie` is
+removed unless cookies are enabled; then its domain is removed and its path
+is confined to the workspace. TLS verification stays enabled, redirects are
+returned without following them, and forwarding headers are stripped.
+
+Recordings contain status, redacted JSON body and Content-Type. The live client
+receives the original upstream body. Authentication paths and non-JSON or
+compressed responses are not recorded. Empty responses can be recorded.
+The panel displays exact JSON text (including large numeric IDs), lets you
+inspect/delete responses and clear the collection; choose
+whether repeated requests keep their first response or replace it. The limits
+are 500 recordings and 32 MiB of response bodies per workspace, plus the server's
+normal request/response byte caps. Timeout is configurable from 1 to 120 seconds.
+
+**Заполнять сущности** additionally upserts successful recorded GET responses into
+already confirmed resource families, using their wrapper, ID and base/nested
+scope rules. A collection does not delete rows absent from the response.
+Existing entity limits still apply; a batch can stop after some successful
+upserts. `X-Mocker-Entities-Imported` reports the count, and
+`X-Mocker-Entities-Result` reports `saved` or `partial-or-refused`. These headers
+are visible in the traffic detail. Clearing recordings does not delete entities.
+`X-Mocker-Recording` distinguishes saved/redacted responses, replay, a kept first
+response, and recording skipped for auth, format, quota or concurrent edits.
+
+Proxy configuration and recordings are installation-local live controls. They
+are excluded from workspace export/fork, scenario checkpoints and immutable
+scenario execution. Changes use their own `version`; stale edits return 409.
+Clearing/deleting advances that version so in-flight old responses cannot
+recreate deleted recordings. Replay checks the version in the same transaction
+as the response lookup; settings changed during a request return
+`409 proxy_config_changed`. Repeat the request against the current settings.
+Ordinary recording does not rebuild the runtime.
+Private corporate addresses are permitted only through the exact origin
+allowlist; link-local/unspecified/multicast addresses are refused, and loopback
+requires an explicitly allowlisted IP literal. HTTP CONNECT, WebSocket and SSE
+proxying are not supported.
+
+MCP exposes `get_workspace_proxy`, `set_workspace_proxy`,
+`list_proxy_recordings`, `delete_proxy_recording`, and `clear_proxy_recordings`.
+The same routes are documented under the `proxy` tag in `api/openapi.json`.
+
 ## Scenarios
 
 A scenario is a named snapshot of a workspace: its current per-operation

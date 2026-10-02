@@ -452,7 +452,7 @@ func TestProposalCreateB11StoreUpgrade(t *testing.T) {
 				t.Fatal(err)
 			}
 			version, err := db.SchemaVersion(t.Context())
-			if err != nil || version != 18 {
+			if err != nil || version != 19 {
 				t.Fatalf("upgrade: %d %v", version, err)
 			}
 			r = NewRepo(db)

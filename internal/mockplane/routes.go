@@ -14,14 +14,13 @@ import (
 	"net/http"
 	"sync"
 
-	"golang.org/x/sync/singleflight"
-
 	"github.com/yashok111/mocker/internal/gen"
 	"github.com/yashok111/mocker/internal/httpx"
 	"github.com/yashok111/mocker/internal/overrides"
 	"github.com/yashok111/mocker/internal/resources"
 	"github.com/yashok111/mocker/internal/router"
 	"github.com/yashok111/mocker/internal/workspaces"
+	"golang.org/x/sync/singleflight"
 )
 
 // SpecSource reads everything a workspace's runtime is built from: the route
@@ -208,6 +207,9 @@ func (c *routeCache) put(key routeCacheKey, rt *runtime) {
 func (p *Plane) serveRoute(w http.ResponseWriter, r *http.Request, ws *workspaces.Workspace, segments []string) {
 	hasSpec := p.specs != nil && ws.SpecID != nil
 	if !hasSpec && p.custom == nil {
+		if p.tryProxy(w, r, ws, nil, nil, segments) {
+			return
+		}
 		p.serveNoRoute(w, r, ws, segments)
 		return
 	}
@@ -221,6 +223,9 @@ func (p *Plane) serveRoute(w http.ResponseWriter, r *http.Request, ws *workspace
 
 	match, ok := rt.table.Match(r.Method, segments)
 	if !ok {
+		if p.tryProxy(w, r, ws, rt, nil, segments) {
+			return
+		}
 		p.serveNoRoute(w, r, ws, segments)
 		return
 	}
@@ -229,6 +234,9 @@ func (p *Plane) serveRoute(w http.ResponseWriter, r *http.Request, ws *workspace
 	// its own (route_off) — see markTrafficMatch's own doc comment
 	// (traffic.go) for why that 404 must still count as a match, not "none".
 	markTrafficMatch(r, match.Route)
+	if p.tryProxy(w, r, ws, rt, match, segments) {
+		return
+	}
 
 	// D7.1/D7.2: the base scope is computed HERE, once, next to the Match
 	// that produced it — POSITIONALLY, off the segments the match already

@@ -19,6 +19,8 @@ import (
 	"strings"
 	"unicode"
 	"unicode/utf8"
+
+	"github.com/yashok111/mocker/internal/probe"
 )
 
 // Routing selects how a request is attributed to a workspace.
@@ -68,7 +70,9 @@ type TrustProxy struct {
 
 // Config is the fully-validated runtime configuration.
 type Config struct {
-	Addr string
+	ProxyAllowlist []string
+	ProxyCAPEM     []byte
+	Addr           string
 	// LogLevel selects slog's level: "debug", "info", "warn" or "error"
 	// (DESIGN §16). Validated here so main never has to fall back silently on
 	// a typo'd value.
@@ -286,6 +290,7 @@ func Load() (*Config, error) {
 	}
 	c.TrustProxy = tp
 	c.URLImportAllowlist = splitList(env("MOCKER_URL_IMPORT_ALLOWLIST", ""))
+	errs = append(errs, loadProxy(c))
 
 	switch c.Routing {
 	case RoutingHost, RoutingPath:
@@ -694,4 +699,24 @@ func checkHostsAndFloors(c *Config, fail func(format string, args ...any)) {
 			fail("%s must be at least 1kb, got %d", sz.name, sz.value)
 		}
 	}
+}
+
+func loadProxy(c *Config) error {
+	var errs []error
+	c.ProxyAllowlist = splitList(env("MOCKER_PROXY_ALLOWLIST", ""))
+	if err := probe.ValidateProxyAllowlist(c.ProxyAllowlist); err != nil {
+		errs = append(errs, fmt.Errorf("MOCKER_PROXY_ALLOWLIST: %w", err))
+	}
+	if path := env("MOCKER_PROXY_CA_FILE", ""); path != "" {
+		pem, err := os.ReadFile(path) // #nosec G304 -- path comes only from administrator-owned environment at startup.
+		if err != nil {
+			errs = append(errs, fmt.Errorf("MOCKER_PROXY_CA_FILE: %w", err))
+		} else if err := probe.ValidateProxyCA(pem); err != nil {
+			errs = append(errs, err)
+		} else {
+			c.ProxyCAPEM = pem
+		}
+	}
+
+	return errors.Join(errs...)
 }

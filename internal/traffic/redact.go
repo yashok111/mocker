@@ -110,7 +110,9 @@ func RedactJSONBody(body []byte) (out []byte, changed bool) {
 		return body, false
 	}
 	var v any
-	if err := jsonx.Unmarshal(body, &v); err != nil {
+	dec := jsonx.NewDecoder(bytes.NewReader(body))
+	dec.UseNumber()
+	if err := dec.Decode(&v); err != nil || !jsonx.Valid(body) {
 		if looksLikelyTruncatedJSON(body) {
 			return nil, true
 		}
