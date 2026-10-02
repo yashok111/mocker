@@ -2,6 +2,7 @@ import { useCallback, useRef } from "react";
 import { afterEach, expect, it, vi } from "vitest";
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { fill } from "@/test/user";
 import { renderInRouter, renderWithProviders } from "@/test/render";
 import { json } from "@/test/http";
 import { BackendDatabase } from "./BackendDatabase";
@@ -410,11 +411,8 @@ async function startEdit(scope?: HTMLElement) {
   );
   await userEvent.selectOptions(screen.getByLabelText("Дизайн API"), "12");
   await userEvent.selectOptions(await screen.findByLabelText("Ревизия API"), "24");
-  await userEvent.type(
-    screen.getByLabelText("Авторский JSON Pointer поля"),
-    "/components/schemas/Changed",
-  );
-  await userEvent.type(screen.getByLabelText(/Причина связи API/), "Keep exact intent");
+  await fill(screen.getByLabelText("Авторский JSON Pointer поля"), "/components/schemas/Changed");
+  await fill(screen.getByLabelText(/Причина связи API/), "Keep exact intent");
 }
 async function leave(action: string) {
   if (action === "inner close")

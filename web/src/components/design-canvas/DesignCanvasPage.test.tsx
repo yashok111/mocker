@@ -29,7 +29,7 @@ describe("DesignCanvasPage", () => {
     renderInRouter(<DesignCanvasPage />);
     const title = await screen.findByRole("textbox", { name: "Название сценария" });
     await userEvent.clear(title);
-    await userEvent.type(title, "Несохранённая диаграмма");
+    await fill(title, "Несохранённая диаграмма");
     await userEvent.click(screen.getByRole("button", { name: "Экспорт .mocker" }));
     await userEvent.click(screen.getByRole("button", { name: "Скачать .mocker" }));
     expect(download).toHaveBeenCalledOnce();
@@ -177,7 +177,7 @@ describe("DesignCanvasPage", () => {
     await addFromCanvasMenu("Добавить объект");
     const name = screen.getByRole("textbox", { name: "Название объекта" });
     await userEvent.clear(name);
-    await userEvent.type(name, "Billing");
+    await fill(name, "Billing");
     await userEvent.click(screen.getByRole("button", { name: "Сохранить в браузере" }));
     expect(localStorage.getItem(STORAGE_KEY)).toContain("Billing");
     await userEvent.click(screen.getByRole("button", { name: "Отменить" }));
@@ -190,7 +190,7 @@ describe("DesignCanvasPage", () => {
     const first = renderInRouter(<DesignCanvasPage />);
     const title = await screen.findByRole("textbox", { name: "Название сценария" });
     await userEvent.clear(title);
-    await userEvent.type(title, "Согласование платежа");
+    await fill(title, "Согласование платежа");
     await userEvent.click(screen.getByRole("button", { name: "Сохранить в браузере" }));
     first.unmount();
     renderInRouter(<DesignCanvasPage />);
@@ -314,7 +314,7 @@ describe("DesignCanvasPage", () => {
 
     await userEvent.click(screen.getByRole("button", { name: "Перенести на сервер" }));
     await userEvent.clear(title);
-    await userEvent.type(title, "Новая правка во время переноса");
+    await fill(title, "Новая правка во время переноса");
     const responseDocument = exampleCanvas();
     resolveTransfer?.(
       json(201, {

@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { useState } from "react";
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { fill } from "@/test/user";
 import { ApiDesignerWorkbench } from "./ApiDesignerWorkbench";
 import { renderInRouter } from "@/test/render";
 import { json, route } from "@/test/http";
@@ -93,7 +94,7 @@ describe("ApiDesignerWorkbench", () => {
     expect(screen.getByRole("textbox", { name: "Исходник OpenAPI" })).toHaveValue(
       detail.draft.document.replace("Orders", "Dirty buffer"),
     );
-    await userEvent.type(screen.getByLabelText("Описание изменения"), "Keep current draft");
+    await fill(screen.getByLabelText("Описание изменения"), "Keep current draft");
     expect(screen.getByRole("button", { name: "Сохранить черновик" })).toBeEnabled();
     expect(localStorage.getItem("mocker:api-design:12:draft")).toContain("Dirty buffer");
     expect(
@@ -163,7 +164,7 @@ describe("ApiDesignerWorkbench", () => {
     const apply = await screen.findByRole("button", { name: "Применить повторно" });
     const remove = screen.getByRole("button", { name: "Снять применение: Жизненный цикл заказа" });
     await waitFor(() => expect(apply).toBeEnabled());
-    await userEvent.type(screen.getByLabelText("Название диаграммы"), " изменено");
+    await fill(screen.getByLabelText("Название диаграммы"), " изменено");
     expect(apply).toBeDisabled();
     expect(remove).toBeDisabled();
     expect(
@@ -243,7 +244,7 @@ describe("ApiDesignerWorkbench", () => {
     finish(json(200, current));
     await screen.findByText("На сервере появилась версия 2");
     expect(source).toHaveValue(edited);
-    await userEvent.type(screen.getByLabelText("Описание изменения"), "Локальная правка");
+    await fill(screen.getByLabelText("Описание изменения"), "Локальная правка");
     await userEvent.click(screen.getByRole("button", { name: "Сохранить черновик" }));
     await waitFor(() =>
       expect(
@@ -428,7 +429,7 @@ describe("ApiDesignerWorkbench", () => {
     });
     renderInRouter(<ApiDesignerWorkbench id={12} />);
     await userEvent.click(await screen.findByRole("tab", { name: "Редактор" }));
-    await userEvent.type(await screen.findByLabelText("Требования security (JSON)"), "invalid");
+    await fill(await screen.findByLabelText("Требования security (JSON)"), "invalid");
     await userEvent.click(screen.getByRole("tab", { name: "Состояния" }));
     const remove = await screen.findByRole("button", {
       name: "Снять применение: Жизненный цикл заказа",
@@ -558,7 +559,7 @@ describe("ApiDesignerWorkbench", () => {
     const apply = await screen.findByRole("button", { name: "Применить повторно" });
     const remove = screen.getByRole("button", { name: "Снять применение: Авторизация" });
     await waitFor(() => expect(apply).toBeEnabled());
-    await userEvent.type(screen.getByLabelText("Название правила"), " изменено");
+    await fill(screen.getByLabelText("Название правила"), " изменено");
     expect(apply).toBeDisabled();
     expect(remove).toBeDisabled();
     await userEvent.click(screen.getByRole("button", { name: "Применить свойства" }));
@@ -639,7 +640,7 @@ describe("ApiDesignerWorkbench", () => {
     finish(json(200, current));
     await screen.findByText("На сервере появилась версия 2");
     expect(source).toHaveValue(edited);
-    await userEvent.type(screen.getByLabelText("Описание изменения"), "Локальная правка");
+    await fill(screen.getByLabelText("Описание изменения"), "Локальная правка");
     await userEvent.click(screen.getByRole("button", { name: "Сохранить черновик" }));
     await waitFor(() =>
       expect(
@@ -738,7 +739,7 @@ describe("ApiDesignerWorkbench", () => {
     const apply = await screen.findByRole("button", { name: "Применить к моку" });
     await waitFor(() => expect(apply).toBeEnabled());
     await userEvent.click(apply);
-    await userEvent.type(screen.getByLabelText("Название правила"), " локально");
+    await fill(screen.getByLabelText("Название правила"), " локально");
     current = responseRuleDetail({ version: 2, revisionId: 42 }, true);
     finish(json(200, current));
     await screen.findByText("На сервере появилась версия 2");
@@ -1329,7 +1330,7 @@ describe("ApiDesignerWorkbench", () => {
     await userEvent.paste(
       '{"openapi":"3.1.0","info":{"title":"Локально","version":"1"},"paths":{}}',
     );
-    await userEvent.type(screen.getByLabelText("Описание изменения"), "Уточнила контракт");
+    await fill(screen.getByLabelText("Описание изменения"), "Уточнила контракт");
     await userEvent.click(screen.getByRole("button", { name: "Сохранить черновик" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
@@ -1440,7 +1441,7 @@ describe("ApiDesignerWorkbench", () => {
     const inlinePath = screen.getByLabelText("Путь");
     const inlineMethod = screen.getByLabelText("Метод");
     await userEvent.clear(inlinePath);
-    await userEvent.type(inlinePath, "/draft-orders");
+    await fill(inlinePath, "/draft-orders");
     await userEvent.selectOptions(inlineMethod, "post");
 
     await userEvent.click(screen.getByRole("button", { name: "Только редактор" }));
@@ -1565,10 +1566,7 @@ describe("ApiDesignerWorkbench", () => {
     expect(screen.getByRole("button", { name: "Опубликовать версию" })).toBeDisabled();
     expect(screen.getByText(/зафиксирована на версии 2/i)).toBeInTheDocument();
 
-    await userEvent.type(
-      screen.getByLabelText("Что нужно проверить в новом кандидате"),
-      "Текущий черновик",
-    );
+    await fill(screen.getByLabelText("Что нужно проверить в новом кандидате"), "Текущий черновик");
     await userEvent.click(screen.getByRole("button", { name: "Создать новый кандидат" }));
 
     expect(await screen.findByText("Кандидат #9")).toBeInTheDocument();
@@ -1595,7 +1593,7 @@ describe("ApiDesignerWorkbench", () => {
     });
     const { queryClient } = renderInRouter(<ApiDesignerWorkbench id={12} />);
     await userEvent.click(await screen.findByRole("tab", { name: "Проверка" }));
-    await userEvent.type(screen.getByLabelText("Что нужно проверить"), "К выпуску");
+    await fill(screen.getByLabelText("Что нужно проверить"), "К выпуску");
     await userEvent.click(screen.getByRole("button", { name: "Создать кандидат" }));
     expect(await screen.findByText("Готов к публикации")).toBeInTheDocument();
 
@@ -1659,7 +1657,7 @@ describe("ApiDesignerWorkbench", () => {
     await userEvent.paste(
       '{"openapi":"3.1.0","info":{"title":"Отправлено","version":"1"},"paths":{}}',
     );
-    await userEvent.type(screen.getByLabelText("Описание изменения"), "Первая правка");
+    await fill(screen.getByLabelText("Описание изменения"), "Первая правка");
     await userEvent.click(screen.getByRole("button", { name: "Сохранить черновик" }));
 
     await userEvent.clear(source);
@@ -1704,8 +1702,8 @@ describe("ApiDesignerWorkbench", () => {
 
     await userEvent.click(await screen.findByRole("button", { name: "Order" }));
     await userEvent.click(screen.getByRole("tab", { name: "Редактор" }));
-    await userEvent.type(screen.getByLabelText("Описание схемы"), "Заказ");
-    await userEvent.type(screen.getByLabelText("Описание изменения"), "Описание заказа");
+    await fill(screen.getByLabelText("Описание схемы"), "Заказ");
+    await fill(screen.getByLabelText("Описание изменения"), "Описание заказа");
     await userEvent.click(screen.getByRole("button", { name: "Сохранить черновик" }));
 
     const schema = screen.getByRole("textbox", { name: "Полная схема JSON" });
@@ -1740,7 +1738,7 @@ describe("ApiDesignerWorkbench", () => {
     await userEvent.click(screen.getByRole("button", { name: /GET.*\/orders/ }));
     await userEvent.click(screen.getByRole("button", { name: "Копировать GET /orders" }));
     await userEvent.clear(screen.getByLabelText("Новый путь копии"));
-    await userEvent.type(screen.getByLabelText("Новый путь копии"), "/orders-copy");
+    await fill(screen.getByLabelText("Новый путь копии"), "/orders-copy");
     await userEvent.click(screen.getByRole("button", { name: "Создать копию" }));
     await userEvent.click(screen.getByRole("radio", { name: "Исходник" }));
     expect(
@@ -1757,7 +1755,7 @@ describe("ApiDesignerWorkbench", () => {
 
     await userEvent.click(screen.getByRole("button", { name: "Добавить операцию" }));
     await userEvent.clear(screen.getByLabelText("Путь"));
-    await userEvent.type(screen.getByLabelText("Путь"), "/health");
+    await fill(screen.getByLabelText("Путь"), "/health");
     await userEvent.click(screen.getByRole("button", { name: "Создать операцию" }));
     await userEvent.click(screen.getByRole("radio", { name: "Исходник" }));
     await vi.waitFor(() =>
@@ -1767,7 +1765,7 @@ describe("ApiDesignerWorkbench", () => {
     );
 
     await userEvent.click(screen.getByRole("button", { name: "Добавить схему" }));
-    await userEvent.type(screen.getByLabelText("Название схемы"), "Customer");
+    await fill(screen.getByLabelText("Название схемы"), "Customer");
     await userEvent.click(screen.getByRole("button", { name: "Создать схему" }));
     await userEvent.click(screen.getByRole("radio", { name: "Исходник" }));
     await vi.waitFor(() =>
@@ -1843,7 +1841,7 @@ describe("ApiDesignerWorkbench", () => {
     await userEvent.clear(schema);
     schema.focus();
     await userEvent.paste("{invalid schema");
-    await userEvent.type(screen.getByLabelText("Описание изменения"), "Схема заказа");
+    await fill(screen.getByLabelText("Описание изменения"), "Схема заказа");
 
     expect(screen.getByRole("button", { name: "Сохранить черновик" })).toBeDisabled();
     await vi.waitFor(() =>

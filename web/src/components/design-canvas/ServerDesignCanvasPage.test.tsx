@@ -1,8 +1,9 @@
 import { sha256 } from "@noble/hashes/sha2.js";
 import { bytesToHex } from "@noble/hashes/utils.js";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { fill } from "@/test/user";
 import { renderInRouter } from "@/test/render";
 import { json, route } from "@/test/http";
 import { exampleCanvas } from "./canvasModel";
@@ -81,7 +82,7 @@ describe("ServerDesignCanvasPage", () => {
       screen.getByRole("combobox", { name: "Режим блока" }),
       "condition",
     );
-    await userEvent.type(screen.getByRole("textbox", { name: "Переменная блока" }), "token");
+    await fill(screen.getByRole("textbox", { name: "Переменная блока" }), "token");
     await userEvent.click(screen.getByRole("button", { name: "1. POST /orders Вызов" }));
     await userEvent.click(screen.getByRole("button", { name: "opt · Заказ прошёл проверку" }));
     expect(screen.getByRole("textbox", { name: "Переменная блока" })).toHaveValue("token");
@@ -340,7 +341,7 @@ describe("ServerDesignCanvasPage", () => {
     expect(title).toHaveValue("Оформление заказа");
     expect(screen.queryByRole("button", { name: "Сохранить на сервере" })).not.toBeInTheDocument();
     await userEvent.clear(title);
-    await userEvent.type(title, "Оплата заказа");
+    await fill(title, "Оплата заказа");
 
     await waitFor(() => expect(screen.getByText("Сохранено")).toBeInTheDocument());
     const write = fetchMock.mock.calls.find(
@@ -380,10 +381,10 @@ describe("ServerDesignCanvasPage", () => {
 
     const title = await screen.findByRole("textbox", { name: "Название сценария" });
     await userEvent.clear(title);
-    await userEvent.type(title, "Отправленная версия");
+    await fill(title, "Отправленная версия");
     await waitFor(() => expect(resolveSave).toBeDefined());
     await userEvent.clear(title);
-    await userEvent.type(title, "Правка после отправки");
+    await fill(title, "Правка после отправки");
 
     resolveSave?.(json(200, detailFixture(2, "Отправленная версия")));
 
@@ -430,10 +431,10 @@ describe("ServerDesignCanvasPage", () => {
 
     const title = await screen.findByRole("textbox", { name: "Название сценария" });
     await userEvent.clear(title);
-    await userEvent.type(title, "Отправленная версия");
+    await fill(title, "Отправленная версия");
     await waitFor(() => expect(resolveFirst).toBeDefined());
     await userEvent.clear(title);
-    await userEvent.type(title, "Правка после отправки");
+    await fill(title, "Правка после отправки");
     resolveFirst?.(json(200, canonical));
 
     await waitFor(() => expect(title).toHaveValue("Правка после отправки"));
@@ -456,7 +457,7 @@ describe("ServerDesignCanvasPage", () => {
 
     const title = await screen.findByRole("textbox", { name: "Название сценария" });
     await userEvent.clear(title);
-    await userEvent.type(title, "Восстановленный черновик");
+    await fill(title, "Восстановленный черновик");
 
     await waitFor(() => {
       const raw = localStorage.getItem("mocker:design-scenario:19:draft");
@@ -492,9 +493,16 @@ describe("ServerDesignCanvasPage", () => {
     const title = await screen.findByRole("textbox", { name: "Название сценария" });
     fireEvent.change(title, { target: { value: "Первая правка" } });
     expect(await screen.findByText("Не удалось сохранить")).toBeInTheDocument();
-    fireEvent.change(title, { target: { value: "Актуальная правка" } });
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-    expect(writes).toBe(1);
+    vi.useFakeTimers();
+    try {
+      fireEvent.change(title, { target: { value: "Актуальная правка" } });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1000);
+      });
+      expect(writes).toBe(1);
+    } finally {
+      vi.useRealTimers();
+    }
     await userEvent.click(screen.getByRole("button", { name: "Повторить сохранение" }));
     await screen.findByText("Сохранено");
     const calls = fetchMock.mock.calls.filter(([, init]) => init?.method === "PUT");
@@ -564,7 +572,7 @@ describe("ServerDesignCanvasPage", () => {
     });
 
     await userEvent.clear(title);
-    await userEvent.type(title, "Черновик остаётся в памяти");
+    await fill(title, "Черновик остаётся в памяти");
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "Не удалось сохранить аварийную копию в браузере",
@@ -591,13 +599,24 @@ describe("ServerDesignCanvasPage", () => {
       "GET /api/design-scenarios/12": () =>
         json(200, detailFixture(2, "Запись успела завершиться")),
     });
-    renderInRouter(<ServerDesignCanvasPage id={12} />);
-    const title = await screen.findByRole("textbox", { name: "Название сценария" });
-    expect(title).toHaveValue(document.title);
-    expect(await screen.findByText(/Предыдущее сохранение было прервано/)).toBeInTheDocument();
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-    expect(fetchMock.mock.calls.filter(([, init]) => init?.method === "PUT")).toHaveLength(0);
-    expect(localStorage.getItem("mocker:design-scenario:12:draft")).not.toBeNull();
+    vi.useFakeTimers();
+    try {
+      renderInRouter(<ServerDesignCanvasPage id={12} />);
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      const title = screen.getByRole("textbox", { name: "Название сценария" });
+      expect(title).toHaveValue(document.title);
+      expect(screen.getByText(/Предыдущее сохранение было прервано/)).toBeInTheDocument();
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1000);
+      });
+      expect(fetchMock.mock.calls.filter(([, init]) => init?.method === "PUT")).toHaveLength(0);
+      expect(localStorage.getItem("mocker:design-scenario:12:draft")).not.toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+    const title = screen.getByRole("textbox", { name: "Название сценария" });
     await userEvent.click(screen.getByRole("button", { name: "Загрузить серверный сценарий" }));
     await waitFor(() => expect(title).toHaveValue("Запись успела завершиться"));
     expect(screen.getByText("Сохранено")).toBeInTheDocument();
@@ -676,7 +695,7 @@ describe("ServerDesignCanvasPage", () => {
     ).toBeInTheDocument();
     const title = screen.getByRole("textbox", { name: "Название сценария" });
     await userEvent.clear(title);
-    await userEvent.type(title, "Сценарий с буфером");
+    await fill(title, "Сценарий с буфером");
 
     await screen.findByText("Сохранено");
     const write = fetchMock.mock.calls.find(
@@ -702,7 +721,7 @@ describe("ServerDesignCanvasPage", () => {
     ).toBeInTheDocument();
     const title = screen.getByRole("textbox", { name: "Название сценария" });
     await userEvent.clear(title);
-    await userEvent.type(title, "Сценарий с raw-буфером");
+    await fill(title, "Сценарий с raw-буфером");
 
     await screen.findByText("Сохранено");
     const write = fetchMock.mock.calls.find(
@@ -843,7 +862,7 @@ describe("ServerDesignCanvasPage", () => {
     const { queryClient } = renderInRouter(<ServerDesignCanvasPage id={12} />);
     const title = await screen.findByRole("textbox", { name: "Название сценария" });
     await userEvent.clear(title);
-    await userEvent.type(title, "Локальная правка");
+    await fill(title, "Локальная правка");
 
     current = detailFixture(2, "Из MCP");
     await queryClient.invalidateQueries({ queryKey: designScenarioKeys.detail(12) });
@@ -882,7 +901,7 @@ describe("ServerDesignCanvasPage", () => {
 
     const title = await screen.findByRole("textbox", { name: "Название сценария" });
     await userEvent.clear(title);
-    await userEvent.type(title, "Локальная копия");
+    await fill(title, "Локальная копия");
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "Сценарий или связанный API изменился на сервере. Ваши локальные правки сохранены.",
@@ -933,7 +952,7 @@ describe("ServerDesignCanvasPage", () => {
     renderInRouter(<ServerDesignCanvasPage id={22} />);
     const title = await screen.findByRole("textbox", { name: "Название сценария" });
     await userEvent.clear(title);
-    await userEvent.type(title, "Локальная правка");
+    await fill(title, "Локальная правка");
     await screen.findByText(/Сценарий или связанный API изменился/);
 
     await userEvent.click(screen.getByRole("button", { name: "Загрузить серверный сценарий" }));
@@ -1223,7 +1242,7 @@ describe("ServerDesignCanvasPage", () => {
     const preview = await screen.findByRole("dialog", { name: "Контракт по всей схеме" });
     const name = within(preview).getByRole("textbox", { name: "Название API" });
     await userEvent.clear(name);
-    await userEvent.type(name, "Мой контракт");
+    await fill(name, "Мой контракт");
     current = detailFixture(2, "Из MCP");
     current.draft.document.messages = [];
     current.diagnostics = [
@@ -1296,7 +1315,7 @@ it("keeps the dirty scenario form intact while closing and reopening exact raw s
   await userEvent.click(await screen.findByRole("button", { name: "Структура сценария" }));
   await userEvent.click(screen.getByRole("button", { name: "opt · Заказ прошёл проверку" }));
   await userEvent.selectOptions(screen.getByRole("combobox", { name: "Режим блока" }), "condition");
-  await userEvent.type(screen.getByRole("textbox", { name: "Переменная блока" }), "token");
+  await fill(screen.getByRole("textbox", { name: "Переменная блока" }), "token");
   await userEvent.click(screen.getByRole("button", { name: "Закрыть снимок сценария" }));
   await waitFor(() =>
     expect(screen.getByRole("button", { name: "Показать закреплённый сценарий" })).toHaveFocus(),
