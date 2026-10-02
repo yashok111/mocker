@@ -13,6 +13,8 @@ import type {
   ApiDesignReview,
   ApiDesignRevisionSummary,
 } from "@/api/generated/schemas";
+import { sha256 } from "@noble/hashes/sha2.js";
+import { bytesToHex } from "@noble/hashes/utils.js";
 
 // SVG layout requires browser text measurements. The workbench still exercises
 // the real schema converter; the real renderer is verified in a browser.
@@ -47,6 +49,57 @@ afterEach(() => {
 });
 
 describe("ApiDesignerWorkbench", () => {
+  it("opens a historical raw API pin while retaining the dirty current editor buffer", async () => {
+    const detail = detailFixture();
+    const raw = '{"components":{"schemas":{"Flag":false}}}';
+    const hash = bytesToHex(sha256(new TextEncoder().encode(raw)));
+    localStorage.setItem(
+      "mocker:api-design:12:draft",
+      JSON.stringify({
+        text: detail.draft.document.replace("Orders", "Dirty buffer"),
+        baseDocument: detail.draft.document,
+        baseVersion: detail.design.version,
+        baseRevisionId: detail.draft.id,
+        formDrafts: "{}",
+        savedAt: Date.now(),
+      }),
+    );
+    const fetchMock = route({
+      "GET /api/designs/12": () => json(200, detail),
+      "GET /api/designs/12/diff?fromRevisionId=41&toRevisionId=41": () =>
+        json(200, diffFixture(detail)),
+      "GET /api/designs/12/revisions/23/artifact-snapshot": () =>
+        json(200, {
+          artifactId: "12",
+          revisionId: "23",
+          contentHash: hash,
+          name: "Historical flag",
+          document: raw,
+        }),
+    });
+    renderInRouter(
+      <ApiDesignerWorkbench
+        id={12}
+        pinnedAPI={{
+          pinnedRevisionId: "23",
+          pinnedHash: hash,
+          pinnedSelectorPointer: "/components/schemas/Flag",
+        }}
+      />,
+    );
+    expect(await screen.findByTestId("pinned-api-raw")).toHaveTextContent(raw);
+    expect(localStorage.getItem("mocker:api-design:12:draft")).toContain("Dirty buffer");
+    await userEvent.click(screen.getByRole("button", { name: "Открыть текущий черновик" }));
+    expect(screen.getByRole("textbox", { name: "Исходник OpenAPI" })).toHaveValue(
+      detail.draft.document.replace("Orders", "Dirty buffer"),
+    );
+    await userEvent.type(screen.getByLabelText("Описание изменения"), "Keep current draft");
+    expect(screen.getByRole("button", { name: "Сохранить черновик" })).toBeEnabled();
+    expect(localStorage.getItem("mocker:api-design:12:draft")).toContain("Dirty buffer");
+    expect(
+      fetchMock.mock.calls.some(([, init]) => ["PUT", "POST"].includes(init?.method ?? "GET")),
+    ).toBe(false);
+  });
   it("state execution: applies the saved state diagram and removes it with the resulting version fence", async () => {
     let current = stateDiagramDetail();
     let applied = false;

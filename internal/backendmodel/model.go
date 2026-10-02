@@ -47,9 +47,10 @@ type Coverage struct {
 }
 
 type ArtifactPin struct {
-	Kind       string `json:"kind"`
-	ID         string `json:"id"`
-	RevisionID string `json:"revisionId"`
+	ContentHash string `json:"contentHash,omitempty"`
+	Kind        string `json:"kind"`
+	ID          string `json:"id"`
+	RevisionID  string `json:"revisionId"`
 }
 
 type Revision struct {

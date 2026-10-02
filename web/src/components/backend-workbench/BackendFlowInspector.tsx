@@ -15,6 +15,7 @@ import {
   useDatabaseCancellation,
 } from "./backendDatabaseReads";
 import type { FlowSelection } from "./backendFlowReads";
+import { BackendAPIArtifacts } from "./BackendAPIArtifacts";
 
 export function BackendFlowInspector({
   projectId,
@@ -177,6 +178,22 @@ export function BackendFlowInspector({
                 node={record}
                 selected={valueSelection}
                 onValueSelect={selectValue}
+              />
+            )}
+            {record.kind === "http_operation" && (
+              <BackendAPIArtifacts
+                projectId={projectId}
+                revisionId={revisionId}
+                sourceNodeId={record.id}
+                sourceKind="http_operation"
+              />
+            )}
+            {record.kind === "api_field" && (
+              <BackendAPIArtifacts
+                projectId={projectId}
+                revisionId={revisionId}
+                sourceNodeId={record.id}
+                sourceKind="api_field"
               />
             )}
             {record.kind === "http_operation" && (

@@ -3,7 +3,7 @@
 
 This topic belongs to `mocker-backend-import` v5. Pin it to the selected global
 guideSetId and verify the import owner tuple/contentHash, including when database
-or inspect3 loads it as a shared reference. Schema1 remains the foundation format;
+or inspect4 loads it as a shared reference. Schema1 remains the foundation format;
 schema2 is relational and schema3 adds typed source flow/query/access records; source4 adds explicit field lineage.
 Old immutable schema1/2/3 bytes/UUIDs/hashes/receipts keep their interpretation.
 Model schema `"1"`, profile
@@ -248,7 +248,9 @@ selector and forbids mediaType; header names are lowercase HTTP tokens. Unknown
 status/media is a gap, never guessed identity. Operation+direction+location+
 selector+status+media is unique (≤500fields/operation), while stable UUID binding
 uses the provider external key. Shape membership does not establish mapping.
-External API/schema revision pin resolution is deferred to B24.
+Manual external API associations use inspect4 and api-artifact-pins-v1. They
+freeze api_design artifact/revision decimal strings, raw contentHash and selected
+object refs separately from imported source API fields; see backend-flow-reference.
 
 Reconcile retains omitted mappings/API fields stale. Removed node/facet/port
 requires updating or explicitly deleting all surviving mappings in the same

@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { renderWithProviders } from "@/test/render";
 import { json } from "@/test/http";
 import { BackendRevisionCompare } from "./BackendRevisionCompare";
+import { defaultParseSearch } from "@tanstack/react-router";
 
 const projectId = "0197aaf9-5555-7000-8000-000000000001";
 const oldId = "0197aaf9-5555-7000-8000-000000000002";
@@ -142,6 +143,48 @@ function server(
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
+});
+it("renders artifact counts and separate exact pinned API navigation with context changes", async () => {
+  const ref = {
+    kind: "api_design",
+    artifactId: "12",
+    revisionId: "23",
+    contentHash: hash,
+    selector: { jsonPointer: "/components/schemas/Flag" },
+    objectHash: hash,
+    lastKnownLabel: "Frozen flag",
+    resolvedPointer: "/components/schemas/Flag",
+  };
+  server(() =>
+    json(200, {
+      ...comparison,
+      summary: { ...comparison.summary, artifacts: { added: 0, removed: 0, modified: 1 } },
+      items: [
+        {
+          ...removed,
+          recordType: "artifact",
+          id: "binding",
+          contextChanged: true,
+          before: { projectId, revisionId: oldId, recordType: "artifact", id: "binding" },
+          after: { projectId, revisionId: newId, recordType: "artifact", id: "binding" },
+          artifactBefore: ref,
+          artifactAfter: { ...ref, revisionId: "24" },
+        },
+      ],
+    }),
+  );
+  await compare();
+  expect(
+    await screen.findByText("Артефакты API: добавлено 0 · удалено 0 · изменено 1"),
+  ).toBeInTheDocument();
+  await userEvent.click(screen.getByRole("button", { name: "Открыть изменение artifact binding" }));
+  expect(screen.getByText(/Контекст всего артефакта изменился/)).toBeInTheDocument();
+  const before = screen.getByRole("region", { name: "До изменения" });
+  const link = within(before).getByRole("link", { name: "Открыть закреплённый API" });
+  expect(
+    defaultParseSearch(new URL(link.getAttribute("href")!, "http://localhost").search),
+  ).toMatchObject({ pinnedRevisionId: "23" });
+  expect(link.getAttribute("href")).toContain(`returnRevisionId=${oldId}`);
 });
 async function compare() {
   renderWithProviders(<BackendRevisionCompare projectId={projectId} initialRevisionId={oldId} />);

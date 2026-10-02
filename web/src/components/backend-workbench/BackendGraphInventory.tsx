@@ -32,6 +32,7 @@ import type {
   QueryBackendGraphRequest,
 } from "@/api/generated/schemas";
 import { describeApiFailureDetailed } from "@/api/errors";
+import { useBackendAPIDeparture } from "./useBackendAPIDeparture";
 
 const wrap = { overflowWrap: "anywhere" as const, whiteSpace: "pre-wrap" as const };
 const kinds = [
@@ -150,6 +151,7 @@ export function Pages({
 }
 
 function Inventory({ projectId, revisionId, schemaVersion }: Props) {
+  const depart = useBackendAPIDeparture();
   const coverageQuery = useGetBackendCoverage(projectId, revisionId, {
     query: { staleTime: Infinity, retry: false },
   });
@@ -158,7 +160,10 @@ function Inventory({ projectId, revisionId, schemaVersion }: Props) {
   const [kindDraft, setKindDraft] = useState("");
   const [filter, setFilter] = useState({ search: "", kind: "" });
   const [cursors, setCursors] = useState([""]);
-  const [selection, setSelection] = useState<Selection | null>(null);
+  const [selection, setRawSelection] = useState<Selection | null>(null);
+  const setSelection = (next: Selection | null) => {
+    depart(() => setRawSelection(next));
+  };
   const query = useGraphPage(projectId, {
     revisionId,
     recordType: "nodes",
@@ -182,9 +187,11 @@ function Inventory({ projectId, revisionId, schemaVersion }: Props) {
       <form
         onSubmit={(event) => {
           event.preventDefault();
-          setFilter({ search: searchDraft.trim(), kind: kindDraft });
-          setCursors([""]);
-          setSelection(null);
+          depart(() => {
+            setFilter({ search: searchDraft.trim(), kind: kindDraft });
+            setCursors([""]);
+            setSelection(null);
+          });
         }}
       >
         <Group align="flex-end">
@@ -401,9 +408,19 @@ function NodeDetails({
   projectId,
   revisionId,
   nodeId,
-  onEdge,
+  onEdge: selectEdge,
 }: Props & { nodeId: string; onEdge: (edge: BackendEdge) => void }) {
+  const depart = useBackendAPIDeparture();
+  const onEdge = (next: BackendEdge) => {
+    depart(() => selectEdge(next));
+  };
   const [selectedValue, setSelectedValue] = useState<BackendLineageValueRef>();
+  const selectValue = (next: BackendLineageValueRef) => {
+    depart(() => setSelectedValue(next));
+  };
+  const closeValue = () => {
+    depart(() => setSelectedValue(undefined));
+  };
   const query = useGetBackendNode(projectId, revisionId, nodeId, {
     query: { staleTime: Infinity, retry: false },
   });
@@ -427,14 +444,14 @@ function NodeDetails({
             projectId={projectId}
             revisionId={revisionId}
             node={node}
-            onValueSelect={setSelectedValue}
+            onValueSelect={selectValue}
           />
           {node.kind === "http_operation" && (
             <BackendAPIFields
               projectId={projectId}
               revisionId={revisionId}
               operationId={node.id}
-              onValueSelect={setSelectedValue}
+              onValueSelect={selectValue}
             />
           )}
           {selectedValue && (
@@ -443,7 +460,7 @@ function NodeDetails({
               projectId={projectId}
               revisionId={revisionId}
               value={selectedValue}
-              onClose={() => setSelectedValue(undefined)}
+              onClose={closeValue}
             />
           )}
           <Code block style={wrap}>
@@ -651,10 +668,18 @@ function RecordInspector({
   recordType,
   id,
 }: Props & { recordType: "node" | "edge" | "evidence"; id: string }) {
+  const depart = useBackendAPIDeparture();
   const [edge, setEdge] = useState<BackendEdge | null>(null);
   if (recordType === "node" && !edge)
     return (
-      <NodeDetails projectId={projectId} revisionId={revisionId} nodeId={id} onEdge={setEdge} />
+      <NodeDetails
+        projectId={projectId}
+        revisionId={revisionId}
+        nodeId={id}
+        onEdge={(next) => {
+          depart(() => setEdge(next));
+        }}
+      />
     );
   if (recordType === "evidence")
     return <EvidenceDetails projectId={projectId} revisionId={revisionId} evidenceId={id} />;

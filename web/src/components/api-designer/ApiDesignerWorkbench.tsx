@@ -111,6 +111,7 @@ import { MockTester } from "./MockTester";
 import { SourceDiff, SourceEditor } from "./SourceEditor";
 import { hasUnsafeJsonNumber } from "./jsonNumberPrecision";
 import classes from "./ApiDesigner.module.css";
+import { PinnedAPIArtifact, type PinnedAPIContext } from "./PinnedAPIArtifact";
 
 const POLL_MS = 5_000;
 const StateDiagramEditor = lazy(() => import("../state-diagram/StateDiagramEditor"));
@@ -144,14 +145,24 @@ type StoredDraft = {
 export function ApiDesignerWorkbench({
   id,
   reviewId,
+  pinnedAPI,
 }: {
   id: number;
   reviewId?: number;
+  pinnedAPI?: PinnedAPIContext;
 }): ReactElement {
-  return <Workbench key={id} id={id} reviewId={reviewId} />;
+  return <Workbench key={id} id={id} reviewId={reviewId} pinnedAPI={pinnedAPI} />;
 }
 
-function Workbench({ id, reviewId }: { id: number; reviewId?: number }): ReactElement {
+function Workbench({
+  id,
+  reviewId,
+  pinnedAPI,
+}: {
+  id: number;
+  reviewId?: number;
+  pinnedAPI?: PinnedAPIContext;
+}): ReactElement {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const narrow = useMediaQuery("(max-width: 62em)", false, { getInitialValueInEffect: false });
@@ -770,6 +781,22 @@ function Workbench({ id, reviewId }: { id: number; reviewId?: number }): ReactEl
         </Group>
       </Group>
 
+      {pinnedAPI?.pinnedRevisionId && (
+        <PinnedAPIArtifact
+          artifactId={String(id)}
+          pin={pinnedAPI}
+          currentRevisionId={String(detail.draft.id)}
+          dirty={dirty}
+          onOpenCurrent={() => {
+            setSelectedRevisionId(null);
+            setComparisonToRevisionId(null);
+            setSelectedReviewId(undefined);
+            setView("editor");
+            setEditorMode("source");
+            setFocusPointer(undefined);
+          }}
+        />
+      )}
       <details className={classes.mockAddresses}>
         <summary>Адреса моков</summary>
         <div className={classes.urlStrip} aria-label="Адреса моков">

@@ -142,13 +142,14 @@ class GuideSyncPackagingTests(unittest.TestCase):
         self.load_published_relational_sources()
         self.generate()
         topic = self.root / "skills/mocker-backend-import/SKILL.md"
-        topic.write_text(
-            topic.read_text().replace(
-                "| mocker-backend-inspect | 3 |", "| mocker-backend-inspect | 1 |"
-            )
+        original = topic.read_text()
+        stale = original.replace(
+            "| mocker-backend-inspect | 4 |", "| mocker-backend-inspect | 1 |"
         )
+        self.assertNotEqual(stale, original, "owner mutation must change the fixture")
+        topic.write_text(stale)
         self.assert_invalid_without_changes(
-            "stale live guide owner inspect1; expected inspect3"
+            "stale live guide owner inspect1; expected inspect4"
         )
 
     def test_explicit_historical_owner_preserves_prose(self):
@@ -242,7 +243,7 @@ class GuideSyncPackagingTests(unittest.TestCase):
             for w in manifest["workflows"]
             if w["workflowId"] == "mocker-backend-inspect"
         )
-        self.assertEqual(owner["workflowVersion"], "3")
+        self.assertEqual(owner["workflowVersion"], "4")
         self.assertEqual(owner["requiredModelSchemaVersions"], ["3", "4"])
         self.assertEqual(owner["guideSetId"], identity)
         self.assertEqual(
@@ -259,16 +260,20 @@ class GuideSyncPackagingTests(unittest.TestCase):
         )
         importer = (self.root / "skills/mocker-backend-import/SKILL.md").read_text()
         self.assertIn(
-            "| `backend-flow-reference` / `backend-analysis` | inspect v3 |", importer
+            "| `backend-flow-reference` / `backend-analysis` | inspect v4 |", importer
         )
         inspector = leaf.decode()
         self.assertIn("Inspect workflow1 was released", inspector)
         self.assertNotIn("no released older inspect version", inspector)
-        self.assertEqual(owner["requiredViewSchemaVersions"], ["saved-view-v1"])
+        self.assertEqual(
+            owner["requiredViewSchemaVersions"],
+            ["saved-view-v1", "api-artifact-pins-v1"],
+        )
         for capability in (
             "backend-flow-query",
             "backend-data-access-query",
             "backend-saved-views",
+            "backend-api-artifact-pins",
         ):
             self.assertIn(capability, owner["requiredCapabilities"])
         self.assertEqual(self.run_sync("--check").returncode, 0)

@@ -1,4 +1,5 @@
 import { BackendValueInspector } from "./BackendValueInspector";
+import { useBackendAPIDeparture } from "./useBackendAPIDeparture";
 import type { BackendLineageValueRef } from "@/api/generated/schemas";
 import { BackendValueSeeds } from "./BackendLineageActions";
 import { useEffect, useRef, useState } from "react";
@@ -43,13 +44,26 @@ export function BackendDatabaseInspector({ ...props }: Props) {
 function SourceDatabaseInspector({
   context: original,
   selection,
-  onSelect,
-  onClose,
+  onSelect: selectRecord,
+  onClose: closeRecord,
   onRequireColumn,
   onFlowNavigate,
   valueRef,
 }: Props) {
+  const depart = useBackendAPIDeparture();
+  const onSelect = (next: DatabaseSelection) => {
+    depart(() => selectRecord(next));
+  };
+  const onClose = () => {
+    depart(closeRecord);
+  };
   const [valueSelection, setValueSelection] = useState<BackendLineageValueRef>();
+  const selectValue = (next: BackendLineageValueRef) => {
+    depart(() => setValueSelection(next));
+  };
+  const closeValue = () => {
+    depart(() => setValueSelection(undefined));
+  };
   const context = { ...original, revisionId: selection.revisionId ?? original.revisionId };
   const key = [...databaseKey(context), "inspector", selection.type, selection.id];
   useDatabaseCancellation(key);
@@ -110,7 +124,7 @@ function SourceDatabaseInspector({
                 revisionId={context.revisionId}
                 node={record}
                 selected={valueRef}
-                onValueSelect={setValueSelection}
+                onValueSelect={selectValue}
               />
             )}
             {valueSelection && (
@@ -119,7 +133,7 @@ function SourceDatabaseInspector({
                 projectId={context.projectId}
                 revisionId={context.revisionId}
                 value={valueSelection}
-                onClose={() => setValueSelection(undefined)}
+                onClose={closeValue}
               />
             )}
             {onFlowNavigate && ["table", "column", "view"].includes(record.kind) && (

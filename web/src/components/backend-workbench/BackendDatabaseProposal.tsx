@@ -333,6 +333,11 @@ function DatabaseProposalControls({
                 void client.invalidateQueries({ queryKey: listKey });
               }}
             />
+            <BackendAPIArtifacts
+              projectId={context.projectId}
+              revisionId={value.proposal.baseRevisionId}
+              readOnly
+            />
           </>
         )}
       </Stack>
@@ -697,3 +702,4 @@ function ProposalEditor({
     </Stack>
   );
 }
+import { BackendAPIArtifacts } from "./BackendAPIArtifacts";

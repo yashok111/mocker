@@ -1194,3 +1194,24 @@ Link upserts are idempotent by tuple. Referenced definitions cannot be removed;
 remove their dependents first in the same ordered batch. Every batch creates one
 revision or changes nothing. Reconcile a stale `expectedVersion` after reading
 the current document; do not blind-retry a full model replacement.
+
+## Open an exact API artifact from a backend association
+
+Backend API links use inspect4 and the backend-flow-reference contract. The
+editor route carries exact pinnedRevisionId, pinnedHash, pinnedObjectKey or
+pinnedSelectorPointer, optional persisted pinnedPointer and backend return pin.
+A separate read-only raw panel loads get_api_artifact_snapshot for the exact API
+design/revision; its raw contentHash never comes from hydrated editor JSON. The
+regular current draft and its dirty buffer remain visible alongside it. A clear
+mismatch banner and explicit «Открыть текущий черновик» distinguish the views.
+Opening the pin performs no restore/save/publish; current-draft navigation is
+explicit. Inherited operation keys identify the consumer and selection shows the
+actual authored source pointer. Late responses must match the requested pin.
+
+Legacy design discovery/editor routing uses numeric IDs and must check
+Number.isSafeInteger before selection/navigation. Unsafe IDs cannot open that
+editor or become rounded discovery selections. Stored pins and new snapshot/pin
+APIs preserve full canonical positive decimal int64 strings through
+9223372036854775807; an unsafe persisted pin remains inspectable/removable through
+the exact API. A historical SavedView or proposal opens its saved source/base
+revision even after the backend head or API draft has advanced.

@@ -1390,9 +1390,9 @@ the proposal. Ready/rebase belongs to B4; measured checks and impact are later.
 
 ## Public MCP source4 import → lineage query fixture
 
-Select import5 and inspect3 with complete requirements in one verified guide
+Select import5 and inspect4 with complete requirements in one verified guide
 set; load backend-model, backend-import-protocol, backend-recovery and the
-inspect3 flow/analysis references. This example is exercised by
+inspect4 flow/analysis references. This example is exercised by
 `internal/mcp/tools_backend_lineage_example_test.go`,
 `TestBackendLineageRealSDKGuideFixtureExample` through actual SDK tool calls.
 The independent bundle is `internal/backendmodel/testdata/lineage/orders/`:
@@ -1482,5 +1482,5 @@ On uncertain commit replay lineageCommit unchanged and require original receipt;
 never replace CAS/key with today's head. Evidence/owner/value inspector reads use
 lineagePin and complete facet/collection/opaque portKey. Redacted shape/explanation
 must omit sensitive constants and samples; source-local API field identity does
-not resolve B24 external API pins. Old foundation/relational examples above keep
+not resolve external API pins; their separate inspect4 contract is in backend-flow-reference. Old foundation/relational examples above keep
 their source1/2 formats and ordinary workflow; source3 flow examples stay source3.

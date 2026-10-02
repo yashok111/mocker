@@ -244,7 +244,7 @@ never truncate. They are validation bounds, not measured performance claims.
 Canvas visibility is at most 200 tables/600 FKs with explicit scope counts; the
 paginated list, relationship table and inspector preserve full read access.
 
-Source schema3/4 supports imported scoped endpoint accesses through inspect3 and
+Source schema3/4 supports imported scoped endpoint accesses through inspect4 and
 query_backend_flow. Select that owner in this same set, then page accesses at
 the exact source revision with dataNodeId; table-level unknown-column access is
 possible, never a confirmed column reader/writer. Open query/edge/witness proof.
@@ -365,10 +365,10 @@ disabled during preview. Name/search limits200characters; finite x/y within
 search drafts, cursors, graph bodies, source text or credentials. Ordinary-agent
 acceptance and live agent evaluation remain deferred.
 
-## Source4 column lineage belongs to inspect3
+## Source4 column lineage belongs to inspect4
 
 Database5 reads source2/3/4 and existing proposal-relational-v1/saved-view-v1.
-For source4 lineage select inspect3 in the same guideSetId/manifestHash, verify
+For source4 lineage select inspect4 in the same guideSetId/manifestHash, verify
 its schema3/4 and field-lineage-v1 support, all required capabilities including
 backend-field-lineage-query, and actual flow-reference/analysis topic hashes.
 Use exact {kind:"column",nodeId,facetKey}, revisionId and reverse for origins or
@@ -376,4 +376,15 @@ forward for downstream. Preserve facet identity, ordered co-inputs, unknown
 boundary destination/actions, coverage and truncation. Do not issue lineage for
 source2/3 or proposals; an exact source-base navigation does not turn designed
 intent into source lineage. No SQL/application/migration execution or latest-pin
-fallback. Query procedure and evidence interpretation belong to inspect3.
+fallback. Query procedure and evidence interpretation belong to inspect4.
+
+## Exact API links from a database value
+
+Select the complete inspect4 owner in this same guide set, including
+backend-api-artifact-pins and api-artifact-pins-v1 in viewSchemaVersions. Follow
+backend-flow-reference for a manually chosen API-field association reached through
+column lineage; column names/types create no automatic correspondence. Query a
+proposal's exact baseRevisionId and a SavedView's exact source target. Orphaned
+source UUIDs remain queryable/removable with their frozen labels. New head or API
+draft observations never replace these pins. Database5 and its proposal contract
+remain unchanged; source1–3 keep their supported reads.

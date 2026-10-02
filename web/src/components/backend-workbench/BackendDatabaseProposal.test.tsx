@@ -15,6 +15,8 @@ const api = vi.hoisted(() => ({
   previewBackendProposalCommands: vi.fn(),
   applyBackendProposalCommands: vi.fn(),
   queryBackendGraph: vi.fn(),
+  getBackendRevision: vi.fn(),
+  queryBackendAPIArtifacts: vi.fn(),
 }));
 vi.mock("@/api/generated/backend-projects/backend-projects", () => api);
 const ok = (data: unknown) => ({ data, status: 200, headers: new Headers() });
@@ -58,6 +60,25 @@ beforeEach(() => {
   );
   api.createBackendProposal.mockResolvedValue(ok(proposalDetail));
   api.getBackendProposal.mockResolvedValue(ok(proposalDetail));
+  api.getBackendRevision.mockResolvedValue(
+    ok({
+      id: "base",
+      projectId: "project",
+      semanticHash: "a".repeat(64),
+      sourceSnapshotIds: ["snap"],
+      artifactPins: [],
+    }),
+  );
+  api.queryBackendAPIArtifacts.mockResolvedValue(
+    ok({
+      revisionId: "base",
+      semanticHash: "a".repeat(64),
+      sourceSnapshotIds: ["snap"],
+      pins: [],
+      items: [],
+      nextCursor: "",
+    }),
+  );
   api.previewBackendProposalCommands.mockResolvedValue(ok(preview));
   api.queryBackendGraph.mockResolvedValue(
     ok({
@@ -86,6 +107,33 @@ beforeEach(() => {
       candidateGraphHash: preview.candidateGraphHash,
     }),
   );
+});
+it("reads API associations from the proposal immutable base when project source is newer", async () => {
+  renderWithProviders(
+    <BackendDatabaseProposal
+      context={{
+        projectId: "project",
+        revisionId: "newer-source",
+        datastoreId: "db",
+        facetKey: "sql",
+      }}
+      repositoryId="repository"
+    />,
+  );
+  await screen.findByRole("option", { name: "Required users" });
+  await userEvent.selectOptions(await screen.findByLabelText("Предложение изменений"), "proposal");
+  expect(await screen.findByText("Ручных связей API нет.")).toBeInTheDocument();
+  expect(api.getBackendRevision).toHaveBeenCalledWith(
+    "project",
+    "base",
+    expect.objectContaining({ signal: expect.any(AbortSignal) }),
+  );
+  expect(api.queryBackendAPIArtifacts).toHaveBeenCalledWith(
+    "project",
+    { revisionId: "base", limit: 100, cursor: "" },
+    expect.objectContaining({ signal: expect.any(AbortSignal) }),
+  );
+  expect(screen.queryByRole("button", { name: "Добавить связь API" })).not.toBeInTheDocument();
 });
 afterEach(() => {
   vi.clearAllMocks();

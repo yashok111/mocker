@@ -81,9 +81,10 @@ type Server struct {
 	// as a New parameter: New's signature is shared with cmd/mocker/main.go,
 	// which this package does not own, so adding a parameter here would break
 	// a build outside this package's remit.
-	specsRepo   *specs.Repo
-	designsRepo *apidesign.Repo
-	backendRepo *backendmodel.Repo
+	specsRepo           *specs.Repo
+	designsRepo         *apidesign.Repo
+	backendRepo         *backendmodel.Repo
+	backendAPIArtifacts *backendmodel.APIArtifactService
 	// designScenariosRepo owns the persisted sequence-design canvas. Its name
 	// stays distinct from scenariosRepo, which is the pre-existing runtime
 	// workspace snapshot feature in internal/scenarios.
@@ -241,15 +242,17 @@ func New(cfg *config.Config, sessions *auth.Manager, ws *workspaces.Repo, db *st
 	customepRepo := customep.NewRepo(db)
 	specsRepo := specs.NewRepo(db, cfg)
 	designsRepo := apidesign.NewRepo(db, cfg)
+	backendRepo := backendmodel.NewRepo(db)
 	s := &Server{
-		cfg:         cfg,
-		sessions:    sessions,
-		ws:          ws,
-		db:          db,
-		log:         log,
-		specsRepo:   specsRepo,
-		designsRepo: designsRepo,
-		backendRepo: backendmodel.NewRepo(db),
+		cfg:                 cfg,
+		sessions:            sessions,
+		ws:                  ws,
+		db:                  db,
+		log:                 log,
+		specsRepo:           specsRepo,
+		designsRepo:         designsRepo,
+		backendRepo:         backendRepo,
+		backendAPIArtifacts: backendmodel.NewAPIArtifactService(backendRepo, designsRepo),
 		designScenariosRepo: designscenario.NewRepo(
 			db,
 			cfg,

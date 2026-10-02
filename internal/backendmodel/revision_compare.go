@@ -125,6 +125,9 @@ func CompareRevisionStates(ctx context.Context, before, after RevisionState) (*R
 		out.Changes = append(out.Changes, delta)
 		out.Summary.SourceChanges++
 	}
+	if err := compareAPIArtifacts(ctx, before, after, out); err != nil {
+		return nil, err
+	}
 	slices.SortFunc(out.Changes, func(a, b RecordDelta) int {
 		if n := strings.Compare(a.RecordType, b.RecordType); n != 0 {
 			return n
@@ -239,7 +242,7 @@ func (r *Repo) CompareRevisions(ctx context.Context, pid string, in CompareRevis
 	if !ValidID(pid) || !ValidID(in.FromRevisionID) || !ValidID(in.ToRevisionID) {
 		return nil, notFound()
 	}
-	if in.RecordType != "" && !slices.Contains([]string{"node", "edge", "evidence", "source", "identity"}, in.RecordType) {
+	if in.RecordType != "" && !slices.Contains([]string{"node", "edge", "evidence", "source", "identity", "artifact"}, in.RecordType) {
 		return nil, invalid("recordType", "Unsupported comparison record type")
 	}
 	if in.ChangeKind != "" && !slices.Contains([]string{"added", "removed", "modified", "identity_mapped", "freshness_changed"}, in.ChangeKind) {
@@ -305,13 +308,16 @@ func (r *Repo) CompareRevisions(ctx context.Context, pid string, in CompareRevis
 	end := min(start+limit, len(filtered))
 	for _, change := range filtered[start:end] {
 		item := ComparisonItem{RecordType: change.RecordType, ID: change.ID, ChangeKinds: change.ChangeKinds, ChangedPaths: change.ChangedPaths}
+		item.ContextChanged = change.ContextChanged
 		if change.Before != nil {
+			item.ArtifactBefore = change.Before.Artifact
 			item.Before = comparisonRef(pid, in.FromRevisionID, change.Before)
 			item.NameBefore = change.Before.Name
 			item.KeyBefore = change.Before.Key
 			item.FreshnessBefore = change.Before.Freshness
 		}
 		if change.After != nil {
+			item.ArtifactAfter = change.After.Artifact
 			item.After = comparisonRef(pid, in.ToRevisionID, change.After)
 			item.NameAfter = change.After.Name
 			item.KeyAfter = change.After.Key

@@ -6,8 +6,8 @@ metadata:
   workflowVersion: "1"
   requiredModelSchemaVersions: "[\"1\"]"
   requiredCapabilities: "[\"backend-projects\",\"backend-project-metadata\",\"backend-revisions\"]"
-  guideSetId: "sha256:c32a1a1d0ee261f265e254cf46f7e5cb2fe630b0a51dc0cdfb57a5e630813e1f"
-  manifestHash: "sha256:c32a1a1d0ee261f265e254cf46f7e5cb2fe630b0a51dc0cdfb57a5e630813e1f"
+  guideSetId: "sha256:0fb6931811c856db03c1add74432299e0310c5e183238692a2df09ab2336a0c0"
+  manifestHash: "sha256:0fb6931811c856db03c1add74432299e0310c5e183238692a2df09ab2336a0c0"
 ---
 
 # Backend project preparation
@@ -32,8 +32,11 @@ this backend-overview topic keeps the project-preparation identity. Project
 preparation still requires schema1, including its empty initial revision; it
 need not require schema2 to prepare a project. Database typed edits/proposals
 use the separately selected database5 workflow. Source flow/data-access questions
-select inspect3 at backend-inspect in this same set; ordinary inspection writes
-nothing. Source4 field lineage selects inspect3 with field-lineage-v1 and backend-field-lineage-query. Impact, measured writer checks and jobs remain unavailable.
+select inspect4 at backend-inspect in this same set; ordinary inspection writes
+nothing. Source4 field lineage selects inspect4 with field-lineage-v1 and backend-field-lineage-query.
+Manual API links require inspect4, backend-api-artifact-pins and api-artifact-pins-v1;
+load its flow-reference contract before any authorized mutation. Backend impact,
+measured writer checks and jobs remain unavailable.
 
 ## Before the first write
 

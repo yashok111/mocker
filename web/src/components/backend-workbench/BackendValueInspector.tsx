@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useBackendAPIDeparture } from "./useBackendAPIDeparture";
 import type { BackendLineageValueRef } from "@/api/generated/schemas";
 import { BackendFlowInspector } from "./BackendFlowInspector";
 import { BackendDatabaseInspector } from "./BackendDatabaseInspector";
@@ -20,13 +21,20 @@ export function BackendValueInspector({
     id: value.nodeId,
     valueRef: value,
   });
+  const depart = useBackendAPIDeparture();
+  const select = (next: FlowSelection) => {
+    depart(() => setSelection(next));
+  };
+  const close = () => {
+    depart(onClose);
+  };
   return selection.valueRef?.kind === "column" ? (
     <BackendDatabaseInspector
       context={{ projectId, revisionId, datastoreId: "", facetKey: selection.valueRef.facetKey }}
       valueRef={selection.valueRef}
       selection={selection}
-      onSelect={setSelection}
-      onClose={onClose}
+      onSelect={select}
+      onClose={close}
     />
   ) : (
     <BackendFlowInspector
@@ -35,8 +43,8 @@ export function BackendValueInspector({
       revisionId={revisionId}
       selection={selection}
       selectedValue={selection.valueRef}
-      onSelect={setSelection}
-      onClose={onClose}
+      onSelect={select}
+      onClose={close}
     />
   );
 }

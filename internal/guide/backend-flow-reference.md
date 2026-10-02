@@ -1,6 +1,6 @@
 # Source flow model and pinned reads
 
-Canonical owner: `mocker-backend-inspect` workflow3. Select/verify this owner's
+Canonical owner: `mocker-backend-inspect` workflow4. Select/verify this owner's
 identity and contentHash in the same global guide set before using the topic.
 Source schema3/4 and `runtime-flow-v1` extend relational source records. They do
 not describe runtime observation or the effect of a database proposal.
@@ -126,7 +126,7 @@ Page size defaults100/max500 and does not change traversal or witnesses.
 
 ## Pinned saved Flow views
 
-Require inspect3, `backend-saved-views` and document `saved-view-v1`. Four tools:
+Require inspect4, `backend-saved-views` and document `saved-view-v1`. Four tools:
 `list_backend_saved_views`, `create_backend_saved_view`, `get_backend_saved_view`,
 `save_backend_saved_view`. Read-only list/get are idempotent; create/save use
 retained idempotency keys. A SavedView is an immutable version with id/projectId,
@@ -180,10 +180,10 @@ transaction atomicity claim appears. Canvas caps200nodes/600edges are distinct
 from collapse and pagination. Preview is local and Save is disabled until Apply
 or Cancel; one-step undo restores coordinates independently of collapse.
 
-## query_backend_lineage (inspect3)
+## query_backend_lineage (inspect4)
 
 Require source4, field-lineage-v1 and backend-field-lineage-query in the selected
-inspect3 set. Existing flow/access reads remain source3/4; source1/2 refuse them.
+inspect4 set. Existing flow/access reads remain source3/4; source1/2 refuse them.
 Lineage refuses source1–3 and proposals with422, rather than an empty answer.
 
 Input: projectId, exact revisionId, complete seed ValueRef, direction
@@ -222,3 +222,202 @@ mapping count is not whole-source coverage. Cancel previous reads on project/
 revision/seed changes and discard mismatched late responses. Pin evidence,
 owner, column facet and exact port navigation to the same revision. Lineage
 panel state is transient; existing saved-view-v1 remains unchanged.
+
+## Manual exact API artifact associations (inspect4)
+
+Require the complete inspect4 workflow, feature `backend-api-artifact-pins` and
+contract `api-artifact-pins-v1` advertised in `viewSchemaVersions`. This contract
+is separate from source model1–4 and provider profiles; mutations require an
+imported source4 baseline. A question authorizes reads only. Select the source
+`http_operation` or `api_field` UUID, API design, immutable API revision and
+selector manually. Names, paths, types, imported structural selectors and lineage
+never establish correspondence automatically. One source UUID belongs to at most
+one binding across the full vector; `origin:"manual"` and the authored reason
+record the association, without proving compatibility or conformance.
+
+API `artifactId`/`revisionId` are canonical positive decimal int64 **strings**
+(1 through9223372036854775807, no sign/leading zero). Backend project/revision/
+sourceNodeId remain canonical UUIDs. `contentHash` is lowercase64hex SHA-256 of
+exact UTF-8 raw immutable `document` bytes returned by the snapshot API. The
+legacy hydrated revision/editor may insert identity extensions; its JSON is not
+the raw hash input. `objectHash` hashes the selected authored value canonically,
+retaining extensions and authored `$ref`. Never substitute the latest snapshot.
+
+For a source HTTP operation use exactly `{objectKey}`: the opaque operation key
+from the owner's identity projection, not operationId, method/path or workspace
+opKey. Inline keys use x-mocker-canvas-operation-id; inherited methods use the
+concrete consumer's x-mocker-canvas-operation-ids.<method>. A legacy operation may
+receive a deterministic key in the owner projection without changing raw bytes.
+The consumer key survives inherited Path Item resolution; `resolvedPointer`
+identifies the actual authored source method. Selected method content/hash/diff
+covers that authored method only: it does not synthesize parent/global parameters,
+servers or security. A surrounding change can leave objectHash unchanged while
+changing contentHash, pin semantics and `contextChanged` in preview/compare. This
+is no automatic compatibility inference.
+
+For a source API field use exactly `{jsonPointer}` at an authored schema position.
+Pointers are nonempty RFC6901 strings, up to64segments and2048 UTF-8 bytes; use
+~0 for tilde, ~1 for slash, and literal percent rather than URI decoding. Accepted
+schema positions include object or boolean schemas in OpenAPI/JSON Schema
+vocabularies (including properties/items/compositions/$defs), with authored `$ref`
+retained rather than followed. Arbitrary objects/arrays/scalars/examples, a `$ref`
+string member, malformed escapes and non-schema positions are rejected. The
+server performs authoritative resolution; a source field's structural selector
+is not an external schema pointer. Keys are1–200 UTF-8 bytes, reasons1–4096bytes.
+
+### Four public operations
+
+All routes below are under `/api`; existing backend/API owner authentication,
+CSRF and access policy apply. MCP adds projectId to each backend request and puts
+snapshot string IDs in its exact path. No latest arguments are accepted. All
+request objects recursively reject unknown/duplicate/null/wrong scalar members.
+
+| MCP tool / OpenAPI operationId | REST route | Required input; optional input | Success |
+|---|---|---|---|
+| get_api_artifact_snapshot / getAPIArtifactSnapshot | GET designs/{id}/revisions/{rid}/artifact-snapshot | artifactId,revisionId strings; no body/query | artifactId,revisionId,contentHash,name,document (raw string) |
+| query_backend_api_artifacts / queryBackendAPIArtifacts | POST backend-projects/{id}/api-artifacts/query | projectId,revisionId UUIDs; sourceNodeId,limit1–100(default50),cursor | revisionId,semanticHash,sourceSnapshotIds,pins,items,nextCursor |
+| preview_backend_api_pins / previewBackendAPIPins | POST backend-projects/{id}/api-artifacts/preview | projectId,baseRevisionId UUIDs,expectedVersion positive int64,commands | baseRevisionId,expectedVersion,candidateHash,semanticHash,pins,bindings,sourceSnapshotIds,diagnostics,diff,diffTruncated,canApply |
+| apply_backend_api_pins / applyBackendAPIPins | POST backend-projects/{id}/api-artifacts/commands | same preview input plus candidateHash lowercase64hex,idempotencyKey1–128 printable ASCII characters without spaces | project,revision; exact durable receipt bytes on replay |
+
+The three reads advertise readOnly/idempotent; apply is mutating/idempotent with
+the required key. Snapshot IDs never pass through floating point. MCP TextContent
+preserves the HTTP body bytes; structured content preserves exact numeric tokens.
+
+Commands are disjoint strict shapes:
+
+```json
+{"type":"set_api_pin","artifactId":"7","revisionId":"45","bindings":[{"sourceNodeId":"11111111-1111-4111-8111-111111111111","selector":{"objectKey":"orders-get"}}],"reason":"Explicitly reviewed source/API association"}
+```
+
+```json
+{"type":"remove_api_pin","artifactId":"7","reason":"Explicitly detach this artifact group"}
+```
+
+Set replaces that artifact's **entire binding set across all pages**. Preserve
+all unedited bindings yourself; the server retains other artifact groups. Set
+requires1–200bindings; to remove its last binding issue remove, which forbids
+revisionId/bindings. No duplicate artifact command or source UUID is accepted.
+Moving a source between groups requires removing it from the old group's full
+set and placing it in the new set explicitly within the command vector.
+
+Each query item is `{binding,resolution}`. Binding freezes sourceNodeId,
+sourceKind,sourceLastKnownLabel,ref,origin,reason. Ref is
+`{kind:"api_design",artifactId,revisionId,contentHash,selector,objectHash,
+lastKnownLabel,resolvedPointer}`. Resolution is
+`{status:"resolved"|"broken"|"orphaned",diagnostics,currentDraftRevisionId?,
+updateAvailable}`. Draft advancement is informational. Missing source yields an
+orphan with original labels; filtering its absent sourceNodeId returns200. A
+missing API/object/hash mismatch yields a broken ref, also200. Missing/foreign
+backend revision is404. Old empty-pin revisions return empty items.
+
+Page with identical project/revision/semanticHash/source filter/limit, collecting
+the entire vector before edits. Reset cursor on any change. Validate every page's
+revision/hash/sourceSnapshotIds/pins; cancel/discard late mismatched responses.
+SavedView reads use its exact target; proposal reads use exact baseRevisionId.
+Reimport carries these frozen pins/bindings without new input or association
+revalidation; source stale/orphan status and original labels remain visible.
+
+Preview returns the full candidate vector, source scope, every diagnostic and
+every diff row. Rows carry sourceNodeId,status,before/after refs,contextChanged and
+changes[{pointer,kind,beforeHash?,afterHash?}]. Keep duplicate-source rows: a prior
+selector missing at the target and a remapped/changed binding can both appear.
+Structural pointers are relative to the selected object; empty means its root.
+A→B→A yields the same semantics for the same source/vector independently of path.
+Only clearing the **full** pin vector restores the source semantic hash anchor.
+Historical revisions and their records/receipts are never rewritten.
+
+A set whose old artifact is unavailable is blocked until explicit removal;
+remove remains allowed without decoding that old body. Bounded lightweight
+digest-only removal/CAS checks verify stored ownership/digests; they do not read
+or decode the old raw body and do not establish checked selected-object existence,
+structural diff or compatibility. A removed row can therefore represent explicit
+detachment without an inspected old-object comparison. Retained unrelated broken
+or orphan groups remain visible and do not block another checked change. An old
+selector absent at the new revision produces backend_api_previous_object_missing
+and a missing diff row. Preserving an invalid target selector blocks apply with
+backend_api_object_missing; an explicit valid remap or detach is required.
+
+Limits are 20 commands, 20 artifacts in the complete retained/candidate vector
+(including unrelated retained non-API kinds), 200 bindings in the complete
+candidate, a 128 KiB REST body (or lower configured body limit), 1000 diff rows/
+structural entries, and generated structural paths of 2048 UTF-8 bytes **after
+escaping**. Overflow truncates diff,
+sets diffTruncated=true/canApply=false and prevents apply. At most 20 distinct heavy
+old/new/retained artifact snapshots may be read/resolved per request: even a
+20-group vector can exceed this on replacement. Bounded lightweight digest-only
+lookups for explicit removal and final transaction CAS are outside this heavy
+read/decode/resolution budget and remain bounded by the command and full artifact
+vector limits. Narrow the request on 413.
+
+| REST status/code | Required response |
+|---|---|
+|400 backend_invalid | Fix strict input, IDs, selector variant or source kind; no write. |
+|404 backend_not_found | Missing/foreign backend baseline; retain historical intent. Snapshot uses404 not_found for missing/foreign owner revision; its owner validation is400 design_invalid. |
+|422 backend_api_pins_unsupported | Mutations require imported source4; supported historical reads remain available. |
+|422 backend_api_pins_blocked | Read diagnostics; explicit repair/removal, then new preview. Truncation diagnostic is backend_api_diff_truncated. |
+|409 backend_version_conflict / backend_api_pins_base_conflict | Preserve intent; explicitly reread project/base and repreview before a new attempt. |
+|409 backend_api_pins_hash_conflict | Candidate/raw artifact changed; explicitly repreview. |
+|409 backend_idempotency_conflict | Key already has a different request; preserve the original attempt/receipt. |
+|413 backend_too_large / backend_api_pins_limit | Transport body bound / service work bound; narrow input. Raw snapshot uses413 too_large for its configured document limit. |
+
+MCP admission/HTTP failures are tool errors; it does not silently retry or change
+selectors. Preview diagnostics can accompany200 with canApply=false; only an
+applicable complete preview authorizes the exact apply candidate. Save the entire
+apply body/key before sending. Timeout/network/5xx/lost reply is unknown outcome:
+retry that identical body/key before other work, even if head/API draft advanced
+or the owner disappeared. Receipt lookup precedes CAS/owner reads and returns
+the original project/revision acknowledgement; do not treat it as a fresh head.
+A confirmed409 requires an explicit repreview, never an automatic new key.
+
+### Public hash → preview → apply → replay → deleted pointer example
+
+These are request templates: substitute actual IDs/versions from project/source
+reads and the owner's exact immutable revision. Illustrative design7/revision45
+must belong together; source UUID11111111-1111-4111-8111-111111111111 is an api_field
+selected by the user. Assume this is the sole binding in group7; otherwise include
+**every** retained binding in each set below. Existing E4 public SDK tests cover
+raw strings, hashes, replay and orphans; this example does not claim an agent run.
+
+1. Call get_api_artifact_snapshot:
+
+```json
+{"artifactId":"7","revisionId":"45"}
+```
+
+Verify SHA-256(snapshot.document's UTF-8 bytes) equals snapshot.contentHash;
+retain raw text/hash and exact IDs. Manually choose the schema pointer. Pinning
+never accepts a hydrated document/hash as a replacement for this owner snapshot.
+2. Save B=exact current source4 backend revision, V=project version. Call
+preview_backend_api_pins with this template (replace B/V with actual UUID/int64):
+
+```json
+{"projectId":"22222222-2222-4222-8222-222222222222","baseRevisionId":"33333333-3333-4333-8333-333333333333","expectedVersion":2,"commands":[{"type":"set_api_pin","artifactId":"7","revisionId":"45","bindings":[{"sourceNodeId":"11111111-1111-4111-8111-111111111111","selector":{"jsonPointer":"/components/schemas/Order/properties/id"}}],"reason":"Manually reviewed Order ID field"}]}
+```
+
+The project/base UUIDs and version2 are illustrative; substitute the exact P/B/V
+read from your project. expectedVersion is a JSON integer, never a string.
+Check the frozen ref's contentHash against the raw snapshot, all retained groups,
+diagnostics, full diff and canApply=true/diffTruncated=false. Let C be candidateHash.
+3. Call apply_backend_api_pins with exactly that preview input, plus
+`candidateHash:C,idempotencyKey:"order-id-pin-1"`. Persist the serialized full body
+and key first. The acknowledgement returns new backend revision R1/version V1.
+If the reply is lost, resend the exact saved request. Compare receipt bytes;
+never mint a key or silently use the newer head for this retry.
+4. In the ordinary API designer explicitly save a separate current draft edit
+that deletes properties/id and adds properties/orderId, yielding immutable API
+revision46. Snapshot45 and backend revision R1 remain unchanged. Query R1: its
+old selector still resolves in45; updateAvailable may announce46 without rebinding.
+5. Read current backend base/version explicitly. Preview a set to46 keeping the
+old /properties/id selector. Inspect backend_api_previous_object_missing and its
+missing row plus backend_api_object_missing; canApply=false blocks apply. Choose
+an explicit remap to /components/schemas/Order/properties/orderId, preserve every
+other group7 binding and preview again. Keep both missing and changed/remapped
+rows, review hashes/context, then apply its new exact candidate with a new saved
+attempt key. Alternatively remove group7 explicitly and preview/apply the detach.
+An unavailable old snapshot blocks set; detach remains available first.
+6. Reopen R1 or a SavedView/proposal base pinned to it: it still names revision45
+and the old field. New head, revision46, orphan labels and dirty current draft
+never replace this history. Exact API editor navigation uses the raw read-only
+pin panel; current draft navigation is explicit and performs no restore/save/
+publish of historical content. Legacy numeric discovery/editor refuses unsafe
+integers; the exact string pin/snapshot APIs retain the full int64 range.

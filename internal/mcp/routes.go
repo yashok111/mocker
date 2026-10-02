@@ -51,6 +51,10 @@ import (
 var noRoute = []string{}
 
 var toolRoutes = map[string][]string{
+	"query_backend_api_artifacts":       {"POST /api/backend-projects/{id}/api-artifacts/query"},
+	"preview_backend_api_pins":          {"POST /api/backend-projects/{id}/api-artifacts/preview"},
+	"apply_backend_api_pins":            {"POST /api/backend-projects/{id}/api-artifacts/commands"},
+	"get_api_artifact_snapshot":         {"GET /api/designs/{id}/revisions/{rid}/artifact-snapshot"},
 	"list_backend_saved_views":          {"GET /api/backend-projects/{id}/saved-views"},
 	"create_backend_saved_view":         {"POST /api/backend-projects/{id}/saved-views"},
 	"get_backend_saved_view":            {"GET /api/backend-projects/{id}/saved-views/{vid}"},
@@ -326,8 +330,9 @@ var toolRoutes = map[string][]string{
 // Pinned in routes_test.go so a tool
 // added without an entry here is caught by a test rather than by a 404 in
 // production.
-// B1.2 adds five isolated database proposal operations.
-const toolCount = 179
+// B1.2 adds five isolated database proposal operations. B24 adds four exact
+// API artifact snapshot/query/preview/apply operations.
+const toolCount = 183
 
 // toolPath resolves ONE call a tool makes into the (method, path) pair
 // loopback.do/call take.

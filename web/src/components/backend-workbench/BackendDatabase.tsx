@@ -31,6 +31,7 @@ import {
   type DatabaseSelection,
 } from "./backendDatabaseReads";
 import { cardinalityText } from "./backendDatabaseLayout";
+import { useBackendAPIDeparture } from "./useBackendAPIDeparture";
 import { usePinnedValue, type BackendSourcePin } from "./backendFlowReads";
 import {
   BackendSavedViewContext,
@@ -74,6 +75,7 @@ function DatabaseDiscovery({
   onDirty?: (dirty: boolean) => void;
 }) {
   const key = ["backend-database-discovery", projectId, revisionId];
+  const depart = useBackendAPIDeparture();
   useDatabaseCancellation(key);
   const query = useQuery({
     queryKey: key,
@@ -114,15 +116,19 @@ function DatabaseDiscovery({
               data={datastores.map((node) => ({ value: node.id, label: node.name }))}
               value={selected.id}
               onChange={(event) => {
-                if (
-                  !(dirty || savedViewSession?.dirty || savedViewSession?.pending) ||
-                  window.confirm(
-                    "Есть несохранённые команды или изменения вида. Перейти к другому хранилищу?",
-                  )
-                ) {
-                  setDirty(false);
-                  setDatastore(event.currentTarget.value);
-                }
+                const value = event.currentTarget.value;
+                depart(
+                  () => {
+                    setDirty(false);
+                    setDatastore(value);
+                  },
+                  dirty || savedViewSession?.dirty || savedViewSession?.pending
+                    ? () =>
+                        window.confirm(
+                          "Есть несохранённые команды, изменения вида или неизвестный результат применения API. Перейти к другому хранилищу?",
+                        )
+                    : undefined,
+                );
               }}
             />
             <DatabaseFacets
@@ -159,6 +165,7 @@ function DatabaseFacets({
     repositoryId?: string;
     onDirty: (dirty: boolean) => void;
   }) {
+  const depart = useBackendAPIDeparture();
   const facets = useMemo(
     () => [...new Set(nodes.flatMap((node) => Object.keys(relationalFacets(node))))].sort(),
     [nodes],
@@ -180,16 +187,20 @@ function DatabaseFacets({
         label="Источник схемы"
         value={selected}
         onChange={(event) => {
-          if (
-            !(dirty || savedViewSession?.dirty || savedViewSession?.pending) ||
-            window.confirm(
-              "Есть несохранённые команды или изменения вида. Перейти к другому источнику?",
-            )
-          ) {
-            setDirty(false);
-            onDirty(false);
-            setSelected(event.currentTarget.value);
-          }
+          const value = event.currentTarget.value;
+          depart(
+            () => {
+              setDirty(false);
+              onDirty(false);
+              setSelected(value);
+            },
+            dirty || savedViewSession?.dirty || savedViewSession?.pending
+              ? () =>
+                  window.confirm(
+                    "Есть несохранённые команды, изменения вида или неизвестный результат применения API. Перейти к другому источнику?",
+                  )
+              : undefined,
+          );
         }}
         data={
           facets.includes(selected) || !selected
@@ -307,6 +318,7 @@ function DatabaseLists({
   nodes: BackendNode[];
   onRequireColumn?: (columnId: string) => void;
 }) {
+  const depart = useBackendAPIDeparture();
   const key = databaseKey(context);
   useDatabaseCancellation(key);
   const workspace = useWorkspaceSavedState<Extract<SavedViewState, { kind: "database" }>>(
@@ -330,12 +342,14 @@ function DatabaseLists({
   const [relationshipLabel, setRelationshipLabel] = useState(tableId);
   const relationshipTable = tableId ? { value: tableId, label: relationshipLabel } : null;
   const setRelationshipTable = (value: { value: string; label: string } | null) => {
-    setRelationshipLabel(value?.label ?? "");
-    const { relationshipTableId: _old, ...filters } = state.filters;
-    workspace.onStateChange({
-      ...state,
-      selection: null,
-      filters: { ...filters, ...(value ? { relationshipTableId: value.value } : {}) },
+    depart(() => {
+      setRelationshipLabel(value?.label ?? "");
+      const { relationshipTableId: _old, ...filters } = state.filters;
+      workspace.onStateChange({
+        ...state,
+        selection: null,
+        filters: { ...filters, ...(value ? { relationshipTableId: value.value } : {}) },
+      });
     });
   };
   const [historicalSelection, setHistoricalSelection] = useState<DatabaseSelection | null>(null);
@@ -399,12 +413,16 @@ function DatabaseLists({
       (node.kind === "symbol" && "databaseRoutine" in node.attributes),
   );
   function select(value: DatabaseSelection, trigger?: HTMLElement) {
-    origin.current = trigger ?? origin.current;
-    setSelection(value);
+    depart(() => {
+      origin.current = trigger ?? origin.current;
+      setSelection(value);
+    });
   }
   function close() {
-    setSelection(null);
-    (origin.current?.isConnected ? origin.current : fallback.current)?.focus();
+    depart(() => {
+      setSelection(null);
+      (origin.current?.isConnected ? origin.current : fallback.current)?.focus();
+    });
   }
   return (
     <Stack gap="md" style={{ minWidth: 0 }}>
@@ -492,12 +510,14 @@ function DatabaseLists({
       <form
         onSubmit={(event) => {
           event.preventDefault();
-          workspace.onStateChange({
-            ...state,
-            filters: { ...state.filters, search: draft.trim() },
-            selection: null,
+          depart(() => {
+            workspace.onStateChange({
+              ...state,
+              filters: { ...state.filters, search: draft.trim() },
+              selection: null,
+            });
+            setTableCursors([""]);
           });
-          setTableCursors([""]);
         }}
       >
         <Group align="flex-end">

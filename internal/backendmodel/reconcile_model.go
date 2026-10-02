@@ -34,12 +34,13 @@ type HistoricalEvidenceRef struct {
 	EvidenceID string `json:"evidenceId"`
 }
 type RevisionState struct {
-	Revision  Revision
-	Nodes     []Node
-	Edges     []Edge
-	Evidence  []Evidence
-	Sources   []SourceSnapshot
-	Inventory []InventoryItem
+	Revision           Revision
+	Nodes              []Node
+	Edges              []Edge
+	Evidence           []Evidence
+	Sources            []SourceSnapshot
+	Inventory          []InventoryItem
+	APIArtifactContext *APIArtifactContext
 }
 type SourceChange struct {
 	Path              string             `json:"path"`
@@ -114,6 +115,9 @@ type ComparisonRef struct {
 	Path       string `json:"path,omitempty"`
 }
 type ComparisonItem struct {
+	ArtifactBefore  *ArtifactRef        `json:"artifactBefore,omitzero"`
+	ArtifactAfter   *ArtifactRef        `json:"artifactAfter,omitzero"`
+	ContextChanged  bool                `json:"contextChanged,omitzero"`
 	RecordType      string              `json:"recordType"`
 	ID              string              `json:"id"`
 	ChangeKinds     []string            `json:"changeKinds"`
@@ -133,12 +137,13 @@ type ComparisonCounts struct {
 	Modified int64 `json:"modified"`
 }
 type ComparisonSummary struct {
-	Nodes            ComparisonCounts `json:"nodes"`
-	Edges            ComparisonCounts `json:"edges"`
-	Evidence         ComparisonCounts `json:"evidence"`
-	SourceChanges    int64            `json:"sourceChanges"`
-	IdentityMappings int64            `json:"identityMappings"`
-	FreshnessChanges int64            `json:"freshnessChanges"`
+	Artifacts        *ComparisonCounts `json:"artifacts,omitzero"`
+	Nodes            ComparisonCounts  `json:"nodes"`
+	Edges            ComparisonCounts  `json:"edges"`
+	Evidence         ComparisonCounts  `json:"evidence"`
+	SourceChanges    int64             `json:"sourceChanges"`
+	IdentityMappings int64             `json:"identityMappings"`
+	FreshnessChanges int64             `json:"freshnessChanges"`
 }
 type ComparisonPin struct {
 	RevisionID        string   `json:"revisionId"`
@@ -160,11 +165,13 @@ type RevisionComparison struct {
 	NextCursor        string            `json:"nextCursor"`
 }
 type RecordSide struct {
+	Artifact                         *ArtifactRef `json:"artifact,omitzero"`
 	RecordType, ID, SnapshotID, Path string
 	Name, Key                        *string
 	Freshness                        *AssertionFreshness
 }
 type RecordDelta struct {
+	ContextChanged            bool `json:"contextChanged,omitzero"`
 	RecordType, ID            string
 	ChangeKinds, ChangedPaths []string
 	Before, After             *RecordSide

@@ -13399,24 +13399,57 @@
         }
       },
       "BackendArtifactPin": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": [
-          "kind",
-          "id",
-          "revisionId"
-        ],
-        "properties": {
-          "kind": {
-            "type": "string"
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "id",
+              "revisionId"
+            ],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "not": {
+                  "const": "api_design"
+                }
+              },
+              "id": {
+                "type": "string"
+              },
+              "revisionId": {
+                "type": "string"
+              }
+            }
           },
-          "id": {
-            "type": "string"
-          },
-          "revisionId": {
-            "type": "string"
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "id",
+              "revisionId",
+              "contentHash"
+            ],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "api_design"
+              },
+              "id": {
+                "$ref": "#/components/schemas/APIArtifactID"
+              },
+              "revisionId": {
+                "$ref": "#/components/schemas/APIArtifactID"
+              },
+              "contentHash": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              }
+            }
           }
-        }
+        ]
       },
       "BackendRevision": {
         "type": "object",
@@ -14188,7 +14221,8 @@
               "type": "string",
               "enum": [
                 "proposal-relational-v1",
-                "saved-view-v1"
+                "saved-view-v1",
+                "api-artifact-pins-v1"
               ]
             }
           },
@@ -20256,6 +20290,9 @@
             "format": "int64",
             "minimum": 0,
             "maximum": 9223372036854775807
+          },
+          "artifacts": {
+            "$ref": "#/components/schemas/BackendComparisonCounts"
           }
         }
       },
@@ -20735,6 +20772,33 @@
                 "type": "string"
               }
             }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "projectId",
+              "revisionId",
+              "recordType",
+              "id"
+            ],
+            "properties": {
+              "projectId": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "revisionId": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "recordType": {
+                "type": "string",
+                "const": "artifact"
+              },
+              "id": {
+                "type": "string"
+              }
+            }
           }
         ]
       },
@@ -20763,7 +20827,8 @@
               "edge",
               "evidence",
               "source",
-              "identity"
+              "identity",
+              "artifact"
             ]
           },
           "id": {
@@ -20867,6 +20932,15 @@
                 "type": "null"
               }
             ]
+          },
+          "artifactBefore": {
+            "$ref": "#/components/schemas/BackendArtifactRef"
+          },
+          "artifactAfter": {
+            "$ref": "#/components/schemas/BackendArtifactRef"
+          },
+          "contextChanged": {
+            "type": "boolean"
           }
         }
       },
@@ -20951,7 +21025,8 @@
               "edge",
               "evidence",
               "source",
-              "identity"
+              "identity",
+              "artifact"
             ]
           },
           "changeKind": {
@@ -35689,6 +35764,639 @@
             "type": "integer",
             "minimum": 0,
             "maximum": 5000
+          }
+        }
+      },
+      "APIArtifactID": {
+        "type": "string",
+        "pattern": "^([1-9][0-9]{0,17}|[1-8][0-9]{18}|9[0-1][0-9]{17}|92[0-1][0-9]{16}|922[0-2][0-9]{15}|9223[0-2][0-9]{14}|92233[0-6][0-9]{13}|922337[0-1][0-9]{12}|92233720[0-2][0-9]{10}|922337203[0-5][0-9]{9}|9223372036[0-7][0-9]{8}|92233720368[0-4][0-9]{7}|922337203685[0-3][0-9]{6}|9223372036854[0-6][0-9]{5}|92233720368547[0-6][0-9]{4}|922337203685477[0-4][0-9]{3}|9223372036854775[0-7][0-9]{2}|922337203685477580[0-6][0-9]{0}|9223372036854775807)$",
+        "minLength": 1,
+        "maxLength": 19,
+        "description": "Canonical positive decimal int64 string. Never a JSON number."
+      },
+      "BackendAPIArtifactSelector": {
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "objectKey"
+            ],
+            "properties": {
+              "objectKey": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200,
+                "description": "At most 200 UTF-8 bytes."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "jsonPointer"
+            ],
+            "properties": {
+              "jsonPointer": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2048,
+                "pattern": "^/(?:[^~/]|~[01])*(?:/(?:[^~/]|~[01])*){0,63}$",
+                "description": "RFC6901 pointer; at most 2048 UTF-8 bytes and 64 segments. Literal percent is retained."
+              }
+            }
+          }
+        ]
+      },
+      "BackendArtifactRef": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "artifactId",
+          "revisionId",
+          "contentHash",
+          "selector",
+          "objectHash",
+          "lastKnownLabel",
+          "resolvedPointer"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "api_design"
+          },
+          "artifactId": {
+            "$ref": "#/components/schemas/APIArtifactID"
+          },
+          "revisionId": {
+            "$ref": "#/components/schemas/APIArtifactID"
+          },
+          "contentHash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "selector": {
+            "$ref": "#/components/schemas/BackendAPIArtifactSelector"
+          },
+          "objectHash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "lastKnownLabel": {
+            "type": "string",
+            "maxLength": 4096,
+            "description": "At most 4096 UTF-8 bytes."
+          },
+          "resolvedPointer": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2048,
+            "pattern": "^/(?:[^~/]|~[01])*(?:/(?:[^~/]|~[01])*){0,63}$",
+            "description": "RFC6901 pointer; at most 2048 UTF-8 bytes and 64 segments. Literal percent is retained."
+          }
+        }
+      },
+      "BackendAPIArtifactBinding": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "sourceNodeId",
+          "sourceKind",
+          "sourceLastKnownLabel",
+          "ref",
+          "origin",
+          "reason"
+        ],
+        "properties": {
+          "sourceNodeId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "sourceKind": {
+            "type": "string",
+            "enum": [
+              "http_operation",
+              "api_field"
+            ]
+          },
+          "sourceLastKnownLabel": {
+            "type": "string",
+            "maxLength": 4096,
+            "description": "At most 4096 UTF-8 bytes."
+          },
+          "ref": {
+            "$ref": "#/components/schemas/BackendArtifactRef"
+          },
+          "origin": {
+            "type": "string",
+            "const": "manual"
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 4096,
+            "description": "At most 4096 UTF-8 bytes.",
+            "minLength": 1
+          }
+        }
+      },
+      "BackendAPIPinBindingInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "sourceNodeId",
+          "selector"
+        ],
+        "properties": {
+          "sourceNodeId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "selector": {
+            "$ref": "#/components/schemas/BackendAPIArtifactSelector"
+          }
+        }
+      },
+      "BackendAPIPinCommand": {
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "type",
+              "artifactId",
+              "revisionId",
+              "bindings",
+              "reason"
+            ],
+            "properties": {
+              "type": {
+                "type": "string",
+                "const": "set_api_pin"
+              },
+              "artifactId": {
+                "$ref": "#/components/schemas/APIArtifactID"
+              },
+              "revisionId": {
+                "$ref": "#/components/schemas/APIArtifactID"
+              },
+              "bindings": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/BackendAPIPinBindingInput"
+                },
+                "maxItems": 200,
+                "minItems": 1
+              },
+              "reason": {
+                "type": "string",
+                "maxLength": 4096,
+                "description": "At most 4096 UTF-8 bytes.",
+                "minLength": 1
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "type",
+              "artifactId",
+              "reason"
+            ],
+            "properties": {
+              "type": {
+                "type": "string",
+                "const": "remove_api_pin"
+              },
+              "artifactId": {
+                "$ref": "#/components/schemas/APIArtifactID"
+              },
+              "reason": {
+                "type": "string",
+                "maxLength": 4096,
+                "description": "At most 4096 UTF-8 bytes.",
+                "minLength": 1
+              }
+            }
+          }
+        ]
+      },
+      "QueryBackendAPIArtifactsRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "revisionId"
+        ],
+        "properties": {
+          "revisionId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "sourceNodeId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100,
+            "default": 50
+          },
+          "cursor": {
+            "type": "string",
+            "maxLength": 4096
+          }
+        }
+      },
+      "PreviewBackendAPIPinsRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "baseRevisionId",
+          "expectedVersion",
+          "commands"
+        ],
+        "properties": {
+          "baseRevisionId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "expectedVersion": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1,
+            "maximum": 9223372036854775807
+          },
+          "commands": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendAPIPinCommand"
+            },
+            "maxItems": 20,
+            "minItems": 1
+          }
+        }
+      },
+      "ApplyBackendAPIPinsRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "baseRevisionId",
+          "expectedVersion",
+          "commands",
+          "candidateHash",
+          "idempotencyKey"
+        ],
+        "properties": {
+          "baseRevisionId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "expectedVersion": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1,
+            "maximum": 9223372036854775807
+          },
+          "commands": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendAPIPinCommand"
+            },
+            "maxItems": 20,
+            "minItems": 1
+          },
+          "candidateHash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "idempotencyKey": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "pattern": "^[!-~]+$"
+          }
+        }
+      },
+      "BackendAPIArtifactDiagnostic": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "code",
+          "message"
+        ],
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "sourceNodeId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "artifactId": {
+            "$ref": "#/components/schemas/APIArtifactID"
+          },
+          "pointer": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2048,
+            "pattern": "^/(?:[^~]|~[01])*$",
+            "description": "RFC6901 pointer; at most 2048 UTF-8 bytes and 64 segments. Literal percent is retained."
+          },
+          "message": {
+            "type": "string"
+          }
+        }
+      },
+      "BackendAPIArtifactResolution": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "status",
+          "diagnostics",
+          "updateAvailable"
+        ],
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "resolved",
+              "broken",
+              "orphaned"
+            ]
+          },
+          "diagnostics": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendAPIArtifactDiagnostic"
+            }
+          },
+          "currentDraftRevisionId": {
+            "$ref": "#/components/schemas/APIArtifactID"
+          },
+          "updateAvailable": {
+            "type": "boolean"
+          }
+        }
+      },
+      "BackendAPIArtifactItem": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "binding",
+          "resolution"
+        ],
+        "properties": {
+          "binding": {
+            "$ref": "#/components/schemas/BackendAPIArtifactBinding"
+          },
+          "resolution": {
+            "$ref": "#/components/schemas/BackendAPIArtifactResolution"
+          }
+        }
+      },
+      "BackendAPIArtifactPage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "revisionId",
+          "semanticHash",
+          "sourceSnapshotIds",
+          "pins",
+          "items",
+          "nextCursor"
+        ],
+        "properties": {
+          "revisionId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "semanticHash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "sourceSnapshotIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "pins": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendArtifactPin"
+            }
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendAPIArtifactItem"
+            },
+            "maxItems": 100
+          },
+          "nextCursor": {
+            "type": "string"
+          }
+        }
+      },
+      "BackendAPIArtifactObjectChange": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "pointer",
+          "kind"
+        ],
+        "properties": {
+          "pointer": {
+            "type": "string",
+            "minLength": 0,
+            "maxLength": 2048,
+            "pattern": "^(?:/(?:[^~]|~[01])*)?$",
+            "description": "Relative RFC6901 structural diff path, including empty root. Bound 2048 UTF-8 bytes after escaping; overflow truncates and blocks apply."
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "added",
+              "removed",
+              "changed"
+            ]
+          },
+          "beforeHash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "afterHash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          }
+        }
+      },
+      "BackendAPIArtifactDiff": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "sourceNodeId",
+          "status",
+          "contextChanged",
+          "changes"
+        ],
+        "properties": {
+          "sourceNodeId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "added",
+              "removed",
+              "changed",
+              "unchanged",
+              "missing",
+              "moved"
+            ]
+          },
+          "before": {
+            "$ref": "#/components/schemas/BackendArtifactRef"
+          },
+          "after": {
+            "$ref": "#/components/schemas/BackendArtifactRef"
+          },
+          "contextChanged": {
+            "type": "boolean"
+          },
+          "changes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendAPIArtifactObjectChange"
+            },
+            "maxItems": 1000
+          }
+        }
+      },
+      "BackendAPIPinsPreview": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "baseRevisionId",
+          "expectedVersion",
+          "candidateHash",
+          "semanticHash",
+          "pins",
+          "bindings",
+          "sourceSnapshotIds",
+          "diagnostics",
+          "diff",
+          "diffTruncated",
+          "canApply"
+        ],
+        "properties": {
+          "baseRevisionId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "expectedVersion": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1,
+            "maximum": 9223372036854775807
+          },
+          "candidateHash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "semanticHash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "pins": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendArtifactPin"
+            }
+          },
+          "bindings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendAPIArtifactBinding"
+            },
+            "maxItems": 200
+          },
+          "sourceSnapshotIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "diagnostics": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendAPIArtifactDiagnostic"
+            }
+          },
+          "diff": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendAPIArtifactDiff"
+            },
+            "maxItems": 1000
+          },
+          "diffTruncated": {
+            "type": "boolean"
+          },
+          "canApply": {
+            "type": "boolean"
+          }
+        }
+      },
+      "BackendAPIPinsResult": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "project",
+          "revision"
+        ],
+        "properties": {
+          "project": {
+            "$ref": "#/components/schemas/BackendProject"
+          },
+          "revision": {
+            "$ref": "#/components/schemas/BackendRevision"
+          }
+        }
+      },
+      "APIArtifactSnapshot": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "artifactId",
+          "revisionId",
+          "contentHash",
+          "name",
+          "document"
+        ],
+        "properties": {
+          "artifactId": {
+            "$ref": "#/components/schemas/APIArtifactID"
+          },
+          "revisionId": {
+            "$ref": "#/components/schemas/APIArtifactID"
+          },
+          "contentHash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "name": {
+            "type": "string"
+          },
+          "document": {
+            "type": "string",
+            "description": "Exact immutable raw owner document bytes represented as a string. Hash is SHA-256 of these UTF-8 bytes, without hydrated operation keys."
           }
         }
       }
@@ -51033,6 +51741,450 @@
           }
         },
         "description": "Read-only bounded static value dependencies in one explicit source4 revision. Unknown boundaries and all multi-source mapping inputs remain visible; witnesses do not prove execution or complete coverage."
+      }
+    },
+    "/api/backend-projects/{id}/api-artifacts/query": {
+      "post": {
+        "tags": [
+          "backend-projects"
+        ],
+        "operationId": "queryBackendAPIArtifacts",
+        "summary": "queryBackendAPIArtifacts",
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendAPIArtifactPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/QueryBackendAPIArtifactsRequest"
+              }
+            }
+          }
+        },
+        "description": "Exact immutable API associations; strict recursive request admission and 128 KiB body limit. Full vector preview retains unrelated associations. Structural diff paths are bounded to 2048 UTF-8 bytes after RFC6901 escaping; truncated output cannot apply. Identical apply retries emit the original stored response bytes."
+      }
+    },
+    "/api/backend-projects/{id}/api-artifacts/preview": {
+      "post": {
+        "tags": [
+          "backend-projects"
+        ],
+        "operationId": "previewBackendAPIPins",
+        "summary": "previewBackendAPIPins",
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendAPIPinsPreview"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PreviewBackendAPIPinsRequest"
+              }
+            }
+          }
+        },
+        "description": "Exact immutable API associations; strict recursive request admission and 128 KiB body limit. Full vector preview retains unrelated associations. Structural diff paths are bounded to 2048 UTF-8 bytes after RFC6901 escaping; truncated output cannot apply. Identical apply retries emit the original stored response bytes."
+      }
+    },
+    "/api/backend-projects/{id}/api-artifacts/commands": {
+      "post": {
+        "tags": [
+          "backend-projects"
+        ],
+        "operationId": "applyBackendAPIPins",
+        "summary": "applyBackendAPIPins",
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendAPIPinsResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApplyBackendAPIPinsRequest"
+              }
+            }
+          }
+        },
+        "description": "Exact immutable API associations; strict recursive request admission and 128 KiB body limit. Full vector preview retains unrelated associations. Structural diff paths are bounded to 2048 UTF-8 bytes after RFC6901 escaping; truncated output cannot apply. Identical apply retries emit the original stored response bytes."
+      }
+    },
+    "/api/designs/{id}/revisions/{rid}/artifact-snapshot": {
+      "get": {
+        "tags": [
+          "api-designs"
+        ],
+        "operationId": "getAPIArtifactSnapshot",
+        "summary": "Read exact raw immutable API artifact",
+        "description": "Owner-matched immutable raw snapshot; foreign revision is 404. IDs are canonical decimal int64 strings.",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIArtifactSnapshot"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid canonical IDs, request admission or owner document.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "$ref": "#/components/schemas/ApiDesignInvalidDetails"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          },
+          "413": {
+            "$ref": "#/components/responses/PayloadTooLarge"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/APIArtifactID"
+            }
+          },
+          {
+            "name": "rid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/APIArtifactID"
+            }
+          }
+        ]
       }
     }
   }

@@ -37,6 +37,14 @@ func loadSourceState(ctx context.Context, q importReader, pid, rid string) (*Rev
 	if len(state.Sources) == 1 && state.Sources[0].Role == "" {
 		state.Sources[0].Role = "primary"
 	}
+	frozen, err := loadAPIArtifactContext(ctx, q, rid)
+	if err != nil {
+		return nil, err
+	}
+	state.APIArtifactContext = frozen
+	if frozen == nil && slices.ContainsFunc(state.Revision.ArtifactPins, func(pin ArtifactPin) bool { return pin.Kind == "api_design" }) {
+		return nil, invalid("context", "API pins require their frozen association context")
+	}
 	return state, nil
 }
 func loadRevisionState(ctx context.Context, q importReader, pid, rid string) (*RevisionState, error) {
@@ -463,7 +471,7 @@ func overlayGraph(ctx context.Context, q importReader, s *ImportSession, base *R
 	slices.SortFunc(g.Nodes, func(a, b Node) int { return strings.Compare(a.ID, b.ID) })
 	slices.SortFunc(g.Edges, func(a, b Edge) int { return strings.Compare(a.ID, b.ID) })
 	slices.SortFunc(g.Evidence, func(a, b Evidence) int { return strings.Compare(a.ID, b.ID) })
-	after := RevisionState{Nodes: g.Nodes, Edges: g.Edges, Evidence: g.Evidence, Sources: g.Sources, Inventory: s.Inventory}
+	after := RevisionState{Revision: Revision{ArtifactPins: base.Revision.ArtifactPins}, APIArtifactContext: base.APIArtifactContext, Nodes: g.Nodes, Edges: g.Edges, Evidence: g.Evidence, Sources: g.Sources, Inventory: s.Inventory}
 	g.SourceChanges = sourceChanges(*base, after)
 	delta, err := CompareRevisionStates(ctx, *base, after)
 	if err != nil {

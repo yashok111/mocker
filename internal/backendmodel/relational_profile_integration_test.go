@@ -64,7 +64,7 @@ func TestRelationalProfileActualB04Store(t *testing.T) {
 			t.Fatal(err)
 		}
 		var schema int
-		if err := db.R.QueryRowContext(t.Context(), `PRAGMA user_version`).Scan(&schema); err != nil || schema != 17 {
+		if err := db.R.QueryRowContext(t.Context(), `PRAGMA user_version`).Scan(&schema); err != nil || schema != 18 {
 			t.Fatalf("schema17 compatibility: %d, %v", schema, err)
 		}
 		return db

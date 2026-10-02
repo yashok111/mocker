@@ -13,17 +13,19 @@ import (
 )
 
 type graphCandidate struct {
-	Sources            []SourceSnapshot   `json:"sources"`
-	SourceChanges      []SourceChange     `json:"sourceChanges"`
-	IdentityDecisions  []IdentityDecision `json:"identityDecisions"`
-	DeletionDecisions  []DeletionDecision `json:"deletionDecisions"`
-	ComparisonSummary  *ComparisonSummary `json:"comparisonSummary"`
-	ReconciliationGaps []string           `json:"reconciliationGaps"`
-	StaleCounts        StaleCounts        `json:"staleCounts"`
-	Nodes              []Node             `json:"nodes"`
-	Edges              []Edge             `json:"edges"`
-	Evidence           []Evidence         `json:"evidence"`
-	Coverage           Coverage           `json:"coverage"`
+	ArtifactPins       []ArtifactPin       `json:"artifactPins,omitempty"`
+	APIArtifactContext *APIArtifactContext `json:"apiArtifactContext,omitzero"`
+	Sources            []SourceSnapshot    `json:"sources"`
+	SourceChanges      []SourceChange      `json:"sourceChanges"`
+	IdentityDecisions  []IdentityDecision  `json:"identityDecisions"`
+	DeletionDecisions  []DeletionDecision  `json:"deletionDecisions"`
+	ComparisonSummary  *ComparisonSummary  `json:"comparisonSummary"`
+	ReconciliationGaps []string            `json:"reconciliationGaps"`
+	StaleCounts        StaleCounts         `json:"staleCounts"`
+	Nodes              []Node              `json:"nodes"`
+	Edges              []Edge              `json:"edges"`
+	Evidence           []Evidence          `json:"evidence"`
+	Coverage           Coverage            `json:"coverage"`
 }
 
 func prepareGraph(ctx context.Context, q importReader, s *ImportSession) (*graphCandidate, []ImportDiagnostic, error) {
@@ -330,6 +332,9 @@ func prepareGraph(ctx context.Context, q importReader, s *ImportSession) (*graph
 		g.Coverage.Gaps = append(g.Coverage.Gaps, "Unresolved nodes or evidence remain.")
 	}
 	finishReconciliation(s, g)
+	if err := carryAPIArtifactContext(ctx, s, base, g); err != nil {
+		return nil, nil, err
+	}
 	semantic, err := candidateJSON(s, g)
 	if err != nil {
 		return nil, nil, err
@@ -583,6 +588,13 @@ func (r *Repo) CommitImport(ctx context.Context, pid, sid string, in CommitImpor
 		}
 		now := time.Now().UTC()
 		rev := Revision{ID: uuid.NewV7().String(), ProjectID: pid, ParentRevisionID: new(current.BaseRevisionID), SchemaVersion: modelSchemaVersion(current.Profile), SemanticHash: hashBytes(b), SourceSnapshotIDs: sourceIDs(g.Sources), ArtifactPins: []ArtifactPin{}, Coverage: g.Coverage, Author: "agent", Summary: "Source-backed foundation graph import", CreatedAt: now}
+		if len(g.ArtifactPins) > 0 {
+			rev.ArtifactPins = g.ArtifactPins
+			rev.SemanticHash, err = APIArtifactSemanticHash(g.APIArtifactContext.SourceContentHash, g.APIArtifactContext.SourceSemanticHash, g.ArtifactPins, g.APIArtifactContext.Bindings)
+			if err != nil {
+				return err
+			}
+		}
 		doc, err := json.Marshal(rev)
 		if err != nil {
 			return err
@@ -645,6 +657,11 @@ func (r *Repo) CommitImport(ctx context.Context, pid, sid string, in CommitImpor
 		}
 		if _, err := tx.ExecContext(ctx, `INSERT INTO backend_revision_sources(revision_id,document) VALUES(?,?)`, rev.ID, string(sourceDoc)); err != nil {
 			return err
+		}
+		if g.APIArtifactContext != nil {
+			if err := saveAPIArtifactContext(ctx, tx, rev.ID, *g.APIArtifactContext); err != nil {
+				return err
+			}
 		}
 		p.Version++
 		p.CurrentRevisionID = rev.ID

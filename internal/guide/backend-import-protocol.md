@@ -458,7 +458,7 @@ runtime, downgrade, automatic provider migration and proposal→source fail.
 Schema1/2 history and receipt bytes stay unchanged; omitted old records stay stale
 at original snapshots and proofs instead of gaining new UUIDs/current claims.
 
-Select inspect3 in this same global set and verify backend-flow-reference before
+Select inspect4 in this same global set and verify backend-flow-reference before
 staging schema3. Its typed flow/step/query/transaction and control/access/boundary
 shapes use external Keys on import and Ids after preview. Keep entry/exits in the
 owning flow; local transaction membership does not propagate to callees. Calls
@@ -482,5 +482,16 @@ call and access references plus the usual complete scope/inventory/proof gates.
 An authorized focused gap investigation changes source analysis focus, not the
 whole-scope import protocol. Unavailable/inconclusive source retains unknowns
 and produces a concrete limitation, never an empty progress commit. Requery the
-new acknowledged source revision through inspect3; imported witnesses still do
+new acknowledged source revision through inspect4; imported witnesses still do
 not establish execution, all writers, atomicity or impact.
+
+## Reimport with frozen API associations
+
+Import5 accepts no API pin/binding input. Reconcile carries the base's frozen
+API artifact pins and bindings without re-resolving or revalidating the manual
+association. It updates the source hash anchor, while stale source status and
+last-known source/object labels remain visible. Explicit source deletion retains
+the binding as orphaned; query_backend_api_artifacts with that sourceNodeId
+returns200 at the new exact revision. Use inspect4's full API procedure for a
+separately authorized remap or removal. Never attach a current API draft during
+import or rewrite an old source revision/SavedView/proposal base.

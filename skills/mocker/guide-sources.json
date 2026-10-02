@@ -213,7 +213,7 @@
     },
     {
       "workflowId": "mocker-backend-inspect",
-      "workflowVersion": "3",
+      "workflowVersion": "4",
       "entrypoint": "backend-inspect",
       "requiredModelSchemaVersions": [
         "3",
@@ -226,10 +226,12 @@
         "backend-flow-query",
         "backend-data-access-query",
         "backend-saved-views",
-        "backend-field-lineage-query"
+        "backend-field-lineage-query",
+        "backend-api-artifact-pins"
       ],
       "requiredViewSchemaVersions": [
-        "saved-view-v1"
+        "saved-view-v1",
+        "api-artifact-pins-v1"
       ]
     }
   ]

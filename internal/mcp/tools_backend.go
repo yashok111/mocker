@@ -31,6 +31,7 @@ func addBackendTools(s *sdk.Server, lb *loopback) {
 	addBackendLineageTools(s, lb)
 	addBackendProposalTools(s, lb)
 	addBackendSavedViewTools(s, lb)
+	addBackendAPIArtifactTools(s, lb)
 	const base = "/api/backend-projects"
 	id := map[string]any{"type": "string", "format": "uuid"}
 	name := map[string]any{"type": "string", "minLength": 1, "maxLength": backendmodel.MaxNameLength}

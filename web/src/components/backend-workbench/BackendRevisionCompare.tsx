@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
   Badge,
   Button,
@@ -25,6 +25,9 @@ import type {
   CompareBackendRevisionsRequest,
 } from "@/api/generated/schemas";
 import { BackendRecordInspector, LoadState, Pages } from "./BackendGraphInventory";
+import { BackendArtifactReference } from "./BackendAPIArtifacts";
+import type { BackendArtifactRef } from "@/api/generated/schemas";
+import { useDatabaseCancellation } from "./backendDatabaseReads";
 const wrap = { overflowWrap: "anywhere" as const, whiteSpace: "pre-wrap" as const };
 export function BackendRevisionCompare(props: { projectId: string; initialRevisionId: string }) {
   return <Compare key={props.projectId} {...props} />;
@@ -84,10 +87,12 @@ function Compare({
                 onChange={(event) => setRecordType(event.currentTarget.value)}
                 data={[
                   { value: "", label: "Все записи" },
-                  ...["node", "edge", "evidence", "source", "identity"].map((value) => ({
-                    value,
-                    label: value,
-                  })),
+                  ...["node", "edge", "evidence", "source", "identity", "artifact"].map(
+                    (value) => ({
+                      value,
+                      label: value,
+                    }),
+                  ),
                 ]}
               />
               <NativeSelect
@@ -122,9 +127,24 @@ function Comparison({
   const [cursors, setCursors] = useState([""]);
   const [selected, setSelected] = useState<BackendComparisonItem | null>(null);
   const input = { ...pins, limit: 100, cursor: cursors.at(-1) ?? "" };
+  const key = ["backend-comparison", projectId, JSON.stringify(input)];
+  useDatabaseCancellation(key);
+  const context = useRef<string | null>(null);
   const query = useQuery({
-    queryKey: ["backend-comparison", projectId, input],
-    queryFn: ({ signal }) => compareBackendRevisions(projectId, input, { signal }),
+    queryKey: key,
+    queryFn: async ({ signal }) => {
+      const response = await compareBackendRevisions(projectId, input, { signal });
+      signal.throwIfAborted();
+      if (response.status !== 200) throw new Error("Не удалось прочитать сравнение");
+      const page = response.data;
+      if (page.from.revisionId !== pins.fromRevisionId || page.to.revisionId !== pins.toRevisionId)
+        throw new Error("Получен другой контекст сравнения ревизий");
+      const identity = JSON.stringify([page.from, page.to, page.comparisonHash]);
+      if (context.current !== null && context.current !== identity)
+        throw new Error("Изменился контекст страниц сравнения ревизий");
+      context.current = identity;
+      return response;
+    },
     staleTime: Infinity,
     retry: false,
   });
@@ -200,9 +220,18 @@ function Comparison({
           <Text size="sm" style={wrap}>
             Изменённые свойства: {selected.changedPaths.join(", ") || "нет"}
           </Text>
+          {selected.contextChanged && <Text>Контекст всего артефакта изменился.</Text>}
           <SimpleGrid cols={{ base: 1, md: 2 }}>
-            <ComparisonSide label="До изменения" reference={selected.before} />
-            <ComparisonSide label="После изменения" reference={selected.after} />
+            <ComparisonSide
+              label="До изменения"
+              reference={selected.before}
+              artifact={selected.artifactBefore}
+            />
+            <ComparisonSide
+              label="После изменения"
+              reference={selected.after}
+              artifact={selected.artifactAfter}
+            />
           </SimpleGrid>
         </Stack>
       )}
@@ -223,6 +252,12 @@ export function ComparisonSummary({ summary }: { summary: BackendComparisonSumma
           {label}: добавлено {count.added} · удалено {count.removed} · изменено {count.modified}
         </Text>
       ))}
+      {summary.artifacts && (
+        <Text size="sm">
+          Артефакты API: добавлено {summary.artifacts.added} · удалено {summary.artifacts.removed} ·
+          изменено {summary.artifacts.modified}
+        </Text>
+      )}
       <Text size="sm">
         Исходники {summary.sourceChanges} · идентичность {summary.identityMappings} · свежесть{" "}
         {summary.freshnessChanges}
@@ -251,9 +286,11 @@ function ComparisonCoverage({ coverage }: { coverage: BackendCoverage }) {
 function ComparisonSide({
   label,
   reference,
+  artifact,
 }: {
   label: string;
   reference: BackendComparisonRef | null;
+  artifact?: BackendArtifactRef;
 }) {
   return (
     <Paper component="section" aria-label={label} withBorder p="sm" style={{ minWidth: 0 }}>
@@ -269,6 +306,17 @@ function ComparisonSide({
                 key={`${reference.projectId}:${reference.revisionId}:${reference.snapshotId}:${reference.path}`}
                 reference={reference}
               />
+            ) : reference.recordType === "artifact" ? (
+              artifact ? (
+                <BackendArtifactReference
+                  reference={artifact}
+                  projectId={reference.projectId}
+                  revisionId={reference.revisionId}
+                  sourceNodeId={reference.id}
+                />
+              ) : (
+                <Text>Точная ссылка артефакта отсутствует в сравнении.</Text>
+              )
             ) : (
               <BackendRecordInspector
                 projectId={reference.projectId}

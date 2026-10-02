@@ -4,6 +4,7 @@ import type { BackendLineageValueRef } from "@/api/generated/schemas";
 import { readDatabaseGraph, useDatabaseCancellation, databaseWrap } from "./backendDatabaseReads";
 import { BackendValueSeeds } from "./BackendLineageActions";
 import { LoadState } from "./BackendGraphInventory";
+import { BackendAPIArtifacts } from "./BackendAPIArtifacts";
 export function BackendAPIFields({
   projectId,
   revisionId,
@@ -35,6 +36,12 @@ export function BackendAPIFields({
       {query.data?.nodes.map((node) => (
         <Stack key={node.id} gap="xs">
           <APIFieldDescription attributes={node.attributes} />
+          <BackendAPIArtifacts
+            projectId={projectId}
+            revisionId={revisionId}
+            sourceNodeId={node.id}
+            sourceKind="api_field"
+          />
           <BackendValueSeeds
             projectId={projectId}
             revisionId={revisionId}

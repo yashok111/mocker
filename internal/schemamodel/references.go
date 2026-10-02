@@ -1,6 +1,7 @@
 package schemamodel
 
 import (
+	"context"
 	"maps"
 	"net/url"
 	"slices"
@@ -23,6 +24,9 @@ type operation struct {
 	common []string
 }
 type traversal struct {
+	ctx         context.Context
+	schemaEntry func(string, any)
+
 	sites    []referenceSite
 	nodes    int
 	resource string
@@ -100,9 +104,17 @@ var childRules = map[string]map[string]childRule{
 }
 
 func (w *traversal) walk(v any, p, kind, schema, property string, depth int) error {
+	if w.ctx != nil {
+		if err := w.ctx.Err(); err != nil {
+			return err
+		}
+	}
 	w.nodes++
 	if depth > maxDepth || w.nodes > maxNodes {
 		return fail(p, "Превышен предел обхода документа (128 уровней, 100000 узлов)")
+	}
+	if kind == "schema" && w.schemaEntry != nil {
+		w.schemaEntry(p, v)
 	}
 	m := object(v)
 	if m == nil {

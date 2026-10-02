@@ -14,9 +14,9 @@ package admin
 // cmd/mocker/main.go can forget a setter and no test in this package ever
 // calls it.
 //
-// Everything New builds for itself (the repositories, the rate limiter) is
-// non-nil by construction and is not checked here: this method is about the
-// wiring cmd/mocker owns, not about New's own arguments.
+// The repositories and rate limiter are non-nil by construction. The required
+// APIArtifactService is additionally checked because its transport depends on
+// both backend and API owners; a missing service must prevent startup.
 //
 // REQUIRED vs OPTIONAL, decided from the setters' own doc comments:
 //
@@ -43,6 +43,11 @@ package admin
 // from the slice reads as a to-do list rather than a set.
 func (s *Server) Ready() []string {
 	var missing []string
+	// Artifact pins require both owners. Keep this explicit even though New
+	// constructs the service, so incomplete production wiring fails startup.
+	if s.backendAPIArtifacts == nil {
+		missing = append(missing, "NewAPIArtifactService")
+	}
 	if s.liveState == nil {
 		missing = append(missing, "SetLiveState")
 	}

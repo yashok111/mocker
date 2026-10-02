@@ -17,6 +17,7 @@ import type { BackendFlowPage, QueryBackendFlowRequest } from "@/api/generated/s
 import { CoverageDetails, LoadState, Pages } from "./BackendGraphInventory";
 import { BackendFlowGraph } from "./BackendFlowGraph";
 import { BackendFlowInspector } from "./BackendFlowInspector";
+import { BackendAPIArtifactsContext } from "./BackendAPIArtifacts";
 import {
   databaseButtonStyles,
   databaseStatus,
@@ -64,6 +65,7 @@ function FlowWorkspace({
   onDatabaseNavigate,
 }: Props) {
   const [selectedValue, setSelectedValue] = useState<FlowSelection["valueRef"]>();
+  const apiHost = useContext(BackendAPIArtifactsContext);
   const [localPin, setPin] = useState<BackendSourcePin>(externalPin ?? {});
   const initialPin = externalPin ?? localPin;
   const workspace = useWorkspaceSavedState<Extract<SavedViewState, { kind: "flow" }>>(
@@ -123,6 +125,7 @@ function FlowWorkspace({
       : undefined;
   if (selectedValue && !activeValue) setSelectedValue(undefined);
   function update(next: BackendSourcePin) {
+    if (apiHost?.guard && !apiHost.guard()) return;
     const value = { ...next, revisionId };
     setPin(value);
     workspace.onStateChange({
