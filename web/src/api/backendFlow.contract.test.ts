@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { afterEach, expect, it, vi } from "vitest";
 import { queryBackendFlow } from "./generated/backend-projects/backend-projects";
 import type { QueryBackendFlowRequest } from "./generated/schemas";

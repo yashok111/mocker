@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { expect, it } from "vitest";
 import type { SchemaModel } from "@/api/generated/schemas";
 import { layoutDiagram } from "../diagram/elkLayout";

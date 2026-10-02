@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, expect, it } from "vitest";
 import { impactGraphModel } from "./model";
 import { reportFixture } from "./fixtures.test-support";

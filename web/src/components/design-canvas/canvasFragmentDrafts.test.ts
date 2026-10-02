@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, expect, it } from "vitest";
 import { createFormDraftStore } from "../api-designer/forms/formDraftStore";
 import { clearObsoleteFragmentDrafts } from "./canvasFragmentDrafts";

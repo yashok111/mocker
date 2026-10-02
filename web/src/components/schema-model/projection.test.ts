@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { expect, it } from "vitest";
 import type { SchemaModel, SchemaModelSchema } from "@/api/generated/schemas";
 import { referenceVertices } from "./projection";

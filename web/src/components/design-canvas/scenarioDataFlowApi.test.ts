@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, expect, it, vi } from "vitest";
 import { analyzeScenarioDataFlow } from "./scenarioDataFlowApi";
 import { analyzeDesignScenarioDataFlow } from "@/api/generated/design-scenarios/design-scenarios";

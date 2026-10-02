@@ -1,3 +1,4 @@
+// @vitest-environment node
 import type { Graph } from "@antv/x6";
 import { describe, expect, it, vi } from "vitest";
 import { applyDiagramRoutes, diagramRouteOptions } from "./elkX6";

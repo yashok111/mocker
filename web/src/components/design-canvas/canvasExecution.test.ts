@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, expect, it } from "vitest";
 import { canvasExecutionBlockReason, defaultStepExecution } from "./canvasExecution";
 import { emptyCanvas, OPERATION_KEY } from "./canvasModel";

@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { afterEach, expect, it, vi } from "vitest";
 import { json, route } from "@/test/http";
 import { loadScenarioArtifact, loadScenarioExportOptions } from "./scenarioExportApi";

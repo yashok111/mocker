@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, expect, it } from "vitest";
 import { blankRule, EXTENSION, readRules, writeRules } from "./model";
 import { nodeSummary } from "./layout";

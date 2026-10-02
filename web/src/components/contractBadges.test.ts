@@ -1,3 +1,4 @@
+// @vitest-environment node
 // P7b B3: the badge rules, one assertion each, on fixtures — a custom row at
 // a NEW shape is «добавлено», one at a spec operation's shape is «изменено»
 // (never «добавлено»), a patched or pinned override is «изменено», routeOff

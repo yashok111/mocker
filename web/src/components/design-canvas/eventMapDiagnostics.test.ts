@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { expect, it } from "vitest";
 import type { DesignScenarioEventMapDiagnostic } from "@/api/generated/schemas";
 import { diagnosticMarkers } from "./eventMapDiagnostics";

@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, expect, it } from "vitest";
 import { emptyCanvas, resolveOperation } from "./canvasModel";
 import { parseCanvas, parseSavedCanvas, serializeSavedCanvas } from "./canvasStorage";

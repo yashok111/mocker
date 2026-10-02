@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { afterEach, expect, it, vi } from "vitest";
 import { json } from "@/test/http";
 import { parseBackendSourcePin, readFlowPage } from "./backendFlowReads";

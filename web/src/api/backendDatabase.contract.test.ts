@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { queryBackendDatabase } from "./generated/backend-projects/backend-projects";
 import type { BackendDatabasePage, QueryBackendDatabaseRequest } from "./generated/schemas";

@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { expect, it } from "vitest";
 import type { BackendNode, BackendEdge } from "@/api/generated/schemas";
 import { buildFlowScene, flowStepContext } from "./backendFlowLayout";

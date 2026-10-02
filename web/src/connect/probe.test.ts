@@ -1,3 +1,4 @@
+// @vitest-environment node
 // probe.test.ts pins the branch that is this screen's entire reason to
 // exist (a 200 with the wrong workspace must never read as success) and
 // the rejection branch a real fetch is awkward to force — both drive the

@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, expect, it } from "vitest";
 import { inheritOperation, parameterValue, validateMergedReferences } from "./canvasContractMerge";
 import type { ConversionIssue } from "./canvasContractConversion";

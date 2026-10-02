@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { expect, it } from "vitest";
 import type { DesignScenarioEventMapReport } from "@/api/generated/schemas";
 import { GRAPH_EDGE_CAP, GRAPH_NODE_CAP, graphSubset } from "./eventMapSubset";

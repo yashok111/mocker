@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { expect, it, vi, afterEach } from "vitest";
 import { json } from "@/test/http";
 import { readArtifactPage, completeArtifactSet, readPinnedScenario } from "./backendArtifactReads";

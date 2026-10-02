@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { expectTypeOf, test } from "vitest";
 import type { SimulateResponseRuleRequest } from "./generated/schemas";
 

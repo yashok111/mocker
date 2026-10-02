@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, expect, it } from "vitest";
 import { layoutDiagram } from "../diagram/elkLayout";
 import { applyRuleLayout, ruleLayoutInput } from "./elk";

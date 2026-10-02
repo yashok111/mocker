@@ -1,3 +1,4 @@
+// @vitest-environment node
 // buildRecipes is plain data, so this pins the two things that would
 // otherwise regress silently: every snippet is built from ws.url and
 // config.reservedPrefix as given (never re-derived), and the apiBase recipe

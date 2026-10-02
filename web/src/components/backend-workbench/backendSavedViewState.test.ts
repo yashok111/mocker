@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { expect, it } from "vitest";
 import { parseBackendSourcePin } from "./backendFlowReads";
 import { savedViewSourcePin, sameViewBinding, savedViewStateEqual } from "./backendSavedViewState";

@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, expect, it } from "vitest";
 import { rebaseCanvasDocument } from "./canvasRebase";
 import type { CanvasDocument } from "./types";

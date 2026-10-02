@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { expect, it } from "vitest";
 import { resourceLayoutInput } from "./layout";
 import type { Model } from "./model";

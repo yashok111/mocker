@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { expect, it, vi } from "vitest";
 import { getDesignScenarioEventMap } from "@/api/generated/design-scenarios/design-scenarios";
 import { getScenarioEventMap } from "./scenarioEventMapApi";

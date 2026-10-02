@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, expect, it } from "vitest";
 import { getOperation, type ApiDocument } from "../api-designer/documentModel";
 import { buildCanvasContract, previewCanvasContract } from "./canvasContractConversion";

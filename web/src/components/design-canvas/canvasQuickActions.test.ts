@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, expect, it } from "vitest";
 import { exampleCanvas } from "./canvasModel";
 import { addCanvasReply, duplicateCanvasMessage, insertCanvasMessage } from "./canvasQuickActions";
