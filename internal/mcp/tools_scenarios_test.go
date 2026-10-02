@@ -264,14 +264,16 @@ func TestApplyDesignScenarioCommandsPreservesNewContractDocumentNumbers(t *testi
 
 func TestApplyDesignScenarioCommandsRejectsUnknownFieldsBeforeAdminCall(t *testing.T) {
 	t.Parallel()
+	calls := &recordingCaller{status: http.StatusOK, body: []byte(`{}`)}
+	fixture := newToolFixture(calls)
 	for _, command := range []string{
 		`{"type":"create_contract","contract":{"id":"new","name":"API","document":{},"source":null}}`,
 		`{"type":"create_contract","contract":{"id":"new","name":"API","document":{},"extra":true}}`,
 		`{"type":"create_contract","contract":{"id":"new","name":"API","document":{}},"label":"ignored"}`,
 		`{"type":"set_title","title":"new","label":"ignored"}`,
 	} {
-		calls := &recordingCaller{status: http.StatusOK, body: []byte(`{}`)}
-		_, errMsg := callTool(t, calls, "apply_design_scenario_commands", `{"scenarioId":7,"expectedVersion":3,"commands":[`+command+`]}`)
+		*calls = recordingCaller{status: http.StatusOK, body: []byte(`{}`)}
+		_, errMsg := fixture.Call(t, "apply_design_scenario_commands", `{"scenarioId":7,"expectedVersion":3,"commands":[`+command+`]}`)
 		if errMsg == "" || calls.method != "" {
 			t.Fatalf("malformed command reached admin: call=%q error=%q command=%s", calls.method, errMsg, command)
 		}
@@ -280,14 +282,16 @@ func TestApplyDesignScenarioCommandsRejectsUnknownFieldsBeforeAdminCall(t *testi
 
 func TestApplyDesignScenarioCommandsRejectsIncompleteUpsertsBeforeAdminCall(t *testing.T) {
 	t.Parallel()
+	calls := &recordingCaller{status: http.StatusOK, body: []byte(`{}`)}
+	fixture := newToolFixture(calls)
 	for _, command := range []string{
 		`{"type":"upsert_participant","participant":{"id":"api","kind":"service"}}`,
 		`{"type":"upsert_participant","participant":{"id":"api","name":null,"kind":"service","description":"kept"}}`,
 		`{"type":"upsert_message","message":{"id":"call","fromId":"client","toId":"api","kind":"request"}}`,
 		`{"type":"upsert_fragment","fragment":{"id":"loop","kind":"loop","fromMessageId":"call","toMessageId":"call"}}`,
 	} {
-		calls := &recordingCaller{status: http.StatusOK, body: []byte(`{}`)}
-		_, errMsg := callTool(t, calls, "apply_design_scenario_commands", `{"scenarioId":7,"expectedVersion":3,"commands":[`+command+`]}`)
+		*calls = recordingCaller{status: http.StatusOK, body: []byte(`{}`)}
+		_, errMsg := fixture.Call(t, "apply_design_scenario_commands", `{"scenarioId":7,"expectedVersion":3,"commands":[`+command+`]}`)
 		if errMsg == "" || calls.method != "" {
 			t.Fatalf("incomplete upsert reached admin and could erase saved fields: call=%q error=%q command=%s", calls.method, errMsg, command)
 		}
@@ -337,6 +341,8 @@ func TestDesignScenarioToolsPreserveColors(t *testing.T) {
 
 func TestDesignScenarioToolsRejectInvalidColorsBeforeAdminCall(t *testing.T) {
 	t.Parallel()
+	calls := &recordingCaller{status: http.StatusOK, body: []byte(`{}`)}
+	fixture := newToolFixture(calls)
 	for _, color := range []string{`""`, `"red"`, `"#123"`, `"#12345678"`, `"#abcdez"`, `"#123456\n"`, `null`, `12`} {
 		for _, field := range []string{"color", "arrowColor"} {
 			message := `{"id":"call","fromId":"api","toId":"api","kind":"request","label":"Call","description":"","` + field + `":` + color + `}`
@@ -348,8 +354,8 @@ func TestDesignScenarioToolsRejectInvalidColorsBeforeAdminCall(t *testing.T) {
 				{"apply_design_scenario_commands", `{"scenarioId":7,"expectedVersion":3,"commands":[{"type":"upsert_message","message":` + message + `}]}`},
 			} {
 				t.Run(tt.name+"/"+field+"/"+color, func(t *testing.T) {
-					calls := &recordingCaller{status: http.StatusOK, body: []byte(`{}`)}
-					_, errMsg := callTool(t, calls, tt.name, tt.args)
+					*calls = recordingCaller{status: http.StatusOK, body: []byte(`{}`)}
+					_, errMsg := fixture.Call(t, tt.name, tt.args)
 					if errMsg == "" || calls.method != "" {
 						t.Fatalf("invalid color reached admin: call=%q error=%q", calls.method, errMsg)
 					}

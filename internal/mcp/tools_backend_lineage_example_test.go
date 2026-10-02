@@ -18,13 +18,14 @@ import (
 // witnesses and ordered inputs come from the independently authored fixture.
 func TestBackendLineageRealSDKGuideFixtureExample(t *testing.T) {
 	server, _ := newResourcesTestServer(t, resourcesTestConfig(t))
+	fixture := newToolFixture(server)
 	call := func(name string, input any, out any) []byte {
 		t.Helper()
 		encoded, err := json.Marshal(input)
 		if err != nil {
 			t.Fatal(err)
 		}
-		raw, message := callTool(t, server, name, string(encoded))
+		raw, message := fixture.Call(t, name, string(encoded))
 		if message != "" {
 			t.Fatalf("%s: %s", name, message)
 		}

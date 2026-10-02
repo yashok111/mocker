@@ -21,9 +21,10 @@ import (
 func TestResponseRuleResultConditionMCPIntegration(t *testing.T) {
 	t.Parallel()
 	server, _ := newResourcesTestServer(t, resourcesTestConfig(t))
+	fixture := newToolFixture(server)
 	call := func(name string, input any) json.RawMessage {
 		t.Helper()
-		out, message := callTool(t, server, name, responseRuleIntegrationJSON(t, input))
+		out, message := fixture.Call(t, name, responseRuleIntegrationJSON(t, input))
 		if message != "" {
 			t.Fatalf("%s: %s", name, message)
 		}
@@ -129,13 +130,13 @@ func TestResponseRuleResultConditionMCPIntegration(t *testing.T) {
 		})
 	}
 
-	_, message := callTool(t, server, "save_response_rule", responseRuleIntegrationJSON(t, map[string]any{"designId": designID, "ruleId": "result-rule", "expectedVersion": 3, "rule": rule}))
+	_, message := fixture.Call(t, "save_response_rule", responseRuleIntegrationJSON(t, map[string]any{"designId": designID, "ruleId": "result-rule", "expectedVersion": 3, "rule": rule}))
 	if !strings.Contains(message, "409") || !strings.Contains(message, `"version":4`) {
 		t.Fatalf("missing CAS conflict: %s", message)
 	}
 	condition["op"] = "not_equals"
 	commands := []any{map[string]any{"type": "update_node", "node": node}, map[string]any{"type": "remove_edge", "edgeId": "unavailable"}}
-	_, message = callTool(t, server, "apply_response_rule_commands", responseRuleIntegrationJSON(t, map[string]any{"designId": designID, "ruleId": "result-rule", "expectedVersion": 4, "commands": commands}))
+	_, message = fixture.Call(t, "apply_response_rule_commands", responseRuleIntegrationJSON(t, map[string]any{"designId": designID, "ruleId": "result-rule", "expectedVersion": 4, "commands": commands}))
 	if !strings.Contains(message, "400") {
 		t.Fatalf("bad batch accepted: %s", message)
 	}
@@ -150,7 +151,7 @@ func TestResponseRuleResultConditionMCPIntegration(t *testing.T) {
 	} {
 		badNode["id"] = "check"
 		commands := []any{map[string]any{"type": "update_node", "node": badNode}}
-		_, message = callTool(t, server, "apply_response_rule_commands", responseRuleIntegrationJSON(t, map[string]any{"designId": designID, "ruleId": "result-rule", "expectedVersion": 4, "commands": commands}))
+		_, message = fixture.Call(t, "apply_response_rule_commands", responseRuleIntegrationJSON(t, map[string]any{"designId": designID, "ruleId": "result-rule", "expectedVersion": 4, "commands": commands}))
 		if message == "" {
 			t.Fatal("MCP accepted malformed condition")
 		}

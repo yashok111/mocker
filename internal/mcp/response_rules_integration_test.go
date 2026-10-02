@@ -48,9 +48,10 @@ func responseRuleIntegrationValue(t *testing.T, raw []byte) any {
 func TestResponseRuleMCPIntegrationLifecycle(t *testing.T) {
 	t.Parallel()
 	server, _ := newResourcesTestServer(t, resourcesTestConfig(t))
+	fixture := newToolFixture(server)
 	call := func(name string, input any) json.RawMessage {
 		t.Helper()
-		out, message := callTool(t, server, name, responseRuleIntegrationJSON(t, input))
+		out, message := fixture.Call(t, name, responseRuleIntegrationJSON(t, input))
 		if message != "" {
 			t.Fatalf("%s: %s", name, message)
 		}
@@ -172,11 +173,11 @@ func TestResponseRuleMCPIntegrationLifecycle(t *testing.T) {
 		})
 	}
 
-	_, message := callTool(t, server, "delete_response_rule", responseRuleIntegrationJSON(t, map[string]any{"designId": designID, "ruleId": "auth", "expectedVersion": 3}))
+	_, message := fixture.Call(t, "delete_response_rule", responseRuleIntegrationJSON(t, map[string]any{"designId": designID, "ruleId": "auth", "expectedVersion": 3}))
 	if !strings.Contains(message, "409") || !strings.Contains(message, `"version":4`) {
 		t.Fatalf("stale conflict: %s", message)
 	}
-	_, message = callTool(t, server, "apply_response_rule_commands", responseRuleIntegrationJSON(t, map[string]any{"designId": designID, "ruleId": "auth", "expectedVersion": 4, "commands": []any{map[string]any{"type": "set_rule", "name": "ROLLBACK"}, map[string]any{"type": "remove_edge", "edgeId": "missing"}}}))
+	_, message = fixture.Call(t, "apply_response_rule_commands", responseRuleIntegrationJSON(t, map[string]any{"designId": designID, "ruleId": "auth", "expectedVersion": 4, "commands": []any{map[string]any{"type": "set_rule", "name": "ROLLBACK"}, map[string]any{"type": "remove_edge", "edgeId": "missing"}}}))
 	if !strings.Contains(message, "400") {
 		t.Fatalf("failed batch accepted: %s", message)
 	}
@@ -203,7 +204,7 @@ func TestResponseRuleMCPIntegrationLifecycle(t *testing.T) {
 	if !strings.Contains(proposal, "9007199254740993") {
 		t.Fatal("proposal rounded example")
 	}
-	_, message = callTool(t, server, "get_response_rule", responseRuleIntegrationJSON(t, map[string]any{"designId": designID, "ruleId": "unsaved"}))
+	_, message = fixture.Call(t, "get_response_rule", responseRuleIntegrationJSON(t, map[string]any{"designId": designID, "ruleId": "unsaved"}))
 	if !strings.Contains(message, "404") {
 		t.Fatalf("proposal persisted: %s", message)
 	}
@@ -262,7 +263,8 @@ func TestResponseRuleHTTPContractAdmitsIncompleteConditions(t *testing.T) {
 		t.Fatal(err)
 	}
 	server, _ := newResourcesTestServer(t, resourcesTestConfig(t))
-	raw, message := callTool(t, server, "create_api_design", `{"name":"Incomplete conditions"}`)
+	fixture := newToolFixture(server)
+	raw, message := fixture.Call(t, "create_api_design", `{"name":"Incomplete conditions"}`)
 	if message != "" {
 		t.Fatal(message)
 	}
@@ -280,14 +282,14 @@ func TestResponseRuleHTTPContractAdmitsIncompleteConditions(t *testing.T) {
 		t.Run(fmt.Sprintf("condition%d", i), func(t *testing.T) {
 			id := fmt.Sprintf("rule%d", i)
 			rule := responserules.Rule{ID: id, Name: "Incomplete", Nodes: []responserules.Node{{ID: "condition", Type: "condition", Name: "Condition", Condition: &condition}}, Edges: []responserules.Edge{}}
-			out, message := callTool(t, server, "create_response_rule", responseRuleIntegrationJSON(t, map[string]any{"designId": detail.Design.ID, "expectedVersion": detail.Design.Version, "rule": rule}))
+			out, message := fixture.Call(t, "create_response_rule", responseRuleIntegrationJSON(t, map[string]any{"designId": detail.Design.ID, "expectedVersion": detail.Design.Version, "rule": rule}))
 			if message != "" {
 				t.Fatalf("server rejected authoring condition: %s", message)
 			}
 			if err := json.Unmarshal(out, &detail); err != nil {
 				t.Fatal(err)
 			}
-			out, message = callTool(t, server, "get_response_rule", responseRuleIntegrationJSON(t, map[string]any{"designId": detail.Design.ID, "ruleId": id}))
+			out, message = fixture.Call(t, "get_response_rule", responseRuleIntegrationJSON(t, map[string]any{"designId": detail.Design.ID, "ruleId": id}))
 			if message != "" {
 				t.Fatal(message)
 			}

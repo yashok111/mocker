@@ -148,6 +148,7 @@ func TestSchemaModelToolsLifecycleThroughRealAdmin(t *testing.T) {
 	t.Parallel()
 	cfg := resourcesTestConfig(t)
 	server, _ := newResourcesTestServer(t, cfg)
+	fixture := newToolFixture(server)
 	var detail struct {
 		Design struct{ ID, Version int64 } `json:"design"`
 		Draft  struct {
@@ -162,7 +163,7 @@ func TestSchemaModelToolsLifecycleThroughRealAdmin(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		raw, msg := callTool(t, server, name, string(body))
+		raw, msg := fixture.Call(t, name, string(body))
 		if msg != "" {
 			t.Fatalf("%s: %s", name, msg)
 		}
@@ -234,7 +235,7 @@ func TestSchemaModelToolsLifecycleThroughRealAdmin(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		_, msg := callTool(t, server, "delete_api_schema", string(args))
+		_, msg := fixture.Call(t, "delete_api_schema", string(args))
 		if msg == "" {
 			t.Fatal("stale/referenced deletion succeeded")
 		}

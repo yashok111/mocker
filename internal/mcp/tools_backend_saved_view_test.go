@@ -47,6 +47,7 @@ func TestBackendSavedViewGuideDatabaseSDKExample(t *testing.T) {
 	for _, dialect := range []string{"postgresql", "sqlite"} {
 		t.Run(dialect, func(t *testing.T) {
 			server, _ := newResourcesTestServer(t, resourcesTestConfig(t))
+			fixture := newToolFixture(server)
 			encode := func(value any) []byte {
 				t.Helper()
 				raw, err := json.Marshal(value)
@@ -57,7 +58,7 @@ func TestBackendSavedViewGuideDatabaseSDKExample(t *testing.T) {
 			}
 			call := func(name string, input map[string]any, out any) []byte {
 				t.Helper()
-				raw, message := callTool(t, server, name, string(encode(input)))
+				raw, message := fixture.Call(t, name, string(encode(input)))
 				if message != "" {
 					t.Fatalf("%s: %s", name, message)
 				}
@@ -147,7 +148,7 @@ func TestBackendSavedViewGuideDatabaseSDKExample(t *testing.T) {
 				t.Fatal("version1 substituted newer presentation")
 			}
 			stale := map[string]any{"projectId": project.ID, "viewId": first.ID, "name": "Stale local edit", "state": state, "expectedVersion": 1, "idempotencyKey": "database-view-conflict"}
-			failure, message := callTool(t, server, "save_backend_saved_view", string(encode(stale)))
+			failure, message := fixture.Call(t, "save_backend_saved_view", string(encode(stale)))
 			if !strings.Contains(string(failure)+message, "backend_version_conflict") || !strings.Contains(string(failure)+message, "currentVersion") {
 				t.Fatalf("old CAS did not return recovery fields: %s %s", failure, message)
 			}
