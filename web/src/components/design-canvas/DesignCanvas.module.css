@@ -17,7 +17,7 @@
 }
 .heading {
   min-width: 0;
-  flex: 1;
+  flex: 1 1 320px;
 }
 .mark {
   display: grid;
@@ -32,13 +32,13 @@
 .titleGroup {
   min-width: 0;
   flex: 1;
-  max-width: 550px;
 }
 .titleInput {
   font-size: 22px;
   font-weight: 650;
-  height: 32px;
   min-height: 32px;
+  line-height: 28px;
+  overflow-wrap: anywhere;
   color: var(--mocker-ink, #25332f);
   padding: 2px 6px;
 }

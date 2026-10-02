@@ -301,7 +301,7 @@ function addParticipantCells(
       y: geometry.header.y,
       width: geometry.header.width,
       height: geometry.header.height,
-      zIndex: 12,
+      zIndex: 20,
       markup: [
         { tagName: "rect", selector: "body" },
         { tagName: "rect", selector: "kindPill" },

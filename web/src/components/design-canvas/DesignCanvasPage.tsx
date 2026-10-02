@@ -15,7 +15,7 @@ import {
   Loader,
   Menu,
   Text,
-  TextInput,
+  Textarea,
   Tooltip,
   UnstyledButton,
 } from "@mantine/core";
@@ -394,11 +394,16 @@ export function DesignCanvasEditor({
             <Text size="xs" c="dimmed" tt="uppercase" lts="0.08em" fw={650}>
               Сценарии взаимодействия
             </Text>
-            <TextInput
+            <Textarea
+              autosize
+              minRows={1}
               variant="unstyled"
               aria-label="Название сценария"
               value={document.title}
               classNames={{ input: classes.titleInput }}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") event.preventDefault();
+              }}
               onChange={(event) => draft.update({ ...document, title: event.currentTarget.value })}
             />
           </div>

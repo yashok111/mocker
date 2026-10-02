@@ -23,6 +23,8 @@ const graph = vi.hoisted(() => ({
   resetCells: vi.fn(),
   zoomToFit: vi.fn(),
   zoom: vi.fn(() => 1),
+  translate: vi.fn(() => ({ tx: 0, ty: 100 })),
+  getCellById: vi.fn(),
   zoomTo: vi.fn(),
   on: vi.fn(),
   resize: vi.fn(),
@@ -76,7 +78,25 @@ function cell(id: string): CellMetadata {
   return result;
 }
 
-beforeEach(() => vi.clearAllMocks());
+beforeEach(() => {
+  vi.clearAllMocks();
+  graph.zoom.mockReturnValue(1);
+  graph.translate.mockReturnValue({ tx: 0, ty: 100 });
+  graph.getCellById.mockImplementation((id: string) => {
+    const metadata = (graph.resetCells.mock.lastCall?.[0] as CellMetadata[] | undefined)?.find(
+      (item) => item.id === id,
+    );
+    if (!metadata) return undefined;
+    return {
+      isNode: () => true,
+      getPosition: () => ({ x: metadata.x, y: metadata.y }),
+      setPosition: (x: number, y: number) => {
+        metadata.x = x;
+        metadata.y = y;
+      },
+    };
+  });
+});
 afterEach(cleanup);
 
 describe("SequenceGraph colors", () => {
@@ -343,7 +363,13 @@ describe("SequenceGraph history", () => {
     expect(screen.queryByText(/Карточки и захваты/)).not.toBeInTheDocument();
     expect(screen.queryByText(/Только просмотр/)).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Масштаб диаграммы")).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Показать всё" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Увеличить масштаб" })).not.toBeInTheDocument();
+    graph.zoomToFit.mockClear();
+    fireEvent.click(screen.getByRole("button", { name: "Показать всё" }));
+    expect(graph.zoomToFit).toHaveBeenCalledExactlyOnceWith({
+      padding: { top: 60, right: 20, bottom: 44, left: 20 },
+      maxScale: 1,
+    });
   });
 
   it("switches read-only mode without resetting viewport and restores editing afterwards", () => {
@@ -470,5 +496,69 @@ describe("SequenceGraph execution", () => {
       ),
     ).toBe(false);
     expect(graph.zoomToFit).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("SequenceGraph sticky participants", () => {
+  function viewport(ty: number, scale = 1) {
+    graph.translate.mockReturnValue({ tx: -120, ty });
+    graph.zoom.mockReturnValue(scale);
+    for (const [event, handler] of graph.on.mock.calls) {
+      if (event === "translate" || event === "scale") handler({});
+    }
+  }
+
+  it("pins headers below controls while preserving columns and message positions", () => {
+    render(view(documentOf()));
+    const originalX = cell("participant:client").x;
+    const originalY = cell("participant:client").y;
+    const messageY = cell("message-label:call").y;
+    viewport(-200);
+    expect(cell("participant:client").y - 200).toBe(64);
+    expect(cell("participant:client").x).toBe(originalX);
+    expect(cell("message-label:call").y).toBe(messageY);
+    viewport(-400, 2);
+    expect(cell("participant:client").y * 2 - 400).toBe(64);
+    viewport(100);
+    expect(cell("participant:client").y).toBe(originalY);
+  });
+
+  it("keeps highlights and selected headers pinned after projection updates", () => {
+    const doc = documentOf();
+    const props = { highlights: [{ kind: "participant", id: "client", status: "added" }] } as const;
+    const highlights = [...props.highlights];
+    const result = render(view(doc, null, { highlights }));
+    const gap = cell("participant:client").y - cell("highlight:participant:client").y;
+    viewport(-200);
+    result.rerender(view(doc, { kind: "participant", id: "client" }, { highlights }));
+    expect(cell("participant:client").y - 200).toBe(64);
+    expect(cell("participant:client").y - cell("highlight:participant:client").y).toBe(gap);
+  });
+
+  it("uses a smaller inset without controls in read-only mode", () => {
+    render(view(documentOf(), null, { readOnly: true }));
+    viewport(-200, 0.5);
+    expect(cell("participant:client").y * 0.5 - 200).toBe(12);
+  });
+
+  it("restores original geometry for fit and keeps dragged headers pinned", () => {
+    const onSpaceParticipant = vi.fn();
+    render(view(documentOf(), null, { onSpaceParticipant }));
+    const originalY = cell("participant:client").y;
+    viewport(-200);
+    const node = {
+      getData: () => cell("participant:client").data,
+      getPosition: () => ({ x: cell("participant:client").x + 50, y: 500 }),
+      setPosition: vi.fn(),
+    };
+    for (const [event, handler] of graph.on.mock.calls) {
+      if (event === "node:moving") handler({ node });
+    }
+    expect(node.setPosition).toHaveBeenLastCalledWith(cell("participant:client").x + 50, 264);
+    graph.zoomToFit.mockImplementationOnce(() => {
+      expect(cell("participant:client").y).toBe(originalY);
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Показать всё" }));
+    expect(cell("participant:client").y).toBe(264);
   });
 });

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { Alert, Button, Code, Loader, Modal, Stack, Text } from "@mantine/core";
 import { useValidateDesignScenario } from "@/api/generated/design-scenarios/design-scenarios";
 import { describeApiFailureDetailed } from "@/api/errors";
@@ -8,10 +8,12 @@ export function ScenarioValidationAction({
   id,
   document,
   disabled = false,
+  renderTrigger,
 }: {
   id: number;
   document: CanvasDocument;
   disabled?: boolean;
+  renderTrigger?: (onValidate: () => void) => ReactNode;
 }) {
   const [opened, setOpened] = useState(false);
   const validation = useValidateDesignScenario();
@@ -27,9 +29,13 @@ export function ScenarioValidationAction({
 
   return (
     <>
-      <Button size="sm" variant="default" disabled={disabled} onClick={validate}>
-        Проверить сценарий
-      </Button>
+      {renderTrigger ? (
+        renderTrigger(validate)
+      ) : (
+        <Button size="sm" variant="default" disabled={disabled} onClick={validate}>
+          Проверить сценарий
+        </Button>
+      )}
       <Modal
         opened={opened}
         onClose={() => setOpened(false)}

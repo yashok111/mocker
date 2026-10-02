@@ -1,8 +1,8 @@
 import { suggestScenarioTests } from "./scenarioTestSuggestionsApi";
 import { useCallback, useEffect, useRef, useState, type ReactElement } from "react";
-import { Alert, Button, Group, Loader, Text } from "@mantine/core";
+import { Alert, Button, Group, Loader, Menu, Text } from "@mantine/core";
 import { useMediaQuery } from "@mantine/hooks";
-import { IconCheck, IconAlertCircle, IconPlayerPlay } from "@tabler/icons-react";
+import { IconCheck, IconAlertCircle, IconPlayerPlay, IconChevronDown } from "@tabler/icons-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { ApiFailure } from "@/api/client";
@@ -553,49 +553,59 @@ function ServerCanvasEditor({
             </Group>
           ),
           actions: (
-            <Group gap="xs">
-              <Button
-                ref={resultsTriggerRef}
-                size="sm"
-                variant="default"
-                loading={resultsLoading}
-                onClick={() => void openResults()}
-              >
-                Получить результат
-              </Button>
-              <Button
-                size="sm"
-                leftSection={<IconPlayerPlay size={16} />}
-                onClick={() => setExecutionOpened(true)}
-              >
-                Запуск
-              </Button>
-              <ScenarioValidationAction
-                id={id}
-                document={draft.document}
-                disabled={draft.pendingForms}
-              />
-              <Button size="sm" variant="default" onClick={() => setContractsOpened(true)}>
-                Контракты API
-              </Button>
-              <Button size="sm" variant="default" onClick={() => setMapOpened(true)}>
-                Карта событий
-              </Button>
-              <Button
-                size="sm"
-                variant="default"
-                disabled={
-                  draft.dirty ||
-                  saveInFlight ||
-                  commands.isPending ||
-                  createCopy.isPending ||
-                  reloading
-                }
-                onClick={() => setHistoryOpened(true)}
-              >
-                История
-              </Button>
-            </Group>
+            <ScenarioValidationAction
+              id={id}
+              document={draft.document}
+              disabled={draft.pendingForms}
+              renderTrigger={(validate) => (
+                <Group gap="xs" wrap="nowrap">
+                  <Button
+                    size="sm"
+                    leftSection={<IconPlayerPlay size={16} />}
+                    onClick={() => setExecutionOpened(true)}
+                  >
+                    Запуск
+                  </Button>
+                  <Menu position="bottom-end" width={230} withinPortal>
+                    <Menu.Target>
+                      <Button
+                        ref={resultsTriggerRef}
+                        size="sm"
+                        variant="default"
+                        rightSection={
+                          resultsLoading ? <Loader size={14} /> : <IconChevronDown size={16} />
+                        }
+                      >
+                        Действия
+                      </Button>
+                    </Menu.Target>
+                    <Menu.Dropdown>
+                      <Menu.Item disabled={resultsLoading} onClick={() => void openResults()}>
+                        Получить результат
+                      </Menu.Item>
+                      <Menu.Item disabled={draft.pendingForms} onClick={validate}>
+                        Проверить сценарий
+                      </Menu.Item>
+                      <Menu.Divider />
+                      <Menu.Item onClick={() => setContractsOpened(true)}>Контракты API</Menu.Item>
+                      <Menu.Item onClick={() => setMapOpened(true)}>Карта событий</Menu.Item>
+                      <Menu.Item
+                        disabled={
+                          draft.dirty ||
+                          saveInFlight ||
+                          commands.isPending ||
+                          createCopy.isPending ||
+                          reloading
+                        }
+                        onClick={() => setHistoryOpened(true)}
+                      >
+                        История
+                      </Menu.Item>
+                    </Menu.Dropdown>
+                  </Menu>
+                </Group>
+              )}
+            />
           ),
           notice: (
             <>

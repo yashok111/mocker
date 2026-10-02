@@ -43,7 +43,30 @@ function detailFixture(version = 1, title = "Оформление заказа")
   };
 }
 
+async function scenarioAction(name: string) {
+  await userEvent.click(await screen.findByRole("button", { name: "Действия" }));
+  return screen.findByRole("menuitem", { name });
+}
+
 describe("ServerDesignCanvasPage", () => {
+  it("groups secondary actions and keeps validation open after the menu closes", async () => {
+    route({
+      "GET /api/design-scenarios/12": () => json(200, detailFixture()),
+      "POST /api/design-scenarios/12/validate": () => json(200, { diagnostics: [] }),
+    });
+    renderInRouter(<ServerDesignCanvasPage id={12} />);
+    expect(await screen.findByRole("button", { name: "Запуск" })).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Получить результат" })).not.toBeInTheDocument();
+    const validation = await scenarioAction("Проверить сценарий");
+    for (const name of ["Получить результат", "Контракты API", "Карта событий", "История"]) {
+      expect(screen.getByRole("menuitem", { name })).toBeVisible();
+    }
+    await userEvent.click(validation);
+    expect(await screen.findByRole("dialog", { name: "Проверка сценария" })).toBeVisible();
+    expect(await screen.findByText("Ошибок и предупреждений нет")).toBeVisible();
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+  });
+
   it("blocks a server run while a fragment condition edit is pending across selection changes", async () => {
     route({
       "GET /api/design-scenarios/12": () => json(200, detailFixture()),
@@ -72,8 +95,8 @@ describe("ServerDesignCanvasPage", () => {
         json(200, { scenarioId: 12, revisionId: 41, sourceHash: "hash-1", options: [] }),
     });
     renderInRouter(<ServerDesignCanvasPage id={12} />);
-    const trigger = await screen.findByRole("button", { name: "Получить результат" });
-    await userEvent.click(trigger);
+    const trigger = await screen.findByRole("button", { name: "Действия" });
+    await userEvent.click(await scenarioAction("Получить результат"));
     expect(await screen.findByRole("dialog", { name: "Получить результат" })).toBeInTheDocument();
     await userEvent.keyboard("{Escape}");
     await waitFor(() =>
@@ -91,8 +114,8 @@ describe("ServerDesignCanvasPage", () => {
       "GET /api/designs": () => json(200, { designs: [] }),
     });
     renderInRouter(<ServerDesignCanvasPage id={12} />);
-    const trigger = await screen.findByRole("button", { name: "Получить результат" });
-    await userEvent.click(trigger);
+    const trigger = await screen.findByRole("button", { name: "Действия" });
+    await userEvent.click(await scenarioAction("Получить результат"));
     const dialog = await screen.findByRole("dialog", { name: "Получить результат" });
     await userEvent.click(within(dialog).getByRole("button", { name: "Создать мок" }));
     expect(await screen.findByRole("dialog", { name: "Контракты API" })).toBeInTheDocument();
@@ -125,7 +148,7 @@ describe("ServerDesignCanvasPage", () => {
     });
     const { queryClient } = renderInRouter(<ServerDesignCanvasPage id={12} />);
     await screen.findByRole("textbox", { name: "Название сценария" });
-    await userEvent.click(screen.getByRole("button", { name: "Получить результат" }));
+    await userEvent.click(await scenarioAction("Получить результат"));
     const dialog = await screen.findByRole("dialog", { name: "Получить результат" });
     expect(await within(dialog).findByLabelText("Предпросмотр результата")).toHaveTextContent(
       "sequenceDiagram old",
@@ -204,7 +227,7 @@ describe("ServerDesignCanvasPage", () => {
     });
     renderInRouter(<ServerDesignCanvasPage id={12} />);
     await screen.findByRole("textbox", { name: "Название сценария" });
-    await userEvent.click(screen.getByRole("button", { name: "Получить результат" }));
+    await userEvent.click(await scenarioAction("Получить результат"));
     const dialog = await screen.findByRole("dialog", { name: "Получить результат" });
     await userEvent.selectOptions(
       within(dialog).getByLabelText("Формат результата"),
@@ -216,7 +239,7 @@ describe("ServerDesignCanvasPage", () => {
     expect(label).toHaveFocus();
     fireEvent.change(label, { target: { value: "Исправленный вызов" } });
     await waitFor(() => expect(screen.getByText("Сохранено")).toBeInTheDocument());
-    await userEvent.click(screen.getByRole("button", { name: "Получить результат" }));
+    await userEvent.click(await scenarioAction("Получить результат"));
     const reopened = await screen.findByRole("dialog", { name: "Получить результат" });
     expect(within(reopened).getByLabelText("Формат результата")).toHaveValue("openapi-json");
     expect(within(reopened).getByLabelText("Весь API-контракт")).toHaveValue(second.id);
@@ -235,7 +258,7 @@ describe("ServerDesignCanvasPage", () => {
     renderInRouter(<ServerDesignCanvasPage id={12} />);
     const title = await screen.findByRole("textbox", { name: "Название сценария" });
     fireEvent.change(title, { target: { value: "Локальная правка" } });
-    await userEvent.click(screen.getByRole("button", { name: "Получить результат" }));
+    await userEvent.click(await scenarioAction("Получить результат"));
     expect(screen.queryByRole("dialog", { name: "Получить результат" })).not.toBeInTheDocument();
     expect(screen.getByText(/Результат будет доступен после сохранения/)).toBeInTheDocument();
   });
@@ -506,7 +529,8 @@ describe("ServerDesignCanvasPage", () => {
     const title = await screen.findByRole("textbox", { name: "Название сценария" });
     fireEvent.change(title, { target: { value: "Отправленная версия" } });
     await waitFor(() => expect(finish).toBeDefined());
-    expect(screen.getByRole("button", { name: "История" })).toBeDisabled();
+    expect(await scenarioAction("История")).toHaveAttribute("data-disabled", "true");
+    await userEvent.keyboard("{Escape}");
     await userEvent.click(screen.getByRole("button", { name: "Отменить" }));
     expect(title).toHaveValue(original.draft.document.title);
     current = sent;
@@ -752,7 +776,7 @@ describe("ServerDesignCanvasPage", () => {
     const title = await screen.findByRole("textbox", { name: "Название сценария" });
     fireEvent.change(title, { target: { value: "Сохранённая правка" } });
     await screen.findByText("Сохранено");
-    await userEvent.click(screen.getByRole("button", { name: "Контракты API" }));
+    await userEvent.click(await scenarioAction("Контракты API"));
     const dialog = await screen.findByRole("dialog", { name: "Контракты API" });
     await userEvent.click(
       within(dialog).getByRole("button", {
@@ -787,7 +811,7 @@ describe("ServerDesignCanvasPage", () => {
     const title = await screen.findByRole("textbox", { name: "Название сценария" });
     fireEvent.change(title, { target: { value: "Сохранённая правка" } });
     await screen.findByText("Сохранено");
-    await userEvent.click(screen.getByRole("button", { name: "Контракты API" }));
+    await userEvent.click(await scenarioAction("Контракты API"));
     const dialog = await screen.findByRole("dialog", { name: "Контракты API" });
     await userEvent.click(within(dialog).getByRole("button", { name: "Добавить API" }));
     const picker = await screen.findByRole("dialog", { name: "Добавить существующий API" });
@@ -949,7 +973,7 @@ describe("ServerDesignCanvasPage", () => {
     renderInRouter(<ServerDesignCanvasPage id={12} />);
 
     await screen.findByRole("textbox", { name: "Название сценария" });
-    await userEvent.click(screen.getByRole("button", { name: "История" }));
+    await userEvent.click(await scenarioAction("История"));
     const dialog = await screen.findByRole("dialog", { name: "История сценария" });
     await userEvent.click(within(dialog).getByRole("button", { name: /Версия 1/ }));
 
@@ -986,7 +1010,7 @@ describe("ServerDesignCanvasPage", () => {
     fireEvent.change(title, { target: { value: "Сохранённая правка" } });
     await waitFor(() => expect(screen.getByText("Сохранено")).toBeInTheDocument());
     expect(screen.getByRole("button", { name: "Отменить" })).toBeEnabled();
-    await userEvent.click(screen.getByRole("button", { name: "История" }));
+    await userEvent.click(await scenarioAction("История"));
     const dialog = await screen.findByRole("dialog", { name: "История сценария" });
     await within(dialog).findByRole("region", { name: "Изменения версий" });
     const version = within(dialog).getByRole("button", { name: /^Версия 1 ·/ });
@@ -1074,7 +1098,7 @@ describe("ServerDesignCanvasPage", () => {
     renderInRouter(<ServerDesignCanvasPage id={12} />);
 
     await screen.findByRole("textbox", { name: "Название сценария" });
-    await userEvent.click(screen.getByRole("button", { name: "Контракты API" }));
+    await userEvent.click(await scenarioAction("Контракты API"));
     const dialog = await screen.findByRole("dialog", { name: "Контракты API" });
     await userEvent.click(
       within(dialog).getByRole("button", { name: `Создать API-проект ${contract.name}` }),
@@ -1117,7 +1141,7 @@ describe("ServerDesignCanvasPage", () => {
     renderInRouter(<ServerDesignCanvasPage id={12} />);
 
     await screen.findByRole("textbox", { name: "Название сценария" });
-    await userEvent.click(screen.getByRole("button", { name: "Контракты API" }));
+    await userEvent.click(await scenarioAction("Контракты API"));
     const contracts = await screen.findByRole("dialog", { name: "Контракты API" });
     await userEvent.click(within(contracts).getByRole("button", { name: "Добавить API" }));
     const picker = await screen.findByRole("dialog", { name: "Добавить существующий API" });
@@ -1145,7 +1169,7 @@ describe("ServerDesignCanvasPage", () => {
     });
     renderInRouter(<ServerDesignCanvasPage id={12} />);
     await screen.findByRole("textbox", { name: "Название сценария" });
-    await userEvent.click(screen.getByRole("button", { name: "Контракты API" }));
+    await userEvent.click(await scenarioAction("Контракты API"));
     await userEvent.click(screen.getByRole("button", { name: "Создать контракт по всей схеме" }));
     const preview = await screen.findByRole("dialog", { name: "Контракт по всей схеме" });
     expect(within(preview).getByText("Операций: 2 · Вызовов: 2")).toBeInTheDocument();
@@ -1192,7 +1216,7 @@ describe("ServerDesignCanvasPage", () => {
     });
     const { queryClient } = renderInRouter(<ServerDesignCanvasPage id={12} />);
     await screen.findByRole("textbox", { name: "Название сценария" });
-    await userEvent.click(screen.getByRole("button", { name: "Контракты API" }));
+    await userEvent.click(await scenarioAction("Контракты API"));
     await userEvent.click(screen.getByRole("button", { name: "Создать контракт по всей схеме" }));
     const preview = await screen.findByRole("dialog", { name: "Контракт по всей схеме" });
     const name = within(preview).getByRole("textbox", { name: "Название API" });
@@ -1237,7 +1261,7 @@ describe("ServerDesignCanvasPage", () => {
       renderInRouter(<ServerDesignCanvasPage id={12} />);
       const title = await screen.findByRole("textbox", { name: "Название сценария" });
       if (state === "dirty") await userEvent.type(title, "!");
-      await userEvent.click(screen.getByRole("button", { name: "Контракты API" }));
+      await userEvent.click(await scenarioAction("Контракты API"));
       expect(screen.getByRole("button", { name: "Создать контракт по всей схеме" })).toBeDisabled();
     },
   );

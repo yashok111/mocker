@@ -7,6 +7,7 @@ import {
 } from "./sequenceProjection";
 export type { SequenceGraphHighlight } from "./sequenceProjection";
 import { Graph } from "@antv/x6";
+import { IconFocus2 } from "@tabler/icons-react";
 import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
 
 import type { CanvasExecutionStatus } from "./canvasExecution";
@@ -16,6 +17,7 @@ import styles from "./SequenceGraph.module.css";
 import { layoutSequence, messageIndexAtY, type SequenceLayout } from "./sequenceLayout";
 import type { CanvasDocument, CanvasSelection } from "./types";
 import { MAX_PARTICIPANT_OFFSET_X } from "./types";
+import { positionSequenceHeaders, stickyParticipantY } from "./sequenceStickyHeaders";
 
 const fitPadding = { top: 72, right: 28, bottom: 112, left: 28 } as const;
 const readOnlyFitPadding = { top: 60, right: 20, bottom: 44, left: 20 } as const;
@@ -118,6 +120,7 @@ export default function SequenceGraph({
   const onEditLabelRef = useRef(onEditLabel);
   const documentRef = useRef(document);
   const readOnlyRef = useRef(readOnly);
+  const fittingRef = useRef(false);
   const [hoveredObject, setHoveredObject] = useState<{
     id: string;
     kind: "participant" | "message";
@@ -219,6 +222,13 @@ export default function SequenceGraph({
     graph.on("blank:mousedown", clearHover);
     graph.on("scale", clearHover);
     graph.on("translate", clearHover);
+    const updateHeaders = () => {
+      if (!fittingRef.current) {
+        positionSequenceHeaders(graph, layoutRef.current, readOnlyRef.current);
+      }
+    };
+    graph.on("translate", updateHeaders);
+    graph.on("scale", updateHeaders);
     container.addEventListener("mouseleave", clearHover);
     const dismissTooltip = (event: KeyboardEvent) => {
       if (event.key === "Escape") clearHover();
@@ -250,7 +260,7 @@ export default function SequenceGraph({
             origin.x - offsetX,
             Math.min(origin.x + MAX_PARTICIPANT_OFFSET_X - offsetX, position.x),
           ),
-          origin.y,
+          stickyParticipantY(graph, origin.y, readOnlyRef.current),
         );
       }
       if (data.role === "messageGrip") node.setPosition(origin.x, position.y);
@@ -284,7 +294,12 @@ export default function SequenceGraph({
           );
         }
       } finally {
-        node.setPosition(origin.x, origin.y);
+        node.setPosition(
+          origin.x,
+          data.role === "participantGrip"
+            ? stickyParticipantY(graph, origin.y, readOnlyRef.current)
+            : origin.y,
+        );
       }
     });
 
@@ -320,9 +335,15 @@ export default function SequenceGraph({
       executionStatuses,
     );
     if (fitOnFirstRenderRef.current && layoutRef.current.participants.length > 0) {
-      graph.zoomToFit({ padding: readOnly ? readOnlyFitPadding : fitPadding, maxScale: 1 });
+      fittingRef.current = true;
+      try {
+        graph.zoomToFit({ padding: readOnly ? readOnlyFitPadding : fitPadding, maxScale: 1 });
+      } finally {
+        fittingRef.current = false;
+      }
       fitOnFirstRenderRef.current = false;
     }
+    positionSequenceHeaders(graph, layoutRef.current, readOnly);
   }, [document, selection, readOnly, highlights, executionStatuses]);
 
   const zoomBy = (delta: number) => {
@@ -334,11 +355,30 @@ export default function SequenceGraph({
   const fit = () => {
     const graph = graphRef.current;
     if (!graph || layoutRef.current.participants.length === 0) return;
-    graph.zoomToFit({ padding: readOnly ? readOnlyFitPadding : fitPadding, maxScale: 1 });
+    fittingRef.current = true;
+    try {
+      positionSequenceHeaders(graph, layoutRef.current, readOnly, true);
+      graph.zoomToFit({ padding: readOnly ? readOnlyFitPadding : fitPadding, maxScale: 1 });
+    } finally {
+      fittingRef.current = false;
+      positionSequenceHeaders(graph, layoutRef.current, readOnly);
+    }
   };
 
   return (
     <section className={styles.shell} aria-label="Диаграмма последовательности">
+      {readOnly ? (
+        <div className={`${styles.controls} ${styles.compactControls}`}>
+          <button
+            type="button"
+            onClick={fit}
+            aria-label="Показать всё"
+            title="Показать всю диаграмму в видимой области"
+          >
+            <IconFocus2 size={18} stroke={1.5} aria-hidden="true" />
+          </button>
+        </div>
+      ) : null}
       {!readOnly ? (
         <div className={styles.controls} aria-label="Масштаб диаграммы">
           <button
