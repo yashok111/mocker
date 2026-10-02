@@ -1,3 +1,6 @@
+import { PinnedScenarioArtifact } from "./PinnedScenarioArtifact";
+import type { PinnedAPIContext } from "../api-designer/PinnedAPIArtifact";
+import { BackendArtifactProjections } from "../backend-workbench/BackendArtifactProjections";
 import { suggestScenarioTests } from "./scenarioTestSuggestionsApi";
 import { useCallback, useEffect, useRef, useState, type ReactElement } from "react";
 import { Alert, Button, Group, Loader, Menu, Text } from "@mantine/core";
@@ -42,7 +45,13 @@ import type { CanvasDocument, CanvasSelection } from "./types";
 const POLL_MS = 5_000;
 const AUTOSAVE_DELAY_MS = 800;
 
-export function ServerDesignCanvasPage({ id }: { id: number }): ReactElement {
+export function ServerDesignCanvasPage({
+  id,
+  pin,
+}: {
+  id: number;
+  pin?: PinnedAPIContext;
+}): ReactElement {
   const query = useGetDesignScenario(id, {
     refetchInterval: POLL_MS,
     refetchOnWindowFocus: true,
@@ -64,6 +73,7 @@ export function ServerDesignCanvasPage({ id }: { id: number }): ReactElement {
     <ServerCanvasEditor
       key={id}
       id={id}
+      pin={pin}
       detail={detail}
       onReload={async () => {
         const result = await query.refetch();
@@ -76,10 +86,12 @@ export function ServerDesignCanvasPage({ id }: { id: number }): ReactElement {
 
 function ServerCanvasEditor({
   id,
+  pin,
   detail,
   onReload,
 }: {
   id: number;
+  pin?: PinnedAPIContext;
   detail: DesignScenarioDetail;
   onReload: () => Promise<DesignScenarioDetail | null>;
 }): ReactElement {
@@ -89,6 +101,8 @@ function ServerCanvasEditor({
   const [saveInFlight, setSaveInFlight] = useState(false);
   const [saveUnconfirmed, setSaveUnconfirmed] = useState(stored?.pendingSave ?? false);
   const [reloading, setReloading] = useState(false);
+  const [pinnedOpened, setPinnedOpened] = useState(true);
+  const pinnedTrigger = useRef<HTMLButtonElement>(null);
   const [contractsOpened, setContractsOpened] = useState(false);
   const [mapOpened, setMapOpened] = useState(false);
   const narrow = useMediaQuery("(max-width: 1023px)", false, { getInitialValueInEffect: false });
@@ -502,6 +516,40 @@ function ServerCanvasEditor({
 
   return (
     <>
+      {pin?.pinnedRevisionId && (
+        <>
+          <Button
+            ref={pinnedTrigger}
+            variant="default"
+            aria-expanded={pinnedOpened}
+            onClick={() => setPinnedOpened((open) => !open)}
+          >
+            Показать закреплённый сценарий
+          </Button>
+          {pinnedOpened && (
+            <PinnedScenarioArtifact
+              artifactId={String(id)}
+              pin={pin}
+              currentRevisionId={String(detail.scenario.draftRevisionId)}
+              dirty={draftDirty}
+              onClose={() => {
+                setPinnedOpened(false);
+                requestAnimationFrame(() => pinnedTrigger.current?.focus());
+              }}
+            />
+          )}
+        </>
+      )}
+      {pin?.returnProjectId && pin.returnRevisionId && pin.projectionView && (
+        <BackendArtifactProjections
+          projectId={pin.returnProjectId}
+          revisionId={pin.returnRevisionId}
+          readOnly
+          initialArtifact={`design_scenario:${id}`}
+          initialView={pin.projectionView}
+          initialEmbedded={pin.embeddedContractId}
+        />
+      )}
       {narrow ? (
         <Group mb="sm">
           <Button variant="light" onClick={() => setMapOpened(true)}>

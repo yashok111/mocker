@@ -1,3 +1,5 @@
+import { ArtifactEditorSide } from "./BackendArtifactContent";
+import type { EditorArtifactSide, ArtifactGroupSide } from "@/api/generated/schemas";
 import { useRef, useState } from "react";
 import {
   Badge,
@@ -226,11 +228,15 @@ function Comparison({
               label="До изменения"
               reference={selected.before}
               artifact={selected.artifactBefore}
+              editor={selected.editorArtifactBefore}
+              group={selected.artifactGroupBefore}
             />
             <ComparisonSide
               label="После изменения"
               reference={selected.after}
               artifact={selected.artifactAfter}
+              editor={selected.editorArtifactAfter}
+              group={selected.artifactGroupAfter}
             />
           </SimpleGrid>
         </Stack>
@@ -254,8 +260,8 @@ export function ComparisonSummary({ summary }: { summary: BackendComparisonSumma
       ))}
       {summary.artifacts && (
         <Text size="sm">
-          Артефакты API: добавлено {summary.artifacts.added} · удалено {summary.artifacts.removed} ·
-          изменено {summary.artifacts.modified}
+          Артефакты API и моделей: добавлено {summary.artifacts.added} · удалено{" "}
+          {summary.artifacts.removed} · изменено {summary.artifacts.modified}
         </Text>
       )}
       <Text size="sm">
@@ -287,16 +293,22 @@ function ComparisonSide({
   label,
   reference,
   artifact,
+  editor,
+  group,
 }: {
   label: string;
   reference: BackendComparisonRef | null;
   artifact?: BackendArtifactRef;
+  editor?: EditorArtifactSide;
+  group?: ArtifactGroupSide;
 }) {
   return (
     <Paper component="section" aria-label={label} withBorder p="sm" style={{ minWidth: 0 }}>
       <Stack>
         <Title order={4}>{label}</Title>
-        {reference ? (
+        {editor || group ? (
+          <ArtifactEditorSide side={(editor ?? group)!} />
+        ) : reference ? (
           <>
             <Text size="xs" style={wrap}>
               Ревизия: {reference.revisionId}

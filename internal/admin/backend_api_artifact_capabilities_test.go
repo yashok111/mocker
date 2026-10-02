@@ -32,7 +32,7 @@ func TestBackendAPIArtifactCapabilityNegotiation(t *testing.T) {
 	if !slices.Equal(out.ModelSchemaVersions, []string{"1", "2", "3", "4"}) || !slices.Equal(out.ProviderProfiles, []string{"foundation-graph-v1", "relational-graph-v1", "runtime-flow-v1", "field-lineage-v1"}) {
 		t.Fatalf("API contract changed source/profile versions: %+v", out)
 	}
-	for _, want := range []struct{ owner, version string }{{"mocker-backend-import", "5"}, {"mocker-backend-database", "5"}, {"mocker-backend-inspect", "4"}} {
+	for _, want := range []struct{ owner, version string }{{"mocker-backend-import", "5"}, {"mocker-backend-database", "5"}, {"mocker-backend-inspect", "5"}} {
 		i := slices.IndexFunc(out.WorkflowVersions, func(w guide.Workflow) bool { return w.WorkflowID == want.owner })
 		if i < 0 || out.WorkflowVersions[i].WorkflowVersion != want.version {
 			t.Fatalf("missing compatible %s v%s: %+v", want.owner, want.version, out.WorkflowVersions)

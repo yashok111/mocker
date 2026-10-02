@@ -86,6 +86,11 @@ var toolRoutes = map[string][]string{
 	"preview_backend_proposal_commands": {"POST /api/backend-projects/{id}/proposals/{pid}/preview"},
 	"apply_backend_proposal_commands":   {"POST /api/backend-projects/{id}/proposals/{pid}/commands"},
 
+	"query_backend_artifacts":               {"POST /api/backend-projects/{id}/artifacts/query"},
+	"preview_backend_artifact_pins":         {"POST /api/backend-projects/{id}/artifacts/preview"},
+	"apply_backend_artifact_pins":           {"POST /api/backend-projects/{id}/artifacts/commands"},
+	"get_design_scenario_artifact_snapshot": {"GET /api/design-scenarios/{id}/revisions/{rid}/artifact-snapshot"},
+
 	"get_backend_capabilities":        {"GET /api/backend-projects/capabilities"},
 	"list_backend_projects":           {"GET /api/backend-projects"},
 	"create_backend_project":          {"POST /api/backend-projects"},
@@ -339,7 +344,7 @@ var toolRoutes = map[string][]string{
 // production.
 // B1.2 adds five isolated database proposal operations. B24 adds four exact
 // API artifact snapshot/query/preview/apply operations.
-const toolCount = 190
+const toolCount = 194
 
 // toolPath resolves ONE call a tool makes into the (method, path) pair
 // loopback.do/call take.

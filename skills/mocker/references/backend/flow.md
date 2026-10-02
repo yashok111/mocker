@@ -1,6 +1,6 @@
 # Source flow model and pinned reads
 
-Canonical owner: `mocker-backend-inspect` workflow4. Select/verify this owner's
+Canonical owner: `mocker-backend-inspect` workflow5. Select/verify this owner's
 identity and contentHash in the same global guide set before using the topic.
 Source schema3/4 and `runtime-flow-v1` extend relational source records. They do
 not describe runtime observation or the effect of a database proposal.
@@ -126,7 +126,7 @@ Page size defaults100/max500 and does not change traversal or witnesses.
 
 ## Pinned saved Flow views
 
-Require inspect4, `backend-saved-views` and document `saved-view-v1`. Four tools:
+Require inspect5, `backend-saved-views` and document `saved-view-v1`. Four tools:
 `list_backend_saved_views`, `create_backend_saved_view`, `get_backend_saved_view`,
 `save_backend_saved_view`. Read-only list/get are idempotent; create/save use
 retained idempotency keys. A SavedView is an immutable version with id/projectId,
@@ -180,10 +180,10 @@ transaction atomicity claim appears. Canvas caps200nodes/600edges are distinct
 from collapse and pagination. Preview is local and Save is disabled until Apply
 or Cancel; one-step undo restores coordinates independently of collapse.
 
-## query_backend_lineage (inspect4)
+## query_backend_lineage (inspect5)
 
 Require source4, field-lineage-v1 and backend-field-lineage-query in the selected
-inspect4 set. Existing flow/access reads remain source3/4; source1/2 refuse them.
+inspect5 set. Existing flow/access reads remain source3/4; source1/2 refuse them.
 Lineage refuses source1–3 and proposals with422, rather than an empty answer.
 
 Input: projectId, exact revisionId, complete seed ValueRef, direction
@@ -223,9 +223,9 @@ revision/seed changes and discard mismatched late responses. Pin evidence,
 owner, column facet and exact port navigation to the same revision. Lineage
 panel state is transient; existing saved-view-v1 remains unchanged.
 
-## Manual exact API artifact associations (inspect4)
+## Manual exact API artifact associations (inspect5)
 
-Require the complete inspect4 workflow, feature `backend-api-artifact-pins` and
+Require the complete inspect5 workflow, feature `backend-api-artifact-pins` and
 contract `api-artifact-pins-v1` advertised in `viewSchemaVersions`. This contract
 is separate from source model1–4 and provider profiles; mutations require an
 imported source4 baseline. A question authorizes reads only. Select the source
@@ -421,3 +421,13 @@ never replace this history. Exact API editor navigation uses the raw read-only
 pin panel; current draft navigation is explicit and performs no restore/save/
 publish of historical content. Legacy numeric discovery/editor refuses unsafe
 integers; the exact string pin/snapshot APIs retain the full int64 range.
+
+## API wrappers when editor associations share a pin
+
+The API-specific commands above retain legacy API-only v1 behavior. For a tagged
+backend-editor-artifacts-v1 context, API sets preserve the complete editor roster
+and shared revision; whole-group removal refuses existing editors. To remove
+the last API link while retaining editors use generic set_artifact_pin with
+apiBindings:[] and the complete retained editorBindings. Select inspect5 with
+backend-editor-projections and load backend-editor-projections for full replacement,
+raw snapshot/hash policies, linked/copy isolation and all generic budgets.

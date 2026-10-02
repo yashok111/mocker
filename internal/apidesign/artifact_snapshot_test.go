@@ -189,3 +189,33 @@ func TestArtifactObjectHashKeyOrder(t *testing.T) {
 		t.Fatal("authored key order changed ObjectHash")
 	}
 }
+
+func TestArtifactSnapshotExactHistoricalVersion(t *testing.T) {
+	r, db := testRepo(t)
+	d, err := r.Create(t.Context(), CreateInput{Name: "Historic API", Document: testDocument, Source: "ui"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	newer, err := r.Save(t.Context(), d.Design.ID, SaveInput{ExpectedVersion: 1, Document: strings.Replace(testDocument, "Orders", "Newer", 1), Source: "ui"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	old, err := r.ArtifactSnapshot(t.Context(), d.Design.ID, d.Draft.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	latest, err := r.ArtifactSnapshot(t.Context(), d.Design.ID, newer.Draft.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if old.Version != d.Draft.Version || old.Version != 1 || latest.Version != newer.Draft.Version || latest.Version != 2 || old.ContentHash != d.Draft.Hash {
+		t.Fatalf("selected revision version old=%+v latest=%+v", old, latest)
+	}
+	var head, version int64
+	if err := db.R.QueryRowContext(t.Context(), `SELECT draft_revision_id,version FROM api_designs WHERE id=?`, d.Design.ID).Scan(&head, &version); err != nil {
+		t.Fatal(err)
+	}
+	if head != newer.Draft.ID || version != 2 {
+		t.Fatal("snapshot changed owner head")
+	}
+}

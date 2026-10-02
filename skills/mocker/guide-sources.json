@@ -134,6 +134,12 @@
       "source": "references/backend/analysis.md",
       "embedded": "backend-analysis.md",
       "workflowId": "mocker-backend-inspect"
+    },
+    {
+      "topic": "backend-editor-projections",
+      "source": "references/backend/editor-projections.md",
+      "embedded": "backend-editor-projections.md",
+      "workflowId": "mocker-backend-inspect"
     }
   ],
   "workflows": [
@@ -213,7 +219,7 @@
     },
     {
       "workflowId": "mocker-backend-inspect",
-      "workflowVersion": "4",
+      "workflowVersion": "5",
       "entrypoint": "backend-inspect",
       "requiredModelSchemaVersions": [
         "3",
@@ -227,11 +233,13 @@
         "backend-data-access-query",
         "backend-saved-views",
         "backend-field-lineage-query",
-        "backend-api-artifact-pins"
+        "backend-api-artifact-pins",
+        "backend-editor-projections"
       ],
       "requiredViewSchemaVersions": [
         "saved-view-v1",
-        "api-artifact-pins-v1"
+        "api-artifact-pins-v1",
+        "backend-editor-artifacts-v1"
       ]
     }
   ]

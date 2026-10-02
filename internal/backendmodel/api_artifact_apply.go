@@ -95,15 +95,12 @@ func (s *APIArtifactService) Apply(ctx context.Context, pid string, in ApplyAPIP
 		if err != nil {
 			return err
 		}
-		baselineHash, err := requestDigest(struct {
-			Revision Revision
-			Context  *APIArtifactContext
-		}{revision, context})
+		baselineHash, err := apiPinsBaselineDigest(ctx, tx, pid, in.BaseRevisionID, revision, context, prepared)
 		if err != nil {
 			return err
 		}
-		if baselineHash != prepared.baselineHash || revision.SchemaVersion != LineageSchemaVersion {
-			return importConflict("backend_api_pins_base_conflict", "Frozen source baseline changed", p.Version)
+		if err := s.checkFullArtifactDigests(ctx, tx, prepared, p.Version, baselineHash, revision.SchemaVersion); err != nil {
+			return err
 		}
 		keys := []string{}
 		for key := range prepared.digests {
@@ -149,7 +146,7 @@ func (s *APIArtifactService) Apply(ctx context.Context, pid string, in ApplyAPIP
 				return err
 			}
 		}
-		if err := saveAPIArtifactContext(ctx, tx, revision.ID, prepared.frozen); err != nil {
+		if err := savePreparedAPIPinsContext(ctx, tx, revision, prepared); err != nil {
 			return err
 		}
 		p.Version++
@@ -182,4 +179,40 @@ func saveAPIArtifactContext(ctx context.Context, tx *sql.Tx, rid string, frozen 
 	}
 	_, err = tx.ExecContext(ctx, `INSERT INTO backend_revision_api_artifacts(revision_id,source_content_hash,source_semantic_hash,document) VALUES(?,?,?,?)`, rid, frozen.SourceContentHash, frozen.SourceSemanticHash, string(doc))
 	return err
+}
+
+func apiPinsBaselineDigest(ctx context.Context, tx *sql.Tx, pid, revisionID string, revision Revision, context *APIArtifactContext, prepared *preparedAPIPins) (string, error) {
+	baselineHash, err := requestDigest(struct {
+		Revision Revision
+		Context  *APIArtifactContext
+	}{revision, context})
+	if prepared.fullContext != nil {
+		baselineHash, err = artifactBaselineDigest(ctx, tx, pid, revisionID)
+	}
+	return baselineHash, err
+}
+
+func (s *APIArtifactService) checkFullArtifactDigests(ctx context.Context, tx *sql.Tx, prepared *preparedAPIPins, version int64, baselineHash, schemaVersion string) error {
+	if baselineHash != prepared.baselineHash || schemaVersion != LineageSchemaVersion {
+		return importConflict("backend_api_pins_base_conflict", "Frozen source baseline changed", version)
+	}
+	if prepared.fullContext != nil {
+		if err := NewArtifactService(s.repo, s.artifacts, nil).checkArtifactDigests(ctx, tx, prepared.artifactDigests, version); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func savePreparedAPIPinsContext(ctx context.Context, tx *sql.Tx, revision Revision, prepared *preparedAPIPins) error {
+	if prepared.fullContext != nil {
+		if err := saveArtifactContext(ctx, tx, revision.ID, *prepared.fullContext, revision.ArtifactPins); err != nil {
+			return err
+		}
+	} else {
+		if err := saveAPIArtifactContext(ctx, tx, revision.ID, prepared.frozen); err != nil {
+			return err
+		}
+	}
+	return nil
 }

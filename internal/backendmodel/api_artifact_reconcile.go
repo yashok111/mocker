@@ -15,10 +15,20 @@ func carryAPIArtifactContext(ctx context.Context, s *ImportSession, base *Revisi
 	if len(base.Revision.ArtifactPins) == 0 {
 		return nil
 	}
+	full := revisionArtifactContext(base)
 	bindings := artifactBindings(base.APIArtifactContext)
 	pins := slices.Clone(base.Revision.ArtifactPins)
-	if err := ValidateAPIArtifactVector(pins, bindings); err != nil {
-		return err
+	if full != nil {
+		bindings = full.APIBindings
+	}
+	var validation error
+	if full != nil {
+		validation = full.Validate(pins)
+	} else {
+		validation = ValidateAPIArtifactVector(pins, bindings)
+	}
+	if validation != nil {
+		return validation
 	}
 	// Keep the original empty-pin candidate serialization as the source anchor.
 	legacy, err := candidateJSON(s, g)
@@ -32,16 +42,26 @@ func carryAPIArtifactContext(ctx context.Context, s *ImportSession, base *Revisi
 		return err
 	}
 	g.ArtifactPins = pins
-	g.APIArtifactContext = &APIArtifactContext{SourceContentHash: content, SourceSemanticHash: hashBytes(legacy), Bindings: bindings}
+	if full != nil && !ArtifactContextUsesV1(pins, *full) {
+		c := *full
+		c.SourceContentHash = content
+		c.SourceSemanticHash = hashBytes(legacy)
+		if _, err := EncodeArtifactContext(c, pins); err != nil {
+			return err
+		}
+		g.ArtifactContext = &c
+	} else {
+		g.APIArtifactContext = &APIArtifactContext{SourceContentHash: content, SourceSemanticHash: hashBytes(legacy), Bindings: bindings}
+	}
 	return ctx.Err()
 }
 
 func compareAPIArtifacts(ctx context.Context, before, after RevisionState, out *RevisionDelta) error {
 	left, right := map[string]APIArtifactBinding{}, map[string]APIArtifactBinding{}
-	for _, b := range artifactBindings(before.APIArtifactContext) {
+	for _, b := range artifactBindings(legacyArtifactContext(revisionArtifactContext(&before))) {
 		left[b.SourceNodeID] = b
 	}
-	for _, b := range artifactBindings(after.APIArtifactContext) {
+	for _, b := range artifactBindings(legacyArtifactContext(revisionArtifactContext(&after))) {
 		right[b.SourceNodeID] = b
 	}
 	ids := map[string]bool{}

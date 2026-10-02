@@ -41,6 +41,7 @@ type RevisionState struct {
 	Sources            []SourceSnapshot
 	Inventory          []InventoryItem
 	APIArtifactContext *APIArtifactContext
+	ArtifactContext    *ArtifactContext
 }
 type SourceChange struct {
 	Path              string             `json:"path"`
@@ -115,21 +116,25 @@ type ComparisonRef struct {
 	Path       string `json:"path,omitempty"`
 }
 type ComparisonItem struct {
-	ArtifactBefore  *ArtifactRef        `json:"artifactBefore,omitzero"`
-	ArtifactAfter   *ArtifactRef        `json:"artifactAfter,omitzero"`
-	ContextChanged  bool                `json:"contextChanged,omitzero"`
-	RecordType      string              `json:"recordType"`
-	ID              string              `json:"id"`
-	ChangeKinds     []string            `json:"changeKinds"`
-	ChangedPaths    []string            `json:"changedPaths"`
-	Before          *ComparisonRef      `json:"before"`
-	After           *ComparisonRef      `json:"after"`
-	NameBefore      *string             `json:"nameBefore"`
-	NameAfter       *string             `json:"nameAfter"`
-	KeyBefore       *string             `json:"keyBefore"`
-	KeyAfter        *string             `json:"keyAfter"`
-	FreshnessBefore *AssertionFreshness `json:"freshnessBefore"`
-	FreshnessAfter  *AssertionFreshness `json:"freshnessAfter"`
+	EditorArtifactBefore *EditorArtifactSide `json:"editorArtifactBefore,omitzero"`
+	EditorArtifactAfter  *EditorArtifactSide `json:"editorArtifactAfter,omitzero"`
+	ArtifactGroupBefore  *ArtifactGroupSide  `json:"artifactGroupBefore,omitzero"`
+	ArtifactGroupAfter   *ArtifactGroupSide  `json:"artifactGroupAfter,omitzero"`
+	ArtifactBefore       *ArtifactRef        `json:"artifactBefore,omitzero"`
+	ArtifactAfter        *ArtifactRef        `json:"artifactAfter,omitzero"`
+	ContextChanged       bool                `json:"contextChanged,omitzero"`
+	RecordType           string              `json:"recordType"`
+	ID                   string              `json:"id"`
+	ChangeKinds          []string            `json:"changeKinds"`
+	ChangedPaths         []string            `json:"changedPaths"`
+	Before               *ComparisonRef      `json:"before"`
+	After                *ComparisonRef      `json:"after"`
+	NameBefore           *string             `json:"nameBefore"`
+	NameAfter            *string             `json:"nameAfter"`
+	KeyBefore            *string             `json:"keyBefore"`
+	KeyAfter             *string             `json:"keyAfter"`
+	FreshnessBefore      *AssertionFreshness `json:"freshnessBefore"`
+	FreshnessAfter       *AssertionFreshness `json:"freshnessAfter"`
 }
 type ComparisonCounts struct {
 	Added    int64 `json:"added"`
@@ -165,7 +170,9 @@ type RevisionComparison struct {
 	NextCursor        string            `json:"nextCursor"`
 }
 type RecordSide struct {
-	Artifact                         *ArtifactRef `json:"artifact,omitzero"`
+	EditorArtifact                   *EditorArtifactSide `json:"editorArtifact,omitzero"`
+	ArtifactGroup                    *ArtifactGroupSide  `json:"artifactGroup,omitzero"`
+	Artifact                         *ArtifactRef        `json:"artifact,omitzero"`
 	RecordType, ID, SnapshotID, Path string
 	Name, Key                        *string
 	Freshness                        *AssertionFreshness

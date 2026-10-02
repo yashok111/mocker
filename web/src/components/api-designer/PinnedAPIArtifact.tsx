@@ -24,6 +24,8 @@ import { findJsonPointerRange } from "./monaco/jsonPointerRange";
 const pinButtonProps = { h: "auto", py: "xs", maw: "100%", styles: databaseButtonStyles };
 
 export type PinnedAPIContext = {
+  projectionView?: string;
+  embeddedContractId?: string;
   pinnedRevisionId?: string;
   pinnedHash?: string;
   pinnedObjectKey?: string;

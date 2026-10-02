@@ -1,3 +1,4 @@
+import { BackendArtifactProjections } from "./BackendArtifactProjections";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Alert,
@@ -333,6 +334,7 @@ function BackendProjectDetail({
                 ),
               reread: async () => {
                 const fresh = await query.refetch();
+                if (fresh.isError) throw fresh.error;
                 if (fresh.data?.status !== 200)
                   throw new Error("Не удалось перечитать текущий проект");
                 const head = await getBackendRevision(projectId, fresh.data.data.currentRevisionId);
@@ -343,6 +345,22 @@ function BackendProjectDetail({
                 )
                   throw new Error("Не удалось перечитать текущую ревизию");
                 return { revision: head.data, projectVersion: fresh.data.data.version };
+              },
+              onCurrentHead: (context, identity) => {
+                const current = queryClient.getQueryData<{ status: number; data: BackendProject }>(
+                  getGetBackendProjectQueryKey(projectId),
+                );
+                if (
+                  apiEditorOwner.current !== identity ||
+                  current?.status !== 200 ||
+                  current.data.version !== context.projectVersion ||
+                  current.data.currentRevisionId !== context.revision.id ||
+                  context.revision.projectId !== projectId
+                )
+                  return false;
+                acknowledgedNavigation.current = true;
+                navigateSource({ ...pin, revisionId: context.revision.id });
+                return true;
               },
               onApplied: (result) => {
                 const current = queryClient.getQueryData<{ status: number; data: BackendProject }>(
@@ -543,7 +561,10 @@ function BackendProjectDetail({
               {revision && (
                 <>
                   {revision.schemaVersion === "4" && (
-                    <BackendAPIArtifacts projectId={projectId} revisionId={revision.id} />
+                    <>
+                      <BackendAPIArtifacts projectId={projectId} revisionId={revision.id} />
+                      <BackendArtifactProjections projectId={projectId} revisionId={revision.id} />
+                    </>
                   )}
                   {["2", "3", "4"].includes(revision.schemaVersion) && (
                     <BackendDatabase

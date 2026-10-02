@@ -16,8 +16,10 @@ type preparedAPIPins struct {
 	frozen  APIArtifactContext
 	// Only checked changed groups participate in owner CAS. Retained broken groups
 	// remain representable and cannot block an unrelated change.
-	digests      map[string]string
-	baselineHash string
+	digests         map[string]string
+	baselineHash    string
+	fullContext     *ArtifactContext
+	artifactDigests map[editorSnapshotKey]string
 }
 
 func boundedArtifactLabel(s string) string {
@@ -79,6 +81,59 @@ func (s *APIArtifactService) prepare(ctx context.Context, pid string, in Preview
 		return nil, &FaultError{Status: 422, Code: "backend_api_pins_unsupported", Message: "API pins require an imported source4 baseline"}
 	}
 	frozen := state.APIArtifactContext
+	if state.ArtifactContext != nil && state.ArtifactContext.DocumentVersion == EditorArtifactDocumentVersion {
+		if err := tx.Rollback(); err != nil {
+			return nil, err
+		}
+		return s.prepareV2APIPins(ctx, pid, in, state)
+	}
+	return s.prepareV1APIPins(ctx, tx, pid, in, state, frozen)
+}
+
+func validateAPIPinsWork(revision Revision, bindings []APIArtifactBinding, commands []APIPinCommand) error {
+	commandByID := map[string]APIPinCommand{}
+	for _, c := range commands {
+		commandByID[c.ArtifactID] = c
+	}
+	oldPins := map[string]ArtifactPin{}
+	finalCount := len(revision.ArtifactPins)
+	bindingCount := len(bindings)
+	targets := map[string]bool{}
+	for _, pin := range revision.ArtifactPins {
+		if pin.Kind != "api_design" {
+			continue
+		}
+		oldPins[pin.ID] = pin
+		c, changed := commandByID[pin.ID]
+		if changed && c.Type == "remove_api_pin" {
+			finalCount--
+			continue
+		}
+		targets[pin.ID+"/"+pin.RevisionID] = true
+	}
+	for _, c := range commands {
+		for _, b := range bindings {
+			if b.Ref.ArtifactID == c.ArtifactID {
+				bindingCount--
+			}
+		}
+		if c.Type == "set_api_pin" {
+			if _, ok := oldPins[c.ArtifactID]; !ok {
+				finalCount++
+			}
+			bindingCount += len(c.Bindings)
+			targets[c.ArtifactID+"/"+c.RevisionID] = true
+		}
+	}
+	if finalCount > MaxAPIArtifactPins || bindingCount > MaxAPIArtifactBindings || len(targets) > MaxAPIArtifactPins {
+		return apiPinsLimit()
+	}
+	return nil
+}
+
+// prepareV1APIPins retains the legacy continuation after the version dispatch.
+func (s *APIArtifactService) prepareV1APIPins(ctx context.Context, tx *sql.Tx, pid string, in PreviewAPIPinsInput, state *RevisionState, frozen *APIArtifactContext) (*preparedAPIPins, error) {
+	var err error
 	if err := validateAPIPinsWork(state.Revision, artifactBindings(frozen), in.Commands); err != nil {
 		return nil, err
 	}
@@ -415,45 +470,4 @@ func (s *APIArtifactService) prepare(ctx context.Context, pid string, in Preview
 	}
 	prepared.frozen.Bindings = preview.Bindings
 	return prepared, ctx.Err()
-}
-
-func validateAPIPinsWork(revision Revision, bindings []APIArtifactBinding, commands []APIPinCommand) error {
-	commandByID := map[string]APIPinCommand{}
-	for _, c := range commands {
-		commandByID[c.ArtifactID] = c
-	}
-	oldPins := map[string]ArtifactPin{}
-	finalCount := len(revision.ArtifactPins)
-	bindingCount := len(bindings)
-	targets := map[string]bool{}
-	for _, pin := range revision.ArtifactPins {
-		if pin.Kind != "api_design" {
-			continue
-		}
-		oldPins[pin.ID] = pin
-		c, changed := commandByID[pin.ID]
-		if changed && c.Type == "remove_api_pin" {
-			finalCount--
-			continue
-		}
-		targets[pin.ID+"/"+pin.RevisionID] = true
-	}
-	for _, c := range commands {
-		for _, b := range bindings {
-			if b.Ref.ArtifactID == c.ArtifactID {
-				bindingCount--
-			}
-		}
-		if c.Type == "set_api_pin" {
-			if _, ok := oldPins[c.ArtifactID]; !ok {
-				finalCount++
-			}
-			bindingCount += len(c.Bindings)
-			targets[c.ArtifactID+"/"+c.RevisionID] = true
-		}
-	}
-	if finalCount > MaxAPIArtifactPins || bindingCount > MaxAPIArtifactBindings || len(targets) > MaxAPIArtifactPins {
-		return apiPinsLimit()
-	}
-	return nil
 }

@@ -1,6 +1,6 @@
 # Bounded source analysis and blocking gaps
 
-This topic belongs to `mocker-backend-inspect` workflow4. Load and verify it
+This topic belongs to `mocker-backend-inspect` workflow5. Load and verify it
 against that actual owner's manifest in the selected immutable global guide set.
 It explains static source scope; no durable analysis job or impact engine runs.
 
@@ -56,7 +56,7 @@ events/external services are atomic with the transaction. Unknown connection,
 isolation or membership stays unknown. A finite static witness does not prove
 termination, actual execution, measured behavior, all writers, data safety or
 proposal conformance. Source4 lineage and saved presentations have separate pinned procedures.
-Manual API pins use the separate inspect4 contract in backend-flow-reference.
+Manual API pins use the separate inspect5 contract in backend-flow-reference.
 Event navigation, backend impact/rebase and observations remain unavailable.
 
 ## Blocking source gap decision
@@ -88,7 +88,7 @@ specific inspected scope/missing input/reason, preserve the unknown and create
 no empty revision to imply progress. No compatible update procedure, no
 authorization or an unsupported provider transition means reads only.
 
-## Field-lineage certainty (inspect4)
+## Field-lineage certainty (inspect5)
 
 Explicit source4 mappings describe static dependencies. Aggregation retains all
 ordered co-inputs, not several independent equivalent transforms. Branch

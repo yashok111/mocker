@@ -58,6 +58,7 @@ function server(
   options: {
     apply?: (body: unknown) => Response | Promise<Response>;
     preview?: (body: unknown) => Response | Promise<Response>;
+    genericEditors?: boolean;
     truncated?: boolean;
     orphan?: boolean;
   } = {},
@@ -65,6 +66,57 @@ function server(
   const bodies: unknown[] = [];
   const fetch = vi.fn(async (url: RequestInfo | URL, init?: RequestInit) => {
     const path = String(url);
+    if (path.endsWith("/artifacts/query")) {
+      const input = JSON.parse(String(init?.body));
+      return json(200, {
+        revisionId: input.revisionId,
+        semanticHash: hash,
+        sourceSnapshotIds: ["snap"],
+        pins: revision.artifactPins,
+        selectedPin: revision.artifactPins[0],
+        view: input.view,
+        hashPolicy: "api-design-raw-document-v1",
+        apiBindings: (options.genericEditors ? ["selected"] : ["selected", "other"]).map(
+          (sourceNodeId) => ({
+            sourceNodeId,
+            sourceKind: "http_operation",
+            sourceLastKnownLabel: "Source operation",
+            origin: "manual",
+            reason: "prior",
+            ref,
+          }),
+        ),
+        editorBindings: options.genericEditors
+          ? [
+              {
+                artifactKind: "api_design",
+                artifactId: "12",
+                selector: { kind: "state_diagram", diagramId: "d" },
+                sourceNodeIds: ["selected"],
+                sourceLabels: ["Frozen"],
+                objectHash: hash,
+                lastKnownLabel: "Saved state",
+                origin: "manual",
+                reason: "prior",
+              },
+            ]
+          : [],
+        bindingsComplete: true,
+        items: [],
+        nextCursor: "",
+        resolution: { status: "resolved", diagnostics: [], updateAvailable: false },
+        diagnostics: [],
+        coverage: {
+          itemsReturned: 0,
+          totalItems: 0,
+          nodesReturned: 0,
+          edgesReturned: 0,
+          diagnosticsReturned: 0,
+          truncatedReasons: [],
+        },
+        complete: true,
+      });
+    }
     if (path.endsWith("/api-artifacts/query")) {
       const input = JSON.parse(String(init?.body));
       return json(200, {
@@ -107,6 +159,23 @@ function server(
           { id: 24, summary: "New" },
         ],
       });
+    if (path.endsWith("/artifacts/preview")) {
+      const input = JSON.parse(String(init?.body));
+      bodies.push(input);
+      return json(200, {
+        ...input,
+        candidateHash: hash,
+        semanticHash: hash,
+        pins: revision.artifactPins,
+        apiBindings: [],
+        editorBindings: [],
+        sourceSnapshotIds: ["snap"],
+        diagnostics: [],
+        diff: [],
+        diffTruncated: false,
+        canApply: true,
+      });
+    }
     if (path.endsWith("/api-artifacts/preview")) {
       const body = JSON.parse(String(init?.body));
       bodies.push(body);
@@ -482,3 +551,26 @@ it.each(["123", "true", "false", "null", '{"opaque":1}', "123.5", "1e3"])(
     });
   },
 );
+
+it("legacy last-node unlink uses generic set and preserves invisible editor associations", async () => {
+  const { bodies } = server({ genericEditors: true });
+  mount();
+  await userEvent.click(await screen.findByRole("button", { name: "Изменить связь API" }));
+  await userEvent.type(screen.getByLabelText(/Причина связи API/), "unlink only");
+  await userEvent.click(screen.getByRole("button", { name: "Удалить связь этого узла" }));
+  await screen.findByRole("button", { name: "Применить полную группу API и моделей" });
+  expect(bodies[0]).toMatchObject({
+    commands: [
+      {
+        type: "set_artifact_pin",
+        artifact: { kind: "api_design", id: "12" },
+        revisionId: "23",
+        apiBindings: [],
+        editorBindings: [
+          { selector: { kind: "state_diagram", diagramId: "d" }, sourceNodeIds: ["selected"] },
+        ],
+      },
+    ],
+  });
+  expect(bodies[0]).not.toHaveProperty("commands.0.editorBindings.0.objectHash");
+});

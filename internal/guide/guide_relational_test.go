@@ -134,7 +134,7 @@ func TestGlobalGuideSetHasOneOwnerForEveryServedTopic(t *testing.T) {
 		"backend-import-protocol": "mocker-backend-import", "backend-recovery": "mocker-backend-import",
 		"backend-examples": "mocker-backend-import", "backend-profile-go-sql": "mocker-backend-import",
 		"backend-database": "mocker-backend-database", "backend-database-reference": "mocker-backend-database",
-		"backend-inspect": "mocker-backend-inspect", "backend-flow-reference": "mocker-backend-inspect", "backend-analysis": "mocker-backend-inspect",
+		"backend-inspect": "mocker-backend-inspect", "backend-flow-reference": "mocker-backend-inspect", "backend-analysis": "mocker-backend-inspect", "backend-editor-projections": "mocker-backend-inspect",
 	}
 	seen := make(map[string]string)
 	for _, owner := range manifest.Workflows {

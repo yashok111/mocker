@@ -424,12 +424,12 @@ func TestAutoCheckpointPolicy_pinsEveryMutatingRoute(t *testing.T) {
 		// (D7.3), P6b's endpoint preview (D13), P6c's close and push
 		// (D9), A6's two asset writes (D3), A11's two entity writes,
 		// P4b's import and fork, then design-scenario validation, execution and archive, plus state-diagram validation and simulation — twenty-six.
-		cpGroupNeverTouchesLayer: 45, // Includes event-map and pinned backend queries, plus API artifact query/preview and scenario transfer export.
+		cpGroupNeverTouchesLayer: 47, // Includes event-map and pinned backend queries, plus API/generic artifact query/preview, proxy writes and scenario transfer export.
 		// Rows in another aggregate: runtime scenarios, checkpoints, API
 		// designs, four persisted design-scenario writes, run start/cancel, and four state-diagram writes.
-		cpGroupAnotherLayer: 44, // Includes backend metadata/import/proposal/saved-view writes API pin apply and scenario transfer import.
+		cpGroupAnotherLayer: 45, // Includes backend metadata/import/proposal/saved-view writes API/generic pin apply and scenario transfer import.
 		// Every GET in the table.
-		cpGroupRead: 74, // Includes source/proposal/saved-view reads, pinned aliases and raw API snapshot.
+		cpGroupRead: 75, // Includes source/proposal/saved-view reads, pinned aliases and exact API/scenario snapshots.
 	}
 
 	byPattern := checkpointPolicyByPattern(t)
@@ -498,8 +498,9 @@ func TestAutoCheckpointPolicy_pinsEveryMutatingRoute(t *testing.T) {
 		}
 	}
 	// Saved-view create/save append presentation versions in their own aggregate.
-	if len(mutating) != 106 {
-		t.Fatalf("routes() registers %d mutating patterns, want 106", len(mutating))
+	// Generic artifacts add three POSTs: two reads/previews and one pin apply.
+	if len(mutating) != 109 {
+		t.Fatalf("routes() registers %d mutating patterns, want 109", len(mutating))
 	}
 
 	// The two halves the group counts alone cannot state: a mutating route

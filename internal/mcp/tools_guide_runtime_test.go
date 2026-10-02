@@ -13,7 +13,7 @@ import (
 
 func TestRuntimeGuideSDKOwnersAndDiscovery(t *testing.T) {
 	server, _ := newResourcesTestServer(t, resourcesTestConfig(t))
-	for _, topic := range []string{"backend-inspect", "backend-flow-reference", "backend-analysis"} {
+	for _, topic := range []string{"backend-inspect", "backend-flow-reference", "backend-analysis", "backend-editor-projections"} {
 		owner, ok := guide.WorkflowForTopic(topic)
 		if !ok {
 			t.Fatalf("new standalone topic %s has no advertised owner", topic)
@@ -26,7 +26,7 @@ func TestRuntimeGuideSDKOwnersAndDiscovery(t *testing.T) {
 		if err := json.Unmarshal(raw, &out); err != nil {
 			t.Fatal(err)
 		}
-		if out.WorkflowID != "mocker-backend-inspect" || out.WorkflowVersion != "4" || out.ManifestHash != owner.ManifestHash || out.GuideSetID != owner.GuideSetID || out.ContentHash != fmt.Sprintf("sha256:%x", sha256.Sum256([]byte(out.Markdown))) {
+		if out.WorkflowID != "mocker-backend-inspect" || out.WorkflowVersion != "5" || out.ManifestHash != owner.ManifestHash || out.GuideSetID != owner.GuideSetID || out.ContentHash != fmt.Sprintf("sha256:%x", sha256.Sum256([]byte(out.Markdown))) {
 			t.Fatalf("SDK cannot verify %s against the selected inspect owner: %#v", topic, out)
 		}
 		if !slices.Contains(out.Topics, topic) || strings.HasPrefix(out.Markdown, "---") {
@@ -34,7 +34,7 @@ func TestRuntimeGuideSDKOwnersAndDiscovery(t *testing.T) {
 		}
 	}
 	response := doMCP(t, newTestEndpoint(t).Handler(), `{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}`, map[string]string{"Authorization": "Bearer " + testKey})
-	for _, topic := range []string{"backend-inspect", "backend-flow-reference", "backend-analysis"} {
+	for _, topic := range []string{"backend-inspect", "backend-flow-reference", "backend-analysis", "backend-editor-projections"} {
 		if !strings.Contains(response.Body.String(), topic) {
 			t.Fatalf("tool discovery cannot locate %s", topic)
 		}

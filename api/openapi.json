@@ -13412,7 +13412,10 @@
               "kind": {
                 "type": "string",
                 "not": {
-                  "const": "api_design"
+                  "enum": [
+                    "api_design",
+                    "design_scenario"
+                  ]
                 }
               },
               "id": {
@@ -13436,6 +13439,32 @@
               "kind": {
                 "type": "string",
                 "const": "api_design"
+              },
+              "id": {
+                "$ref": "#/components/schemas/APIArtifactID"
+              },
+              "revisionId": {
+                "$ref": "#/components/schemas/APIArtifactID"
+              },
+              "contentHash": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "id",
+              "revisionId",
+              "contentHash"
+            ],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "design_scenario"
               },
               "id": {
                 "$ref": "#/components/schemas/APIArtifactID"
@@ -13816,7 +13845,10 @@
               "maxLineagePageSize",
               "maxLineageVisitedValues",
               "maxLineageExaminedMappings",
-              "maxLineageReferenceIncidences"
+              "maxLineageReferenceIncidences",
+              "maxEditorArtifactContextBytes",
+              "maxEditorEventConstructionBytes",
+              "maxEventMapBytes"
             ],
             "properties": {
               "maxNameLength": {
@@ -14130,6 +14162,24 @@
                 "format": "int64",
                 "minimum": 20000,
                 "maximum": 20000
+              },
+              "maxEditorArtifactContextBytes": {
+                "type": "integer",
+                "format": "int64",
+                "const": 4194304,
+                "description": "Maximum serialized NEW tagged v2 context bytes including both binding collections and frozen labels; independent of old v1, page size and RSS."
+              },
+              "maxEditorEventConstructionBytes": {
+                "type": "integer",
+                "format": "int64",
+                "const": 4194304,
+                "description": "Conservative prospective EventMap construction accounting before compaction; independent of owner final output, context and RSS."
+              },
+              "maxEventMapBytes": {
+                "type": "integer",
+                "format": "int64",
+                "const": 4194304,
+                "description": "Existing owner final EventMap output byte budget; independent of B31 prospective construction and complete context."
               }
             }
           },
@@ -14222,7 +14272,8 @@
               "enum": [
                 "proposal-relational-v1",
                 "saved-view-v1",
-                "api-artifact-pins-v1"
+                "api-artifact-pins-v1",
+                "backend-editor-artifacts-v1"
               ]
             }
           },
@@ -20941,6 +20992,18 @@
           },
           "contextChanged": {
             "type": "boolean"
+          },
+          "editorArtifactBefore": {
+            "$ref": "#/components/schemas/EditorArtifactSide"
+          },
+          "editorArtifactAfter": {
+            "$ref": "#/components/schemas/EditorArtifactSide"
+          },
+          "artifactGroupBefore": {
+            "$ref": "#/components/schemas/ArtifactGroupSide"
+          },
+          "artifactGroupAfter": {
+            "$ref": "#/components/schemas/ArtifactGroupSide"
           }
         }
       },
@@ -36739,6 +36802,2413 @@
         "required": [
           "ok"
         ]
+      },
+      "ArtifactKey": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "id"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "api_design",
+              "design_scenario"
+            ]
+          },
+          "id": {
+            "$ref": "#/components/schemas/APIArtifactID"
+          }
+        }
+      },
+      "EditorSelectorSequenceMessage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "messageId"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "sequence_message"
+          },
+          "messageId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 50000
+          }
+        }
+      },
+      "EditorSelectorParticipant": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "participantId"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "participant"
+          },
+          "participantId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 50000
+          }
+        }
+      },
+      "EditorSelectorEventOperation": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "contractId",
+          "operationId"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "event_operation"
+          },
+          "contractId": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,100}$"
+          },
+          "operationId": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,100}$"
+          }
+        }
+      },
+      "EditorSelectorEventChannel": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "channelId"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "event_channel"
+          },
+          "channelId": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,100}$"
+          }
+        }
+      },
+      "EditorSelectorEventMessage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "messageId"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "event_message"
+          },
+          "messageId": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,100}$"
+          }
+        }
+      },
+      "EditorSelectorStateDiagram": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "diagramId"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "state_diagram"
+          },
+          "diagramId": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,80}$"
+          },
+          "embeddedContractId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 50000
+          }
+        }
+      },
+      "EditorSelectorStateTransition": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "diagramId",
+          "transitionId"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "state_transition"
+          },
+          "diagramId": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,80}$"
+          },
+          "transitionId": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,80}$"
+          },
+          "embeddedContractId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 50000
+          }
+        }
+      },
+      "EditorSelectorResponseRule": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "ruleId"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "response_rule"
+          },
+          "ruleId": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,80}$"
+          },
+          "embeddedContractId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 50000
+          }
+        }
+      },
+      "EditorSelectorResponseNode": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "ruleId",
+          "nodeId"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "response_node"
+          },
+          "ruleId": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,80}$"
+          },
+          "nodeId": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,80}$"
+          },
+          "embeddedContractId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 50000
+          }
+        }
+      },
+      "EditorSelector": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/EditorSelectorSequenceMessage"
+          },
+          {
+            "$ref": "#/components/schemas/EditorSelectorParticipant"
+          },
+          {
+            "$ref": "#/components/schemas/EditorSelectorEventOperation"
+          },
+          {
+            "$ref": "#/components/schemas/EditorSelectorEventChannel"
+          },
+          {
+            "$ref": "#/components/schemas/EditorSelectorEventMessage"
+          },
+          {
+            "$ref": "#/components/schemas/EditorSelectorStateDiagram"
+          },
+          {
+            "$ref": "#/components/schemas/EditorSelectorStateTransition"
+          },
+          {
+            "$ref": "#/components/schemas/EditorSelectorResponseRule"
+          },
+          {
+            "$ref": "#/components/schemas/EditorSelectorResponseNode"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "kind"
+        }
+      },
+      "EditorBindingInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "selector",
+          "sourceNodeIds"
+        ],
+        "properties": {
+          "selector": {
+            "$ref": "#/components/schemas/EditorSelector"
+          },
+          "sourceNodeIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "minItems": 1,
+            "maxItems": 100,
+            "uniqueItems": true
+          }
+        }
+      },
+      "EditorBinding": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "artifactKind",
+          "artifactId",
+          "selector",
+          "sourceNodeIds",
+          "sourceLabels",
+          "objectHash",
+          "lastKnownLabel",
+          "origin",
+          "reason"
+        ],
+        "properties": {
+          "artifactKind": {
+            "type": "string",
+            "enum": [
+              "api_design",
+              "design_scenario"
+            ]
+          },
+          "artifactId": {
+            "$ref": "#/components/schemas/APIArtifactID"
+          },
+          "selector": {
+            "$ref": "#/components/schemas/EditorSelector"
+          },
+          "sourceNodeIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "minItems": 1,
+            "maxItems": 100,
+            "uniqueItems": true
+          },
+          "sourceLabels": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "maxLength": 4096
+            },
+            "minItems": 1,
+            "maxItems": 100
+          },
+          "objectHash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "lastKnownLabel": {
+            "type": "string",
+            "maxLength": 4096
+          },
+          "origin": {
+            "type": "string",
+            "const": "manual"
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096
+          }
+        }
+      },
+      "ArtifactPinCommand": {
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "type",
+              "artifact",
+              "revisionId",
+              "editorBindings",
+              "reason",
+              "apiBindings"
+            ],
+            "properties": {
+              "type": {
+                "type": "string",
+                "const": "set_artifact_pin"
+              },
+              "artifact": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "kind",
+                  "id"
+                ],
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "const": "api_design"
+                  },
+                  "id": {
+                    "$ref": "#/components/schemas/APIArtifactID"
+                  }
+                }
+              },
+              "revisionId": {
+                "$ref": "#/components/schemas/APIArtifactID"
+              },
+              "editorBindings": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/APIEditorBindingInput"
+                },
+                "maxItems": 200
+              },
+              "reason": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 4096
+              },
+              "apiBindings": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/BackendAPIPinBindingInput"
+                },
+                "maxItems": 200
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "type",
+              "artifact",
+              "revisionId",
+              "editorBindings",
+              "reason"
+            ],
+            "properties": {
+              "type": {
+                "type": "string",
+                "const": "set_artifact_pin"
+              },
+              "artifact": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "kind",
+                  "id"
+                ],
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "const": "design_scenario"
+                  },
+                  "id": {
+                    "$ref": "#/components/schemas/APIArtifactID"
+                  }
+                }
+              },
+              "revisionId": {
+                "$ref": "#/components/schemas/APIArtifactID"
+              },
+              "editorBindings": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/ScenarioEditorBindingInput"
+                },
+                "maxItems": 200
+              },
+              "reason": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 4096
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "type",
+              "artifact",
+              "reason"
+            ],
+            "properties": {
+              "type": {
+                "type": "string",
+                "const": "remove_artifact_pin"
+              },
+              "artifact": {
+                "$ref": "#/components/schemas/ArtifactKey"
+              },
+              "reason": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 4096
+              }
+            }
+          }
+        ]
+      },
+      "QueryBackendArtifactsRequest": {
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "revisionId",
+              "artifact",
+              "view"
+            ],
+            "properties": {
+              "revisionId": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "artifact": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "kind",
+                  "id"
+                ],
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "const": "design_scenario"
+                  },
+                  "id": {
+                    "$ref": "#/components/schemas/APIArtifactID"
+                  }
+                }
+              },
+              "view": {
+                "type": "string",
+                "enum": [
+                  "sequence",
+                  "event_model"
+                ]
+              },
+              "limit": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 100,
+                "default": 50
+              },
+              "cursor": {
+                "type": "string",
+                "maxLength": 4096
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "revisionId",
+              "artifact",
+              "view",
+              "embeddedContractId"
+            ],
+            "properties": {
+              "revisionId": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "artifact": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "kind",
+                  "id"
+                ],
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "const": "design_scenario"
+                  },
+                  "id": {
+                    "$ref": "#/components/schemas/APIArtifactID"
+                  }
+                }
+              },
+              "view": {
+                "type": "string",
+                "enum": [
+                  "states",
+                  "response_rules"
+                ]
+              },
+              "embeddedContractId": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 50000
+              },
+              "limit": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 100,
+                "default": 50
+              },
+              "cursor": {
+                "type": "string",
+                "maxLength": 4096
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "revisionId",
+              "artifact",
+              "view"
+            ],
+            "properties": {
+              "revisionId": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "artifact": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "kind",
+                  "id"
+                ],
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "const": "api_design"
+                  },
+                  "id": {
+                    "$ref": "#/components/schemas/APIArtifactID"
+                  }
+                }
+              },
+              "view": {
+                "type": "string",
+                "enum": [
+                  "states",
+                  "response_rules"
+                ]
+              },
+              "limit": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 100,
+                "default": 50
+              },
+              "cursor": {
+                "type": "string",
+                "maxLength": 4096
+              }
+            }
+          }
+        ],
+        "description": "Strict exact owner/view selection. 128 KiB complete original body including outer whitespace. Page default50/max100; cursor belongs to the complete exact context.",
+        "type": "object"
+      },
+      "PreviewBackendArtifactPinsRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "baseRevisionId",
+          "expectedVersion",
+          "commands"
+        ],
+        "properties": {
+          "baseRevisionId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "expectedVersion": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1,
+            "maximum": 9223372036854775807
+          },
+          "commands": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ArtifactPinCommand"
+            },
+            "minItems": 1,
+            "maxItems": 20
+          }
+        },
+        "description": "New generic preview/apply conservatively reserve a canonical complete Apply Arguments envelope including projectId, decoded base/version/commands, 64-character candidateHash and all supported 1–128 printable ASCII idempotency keys with worst JSON escaping. Reserved Arguments must fit 128 KiB and Arguments plus 126 bytes of required canonical numeric-int64 JSON-RPC framing must fit global maxBodyBytes; REST shares this conservative rule. A 413 backend_artifact_apply_body_limit exposes allowedBytes, reservedApplyBytes and configured globalMaxBodyBytes/rpcFramingBytes/reservedRPCBytes. Padding, optional RPC metadata/inputResponses/requestState and arbitrary string RPC IDs consume additional unchanged global raw-body space. Existing exact receipts are returned before the new reservation; no extra preview/hash fields are added."
+      },
+      "ApplyBackendArtifactPinsRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "baseRevisionId",
+          "expectedVersion",
+          "commands",
+          "candidateHash",
+          "idempotencyKey"
+        ],
+        "properties": {
+          "baseRevisionId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "expectedVersion": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1,
+            "maximum": 9223372036854775807
+          },
+          "commands": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ArtifactPinCommand"
+            },
+            "minItems": 1,
+            "maxItems": 20
+          },
+          "candidateHash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "idempotencyKey": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "pattern": "^[!-~]+$"
+          }
+        },
+        "description": "New generic preview/apply conservatively reserve a canonical complete Apply Arguments envelope including projectId, decoded base/version/commands, 64-character candidateHash and all supported 1–128 printable ASCII idempotency keys with worst JSON escaping. Reserved Arguments must fit 128 KiB and Arguments plus 126 bytes of required canonical numeric-int64 JSON-RPC framing must fit global maxBodyBytes; REST shares this conservative rule. A 413 backend_artifact_apply_body_limit exposes allowedBytes, reservedApplyBytes and configured globalMaxBodyBytes/rpcFramingBytes/reservedRPCBytes. Padding, optional RPC metadata/inputResponses/requestState and arbitrary string RPC IDs consume additional unchanged global raw-body space. Existing exact receipts are returned before the new reservation; no extra preview/hash fields are added."
+      },
+      "ArtifactContractSource": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "designId",
+          "revisionId",
+          "version"
+        ],
+        "properties": {
+          "designId": {
+            "$ref": "#/components/schemas/APIArtifactID"
+          },
+          "revisionId": {
+            "$ref": "#/components/schemas/APIArtifactID"
+          },
+          "version": {
+            "type": "string",
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/APIArtifactID"
+              },
+              {
+                "type": "string",
+                "const": "0"
+              }
+            ],
+            "description": "Canonical decimal int64 source version. Existing COPY provenance may preserve zero; linked verification requires the exact positive owner version."
+          }
+        }
+      },
+      "ArtifactEmbeddedContract": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "contractId",
+          "mode",
+          "documentHash",
+          "originStatus"
+        ],
+        "properties": {
+          "contractId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 50000
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "linked",
+              "copy"
+            ]
+          },
+          "documentHash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "origin": {
+            "$ref": "#/components/schemas/ArtifactContractSource"
+          },
+          "originStatus": {
+            "type": "string"
+          },
+          "apiContentHash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "currentDraftRevisionId": {
+            "$ref": "#/components/schemas/APIArtifactID"
+          }
+        }
+      },
+      "ArtifactEventMapLocator": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "pointer"
+        ],
+        "properties": {
+          "pointer": {
+            "type": "string"
+          },
+          "entityId": {
+            "type": "string"
+          },
+          "contractId": {
+            "type": "string"
+          },
+          "operationId": {
+            "type": "string"
+          },
+          "participantId": {
+            "type": "string"
+          },
+          "httpContractId": {
+            "type": "string"
+          },
+          "operationKey": {
+            "type": "string"
+          },
+          "diagramId": {
+            "type": "string"
+          },
+          "transitionId": {
+            "type": "string"
+          },
+          "mode": {
+            "type": "string"
+          },
+          "method": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "pinnedRevisionId": {
+            "$ref": "#/components/schemas/APIArtifactID"
+          }
+        }
+      },
+      "ArtifactOwnerAddress": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "pointer"
+        ],
+        "properties": {
+          "pointer": {
+            "type": "string"
+          },
+          "entityId": {
+            "type": "string"
+          },
+          "messageId": {
+            "type": "string"
+          },
+          "participantId": {
+            "type": "string"
+          },
+          "fragmentId": {
+            "type": "string"
+          },
+          "branchId": {
+            "type": "string"
+          },
+          "contractId": {
+            "type": "string"
+          },
+          "operationId": {
+            "type": "string"
+          },
+          "channelId": {
+            "type": "string"
+          },
+          "schemaId": {
+            "type": "string"
+          },
+          "serverId": {
+            "type": "string"
+          },
+          "diagramId": {
+            "type": "string"
+          },
+          "stateId": {
+            "type": "string"
+          },
+          "transitionId": {
+            "type": "string"
+          },
+          "ruleId": {
+            "type": "string"
+          },
+          "nodeId": {
+            "type": "string"
+          },
+          "edgeId": {
+            "type": "string"
+          },
+          "operationKey": {
+            "type": "string"
+          },
+          "eventMap": {
+            "$ref": "#/components/schemas/ArtifactEventMapLocator"
+          }
+        }
+      },
+      "ArtifactProjectionLocator": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "pin",
+          "view",
+          "owner"
+        ],
+        "properties": {
+          "pin": {
+            "$ref": "#/components/schemas/BackendArtifactPin"
+          },
+          "view": {
+            "type": "string",
+            "enum": [
+              "sequence",
+              "states",
+              "response_rules",
+              "event_model"
+            ]
+          },
+          "owner": {
+            "$ref": "#/components/schemas/ArtifactOwnerAddress"
+          },
+          "embedded": {
+            "$ref": "#/components/schemas/ArtifactEmbeddedContract"
+          }
+        }
+      },
+      "ArtifactEventMapNode": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "kind",
+          "label",
+          "locator"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "locator": {
+            "$ref": "#/components/schemas/ArtifactEventMapLocator"
+          },
+          "groupId": {
+            "type": "string"
+          },
+          "clientId": {
+            "type": "string"
+          }
+        }
+      },
+      "ArtifactEventMapEdge": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "kind",
+          "source",
+          "target",
+          "label",
+          "locator"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string"
+          },
+          "target": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "locator": {
+            "$ref": "#/components/schemas/ArtifactEventMapLocator"
+          }
+        }
+      },
+      "ArtifactAPIOperationData": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "operationKey",
+          "method",
+          "path",
+          "summary",
+          "documentJSON"
+        ],
+        "properties": {
+          "operationKey": {
+            "type": "string"
+          },
+          "method": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "summary": {
+            "type": "string"
+          },
+          "documentJSON": {
+            "type": "string"
+          }
+        }
+      },
+      "ArtifactUnsupportedData": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "documentJSON",
+          "description"
+        ],
+        "properties": {
+          "documentJSON": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          }
+        }
+      },
+      "ArtifactProjectionDataParticipant": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "participant"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "participant"
+          },
+          "participant": {
+            "$ref": "#/components/schemas/DesignScenarioParticipant"
+          }
+        }
+      },
+      "ArtifactProjectionDataSequenceMessage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "sequenceMessage"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "sequence_message"
+          },
+          "sequenceMessage": {
+            "$ref": "#/components/schemas/DesignScenarioMessage"
+          }
+        }
+      },
+      "ArtifactProjectionDataFragment": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "fragment"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "fragment"
+          },
+          "fragment": {
+            "$ref": "#/components/schemas/DesignScenarioFragment"
+          }
+        }
+      },
+      "ArtifactProjectionDataStateDiagram": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "stateDiagram"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "state_diagram"
+          },
+          "stateDiagram": {
+            "$ref": "#/components/schemas/StateDiagram"
+          }
+        }
+      },
+      "ArtifactProjectionDataState": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "state"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "state"
+          },
+          "state": {
+            "$ref": "#/components/schemas/StateDiagramState"
+          }
+        }
+      },
+      "ArtifactProjectionDataStateTransition": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "stateTransition"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "state_transition"
+          },
+          "stateTransition": {
+            "$ref": "#/components/schemas/StateDiagramTransition"
+          }
+        }
+      },
+      "ArtifactProjectionDataResponseRule": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "responseRule"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "response_rule"
+          },
+          "responseRule": {
+            "$ref": "#/components/schemas/ResponseRule"
+          }
+        }
+      },
+      "ArtifactProjectionDataResponseNode": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "responseNode"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "response_node"
+          },
+          "responseNode": {
+            "$ref": "#/components/schemas/ResponseRuleNode"
+          }
+        }
+      },
+      "ArtifactProjectionDataResponseEdge": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "responseEdge"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "response_edge"
+          },
+          "responseEdge": {
+            "$ref": "#/components/schemas/ResponseRuleEdge"
+          }
+        }
+      },
+      "ArtifactProjectionDataEventNode": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "eventNode"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "event_node"
+          },
+          "eventNode": {
+            "$ref": "#/components/schemas/ArtifactEventMapNode"
+          }
+        }
+      },
+      "ArtifactProjectionDataEventEdge": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "eventEdge"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "event_edge"
+          },
+          "eventEdge": {
+            "$ref": "#/components/schemas/ArtifactEventMapEdge"
+          }
+        }
+      },
+      "ArtifactProjectionDataEventServer": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "eventServer"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "event_server"
+          },
+          "eventServer": {
+            "$ref": "#/components/schemas/DesignScenarioEventServer"
+          }
+        }
+      },
+      "ArtifactProjectionDataEventChannel": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "eventChannel"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "event_channel"
+          },
+          "eventChannel": {
+            "$ref": "#/components/schemas/DesignScenarioEventChannel"
+          }
+        }
+      },
+      "ArtifactProjectionDataEventMessage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "eventMessage"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "event_message"
+          },
+          "eventMessage": {
+            "$ref": "#/components/schemas/DesignScenarioEventMessage"
+          }
+        }
+      },
+      "ArtifactProjectionDataEventSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "eventSchema"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "event_schema"
+          },
+          "eventSchema": {
+            "$ref": "#/components/schemas/DesignScenarioEventSchema"
+          }
+        }
+      },
+      "ArtifactProjectionDataEventContract": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "eventContract"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "event_contract"
+          },
+          "eventContract": {
+            "$ref": "#/components/schemas/DesignScenarioEventContract"
+          }
+        }
+      },
+      "ArtifactProjectionDataEventOperation": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "eventOperation"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "event_operation"
+          },
+          "eventOperation": {
+            "$ref": "#/components/schemas/DesignScenarioEventOperation"
+          }
+        }
+      },
+      "ArtifactProjectionDataApiOperation": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "apiOperation"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "api_operation"
+          },
+          "apiOperation": {
+            "$ref": "#/components/schemas/ArtifactAPIOperationData"
+          }
+        }
+      },
+      "ArtifactProjectionDataUnsupported": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "unsupported"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "unsupported"
+          },
+          "unsupported": {
+            "$ref": "#/components/schemas/ArtifactUnsupportedData"
+          }
+        }
+      },
+      "ArtifactProjectionData": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/ArtifactProjectionDataParticipant"
+          },
+          {
+            "$ref": "#/components/schemas/ArtifactProjectionDataSequenceMessage"
+          },
+          {
+            "$ref": "#/components/schemas/ArtifactProjectionDataFragment"
+          },
+          {
+            "$ref": "#/components/schemas/ArtifactProjectionDataStateDiagram"
+          },
+          {
+            "$ref": "#/components/schemas/ArtifactProjectionDataState"
+          },
+          {
+            "$ref": "#/components/schemas/ArtifactProjectionDataStateTransition"
+          },
+          {
+            "$ref": "#/components/schemas/ArtifactProjectionDataResponseRule"
+          },
+          {
+            "$ref": "#/components/schemas/ArtifactProjectionDataResponseNode"
+          },
+          {
+            "$ref": "#/components/schemas/ArtifactProjectionDataResponseEdge"
+          },
+          {
+            "$ref": "#/components/schemas/ArtifactProjectionDataEventNode"
+          },
+          {
+            "$ref": "#/components/schemas/ArtifactProjectionDataEventEdge"
+          },
+          {
+            "$ref": "#/components/schemas/ArtifactProjectionDataEventServer"
+          },
+          {
+            "$ref": "#/components/schemas/ArtifactProjectionDataEventChannel"
+          },
+          {
+            "$ref": "#/components/schemas/ArtifactProjectionDataEventMessage"
+          },
+          {
+            "$ref": "#/components/schemas/ArtifactProjectionDataEventSchema"
+          },
+          {
+            "$ref": "#/components/schemas/ArtifactProjectionDataEventContract"
+          },
+          {
+            "$ref": "#/components/schemas/ArtifactProjectionDataEventOperation"
+          },
+          {
+            "$ref": "#/components/schemas/ArtifactProjectionDataApiOperation"
+          },
+          {
+            "$ref": "#/components/schemas/ArtifactProjectionDataUnsupported"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "kind"
+        }
+      },
+      "ArtifactDiagnostic": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "code",
+          "message"
+        ],
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "severity": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "artifact": {
+            "$ref": "#/components/schemas/ArtifactKey"
+          },
+          "selector": {
+            "$ref": "#/components/schemas/EditorSelector"
+          },
+          "locator": {
+            "$ref": "#/components/schemas/ArtifactProjectionLocator"
+          },
+          "sourceNodeIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "pointer": {
+            "type": "string"
+          }
+        }
+      },
+      "ArtifactResolution": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "status",
+          "diagnostics",
+          "updateAvailable"
+        ],
+        "properties": {
+          "status": {
+            "type": "string"
+          },
+          "diagnostics": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ArtifactDiagnostic"
+            }
+          },
+          "currentDraftRevisionId": {
+            "$ref": "#/components/schemas/APIArtifactID"
+          },
+          "updateAvailable": {
+            "type": "boolean"
+          }
+        }
+      },
+      "ArtifactProjectionItem": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "kind",
+          "label",
+          "locator",
+          "objectHash",
+          "sourceNodeIds",
+          "data",
+          "diagnostics"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "locator": {
+            "$ref": "#/components/schemas/ArtifactProjectionLocator"
+          },
+          "bindingSelector": {
+            "$ref": "#/components/schemas/EditorSelector"
+          },
+          "objectHash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "sourceNodeIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "data": {
+            "$ref": "#/components/schemas/ArtifactProjectionData"
+          },
+          "diagnostics": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ArtifactDiagnostic"
+            }
+          }
+        }
+      },
+      "ArtifactProjectionCoverage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "itemsReturned",
+          "totalItems",
+          "nodesReturned",
+          "edgesReturned",
+          "diagnosticsReturned",
+          "truncatedReasons"
+        ],
+        "properties": {
+          "itemsReturned": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "totalItems": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "nodesReturned": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "edgesReturned": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "diagnosticsReturned": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "truncatedReasons": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "ArtifactProjectionPage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "revisionId",
+          "semanticHash",
+          "sourceSnapshotIds",
+          "pins",
+          "selectedPin",
+          "hashPolicy",
+          "view",
+          "apiBindings",
+          "editorBindings",
+          "bindingsComplete",
+          "items",
+          "nextCursor",
+          "resolution",
+          "diagnostics",
+          "coverage",
+          "complete"
+        ],
+        "properties": {
+          "revisionId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "semanticHash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "sourceSnapshotIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "pins": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendArtifactPin"
+            },
+            "maxItems": 20
+          },
+          "selectedPin": {
+            "$ref": "#/components/schemas/BackendArtifactPin"
+          },
+          "hashPolicy": {
+            "type": "string",
+            "enum": [
+              "api-design-raw-document-v1",
+              "design-scenario-envelope-v1"
+            ]
+          },
+          "view": {
+            "type": "string",
+            "enum": [
+              "sequence",
+              "event_model",
+              "states",
+              "response_rules"
+            ]
+          },
+          "embeddedContractId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 50000
+          },
+          "apiBindings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendAPIArtifactBinding"
+            },
+            "maxItems": 200
+          },
+          "editorBindings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EditorBinding"
+            },
+            "maxItems": 200
+          },
+          "bindingsComplete": {
+            "type": "boolean",
+            "const": true
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ArtifactProjectionItem"
+            },
+            "maxItems": 100
+          },
+          "nextCursor": {
+            "type": "string"
+          },
+          "resolution": {
+            "$ref": "#/components/schemas/ArtifactResolution"
+          },
+          "diagnostics": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ArtifactDiagnostic"
+            }
+          },
+          "coverage": {
+            "$ref": "#/components/schemas/ArtifactProjectionCoverage"
+          },
+          "complete": {
+            "type": "boolean"
+          }
+        }
+      },
+      "EditorArtifactSide": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "pin",
+          "binding"
+        ],
+        "properties": {
+          "pin": {
+            "$ref": "#/components/schemas/BackendArtifactPin"
+          },
+          "binding": {
+            "$ref": "#/components/schemas/EditorBinding"
+          }
+        }
+      },
+      "ArtifactGroupSide": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "pin"
+        ],
+        "properties": {
+          "pin": {
+            "$ref": "#/components/schemas/BackendArtifactPin"
+          }
+        }
+      },
+      "ArtifactComparisonSide": {
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "api"
+            ],
+            "properties": {
+              "api": {
+                "$ref": "#/components/schemas/BackendArtifactRef"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "editor"
+            ],
+            "properties": {
+              "editor": {
+                "$ref": "#/components/schemas/EditorArtifactSide"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "group"
+            ],
+            "properties": {
+              "group": {
+                "$ref": "#/components/schemas/ArtifactGroupSide"
+              }
+            }
+          }
+        ]
+      },
+      "ArtifactPinsDiff": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "identity",
+          "kind",
+          "status",
+          "contextChanged",
+          "changes"
+        ],
+        "properties": {
+          "identity": {
+            "type": "string"
+          },
+          "sourceNodeId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "before": {
+            "$ref": "#/components/schemas/ArtifactComparisonSide"
+          },
+          "after": {
+            "$ref": "#/components/schemas/ArtifactComparisonSide"
+          },
+          "contextChanged": {
+            "type": "boolean"
+          },
+          "changes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendAPIArtifactObjectChange"
+            },
+            "maxItems": 1000
+          }
+        }
+      },
+      "ArtifactPinsPreview": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "baseRevisionId",
+          "expectedVersion",
+          "candidateHash",
+          "semanticHash",
+          "pins",
+          "apiBindings",
+          "editorBindings",
+          "sourceSnapshotIds",
+          "diagnostics",
+          "diff",
+          "diffTruncated",
+          "canApply"
+        ],
+        "properties": {
+          "baseRevisionId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "expectedVersion": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1,
+            "maximum": 9223372036854775807
+          },
+          "candidateHash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "semanticHash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "pins": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendArtifactPin"
+            },
+            "maxItems": 20
+          },
+          "apiBindings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendAPIArtifactBinding"
+            },
+            "maxItems": 200
+          },
+          "editorBindings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EditorBinding"
+            },
+            "maxItems": 200
+          },
+          "sourceSnapshotIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "diagnostics": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ArtifactDiagnostic"
+            }
+          },
+          "diff": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ArtifactPinsDiff"
+            },
+            "maxItems": 1000
+          },
+          "diffTruncated": {
+            "type": "boolean"
+          },
+          "canApply": {
+            "type": "boolean"
+          }
+        }
+      },
+      "ArtifactPinsResult": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "project",
+          "revision"
+        ],
+        "properties": {
+          "project": {
+            "$ref": "#/components/schemas/BackendProject"
+          },
+          "revision": {
+            "$ref": "#/components/schemas/BackendRevision"
+          }
+        }
+      },
+      "DesignScenarioArtifactSnapshot": {
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "scenarioId",
+              "revisionId",
+              "version",
+              "storedContentHash",
+              "documentHash",
+              "documentJSON",
+              "formDraftsJSON",
+              "hashPolicy",
+              "typedStatus",
+              "envelopeVerification",
+              "contentHash"
+            ],
+            "properties": {
+              "scenarioId": {
+                "$ref": "#/components/schemas/APIArtifactID"
+              },
+              "revisionId": {
+                "$ref": "#/components/schemas/APIArtifactID"
+              },
+              "version": {
+                "$ref": "#/components/schemas/APIArtifactID"
+              },
+              "storedContentHash": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              },
+              "documentHash": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              },
+              "documentJSON": {
+                "type": "string"
+              },
+              "formDraftsJSON": {
+                "type": "string"
+              },
+              "hashPolicy": {
+                "type": "string",
+                "const": "design-scenario-envelope-v1"
+              },
+              "typedStatus": {
+                "type": "string",
+                "const": "supported"
+              },
+              "envelopeVerification": {
+                "type": "string",
+                "const": "verified"
+              },
+              "contentHash": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "scenarioId",
+              "revisionId",
+              "version",
+              "storedContentHash",
+              "documentHash",
+              "documentJSON",
+              "formDraftsJSON",
+              "hashPolicy",
+              "typedStatus",
+              "envelopeVerification"
+            ],
+            "properties": {
+              "scenarioId": {
+                "$ref": "#/components/schemas/APIArtifactID"
+              },
+              "revisionId": {
+                "$ref": "#/components/schemas/APIArtifactID"
+              },
+              "version": {
+                "$ref": "#/components/schemas/APIArtifactID"
+              },
+              "storedContentHash": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              },
+              "documentHash": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              },
+              "documentJSON": {
+                "type": "string"
+              },
+              "formDraftsJSON": {
+                "type": "string"
+              },
+              "hashPolicy": {
+                "type": "string",
+                "const": "design-scenario-envelope-v1"
+              },
+              "typedStatus": {
+                "type": "string",
+                "const": "unsupported"
+              },
+              "envelopeVerification": {
+                "type": "string",
+                "const": "unavailable"
+              }
+            }
+          }
+        ]
+      },
+      "RecordSide": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "RecordType",
+          "ID",
+          "SnapshotID",
+          "Path",
+          "Name",
+          "Key",
+          "Freshness"
+        ],
+        "properties": {
+          "RecordType": {
+            "type": "string"
+          },
+          "ID": {
+            "type": "string"
+          },
+          "SnapshotID": {
+            "type": "string"
+          },
+          "Path": {
+            "type": "string"
+          },
+          "Name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "Key": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "Freshness": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BackendAssertionFreshness"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "artifact": {
+            "$ref": "#/components/schemas/BackendArtifactRef"
+          },
+          "editorArtifact": {
+            "$ref": "#/components/schemas/EditorArtifactSide"
+          },
+          "artifactGroup": {
+            "$ref": "#/components/schemas/ArtifactGroupSide"
+          }
+        }
+      },
+      "APIEditorSelector": {
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "diagramId"
+            ],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "state_diagram"
+              },
+              "diagramId": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_-]{1,80}$"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "diagramId",
+              "transitionId"
+            ],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "state_transition"
+              },
+              "diagramId": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_-]{1,80}$"
+              },
+              "transitionId": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_-]{1,80}$"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "ruleId"
+            ],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "response_rule"
+              },
+              "ruleId": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_-]{1,80}$"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "ruleId",
+              "nodeId"
+            ],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "response_node"
+              },
+              "ruleId": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_-]{1,80}$"
+              },
+              "nodeId": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_-]{1,80}$"
+              }
+            }
+          }
+        ]
+      },
+      "ScenarioEditorSelector": {
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "messageId"
+            ],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "sequence_message"
+              },
+              "messageId": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 50000
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "participantId"
+            ],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "participant"
+              },
+              "participantId": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 50000
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "contractId",
+              "operationId"
+            ],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "event_operation"
+              },
+              "contractId": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_-]{1,100}$"
+              },
+              "operationId": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_-]{1,100}$"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "channelId"
+            ],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "event_channel"
+              },
+              "channelId": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_-]{1,100}$"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "messageId"
+            ],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "event_message"
+              },
+              "messageId": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_-]{1,100}$"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "diagramId",
+              "embeddedContractId"
+            ],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "state_diagram"
+              },
+              "diagramId": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_-]{1,80}$"
+              },
+              "embeddedContractId": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 50000
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "diagramId",
+              "transitionId",
+              "embeddedContractId"
+            ],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "state_transition"
+              },
+              "diagramId": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_-]{1,80}$"
+              },
+              "transitionId": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_-]{1,80}$"
+              },
+              "embeddedContractId": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 50000
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "ruleId",
+              "embeddedContractId"
+            ],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "response_rule"
+              },
+              "ruleId": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_-]{1,80}$"
+              },
+              "embeddedContractId": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 50000
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "ruleId",
+              "nodeId",
+              "embeddedContractId"
+            ],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "response_node"
+              },
+              "ruleId": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_-]{1,80}$"
+              },
+              "nodeId": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_-]{1,80}$"
+              },
+              "embeddedContractId": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 50000
+              }
+            }
+          }
+        ]
+      },
+      "APIEditorBindingInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "selector",
+          "sourceNodeIds"
+        ],
+        "properties": {
+          "selector": {
+            "$ref": "#/components/schemas/APIEditorSelector"
+          },
+          "sourceNodeIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "minItems": 1,
+            "maxItems": 100,
+            "uniqueItems": true
+          }
+        }
+      },
+      "ScenarioEditorBindingInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "selector",
+          "sourceNodeIds"
+        ],
+        "properties": {
+          "selector": {
+            "$ref": "#/components/schemas/ScenarioEditorSelector"
+          },
+          "sourceNodeIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "minItems": 1,
+            "maxItems": 100,
+            "uniqueItems": true
+          }
+        }
+      },
+      "ComparisonItem": {
+        "$ref": "#/components/schemas/BackendComparisonItem"
       }
     }
   },
@@ -53088,6 +55558,450 @@
             }
           }
         }
+      }
+    },
+    "/api/backend-projects/{id}/artifacts/query": {
+      "post": {
+        "tags": [
+          "backend-projects"
+        ],
+        "operationId": "queryBackendArtifacts",
+        "summary": "queryBackendArtifacts",
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ArtifactProjectionPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/QueryBackendArtifactsRequest"
+              }
+            }
+          }
+        },
+        "description": "Exact immutable artifact groups and strict recursive selector input; complete original body including outer whitespace at most128 KiB. Every page preserves full selected API/editor roster and bindingsComplete:true independently of projection pagination. Full new v2 context at most4 MiB of escaped serialized UTF-8 bytes across all groups. B31 event construction separately admits4 MiB accounted bytes and prospective5000nodes/10000edges/2000diagnostics before owner final4 MiB output. Over-construction retains diagnostics/full roster and exact snapshot access. A required request resolves at most20distinct heavy owner snapshots. Apply uses CAS and exact idempotent original receipt bytes; blocked/truncated preview cannot apply."
+      }
+    },
+    "/api/backend-projects/{id}/artifacts/preview": {
+      "post": {
+        "tags": [
+          "backend-projects"
+        ],
+        "operationId": "previewBackendArtifactPins",
+        "summary": "previewBackendArtifactPins",
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ArtifactPinsPreview"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PreviewBackendArtifactPinsRequest"
+              }
+            }
+          }
+        },
+        "description": "Exact immutable artifact groups and strict recursive selector input; complete original body including outer whitespace at most128 KiB. Every page preserves full selected API/editor roster and bindingsComplete:true independently of projection pagination. Full new v2 context at most4 MiB of escaped serialized UTF-8 bytes across all groups. B31 event construction separately admits4 MiB accounted bytes and prospective5000nodes/10000edges/2000diagnostics before owner final4 MiB output. Over-construction retains diagnostics/full roster and exact snapshot access. A required request resolves at most20distinct heavy owner snapshots. Apply uses CAS and exact idempotent original receipt bytes; blocked/truncated preview cannot apply. New generic preview/apply conservatively reserve a canonical complete Apply Arguments envelope including projectId, decoded base/version/commands, 64-character candidateHash and all supported 1–128 printable ASCII idempotency keys with worst JSON escaping. Reserved Arguments must fit 128 KiB and Arguments plus 126 bytes of required canonical numeric-int64 JSON-RPC framing must fit global maxBodyBytes; REST shares this conservative rule. A 413 backend_artifact_apply_body_limit exposes allowedBytes, reservedApplyBytes and configured globalMaxBodyBytes/rpcFramingBytes/reservedRPCBytes. Padding, optional RPC metadata/inputResponses/requestState and arbitrary string RPC IDs consume additional unchanged global raw-body space. Existing exact receipts are returned before the new reservation; no extra preview/hash fields are added."
+      }
+    },
+    "/api/backend-projects/{id}/artifacts/commands": {
+      "post": {
+        "tags": [
+          "backend-projects"
+        ],
+        "operationId": "applyBackendArtifactPins",
+        "summary": "applyBackendArtifactPins",
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ArtifactPinsResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApplyBackendArtifactPinsRequest"
+              }
+            }
+          }
+        },
+        "description": "Exact immutable artifact groups and strict recursive selector input; complete original body including outer whitespace at most128 KiB. Every page preserves full selected API/editor roster and bindingsComplete:true independently of projection pagination. Full new v2 context at most4 MiB of escaped serialized UTF-8 bytes across all groups. B31 event construction separately admits4 MiB accounted bytes and prospective5000nodes/10000edges/2000diagnostics before owner final4 MiB output. Over-construction retains diagnostics/full roster and exact snapshot access. A required request resolves at most20distinct heavy owner snapshots. Apply uses CAS and exact idempotent original receipt bytes; blocked/truncated preview cannot apply. New generic preview/apply conservatively reserve a canonical complete Apply Arguments envelope including projectId, decoded base/version/commands, 64-character candidateHash and all supported 1–128 printable ASCII idempotency keys with worst JSON escaping. Reserved Arguments must fit 128 KiB and Arguments plus 126 bytes of required canonical numeric-int64 JSON-RPC framing must fit global maxBodyBytes; REST shares this conservative rule. A 413 backend_artifact_apply_body_limit exposes allowedBytes, reservedApplyBytes and configured globalMaxBodyBytes/rpcFramingBytes/reservedRPCBytes. Padding, optional RPC metadata/inputResponses/requestState and arbitrary string RPC IDs consume additional unchanged global raw-body space. Existing exact receipts are returned before the new reservation; no extra preview/hash fields are added."
+      }
+    },
+    "/api/design-scenarios/{id}/revisions/{rid}/artifact-snapshot": {
+      "get": {
+        "tags": [
+          "design-scenarios"
+        ],
+        "operationId": "getDesignScenarioArtifactSnapshot",
+        "summary": "Read exact qualified immutable scenario envelope",
+        "description": "Exact scenario identity/revision/version use decimal strings. Raw documentJSON and formDraftsJSON remain byte-exact strings. documentHash hashes the raw document; storedContentHash is always stored metadata. contentHash is present only for verified design-scenario-envelope-v1 envelopes. Unsupported typed documents remain qualified with unavailable verification and no contentHash; malformed data or checkable corruption remains an error.",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DesignScenarioArtifactSnapshot"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid canonical IDs, request admission or owner document.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "required": [
+                        "code",
+                        "message"
+                      ],
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {
+                          "$ref": "#/components/schemas/ApiDesignInvalidDetails"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
+          },
+          "413": {
+            "$ref": "#/components/responses/PayloadTooLarge"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/APIArtifactID"
+            }
+          },
+          {
+            "name": "rid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/APIArtifactID"
+            }
+          }
+        ]
       }
     }
   }

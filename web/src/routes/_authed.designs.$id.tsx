@@ -4,6 +4,8 @@ import { ApiDesignerWorkbench } from "@/components/api-designer/ApiDesignerWorkb
 import { NotFoundFallback } from "@/components/ErrorFallback";
 
 const designSearch = type({
+  "projectionView?": "string",
+  "embeddedContractId?": "string",
   "reviewId?": "string | number",
   "pinnedRevisionId?": "string",
   "pinnedHash?": "string",

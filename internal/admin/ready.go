@@ -48,6 +48,12 @@ func (s *Server) Ready() []string {
 	if s.backendAPIArtifacts == nil {
 		missing = append(missing, "NewAPIArtifactService")
 	}
+	if s.backendArtifacts == nil {
+		missing = append(missing, "NewArtifactService")
+	}
+	if s.scenarioArtifactSnapshots == nil {
+		missing = append(missing, "ScenarioArtifactSnapshots")
+	}
 	if s.liveState == nil {
 		missing = append(missing, "SetLiveState")
 	}

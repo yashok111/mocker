@@ -175,7 +175,7 @@ it("renders artifact counts and separate exact pinned API navigation with contex
   );
   await compare();
   expect(
-    await screen.findByText("Артефакты API: добавлено 0 · удалено 0 · изменено 1"),
+    await screen.findByText("Артефакты API и моделей: добавлено 0 · удалено 0 · изменено 1"),
   ).toBeInTheDocument();
   await userEvent.click(screen.getByRole("button", { name: "Открыть изменение artifact binding" }));
   expect(screen.getByText(/Контекст всего артефакта изменился/)).toBeInTheDocument();
@@ -302,4 +302,69 @@ it("reads removed evidence by evidenceId and source changes from the pinned mani
   expect(params.has("cursor")).toBe(false);
   await userEvent.click(screen.getByRole("button", { name: "Открыть изменение source old.go" }));
   expect(await screen.findByText("analyzed · go")).toBeInTheDocument();
+});
+
+it("renders exact editor and projection-only group fields using complete identities", async () => {
+  const pin = {
+    kind: "design_scenario",
+    id: "9007199254740993",
+    revisionId: "9007199254740995",
+    contentHash: hash,
+  };
+  const binding = {
+    artifactKind: "design_scenario",
+    artifactId: pin.id,
+    selector: { kind: "participant", participantId: "p" },
+    sourceNodeIds: ["same"],
+    sourceLabels: ["Frozen orphan source"],
+    objectHash: hash,
+    lastKnownLabel: "Saved participant",
+    origin: "manual",
+    reason: "Explicit intent",
+  };
+  server(() =>
+    json(200, {
+      ...comparison,
+      items: [
+        {
+          ...removed,
+          recordType: "artifact",
+          id: "editor-full-identity",
+          before: {
+            projectId,
+            revisionId: oldId,
+            recordType: "artifact",
+            id: "editor-full-identity",
+          },
+          after: null,
+          editorArtifactBefore: { pin, binding },
+        },
+        {
+          ...removed,
+          recordType: "artifact",
+          id: "projection-group-identity",
+          before: {
+            projectId,
+            revisionId: oldId,
+            recordType: "artifact",
+            id: "projection-group-identity",
+          },
+          after: null,
+          artifactGroupBefore: { pin },
+        },
+      ],
+    }),
+  );
+  await compare();
+  await userEvent.click(
+    await screen.findByRole("button", { name: "Открыть изменение artifact editor-full-identity" }),
+  );
+  expect(screen.getByText("Saved participant")).toBeVisible();
+  expect(screen.getByText(/Frozen orphan source/)).toBeVisible();
+  expect(screen.getByText(/9007199254740993/)).toBeVisible();
+  await userEvent.click(
+    screen.getByRole("button", { name: "Открыть изменение artifact projection-group-identity" }),
+  );
+  expect(screen.queryByText("Saved participant")).not.toBeInTheDocument();
+  expect(screen.getByText(/9007199254740995/)).toBeVisible();
 });

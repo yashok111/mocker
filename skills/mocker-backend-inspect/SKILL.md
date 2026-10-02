@@ -3,12 +3,12 @@ name: mocker-backend-inspect
 description: Inspect a pinned source-backed HTTP endpoint flow, branches, queries, transaction boundaries or imported table/column readers and writers in mocker. Use for backend flow and data-access questions or an explicitly requested blocking source gap investigation.
 metadata:
   workflowId: "mocker-backend-inspect"
-  workflowVersion: "4"
+  workflowVersion: "5"
   requiredModelSchemaVersions: "[\"3\",\"4\"]"
-  requiredViewSchemaVersions: "[\"saved-view-v1\",\"api-artifact-pins-v1\"]"
-  requiredCapabilities: "[\"backend-projects\",\"backend-revisions\",\"backend-graph-query\",\"backend-flow-query\",\"backend-data-access-query\",\"backend-saved-views\",\"backend-field-lineage-query\",\"backend-api-artifact-pins\"]"
-  guideSetId: "sha256:5e7fd2499c5df968ff93fc9fda1c34a93b1340f28e14ee90c430f89cff3e68d1"
-  manifestHash: "sha256:5e7fd2499c5df968ff93fc9fda1c34a93b1340f28e14ee90c430f89cff3e68d1"
+  requiredViewSchemaVersions: "[\"saved-view-v1\",\"api-artifact-pins-v1\",\"backend-editor-artifacts-v1\"]"
+  requiredCapabilities: "[\"backend-projects\",\"backend-revisions\",\"backend-graph-query\",\"backend-flow-query\",\"backend-data-access-query\",\"backend-saved-views\",\"backend-field-lineage-query\",\"backend-api-artifact-pins\",\"backend-editor-projections\"]"
+  guideSetId: "sha256:2d798d65181489ad1c8c08cea728fd9da21f41c97ba295a5a1af742973b16cb1"
+  manifestHash: "sha256:2d798d65181489ad1c8c08cea728fd9da21f41c97ba295a5a1af742973b16cb1"
 ---
 
 # Pinned source flow and data-access inspection
@@ -22,14 +22,13 @@ leaf loads shared references from the server and needs no neighboring package.
 ## Negotiate the complete procedure
 
 Call `get_server_config` and `get_backend_capabilities`. Select the advertised
-supported `mocker-backend-inspect` workflow4 with schemas3/4 and runtime-flow-v1; lineage additionally requires
+supported `mocker-backend-inspect` workflow5 with schemas3/4 and runtime-flow-v1; lineage additionally requires
 source4 field-lineage-v1. Verify all
 listed capabilities and `query_backend_flow`. Decode installed metadata's schema
-and capability JSON-list strings. Matching tools or a partial schema intersection
-cannot qualify a flow task. Inspect workflow1 was released for source inspection; <!-- guide-owner-history -->
+and capability JSON-list strings. Matching tools or partial schemas cannot qualify a flow task. Inspect workflow1 was released for source inspection; <!-- guide-owner-history -->
 Workflow2 added saved views and workflow3 added lineage. <!-- guide-owner-history -->
-This set advertises workflow4 with manual API pins; older local text requires
-the complete compatible inspect4 server fallback for these tasks.
+Workflow4 added manual API pins. <!-- guide-owner-history -->
+Workflow5 adds saved editor projections; use complete inspect5 server fallback.
 
 Use installed text only when workflowId/version/guideSetId/manifestHash match the
 selected advertised tuple and each needed local topic contentHash matches its
@@ -41,13 +40,13 @@ missing or unsupported local metadata all require compatible server fallback.
 If no compatible set exists, report unavailable flow inspection and continue
 only independent supported reads. Never substitute latest for an unknown set,
 mix workflow versions or create an import merely to satisfy a pure question.
-
 Load details progressively from this same immutable guideSetId:
 
 | Topic | Actual owner | Read when |
 |---|---|---|
-| `backend-flow-reference` | inspect4 | Before the first flow/access query; strict variants, typed records and pagination. |
-| `backend-analysis` | inspect4 | For witnesses, uncertainty, truncation or a blocking gap. |
+| `backend-flow-reference` | inspect5 | Before the first flow/access query; strict variants, typed records and pagination. |
+| `backend-analysis` | inspect5 | For witnesses, uncertainty, truncation or a blocking gap. |
+| `backend-editor-projections` | inspect5 | Before saved scenario/API editor projections or generic pin changes. |
 | `backend-model` | import5 | When identity, proof, freshness or coverage needs explanation. |
 | `backend-recovery` | import5 | On resume/read failure, or before authorized import publication. |
 | `backend-database-reference` | database5 | For selected SQL/ORM facets and relational bounds. |
@@ -125,10 +124,10 @@ changed; use the selected import recovery, never guess publication success.
 
 ## Save and reopen a Flow presentation when requested
 
-Before saved-view writes require inspect4, `backend-saved-views` and
+Before saved-view writes require inspect5, `backend-saved-views` and
 `saved-view-v1` in the selected global set. Ordinary inspection still writes
 nothing. Use the saved-view contract/example in `backend-flow-reference` under
-this inspect4 owner. List `list_backend_saved_views {projectId,kind:"flow"}`,
+this inspect5 owner. List `list_backend_saved_views {projectId,kind:"flow"}`,
 create from the exact source pin and complete submitted presentation, then retain
 returned viewId/version/pins. Reopen with `get_backend_saved_view
 {projectId,viewId,version}` before graph/flow/evidence reads; use only its target
@@ -146,7 +145,7 @@ change canvas presentation only. No path or transaction guarantee is inferred. O
 
 ## Ordered pinned field-lineage inspection
 
-1. Require inspect4, source4, field-lineage-v1 and backend-field-lineage-query.
+1. Require inspect5, source4, field-lineage-v1 and backend-field-lineage-query.
    Source1–3 and proposals refuse this query; their older reads remain supported.
    A proposal may navigate to its exact source base only if that base is source4.
 2. Select one complete value ref from pinned node reads: column nodeId+facetKey;
@@ -174,7 +173,7 @@ change canvas presentation only. No path or transaction guarantee is inferred. O
    transient and do not extend saved-view-v1. Never fall back to latest on failure.
 
 API fields beneath their source HTTP operation retain direction/location/status/
-media/structural selector. Manual external API associations require inspect4,
+media/structural selector. Manual external API associations require inspect5,
 backend-api-artifact-pins and api-artifact-pins-v1 in viewSchemaVersions. Read the
 full contract/example in backend-flow-reference before an authorized change.
 Choose source node, immutable API revision and operation key/schema pointer
@@ -184,16 +183,18 @@ Lost replies retain the exact body/key for replay; CAS requires explicit reprevi
 Historical SavedView/proposal reads keep their exact source/base revisions.
 The separate raw pinned editor panel preserves the dirty current draft. Manual
 associations do not establish compatibility, conformance or executed behavior.
-
+For saved editors require backend-editor-projections/backend-editor-artifacts-v1;
+load backend-editor-projections for full rosters, linked/copy provenance, qualified
+snapshots, retries/current-head409 recovery and independent admission budgets.
 ## Owner dependency requirements in this guide set
 
 Each dependency must qualify completely in the same guideSetId/manifestHash.
-Source4/profile field-lineage-v1 is additionally required for lineage itself;
-source1–3 keep their older supported operations. Selecting a reference starts no writes.
+Source4/field-lineage-v1 is required for lineage; source1–3 retain supported reads.
+Selecting a reference starts no writes.
 
 | Owner | Exact version | Model versions | View versions | Required capabilities |
 |---|---|---|---|---|
 | mocker-backend-project | 1 | 1 |  | backend-projects, backend-project-metadata, backend-revisions |
 | mocker-backend-import | 5 | 1,2,3,4 |  | backend-projects, backend-revisions, backend-graph-query, backend-source-import, backend-source-reconcile, backend-revision-compare, backend-relational-import, backend-database-query, backend-database-er, backend-runtime-flow-import, backend-flow-query, backend-data-access-query, backend-field-lineage-import, backend-field-lineage-query |
 | mocker-backend-database | 5 | 2,3,4 | proposal-relational-v1,saved-view-v1 | backend-projects, backend-revisions, backend-graph-query, backend-database-query, backend-database-er, backend-db-proposals, backend-db-typed-edits, backend-flow-query, backend-data-access-query, backend-saved-views, backend-field-lineage-query |
-| mocker-backend-inspect | 4 | 3,4 | saved-view-v1,api-artifact-pins-v1 | backend-projects, backend-revisions, backend-graph-query, backend-flow-query, backend-data-access-query, backend-saved-views, backend-field-lineage-query, backend-api-artifact-pins |
+| mocker-backend-inspect | 5 | 3,4 | saved-view-v1,api-artifact-pins-v1,backend-editor-artifacts-v1 | backend-projects, backend-revisions, backend-graph-query, backend-flow-query, backend-data-access-query, backend-saved-views, backend-field-lineage-query, backend-api-artifact-pins, backend-editor-projections |

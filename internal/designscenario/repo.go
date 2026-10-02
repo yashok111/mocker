@@ -116,15 +116,28 @@ func (r *Repo) prepare(document Document, formDrafts map[string]string) (prepare
 	if r.cfg.MaxBody > 0 && int64(len(documentJSON)+len(draftsJSON)) > r.cfg.MaxBody {
 		return preparedDocument{}, nil, ErrTooLarge
 	}
+	_, hash, err := encodeScenarioEnvelope(document, formDrafts)
+	if err != nil {
+		return preparedDocument{}, nil, err
+	}
+	return preparedDocument{document: string(documentJSON), formDrafts: string(draftsJSON), hash: hash}, diagnostics, nil
+}
+
+// encodeScenarioEnvelope is the immutable owner's existing hash policy. It is
+// pure: callers decide whether to validate, persist, or verify the document.
+func encodeScenarioEnvelope(document Document, formDrafts map[string]string) ([]byte, string, error) {
+	if formDrafts == nil {
+		formDrafts = map[string]string{}
+	}
 	envelope, err := jsonx.Marshal(struct {
 		Document   Document          `json:"document"`
 		FormDrafts map[string]string `json:"formDrafts"`
 	}{Document: document, FormDrafts: formDrafts})
 	if err != nil {
-		return preparedDocument{}, nil, fmt.Errorf("encode design scenario hash input: %w", err)
+		return nil, "", fmt.Errorf("encode design scenario hash input: %w", err)
 	}
 	sum := sha256.Sum256(envelope)
-	return preparedDocument{document: string(documentJSON), formDrafts: string(draftsJSON), hash: hex.EncodeToString(sum[:])}, diagnostics, nil
+	return envelope, hex.EncodeToString(sum[:]), nil
 }
 
 func cloneDocument(document Document) (Document, error) {

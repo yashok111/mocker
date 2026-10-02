@@ -1,3 +1,4 @@
+import { BackendArtifactProjections } from "../backend-workbench/BackendArtifactProjections";
 import {
   lazy,
   Suspense,
@@ -795,6 +796,15 @@ function Workbench({
             setEditorMode("source");
             setFocusPointer(undefined);
           }}
+        />
+      )}
+      {pinnedAPI?.returnProjectId && pinnedAPI.returnRevisionId && pinnedAPI.projectionView && (
+        <BackendArtifactProjections
+          projectId={pinnedAPI.returnProjectId}
+          revisionId={pinnedAPI.returnRevisionId}
+          readOnly
+          initialArtifact={`api_design:${id}`}
+          initialView={pinnedAPI.projectionView}
         />
       )}
       <details className={classes.mockAddresses}>

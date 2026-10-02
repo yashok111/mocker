@@ -91,7 +91,7 @@ endpoint access or impact safety.
 
 Runtime source3 adds imported net/http handlers, flow steps, call candidates,
 query definitions and explicit table/column accesses. Read backend-flow-reference
-and backend-analysis under inspect4 in this same set for exact shapes and limits.
+and backend-analysis under inspect5 in this same set for exact shapes and limits.
 Capture Go/query text as original source bytes and physical spans; do not launch
 the service, package scripts, SQL or migrations. Dynamic dispatch gets candidate
 proof plus an unresolved remainder when scope is partial/unknown. A table-level

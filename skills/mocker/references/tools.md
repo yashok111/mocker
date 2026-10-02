@@ -328,7 +328,7 @@ See `design.md` for limits and the complete workflow.
 
 ## Backend saved views
 
-Select inspect4 for source Flow or database5 for source/proposal Database in one
+Select inspect5 for source Flow or database5 for source/proposal Database in one
 verified guideSetId/manifestHash. Require backend-saved-views and saved-view-v1;
 import5 remains the source import owner. Saving presentation requires an explicit
 request and does not import/apply/execute source, SQL or migrations.
@@ -343,12 +343,12 @@ request and does not import/apply/execute source, SQL or migrations.
 Reopen resolves saved target/state before model reads. Share viewId/viewVersion;
 failed saved pins never fall back to heads.409 preserves changes and needs
 explicit reload/reconcile or save-as-new. See backend-flow-reference under
-inspect4 and backend-database-reference under database5 for complete examples.
+inspect5 and backend-database-reference under database5 for complete examples.
 
 ## Backend source4 field lineage
 
-Import5 owns source4 field-lineage-v1 import; inspect4 owns pinned lineage reads;
-database5 routes column actions to inspect4. Select compatible complete owners
+Import5 owns source4 field-lineage-v1 import; inspect5 owns pinned lineage reads;
+database5 routes column actions to inspect5. Select compatible complete owners
 in one verified guideSetId/manifestHash. Existing source1–3 operations, DB
 proposals and saved-view-v1 retain their established contracts.
 
@@ -363,12 +363,29 @@ mapping cards preserve all ordered sources, destination, transform/redaction,
 evidence and explicit boundaries. Zero-input unknown is not constant. Empty
 results never prove no dependency. Pagination differs from global traversal
 truncation and source coverage. No source code/SQL execution, latest fallback or
-implicit external API association is provided; load inspect4 flow/analysis topics.
+implicit external API association is provided; load inspect5 flow/analysis topics.
 
-## Exact backend API artifact associations (inspect4)
+## Exact backend API artifact associations (inspect5)
 
 Require backend-api-artifact-pins and api-artifact-pins-v1 in viewSchemaVersions.
-Read backend-flow-reference under its complete inspect4 owner for all four tools:
+Read backend-flow-reference under its complete inspect5 owner for all four tools:
 query_backend_api_artifacts, preview_backend_api_pins, apply_backend_api_pins and
 get_api_artifact_snapshot. Associations are manual, use exact decimal string API
 IDs and immutable raw hashes, and never select latest implicitly.
+
+## Saved editor projections and generic artifact pins
+
+Select inspect5 and verify backend-editor-projections/backend-editor-artifacts-v1;
+load `backend-editor-projections` from its advertised immutable set.
+
+| Tool | Input and behavior |
+|---|---|
+| query_backend_artifacts | projectId, exact revisionId, artifact:{kind,id}, view sequence/states/response_rules/event_model, embeddedContractId when scenario states/rules, limit/cursor; returns frozen full selected-group rosters on every page. Read only. |
+| preview_backend_artifact_pins | projectId, current baseRevisionId/expectedVersion, complete ordered commands; returns candidateHash/diff/canApply with body/context/work admission. Read only. |
+| apply_backend_artifact_pins | Exact preview body plus candidateHash/idempotencyKey; full group replacement/removal with backend CAS and exact durable retry. Edits backend associations only. |
+| get_design_scenario_artifact_snapshot | Exact scenarioId/revisionId strings; returns raw document/drafts, storedContentHash/documentHash and qualified status, contentHash only when verified. Read only. |
+
+The old API-specific query/preview/apply/snapshot tools remain available. Generic
+set preserves editors when the last API link is removed; explicit remove clears
+both collections. Unsupported saved content remains readable without becoming
+bindable. No projection/snapshot read writes owners or executes authored rules.

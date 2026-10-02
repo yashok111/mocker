@@ -6,8 +6,8 @@ metadata:
   workflowVersion: "1"
   requiredModelSchemaVersions: "[]"
   requiredCapabilities: "[]"
-  guideSetId: "sha256:5e7fd2499c5df968ff93fc9fda1c34a93b1340f28e14ee90c430f89cff3e68d1"
-  manifestHash: "sha256:5e7fd2499c5df968ff93fc9fda1c34a93b1340f28e14ee90c430f89cff3e68d1"
+  guideSetId: "sha256:2d798d65181489ad1c8c08cea728fd9da21f41c97ba295a5a1af742973b16cb1"
+  manifestHash: "sha256:2d798d65181489ad1c8c08cea728fd9da21f41c97ba295a5a1af742973b16cb1"
 ---
 
 # mocker
@@ -19,7 +19,7 @@ foundation or PostgreSQL/SQLite relational source-facet import, explicit
 same-provider snapshot reconciliation and pinned database/ER, structural
 comparison and evidence reads. Typed NULL/NOT NULL and FK proposals use separate pinned preview/apply and unverified criteria;
 source schema3 adds pinned endpoint flows and imported scoped data accesses;
-source4 adds explicit field lineage and manual exact API associations through inspect4; incremental import and backend impact remain unavailable. For mocks, one OpenAPI
+source4 adds explicit field lineage and manual exact API associations through inspect5; incremental import and backend impact remain unavailable. For mocks, one OpenAPI
 spec is imported once; every WORKSPACE
 bound to it serves the spec's routes on its own host with deterministic
 generated bodies, records what it served, and remembers what it is told to
@@ -94,7 +94,7 @@ No compatible set means no proposal writes. Source import selects import5, inclu
 compatible initial import or relational→runtime extension. Flow/access questions
 select mocker-backend-inspect, references/backend/inspect.md or backend-inspect
 from the advertised set; load flow-reference/analysis progressively under their
-actual inspect4 owner. Manual API associations also select inspect4 with backend-api-artifact-pins
+actual inspect5 owner. Manual API associations also select inspect5 with backend-api-artifact-pins
 and api-artifact-pins-v1 in viewSchemaVersions, then load the complete flow-reference
 contract/example before preview/apply. Ordinary inspection performs no writes. An explicitly
 requested resolvable source gap uses the selected import5 whole-scope reconcile,
@@ -169,7 +169,7 @@ fresh runId and the returned revisionId/name/variables, then verify the actual
 controlFlow and refresh coverage. Generation is read-only; unresolved paths
 include reasons. See `references/design.md` for the workflow and limits.
 
-Saved Flow/Database presentation tasks select inspect4/database5 respectively,
+Saved Flow/Database presentation tasks select inspect5/database5 respectively,
 requiring backend-saved-views and saved-view-v1 in that same pinned set. Read the
 saved version before model reads, preserve exact targets and both URL viewId/
 viewVersion, and use the owner's complete saved-view example. Create/save are
@@ -177,3 +177,9 @@ explicit presentation writes with retained exact keys/requests and old-version
 CAS. Failed saved reads have no head fallback. Proposal intent/unknown runtime
 checks stay explicit; layouts/collapse infer no source behavior or field lineage.
 Source import continues to select import5. Live agent acceptance remains deferred.
+
+For authored sequence/state/rule/EventModel projections select inspect5 with
+backend-editor-projections and backend-editor-artifacts-v1; load
+`backend-editor-projections` before reads or authorized generic pin changes.
+Keep authored completeness, origin verification, source evidence and runtime
+completeness separate; saved copy content remains independent.

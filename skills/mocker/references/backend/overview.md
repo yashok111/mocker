@@ -6,8 +6,8 @@ metadata:
   workflowVersion: "1"
   requiredModelSchemaVersions: "[\"1\"]"
   requiredCapabilities: "[\"backend-projects\",\"backend-project-metadata\",\"backend-revisions\"]"
-  guideSetId: "sha256:5e7fd2499c5df968ff93fc9fda1c34a93b1340f28e14ee90c430f89cff3e68d1"
-  manifestHash: "sha256:5e7fd2499c5df968ff93fc9fda1c34a93b1340f28e14ee90c430f89cff3e68d1"
+  guideSetId: "sha256:2d798d65181489ad1c8c08cea728fd9da21f41c97ba295a5a1af742973b16cb1"
+  manifestHash: "sha256:2d798d65181489ad1c8c08cea728fd9da21f41c97ba295a5a1af742973b16cb1"
 ---
 
 # Backend project preparation
@@ -32,9 +32,9 @@ this backend-overview topic keeps the project-preparation identity. Project
 preparation still requires schema1, including its empty initial revision; it
 need not require schema2 to prepare a project. Database typed edits/proposals
 use the separately selected database5 workflow. Source flow/data-access questions
-select inspect4 at backend-inspect in this same set; ordinary inspection writes
-nothing. Source4 field lineage selects inspect4 with field-lineage-v1 and backend-field-lineage-query.
-Manual API links require inspect4, backend-api-artifact-pins and api-artifact-pins-v1;
+select inspect5 at backend-inspect in this same set; ordinary inspection writes
+nothing. Source4 field lineage selects inspect5 with field-lineage-v1 and backend-field-lineage-query.
+Manual API links require inspect5, backend-api-artifact-pins and api-artifact-pins-v1;
 load its flow-reference contract before any authorized mutation. Backend impact,
 measured writer checks and jobs remain unavailable.
 
@@ -106,3 +106,8 @@ is an idempotency conflict; resolve the existing receipt/request first. For a
 known compare-and-swap conflict, re-read and reconcile, then issue the newly
 formed command with a new key. A receipt replay returns the original result,
 which may be older than current state; read the project again for its live state.
+
+Saved editor projections use inspect5 with backend-editor-projections and
+backend-editor-artifacts-v1. Load backend-editor-projections for exact historic
+sequence/state/rule/EventModel reads and generic pin changes. Manual associations
+and authored EventModel do not establish source event evidence or execution.

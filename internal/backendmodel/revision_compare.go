@@ -125,7 +125,7 @@ func CompareRevisionStates(ctx context.Context, before, after RevisionState) (*R
 		out.Changes = append(out.Changes, delta)
 		out.Summary.SourceChanges++
 	}
-	if err := compareAPIArtifacts(ctx, before, after, out); err != nil {
+	if err := compareRevisionArtifacts(ctx, before, after, out); err != nil {
 		return nil, err
 	}
 	slices.SortFunc(out.Changes, func(a, b RecordDelta) int {
@@ -310,6 +310,8 @@ func (r *Repo) CompareRevisions(ctx context.Context, pid string, in CompareRevis
 		item := ComparisonItem{RecordType: change.RecordType, ID: change.ID, ChangeKinds: change.ChangeKinds, ChangedPaths: change.ChangedPaths}
 		item.ContextChanged = change.ContextChanged
 		if change.Before != nil {
+			item.EditorArtifactBefore = change.Before.EditorArtifact
+			item.ArtifactGroupBefore = change.Before.ArtifactGroup
 			item.ArtifactBefore = change.Before.Artifact
 			item.Before = comparisonRef(pid, in.FromRevisionID, change.Before)
 			item.NameBefore = change.Before.Name
@@ -317,6 +319,8 @@ func (r *Repo) CompareRevisions(ctx context.Context, pid string, in CompareRevis
 			item.FreshnessBefore = change.Before.Freshness
 		}
 		if change.After != nil {
+			item.EditorArtifactAfter = change.After.EditorArtifact
+			item.ArtifactGroupAfter = change.After.ArtifactGroup
 			item.ArtifactAfter = change.After.Artifact
 			item.After = comparisonRef(pid, in.ToRevisionID, change.After)
 			item.NameAfter = change.After.Name
@@ -347,4 +351,11 @@ func comparisonRef(pid, rid string, side *RecordSide) *ComparisonRef {
 		ref.Path = side.Path
 	}
 	return ref
+}
+
+func compareRevisionArtifacts(ctx context.Context, before, after RevisionState, out *RevisionDelta) error {
+	if err := compareAPIArtifacts(ctx, before, after, out); err != nil {
+		return err
+	}
+	return compareEditorArtifacts(ctx, before, after, out)
 }

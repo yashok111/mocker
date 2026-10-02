@@ -74,7 +74,7 @@ func TestTopics(t *testing.T) {
 		"backend-overview", "backend-import", "backend-model", "backend-import-protocol",
 		"backend-recovery", "backend-examples", "backend-database",
 		"backend-database-reference", "backend-profile-go-sql",
-		"backend-inspect", "backend-flow-reference", "backend-analysis",
+		"backend-inspect", "backend-flow-reference", "backend-analysis", "backend-editor-projections",
 	}
 	if !slices.Equal(Topics(), want) {
 		t.Errorf("served topics = %v; want complete ordered inventory %v", Topics(), want)

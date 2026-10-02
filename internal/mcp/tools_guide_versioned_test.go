@@ -134,6 +134,7 @@ func TestGuideRequiredCapabilitiesHaveMCPTools(t *testing.T) {
 		"backend-data-access-query":    {"query_backend_flow"},
 		"backend-field-lineage-import": {"begin_backend_import", "put_backend_import_batch", "preview_backend_import", "commit_backend_import"},
 		"backend-field-lineage-query":  {"query_backend_lineage"},
+		"backend-editor-projections":   {"query_backend_artifacts", "preview_backend_artifact_pins", "apply_backend_artifact_pins", "get_design_scenario_artifact_snapshot"},
 		"backend-api-artifact-pins":    {"query_backend_api_artifacts", "preview_backend_api_pins", "apply_backend_api_pins", "get_api_artifact_snapshot"},
 	}
 	if !inventory["get_backend_capabilities"] {

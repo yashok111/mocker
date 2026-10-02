@@ -15,6 +15,7 @@ import (
 type graphCandidate struct {
 	ArtifactPins       []ArtifactPin       `json:"artifactPins,omitempty"`
 	APIArtifactContext *APIArtifactContext `json:"apiArtifactContext,omitzero"`
+	ArtifactContext    *ArtifactContext    `json:"artifactContext,omitzero"`
 	Sources            []SourceSnapshot    `json:"sources"`
 	SourceChanges      []SourceChange      `json:"sourceChanges"`
 	IdentityDecisions  []IdentityDecision  `json:"identityDecisions"`
@@ -431,6 +432,11 @@ func unresolvedCount(g *graphCandidate) int64 {
 	return n
 }
 func candidateJSON(s *ImportSession, g *graphCandidate) ([]byte, error) {
+	if g.ArtifactContext != nil {
+		if _, err := EncodeArtifactContext(*g.ArtifactContext, g.ArtifactPins); err != nil {
+			return nil, err
+		}
+	}
 	foundation, err := canonicalJSON(struct {
 		ProjectID      string          `json:"projectId"`
 		BaseRevisionID string          `json:"baseRevisionId"`
@@ -590,7 +596,7 @@ func (r *Repo) CommitImport(ctx context.Context, pid, sid string, in CommitImpor
 		rev := Revision{ID: uuid.NewV7().String(), ProjectID: pid, ParentRevisionID: new(current.BaseRevisionID), SchemaVersion: modelSchemaVersion(current.Profile), SemanticHash: hashBytes(b), SourceSnapshotIDs: sourceIDs(g.Sources), ArtifactPins: []ArtifactPin{}, Coverage: g.Coverage, Author: "agent", Summary: "Source-backed foundation graph import", CreatedAt: now}
 		if len(g.ArtifactPins) > 0 {
 			rev.ArtifactPins = g.ArtifactPins
-			rev.SemanticHash, err = APIArtifactSemanticHash(g.APIArtifactContext.SourceContentHash, g.APIArtifactContext.SourceSemanticHash, g.ArtifactPins, g.APIArtifactContext.Bindings)
+			rev.SemanticHash, err = importedArtifactSemanticHash(g)
 			if err != nil {
 				return err
 			}
@@ -658,10 +664,8 @@ func (r *Repo) CommitImport(ctx context.Context, pid, sid string, in CommitImpor
 		if _, err := tx.ExecContext(ctx, `INSERT INTO backend_revision_sources(revision_id,document) VALUES(?,?)`, rev.ID, string(sourceDoc)); err != nil {
 			return err
 		}
-		if g.APIArtifactContext != nil {
-			if err := saveAPIArtifactContext(ctx, tx, rev.ID, *g.APIArtifactContext); err != nil {
-				return err
-			}
+		if err := saveImportedArtifactContext(ctx, tx, rev.ID, g); err != nil {
+			return err
 		}
 		p.Version++
 		p.CurrentRevisionID = rev.ID
@@ -686,4 +690,26 @@ func (r *Repo) CommitImport(ctx context.Context, pid, sid string, in CommitImpor
 		return nil, err
 	}
 	return result, nil
+}
+
+func importedArtifactSemanticHash(g *graphCandidate) (string, error) {
+	if g.ArtifactContext != nil {
+		c := g.ArtifactContext
+		return ArtifactSemanticHash(c.SourceContentHash, c.SourceSemanticHash, g.ArtifactPins, c.APIBindings, c.EditorBindings)
+	} else {
+		return APIArtifactSemanticHash(g.APIArtifactContext.SourceContentHash, g.APIArtifactContext.SourceSemanticHash, g.ArtifactPins, g.APIArtifactContext.Bindings)
+	}
+}
+
+func saveImportedArtifactContext(ctx context.Context, tx *sql.Tx, revisionID string, g *graphCandidate) error {
+	if g.ArtifactContext != nil {
+		if err := saveArtifactContext(ctx, tx, revisionID, *g.ArtifactContext, g.ArtifactPins); err != nil {
+			return err
+		}
+	} else if g.APIArtifactContext != nil {
+		if err := saveAPIArtifactContext(ctx, tx, revisionID, *g.APIArtifactContext); err != nil {
+			return err
+		}
+	}
+	return nil
 }

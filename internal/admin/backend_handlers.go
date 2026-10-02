@@ -10,6 +10,7 @@ import (
 	"strconv"
 
 	"github.com/yashok111/mocker/internal/backendmodel"
+	"github.com/yashok111/mocker/internal/designscenario"
 	"github.com/yashok111/mocker/internal/guide"
 	"github.com/yashok111/mocker/internal/httpx"
 )
@@ -169,12 +170,12 @@ func (s *Server) handleGetBackendCapabilities(w http.ResponseWriter, r *http.Req
 	httpx.JSON(w, 200, map[string]any{
 		"modelSchemaVersions":      backendmodel.SupportedModelSchemaVersions(),
 		"workflowVersions":         guide.BackendWorkflows(),
-		"features":                 append(backendmodel.Features(), "backend-relational-import", "backend-database-query", "backend-database-er", "backend-db-proposals", "backend-db-typed-edits", "backend-runtime-flow-import", "backend-flow-query", "backend-data-access-query", "backend-saved-views", "backend-field-lineage-import", "backend-field-lineage-query", "backend-api-artifact-pins"),
+		"features":                 append(backendmodel.Features(), "backend-relational-import", "backend-database-query", "backend-database-er", "backend-db-proposals", "backend-db-typed-edits", "backend-runtime-flow-import", "backend-flow-query", "backend-data-access-query", "backend-saved-views", "backend-field-lineage-import", "backend-field-lineage-query", "backend-api-artifact-pins", "backend-editor-projections"),
 		"providerProfiles":         []string{backendmodel.GraphProfile, backendmodel.RelationalProfile, backendmodel.RuntimeProfile, backendmodel.LineageProfile},
 		"supportedNodeKinds":       backendmodel.SupportedNodeKindsForProfile(backendmodel.LineageProfile),
 		"supportedEdgeKinds":       backendmodel.SupportedEdgeKindsForProfile(backendmodel.LineageProfile),
 		"guideSetId":               guide.CurrentGuideSetID(),
-		"viewSchemaVersions":       []string{backendmodel.ProposalDocumentVersion, backendmodel.SavedViewDocumentVersion, "api-artifact-pins-v1"},
+		"viewSchemaVersions":       []string{backendmodel.ProposalDocumentVersion, backendmodel.SavedViewDocumentVersion, "api-artifact-pins-v1", backendmodel.EditorArtifactDocumentVersion},
 		"proposalDocumentVersions": []string{backendmodel.ProposalDocumentVersion},
 		"proposalCommands":         []map[string]string{{"type": "alter_column", "property": "nullable"}, {"type": "alter_constraint", "action": "create", "constraintKind": "foreign_key"}, {"type": "alter_constraint", "action": "update", "constraintKind": "foreign_key"}, {"type": "set_criteria"}},
 		"importModes":              []string{"initial", "reconcile"},
@@ -195,6 +196,7 @@ func (s *Server) handleGetBackendCapabilities(w http.ResponseWriter, r *http.Req
 		},
 		"comparisonVersion": int64(1),
 		"limits": map[string]any{"maxNameLength": backendmodel.MaxNameLength, "maxIdempotencyKeyLength": backendmodel.MaxKeyLength, "defaultPageSize": backendmodel.DefaultPageSize, "maxPageSize": backendmodel.MaxPageSize, "maxCommands": 1, "maxBodyBytes": s.cfg.MaxBody,
+			"maxEditorArtifactContextBytes": backendmodel.MaxEditorArtifactContextBytes, "maxEditorEventConstructionBytes": backendmodel.MaxEditorEventConstructionBytes, "maxEventMapBytes": designscenario.MaxEventMapBytes,
 			"maxImportBatchCommands": backendmodel.MaxImportCommands, "maxImportBatchBytes": min(s.cfg.MaxBody, int64(backendmodel.MaxImportBatchBytes)),
 			"maxManifestFiles": backendmodel.MaxManifestFiles, "maxSnippetBytes": backendmodel.MaxEvidenceSnippetBytes,
 			"maxRevisionNodes": backendmodel.MaxRevisionNodes, "maxRevisionEdges": backendmodel.MaxRevisionEdges, "maxRevisionEvidence": backendmodel.MaxRevisionEvidence,

@@ -16,6 +16,7 @@ import (
 type ArtifactSnapshot struct {
 	DesignID         int64
 	RevisionID       int64
+	Version          int64
 	DesignName       string
 	ContentHash      string
 	Document         string
@@ -44,7 +45,7 @@ func (r *Repo) ArtifactSnapshot(ctx context.Context, designID, revisionID int64)
 	}
 	defer func() { _ = tx.Rollback() }()
 	out := &ArtifactSnapshot{DesignID: designID, RevisionID: revisionID}
-	err = tx.QueryRowContext(ctx, `SELECT d.name,r.hash FROM api_designs d JOIN api_design_revisions r ON r.design_id=d.id WHERE d.id=? AND r.id=?`, designID, revisionID).Scan(&out.DesignName, &out.ContentHash)
+	err = tx.QueryRowContext(ctx, `SELECT d.name,r.hash,r.version FROM api_designs d JOIN api_design_revisions r ON r.design_id=d.id WHERE d.id=? AND r.id=?`, designID, revisionID).Scan(&out.DesignName, &out.ContentHash, &out.Version)
 	if err != nil {
 		return nil, notFound(err)
 	}

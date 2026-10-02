@@ -198,6 +198,10 @@ func TestExportReadsOneConfigurationSnapshot(t *testing.T) {
 	go func() {
 		for i := 1; ; i++ {
 			if err := update(ctx, i%2); err != nil {
+				// database/sql may finish its cancellation rollback before Commit.
+				if errors.Is(err, sql.ErrTxDone) && errors.Is(ctx.Err(), context.Canceled) {
+					err = context.Canceled
+				}
 				done <- err
 				return
 			}

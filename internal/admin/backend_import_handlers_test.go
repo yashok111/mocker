@@ -371,6 +371,12 @@ func validateBackendImportResponse(t *testing.T, method, path string, data []byt
 	if len(parts) == 6 && parts[1] == "designs" && parts[5] == "artifact-snapshot" {
 		name = "APIArtifactSnapshot"
 	}
+	if len(parts) == 5 && parts[3] == "artifacts" {
+		name = map[string]string{"query": "ArtifactProjectionPage", "preview": "ArtifactPinsPreview", "commands": "ArtifactPinsResult"}[parts[4]]
+	}
+	if len(parts) == 6 && parts[1] == "design-scenarios" && parts[5] == "artifact-snapshot" {
+		name = "DesignScenarioArtifactSnapshot"
+	}
 	if name == "" {
 		t.Fatalf("No response schema selected for %s %s", method, path)
 	}

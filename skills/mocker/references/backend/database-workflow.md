@@ -7,8 +7,8 @@ metadata:
   requiredModelSchemaVersions: "[\"2\",\"3\",\"4\"]"
   requiredViewSchemaVersions: "[\"proposal-relational-v1\",\"saved-view-v1\"]"
   requiredCapabilities: "[\"backend-projects\",\"backend-revisions\",\"backend-graph-query\",\"backend-database-query\",\"backend-database-er\",\"backend-db-proposals\",\"backend-db-typed-edits\",\"backend-flow-query\",\"backend-data-access-query\",\"backend-saved-views\",\"backend-field-lineage-query\"]"
-  guideSetId: "sha256:5e7fd2499c5df968ff93fc9fda1c34a93b1340f28e14ee90c430f89cff3e68d1"
-  manifestHash: "sha256:5e7fd2499c5df968ff93fc9fda1c34a93b1340f28e14ee90c430f89cff3e68d1"
+  guideSetId: "sha256:2d798d65181489ad1c8c08cea728fd9da21f41c97ba295a5a1af742973b16cb1"
+  manifestHash: "sha256:2d798d65181489ad1c8c08cea728fd9da21f41c97ba295a5a1af742973b16cb1"
 ---
 
 # Pinned database inspection and proposals
@@ -79,7 +79,7 @@ is required for a straightforward already-pinned table inspection.
    between explicit known facets and separate native-definition differences.
    Missing selected-facet proofs are limitations, not absence. Canvas limits or
    one query page do not prove full schema coverage.
-6. For imported readers/writers select inspect4 in this same set, verify its
+6. For imported readers/writers select inspect5 in this same set, verify its
    schema3/4/profile/capabilities and flow-reference/analysis topics, then page
    query_backend_flow view:accesses at this exact source revision and dataNodeId.
    Schema2 flow reads are unavailable. Whole-table unknown-column accesses are
@@ -177,17 +177,17 @@ Changing kind/target requires a new view. Preview/layout/collapse do not invent
 relationships or evidence. Ordinary-agent acceptance and live agent evaluation
 remain deferred; public SDK/REST examples are verification of the interface.
 
-## Column lineage and API links delegate to inspect4
+## Column lineage and API links delegate to inspect5
 
 Database5 supports source2/3/4 with unchanged proposal/saved-view contracts.
-For lineage select inspect4 in this same guideSetId/manifestHash with source4,
-field-lineage-v1 and all inspect4 requirements. Verify its flow/analysis topics.
+For lineage select inspect5 in this same guideSetId/manifestHash with source4,
+field-lineage-v1 and all inspect5 requirements. Verify its flow/analysis topics.
 Pass exact `{kind:"column",nodeId,facetKey}` and source revision; reverse means
 origin, forward downstream. Preserve facet and unknown boundary target/actions.
-Follow inspect4's full query procedure; API links additionally require backend-api-artifact-pins and api-artifact-pins-v1. Source2/3
+Follow inspect5's full query procedure; API links additionally require backend-api-artifact-pins and api-artifact-pins-v1. Source2/3
 and proposals refuse it; source-base navigation does not prove designed behavior.
-No SQL/code execution or latest fallback.
-
+No SQL/code execution or latest fallback. For saved editors load inspect5's
+backend-editor-projections with backend-editor-projections/backend-editor-artifacts-v1.
 ## Owner dependency requirements in this guide set
 
 Verify complete owners in the same guideSetId/manifestHash; lineage additionally requires source4/field-lineage-v1. Reference selection starts no writes.
@@ -197,4 +197,4 @@ Verify complete owners in the same guideSetId/manifestHash; lineage additionally
 | mocker-backend-project | 1 | 1 |  | backend-projects, backend-project-metadata, backend-revisions |
 | mocker-backend-import | 5 | 1,2,3,4 |  | backend-projects, backend-revisions, backend-graph-query, backend-source-import, backend-source-reconcile, backend-revision-compare, backend-relational-import, backend-database-query, backend-database-er, backend-runtime-flow-import, backend-flow-query, backend-data-access-query, backend-field-lineage-import, backend-field-lineage-query |
 | mocker-backend-database | 5 | 2,3,4 | proposal-relational-v1,saved-view-v1 | backend-projects, backend-revisions, backend-graph-query, backend-database-query, backend-database-er, backend-db-proposals, backend-db-typed-edits, backend-flow-query, backend-data-access-query, backend-saved-views, backend-field-lineage-query |
-| mocker-backend-inspect | 4 | 3,4 | saved-view-v1,api-artifact-pins-v1 | backend-projects, backend-revisions, backend-graph-query, backend-flow-query, backend-data-access-query, backend-saved-views, backend-field-lineage-query, backend-api-artifact-pins |
+| mocker-backend-inspect | 5 | 3,4 | saved-view-v1,api-artifact-pins-v1,backend-editor-artifacts-v1 | backend-projects, backend-revisions, backend-graph-query, backend-flow-query, backend-data-access-query, backend-saved-views, backend-field-lineage-query, backend-api-artifact-pins, backend-editor-projections |

@@ -1,3 +1,7 @@
+import { completeArtifactSet, readArtifactPage } from "./backendArtifactReads";
+import { ArtifactDeltaSide } from "./BackendArtifactContent";
+import type { ArtifactPinsPreview, ApplyBackendArtifactPinsRequest } from "@/api/generated/schemas";
+import { BackendArtifactProjections } from "./BackendArtifactProjections";
 import { createContext, useContext, useEffect, useId, useRef, useState } from "react";
 import {
   Alert,
@@ -15,6 +19,8 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { defaultStringifySearch } from "@tanstack/react-router";
 import {
+  applyBackendArtifactPins,
+  previewBackendArtifactPins,
   applyBackendAPIPins,
   getBackendRevision,
   previewBackendAPIPins,
@@ -30,6 +36,7 @@ import type {
   BackendArtifactRef,
   BackendRevision,
   PreviewBackendAPIPinsRequest,
+  PreviewBackendArtifactPinsRequest,
 } from "@/api/generated/schemas";
 import { ApiFailure } from "@/api/client";
 import { LoadState } from "./BackendGraphInventory";
@@ -56,6 +63,10 @@ type Host = {
   onDirty: (dirty: boolean, identity?: string) => void;
   onApplied: (result: BackendAPIPinsResult) => void;
   reread?: () => Promise<{ revision: BackendRevision; projectVersion: number }>;
+  onCurrentHead?: (
+    context: { revision: BackendRevision; projectVersion: number },
+    identity: string,
+  ) => boolean;
   guard?: () => boolean;
   claim?: (identity: string) => boolean;
 };
@@ -145,11 +156,17 @@ type Props = {
   readOnly?: boolean;
 };
 export function BackendAPIArtifacts(props: Props) {
+  const host = useContext(BackendAPIArtifactsContext);
   return (
-    <ArtifactPanel
-      key={`${props.projectId}:${props.revisionId}:${props.sourceNodeId ?? "all"}`}
-      {...props}
-    />
+    <>
+      <ArtifactPanel
+        key={`${props.projectId}:${props.revisionId}:${props.sourceNodeId ?? "all"}`}
+        {...props}
+      />
+      {props.sourceNodeId && host?.revision.schemaVersion === "4" && (
+        <BackendArtifactProjections {...props} />
+      )}
+    </>
   );
 }
 function ArtifactPanel({
@@ -161,6 +178,10 @@ function ArtifactPanel({
 }: Props) {
   const instanceId = useId();
   const host = useContext(BackendAPIArtifactsContext);
+  const latestHost = useRef(host);
+  useEffect(() => {
+    latestHost.current = host;
+  }, [host]);
   const key = ["backend-api-artifacts", projectId, revisionId, sourceNodeId ?? "all"];
   useDatabaseCancellation(key);
   const revisionQuery = useQuery({
@@ -211,8 +232,14 @@ function ArtifactPanel({
   const [originalSource, setOriginalSource] = useState(sourceNodeId ?? "");
   const [selectedKind, setSelectedKind] = useState(sourceKind ?? "http_operation");
   const [preview, setPreview] = useState<BackendAPIPinsPreview | null>(null);
-  const [candidate, setCandidate] = useState<PreviewBackendAPIPinsRequest | null>(null);
-  const [attempt, setAttempt] = useState<ApplyBackendAPIPinsRequest | null>(null);
+  const [candidate, setCandidate] = useState<
+    PreviewBackendAPIPinsRequest | PreviewBackendArtifactPinsRequest | null
+  >(null);
+  const [attempt, setAttempt] = useState<
+    ApplyBackendAPIPinsRequest | ApplyBackendArtifactPinsRequest | null
+  >(null);
+  const [genericPreview, setGenericPreview] = useState<ArtifactPinsPreview | null>(null);
+  const generic = useRef(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [conflict, setConflict] = useState(false);
@@ -283,6 +310,7 @@ function ArtifactPanel({
     request.current.generation++;
     request.current.controller?.abort();
     setPreview(null);
+    setGenericPreview(null);
     setCandidate(null);
     setError(null);
     setConflict(false);
@@ -370,6 +398,55 @@ function ArtifactPanel({
     const signal = request.current.controller.signal;
     setBusy(true);
     try {
+      // Legacy removal cannot delete a group that retains invisible editor links.
+      generic.current = false;
+      if (mode === "remove_node" || mode === "remove_group") {
+        const group = await readArtifactPage(
+          captured.scope,
+          {
+            revisionId: captured.scope.revisionId,
+            artifact: { kind: "api_design", id: artifactId },
+            view: "states",
+            limit: 1,
+          },
+          signal,
+        );
+        if (group.editorBindings.length) {
+          const command =
+            mode === "remove_group"
+              ? {
+                  type: "remove_artifact_pin" as const,
+                  artifact: { kind: "api_design" as const, id: artifactId },
+                  reason: reason.trim(),
+                }
+              : completeArtifactSet(
+                  group,
+                  group.selectedPin.revisionId,
+                  reason.trim(),
+                  undefined,
+                  group.apiBindings
+                    .filter((b) => b.sourceNodeId !== originalSource)
+                    .map((b) => ({ sourceNodeId: b.sourceNodeId, selector: b.ref.selector })),
+                );
+          const body = { ...input, commands: [command] };
+          const response = await previewBackendArtifactPins(projectId, body, { signal });
+          signal.throwIfAborted();
+          if (
+            response.status !== 200 ||
+            response.data.baseRevisionId !== input.baseRevisionId ||
+            response.data.expectedVersion !== input.expectedVersion ||
+            JSON.stringify([...response.data.sourceSnapshotIds].sort()) !==
+              JSON.stringify([...captured.scope.sourceSnapshotIds].sort())
+          )
+            throw new Error("Другой контекст generic preview");
+          if (request.current.alive && current === request.current.generation) {
+            generic.current = true;
+            setGenericPreview(response.data);
+            setCandidate(structuredClone(body));
+          }
+          return;
+        }
+      }
       const response = await previewBackendAPIPins(projectId, input, { signal });
       signal.throwIfAborted();
       if (response.status !== 200) throw new Error("Не удалось получить предпросмотр");
@@ -404,23 +481,30 @@ function ArtifactPanel({
     if (
       busy ||
       conflict ||
-      (!attempt && (!preview?.canApply || preview.diffTruncated || !candidate))
+      (!attempt &&
+        (!(genericPreview ?? preview)?.canApply ||
+          (genericPreview ?? preview)?.diffTruncated ||
+          !candidate))
     )
       return;
     const input = attempt ?? {
       ...candidate!,
-      candidateHash: preview!.candidateHash,
+      candidateHash: (genericPreview ?? preview)!.candidateHash,
       idempotencyKey: crypto.randomUUID(),
     };
     if (new TextEncoder().encode(JSON.stringify(input)).length > 128 * 1024) {
       setError("Команда применения превышает 128 KiB; требуется более узкий запрос");
       return;
     }
+    const generation = request.current.generation;
+    const usesGeneric = generic.current;
     setAttempt(input);
     setBusy(true);
     setError(null);
     try {
-      const response = await applyBackendAPIPins(projectId, input);
+      const response = usesGeneric
+        ? await applyBackendArtifactPins(projectId, input as ApplyBackendArtifactPinsRequest)
+        : await applyBackendAPIPins(projectId, input as ApplyBackendAPIPinsRequest);
       if (response.status !== 200) throw new Error("Неизвестный ответ применения API");
       if (
         response.data.project.id !== projectId ||
@@ -428,16 +512,27 @@ function ArtifactPanel({
         response.data.revision.parentRevisionId !== input.baseRevisionId
       )
         throw new Error("Ответ применения содержит другой контекст API");
-      if (request.current.alive) {
+      if (request.current.alive && request.current.generation === generation) {
         setAttempt(null);
         setUnknown(false);
         setEditing(false);
         setPreview(null);
         setCandidate(null);
-        host?.onApplied(response.data);
+        setGenericPreview(null);
+        const currentHost = latestHost.current;
+        if (
+          !usesGeneric ||
+          (currentHost?.revision.id === input.baseRevisionId &&
+            currentHost.projectVersion === input.expectedVersion)
+        )
+          currentHost?.onApplied(response.data);
+        else
+          setError(
+            `Применение API подтверждено: ревизия ${response.data.revision.id}. Результат доступен в истории; текущий выбор сохранён.`,
+          );
       }
     } catch (failure) {
-      if (!request.current.alive) return;
+      if (!request.current.alive || request.current.generation !== generation) return;
       const known =
         failure instanceof ApiFailure &&
         failure.status >= 400 &&
@@ -445,10 +540,14 @@ function ArtifactPanel({
         ![408, 429].includes(failure.status);
       setUnknown(!known);
       if (known) setAttempt(null);
+      if (known && failure instanceof ApiFailure && [413, 422].includes(failure.status)) {
+        setPreview((value) => (value ? { ...value, canApply: false } : value));
+        setGenericPreview((value) => (value ? { ...value, canApply: false } : value));
+      }
       setConflict(failure instanceof ApiFailure && failure.status === 409);
       setError(failure instanceof Error ? failure.message : "Ошибка применения API");
     } finally {
-      if (request.current.alive) setBusy(false);
+      if (request.current.alive && request.current.generation === generation) setBusy(false);
     }
   }
   return (
@@ -716,6 +815,51 @@ function ArtifactPanel({
           >
             Перечитать источник и повторить предпросмотр
           </Button>
+        )}
+        {genericPreview && (
+          <>
+            <Button
+              {...pinButtonProps}
+              disabled={
+                busy ||
+                conflict ||
+                (!attempt && (!genericPreview.canApply || genericPreview.diffTruncated))
+              }
+              onClick={() => void apply()}
+            >
+              {attempt
+                ? "Повторить точное применение API"
+                : "Применить полную группу API и моделей"}
+            </Button>
+            <Stack aria-label="Полный предпросмотр группы API и моделей">
+              <Text>
+                Полный перечень после изменения: {genericPreview.apiBindings.length} API +{" "}
+                {genericPreview.editorBindings.length} моделей
+              </Text>
+              {genericPreview.diff.map((d) => (
+                <Stack key={d.identity}>
+                  <Text style={databaseWrap}>
+                    {d.kind} · {d.status} · {d.identity}
+                    {d.contextChanged ? " · контекст изменён" : ""}
+                  </Text>
+                  <ArtifactDeltaSide
+                    side={d.before}
+                    projectId={projectId}
+                    revisionId={revisionId}
+                  />
+                  <ArtifactDeltaSide side={d.after} projectId={projectId} revisionId={revisionId} />
+                </Stack>
+              ))}
+              {genericPreview.diagnostics.map((d, i) => (
+                <Text key={i} style={databaseWrap}>
+                  {d.code}: {d.message}
+                </Text>
+              ))}
+              {genericPreview.diffTruncated && (
+                <Text c="orange">Предпросмотр усечён; применение запрещено.</Text>
+              )}
+            </Stack>
+          </>
         )}
         {preview && (
           <Stack data-testid="api-pin-preview" aria-label="Предпросмотр связей API">

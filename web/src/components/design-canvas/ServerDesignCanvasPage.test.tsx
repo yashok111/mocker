@@ -1,3 +1,5 @@
+import { sha256 } from "@noble/hashes/sha2.js";
+import { bytesToHex } from "@noble/hashes/utils.js";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -1265,4 +1267,48 @@ describe("ServerDesignCanvasPage", () => {
       expect(screen.getByRole("button", { name: "Создать контракт по всей схеме" })).toBeDisabled();
     },
   );
+});
+
+it("keeps the dirty scenario form intact while closing and reopening exact raw snapshot", async () => {
+  const documentJSON = '{"value":9007199254740993}';
+  const hash = "a".repeat(64);
+  route({
+    "GET /api/design-scenarios/12": () => json(200, detailFixture()),
+    "GET /api/design-scenarios/12/revisions/23/artifact-snapshot": () =>
+      json(200, {
+        scenarioId: "12",
+        revisionId: "23",
+        version: "1",
+        storedContentHash: hash,
+        contentHash: hash,
+        documentHash: bytesToHex(sha256(new TextEncoder().encode(documentJSON))),
+        documentJSON,
+        formDraftsJSON: "null",
+        hashPolicy: "design-scenario-envelope-v1",
+        typedStatus: "supported",
+        envelopeVerification: "verified",
+      }),
+  });
+  renderInRouter(
+    <ServerDesignCanvasPage id={12} pin={{ pinnedRevisionId: "23", pinnedHash: hash }} />,
+  );
+  await screen.findByText(documentJSON);
+  await userEvent.click(await screen.findByRole("button", { name: "Структура сценария" }));
+  await userEvent.click(screen.getByRole("button", { name: "opt · Заказ прошёл проверку" }));
+  await userEvent.selectOptions(screen.getByRole("combobox", { name: "Режим блока" }), "condition");
+  await userEvent.type(screen.getByRole("textbox", { name: "Переменная блока" }), "token");
+  await userEvent.click(screen.getByRole("button", { name: "Закрыть снимок сценария" }));
+  await waitFor(() =>
+    expect(screen.getByRole("button", { name: "Показать закреплённый сценарий" })).toHaveFocus(),
+  );
+  expect(screen.getByRole("textbox", { name: "Переменная блока" })).toHaveValue("token");
+  await userEvent.click(screen.getByRole("button", { name: "Показать закреплённый сценарий" }));
+  await screen.findByText(documentJSON);
+  expect(screen.getByRole("textbox", { name: "Переменная блока" })).toHaveValue("token");
+  expect(screen.getByRole("button", { name: "Запуск" })).toBeVisible();
+  await scenarioAction("Проверить сценарий");
+  for (const name of ["Получить результат", "Контракты API", "Карта событий", "История"]) {
+    expect(screen.getByRole("menuitem", { name })).toBeVisible();
+  }
+  expect(screen.getByRole("textbox", { name: "Переменная блока" })).toHaveValue("token");
 });

@@ -6,8 +6,8 @@ metadata:
   workflowVersion: "5"
   requiredModelSchemaVersions: "[\"1\",\"2\",\"3\",\"4\"]"
   requiredCapabilities: "[\"backend-projects\",\"backend-revisions\",\"backend-graph-query\",\"backend-source-import\",\"backend-source-reconcile\",\"backend-revision-compare\",\"backend-relational-import\",\"backend-database-query\",\"backend-database-er\",\"backend-runtime-flow-import\",\"backend-flow-query\",\"backend-data-access-query\",\"backend-field-lineage-import\",\"backend-field-lineage-query\"]"
-  guideSetId: "sha256:5e7fd2499c5df968ff93fc9fda1c34a93b1340f28e14ee90c430f89cff3e68d1"
-  manifestHash: "sha256:5e7fd2499c5df968ff93fc9fda1c34a93b1340f28e14ee90c430f89cff3e68d1"
+  guideSetId: "sha256:2d798d65181489ad1c8c08cea728fd9da21f41c97ba295a5a1af742973b16cb1"
+  manifestHash: "sha256:2d798d65181489ad1c8c08cea728fd9da21f41c97ba295a5a1af742973b16cb1"
 ---
 
 # Source graph import and reconciliation
@@ -59,10 +59,10 @@ This independently installable leaf fetches references with
 | `backend-examples` | import v5 | When a concrete fixture or recovery sequence is needed. |
 | `backend-profile-go-sql` | import v5 | For Go, SQL, ORM and migration source extraction. |
 | `backend-database-reference` | database v5 | For relational details, pinned ER, drift and unknown bounds. |
-| `backend-flow-reference` / `backend-analysis` | inspect v4 | For schema3/4 flow/access and source4 lineage reads, bounded source certainty. |
+| `backend-flow-reference` / `backend-analysis` / `backend-editor-projections` | inspect v5 | For schema3/4 flow/access and source4 lineage reads, bounded source certainty. |
 
 Verify import-owned topics against this manifest. For database or inspect topics,
-select the advertised supported database5 or inspect4 owner in this same global
+select the advertised supported database5 or inspect5 owner in this same global
 set/hash, check all its schemas/capabilities and verify the returned actual owner
 tuple/contentHash. A dependency is not import-owned because import uses it.
 Project creation selects project1 at backend-overview before writes; then return to import.
@@ -169,7 +169,7 @@ Before first commit, independently check every asserted typed scalar/expression 
     ordered columns/FKs/native definitions/evidence. Return project URL
     `/backend-projects/{projectId}`, revision ID, selected facet, source consistency,
     coverage/gaps/stale counts, unresolved objects and drift/unknown limitations.
-    Flow/access answers select inspect4 in this set and query the exact source3/4
+    Flow/access answers select inspect5 in this set and query the exact source3/4
     committed pin, page relevant results and open each record proof.
 
 ## Deletion, replay and comparison boundaries
@@ -186,7 +186,7 @@ then inspect before/after evidence; structural change proves no impact or execut
 Require schema4/field-lineage-v1 and both lineage capabilities under import5;
 load backend-model's full source4 shapes/upgrade/redaction/proof before staging.
 Preserve ordered inputs/exact nodeKey addresses; zero-input unknown is not constant.
-After commit select inspect4 at the exact source4 pin. Reimport carries frozen API
+After commit select inspect5 at the exact source4 pin. Reimport carries frozen API
 pins/bindings and stale/orphan labels; no new pin input.
 ## Owner dependency requirements in this guide set
 
@@ -197,4 +197,4 @@ Verify every complete owner below in the same guideSetId/manifestHash; reference
 | mocker-backend-project | 1 | 1 |  | backend-projects, backend-project-metadata, backend-revisions |
 | mocker-backend-import | 5 | 1,2,3,4 |  | backend-projects, backend-revisions, backend-graph-query, backend-source-import, backend-source-reconcile, backend-revision-compare, backend-relational-import, backend-database-query, backend-database-er, backend-runtime-flow-import, backend-flow-query, backend-data-access-query, backend-field-lineage-import, backend-field-lineage-query |
 | mocker-backend-database | 5 | 2,3,4 | proposal-relational-v1,saved-view-v1 | backend-projects, backend-revisions, backend-graph-query, backend-database-query, backend-database-er, backend-db-proposals, backend-db-typed-edits, backend-flow-query, backend-data-access-query, backend-saved-views, backend-field-lineage-query |
-| mocker-backend-inspect | 4 | 3,4 | saved-view-v1,api-artifact-pins-v1 | backend-projects, backend-revisions, backend-graph-query, backend-flow-query, backend-data-access-query, backend-saved-views, backend-field-lineage-query, backend-api-artifact-pins |
+| mocker-backend-inspect | 5 | 3,4 | saved-view-v1,api-artifact-pins-v1,backend-editor-artifacts-v1 | backend-projects, backend-revisions, backend-graph-query, backend-flow-query, backend-data-access-query, backend-saved-views, backend-field-lineage-query, backend-api-artifact-pins, backend-editor-projections |

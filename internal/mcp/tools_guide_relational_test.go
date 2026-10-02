@@ -127,7 +127,7 @@ func TestCrossOwnerRelationalGuideSDKUsesAdvertisedPinnedSet(t *testing.T) {
 			if out.ContentHash != fmt.Sprintf("sha256:%x", sha256.Sum256([]byte(out.Markdown))) {
 				t.Fatal("served topic body does not match its advertised hash")
 			}
-			if len(out.Topics) != 19 || !slices.Contains(out.Topics, item.topic) || !strings.HasPrefix(out.Markdown, "# ") {
+			if len(out.Topics) != 20 || !slices.Contains(out.Topics, item.topic) || !strings.HasPrefix(out.Markdown, "# ") {
 				t.Fatal("SDK served body/discovery is incomplete or carries skill frontmatter")
 			}
 		})

@@ -36,31 +36,7 @@ func apiPinsBlocked(d []APIArtifactDiagnostic) error {
 }
 
 func loadAPIArtifactContext(ctx context.Context, q importReader, rid string) (*APIArtifactContext, error) {
-	// Upgrade fixtures can import into the older schema before running migration18.
-	// An absent optional table is the original empty-pin context.
-	var available int
-	if err := q.QueryRowContext(ctx, `SELECT count(*) FROM sqlite_master WHERE type='table' AND name='backend_revision_api_artifacts'`).Scan(&available); err != nil {
-		return nil, err
-	}
-	if available == 0 {
-		return nil, nil
-	}
-	var doc, content, semantic string
-	err := q.QueryRowContext(ctx, `SELECT source_content_hash,source_semantic_hash,document FROM backend_revision_api_artifacts WHERE revision_id=?`, rid).Scan(&content, &semantic, &doc)
-	if errors.Is(err, sql.ErrNoRows) {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-	var out APIArtifactContext
-	if err = json.Unmarshal([]byte(doc), &out); err != nil {
-		return nil, err
-	}
-	if out.SourceContentHash != content || out.SourceSemanticHash != semantic || !validHash(content) || !validHash(semantic) {
-		return nil, invalid("context", "Invalid frozen API artifact context")
-	}
-	return &out, nil
+	return loadLegacyArtifactContext(ctx, q, rid)
 }
 
 func loadAPIArtifactCoverage(ctx context.Context, q importReader, state *RevisionState) (*RevisionCoverage, error) {

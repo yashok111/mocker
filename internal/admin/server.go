@@ -82,10 +82,12 @@ type Server struct {
 	// as a New parameter: New's signature is shared with cmd/mocker/main.go,
 	// which this package does not own, so adding a parameter here would break
 	// a build outside this package's remit.
-	specsRepo           *specs.Repo
-	designsRepo         *apidesign.Repo
-	backendRepo         *backendmodel.Repo
-	backendAPIArtifacts *backendmodel.APIArtifactService
+	specsRepo                 *specs.Repo
+	designsRepo               *apidesign.Repo
+	backendRepo               *backendmodel.Repo
+	backendAPIArtifacts       *backendmodel.APIArtifactService
+	backendArtifacts          *backendmodel.ArtifactService
+	scenarioArtifactSnapshots backendmodel.ScenarioArtifactReader
 	// designScenariosRepo owns the persisted sequence-design canvas. Its name
 	// stays distinct from scenariosRepo, which is the pre-existing runtime
 	// workspace snapshot feature in internal/scenarios.
@@ -244,26 +246,25 @@ func New(cfg *config.Config, sessions *auth.Manager, ws *workspaces.Repo, db *st
 	specsRepo := specs.NewRepo(db, cfg)
 	designsRepo := apidesign.NewRepo(db, cfg)
 	backendRepo := backendmodel.NewRepo(db)
+	designScenariosRepo := designscenario.NewRepo(db, cfg, designsRepo)
 	s := &Server{
-		proxyRepo:           recordproxy.NewRepo(db),
-		cfg:                 cfg,
-		sessions:            sessions,
-		ws:                  ws,
-		db:                  db,
-		log:                 log,
-		specsRepo:           specsRepo,
-		designsRepo:         designsRepo,
-		backendRepo:         backendRepo,
-		backendAPIArtifacts: backendmodel.NewAPIArtifactService(backendRepo, designsRepo),
-		designScenariosRepo: designscenario.NewRepo(
-			db,
-			cfg,
-			designsRepo,
-		),
-		overridesRepo: overridesRepo,
-		trafficRepo:   traffic.NewRepo(db),
-		customepRepo:  customepRepo,
-		scenariosRepo: scenarios.NewRepo(db, overridesRepo),
+		proxyRepo:                 recordproxy.NewRepo(db),
+		cfg:                       cfg,
+		sessions:                  sessions,
+		ws:                        ws,
+		db:                        db,
+		log:                       log,
+		specsRepo:                 specsRepo,
+		designsRepo:               designsRepo,
+		backendRepo:               backendRepo,
+		backendAPIArtifacts:       backendmodel.NewAPIArtifactService(backendRepo, designsRepo),
+		designScenariosRepo:       designScenariosRepo,
+		backendArtifacts:          backendmodel.NewArtifactServiceWithBodyLimit(backendRepo, designsRepo, designScenariosRepo, cfg.MaxBody),
+		scenarioArtifactSnapshots: designScenariosRepo,
+		overridesRepo:             overridesRepo,
+		trafficRepo:               traffic.NewRepo(db),
+		customepRepo:              customepRepo,
+		scenariosRepo:             scenarios.NewRepo(db, overridesRepo),
 		// P2c (§B): cfg.CheckpointRetention is a REQUIRED constructor
 		// parameter, not normalised away here or inside checkpoints.NewRepo
 		// — MOCKER_CHECKPOINT_RETENTION=0 means "prune nothing" (C7), a

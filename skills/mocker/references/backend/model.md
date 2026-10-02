@@ -3,7 +3,7 @@
 
 This topic belongs to `mocker-backend-import` v5. Pin it to the selected global
 guideSetId and verify the import owner tuple/contentHash, including when database
-or inspect4 loads it as a shared reference. Schema1 remains the foundation format;
+or inspect5 loads it as a shared reference. Schema1 remains the foundation format;
 schema2 is relational and schema3 adds typed source flow/query/access records; source4 adds explicit field lineage.
 Old immutable schema1/2/3 bytes/UUIDs/hashes/receipts keep their interpretation.
 Model schema `"1"`, profile
@@ -248,7 +248,7 @@ selector and forbids mediaType; header names are lowercase HTTP tokens. Unknown
 status/media is a gap, never guessed identity. Operation+direction+location+
 selector+status+media is unique (≤500fields/operation), while stable UUID binding
 uses the provider external key. Shape membership does not establish mapping.
-Manual external API associations use inspect4 and api-artifact-pins-v1. They
+Manual external API associations use inspect5 and api-artifact-pins-v1. They
 freeze api_design artifact/revision decimal strings, raw contentHash and selected
 object refs separately from imported source API fields; see backend-flow-reference.
 
@@ -258,3 +258,12 @@ candidate; a stale mapping still cannot reference a nonexistent value. Changing
 port keys requires explicit repair, never name/position rebinding. Stale endpoint
 proof propagates even after mapping refresh. Compare source mapping/API nodes
 without claiming behavioral impact; old pinned revisions remain readable.
+
+## Saved editor content alongside source4
+
+Inspect5 owns backend-editor-projections and the tagged context contract
+backend-editor-artifacts-v1. Source models remain schema1–4/store19; authored
+sequence/state/rule/EventModel content does not introduce source event records.
+The editor topic defines exact owner/object/source identities, separate envelope/
+raw/authored hash policies, qualified origin/copy semantics and independent
+completeness. Load it from the same selected global set before generic pin work.

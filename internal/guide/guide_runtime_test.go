@@ -16,9 +16,9 @@ func TestRuntimeGuideOwnersAndRequirements(t *testing.T) {
 	}{
 		{"backend-import", "mocker-backend-import", "5"},
 		{"backend-database", "mocker-backend-database", "5"},
-		{"backend-inspect", "mocker-backend-inspect", "4"},
-		{"backend-flow-reference", "mocker-backend-inspect", "4"},
-		{"backend-analysis", "mocker-backend-inspect", "4"},
+		{"backend-inspect", "mocker-backend-inspect", "5"},
+		{"backend-flow-reference", "mocker-backend-inspect", "5"},
+		{"backend-analysis", "mocker-backend-inspect", "5"},
 	} {
 		owner, ok := WorkflowForTopic(item.topic)
 		if !ok || owner.WorkflowID != item.owner || owner.WorkflowVersion != item.version {
@@ -37,11 +37,11 @@ func TestRuntimeGuideOwnersAndRequirements(t *testing.T) {
 		if !ok || index < 0 || owner.Topics[index].ContentHash != fmt.Sprintf("sha256:%x", sha256.Sum256([]byte(body))) {
 			t.Fatalf("topic %s cannot be verified against its actual owner", item.topic)
 		}
-		if item.topic == "backend-import" && !strings.Contains(body, "| `backend-flow-reference` / `backend-analysis` | inspect v4 |") {
+		if item.topic == "backend-import" && !strings.Contains(body, "| `backend-flow-reference` / `backend-analysis` / `backend-editor-projections` | inspect v5 |") {
 			t.Fatal("import dependency table names a different inspect owner")
 		}
 		if item.topic == "backend-inspect" && (!strings.Contains(body, "Inspect workflow1 was released") || strings.Contains(body, "no released older inspect version")) {
-			t.Fatal("inspect4 misstates the released inspect1 history")
+			t.Fatal("inspect5 misstates the released inspect1 history")
 		}
 	}
 	inspect, _ := WorkflowForTopic("backend-inspect")
