@@ -193,7 +193,7 @@ func apiPinsBaselineDigest(ctx context.Context, tx *sql.Tx, pid, revisionID stri
 }
 
 func (s *APIArtifactService) checkFullArtifactDigests(ctx context.Context, tx *sql.Tx, prepared *preparedAPIPins, version int64, baselineHash, schemaVersion string) error {
-	if baselineHash != prepared.baselineHash || schemaVersion != LineageSchemaVersion {
+	if baselineHash != prepared.baselineHash || !isLineageSchema(schemaVersion) {
 		return importConflict("backend_api_pins_base_conflict", "Frozen source baseline changed", version)
 	}
 	if prepared.fullContext != nil {

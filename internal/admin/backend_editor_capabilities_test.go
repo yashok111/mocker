@@ -15,10 +15,11 @@ func TestBackendEditorCapabilityNegotiation(t *testing.T) {
 		t.Fatalf("capabilities: %d %s %v", status, raw, err)
 	}
 	var out struct {
-		Features           []string         `json:"features"`
-		ViewSchemaVersions []string         `json:"viewSchemaVersions"`
-		WorkflowVersions   []guide.Workflow `json:"workflowVersions"`
-		Limits             map[string]int64 `json:"limits"`
+		ModelSchemaVersions []string         `json:"modelSchemaVersions"`
+		Features            []string         `json:"features"`
+		ViewSchemaVersions  []string         `json:"viewSchemaVersions"`
+		WorkflowVersions    []guide.Workflow `json:"workflowVersions"`
+		Limits              map[string]int64 `json:"limits"`
 	}
 	if err := json.Unmarshal(raw, &out); err != nil {
 		t.Fatal(err)
@@ -33,7 +34,16 @@ func TestBackendEditorCapabilityNegotiation(t *testing.T) {
 	}
 	owner, _ := guide.WorkflowForTopic("backend-editor-projections")
 	i := slices.IndexFunc(out.WorkflowVersions, func(w guide.Workflow) bool { return w.WorkflowID == owner.WorkflowID })
-	if i < 0 || out.WorkflowVersions[i].WorkflowVersion != "5" || out.WorkflowVersions[i].GuideSetID != guide.CurrentGuideSetID() {
+	if i < 0 || out.WorkflowVersions[i].WorkflowVersion != "6" || out.WorkflowVersions[i].GuideSetID != guide.CurrentGuideSetID() {
 		t.Fatalf("editor owner unavailable: %+v", out.WorkflowVersions)
+	}
+	w := out.WorkflowVersions[i]
+	if !slices.Equal(w.RequiredModelSchemaVersions, []string{"3", "4", "5"}) {
+		t.Fatalf("editor guide v6 changed retained source requirements: %v", w.RequiredModelSchemaVersions)
+	}
+	for _, schema := range w.RequiredModelSchemaVersions {
+		if !slices.Contains(out.ModelSchemaVersions, schema) {
+			t.Fatalf("editor guide cannot qualify: missing schema %s", schema)
+		}
 	}
 }

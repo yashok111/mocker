@@ -15,6 +15,8 @@ func isRelationalSchema(schema string) bool {
 
 func profileForSchema(schema string) string {
 	switch schema {
+	case EventsSchemaVersion:
+		return EventsProfile
 	case LineageSchemaVersion:
 		return LineageProfile
 	case RuntimeSchemaVersion:

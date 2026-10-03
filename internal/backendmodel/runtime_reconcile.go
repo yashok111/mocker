@@ -47,6 +47,12 @@ func runtimeReferences(kind string, attrs map[string]jsontext.Value, edge, persi
 }
 
 func sourceAttributeReferences(kind string, attrs map[string]jsontext.Value, edge, persisted bool) ([]relationalReference, error) {
+	if eventsSubject(kind, edge) || eventsEmit(kind, attrs, edge) {
+		return eventsReferences(kind, attrs, edge, persisted)
+	}
+	if contextualLineageMapping(kind, attrs, edge) {
+		return eventsLineageReferences(kind, attrs, edge, persisted)
+	}
 	if lineageSubject(kind, edge) {
 		return lineageReferences(kind, attrs, edge, persisted)
 	}
@@ -57,12 +63,22 @@ func sourceAttributeReferences(kind string, attrs map[string]jsontext.Value, edg
 }
 
 func sourceActiveReferenceTo(kind string, attrs map[string]jsontext.Value, edge bool, id string) bool {
+	return sourceActiveRecordReferenceTo(kind, attrs, edge, "node", id)
+}
+func sourceActiveRecordReferenceTo(kind string, attrs map[string]jsontext.Value, edge bool, recordType, id string) bool {
 	refs, err := sourceAttributeReferences(kind, attrs, edge, true)
 	if err != nil {
-		return lineageSubject(kind, edge) || runtimeSubject(kind, edge) || relationalSubject(kind, attrs, edge)
+		return eventsSubject(kind, edge) || eventsEmit(kind, attrs, edge) || lineageSubject(kind, edge) || runtimeSubject(kind, edge) || relationalSubject(kind, attrs, edge)
 	}
+	return activeRecordReferenceTo(refs, recordType, id)
+}
+func activeRecordReferenceTo(refs []relationalReference, recordType, id string) bool {
 	return slices.ContainsFunc(refs, func(ref relationalReference) bool {
-		return ref.Kind != "evidence" && ref.HistoricalRevisionID == "" && ref.ID == id
+		typ := ref.RecordType
+		if typ == "" {
+			typ = "node"
+		}
+		return ref.Kind != "evidence" && ref.HistoricalRevisionID == "" && typ == recordType && ref.ID == id
 	})
 }
 
@@ -255,12 +271,16 @@ func validateRuntimeGraph(ctx context.Context, _ importReader, s *ImportSession,
 		if edge {
 			path = "edges/" + id
 		}
-		if err := validateRuntimeAttributes(kind, attrs, edge, true); err != nil {
+		validator := validateRuntimeAttributes
+		if selectedProfile(s.Profile) == EventsProfile {
+			validator = validateEventsAttributes
+		}
+		if err := validator(kind, attrs, edge, true); err != nil {
 			add(path, err.Error())
 			return
 		}
 		boundedProof(id, ids, fresh)
-		refs, err := runtimeReferences(kind, attrs, edge, true)
+		refs, err := sourceAttributeReferences(kind, attrs, edge, true)
 		if err != nil {
 			add(path, err.Error())
 			return
@@ -410,7 +430,7 @@ func validateRuntimeGraph(ctx context.Context, _ importReader, s *ImportSession,
 		if e.Kind == "calls" && from.Kind == "flow_step" {
 			if to.Kind == "unresolved_target" {
 				expected := runtimeString(to.Attributes["expectedKind"])
-				valid := slices.Contains([]string{"symbol", "handler", "external_system", "query"}, expected)
+				valid := slices.Contains([]string{"symbol", "handler", "external_system", "query"}, expected) || selectedProfile(s.Profile) == EventsProfile && expected == "http_operation"
 				if attributes[from.ID].StepKind == "query" {
 					valid = expected == "query"
 				}

@@ -2,11 +2,12 @@ package mcp
 
 import (
 	"encoding/json"
-	"github.com/yashok111/mocker/internal/guide"
 	"net/http"
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/yashok111/mocker/internal/guide"
 )
 
 // callGuide drives get_guide through the real handler — guard, transport,

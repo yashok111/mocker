@@ -16,9 +16,9 @@ func TestRelationalGuideTopicsHaveServedOwnerAndBody(t *testing.T) {
 	for _, item := range []struct {
 		topic, owner, version string
 	}{
-		{topic: "backend-database", owner: "mocker-backend-database", version: "5"},
-		{topic: "backend-database-reference", owner: "mocker-backend-database", version: "5"},
-		{topic: "backend-profile-go-sql", owner: "mocker-backend-import", version: "5"},
+		{topic: "backend-database", owner: "mocker-backend-database", version: "6"},
+		{topic: "backend-database-reference", owner: "mocker-backend-database", version: "6"},
+		{topic: "backend-profile-go-sql", owner: "mocker-backend-import", version: "6"},
 	} {
 		t.Run(item.topic, func(t *testing.T) {
 			t.Parallel()
@@ -65,19 +65,19 @@ func TestRelationalGuideWorkflowRequirements(t *testing.T) {
 		schemas, capabilities      []string
 	}{
 		{
-			entrypoint: "backend-import", owner: "mocker-backend-import", version: "5",
-			schemas: []string{"1", "2", "3", "4"},
+			entrypoint: "backend-import", owner: "mocker-backend-import", version: "6",
+			schemas: []string{"1", "2", "3", "4", "5"},
 			capabilities: []string{
 				"backend-projects", "backend-revisions", "backend-graph-query", "backend-source-import",
 				"backend-source-reconcile", "backend-revision-compare", "backend-relational-import",
-				"backend-database-query", "backend-database-er", "backend-runtime-flow-import", "backend-flow-query", "backend-data-access-query", "backend-field-lineage-import", "backend-field-lineage-query",
+				"backend-database-query", "backend-database-er", "backend-runtime-flow-import", "backend-flow-query", "backend-data-access-query", "backend-field-lineage-import", "backend-field-lineage-query", "backend-events-import", "backend-events-query",
 			},
 		},
 		{
-			entrypoint: "backend-database", owner: "mocker-backend-database", version: "5",
-			schemas: []string{"2", "3", "4"},
+			entrypoint: "backend-database", owner: "mocker-backend-database", version: "6",
+			schemas: []string{"2", "3", "4", "5"},
 			capabilities: []string{
-				"backend-projects", "backend-revisions", "backend-graph-query", "backend-database-query", "backend-database-er", "backend-db-proposals", "backend-db-typed-edits", "backend-flow-query", "backend-data-access-query", "backend-saved-views", "backend-field-lineage-query",
+				"backend-projects", "backend-revisions", "backend-graph-query", "backend-database-query", "backend-database-er", "backend-db-proposals", "backend-db-typed-edits", "backend-flow-query", "backend-data-access-query", "backend-saved-views", "backend-field-lineage-query", "backend-events-query",
 			},
 		},
 	} {
@@ -134,7 +134,7 @@ func TestGlobalGuideSetHasOneOwnerForEveryServedTopic(t *testing.T) {
 		"backend-import-protocol": "mocker-backend-import", "backend-recovery": "mocker-backend-import",
 		"backend-examples": "mocker-backend-import", "backend-profile-go-sql": "mocker-backend-import",
 		"backend-database": "mocker-backend-database", "backend-database-reference": "mocker-backend-database",
-		"backend-inspect": "mocker-backend-inspect", "backend-flow-reference": "mocker-backend-inspect", "backend-analysis": "mocker-backend-inspect", "backend-editor-projections": "mocker-backend-inspect",
+		"backend-inspect": "mocker-backend-inspect", "backend-flow-reference": "mocker-backend-inspect", "backend-analysis": "mocker-backend-inspect", "backend-editor-projections": "mocker-backend-inspect", "backend-events": "mocker-backend-inspect",
 	}
 	seen := make(map[string]string)
 	for _, owner := range manifest.Workflows {

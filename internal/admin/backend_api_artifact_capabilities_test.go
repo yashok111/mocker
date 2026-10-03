@@ -9,7 +9,7 @@ import (
 )
 
 // A client must qualify the implemented API pin procedure through discovery,
-// while existing import/profile contracts remain usable without a version bump.
+// while current guide v6 retains the earlier schemas and pin contracts.
 func TestBackendAPIArtifactCapabilityNegotiation(t *testing.T) {
 	s := loopbackTestServer(t, nil)
 	status, raw, err := s.CallAsMCP(t.Context(), loopbackTestSrc(), "GET", "/api/backend-projects/capabilities", nil)
@@ -29,15 +29,30 @@ func TestBackendAPIArtifactCapabilityNegotiation(t *testing.T) {
 	if !slices.Contains(out.Features, "backend-api-artifact-pins") || !slices.Contains(out.ViewSchemaVersions, "api-artifact-pins-v1") {
 		t.Fatalf("API pin procedure cannot qualify: features=%v contracts=%v", out.Features, out.ViewSchemaVersions)
 	}
-	if !slices.Equal(out.ModelSchemaVersions, []string{"1", "2", "3", "4"}) || !slices.Equal(out.ProviderProfiles, []string{"foundation-graph-v1", "relational-graph-v1", "runtime-flow-v1", "field-lineage-v1"}) {
+	if !slices.Equal(out.ModelSchemaVersions, []string{"1", "2", "3", "4", "5"}) || !slices.Equal(out.ProviderProfiles, []string{"foundation-graph-v1", "relational-graph-v1", "runtime-flow-v1", "field-lineage-v1", "events-service-v1"}) {
 		t.Fatalf("API contract changed source/profile versions: %+v", out)
 	}
-	for _, want := range []struct{ owner, version string }{{"mocker-backend-import", "5"}, {"mocker-backend-database", "5"}, {"mocker-backend-inspect", "5"}} {
+	for _, want := range []struct {
+		owner, version string
+		schemas        []string
+	}{
+		{"mocker-backend-import", "6", []string{"1", "2", "3", "4", "5"}},
+		{"mocker-backend-database", "6", []string{"2", "3", "4", "5"}},
+		{"mocker-backend-inspect", "6", []string{"3", "4", "5"}},
+	} {
 		i := slices.IndexFunc(out.WorkflowVersions, func(w guide.Workflow) bool { return w.WorkflowID == want.owner })
 		if i < 0 || out.WorkflowVersions[i].WorkflowVersion != want.version {
 			t.Fatalf("missing compatible %s v%s: %+v", want.owner, want.version, out.WorkflowVersions)
 		}
 		w := out.WorkflowVersions[i]
+		if !slices.Equal(w.RequiredModelSchemaVersions, want.schemas) {
+			t.Fatalf("%s v%s changed retained schema requirements: %v; want %v", w.WorkflowID, want.version, w.RequiredModelSchemaVersions, want.schemas)
+		}
+		for _, schema := range w.RequiredModelSchemaVersions {
+			if !slices.Contains(out.ModelSchemaVersions, schema) {
+				t.Fatalf("%s cannot qualify: missing schema %s", w.WorkflowID, schema)
+			}
+		}
 		for _, feature := range w.RequiredCapabilities {
 			if !slices.Contains(out.Features, feature) {
 				t.Fatalf("%s cannot qualify: missing %s", w.WorkflowID, feature)

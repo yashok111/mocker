@@ -13,20 +13,33 @@ type LineageValueRef struct {
 	FacetKey   string `json:"facetKey,omitempty"`
 	Collection string `json:"collection,omitempty"`
 	PortKey    string `json:"portKey,omitempty"`
+	EndpointID string `json:"endpointId,omitempty"`
+	RouteID    string `json:"routeId,omitempty"`
 }
 type ImportLineageValueRef struct {
-	Kind       string `json:"kind"`
-	NodeKey    string `json:"nodeKey"`
-	FacetKey   string `json:"facetKey,omitempty"`
-	Collection string `json:"collection,omitempty"`
-	PortKey    string `json:"portKey,omitempty"`
+	Kind        string `json:"kind"`
+	NodeKey     string `json:"nodeKey"`
+	FacetKey    string `json:"facetKey,omitempty"`
+	Collection  string `json:"collection,omitempty"`
+	PortKey     string `json:"portKey,omitempty"`
+	EndpointKey string `json:"endpointKey,omitempty"`
+	RouteKey    string `json:"routeKey,omitempty"`
 }
 type LineageTransform struct {
 	Kind        string `json:"kind"`
 	Description string `json:"description"`
 	Redacted    bool   `json:"redacted"`
 }
+type LineageTransport struct {
+	EmitsEdgeID    string `json:"emitsEdgeId"`
+	DeliveryEdgeID string `json:"deliveryEdgeId"`
+}
+type ImportLineageTransport struct {
+	EmitsEdgeKey    string `json:"emitsEdgeKey"`
+	DeliveryEdgeKey string `json:"deliveryEdgeKey"`
+}
 type LineageMappingAttributes struct {
+	Transport      *LineageTransport `json:"transport,omitempty"`
 	Sources        []LineageValueRef `json:"sources"`
 	Destination    LineageValueRef   `json:"destination"`
 	Transform      LineageTransform  `json:"transform"`
@@ -35,6 +48,7 @@ type LineageMappingAttributes struct {
 	Description    string            `json:"description,omitempty"`
 }
 type ImportLineageMappingAttributes struct {
+	Transport      *ImportLineageTransport `json:"transport,omitempty"`
 	Sources        []ImportLineageValueRef `json:"sources"`
 	Destination    ImportLineageValueRef   `json:"destination"`
 	Transform      LineageTransform        `json:"transform"`
@@ -69,14 +83,14 @@ type APIFieldAttributes struct {
 }
 
 func (r *LineageValueRef) UnmarshalJSON(raw []byte) error {
-	if err := validateLineageRef(raw, true); err != nil {
+	if err := validateEventsLineageRef(raw, true); err != nil {
 		return err
 	}
 	type plain LineageValueRef
 	return json.Unmarshal(raw, (*plain)(r), json.RejectUnknownMembers(true))
 }
 func (r *ImportLineageValueRef) UnmarshalJSON(raw []byte) error {
-	if err := validateLineageRef(raw, false); err != nil {
+	if err := validateEventsLineageRef(raw, false); err != nil {
 		return err
 	}
 	type plain ImportLineageValueRef
@@ -87,7 +101,7 @@ func (a *LineageMappingAttributes) UnmarshalJSON(raw []byte) error {
 	if err != nil {
 		return err
 	}
-	if err = validateLineageAttributes("field_mapping", m, false, true); err != nil {
+	if err = validateEventsLineageAttributes("field_mapping", m, false, true); err != nil {
 		return err
 	}
 	type plain LineageMappingAttributes
@@ -98,7 +112,7 @@ func (a *ImportLineageMappingAttributes) UnmarshalJSON(raw []byte) error {
 	if err != nil {
 		return err
 	}
-	if err = validateLineageAttributes("field_mapping", m, false, false); err != nil {
+	if err = validateEventsLineageAttributes("field_mapping", m, false, false); err != nil {
 		return err
 	}
 	type plain ImportLineageMappingAttributes
@@ -116,7 +130,17 @@ func (a *APIFieldAttributes) UnmarshalJSON(raw []byte) error {
 	return json.Unmarshal(raw, (*plain)(a), json.RejectUnknownMembers(true))
 }
 func decodeLineageMapping(attrs map[string]jsontext.Value) (LineageMappingAttributes, error) {
+	return decodeLineageMappingForSchema(attrs, LineageSchemaVersion)
+}
+func decodeLineageMappingForSchema(attrs map[string]jsontext.Value, schema string) (LineageMappingAttributes, error) {
 	var out LineageMappingAttributes
+	validator := validateLineageAttributes
+	if schema == EventsSchemaVersion {
+		validator = validateEventsLineageAttributes
+	}
+	if err := validator("field_mapping", attrs, false, true); err != nil {
+		return out, err
+	}
 	raw, err := json.Marshal(attrs)
 	if err == nil {
 		err = json.Unmarshal(raw, &out)

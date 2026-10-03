@@ -1,0 +1,24 @@
+// INERT SOURCE: explicit identity and configuration, not deployment evidence.
+const primary = channel("orders.primary", "Order events", "kafka", "orders.cancelled", "orders");
+const secondary = channel("orders.secondary", "Order events", "kafka", "orders.cancelled.secondary", "orders");
+const returns = channel("returns.primary", "Order events", "kafka", "returns.cancelled", "returns");
+const retry = channel("orders.retry", "Retry", "kafka", "orders.retry", "orders");
+const dlq = channel("orders.dlq", "DLQ", "kafka", "orders.dlq", "orders");
+const orphan = channel("orders.orphan", "Orphan", "kafka", "orders.orphan", "orders");
+const known = consumer("billing.cancel", "Cancel order", onOrderCancelled);
+subscribe(primary, "orders.cancelled.v1", known, { group: "billing", condition: "type=cancelled" });
+subscribe(secondary, "orders.cancelled.v1", known, { group: "billing", condition: "type=cancelled" });
+const distinct = consumer("billing.return", "Cancel order", onReturnCancelled);
+subscribe(returns, "returns.cancelled.v1", distinct, { group: "billing", condition: "type=cancelled" });
+configureRetry(known, retry, "orders.cancelled.v1", { delay: "PT30S", maxAttempts: 3, reason: "transient failure" });
+configureDLQ(known, dlq, "orders.cancelled.v1", { reason: "retry attempts exhausted" });
+const orphanConsumer = consumer("billing.orphan", "Orphan listener", onOrphan);
+subscribe(orphan, "orders.cancelled.v1", orphanConsumer, { group: "billing-orphan", condition: "all" });
+const fraud = consumerFromPlugin("billing.fraud", "Fraud cancellation", "fraud-v1");
+subscribe(primary, "orders.cancelled.v1", fraud, { group: "fraud", condition: "risk=high" });
+const audit = dynamicConsumer("billing.audit", "Audit", { cancelled: onAudit }, runtimeDispatchKey);
+subscribe(primary, "orders.cancelled.v1", audit, { group: "audit", condition: "all" });
+const legacy = consumerFromModule("billing.legacy", "Legacy cancellation", "../private-ledger/cancel");
+subscribe(primary, "orders.cancelled.v1", legacy, { group: "legacy", condition: "all" });
+const ordersService = service("orders", { sources: ["orders.ts.txt", "jobs.ts.txt"], channels: [primary, secondary, returns, retry, dlq, orphan] });
+const billingService = service("billing", { sources: ["billing.ts.txt"], consumers: [known, distinct, orphanConsumer, fraud, audit, legacy] });

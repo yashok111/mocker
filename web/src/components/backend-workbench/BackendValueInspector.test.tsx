@@ -4,7 +4,50 @@ import { renderWithProviders } from "@/test/render";
 import { json } from "@/test/http";
 import { BackendValueInspector } from "./BackendValueInspector";
 import { BackendAPIArtifactsContext } from "./BackendAPIArtifacts";
+import { useState } from "react";
 afterEach(() => vi.unstubAllGlobals());
+it("updates the full event address when the selected field stays the same", async () => {
+  vi.stubGlobal("fetch", async (url: RequestInfo | URL, init?: RequestInit) => {
+    if (String(url).endsWith("/revisions/rev"))
+      return json(200, {
+        id: "rev",
+        projectId: "project",
+        schemaVersion: "5",
+        semanticHash: "a".repeat(64),
+      });
+    if (String(url).endsWith("/nodes/field"))
+      return json(200, {
+        id: "field",
+        kind: "event_field",
+        parentId: "message",
+        name: "Same field",
+        attributes: {},
+        evidenceIds: [],
+      });
+    if (init?.method === "POST") return json(422, {});
+    return json(200, { items: [], nextCursor: "" });
+  });
+  function Harness() {
+    const [routeId, setRouteId] = useState("delivery-a");
+    return (
+      <>
+        <button onClick={() => setRouteId("delivery-b")}>Other route</button>
+        <BackendValueInspector
+          projectId="project"
+          revisionId="rev"
+          value={{ kind: "event_field", nodeId: "field", endpointId: "consumer", routeId }}
+          onClose={() => {}}
+        />
+      </>
+    );
+  }
+  renderWithProviders(<Harness />);
+  await screen.findByRole("heading", { name: "Same field" });
+  fireEvent.click(screen.getByRole("button", { name: "Other route" }));
+  expect(await screen.findByText(/Маршрут значения: delivery-b/)).toBeVisible();
+  expect(screen.queryByText(/Маршрут значения: delivery-a/)).not.toBeInTheDocument();
+  await vi.waitFor(() => expect(screen.getByRole("heading", { name: "Same field" })).toHaveFocus());
+});
 it("opens the exact query result collection/key and its owner in the pinned inspector", async () => {
   const urls: string[] = [];
   vi.stubGlobal("fetch", async (url: RequestInfo | URL, init?: RequestInit) => {

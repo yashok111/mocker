@@ -140,6 +140,12 @@
       "source": "references/backend/editor-projections.md",
       "embedded": "backend-editor-projections.md",
       "workflowId": "mocker-backend-inspect"
+    },
+    {
+      "topic": "backend-events",
+      "source": "references/backend/events.md",
+      "embedded": "backend-events.md",
+      "workflowId": "mocker-backend-inspect"
     }
   ],
   "workflows": [
@@ -165,13 +171,14 @@
     },
     {
       "workflowId": "mocker-backend-import",
-      "workflowVersion": "5",
+      "workflowVersion": "6",
       "entrypoint": "backend-import",
       "requiredModelSchemaVersions": [
         "1",
         "2",
         "3",
-        "4"
+        "4",
+        "5"
       ],
       "requiredCapabilities": [
         "backend-projects",
@@ -187,17 +194,20 @@
         "backend-flow-query",
         "backend-data-access-query",
         "backend-field-lineage-import",
-        "backend-field-lineage-query"
+        "backend-field-lineage-query",
+        "backend-events-import",
+        "backend-events-query"
       ]
     },
     {
       "workflowId": "mocker-backend-database",
-      "workflowVersion": "5",
+      "workflowVersion": "6",
       "entrypoint": "backend-database",
       "requiredModelSchemaVersions": [
         "2",
         "3",
-        "4"
+        "4",
+        "5"
       ],
       "requiredCapabilities": [
         "backend-projects",
@@ -210,7 +220,8 @@
         "backend-flow-query",
         "backend-data-access-query",
         "backend-saved-views",
-        "backend-field-lineage-query"
+        "backend-field-lineage-query",
+        "backend-events-query"
       ],
       "requiredViewSchemaVersions": [
         "proposal-relational-v1",
@@ -219,11 +230,12 @@
     },
     {
       "workflowId": "mocker-backend-inspect",
-      "workflowVersion": "5",
+      "workflowVersion": "6",
       "entrypoint": "backend-inspect",
       "requiredModelSchemaVersions": [
         "3",
-        "4"
+        "4",
+        "5"
       ],
       "requiredCapabilities": [
         "backend-projects",
@@ -234,7 +246,8 @@
         "backend-saved-views",
         "backend-field-lineage-query",
         "backend-api-artifact-pins",
-        "backend-editor-projections"
+        "backend-editor-projections",
+        "backend-events-query"
       ],
       "requiredViewSchemaVersions": [
         "saved-view-v1",

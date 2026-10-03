@@ -302,8 +302,11 @@ func assignRelationalOwnership(base *RevisionState, g *graphCandidate, s *Import
 		if hasRuntimeProfile(selectedProfile(s.Profile)) && old[e.ID] == nil && (runtimeSubject(nodes[e.From].Kind, false) || runtimeSubject(nodes[e.To].Kind, false)) {
 			e.Ownership.Profile = RuntimeProfile
 		}
-		if selectedProfile(s.Profile) == LineageProfile && old[e.ID] == nil && (lineageSubject(nodes[e.From].Kind, false) || lineageSubject(nodes[e.To].Kind, false)) {
+		if hasLineageProfile(selectedProfile(s.Profile)) && old[e.ID] == nil && (lineageSubject(nodes[e.From].Kind, false) || lineageSubject(nodes[e.To].Kind, false)) {
 			e.Ownership.Profile = LineageProfile
+		}
+		if selectedProfile(s.Profile) == EventsProfile && eventsRelation(e.Kind, nodes[e.From], nodes[e.To]) {
+			e.Ownership.Profile = EventsProfile
 		}
 		current[e.ID] = e.Ownership
 	}
@@ -316,6 +319,9 @@ func assignRelationalOwnership(base *RevisionState, g *graphCandidate, s *Import
 func relationalOwnership(kind string, attrs map[string]jsontext.Value, edge bool, s *ImportSession, existing *AssertionOwnership) *AssertionOwnership {
 	if existing != nil {
 		copy := *existing
+		if selectedProfile(s.Profile) == EventsProfile && (eventsSubject(kind, edge) || eventsEmit(kind, attrs, edge) || contextualLineageMapping(kind, attrs, edge)) {
+			copy.Profile = EventsProfile
+		}
 		return &copy
 	}
 	profile := GraphProfile
@@ -325,8 +331,11 @@ func relationalOwnership(kind string, attrs map[string]jsontext.Value, edge bool
 	if hasRuntimeProfile(selectedProfile(s.Profile)) && runtimeSubject(kind, edge) {
 		profile = RuntimeProfile
 	}
-	if selectedProfile(s.Profile) == LineageProfile && lineageSubject(kind, edge) {
+	if hasLineageProfile(selectedProfile(s.Profile)) && lineageSubject(kind, edge) {
 		profile = LineageProfile
+	}
+	if selectedProfile(s.Profile) == EventsProfile && (eventsSubject(kind, edge) || eventsEmit(kind, attrs, edge) || contextualLineageMapping(kind, attrs, edge)) {
+		profile = EventsProfile
 	}
 	return &AssertionOwnership{RepositoryID: s.RepositoryID, ProviderNamespace: s.Manifest.Provider.Namespace, Profile: profile}
 }

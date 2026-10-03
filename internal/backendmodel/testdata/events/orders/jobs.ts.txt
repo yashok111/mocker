@@ -1,0 +1,11 @@
+// INERT SOURCE: schedules are declarations; this fixture has no runner.
+const sweep = job("orders.sweep", "Cancellation sweep", {
+  trigger: { cron: "0 3 * * *", timezone: "UTC" }, handler: sweepCancelled
+});
+async function sweepCancelled(db) {
+  return db.query("SELECT id FROM orders WHERE status = 'cancelled'");
+}
+const replay = job("orders.replay", "Manual replay", {
+  trigger: { manual: true }, handler: replayCancelled
+});
+function replayCancelled(input) { return inspectReplay(input.orderId); }

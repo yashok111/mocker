@@ -142,7 +142,7 @@ func (s *ArtifactService) applyArtifactPinsTx(ctx context.Context, tx *sql.Tx, p
 	if err = json.Unmarshal([]byte(document), &revision); err != nil {
 		return err
 	}
-	if revision.SchemaVersion != LineageSchemaVersion {
+	if !isLineageSchema(revision.SchemaVersion) {
 		return importConflict("backend_artifact_pins_base_conflict", "Source baseline schema changed", p.Version)
 	}
 	if _, err = loadArtifactContext(ctx, tx, in.BaseRevisionID, revision.ArtifactPins); err != nil {

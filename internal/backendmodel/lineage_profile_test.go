@@ -80,7 +80,7 @@ func TestLineageProfileTransitions(t *testing.T) {
 			assertFault(t, err, "backend_unsupported_scope")
 		})
 	}
-	if !slices.Equal(SupportedModelSchemaVersions(), []string{"1", "2", "3", "4"}) {
+	if !slices.Equal(SupportedModelSchemaVersions(), []string{"1", "2", "3", "4", "5"}) {
 		t.Fatal("missing schema4")
 	}
 }

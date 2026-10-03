@@ -170,7 +170,7 @@ func overlayGraph(ctx context.Context, q importReader, s *ImportSession, base *R
 	}
 	owned := map[string]bool{}
 	checkOwner := func(typ, id string, o *AssertionOwnership) {
-		valid := o != nil && o.RepositoryID == s.RepositoryID && o.ProviderNamespace == s.Manifest.Provider.Namespace && (o.Profile == GraphProfile || hasRelationalProfile(selectedProfile(s.Profile)) && o.Profile == RelationalProfile || hasRuntimeProfile(selectedProfile(s.Profile)) && o.Profile == RuntimeProfile || selectedProfile(s.Profile) == LineageProfile && o.Profile == LineageProfile)
+		valid := o != nil && o.RepositoryID == s.RepositoryID && o.ProviderNamespace == s.Manifest.Provider.Namespace && (o.Profile == GraphProfile || hasRelationalProfile(selectedProfile(s.Profile)) && o.Profile == RelationalProfile || hasRuntimeProfile(selectedProfile(s.Profile)) && o.Profile == RuntimeProfile || hasLineageProfile(selectedProfile(s.Profile)) && o.Profile == LineageProfile || selectedProfile(s.Profile) == EventsProfile && o.Profile == EventsProfile)
 		owned[typ+"\x00"+id] = valid
 		if !valid {
 			add("backend_unsupported_scope", typ+"/"+id, "Base assertion belongs to another ownership partition")
@@ -415,6 +415,38 @@ func overlayGraph(ctx context.Context, q importReader, s *ImportSession, base *R
 				add("backend_unsafe_deletion", "deletion/"+n.ExternalKey, "Surviving edges or parent links prevent deletion")
 			}
 		}
+
+		// Edge assertions can be active nested dependencies (event route proof).
+		// Reject their removal through the same closure as node dependencies.
+		if selectedProfile(s.Profile) == EventsProfile {
+			for _, e := range g.Edges {
+				address := "edge\x00" + e.ID
+				if !deleted[address] {
+					continue
+				}
+				dangling := false
+				for _, n := range g.Nodes {
+					if !deleted["node\x00"+n.ID] && sourceActiveRecordReferenceTo(n.Kind, n.Attributes, false, "edge", e.ID) {
+						dangling = true
+					}
+				}
+				for _, subject := range g.Edges {
+					if !deleted["edge\x00"+subject.ID] && sourceActiveRecordReferenceTo(subject.Kind, subject.Attributes, true, "edge", e.ID) {
+						dangling = true
+					}
+				}
+				if dangling {
+					delete(deleted, address)
+					changed = true
+					for i := range g.DeletionDecisions {
+						if g.DeletionDecisions[i].Command.ExpectedID == e.ID {
+							g.DeletionDecisions[i].Resolved = false
+						}
+					}
+					add("backend_unsafe_deletion", "deletion/"+e.ExternalKey, "Surviving nested edge references prevent deletion")
+				}
+			}
+		}
 		if !changed {
 			break
 		}
@@ -438,7 +470,7 @@ func overlayGraph(ctx context.Context, q importReader, s *ImportSession, base *R
 	if !inventoryCountsValid(s, commands) {
 		add("backend_unsafe_deletion", "inventory", "Complete inventory counts must match the manifest and submitted endpoint/datastore contributions")
 	}
-	if selectedProfile(s.Profile) == LineageProfile {
+	if hasLineageProfile(selectedProfile(s.Profile)) {
 		markLineageEndpointStaleness(g)
 	}
 	propagateStaleness(g)

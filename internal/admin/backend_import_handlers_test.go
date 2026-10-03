@@ -3,16 +3,16 @@ package admin
 import (
 	"bytes"
 	"encoding/json/v2"
-	"github.com/santhosh-tekuri/jsonschema/v6"
-	"github.com/yashok111/mocker/internal/jsonx"
 	"net/http"
 	"os"
 	"strconv"
 	"strings"
 	"testing"
 
+	"github.com/santhosh-tekuri/jsonschema/v6"
 	"github.com/yashok111/mocker/internal/backendmodel"
 	"github.com/yashok111/mocker/internal/config"
+	"github.com/yashok111/mocker/internal/jsonx"
 )
 
 func TestBackendImportRouteInventory(t *testing.T) {
@@ -350,6 +350,8 @@ func validateBackendImportResponse(t *testing.T, method, path string, data []byt
 	}
 	if len(parts) == 5 && parts[4] == "query" {
 		switch parts[3] {
+		case "events":
+			name = "BackendEventsPage"
 		case "lineage":
 			name = "BackendLineagePage"
 		case "flow":

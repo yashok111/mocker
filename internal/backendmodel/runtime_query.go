@@ -238,7 +238,7 @@ func projectRuntimeFlow(ctx context.Context, state *RevisionState, in FlowQueryI
 	// bounded projection, then selects a different-sized window over that result.
 	scope, err := requestDigest(struct {
 		ProjectID, RevisionID, SemanticHash, Policy, View, Search, FlowID, EntrypointID, DataNodeID, AccessKind string
-	}{page.ProjectID, page.RevisionID, page.SemanticHash, runtimeTraversalPolicy, in.View, strings.ToLower(in.Search), in.FlowID, in.EntrypointID, in.DataNodeID, in.AccessKind})
+	}{page.ProjectID, page.RevisionID, page.SemanticHash, runtimePolicyForSchema(state.Revision.SchemaVersion), in.View, strings.ToLower(in.Search), in.FlowID, in.EntrypointID, in.DataNodeID, in.AccessKind})
 	if err != nil {
 		return nil, err
 	}
@@ -260,7 +260,7 @@ func projectRuntimeFlow(ctx context.Context, state *RevisionState, in FlowQueryI
 				return nil, err
 			}
 			n := p.nodes[id]
-			if n.Kind != "http_operation" || !strings.Contains(strings.ToLower(n.Name+" "+runtimeAttributeString(n.Attributes, "method")+" "+runtimeAttributeString(n.Attributes, "path")), strings.ToLower(in.Search)) {
+			if !runtimeEntrypointForSchema(p.state.Revision.SchemaVersion, n.Kind) || !strings.Contains(strings.ToLower(n.Name+" "+runtimeAttributeString(n.Attributes, "method")+" "+runtimeAttributeString(n.Attributes, "path")), strings.ToLower(in.Search)) {
 				continue
 			}
 			page.EntryPointItems = append(page.EntryPointItems, p.entrypoint(n))
@@ -300,7 +300,7 @@ func projectRuntimeFlow(ctx context.Context, state *RevisionState, in FlowQueryI
 				}
 				p.observeNode(n)
 				for _, e := range p.out[n.ID] {
-					if slices.Contains([]string{"next", "branch", "error", "returns", "calls", "begins", "commits", "rolls_back"}, e.Kind) {
+					if slices.Contains([]string{"next", "branch", "error", "returns", "calls", "begins", "commits", "rolls_back"}, e.Kind) || state.Revision.SchemaVersion == EventsSchemaVersion && e.Kind == "emits" {
 						p.observeEdge(e)
 						page.TransitionItems = append(page.TransitionItems, e)
 					}
@@ -508,8 +508,8 @@ func (p *runtimeFlowProjection) selectAccesses() error {
 		if !ok {
 			return notFound()
 		}
-		if n.Kind != "http_operation" {
-			return invalid("entrypointId", "Selector must identify an HTTP operation")
+		if !runtimeEntrypointForSchema(p.state.Revision.SchemaVersion, n.Kind) {
+			return invalid("entrypointId", "Selector must identify a supported pinned entrypoint")
 		}
 	}
 	var data Node
@@ -578,7 +578,7 @@ func runtimeCompareWitness(a, b runtimeWitness) int {
 func (p *runtimeFlowProjection) relevant(n Node, e Edge) bool {
 	switch e.Kind {
 	case "handles":
-		return n.Kind == "http_operation"
+		return runtimeEntrypointForSchema(p.state.Revision.SchemaVersion, n.Kind)
 	case "contains":
 		target := p.nodes[e.To]
 		return (n.Kind == "handler" || n.Kind == "symbol") && target.Kind == "flow" || n.Kind == "flow" && e.To == runtimeAttributeString(n.Attributes, "entryStepId")
@@ -597,7 +597,7 @@ func (p *runtimeFlowProjection) traverse(ctx context.Context) error {
 	seen := map[runtimeReachState]runtimeWitness{}
 	for _, id := range slices.Sorted(maps.Keys(p.nodes)) {
 		n := p.nodes[id]
-		if n.Kind != "http_operation" || p.in.EntrypointID != "" && id != p.in.EntrypointID {
+		if !runtimeEntrypointForSchema(p.state.Revision.SchemaVersion, n.Kind) || p.in.EntrypointID != "" && id != p.in.EntrypointID {
 			continue
 		}
 		w := runtimeWitness{runtimeReachState: runtimeReachState{entrypointID: id, nodeID: id}, nodes: []string{id}, edges: []string{}}
@@ -620,7 +620,7 @@ func (p *runtimeFlowProjection) traverse(ctx context.Context) error {
 		}
 		n := p.nodes[w.nodeID]
 		p.observeNode(n)
-		if n.Kind == "http_operation" {
+		if runtimeEntrypointForSchema(p.state.Revision.SchemaVersion, n.Kind) {
 			p.entrypoint(n)
 		}
 		for _, e := range p.out[n.ID] {
@@ -812,4 +812,11 @@ func (p *runtimeFlowProjection) access(e Edge, w *runtimeWitness, relation strin
 		p.limitations[key] = true
 	}
 	return i
+}
+
+func runtimePolicyForSchema(schema string) string {
+	if schema == EventsSchemaVersion {
+		return EventsFlowTraversalPolicy
+	}
+	return runtimeTraversalPolicy
 }

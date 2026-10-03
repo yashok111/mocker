@@ -350,7 +350,7 @@ function FlowWorkspace({
             {...callbacks}
           />
         )}
-        {selection && activeValue?.kind === "column" ? (
+        {selection && (activeValue?.kind === "column" || activeValue?.kind === "event_field") ? (
           <BackendValueInspector
             key={JSON.stringify(activeValue)}
             projectId={projectId}

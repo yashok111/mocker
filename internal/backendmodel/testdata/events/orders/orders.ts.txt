@@ -1,0 +1,31 @@
+// INERT SOURCE: read as text; never execute or import.
+const orderEvents = defineMessage("orders.cancelled.v1", "OrderCancelled", {
+  orderId: "string", status: "string", reason: "string"
+});
+const secondaryEvents = defineMessage("returns.cancelled.v1", "OrderCancelled", {
+  orderId: "string", status: "string"
+});
+
+async function cancelOrder(db, broker, billingHttp, orderId, operatorReason) {
+  const tx = await db.begin("orders", "read committed");
+  const row = await tx.query(
+    "UPDATE orders SET status = 'cancelled' WHERE id = $1 RETURNING id, status",
+    [orderId]
+  );
+  const reason = `${row.status}:${operatorReason}`;
+  const event = { orderId: row.id, status: row.status, reason };
+  await broker.publish("orders.primary", orderEvents, event);
+  await broker.publish("orders.secondary", orderEvents, event);
+  // Publication precedes commit; this is neither an outbox nor atomic delivery.
+  await tx.commit();
+  await billingHttp.invokeOperation("billing.cancel-order.v1", { orderId });
+  return row.status;
+}
+
+async function cancelReturn(broker, returnRow) {
+  const event = { orderId: returnRow.orderId, status: returnRow.status };
+  await broker.publish("returns.primary", secondaryEvents, event);
+}
+const ordersDatabase = configureDatabase("orders", { dialect: "postgresql" });
+bindDatabase(cancelOrder, ordersDatabase);
+bindDatabase(sweepCancelled, ordersDatabase);

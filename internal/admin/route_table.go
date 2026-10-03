@@ -253,6 +253,7 @@ func (s *Server) routes() []route {
 		{"POST /api/backend-projects/{id}/artifacts/preview", s.handlePreviewBackendArtifactPins, mcpAllow, cpNeverTouchesLayer},
 		{"POST /api/backend-projects/{id}/artifacts/commands", s.handleApplyBackendArtifactPins, mcpAllow, cpAnotherLayer},
 		{"GET /api/design-scenarios/{id}/revisions/{rid}/artifact-snapshot", s.handleGetDesignScenarioArtifactSnapshot, mcpAllow, cpRead},
+		{"POST /api/backend-projects/{id}/events/query", s.handleQueryBackendEvents, mcpAllow, cpNeverTouchesLayer},
 		{"POST /api/backend-projects/{id}/lineage/query", s.handleQueryBackendLineage, mcpAllow, cpNeverTouchesLayer},
 		{"POST /api/backend-projects/{id}/flow/query", s.handleQueryBackendFlow, mcpAllow, cpNeverTouchesLayer},
 		{"POST /api/backend-projects/{id}/graph/query", s.handleQueryBackendGraph, mcpAllow, cpNeverTouchesLayer},

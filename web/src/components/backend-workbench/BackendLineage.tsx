@@ -325,6 +325,8 @@ function LineageValue({
   if (value.kind === "column") label += ` · колонка · ${value.facetKey}`;
   if (value.kind === "port") label += ` · ${value.collection} · ${value.portKey}`;
   if (value.kind === "api_field") label += " · поле API";
+  if (value.kind === "event_field")
+    label += ` · поле события · ${value.endpointId} · маршрут ${value.routeId}`;
   return (
     <Stack gap={2}>
       <Group>

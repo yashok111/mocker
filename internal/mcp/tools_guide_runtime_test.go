@@ -13,7 +13,7 @@ import (
 
 func TestRuntimeGuideSDKOwnersAndDiscovery(t *testing.T) {
 	server, _ := newResourcesTestServer(t, resourcesTestConfig(t))
-	for _, topic := range []string{"backend-inspect", "backend-flow-reference", "backend-analysis", "backend-editor-projections"} {
+	for _, topic := range []string{"backend-inspect", "backend-flow-reference", "backend-analysis", "backend-editor-projections", "backend-events"} {
 		owner, ok := guide.WorkflowForTopic(topic)
 		if !ok {
 			t.Fatalf("new standalone topic %s has no advertised owner", topic)
@@ -26,7 +26,7 @@ func TestRuntimeGuideSDKOwnersAndDiscovery(t *testing.T) {
 		if err := json.Unmarshal(raw, &out); err != nil {
 			t.Fatal(err)
 		}
-		if out.WorkflowID != "mocker-backend-inspect" || out.WorkflowVersion != "5" || out.ManifestHash != owner.ManifestHash || out.GuideSetID != owner.GuideSetID || out.ContentHash != fmt.Sprintf("sha256:%x", sha256.Sum256([]byte(out.Markdown))) {
+		if out.WorkflowID != "mocker-backend-inspect" || out.WorkflowVersion != "6" || out.ManifestHash != owner.ManifestHash || out.GuideSetID != owner.GuideSetID || out.ContentHash != fmt.Sprintf("sha256:%x", sha256.Sum256([]byte(out.Markdown))) {
 			t.Fatalf("SDK cannot verify %s against the selected inspect owner: %#v", topic, out)
 		}
 		if !slices.Contains(out.Topics, topic) || strings.HasPrefix(out.Markdown, "---") {
@@ -34,7 +34,7 @@ func TestRuntimeGuideSDKOwnersAndDiscovery(t *testing.T) {
 		}
 	}
 	response := doMCP(t, newTestEndpoint(t).Handler(), `{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}`, map[string]string{"Authorization": "Bearer " + testKey})
-	for _, topic := range []string{"backend-inspect", "backend-flow-reference", "backend-analysis", "backend-editor-projections"} {
+	for _, topic := range []string{"backend-inspect", "backend-flow-reference", "backend-analysis", "backend-editor-projections", "backend-events"} {
 		if !strings.Contains(response.Body.String(), topic) {
 			t.Fatalf("tool discovery cannot locate %s", topic)
 		}
@@ -46,6 +46,7 @@ func TestRuntimeGuideSDKOwnersAndDiscovery(t *testing.T) {
 func TestRuntimeLeafOlderNewerSetRefusalAndCurrentFallback(t *testing.T) {
 	for _, topic := range []string{"backend-import", "backend-database", "backend-inspect"} {
 		for _, set := range []string{
+			"sha256:2d798d65181489ad1c8c08cea728fd9da21f41c97ba295a5a1af742973b16cb1",
 			"sha256:54ad47e9cec57296780d3ef881fa90d192c4bb467fcdcde124bd7df8692776de",
 			"sha256:0000000000000000000000000000000000000000000000000000000000000000",
 		} {

@@ -25,10 +25,14 @@ export function BackendLineageActions({
   const [direction, setDirection] = useState<"forward" | "reverse" | null>(null);
   const [launchId, setLaunchId] = useState(0);
   const trigger = useRef<HTMLButtonElement | null>(null);
-  if (proposal || (revision.data?.status === 200 && revision.data.data.schemaVersion !== "4"))
+  if (
+    proposal ||
+    (revision.data?.status === 200 && !["4", "5"].includes(revision.data.data.schemaVersion))
+  )
     return (
       <Text size="sm">
-        Происхождение значения доступно только в снимке source4; предложения не поддерживаются.
+        Происхождение значения доступно только в снимке source4 или source5; предложения не
+        поддерживаются.
       </Text>
     );
   return (

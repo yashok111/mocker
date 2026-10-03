@@ -65,7 +65,7 @@ func (in *LineageQueryInput) UnmarshalJSON(raw []byte) error {
 	for key, v := range m {
 		switch key {
 		case "seed":
-			if err := validateLineageRef(v, true); err != nil {
+			if err := validateEventsLineageRef(v, true); err != nil {
 				return invalid("seed", err.Error())
 			}
 		case "maxDepth", "limit":
@@ -109,7 +109,7 @@ func (in LineageQueryInput) validate() error {
 	if err != nil {
 		return invalid("seed", "Invalid value reference")
 	}
-	if err = validateLineageRef(raw, true); err != nil {
+	if err = validateEventsLineageRef(raw, true); err != nil {
 		return invalid("seed", err.Error())
 	}
 	return nil
@@ -167,8 +167,19 @@ func projectLineage(ctx context.Context, state *RevisionState, in LineageQueryIn
 		return nil, notFound()
 	}
 	source := primarySource(*state)
-	if state.Revision.SchemaVersion != LineageSchemaVersion || source == nil || !sourceProfilesMatch(LineageSchemaVersion, source.Provider.Profiles) {
-		return nil, &FaultError{Status: 422, Code: "backend_unsupported_scope", Message: "Lineage reads require a pinned source4 revision"}
+	if !isLineageSchema(state.Revision.SchemaVersion) || source == nil || !sourceProfilesMatch(state.Revision.SchemaVersion, source.Provider.Profiles) {
+		return nil, &FaultError{Status: 422, Code: "backend_unsupported_scope", Message: "Lineage reads require a pinned source4 or source5 revision"}
+	}
+	rawSeed, err := json.Marshal(in.Seed)
+	if err != nil {
+		return nil, err
+	}
+	refValidator := validateLineageRef
+	if state.Revision.SchemaVersion == EventsSchemaVersion {
+		refValidator = validateEventsLineageRef
+	}
+	if err := refValidator(rawSeed, true); err != nil {
+		return nil, invalid("seed", err.Error())
 	}
 	if in.MaxDepth == 0 {
 		in.MaxDepth = 8
@@ -176,7 +187,7 @@ func projectLineage(ctx context.Context, state *RevisionState, in LineageQueryIn
 	if in.Limit == 0 {
 		in.Limit = 50
 	}
-	page := &LineagePage{ProjectID: state.Revision.ProjectID, RevisionID: in.RevisionID, SemanticHash: state.Revision.SemanticHash, Policy: LineageTraversalPolicy, Seed: in.Seed, Direction: in.Direction, Items: []LineageItem{}, TruncationReasons: []string{}, Limitations: []string{}, Coverage: RevisionCoverage{Coverage: state.Revision.Coverage, Snapshots: slices.Clone(state.Sources), Inventory: slices.Clone(state.Inventory), ReconciliationGaps: []string{}}}
+	page := &LineagePage{ProjectID: state.Revision.ProjectID, RevisionID: in.RevisionID, SemanticHash: state.Revision.SemanticHash, Policy: lineagePolicyForSchema(state.Revision.SchemaVersion), Seed: in.Seed, Direction: in.Direction, Items: []LineageItem{}, TruncationReasons: []string{}, Limitations: []string{}, Coverage: RevisionCoverage{Coverage: state.Revision.Coverage, Snapshots: slices.Clone(state.Sources), Inventory: slices.Clone(state.Inventory), ReconciliationGaps: []string{}}}
 	scope, err := requestDigest(struct {
 		Project, Revision, Hash, Policy string
 		Seed                            LineageValueRef
@@ -194,6 +205,17 @@ func projectLineage(ctx context.Context, state *RevisionState, in LineageQueryIn
 	evidence := map[string]Evidence{}
 	index := map[LineageValueRef][]lineageIndexedMapping{}
 	contains := map[string][]Edge{}
+	edges := map[string]Edge{}
+	handles := map[string][]Edge{}
+	for _, e := range state.Edges {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		if e.Kind == "handles" {
+			handles[e.From] = append(handles[e.From], e)
+		}
+		edges[e.ID] = e
+	}
 	limitations := map[string]bool{}
 	truncations := map[string]bool{}
 	for _, gap := range state.Revision.Coverage.Gaps {
@@ -222,7 +244,7 @@ func projectLineage(ctx context.Context, state *RevisionState, in LineageQueryIn
 			page.Coverage.StaleCounts.Nodes++
 		}
 	}
-	if err := validateLineageValueTarget(in.Seed, nodes); err != nil {
+	if err := validateLineageValueTargetForSchema(in.Seed, nodes, edges, state.Revision.SchemaVersion); err != nil {
 		return nil, err
 	}
 	for _, e := range state.Evidence {
@@ -248,6 +270,7 @@ func projectLineage(ctx context.Context, state *RevisionState, in LineageQueryIn
 			limitations["Unknown table column access "+e.ID+" cannot be expanded into field references"] = true
 		}
 	}
+	indexedMappings, indexedIncidences := 0, 0
 	for _, n := range state.Nodes {
 		if err := ctx.Err(); err != nil {
 			return nil, err
@@ -255,7 +278,23 @@ func projectLineage(ctx context.Context, state *RevisionState, in LineageQueryIn
 		if n.Kind != "field_mapping" {
 			continue
 		}
-		attrs, err := decodeLineageMapping(n.Attributes)
+		if state.Revision.SchemaVersion == EventsSchemaVersion {
+			if indexedMappings == lineageMaxExaminedMappings {
+				truncations["mapping_limit"] = true
+				break
+			}
+			refs, err := relationalArray(n.Attributes["sources"], MaxLineageSources)
+			if err != nil {
+				return nil, err
+			}
+			if indexedIncidences+len(refs)+1 > lineageMaxReferenceIncidences {
+				truncations["reference_limit"] = true
+				break
+			}
+			indexedMappings++
+			indexedIncidences += len(refs) + 1
+		}
+		attrs, err := decodeLineageMappingForSchema(n.Attributes, state.Revision.SchemaVersion)
 		if err != nil {
 			return nil, err
 		}
@@ -277,7 +316,7 @@ func projectLineage(ctx context.Context, state *RevisionState, in LineageQueryIn
 		}
 		slices.SortFunc(mappings, func(a, b lineageIndexedMapping) int { return strings.Compare(a.node.ID, b.node.ID) })
 	}
-	proofReader := lineageProofReader{ctx: ctx, nodes: nodes, evidence: evidence, contains: contains}
+	proofReader := lineageProofReader{ctx: ctx, nodes: nodes, evidence: evidence, contains: contains, edges: edges, handles: handles, schema: state.Revision.SchemaVersion}
 	visited := map[LineageValueRef]bool{in.Seed: true}
 	emitted := map[string]bool{}
 	queue := []lineageReach{{value: in.Seed, status: "explicit", reasons: map[string]bool{}}}
@@ -405,6 +444,9 @@ type lineageProofReader struct {
 	nodes    map[string]Node
 	evidence map[string]Evidence
 	contains map[string][]Edge
+	edges    map[string]Edge
+	schema   string
+	handles  map[string][]Edge
 }
 
 func (r lineageProofReader) record(p *lineageProof, ids []string, fresh *AssertionFreshness) error {
@@ -538,16 +580,30 @@ func (r lineageProofReader) mapping(m lineageIndexedMapping) (lineageProof, erro
 		if err := r.ctx.Err(); err != nil {
 			return p, err
 		}
-		if err := validateLineageValueTarget(ref, r.nodes); err != nil {
+		if err := validateLineageValueTargetForSchema(ref, r.nodes, r.edges, r.schema); err != nil {
 			p.status = runtimeWorseStatus(p.status, "unresolved")
 			p.add("unresolved_endpoint", true)
 			continue
+		}
+		if ref.Kind == "event_field" {
+			if err := r.eventRef(&p, ref); err != nil {
+				return p, err
+			}
 		}
 		n := r.nodes[ref.NodeID]
 		if err := r.node(&p, n, &ref); err != nil {
 			return p, err
 		}
 		if err := r.owner(&p, n); err != nil {
+			return p, err
+		}
+	}
+	if r.schema == EventsSchemaVersion && contextualLineageMapping(m.node.Kind, m.node.Attributes, false) {
+		if err := validateEventsLineageMapping(m.node, m.attrs, r.nodes, r.edges, r.handles); err != nil {
+			p.status = runtimeWorseStatus(p.status, "unresolved")
+			p.add("invalid_event_tuple", true)
+		}
+		if err := r.eventMapping(&p, m); err != nil {
 			return p, err
 		}
 	}

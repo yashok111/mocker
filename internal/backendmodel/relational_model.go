@@ -11,7 +11,7 @@ const (
 	MaxRelationalReferences     = 500
 )
 
-type relationalReference struct{ Path, Kind, Key, ID, HistoricalRevisionID string }
+type relationalReference struct{ Path, Kind, Key, ID, HistoricalRevisionID, RecordType string }
 type relationalScalar struct {
 	Status string         `json:"status"`
 	Value  jsontext.Value `json:"value,omitzero"`

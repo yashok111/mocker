@@ -58,6 +58,11 @@ const kinds = [
   "transaction",
   "api_field",
   "field_mapping",
+  "channel",
+  "message",
+  "consumer",
+  "job",
+  "event_field",
 ];
 const categories: Record<string, string> = {
   files: "Файлы",
@@ -212,8 +217,11 @@ function Inventory({ projectId, revisionId, schemaVersion }: Props) {
                   (kind) =>
                     (!["flow", "flow_step", "query", "transaction"].includes(kind) ||
                       schemaVersion === "3" ||
-                      schemaVersion === "4") &&
-                    (["2", "3", "4"].includes(schemaVersion ?? "") ||
+                      schemaVersion === "4" ||
+                      schemaVersion === "5") &&
+                    (!["channel", "message", "consumer", "job", "event_field"].includes(kind) ||
+                      schemaVersion === "5") &&
+                    (["2", "3", "4", "5"].includes(schemaVersion ?? "") ||
                       ![
                         "db_schema",
                         "table",

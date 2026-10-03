@@ -94,11 +94,11 @@ func TestCrossOwnerRelationalGuideSDKUsesAdvertisedPinnedSet(t *testing.T) {
 	for _, item := range []struct {
 		topic, owner, version string
 	}{
-		{topic: "backend-database", owner: "mocker-backend-database", version: "5"},
-		{topic: "backend-database-reference", owner: "mocker-backend-database", version: "5"},
-		{topic: "backend-model", owner: "mocker-backend-import", version: "5"},
-		{topic: "backend-recovery", owner: "mocker-backend-import", version: "5"},
-		{topic: "backend-profile-go-sql", owner: "mocker-backend-import", version: "5"},
+		{topic: "backend-database", owner: "mocker-backend-database", version: "6"},
+		{topic: "backend-database-reference", owner: "mocker-backend-database", version: "6"},
+		{topic: "backend-model", owner: "mocker-backend-import", version: "6"},
+		{topic: "backend-recovery", owner: "mocker-backend-import", version: "6"},
+		{topic: "backend-profile-go-sql", owner: "mocker-backend-import", version: "6"},
 	} {
 		t.Run(item.topic, func(t *testing.T) {
 			ownerIndex := slices.IndexFunc(capabilities.WorkflowVersions, func(w guide.Workflow) bool { return w.WorkflowID == item.owner })
@@ -127,7 +127,7 @@ func TestCrossOwnerRelationalGuideSDKUsesAdvertisedPinnedSet(t *testing.T) {
 			if out.ContentHash != fmt.Sprintf("sha256:%x", sha256.Sum256([]byte(out.Markdown))) {
 				t.Fatal("served topic body does not match its advertised hash")
 			}
-			if len(out.Topics) != 20 || !slices.Contains(out.Topics, item.topic) || !strings.HasPrefix(out.Markdown, "# ") {
+			if len(out.Topics) != 21 || !slices.Contains(out.Topics, item.topic) || !strings.HasPrefix(out.Markdown, "# ") {
 				t.Fatal("SDK served body/discovery is incomplete or carries skill frontmatter")
 			}
 		})

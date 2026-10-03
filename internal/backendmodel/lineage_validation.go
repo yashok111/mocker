@@ -23,6 +23,12 @@ func lineageText(raw jsontext.Value) error {
 	return nil
 }
 func validateLineageRef(raw jsontext.Value, persisted bool) error {
+	return validateLineageRefMode(raw, persisted, false)
+}
+func validateEventsLineageRef(raw jsontext.Value, persisted bool) error {
+	return validateLineageRefMode(raw, persisted, true)
+}
+func validateLineageRefMode(raw jsontext.Value, persisted, events bool) error {
 	m, err := relationalObject(raw)
 	if err != nil {
 		return err
@@ -38,6 +44,11 @@ func validateLineageRef(raw jsontext.Value, persisted bool) error {
 	case "port":
 		required = append(required, "collection", "portKey")
 	case "api_field":
+	case "event_field":
+		if !events {
+			return semantic("kind", "Event references require source5")
+		}
+		required = append(required, runtimeReferenceName("endpointKey", persisted), runtimeReferenceName("routeKey", persisted))
 	default:
 		return semantic("kind", "Unknown lineage value kind")
 	}
@@ -48,23 +59,23 @@ func validateLineageRef(raw jsontext.Value, persisted bool) error {
 	if !externalKey(v) || persisted && !ValidID(v) {
 		return semantic(key, "Value reference requires an external key or canonical UUID in the selected mode")
 	}
+	if err := validateLineageContextualRef(m, persisted); err != nil {
+		return err
+	}
 	if f, ok := m["facetKey"]; ok {
 		if err := lineageText(f); err != nil {
 			return err
 		}
 	}
-	if p, ok := m["portKey"]; ok {
-		s := runtimeString(p)
-		if len(s) < 1 || len(s) > 128 || strings.ContainsFunc(s, func(r rune) bool { return r < 33 || r > 126 }) {
-			return semantic("portKey", "Invalid opaque local port key")
-		}
-		if err := relationalEnum(m["collection"], "inputs", "outputs", "parameters", "results"); err != nil {
-			return err
-		}
-	}
-	return nil
+	return validateLineagePortRef(m)
 }
 func validateLineageAttributes(kind string, a map[string]jsontext.Value, edge, persisted bool) error {
+	return validateLineageAttributesMode(kind, a, edge, persisted, false)
+}
+func validateEventsLineageAttributes(kind string, a map[string]jsontext.Value, edge, persisted bool) error {
+	return validateLineageAttributesMode(kind, a, edge, persisted, true)
+}
+func validateLineageAttributesMode(kind string, a map[string]jsontext.Value, edge, persisted, events bool) error {
 	if !lineageSubject(kind, edge) {
 		return validateRuntimeAttributes(kind, a, edge, persisted)
 	}
@@ -72,6 +83,9 @@ func validateLineageAttributes(kind string, a map[string]jsontext.Value, edge, p
 	optional := []string{"description"}
 	if kind == "field_mapping" {
 		required = append(required, "sources", "destination", "transform")
+		if events {
+			optional = append(optional, "transport")
+		}
 	} else {
 		required = append(required, "direction", "location", "selector", "nativeType")
 		optional = append(optional, "responseStatus", "mediaType")
@@ -109,7 +123,7 @@ func validateLineageAttributes(kind string, a map[string]jsontext.Value, edge, p
 	}
 	seen := map[ImportLineageValueRef]bool{}
 	for _, raw := range append(slices.Clone(sources), a["destination"]) {
-		if err := validateLineageRef(raw, persisted); err != nil {
+		if err := validateLineageRefMode(raw, persisted, events); err != nil {
 			return err
 		}
 	}
@@ -120,11 +134,14 @@ func validateLineageAttributes(kind string, a map[string]jsontext.Value, edge, p
 		if persisted {
 			key = "nodeId"
 		}
-		ref := ImportLineageValueRef{Kind: runtimeString(m["kind"]), NodeKey: runtimeString(m[key]), FacetKey: runtimeString(m["facetKey"]), Collection: runtimeString(m["collection"]), PortKey: runtimeString(m["portKey"])}
+		ref := ImportLineageValueRef{Kind: runtimeString(m["kind"]), NodeKey: runtimeString(m[key]), FacetKey: runtimeString(m["facetKey"]), Collection: runtimeString(m["collection"]), PortKey: runtimeString(m["portKey"]), EndpointKey: runtimeString(m[runtimeReferenceName("endpointKey", persisted)]), RouteKey: runtimeString(m[runtimeReferenceName("routeKey", persisted)])}
 		if seen[ref] {
 			return semantic("sources", "Duplicate exact value reference")
 		}
 		seen[ref] = true
+	}
+	if err := validateLineageTransport(a, persisted); err != nil {
+		return err
 	}
 	tr, err := relationalObject(a["transform"])
 	if err != nil {
@@ -241,6 +258,51 @@ func validateAPIField(a map[string]jsontext.Value) error {
 	}
 	if err := runtimeScalar(a["nativeType"], false); err != nil {
 		return err
+	}
+	return nil
+}
+
+func validateLineageContextualRef(m map[string]jsontext.Value, persisted bool) error {
+	for _, member := range []string{runtimeReferenceName("endpointKey", persisted), runtimeReferenceName("routeKey", persisted)} {
+		if raw, ok := m[member]; ok {
+			value := runtimeString(raw)
+			if !externalKey(value) || persisted && !ValidID(value) {
+				return semantic(member, "Invalid contextual reference")
+			}
+		}
+	}
+	return nil
+}
+
+func validateLineageTransport(a map[string]jsontext.Value, persisted bool) error {
+	if raw, ok := a["transport"]; ok {
+		tr, err := relationalObject(raw)
+		if err != nil {
+			return err
+		}
+		keys := []string{runtimeReferenceName("emitsEdgeKey", persisted), runtimeReferenceName("deliveryEdgeKey", persisted)}
+		if err := relationalFields(tr, keys, nil); err != nil {
+			return err
+		}
+		for _, key := range keys {
+			v := runtimeString(tr[key])
+			if !externalKey(v) || persisted && !ValidID(v) {
+				return semantic(key, "Invalid transport edge reference")
+			}
+		}
+	}
+	return nil
+}
+
+func validateLineagePortRef(m map[string]jsontext.Value) error {
+	if p, ok := m["portKey"]; ok {
+		s := runtimeString(p)
+		if len(s) < 1 || len(s) > 128 || strings.ContainsFunc(s, func(r rune) bool { return r < 33 || r > 126 }) {
+			return semantic("portKey", "Invalid opaque local port key")
+		}
+		if err := relationalEnum(m["collection"], "inputs", "outputs", "parameters", "results"); err != nil {
+			return err
+		}
 	}
 	return nil
 }

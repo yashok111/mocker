@@ -105,7 +105,7 @@ func TestRelationalProfileInitialAndDefault(t *testing.T) {
 			}
 		})
 	}
-	if SchemaVersion != "1" || !slices.Equal(SupportedModelSchemaVersions(), []string{"1", "2", "3", "4"}) {
+	if SchemaVersion != "1" || !slices.Equal(SupportedModelSchemaVersions(), []string{"1", "2", "3", "4", "5"}) {
 		t.Fatal("foundation schema constant or supported versions changed")
 	}
 	if !slices.Equal(SupportedNodeKindsForProfile(GraphProfile), SupportedNodeKinds()) || !slices.Equal(SupportedEdgeKindsForProfile(GraphProfile), SupportedEdgeKinds()) {

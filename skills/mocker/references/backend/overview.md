@@ -6,8 +6,8 @@ metadata:
   workflowVersion: "1"
   requiredModelSchemaVersions: "[\"1\"]"
   requiredCapabilities: "[\"backend-projects\",\"backend-project-metadata\",\"backend-revisions\"]"
-  guideSetId: "sha256:2d798d65181489ad1c8c08cea728fd9da21f41c97ba295a5a1af742973b16cb1"
-  manifestHash: "sha256:2d798d65181489ad1c8c08cea728fd9da21f41c97ba295a5a1af742973b16cb1"
+  guideSetId: "sha256:6ba1f13bd68d7c1ffdc3022a548041ed825361f2bc71d44389357483655992e2"
+  manifestHash: "sha256:6ba1f13bd68d7c1ffdc3022a548041ed825361f2bc71d44389357483655992e2"
 ---
 
 # Backend project preparation
@@ -25,18 +25,18 @@ Select that complete workflow before import writes. This project-preparation
 procedure does not import sources. Import's backend-model/import-protocol/recovery/
 examples topics use its selected set and import owner identity; relational
 imports additionally load the database-reference topic through the supported
-database v5 owner in that same global set. Database inspection selects the
+database v6 owner in that same global set. Database inspection selects the
 independent database leaf or pinned backend-database entrypoint. Every shared
 topic is verified against its actual canonical owner manifest/tuple/contentHash;
 this backend-overview topic keeps the project-preparation identity. Project
 preparation still requires schema1, including its empty initial revision; it
 need not require schema2 to prepare a project. Database typed edits/proposals
-use the separately selected database5 workflow. Source flow/data-access questions
-select inspect5 at backend-inspect in this same set; ordinary inspection writes
-nothing. Source4 field lineage selects inspect5 with field-lineage-v1 and backend-field-lineage-query.
-Manual API links require inspect5, backend-api-artifact-pins and api-artifact-pins-v1;
+use the separately selected database6 workflow. Source flow/data-access questions
+select inspect6 at backend-inspect in this same set; ordinary inspection writes
+nothing. Source4 field lineage selects inspect6 with field-lineage-v1 and backend-field-lineage-query.
+Manual API links require inspect6, backend-api-artifact-pins and api-artifact-pins-v1;
 load its flow-reference contract before any authorized mutation. Backend impact,
-measured writer checks and jobs remain unavailable.
+measured writer checks and job execution remain unavailable.
 
 ## Before the first write
 
@@ -107,7 +107,7 @@ known compare-and-swap conflict, re-read and reconcile, then issue the newly
 formed command with a new key. A receipt replay returns the original result,
 which may be older than current state; read the project again for its live state.
 
-Saved editor projections use inspect5 with backend-editor-projections and
+Saved editor projections use inspect6 with backend-editor-projections and
 backend-editor-artifacts-v1. Load backend-editor-projections for exact historic
 sequence/state/rule/EventModel reads and generic pin changes. Manual associations
 and authored EventModel do not establish source event evidence or execution.

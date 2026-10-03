@@ -328,9 +328,9 @@ See `design.md` for limits and the complete workflow.
 
 ## Backend saved views
 
-Select inspect5 for source Flow or database5 for source/proposal Database in one
+Select inspect6 for source Flow or database6 for source/proposal Database in one
 verified guideSetId/manifestHash. Require backend-saved-views and saved-view-v1;
-import5 remains the source import owner. Saving presentation requires an explicit
+import6 remains the source import owner. Saving presentation requires an explicit
 request and does not import/apply/execute source, SQL or migrations.
 
 | Tool | Purpose | Input |
@@ -343,18 +343,18 @@ request and does not import/apply/execute source, SQL or migrations.
 Reopen resolves saved target/state before model reads. Share viewId/viewVersion;
 failed saved pins never fall back to heads.409 preserves changes and needs
 explicit reload/reconcile or save-as-new. See backend-flow-reference under
-inspect5 and backend-database-reference under database5 for complete examples.
+inspect6 and backend-database-reference under database6 for complete examples.
 
-## Backend source4 field lineage
+## Backend source4/5 field lineage
 
-Import5 owns source4 field-lineage-v1 import; inspect5 owns pinned lineage reads;
-database5 routes column actions to inspect5. Select compatible complete owners
+Import6 owns source4 field-lineage-v1 import; inspect6 owns pinned lineage reads;
+database6 routes column actions to inspect6. Select compatible complete owners
 in one verified guideSetId/manifestHash. Existing source1–3 operations, DB
 proposals and saved-view-v1 retain their established contracts.
 
 | Tool | Purpose | Input |
 |---|---|---|
-| query_backend_lineage | Read-only/idempotent explicit static dependencies | projectId*, revisionId* (source4), seed* (full ValueRef), direction* forward/reverse, maxDepth1–32/default8, limit1–100/default50, cursor |
+| query_backend_lineage | Read-only/idempotent explicit static dependencies | projectId*, revisionId* (source4/5), seed* (full ValueRef), direction* forward/reverse, maxDepth1–32/default8, limit1–100/default50, cursor |
 
 Column seed needs nodeId+facetKey; port needs nodeId+collection+opaque portKey;
 api_field needs nodeId. Import refs instead use nodeKey. No proposal or mixed
@@ -363,19 +363,19 @@ mapping cards preserve all ordered sources, destination, transform/redaction,
 evidence and explicit boundaries. Zero-input unknown is not constant. Empty
 results never prove no dependency. Pagination differs from global traversal
 truncation and source coverage. No source code/SQL execution, latest fallback or
-implicit external API association is provided; load inspect5 flow/analysis topics.
+implicit external API association is provided; load inspect6 flow/analysis topics.
 
-## Exact backend API artifact associations (inspect5)
+## Exact backend API artifact associations (inspect6)
 
 Require backend-api-artifact-pins and api-artifact-pins-v1 in viewSchemaVersions.
-Read backend-flow-reference under its complete inspect5 owner for all four tools:
+Read backend-flow-reference under its complete inspect6 owner for all four tools:
 query_backend_api_artifacts, preview_backend_api_pins, apply_backend_api_pins and
 get_api_artifact_snapshot. Associations are manual, use exact decimal string API
 IDs and immutable raw hashes, and never select latest implicitly.
 
 ## Saved editor projections and generic artifact pins
 
-Select inspect5 and verify backend-editor-projections/backend-editor-artifacts-v1;
+Select inspect6 and verify backend-editor-projections/backend-editor-artifacts-v1;
 load `backend-editor-projections` from its advertised immutable set.
 
 | Tool | Input and behavior |
@@ -389,3 +389,19 @@ The old API-specific query/preview/apply/snapshot tools remain available. Generi
 set preserves editors when the last API link is removed; explicit remove clears
 both collections. Unsupported saved content remains readable without becoming
 bindable. No projection/snapshot read writes owners or executes authored rules.
+
+## Backend source5 events (inspect6)
+
+Select complete inspect6/source5/events-service-v1 with backend-events-query;
+import6 owns initial/whole-scope source import and exact4→5 extension. Load
+backend-events before route/job/service-call or contextual field navigation.
+
+| Tool | Required pins | Views/selectors | Output |
+|---|---|---|---|
+| query_backend_events | projectId, revisionId | routes with optional seedNodeId; jobs/service_calls with optional serviceId; limit1–100/default50,cursor | Exact hash/policy/selectors, typed route/job/service_call/boundary, source witnesses, coverage, limits/counts/truncation. Read only/idempotent. |
+
+REST POST /api/backend-projects/{id}/events/query is queryBackendEvents. Preserve
+full cursor identity and cancel/discard obsolete replies. >20000edge admission
+returns pinned empty diagnostic; complete means enumeration, never delivery.
+Event lineage seeds carry nodeId+endpointId+edge routeId on source5; explicit
+transport mappings alone join producer/consumer fields. No job executes.

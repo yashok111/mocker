@@ -3,12 +3,12 @@ name: mocker-backend-database
 description: Inspect a pinned source-backed PostgreSQL or SQLite database model, ordered columns/FKs, facet drift, coverage and evidence in mocker. Use for database/ER/schema inspection; import uses mocker-backend-import and design typed NULL/NOT NULL and FK proposals with pinned preview/apply and unverified criteria.
 metadata:
   workflowId: "mocker-backend-database"
-  workflowVersion: "5"
-  requiredModelSchemaVersions: "[\"2\",\"3\",\"4\"]"
+  workflowVersion: "6"
+  requiredModelSchemaVersions: "[\"2\",\"3\",\"4\",\"5\"]"
   requiredViewSchemaVersions: "[\"proposal-relational-v1\",\"saved-view-v1\"]"
-  requiredCapabilities: "[\"backend-projects\",\"backend-revisions\",\"backend-graph-query\",\"backend-database-query\",\"backend-database-er\",\"backend-db-proposals\",\"backend-db-typed-edits\",\"backend-flow-query\",\"backend-data-access-query\",\"backend-saved-views\",\"backend-field-lineage-query\"]"
-  guideSetId: "sha256:2d798d65181489ad1c8c08cea728fd9da21f41c97ba295a5a1af742973b16cb1"
-  manifestHash: "sha256:2d798d65181489ad1c8c08cea728fd9da21f41c97ba295a5a1af742973b16cb1"
+  requiredCapabilities: "[\"backend-projects\",\"backend-revisions\",\"backend-graph-query\",\"backend-database-query\",\"backend-database-er\",\"backend-db-proposals\",\"backend-db-typed-edits\",\"backend-flow-query\",\"backend-data-access-query\",\"backend-saved-views\",\"backend-field-lineage-query\",\"backend-events-query\"]"
+  guideSetId: "sha256:6ba1f13bd68d7c1ffdc3022a548041ed825361f2bc71d44389357483655992e2"
+  manifestHash: "sha256:6ba1f13bd68d7c1ffdc3022a548041ed825361f2bc71d44389357483655992e2"
 ---
 
 # Pinned database inspection and proposals
@@ -22,31 +22,28 @@ or who reads a column. This leaf needs no neighboring root package.
 
 ## Select and verify the read procedure
 
-Call `get_server_config` and `get_backend_capabilities`. Select an advertised
-supported `mocker-backend-database` workflow5 with schemas2/3/4, database-query/ER,
-source flow/access reads and
-all its required capabilities, backend-saved-views, and proposal-relational-v1/saved-view-v1 view support. Tool-name matches or a schema1-only set cannot
-supply relational inspection. Decode installed schema/capability metadata from
-its JSON-list strings. Use local text only on an exact workflowId/version/set/
-manifestHash match and matching topic contentHash. Otherwise fetch the complete
-selected server entrypoint using `get_guide {topic:selected.entrypoint,
-guideSetId:selected.guideSetId}`, verify its tuple/contentHash and use its entire
-procedure. Record identity and instruction source. Missing/older/newer local
-metadata all require this compatible server fallback. If none exists, report the
-unavailable relational inspection and continue only independent supported reads.
-Do not create an import to turn an inspection request into a write.
+Call `get_server_config` and `get_backend_capabilities`. Select an advertised supported
+`mocker-backend-database` workflow6 with schemas2/3/4/5, database-query/ER, source flow/access reads
+and all its required capabilities, backend-saved-views, and proposal-relational-v1/saved-view-v1
+view support. Tool-name matches or a schema1-only set cannot supply relational inspection. Decode
+installed schema/capability metadata from its JSON-list strings. Use local text only on an exact
+workflowId/version/set/ manifestHash match and matching topic contentHash. Otherwise fetch the
+complete selected server entrypoint using `get_guide {topic:selected.entrypoint,
+guideSetId:selected.guideSetId}`, verify its tuple/contentHash and use its entire procedure. Record
+identity and instruction source. Missing/older/newer local metadata all require this compatible
+server fallback. If none exists, report the unavailable relational inspection and continue only
+independent supported reads. Do not create an import to turn an inspection request into a write.
 
-Load `backend-database-reference` from the same guideSetId and verify its database
-owner tuple/contentHash against the selected manifest. Load `backend-model` when
-record/freshness semantics are needed and `backend-recovery` on read failures,
-resume or selector changes. Those two topics are canonically import-owned:
-explicitly select the supported advertised `mocker-backend-import` v5 identity
-with that same global guideSetId/manifestHash, check its declared requirements,
-and verify each returned actual owner tuple/contentHash against its manifest.
-This selects a reference owner, without starting import writes. Never assert that
-an import-owned topic belongs to database v5. Unknown sets fail; do not substitute
-latest or read a neighboring root directory. No model/protocol/example bulk load
-is required for a straightforward already-pinned table inspection.
+Load `backend-database-reference` from the same guideSetId and verify its database owner
+tuple/contentHash against the selected manifest. Load `backend-model` when record/freshness
+semantics are needed and `backend-recovery` on read failures, resume or selector changes. Those two
+topics are canonically import-owned: explicitly select the supported advertised
+`mocker-backend-import` v6 identity with that same global guideSetId/manifestHash, check its
+declared requirements, and verify each returned actual owner tuple/contentHash against its manifest.
+This selects a reference owner, without starting import writes. Never assert that an import-owned
+topic belongs to database v6. Unknown sets fail; do not substitute latest or read a neighboring root
+directory. No model/protocol/example bulk load is required for a straightforward already-pinned
+table inspection.
 
 ## Ordered inspection
 
@@ -79,8 +76,8 @@ is required for a straightforward already-pinned table inspection.
    between explicit known facets and separate native-definition differences.
    Missing selected-facet proofs are limitations, not absence. Canvas limits or
    one query page do not prove full schema coverage.
-6. For imported readers/writers select inspect5 in this same set, verify its
-   schema3/4/profile/capabilities and flow-reference/analysis topics, then page
+6. For imported readers/writers select inspect6 in this same set, verify its
+   schema3/4/5/profile/capabilities and flow-reference/analysis topics, then page
    query_backend_flow view:accesses at this exact source revision and dataNodeId.
    Schema2 flow reads are unavailable. Whole-table unknown-column accesses are
    possible, never confirmed column accesses. Open each query/witness proof;
@@ -88,12 +85,11 @@ is required for a straightforward already-pinned table inspection.
 
 ## Typed proposal procedure
 
-Before the first design write select database workflow5, exact guideSetId and
-manifestHash, source schemas2/3/4, view `proposal-relational-v1`, and both
-`backend-db-proposals` and `backend-db-typed-edits`. An inspection-only workflow1
-or matching tool names is insufficient. If local metadata differs, fetch and
-follow the entire compatible server workflow. If no compatible set exists,
-perform supported reads and report that proposal writes are unavailable.
+Before the first design write select database workflow6, exact guideSetId and manifestHash, source
+schemas2/3/4/5, view `proposal-relational-v1`, and both `backend-db-proposals` and
+`backend-db-typed-edits`. An inspection-only workflow1 or matching tool names is insufficient. If
+local metadata differs, fetch and follow the entire compatible server workflow. If no compatible set
+exists, perform supported reads and report that proposal writes are unavailable.
 
 1. Inspect the chosen immutable source baseline, repository, datastore and facet
    using the ordered reads above. Read existing `list_backend_proposals` and
@@ -125,76 +121,76 @@ perform supported reads and report that proposal writes are unavailable.
    move the baseline. Data/backfill, writers, uniqueness/orphans/actions and the
    migration plan are unverified requirements, never executed verification.
 
-Load `backend-examples` only when needed, under its actual import5 owner in the
-same selected global set. After restart or server update renegotiate before new
-writes while retaining existing request/key/checkpoint. On uncertain create/apply
-retry the exact request/key at most three times with 1/2/4-second backoff, then
-save the request and pins as a recovery checkpoint. Never guess success. Receipt
-replay returns the original response even after later saves. On CAS conflict
-reread, reconcile commands explicitly and preview again with a new apply key.
-Replacing only expectedVersion is forbidden. Historical cursor continuation is
-invalidated by a later save; restart the history page rather than mixing drafts.
+Load `backend-examples` only when needed, under its actual import6 owner in the same selected global
+set. After restart or server update renegotiate before new writes while retaining existing
+request/key/checkpoint. On uncertain create/apply retry the exact request/key at most three times
+with 1/2/4-second backoff, then save the request and pins as a recovery checkpoint. Never guess
+success. Receipt replay returns the original response even after later saves. On CAS conflict
+reread, reconcile commands explicitly and preview again with a new apply key. Replacing only
+expectedVersion is forbidden. Historical cursor continuation is invalidated by a later save; restart
+the history page rather than mixing drafts.
 
-Proposal flow navigation returns to its exact source base revisionId, with no
-proposal selector on query_backend_flow. Imported scoped accesses do not verify
-all writers or existing data and cannot demonstrate proposed runtime behavior.
-Ready/rebase, live collection, measured checks, impact and provider
-migration are unavailable. Report those boundaries
-without creating jobs or using import/project commands as a schema edit engine.
+Proposal flow navigation returns to its exact source base revisionId, with no proposal selector on
+query_backend_flow. Imported scoped accesses do not verify all writers or existing data and cannot
+demonstrate proposed runtime behavior. Ready/rebase, live collection, measured checks, impact and
+provider migration are unavailable. Report those boundaries without creating jobs or using
+import/project commands as a schema edit engine.
 
-All reads retain exact int64 tokens. A client that cannot preserve an integer
-must report precision failure instead of rounding and using it. Source cardinality
-is source rows per target row; target cardinality is target rows per source row.
-For nondeferrable orders.user_id NOT NULL → users.id PK, established source
-semantics may give target `{min:1,max:"1"}` and source `{min:0,max:"many"}`:
-every user need not have an order. Each minimum and maximum has an independent
-proof and basis. Unknown MATCH or deferrability may prevent min1 while a complete
-current explicit unique key still proves max1. A known nullable source under
-MATCH SIMPLE can prove min0 despite another unknown nullable value.
-Missing/inferred/stale proof cannot confirm the affected bound. A join table
-remains a table with its FKs.
+All reads retain exact int64 tokens. A client that cannot preserve an integer must report precision
+failure instead of rounding and using it. Source cardinality is source rows per target row; target
+cardinality is target rows per source row. For nondeferrable orders.user_id NOT NULL → users.id PK,
+established source semantics may give target `{min:1,max:"1"}` and source `{min:0,max:"many"}`:
+every user need not have an order. Each minimum and maximum has an independent proof and basis.
+Unknown MATCH or deferrability may prevent min1 while a complete current explicit unique key still
+proves max1. A known nullable source under MATCH SIMPLE can prove min0 despite another unknown
+nullable value. Missing/inferred/stale proof cannot confirm the affected bound. A join table remains
+a table with its FKs.
 
 ## Save and reopen a Database presentation when requested
 
-Require database5, `backend-saved-views`, `saved-view-v1` and the existing source/
-proposal versions before writes. Use the complete example/contract in
-`backend-database-reference` under this database5 owner. List source/proposal
-Database views, create from revisionId or the exact proposal target, and retain
-all returned pins. A saved proposal retains its immutable proposalRevisionId,
-source base, desired intent, unverified checks and base-outdated warning after
-source or draft advancement. Read the saved version first and only then issue
-Database/graph/node reads from that target. Never initialize it from current draft
-or substitute another scope when the saved read fails.
+Require database6, `backend-saved-views`, `saved-view-v1` and the existing source/ proposal versions
+before writes. Use the complete example/contract in `backend-database-reference` under this
+database6 owner. List source/proposal Database views, create from revisionId or the exact proposal
+target, and retain all returned pins. A saved proposal retains its immutable proposalRevisionId,
+source base, desired intent, unverified checks and base-outdated warning after source or draft
+advancement. Read the saved version first and only then issue Database/graph/node reads from that
+target. Never initialize it from current draft or substitute another scope when the saved read
+fails.
 
-The whole submitted presentation includes search, relationshipTableId, selection
-(including designed FK edges), manual positions and real schema collapsed IDs.
-Saving does not apply proposal commands, mutate source or verify the database.
-Reopen starts the first query page and retains other-page coordinates/selection.
-Sharing uses viewId plus viewVersion. Save appends using that opened version's
-expectedVersion; retain exact input/key for uncertain retries.409 keeps local
-changes and requires explicit reload or save-as-new; never update only CAS.
-Changing kind/target requires a new view. Preview/layout/collapse do not invent
-relationships or evidence. Ordinary-agent acceptance and live agent evaluation
-remain deferred; public SDK/REST examples are verification of the interface.
+The whole submitted presentation includes search, relationshipTableId, selection (including designed
+FK edges), manual positions and real schema collapsed IDs. Saving does not apply proposal commands,
+mutate source or verify the database. Reopen starts the first query page and retains other-page
+coordinates/selection. Sharing uses viewId plus viewVersion. Save appends using that opened
+version's expectedVersion; retain exact input/key for uncertain retries.409 keeps local changes and
+requires explicit reload or save-as-new; never update only CAS. Changing kind/target requires a new
+view. Preview/layout/collapse do not invent relationships or evidence. Ordinary-agent acceptance and
+live agent evaluation remain deferred; public SDK/REST examples are verification of the interface.
 
-## Column lineage and API links delegate to inspect5
+## Column lineage and API links delegate to inspect6
 
-Database5 supports source2/3/4 with unchanged proposal/saved-view contracts.
-For lineage select inspect5 in this same guideSetId/manifestHash with source4,
-field-lineage-v1 and all inspect5 requirements. Verify its flow/analysis topics.
+Database6 supports source2/3/4/5 with unchanged proposal/saved-view contracts.
+For lineage select inspect6 in this same guideSetId/manifestHash with source4/5,
+field-lineage-v1 and all inspect6 requirements. Verify its flow/analysis topics.
 Pass exact `{kind:"column",nodeId,facetKey}` and source revision; reverse means
 origin, forward downstream. Preserve facet and unknown boundary target/actions.
-Follow inspect5's full query procedure; API links additionally require backend-api-artifact-pins and api-artifact-pins-v1. Source2/3
+Follow inspect6's full query procedure; API links additionally require backend-api-artifact-pins and api-artifact-pins-v1. Source2/3
 and proposals refuse it; source-base navigation does not prove designed behavior.
-No SQL/code execution or latest fallback. For saved editors load inspect5's
+No SQL/code execution or latest fallback. For saved editors load inspect6's
 backend-editor-projections with backend-editor-projections/backend-editor-artifacts-v1.
 ## Owner dependency requirements in this guide set
 
-Verify complete owners in the same guideSetId/manifestHash; lineage additionally requires source4/field-lineage-v1. Reference selection starts no writes.
+Verify complete owners in the same guideSetId/manifestHash; lineage additionally requires source4/5
+field-lineage-v1. Reference selection starts no writes.
 
 | Owner | Exact version | Model versions | View versions | Required capabilities |
 |---|---|---|---|---|
 | mocker-backend-project | 1 | 1 |  | backend-projects, backend-project-metadata, backend-revisions |
-| mocker-backend-import | 5 | 1,2,3,4 |  | backend-projects, backend-revisions, backend-graph-query, backend-source-import, backend-source-reconcile, backend-revision-compare, backend-relational-import, backend-database-query, backend-database-er, backend-runtime-flow-import, backend-flow-query, backend-data-access-query, backend-field-lineage-import, backend-field-lineage-query |
-| mocker-backend-database | 5 | 2,3,4 | proposal-relational-v1,saved-view-v1 | backend-projects, backend-revisions, backend-graph-query, backend-database-query, backend-database-er, backend-db-proposals, backend-db-typed-edits, backend-flow-query, backend-data-access-query, backend-saved-views, backend-field-lineage-query |
-| mocker-backend-inspect | 5 | 3,4 | saved-view-v1,api-artifact-pins-v1,backend-editor-artifacts-v1 | backend-projects, backend-revisions, backend-graph-query, backend-flow-query, backend-data-access-query, backend-saved-views, backend-field-lineage-query, backend-api-artifact-pins, backend-editor-projections |
+| mocker-backend-import | 6 | 1,2,3,4,5 |  | backend-projects, backend-revisions, backend-graph-query, backend-source-import, backend-source-reconcile, backend-revision-compare, backend-relational-import, backend-database-query, backend-database-er, backend-runtime-flow-import, backend-flow-query, backend-data-access-query, backend-field-lineage-import, backend-field-lineage-query, backend-events-import, backend-events-query |
+| mocker-backend-database | 6 | 2,3,4,5 | proposal-relational-v1,saved-view-v1 | backend-projects, backend-revisions, backend-graph-query, backend-database-query, backend-database-er, backend-db-proposals, backend-db-typed-edits, backend-flow-query, backend-data-access-query, backend-saved-views, backend-field-lineage-query, backend-events-query |
+| mocker-backend-inspect | 6 | 3,4,5 | saved-view-v1,api-artifact-pins-v1,backend-editor-artifacts-v1 | backend-projects, backend-revisions, backend-graph-query, backend-flow-query, backend-data-access-query, backend-saved-views, backend-field-lineage-query, backend-api-artifact-pins, backend-editor-projections, backend-events-query |
+
+Source5 column→event-field navigation delegates to inspect6/backend-events. Follow explicit source
+lineage mappings to the full event-field nodeId/endpointId/ routeId; select exact source
+routes/handler/Flow and retain transport boundaries. A proposal returns to its exact source baseline
+and establishes no delivery or execution. Source2/3 lineage remains unavailable; SavedView/proposal
+versions stay.

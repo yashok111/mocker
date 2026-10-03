@@ -1,8 +1,8 @@
 # Source flow model and pinned reads
 
-Canonical owner: `mocker-backend-inspect` workflow5. Select/verify this owner's
+Canonical owner: `mocker-backend-inspect` workflow6. Select/verify this owner's
 identity and contentHash in the same global guide set before using the topic.
-Source schema3/4 and `runtime-flow-v1` extend relational source records. They do
+Source schema3/4/5 and `runtime-flow-v1` extend relational source records. They do
 not describe runtime observation or the effect of a database proposal.
 
 ## Strict source records
@@ -72,7 +72,7 @@ entry/exit/context/parent/call/access references and all existing deletion gates
 
 ## query_backend_flow
 
-Required on every variant: projectId, exact source schema3/4 revisionId, view.
+Required on every variant: projectId, exact source schema3/4/5 revisionId, view.
 Optional limit/cursor retain exact pins. No proposal selector is accepted.
 
 | view | Selectors | Item array |
@@ -126,7 +126,7 @@ Page size defaults100/max500 and does not change traversal or witnesses.
 
 ## Pinned saved Flow views
 
-Require inspect5, `backend-saved-views` and document `saved-view-v1`. Four tools:
+Require inspect6, `backend-saved-views` and document `saved-view-v1`. Four tools:
 `list_backend_saved_views`, `create_backend_saved_view`, `get_backend_saved_view`,
 `save_backend_saved_view`. Read-only list/get are idempotent; create/save use
 retained idempotency keys. A SavedView is an immutable version with id/projectId,
@@ -180,16 +180,16 @@ transaction atomicity claim appears. Canvas caps200nodes/600edges are distinct
 from collapse and pagination. Preview is local and Save is disabled until Apply
 or Cancel; one-step undo restores coordinates independently of collapse.
 
-## query_backend_lineage (inspect5)
+## query_backend_lineage (inspect6)
 
-Require source4, field-lineage-v1 and backend-field-lineage-query in the selected
-inspect5 set. Existing flow/access reads remain source3/4; source1/2 refuse them.
+Require source4/5, field-lineage-v1 and backend-field-lineage-query in the selected
+inspect6 set. Existing flow/access reads remain source3/4/5; source1/2 refuse them.
 Lineage refuses source1–3 and proposals with422, rather than an empty answer.
 
 Input: projectId, exact revisionId, complete seed ValueRef, direction
 forward/reverse; maxDepth1–32/default8, limit1–100/default50 and optional cursor.
 ValueRefs are column {kind,nodeId,facetKey}, port
-{kind,nodeId,collection,portKey}, api_field {kind,nodeId}. Unknown/mixed/proposal
+{kind,nodeId,collection,portKey}, api_field {kind,nodeId}; source5 also event_field {kind,nodeId,endpointId,routeId}. Unknown/mixed/proposal
 members and malformed refs/options/cursors return400; missing project/revision/
 node returns404. Retain opaque portKey and collection, and never substitute latest.
 
@@ -223,12 +223,12 @@ revision/seed changes and discard mismatched late responses. Pin evidence,
 owner, column facet and exact port navigation to the same revision. Lineage
 panel state is transient; existing saved-view-v1 remains unchanged.
 
-## Manual exact API artifact associations (inspect5)
+## Manual exact API artifact associations (inspect6)
 
-Require the complete inspect5 workflow, feature `backend-api-artifact-pins` and
+Require the complete inspect6 workflow, feature `backend-api-artifact-pins` and
 contract `api-artifact-pins-v1` advertised in `viewSchemaVersions`. This contract
-is separate from source model1–4 and provider profiles; mutations require an
-imported source4 baseline. A question authorizes reads only. Select the source
+is separate from source model1–5 and provider profiles; mutations require an
+imported source4/5 baseline. A question authorizes reads only. Select the source
 `http_operation` or `api_field` UUID, API design, immutable API revision and
 selector manually. Names, paths, types, imported structural selectors and lineage
 never establish correspondence automatically. One source UUID belongs to at most
@@ -353,7 +353,7 @@ vector limits. Narrow the request on 413.
 |---|---|
 |400 backend_invalid | Fix strict input, IDs, selector variant or source kind; no write. |
 |404 backend_not_found | Missing/foreign backend baseline; retain historical intent. Snapshot uses404 not_found for missing/foreign owner revision; its owner validation is400 design_invalid. |
-|422 backend_api_pins_unsupported | Mutations require imported source4; supported historical reads remain available. |
+|422 backend_api_pins_unsupported | Mutations require imported source4/5; supported historical reads remain available. |
 |422 backend_api_pins_blocked | Read diagnostics; explicit repair/removal, then new preview. Truncation diagnostic is backend_api_diff_truncated. |
 |409 backend_version_conflict / backend_api_pins_base_conflict | Preserve intent; explicitly reread project/base and repreview before a new attempt. |
 |409 backend_api_pins_hash_conflict | Candidate/raw artifact changed; explicitly repreview. |
@@ -428,6 +428,20 @@ The API-specific commands above retain legacy API-only v1 behavior. For a tagged
 backend-editor-artifacts-v1 context, API sets preserve the complete editor roster
 and shared revision; whole-group removal refuses existing editors. To remove
 the last API link while retaining editors use generic set_artifact_pin with
-apiBindings:[] and the complete retained editorBindings. Select inspect5 with
+apiBindings:[] and the complete retained editorBindings. Select inspect6 with
 backend-editor-projections and load backend-editor-projections for full replacement,
 raw snapshot/hash policies, linked/copy isolation and all generic budgets.
+
+## Source5 Flow entrypoints and event lineage
+
+Consumer/job entrypoints and explicit call-step→http_operation→handles→owned
+flow are available on source5. Events routes/jobs/service_calls uses
+query_backend_events and backend-events under inspect6; retain exact pinned
+IDs and unknown external/dispatch boundaries. Flow policy runtime-flow-reachability-v2
+applies to source5; source3/4 retains its advertised v1 policy. Contextual field
+lineage uses field-lineage-traversal-v2 only on5; source4 remains v1. Each event
+seed includes full nodeId+endpointId+EDGE routeId, and each cross-endpoint
+transport requires explicit emits+delivery pair proof. Cancel old reads and
+check the complete response pin/hash/policy/seed before showing late results.
+SavedView document and Flow/database unions remain saved-view-v1; Events
+selection is transient. Use backend-events for full budgets and gap workflow.

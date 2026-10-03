@@ -1,11 +1,12 @@
 # Source-backed graph model
 
 
-This topic belongs to `mocker-backend-import` v5. Pin it to the selected global
+This topic belongs to `mocker-backend-import` v6. Pin it to the selected global
 guideSetId and verify the import owner tuple/contentHash, including when database
-or inspect5 loads it as a shared reference. Schema1 remains the foundation format;
-schema2 is relational and schema3 adds typed source flow/query/access records; source4 adds explicit field lineage.
-Old immutable schema1/2/3 bytes/UUIDs/hashes/receipts keep their interpretation.
+or inspect6 loads it as a shared reference. Schema1 remains the foundation format;
+schema2 is relational and schema3 adds typed source flow/query/access records; source4 adds explicit field lineage; source5 adds event/job/service records and
+contextual message-field lineage.
+Old immutable schema1/2/3/4 bytes/UUIDs/hashes/receipts keep their interpretation.
 Model schema `"1"`, profile
 `foundation-graph-v1`, supports the foundation shapes below.
 Provider assertions and evidence are inspectable; successful graph validation
@@ -119,7 +120,7 @@ whole-repository combined graph under the same sole provider, not one provider
 per SQL/ORM facet. Provider profiles are exactly foundation plus relational.
 A proven SQL/ORM match shares one stable subject; names alone never merge objects.
 For exact fields and ER semantics load `backend-database-reference` from the same
-set after selecting/verifying the supported database v5 owner identity.
+set after selecting/verifying the supported database v6 owner identity.
 
 A facet is a stable map entry keyed by facetKey (1–200 printable characters),
 with sourceKind sql/orm/migration, dialect postgresql/sqlite, analysisStatus
@@ -192,7 +193,7 @@ source schema2 baseline. It is never import data or source schema3. Shared reads
 select exclusive source revisionId or exact proposal/proposalRevisionId. Keep
 sourceRecord, desired effectiveFacet, propertyOrigins and unverified criteria
 separate. New designed objects have no sourceRecord or source evidence. Read the
-verified database5 reference for commands, projection and ER assumptions. Import5
+verified database6 reference for commands, projection and ER assumptions. Import6
 continues to mutate only source snapshots with its original receipts and CAS.
 
 ## Source4 explicit field lineage
@@ -248,7 +249,7 @@ selector and forbids mediaType; header names are lowercase HTTP tokens. Unknown
 status/media is a gap, never guessed identity. Operation+direction+location+
 selector+status+media is unique (≤500fields/operation), while stable UUID binding
 uses the provider external key. Shape membership does not establish mapping.
-Manual external API associations use inspect5 and api-artifact-pins-v1. They
+Manual external API associations use inspect6 and api-artifact-pins-v1. They
 freeze api_design artifact/revision decimal strings, raw contentHash and selected
 object refs separately from imported source API fields; see backend-flow-reference.
 
@@ -261,9 +262,40 @@ without claiming behavioral impact; old pinned revisions remain readable.
 
 ## Saved editor content alongside source4
 
-Inspect5 owns backend-editor-projections and the tagged context contract
-backend-editor-artifacts-v1. Source models remain schema1–4/store19; authored
+Inspect6 owns backend-editor-projections and the tagged context contract
+backend-editor-artifacts-v1. Source models span schema1–5/store19; authored
 sequence/state/rule/EventModel content does not introduce source event records.
 The editor topic defines exact owner/object/source identities, separate envelope/
 raw/authored hash policies, qualified origin/copy semantics and independent
 completeness. Load it from the same selected global set before generic pin work.
+
+## Source5 events-service-v1
+
+Initial source5 requires exactly foundation+relational+runtime+lineage+events.
+Only explicit4→5 field-lineage-v1→events-service-v1 whole-scope reconcile extends
+a source base; same5→5 retains identity, and source1–3 jumps/downgrades fail.
+Old profile strict decoders and serialized rows/hashes/receipts remain exact.
+Nodes channel/message/consumer/job/event_field and flow_step stepKind emit use
+analysisStatus/gaps, exact ownership/contains and analyzed member hash/physical
+line proof. Channel protocol/address/scope are known/unknown scalars; message
+fieldInventory complete/partial/unknown; consumer/job dispatchStatus and reason;
+job trigger cron/interval/manual/unknown; event_field section payload/headers/key,
+structural property/items path and nativeType known/unknown. Field max500 per
+message; dispatch max50 known handlers plus one unresolved remainder.
+Relations emits(deliveryStatus/channelKey), delivered_to(messageKey/group/condition/
+deliveryStatus), retries(messageKey/reason/delay/maxAttempts), dead_letters
+(messageKey/reason) use Keys at import and IDs persisted. Source5 calls can
+explicitly target a remote http_operation; names/URLs/methods create no target.
+Unresolved targets retain expectedKind/reason/searchScope; source proves no delivery.
+
+ValueRef event_field is {kind,nodeId,endpointId,routeId}; import uses nodeKey/
+endpointKey/routeKey, and route resolves an EDGE. Full equality includes all
+three IDs. Serialization/deserialization mappings use exact emit/consumer flow
+context; separate consumer-owned transport mapping declares emitsEdgeKey/
+deliveryEdgeKey (IDs persisted), exact matching message/channel tuple and
+routeIds. Matching field schemas create no transport. Nested node/edge reference
+resolution, deletion closure and retained staleness apply. Stale/unknown/unresolved
+route proof blocks traversal; source4 rejects these new refs/transport.
+For reads select inspect6/backend-events in the same guide set and verify all
+owner requirements; source5 remains eligible for inherited Database/Flow/lineage/
+proposals/SavedView and pin operations without changing their document versions.

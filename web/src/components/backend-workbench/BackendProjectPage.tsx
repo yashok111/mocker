@@ -40,6 +40,7 @@ import { BackendRevisionCompare } from "./BackendRevisionCompare";
 import { BackendImportReview } from "./BackendImportReview";
 import { BackendDatabase } from "./BackendDatabase";
 import { BackendFlow } from "./BackendFlow";
+import { BackendEvents } from "./BackendEvents";
 import { usePinnedValue, type BackendSourcePin } from "./backendFlowReads";
 import { BackendSavedViews } from "./BackendSavedViews";
 import { BackendSavedViewContext, savedViewSourcePin } from "./backendSavedViewState";
@@ -247,14 +248,14 @@ function BackendProjectDetail({
     },
   );
   const revision = revisionQuery.data?.status === 200 ? revisionQuery.data.data : undefined;
-  if (revision && ["3", "4"].includes(revision.schemaVersion) && selectedRevisionId === null) {
+  if (revision && ["3", "4", "5"].includes(revision.schemaVersion) && selectedRevisionId === null) {
     setSelectedRevisionId(revision.id);
     setPin({ ...pin, revisionId: revision.id });
   }
   useEffect(() => {
     if (
       revision &&
-      ["3", "4"].includes(revision.schemaVersion) &&
+      ["3", "4", "5"].includes(revision.schemaVersion) &&
       !sourcePin?.revisionId &&
       pin.revisionId === revision.id
     )
@@ -560,20 +561,20 @@ function BackendProjectDetail({
               )}
               {revision && (
                 <>
-                  {revision.schemaVersion === "4" && (
+                  {["4", "5"].includes(revision.schemaVersion) && (
                     <>
                       <BackendAPIArtifacts projectId={projectId} revisionId={revision.id} />
                       <BackendArtifactProjections projectId={projectId} revisionId={revision.id} />
                     </>
                   )}
-                  {["2", "3", "4"].includes(revision.schemaVersion) && (
+                  {["2", "3", "4", "5"].includes(revision.schemaVersion) && (
                     <BackendDatabase
                       projectId={projectId}
                       revisionId={revision.id}
                       repositoryId={project.repositories[0]?.id}
                       pin={pin}
                       onFlowNavigate={
-                        ["3", "4"].includes(revision.schemaVersion)
+                        ["3", "4", "5"].includes(revision.schemaVersion)
                           ? (value) => {
                               navigateSource(value);
                               requestAnimationFrame(() =>
@@ -590,7 +591,22 @@ function BackendProjectDetail({
                       }}
                     />
                   )}
-                  {["3", "4"].includes(revision.schemaVersion) && (
+                  {revision.schemaVersion === "5" && (
+                    <BackendEvents
+                      projectId={projectId}
+                      revisionId={revision.id}
+                      semanticHash={revision.semanticHash}
+                      onFlowNavigate={(value) => {
+                        navigateSource(value);
+                        requestAnimationFrame(() =>
+                          document
+                            .querySelector<HTMLElement>('[aria-label="Flow исходников"] h2')
+                            ?.focus(),
+                        );
+                      }}
+                    />
+                  )}
+                  {["3", "4", "5"].includes(revision.schemaVersion) && (
                     <BackendFlow
                       projectId={projectId}
                       revisionId={revision.id}

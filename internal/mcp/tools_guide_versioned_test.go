@@ -4,9 +4,10 @@ import (
 	"crypto/sha256"
 	"encoding/json/v2"
 	"fmt"
-	"github.com/yashok111/mocker/internal/guide"
 	"strings"
 	"testing"
+
+	"github.com/yashok111/mocker/internal/guide"
 )
 
 func TestGetGuideSelection(t *testing.T) {
@@ -36,7 +37,7 @@ func TestStandaloneImportReferencesThroughPinnedMCP(t *testing.T) {
 			t.Fatal(message)
 		}
 		wantHash := fmt.Sprintf("sha256:%x", sha256.Sum256([]byte(out.Markdown)))
-		if out.WorkflowID != "mocker-backend-import" || out.WorkflowVersion != "5" || out.GuideSetID != guide.CurrentGuideSetID() || out.ManifestHash != guide.CurrentGuideSetID() || out.ContentHash != wantHash {
+		if out.WorkflowID != "mocker-backend-import" || out.WorkflowVersion != "6" || out.GuideSetID != guide.CurrentGuideSetID() || out.ManifestHash != guide.CurrentGuideSetID() || out.ContentHash != wantHash {
 			t.Fatalf("pinned topic %s: %#v", topic, out)
 		}
 	}
@@ -73,7 +74,7 @@ func TestStandaloneImportTopicDiscovery(t *testing.T) {
 		if tool.Name != "get_guide" {
 			continue
 		}
-		for _, topic := range []string{"backend-import", "backend-model", "backend-import-protocol", "backend-recovery", "backend-examples"} {
+		for _, topic := range []string{"backend-import", "backend-model", "backend-import-protocol", "backend-recovery", "backend-examples", "backend-events"} {
 			if !strings.Contains(tool.Description, topic) || !strings.Contains(tool.InputSchema.Properties["topic"].Description, topic) {
 				t.Errorf("guide discovery omits %s", topic)
 			}
@@ -134,6 +135,8 @@ func TestGuideRequiredCapabilitiesHaveMCPTools(t *testing.T) {
 		"backend-data-access-query":    {"query_backend_flow"},
 		"backend-field-lineage-import": {"begin_backend_import", "put_backend_import_batch", "preview_backend_import", "commit_backend_import"},
 		"backend-field-lineage-query":  {"query_backend_lineage"},
+		"backend-events-import":        {"begin_backend_import", "put_backend_import_batch", "preview_backend_import", "commit_backend_import"},
+		"backend-events-query":         {"query_backend_events"},
 		"backend-editor-projections":   {"query_backend_artifacts", "preview_backend_artifact_pins", "apply_backend_artifact_pins", "get_design_scenario_artifact_snapshot"},
 		"backend-api-artifact-pins":    {"query_backend_api_artifacts", "preview_backend_api_pins", "apply_backend_api_pins", "get_api_artifact_snapshot"},
 	}
@@ -166,7 +169,7 @@ func TestObsoleteImportGuideSetDoesNotSubstituteV4(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if out.WorkflowVersion != "5" || out.WorkflowID != "mocker-backend-import" || out.GuideSetID != guide.CurrentGuideSetID() {
+	if out.WorkflowVersion != "6" || out.WorkflowID != "mocker-backend-import" || out.GuideSetID != guide.CurrentGuideSetID() {
 		t.Fatalf("current import guide identity: %#v", out)
 	}
 }

@@ -116,6 +116,24 @@ func validateLineageValueTarget(ref LineageValueRef, nodes map[string]Node) erro
 	return invalid("seed", "Value reference kind, facet or local port does not exist")
 }
 func validateLineageGraph(ctx context.Context, s *ImportSession, g *graphCandidate, diagnostics *[]ImportDiagnostic) error {
+	events := selectedProfile(s.Profile) == EventsProfile
+	validator := validateLineageAttributes
+	schema := LineageSchemaVersion
+	if events {
+		validator = validateEventsLineageAttributes
+		schema = EventsSchemaVersion
+	}
+	edges := map[string]Edge{}
+	handles := map[string][]Edge{}
+	for _, e := range g.Edges {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if e.Kind == "handles" {
+			handles[e.From] = append(handles[e.From], e)
+		}
+		edges[e.ID] = e
+	}
 	add := func(path, message string) {
 		*diagnostics = append(*diagnostics, ImportDiagnostic{Code: "backend_graph_invalid", Path: path, Message: message})
 	}
@@ -172,7 +190,7 @@ func validateLineageGraph(ctx context.Context, s *ImportSession, g *graphCandida
 			continue
 		}
 		path := "nodes/" + n.ID
-		if err := validateLineageAttributes(n.Kind, n.Attributes, false, true); err != nil {
+		if err := validator(n.Kind, n.Attributes, false, true); err != nil {
 			add(path, err.Error())
 			continue
 		}
@@ -182,6 +200,11 @@ func validateLineageGraph(ctx context.Context, s *ImportSession, g *graphCandida
 			parent = nodes[*n.ParentID]
 		}
 		valid, _ := lineageContains(parent, n)
+		if events {
+			if v, ok := eventsContains(parent, n); ok {
+				valid = v
+			}
+		}
 		if !valid || len(contains[n.ID]) != 1 || contains[n.ID][0].From != parent.ID || parent.Ownership == nil || parent.Ownership.RepositoryID != s.RepositoryID {
 			add(path+"/parentId", "Lineage nodes require one agreeing contains edge and a valid parent in the same repository")
 		}
@@ -205,10 +228,15 @@ func validateLineageGraph(ctx context.Context, s *ImportSession, g *graphCandida
 			selectors[key] = true
 			continue
 		}
-		a, err := decodeLineageMapping(n.Attributes)
+		a, err := decodeLineageMappingForSchema(n.Attributes, schema)
 		if err != nil {
 			add(path, err.Error())
 			continue
+		}
+		if events {
+			if err := validateEventsLineageMapping(n, a, nodes, edges, handles); err != nil {
+				add(path+"/attributes", err.Error())
+			}
 		}
 		count += len(a.Sources) + 1
 		if count > MaxLineageReferences {
@@ -219,7 +247,7 @@ func validateLineageGraph(ctx context.Context, s *ImportSession, g *graphCandida
 			if i < len(a.Sources) {
 				refPath = fmt.Sprintf("%s/attributes/sources/%d", path, i)
 			}
-			if err := validateLineageValueTarget(ref, nodes); err != nil {
+			if err := validateLineageValueTargetForSchema(ref, nodes, edges, schema); err != nil {
 				add(refPath, "Every lineage value must survive with its exact kind, facet and local port")
 				continue
 			}
@@ -256,7 +284,7 @@ func markLineageEndpointStaleness(g *graphCandidate) {
 		if n.Kind != "field_mapping" || n.Freshness == nil || n.Freshness.Status == "stale" {
 			continue
 		}
-		a, err := decodeLineageMapping(n.Attributes)
+		a, err := decodeLineageMappingForSchema(n.Attributes, EventsSchemaVersion)
 		if err != nil {
 			continue
 		}

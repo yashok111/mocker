@@ -278,6 +278,9 @@ func validateCommand(c ImportCommand, s *ImportSession) error {
 		validator := validateAttributes
 		if hasRuntimeProfile(selectedProfile(s.Profile)) {
 			validator = func(kind string, attrs map[string]jsontext.Value, edge bool) error {
+				if selectedProfile(s.Profile) == EventsProfile {
+					return validateEventsAttributes(kind, attrs, edge, false)
+				}
 				if selectedProfile(s.Profile) == LineageProfile {
 					return validateLineageAttributes(kind, attrs, edge, false)
 				}
@@ -304,6 +307,9 @@ func validateCommand(c ImportCommand, s *ImportSession) error {
 		validator := validateAttributes
 		if hasRuntimeProfile(selectedProfile(s.Profile)) {
 			validator = func(kind string, attrs map[string]jsontext.Value, edge bool) error {
+				if selectedProfile(s.Profile) == EventsProfile {
+					return validateEventsAttributes(kind, attrs, edge, false)
+				}
 				if selectedProfile(s.Profile) == LineageProfile {
 					return validateLineageAttributes(kind, attrs, edge, false)
 				}

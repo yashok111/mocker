@@ -165,16 +165,20 @@ func prepareGraph(ctx context.Context, q importReader, s *ImportSession) (*graph
 		}
 	}
 	if hasRuntimeProfile(selectedProfile(s.Profile)) {
+		resolver := resolveRuntimeAttributes
+		if selectedProfile(s.Profile) == EventsProfile {
+			resolver = resolveEventsAttributes
+		}
 		for i := range g.Nodes {
 			n := &g.Nodes[i]
-			n.Attributes, err = resolveRuntimeAttributes(n.Kind, n.Attributes, false, resolve)
+			n.Attributes, err = resolver(n.Kind, n.Attributes, false, resolve)
 			if err != nil {
 				return nil, nil, err
 			}
 		}
 		for i := range g.Edges {
 			e := &g.Edges[i]
-			e.Attributes, err = resolveRuntimeAttributes(e.Kind, e.Attributes, true, resolve)
+			e.Attributes, err = resolver(e.Kind, e.Attributes, true, resolve)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -262,9 +266,14 @@ func prepareGraph(ctx context.Context, q importReader, s *ImportSession) (*graph
 				valid = runtimeValid
 			}
 		}
-		if selectedProfile(s.Profile) == LineageProfile && e.Kind == "contains" {
+		if hasLineageProfile(selectedProfile(s.Profile)) && e.Kind == "contains" {
 			if lineageValid, applies := lineageContains(from, to); applies {
 				valid = lineageValid
+			}
+		}
+		if selectedProfile(s.Profile) == EventsProfile {
+			if eventValid, applies := eventsEndpoints(e, from, to); applies {
+				valid = eventValid
 			}
 		}
 		if !valid {
@@ -308,8 +317,13 @@ func prepareGraph(ctx context.Context, q importReader, s *ImportSession) (*graph
 			return nil, nil, err
 		}
 	}
-	if selectedProfile(s.Profile) == LineageProfile {
+	if hasLineageProfile(selectedProfile(s.Profile)) {
 		if err := validateLineageGraph(ctx, s, g, &d); err != nil {
+			return nil, nil, err
+		}
+	}
+	if selectedProfile(s.Profile) == EventsProfile {
+		if err := validateEventsGraph(ctx, s, g, &d); err != nil {
 			return nil, nil, err
 		}
 	}

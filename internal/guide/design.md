@@ -1197,7 +1197,7 @@ the current document; do not blind-retry a full model replacement.
 
 ## Open an exact API artifact from a backend association
 
-Backend API links use inspect5 and the backend-flow-reference contract. The
+Backend API links use inspect6 and the backend-flow-reference contract. The
 editor route carries exact pinnedRevisionId, pinnedHash, pinnedObjectKey or
 pinnedSelectorPointer, optional persisted pinnedPointer and backend return pin.
 A separate read-only raw panel loads get_api_artifact_snapshot for the exact API

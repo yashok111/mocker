@@ -6,6 +6,7 @@ import (
 	"encoding/json/v2"
 	"fmt"
 	"net/url"
+	"slices"
 	"strconv"
 
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
@@ -129,8 +130,8 @@ func addBackendImportTool(s *sdk.Server, lb *loopback, tool *sdk.Tool, route str
 			if !ok {
 				continue
 			}
-			// revisionId pins graph/database query bodies rather than their paths.
-			if key == "revisionId" && (tool.Name == "query_backend_graph" || tool.Name == "query_backend_database" || tool.Name == "query_backend_flow" || tool.Name == "query_backend_lineage") {
+			// Source query revisionId pins the request body.
+			if key == "revisionId" && slices.Contains([]string{"query_backend_graph", "query_backend_database", "query_backend_flow", "query_backend_lineage", "query_backend_events"}, tool.Name) {
 				continue
 			}
 			var value string

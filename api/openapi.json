@@ -13518,7 +13518,8 @@
               "1",
               "2",
               "3",
-              "4"
+              "4",
+              "5"
             ]
           },
           "semanticHash": {
@@ -13848,7 +13849,15 @@
               "maxLineageReferenceIncidences",
               "maxEditorArtifactContextBytes",
               "maxEditorEventConstructionBytes",
-              "maxEventMapBytes"
+              "maxEventMapBytes",
+              "maxEventFieldsPerMessage",
+              "maxEventHandlers",
+              "maxEventsExaminedEdges",
+              "maxEventsItems",
+              "maxEventsAuxiliaryRecords",
+              "maxEventsWitnessRecords",
+              "defaultEventsPageSize",
+              "maxEventsPageSize"
             ],
             "properties": {
               "maxNameLength": {
@@ -14180,6 +14189,39 @@
                 "format": "int64",
                 "const": 4194304,
                 "description": "Existing owner final EventMap output byte budget; independent of B31 prospective construction and complete context."
+              },
+              "maxEventFieldsPerMessage": {
+                "type": "integer",
+                "const": 500
+              },
+              "maxEventHandlers": {
+                "type": "integer",
+                "const": 50
+              },
+              "maxEventsExaminedEdges": {
+                "type": "integer",
+                "const": 20000,
+                "description": "Complete-scan-admission: a revision above this total edge count returns an empty pinned truncated diagnostic page, with no source-absence claim."
+              },
+              "maxEventsItems": {
+                "type": "integer",
+                "const": 5000
+              },
+              "maxEventsAuxiliaryRecords": {
+                "type": "integer",
+                "const": 20000
+              },
+              "maxEventsWitnessRecords": {
+                "type": "integer",
+                "const": 256
+              },
+              "defaultEventsPageSize": {
+                "type": "integer",
+                "const": 50
+              },
+              "maxEventsPageSize": {
+                "type": "integer",
+                "const": 100
               }
             }
           },
@@ -14453,7 +14495,12 @@
           "query",
           "transaction",
           "api_field",
-          "field_mapping"
+          "field_mapping",
+          "channel",
+          "message",
+          "consumer",
+          "job",
+          "event_field"
         ]
       },
       "BackendEdgeKind": {
@@ -14473,7 +14520,11 @@
           "deletes",
           "begins",
           "commits",
-          "rolls_back"
+          "rolls_back",
+          "emits",
+          "delivered_to",
+          "retries",
+          "dead_letters"
         ]
       },
       "BackendProvider": {
@@ -15978,6 +16029,231 @@
                 }
               }
             }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "externalKey",
+              "kind",
+              "name",
+              "attributes",
+              "evidenceKeys"
+            ],
+            "properties": {
+              "externalKey": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200,
+                "pattern": "^[^\\p{Cc}]+$"
+              },
+              "kind": {
+                "type": "string",
+                "const": "channel"
+              },
+              "name": {
+                "type": "string",
+                "minLength": 1
+              },
+              "attributes": {
+                "$ref": "#/components/schemas/BackendEventsChannelAttributes"
+              },
+              "parentKey": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200,
+                "pattern": "^[^\\p{Cc}]+$"
+              },
+              "evidenceKeys": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200,
+                  "pattern": "^[^\\p{Cc}]+$"
+                }
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "externalKey",
+              "kind",
+              "name",
+              "attributes",
+              "evidenceKeys"
+            ],
+            "properties": {
+              "externalKey": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200,
+                "pattern": "^[^\\p{Cc}]+$"
+              },
+              "kind": {
+                "type": "string",
+                "const": "message"
+              },
+              "name": {
+                "type": "string",
+                "minLength": 1
+              },
+              "attributes": {
+                "$ref": "#/components/schemas/BackendEventsMessageAttributes"
+              },
+              "parentKey": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200,
+                "pattern": "^[^\\p{Cc}]+$"
+              },
+              "evidenceKeys": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200,
+                  "pattern": "^[^\\p{Cc}]+$"
+                }
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "externalKey",
+              "kind",
+              "name",
+              "attributes",
+              "evidenceKeys"
+            ],
+            "properties": {
+              "externalKey": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200,
+                "pattern": "^[^\\p{Cc}]+$"
+              },
+              "kind": {
+                "type": "string",
+                "const": "consumer"
+              },
+              "name": {
+                "type": "string",
+                "minLength": 1
+              },
+              "attributes": {
+                "$ref": "#/components/schemas/BackendEventsConsumerAttributes"
+              },
+              "parentKey": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200,
+                "pattern": "^[^\\p{Cc}]+$"
+              },
+              "evidenceKeys": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200,
+                  "pattern": "^[^\\p{Cc}]+$"
+                }
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "externalKey",
+              "kind",
+              "name",
+              "attributes",
+              "evidenceKeys"
+            ],
+            "properties": {
+              "externalKey": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200,
+                "pattern": "^[^\\p{Cc}]+$"
+              },
+              "kind": {
+                "type": "string",
+                "const": "job"
+              },
+              "name": {
+                "type": "string",
+                "minLength": 1
+              },
+              "attributes": {
+                "$ref": "#/components/schemas/BackendEventsJobAttributes"
+              },
+              "parentKey": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200,
+                "pattern": "^[^\\p{Cc}]+$"
+              },
+              "evidenceKeys": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200,
+                  "pattern": "^[^\\p{Cc}]+$"
+                }
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "externalKey",
+              "kind",
+              "name",
+              "attributes",
+              "evidenceKeys"
+            ],
+            "properties": {
+              "externalKey": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200,
+                "pattern": "^[^\\p{Cc}]+$"
+              },
+              "kind": {
+                "type": "string",
+                "const": "event_field"
+              },
+              "name": {
+                "type": "string",
+                "minLength": 1
+              },
+              "attributes": {
+                "$ref": "#/components/schemas/BackendEventsEventFieldAttributes"
+              },
+              "parentKey": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200,
+                "pattern": "^[^\\p{Cc}]+$"
+              },
+              "evidenceKeys": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200,
+                  "pattern": "^[^\\p{Cc}]+$"
+                }
+              }
+            }
           }
         ]
       },
@@ -17280,6 +17556,301 @@
                 "$ref": "#/components/schemas/BackendFacetComparison"
               }
             }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "externalKey",
+              "kind",
+              "name",
+              "attributes",
+              "id",
+              "parentId",
+              "evidenceIds"
+            ],
+            "properties": {
+              "externalKey": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200,
+                "pattern": "^[^\\p{Cc}]+$"
+              },
+              "kind": {
+                "type": "string",
+                "const": "channel"
+              },
+              "name": {
+                "type": "string",
+                "minLength": 1
+              },
+              "attributes": {
+                "$ref": "#/components/schemas/BackendEventsChannelAttributes"
+              },
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "parentId": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "uuid"
+              },
+              "evidenceIds": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              },
+              "ownership": {
+                "$ref": "#/components/schemas/BackendAssertionOwnership"
+              },
+              "freshness": {
+                "$ref": "#/components/schemas/BackendAssertionFreshness"
+              },
+              "facetComparison": {
+                "$ref": "#/components/schemas/BackendFacetComparison"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "externalKey",
+              "kind",
+              "name",
+              "attributes",
+              "id",
+              "parentId",
+              "evidenceIds"
+            ],
+            "properties": {
+              "externalKey": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200,
+                "pattern": "^[^\\p{Cc}]+$"
+              },
+              "kind": {
+                "type": "string",
+                "const": "message"
+              },
+              "name": {
+                "type": "string",
+                "minLength": 1
+              },
+              "attributes": {
+                "$ref": "#/components/schemas/BackendEventsMessageAttributes"
+              },
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "parentId": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "uuid"
+              },
+              "evidenceIds": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              },
+              "ownership": {
+                "$ref": "#/components/schemas/BackendAssertionOwnership"
+              },
+              "freshness": {
+                "$ref": "#/components/schemas/BackendAssertionFreshness"
+              },
+              "facetComparison": {
+                "$ref": "#/components/schemas/BackendFacetComparison"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "externalKey",
+              "kind",
+              "name",
+              "attributes",
+              "id",
+              "parentId",
+              "evidenceIds"
+            ],
+            "properties": {
+              "externalKey": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200,
+                "pattern": "^[^\\p{Cc}]+$"
+              },
+              "kind": {
+                "type": "string",
+                "const": "consumer"
+              },
+              "name": {
+                "type": "string",
+                "minLength": 1
+              },
+              "attributes": {
+                "$ref": "#/components/schemas/BackendEventsConsumerAttributes"
+              },
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "parentId": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "uuid"
+              },
+              "evidenceIds": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              },
+              "ownership": {
+                "$ref": "#/components/schemas/BackendAssertionOwnership"
+              },
+              "freshness": {
+                "$ref": "#/components/schemas/BackendAssertionFreshness"
+              },
+              "facetComparison": {
+                "$ref": "#/components/schemas/BackendFacetComparison"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "externalKey",
+              "kind",
+              "name",
+              "attributes",
+              "id",
+              "parentId",
+              "evidenceIds"
+            ],
+            "properties": {
+              "externalKey": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200,
+                "pattern": "^[^\\p{Cc}]+$"
+              },
+              "kind": {
+                "type": "string",
+                "const": "job"
+              },
+              "name": {
+                "type": "string",
+                "minLength": 1
+              },
+              "attributes": {
+                "$ref": "#/components/schemas/BackendEventsJobAttributes"
+              },
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "parentId": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "uuid"
+              },
+              "evidenceIds": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              },
+              "ownership": {
+                "$ref": "#/components/schemas/BackendAssertionOwnership"
+              },
+              "freshness": {
+                "$ref": "#/components/schemas/BackendAssertionFreshness"
+              },
+              "facetComparison": {
+                "$ref": "#/components/schemas/BackendFacetComparison"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "externalKey",
+              "kind",
+              "name",
+              "attributes",
+              "id",
+              "parentId",
+              "evidenceIds"
+            ],
+            "properties": {
+              "externalKey": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200,
+                "pattern": "^[^\\p{Cc}]+$"
+              },
+              "kind": {
+                "type": "string",
+                "const": "event_field"
+              },
+              "name": {
+                "type": "string",
+                "minLength": 1
+              },
+              "attributes": {
+                "$ref": "#/components/schemas/BackendEventsEventFieldAttributes"
+              },
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "parentId": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "uuid"
+              },
+              "evidenceIds": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              },
+              "ownership": {
+                "$ref": "#/components/schemas/BackendAssertionOwnership"
+              },
+              "freshness": {
+                "$ref": "#/components/schemas/BackendAssertionFreshness"
+              },
+              "facetComparison": {
+                "$ref": "#/components/schemas/BackendFacetComparison"
+              }
+            }
           }
         ]
       },
@@ -17854,6 +18425,198 @@
               },
               "attributes": {
                 "$ref": "#/components/schemas/BackendDeletesAttributesInput"
+              },
+              "evidenceKeys": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200,
+                  "pattern": "^[^\\p{Cc}]+$"
+                }
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "externalKey",
+              "kind",
+              "fromKey",
+              "toKey",
+              "attributes",
+              "evidenceKeys"
+            ],
+            "properties": {
+              "externalKey": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200,
+                "pattern": "^[^\\p{Cc}]+$"
+              },
+              "kind": {
+                "type": "string",
+                "const": "emits"
+              },
+              "fromKey": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200,
+                "pattern": "^[^\\p{Cc}]+$"
+              },
+              "toKey": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200,
+                "pattern": "^[^\\p{Cc}]+$"
+              },
+              "attributes": {
+                "$ref": "#/components/schemas/BackendEventsEmitsAttributesInput"
+              },
+              "evidenceKeys": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200,
+                  "pattern": "^[^\\p{Cc}]+$"
+                }
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "externalKey",
+              "kind",
+              "fromKey",
+              "toKey",
+              "attributes",
+              "evidenceKeys"
+            ],
+            "properties": {
+              "externalKey": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200,
+                "pattern": "^[^\\p{Cc}]+$"
+              },
+              "kind": {
+                "type": "string",
+                "const": "delivered_to"
+              },
+              "fromKey": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200,
+                "pattern": "^[^\\p{Cc}]+$"
+              },
+              "toKey": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200,
+                "pattern": "^[^\\p{Cc}]+$"
+              },
+              "attributes": {
+                "$ref": "#/components/schemas/BackendEventsDeliveredToAttributesInput"
+              },
+              "evidenceKeys": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200,
+                  "pattern": "^[^\\p{Cc}]+$"
+                }
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "externalKey",
+              "kind",
+              "fromKey",
+              "toKey",
+              "attributes",
+              "evidenceKeys"
+            ],
+            "properties": {
+              "externalKey": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200,
+                "pattern": "^[^\\p{Cc}]+$"
+              },
+              "kind": {
+                "type": "string",
+                "const": "retries"
+              },
+              "fromKey": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200,
+                "pattern": "^[^\\p{Cc}]+$"
+              },
+              "toKey": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200,
+                "pattern": "^[^\\p{Cc}]+$"
+              },
+              "attributes": {
+                "$ref": "#/components/schemas/BackendEventsRetriesAttributesInput"
+              },
+              "evidenceKeys": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200,
+                  "pattern": "^[^\\p{Cc}]+$"
+                }
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "externalKey",
+              "kind",
+              "fromKey",
+              "toKey",
+              "attributes",
+              "evidenceKeys"
+            ],
+            "properties": {
+              "externalKey": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200,
+                "pattern": "^[^\\p{Cc}]+$"
+              },
+              "kind": {
+                "type": "string",
+                "const": "dead_letters"
+              },
+              "fromKey": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200,
+                "pattern": "^[^\\p{Cc}]+$"
+              },
+              "toKey": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200,
+                "pattern": "^[^\\p{Cc}]+$"
+              },
+              "attributes": {
+                "$ref": "#/components/schemas/BackendEventsDeadLettersAttributesInput"
               },
               "evidenceKeys": {
                 "type": "array",
@@ -18546,6 +19309,230 @@
                 "$ref": "#/components/schemas/BackendFacetComparison"
               }
             }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "externalKey",
+              "kind",
+              "from",
+              "to",
+              "attributes",
+              "evidenceIds"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "externalKey": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200,
+                "pattern": "^[^\\p{Cc}]+$"
+              },
+              "kind": {
+                "type": "string",
+                "const": "emits"
+              },
+              "from": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "to": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "attributes": {
+                "$ref": "#/components/schemas/BackendEventsEmitsAttributes"
+              },
+              "evidenceIds": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              },
+              "ownership": {
+                "$ref": "#/components/schemas/BackendAssertionOwnership"
+              },
+              "freshness": {
+                "$ref": "#/components/schemas/BackendAssertionFreshness"
+              },
+              "facetComparison": {
+                "$ref": "#/components/schemas/BackendFacetComparison"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "externalKey",
+              "kind",
+              "from",
+              "to",
+              "attributes",
+              "evidenceIds"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "externalKey": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200,
+                "pattern": "^[^\\p{Cc}]+$"
+              },
+              "kind": {
+                "type": "string",
+                "const": "delivered_to"
+              },
+              "from": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "to": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "attributes": {
+                "$ref": "#/components/schemas/BackendEventsDeliveredToAttributes"
+              },
+              "evidenceIds": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              },
+              "ownership": {
+                "$ref": "#/components/schemas/BackendAssertionOwnership"
+              },
+              "freshness": {
+                "$ref": "#/components/schemas/BackendAssertionFreshness"
+              },
+              "facetComparison": {
+                "$ref": "#/components/schemas/BackendFacetComparison"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "externalKey",
+              "kind",
+              "from",
+              "to",
+              "attributes",
+              "evidenceIds"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "externalKey": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200,
+                "pattern": "^[^\\p{Cc}]+$"
+              },
+              "kind": {
+                "type": "string",
+                "const": "retries"
+              },
+              "from": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "to": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "attributes": {
+                "$ref": "#/components/schemas/BackendEventsRetriesAttributes"
+              },
+              "evidenceIds": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              },
+              "ownership": {
+                "$ref": "#/components/schemas/BackendAssertionOwnership"
+              },
+              "freshness": {
+                "$ref": "#/components/schemas/BackendAssertionFreshness"
+              },
+              "facetComparison": {
+                "$ref": "#/components/schemas/BackendFacetComparison"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "externalKey",
+              "kind",
+              "from",
+              "to",
+              "attributes",
+              "evidenceIds"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "externalKey": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200,
+                "pattern": "^[^\\p{Cc}]+$"
+              },
+              "kind": {
+                "type": "string",
+                "const": "dead_letters"
+              },
+              "from": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "to": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "attributes": {
+                "$ref": "#/components/schemas/BackendEventsDeadLettersAttributes"
+              },
+              "evidenceIds": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              },
+              "ownership": {
+                "$ref": "#/components/schemas/BackendAssertionOwnership"
+              },
+              "freshness": {
+                "$ref": "#/components/schemas/BackendAssertionFreshness"
+              },
+              "facetComparison": {
+                "$ref": "#/components/schemas/BackendFacetComparison"
+              }
+            }
           }
         ]
       },
@@ -18873,7 +19860,8 @@
               "foundation-graph-v1",
               "relational-graph-v1",
               "runtime-flow-v1",
-              "field-lineage-v1"
+              "field-lineage-v1",
+              "events-service-v1"
             ],
             "default": "foundation-graph-v1"
           },
@@ -18938,7 +19926,8 @@
                   "enum": [
                     "relational-graph-v1",
                     "runtime-flow-v1",
-                    "field-lineage-v1"
+                    "field-lineage-v1",
+                    "events-service-v1"
                   ]
                 },
                 "mode": {
@@ -19053,6 +20042,241 @@
                   }
                 }
               ]
+            }
+          },
+          {
+            "if": {
+              "required": [
+                "profileExtension",
+                "profile"
+              ],
+              "properties": {
+                "profile": {
+                  "const": "events-service-v1"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "profileExtension": {
+                  "$ref": "#/components/schemas/BackendProfileExtension"
+                },
+                "profile": {
+                  "const": "events-service-v1"
+                }
+              },
+              "allOf": [
+                {
+                  "properties": {
+                    "profileExtension": {
+                      "properties": {
+                        "toProfile": {
+                          "const": "events-service-v1"
+                        }
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "if": {
+              "required": [
+                "profile"
+              ],
+              "properties": {
+                "profile": {
+                  "type": "string",
+                  "const": "events-service-v1"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "manifest": {
+                  "properties": {
+                    "provider": {
+                      "properties": {
+                        "profiles": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "enum": [
+                              "foundation-graph-v1",
+                              "relational-graph-v1",
+                              "runtime-flow-v1",
+                              "field-lineage-v1",
+                              "events-service-v1"
+                            ]
+                          },
+                          "minItems": 5,
+                          "maxItems": 5,
+                          "uniqueItems": true
+                        }
+                      }
+                    }
+                  }
+                },
+                "graphScope": {
+                  "properties": {
+                    "profile": {
+                      "type": "string",
+                      "const": "events-service-v1"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "required": [
+                "profile"
+              ],
+              "properties": {
+                "profile": {
+                  "type": "string",
+                  "const": "relational-graph-v1"
+                }
+              },
+              "not": {
+                "required": [
+                  "mode"
+                ],
+                "properties": {
+                  "mode": {
+                    "type": "string",
+                    "const": "reconcile"
+                  }
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "manifest": {
+                  "properties": {
+                    "provider": {
+                      "properties": {
+                        "profiles": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "enum": [
+                              "foundation-graph-v1",
+                              "relational-graph-v1"
+                            ]
+                          },
+                          "minItems": 2,
+                          "maxItems": 2,
+                          "uniqueItems": true
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "required": [
+                "profile"
+              ],
+              "properties": {
+                "profile": {
+                  "type": "string",
+                  "const": "runtime-flow-v1"
+                }
+              },
+              "not": {
+                "required": [
+                  "mode"
+                ],
+                "properties": {
+                  "mode": {
+                    "type": "string",
+                    "const": "reconcile"
+                  }
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "manifest": {
+                  "properties": {
+                    "provider": {
+                      "properties": {
+                        "profiles": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "enum": [
+                              "foundation-graph-v1",
+                              "relational-graph-v1",
+                              "runtime-flow-v1"
+                            ]
+                          },
+                          "minItems": 3,
+                          "maxItems": 3,
+                          "uniqueItems": true
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "required": [
+                "profile"
+              ],
+              "properties": {
+                "profile": {
+                  "type": "string",
+                  "const": "field-lineage-v1"
+                }
+              },
+              "not": {
+                "required": [
+                  "mode"
+                ],
+                "properties": {
+                  "mode": {
+                    "type": "string",
+                    "const": "reconcile"
+                  }
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "manifest": {
+                  "properties": {
+                    "provider": {
+                      "properties": {
+                        "profiles": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "enum": [
+                              "foundation-graph-v1",
+                              "relational-graph-v1",
+                              "runtime-flow-v1",
+                              "field-lineage-v1"
+                            ]
+                          },
+                          "minItems": 4,
+                          "maxItems": 4,
+                          "uniqueItems": true
+                        }
+                      }
+                    }
+                  }
+                }
+              }
             }
           }
         ]
@@ -19287,7 +20511,8 @@
               "foundation-graph-v1",
               "relational-graph-v1",
               "runtime-flow-v1",
-              "field-lineage-v1"
+              "field-lineage-v1",
+              "events-service-v1"
             ]
           }
         }
@@ -19587,7 +20812,8 @@
               "1",
               "2",
               "3",
-              "4"
+              "4",
+              "5"
             ]
           }
         }
@@ -20116,7 +21342,8 @@
               "foundation-graph-v1",
               "relational-graph-v1",
               "runtime-flow-v1",
-              "field-lineage-v1"
+              "field-lineage-v1",
+              "events-service-v1"
             ]
           },
           "status": {
@@ -21166,6 +22393,24 @@
               "toProfile": {
                 "type": "string",
                 "const": "field-lineage-v1"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "fromProfile",
+              "toProfile"
+            ],
+            "properties": {
+              "fromProfile": {
+                "type": "string",
+                "const": "field-lineage-v1"
+              },
+              "toProfile": {
+                "type": "string",
+                "const": "events-service-v1"
               }
             }
           }
@@ -25612,7 +26857,8 @@
               "foundation-graph-v1",
               "relational-graph-v1",
               "runtime-flow-v1",
-              "field-lineage-v1"
+              "field-lineage-v1",
+              "events-service-v1"
             ]
           },
           "modelSchemaVersions": {
@@ -25623,7 +26869,8 @@
                 "1",
                 "2",
                 "3",
-                "4"
+                "4",
+                "5"
               ]
             }
           },
@@ -25738,6 +26985,29 @@
               "profile": {
                 "type": "string",
                 "const": "field-lineage-v1"
+              },
+              "scope": {
+                "type": "string",
+                "const": "whole-repository-combined-graph"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "version",
+              "profile",
+              "scope"
+            ],
+            "properties": {
+              "version": {
+                "type": "string",
+                "const": "1"
+              },
+              "profile": {
+                "type": "string",
+                "const": "events-service-v1"
               },
               "scope": {
                 "type": "string",
@@ -29904,6 +31174,9 @@
                 }
               }
             ]
+          },
+          {
+            "$ref": "#/components/schemas/BackendEventsEmitAttributesInput"
           }
         ]
       },
@@ -32514,6 +33787,9 @@
                 }
               }
             ]
+          },
+          {
+            "$ref": "#/components/schemas/BackendEventsEmitAttributes"
           }
         ]
       },
@@ -34321,6 +35597,9 @@
           },
           {
             "$ref": "#/components/schemas/BackendLineageValueRefAPIField"
+          },
+          {
+            "$ref": "#/components/schemas/BackendLineageValueRefEventField"
           }
         ]
       },
@@ -34418,6 +35697,9 @@
           },
           {
             "$ref": "#/components/schemas/BackendImportLineageValueRefAPIField"
+          },
+          {
+            "$ref": "#/components/schemas/BackendImportLineageValueRefEventField"
           }
         ]
       },
@@ -34502,6 +35784,9 @@
             "minLength": 1,
             "maxLength": 4096,
             "pattern": "^[^\\x00-\\x08\\x0b\\x0c\\x0e-\\x1f\\x7f-\\x9f]+$"
+          },
+          "transport": {
+            "$ref": "#/components/schemas/BackendLineageTransport"
           }
         },
         "allOf": [
@@ -34696,6 +35981,9 @@
             "minLength": 1,
             "maxLength": 4096,
             "pattern": "^[^\\x00-\\x08\\x0b\\x0c\\x0e-\\x1f\\x7f-\\x9f]+$"
+          },
+          "transport": {
+            "$ref": "#/components/schemas/BackendImportLineageTransport"
           }
         },
         "allOf": [
@@ -35773,7 +37061,10 @@
           },
           "policy": {
             "type": "string",
-            "const": "field-lineage-traversal-v1"
+            "enum": [
+              "field-lineage-traversal-v1",
+              "field-lineage-traversal-v2"
+            ]
           },
           "seed": {
             "$ref": "#/components/schemas/BackendLineageValueRef"
@@ -39209,6 +40500,2809 @@
       },
       "ComparisonItem": {
         "$ref": "#/components/schemas/BackendComparisonItem"
+      },
+      "BackendEventsScalar": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/BackendEventsScalarKnown"
+          },
+          {
+            "$ref": "#/components/schemas/BackendEventsScalarUnknown"
+          }
+        ]
+      },
+      "BackendEventsScalarKnown": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "status",
+          "value"
+        ],
+        "properties": {
+          "status": {
+            "type": "string",
+            "const": "known"
+          },
+          "value": {
+            "type": "string",
+            "maxLength": 4096
+          }
+        }
+      },
+      "BackendEventsScalarUnknown": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "status",
+          "reason"
+        ],
+        "properties": {
+          "status": {
+            "type": "string",
+            "const": "unknown"
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096,
+            "pattern": "^[^\\x00-\\x08\\x0b\\x0c\\x0e-\\x1f\\x7f-\\x9f]+$"
+          }
+        }
+      },
+      "BackendEventsTrigger": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/BackendEventsTriggerCron"
+          },
+          {
+            "$ref": "#/components/schemas/BackendEventsTriggerInterval"
+          },
+          {
+            "$ref": "#/components/schemas/BackendEventsTriggerManual"
+          },
+          {
+            "$ref": "#/components/schemas/BackendEventsTriggerUnknown"
+          }
+        ]
+      },
+      "BackendEventsTriggerCron": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "expression",
+          "timezone"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "cron"
+          },
+          "expression": {
+            "$ref": "#/components/schemas/BackendEventsScalar"
+          },
+          "timezone": {
+            "$ref": "#/components/schemas/BackendEventsScalar"
+          }
+        }
+      },
+      "BackendEventsTriggerInterval": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "duration"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "interval"
+          },
+          "duration": {
+            "$ref": "#/components/schemas/BackendEventsScalar"
+          }
+        }
+      },
+      "BackendEventsTriggerManual": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "manual"
+          }
+        }
+      },
+      "BackendEventsTriggerUnknown": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "reason"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "unknown"
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096,
+            "pattern": "^[^\\x00-\\x08\\x0b\\x0c\\x0e-\\x1f\\x7f-\\x9f]+$"
+          }
+        }
+      },
+      "BackendEventsChannelAttributes": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "analysisStatus",
+          "gaps",
+          "protocol",
+          "address",
+          "scope"
+        ],
+        "properties": {
+          "analysisStatus": {
+            "type": "string",
+            "enum": [
+              "complete",
+              "partial",
+              "unsupported"
+            ]
+          },
+          "gaps": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 4096,
+              "pattern": "^[^\\x00-\\x08\\x0b\\x0c\\x0e-\\x1f\\x7f-\\x9f]+$"
+            },
+            "maxItems": 250000
+          },
+          "protocol": {
+            "$ref": "#/components/schemas/BackendEventsScalar"
+          },
+          "address": {
+            "$ref": "#/components/schemas/BackendEventsScalar"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/BackendEventsScalar"
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096,
+            "pattern": "^[^\\x00-\\x08\\x0b\\x0c\\x0e-\\x1f\\x7f-\\x9f]+$"
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "required": [
+                "analysisStatus"
+              ],
+              "properties": {
+                "analysisStatus": {
+                  "type": "string",
+                  "const": "complete"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "gaps": {
+                  "maxItems": 0
+                }
+              }
+            },
+            "else": {
+              "properties": {
+                "gaps": {
+                  "minItems": 1
+                }
+              }
+            }
+          }
+        ]
+      },
+      "BackendEventsMessageAttributes": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "analysisStatus",
+          "gaps",
+          "fieldInventory"
+        ],
+        "properties": {
+          "analysisStatus": {
+            "type": "string",
+            "enum": [
+              "complete",
+              "partial",
+              "unsupported"
+            ]
+          },
+          "gaps": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 4096,
+              "pattern": "^[^\\x00-\\x08\\x0b\\x0c\\x0e-\\x1f\\x7f-\\x9f]+$"
+            },
+            "maxItems": 250000
+          },
+          "fieldInventory": {
+            "type": "string",
+            "enum": [
+              "complete",
+              "partial",
+              "unknown"
+            ]
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096,
+            "pattern": "^[^\\x00-\\x08\\x0b\\x0c\\x0e-\\x1f\\x7f-\\x9f]+$"
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "required": [
+                "analysisStatus"
+              ],
+              "properties": {
+                "analysisStatus": {
+                  "type": "string",
+                  "const": "complete"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "gaps": {
+                  "maxItems": 0
+                }
+              }
+            },
+            "else": {
+              "properties": {
+                "gaps": {
+                  "minItems": 1
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "fieldInventory": {
+                  "enum": [
+                    "partial",
+                    "unknown"
+                  ]
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "analysisStatus": {
+                  "enum": [
+                    "partial",
+                    "unsupported"
+                  ]
+                }
+              }
+            }
+          }
+        ]
+      },
+      "BackendEventsConsumerAttributes": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "analysisStatus",
+          "gaps",
+          "dispatchStatus"
+        ],
+        "properties": {
+          "analysisStatus": {
+            "type": "string",
+            "enum": [
+              "complete",
+              "partial",
+              "unsupported"
+            ]
+          },
+          "gaps": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 4096,
+              "pattern": "^[^\\x00-\\x08\\x0b\\x0c\\x0e-\\x1f\\x7f-\\x9f]+$"
+            },
+            "maxItems": 250000
+          },
+          "dispatchStatus": {
+            "type": "string",
+            "enum": [
+              "complete",
+              "partial",
+              "unknown"
+            ]
+          },
+          "dispatchReason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096,
+            "pattern": "^[^\\x00-\\x08\\x0b\\x0c\\x0e-\\x1f\\x7f-\\x9f]+$"
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096,
+            "pattern": "^[^\\x00-\\x08\\x0b\\x0c\\x0e-\\x1f\\x7f-\\x9f]+$"
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "required": [
+                "analysisStatus"
+              ],
+              "properties": {
+                "analysisStatus": {
+                  "type": "string",
+                  "const": "complete"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "gaps": {
+                  "maxItems": 0
+                }
+              }
+            },
+            "else": {
+              "properties": {
+                "gaps": {
+                  "minItems": 1
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "dispatchStatus": {
+                  "type": "string",
+                  "const": "complete"
+                }
+              }
+            },
+            "then": {
+              "not": {
+                "required": [
+                  "dispatchReason"
+                ]
+              }
+            },
+            "else": {
+              "required": [
+                "dispatchReason"
+              ],
+              "properties": {
+                "analysisStatus": {
+                  "enum": [
+                    "partial",
+                    "unsupported"
+                  ]
+                }
+              }
+            }
+          }
+        ]
+      },
+      "BackendEventsJobAttributes": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "analysisStatus",
+          "gaps",
+          "dispatchStatus",
+          "trigger"
+        ],
+        "properties": {
+          "analysisStatus": {
+            "type": "string",
+            "enum": [
+              "complete",
+              "partial",
+              "unsupported"
+            ]
+          },
+          "gaps": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 4096,
+              "pattern": "^[^\\x00-\\x08\\x0b\\x0c\\x0e-\\x1f\\x7f-\\x9f]+$"
+            },
+            "maxItems": 250000
+          },
+          "dispatchStatus": {
+            "type": "string",
+            "enum": [
+              "complete",
+              "partial",
+              "unknown"
+            ]
+          },
+          "dispatchReason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096,
+            "pattern": "^[^\\x00-\\x08\\x0b\\x0c\\x0e-\\x1f\\x7f-\\x9f]+$"
+          },
+          "trigger": {
+            "$ref": "#/components/schemas/BackendEventsTrigger"
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096,
+            "pattern": "^[^\\x00-\\x08\\x0b\\x0c\\x0e-\\x1f\\x7f-\\x9f]+$"
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "required": [
+                "analysisStatus"
+              ],
+              "properties": {
+                "analysisStatus": {
+                  "type": "string",
+                  "const": "complete"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "gaps": {
+                  "maxItems": 0
+                }
+              }
+            },
+            "else": {
+              "properties": {
+                "gaps": {
+                  "minItems": 1
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "dispatchStatus": {
+                  "type": "string",
+                  "const": "complete"
+                }
+              }
+            },
+            "then": {
+              "not": {
+                "required": [
+                  "dispatchReason"
+                ]
+              }
+            },
+            "else": {
+              "required": [
+                "dispatchReason"
+              ],
+              "properties": {
+                "analysisStatus": {
+                  "enum": [
+                    "partial",
+                    "unsupported"
+                  ]
+                }
+              }
+            }
+          }
+        ]
+      },
+      "BackendEventsEventFieldAttributes": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "analysisStatus",
+          "gaps",
+          "section",
+          "path",
+          "nativeType"
+        ],
+        "properties": {
+          "analysisStatus": {
+            "type": "string",
+            "enum": [
+              "complete",
+              "partial",
+              "unsupported"
+            ]
+          },
+          "gaps": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 4096,
+              "pattern": "^[^\\x00-\\x08\\x0b\\x0c\\x0e-\\x1f\\x7f-\\x9f]+$"
+            },
+            "maxItems": 250000
+          },
+          "section": {
+            "type": "string",
+            "enum": [
+              "payload",
+              "headers",
+              "key"
+            ]
+          },
+          "path": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendAPIFieldPathSegment"
+            },
+            "maxItems": 32
+          },
+          "nativeType": {
+            "$ref": "#/components/schemas/BackendEventsScalar"
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096,
+            "pattern": "^[^\\x00-\\x08\\x0b\\x0c\\x0e-\\x1f\\x7f-\\x9f]+$"
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "required": [
+                "analysisStatus"
+              ],
+              "properties": {
+                "analysisStatus": {
+                  "type": "string",
+                  "const": "complete"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "gaps": {
+                  "maxItems": 0
+                }
+              }
+            },
+            "else": {
+              "properties": {
+                "gaps": {
+                  "minItems": 1
+                }
+              }
+            }
+          }
+        ]
+      },
+      "BackendEventsEmitsAttributesInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "channelKey",
+          "deliveryStatus"
+        ],
+        "properties": {
+          "channelKey": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200,
+            "pattern": "^[^\\p{Cc}]+$"
+          },
+          "deliveryStatus": {
+            "type": "string",
+            "enum": [
+              "declared",
+              "unknown"
+            ]
+          },
+          "deliveryReason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096,
+            "pattern": "^[^\\x00-\\x08\\x0b\\x0c\\x0e-\\x1f\\x7f-\\x9f]+$"
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096,
+            "pattern": "^[^\\x00-\\x08\\x0b\\x0c\\x0e-\\x1f\\x7f-\\x9f]+$"
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "deliveryStatus": {
+                  "type": "string",
+                  "const": "unknown"
+                }
+              }
+            },
+            "then": {
+              "required": [
+                "deliveryReason"
+              ]
+            },
+            "else": {
+              "not": {
+                "required": [
+                  "deliveryReason"
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "BackendEventsDeliveredToAttributesInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "messageKey",
+          "deliveryStatus",
+          "condition",
+          "group"
+        ],
+        "properties": {
+          "messageKey": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200,
+            "pattern": "^[^\\p{Cc}]+$"
+          },
+          "deliveryStatus": {
+            "type": "string",
+            "enum": [
+              "declared",
+              "unknown"
+            ]
+          },
+          "deliveryReason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096,
+            "pattern": "^[^\\x00-\\x08\\x0b\\x0c\\x0e-\\x1f\\x7f-\\x9f]+$"
+          },
+          "condition": {
+            "$ref": "#/components/schemas/BackendEventsScalar"
+          },
+          "group": {
+            "$ref": "#/components/schemas/BackendEventsScalar"
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096,
+            "pattern": "^[^\\x00-\\x08\\x0b\\x0c\\x0e-\\x1f\\x7f-\\x9f]+$"
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "deliveryStatus": {
+                  "type": "string",
+                  "const": "unknown"
+                }
+              }
+            },
+            "then": {
+              "required": [
+                "deliveryReason"
+              ]
+            },
+            "else": {
+              "not": {
+                "required": [
+                  "deliveryReason"
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "BackendEventsRetriesAttributesInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "messageKey",
+          "reason",
+          "delay",
+          "maxAttempts"
+        ],
+        "properties": {
+          "messageKey": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200,
+            "pattern": "^[^\\p{Cc}]+$"
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096,
+            "pattern": "^[^\\x00-\\x08\\x0b\\x0c\\x0e-\\x1f\\x7f-\\x9f]+$"
+          },
+          "delay": {
+            "$ref": "#/components/schemas/BackendEventsScalar"
+          },
+          "maxAttempts": {
+            "$ref": "#/components/schemas/BackendEventsScalar"
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096,
+            "pattern": "^[^\\x00-\\x08\\x0b\\x0c\\x0e-\\x1f\\x7f-\\x9f]+$"
+          }
+        }
+      },
+      "BackendEventsDeadLettersAttributesInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "messageKey",
+          "reason"
+        ],
+        "properties": {
+          "messageKey": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200,
+            "pattern": "^[^\\p{Cc}]+$"
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096,
+            "pattern": "^[^\\x00-\\x08\\x0b\\x0c\\x0e-\\x1f\\x7f-\\x9f]+$"
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096,
+            "pattern": "^[^\\x00-\\x08\\x0b\\x0c\\x0e-\\x1f\\x7f-\\x9f]+$"
+          }
+        }
+      },
+      "BackendEventsEmitAttributesInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "analysisStatus",
+          "gaps",
+          "inputs",
+          "outputs",
+          "transactionContext",
+          "nativeText",
+          "stepKind"
+        ],
+        "properties": {
+          "analysisStatus": {
+            "type": "string",
+            "enum": [
+              "complete",
+              "partial",
+              "unsupported"
+            ]
+          },
+          "gaps": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 4096
+            },
+            "maxItems": 500
+          },
+          "inputs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendFlowPort"
+            },
+            "maxItems": 500
+          },
+          "outputs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendFlowPort"
+            },
+            "maxItems": 500
+          },
+          "transactionContext": {
+            "$ref": "#/components/schemas/BackendTransactionContextInput"
+          },
+          "nativeText": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 65536
+          },
+          "nativeReason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "stepKind": {
+            "type": "string",
+            "const": "emit"
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "analysisStatus": {
+                  "const": "complete"
+                }
+              },
+              "required": [
+                "analysisStatus"
+              ]
+            },
+            "then": {
+              "properties": {
+                "gaps": {
+                  "maxItems": 0
+                }
+              }
+            },
+            "else": {
+              "properties": {
+                "gaps": {
+                  "minItems": 1
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "nativeText": {
+                  "type": "null"
+                }
+              },
+              "required": [
+                "nativeText"
+              ]
+            },
+            "then": {
+              "required": [
+                "nativeReason"
+              ]
+            },
+            "else": {
+              "not": {
+                "required": [
+                  "nativeReason"
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "BackendImportLineageValueRefEventField": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "nodeKey",
+          "endpointKey",
+          "routeKey"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "event_field"
+          },
+          "nodeKey": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200,
+            "pattern": "^[^\\p{Cc}]+$"
+          },
+          "endpointKey": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200,
+            "pattern": "^[^\\p{Cc}]+$"
+          },
+          "routeKey": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200,
+            "pattern": "^[^\\p{Cc}]+$"
+          }
+        }
+      },
+      "BackendImportLineageTransport": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "emitsEdgeKey",
+          "deliveryEdgeKey"
+        ],
+        "properties": {
+          "emitsEdgeKey": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200,
+            "pattern": "^[^\\p{Cc}]+$"
+          },
+          "deliveryEdgeKey": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200,
+            "pattern": "^[^\\p{Cc}]+$"
+          }
+        }
+      },
+      "BackendEventsEmitsAttributes": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "channelId",
+          "deliveryStatus"
+        ],
+        "properties": {
+          "channelId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            "not": {
+              "const": "00000000-0000-0000-0000-000000000000"
+            }
+          },
+          "deliveryStatus": {
+            "type": "string",
+            "enum": [
+              "declared",
+              "unknown"
+            ]
+          },
+          "deliveryReason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096,
+            "pattern": "^[^\\x00-\\x08\\x0b\\x0c\\x0e-\\x1f\\x7f-\\x9f]+$"
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096,
+            "pattern": "^[^\\x00-\\x08\\x0b\\x0c\\x0e-\\x1f\\x7f-\\x9f]+$"
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "deliveryStatus": {
+                  "type": "string",
+                  "const": "unknown"
+                }
+              }
+            },
+            "then": {
+              "required": [
+                "deliveryReason"
+              ]
+            },
+            "else": {
+              "not": {
+                "required": [
+                  "deliveryReason"
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "BackendEventsDeliveredToAttributes": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "messageId",
+          "deliveryStatus",
+          "condition",
+          "group"
+        ],
+        "properties": {
+          "messageId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            "not": {
+              "const": "00000000-0000-0000-0000-000000000000"
+            }
+          },
+          "deliveryStatus": {
+            "type": "string",
+            "enum": [
+              "declared",
+              "unknown"
+            ]
+          },
+          "deliveryReason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096,
+            "pattern": "^[^\\x00-\\x08\\x0b\\x0c\\x0e-\\x1f\\x7f-\\x9f]+$"
+          },
+          "condition": {
+            "$ref": "#/components/schemas/BackendEventsScalar"
+          },
+          "group": {
+            "$ref": "#/components/schemas/BackendEventsScalar"
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096,
+            "pattern": "^[^\\x00-\\x08\\x0b\\x0c\\x0e-\\x1f\\x7f-\\x9f]+$"
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "deliveryStatus": {
+                  "type": "string",
+                  "const": "unknown"
+                }
+              }
+            },
+            "then": {
+              "required": [
+                "deliveryReason"
+              ]
+            },
+            "else": {
+              "not": {
+                "required": [
+                  "deliveryReason"
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "BackendEventsRetriesAttributes": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "messageId",
+          "reason",
+          "delay",
+          "maxAttempts"
+        ],
+        "properties": {
+          "messageId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            "not": {
+              "const": "00000000-0000-0000-0000-000000000000"
+            }
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096,
+            "pattern": "^[^\\x00-\\x08\\x0b\\x0c\\x0e-\\x1f\\x7f-\\x9f]+$"
+          },
+          "delay": {
+            "$ref": "#/components/schemas/BackendEventsScalar"
+          },
+          "maxAttempts": {
+            "$ref": "#/components/schemas/BackendEventsScalar"
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096,
+            "pattern": "^[^\\x00-\\x08\\x0b\\x0c\\x0e-\\x1f\\x7f-\\x9f]+$"
+          }
+        }
+      },
+      "BackendEventsDeadLettersAttributes": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "messageId",
+          "reason"
+        ],
+        "properties": {
+          "messageId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            "not": {
+              "const": "00000000-0000-0000-0000-000000000000"
+            }
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096,
+            "pattern": "^[^\\x00-\\x08\\x0b\\x0c\\x0e-\\x1f\\x7f-\\x9f]+$"
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096,
+            "pattern": "^[^\\x00-\\x08\\x0b\\x0c\\x0e-\\x1f\\x7f-\\x9f]+$"
+          }
+        }
+      },
+      "BackendEventsEmitAttributes": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "analysisStatus",
+          "gaps",
+          "inputs",
+          "outputs",
+          "transactionContext",
+          "nativeText",
+          "stepKind"
+        ],
+        "properties": {
+          "analysisStatus": {
+            "type": "string",
+            "enum": [
+              "complete",
+              "partial",
+              "unsupported"
+            ]
+          },
+          "gaps": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 4096
+            },
+            "maxItems": 500
+          },
+          "inputs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendFlowPort"
+            },
+            "maxItems": 500
+          },
+          "outputs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendFlowPort"
+            },
+            "maxItems": 500
+          },
+          "transactionContext": {
+            "$ref": "#/components/schemas/BackendTransactionContext"
+          },
+          "nativeText": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 65536
+          },
+          "nativeReason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "stepKind": {
+            "type": "string",
+            "const": "emit"
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "analysisStatus": {
+                  "const": "complete"
+                }
+              },
+              "required": [
+                "analysisStatus"
+              ]
+            },
+            "then": {
+              "properties": {
+                "gaps": {
+                  "maxItems": 0
+                }
+              }
+            },
+            "else": {
+              "properties": {
+                "gaps": {
+                  "minItems": 1
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "nativeText": {
+                  "type": "null"
+                }
+              },
+              "required": [
+                "nativeText"
+              ]
+            },
+            "then": {
+              "required": [
+                "nativeReason"
+              ]
+            },
+            "else": {
+              "not": {
+                "required": [
+                  "nativeReason"
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "BackendLineageValueRefEventField": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "nodeId",
+          "endpointId",
+          "routeId"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "event_field"
+          },
+          "nodeId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            "not": {
+              "const": "00000000-0000-0000-0000-000000000000"
+            }
+          },
+          "endpointId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            "not": {
+              "const": "00000000-0000-0000-0000-000000000000"
+            }
+          },
+          "routeId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            "not": {
+              "const": "00000000-0000-0000-0000-000000000000"
+            }
+          }
+        }
+      },
+      "BackendLineageTransport": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "emitsEdgeId",
+          "deliveryEdgeId"
+        ],
+        "properties": {
+          "emitsEdgeId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            "not": {
+              "const": "00000000-0000-0000-0000-000000000000"
+            }
+          },
+          "deliveryEdgeId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            "not": {
+              "const": "00000000-0000-0000-0000-000000000000"
+            }
+          }
+        }
+      },
+      "QueryBackendEventsRequest": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/QueryBackendEventsRoutesRequest"
+          },
+          {
+            "$ref": "#/components/schemas/QueryBackendEventsJobsRequest"
+          },
+          {
+            "$ref": "#/components/schemas/QueryBackendEventsServiceCallsRequest"
+          }
+        ]
+      },
+      "QueryBackendEventsRoutesRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "revisionId",
+          "view"
+        ],
+        "properties": {
+          "revisionId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            "not": {
+              "const": "00000000-0000-0000-0000-000000000000"
+            }
+          },
+          "view": {
+            "type": "string",
+            "const": "routes"
+          },
+          "seedNodeId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            "not": {
+              "const": "00000000-0000-0000-0000-000000000000"
+            }
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100,
+            "default": 50
+          },
+          "cursor": {
+            "type": "string",
+            "maxLength": 4096
+          }
+        }
+      },
+      "QueryBackendEventsJobsRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "revisionId",
+          "view"
+        ],
+        "properties": {
+          "revisionId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            "not": {
+              "const": "00000000-0000-0000-0000-000000000000"
+            }
+          },
+          "view": {
+            "type": "string",
+            "const": "jobs"
+          },
+          "serviceId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            "not": {
+              "const": "00000000-0000-0000-0000-000000000000"
+            }
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100,
+            "default": 50
+          },
+          "cursor": {
+            "type": "string",
+            "maxLength": 4096
+          }
+        }
+      },
+      "QueryBackendEventsServiceCallsRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "revisionId",
+          "view"
+        ],
+        "properties": {
+          "revisionId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            "not": {
+              "const": "00000000-0000-0000-0000-000000000000"
+            }
+          },
+          "view": {
+            "type": "string",
+            "const": "service_calls"
+          },
+          "serviceId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            "not": {
+              "const": "00000000-0000-0000-0000-000000000000"
+            }
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100,
+            "default": 50
+          },
+          "cursor": {
+            "type": "string",
+            "maxLength": 4096
+          }
+        }
+      },
+      "BackendEventsStatus": {
+        "type": "string",
+        "enum": [
+          "explicit",
+          "inferred",
+          "stale",
+          "unresolved"
+        ]
+      },
+      "BackendEventsReferences": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [],
+        "properties": {
+          "producerId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            "not": {
+              "const": "00000000-0000-0000-0000-000000000000"
+            }
+          },
+          "messageId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            "not": {
+              "const": "00000000-0000-0000-0000-000000000000"
+            }
+          },
+          "channelId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            "not": {
+              "const": "00000000-0000-0000-0000-000000000000"
+            }
+          },
+          "consumerId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            "not": {
+              "const": "00000000-0000-0000-0000-000000000000"
+            }
+          },
+          "emitsEdgeId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            "not": {
+              "const": "00000000-0000-0000-0000-000000000000"
+            }
+          },
+          "deliveryEdgeId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            "not": {
+              "const": "00000000-0000-0000-0000-000000000000"
+            }
+          },
+          "jobId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            "not": {
+              "const": "00000000-0000-0000-0000-000000000000"
+            }
+          },
+          "callStepId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            "not": {
+              "const": "00000000-0000-0000-0000-000000000000"
+            }
+          },
+          "callsEdgeId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            "not": {
+              "const": "00000000-0000-0000-0000-000000000000"
+            }
+          },
+          "operationId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            "not": {
+              "const": "00000000-0000-0000-0000-000000000000"
+            }
+          },
+          "targetId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            "not": {
+              "const": "00000000-0000-0000-0000-000000000000"
+            }
+          },
+          "targetServiceId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            "not": {
+              "const": "00000000-0000-0000-0000-000000000000"
+            }
+          }
+        }
+      },
+      "BackendEventsWitness": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "provenance",
+          "nodeIds",
+          "edgeIds",
+          "evidenceIds",
+          "status",
+          "limitations"
+        ],
+        "properties": {
+          "provenance": {
+            "type": "string",
+            "const": "source"
+          },
+          "nodeIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+              "not": {
+                "const": "00000000-0000-0000-0000-000000000000"
+              }
+            },
+            "maxItems": 256
+          },
+          "edgeIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+              "not": {
+                "const": "00000000-0000-0000-0000-000000000000"
+              }
+            },
+            "maxItems": 256
+          },
+          "evidenceIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+              "not": {
+                "const": "00000000-0000-0000-0000-000000000000"
+              }
+            },
+            "maxItems": 256
+          },
+          "status": {
+            "$ref": "#/components/schemas/BackendEventsStatus"
+          },
+          "limitations": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "BackendEventsDispatch": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "flowIds",
+          "witness"
+        ],
+        "properties": {
+          "handlesEdgeId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            "not": {
+              "const": "00000000-0000-0000-0000-000000000000"
+            }
+          },
+          "handlerId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            "not": {
+              "const": "00000000-0000-0000-0000-000000000000"
+            }
+          },
+          "unresolvedTargetId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            "not": {
+              "const": "00000000-0000-0000-0000-000000000000"
+            }
+          },
+          "flowIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+              "not": {
+                "const": "00000000-0000-0000-0000-000000000000"
+              }
+            },
+            "maxItems": 256
+          },
+          "witness": {
+            "$ref": "#/components/schemas/BackendEventsWitness"
+          }
+        }
+      },
+      "BackendEventsRelatedRoute": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/BackendEventsRelatedRetries"
+          },
+          {
+            "$ref": "#/components/schemas/BackendEventsRelatedDeadLetters"
+          }
+        ]
+      },
+      "BackendEventsRelatedRetries": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "edgeId",
+          "consumerId",
+          "channelId",
+          "messageId",
+          "reason",
+          "witness",
+          "delay",
+          "maxAttempts"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "retries"
+          },
+          "edgeId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            "not": {
+              "const": "00000000-0000-0000-0000-000000000000"
+            }
+          },
+          "consumerId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            "not": {
+              "const": "00000000-0000-0000-0000-000000000000"
+            }
+          },
+          "channelId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            "not": {
+              "const": "00000000-0000-0000-0000-000000000000"
+            }
+          },
+          "messageId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            "not": {
+              "const": "00000000-0000-0000-0000-000000000000"
+            }
+          },
+          "reason": {
+            "type": "string"
+          },
+          "witness": {
+            "$ref": "#/components/schemas/BackendEventsWitness"
+          },
+          "delay": {
+            "$ref": "#/components/schemas/BackendEventsScalar"
+          },
+          "maxAttempts": {
+            "$ref": "#/components/schemas/BackendEventsScalar"
+          }
+        }
+      },
+      "BackendEventsRelatedDeadLetters": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "edgeId",
+          "consumerId",
+          "channelId",
+          "messageId",
+          "reason",
+          "witness"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "dead_letters"
+          },
+          "edgeId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            "not": {
+              "const": "00000000-0000-0000-0000-000000000000"
+            }
+          },
+          "consumerId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            "not": {
+              "const": "00000000-0000-0000-0000-000000000000"
+            }
+          },
+          "channelId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            "not": {
+              "const": "00000000-0000-0000-0000-000000000000"
+            }
+          },
+          "messageId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            "not": {
+              "const": "00000000-0000-0000-0000-000000000000"
+            }
+          },
+          "reason": {
+            "type": "string"
+          },
+          "witness": {
+            "$ref": "#/components/schemas/BackendEventsWitness"
+          }
+        }
+      },
+      "BackendEventsTransactionContext": {
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "status",
+              "transactionId"
+            ],
+            "properties": {
+              "status": {
+                "type": "string",
+                "const": "known"
+              },
+              "transactionId": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+                "not": {
+                  "const": "00000000-0000-0000-0000-000000000000"
+                }
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "status",
+              "reason"
+            ],
+            "properties": {
+              "status": {
+                "type": "string",
+                "const": "none"
+              },
+              "reason": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 4096,
+                "pattern": "^[^\\x00-\\x08\\x0b\\x0c\\x0e-\\x1f\\x7f-\\x9f]+$"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "status",
+              "reason"
+            ],
+            "properties": {
+              "status": {
+                "type": "string",
+                "const": "unknown"
+              },
+              "reason": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 4096,
+                "pattern": "^[^\\x00-\\x08\\x0b\\x0c\\x0e-\\x1f\\x7f-\\x9f]+$"
+              }
+            }
+          }
+        ]
+      },
+      "BackendEventsEmitContext": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "transaction",
+          "limitations"
+        ],
+        "properties": {
+          "flowId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            "not": {
+              "const": "00000000-0000-0000-0000-000000000000"
+            }
+          },
+          "transaction": {
+            "$ref": "#/components/schemas/BackendEventsTransactionContext"
+          },
+          "controlWitness": {
+            "$ref": "#/components/schemas/BackendEventsWitness"
+          },
+          "limitations": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "BackendEventsRouteItem": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "references",
+          "condition",
+          "group",
+          "dispatch",
+          "related",
+          "witness"
+        ],
+        "properties": {
+          "references": {
+            "$ref": "#/components/schemas/BackendEventsReferences"
+          },
+          "condition": {
+            "$ref": "#/components/schemas/BackendEventsScalar"
+          },
+          "group": {
+            "$ref": "#/components/schemas/BackendEventsScalar"
+          },
+          "dispatch": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendEventsDispatch"
+            },
+            "maxItems": 256
+          },
+          "related": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendEventsRelatedRoute"
+            },
+            "maxItems": 256
+          },
+          "emitContext": {
+            "$ref": "#/components/schemas/BackendEventsEmitContext"
+          },
+          "witness": {
+            "$ref": "#/components/schemas/BackendEventsWitness"
+          }
+        }
+      },
+      "BackendEventsJobItem": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "references",
+          "trigger",
+          "dispatch",
+          "witness"
+        ],
+        "properties": {
+          "references": {
+            "$ref": "#/components/schemas/BackendEventsReferences"
+          },
+          "trigger": {
+            "$ref": "#/components/schemas/BackendEventsTrigger"
+          },
+          "dispatch": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendEventsDispatch"
+            },
+            "maxItems": 256
+          },
+          "witness": {
+            "$ref": "#/components/schemas/BackendEventsWitness"
+          }
+        }
+      },
+      "BackendEventsServiceCallItem": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "references",
+          "dispatch",
+          "witness"
+        ],
+        "properties": {
+          "references": {
+            "$ref": "#/components/schemas/BackendEventsReferences"
+          },
+          "dispatch": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendEventsDispatch"
+            },
+            "maxItems": 256
+          },
+          "witness": {
+            "$ref": "#/components/schemas/BackendEventsWitness"
+          }
+        }
+      },
+      "BackendEventsBoundaryItem": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/BackendEventsRoutesBoundaryItem"
+          },
+          {
+            "$ref": "#/components/schemas/BackendEventsJobsBoundaryItem"
+          },
+          {
+            "$ref": "#/components/schemas/BackendEventsServiceCallsBoundaryItem"
+          }
+        ]
+      },
+      "BackendEventsItem": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/BackendEventsRouteResult"
+          },
+          {
+            "$ref": "#/components/schemas/BackendEventsJobResult"
+          },
+          {
+            "$ref": "#/components/schemas/BackendEventsServiceCallResult"
+          },
+          {
+            "$ref": "#/components/schemas/BackendEventsBoundaryResult"
+          }
+        ]
+      },
+      "BackendEventsRouteResult": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "route"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "route"
+          },
+          "route": {
+            "$ref": "#/components/schemas/BackendEventsRouteItem"
+          }
+        }
+      },
+      "BackendEventsJobResult": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "job"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "job"
+          },
+          "job": {
+            "$ref": "#/components/schemas/BackendEventsJobItem"
+          }
+        }
+      },
+      "BackendEventsServiceCallResult": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "serviceCall"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "service_call"
+          },
+          "serviceCall": {
+            "$ref": "#/components/schemas/BackendEventsServiceCallItem"
+          }
+        }
+      },
+      "BackendEventsBoundaryResult": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "boundary"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "boundary"
+          },
+          "boundary": {
+            "$ref": "#/components/schemas/BackendEventsBoundaryItem"
+          }
+        }
+      },
+      "BackendEventsQueryLimits": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "maxExaminedEdges",
+          "maxItems",
+          "maxAuxiliaryRecords",
+          "maxWitnessRecords",
+          "defaultPageSize",
+          "maxPageSize",
+          "scanPolicy"
+        ],
+        "properties": {
+          "maxExaminedEdges": {
+            "type": "integer",
+            "const": 20000
+          },
+          "maxItems": {
+            "type": "integer",
+            "const": 5000
+          },
+          "maxAuxiliaryRecords": {
+            "type": "integer",
+            "const": 20000
+          },
+          "maxWitnessRecords": {
+            "type": "integer",
+            "const": 256
+          },
+          "defaultPageSize": {
+            "type": "integer",
+            "const": 50
+          },
+          "maxPageSize": {
+            "type": "integer",
+            "const": 100
+          },
+          "scanPolicy": {
+            "type": "string",
+            "const": "complete-scan-admission"
+          }
+        }
+      },
+      "BackendEventsPage": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/BackendEventsRoutesPage"
+          },
+          {
+            "$ref": "#/components/schemas/BackendEventsJobsPage"
+          },
+          {
+            "$ref": "#/components/schemas/BackendEventsServiceCallsPage"
+          }
+        ]
+      },
+      "BackendEventsRoutesPage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "projectId",
+          "revisionId",
+          "semanticHash",
+          "policy",
+          "view",
+          "items",
+          "nextCursor",
+          "coverage",
+          "limits",
+          "complete",
+          "truncated",
+          "truncationReasons",
+          "limitations",
+          "totalEdgeCount",
+          "examinedEdgeCount",
+          "constructedItemCount",
+          "auxiliaryRecordCount"
+        ],
+        "properties": {
+          "projectId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            "not": {
+              "const": "00000000-0000-0000-0000-000000000000"
+            }
+          },
+          "revisionId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            "not": {
+              "const": "00000000-0000-0000-0000-000000000000"
+            }
+          },
+          "semanticHash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "policy": {
+            "type": "string",
+            "const": "source-events-projection-v1"
+          },
+          "view": {
+            "type": "string",
+            "const": "routes"
+          },
+          "seedNodeId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            "not": {
+              "const": "00000000-0000-0000-0000-000000000000"
+            }
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendEventsRoutesItem"
+            },
+            "maxItems": 100
+          },
+          "nextCursor": {
+            "type": "string"
+          },
+          "coverage": {
+            "$ref": "#/components/schemas/BackendRevisionCoverage"
+          },
+          "limits": {
+            "$ref": "#/components/schemas/BackendEventsQueryLimits"
+          },
+          "complete": {
+            "type": "boolean"
+          },
+          "truncated": {
+            "type": "boolean"
+          },
+          "truncationReasons": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "edge_limit",
+                "item_limit",
+                "auxiliary_limit",
+                "witness_limit",
+                "ownership_depth"
+              ]
+            }
+          },
+          "limitations": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "totalEdgeCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "examinedEdgeCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "constructedItemCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "auxiliaryRecordCount": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "description": "Complete means this selected bounded enumeration finished; it does not establish source completeness, broker delivery or execution. Revisions exceeding the edge admission limit return an empty diagnostic page, complete=false and truncated=true."
+      },
+      "BackendEventsJobsPage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "projectId",
+          "revisionId",
+          "semanticHash",
+          "policy",
+          "view",
+          "items",
+          "nextCursor",
+          "coverage",
+          "limits",
+          "complete",
+          "truncated",
+          "truncationReasons",
+          "limitations",
+          "totalEdgeCount",
+          "examinedEdgeCount",
+          "constructedItemCount",
+          "auxiliaryRecordCount"
+        ],
+        "properties": {
+          "projectId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            "not": {
+              "const": "00000000-0000-0000-0000-000000000000"
+            }
+          },
+          "revisionId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            "not": {
+              "const": "00000000-0000-0000-0000-000000000000"
+            }
+          },
+          "semanticHash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "policy": {
+            "type": "string",
+            "const": "source-events-projection-v1"
+          },
+          "view": {
+            "type": "string",
+            "const": "jobs"
+          },
+          "serviceId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            "not": {
+              "const": "00000000-0000-0000-0000-000000000000"
+            }
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendEventsJobsItem"
+            },
+            "maxItems": 100
+          },
+          "nextCursor": {
+            "type": "string"
+          },
+          "coverage": {
+            "$ref": "#/components/schemas/BackendRevisionCoverage"
+          },
+          "limits": {
+            "$ref": "#/components/schemas/BackendEventsQueryLimits"
+          },
+          "complete": {
+            "type": "boolean"
+          },
+          "truncated": {
+            "type": "boolean"
+          },
+          "truncationReasons": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "edge_limit",
+                "item_limit",
+                "auxiliary_limit",
+                "witness_limit",
+                "ownership_depth"
+              ]
+            }
+          },
+          "limitations": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "totalEdgeCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "examinedEdgeCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "constructedItemCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "auxiliaryRecordCount": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "description": "Complete means this selected bounded enumeration finished; it does not establish source completeness, broker delivery or execution. Revisions exceeding the edge admission limit return an empty diagnostic page, complete=false and truncated=true."
+      },
+      "BackendEventsServiceCallsPage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "projectId",
+          "revisionId",
+          "semanticHash",
+          "policy",
+          "view",
+          "items",
+          "nextCursor",
+          "coverage",
+          "limits",
+          "complete",
+          "truncated",
+          "truncationReasons",
+          "limitations",
+          "totalEdgeCount",
+          "examinedEdgeCount",
+          "constructedItemCount",
+          "auxiliaryRecordCount"
+        ],
+        "properties": {
+          "projectId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            "not": {
+              "const": "00000000-0000-0000-0000-000000000000"
+            }
+          },
+          "revisionId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            "not": {
+              "const": "00000000-0000-0000-0000-000000000000"
+            }
+          },
+          "semanticHash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "policy": {
+            "type": "string",
+            "const": "source-events-projection-v1"
+          },
+          "view": {
+            "type": "string",
+            "const": "service_calls"
+          },
+          "serviceId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            "not": {
+              "const": "00000000-0000-0000-0000-000000000000"
+            }
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendEventsServiceCallsItem"
+            },
+            "maxItems": 100
+          },
+          "nextCursor": {
+            "type": "string"
+          },
+          "coverage": {
+            "$ref": "#/components/schemas/BackendRevisionCoverage"
+          },
+          "limits": {
+            "$ref": "#/components/schemas/BackendEventsQueryLimits"
+          },
+          "complete": {
+            "type": "boolean"
+          },
+          "truncated": {
+            "type": "boolean"
+          },
+          "truncationReasons": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "edge_limit",
+                "item_limit",
+                "auxiliary_limit",
+                "witness_limit",
+                "ownership_depth"
+              ]
+            }
+          },
+          "limitations": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "totalEdgeCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "examinedEdgeCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "constructedItemCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "auxiliaryRecordCount": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "description": "Complete means this selected bounded enumeration finished; it does not establish source completeness, broker delivery or execution. Revisions exceeding the edge admission limit return an empty diagnostic page, complete=false and truncated=true."
+      },
+      "BackendEventsRoutesBoundaryItem": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "view",
+          "reason",
+          "references",
+          "dispatch",
+          "related",
+          "witness"
+        ],
+        "properties": {
+          "view": {
+            "type": "string",
+            "const": "routes"
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096,
+            "pattern": "^[^\\x00-\\x08\\x0b\\x0c\\x0e-\\x1f\\x7f-\\x9f]+$"
+          },
+          "references": {
+            "$ref": "#/components/schemas/BackendEventsReferences"
+          },
+          "condition": {
+            "$ref": "#/components/schemas/BackendEventsScalar"
+          },
+          "group": {
+            "$ref": "#/components/schemas/BackendEventsScalar"
+          },
+          "trigger": {
+            "$ref": "#/components/schemas/BackendEventsTrigger"
+          },
+          "dispatch": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendEventsDispatch"
+            },
+            "maxItems": 256
+          },
+          "related": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendEventsRelatedRoute"
+            },
+            "maxItems": 256
+          },
+          "emitContext": {
+            "$ref": "#/components/schemas/BackendEventsEmitContext"
+          },
+          "witness": {
+            "$ref": "#/components/schemas/BackendEventsWitness"
+          }
+        }
+      },
+      "BackendEventsRoutesBoundaryResult": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "boundary"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "boundary"
+          },
+          "boundary": {
+            "$ref": "#/components/schemas/BackendEventsRoutesBoundaryItem"
+          }
+        }
+      },
+      "BackendEventsRoutesItem": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/BackendEventsRouteResult"
+          },
+          {
+            "$ref": "#/components/schemas/BackendEventsRoutesBoundaryResult"
+          }
+        ]
+      },
+      "BackendEventsJobsBoundaryItem": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "view",
+          "reason",
+          "references",
+          "dispatch",
+          "related",
+          "witness"
+        ],
+        "properties": {
+          "view": {
+            "type": "string",
+            "const": "jobs"
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096,
+            "pattern": "^[^\\x00-\\x08\\x0b\\x0c\\x0e-\\x1f\\x7f-\\x9f]+$"
+          },
+          "references": {
+            "$ref": "#/components/schemas/BackendEventsReferences"
+          },
+          "condition": {
+            "$ref": "#/components/schemas/BackendEventsScalar"
+          },
+          "group": {
+            "$ref": "#/components/schemas/BackendEventsScalar"
+          },
+          "trigger": {
+            "$ref": "#/components/schemas/BackendEventsTrigger"
+          },
+          "dispatch": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendEventsDispatch"
+            },
+            "maxItems": 256
+          },
+          "related": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendEventsRelatedRoute"
+            },
+            "maxItems": 256
+          },
+          "emitContext": {
+            "$ref": "#/components/schemas/BackendEventsEmitContext"
+          },
+          "witness": {
+            "$ref": "#/components/schemas/BackendEventsWitness"
+          }
+        }
+      },
+      "BackendEventsJobsBoundaryResult": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "boundary"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "boundary"
+          },
+          "boundary": {
+            "$ref": "#/components/schemas/BackendEventsJobsBoundaryItem"
+          }
+        }
+      },
+      "BackendEventsJobsItem": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/BackendEventsJobResult"
+          },
+          {
+            "$ref": "#/components/schemas/BackendEventsJobsBoundaryResult"
+          }
+        ]
+      },
+      "BackendEventsServiceCallsBoundaryItem": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "view",
+          "reason",
+          "references",
+          "dispatch",
+          "related",
+          "witness"
+        ],
+        "properties": {
+          "view": {
+            "type": "string",
+            "const": "service_calls"
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096,
+            "pattern": "^[^\\x00-\\x08\\x0b\\x0c\\x0e-\\x1f\\x7f-\\x9f]+$"
+          },
+          "references": {
+            "$ref": "#/components/schemas/BackendEventsReferences"
+          },
+          "condition": {
+            "$ref": "#/components/schemas/BackendEventsScalar"
+          },
+          "group": {
+            "$ref": "#/components/schemas/BackendEventsScalar"
+          },
+          "trigger": {
+            "$ref": "#/components/schemas/BackendEventsTrigger"
+          },
+          "dispatch": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendEventsDispatch"
+            },
+            "maxItems": 256
+          },
+          "related": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendEventsRelatedRoute"
+            },
+            "maxItems": 256
+          },
+          "emitContext": {
+            "$ref": "#/components/schemas/BackendEventsEmitContext"
+          },
+          "witness": {
+            "$ref": "#/components/schemas/BackendEventsWitness"
+          }
+        }
+      },
+      "BackendEventsServiceCallsBoundaryResult": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "boundary"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "boundary"
+          },
+          "boundary": {
+            "$ref": "#/components/schemas/BackendEventsServiceCallsBoundaryItem"
+          }
+        }
+      },
+      "BackendEventsServiceCallsItem": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/BackendEventsServiceCallResult"
+          },
+          {
+            "$ref": "#/components/schemas/BackendEventsServiceCallsBoundaryResult"
+          }
+        ]
       }
     }
   },
@@ -53921,7 +58015,7 @@
             }
           }
         },
-        "description": "Read-only source3 reachability and reverse direct/possible accesses. Bounded source witnesses do not establish execution, lineage or transaction atomicity."
+        "description": "Read-only source3/4/5 reachability and reverse direct/possible accesses. Source3/4 cursors retain runtime-flow-reachability-v1; source5 uses runtime-flow-reachability-v2 with consumer/job entrypoints and explicit service calls. Bounded source witnesses do not establish execution, lineage or transaction atomicity."
       }
     },
     "/api/backend-projects/{id}/saved-views": {
@@ -54550,7 +58644,7 @@
             }
           }
         },
-        "description": "Read-only bounded static value dependencies in one explicit source4 revision. Unknown boundaries and all multi-source mapping inputs remain visible; witnesses do not prove execution or complete coverage."
+        "description": "Read-only bounded static value dependencies in one explicit source4/5 revision. Unknown boundaries and all multi-source mapping inputs remain visible; witnesses do not prove execution or complete coverage. Source4 retains field-lineage-traversal-v1; source5 uses field-lineage-traversal-v2 and full node/endpoint/route event addresses. Unknown or stale transport remains a boundary."
       }
     },
     "/api/backend-projects/{id}/api-artifacts/query": {
@@ -56002,6 +60096,114 @@
             }
           }
         ]
+      }
+    },
+    "/api/backend-projects/{id}/events/query": {
+      "post": {
+        "tags": [
+          "backend-projects"
+        ],
+        "operationId": "queryBackendEvents",
+        "summary": "Query pinned source events, jobs and service calls",
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendEventsPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/QueryBackendEventsRequest"
+              }
+            }
+          }
+        },
+        "description": "Pure source5 bounded projection using exact explicit references. No execution or delivery claim. Select routes with optional seedNodeId; jobs/service_calls with optional serviceId. Complete means enumeration. Revisions above 20000 edges return a pinned empty diagnostic page under complete-scan-admission."
       }
     }
   }

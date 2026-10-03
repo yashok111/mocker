@@ -2,11 +2,11 @@
 
 
 Load as `backend-database-reference` from the selected global guideSetId. Its
-canonical owner is `mocker-backend-database` v5. Import v5 explicitly selects
+canonical owner is `mocker-backend-database` v6. Import v6 explicitly selects
 that supported owner in the same set and verifies the actual returned owner
 workflow/version/set/manifestHash/contentHash against the owner's manifest.
 Do not expect this topic to return import identity. For shared UUID/provenance/
-recovery semantics, model/recovery topics keep import v5 ownership.
+recovery semantics, model/recovery topics keep import v6 ownership.
 
 ## Declared source model
 
@@ -244,7 +244,7 @@ never truncate. They are validation bounds, not measured performance claims.
 Canvas visibility is at most 200 tables/600 FKs with explicit scope counts; the
 paginated list, relationship table and inspector preserve full read access.
 
-Source schema3/4 supports imported scoped endpoint accesses through inspect5 and
+Source schema3/4/5 supports imported scoped endpoint accesses through inspect6 and
 query_backend_flow. Select that owner in this same set, then page accesses at
 the exact source revision with dataNodeId; table-level unknown-column access is
 possible, never a confirmed column reader/writer. Open query/edge/witness proof.
@@ -256,7 +256,7 @@ impact and provider migration remain unavailable. Saved views persist presentati
 
 ## Proposal documents and property provenance
 
-`proposal-relational-v1` is a desired view/document, separate from source schemas2/3/4.
+`proposal-relational-v1` is a desired view/document, separate from source schemas2/3/4/5.
 Create pins project/repository/base revision and hash/datastore/facet. A proposal
 has its own positive int64 version and immutable draft history. Only draft status
 is supported. Imported graph rows, provider identities, source receipts and the
@@ -306,7 +306,7 @@ truncation, extra open-proposal cap or performance claim is implied.
 
 ## Pinned saved Database views and executable SDK example
 
-Require database5, `backend-saved-views` and `saved-view-v1`, preserving source
+Require database6, `backend-saved-views` and `saved-view-v1`, preserving source
 schemas2/3 and proposal-relational-v1 requirements. List/get/create/save use the
 four `*_backend_saved_view[s]` tools; no delete or rebind exists. GET resolves an
 exact immutable saved version before reading its source/proposal model. Share
@@ -365,26 +365,30 @@ disabled during preview. Name/search limits200characters; finite x/y within
 search drafts, cursors, graph bodies, source text or credentials. Ordinary-agent
 acceptance and live agent evaluation remain deferred.
 
-## Source4 column lineage belongs to inspect5
+## Source4 column lineage belongs to inspect6
 
-Database5 reads source2/3/4 and existing proposal-relational-v1/saved-view-v1.
-For source4 lineage select inspect5 in the same guideSetId/manifestHash, verify
-its schema3/4 and field-lineage-v1 support, all required capabilities including
+Database6 reads source2/3/4/5 and existing proposal-relational-v1/saved-view-v1.
+For source4/5 lineage select inspect6 in the same guideSetId/manifestHash, verify
+its schema3/4/5 and field-lineage-v1 support, all required capabilities including
 backend-field-lineage-query, and actual flow-reference/analysis topic hashes.
 Use exact {kind:"column",nodeId,facetKey}, revisionId and reverse for origins or
 forward for downstream. Preserve facet identity, ordered co-inputs, unknown
 boundary destination/actions, coverage and truncation. Do not issue lineage for
 source2/3 or proposals; an exact source-base navigation does not turn designed
 intent into source lineage. No SQL/application/migration execution or latest-pin
-fallback. Query procedure and evidence interpretation belong to inspect5.
+fallback. Query procedure and evidence interpretation belong to inspect6.
 
 ## Exact API links from a database value
 
-Select the complete inspect5 owner in this same guide set, including
+Select the complete inspect6 owner in this same guide set, including
 backend-api-artifact-pins and api-artifact-pins-v1 in viewSchemaVersions. Follow
 backend-flow-reference for a manually chosen API-field association reached through
 column lineage; column names/types create no automatic correspondence. Query a
 proposal's exact baseRevisionId and a SavedView's exact source target. Orphaned
 source UUIDs remain queryable/removable with their frozen labels. New head or API
-draft observations never replace these pins. Database5 and its proposal contract
+draft observations never replace these pins. Database6 and its proposal contract
 remain unchanged; source1–3 keep their supported reads.
+
+Source5 column→message fields delegates to inspect6/backend-events with full
+node+endpoint+edge route refs and explicit transport. Source2/3/proposals never
+acquire contextual event lineage through schema or name matching.

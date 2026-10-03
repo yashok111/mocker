@@ -1,0 +1,18 @@
+// INERT SOURCE: this file belongs to service billing, not service orders.
+async function onOrderCancelled(bytes, billingStore) {
+  const decoded = decode("orders.cancelled.v1", bytes);
+  const status = decoded.status;
+  await billingStore.markCancelled(decoded.orderId, status);
+}
+async function onReturnCancelled(bytes, billingStore) {
+  const decoded = decode("returns.cancelled.v1", bytes);
+  await billingStore.markReturned(decoded.orderId, decoded.status);
+}
+function onOrphan(bytes) { return decode("orders.cancelled.v1", bytes); }
+function onAudit(bytes) { return auditLog(decode("orders.cancelled.v1", bytes)); }
+
+const cancelOrderOperation = httpOperation("billing.cancel-order.v1", "POST", "/internal/orders/cancel", cancelOrderHttp);
+async function cancelOrderHttp(request, billingStore) {
+  await billingStore.markCancelled(request.orderId, "cancelled");
+  return { accepted: true };
+}

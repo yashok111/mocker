@@ -9,8 +9,8 @@ import (
 
 func TestEditorGuideHasQualifiedPinnedOwner(t *testing.T) {
 	owner, ok := WorkflowForTopic("backend-editor-projections")
-	if !ok || owner.WorkflowID != "mocker-backend-inspect" || owner.WorkflowVersion != "5" {
-		t.Fatalf("editor guide lacks inspect5 owner: %+v", owner)
+	if !ok || owner.WorkflowID != "mocker-backend-inspect" || owner.WorkflowVersion != "6" {
+		t.Fatalf("editor guide lacks inspect6 owner: %+v", owner)
 	}
 	if !slices.Contains(owner.RequiredCapabilities, "backend-editor-projections") || !slices.Contains(owner.RequiredViewSchemaVersions, "backend-editor-artifacts-v1") {
 		t.Fatalf("editor guide can qualify without its complete contract: %+v", owner)

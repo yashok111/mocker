@@ -1,7 +1,7 @@
 # Import recovery and pinned reads
 
 
-This topic is canonically import v5-owned. Database v5 readers explicitly select
+This topic is canonically import v6-owned. Database v6 readers explicitly select
 its supported import owner in the same global set and verify the actual returned
 owner tuple/contentHash. Use it from the selected set before commit
 and whenever a response is lost, a session resumes, or CAS fails. Recheck selected
@@ -143,7 +143,7 @@ proof still read through its exact revision/snapshot.
 ## Proposal recovery
 
 Proposal create/apply uses a separate retained exact request and idempotencyKey.
-Before a new mutation after restart/update select a compatible database5 workflow,
+Before a new mutation after restart/update select a compatible database6 workflow,
 view proposal-relational-v1, exact set/hash and proposal/edit capabilities. For an
 uncertain acknowledgement retry the identical request/key three times with
 1/2/4-second backoff, then preserve request, key, proposal and base/draft pins as
@@ -156,4 +156,4 @@ Do not patch only expectedVersion or use project CAS. A new source head leaves
 the proposal baseline intact and reports baseOutdated. Historical graph cursors
 remain pinned; history-list continuation after a save must restart. Wrong ownership
 or designed-object source evidence gives404. Unsupported ready/rebase/impact
-remains a later boundary. These rules do not alter import5 batch/commit recovery.
+remains a later boundary. These rules do not alter import6 batch/commit recovery.

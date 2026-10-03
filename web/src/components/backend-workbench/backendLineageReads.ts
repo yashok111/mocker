@@ -10,7 +10,9 @@ export function lineageRefKey(ref: BackendLineageValueRef) {
       ? [ref.kind, ref.nodeId, ref.collection, ref.portKey]
       : ref.kind === "column"
         ? [ref.kind, ref.nodeId, ref.facetKey]
-        : [ref.kind, ref.nodeId],
+        : ref.kind === "event_field"
+          ? [ref.kind, ref.nodeId, ref.endpointId, ref.routeId]
+          : [ref.kind, ref.nodeId],
   );
 }
 export function lineageRefLabel(ref: BackendLineageValueRef) {
@@ -18,7 +20,9 @@ export function lineageRefLabel(ref: BackendLineageValueRef) {
     ? `${ref.nodeId} · ${ref.collection} · ${ref.portKey}`
     : ref.kind === "column"
       ? `${ref.nodeId} · колонка · ${ref.facetKey}`
-      : `${ref.nodeId} · поле API`;
+      : ref.kind === "event_field"
+        ? `${ref.nodeId} · поле события · ${ref.endpointId} · маршрут ${ref.routeId}`
+        : `${ref.nodeId} · поле API`;
 }
 export async function readLineagePage(
   projectId: string,

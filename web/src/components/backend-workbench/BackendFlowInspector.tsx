@@ -16,6 +16,7 @@ import {
 } from "./backendDatabaseReads";
 import type { FlowSelection } from "./backendFlowReads";
 import { BackendAPIArtifacts } from "./BackendAPIArtifacts";
+import { lineageRefKey, lineageRefLabel } from "./backendLineageReads";
 
 export function BackendFlowInspector({
   projectId,
@@ -37,7 +38,12 @@ export function BackendFlowInspector({
   );
   const selectValue = (ref: BackendLineageValueRef) => {
     setValueSelection(ref);
-    if (ref.nodeId !== selection.id) onSelect({ type: "node", id: ref.nodeId, valueRef: ref });
+    if (
+      ref.nodeId !== selection.id ||
+      (ref.kind === "event_field" &&
+        (!selectedValue || lineageRefKey(ref) !== lineageRefKey(selectedValue)))
+    )
+      onSelect({ type: "node", id: ref.nodeId, valueRef: ref });
   };
   const key = ["backend-flow-inspector", projectId, revisionId, selection.type, selection.id];
   useDatabaseCancellation(key);
@@ -211,7 +217,9 @@ export function BackendFlowInspector({
                   ? `${valueSelection.collection} · ${valueSelection.portKey}`
                   : valueSelection.kind === "column"
                     ? `колонка · ${valueSelection.facetKey}`
-                    : "поле API"}
+                    : valueSelection.kind === "event_field"
+                      ? lineageRefLabel(valueSelection)
+                      : "поле API"}
               </Text>
             )}
             {"parentId" in record && record.parentId && (

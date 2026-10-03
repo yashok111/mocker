@@ -4,13 +4,14 @@ import (
 	"crypto/sha256"
 	"encoding/json/v2"
 	"fmt"
-	"go.yaml.in/yaml/v3"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
+
+	"go.yaml.in/yaml/v3"
 )
 
 func TestVersionedWorkflowContract(t *testing.T) {
@@ -46,7 +47,7 @@ func TestImportWorkflowUsesPinnedAvailableTopics(t *testing.T) {
 			selected = workflow
 		}
 	}
-	if selected.Entrypoint != "backend-import" || selected.WorkflowVersion != "5" {
+	if selected.Entrypoint != "backend-import" || selected.WorkflowVersion != "6" {
 		t.Fatalf("source import workflow unavailable: %#v", selected)
 	}
 	if selected.GuideSetID != CurrentGuideSetID() || selected.ManifestHash != CurrentGuideSetID() {
@@ -57,7 +58,7 @@ func TestImportWorkflowUsesPinnedAvailableTopics(t *testing.T) {
 			t.Errorf("import workflow does not require %s", required)
 		}
 	}
-	if !slices.Equal(selected.RequiredModelSchemaVersions, []string{"1", "2", "3", "4"}) || len(selected.Topics) == 0 {
+	if !slices.Equal(selected.RequiredModelSchemaVersions, []string{"1", "2", "3", "4", "5"}) || len(selected.Topics) == 0 {
 		t.Fatal("import workflow has no supported schema or procedure")
 	}
 	for _, topic := range selected.Topics {

@@ -12,15 +12,18 @@ const (
 )
 
 func hasRuntimeProfile(profile string) bool {
-	return profile == RuntimeProfile || profile == LineageProfile
+	return profile == RuntimeProfile || hasLineageProfile(profile)
 }
 func isRuntimeSchema(schema string) bool {
-	return schema == RuntimeSchemaVersion || schema == LineageSchemaVersion
+	return schema == RuntimeSchemaVersion || isLineageSchema(schema)
 }
 func sourceProfilesMatch(schema string, profiles []string) bool {
 	expected := []string{GraphProfile, RelationalProfile, RuntimeProfile}
-	if schema == LineageSchemaVersion {
+	if isLineageSchema(schema) {
 		expected = append(expected, LineageProfile)
+		if schema == EventsSchemaVersion {
+			expected = append(expected, EventsProfile)
+		}
 	} else if schema != RuntimeSchemaVersion {
 		return false
 	}

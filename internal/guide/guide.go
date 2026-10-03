@@ -46,12 +46,13 @@ const (
 	TopicBackendFlowReference     = "backend-flow-reference"
 	TopicBackendAnalysis          = "backend-analysis"
 	TopicBackendEditorProjections = "backend-editor-projections"
+	TopicBackendEvents            = "backend-events"
 )
 
 //go:embed instructions.md overview.md tools.md shapes.md cookbook.md http.md design.md functions.md backend-overview.md backend-import.md backend-model.md backend-import-protocol.md backend-recovery.md backend-examples.md manifest.json
 //go:embed backend-database.md backend-database-reference.md backend-profile-go-sql.md
 //go:embed backend-inspect.md backend-flow-reference.md backend-analysis.md
-//go:embed backend-editor-projections.md
+//go:embed backend-editor-projections.md backend-events.md
 var files embed.FS
 
 // topicFiles maps a topic to its embedded file. overview.md is SKILL.md
@@ -79,6 +80,7 @@ var topicFiles = map[string]string{
 	TopicBackendFlowReference:     "backend-flow-reference.md",
 	TopicBackendAnalysis:          "backend-analysis.md",
 	TopicBackendEditorProjections: "backend-editor-projections.md",
+	TopicBackendEvents:            "backend-events.md",
 }
 
 // Topics is the ordered list of topic names get_guide accepts.
@@ -90,7 +92,7 @@ func Topics() []string {
 		TopicBackendExamples, TopicBackendDatabase, TopicBackendDatabaseReference,
 		TopicBackendProfileGoSQL,
 		TopicBackendInspect, TopicBackendFlowReference, TopicBackendAnalysis,
-		TopicBackendEditorProjections,
+		TopicBackendEditorProjections, TopicBackendEvents,
 	}
 }
 

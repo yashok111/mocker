@@ -131,8 +131,8 @@ func (s *ArtifactService) loadArtifactPinsBaseline(ctx context.Context, pid stri
 	if p.CurrentRevisionID != in.BaseRevisionID {
 		return nil, nil, "", importConflict("backend_artifact_pins_base_conflict", "Current source baseline changed", p.Version)
 	}
-	if state.Revision.SchemaVersion != LineageSchemaVersion || len(state.Sources) == 0 || len(state.Revision.SourceSnapshotIDs) == 0 || len(p.Repositories) == 0 {
-		return nil, nil, "", &FaultError{Status: 422, Code: "backend_artifact_pins_unsupported", Message: "Artifact pins require an imported source4 baseline"}
+	if !isLineageSchema(state.Revision.SchemaVersion) || len(state.Sources) == 0 || len(state.Revision.SourceSnapshotIDs) == 0 || len(p.Repositories) == 0 {
+		return nil, nil, "", &FaultError{Status: 422, Code: "backend_artifact_pins_unsupported", Message: "Artifact pins require an imported source4 or source5 baseline"}
 	}
 	baselineHash, err := artifactBaselineDigest(ctx, tx, pid, in.BaseRevisionID)
 	if err != nil {

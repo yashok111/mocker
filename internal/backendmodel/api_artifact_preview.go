@@ -77,8 +77,8 @@ func (s *APIArtifactService) prepare(ctx context.Context, pid string, in Preview
 	if p.CurrentRevisionID != in.BaseRevisionID {
 		return nil, importConflict("backend_api_pins_base_conflict", "Current source baseline changed", p.Version)
 	}
-	if state.Revision.SchemaVersion != LineageSchemaVersion || len(state.Sources) == 0 || len(state.Revision.SourceSnapshotIDs) == 0 || len(p.Repositories) == 0 {
-		return nil, &FaultError{Status: 422, Code: "backend_api_pins_unsupported", Message: "API pins require an imported source4 baseline"}
+	if !isLineageSchema(state.Revision.SchemaVersion) || len(state.Sources) == 0 || len(state.Revision.SourceSnapshotIDs) == 0 || len(p.Repositories) == 0 {
+		return nil, &FaultError{Status: 422, Code: "backend_api_pins_unsupported", Message: "API pins require an imported source4 or source5 baseline"}
 	}
 	frozen := state.APIArtifactContext
 	if state.ArtifactContext != nil && state.ArtifactContext.DocumentVersion == EditorArtifactDocumentVersion {

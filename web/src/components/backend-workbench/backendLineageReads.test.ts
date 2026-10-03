@@ -1,8 +1,34 @@
 // @vitest-environment node
 import { afterEach, expect, it, vi } from "vitest";
 import { json } from "@/test/http";
-import { readLineagePage, lineageRefKey } from "./backendLineageReads";
+import { readLineagePage, lineageRefKey, lineageRefLabel } from "./backendLineageReads";
 afterEach(() => vi.unstubAllGlobals());
+it("keeps each event endpoint and delivery route a distinct value and response seed", async () => {
+  const event = {
+    kind: "event_field" as const,
+    nodeId: "field",
+    endpointId: "consumer",
+    routeId: "delivery-a",
+  };
+  expect(lineageRefKey(event)).not.toBe(lineageRefKey({ ...event, routeId: "delivery-b" }));
+  expect(lineageRefKey(event)).not.toBe(lineageRefKey({ ...event, endpointId: "producer" }));
+  expect(lineageRefLabel(event)).toContain("delivery-a");
+  vi.stubGlobal("fetch", async () =>
+    json(200, {
+      projectId: "project",
+      revisionId: "rev",
+      direction: "forward",
+      seed: { ...event, routeId: "delivery-b" },
+    }),
+  );
+  await expect(
+    readLineagePage(
+      "project",
+      { revisionId: "rev", direction: "forward", seed: event },
+      new AbortController().signal,
+    ),
+  ).rejects.toThrow(/друг/);
+});
 const seed = {
   kind: "port" as const,
   nodeId: "step",

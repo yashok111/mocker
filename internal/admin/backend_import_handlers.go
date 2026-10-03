@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"reflect"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -346,7 +347,7 @@ func backendImportShape(raw jsontext.Value, typ reflect.Type, path string) error
 		}
 		if value, supplied := fields["profile"]; supplied {
 			var profile string
-			if err := json.Unmarshal(value, &profile); err != nil || (profile != backendmodel.GraphProfile && profile != backendmodel.RelationalProfile && profile != backendmodel.RuntimeProfile && profile != backendmodel.LineageProfile) {
+			if err := json.Unmarshal(value, &profile); err != nil || !slices.Contains([]string{backendmodel.GraphProfile, backendmodel.RelationalProfile, backendmodel.RuntimeProfile, backendmodel.LineageProfile, backendmodel.EventsProfile}, profile) {
 				return fmt.Errorf("%s/profile must select a supported import profile", path)
 			}
 		}

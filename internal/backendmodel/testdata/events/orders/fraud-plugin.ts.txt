@@ -1,0 +1,6 @@
+// ALTERNATE INERT EVIDENCE: excluded from baseline, added for resolved scope.
+pluginRegistry.register("fraud-v1", onFraudCancelled);
+async function onFraudCancelled(bytes, fraudStore) {
+  const decoded = decode("orders.cancelled.v1", bytes);
+  await fraudStore.recordCancellation(decoded.orderId);
+}

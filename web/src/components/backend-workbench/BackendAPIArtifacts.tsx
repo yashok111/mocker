@@ -163,7 +163,7 @@ export function BackendAPIArtifacts(props: Props) {
         key={`${props.projectId}:${props.revisionId}:${props.sourceNodeId ?? "all"}`}
         {...props}
       />
-      {props.sourceNodeId && host?.revision.schemaVersion === "4" && (
+      {props.sourceNodeId && host && ["4", "5"].includes(host.revision.schemaVersion) && (
         <BackendArtifactProjections {...props} />
       )}
     </>

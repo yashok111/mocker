@@ -65,8 +65,12 @@ func resolveSavedReferences(ctx context.Context, q importReader, pid string, in 
 	if f := s.Flow; f != nil {
 		var flow Node
 		if f.Scope.EntrypointID != "" {
-			if _, err := node(f.Scope.EntrypointID, "http_operation", "state.scope.entrypointId"); err != nil {
+			entry, err := node(f.Scope.EntrypointID, "", "state.scope.entrypointId")
+			if err != nil {
 				return nil, err
+			}
+			if !runtimeEntrypointForSchema(state.Revision.SchemaVersion, entry.Kind) {
+				return nil, invalid("state.scope.entrypointId", "Expected a supported pinned entrypoint")
 			}
 		}
 		if f.Scope.FlowID != "" {

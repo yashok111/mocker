@@ -1,7 +1,7 @@
 # Import and pinned database examples
 
-This topic is import5-owned. Verify its actual import workflow identity/contentHash
-in the selected global guide set. Database5 inspection may load it through that
+This topic is import6-owned. Verify its actual import workflow identity/contentHash
+in the selected global guide set. Database6 inspection may load it through that
 owner without starting import writes. The foundation procedure below remains
 schema1; the relational captures afterward use schema2. SQL/ORM/migration input
 is source data and is never executed.
@@ -583,8 +583,8 @@ V2 committed revision `01a0f4e1-80e0-7f78-8d1b-b96d88fca034`. Its later read at 
 
 ### Inspection-only design request
 
-For typed schema designs use the separately negotiated database5 procedure.
-Source import5 examples above keep their original protocol and CAS.
+For typed schema designs use the separately negotiated database6 procedure.
+Source import6 examples above keep their original protocol and CAS.
 
 ## Actual SDK proposal examples: PostgreSQL and SQLite
 
@@ -1390,9 +1390,9 @@ the proposal. Ready/rebase belongs to B4; measured checks and impact are later.
 
 ## Public MCP source4 import → lineage query fixture
 
-Select import5 and inspect5 with complete requirements in one verified guide
+Select import6 and inspect6 with complete requirements in one verified guide
 set; load backend-model, backend-import-protocol, backend-recovery and the
-inspect5 flow/analysis references. This example is exercised by
+inspect6 flow/analysis references. This example is exercised by
 `internal/mcp/tools_backend_lineage_example_test.go`,
 `TestBackendLineageRealSDKGuideFixtureExample` through actual SDK tool calls.
 The independent bundle is `internal/backendmodel/testdata/lineage/orders/`:
@@ -1482,5 +1482,5 @@ On uncertain commit replay lineageCommit unchanged and require original receipt;
 never replace CAS/key with today's head. Evidence/owner/value inspector reads use
 lineagePin and complete facet/collection/opaque portKey. Redacted shape/explanation
 must omit sensitive constants and samples; source-local API field identity does
-not resolve external API pins; their separate inspect5 contract is in backend-flow-reference. Old foundation/relational examples above keep
+not resolve external API pins; their separate inspect6 contract is in backend-flow-reference. Old foundation/relational examples above keep
 their source1/2 formats and ordinary workflow; source3 flow examples stay source3.
