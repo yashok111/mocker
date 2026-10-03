@@ -45,14 +45,16 @@ through MCP. Relational tasks require compatible schema2/profile/capabilities; a
 foundation-only fallback does not qualify. PostgreSQL/SQLite definitions are
 source data; no inspected SQL, migration or application executes. Typed database
 proposals select the advertised compatible database workflow with
-proposal-relational-v1 view support. Source schema3/4 retains pinned endpoint
+proposal-relational-v1 view support. Source schemas 3–5 retain pinned endpoint
 steps, branches, queries and local transaction boundaries through the inspect
 workflow and query_backend_flow. Imported readers/writers are scoped source
 claims with proof and explicit uncertainty; whole-table unknown-column accesses
 remain possible for a selected column. Source4/field-lineage-v1 adds explicit
 ordered value mappings and pinned forward/reverse query_backend_lineage reads.
 Unknown boundaries, partial coverage and redacted transformations remain visible;
-API fields are source-local identities, with external API pins still deferred.
+API fields are source-local identities; API and scenario references use explicit
+immutable artifact pins. Source5/events-service-v1 adds declared event routes,
+static jobs and service-call boundaries, with contextual message-field lineage.
 Saved views retain exact source pins for Flow, source or proposal pins for Database,
 and their own view-version pins through saved-view-v1; reopening never falls back to head.
 Ordinary inspection performs no writes. An explicitly requested resolvable gap
@@ -60,6 +62,25 @@ uses normal whole-scope reconcile, source audit and commit; unavailable source
 retains its unknown without an empty progress revision. Existing data, all writers,
 atomicity, application/migration execution and impact remain unverified or unavailable.
 [`docs/README.md`](docs/README.md) is the index.
+
+### Real-source Backend Workbench checks
+
+The local repository `~/Documents/education-platform` is available as a real
+backend for Workbench experiments and verification. Read its local instructions
+before inspecting it. Use relevant source paths, the exact commit and file hashes
+to check imports, event/job/service views and field lineage alongside synthetic
+fixtures. Start with source inspection; importing a model does not run that
+application, its database, jobs or broker.
+
+Keep that repository unchanged during verification. Preserve missing source,
+unresolved dispatch and unproven producer/consumer connections as explicit
+boundaries. Record the inspected scope and distinguish source declarations from
+observed runtime behavior.
+
+Local harnesses and results live under `data/workbench-real-qa/` (ignored by Git).
+Previous education-platform checks use `education-services*`; B3.2 verification
+uses `education-b32/`. Local plans, progress and detailed reports under `docs/`
+are also ignored; existing tracked user/agent documentation remains tracked.
 
 ## What P0 does and what it does not yet
 

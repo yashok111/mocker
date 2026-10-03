@@ -39,6 +39,10 @@ next to it, so open the one the task is actually about:
   the argument for each; an item leaves it for `HISTORY.md` when it ships or
   for `CARVE-OUTS.md` when it is refused.
 
+For Backend Workbench validation on a real backend, read the
+[local real-source checks](README.md#real-source-backend-workbench-checks) before
+planning QA. That section records the available repository and artifact locations.
+
 **The detailed context of each subsystem lives in `docs/agent/` and is read
 on demand too.** This file was cut to what every session needs on
 2026-09-05; every paragraph that left it is in one of these files, text
