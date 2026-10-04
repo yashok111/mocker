@@ -7,7 +7,7 @@ before commit or any retry. Select compatibility before the first write.
 
 ## Protocol boundary in import7
 
-Capture, source fidelity, batch hashing, exact recovery and the independent pre-commit audit remain required for source6. Composed Begin/scope/reference/claim/resolution/incremental rules belong to sync1/backend-sync. Read that complete owner before a composed write. The legacy key-based Begin/commands/adjacent transitions below retain source1–5 semantics and do not permit composed requests to borrow their old fields. In particular, selected retained-five-profile extension is decided per partition, even when the head is schema6.
+Capture, source fidelity, batch hashing, exact recovery and the independent pre-commit audit remain required for source6. Composed Begin/scope/reference/claim/resolution/incremental rules belong to sync2/backend-sync. Read that complete owner before a composed write. The legacy key-based Begin/commands/adjacent transitions below retain source1–5 semantics and do not permit composed requests to borrow their old fields. In particular, selected retained-five-profile extension is decided per partition, even when the head is schema6.
 
 ## Source capture and inventory
 

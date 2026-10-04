@@ -178,6 +178,20 @@
       "source": "references/backend/annotations.md",
       "embedded": "backend-annotations.md",
       "workflowId": "mocker-backend-project"
+    },
+    {
+      "topic": "backend-change-rebase",
+      "package": "mocker-backend-change",
+      "source": "references/rebase.md",
+      "embedded": "backend-change-rebase.md",
+      "workflowId": "mocker-backend-change"
+    },
+    {
+      "topic": "backend-analysis-jobs",
+      "package": "mocker-backend-change",
+      "source": "references/analysis-jobs.md",
+      "embedded": "backend-analysis-jobs.md",
+      "workflowId": "mocker-backend-change"
     }
   ],
   "workflows": [
@@ -308,7 +322,7 @@
     },
     {
       "workflowId": "mocker-backend-sync",
-      "workflowVersion": "1",
+      "workflowVersion": "2",
       "entrypoint": "backend-sync",
       "requiredModelSchemaVersions": [
         "1",
@@ -327,12 +341,15 @@
         "backend-source-incremental-sync",
         "backend-source-assertions",
         "backend-import-candidate",
-        "backend-representations"
+        "backend-representations",
+        "backend-analysis-jobs",
+        "backend-analysis-diff",
+        "backend-analysis-impact"
       ]
     },
     {
       "workflowId": "mocker-backend-change",
-      "workflowVersion": "1",
+      "workflowVersion": "2",
       "entrypoint": "backend-change-proposals",
       "requiredModelSchemaVersions": [
         "5",
@@ -348,7 +365,12 @@
         "backend-change-proposals",
         "backend-change-typed-edits",
         "backend-source-assertions",
-        "backend-representations"
+        "backend-representations",
+        "backend-analysis-jobs",
+        "backend-analysis-diff",
+        "backend-analysis-impact",
+        "backend-change-rebase",
+        "backend-change-ready"
       ]
     }
   ]

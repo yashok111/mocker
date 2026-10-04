@@ -71,5 +71,25 @@ func loadLegacyEffectiveGraph(ctx context.Context, q importReader, pid string, t
 	if err := finishEffectivePins(out, out.Source.SourceVector); err != nil {
 		return nil, err
 	}
+	// Bind existing immutable overlay intent into the private proof index. The
+	// public historical Origins roster remains unchanged; no-op intent must not
+	// regain baseline support just because its effective value equals source.
+	index := out.indexedReads()
+	for _, overlay := range legacy.draft.Overlays {
+		payload, ok := index.payloads[overlay.RecordType+"\x00"+overlay.SubjectID]
+		if !ok {
+			continue
+		}
+		for path, origin := range overlay.PropertyOrigins {
+			if origin.Kind != "intent" {
+				continue
+			}
+			property := sourcePropertyForPointer(payload, "/attributes/facets/"+escapeRelationalPointer(overlay.FacetKey)+path)
+			if property == nil {
+				continue
+			}
+			index.origins[overlay.RecordType+"\x00"+overlay.SubjectID+"\x00"+sourcePropertyKey(*property)] = EffectiveFieldOrigin{RecordType: overlay.RecordType, SubjectID: overlay.SubjectID, Selector: EffectivePropertySelector{Kind: "source", Source: property}, Kind: "intent", CommandID: origin.CommandID, Reason: origin.Reason, EvidenceIDs: []string{}, SourceClaims: []BaseAssertionRef{}}
+		}
+	}
 	return out, nil
 }

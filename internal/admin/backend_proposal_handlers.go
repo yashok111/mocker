@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/url"
+	"slices"
 	"strconv"
 
 	"github.com/yashok111/mocker/internal/backendmodel"
@@ -29,6 +30,9 @@ func (s *Server) backendProposalBody(w http.ResponseWriter, r *http.Request, out
 }
 
 func backendProposalQuery(r *http.Request, detail bool) (url.Values, int, error) {
+	return backendProposalQueryStatuses(r, detail, []string{"draft"})
+}
+func backendProposalQueryStatuses(r *http.Request, detail bool, statuses []string) (url.Values, int, error) {
 	q, err := url.ParseQuery(r.URL.RawQuery)
 	if err != nil {
 		return nil, 0, backendQueryError()
@@ -54,7 +58,7 @@ func backendProposalQuery(r *http.Request, detail bool) (url.Values, int, error)
 				return nil, 0, backendQueryError()
 			}
 		case "status":
-			if detail || values[0] != "draft" {
+			if detail || !slices.Contains(statuses, values[0]) {
 				return nil, 0, backendQueryError()
 			}
 		default:

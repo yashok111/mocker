@@ -43,6 +43,9 @@ package admin
 // from the slice reads as a to-do list rather than a set.
 func (s *Server) Ready() []string {
 	var missing []string
+	if s.backendAnalysis == nil || s.backendAnalysisRepo == nil {
+		missing = append(missing, "SetBackendAnalysis")
+	}
 	// Artifact pins require both owners. Keep this explicit even though New
 	// constructs the service, so incomplete production wiring fails startup.
 	if s.backendAPIArtifacts == nil {

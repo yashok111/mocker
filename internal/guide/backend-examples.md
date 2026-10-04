@@ -14,11 +14,47 @@ Persist each named input before sending; variables below show what to retain.
 Actual UUIDs, versions and hashes always come from responses, never these names.
 Fixture strings are source data; no source application, SQL or package script runs.
 
+## B4.2 executable public workflow
+
+`internal/mcp/tools_backend_b42_examples_test.go` runs `TestBackendB42SDKPublicWorkflowExample` through the actual MCP SDK, real authenticated REST/session/CSRF handlers, temporary SQLite and the real static worker. Source is inert Go declaration text. The example negotiates current sync2/change2 alongside the retained owners and verifies each fetched topic hash. It preserves legacy artifact-context wire bytes instead of decoding them as a new writable context.
+
+Run from the repository root, retaining artifacts:
+
+```sh
+mkdir -p /private/tmp/mocker-b42-example-artifacts
+GOCACHE=/private/tmp/mocker-b42-analysis-cache go test ./internal/mcp \
+  -run '^TestBackendB42SDKPublicWorkflowExample$' -count=1 -artifacts \
+  -outputdir=/private/tmp/mocker-b42-example-artifacts -v
+```
+
+The retained `sdk-protocol.json` includes actual requests, returned IDs/hashes and expected refusals; `REST POST ...` entries show the session-authenticated route calls. Fresh executions obtain fresh IDs. Do not substitute IDs from an older transcript into a different project.
+
+The executable sequence demonstrates:
+
+1. Import B named Before; save O named Desired; reconcile the same partition into N named NewSource. Preview returns all three presence-aware values and no candidateHash while unresolved. Keep O with an explicit reason, preview again and apply exactly that candidate. Old source and old desired reads stay byte-identical.
+2. Start source-to-source diff over REST, cancel through MCP, and replay REST Start with the original key/body: the queued start receipt stays exact despite later cancellation. A new-key terminal cancellation is refused.
+3. Admit a second queued job, close/reopen the actual store and run startup recovery. Poll returns interrupted with an explicit frozen resultVersion. Old-key Start replays the old receipt; deliberate new-key Retry creates a distinct queued job with the original analysisInputHash. The original interrupted manifest remains readable after the retried job completes.
+4. Run the real worker, poll through `get_backend_analysis`, and page `changes` at one chosen resultVersion with limit1 and all returned cursors. Re-read each frozen page byte-for-byte and reconcile the complete count against its manifest. No page silently follows newer work.
+5. Start impact from the rebased saved draft's exact base to its exact full proposal revision. Require completed/complete, all changed addresses covered and runtimeVerified false. A wrong resultHash is refused. Acknowledge the exact gap set and mark ready with the returned job/resultVersion/inputHash/resultHash. Reopen the store again and replay rebase/ready/start/retry/cancel receipts and saved source/draft/report/context reads unchanged.
+
+The ready request is constructed from returned values, not client assertions:
+
+```text
+report = {jobId:job.id, resultVersion:job.resultVersion,
+          inputHash:job.analysisInputHash, resultHash:page.manifest.semanticResultHash}
+acknowledgedGapIds = sorted(unique(page.manifest.gaps.map(gap => gap.id)))
+apply_backend_change_proposal_lifecycle({projectId,proposalId,
+  expectedVersion:savedProposal.version,proposalRevisionId:savedDraft.id,
+  action:"ready",report,acknowledgedGapIds,idempotencyKey:savedReadyKey})
+```
+
+Persist that complete request before transport. The example's accelerated poll timing is for tests; production clients honor recommendedPollIntervalMs. These examples validate developer protocol usage. Ordinary/live-agent acceptance remains deferred, and static ready never means runtime tested or deployed. For complete request/limit/recovery contracts read change2's `backend-analysis-jobs` and `backend-change-rebase` in this set.
+
 ## B4.1 executable SDK captures
 
 `internal/mcp/tools_backend_b41_examples_test.go` executes these five episodes through the real SDK, admin handlers and temporary SQLite. The capture contains 195 calls, including 23 expected refusals. Source strings and the prior Store19 database are inert fixtures; imported code and SQL never execute. The complete request/response witness is emitted as `sdk-protocol.json` for each test. To preserve artifacts, create an output directory, then run `go test ./internal/mcp -run '^TestBackendB41SDK' -count=1 -artifacts -outputdir=/absolute/output/directory -v`.
 
-The excerpts below contain actual captured request IDs, hashes and returned pins. Do not replay those historical UUIDs into a different project. The executable examples use each response to construct the next request, select import7/sync1/change1/project2/inspect7/database7 from current capabilities in one exact guide set, verify topic hashes, and refuse unavailable old guide sets. These protocol captures preceded guide registration, so they contain no invented future guide identity. Responses below project relevant fields and show at most two array entries; omitted fields and entries remain in the full witness.
+The excerpts below contain actual captured request IDs, hashes and returned pins. Do not replay those historical UUIDs into a different project. The executable examples use each response to construct the next request, select import7/sync2/change2/project2/inspect7/database7 from current capabilities in one exact guide set, verify topic hashes, and refuse unavailable old guide sets. These protocol captures preceded guide registration, so they contain no invented future guide identity. Responses below project relevant fields and show at most two array entries; omitted fields and entries remain in the full witness.
 
 The tests additionally verify source5/full5 assertion refusal, a foreign project's exact UUID, candidate invalidation after batch/commit, candidate specialized-query and SavedView rejection, read purity across all backend tables, unchanged source proof, and full command reuse after restore/server restart. Original request strings and original receipts are compared byte-for-byte. No-op and overwritten commands remain reserved even when their semantic effect disappears.
 
@@ -3539,7 +3575,7 @@ NOT NULL apply request/key returned byte-for-byte the original receipt.
 Creation replay also returned its original acknowledgement. Reading the old
 proposal revision still returned its immutable original draft; current CAS
 version was 4. A later source head is reported as baseOutdated, without rebasing
-the proposal. Ready/rebase belongs to B4; measured checks and impact are later.
+the proposal. Legacy relational ready/rebase remain unsupported. Authorized static diff/impact now uses change2/backend-analysis-jobs with the exact `proposal:{proposalId,proposalRevisionId}` target; measured runtime checks remain unavailable. The captured JSON above records the historical response unchanged.
 
 ### sqlite: nullable legacy_note to desired NOT NULL
 
@@ -3935,7 +3971,7 @@ NOT NULL apply request/key returned byte-for-byte the original receipt.
 Creation replay also returned its original acknowledgement. Reading the old
 proposal revision still returned its immutable original draft; current CAS
 version was 4. A later source head is reported as baseOutdated, without rebasing
-the proposal. Ready/rebase belongs to B4; measured checks and impact are later.
+the proposal. Legacy relational ready/rebase remain unsupported. Authorized static diff/impact now uses change2/backend-analysis-jobs with the exact `proposal:{proposalId,proposalRevisionId}` target; measured runtime checks remain unavailable. The captured JSON above records the historical response unchanged.
 
 ## Public MCP source4 import → lineage query fixture
 

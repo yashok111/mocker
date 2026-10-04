@@ -34,3 +34,44 @@ describe("local identity intent", () => {
     ]);
   });
 });
+
+it("removes a carried qualified identity with its exact underlying record", () => {
+  const source = {
+    recordType: "node" as const,
+    id: changeTestID,
+    repositoryId: changeTestID,
+    providerNamespace: "compiler",
+    externalKey: "old",
+    assertionHash: "a".repeat(64),
+  };
+  const target = {
+    kind: "carried_source_identity" as const,
+    source,
+    basis: { revisionId: changeTestID, semanticHash: "b".repeat(64) },
+  };
+  const baseline = [
+    {
+      target,
+      externalKey: "desired",
+      origin: {
+        kind: "intent" as const,
+        recordType: "node" as const,
+        subjectId: changeTestID,
+        selector: { kind: "edge_name" as const },
+        sourceClaims: [],
+        evidenceIds: [],
+      },
+    },
+  ];
+  expect(
+    changePendingIdentities(baseline, [
+      {
+        type: "remove_node",
+        commandId: changeTestID,
+        reason: "Remove exact record",
+        id: changeTestID,
+      },
+    ]),
+  ).toEqual([]);
+  expect(baseline[0]!.target.basis.semanticHash).toBe("b".repeat(64));
+});

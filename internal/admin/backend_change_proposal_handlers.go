@@ -3,6 +3,7 @@ package admin
 import (
 	"encoding/json/jsontext"
 	"encoding/json/v2"
+	"errors"
 	"net/http"
 	"net/url"
 
@@ -14,7 +15,7 @@ func backendChangeProposalQuery(r *http.Request, detail bool) (url.Values, int, 
 	if r.ContentLength != 0 || r.TransferEncoding != nil {
 		return nil, 0, backendQueryError()
 	}
-	query, limit, err := backendProposalQuery(r, detail)
+	query, limit, err := backendProposalQueryStatuses(r, detail, []string{"draft", "ready"})
 	if err != nil {
 		return nil, 0, err
 	}
@@ -35,7 +36,11 @@ func (s *Server) backendChangeProposalBody(w http.ResponseWriter, r *http.Reques
 		return false
 	}
 	if err := json.Unmarshal(raw, out, json.RejectUnknownMembers(true)); err != nil {
-		s.backendError(w, backendQueryError())
+		if fault, ok := errors.AsType[*backendmodel.FaultError](err); ok {
+			s.backendError(w, fault)
+		} else {
+			s.backendError(w, backendQueryError())
+		}
 		return false
 	}
 	var fields map[string]jsontext.Value
@@ -43,7 +48,7 @@ func (s *Server) backendChangeProposalBody(w http.ResponseWriter, r *http.Reques
 		s.backendError(w, backendQueryError())
 		return false
 	}
-	for _, key := range []string{"baseRevisionId", "proposalRevisionId", "restoreRevisionId"} {
+	for _, key := range []string{"baseRevisionId", "proposalRevisionId", "restoreRevisionId", "newBaseRevisionId"} {
 		if value, ok := fields[key]; ok {
 			var id string
 			if json.Unmarshal(value, &id) != nil || !backendmodel.ValidID(id) {
@@ -147,6 +152,52 @@ func (s *Server) handleRestoreBackendChangeProposal(w http.ResponseWriter, r *ht
 		return
 	}
 	out, err := s.backendRepo.RestoreChangeProposal(r.Context(), r.PathValue("id"), r.PathValue("pid"), in)
+	if err != nil {
+		s.backendError(w, err)
+		return
+	}
+	httpx.JSON(w, 200, out)
+}
+
+func (s *Server) handlePreviewBackendChangeProposalRebase(w http.ResponseWriter, r *http.Request) {
+	if _, ok := s.requireUser(w, r); !ok {
+		return
+	}
+	var in backendmodel.PreviewChangeProposalRebaseInput
+	if !s.backendChangeProposalBody(w, r, &in) {
+		return
+	}
+	out, err := s.backendRepo.PreviewChangeProposalRebase(r.Context(), r.PathValue("id"), r.PathValue("pid"), in)
+	if err != nil {
+		s.backendError(w, err)
+		return
+	}
+	httpx.JSON(w, 200, out)
+}
+func (s *Server) handleApplyBackendChangeProposalRebase(w http.ResponseWriter, r *http.Request) {
+	if _, ok := s.requireUser(w, r); !ok {
+		return
+	}
+	var in backendmodel.ApplyChangeProposalRebaseInput
+	if !s.backendChangeProposalBody(w, r, &in) {
+		return
+	}
+	out, err := s.backendRepo.ApplyChangeProposalRebase(r.Context(), r.PathValue("id"), r.PathValue("pid"), in)
+	if err != nil {
+		s.backendError(w, err)
+		return
+	}
+	httpx.JSON(w, 200, out)
+}
+func (s *Server) handleApplyBackendChangeProposalLifecycle(w http.ResponseWriter, r *http.Request) {
+	if _, ok := s.requireUser(w, r); !ok {
+		return
+	}
+	var in backendmodel.ApplyChangeProposalLifecycleInput
+	if !s.backendChangeProposalBody(w, r, &in) {
+		return
+	}
+	out, err := s.backendRepo.ApplyChangeProposalLifecycle(r.Context(), r.PathValue("id"), r.PathValue("pid"), in, s.backendAnalysisRepo)
 	if err != nil {
 		s.backendError(w, err)
 		return

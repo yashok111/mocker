@@ -51,6 +51,15 @@ import (
 var noRoute = []string{}
 
 var toolRoutes = map[string][]string{
+	"start_backend_analysis":                   {"POST /api/backend-projects/{id}/analyses"},
+	"list_backend_analysis":                    {"GET /api/backend-projects/{id}/analyses"},
+	"get_backend_analysis":                     {"GET /api/backend-projects/{id}/analyses/{aid}"},
+	"cancel_backend_analysis":                  {"POST /api/backend-projects/{id}/analyses/{aid}/cancel"},
+	"retry_backend_analysis":                   {"POST /api/backend-projects/{id}/analyses/{aid}/retry"},
+	"get_backend_analysis_results":             {"GET /api/backend-projects/{id}/analyses/{aid}/results"},
+	"preview_backend_change_proposal_rebase":   {"POST /api/backend-projects/{id}/change-proposals/{pid}/rebase-preview"},
+	"apply_backend_change_proposal_rebase":     {"POST /api/backend-projects/{id}/change-proposals/{pid}/rebase"},
+	"apply_backend_change_proposal_lifecycle":  {"POST /api/backend-projects/{id}/change-proposals/{pid}/lifecycle"},
 	"list_backend_change_proposals":            {"GET /api/backend-projects/{id}/change-proposals"},
 	"create_backend_change_proposal":           {"POST /api/backend-projects/{id}/change-proposals"},
 	"get_backend_change_proposal":              {"GET /api/backend-projects/{id}/change-proposals/{pid}"},
@@ -353,7 +362,7 @@ var toolRoutes = map[string][]string{
 // production.
 // B1.2 adds five isolated database proposal operations. B24 adds four exact
 // API artifact snapshot/query/preview/apply operations.
-const toolCount = 203
+const toolCount = 212
 
 // toolPath resolves ONE call a tool makes into the (method, path) pair
 // loopback.do/call take.

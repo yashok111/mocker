@@ -22,10 +22,14 @@ import (
 	"time"
 
 	"github.com/yashok111/mocker/internal/admin"
+	"github.com/yashok111/mocker/internal/apidesign"
 	"github.com/yashok111/mocker/internal/assets"
 	"github.com/yashok111/mocker/internal/auth"
+	"github.com/yashok111/mocker/internal/backendanalysis"
+	"github.com/yashok111/mocker/internal/backendmodel"
 	"github.com/yashok111/mocker/internal/config"
 	"github.com/yashok111/mocker/internal/customep"
+	"github.com/yashok111/mocker/internal/designscenario"
 	"github.com/yashok111/mocker/internal/httpx"
 	"github.com/yashok111/mocker/internal/livestate"
 	"github.com/yashok111/mocker/internal/mcp"
@@ -155,8 +159,10 @@ func runHashPassword(args []string, stdin io.Reader, stdout, stderr io.Writer) e
 // and none is written after the listener opens — which is the startup-only
 // calling contract every setter on both planes documents.
 type app struct {
-	cfg *config.Config
-	log *slog.Logger
+	analysisRepo    *backendanalysis.Repo
+	analysisService *backendanalysis.Service
+	cfg             *config.Config
+	log             *slog.Logger
 
 	db       *store.DB
 	sessions *auth.Manager
@@ -277,6 +283,24 @@ func (a *app) buildPlanes(ctx context.Context) error {
 	}
 
 	a.mockPlane = mockplane.New(a.cfg, ws, a.specRepo, a.log)
+	return a.buildAnalysis(ctx)
+}
+
+// Analysis recovery is a startup barrier: acknowledged work is never silently
+// resumed, and a failed terminal write prevents readiness and listener creation.
+func (a *app) buildAnalysis(ctx context.Context) error {
+	graphs := backendmodel.NewRepo(a.db)
+	designs := apidesign.NewRepo(a.db, a.cfg)
+	scenarios := designscenario.NewRepo(a.db, a.cfg, designs)
+	a.analysisRepo = backendanalysis.NewRepo(a.db)
+	engine := backendanalysis.NewEngine(graphs, func(c context.Context) *backendmodel.EditorArtifactRequest {
+		return backendmodel.NewEditorArtifactRequest(c, designs, scenarios)
+	})
+	a.analysisService = backendanalysis.NewService(a.analysisRepo, graphs, engine)
+	if err := a.analysisService.RecoverInterrupted(ctx); err != nil {
+		return fmt.Errorf("recover backend analyses: %w", err)
+	}
+	a.adminSrv.SetBackendAnalysis(a.analysisService, a.analysisRepo)
 	return nil
 }
 
@@ -529,10 +553,30 @@ func (a *app) checkWiring() error {
 // The shutdown ordering at the bottom is the load-bearing part of this
 // file. Read the comments before changing it: they cite the incident where
 // the recorder lost the last traffic records.
-func (a *app) startAndDrain(ctx context.Context, stop context.CancelFunc) error {
+func (a *app) startAndDrain(ctx context.Context, stop context.CancelFunc) (runErr error) {
 	if err := a.adminSrv.InitializeScenarioRuns(ctx); err != nil {
 		return fmt.Errorf("recover scenario runs: %w", err)
 	}
+
+	analysisResult := make(chan error, 1)
+	go func() {
+		err := a.analysisService.Run(ctx)
+		analysisResult <- err
+		if err != nil {
+			stop()
+		}
+	}()
+	defer func() {
+		drain, cancel := context.WithTimeout(context.WithoutCancel(ctx), shutdownDrain)
+		defer cancel()
+		closeErr := a.analysisService.Close(drain)
+		workerErr := <-analysisResult
+		runErr = errors.Join(runErr, closeErr, workerErr)
+	}()
+	if err := a.analysisService.WaitRunning(ctx); err != nil {
+		return err
+	}
+
 	dispatcher := server.New(a.cfg, a.adminSrv.Handler(), a.mockPlane, a.log)
 	// Recover, RequestLog and MaxBody wrap the WHOLE dispatcher exactly once
 	// here — both planes build their own handler with only what is specific
@@ -611,7 +655,6 @@ func (a *app) startAndDrain(ctx context.Context, stop context.CancelFunc) error 
 		"routing", string(a.cfg.Routing),
 	)
 
-	var runErr error
 	select {
 	case <-ctx.Done():
 		a.log.Info("shutdown signal received, draining", "timeout", shutdownDrain)

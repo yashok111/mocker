@@ -85,7 +85,12 @@ export async function hashBackendImportCommands(
   commands: readonly BackendImportCommand[],
 ): Promise<string> {
   if (!Array.isArray(commands)) throw new Error("Пакет команд должен быть массивом.");
-  const bytes = new TextEncoder().encode(canonical(commands, new Set(), 0));
+  return hashBackendJSON(commands);
+}
+
+/** Canonical JSON digest shared with the backend receipt and source-vector protocol. */
+export async function hashBackendJSON(value: unknown): Promise<string> {
+  const bytes = new TextEncoder().encode(canonical(value, new Set(), 0));
   const digest = globalThis.crypto?.subtle
     ? new Uint8Array(await crypto.subtle.digest("SHA-256", bytes))
     : (await import("@noble/hashes/sha2.js")).sha256(bytes);

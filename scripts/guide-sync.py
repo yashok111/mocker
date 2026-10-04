@@ -210,11 +210,11 @@ def validate_metadata(text, workflow):
 # Recognizable current owner declarations are checked against the declaration
 # source of truth. Historical owner prose must opt out on its exact line.
 OWNER_DECLARATION = re.compile(
-    r"(?<![\w-])(?:mocker-backend-)?([Ii]mport|[Ii]nspect|[Dd]atabase)`?"
-    r"(?:\s+(?:v|workflow)\s*|)([0-9]+)\b",
+    r"(?<![\w-])(?:mocker-backend-)?([Ii]mport|[Ii]nspect|[Dd]atabase|[Ss]ync|[Cc]hange)`?"
+    r"(?:\s+(?:v|version|workflow)\s*`?|)([0-9]+)\b",
 )
 OWNER_TABLE = re.compile(
-    r"^\s*\|\s*mocker-backend-(import|inspect|database)\s*\|\s*([0-9]+)\s*\|",
+    r"^\s*\|\s*mocker-backend-(import|inspect|database|sync|change)\s*\|\s*([0-9]+)\s*\|",
     re.IGNORECASE,
 )
 
@@ -234,6 +234,8 @@ def validate_owner_references(text, workflows, path):
             "mocker-backend-import",
             "mocker-backend-inspect",
             "mocker-backend-database",
+            "mocker-backend-sync",
+            "mocker-backend-change",
         }
     }
     for number, line in enumerate(body(text).splitlines(), 1):

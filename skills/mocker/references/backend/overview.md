@@ -6,8 +6,8 @@ metadata:
   workflowVersion: "2"
   requiredModelSchemaVersions: "[\"1\"]"
   requiredCapabilities: "[\"backend-projects\",\"backend-project-metadata\",\"backend-revisions\",\"backend-annotations\"]"
-  guideSetId: "sha256:5a8d1fe6bc274c7b60621c826a5fcca31e4ab6b1c6e8f885a40d90abfbbeebdd"
-  manifestHash: "sha256:5a8d1fe6bc274c7b60621c826a5fcca31e4ab6b1c6e8f885a40d90abfbbeebdd"
+  guideSetId: "sha256:dfb9851bf1c8ba63fe44094c929a300267ffbe0761f365ab1914fca3ead729b5"
+  manifestHash: "sha256:dfb9851bf1c8ba63fe44094c929a300267ffbe0761f365ab1914fca3ead729b5"
 ---
 
 # Backend project preparation
@@ -35,8 +35,7 @@ use the separately selected database7 workflow. Source flow/data-access question
 select inspect7 at backend-inspect in this same set; ordinary inspection writes
 nothing. Source4 field lineage selects inspect7 with field-lineage-v1 and backend-field-lineage-query.
 Manual API links require inspect7, backend-api-artifact-pins and api-artifact-pins-v1;
-load its flow-reference contract before any authorized mutation. Backend impact,
-measured writer checks and job execution remain unavailable.
+load its flow-reference contract before any authorized mutation. Static diff/impact and explicit rebase use change2 topics backend-analysis-jobs and backend-change-rebase. Measured writer checks and source job execution remain unavailable.
 
 ## Before the first write
 
@@ -78,7 +77,7 @@ strings before comparing them with the server manifest's typed arrays.
 
 Project metadata batches also create/update/remove source-object annotations. Select backend-annotations from this project2 owner before those writes; it defines exact plain-text replacement, current/historical/orphan targets, project CAS and cursor409 recovery. Metadata updates keep source revision bytes unchanged. Project2 still requires the empty schema1 creation branch; it does not implicitly import source6.
 
-Select sync1 for source6 scopes/provider migration/incremental reconciliation, change1 for full desired source5/source6 proposals, and inspect7/database7 for exact reads and SavedView-v2. Old relational proposal procedures remain under database7 with their legacy proposal tag; full proposals use changeProposal explicitly.
+Select sync2 for source6 scopes/provider migration/incremental reconciliation, change2 for full desired source5/source6 proposals, and inspect7/database7 for exact reads and SavedView-v2. Old relational proposal procedures remain under database7 with their legacy proposal tag; full proposals use changeProposal explicitly.
 
 ## Available tools and ordered procedure
 

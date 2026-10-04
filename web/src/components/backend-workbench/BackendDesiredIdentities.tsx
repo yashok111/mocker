@@ -30,7 +30,10 @@ export function BackendDesiredIdentities({
       const identities = "identities" in page ? (page.identities ?? []) : [];
       for (const identity of identities) {
         const ref =
-          identity.target.kind === "source_identity" ? identity.target.source : identity.target;
+          identity.target.kind === "source_identity" ||
+          identity.target.kind === "carried_source_identity"
+            ? identity.target.source
+            : identity.target;
         if (ref.id !== id || ref.recordType !== recordType)
           throw new BackendReadError("Получена идентичность другого объекта.");
       }
@@ -45,7 +48,8 @@ export function BackendDesiredIdentities({
       <LoadState query={query} label="ключей предложения" />
       {query.data?.map((identity) => (
         <div key={JSON.stringify(identity.target)}>
-          {identity.target.kind === "source_identity" ? (
+          {identity.target.kind === "source_identity" ||
+          identity.target.kind === "carried_source_identity" ? (
             <>
               <Text size="sm" style={wrap}>
                 {identity.target.source.providerNamespace} · {identity.target.source.externalKey} →{" "}
@@ -60,9 +64,18 @@ export function BackendDesiredIdentities({
               Новая идентичность: {identity.externalKey ?? "ключ не задан"}
             </Text>
           )}
+          {identity.target.kind === "carried_source_identity" && (
+            <Text size="xs" style={wrap}>
+              Историческая база: {identity.target.basis.revisionId} ·{" "}
+              {identity.target.basis.semanticHash} · перенесённая идентичность, историческое
+              основание, не текущее доказательство
+            </Text>
+          )}
           {identity.origin.kind === "intent" && (
             <Text size="sm" style={wrap}>
               Намерение: {identity.origin.reason}
+              {identity.origin.rebaseResolution &&
+                ` · решение переноса ${identity.origin.rebaseResolution.resolutionId}`}
             </Text>
           )}
         </div>

@@ -66,6 +66,8 @@ func TestIdentityUpgradePreservesBytesAndCommittedAllocations(t *testing.T) {
 	// Restore the legacy schema/data shape, then run the actual production migration.
 	err = db.Write(t.Context(), func(tx *sql.Tx) error {
 		for _, table := range []string{
+			"backend_analysis_receipts", "backend_analysis_chunks", "backend_analysis_manifests",
+			"backend_analysis_jobs", "backend_analysis_inputs",
 			"backend_change_proposal_commands", "backend_change_proposal_batches",
 			"backend_change_proposal_identities", "backend_change_proposal_events",
 			"backend_change_proposal_revisions", "backend_change_proposals",

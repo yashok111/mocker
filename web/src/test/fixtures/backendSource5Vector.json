@@ -1,0 +1,352 @@
+{
+  "vector": {
+    "documentVersion": "source-vector-v1",
+    "partitions": [
+      {
+        "repositoryId": "01a10029-6910-7d33-bc2e-d77b30ee3a41",
+        "providerNamespace": "education-b32",
+        "snapshotId": "01a10029-6910-7eb0-90f1-883bd1de9540",
+        "provider": {
+          "name": "local-readonly-source-audit",
+          "version": "1",
+          "namespace": "education-b32",
+          "method": "agent",
+          "profiles": [
+            "foundation-graph-v1",
+            "relational-graph-v1",
+            "runtime-flow-v1",
+            "field-lineage-v1",
+            "events-service-v1"
+          ],
+          "limitations": [
+            "No verified subscriber for oneme_core_WebAppEvents; no edge to RegistrationEventModule allowed.",
+            "Registration consumer actual runtime topic and external producer unknown.",
+            "No cron expression or external scheduler observed for broadcast_reminder; 50-second lock TTL is not schedule.",
+            "No external MAX handler/route inferred from CreateChat method name.",
+            "No runtime dispatch, config rollout, broker delivery, retries, or successful external responses asserted.",
+            "Service containers are code ownership/types within one repository, not separately deployed services.",
+            "RegistrationEventService.notify is unused; Process path does not call Notify.",
+            "Emit step summarizes SendEvent serialization, enqueue and queued WriteMessages callback; callback execution is not established. Reminder step summarizes Run to SendReminder to Save across explicit calls, not a single function body.",
+            "Bounded static source projection; error branches, runtime execution, deployment, retry semantics and whole-repository completeness not established."
+          ]
+        },
+        "inventory": [
+          {
+            "category": "files",
+            "status": "partial",
+            "knownCount": 17,
+            "denominator": null,
+            "discoverySource": "Bounded independent source oracle; no whole-repository completeness claim",
+            "gaps": [
+              "No verified subscriber for oneme_core_WebAppEvents; no edge to RegistrationEventModule allowed.",
+              "Registration consumer actual runtime topic and external producer unknown.",
+              "No cron expression or external scheduler observed for broadcast_reminder; 50-second lock TTL is not schedule.",
+              "No external MAX handler/route inferred from CreateChat method name.",
+              "No runtime dispatch, config rollout, broker delivery, retries, or successful external responses asserted.",
+              "Service containers are code ownership/types within one repository, not separately deployed services.",
+              "RegistrationEventService.notify is unused; Process path does not call Notify.",
+              "Emit step summarizes SendEvent serialization, enqueue and queued WriteMessages callback; callback execution is not established. Reminder step summarizes Run to SendReminder to Save across explicit calls, not a single function body.",
+              "Bounded static source projection; error branches, runtime execution, deployment, retry semantics and whole-repository completeness not established."
+            ],
+            "reason": "No verified subscriber for oneme_core_WebAppEvents; no edge to RegistrationEventModule allowed."
+          },
+          {
+            "category": "endpoints",
+            "status": "partial",
+            "knownCount": 0,
+            "denominator": null,
+            "discoverySource": "Bounded independent source oracle; no whole-repository completeness claim",
+            "gaps": [
+              "No verified subscriber for oneme_core_WebAppEvents; no edge to RegistrationEventModule allowed.",
+              "Registration consumer actual runtime topic and external producer unknown.",
+              "No cron expression or external scheduler observed for broadcast_reminder; 50-second lock TTL is not schedule.",
+              "No external MAX handler/route inferred from CreateChat method name.",
+              "No runtime dispatch, config rollout, broker delivery, retries, or successful external responses asserted.",
+              "Service containers are code ownership/types within one repository, not separately deployed services.",
+              "RegistrationEventService.notify is unused; Process path does not call Notify.",
+              "Emit step summarizes SendEvent serialization, enqueue and queued WriteMessages callback; callback execution is not established. Reminder step summarizes Run to SendReminder to Save across explicit calls, not a single function body.",
+              "Bounded static source projection; error branches, runtime execution, deployment, retry semantics and whole-repository completeness not established."
+            ],
+            "reason": "No verified subscriber for oneme_core_WebAppEvents; no edge to RegistrationEventModule allowed."
+          },
+          {
+            "category": "datastores",
+            "status": "partial",
+            "knownCount": 1,
+            "denominator": null,
+            "discoverySource": "Bounded independent source oracle; no whole-repository completeness claim",
+            "gaps": [
+              "No verified subscriber for oneme_core_WebAppEvents; no edge to RegistrationEventModule allowed.",
+              "Registration consumer actual runtime topic and external producer unknown.",
+              "No cron expression or external scheduler observed for broadcast_reminder; 50-second lock TTL is not schedule.",
+              "No external MAX handler/route inferred from CreateChat method name.",
+              "No runtime dispatch, config rollout, broker delivery, retries, or successful external responses asserted.",
+              "Service containers are code ownership/types within one repository, not separately deployed services.",
+              "RegistrationEventService.notify is unused; Process path does not call Notify.",
+              "Emit step summarizes SendEvent serialization, enqueue and queued WriteMessages callback; callback execution is not established. Reminder step summarizes Run to SendReminder to Save across explicit calls, not a single function body.",
+              "Bounded static source projection; error branches, runtime execution, deployment, retry semantics and whole-repository completeness not established."
+            ],
+            "reason": "No verified subscriber for oneme_core_WebAppEvents; no edge to RegistrationEventModule allowed."
+          },
+          {
+            "category": "migrations",
+            "status": "partial",
+            "knownCount": 0,
+            "denominator": null,
+            "discoverySource": "Bounded independent source oracle; no whole-repository completeness claim",
+            "gaps": [
+              "No verified subscriber for oneme_core_WebAppEvents; no edge to RegistrationEventModule allowed.",
+              "Registration consumer actual runtime topic and external producer unknown.",
+              "No cron expression or external scheduler observed for broadcast_reminder; 50-second lock TTL is not schedule.",
+              "No external MAX handler/route inferred from CreateChat method name.",
+              "No runtime dispatch, config rollout, broker delivery, retries, or successful external responses asserted.",
+              "Service containers are code ownership/types within one repository, not separately deployed services.",
+              "RegistrationEventService.notify is unused; Process path does not call Notify.",
+              "Emit step summarizes SendEvent serialization, enqueue and queued WriteMessages callback; callback execution is not established. Reminder step summarizes Run to SendReminder to Save across explicit calls, not a single function body.",
+              "Bounded static source projection; error branches, runtime execution, deployment, retry semantics and whole-repository completeness not established."
+            ],
+            "reason": "No verified subscriber for oneme_core_WebAppEvents; no edge to RegistrationEventModule allowed."
+          },
+          {
+            "category": "producers",
+            "status": "partial",
+            "knownCount": 1,
+            "denominator": null,
+            "discoverySource": "Bounded independent source oracle; no whole-repository completeness claim",
+            "gaps": [
+              "No verified subscriber for oneme_core_WebAppEvents; no edge to RegistrationEventModule allowed.",
+              "Registration consumer actual runtime topic and external producer unknown.",
+              "No cron expression or external scheduler observed for broadcast_reminder; 50-second lock TTL is not schedule.",
+              "No external MAX handler/route inferred from CreateChat method name.",
+              "No runtime dispatch, config rollout, broker delivery, retries, or successful external responses asserted.",
+              "Service containers are code ownership/types within one repository, not separately deployed services.",
+              "RegistrationEventService.notify is unused; Process path does not call Notify.",
+              "Emit step summarizes SendEvent serialization, enqueue and queued WriteMessages callback; callback execution is not established. Reminder step summarizes Run to SendReminder to Save across explicit calls, not a single function body.",
+              "Bounded static source projection; error branches, runtime execution, deployment, retry semantics and whole-repository completeness not established."
+            ],
+            "reason": "No verified subscriber for oneme_core_WebAppEvents; no edge to RegistrationEventModule allowed."
+          },
+          {
+            "category": "consumers",
+            "status": "partial",
+            "knownCount": 1,
+            "denominator": null,
+            "discoverySource": "Bounded independent source oracle; no whole-repository completeness claim",
+            "gaps": [
+              "No verified subscriber for oneme_core_WebAppEvents; no edge to RegistrationEventModule allowed.",
+              "Registration consumer actual runtime topic and external producer unknown.",
+              "No cron expression or external scheduler observed for broadcast_reminder; 50-second lock TTL is not schedule.",
+              "No external MAX handler/route inferred from CreateChat method name.",
+              "No runtime dispatch, config rollout, broker delivery, retries, or successful external responses asserted.",
+              "Service containers are code ownership/types within one repository, not separately deployed services.",
+              "RegistrationEventService.notify is unused; Process path does not call Notify.",
+              "Emit step summarizes SendEvent serialization, enqueue and queued WriteMessages callback; callback execution is not established. Reminder step summarizes Run to SendReminder to Save across explicit calls, not a single function body.",
+              "Bounded static source projection; error branches, runtime execution, deployment, retry semantics and whole-repository completeness not established."
+            ],
+            "reason": "No verified subscriber for oneme_core_WebAppEvents; no edge to RegistrationEventModule allowed."
+          },
+          {
+            "category": "jobs",
+            "status": "partial",
+            "knownCount": 1,
+            "denominator": null,
+            "discoverySource": "Bounded independent source oracle; no whole-repository completeness claim",
+            "gaps": [
+              "No verified subscriber for oneme_core_WebAppEvents; no edge to RegistrationEventModule allowed.",
+              "Registration consumer actual runtime topic and external producer unknown.",
+              "No cron expression or external scheduler observed for broadcast_reminder; 50-second lock TTL is not schedule.",
+              "No external MAX handler/route inferred from CreateChat method name.",
+              "No runtime dispatch, config rollout, broker delivery, retries, or successful external responses asserted.",
+              "Service containers are code ownership/types within one repository, not separately deployed services.",
+              "RegistrationEventService.notify is unused; Process path does not call Notify.",
+              "Emit step summarizes SendEvent serialization, enqueue and queued WriteMessages callback; callback execution is not established. Reminder step summarizes Run to SendReminder to Save across explicit calls, not a single function body.",
+              "Bounded static source projection; error branches, runtime execution, deployment, retry semantics and whole-repository completeness not established."
+            ],
+            "reason": "No verified subscriber for oneme_core_WebAppEvents; no edge to RegistrationEventModule allowed."
+          },
+          {
+            "category": "contracts",
+            "status": "partial",
+            "knownCount": 0,
+            "denominator": null,
+            "discoverySource": "Bounded independent source oracle; no whole-repository completeness claim",
+            "gaps": [
+              "No verified subscriber for oneme_core_WebAppEvents; no edge to RegistrationEventModule allowed.",
+              "Registration consumer actual runtime topic and external producer unknown.",
+              "No cron expression or external scheduler observed for broadcast_reminder; 50-second lock TTL is not schedule.",
+              "No external MAX handler/route inferred from CreateChat method name.",
+              "No runtime dispatch, config rollout, broker delivery, retries, or successful external responses asserted.",
+              "Service containers are code ownership/types within one repository, not separately deployed services.",
+              "RegistrationEventService.notify is unused; Process path does not call Notify.",
+              "Emit step summarizes SendEvent serialization, enqueue and queued WriteMessages callback; callback execution is not established. Reminder step summarizes Run to SendReminder to Save across explicit calls, not a single function body.",
+              "Bounded static source projection; error branches, runtime execution, deployment, retry semantics and whole-repository completeness not established."
+            ],
+            "reason": "No verified subscriber for oneme_core_WebAppEvents; no edge to RegistrationEventModule allowed."
+          },
+          {
+            "category": "tests",
+            "status": "partial",
+            "knownCount": 0,
+            "denominator": null,
+            "discoverySource": "Bounded independent source oracle; no whole-repository completeness claim",
+            "gaps": [
+              "No verified subscriber for oneme_core_WebAppEvents; no edge to RegistrationEventModule allowed.",
+              "Registration consumer actual runtime topic and external producer unknown.",
+              "No cron expression or external scheduler observed for broadcast_reminder; 50-second lock TTL is not schedule.",
+              "No external MAX handler/route inferred from CreateChat method name.",
+              "No runtime dispatch, config rollout, broker delivery, retries, or successful external responses asserted.",
+              "Service containers are code ownership/types within one repository, not separately deployed services.",
+              "RegistrationEventService.notify is unused; Process path does not call Notify.",
+              "Emit step summarizes SendEvent serialization, enqueue and queued WriteMessages callback; callback execution is not established. Reminder step summarizes Run to SendReminder to Save across explicit calls, not a single function body.",
+              "Bounded static source projection; error branches, runtime execution, deployment, retry semantics and whole-repository completeness not established."
+            ],
+            "reason": "No verified subscriber for oneme_core_WebAppEvents; no edge to RegistrationEventModule allowed."
+          }
+        ],
+        "scopeStatus": { "status": "partial", "gaps": ["Legacy source scope retained"] }
+      }
+    ],
+    "snapshots": [
+      {
+        "role": "active_source",
+        "id": "01a10029-6910-7eb0-90f1-883bd1de9540",
+        "repositoryId": "01a10029-6910-7d33-bc2e-d77b30ee3a41",
+        "manifestHash": "79619a13da920c71f96ea3611708b96f5a20b749ac40df6bf947f17059714fd5",
+        "provider": {
+          "name": "local-readonly-source-audit",
+          "version": "1",
+          "namespace": "education-b32",
+          "method": "agent",
+          "profiles": [
+            "foundation-graph-v1",
+            "relational-graph-v1",
+            "runtime-flow-v1",
+            "field-lineage-v1",
+            "events-service-v1"
+          ],
+          "limitations": [
+            "No verified subscriber for oneme_core_WebAppEvents; no edge to RegistrationEventModule allowed.",
+            "Registration consumer actual runtime topic and external producer unknown.",
+            "No cron expression or external scheduler observed for broadcast_reminder; 50-second lock TTL is not schedule.",
+            "No external MAX handler/route inferred from CreateChat method name.",
+            "No runtime dispatch, config rollout, broker delivery, retries, or successful external responses asserted.",
+            "Service containers are code ownership/types within one repository, not separately deployed services.",
+            "RegistrationEventService.notify is unused; Process path does not call Notify.",
+            "Emit step summarizes SendEvent serialization, enqueue and queued WriteMessages callback; callback execution is not established. Reminder step summarizes Run to SendReminder to Save across explicit calls, not a single function body.",
+            "Bounded static source projection; error branches, runtime execution, deployment, retry semantics and whole-repository completeness not established."
+          ]
+        },
+        "commit": "27b8206c2f0879d81e77f28527e73f2c98647b05",
+        "dirty": false,
+        "consistency": "verified",
+        "capturedAt": "2026-10-03T05:07:56.303Z",
+        "files": [
+          {
+            "path": "internal/domain/broadcast/kafka.go",
+            "contentHash": "035e29cc3be24a9b76eb2c05175550b892ace402ef4c1525699df3a471412791",
+            "fileType": "go",
+            "analysisStatus": "analyzed"
+          },
+          {
+            "path": "internal/domain/broadcast/dto.go",
+            "contentHash": "dc43a514f542ea2bc058cb71c548cb7733db29b55ece33ae15e9e7689fb8a63e",
+            "fileType": "go",
+            "analysisStatus": "analyzed"
+          },
+          {
+            "path": "internal/domain/broadcast/chat_service.go",
+            "contentHash": "b1ba6a747a5908f33eade779ef4ae01b94bc21fda846809ecb5667d6916e71ea",
+            "fileType": "go",
+            "analysisStatus": "analyzed"
+          },
+          {
+            "path": "internal/domain/chat/service.go",
+            "contentHash": "28e7ff336d6eb1f86d7c742928fd3d7d2fee7c961d201cec31862c3d226841b6",
+            "fileType": "go",
+            "analysisStatus": "analyzed"
+          },
+          {
+            "path": "internal/application/background/module.go",
+            "contentHash": "93dbb847cced7f110e159ca6fef61438da4bcc0c20f2373b457a67a2fdd33ff3",
+            "fileType": "go",
+            "analysisStatus": "analyzed"
+          },
+          {
+            "path": "internal/application/platform/registration_event.go",
+            "contentHash": "ae374b6528ed1eccdece294a7822fe3816223f575a3cacf5fb1d9effcf303d53",
+            "fileType": "go",
+            "analysisStatus": "analyzed"
+          },
+          {
+            "path": "internal/domain/user/entity.go",
+            "contentHash": "2a99bfc1d2118b06cb2b31985294d85e2234da93657d30a7e5d26eb34c2e6572",
+            "fileType": "go",
+            "analysisStatus": "analyzed"
+          },
+          {
+            "path": "internal/domain/user/service/registration_event_service.go",
+            "contentHash": "1d4a9e41cff83a9c1d3375812dc0f79f90844ce411dfa880be4b4f2734fdbf98",
+            "fileType": "go",
+            "analysisStatus": "analyzed"
+          },
+          {
+            "path": "internal/infrastructure/kafka/client.go",
+            "contentHash": "692e34b63cd536fa01a8e2e32a4f43f23f50bbfdb7dc6f50b052147c2ec751d7",
+            "fileType": "go",
+            "analysisStatus": "analyzed"
+          },
+          {
+            "path": "cmd/education-platform/main.go",
+            "contentHash": "7bde0d8a7d6e0ecf80a173eb6de25927a4bf292e319c38bcce0d502fd0c1a21d",
+            "fileType": "go",
+            "analysisStatus": "analyzed"
+          },
+          {
+            "path": "internal/application/actions/broadcast_reminder.go",
+            "contentHash": "21b873942933adbf64926b9ee7638e5ad7bbf3eb5a74ed2712f5d32e8c99a894",
+            "fileType": "go",
+            "analysisStatus": "analyzed"
+          },
+          {
+            "path": "internal/application/platform/broadcast_reminder.go",
+            "contentHash": "7c7dbd85756141bd6cef313c200ecf2d482ad02528f3956ef148297b3702d944",
+            "fileType": "go",
+            "analysisStatus": "analyzed"
+          },
+          {
+            "path": "internal/application/platform/commands/broadcast_reminder.go",
+            "contentHash": "398246839fdc2119f4823a129d8fbb942141a12d938afabf9d3ca2a7eb3baf6b",
+            "fileType": "go",
+            "analysisStatus": "analyzed"
+          },
+          {
+            "path": "internal/domain/broadcast/message_service.go",
+            "contentHash": "35868ba669ab6bb8b50c9d7c1c7448cd1d1bd869c68cf88d03b8a8528e7a651f",
+            "fileType": "go",
+            "analysisStatus": "analyzed"
+          },
+          {
+            "path": "internal/domain/chat/bot/sferum/message/dto.go",
+            "contentHash": "9e4ffbd18a7f5aef7842a169dff1dd759a1b021ebd35c16159af9f148ed0ffb6",
+            "fileType": "go",
+            "analysisStatus": "analyzed"
+          },
+          {
+            "path": "internal/domain/chat/bot/sferum/message/pg_delayed_messages_repository.go",
+            "contentHash": "c82bac51e5c0eb581bcca0e5c53fb5e3ce8df69a74d39f9fa5d58a7562d40d1b",
+            "fileType": "go",
+            "analysisStatus": "analyzed"
+          },
+          {
+            "path": "internal/domain/chat/bot/sferum/message/schema.go",
+            "contentHash": "d3d70e9a3d1c3e104adf4ba86a0321ab90e7fb7697640127087455eb87893fd1",
+            "fileType": "go",
+            "analysisStatus": "analyzed"
+          }
+        ]
+      }
+    ]
+  },
+  "hash": "d034130375d5fba6263c8f10087cbd0ffdd5077a2142ce6e04266866ea338cf7",
+  "revisionId": "01a10029-6969-7158-ba40-9717c6cf7cdc"
+}

@@ -1,14 +1,14 @@
 ---
 name: mocker-backend-change
-description: Prepare an isolated typed full-graph proposal from an exact source5/source6 revision; preview ordered commands, save immutable drafts, inspect baseline versus intent and restore history with exact request recovery.
+description: Prepare typed backend graph proposals, resolve three-way rebase conflicts, run durable static diff/impact jobs and associate exact saved-draft reports with ready. Use for desired backend changes, source comparison or analysis recovery; inspection alone starts no job.
 metadata:
   workflowId: "mocker-backend-change"
-  workflowVersion: "1"
+  workflowVersion: "2"
   requiredModelSchemaVersions: "[\"5\",\"6\"]"
   requiredViewSchemaVersions: "[\"proposal-graph-v1\"]"
-  requiredCapabilities: "[\"backend-projects\",\"backend-revisions\",\"backend-graph-query\",\"backend-change-proposals\",\"backend-change-typed-edits\",\"backend-source-assertions\",\"backend-representations\"]"
-  guideSetId: "sha256:5a8d1fe6bc274c7b60621c826a5fcca31e4ab6b1c6e8f885a40d90abfbbeebdd"
-  manifestHash: "sha256:5a8d1fe6bc274c7b60621c826a5fcca31e4ab6b1c6e8f885a40d90abfbbeebdd"
+  requiredCapabilities: "[\"backend-projects\",\"backend-revisions\",\"backend-graph-query\",\"backend-change-proposals\",\"backend-change-typed-edits\",\"backend-source-assertions\",\"backend-representations\",\"backend-analysis-jobs\",\"backend-analysis-diff\",\"backend-analysis-impact\",\"backend-change-rebase\",\"backend-change-ready\"]"
+  guideSetId: "sha256:dfb9851bf1c8ba63fe44094c929a300267ffbe0761f365ab1914fca3ead729b5"
+  manifestHash: "sha256:dfb9851bf1c8ba63fe44094c929a300267ffbe0761f365ab1914fca3ead729b5"
 ---
 
 # Prepare a full graph proposal
@@ -17,7 +17,7 @@ A full proposal keeps one immutable source baseline and an independent sequence 
 
 ## Pin the procedure and baseline
 
-Read `get_server_config`/`get_backend_capabilities`. Select advertised change1, proposal-graph-v1, all required capabilities and a compatible immutable guide set. Verify workflowId/version/guideSetId/manifestHash/contentHash; on mismatch use the complete pinned server `backend-change-proposals` entrypoint. Unknown sets fail. Shared source semantics use import7; exact read/lineage/proof procedures use inspect7; database facets use database7. Verify each actual owner in the same set.
+Read `get_server_config`/`get_backend_capabilities`. Select advertised change2, proposal-graph-v1, all required capabilities and a compatible immutable guide set. Verify workflowId/version/guideSetId/manifestHash/contentHash; on mismatch use the complete pinned server `backend-change-proposals` entrypoint. Unknown sets fail. Shared source semantics use import7; exact read/lineage/proof procedures use inspect7; database facets use database7. Verify each actual owner in the same set.
 
 Read the chosen source revision explicitly. Source5 is supported with source5 vocabulary; a full proposal's structural schema6 tag does not upgrade that baseline or grant representation commands. Source6 admits domain_entity, dto, api_schema and representation_field. Select source6 explicitly at creation when those kinds are needed.
 
@@ -41,7 +41,7 @@ Every command includes a new canonical commandId and a nonblank reason. Keep com
 | set_field_mapping | mappingId, parentId, ordered sources, destination, transform, analysisStatus, gaps; optional typed transport/description |
 | set_artifact_pin | typed artifact, exact revisionId, complete editorBindings; api_design also requires complete apiBindings |
 | remove_artifact_pin | exact typed artifact |
-| map_identity | exact source_identity or intent_identity target, expectedExternalKey, newExternalKey |
+| map_identity | exact source_identity, carried_source_identity or intent_identity target, expectedExternalKey, newExternalKey |
 | set_criteria | complete criteria replacement array |
 
 The canonical API has 16 families / 72 closed kind/action/artifact branches. Use that branch's complete attributes and definitions, preserving ordered FK pairs/index terms/ports/mapping inputs and explicit unknown reasons. Omitted, null, empty and false are different values. Source proof fields such as ownership, freshness, evidenceIds/evidenceKeys and sourceSnapshotId are not editable desired groups. Artifact owner documents remain immutable; pins refer to exact owner revisions.
@@ -92,7 +92,7 @@ Every accepted commandId stays consumed, including no-ops, criteria-only changes
 
 Criteria are authored statements about desired structure, not evidence of test execution. The 10 closed variants cover object_exists/object_absent for node or edge, edge_exists, field_equals with typed selector/present-value, artifact_object_matches for the two artifact namespaces, test_attachment with exact source/owner references, and runtime_check. Required flags, target UUIDs, attachment scope and unknown status remain explicit. Empty criteria means none declared, not passed runtime checks.
 
-Page history with the selected immutable draft pinned. Source baseline/vector/artifact context belong to that historical revision, not newer aggregate metadata. Restore uses `restore_backend_change_proposal {projectId,proposalId,expectedVersion,proposalRevisionId,restoreRevisionId,idempotencyKey}` after explicit review. It appends a new draft on the same base; it neither replays old commands nor releases command/object IDs. There is no B4.1 rebase/ready/implemented/archive operation. Local undo changes only unsaved commands.
+Page history with the selected immutable draft pinned. Source baseline/vector/artifact context belong to that historical revision, not newer aggregate metadata. Restore uses `restore_backend_change_proposal {projectId,proposalId,expectedVersion,proposalRevisionId,restoreRevisionId,idempotencyKey}` after explicit review. It appends a new draft on the same base; it neither replays old commands nor releases command/object IDs. Explicit rebase and ready follow the references below. Implemented/archive remain unavailable. Local undo changes only unsaved commands.
 
 ## Read intent and baseline separately
 
@@ -107,3 +107,11 @@ Presentation saving belongs to inspect7/database7. For a full target, explicitly
 Persist Create, Apply and Restore bodies/path IDs before sending. Storage failure must be visible; do not dispatch a request whose unknown result cannot be recovered. Find pending Create at the project level even if the project opens on a newer source base. Restore its original base context explicitly, without rebasing the saved body. Browser recovery never sends automatically.
 
 For an unknown outcome, repeat exactly the saved request/key. For definitive 409, retain the refused attempt, read the current draft and explicitly reconcile intent, then preview a new request. Continuing with unchanged local IDs differs from consciously copying commands as new edits; do not silently regenerate IDs on resend. Keep separate original receipt state, selected historical draft and current aggregate head. No UI recovery step mutates source facts.
+
+## Rebase and static analysis
+
+Read `get_guide {topic:"backend-change-rebase",guideSetId:selected.guideSetId}` before moving a saved draft to an explicitly selected source base. B/O/N conflicts need exact selectors, choices and reasons; ordered repair commands remain real commands. Read `get_guide {topic:"backend-analysis-jobs",guideSetId:selected.guideSetId}` before starting durable diff/impact, cancelling/retrying a job or marking ready. Both topics belong to change2 in this exact set; verify their returned owner/contentHash.
+
+Only in a standalone `mocker-backend-change` installation, the local files relative to that package's SKILL.md are `references/rebase.md` and `references/analysis-jobs.md`. Root-only compatibility and server-topic readers use the pinned get_guide calls above; those leaf-local paths are not relative to the generated compatibility document.
+
+Ready is a static review association with an exact complete saved full-draft impact report. It is never runtime verification. Normal Apply, Restore and Rebase return to draft and clear ready association; older receipts and source/proposal bytes remain immutable. Source5 may retain snapshots with an empty contentHash and has a nonempty derived source vector. Preserve the returned legacy artifact context and exact pins instead of synthesizing source6 facts.

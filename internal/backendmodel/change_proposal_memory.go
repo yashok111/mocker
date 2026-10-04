@@ -21,11 +21,15 @@ type changeReadBudget struct {
 	reservation *store.TransientReservation
 	bytes       int64
 	seen        map[string]bool
+	lease       *AnalysisInputReservation
 }
 
 func (b *changeReadBudget) admit(ctx context.Context, key string, size int64) error {
 	if b == nil {
 		return nil
+	}
+	if b.lease != nil {
+		return b.lease.admit(key, size)
 	}
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -149,8 +153,21 @@ func changeIdentityInputBytes(ctx context.Context, q importReader, pid, proposal
 	return bytes, err
 }
 func (r *Repo) reserveChangeInput(ctx context.Context, pid string, bytes int64) (*store.TransientReservation, error) {
-	if bytes > MaxRevisionBytes {
+	if bytes < 0 || bytes > MaxRevisionBytes {
 		return nil, limitFault("Pinned proposal inputs exceed materialization bounds")
+	}
+	if lease := analysisLease(ctx); lease != nil {
+		if err := lease.valid(r, pid); err != nil {
+			return nil, err
+		}
+		admitted, _ := ctx.Value(analysisChangePreparationKey{}).(*analysisChangePreparation)
+		if admitted == nil || admitted.lease != lease || admitted.projectID != pid {
+			return nil, invalid("analysisInput", "Preparation reservation borrowing requires exact internal admission")
+		}
+		if bytes > lease.inputBytes {
+			return nil, limitFault("Prepared inputs exceed the admitted analysis inventory")
+		}
+		return lease.reservation, nil
 	}
 	var reservation *store.TransientReservation
 	err := r.db.Write(ctx, func(tx *sql.Tx) error {

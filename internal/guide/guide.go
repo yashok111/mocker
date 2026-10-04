@@ -49,6 +49,8 @@ const (
 	TopicBackendEvents            = "backend-events"
 	TopicBackendSync              = "backend-sync"
 	TopicBackendChangeProposals   = "backend-change-proposals"
+	TopicBackendChangeRebase      = "backend-change-rebase"
+	TopicBackendAnalysisJobs      = "backend-analysis-jobs"
 	TopicBackendAnnotations       = "backend-annotations"
 )
 
@@ -57,6 +59,7 @@ const (
 //go:embed backend-inspect.md backend-flow-reference.md backend-analysis.md
 //go:embed backend-editor-projections.md backend-events.md
 //go:embed backend-sync.md backend-change-proposals.md backend-annotations.md
+//go:embed backend-change-rebase.md backend-analysis-jobs.md
 var files embed.FS
 
 // topicFiles maps a topic to its embedded file. overview.md is SKILL.md
@@ -88,6 +91,8 @@ var topicFiles = map[string]string{
 	TopicBackendSync:              "backend-sync.md",
 	TopicBackendChangeProposals:   "backend-change-proposals.md",
 	TopicBackendAnnotations:       "backend-annotations.md",
+	TopicBackendChangeRebase:      "backend-change-rebase.md",
+	TopicBackendAnalysisJobs:      "backend-analysis-jobs.md",
 }
 
 // Topics is the ordered list of topic names get_guide accepts.
@@ -101,6 +106,7 @@ func Topics() []string {
 		TopicBackendInspect, TopicBackendFlowReference, TopicBackendAnalysis,
 		TopicBackendEditorProjections, TopicBackendEvents,
 		TopicBackendSync, TopicBackendChangeProposals, TopicBackendAnnotations,
+		TopicBackendChangeRebase, TopicBackendAnalysisJobs,
 	}
 }
 

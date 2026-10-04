@@ -1,3 +1,10 @@
+import { BackendLegacyRecoveryNotice } from "./BackendLegacyRecoveryNotice";
+import { BackendAnalysisJobs } from "./BackendAnalysisJobs";
+import {
+  BackendAnalysisRecoveryProvider,
+  useBackendAnalysisRecovery,
+} from "./backendAnalysisRecovery";
+import { BackendAnalysisRecoveryNotice } from "./BackendAnalysisRecoveryNotice";
 import { BackendAnnotations, type BackendAnnotationsProps } from "./BackendAnnotations";
 import { BackendArtifactProjections } from "./BackendArtifactProjections";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -70,6 +77,15 @@ type ProjectPageProps = {
 };
 
 export function BackendProjectPage(props: ProjectPageProps) {
+  return (
+    <BackendAnalysisRecoveryProvider key={props.projectId} projectId={props.projectId}>
+      <BackendAnalysisRecoveryNotice projectId={props.projectId} />
+      <BackendLegacyRecoveryNotice projectId={props.projectId} />
+      <BackendProjectGate {...props} />
+    </BackendAnalysisRecoveryProvider>
+  );
+}
+function BackendProjectGate(props: ProjectPageProps) {
   const full =
     props.sourcePin?.changeProposalId !== undefined ||
     props.sourcePin?.proposalRevisionId !== undefined;
@@ -246,6 +262,7 @@ function BackendProjectDetail({
   initialFullTarget,
   onImportCandidateChange,
 }: ProjectPageProps) {
+  const analysisRecovery = useBackendAnalysisRecovery(projectId);
   const fullTarget =
     initialFullTarget ??
     (initialSaved?.documentVersion === "saved-view-v2" && initialSaved.target.changeProposal
@@ -297,6 +314,7 @@ function BackendProjectDetail({
     onSourceNavigate?.(savedViewSourcePin(value), true);
   });
   const dirty =
+    analysisRecovery.blocked ||
     changeDirty ||
     syncDirty ||
     annotationDirty ||
@@ -339,6 +357,7 @@ function BackendProjectDetail({
   const [compareOpen, setCompareOpen] = useState(false);
   const [importsOpen, setImportsOpen] = useState(false);
   const [importsMounted, setImportsMounted] = useState(false);
+  const [analysisOpen, setAnalysisOpen] = useState(false);
   const [changesOpen, setChangesOpen] = useState(false);
   const [changesMounted, setChangesMounted] = useState(false);
   const [historyCursors, setHistoryCursors] = useState([""]);
@@ -700,6 +719,16 @@ function BackendProjectDetail({
                   Предложения изменений
                 </Button>
               </Group>
+              <Button
+                variant="default"
+                aria-expanded={analysisOpen}
+                onClick={() => setAnalysisOpen((value) => !value)}
+              >
+                Задания анализа
+              </Button>
+              {analysisOpen && revision && (
+                <BackendAnalysisJobs projectId={projectId} sourceRevisionId={revision.id} />
+              )}
               {compareOpen && (
                 <BackendRevisionCompare
                   projectId={projectId}

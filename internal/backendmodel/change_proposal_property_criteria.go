@@ -83,6 +83,9 @@ func (r changeCriteriaReader) proposalField(c ChangeCriterion, selector Effectiv
 		_, err := normalizeName(name)
 		return err
 	}
+	if selector.Kind == "carried_source_identity" && selector.CarriedSourceIdentity != nil {
+		return r.carriedIdentityField(c, selector)
+	}
 	if selector.RecordType != c.RecordType || selector.ID != c.ID {
 		return invalid("selector", "Identity property selector must address its criterion subject")
 	}
@@ -96,7 +99,7 @@ func (r changeCriteriaReader) proposalField(c ChangeCriterion, selector Effectiv
 		}
 	case "intent_identity":
 		reserved, ok := r.e.used[c.ID]
-		if !ok || reserved.RecordType != c.RecordType || reserved.Origin.Kind != "intent" {
+		if !ok || reserved.RecordType != c.RecordType || !changeAllocatedIntent(reserved) {
 			return invalid("selector", "Intent identity property requires a proposal-created object")
 		}
 	default:
@@ -119,4 +122,12 @@ func validateChangeIdentityExpected(expected *SourcePropertyValue, nullable bool
 		return invalid("expected", "Identity key must be a bounded nonempty string")
 	}
 	return nil
+}
+
+func (r changeCriteriaReader) carriedIdentityField(c ChangeCriterion, selector EffectivePropertySelector) error {
+	carry := selector.CarriedSourceIdentity
+	if carry.Source.RecordType != c.RecordType || carry.Source.ID != c.ID || !changeCarried(r.e, ChangeIdentityTarget{Kind: selector.Kind, Source: &carry.Source, Basis: &carry.Basis}) {
+		return invalid("selector", "Exact carried source identity must address the criterion subject")
+	}
+	return validateChangeIdentityExpected(c.Expected, false)
 }

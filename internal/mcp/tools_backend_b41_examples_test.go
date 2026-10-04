@@ -75,7 +75,7 @@ func (h *b41SDKExamples) negotiate(t *testing.T) {
 		if !slices.Equal(capabilities.ModelSchemaVersions, []string{"1", "2", "3", "4", "5", "6"}) || !slices.Contains(capabilities.ProviderProfiles, "composed-source-v1") || len(capabilities.Workflows) != 6 {
 			t.Fatalf("incomplete source6 discovery: %+v", capabilities)
 		}
-		versions := map[string]string{"mocker-backend-project": "2", "mocker-backend-import": "7", "mocker-backend-database": "7", "mocker-backend-inspect": "7", "mocker-backend-sync": "1", "mocker-backend-change": "1"}
+		versions := map[string]string{"mocker-backend-project": "2", "mocker-backend-import": "7", "mocker-backend-database": "7", "mocker-backend-inspect": "7", "mocker-backend-sync": "2", "mocker-backend-change": "2"}
 		selectedSet := ""
 		for _, owner := range capabilities.Workflows {
 			if versions[owner.WorkflowID] != owner.WorkflowVersion || owner.GuideSetID == "" || owner.ManifestHash != owner.GuideSetID || selectedSet != "" && selectedSet != owner.GuideSetID {
@@ -93,7 +93,7 @@ func (h *b41SDKExamples) negotiate(t *testing.T) {
 			for _, topic := range owner.Topics {
 				var out GetGuideOutput
 				h.call(t, "get_guide", GetGuideInput{GuideSetID: selectedSet, Topic: topic.Topic}, nil, &out)
-				if out.GuideSetID != selectedSet || out.ManifestHash != owner.ManifestHash || out.WorkflowID != owner.WorkflowID || out.WorkflowVersion != owner.WorkflowVersion || out.Topic != topic.Topic || out.ContentHash != topic.ContentHash || out.ContentHash != "sha256:"+b41Digest([]byte(out.Markdown)) || len(out.Topics) != 24 || !slices.Contains(out.Topics, topic.Topic) || !strings.HasPrefix(out.Markdown, "# ") {
+				if out.GuideSetID != selectedSet || out.ManifestHash != owner.ManifestHash || out.WorkflowID != owner.WorkflowID || out.WorkflowVersion != owner.WorkflowVersion || out.Topic != topic.Topic || out.ContentHash != topic.ContentHash || out.ContentHash != "sha256:"+b41Digest([]byte(out.Markdown)) || len(out.Topics) != len(guide.Topics()) || !slices.Contains(out.Topics, topic.Topic) || !strings.HasPrefix(out.Markdown, "# ") {
 					t.Fatalf("served topic does not match its advertised owner/body: %s", topic.Topic)
 				}
 			}

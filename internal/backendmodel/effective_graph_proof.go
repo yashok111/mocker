@@ -14,6 +14,14 @@ func effectivePropertyProof(graph *EffectiveGraphSnapshot, typ, id string, prope
 	if graph.Source.SourceVector != nil {
 		return sourcePropertyProof(graph.Source, typ, id, property)
 	}
+	// Legacy saved source snapshots omit public property-origin sidecars. Reuse
+	// their exact typed subject/facet support rather than invent a missing origin.
+	if !hasOrigin {
+		if _, exists := index.payloads[typ+"\x00"+id]; exists {
+			origin = effectiveLegacyOriginSupport(graph.Source, ChangeEvaluationFieldOrigin{ChangeRecordRef: ChangeRecordRef{RecordType: typ, ID: id}, Selector: EffectivePropertySelector{Kind: "source", Source: new(property)}}, EffectiveFieldOrigin{Kind: "source", SourceClaims: []BaseAssertionRef{}, EvidenceIDs: []string{}})
+			hasOrigin = true
+		}
+	}
 	p := lineageProof{status: "explicit", reasons: map[string]bool{}}
 	found := hasOrigin && origin.Kind == "source"
 	if found {

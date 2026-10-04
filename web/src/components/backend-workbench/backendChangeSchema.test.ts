@@ -24,3 +24,24 @@ describe("full command form contract", () => {
     Object.values(backendChangeSchemas).forEach(walk);
   });
 });
+
+it("exports every analysis, rebase and ready request root for exact recovery", () => {
+  for (const name of [
+    "StartBackendAnalysisRequest",
+    "CancelBackendAnalysisRequest",
+    "RetryBackendAnalysisRequest",
+    "PreviewBackendChangeProposalRebaseRequest",
+    "ApplyBackendChangeProposalRebaseRequest",
+    "ApplyBackendChangeProposalLifecycleRequest",
+    "BackendAnalysisJobDetail",
+    "BackendAnalysisResultPage",
+  ]) {
+    expect(backendChangeSchemas).toHaveProperty(name);
+  }
+  const targets = backendChangeSchemas.BackendChangeIdentityTarget!.oneOf!;
+  const carry = targets.find((arm) => arm.properties?.kind?.const === "carried_source_identity")!;
+  expect(carry.required).toContain("basis");
+  expect(carry.additionalProperties).toBe(false);
+  const output = backendChangeSchemas.BackendAnalysisResultPage!;
+  expect(output.properties!.items!.type).toBe("array");
+});

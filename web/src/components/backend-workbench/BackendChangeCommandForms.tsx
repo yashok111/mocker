@@ -204,8 +204,9 @@ export function BackendChangeCommandForms({
               ...identities.map((item, index) => ({
                 value: String(index),
                 label:
-                  item.target.kind === "source_identity"
-                    ? `${item.target.source.recordType} ${item.target.source.id} · ${item.target.source.repositoryId} · ${item.target.source.providerNamespace} · ${item.target.source.externalKey} · ${item.target.source.assertionHash}`
+                  item.target.kind === "source_identity" ||
+                  item.target.kind === "carried_source_identity"
+                    ? `${item.target.source.recordType} ${item.target.source.id} · ${item.target.source.repositoryId} · ${item.target.source.providerNamespace} · ${item.target.source.externalKey} · ${item.target.source.assertionHash}${item.target.kind === "carried_source_identity" ? ` · историческая база ${item.target.basis.revisionId} · ${item.target.basis.semanticHash}` : ""}`
                     : `${item.target.recordType} ${item.target.id} · созданный объект · ${item.externalKey ?? "ключ не задан"}`,
               })),
             ]}

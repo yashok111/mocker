@@ -408,4 +408,22 @@ transport mappings alone join producer/consumer fields. No job executes.
 
 ## Source synchronization, desired changes and annotations
 
-Select sync1 and load `backend-sync` for composed source6 scopes, exact provider claims, incremental affected writes and READY candidate reads. Select change1 and load `backend-change-proposals` for full desired graph commands, preview/apply, immutable history and restore. Project2 owns `backend-annotations`: annotations are project metadata with exact text, CAS, cursor conflicts and orphan tracking. Inspect7/database7 own supported source/full inspection and explicit SavedView-v2; importCandidate supports basic graph/node/evidence/coverage/assertions only and cannot be saved. Verify each owner's complete requirements and topic hashes in the same selected guide set before following its procedure.
+Select sync2 and load `backend-sync` for composed source6 scopes, exact provider claims, incremental affected writes and READY candidate reads. Select change2 and load `backend-change-proposals` for full desired graph commands, preview/apply, immutable history and restore. Project2 owns `backend-annotations`: annotations are project metadata with exact text, CAS, cursor conflicts and orphan tracking. Inspect7/database7 own supported source/full inspection and explicit SavedView-v2; importCandidate supports basic graph/node/evidence/coverage/assertions only and cannot be saved. Verify each owner's complete requirements and topic hashes in the same selected guide set before following its procedure.
+
+### Backend static analysis, rebase and ready
+
+Select change2 and read `backend-analysis-jobs` / `backend-change-rebase` from the negotiated set. Source-to-source entry points also use sync2 for source preparation; `backend-analysis` stays inspect7-owned.
+
+| Tool | Inputs beyond projectId | Result / constraint |
+| --- | --- | --- |
+| start_backend_analysis | kind diff/impact, fromRevisionId, exact target, scope, limits, observationMode none, idempotencyKey | Durable job (REST202); result is not ready yet. |
+| list_backend_analysis | status?, kind?, limit?, cursor? | Stable filtered job page. |
+| get_backend_analysis | jobId | Mutable job plus immutable input context/pins. |
+| get_backend_analysis_results | jobId, resultVersion, section, cursor?/limit?/filters | Frozen manifest and section page; no latest fallback. |
+| cancel_backend_analysis | jobId, idempotencyKey | Persisted cancellation; terminal new-key cancel409. |
+| retry_backend_analysis | jobId, idempotencyKey | New job from terminal immutable input (REST202); old key replays. |
+| preview_backend_change_proposal_rebase | proposalId, expectedVersion, proposalRevisionId, newBaseRevisionId, identityResolutions[], resolutions[], repairCommands[] | Read-only B/O/N conflicts, diagnostics and candidateHash. |
+| apply_backend_change_proposal_rebase | Exact preview input, candidateHash, idempotencyKey | New saved draft on selected base, status draft; immutable receipt. |
+| apply_backend_change_proposal_lifecycle | proposalId, expectedVersion, proposalRevisionId, action ready, report, acknowledgedGapIds[], idempotencyKey | Exact completed saved-draft impact association; runtime unverified. |
+
+REST paths are `/api/backend-projects/{projectId}/analyses` (POST/GET), `/{jobId}` (GET), `/{jobId}/results` (GET), `/{jobId}/cancel` and `/{jobId}/retry` (POST). Proposal POST paths are `/api/backend-projects/{projectId}/change-proposals/{proposalId}/rebase-preview`, `/rebase`, `/lifecycle`. Browser REST mutations retain existing session/CSRF requirements; MCP uses its bearer-authenticated adapter to the same handlers. Preserve exact integer versions and original request bytes.

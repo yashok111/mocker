@@ -6,8 +6,8 @@ metadata:
   workflowVersion: "2"
   requiredModelSchemaVersions: "[]"
   requiredCapabilities: "[]"
-  guideSetId: "sha256:5a8d1fe6bc274c7b60621c826a5fcca31e4ab6b1c6e8f885a40d90abfbbeebdd"
-  manifestHash: "sha256:5a8d1fe6bc274c7b60621c826a5fcca31e4ab6b1c6e8f885a40d90abfbbeebdd"
+  guideSetId: "sha256:dfb9851bf1c8ba63fe44094c929a300267ffbe0761f365ab1914fca3ead729b5"
+  manifestHash: "sha256:dfb9851bf1c8ba63fe44094c929a300267ffbe0761f365ab1914fca3ead729b5"
 ---
 
 # mocker
@@ -20,7 +20,7 @@ same-provider snapshot reconciliation and pinned database/ER, structural
 comparison and evidence reads. Typed NULL/NOT NULL and FK proposals use separate pinned preview/apply and unverified criteria;
 source schema3 adds pinned endpoint flows and imported scoped data accesses;
 source4 adds explicit field lineage and manual exact API associations through inspect7;
-source5 adds evidence-backed event routes/jobs/service calls and contextual fields; source6 incremental synchronization uses sync1; backend impact remains unavailable. For mocks, one OpenAPI
+source5 adds evidence-backed event routes/jobs/service calls and contextual fields; source6 incremental synchronization uses sync2; static diff/impact uses durable pinned jobs with runtime unverified. For mocks, one OpenAPI
 spec is imported once; every WORKSPACE
 bound to it serves the spec's routes on its own host with deterministic
 generated bodies, records what it served, and remembers what it is told to
@@ -28,7 +28,7 @@ remember. The agent talks to it through MCP (`POST /mcp`, bearer key) — the
 same admin API the human panel uses, one tool per verb — spec import included
 (`import_spec`, JSON or YAML) since A8.
 
-Source6 supports explicit multi-provider source synchronization through sync1. Full desired graph changes use change1; annotations use project2. Read the selected owner's exact contract before any write.
+Source6 supports explicit multi-provider source synchronization through sync2. Full desired graph changes use change2; annotations use project2. Read the selected owner's exact contract before any write.
 
 ## Mental model
 
@@ -74,15 +74,16 @@ Route the task before listing or changing resources. Keep ordinary mock workspac
 | --- | --- |
 | Create/rename a backend project; source-object annotations | project2 / backend-overview, then backend-annotations |
 | Existing source1–5 import, adjacent profile transition or revision comparison | import7 / backend-import |
-| Composed source6 addition/reconcile/provider migration or authorized incremental sync | sync1 / backend-sync |
+| Composed source6 addition/reconcile/provider migration or authorized incremental sync | sync2 / backend-sync |
 | Exact graph/proof/Flow/lineage/events/artifact inspection | inspect7 / backend-inspect |
 | Relational source/full inspection or existing typed relational proposals | database7 / backend-database |
-| Full desired graph proposal, qualified intended keys, history/restore | change1 / backend-change-proposals |
+| Full desired graph proposal, qualified intended keys, history/restore | change2 / backend-change-proposals |
+| Three-way rebase, durable diff/impact, exact impact report to ready | change2 / backend-change-rebase, backend-analysis-jobs |
 | Saved Flow/Database presentation | inspect7/database7 with the matching v1/v2 view contract |
 
 Prefer the installed independent leaf; root-only clients use its generated compatibility reference or get_guide entrypoint. Verify actual advertised workflowId/version/set/manifest/topic hashes and all requirements. On local mismatch use the complete compatible server procedure in the same selected immutable set. Unknown guide sets fail; tool presence alone is insufficient. Every shared topic keeps its canonical owner. No compatible procedure means supported reads only.
 
-Inspection starts no source/metadata/proposal mutation. A requested source correction chooses import7 for its legacy source scope or sync1 for composed source scope, retaining capture/proof/audit rules. A human annotation is metadata; a full proposal is intent; neither repairs source evidence. READY staging has exact basic reads and cannot be used for specialized queries or saved presentations. Backend jobs, lifecycle transitions, rebase and impact are not B4.1 operations.
+Inspection starts no source/metadata/proposal mutation. A requested source correction chooses import7 for its legacy source scope or sync2 for composed source scope, retaining capture/proof/audit rules. A human annotation is metadata; a full proposal is intent; neither repairs source evidence. READY staging has exact basic reads and cannot be used for specialized queries or saved presentations. Select change2/backend-analysis-jobs for durable diff/impact and exact report-to-ready; change2/backend-change-rebase for explicit three-way rebase. Imported code, SQL and jobs never execute.
 
 ## Mock workspace workflow
 

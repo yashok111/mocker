@@ -1,3 +1,4 @@
+import { inspectAnalysisRecovery, analysisRecoveryKey } from "./backendAnalysisRecovery";
 import { useRef, useState } from "react";
 import {
   discoverChangeCreateRecovery,
@@ -46,6 +47,10 @@ export function useBackendChangeRecovery(key: string, createProjectId?: string) 
   function persist(attempt: ChangeAttempt): boolean {
     const previous = state.current;
     try {
+      const projectId = previous.key.split(":")[1]!;
+      const analysis = inspectAnalysisRecovery(analysisRecoveryKey(projectId));
+      if (analysis.raw || analysis.error)
+        throw new Error("Сначала восстановите операцию анализа или переноса проекта.");
       const raw = writeChangeRecovery(previous.key, attempt, previous.raw);
       adopt({ ...previous, raw, attempt, error: null });
       setUnsent(false);

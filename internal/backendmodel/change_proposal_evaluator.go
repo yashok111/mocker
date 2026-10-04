@@ -36,7 +36,9 @@ func newChangeEvaluation(source *SourceGraphSnapshot, draft ChangeProposalRevisi
 	add := func(ref ChangeRecordRef, p SourceAssertionPayload) {
 		origin := EffectiveOrigin{Kind: "source", BaseRef: &EffectiveBasis{RevisionID: draft.BaseRevisionID, SemanticHash: draft.BaseSemanticHash, RecordType: ref.RecordType, ID: ref.ID}}
 		e.records[ref.ID] = ChangeCreatedRecord{ChangeRecordRef: ref, Payload: p, Origin: origin}
-		e.used[ref.ID] = ChangeObjectIdentity{ChangeRecordRef: ref, Kind: p.Kind, Origin: origin}
+		if _, exists := e.used[ref.ID]; !exists {
+			e.used[ref.ID] = ChangeObjectIdentity{ChangeRecordRef: ref, Kind: p.Kind, Origin: origin}
+		}
 	}
 	for _, n := range source.State.Nodes {
 		add(ChangeRecordRef{RecordType: "node", ID: n.ID}, sourceNodePayload(n))
@@ -97,7 +99,7 @@ func newChangeEvaluation(source *SourceGraphSnapshot, draft ChangeProposalRevisi
 
 func (e *changeEvaluation) origin(c ChangeProposalCommand, ref ChangeRecordRef) EffectiveOrigin {
 	origin := EffectiveOrigin{Kind: "intent", CommandID: c.CommandID, Reason: c.Reason}
-	if old, ok := e.used[ref.ID]; ok && old.Origin.Kind == "source" {
+	if old, ok := e.records[ref.ID]; ok && old.Origin.BaseRef != nil {
 		origin.BaseRef = old.Origin.BaseRef
 	}
 	return origin
@@ -451,14 +453,20 @@ func (e *changeEvaluation) mapIdentity(c ChangeProposalCommand) error {
 		return err
 	}
 	var expected *string
-	if target.Kind == "source_identity" {
+	switch target.Kind {
+	case "source_identity":
 		if !slices.Contains(e.source.Identities, *target.Source) {
 			return invalid("target", "Qualified identity does not match selected draft baseline")
 		}
 		expected = new(target.Source.ExternalKey)
-	} else {
+	case "carried_source_identity":
+		if !changeCarried(e, target) {
+			return invalid("target", "Exact carried source identity required")
+		}
+		expected = new(target.Source.ExternalKey)
+	default:
 		reserved, ok := e.used[ref.ID]
-		if !ok || reserved.Origin.Kind != "intent" {
+		if !ok || !changeAllocatedIntent(reserved) {
 			return invalid("target", "Intent identity requires a proposal-created record")
 		}
 	}
@@ -527,38 +535,7 @@ func (e *changeEvaluation) snapshot() (*ChangeEvaluationSnapshot, error) {
 			out.Origins = append(out.Origins, ChangeEvaluationFieldOrigin{ChangeRecordRef: r.ChangeRecordRef, Selector: EffectivePropertySelector{Kind: "edge_name"}, Origin: name.Origin})
 		}
 	}
-	for _, s := range e.source.Identities {
-		if _, ok := e.records[s.ID]; !ok {
-			continue
-		}
-		r := e.records[s.ID]
-		out.Identities = append(out.Identities, ChangeEvaluationIdentity{Target: ChangeIdentityTarget{Kind: "source_identity", Source: new(s)}, ExternalKey: new(s.ExternalKey), Origin: EffectiveOrigin{Kind: "source", BaseRef: e.used[r.ID].Origin.BaseRef}})
-	}
-	for _, r := range rev.Delta.Created {
-		if _, ok := e.records[r.ID]; !ok {
-			continue
-		}
-		out.Identities = append(out.Identities, ChangeEvaluationIdentity{Target: ChangeIdentityTarget{Kind: "intent_identity", RecordType: r.RecordType, ID: r.ID}, Origin: r.Origin})
-	}
-	for i := range out.Identities {
-		identity := &out.Identities[i]
-		for _, override := range rev.Delta.IdentityIntents {
-			if changeIdentityKey(identity.Target) == changeIdentityKey(override.Target) {
-				identity.ExternalKey, identity.Origin = override.ExternalKey, override.Origin
-			}
-		}
-	}
-	slices.SortFunc(out.Identities, func(a, b ChangeEvaluationIdentity) int {
-		return strings.Compare(changeIdentityKey(a.Target), changeIdentityKey(b.Target))
-	})
-	for _, identity := range out.Identities {
-		ref := changeIdentityRef(identity.Target)
-		selector := EffectivePropertySelector{Kind: identity.Target.Kind, RecordType: ref.RecordType, ID: ref.ID}
-		if identity.Target.Source != nil {
-			selector.RepositoryID, selector.ProviderNamespace = identity.Target.Source.RepositoryID, identity.Target.Source.ProviderNamespace
-		}
-		out.Origins = append(out.Origins, ChangeEvaluationFieldOrigin{ChangeRecordRef: ref, Selector: selector, Origin: identity.Origin})
-	}
+	e.appendIdentitySnapshot(out)
 	return out, nil
 }
 
@@ -569,7 +546,11 @@ func validateChangeIdentityKeys(snapshot *ChangeEvaluationSnapshot) error {
 			continue
 		}
 		r := changeIdentityRef(identity.Target)
-		key := identity.Target.Kind + "\x00" + r.RecordType + "\x00"
+		kind := identity.Target.Kind
+		if kind == "carried_source_identity" {
+			kind = "source_identity"
+		}
+		key := kind + "\x00" + r.RecordType + "\x00"
 		if identity.Target.Source != nil {
 			key += identity.Target.Source.RepositoryID + "\x00" + identity.Target.Source.ProviderNamespace + "\x00"
 		}
@@ -600,4 +581,50 @@ func (e *changeEvaluation) validate(ctx context.Context) (*ChangeEvaluationSnaps
 		diagnostics = append(diagnostics, ImportDiagnostic{Code: "backend_change_invalid", Path: "identities", Message: err.Error()})
 	}
 	return snapshot, diagnostics, nil
+}
+
+func (e *changeEvaluation) appendIdentitySnapshot(out *ChangeEvaluationSnapshot) {
+	rev := e.revision
+	for _, s := range e.source.Identities {
+		if slices.ContainsFunc(rev.Delta.CarriedIdentities, func(c ChangeCarriedSourceIdentity) bool {
+			return c.Source.ID == s.ID && c.Source.RecordType == s.RecordType && c.Source.RepositoryID == s.RepositoryID && c.Source.ProviderNamespace == s.ProviderNamespace
+		}) {
+			continue
+		}
+		if _, ok := e.records[s.ID]; !ok {
+			continue
+		}
+		r := e.records[s.ID]
+		out.Identities = append(out.Identities, ChangeEvaluationIdentity{Target: ChangeIdentityTarget{Kind: "source_identity", Source: new(s)}, ExternalKey: new(s.ExternalKey), Origin: EffectiveOrigin{Kind: "source", BaseRef: &EffectiveBasis{RevisionID: rev.BaseRevisionID, SemanticHash: rev.BaseSemanticHash, RecordType: r.RecordType, ID: r.ID}}})
+	}
+	for _, c := range rev.Delta.CarriedIdentities {
+		if r, ok := e.records[c.Source.ID]; ok {
+			out.Identities = append(out.Identities, ChangeEvaluationIdentity{Target: ChangeIdentityTarget{Kind: "carried_source_identity", Source: new(c.Source), Basis: new(c.Basis)}, ExternalKey: new(c.Source.ExternalKey), Origin: r.Origin})
+		}
+	}
+	for _, r := range rev.Delta.Created {
+		if changeCarriedRecord(rev, r.ID) {
+			continue
+		}
+		if _, ok := e.records[r.ID]; !ok {
+			continue
+		}
+		out.Identities = append(out.Identities, ChangeEvaluationIdentity{Target: ChangeIdentityTarget{Kind: "intent_identity", RecordType: r.RecordType, ID: r.ID}, Origin: r.Origin})
+	}
+	for i := range out.Identities {
+		identity := &out.Identities[i]
+		for _, override := range rev.Delta.IdentityIntents {
+			if changeIdentityKey(identity.Target) == changeIdentityKey(override.Target) {
+				identity.ExternalKey, identity.Origin = override.ExternalKey, override.Origin
+			}
+		}
+	}
+	slices.SortFunc(out.Identities, func(a, b ChangeEvaluationIdentity) int {
+		return strings.Compare(changeIdentityKey(a.Target), changeIdentityKey(b.Target))
+	})
+	for _, identity := range out.Identities {
+		ref := changeIdentityRef(identity.Target)
+		selector := changeIdentitySelector(identity.Target)
+		out.Origins = append(out.Origins, ChangeEvaluationFieldOrigin{ChangeRecordRef: ref, Selector: selector, Origin: identity.Origin})
+	}
 }

@@ -158,6 +158,8 @@ export function writeChangeRecovery(
   attempt: ChangeAttempt | null,
   expectedRaw?: string | null,
 ): string | null {
+  if (attempt && JSON.stringify(attempt.input) !== attempt.body)
+    throw new Error("Исходные байты запроса изменены");
   const current = storedChange(key);
   const raw = attempt
     ? JSON.stringify({ version: 1, kind: attempt.kind, body: attempt.body, phase: attempt.phase })
@@ -174,5 +176,33 @@ export function writeChangeRecovery(
   }
   if (storedChange(key) !== raw)
     throw new Error("Не удалось подтвердить запись восстановления. Запрос не отправлен.");
+  window.dispatchEvent(new Event("backend-recovery-change"));
   return raw;
+}
+
+/** Discover every owner-bound legacy slot without silently losing it on editor unmount. */
+export function discoverProjectChangeRecovery(projectId: string): ChangeRecoverySlot[] {
+  try {
+    const keys = new Set<string>();
+    for (let i = 0; i < sessionStorage.length; i++) {
+      const key = sessionStorage.key(i);
+      if (
+        key &&
+        (key === changeCreateRecoveryKey(projectId) ||
+          key.startsWith(`${changeCreateRecoveryKey(projectId)}:`) ||
+          key.startsWith(`backend-change-attempt:${projectId}:`))
+      )
+        keys.add(key);
+    }
+    return [...keys].sort().map(inspectChangeRecovery);
+  } catch (cause) {
+    return [
+      {
+        key: changeCreateRecoveryKey(projectId),
+        raw: null,
+        attempt: null,
+        error: storageError("найти", cause),
+      },
+    ];
+  }
 }

@@ -7,8 +7,8 @@ metadata:
   requiredModelSchemaVersions: "[\"3\",\"4\",\"5\",\"6\"]"
   requiredViewSchemaVersions: "[\"saved-view-v1\",\"api-artifact-pins-v1\",\"backend-editor-artifacts-v1\",\"proposal-graph-v1\",\"saved-view-v2\",\"import-candidate-v1\"]"
   requiredCapabilities: "[\"backend-projects\",\"backend-revisions\",\"backend-graph-query\",\"backend-flow-query\",\"backend-data-access-query\",\"backend-saved-views\",\"backend-field-lineage-query\",\"backend-api-artifact-pins\",\"backend-editor-projections\",\"backend-events-query\",\"backend-source-assertions\",\"backend-import-candidate\",\"backend-change-proposals\",\"backend-representations\",\"backend-saved-views-v2\"]"
-  guideSetId: "sha256:5a8d1fe6bc274c7b60621c826a5fcca31e4ab6b1c6e8f885a40d90abfbbeebdd"
-  manifestHash: "sha256:5a8d1fe6bc274c7b60621c826a5fcca31e4ab6b1c6e8f885a40d90abfbbeebdd"
+  guideSetId: "sha256:dfb9851bf1c8ba63fe44094c929a300267ffbe0761f365ab1914fca3ead729b5"
+  manifestHash: "sha256:dfb9851bf1c8ba63fe44094c929a300267ffbe0761f365ab1914fca3ead729b5"
 ---
 # Pinned source flow and data-access inspection
 
@@ -62,7 +62,7 @@ original requests and receipts.
 ## Exact source6/full/staged extensions
 
 Use one explicit revisionId, legacy proposal, full changeProposal or READY importCandidate selector and preserve the complete returned target/pins. Native source6 wraps records with tag6 and all qualified claims; full proposal origins distinguish baseline proof from intent. Source5/legacy/full5 assertions are unsupported. Exact details and target exclusions are in backend-flow-reference/backend-database-reference under their actual inspect7/database7 owners.
-Staging permits graph/node/evidence/coverage/assertions only. It rejects specialized queries and SavedViews; a stale candidate409 never falls back to a source head. Select change1 before full proposal writes and sync1 before composed source updates. Existing legacy procedures below retain their old wire.
+Staging permits graph/node/evidence/coverage/assertions only. It rejects specialized queries and SavedViews; a stale candidate409 never falls back to a source head. Select change2 before full proposal writes and sync2 before composed source updates. Existing legacy procedures below retain their old wire.
 For source6/full Flow or Database presentations, explicitly select SavedView-v2 and read the complete create/save/reopen procedure in the matching reference before writing. Preserve full target, viewId/version and pins.effective; pins.revisionId alone is only a full draft's source baseline. Unknown writes keep exact bytes/key/CAS. Keep omitted-tag v1 requests and receipts unchanged.
 
 ## Ordered inspection
@@ -99,9 +99,9 @@ For source6/full Flow or Database presentations, explicitly select SavedView-v2 
    unresolved status, direct/possible relations, source coverage, local boundary
    completeness and query traversal limits. Readers/writers are imported claims;
    existing rows, all writers, NOT NULL enforcement, atomicity,
-   impact, traces, latency and event delivery remain unverified or unavailable.
+   runtime impact, traces, latency and event delivery remain unverified or unavailable. Authorized static diff/impact uses change2/backend-analysis-jobs; this inspection workflow starts no job.
 
-A source6 gap correction uses separately negotiated sync1 and its exact selected-partition policy. Source1–5 gap corrections retain the legacy procedure below; a narrower analysis question alone does not change protocol scope.
+A source6 gap correction uses separately negotiated sync2 and its exact selected-partition policy. Source1–5 gap corrections retain the legacy procedure below; a narrower analysis question alone does not change protocol scope.
 
 ## Investigate an explicitly requested blocking gap
 
@@ -196,5 +196,5 @@ snapshots, retries/current-head409 recovery and independent admission budgets.
 | mocker-backend-import | 7 | 1,2,3,4,5,6 |  | backend-projects, backend-revisions, backend-graph-query, backend-source-import, backend-source-reconcile, backend-revision-compare, backend-relational-import, backend-database-query, backend-database-er, backend-runtime-flow-import, backend-flow-query, backend-data-access-query, backend-field-lineage-import, backend-field-lineage-query, backend-events-import, backend-events-query, backend-source-sync, backend-representations |
 | mocker-backend-database | 7 | 2,3,4,5,6 | proposal-relational-v1,saved-view-v1,proposal-graph-v1,saved-view-v2 | backend-projects, backend-revisions, backend-graph-query, backend-database-query, backend-database-er, backend-db-proposals, backend-db-typed-edits, backend-flow-query, backend-data-access-query, backend-saved-views, backend-field-lineage-query, backend-events-query, backend-change-proposals, backend-source-assertions, backend-saved-views-v2 |
 | mocker-backend-inspect | 7 | 3,4,5,6 | saved-view-v1,api-artifact-pins-v1,backend-editor-artifacts-v1,proposal-graph-v1,saved-view-v2,import-candidate-v1 | backend-projects, backend-revisions, backend-graph-query, backend-flow-query, backend-data-access-query, backend-saved-views, backend-field-lineage-query, backend-api-artifact-pins, backend-editor-projections, backend-events-query, backend-source-assertions, backend-import-candidate, backend-change-proposals, backend-representations, backend-saved-views-v2 |
-| mocker-backend-sync | 1 | 1,5,6 | import-candidate-v1 | backend-projects, backend-revisions, backend-graph-query, backend-source-import, backend-source-sync, backend-source-incremental-sync, backend-source-assertions, backend-import-candidate, backend-representations |
-| mocker-backend-change | 1 | 5,6 | proposal-graph-v1 | backend-projects, backend-revisions, backend-graph-query, backend-change-proposals, backend-change-typed-edits, backend-source-assertions, backend-representations |
+| mocker-backend-sync | 2 | 1,5,6 | import-candidate-v1 | backend-projects, backend-revisions, backend-graph-query, backend-source-import, backend-source-sync, backend-source-incremental-sync, backend-source-assertions, backend-import-candidate, backend-representations, backend-analysis-jobs, backend-analysis-diff, backend-analysis-impact |
+| mocker-backend-change | 2 | 5,6 | proposal-graph-v1 | backend-projects, backend-revisions, backend-graph-query, backend-change-proposals, backend-change-typed-edits, backend-source-assertions, backend-representations, backend-analysis-jobs, backend-analysis-diff, backend-analysis-impact, backend-change-rebase, backend-change-ready |

@@ -20,6 +20,7 @@ import (
 	"github.com/yashok111/mocker/internal/apidesign"
 	"github.com/yashok111/mocker/internal/assets"
 	"github.com/yashok111/mocker/internal/auth"
+	"github.com/yashok111/mocker/internal/backendanalysis"
 	"github.com/yashok111/mocker/internal/backendmodel"
 	"github.com/yashok111/mocker/internal/checkpoints"
 	"github.com/yashok111/mocker/internal/config"
@@ -71,12 +72,14 @@ const readyzTimeout = 2 * time.Second
 
 // Server holds the admin plane's dependencies and builds its HTTP handler.
 type Server struct {
-	proxyRepo *recordproxy.Repo
-	cfg       *config.Config
-	sessions  *auth.Manager
-	ws        *workspaces.Repo
-	db        *store.DB
-	log       *slog.Logger
+	backendAnalysis     *backendanalysis.Service
+	backendAnalysisRepo *backendanalysis.Repo
+	proxyRepo           *recordproxy.Repo
+	cfg                 *config.Config
+	sessions            *auth.Manager
+	ws                  *workspaces.Repo
+	db                  *store.DB
+	log                 *slog.Logger
 
 	// specsRepo is constructed internally from db and cfg rather than taken
 	// as a New parameter: New's signature is shared with cmd/mocker/main.go,
@@ -527,4 +530,10 @@ func parseClampedLimit(r *http.Request, def, limitMax int) int {
 // found") sites this package used to spell out by hand.
 func answerWorkspaceGone(w http.ResponseWriter) {
 	httpx.Err(w, http.StatusNotFound, httpx.CodeNotFound, "workspace not found")
+}
+
+// SetBackendAnalysis binds the application's worker owner before serving.
+func (s *Server) SetBackendAnalysis(service *backendanalysis.Service, repo *backendanalysis.Repo) {
+	s.backendAnalysis = service
+	s.backendAnalysisRepo = repo
 }

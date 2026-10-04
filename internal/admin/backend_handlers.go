@@ -17,6 +17,9 @@ import (
 
 func (s *Server) backendError(w http.ResponseWriter, err error) {
 	if fault, ok := errors.AsType[*backendmodel.FaultError](err); ok {
+		if fault.Code == "backend_analysis_queue_full" && fault.Status == 429 {
+			w.Header().Set("Retry-After", "2")
+		}
 		httpx.JSON(w, fault.Status, struct {
 			Error *backendmodel.FaultError `json:"error"`
 		}{fault})
@@ -172,6 +175,7 @@ func (s *Server) handleGetBackendCapabilities(w http.ResponseWriter, r *http.Req
 		"modelSchemaVersions":      backendmodel.SupportedModelSchemaVersions(),
 		"workflowVersions":         guide.BackendWorkflows(),
 		"features":                 backendCapabilityFeatures(),
+		"analysisSupport":          map[string]any{"documentVersion": "backend-analysis-context-v1", "kinds": []string{"diff", "impact"}, "targets": []string{"revisionId", "proposal", "changeProposal", "commandPreview"}, "observationModes": []string{"none"}, "ruleSetVersion": "b42-rules/v1", "traversalVersion": "b42-traversal/v1"},
 		"providerProfiles":         []string{backendmodel.GraphProfile, backendmodel.RelationalProfile, backendmodel.RuntimeProfile, backendmodel.LineageProfile, backendmodel.EventsProfile, backendmodel.ComposedProfile},
 		"supportedNodeKinds":       backendmodel.SupportedNodeKindsForProfile(backendmodel.ComposedProfile),
 		"supportedEdgeKinds":       backendmodel.SupportedEdgeKindsForProfile(backendmodel.ComposedProfile),
@@ -205,16 +209,17 @@ func (s *Server) handleGetBackendCapabilities(w http.ResponseWriter, r *http.Req
 		},
 		"comparisonVersion": int64(1),
 		"limits": map[string]any{"maxNameLength": backendmodel.MaxNameLength, "maxIdempotencyKeyLength": backendmodel.MaxKeyLength, "defaultPageSize": backendmodel.DefaultPageSize, "maxPageSize": backendmodel.MaxPageSize, "maxCommands": backendmodel.MaxProjectCommands, "maxBodyBytes": s.cfg.MaxBody,
-			"maxProjectCommandBytes":        min(s.cfg.MaxBody, int64(backendmodel.MaxProjectCommandBytes)),
-			"maxAnnotationBodyBytes":        min(s.cfg.MaxBody, int64(backendmodel.MaxAnnotationBodyBytes)),
-			"maxAnnotationIdentities":       backendmodel.MaxAnnotationIdentities,
-			"maxAnnotationTextBytes":        backendmodel.MaxAnnotationTextBytes,
-			"defaultAnnotationPageSize":     backendmodel.DefaultAnnotationPageSize,
-			"maxAnnotationPageSize":         backendmodel.MaxAnnotationPageSize,
-			"maxSourceRepositories":         backendmodel.MaxSourceRepositories,
-			"maxSourceProviders":            backendmodel.MaxSourceProviders,
-			"maxIncrementalSubjects":        backendmodel.MaxIncrementalSubjects,
-			"maxChangeProposalCommands":     backendmodel.MaxChangeProposalCommands,
+			"maxProjectCommandBytes":    min(s.cfg.MaxBody, int64(backendmodel.MaxProjectCommandBytes)),
+			"maxAnnotationBodyBytes":    min(s.cfg.MaxBody, int64(backendmodel.MaxAnnotationBodyBytes)),
+			"maxAnnotationIdentities":   backendmodel.MaxAnnotationIdentities,
+			"maxAnnotationTextBytes":    backendmodel.MaxAnnotationTextBytes,
+			"defaultAnnotationPageSize": backendmodel.DefaultAnnotationPageSize,
+			"maxAnnotationPageSize":     backendmodel.MaxAnnotationPageSize,
+			"maxSourceRepositories":     backendmodel.MaxSourceRepositories,
+			"maxSourceProviders":        backendmodel.MaxSourceProviders,
+			"maxIncrementalSubjects":    backendmodel.MaxIncrementalSubjects,
+			"maxChangeProposalCommands": backendmodel.MaxChangeProposalCommands,
+			"maxAnalysisInputBytes":     min(s.cfg.MaxBody, int64(2<<20)), "maxAnalysisResultBytes": int64(32 << 20), "maxAnalysisProjectBytes": int64(256 << 20), "maxAnalysisJobs": int64(1000), "maxAnalysisWaitingJobs": int64(20), "maxAnalysisRunningJobs": int64(2), "maxAnalysisStates": int64(10000), "maxAnalysisDependencyVisits": int64(50000), "maxAnalysisDepth": int64(32), "maxAnalysisFindings": int64(10000), "maxAnalysisRecords": int64(20000), "maxAnalysisWitnessesPerObject": int64(8), "recommendedAnalysisPollIntervalMs": int64(2000),
 			"maxChangeProposalCommandBytes": min(s.cfg.MaxBody, int64(backendmodel.MaxChangeProposalCommandBytes)),
 			"maxChangeProposalCriteria":     backendmodel.MaxChangeProposalCriteria,
 			"maxChangeProposals":            backendmodel.MaxChangeProposals,

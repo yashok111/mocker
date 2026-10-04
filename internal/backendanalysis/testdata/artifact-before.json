@@ -1,0 +1,1 @@
+{"openapi":"3.1.0","info":{"title":"Historical","version":"1"},"paths":{},"x-mocker-state-diagrams":{"formatVersion":1,"diagrams":[{"id":"d","name":"Lifecycle","initialStateId":"a","states":[{"id":"a","name":"A","x":0,"y":0,"terminal":false},{"id":"b","name":"B","x":1,"y":0,"terminal":true}],"transitions":[]}]}}

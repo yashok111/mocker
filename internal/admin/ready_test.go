@@ -12,6 +12,7 @@ import (
 
 	"github.com/yashok111/mocker/internal/admin"
 	"github.com/yashok111/mocker/internal/auth"
+	"github.com/yashok111/mocker/internal/backendanalysis"
 	"github.com/yashok111/mocker/internal/store"
 	"github.com/yashok111/mocker/internal/stream"
 	"github.com/yashok111/mocker/internal/workspaces"
@@ -61,6 +62,9 @@ func TestServerReadyReportsEverySetterUntilItRuns(t *testing.T) {
 		name string
 		wire func(*admin.Server)
 	}{
+		{"SetBackendAnalysis", func(s *admin.Server) {
+			s.SetBackendAnalysis(backendanalysis.NewService(nil, nil, nil), backendanalysis.NewRepo(nil))
+		}},
 		{"SetLiveState", func(s *admin.Server) { s.SetLiveState(readyLiveState{}) }},
 		{"SetTraffic", func(s *admin.Server) { s.SetTraffic(readyTraffic{}) }},
 		{"SetStream", func(s *admin.Server) {
@@ -103,6 +107,7 @@ func TestServerReadyIgnoresMCP(t *testing.T) {
 	t.Parallel()
 
 	srv := newReadyServer(t)
+	srv.SetBackendAnalysis(backendanalysis.NewService(nil, nil, nil), backendanalysis.NewRepo(nil))
 	srv.SetLiveState(readyLiveState{})
 	srv.SetTraffic(readyTraffic{})
 	srv.SetStream(stream.NewRegistry(), stream.NewWorkspaceRegistry(1), admin.StreamOptions{})
@@ -128,5 +133,17 @@ func TestServerReadyRequiresBothStreamRegistries(t *testing.T) {
 
 	if got := srv.Ready(); !slices.Contains(got, "SetStream") {
 		t.Fatalf("mock registry nil: Ready() = %v, want it to name SetStream", got)
+	}
+}
+
+func TestServerReadyRequiresAnalysisReader(t *testing.T) {
+	srv := newReadyServer(t)
+	srv.SetBackendAnalysis(backendanalysis.NewService(nil, nil, nil), nil)
+	if !slices.Contains(srv.Ready(), "SetBackendAnalysis") {
+		t.Fatal("missing reader accepted")
+	}
+	srv.SetBackendAnalysis(nil, backendanalysis.NewRepo(nil))
+	if !slices.Contains(srv.Ready(), "SetBackendAnalysis") {
+		t.Fatal("missing service accepted")
 	}
 }

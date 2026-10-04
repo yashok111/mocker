@@ -87,6 +87,8 @@ func (r *Repo) restoreChangeTx(ctx context.Context, tx *sql.Tx, w changeRestoreW
 	rev.Author = "user"
 	rev.Summary = "Restore historical desired graph"
 	p.Version++
+	p.Status = "draft"
+	p.ReadyReference = nil
 	p.CurrentDraftRevisionID, p.CurrentDraftHash, p.UpdatedAt = rev.ID, rev.SemanticHash, now
 	if err = persistChangeRevision(ctx, tx, *p, rev, "restore", old.ID, []ChangeProposalCommand{}, nil); err != nil {
 		return err

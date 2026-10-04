@@ -117,7 +117,7 @@ func addBackendImportTool(s *sdk.Server, lb *loopback, tool *sdk.Tool, route str
 			return backendAdmissionFault(selectErr), nil
 		}
 		var params []any
-		for _, key := range []string{"projectId", "importId", "proposalId", "viewId", "revisionId", "nodeId", "batchId"} {
+		for _, key := range []string{"projectId", "importId", "proposalId", "jobId", "viewId", "revisionId", "nodeId", "batchId"} {
 			raw, ok := in[key]
 			if !ok {
 				continue
@@ -152,9 +152,9 @@ func addBackendImportTool(s *sdk.Server, lb *loopback, tool *sdk.Tool, route str
 		var err error
 		if method == "GET" {
 			q := url.Values{}
-			for _, key := range []string{"limit", "cursor", "subjectId", "evidenceId", "previewVersion", "recordType", "baseRevisionId", "status", "proposalRevisionId", "kind", "version", "importVersion", "candidateHash", "id", "repositoryId", "providerNamespace"} {
+			for _, key := range []string{"limit", "cursor", "subjectId", "evidenceId", "previewVersion", "recordType", "baseRevisionId", "status", "proposalRevisionId", "kind", "version", "importVersion", "candidateHash", "id", "repositoryId", "providerNamespace", "resultVersion", "section", "service", "certainty", "direction", "depth"} {
 				if raw, ok := in[key]; ok {
-					if key == "limit" || key == "previewVersion" || key == "version" || key == "importVersion" {
+					if slices.Contains([]string{"limit", "previewVersion", "version", "importVersion", "resultVersion", "depth"}, key) {
 						var value int64
 						if err := json.Unmarshal(raw, &value); err != nil {
 							return designScenarioToolErrorResult(err), nil

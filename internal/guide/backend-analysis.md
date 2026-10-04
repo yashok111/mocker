@@ -2,13 +2,13 @@
 
 This topic belongs to `mocker-backend-inspect` workflow7. Load and verify it
 against that actual owner's manifest in the selected immutable global guide set.
-It explains static source scope; no durable analysis job or impact engine runs.
+It explains static source scope; this inspection procedure starts no durable job. For an authorized static diff/impact job select change2 and verify its `backend-analysis-jobs` topic in the same guide set.
 
 ## Baseline, candidate and intent in inspect7
 
 Pin the full read target and complete response pins, not only a base revision. Native source6 retains all provider claims and separate own/dependency/field currentness. Full proposal origins distinguish intent from baseline support; changing an effective property does not refresh its baseline proof. Staged basic reads concern a current READY candidate and support no specialized traversal. A historical_metadata basis remains metadata testimony with its source5 hash/location and a semantic-support gap.
 
-Representation fields have independent UUID/parent/selector identities. Their declared mappings retain ordered co-inputs and unknown boundaries; matching names/types never establish correspondence. An authorized source6 correction selects sync1 with an exact selected partition and explicit whole/incremental policy. Do not reuse the legacy whole-repository instructions below to widen an incremental affected scope, rewrite a foreign dependency or silently extend a retained provider.
+Representation fields have independent UUID/parent/selector identities. Their declared mappings retain ordered co-inputs and unknown boundaries; matching names/types never establish correspondence. An authorized source6 correction selects sync2 with an exact selected partition and explicit whole/incremental policy. Do not reuse the legacy whole-repository instructions below to widen an incremental affected scope, rewrite a foreign dependency or silently extend a retained provider.
 
 ## Read what the witness establishes
 
@@ -64,7 +64,7 @@ termination, actual execution, measured behavior, all writers, data safety or
 proposal conformance. Source4 lineage and saved presentations have separate pinned procedures.
 Manual API pins use the separate inspect7 contract in backend-flow-reference.
 Source5 event navigation uses backend-events in this inspect7 set. Backend
-impact/rebase and runtime observations remain unavailable.
+durable impact/rebase procedures belong to change2; runtime observations remain unavailable.
 
 ## Blocking source gap decision
 

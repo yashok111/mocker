@@ -11,17 +11,23 @@ import (
 	"uuid"
 )
 
-const changeProposalColumns = `id,project_id,name,version,status,current_draft_revision_id,current_draft_hash,created_at,updated_at`
+const changeProposalColumns = `id,project_id,name,version,status,current_draft_revision_id,current_draft_hash,created_at,updated_at,ready_reference`
 
 func scanChangeProposal(row interface{ Scan(...any) error }) (*ChangeProposal, error) {
 	p := new(ChangeProposal)
 	var created, updated string
-	err := row.Scan(&p.ID, &p.ProjectID, &p.Name, &p.Version, &p.Status, &p.CurrentDraftRevisionID, &p.CurrentDraftHash, &created, &updated)
+	var ready *string
+	err := row.Scan(&p.ID, &p.ProjectID, &p.Name, &p.Version, &p.Status, &p.CurrentDraftRevisionID, &p.CurrentDraftHash, &created, &updated, &ready)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, notFound()
 	}
 	if err != nil {
 		return nil, err
+	}
+	if ready != nil {
+		if err = json.Unmarshal([]byte(*ready), &p.ReadyReference); err != nil {
+			return nil, err
+		}
 	}
 	p.CreatedAt, err = time.Parse(time.RFC3339Nano, created)
 	if err != nil {
@@ -77,12 +83,18 @@ func readChangeReceipt(ctx context.Context, q importReader, scope, key, digest s
 	}
 	return true, nil
 }
-func requireChangeDraft(p *ChangeProposal, version int64, rid string) error {
+func requireChangeCAS(p *ChangeProposal, version int64, rid string) error {
 	if p.Version != version || p.Version == math.MaxInt64 || p.CurrentDraftRevisionID != rid {
 		return &FaultError{Status: 409, Code: "backend_change_version_conflict", Message: "Proposal version or selected draft changed", CurrentVersion: p.Version, Details: map[string]any{"proposalRevisionId": p.CurrentDraftRevisionID, "semanticHash": p.CurrentDraftHash}}
 	}
-	if p.Status != "draft" {
-		return &FaultError{Status: 422, Code: "backend_unsupported_scope", Message: "Only draft proposals may be edited"}
+	return nil
+}
+func requireChangeDraft(p *ChangeProposal, version int64, rid string) error {
+	if err := requireChangeCAS(p, version, rid); err != nil {
+		return err
+	}
+	if p.Status != "draft" && p.Status != "ready" {
+		return &FaultError{Status: 422, Code: "backend_unsupported_scope", Message: "Only draft or ready proposals may be edited"}
 	}
 	return nil
 }
@@ -119,7 +131,7 @@ func (r *Repo) CreateChangeProposal(ctx context.Context, pid string, in CreateCh
 		rev := *prepared
 		rev.ID, rev.ProposalID, rev.AcceptedBatchRevisionID, rev.CreatedAt = p.CurrentDraftRevisionID, p.ID, p.CurrentDraftRevisionID, now
 		stamp := now.Format(time.RFC3339Nano)
-		if _, err := tx.ExecContext(ctx, `INSERT INTO backend_change_proposals (`+changeProposalColumns+`) VALUES(?,?,?,?,?,?,?,?,?)`, p.ID, pid, p.Name, p.Version, p.Status, p.CurrentDraftRevisionID, p.CurrentDraftHash, stamp, stamp); err != nil {
+		if _, err := tx.ExecContext(ctx, `INSERT INTO backend_change_proposals (`+changeProposalColumns+`) VALUES(?,?,?,?,?,?,?,?,?,NULL)`, p.ID, pid, p.Name, p.Version, p.Status, p.CurrentDraftRevisionID, p.CurrentDraftHash, stamp, stamp); err != nil {
 			return err
 		}
 		if err := persistChangeRevision(ctx, tx, p, rev, "create", "", []ChangeProposalCommand{}, nil); err != nil {
@@ -344,8 +356,8 @@ func (r *Repo) ListChangeProposals(ctx context.Context, pid string, in ChangePro
 	if _, err := r.Get(ctx, pid); err != nil {
 		return nil, err
 	}
-	if in.Status != "" && in.Status != "draft" {
-		return nil, &FaultError{Status: 422, Code: "backend_unsupported_scope", Message: "Only draft proposals are supported"}
+	if in.Status != "" && in.Status != "draft" && in.Status != "ready" {
+		return nil, &FaultError{Status: 422, Code: "backend_unsupported_scope", Message: "Only draft and ready proposals are supported"}
 	}
 	if in.BaseRevisionID != "" && !ValidID(in.BaseRevisionID) {
 		return nil, invalid("baseRevisionId", "Expected canonical UUID")
@@ -370,7 +382,7 @@ func (r *Repo) ListChangeProposals(ctx context.Context, pid string, in ChangePro
 	if err != nil {
 		return nil, err
 	}
-	rows, err := tx.QueryContext(ctx, `SELECT `+changeProposalColumns+` FROM backend_change_proposals WHERE project_id=? AND id>? AND (?='' OR current_draft_revision_id IN (SELECT id FROM backend_change_proposal_revisions WHERE base_revision_id=?)) ORDER BY id LIMIT ?`, pid, after, in.BaseRevisionID, in.BaseRevisionID, limit+1)
+	rows, err := tx.QueryContext(ctx, `SELECT `+changeProposalColumns+` FROM backend_change_proposals WHERE project_id=? AND id>? AND (?='' OR status=?) AND (?='' OR current_draft_revision_id IN (SELECT id FROM backend_change_proposal_revisions WHERE base_revision_id=?)) ORDER BY id LIMIT ?`, pid, after, in.Status, in.Status, in.BaseRevisionID, in.BaseRevisionID, limit+1)
 	if err != nil {
 		return nil, err
 	}

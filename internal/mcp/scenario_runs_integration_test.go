@@ -136,23 +136,30 @@ func awaitScenarioRunProfile(t *testing.T, executor *scenarioRunsObservedExecuto
 	}
 }
 
-func readScenarioRunMCP(t *testing.T, calls Caller, scenarioID int64, runID string) designscenario.RunReport {
+func readScenarioRunMCP(t *testing.T, calls Caller, scenarioID int64, runID string, fixture ...*toolFixture) designscenario.RunReport {
 	t.Helper()
 	var report designscenario.RunReport
-	if errMsg := callDesignScenarioTool(t, calls, "get_design_scenario_run", map[string]any{"scenarioId": scenarioID, "runId": runID}, &report); errMsg != "" {
+	args := map[string]any{"scenarioId": scenarioID, "runId": runID}
+	var errMsg string
+	if len(fixture) == 0 {
+		errMsg = callDesignScenarioTool(t, calls, "get_design_scenario_run", args, &report)
+	} else {
+		errMsg = callScenarioRunFixture(t, fixture[0], "get_design_scenario_run", args, &report)
+	}
+	if errMsg != "" {
 		t.Fatal(errMsg)
 	}
 	return report
 }
 
-func awaitScenarioRunTerminalMCP(t *testing.T, calls Caller, scenarioID int64, runID string) designscenario.RunReport {
+func awaitScenarioRunTerminalMCP(t *testing.T, calls Caller, scenarioID int64, runID string, fixture ...*toolFixture) designscenario.RunReport {
 	t.Helper()
 	deadline := time.NewTimer(5 * time.Second)
 	defer deadline.Stop()
 	poll := time.NewTicker(10 * time.Millisecond)
 	defer poll.Stop()
 	for {
-		report := readScenarioRunMCP(t, calls, scenarioID, runID)
+		report := readScenarioRunMCP(t, calls, scenarioID, runID, fixture...)
 		if report.Status != "running" {
 			return report
 		}
@@ -260,13 +267,20 @@ func TestDesignScenarioMCPRunWholeSequenceAndVariableVariants(t *testing.T) {
 func TestDesignScenarioMCPRunScopedReadsAndCancellation(t *testing.T) {
 	t.Parallel()
 	srv, scenario, executor := scenarioRunsMCPFixture(t)
+	// A deployed SDK server registers its schemas once. Rebuilding it for
+	// every deliberate 404 can consume the gated step's unchanged 30s budget
+	// before this test gets to send the cancellation it intends to observe.
+	fixture := newToolFixture(srv)
+	call := func(name string, args any, out any) string {
+		return callScenarioRunFixture(t, fixture, name, args, out)
+	}
 	var other designscenario.Detail
 	document := designscenario.Document{FormatVersion: 1, Title: "Other", Participants: []designscenario.Participant{}, Messages: []designscenario.Message{}, Fragments: []designscenario.Fragment{}, Contracts: []designscenario.Contract{}}
-	if errMsg := callDesignScenarioTool(t, srv, "create_design_scenario", map[string]any{"document": document}, &other); errMsg != "" {
+	if errMsg := call("create_design_scenario", map[string]any{"document": document}, &other); errMsg != "" {
 		t.Fatal(errMsg)
 	}
 	var report designscenario.RunReport
-	if errMsg := callDesignScenarioTool(t, srv, "run_design_scenario", map[string]any{"scenarioId": scenario.Scenario.ID, "revisionId": scenario.Draft.ID, "runId": "cancel-me"}, &report); errMsg != "" {
+	if errMsg := call("run_design_scenario", map[string]any{"scenarioId": scenario.Scenario.ID, "revisionId": scenario.Draft.ID, "runId": "cancel-me"}, &report); errMsg != "" {
 		t.Fatal(errMsg)
 	}
 	awaitScenarioRunProfile(t, executor)
@@ -276,26 +290,42 @@ func TestDesignScenarioMCPRunScopedReadsAndCancellation(t *testing.T) {
 			runID      string
 		}{{other.Scenario.ID, "cancel-me"}, {scenario.Scenario.ID, "missing"}} {
 			var ignored designscenario.RunReport
-			if errMsg := callDesignScenarioTool(t, srv, tool, map[string]any{"scenarioId": lookup.scenarioID, "runId": lookup.runID}, &ignored); !strings.Contains(errMsg, "404") {
+			if errMsg := call(tool, map[string]any{"scenarioId": lookup.scenarioID, "runId": lookup.runID}, &ignored); !strings.Contains(errMsg, "404") {
 				t.Fatalf("%s scoped to %d/%s: %q", tool, lookup.scenarioID, lookup.runID, errMsg)
 			}
 		}
 	}
 	args := map[string]any{"scenarioId": scenario.Scenario.ID, "runId": "cancel-me"}
-	if errMsg := callDesignScenarioTool(t, srv, "cancel_design_scenario_run", args, &report); errMsg != "" {
+	if errMsg := call("cancel_design_scenario_run", args, &report); errMsg != "" {
 		t.Fatal(errMsg)
 	}
-	cancelled := awaitScenarioRunTerminalMCP(t, srv, scenario.Scenario.ID, "cancel-me")
+	cancelled := awaitScenarioRunTerminalMCP(t, srv, scenario.Scenario.ID, "cancel-me", fixture)
 	if cancelled.Status != "cancelled" || cancelled.FinishedAt == nil || cancelled.Steps[0].Status != "passed" || cancelled.Steps[1].Status != "cancelled" || executor.dispatched.Load() != 2 {
 		t.Fatalf("cancelled run: %+v", cancelled)
 	}
-	if errMsg := callDesignScenarioTool(t, srv, "cancel_design_scenario_run", args, &report); errMsg != "" {
+	if errMsg := call("cancel_design_scenario_run", args, &report); errMsg != "" {
 		t.Fatal(errMsg)
 	}
 	if !reflect.DeepEqual(report, cancelled) {
 		t.Fatal("repeated cancel changed the terminal report")
 	}
-	if got := readScenarioRunMCP(t, srv, scenario.Scenario.ID, "cancel-me"); !reflect.DeepEqual(got, cancelled) {
+	if got := readScenarioRunMCP(t, srv, scenario.Scenario.ID, "cancel-me", fixture); !reflect.DeepEqual(got, cancelled) {
 		t.Fatalf("saved cancellation changed: %s", fmt.Sprint(got))
 	}
+}
+
+func callScenarioRunFixture(t *testing.T, fixture *toolFixture, name string, args any, out any) string {
+	t.Helper()
+	body, err := jsonx.Marshal(args)
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, errMsg := fixture.Call(t, name, string(body))
+	if errMsg != "" {
+		return errMsg
+	}
+	if err := jsonx.Unmarshal(raw, out); err != nil {
+		t.Fatalf("decode %s: %v; body=%s", name, err, raw)
+	}
+	return ""
 }

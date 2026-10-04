@@ -91,7 +91,7 @@ func TestChangeProposalProjectQuotaAndVersionExhaustion(t *testing.T) {
 			rev := d.Revision
 			rev.ID, rev.ProposalID, rev.AcceptedBatchRevisionID = p.CurrentDraftRevisionID, p.ID, p.CurrentDraftRevisionID
 			stamp := p.CreatedAt.Format(time.RFC3339Nano)
-			if _, err := tx.ExecContext(t.Context(), `INSERT INTO backend_change_proposals (`+changeProposalColumns+`) VALUES(?,?,?,?,?,?,?,?,?)`, p.ID, p.ProjectID, p.Name, p.Version, p.Status, p.CurrentDraftRevisionID, p.CurrentDraftHash, stamp, stamp); err != nil {
+			if _, err := tx.ExecContext(t.Context(), `INSERT INTO backend_change_proposals (`+changeProposalColumns+`) VALUES(?,?,?,?,?,?,?,?,?,NULL)`, p.ID, p.ProjectID, p.Name, p.Version, p.Status, p.CurrentDraftRevisionID, p.CurrentDraftHash, stamp, stamp); err != nil {
 				return err
 			}
 			if err := persistChangeRevision(t.Context(), tx, p, rev, "create", "", []ChangeProposalCommand{}, nil); err != nil {

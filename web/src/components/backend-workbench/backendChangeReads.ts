@@ -1,3 +1,4 @@
+import { hashBackendJSON } from "./backendImportHash";
 import { changeIdentityKey } from "./backendChangeState";
 import {
   getBackendChangeProposal,
@@ -131,4 +132,54 @@ export async function readChangeIdentities(
     } while (cursor);
   }
   return [...identities.values()];
+}
+
+/** Rebase deliberately changes the baseline; ordinary apply keeps its stricter old-base checks. */
+export async function verifyRebaseAcceptance(
+  result: import("@/api/generated/schemas").BackendChangeProposalApplyResult,
+  base: BackendChangeProposalDetail,
+  expected: {
+    newBaseRevisionId: string;
+    newBaseSemanticHash: string;
+    sourceVectorHash: string;
+    sourceSnapshotIds: string[];
+    candidateHash: string;
+    semanticHash: string;
+  },
+) {
+  if (
+    result.proposal.id !== base.proposal.id ||
+    result.proposal.projectId !== base.proposal.projectId ||
+    result.proposal.version !== base.proposal.version + 1 ||
+    result.proposal.status !== "draft" ||
+    result.proposal.readyReference ||
+    result.revision.proposalId !== base.proposal.id ||
+    result.revision.parentRevisionId !== base.revision.id ||
+    result.revision.id === base.revision.id ||
+    result.proposal.currentDraftRevisionId !== result.revision.id ||
+    result.revision.baseRevisionId !== expected.newBaseRevisionId ||
+    result.revision.baseSemanticHash !== expected.newBaseSemanticHash ||
+    result.revision.semanticHash !== expected.semanticHash ||
+    (await hashBackendJSON(result.revision.sourceVector)) !== expected.sourceVectorHash ||
+    JSON.stringify(result.revision.sourceSnapshotIds) !==
+      JSON.stringify(expected.sourceSnapshotIds) ||
+    result.revision.rebase?.candidateHash !== expected.candidateHash
+  )
+    throw new Error("Rebase не подтвердил новую базу, точные source pins и новый черновик.");
+  return {
+    ...base,
+    proposal: result.proposal,
+    revision: result.revision,
+    history: [
+      {
+        id: result.revision.id,
+        parentRevisionId: result.revision.parentRevisionId,
+        semanticHash: result.revision.semanticHash,
+        author: result.revision.author,
+        summary: result.revision.summary,
+        createdAt: result.revision.createdAt,
+      },
+      ...base.history,
+    ],
+  };
 }

@@ -19,6 +19,7 @@ func backendCapabilityFeatures() []string {
 		"backend-annotations", "backend-source-sync", "backend-source-incremental-sync",
 		"backend-source-assertions", "backend-import-candidate", "backend-change-proposals",
 		"backend-change-typed-edits", "backend-representations", "backend-saved-views-v2",
+		"backend-analysis-jobs", "backend-analysis-diff", "backend-analysis-impact", "backend-change-rebase", "backend-change-ready",
 	)
 }
 

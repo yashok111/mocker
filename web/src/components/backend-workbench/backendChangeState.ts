@@ -31,7 +31,9 @@ export function changePendingIdentities(
 ): BackendEffectiveIdentity[] {
   const result = structuredClone(baseline);
   const idOf = (identity: BackendEffectiveIdentity) =>
-    identity.target.kind === "source_identity" ? identity.target.source.id : identity.target.id;
+    identity.target.kind === "source_identity" || identity.target.kind === "carried_source_identity"
+      ? identity.target.source.id
+      : identity.target.id;
   for (const command of commands) {
     if (command.type === "remove_node" || command.type === "remove_edge") {
       for (let index = result.length - 1; index >= 0; index--)

@@ -7,8 +7,8 @@ metadata:
   requiredModelSchemaVersions: "[\"2\",\"3\",\"4\",\"5\",\"6\"]"
   requiredViewSchemaVersions: "[\"proposal-relational-v1\",\"saved-view-v1\",\"proposal-graph-v1\",\"saved-view-v2\"]"
   requiredCapabilities: "[\"backend-projects\",\"backend-revisions\",\"backend-graph-query\",\"backend-database-query\",\"backend-database-er\",\"backend-db-proposals\",\"backend-db-typed-edits\",\"backend-flow-query\",\"backend-data-access-query\",\"backend-saved-views\",\"backend-field-lineage-query\",\"backend-events-query\",\"backend-change-proposals\",\"backend-source-assertions\",\"backend-saved-views-v2\"]"
-  guideSetId: "sha256:5a8d1fe6bc274c7b60621c826a5fcca31e4ab6b1c6e8f885a40d90abfbbeebdd"
-  manifestHash: "sha256:5a8d1fe6bc274c7b60621c826a5fcca31e4ab6b1c6e8f885a40d90abfbbeebdd"
+  guideSetId: "sha256:dfb9851bf1c8ba63fe44094c929a300267ffbe0761f365ab1914fca3ead729b5"
+  manifestHash: "sha256:dfb9851bf1c8ba63fe44094c929a300267ffbe0761f365ab1914fca3ead729b5"
 ---
 # Pinned database inspection and proposals
 
@@ -47,7 +47,7 @@ table inspection.
 ## Exact source6/full/staged extensions
 
 Use one explicit revisionId, legacy proposal, full changeProposal or READY importCandidate selector and preserve the complete returned target/pins. Native source6 wraps records with tag6 and all qualified claims; full proposal origins distinguish baseline proof from intent. Source5/legacy/full5 assertions are unsupported. Exact details and target exclusions are in backend-flow-reference/backend-database-reference under their actual inspect7/database7 owners.
-Staging permits graph/node/evidence/coverage/assertions only. It rejects specialized queries and SavedViews; a stale candidate409 never falls back to a source head. Select change1 before full proposal writes and sync1 before composed source updates. Existing legacy procedures below retain their old wire.
+Staging permits graph/node/evidence/coverage/assertions only. It rejects specialized queries and SavedViews; a stale candidate409 never falls back to a source head. Select change2 before full proposal writes and sync2 before composed source updates. Existing legacy procedures below retain their old wire.
 For source6/full Flow or Database presentations, explicitly select SavedView-v2 and read the complete create/save/reopen procedure in the matching reference before writing. Preserve full target, viewId/version and pins.effective; pins.revisionId alone is only a full draft's source baseline. Unknown writes keep exact bytes/key/CAS. Keep omitted-tag v1 requests and receipts unchanged.
 
 ## Ordered inspection
@@ -88,9 +88,9 @@ For source6/full Flow or Database presentations, explicitly select SavedView-v2 
    possible, never confirmed column accesses. Open each query/witness proof;
    report coverage/truncation and unknown/unattached callers honestly.
 
-## Full desired relational changes use change1
+## Full desired relational changes use change2
 
-Database7 reads an exact full target {changeProposal:{proposalId,proposalRevisionId}} as well as the existing source/legacy variants. Its effective structural facets can contain desired values without provider proof; keep intent origins and exact baseline evidence separate. Full create/edit/history/restore and all 16 command families select change1/backend-change-proposals in this set. Existing database proposal tools and their proposal-relational-v1 documents remain distinct; never substitute a full proposal ID into a legacy proposal route.
+Database7 reads an exact full target {changeProposal:{proposalId,proposalRevisionId}} as well as the existing source/legacy variants. Its effective structural facets can contain desired values without provider proof; keep intent origins and exact baseline evidence separate. Full create/edit/history/restore and all 16 command families select change2/backend-change-proposals in this set. Existing database proposal tools and their proposal-relational-v1 documents remain distinct; never substitute a full proposal ID into a legacy proposal route.
 
 ## Existing legacy relational proposal procedure
 
@@ -141,9 +141,7 @@ the history page rather than mixing drafts.
 
 Proposal flow navigation returns to its exact source base revisionId, with no proposal selector on
 query_backend_flow. Imported scoped accesses do not verify all writers or existing data and cannot
-demonstrate proposed runtime behavior. Ready/rebase, live collection, measured checks, impact and
-provider migration are unavailable. Report those boundaries without creating jobs or using
-import/project commands as a schema edit engine.
+demonstrate proposed runtime behavior. Legacy relational proposals do not support ready/rebase. For separately authorized static diff/impact select change2/backend-analysis-jobs; full-proposal rebase/ready use change2 and provider migration uses sync2. Live collection and measured checks remain unavailable. Inspection alone creates no jobs and never uses import/project commands as a schema edit engine.
 
 All reads retain exact int64 tokens. A client that cannot preserve an integer must report precision
 failure instead of rounding and using it. Source cardinality is source rows per target row; target
@@ -196,5 +194,5 @@ backend-editor-projections with backend-editor-projections/backend-editor-artifa
 | mocker-backend-import | 7 | 1,2,3,4,5,6 |  | backend-projects, backend-revisions, backend-graph-query, backend-source-import, backend-source-reconcile, backend-revision-compare, backend-relational-import, backend-database-query, backend-database-er, backend-runtime-flow-import, backend-flow-query, backend-data-access-query, backend-field-lineage-import, backend-field-lineage-query, backend-events-import, backend-events-query, backend-source-sync, backend-representations |
 | mocker-backend-database | 7 | 2,3,4,5,6 | proposal-relational-v1,saved-view-v1,proposal-graph-v1,saved-view-v2 | backend-projects, backend-revisions, backend-graph-query, backend-database-query, backend-database-er, backend-db-proposals, backend-db-typed-edits, backend-flow-query, backend-data-access-query, backend-saved-views, backend-field-lineage-query, backend-events-query, backend-change-proposals, backend-source-assertions, backend-saved-views-v2 |
 | mocker-backend-inspect | 7 | 3,4,5,6 | saved-view-v1,api-artifact-pins-v1,backend-editor-artifacts-v1,proposal-graph-v1,saved-view-v2,import-candidate-v1 | backend-projects, backend-revisions, backend-graph-query, backend-flow-query, backend-data-access-query, backend-saved-views, backend-field-lineage-query, backend-api-artifact-pins, backend-editor-projections, backend-events-query, backend-source-assertions, backend-import-candidate, backend-change-proposals, backend-representations, backend-saved-views-v2 |
-| mocker-backend-sync | 1 | 1,5,6 | import-candidate-v1 | backend-projects, backend-revisions, backend-graph-query, backend-source-import, backend-source-sync, backend-source-incremental-sync, backend-source-assertions, backend-import-candidate, backend-representations |
-| mocker-backend-change | 1 | 5,6 | proposal-graph-v1 | backend-projects, backend-revisions, backend-graph-query, backend-change-proposals, backend-change-typed-edits, backend-source-assertions, backend-representations |
+| mocker-backend-sync | 2 | 1,5,6 | import-candidate-v1 | backend-projects, backend-revisions, backend-graph-query, backend-source-import, backend-source-sync, backend-source-incremental-sync, backend-source-assertions, backend-import-candidate, backend-representations, backend-analysis-jobs, backend-analysis-diff, backend-analysis-impact |
+| mocker-backend-change | 2 | 5,6 | proposal-graph-v1 | backend-projects, backend-revisions, backend-graph-query, backend-change-proposals, backend-change-typed-edits, backend-source-assertions, backend-representations, backend-analysis-jobs, backend-analysis-diff, backend-analysis-impact, backend-change-rebase, backend-change-ready |

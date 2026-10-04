@@ -55,7 +55,7 @@ const HTTP_METHODS = ["get", "post", "put", "delete", "patch"] as const;
 // agree with anything that file said. Every test below that wants to name it
 // reads it from here, which is the one thing the old title did not do — it
 // said "64" while the assertion said 70, for four slices running.
-const ROUTE_COUNT = 201;
+const ROUTE_COUNT = 210;
 
 interface RouteInfo {
   method: string;
@@ -253,6 +253,22 @@ describe("web/src API coverage", () => {
     // or two of it; this leaves room for a loaded CI box without hiding a
     // hang.
   }, 60_000);
+
+  it("has real generated-client callers for all nine B4.2 operations", () => {
+    for (const operation of [
+      "startBackendAnalysis",
+      "listBackendAnalysis",
+      "getBackendAnalysis",
+      "getBackendAnalysisResults",
+      "cancelBackendAnalysis",
+      "retryBackendAnalysis",
+      "previewBackendChangeProposalRebase",
+      "applyBackendChangeProposalRebase",
+      "applyBackendChangeProposalLifecycle",
+    ]) {
+      expect(calledSymbols.has(operation), operation).toBe(true);
+    }
+  });
 
   afterAll(() => {
     sources?.dispose();

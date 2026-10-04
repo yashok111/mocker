@@ -15,8 +15,8 @@ func TestB41GuideOwnersAndContracts(t *testing.T) {
 		topic, owner, version       string
 		models, views, capabilities []string
 	}{
-		{"backend-sync", "mocker-backend-sync", "1", []string{"1", "5", "6"}, []string{"import-candidate-v1"}, []string{"backend-projects", "backend-revisions", "backend-graph-query", "backend-source-import", "backend-source-sync", "backend-source-incremental-sync", "backend-source-assertions", "backend-import-candidate", "backend-representations"}},
-		{"backend-change-proposals", "mocker-backend-change", "1", []string{"5", "6"}, []string{"proposal-graph-v1"}, []string{"backend-projects", "backend-revisions", "backend-graph-query", "backend-change-proposals", "backend-change-typed-edits", "backend-source-assertions", "backend-representations"}},
+		{"backend-sync", "mocker-backend-sync", "2", []string{"1", "5", "6"}, []string{"import-candidate-v1"}, []string{"backend-projects", "backend-revisions", "backend-graph-query", "backend-source-import", "backend-source-sync", "backend-source-incremental-sync", "backend-source-assertions", "backend-import-candidate", "backend-representations", "backend-analysis-jobs", "backend-analysis-diff", "backend-analysis-impact"}},
+		{"backend-change-proposals", "mocker-backend-change", "2", []string{"5", "6"}, []string{"proposal-graph-v1"}, []string{"backend-projects", "backend-revisions", "backend-graph-query", "backend-change-proposals", "backend-change-typed-edits", "backend-source-assertions", "backend-representations", "backend-analysis-jobs", "backend-analysis-diff", "backend-analysis-impact", "backend-change-rebase", "backend-change-ready"}},
 		{"backend-annotations", "mocker-backend-project", "2", []string{"1"}, nil, []string{"backend-projects", "backend-project-metadata", "backend-revisions", "backend-annotations"}},
 	} {
 		t.Run(item.topic, func(t *testing.T) {

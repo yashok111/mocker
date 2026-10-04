@@ -22,7 +22,7 @@ Typed domain_entity/dto/api_schema owners and representation_field children have
 
 An original source5 legacy-proof-basis-v1 is a response-only, verified historical basis. historical_metadata is shown as metadata testimony with a legacy_metadata_only semantic-support gap. legacy_record has broad record scope; no typed semantic property is invented. Keep source revision/semantic/document/evidence hashes and exact original evidence navigation. Submitting a copied basis or a metadata pointer as fresh source6 proof is invalid.
 
-Source synchronization belongs to sync1. Full desired changes belong to change1. Their full projection retains baseline claims/evidence separately from intent origins; a new desired field has no fabricated provider evidence. The legacy source record rules below keep their original meanings.
+Source synchronization belongs to sync2. Full desired changes belong to change2. Their full projection retains baseline claims/evidence separately from intent origins; a new desired field has no fabricated provider evidence. The legacy source record rules below keep their original meanings.
 
 ## Kinds and attributes
 

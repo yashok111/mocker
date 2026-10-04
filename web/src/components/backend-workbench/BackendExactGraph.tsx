@@ -560,7 +560,9 @@ export function IntentOrigins({ origins }: { origins?: BackendEffectiveFieldOrig
             {JSON.stringify(origin.selector)} · {origin.reason}
           </Text>
           <Text size="xs" style={wrap}>
-            Команда: {origin.commandId}
+            {origin.rebaseResolution
+              ? `Решение переноса: ${origin.rebaseResolution.resolutionId} · ${origin.rebaseResolution.reason} · черновик ${origin.rebaseResolution.proposalRevisionId}`
+              : `Команда: ${origin.commandId}`}
           </Text>
         </div>
       ))}

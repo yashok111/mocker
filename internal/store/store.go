@@ -217,6 +217,9 @@ type migration struct {
 }
 
 func (db *DB) applyMigration(ctx context.Context, m migration) error {
+	if m.version == 21 {
+		return db.applyMigration21(ctx, m)
+	}
 	// user_version takes a literal, but is transactional. Commit the schema
 	// and its version together so a crash cannot replay a completed rebuild.
 	return db.Write(ctx, func(tx *sql.Tx) error {

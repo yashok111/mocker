@@ -120,6 +120,43 @@ class GuideSyncPackagingTests(unittest.TestCase):
             "validation failure created output directories",
         )
 
+    def test_b42_topics_retain_canonical_owners(self):
+        self.load_published_relational_sources()
+        self.generate()
+        manifest = json.loads((self.root / "internal/guide/manifest.json").read_text())
+        owners = {s["topic"]: s for s in manifest["sources"]}
+        self.assertEqual(owners["backend-analysis"]["workflowId"], "mocker-backend-inspect")
+        self.assertEqual(owners["backend-recovery"]["workflowId"], "mocker-backend-import")
+        for topic in ("backend-change-rebase", "backend-analysis-jobs"):
+            self.assertIn(topic, owners, "B4.2 topic missing from canonical declarations")
+            self.assertEqual(owners[topic]["workflowId"], "mocker-backend-change")
+            self.assertEqual(owners[topic]["package"], "mocker-backend-change")
+        versions = {w["workflowId"]: w["workflowVersion"] for w in manifest["workflows"]}
+        self.assertEqual(len(versions), 7)
+        for owner in ("sync", "change"):
+            self.assertEqual(versions["mocker-backend-" + owner], "2")
+
+    def test_stale_sync_change_owner_rejected_before_writes(self):
+        self.load_published_relational_sources()
+        self.generate()
+        topic = self.root / "skills/mocker/references/backend/overview.md"
+        original = topic.read_text()
+        versions = {w["workflowId"]: w["workflowVersion"] for w in self.declarations["workflows"]}
+        for owner in ("sync", "change"):
+            version = versions["mocker-backend-" + owner]
+            stale = "1" if version != "1" else "0"
+            for label in (f"{owner}{stale}", f"{owner} v{stale}",
+                          f"`mocker-backend-{owner}` workflow{stale}",
+                          f"| mocker-backend-{owner} | {stale} |",
+                          f"mocker-backend-{owner} version {stale}",
+                          f"`mocker-backend-{owner}` version `{stale}`"):
+                with self.subTest(label=label):
+                    topic.write_text(original + "\n" + label + "\n")
+                    self.assert_invalid_without_changes(
+                        f"stale live guide owner {owner}{stale}; expected {owner}{version}"
+                    )
+        topic.write_text(original)
+
     def test_stale_live_owner_fails_before_output_changes(self):
         self.load_published_relational_sources()
         self.generate()
@@ -203,7 +240,7 @@ class GuideSyncPackagingTests(unittest.TestCase):
         self.load_published_relational_sources()
         self.generate()
         manifest = json.loads((self.root / "internal/guide/manifest.json").read_text())
-        self.assertEqual(len(manifest["sources"]), 24)
+        self.assertEqual(len(manifest["sources"]), len(self.declarations["sources"]))
         workflows = {w["workflowId"]: w for w in manifest["workflows"]}
         self.assertEqual(len(workflows), 7)
         importing = workflows["mocker-backend-import"]
@@ -273,8 +310,8 @@ class GuideSyncPackagingTests(unittest.TestCase):
         manifest = json.loads((self.root / "internal/guide/manifest.json").read_text())
         workflows = {w["workflowId"]: w for w in manifest["workflows"]}
         for topic, owner, version, models, views in (
-            ("backend-sync", "mocker-backend-sync", "1", ["1", "5", "6"], ["import-candidate-v1"]),
-            ("backend-change-proposals", "mocker-backend-change", "1", ["5", "6"], ["proposal-graph-v1"]),
+            ("backend-sync", "mocker-backend-sync", "2", ["1", "5", "6"], ["import-candidate-v1"]),
+            ("backend-change-proposals", "mocker-backend-change", "2", ["5", "6"], ["proposal-graph-v1"]),
             ("backend-annotations", "mocker-backend-project", "2", ["1"], []),
         ):
             with self.subTest(topic=topic):

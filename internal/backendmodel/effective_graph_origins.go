@@ -6,7 +6,7 @@ import (
 )
 
 func effectiveEvaluationOrigin(source *SourceGraphSnapshot, input ChangeEvaluationFieldOrigin) EffectiveFieldOrigin {
-	out := EffectiveFieldOrigin{RecordType: input.RecordType, SubjectID: input.ID, Selector: input.Selector, Kind: input.Origin.Kind, CommandID: input.Origin.CommandID, Reason: input.Origin.Reason, SourceClaims: []BaseAssertionRef{}, EvidenceIDs: []string{}}
+	out := EffectiveFieldOrigin{RebaseResolution: input.Origin.RebaseResolution, RecordType: input.RecordType, SubjectID: input.ID, Selector: input.Selector, Kind: input.Origin.Kind, CommandID: input.Origin.CommandID, Reason: input.Origin.Reason, SourceClaims: []BaseAssertionRef{}, EvidenceIDs: []string{}}
 	if input.Origin.BaseRef != nil {
 		b := input.Origin.BaseRef
 		out.BaseRef = &EffectiveBaseRef{RevisionID: b.RevisionID, SemanticHash: b.SemanticHash, RecordType: b.RecordType, SubjectID: b.ID}

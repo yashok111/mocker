@@ -6,15 +6,16 @@ import (
 )
 
 type EffectivePropertySelector struct {
-	Kind              string                       `json:"kind"`
-	Source            *TypedSourcePropertySelector `json:"source,omitzero"`
-	RecordType        string                       `json:"recordType,omitempty"`
-	ID                string                       `json:"id,omitempty"`
-	RepositoryID      string                       `json:"repositoryId,omitempty"`
-	ProviderNamespace string                       `json:"providerNamespace,omitempty"`
-	EdgeName          bool                         `json:"-"`
-	SourceIdentity    *SourceIdentitySelector      `json:"-"`
-	IntentIdentity    *IntentIdentitySelector      `json:"-"`
+	CarriedSourceIdentity *ChangeCarriedSourceIdentity `json:"carriedSourceIdentity,omitzero"`
+	Kind                  string                       `json:"kind"`
+	Source                *TypedSourcePropertySelector `json:"source,omitzero"`
+	RecordType            string                       `json:"recordType,omitempty"`
+	ID                    string                       `json:"id,omitempty"`
+	RepositoryID          string                       `json:"repositoryId,omitempty"`
+	ProviderNamespace     string                       `json:"providerNamespace,omitempty"`
+	EdgeName              bool                         `json:"-"`
+	SourceIdentity        *SourceIdentitySelector      `json:"-"`
+	IntentIdentity        *IntentIdentitySelector      `json:"-"`
 }
 
 type EffectiveGraphPins struct {
@@ -66,16 +67,17 @@ type IntentIdentitySelector struct {
 	ID         string `json:"id"`
 }
 type EffectiveFieldOrigin struct {
-	RecordType   string                    `json:"recordType"`
-	SubjectID    string                    `json:"subjectId"`
-	Selector     EffectivePropertySelector `json:"selector"`
-	Kind         string                    `json:"kind"`
-	CommandID    string                    `json:"commandId,omitempty"`
-	Reason       string                    `json:"reason,omitempty"`
-	BaseRef      *EffectiveBaseRef         `json:"baseRef,omitzero"`
-	SourceClaims []BaseAssertionRef        `json:"sourceClaims"`
-	EvidenceIDs  []string                  `json:"evidenceIds"`
-	Freshness    *AssertionFreshness       `json:"freshness,omitzero"`
+	RebaseResolution *RebaseResolutionOrigin   `json:"rebaseResolution,omitzero"`
+	RecordType       string                    `json:"recordType"`
+	SubjectID        string                    `json:"subjectId"`
+	Selector         EffectivePropertySelector `json:"selector"`
+	Kind             string                    `json:"kind"`
+	CommandID        string                    `json:"commandId,omitempty"`
+	Reason           string                    `json:"reason,omitempty"`
+	BaseRef          *EffectiveBaseRef         `json:"baseRef,omitzero"`
+	SourceClaims     []BaseAssertionRef        `json:"sourceClaims"`
+	EvidenceIDs      []string                  `json:"evidenceIds"`
+	Freshness        *AssertionFreshness       `json:"freshness,omitzero"`
 }
 type EffectiveIdentity struct {
 	Target      ChangeIdentityTarget `json:"target"`
@@ -85,6 +87,12 @@ type EffectiveIdentity struct {
 
 func (s EffectivePropertySelector) MarshalJSON() ([]byte, error) {
 	switch {
+	case s.CarriedSourceIdentity != nil:
+		s.Kind = "carried_source_identity"
+		s.RecordType = ""
+		s.ID = ""
+		s.RepositoryID = ""
+		s.ProviderNamespace = ""
 	case s.Source != nil:
 		s.Kind = "source"
 	case s.EdgeName:
@@ -108,6 +116,15 @@ func (s *EffectivePropertySelector) UnmarshalJSON(b []byte) error {
 	}
 	fields := []string{"kind"}
 	switch v.Kind {
+	case "carried_source_identity":
+		fields = append(fields, "carriedSourceIdentity")
+		if v.CarriedSourceIdentity == nil {
+			return invalid("selector", "Exact carried identity required")
+		}
+		c := v.CarriedSourceIdentity
+		if err := (ChangeIdentityTarget{Kind: v.Kind, Source: &c.Source, Basis: &c.Basis}).Validate(); err != nil {
+			return err
+		}
 	case "source":
 		fields = append(fields, "source")
 		if v.Source == nil {
@@ -128,15 +145,8 @@ func (s *EffectivePropertySelector) UnmarshalJSON(b []byte) error {
 	if err = relationalFields(m, fields, nil); err != nil {
 		return err
 	}
-	if v.Kind == "source_identity" || v.Kind == "intent_identity" {
-		if !ValidID(v.ID) || !slices.Contains([]string{"node", "edge"}, v.RecordType) {
-			return invalid("selector", "Identity selectors require canonical record identity")
-		}
-	}
-	if v.Kind == "source_identity" {
-		if !ValidID(v.RepositoryID) || !externalKey(v.ProviderNamespace) {
-			return invalid("selector", "Source identity selectors require a qualified owner")
-		}
+	if err = validateEffectiveIdentitySelector(EffectivePropertySelector(v)); err != nil {
+		return err
 	}
 	*s = EffectivePropertySelector(v)
 	switch v.Kind {
@@ -157,10 +167,11 @@ type EffectiveBasis struct {
 	ID           string `json:"id"`
 }
 type EffectiveOrigin struct {
-	Kind      string          `json:"kind"`
-	CommandID string          `json:"commandId,omitempty"`
-	Reason    string          `json:"reason,omitempty"`
-	BaseRef   *EffectiveBasis `json:"baseRef,omitzero"`
+	RebaseResolution *RebaseResolutionOrigin `json:"rebaseResolution,omitzero"`
+	Kind             string                  `json:"kind"`
+	CommandID        string                  `json:"commandId,omitempty"`
+	Reason           string                  `json:"reason,omitempty"`
+	BaseRef          *EffectiveBasis         `json:"baseRef,omitzero"`
 }
 type ChangeEvaluationFieldOrigin struct {
 	ChangeRecordRef
@@ -195,4 +206,18 @@ type ChangeEvaluationSnapshot struct {
 	Coverage              Coverage
 	Origins               []ChangeEvaluationFieldOrigin
 	BaselineEvidence      []Evidence
+}
+
+func validateEffectiveIdentitySelector(s EffectivePropertySelector) error {
+	if s.Kind == "source_identity" || s.Kind == "intent_identity" {
+		if !ValidID(s.ID) || !slices.Contains([]string{"node", "edge"}, s.RecordType) {
+			return invalid("selector", "Identity selectors require canonical record identity")
+		}
+	}
+	if s.Kind == "source_identity" {
+		if !ValidID(s.RepositoryID) || !externalKey(s.ProviderNamespace) {
+			return invalid("selector", "Source identity selectors require a qualified owner")
+		}
+	}
+	return nil
 }

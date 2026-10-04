@@ -17,15 +17,16 @@ const (
 )
 
 type ChangeProposal struct {
-	ID                     string    `json:"id"`
-	ProjectID              string    `json:"projectId"`
-	Name                   string    `json:"name"`
-	Version                int64     `json:"version"`
-	Status                 string    `json:"status"`
-	CurrentDraftRevisionID string    `json:"currentDraftRevisionId"`
-	CurrentDraftHash       string    `json:"currentDraftHash"`
-	CreatedAt              time.Time `json:"createdAt"`
-	UpdatedAt              time.Time `json:"updatedAt"`
+	ReadyReference         *ChangeProposalReadyReference `json:"readyReference,omitzero"`
+	ID                     string                        `json:"id"`
+	ProjectID              string                        `json:"projectId"`
+	Name                   string                        `json:"name"`
+	Version                int64                         `json:"version"`
+	Status                 string                        `json:"status"`
+	CurrentDraftRevisionID string                        `json:"currentDraftRevisionId"`
+	CurrentDraftHash       string                        `json:"currentDraftHash"`
+	CreatedAt              time.Time                     `json:"createdAt"`
+	UpdatedAt              time.Time                     `json:"updatedAt"`
 }
 
 type ChangeRecordRef struct {
@@ -33,6 +34,7 @@ type ChangeRecordRef struct {
 	ID         string `json:"id"`
 }
 type ChangeObjectIdentity struct {
+	AllocationKind string `json:"allocationKind,omitempty"`
 	ChangeRecordRef
 	Kind            string          `json:"kind"`
 	FirstRevisionID string          `json:"firstRevisionId"`
@@ -69,32 +71,34 @@ type ChangeArtifactIntent struct {
 	Origin   EffectiveOrigin `json:"origin"`
 }
 type ChangeDelta struct {
-	Created         []ChangeCreatedRecord  `json:"created"`
-	Removed         []ChangeRemoval        `json:"removed"`
-	Properties      []ChangeProperty       `json:"properties"`
-	IdentityIntents []ChangeIdentityIntent `json:"identityIntents"`
-	ArtifactIntents []ChangeArtifactIntent `json:"artifactIntents"`
-	EdgeNames       []ChangeEdgeName       `json:"edgeNames"`
+	CarriedIdentities []ChangeCarriedSourceIdentity `json:"carriedIdentities,omitempty"`
+	Created           []ChangeCreatedRecord         `json:"created"`
+	Removed           []ChangeRemoval               `json:"removed"`
+	Properties        []ChangeProperty              `json:"properties"`
+	IdentityIntents   []ChangeIdentityIntent        `json:"identityIntents"`
+	ArtifactIntents   []ChangeArtifactIntent        `json:"artifactIntents"`
+	EdgeNames         []ChangeEdgeName              `json:"edgeNames"`
 }
 type ChangeProposalRevision struct {
-	ID                      string            `json:"id"`
-	ProposalID              string            `json:"proposalId"`
-	ParentRevisionID        *string           `json:"parentRevisionId"`
-	DocumentVersion         string            `json:"documentVersion"`
-	BaseRevisionID          string            `json:"baseRevisionId"`
-	BaseSemanticHash        string            `json:"baseSemanticHash"`
-	BaseSchemaVersion       string            `json:"baseSchemaVersion"`
-	SourceSnapshotIDs       []string          `json:"sourceSnapshotIds"`
-	SourceVector            SourceVector      `json:"sourceVector"`
-	ArtifactPins            []ArtifactPin     `json:"artifactPins"`
-	ArtifactContext         ArtifactContext   `json:"artifactContext"`
-	Delta                   ChangeDelta       `json:"delta"`
-	Criteria                []ChangeCriterion `json:"criteria"`
-	SemanticHash            string            `json:"semanticHash"`
-	AcceptedBatchRevisionID string            `json:"acceptedBatchRevisionId"`
-	Author                  string            `json:"author"`
-	Summary                 string            `json:"summary"`
-	CreatedAt               time.Time         `json:"createdAt"`
+	Rebase                  *ChangeRebaseAction `json:"rebase,omitzero"`
+	ID                      string              `json:"id"`
+	ProposalID              string              `json:"proposalId"`
+	ParentRevisionID        *string             `json:"parentRevisionId"`
+	DocumentVersion         string              `json:"documentVersion"`
+	BaseRevisionID          string              `json:"baseRevisionId"`
+	BaseSemanticHash        string              `json:"baseSemanticHash"`
+	BaseSchemaVersion       string              `json:"baseSchemaVersion"`
+	SourceSnapshotIDs       []string            `json:"sourceSnapshotIds"`
+	SourceVector            SourceVector        `json:"sourceVector"`
+	ArtifactPins            []ArtifactPin       `json:"artifactPins"`
+	ArtifactContext         ArtifactContext     `json:"artifactContext"`
+	Delta                   ChangeDelta         `json:"delta"`
+	Criteria                []ChangeCriterion   `json:"criteria"`
+	SemanticHash            string              `json:"semanticHash"`
+	AcceptedBatchRevisionID string              `json:"acceptedBatchRevisionId"`
+	Author                  string              `json:"author"`
+	Summary                 string              `json:"summary"`
+	CreatedAt               time.Time           `json:"createdAt"`
 }
 
 // A draft preserves either legacy or tagged artifact context verbatim. The

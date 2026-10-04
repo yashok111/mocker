@@ -69,12 +69,14 @@ func TestEmbeddedCopiesMatchTheSkill(t *testing.T) {
 
 func TestTopics(t *testing.T) {
 	t.Parallel()
-	want := []string{
-		"overview", "tools", "shapes", "cookbook", "http", "design", "functions",
-		"backend-overview", "backend-import", "backend-model", "backend-import-protocol",
-		"backend-recovery", "backend-examples", "backend-database",
-		"backend-database-reference", "backend-profile-go-sql",
-		"backend-inspect", "backend-flow-reference", "backend-analysis", "backend-editor-projections", "backend-events", "backend-sync", "backend-change-proposals", "backend-annotations",
+	raw, _ := Raw("manifest.json")
+	var declarations guideSourceDeclarations
+	if err := json.Unmarshal([]byte(raw), &declarations); err != nil {
+		t.Fatal(err)
+	}
+	want := make([]string, 0, len(declarations.Sources))
+	for _, source := range declarations.Sources {
+		want = append(want, source.Topic)
 	}
 	if !slices.Equal(Topics(), want) {
 		t.Errorf("served topics = %v; want complete ordered inventory %v", Topics(), want)

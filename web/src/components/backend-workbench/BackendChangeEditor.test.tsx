@@ -711,3 +711,87 @@ it("restores commands and requires reconciliation when rereading a conflict", ()
   expect(screen.getByText(/Порядок локальных команд \(1\/100\)/)).toBeInTheDocument();
   expect(api.attempts).toHaveLength(0);
 });
+
+it("keeps the selected saved report applicable after Ready and still detects subsequent real edits", async () => {
+  const { BackendAnalysisRecoveryProvider } = await import("./backendAnalysisRecovery");
+  const { analysisTestDetail, analysisTestManifest } =
+    await import("./backendAnalysisTestFixtures");
+  setup();
+  const existingFetch = globalThis.fetch;
+  const detail = changeTestDetail();
+  detail.proposal.version = 3;
+  const analysis = analysisTestDetail(),
+    manifest = analysisTestManifest();
+  const writes: Record<string, unknown>[] = [];
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = new URL(String(input), "http://localhost"),
+        path = url.pathname;
+      if (path.endsWith("/lifecycle")) {
+        const body = JSON.parse(String(init?.body));
+        writes.push(body);
+        return response({
+          proposal: {
+            ...detail.proposal,
+            version: 4,
+            status: "ready",
+            readyReference: { report: body.report, acknowledgedGapIds: body.acknowledgedGapIds },
+          },
+          revision: detail.revision,
+          semanticHash: detail.revision.semanticHash,
+          changes: [],
+        });
+      }
+      if (path.endsWith("/analyses")) return response({ items: [analysis.job], nextCursor: "" });
+      if (path.endsWith(`/analyses/${analysis.job.id}`)) return response(analysis);
+      if (path.endsWith("/results"))
+        return response({
+          manifest,
+          section: url.searchParams.get("section"),
+          items: [],
+          nextCursor: "",
+        });
+      if (path.endsWith("/revisions")) return response({ items: [], nextCursor: "" });
+      return existingFetch(input, init);
+    }),
+  );
+  const saved = vi.fn();
+  renderWithProviders(
+    <BackendAnalysisRecoveryProvider projectId={changeTestID}>
+      <BackendChangeEditor projectId={changeTestID} detail={detail} onSaved={saved} />
+    </BackendAnalysisRecoveryProvider>,
+  );
+  await screen.findByRole("option", { name: /impact · completed/ });
+  fireEvent.change(screen.getByLabelText("Задание анализа"), {
+    target: { value: analysis.job.id },
+  });
+  fireEvent.change(await screen.findByLabelText("Неизменяемая версия отчёта"), {
+    target: { value: "2" },
+  });
+  const ready = await screen.findByRole("button", { name: "Отметить черновик готовым" });
+  await waitFor(() => expect(ready).toBeEnabled());
+  fireEvent.click(ready);
+  await waitFor(() =>
+    expect(saved).toHaveBeenCalledWith(
+      expect.objectContaining({
+        proposal: expect.objectContaining({ version: 4, status: "ready" }),
+        revision: expect.objectContaining({
+          id: detail.revision.id,
+          semanticHash: detail.revision.semanticHash,
+        }),
+      }),
+    ),
+  );
+  expect(writes).toHaveLength(1);
+  expect(writes[0]).toMatchObject({ expectedVersion: 3, proposalRevisionId: detail.revision.id });
+  expect(await screen.findByText("Черновик уже готов.")).toBeInTheDocument();
+  expect(screen.queryByText(/Есть несохранённые изменения\. Сначала/)).toBeNull();
+  expect(screen.getByLabelText("Неизменяемая версия отчёта")).toHaveValue("2");
+  expect(screen.getByTestId("exact-draft")).toHaveTextContent(detail.revision.id);
+  fireEvent.change(screen.getByRole("textbox", { name: "Причина изменения" }), {
+    target: { value: "Actual edit after ready" },
+  });
+  expect(await screen.findByText(/Есть несохранённые изменения\. Сначала/)).toBeInTheDocument();
+  expect(screen.queryByText("Черновик уже готов.")).toBeNull();
+});

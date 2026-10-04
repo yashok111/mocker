@@ -69,12 +69,13 @@ func changeSemanticHash(s *ChangeEvaluationSnapshot) (string, error) {
 	}
 	slices.SortFunc(records, func(a, b record) int { return strings.Compare(a.ID, b.ID) })
 	type identity struct {
-		Kind              string  `json:"kind"`
-		RecordType        string  `json:"recordType"`
-		ID                string  `json:"id"`
-		RepositoryID      string  `json:"repositoryId,omitempty"`
-		ProviderNamespace string  `json:"providerNamespace,omitempty"`
-		ExternalKey       *string `json:"externalKey"`
+		CarriedSource     *ChangeCarriedSourceIdentity `json:"carriedSource,omitzero"`
+		Kind              string                       `json:"kind"`
+		RecordType        string                       `json:"recordType"`
+		ID                string                       `json:"id"`
+		RepositoryID      string                       `json:"repositoryId,omitempty"`
+		ProviderNamespace string                       `json:"providerNamespace,omitempty"`
+		ExternalKey       *string                      `json:"externalKey"`
 	}
 	identities := []identity{}
 	for _, i := range s.Identities {
@@ -82,6 +83,9 @@ func changeSemanticHash(s *ChangeEvaluationSnapshot) (string, error) {
 		value := identity{Kind: i.Target.Kind, RecordType: ref.RecordType, ID: ref.ID, ExternalKey: i.ExternalKey}
 		if i.Target.Source != nil {
 			value.RepositoryID, value.ProviderNamespace = i.Target.Source.RepositoryID, i.Target.Source.ProviderNamespace
+		}
+		if i.Target.Kind == "carried_source_identity" {
+			value.CarriedSource = &ChangeCarriedSourceIdentity{Source: *i.Target.Source, Basis: *i.Target.Basis}
 		}
 		identities = append(identities, value)
 	}

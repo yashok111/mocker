@@ -8,6 +8,9 @@ import (
 )
 
 func (r *Repo) ResolveEffectiveGraph(ctx context.Context, pid string, target BackendReadTarget) (*EffectiveGraphSnapshot, error) {
+	if err := r.validateAnalysisLeaseTarget(ctx, pid, target); err != nil {
+		return nil, err
+	}
 	tx, err := r.db.R.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
 	if err != nil {
 		return nil, err
@@ -119,6 +122,10 @@ func loadChangeEffectiveGraph(ctx context.Context, q importReader, pid string, t
 	if err != nil {
 		return nil, err
 	}
+	return changeEffectiveSnapshot(ctx, q, target, revision, source, desired)
+}
+
+func changeEffectiveSnapshot(ctx context.Context, q importReader, target BackendReadTarget, revision *ChangeProposalRevision, source *SourceGraphSnapshot, desired *ChangeEvaluationSnapshot) (*EffectiveGraphSnapshot, error) {
 	state, err := detachedEffectiveState(source.State)
 	if err != nil {
 		return nil, err
@@ -138,11 +145,7 @@ func loadChangeEffectiveGraph(ctx context.Context, q importReader, pid string, t
 	}
 	for _, identity := range desired.Identities {
 		ref := changeIdentityRef(identity.Target)
-		selector := EffectivePropertySelector{Kind: identity.Target.Kind, RecordType: ref.RecordType, ID: ref.ID}
-		if identity.Target.Source != nil {
-			selector.RepositoryID = identity.Target.Source.RepositoryID
-			selector.ProviderNamespace = identity.Target.Source.ProviderNamespace
-		}
+		selector := changeIdentitySelector(identity.Target)
 		origin := effectiveEvaluationOrigin(source, ChangeEvaluationFieldOrigin{ChangeRecordRef: ref, Selector: selector, Origin: identity.Origin})
 		out.Identities = append(out.Identities, EffectiveIdentity{Target: identity.Target, ExternalKey: identity.ExternalKey, Origin: origin})
 	}

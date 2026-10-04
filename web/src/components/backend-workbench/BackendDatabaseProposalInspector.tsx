@@ -1,4 +1,5 @@
-import { useEffect, useRef } from "react";
+import { BackendAnalysisJobs } from "./BackendAnalysisJobs";
+import { useEffect, useRef, useState } from "react";
 import { Badge, Button, Code, Group, Paper, Stack, Text, Title } from "@mantine/core";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -32,6 +33,7 @@ export function BackendDatabaseProposalInspector({
   onClose: () => void;
   onFlowNavigate?: (pin: BackendSourcePin) => void;
 }) {
+  const [analysisOpen, setAnalysisOpen] = useState(false);
   const target = context.proposal!;
   const key = [...databaseKey(context), "proposal-inspector", selection.type, selection.id];
   useDatabaseCancellation(key);
@@ -138,6 +140,20 @@ export function BackendDatabaseProposalInspector({
           Происхождение значения доступно только в снимке source4; предложения не поддерживаются.
         </Text>
         <LoadState query={record} label="предложенного объекта" />
+        <Button
+          variant="default"
+          aria-expanded={analysisOpen}
+          onClick={() => setAnalysisOpen((v) => !v)}
+        >
+          Анализ реляционного предложения
+        </Button>
+        {analysisOpen && (
+          <BackendAnalysisJobs
+            projectId={context.projectId}
+            sourceRevisionId={context.revisionId}
+            target={{ proposal: target }}
+          />
+        )}
         <Title order={4}>Полнота основания</Title>
         <Text size="sm">Покрытие исходной ревизии; проверки предложения не выполнены.</Text>
         <LoadState query={coverage} label="полноты основания" />

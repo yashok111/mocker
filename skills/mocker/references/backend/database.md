@@ -278,8 +278,7 @@ possible, never a confirmed column reader/writer. Open query/edge/witness proof.
 Source2 flow inspection is unavailable. DB proposals keep their exact source base
 for flow navigation; no proposal selector is accepted by the flow query.
 Imported accesses do not verify all writers, data/backfill or proposed behavior.
-Live collection, measured data/writer checks, ready/rebase,
-impact and provider migration remain unavailable. Saved views persist presentation and exact pins only.
+Legacy relational proposals do not support ready/rebase. Authorized static diff/impact uses change2/backend-analysis-jobs with the exact `proposal:{proposalId,proposalRevisionId}` target. Source provider migration uses separately negotiated sync2; neither action is implied by inspection. Live collection and measured data/writer checks remain unavailable; runtime behavior stays unverified. Saved views persist presentation and exact pins only.
 
 ## Proposal documents and property provenance
 

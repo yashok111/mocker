@@ -5131,7 +5131,9 @@
                 "kind": {
                   "const": "event"
                 },
-                "operation": false
+                "operation": {
+                  "not": {}
+                }
               }
             }
           }
@@ -13760,7 +13762,8 @@
           "sourceScopes",
           "syncPolicies",
           "changeProposalCommands",
-          "readTargetSupport"
+          "readTargetSupport",
+          "analysisSupport"
         ],
         "properties": {
           "modelSchemaVersions": {
@@ -13887,7 +13890,20 @@
               "maxChangeProposalCriteria",
               "maxChangeProposals",
               "maxChangeProposalRevisions",
-              "maxChangeProposalBytes"
+              "maxChangeProposalBytes",
+              "maxAnalysisInputBytes",
+              "maxAnalysisResultBytes",
+              "maxAnalysisProjectBytes",
+              "maxAnalysisJobs",
+              "maxAnalysisWaitingJobs",
+              "maxAnalysisRunningJobs",
+              "maxAnalysisStates",
+              "maxAnalysisDependencyVisits",
+              "maxAnalysisDepth",
+              "maxAnalysisFindings",
+              "maxAnalysisRecords",
+              "maxAnalysisWitnessesPerObject",
+              "recommendedAnalysisPollIntervalMs"
             ],
             "properties": {
               "maxNameLength": {
@@ -14345,6 +14361,84 @@
                 "format": "int64",
                 "const": 536870912,
                 "description": "Maximum retained full proposal bytes per project."
+              },
+              "maxAnalysisInputBytes": {
+                "type": "integer",
+                "format": "int64",
+                "minimum": 1,
+                "maximum": 9223372036854775807
+              },
+              "maxAnalysisResultBytes": {
+                "type": "integer",
+                "format": "int64",
+                "minimum": 1,
+                "maximum": 9223372036854775807
+              },
+              "maxAnalysisProjectBytes": {
+                "type": "integer",
+                "format": "int64",
+                "minimum": 1,
+                "maximum": 9223372036854775807
+              },
+              "maxAnalysisJobs": {
+                "type": "integer",
+                "format": "int64",
+                "minimum": 1,
+                "maximum": 9223372036854775807
+              },
+              "maxAnalysisWaitingJobs": {
+                "type": "integer",
+                "format": "int64",
+                "minimum": 1,
+                "maximum": 9223372036854775807
+              },
+              "maxAnalysisRunningJobs": {
+                "type": "integer",
+                "format": "int64",
+                "minimum": 1,
+                "maximum": 9223372036854775807
+              },
+              "maxAnalysisStates": {
+                "type": "integer",
+                "format": "int64",
+                "minimum": 1,
+                "maximum": 9223372036854775807
+              },
+              "maxAnalysisDependencyVisits": {
+                "type": "integer",
+                "format": "int64",
+                "minimum": 1,
+                "maximum": 9223372036854775807
+              },
+              "maxAnalysisDepth": {
+                "type": "integer",
+                "format": "int64",
+                "minimum": 1,
+                "maximum": 9223372036854775807
+              },
+              "maxAnalysisFindings": {
+                "type": "integer",
+                "format": "int64",
+                "minimum": 1,
+                "maximum": 9223372036854775807
+              },
+              "maxAnalysisRecords": {
+                "type": "integer",
+                "format": "int64",
+                "minimum": 1,
+                "maximum": 9223372036854775807
+              },
+              "maxAnalysisWitnessesPerObject": {
+                "type": "integer",
+                "format": "int64",
+                "minimum": 1,
+                "maximum": 9223372036854775807
+              },
+              "recommendedAnalysisPollIntervalMs": {
+                "type": "integer",
+                "format": "int64",
+                "minimum": 1,
+                "maximum": 9223372036854775807
               }
             }
           },
@@ -14618,6 +14712,66 @@
             "uniqueItems": true,
             "items": {
               "$ref": "#/components/schemas/BackendReadTargetSupport"
+            }
+          },
+          "analysisSupport": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "documentVersion",
+              "kinds",
+              "targets",
+              "observationModes",
+              "ruleSetVersion",
+              "traversalVersion"
+            ],
+            "properties": {
+              "documentVersion": {
+                "type": "string",
+                "const": "backend-analysis-context-v1"
+              },
+              "ruleSetVersion": {
+                "type": "string",
+                "const": "b42-rules/v1"
+              },
+              "traversalVersion": {
+                "type": "string",
+                "const": "b42-traversal/v1"
+              },
+              "kinds": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "diff",
+                    "impact"
+                  ]
+                },
+                "uniqueItems": true
+              },
+              "targets": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "revisionId",
+                    "proposal",
+                    "changeProposal",
+                    "commandPreview"
+                  ]
+                },
+                "uniqueItems": true
+              },
+              "observationModes": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "none"
+                  ]
+                },
+                "uniqueItems": true
+              }
             }
           }
         }
@@ -61805,41 +61959,70 @@
         ]
       },
       "BackendEffectiveArtifactContext": {
-        "type": "object",
-        "additionalProperties": false,
-        "properties": {
-          "documentVersion": {
-            "type": "string",
-            "enum": [
-              "",
-              "backend-editor-artifacts-v1"
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "documentVersion": {
+                "type": "string",
+                "enum": [
+                  "",
+                  "backend-editor-artifacts-v1"
+                ]
+              },
+              "sourceContentHash": {
+                "type": "string"
+              },
+              "sourceSemanticHash": {
+                "type": "string"
+              },
+              "apiBindings": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/BackendAPIArtifactBinding"
+                }
+              },
+              "editorBindings": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/EditorBinding"
+                }
+              }
+            },
+            "required": [
+              "documentVersion",
+              "sourceContentHash",
+              "sourceSemanticHash",
+              "apiBindings",
+              "editorBindings"
             ]
           },
-          "sourceContentHash": {
-            "type": "string"
-          },
-          "sourceSemanticHash": {
-            "type": "string"
-          },
-          "apiBindings": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/BackendAPIArtifactBinding"
-            }
-          },
-          "editorBindings": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/EditorBinding"
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "sourceContentHash",
+              "sourceSemanticHash",
+              "bindings"
+            ],
+            "properties": {
+              "sourceContentHash": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              },
+              "sourceSemanticHash": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              },
+              "bindings": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/BackendAPIArtifactBinding"
+                }
+              }
             }
           }
-        },
-        "required": [
-          "documentVersion",
-          "sourceContentHash",
-          "sourceSemanticHash",
-          "apiBindings",
-          "editorBindings"
         ]
       },
       "BackendEffectiveGraphPins": {
@@ -62129,6 +62312,23 @@
               "recordType",
               "id"
             ]
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "carried_source_identity"
+              },
+              "carriedSourceIdentity": {
+                "$ref": "#/components/schemas/BackendChangeCarriedSourceIdentity"
+              }
+            },
+            "required": [
+              "kind",
+              "carriedSourceIdentity"
+            ]
           }
         ]
       },
@@ -62195,6 +62395,9 @@
           },
           "freshness": {
             "$ref": "#/components/schemas/BackendSourceAssertionFreshness"
+          },
+          "rebaseResolution": {
+            "$ref": "#/components/schemas/BackendRebaseResolutionOrigin"
           }
         },
         "required": [
@@ -62204,6 +62407,37 @@
           "kind",
           "sourceClaims",
           "evidenceIds"
+        ],
+        "allOf": [
+          {
+            "if": {
+              "required": [
+                "rebaseResolution"
+              ]
+            },
+            "then": {
+              "properties": {
+                "kind": {
+                  "type": "string",
+                  "const": "intent"
+                }
+              },
+              "not": {
+                "anyOf": [
+                  {
+                    "required": [
+                      "commandId"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "reason"
+                    ]
+                  }
+                ]
+              }
+            }
+          }
         ]
       },
       "BackendChangeIdentityTarget": {
@@ -62253,6 +62487,27 @@
               "kind",
               "recordType",
               "id"
+            ]
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "carried_source_identity"
+              },
+              "source": {
+                "$ref": "#/components/schemas/BackendQualifiedSourceIdentity"
+              },
+              "basis": {
+                "$ref": "#/components/schemas/BackendCarriedSourceBasis"
+              }
+            },
+            "required": [
+              "kind",
+              "source",
+              "basis"
             ]
           }
         ]
@@ -71007,7 +71262,10 @@
           },
           "status": {
             "type": "string",
-            "const": "draft"
+            "enum": [
+              "draft",
+              "ready"
+            ]
           },
           "currentDraftRevisionId": {
             "type": "string",
@@ -71028,6 +71286,9 @@
           "updatedAt": {
             "type": "string",
             "format": "date-time"
+          },
+          "readyReference": {
+            "$ref": "#/components/schemas/BackendChangeProposalReadyReference"
           }
         },
         "required": [
@@ -71130,10 +71391,44 @@
           },
           "baseRef": {
             "$ref": "#/components/schemas/BackendChangeOriginBaseRef"
+          },
+          "rebaseResolution": {
+            "$ref": "#/components/schemas/BackendRebaseResolutionOrigin"
           }
         },
         "required": [
           "kind"
+        ],
+        "allOf": [
+          {
+            "if": {
+              "required": [
+                "rebaseResolution"
+              ]
+            },
+            "then": {
+              "properties": {
+                "kind": {
+                  "type": "string",
+                  "const": "intent"
+                }
+              },
+              "not": {
+                "anyOf": [
+                  {
+                    "required": [
+                      "commandId"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "reason"
+                    ]
+                  }
+                ]
+              }
+            }
+          }
         ]
       },
       "BackendChangeCreatedRecord": {
@@ -71350,6 +71645,12 @@
             "items": {
               "$ref": "#/components/schemas/BackendChangeEdgeName"
             }
+          },
+          "carriedIdentities": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendChangeCarriedSourceIdentity"
+            }
           }
         },
         "required": [
@@ -71473,6 +71774,9 @@
           "createdAt": {
             "type": "string",
             "format": "date-time"
+          },
+          "rebase": {
+            "$ref": "#/components/schemas/BackendChangeRebaseAction"
           }
         },
         "required": [
@@ -75373,6 +75677,2640 @@
           "representation_field"
         ],
         "description": "Negotiated node kinds, including source6 representations; native source1–5 record unions remain unchanged."
+      },
+      "BackendAnalysisAddress": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "recordType": {
+            "type": "string",
+            "enum": [
+              "node",
+              "edge",
+              "evidence",
+              "source",
+              "identity",
+              "artifact",
+              "desired",
+              "artifact_object"
+            ]
+          },
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096
+          }
+        },
+        "required": [
+          "recordType",
+          "id"
+        ]
+      },
+      "BackendAnalysisScope": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "changedIds": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendAnalysisAddress"
+            }
+          },
+          "service": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "certainty": {
+            "type": "string",
+            "enum": [
+              "",
+              "confirmed",
+              "possible",
+              "unknown"
+            ]
+          },
+          "direction": {
+            "type": "string",
+            "enum": [
+              "",
+              "upstream",
+              "downstream",
+              "both"
+            ]
+          },
+          "depth": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "maximum": 32
+          }
+        },
+        "required": []
+      },
+      "BackendAnalysisLimits": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "states": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1,
+            "maximum": 10000
+          },
+          "dependencyVisits": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1,
+            "maximum": 50000
+          },
+          "depth": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1,
+            "maximum": 32
+          },
+          "findings": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1,
+            "maximum": 10000
+          },
+          "records": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1,
+            "maximum": 20000
+          },
+          "witnessesPerObject": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1,
+            "maximum": 8
+          },
+          "resultBytes": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1,
+            "maximum": 33554432
+          }
+        },
+        "required": []
+      },
+      "BackendAnalysisCommandPreviewTarget": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "changeProposal": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "proposalId": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+                "not": {
+                  "const": "00000000-0000-0000-0000-000000000000"
+                }
+              },
+              "proposalRevisionId": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+                "not": {
+                  "const": "00000000-0000-0000-0000-000000000000"
+                }
+              }
+            },
+            "required": [
+              "proposalId",
+              "proposalRevisionId"
+            ]
+          },
+          "expectedVersion": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1,
+            "maximum": 9223372036854775807
+          },
+          "commands": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendChangeProposalCommand"
+            },
+            "minItems": 1,
+            "maxItems": 100
+          },
+          "candidateHash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          }
+        },
+        "required": [
+          "changeProposal",
+          "expectedVersion",
+          "commands",
+          "candidateHash"
+        ]
+      },
+      "BackendAnalysisTarget": {
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "revisionId": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+                "not": {
+                  "const": "00000000-0000-0000-0000-000000000000"
+                }
+              }
+            },
+            "required": [
+              "revisionId"
+            ]
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "proposal": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "proposalId": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+                    "not": {
+                      "const": "00000000-0000-0000-0000-000000000000"
+                    }
+                  },
+                  "proposalRevisionId": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+                    "not": {
+                      "const": "00000000-0000-0000-0000-000000000000"
+                    }
+                  }
+                },
+                "required": [
+                  "proposalId",
+                  "proposalRevisionId"
+                ]
+              }
+            },
+            "required": [
+              "proposal"
+            ]
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "changeProposal": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "proposalId": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+                    "not": {
+                      "const": "00000000-0000-0000-0000-000000000000"
+                    }
+                  },
+                  "proposalRevisionId": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+                    "not": {
+                      "const": "00000000-0000-0000-0000-000000000000"
+                    }
+                  }
+                },
+                "required": [
+                  "proposalId",
+                  "proposalRevisionId"
+                ]
+              }
+            },
+            "required": [
+              "changeProposal"
+            ]
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "commandPreview": {
+                "$ref": "#/components/schemas/BackendAnalysisCommandPreviewTarget"
+              }
+            },
+            "required": [
+              "commandPreview"
+            ]
+          }
+        ]
+      },
+      "StartBackendAnalysisRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "diff",
+              "impact"
+            ]
+          },
+          "fromRevisionId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            "not": {
+              "const": "00000000-0000-0000-0000-000000000000"
+            }
+          },
+          "target": {
+            "$ref": "#/components/schemas/BackendAnalysisTarget"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/BackendAnalysisScope"
+          },
+          "limits": {
+            "$ref": "#/components/schemas/BackendAnalysisLimits"
+          },
+          "observationMode": {
+            "type": "string",
+            "const": "none"
+          },
+          "observationPins": {
+            "type": "array",
+            "items": {},
+            "maxItems": 0
+          },
+          "idempotencyKey": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "pattern": "^[!-~]+$"
+          }
+        },
+        "required": [
+          "kind",
+          "fromRevisionId",
+          "target",
+          "scope",
+          "limits",
+          "observationMode",
+          "idempotencyKey"
+        ]
+      },
+      "CancelBackendAnalysisRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "idempotencyKey": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "pattern": "^[!-~]+$"
+          }
+        },
+        "required": [
+          "idempotencyKey"
+        ]
+      },
+      "RetryBackendAnalysisRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "idempotencyKey": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "pattern": "^[!-~]+$"
+          }
+        },
+        "required": [
+          "idempotencyKey"
+        ]
+      },
+      "BackendAnalysisProgress": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "states": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "maximum": 9223372036854775807
+          },
+          "dependencyVisits": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "maximum": 9223372036854775807
+          },
+          "findings": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "maximum": 9223372036854775807
+          },
+          "records": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "maximum": 9223372036854775807
+          }
+        },
+        "required": [
+          "states",
+          "dependencyVisits",
+          "findings",
+          "records"
+        ]
+      },
+      "BackendAnalysisDiagnostic": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "objects": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendAnalysisAddress"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "code",
+          "message",
+          "objects"
+        ]
+      },
+      "BackendAnalysisJob": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            "not": {
+              "const": "00000000-0000-0000-0000-000000000000"
+            }
+          },
+          "projectId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            "not": {
+              "const": "00000000-0000-0000-0000-000000000000"
+            }
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "diff",
+              "impact"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "queued",
+              "running",
+              "completed",
+              "failed",
+              "cancelled",
+              "interrupted"
+            ]
+          },
+          "analysisInputHash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "version": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1,
+            "maximum": 9223372036854775807
+          },
+          "resultVersion": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1,
+            "maximum": 9223372036854775807
+          },
+          "recommendedPollIntervalMs": {
+            "type": "integer",
+            "const": 2000
+          },
+          "progress": {
+            "$ref": "#/components/schemas/BackendAnalysisProgress"
+          },
+          "diagnostic": {
+            "$ref": "#/components/schemas/BackendAnalysisDiagnostic"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "projectId",
+          "kind",
+          "status",
+          "analysisInputHash",
+          "version",
+          "recommendedPollIntervalMs",
+          "progress",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "BackendAnalysisSourcePins": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "revisionId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            "not": {
+              "const": "00000000-0000-0000-0000-000000000000"
+            }
+          },
+          "semanticHash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "contentHash": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              },
+              {
+                "type": "string",
+                "const": ""
+              }
+            ]
+          },
+          "sourceVectorHash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "sourceSnapshotIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+              "not": {
+                "const": "00000000-0000-0000-0000-000000000000"
+              }
+            }
+          }
+        },
+        "required": [
+          "revisionId",
+          "semanticHash",
+          "contentHash",
+          "sourceVectorHash",
+          "sourceSnapshotIds"
+        ]
+      },
+      "BackendAnalysisContextPreview": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "changeProposal": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "proposalId": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+                "not": {
+                  "const": "00000000-0000-0000-0000-000000000000"
+                }
+              },
+              "proposalRevisionId": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+                "not": {
+                  "const": "00000000-0000-0000-0000-000000000000"
+                }
+              }
+            },
+            "required": [
+              "proposalId",
+              "proposalRevisionId"
+            ]
+          },
+          "expectedVersion": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1,
+            "maximum": 9223372036854775807
+          },
+          "draftHash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "candidateHash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "commandsHash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          }
+        },
+        "required": [
+          "changeProposal",
+          "expectedVersion",
+          "draftHash",
+          "candidateHash",
+          "commandsHash"
+        ]
+      },
+      "BackendAnalysisContextTarget": {
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "revisionId": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+                "not": {
+                  "const": "00000000-0000-0000-0000-000000000000"
+                }
+              }
+            },
+            "required": [
+              "revisionId"
+            ]
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "proposal": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "proposalId": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+                    "not": {
+                      "const": "00000000-0000-0000-0000-000000000000"
+                    }
+                  },
+                  "proposalRevisionId": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+                    "not": {
+                      "const": "00000000-0000-0000-0000-000000000000"
+                    }
+                  }
+                },
+                "required": [
+                  "proposalId",
+                  "proposalRevisionId"
+                ]
+              }
+            },
+            "required": [
+              "proposal"
+            ]
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "changeProposal": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "proposalId": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+                    "not": {
+                      "const": "00000000-0000-0000-0000-000000000000"
+                    }
+                  },
+                  "proposalRevisionId": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+                    "not": {
+                      "const": "00000000-0000-0000-0000-000000000000"
+                    }
+                  }
+                },
+                "required": [
+                  "proposalId",
+                  "proposalRevisionId"
+                ]
+              }
+            },
+            "required": [
+              "changeProposal"
+            ]
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "commandPreview": {
+                "$ref": "#/components/schemas/BackendAnalysisContextPreview"
+              }
+            },
+            "required": [
+              "commandPreview"
+            ]
+          }
+        ]
+      },
+      "BackendAnalysisInputContext": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "documentVersion": {
+            "type": "string",
+            "const": "backend-analysis-context-v1"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "diff",
+              "impact"
+            ]
+          },
+          "fromRevisionId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            "not": {
+              "const": "00000000-0000-0000-0000-000000000000"
+            }
+          },
+          "target": {
+            "$ref": "#/components/schemas/BackendAnalysisContextTarget"
+          },
+          "beforePins": {
+            "$ref": "#/components/schemas/BackendEffectiveGraphPins"
+          },
+          "afterPins": {
+            "$ref": "#/components/schemas/BackendEffectiveGraphPins"
+          },
+          "beforeSource": {
+            "$ref": "#/components/schemas/BackendAnalysisSourcePins"
+          },
+          "afterSource": {
+            "$ref": "#/components/schemas/BackendAnalysisSourcePins"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/BackendAnalysisScope"
+          },
+          "limits": {
+            "$ref": "#/components/schemas/BackendAnalysisLimits"
+          },
+          "ruleSetVersion": {
+            "type": "string"
+          },
+          "traversalVersion": {
+            "type": "string"
+          },
+          "observationMode": {
+            "type": "string",
+            "const": "none"
+          }
+        },
+        "required": [
+          "documentVersion",
+          "kind",
+          "fromRevisionId",
+          "target",
+          "beforePins",
+          "afterPins",
+          "beforeSource",
+          "afterSource",
+          "scope",
+          "limits",
+          "ruleSetVersion",
+          "traversalVersion",
+          "observationMode"
+        ]
+      },
+      "BackendAnalysisJobDetail": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "job": {
+            "$ref": "#/components/schemas/BackendAnalysisJob"
+          },
+          "input": {
+            "$ref": "#/components/schemas/BackendAnalysisInputContext"
+          }
+        },
+        "required": [
+          "job",
+          "input"
+        ]
+      },
+      "BackendAnalysisJobPage": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendAnalysisJob"
+            }
+          },
+          "nextCursor": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "items",
+          "nextCursor"
+        ]
+      },
+      "BackendAnalysisSectionManifest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "section": {
+            "type": "string",
+            "enum": [
+              "changes",
+              "findings",
+              "witnesses",
+              "checks",
+              "gaps"
+            ]
+          },
+          "count": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "maximum": 9223372036854775807
+          },
+          "bytes": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "maximum": 9223372036854775807
+          }
+        },
+        "required": [
+          "section",
+          "count",
+          "bytes"
+        ]
+      },
+      "BackendAnalysisResultManifest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "jobId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            "not": {
+              "const": "00000000-0000-0000-0000-000000000000"
+            }
+          },
+          "analysisInputHash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "semanticResultHash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "resultVersion": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1,
+            "maximum": 9223372036854775807
+          },
+          "highWaterSequence": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "maximum": 9223372036854775807
+          },
+          "complete": {
+            "type": "boolean"
+          },
+          "sections": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendAnalysisSectionManifest"
+            }
+          },
+          "changedIds": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendAnalysisAddress"
+            }
+          },
+          "coveredChangedIds": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendAnalysisAddress"
+            }
+          },
+          "gaps": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendAnalysisDiagnostic"
+            }
+          },
+          "truncationReasons": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendAnalysisDiagnostic"
+            }
+          },
+          "sourceCoverageBefore": {
+            "$ref": "#/components/schemas/BackendAnalysisCoverage"
+          },
+          "sourceCoverageAfter": {
+            "$ref": "#/components/schemas/BackendAnalysisCoverage"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/BackendAnalysisScope"
+          },
+          "ruleSetVersion": {
+            "type": "string"
+          },
+          "traversalVersion": {
+            "type": "string"
+          },
+          "verdict": {
+            "type": "string"
+          },
+          "runtimeVerified": {
+            "type": "boolean",
+            "const": false
+          }
+        },
+        "required": [
+          "jobId",
+          "analysisInputHash",
+          "semanticResultHash",
+          "resultVersion",
+          "highWaterSequence",
+          "complete",
+          "sections",
+          "changedIds",
+          "coveredChangedIds",
+          "gaps",
+          "truncationReasons",
+          "sourceCoverageBefore",
+          "sourceCoverageAfter",
+          "scope",
+          "ruleSetVersion",
+          "traversalVersion",
+          "verdict",
+          "runtimeVerified"
+        ],
+        "allOf": [
+          {
+            "if": {
+              "anyOf": [
+                {
+                  "properties": {
+                    "sourceCoverageBefore": {
+                      "properties": {
+                        "status": {
+                          "const": ""
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "properties": {
+                    "sourceCoverageAfter": {
+                      "properties": {
+                        "status": {
+                          "const": ""
+                        }
+                      }
+                    }
+                  }
+                }
+              ]
+            },
+            "then": {
+              "properties": {
+                "complete": {
+                  "const": false
+                }
+              }
+            }
+          }
+        ]
+      },
+      "BackendAnalysisResultPage": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "manifest": {
+            "$ref": "#/components/schemas/BackendAnalysisResultManifest"
+          },
+          "section": {
+            "type": "string",
+            "enum": [
+              "changes",
+              "findings",
+              "witnesses",
+              "checks",
+              "gaps"
+            ]
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendAnalysisResultRecord"
+            }
+          },
+          "nextCursor": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "manifest",
+          "section",
+          "items",
+          "nextCursor"
+        ]
+      },
+      "BackendChangeRebaseIdentityResolution": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "oldSourceId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            "not": {
+              "const": "00000000-0000-0000-0000-000000000000"
+            }
+          },
+          "newSourceId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            "not": {
+              "const": "00000000-0000-0000-0000-000000000000"
+            }
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096
+          }
+        },
+        "required": [
+          "oldSourceId",
+          "newSourceId",
+          "reason"
+        ]
+      },
+      "BackendChangeRebaseResolution": {
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "conflictId": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              },
+              "choice": {
+                "type": "string",
+                "enum": [
+                  "take_source",
+                  "keep_proposal"
+                ]
+              },
+              "reason": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 4096
+              }
+            },
+            "required": [
+              "conflictId",
+              "choice",
+              "reason"
+            ]
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "conflictId": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              },
+              "choice": {
+                "type": "string",
+                "const": "replace"
+              },
+              "reason": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 4096
+              },
+              "value": {
+                "$ref": "#/components/schemas/BackendChangeRebaseReplacementValue"
+              }
+            },
+            "required": [
+              "conflictId",
+              "choice",
+              "reason",
+              "value"
+            ]
+          }
+        ]
+      },
+      "PreviewBackendChangeProposalRebaseRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "expectedVersion": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1,
+            "maximum": 9223372036854775807
+          },
+          "proposalRevisionId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            "not": {
+              "const": "00000000-0000-0000-0000-000000000000"
+            }
+          },
+          "newBaseRevisionId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            "not": {
+              "const": "00000000-0000-0000-0000-000000000000"
+            }
+          },
+          "identityResolutions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendChangeRebaseIdentityResolution"
+            }
+          },
+          "resolutions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendChangeRebaseResolution"
+            }
+          },
+          "repairCommands": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendChangeProposalCommand"
+            },
+            "maxItems": 100
+          }
+        },
+        "required": [
+          "expectedVersion",
+          "proposalRevisionId",
+          "newBaseRevisionId",
+          "identityResolutions",
+          "resolutions",
+          "repairCommands"
+        ]
+      },
+      "ApplyBackendChangeProposalRebaseRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "expectedVersion": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1,
+            "maximum": 9223372036854775807
+          },
+          "proposalRevisionId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            "not": {
+              "const": "00000000-0000-0000-0000-000000000000"
+            }
+          },
+          "newBaseRevisionId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            "not": {
+              "const": "00000000-0000-0000-0000-000000000000"
+            }
+          },
+          "identityResolutions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendChangeRebaseIdentityResolution"
+            }
+          },
+          "resolutions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendChangeRebaseResolution"
+            }
+          },
+          "repairCommands": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendChangeProposalCommand"
+            },
+            "maxItems": 100
+          },
+          "candidateHash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "idempotencyKey": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "pattern": "^[!-~]+$"
+          }
+        },
+        "required": [
+          "expectedVersion",
+          "proposalRevisionId",
+          "newBaseRevisionId",
+          "identityResolutions",
+          "resolutions",
+          "repairCommands",
+          "candidateHash",
+          "idempotencyKey"
+        ]
+      },
+      "BackendChangeRebaseValue": {
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "presence": {
+                "type": "string",
+                "enum": [
+                  "absent_record",
+                  "absent_property"
+                ]
+              }
+            },
+            "required": [
+              "presence"
+            ]
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "presence": {
+                "type": "string",
+                "const": "null"
+              },
+              "value": {
+                "type": "null"
+              }
+            },
+            "required": [
+              "presence",
+              "value"
+            ]
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "presence": {
+                "type": "string",
+                "const": "value"
+              },
+              "value": {
+                "not": {
+                  "type": "null"
+                }
+              }
+            },
+            "required": [
+              "presence",
+              "value"
+            ]
+          }
+        ]
+      },
+      "BackendChangeRebaseSelector": {
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "record",
+                  "edge_name"
+                ]
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "property"
+              },
+              "property": {
+                "$ref": "#/components/schemas/BackendEffectivePropertySelector"
+              }
+            },
+            "required": [
+              "kind",
+              "property"
+            ]
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "identity"
+              },
+              "identity": {
+                "$ref": "#/components/schemas/BackendChangeIdentityTarget"
+              }
+            },
+            "required": [
+              "kind",
+              "identity"
+            ]
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "artifact"
+              },
+              "artifact": {
+                "$ref": "#/components/schemas/ArtifactKey"
+              }
+            },
+            "required": [
+              "kind",
+              "artifact"
+            ]
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "criterion"
+              },
+              "criterionKey": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              }
+            },
+            "required": [
+              "kind",
+              "criterionKey"
+            ]
+          }
+        ]
+      },
+      "BackendChangeRebaseConflict": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "object": {
+            "$ref": "#/components/schemas/BackendChangeRecordRef"
+          },
+          "selector": {
+            "$ref": "#/components/schemas/BackendChangeRebaseSelector"
+          },
+          "base": {
+            "$ref": "#/components/schemas/BackendChangeRebaseValue"
+          },
+          "ours": {
+            "$ref": "#/components/schemas/BackendChangeRebaseValue"
+          },
+          "newSource": {
+            "$ref": "#/components/schemas/BackendChangeRebaseValue"
+          }
+        },
+        "required": [
+          "id",
+          "object",
+          "selector",
+          "base",
+          "ours",
+          "newSource"
+        ]
+      },
+      "BackendChangeProposalRebaseCandidate": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "proposalId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            "not": {
+              "const": "00000000-0000-0000-0000-000000000000"
+            }
+          },
+          "proposalRevisionId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            "not": {
+              "const": "00000000-0000-0000-0000-000000000000"
+            }
+          },
+          "expectedVersion": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1,
+            "maximum": 9223372036854775807
+          },
+          "oldBaseRevisionId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            "not": {
+              "const": "00000000-0000-0000-0000-000000000000"
+            }
+          },
+          "oldBaseSemanticHash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "newBaseRevisionId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            "not": {
+              "const": "00000000-0000-0000-0000-000000000000"
+            }
+          },
+          "newBaseSemanticHash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "conflicts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendChangeRebaseConflict"
+            }
+          },
+          "diagnostics": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendImportDiagnostic"
+            }
+          },
+          "semanticHash": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "candidateHash": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sourcePins": {
+            "$ref": "#/components/schemas/BackendAnalysisSourcePins"
+          },
+          "artifactPins": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendArtifactPin"
+            }
+          }
+        },
+        "required": [
+          "proposalId",
+          "proposalRevisionId",
+          "expectedVersion",
+          "oldBaseRevisionId",
+          "oldBaseSemanticHash",
+          "newBaseRevisionId",
+          "newBaseSemanticHash",
+          "conflicts",
+          "diagnostics",
+          "semanticHash",
+          "candidateHash",
+          "sourcePins",
+          "artifactPins"
+        ]
+      },
+      "BackendAnalysisReportRef": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "jobId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            "not": {
+              "const": "00000000-0000-0000-0000-000000000000"
+            }
+          },
+          "resultVersion": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1,
+            "maximum": 9223372036854775807
+          },
+          "inputHash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "resultHash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          }
+        },
+        "required": [
+          "jobId",
+          "resultVersion",
+          "inputHash",
+          "resultHash"
+        ]
+      },
+      "ApplyBackendChangeProposalLifecycleRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "expectedVersion": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1,
+            "maximum": 9223372036854775807
+          },
+          "proposalRevisionId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            "not": {
+              "const": "00000000-0000-0000-0000-000000000000"
+            }
+          },
+          "action": {
+            "type": "string",
+            "const": "ready"
+          },
+          "idempotencyKey": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "pattern": "^[!-~]+$"
+          },
+          "report": {
+            "$ref": "#/components/schemas/BackendAnalysisReportRef"
+          },
+          "acknowledgedGapIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 4096
+            }
+          }
+        },
+        "required": [
+          "expectedVersion",
+          "proposalRevisionId",
+          "action",
+          "idempotencyKey",
+          "report",
+          "acknowledgedGapIds"
+        ]
+      },
+      "BackendChangeProposalReadyReference": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "report": {
+            "$ref": "#/components/schemas/BackendAnalysisReportRef"
+          },
+          "proposalRevisionId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            "not": {
+              "const": "00000000-0000-0000-0000-000000000000"
+            }
+          },
+          "draftHash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "acknowledgedGapIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "report",
+          "proposalRevisionId",
+          "draftHash",
+          "acknowledgedGapIds"
+        ]
+      },
+      "BackendChangeRebaseAction": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "protocol": {
+            "type": "string",
+            "const": "backend-change-rebase-v1"
+          },
+          "input": {
+            "$ref": "#/components/schemas/PreviewBackendChangeProposalRebaseRequest"
+          },
+          "candidateHash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          }
+        },
+        "required": [
+          "protocol",
+          "input",
+          "candidateHash"
+        ]
+      },
+      "BackendCarriedSourceBasis": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "revisionId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            "not": {
+              "const": "00000000-0000-0000-0000-000000000000"
+            }
+          },
+          "semanticHash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          }
+        },
+        "required": [
+          "revisionId",
+          "semanticHash"
+        ]
+      },
+      "BackendChangeCarriedSourceIdentity": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "source": {
+            "$ref": "#/components/schemas/BackendQualifiedSourceIdentity"
+          },
+          "basis": {
+            "$ref": "#/components/schemas/BackendCarriedSourceBasis"
+          }
+        },
+        "required": [
+          "source",
+          "basis"
+        ]
+      },
+      "BackendRebaseResolutionOrigin": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "proposalRevisionId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            "not": {
+              "const": "00000000-0000-0000-0000-000000000000"
+            }
+          },
+          "resolutionId": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096
+          }
+        },
+        "required": [
+          "proposalRevisionId",
+          "resolutionId",
+          "reason"
+        ]
+      },
+      "BackendAnalysisResultAddress": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "recordType",
+          "id"
+        ],
+        "properties": {
+          "recordType": {
+            "type": "string",
+            "enum": [
+              "",
+              "node",
+              "edge",
+              "evidence",
+              "source",
+              "identity",
+              "artifact",
+              "desired",
+              "artifact_object",
+              "diagnostic"
+            ]
+          },
+          "id": {
+            "type": "string"
+          }
+        }
+      },
+      "BackendAnalysisResultRecord": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "service",
+          "kind",
+          "certainty",
+          "direction",
+          "depth",
+          "object",
+          "detail"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "service": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "certainty": {
+            "type": "string",
+            "enum": [
+              "confirmed",
+              "possible",
+              "unknown"
+            ]
+          },
+          "direction": {
+            "type": "string",
+            "enum": [
+              "upstream",
+              "downstream",
+              "both"
+            ]
+          },
+          "depth": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 32
+          },
+          "object": {
+            "$ref": "#/components/schemas/BackendAnalysisResultAddress"
+          },
+          "detail": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/BackendAnalysisDiffChange"
+              },
+              {
+                "$ref": "#/components/schemas/BackendAnalysisRuleResult"
+              },
+              {
+                "$ref": "#/components/schemas/BackendAnalysisWitness"
+              },
+              {
+                "$ref": "#/components/schemas/BackendAnalysisDiagnostic"
+              },
+              {
+                "$ref": "#/components/schemas/BackendAnalysisArtifactChange"
+              }
+            ]
+          }
+        }
+      },
+      "BackendChangeRebaseArtifactValue": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "pin": {
+            "$ref": "#/components/schemas/BackendArtifactPin"
+          },
+          "apiBindings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendAPIArtifactBinding"
+            }
+          },
+          "editorBindings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EditorBinding"
+            }
+          }
+        },
+        "required": [
+          "pin",
+          "apiBindings",
+          "editorBindings"
+        ]
+      },
+      "BackendChangeRebaseReplacementValue": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/BackendChangeRebasePropertyValue"
+          },
+          {
+            "$ref": "#/components/schemas/BackendChangeRebaseArtifactValue"
+          },
+          {
+            "$ref": "#/components/schemas/BackendChangeCriterion"
+          }
+        ]
+      },
+      "BackendAnalysisDiffChange": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "object": {
+            "$ref": "#/components/schemas/BackendAnalysisResultAddress"
+          },
+          "facet": {
+            "type": "string"
+          },
+          "operation": {
+            "type": "string",
+            "enum": [
+              "added",
+              "removed",
+              "modified"
+            ]
+          },
+          "kind": {
+            "type": "string"
+          },
+          "paths": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "before": {},
+          "after": {}
+        },
+        "required": [
+          "object",
+          "facet",
+          "operation",
+          "kind",
+          "paths",
+          "before",
+          "after"
+        ]
+      },
+      "BackendAnalysisProofReference": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "side": {
+            "type": "string",
+            "enum": [
+              "before",
+              "after"
+            ]
+          },
+          "targetHash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "effectiveSemanticHash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "baseRevisionId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            "not": {
+              "const": "00000000-0000-0000-0000-000000000000"
+            }
+          },
+          "status": {
+            "type": "string"
+          },
+          "evidenceIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+              "not": {
+                "const": "00000000-0000-0000-0000-000000000000"
+              }
+            }
+          },
+          "assertions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendBaseAssertionRef"
+            }
+          },
+          "reasons": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "side",
+          "targetHash",
+          "effectiveSemanticHash",
+          "baseRevisionId",
+          "status",
+          "evidenceIds",
+          "assertions",
+          "reasons"
+        ]
+      },
+      "BackendAnalysisRuleResult": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "ruleId": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          },
+          "prerequisites": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "object": {
+            "$ref": "#/components/schemas/BackendAnalysisResultAddress"
+          },
+          "status": {
+            "type": "string"
+          },
+          "severity": {
+            "type": "string"
+          },
+          "certainty": {
+            "type": "string",
+            "enum": [
+              "confirmed",
+              "possible",
+              "unknown"
+            ]
+          },
+          "message": {
+            "type": "string"
+          },
+          "evidence": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendAnalysisProofReference"
+            }
+          }
+        },
+        "required": [
+          "ruleId",
+          "version",
+          "prerequisites",
+          "object",
+          "status",
+          "severity",
+          "certainty",
+          "message",
+          "evidence"
+        ]
+      },
+      "BackendAnalysisDependencyStep": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "artifact": {
+            "$ref": "#/components/schemas/ArtifactProjectionLocator"
+          },
+          "objectHash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "from": {
+            "$ref": "#/components/schemas/BackendAnalysisResultAddress"
+          },
+          "to": {
+            "$ref": "#/components/schemas/BackendAnalysisResultAddress"
+          },
+          "context": {
+            "$ref": "#/components/schemas/BackendLineageValueRef"
+          },
+          "evidence": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendAnalysisProofReference"
+            }
+          }
+        },
+        "required": [
+          "kind",
+          "id",
+          "from",
+          "to",
+          "evidence"
+        ]
+      },
+      "BackendAnalysisWitness": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "side": {
+            "type": "string",
+            "enum": [
+              "before",
+              "after"
+            ]
+          },
+          "seed": {
+            "$ref": "#/components/schemas/BackendAnalysisResultAddress"
+          },
+          "affected": {
+            "$ref": "#/components/schemas/BackendAnalysisResultAddress"
+          },
+          "steps": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendAnalysisDependencyStep"
+            }
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "confirmed",
+              "possible",
+              "unknown"
+            ]
+          }
+        },
+        "required": [
+          "side",
+          "seed",
+          "affected",
+          "steps",
+          "status"
+        ]
+      },
+      "BackendAnalysisArtifactChange": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "before": {
+            "$ref": "#/components/schemas/ArtifactProjectionItem"
+          },
+          "after": {
+            "$ref": "#/components/schemas/ArtifactProjectionItem"
+          },
+          "beforePin": {
+            "$ref": "#/components/schemas/BackendArtifactPin"
+          },
+          "afterPin": {
+            "$ref": "#/components/schemas/BackendArtifactPin"
+          }
+        },
+        "required": []
+      },
+      "BackendChangeRebasePropertyValue": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "from",
+              "to"
+            ],
+            "properties": {
+              "from": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "to": {
+                "type": "string",
+                "format": "uuid"
+              }
+            }
+          },
+          {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          {
+            "type": "string",
+            "enum": [
+              "postgresql",
+              "sqlite"
+            ]
+          },
+          {
+            "type": "string",
+            "enum": [
+              "complete",
+              "partial",
+              "unsupported"
+            ]
+          },
+          {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "type": "string",
+            "minLength": 1
+          },
+          {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Literal UTF-8 source text; at most 65536 UTF-8 bytes, enforced atomically by the domain."
+          },
+          {
+            "type": "string",
+            "description": "Literal UTF-8 source text; at most 65536 UTF-8 bytes, enforced atomically by the domain."
+          },
+          {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "maxItems": 500,
+            "uniqueItems": true
+          },
+          {
+            "type": "string",
+            "enum": [
+              "procedure",
+              "function",
+              "trigger"
+            ]
+          },
+          {
+            "type": "string",
+            "pattern": "^[A-Z]+$",
+            "minLength": 1
+          },
+          {
+            "type": "string",
+            "pattern": "^/",
+            "minLength": 1
+          },
+          {
+            "$ref": "#/components/schemas/BackendKnownNativeString"
+          },
+          {
+            "$ref": "#/components/schemas/BackendKnownTypeFamily"
+          },
+          {
+            "$ref": "#/components/schemas/BackendKnownBoolean"
+          },
+          {
+            "$ref": "#/components/schemas/BackendKnownNullableNativeString"
+          },
+          {
+            "$ref": "#/components/schemas/BackendKnownOrdinal"
+          },
+          {
+            "type": "string",
+            "enum": [
+              "primary_key",
+              "unique",
+              "check",
+              "foreign_key"
+            ]
+          },
+          {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "maxItems": 64,
+            "uniqueItems": true
+          },
+          {
+            "$ref": "#/components/schemas/BackendKnownNullableBoolean"
+          },
+          {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendIndexTerm"
+            },
+            "minItems": 1,
+            "maxItems": 64
+          },
+          {
+            "type": "boolean"
+          },
+          {
+            "$ref": "#/components/schemas/BackendKnownMigrationOrder"
+          },
+          {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendMigrationChange"
+            },
+            "maxItems": 500
+          },
+          {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 4096
+            },
+            "maxItems": 500
+          },
+          {
+            "type": "string",
+            "format": "uuid"
+          },
+          {
+            "type": "string",
+            "enum": [
+              "complete",
+              "partial",
+              "unknown"
+            ]
+          },
+          {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendFlowPort"
+            },
+            "maxItems": 500
+          },
+          {
+            "$ref": "#/components/schemas/BackendTransactionContext"
+          },
+          {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 65536
+          },
+          {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096
+          },
+          {
+            "type": "string",
+            "const": "input"
+          },
+          {
+            "type": "string",
+            "const": "authorization"
+          },
+          {
+            "type": "string",
+            "const": "validation"
+          },
+          {
+            "type": "string",
+            "const": "condition"
+          },
+          {
+            "type": "string",
+            "const": "call"
+          },
+          {
+            "type": "string",
+            "const": "query"
+          },
+          {
+            "type": "string",
+            "const": "transform"
+          },
+          {
+            "type": "string",
+            "const": "transaction_begin"
+          },
+          {
+            "type": "string",
+            "const": "transaction_commit"
+          },
+          {
+            "type": "string",
+            "const": "transaction_rollback"
+          },
+          {
+            "type": "string",
+            "const": "return"
+          },
+          {
+            "type": "string",
+            "const": "raise"
+          },
+          {
+            "type": "string",
+            "const": "loop"
+          },
+          {
+            "type": "string",
+            "const": "parallel"
+          },
+          {
+            "type": "string",
+            "const": "join"
+          },
+          {
+            "type": "string",
+            "const": "opaque"
+          },
+          {
+            "type": "string",
+            "const": "emit"
+          },
+          {
+            "type": "string",
+            "enum": [
+              "postgresql",
+              "sqlite",
+              "unknown"
+            ]
+          },
+          {
+            "type": "string",
+            "const": "request"
+          },
+          {
+            "type": "string",
+            "const": "path"
+          },
+          {
+            "$ref": "#/components/schemas/BackendAPIFieldNameSelector"
+          },
+          {
+            "$ref": "#/components/schemas/BackendAPIFieldNativeType"
+          },
+          {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 4096,
+              "pattern": "^[^\\x00-\\x08\\x0b\\x0c\\x0e-\\x1f\\x7f-\\x9f]+$"
+            },
+            "maxItems": 250000
+          },
+          {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096,
+            "pattern": "^[^\\x00-\\x08\\x0b\\x0c\\x0e-\\x1f\\x7f-\\x9f]+$"
+          },
+          {
+            "type": "string",
+            "const": "header"
+          },
+          {
+            "type": "string",
+            "const": "cookie"
+          },
+          {
+            "type": "string",
+            "const": "body"
+          },
+          {
+            "$ref": "#/components/schemas/BackendAPIFieldBodySelector"
+          },
+          {
+            "type": "string",
+            "pattern": "^[!#$%&'*+.^_`|~0-9a-z-]+/[!#$%&'*+.^_`|~0-9a-z-]+$"
+          },
+          {
+            "type": "string",
+            "const": "response"
+          },
+          {
+            "type": "string",
+            "pattern": "^([1-5][0-9][0-9]|[1-5]XX|default)$"
+          },
+          {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendLineageValueRef"
+            },
+            "maxItems": 64,
+            "uniqueItems": true
+          },
+          {
+            "$ref": "#/components/schemas/BackendLineageValueRef"
+          },
+          {
+            "$ref": "#/components/schemas/BackendLineageTransform"
+          },
+          {
+            "$ref": "#/components/schemas/BackendLineageTransport"
+          },
+          {
+            "$ref": "#/components/schemas/BackendEventsScalar"
+          },
+          {
+            "$ref": "#/components/schemas/BackendEventsTrigger"
+          },
+          {
+            "type": "string",
+            "enum": [
+              "payload",
+              "headers",
+              "key"
+            ]
+          },
+          {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendAPIFieldPathSegment"
+            },
+            "maxItems": 32
+          },
+          {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 32,
+            "items": {
+              "$ref": "#/components/schemas/BackendRepresentationPathSegment"
+            }
+          },
+          {
+            "$ref": "#/components/schemas/BackendRepresentationKnownBoolean"
+          },
+          {
+            "$ref": "#/components/schemas/BackendRepresentationKnownCardinality"
+          },
+          {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendReferenceColumnPair"
+            },
+            "maxItems": 64
+          },
+          {
+            "$ref": "#/components/schemas/BackendKnownReferentialAction"
+          },
+          {
+            "$ref": "#/components/schemas/BackendKnownMatchType"
+          },
+          {
+            "type": "string",
+            "enum": [
+              "error",
+              "timeout",
+              "retry"
+            ]
+          },
+          {
+            "type": "string",
+            "enum": [
+              "read"
+            ]
+          },
+          {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200,
+            "pattern": "^[^\\p{Cc}]+$"
+          },
+          {
+            "type": "string",
+            "enum": [
+              "listed",
+              "unknown"
+            ]
+          },
+          {
+            "type": "string",
+            "enum": [
+              "insert",
+              "update",
+              "upsert"
+            ]
+          },
+          {
+            "type": "string",
+            "enum": [
+              "delete"
+            ]
+          },
+          {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            "not": {
+              "const": "00000000-0000-0000-0000-000000000000"
+            }
+          },
+          {
+            "type": "string",
+            "enum": [
+              "declared",
+              "unknown"
+            ]
+          }
+        ]
+      },
+      "BackendAnalysisCoverage": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/BackendCoverage"
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "status",
+              "denominator",
+              "knownObjects",
+              "gaps"
+            ],
+            "properties": {
+              "status": {
+                "type": "string",
+                "const": ""
+              },
+              "denominator": {
+                "type": "null"
+              },
+              "knownObjects": {
+                "type": "integer",
+                "const": 0
+              },
+              "gaps": {
+                "type": "array",
+                "maxItems": 0,
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        ]
       }
     }
   },
@@ -94034,7 +96972,10 @@
             "required": false,
             "schema": {
               "type": "string",
-              "const": "draft"
+              "enum": [
+                "draft",
+                "ready"
+              ]
             }
           }
         ],
@@ -94763,6 +97704,1336 @@
           }
         },
         "description": "Work with one isolated full graph proposal and its exact immutable draft baseline."
+      }
+    },
+    "/api/backend-projects/{id}/analyses": {
+      "post": {
+        "tags": [
+          "backend-projects"
+        ],
+        "operationId": "startBackendAnalysis",
+        "summary": "startBackendAnalysis",
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+              "not": {
+                "const": "00000000-0000-0000-0000-000000000000"
+              }
+            }
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "202": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendAnalysisJob"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Queue full; retry after two seconds",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "string",
+                  "const": "2"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StartBackendAnalysisRequest"
+              }
+            }
+          }
+        },
+        "description": "Uses exact immutable pins and project ownership. Analysis is static and never executes source, SQL, jobs or brokers."
+      },
+      "get": {
+        "tags": [
+          "backend-projects"
+        ],
+        "operationId": "listBackendAnalysis",
+        "summary": "listBackendAnalysis",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+              "not": {
+                "const": "00000000-0000-0000-0000-000000000000"
+              }
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "queued",
+                "running",
+                "completed",
+                "failed",
+                "cancelled",
+                "interrupted"
+              ]
+            }
+          },
+          {
+            "name": "kind",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "diff",
+                "impact"
+              ]
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 0,
+              "maxLength": 1024
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1,
+              "maximum": 500
+            }
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendAnalysisJobPage"
+                }
+              }
+            }
+          }
+        },
+        "description": "Uses exact immutable pins and project ownership. Analysis is static and never executes source, SQL, jobs or brokers."
+      }
+    },
+    "/api/backend-projects/{id}/analyses/{aid}": {
+      "get": {
+        "tags": [
+          "backend-projects"
+        ],
+        "operationId": "getBackendAnalysis",
+        "summary": "getBackendAnalysis",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+              "not": {
+                "const": "00000000-0000-0000-0000-000000000000"
+              }
+            }
+          },
+          {
+            "name": "aid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+              "not": {
+                "const": "00000000-0000-0000-0000-000000000000"
+              }
+            }
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendAnalysisJobDetail"
+                }
+              }
+            }
+          }
+        },
+        "description": "Uses exact immutable pins and project ownership. Analysis is static and never executes source, SQL, jobs or brokers."
+      }
+    },
+    "/api/backend-projects/{id}/analyses/{aid}/cancel": {
+      "post": {
+        "tags": [
+          "backend-projects"
+        ],
+        "operationId": "cancelBackendAnalysis",
+        "summary": "cancelBackendAnalysis",
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+              "not": {
+                "const": "00000000-0000-0000-0000-000000000000"
+              }
+            }
+          },
+          {
+            "name": "aid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+              "not": {
+                "const": "00000000-0000-0000-0000-000000000000"
+              }
+            }
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendAnalysisJob"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CancelBackendAnalysisRequest"
+              }
+            }
+          }
+        },
+        "description": "Uses exact immutable pins and project ownership. Analysis is static and never executes source, SQL, jobs or brokers."
+      }
+    },
+    "/api/backend-projects/{id}/analyses/{aid}/retry": {
+      "post": {
+        "tags": [
+          "backend-projects"
+        ],
+        "operationId": "retryBackendAnalysis",
+        "summary": "retryBackendAnalysis",
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+              "not": {
+                "const": "00000000-0000-0000-0000-000000000000"
+              }
+            }
+          },
+          {
+            "name": "aid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+              "not": {
+                "const": "00000000-0000-0000-0000-000000000000"
+              }
+            }
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "202": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendAnalysisJob"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Queue full; retry after two seconds",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "string",
+                  "const": "2"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RetryBackendAnalysisRequest"
+              }
+            }
+          }
+        },
+        "description": "Uses exact immutable pins and project ownership. Analysis is static and never executes source, SQL, jobs or brokers."
+      }
+    },
+    "/api/backend-projects/{id}/analyses/{aid}/results": {
+      "get": {
+        "tags": [
+          "backend-projects"
+        ],
+        "operationId": "getBackendAnalysisResults",
+        "summary": "getBackendAnalysisResults",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+              "not": {
+                "const": "00000000-0000-0000-0000-000000000000"
+              }
+            }
+          },
+          {
+            "name": "aid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+              "not": {
+                "const": "00000000-0000-0000-0000-000000000000"
+              }
+            }
+          },
+          {
+            "name": "resultVersion",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1,
+              "maximum": 9223372036854775807
+            }
+          },
+          {
+            "name": "section",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "changes",
+                "findings",
+                "witnesses",
+                "checks",
+                "gaps"
+              ]
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 0,
+              "maxLength": 1024
+            }
+          },
+          {
+            "name": "service",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "kind",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "certainty",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "confirmed",
+                "possible",
+                "unknown"
+              ]
+            }
+          },
+          {
+            "name": "direction",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "upstream",
+                "downstream",
+                "both"
+              ]
+            }
+          },
+          {
+            "name": "depth",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 0,
+              "maximum": 32
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1,
+              "maximum": 500
+            }
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendAnalysisResultPage"
+                }
+              }
+            }
+          }
+        },
+        "description": "Uses exact immutable pins and project ownership. Analysis is static and never executes source, SQL, jobs or brokers."
+      }
+    },
+    "/api/backend-projects/{id}/change-proposals/{pid}/rebase-preview": {
+      "post": {
+        "tags": [
+          "backend-projects"
+        ],
+        "operationId": "previewBackendChangeProposalRebase",
+        "summary": "previewBackendChangeProposalRebase",
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+              "not": {
+                "const": "00000000-0000-0000-0000-000000000000"
+              }
+            }
+          },
+          {
+            "name": "pid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+              "not": {
+                "const": "00000000-0000-0000-0000-000000000000"
+              }
+            }
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendChangeProposalRebaseCandidate"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PreviewBackendChangeProposalRebaseRequest"
+              }
+            }
+          }
+        },
+        "description": "Uses exact immutable pins and project ownership. Analysis is static and never executes source, SQL, jobs or brokers."
+      }
+    },
+    "/api/backend-projects/{id}/change-proposals/{pid}/rebase": {
+      "post": {
+        "tags": [
+          "backend-projects"
+        ],
+        "operationId": "applyBackendChangeProposalRebase",
+        "summary": "applyBackendChangeProposalRebase",
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+              "not": {
+                "const": "00000000-0000-0000-0000-000000000000"
+              }
+            }
+          },
+          {
+            "name": "pid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+              "not": {
+                "const": "00000000-0000-0000-0000-000000000000"
+              }
+            }
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendChangeProposalApplyResult"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApplyBackendChangeProposalRebaseRequest"
+              }
+            }
+          }
+        },
+        "description": "Uses exact immutable pins and project ownership. Analysis is static and never executes source, SQL, jobs or brokers."
+      }
+    },
+    "/api/backend-projects/{id}/change-proposals/{pid}/lifecycle": {
+      "post": {
+        "tags": [
+          "backend-projects"
+        ],
+        "operationId": "applyBackendChangeProposalLifecycle",
+        "summary": "applyBackendChangeProposalLifecycle",
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+              "not": {
+                "const": "00000000-0000-0000-0000-000000000000"
+              }
+            }
+          },
+          {
+            "name": "pid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+              "not": {
+                "const": "00000000-0000-0000-0000-000000000000"
+              }
+            }
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendChangeProposalApplyResult"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApplyBackendChangeProposalLifecycleRequest"
+              }
+            }
+          }
+        },
+        "description": "Uses exact immutable pins and project ownership. Analysis is static and never executes source, SQL, jobs or brokers."
       }
     }
   }

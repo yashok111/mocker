@@ -68,12 +68,17 @@ func TestBackendB41PublicMutationCSRF(t *testing.T) {
 	}
 	const id = "0197aaf9-5555-7000-8000-000000000001"
 	base := "/api/backend-projects/" + id + "/change-proposals"
-	for _, suffix := range []string{"", "/" + id + "/preview", "/" + id + "/commands", "/" + id + "/restore"} {
+	paths := make([]string, 0, 10)
+	paths = append(paths, "/api/backend-projects/"+id+"/analyses", "/api/backend-projects/"+id+"/analyses/"+id+"/cancel", "/api/backend-projects/"+id+"/analyses/"+id+"/retry")
+	for _, suffix := range []string{"", "/" + id + "/preview", "/" + id + "/commands", "/" + id + "/restore", "/" + id + "/rebase-preview", "/" + id + "/rebase", "/" + id + "/lifecycle"} {
+		paths = append(paths, base+suffix)
+	}
+	for _, path := range paths {
 		for _, tc := range []struct {
 			token, origin string
 			want          int
 		}{{"", "http://mocker.local", 403}, {"wrong", "http://mocker.local", 403}, {auth.CSRFToken, "http://attacker.local", 403}, {auth.CSRFToken, "http://mocker.local", 400}} {
-			r := httptest.NewRequest(http.MethodPost, "http://mocker.local"+base+suffix, strings.NewReader(`{}`))
+			r := httptest.NewRequest(http.MethodPost, "http://mocker.local"+path, strings.NewReader(`{}`))
 			r.Header.Set("Content-Type", "application/json")
 			r.Header.Set("Origin", tc.origin)
 			r.Header.Set("X-CSRF-Token", tc.token)
@@ -83,7 +88,7 @@ func TestBackendB41PublicMutationCSRF(t *testing.T) {
 			w := httptest.NewRecorder()
 			handler.ServeHTTP(w, r)
 			if w.Code != tc.want {
-				t.Fatalf("%s: %d %s", suffix, w.Code, w.Body)
+				t.Fatalf("%s: %d %s", path, w.Code, w.Body)
 			}
 		}
 	}

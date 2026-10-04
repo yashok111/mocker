@@ -59,6 +59,9 @@ func (r *Repo) prepareChangeProposal(ctx context.Context, pid, id string, in Pre
 	if err := validateChangeCommands(in.Commands); err != nil {
 		return nil, err
 	}
+	if err := r.validateAnalysisChangePreparation(ctx, pid, id, in); err != nil {
+		return nil, err
+	}
 	tx, err := r.db.R.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
 	if err != nil {
 		return nil, err
@@ -87,14 +90,18 @@ func (r *Repo) prepareChangeProposal(ctx context.Context, pid, id string, in Pre
 	if err != nil {
 		return nil, err
 	}
-	inputBytes += draftBytes + ledgerBytes
+	historicalBytes, err := changeHistoricalIdentityBytes(ctx, tx, pid, id, in.ProposalRevisionID)
+	if err != nil {
+		return nil, err
+	}
+	inputBytes += draftBytes + ledgerBytes + historicalBytes
 	reservation, err := r.reserveChangeInput(ctx, pid, inputBytes)
 	if err != nil {
 		return nil, err
 	}
 	retained := false
 	defer func() {
-		if !retained {
+		if !retained && analysisLease(ctx) == nil {
 			reservation.Release()
 		}
 	}()
@@ -107,7 +114,7 @@ func (r *Repo) prepareChangeProposal(ctx context.Context, pid, id string, in Pre
 		return nil, err
 	}
 
-	used, err := loadChangeIdentities(ctx, tx, id)
+	used, err := loadChangeReservedIdentities(ctx, tx, pid, id)
 	if err != nil {
 		return nil, err
 	}
@@ -115,7 +122,7 @@ func (r *Repo) prepareChangeProposal(ctx context.Context, pid, id string, in Pre
 	if err != nil {
 		return nil, err
 	}
-	evaluation.readBudget = &changeReadBudget{repo: r, pid: pid, reservation: reservation, bytes: inputBytes, seen: map[string]bool{"source:" + draft.BaseRevisionID: true}}
+	evaluation.readBudget = &changeReadBudget{repo: r, pid: pid, reservation: reservation, bytes: inputBytes, seen: map[string]bool{"source:" + draft.BaseRevisionID: true}, lease: analysisLease(ctx)}
 	prepared := &preparedChangeProposal{proposal: *p, draft: *draft, evaluation: evaluation, reservation: reservation, input: in}
 	if err = r.evaluateChangeDraft(ctx, tx, pid, prepared); err != nil {
 		return nil, err
@@ -193,6 +200,13 @@ func (r *Repo) evaluateChangeDraft(ctx context.Context, tx importReader, pid str
 	if len(raw) > MaxRevisionBytes {
 		return limitFault("Proposal draft exceeds materialization bounds")
 	}
+	if lease := analysisLease(ctx); lease != nil {
+		if err = lease.reconcilePrepared(ctx, int64(len(raw))); err != nil {
+			return err
+		}
+		prepared.candidate = candidate
+		return nil
+	}
 	if err = r.db.Write(ctx, func(writer *sql.Tx) error {
 		staged, err := stagingBytes(ctx, writer, pid)
 		if err != nil {
@@ -214,7 +228,11 @@ func (r *Repo) PreviewChangeProposal(ctx context.Context, pid, id string, in Pre
 	if err != nil {
 		return nil, err
 	}
-	defer prepared.reservation.Release()
+	defer func() {
+		if analysisLease(ctx) == nil {
+			prepared.reservation.Release()
+		}
+	}()
 	return prepared.candidate, nil
 }
 func (r *Repo) ApplyChangeProposal(ctx context.Context, pid, id string, in ApplyChangeProposalInput) (*ChangeProposalApplyResult, error) {
@@ -232,7 +250,11 @@ func (r *Repo) ApplyChangeProposal(ctx context.Context, pid, id string, in Apply
 	}
 	prepared, prepareErr := r.prepareChangeProposal(ctx, pid, id, PreviewChangeProposalInput{ExpectedVersion: in.ExpectedVersion, ProposalRevisionID: in.ProposalRevisionID, Commands: in.Commands})
 	if prepared != nil {
-		defer prepared.reservation.Release()
+		defer func() {
+			if analysisLease(ctx) == nil {
+				prepared.reservation.Release()
+			}
+		}()
 	}
 	err = r.db.Write(ctx, func(tx *sql.Tx) error {
 		return r.applyChangeTx(ctx, tx, changeApplyWrite{pid: pid, id: id, scope: scope, digest: digest, in: in, prepared: prepared, prepareErr: prepareErr, out: out})
@@ -243,7 +265,7 @@ func (r *Repo) ApplyChangeProposal(ctx context.Context, pid, id string, in Apply
 	return out, nil
 }
 func updateChangeAggregate(ctx context.Context, tx *sql.Tx, p ChangeProposal) error {
-	_, err := tx.ExecContext(ctx, `UPDATE backend_change_proposals SET version=?,current_draft_revision_id=?,current_draft_hash=?,updated_at=? WHERE project_id=? AND id=?`, p.Version, p.CurrentDraftRevisionID, p.CurrentDraftHash, p.UpdatedAt.Format(time.RFC3339Nano), p.ProjectID, p.ID)
+	_, err := tx.ExecContext(ctx, `UPDATE backend_change_proposals SET status='draft',ready_reference=NULL,version=?,current_draft_revision_id=?,current_draft_hash=?,updated_at=? WHERE project_id=? AND id=?`, p.Version, p.CurrentDraftRevisionID, p.CurrentDraftHash, p.UpdatedAt.Format(time.RFC3339Nano), p.ProjectID, p.ID)
 	return err
 }
 
@@ -291,6 +313,8 @@ func (r *Repo) applyChangeTx(ctx context.Context, tx *sql.Tx, w changeApplyWrite
 	rev.Author = "user"
 	rev.Summary = "Apply desired graph commands"
 	p.Version++
+	p.Status = "draft"
+	p.ReadyReference = nil
 	p.CurrentDraftRevisionID, p.CurrentDraftHash, p.UpdatedAt = rev.ID, rev.SemanticHash, now
 	if err = persistChangeRevision(ctx, tx, *p, rev, "apply", "", in.Commands, prepared.evaluation.newIDs); err != nil {
 		return err

@@ -7,6 +7,7 @@ import (
 
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/yashok111/mocker/api"
+	"github.com/yashok111/mocker/internal/backendanalysis"
 	"github.com/yashok111/mocker/internal/backendmodel"
 	"github.com/yashok111/mocker/internal/jsonx"
 )
@@ -22,6 +23,9 @@ func addBackendChangeProposalTools(s *sdk.Server, lb *loopback) {
 		{"get_backend_change_proposal", "GET " + base + "/{pid}", "", true},
 		{"preview_backend_change_proposal_commands", "POST " + base + "/{pid}/preview", "PreviewBackendChangeProposalCommandsRequest", true},
 		{"apply_backend_change_proposal_commands", "POST " + base + "/{pid}/commands", "ApplyBackendChangeProposalCommandsRequest", false},
+		{"preview_backend_change_proposal_rebase", "POST " + base + "/{pid}/rebase-preview", "PreviewBackendChangeProposalRebaseRequest", true},
+		{"apply_backend_change_proposal_rebase", "POST " + base + "/{pid}/rebase", "ApplyBackendChangeProposalRebaseRequest", false},
+		{"apply_backend_change_proposal_lifecycle", "POST " + base + "/{pid}/lifecycle", "ApplyBackendChangeProposalLifecycleRequest", false},
 		{"restore_backend_change_proposal", "POST " + base + "/{pid}/restore", "RestoreBackendChangeProposalRequest", false},
 	} {
 		var schema map[string]any
@@ -45,7 +49,7 @@ func addBackendChangeProposalTools(s *sdk.Server, lb *loopback) {
 				required = append(required, "proposalId")
 			} else {
 				fields["baseRevisionId"] = id
-				fields["status"] = map[string]any{"type": "string", "const": "draft"}
+				fields["status"] = map[string]any{"type": "string", "enum": []string{"draft", "ready"}}
 			}
 			schema = designScenarioSchemaObject(required, fields)
 		}
@@ -115,6 +119,18 @@ func backendAdmissionFault(err error) *sdk.CallToolResult {
 func validateBackendChangeToolBody(name string, body []byte) error {
 	var input any
 	switch name {
+	case "start_backend_analysis":
+		input = new(backendanalysis.StartInput)
+	case "cancel_backend_analysis":
+		input = new(backendanalysis.CancelInput)
+	case "retry_backend_analysis":
+		input = new(backendanalysis.RetryInput)
+	case "preview_backend_change_proposal_rebase":
+		input = new(backendmodel.PreviewChangeProposalRebaseInput)
+	case "apply_backend_change_proposal_rebase":
+		input = new(backendmodel.ApplyChangeProposalRebaseInput)
+	case "apply_backend_change_proposal_lifecycle":
+		input = new(backendmodel.ApplyChangeProposalLifecycleInput)
 	case "create_backend_change_proposal":
 		input = new(backendmodel.CreateChangeProposalInput)
 	case "preview_backend_change_proposal_commands":
@@ -126,8 +142,12 @@ func validateBackendChangeToolBody(name string, body []byte) error {
 	default:
 		return nil
 	}
-	if len(body) > backendmodel.MaxChangeProposalCommandBytes {
-		return fmt.Errorf("full proposal request exceeds 1 MiB")
+	maxBytes := backendmodel.MaxChangeProposalCommandBytes
+	if name == "start_backend_analysis" || name == "cancel_backend_analysis" || name == "retry_backend_analysis" {
+		maxBytes = 2 << 20
+	}
+	if len(body) > maxBytes {
+		return fmt.Errorf("backend request exceeds operation body limit")
 	}
 	return json.Unmarshal(body, input, json.RejectUnknownMembers(true))
 }

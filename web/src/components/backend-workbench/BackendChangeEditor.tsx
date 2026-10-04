@@ -1,3 +1,6 @@
+import { BackendAnalysisJobs } from "./BackendAnalysisJobs";
+import { BackendChangeRebase } from "./BackendChangeRebase";
+import { useBackendAnalysisRecovery, type AnalysisAttempt } from "./backendAnalysisRecovery";
 import { useBackendChangeRecovery } from "./useBackendChangeRecovery";
 import { BackendChangeRecoveryNotice } from "./BackendChangeRecoveryNotice";
 import { useEffect, useRef, useState } from "react";
@@ -53,6 +56,9 @@ export function BackendChangeEditor({
 }) {
   const recoveryKey = `backend-change-attempt:${projectId}:${detail.proposal.id}`;
   const [base, setBase] = useState(detail);
+  const analysisRecovery = useBackendAnalysisRecovery(projectId);
+  const [rebaseDirty, setRebaseDirty] = useState(false);
+  const [inputEpoch, setInputEpoch] = useState(0);
   const recovery = useBackendChangeRecovery(recoveryKey);
   const attempt = recovery.attempt;
   const [commands, setCommands] = useState<BackendChangeProposalCommand[]>(() => {
@@ -82,8 +88,22 @@ export function BackendChangeEditor({
     onDirtyRef.current = onDirty;
   }, [onDirty]);
   const historical = base.revision.id !== base.proposal.currentDraftRevisionId;
-  const locked = busy || !!attempt || conflict || readOnly || historical || recovery.blocked;
-  const dirty = commands.length > 0 || !!attempt || formDirty || recovery.blocked;
+  const locked =
+    rebaseDirty ||
+    analysisRecovery.blocked ||
+    busy ||
+    !!attempt ||
+    conflict ||
+    readOnly ||
+    historical ||
+    recovery.blocked;
+  const dirty =
+    rebaseDirty ||
+    analysisRecovery.blocked ||
+    commands.length > 0 ||
+    !!attempt ||
+    formDirty ||
+    recovery.blocked;
   useEffect(() => {
     onDirtyRef.current?.(dirty);
     const leave = (event: BeforeUnloadEvent) => {
@@ -106,6 +126,45 @@ export function BackendChangeEditor({
   function storeAttempt(value: ChangeAttempt | null) {
     return value ? recovery.persist(value) : recovery.clear();
   }
+  useEffect(() => {
+    const acceptRecovered = (event: Event) => {
+      const accepted = (event as CustomEvent<{ attempt: AnalysisAttempt; result: unknown }>).detail;
+      if (
+        !accepted ||
+        !["ready", "rebase"].includes(accepted.attempt.kind) ||
+        accepted.attempt.owner.proposalId !== base.proposal.id ||
+        !("proposalRevisionId" in accepted.attempt.input) ||
+        accepted.attempt.input.proposalRevisionId !== base.revision.id
+      )
+        return;
+      const result = accepted.result as BackendChangeProposalApplyResult;
+      const next = {
+        ...base,
+        proposal: result.proposal,
+        revision: result.revision,
+        history:
+          accepted.attempt.kind === "rebase"
+            ? [
+                {
+                  id: result.revision.id,
+                  parentRevisionId: result.revision.parentRevisionId,
+                  semanticHash: result.revision.semanticHash,
+                  author: result.revision.author,
+                  summary: result.revision.summary,
+                  createdAt: result.revision.createdAt,
+                },
+                ...base.history.filter((r) => r.id !== result.revision.id),
+              ]
+            : base.history,
+      };
+      setBase(next);
+      setPreview(null);
+      if (accepted.attempt.kind === "rebase") setInputEpoch((value) => value + 1);
+      onSaved(next);
+    };
+    window.addEventListener("backend-analysis-accepted", acceptRecovered);
+    return () => window.removeEventListener("backend-analysis-accepted", acceptRecovered);
+  }, [base, onSaved]);
   const identities = useQuery({
     queryKey: [
       "backend-change-identities",
@@ -119,6 +178,7 @@ export function BackendChangeEditor({
     queryFn: ({ signal }) => readChangeIdentities(projectId, base, signal),
   });
   function localChange(next: BackendChangeProposalCommand[]) {
+    setInputEpoch((value) => value + 1);
     epoch.current++;
     controller.current?.abort();
     setUndo((previous) => [...previous.slice(-49), structuredClone(commands)]);
@@ -204,6 +264,7 @@ export function BackendChangeEditor({
         ...base.history.filter((item) => item.id !== result.revision.id),
       ],
     };
+    setInputEpoch((value) => value + 1);
     setBase(next);
     setCommands([]);
     setUndo([]);
@@ -218,7 +279,17 @@ export function BackendChangeEditor({
     onSaved(next);
   }
   async function mutate(kind: "apply" | "restore") {
-    if (busy || conflict || readOnly || recovery.cleanupPending || (!attempt && recovery.blocked))
+    if (
+      analysisRecovery.busy ||
+      analysisRecovery.attempt ||
+      analysisRecovery.error ||
+      rebaseDirty ||
+      busy ||
+      conflict ||
+      readOnly ||
+      recovery.cleanupPending ||
+      (!attempt && recovery.blocked)
+    )
       return;
     if (attempt && attempt.kind !== kind) return;
     let next = attempt;
@@ -426,7 +497,10 @@ export function BackendChangeEditor({
               }}
               onDirtyChange={(value) => {
                 setFormDirty(value);
-                if (value) setPreview(null);
+                if (value) {
+                  setPreview(null);
+                  setInputEpoch((epoch) => epoch + 1);
+                }
               }}
               onCancel={
                 editing
@@ -470,6 +544,7 @@ export function BackendChangeEditor({
             variant="subtle"
             disabled={locked || undo.length === 0}
             onClick={() => {
+              setInputEpoch((value) => value + 1);
               const previous = undo.at(-1)!;
               setCommands(previous);
               setUndo(undo.slice(0, -1));
@@ -623,6 +698,54 @@ export function BackendChangeEditor({
           ))}
         </ol>
       </details>
+      <BackendAnalysisJobs
+        projectId={projectId}
+        sourceRevisionId={base.revision.baseRevisionId}
+        proposal={readOnly || historical ? undefined : base}
+        dirty={commands.length > 0 || formDirty || rebaseDirty}
+        inputEpoch={inputEpoch}
+        disabled={formDirty || (commands.length > 0 && !preview?.value.candidateHash)}
+        target={
+          commands.length && preview?.value.candidateHash
+            ? {
+                commandPreview: {
+                  changeProposal: {
+                    proposalId: base.proposal.id,
+                    proposalRevisionId: base.revision.id,
+                  },
+                  expectedVersion: base.proposal.version,
+                  commands,
+                  candidateHash: preview.value.candidateHash,
+                },
+              }
+            : {
+                changeProposal: {
+                  proposalId: base.proposal.id,
+                  proposalRevisionId: base.revision.id,
+                },
+              }
+        }
+        onSaved={(value) => {
+          setBase(value);
+          onSaved(value);
+        }}
+      />
+      {!readOnly && !historical && (
+        <BackendChangeRebase
+          key={base.revision.id}
+          projectId={projectId}
+          detail={base}
+          identities={identities.data}
+          disabled={busy || commands.length > 0 || formDirty || !!attempt || recovery.blocked}
+          onDirty={setRebaseDirty}
+          onSaved={(value) => {
+            setBase(value);
+            setInputEpoch((epoch) => epoch + 1);
+            setPreview(null);
+            onSaved(value);
+          }}
+        />
+      )}
       <BackendEffectiveViews
         projectId={projectId}
         target={{

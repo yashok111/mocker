@@ -6,8 +6,8 @@ metadata:
   workflowVersion: "7"
   requiredModelSchemaVersions: "[\"1\",\"2\",\"3\",\"4\",\"5\",\"6\"]"
   requiredCapabilities: "[\"backend-projects\",\"backend-revisions\",\"backend-graph-query\",\"backend-source-import\",\"backend-source-reconcile\",\"backend-revision-compare\",\"backend-relational-import\",\"backend-database-query\",\"backend-database-er\",\"backend-runtime-flow-import\",\"backend-flow-query\",\"backend-data-access-query\",\"backend-field-lineage-import\",\"backend-field-lineage-query\",\"backend-events-import\",\"backend-events-query\",\"backend-source-sync\",\"backend-representations\"]"
-  guideSetId: "sha256:5a8d1fe6bc274c7b60621c826a5fcca31e4ab6b1c6e8f885a40d90abfbbeebdd"
-  manifestHash: "sha256:5a8d1fe6bc274c7b60621c826a5fcca31e4ab6b1c6e8f885a40d90abfbbeebdd"
+  guideSetId: "sha256:dfb9851bf1c8ba63fe44094c929a300267ffbe0761f365ab1914fca3ead729b5"
+  manifestHash: "sha256:dfb9851bf1c8ba63fe44094c929a300267ffbe0761f365ab1914fca3ead729b5"
 ---
 
 # Source graph import and reconciliation
@@ -18,14 +18,14 @@ claims with evidence, not runtime observations. Relational import retains native
 ordered keys/FKs, unknowns and contradictions without choosing a truth by name. This workflow does
 not execute the inspected application, package scripts, SQL, migrations or bodies. Runtime source
 flows/query accesses use schema3/4/5; field lineage uses source4/5. Source5 adds evidence-backed
-events/jobs/service calls and contextual fields. DB edits remain separate draft proposals. The legacy procedure below does not provide incremental scopes or provider migration; select sync1 for those composed-source operations. Backend impact remains unavailable. No source claim is executed application
+events/jobs/service calls and contextual fields. DB edits remain separate draft proposals. The legacy procedure below does not provide incremental scopes or provider migration; select sync2 for those composed-source operations. Durable static diff/impact uses change2/backend-analysis-jobs in the same guide set. No source claim is executed application
 behavior.
 
 ## Select a compatible complete procedure before writes
 
 Call `get_server_config` and `get_backend_capabilities`. Classify foundation, relational,
 runtime-flow, field-lineage or events work. Decode installed schema/capability JSON lists. This leaf
-targets import7 with preserved schema1–5 branches and explicit source6 delegation to sync1; verify all listed model versions and capabilities. Verify tools, per-profile kinds and
+targets import7 with preserved schema1–5 branches and explicit source6 delegation to sync2; verify all listed model versions and capabilities. Verify tools, per-profile kinds and
 transitions: foundation-graph-v1, relational-graph-v1, runtime-flow-v1, field-lineage-v1 and
 events-service-v1. Matching tools or partial schema intersection cannot qualify. Runtime requires
 schema3/4/5 and runtime import/flow/access capabilities; relational requires schema2. A narrower
@@ -68,7 +68,7 @@ writes; then return to import.
 
 ## Choose legacy import or composed sync explicitly
 
-Import7 preserves the source1–5 capture/extraction, adjacent extension, batching, audit and receipt procedures below. A composed source6 write selects sync1/backend-sync in this same verified set. Inspect the selected repository/provider descriptor as well as the head schema: a source6 head can retain a five-profile partition that needs explicit whole-source5→6 extension when that partition is reconciled. New source6 claims, qualified references and resolution decisions follow sync1; never send legacy top-level graphScope/repositoryId in a composed Begin.
+Import7 preserves the source1–5 capture/extraction, adjacent extension, batching, audit and receipt procedures below. A composed source6 write selects sync2/backend-sync in this same verified set. Inspect the selected repository/provider descriptor as well as the head schema: a source6 head can retain a five-profile partition that needs explicit whole-source5→6 extension when that partition is reconciled. New source6 claims, qualified references and resolution decisions follow sync2; never send legacy top-level graphScope/repositoryId in a composed Begin.
 
 The common model/protocol/recovery topics describe source6 provenance and exact recovery while retaining the legacy wire. Required profiles and scope fields are chosen by the selected protocol, not inferred from matching file names. Pure comparison/inspection does not authorize a new import.
 
@@ -195,5 +195,5 @@ pins/bindings and stale/orphan labels; no new pin input.
 | mocker-backend-import | 7 | 1,2,3,4,5,6 |  | backend-projects, backend-revisions, backend-graph-query, backend-source-import, backend-source-reconcile, backend-revision-compare, backend-relational-import, backend-database-query, backend-database-er, backend-runtime-flow-import, backend-flow-query, backend-data-access-query, backend-field-lineage-import, backend-field-lineage-query, backend-events-import, backend-events-query, backend-source-sync, backend-representations |
 | mocker-backend-database | 7 | 2,3,4,5,6 | proposal-relational-v1,saved-view-v1,proposal-graph-v1,saved-view-v2 | backend-projects, backend-revisions, backend-graph-query, backend-database-query, backend-database-er, backend-db-proposals, backend-db-typed-edits, backend-flow-query, backend-data-access-query, backend-saved-views, backend-field-lineage-query, backend-events-query, backend-change-proposals, backend-source-assertions, backend-saved-views-v2 |
 | mocker-backend-inspect | 7 | 3,4,5,6 | saved-view-v1,api-artifact-pins-v1,backend-editor-artifacts-v1,proposal-graph-v1,saved-view-v2,import-candidate-v1 | backend-projects, backend-revisions, backend-graph-query, backend-flow-query, backend-data-access-query, backend-saved-views, backend-field-lineage-query, backend-api-artifact-pins, backend-editor-projections, backend-events-query, backend-source-assertions, backend-import-candidate, backend-change-proposals, backend-representations, backend-saved-views-v2 |
-| mocker-backend-sync | 1 | 1,5,6 | import-candidate-v1 | backend-projects, backend-revisions, backend-graph-query, backend-source-import, backend-source-sync, backend-source-incremental-sync, backend-source-assertions, backend-import-candidate, backend-representations |
-| mocker-backend-change | 1 | 5,6 | proposal-graph-v1 | backend-projects, backend-revisions, backend-graph-query, backend-change-proposals, backend-change-typed-edits, backend-source-assertions, backend-representations |
+| mocker-backend-sync | 2 | 1,5,6 | import-candidate-v1 | backend-projects, backend-revisions, backend-graph-query, backend-source-import, backend-source-sync, backend-source-incremental-sync, backend-source-assertions, backend-import-candidate, backend-representations, backend-analysis-jobs, backend-analysis-diff, backend-analysis-impact |
+| mocker-backend-change | 2 | 5,6 | proposal-graph-v1 | backend-projects, backend-revisions, backend-graph-query, backend-change-proposals, backend-change-typed-edits, backend-source-assertions, backend-representations, backend-analysis-jobs, backend-analysis-diff, backend-analysis-impact, backend-change-rebase, backend-change-ready |

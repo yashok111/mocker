@@ -149,6 +149,335 @@ export const backendChangeSchemas: Record<string, ChangeSchema> = {
       "idempotencyKey",
     ],
   },
+  ApplyBackendChangeProposalLifecycleRequest: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      expectedVersion: {
+        type: "integer",
+        format: "int64",
+        minimum: 1,
+        maximum: 9223372036854776000,
+      },
+      proposalRevisionId: {
+        type: "string",
+        format: "uuid",
+        pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+        not: {
+          const: "00000000-0000-0000-0000-000000000000",
+        },
+      },
+      action: {
+        type: "string",
+        const: "ready",
+      },
+      idempotencyKey: {
+        type: "string",
+        minLength: 1,
+        maxLength: 128,
+        pattern: "^[!-~]+$",
+      },
+      report: {
+        $ref: "#/components/schemas/BackendAnalysisReportRef",
+      },
+      acknowledgedGapIds: {
+        type: "array",
+        items: {
+          type: "string",
+          minLength: 1,
+          maxLength: 4096,
+        },
+      },
+    },
+    required: [
+      "expectedVersion",
+      "proposalRevisionId",
+      "action",
+      "idempotencyKey",
+      "report",
+      "acknowledgedGapIds",
+    ],
+  },
+  ApplyBackendChangeProposalRebaseRequest: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      expectedVersion: {
+        type: "integer",
+        format: "int64",
+        minimum: 1,
+        maximum: 9223372036854776000,
+      },
+      proposalRevisionId: {
+        type: "string",
+        format: "uuid",
+        pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+        not: {
+          const: "00000000-0000-0000-0000-000000000000",
+        },
+      },
+      newBaseRevisionId: {
+        type: "string",
+        format: "uuid",
+        pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+        not: {
+          const: "00000000-0000-0000-0000-000000000000",
+        },
+      },
+      identityResolutions: {
+        type: "array",
+        items: {
+          $ref: "#/components/schemas/BackendChangeRebaseIdentityResolution",
+        },
+      },
+      resolutions: {
+        type: "array",
+        items: {
+          $ref: "#/components/schemas/BackendChangeRebaseResolution",
+        },
+      },
+      repairCommands: {
+        type: "array",
+        items: {
+          $ref: "#/components/schemas/BackendChangeProposalCommand",
+        },
+        maxItems: 100,
+      },
+      candidateHash: {
+        type: "string",
+        pattern: "^[a-f0-9]{64}$",
+      },
+      idempotencyKey: {
+        type: "string",
+        minLength: 1,
+        maxLength: 128,
+        pattern: "^[!-~]+$",
+      },
+    },
+    required: [
+      "expectedVersion",
+      "proposalRevisionId",
+      "newBaseRevisionId",
+      "identityResolutions",
+      "resolutions",
+      "repairCommands",
+      "candidateHash",
+      "idempotencyKey",
+    ],
+  },
+  ArtifactAPIOperationData: {
+    type: "object",
+    additionalProperties: false,
+    required: ["operationKey", "method", "path", "summary", "documentJSON"],
+    properties: {
+      operationKey: {
+        type: "string",
+      },
+      method: {
+        type: "string",
+      },
+      path: {
+        type: "string",
+      },
+      summary: {
+        type: "string",
+      },
+      documentJSON: {
+        type: "string",
+      },
+    },
+  },
+  ArtifactContractSource: {
+    type: "object",
+    additionalProperties: false,
+    required: ["designId", "revisionId", "version"],
+    properties: {
+      designId: {
+        $ref: "#/components/schemas/APIArtifactID",
+      },
+      revisionId: {
+        $ref: "#/components/schemas/APIArtifactID",
+      },
+      version: {
+        type: "string",
+        anyOf: [
+          {
+            $ref: "#/components/schemas/APIArtifactID",
+          },
+          {
+            type: "string",
+            const: "0",
+          },
+        ],
+        description:
+          "Canonical decimal int64 source version. Existing COPY provenance may preserve zero; linked verification requires the exact positive owner version.",
+      },
+    },
+  },
+  ArtifactDiagnostic: {
+    type: "object",
+    additionalProperties: false,
+    required: ["code", "message"],
+    properties: {
+      code: {
+        type: "string",
+      },
+      severity: {
+        type: "string",
+      },
+      message: {
+        type: "string",
+      },
+      artifact: {
+        $ref: "#/components/schemas/ArtifactKey",
+      },
+      selector: {
+        $ref: "#/components/schemas/EditorSelector",
+      },
+      locator: {
+        $ref: "#/components/schemas/ArtifactProjectionLocator",
+      },
+      sourceNodeIds: {
+        type: "array",
+        items: {
+          type: "string",
+          format: "uuid",
+        },
+      },
+      pointer: {
+        type: "string",
+      },
+    },
+  },
+  ArtifactEmbeddedContract: {
+    type: "object",
+    additionalProperties: false,
+    required: ["contractId", "mode", "documentHash", "originStatus"],
+    properties: {
+      contractId: {
+        type: "string",
+        minLength: 1,
+        maxLength: 50000,
+      },
+      mode: {
+        type: "string",
+        enum: ["linked", "copy"],
+      },
+      documentHash: {
+        type: "string",
+        pattern: "^[a-f0-9]{64}$",
+      },
+      origin: {
+        $ref: "#/components/schemas/ArtifactContractSource",
+      },
+      originStatus: {
+        type: "string",
+      },
+      apiContentHash: {
+        type: "string",
+        pattern: "^[a-f0-9]{64}$",
+      },
+      currentDraftRevisionId: {
+        $ref: "#/components/schemas/APIArtifactID",
+      },
+    },
+  },
+  ArtifactEventMapEdge: {
+    type: "object",
+    additionalProperties: false,
+    required: ["id", "kind", "source", "target", "label", "locator"],
+    properties: {
+      id: {
+        type: "string",
+      },
+      kind: {
+        type: "string",
+      },
+      source: {
+        type: "string",
+      },
+      target: {
+        type: "string",
+      },
+      label: {
+        type: "string",
+      },
+      locator: {
+        $ref: "#/components/schemas/ArtifactEventMapLocator",
+      },
+    },
+  },
+  ArtifactEventMapLocator: {
+    type: "object",
+    additionalProperties: false,
+    required: ["pointer"],
+    properties: {
+      pointer: {
+        type: "string",
+      },
+      entityId: {
+        type: "string",
+      },
+      contractId: {
+        type: "string",
+      },
+      operationId: {
+        type: "string",
+      },
+      participantId: {
+        type: "string",
+      },
+      httpContractId: {
+        type: "string",
+      },
+      operationKey: {
+        type: "string",
+      },
+      diagramId: {
+        type: "string",
+      },
+      transitionId: {
+        type: "string",
+      },
+      mode: {
+        type: "string",
+      },
+      method: {
+        type: "string",
+      },
+      path: {
+        type: "string",
+      },
+      pinnedRevisionId: {
+        $ref: "#/components/schemas/APIArtifactID",
+      },
+    },
+  },
+  ArtifactEventMapNode: {
+    type: "object",
+    additionalProperties: false,
+    required: ["id", "kind", "label", "locator"],
+    properties: {
+      id: {
+        type: "string",
+      },
+      kind: {
+        type: "string",
+      },
+      label: {
+        type: "string",
+      },
+      locator: {
+        $ref: "#/components/schemas/ArtifactEventMapLocator",
+      },
+      groupId: {
+        type: "string",
+      },
+      clientId: {
+        type: "string",
+      },
+    },
+  },
   ArtifactKey: {
     type: "object",
     additionalProperties: false,
@@ -160,6 +489,1712 @@ export const backendChangeSchemas: Record<string, ChangeSchema> = {
       },
       id: {
         $ref: "#/components/schemas/APIArtifactID",
+      },
+    },
+  },
+  ArtifactOwnerAddress: {
+    type: "object",
+    additionalProperties: false,
+    required: ["pointer"],
+    properties: {
+      pointer: {
+        type: "string",
+      },
+      entityId: {
+        type: "string",
+      },
+      messageId: {
+        type: "string",
+      },
+      participantId: {
+        type: "string",
+      },
+      fragmentId: {
+        type: "string",
+      },
+      branchId: {
+        type: "string",
+      },
+      contractId: {
+        type: "string",
+      },
+      operationId: {
+        type: "string",
+      },
+      channelId: {
+        type: "string",
+      },
+      schemaId: {
+        type: "string",
+      },
+      serverId: {
+        type: "string",
+      },
+      diagramId: {
+        type: "string",
+      },
+      stateId: {
+        type: "string",
+      },
+      transitionId: {
+        type: "string",
+      },
+      ruleId: {
+        type: "string",
+      },
+      nodeId: {
+        type: "string",
+      },
+      edgeId: {
+        type: "string",
+      },
+      operationKey: {
+        type: "string",
+      },
+      eventMap: {
+        $ref: "#/components/schemas/ArtifactEventMapLocator",
+      },
+    },
+  },
+  ArtifactProjectionData: {
+    oneOf: [
+      {
+        $ref: "#/components/schemas/ArtifactProjectionDataParticipant",
+      },
+      {
+        $ref: "#/components/schemas/ArtifactProjectionDataSequenceMessage",
+      },
+      {
+        $ref: "#/components/schemas/ArtifactProjectionDataFragment",
+      },
+      {
+        $ref: "#/components/schemas/ArtifactProjectionDataStateDiagram",
+      },
+      {
+        $ref: "#/components/schemas/ArtifactProjectionDataState",
+      },
+      {
+        $ref: "#/components/schemas/ArtifactProjectionDataStateTransition",
+      },
+      {
+        $ref: "#/components/schemas/ArtifactProjectionDataResponseRule",
+      },
+      {
+        $ref: "#/components/schemas/ArtifactProjectionDataResponseNode",
+      },
+      {
+        $ref: "#/components/schemas/ArtifactProjectionDataResponseEdge",
+      },
+      {
+        $ref: "#/components/schemas/ArtifactProjectionDataEventNode",
+      },
+      {
+        $ref: "#/components/schemas/ArtifactProjectionDataEventEdge",
+      },
+      {
+        $ref: "#/components/schemas/ArtifactProjectionDataEventServer",
+      },
+      {
+        $ref: "#/components/schemas/ArtifactProjectionDataEventChannel",
+      },
+      {
+        $ref: "#/components/schemas/ArtifactProjectionDataEventMessage",
+      },
+      {
+        $ref: "#/components/schemas/ArtifactProjectionDataEventSchema",
+      },
+      {
+        $ref: "#/components/schemas/ArtifactProjectionDataEventContract",
+      },
+      {
+        $ref: "#/components/schemas/ArtifactProjectionDataEventOperation",
+      },
+      {
+        $ref: "#/components/schemas/ArtifactProjectionDataApiOperation",
+      },
+      {
+        $ref: "#/components/schemas/ArtifactProjectionDataUnsupported",
+      },
+    ],
+    discriminator: {
+      propertyName: "kind",
+    },
+  },
+  ArtifactProjectionDataApiOperation: {
+    type: "object",
+    additionalProperties: false,
+    required: ["kind", "apiOperation"],
+    properties: {
+      kind: {
+        type: "string",
+        const: "api_operation",
+      },
+      apiOperation: {
+        $ref: "#/components/schemas/ArtifactAPIOperationData",
+      },
+    },
+  },
+  ArtifactProjectionDataEventChannel: {
+    type: "object",
+    additionalProperties: false,
+    required: ["kind", "eventChannel"],
+    properties: {
+      kind: {
+        type: "string",
+        const: "event_channel",
+      },
+      eventChannel: {
+        $ref: "#/components/schemas/DesignScenarioEventChannel",
+      },
+    },
+  },
+  ArtifactProjectionDataEventContract: {
+    type: "object",
+    additionalProperties: false,
+    required: ["kind", "eventContract"],
+    properties: {
+      kind: {
+        type: "string",
+        const: "event_contract",
+      },
+      eventContract: {
+        $ref: "#/components/schemas/DesignScenarioEventContract",
+      },
+    },
+  },
+  ArtifactProjectionDataEventEdge: {
+    type: "object",
+    additionalProperties: false,
+    required: ["kind", "eventEdge"],
+    properties: {
+      kind: {
+        type: "string",
+        const: "event_edge",
+      },
+      eventEdge: {
+        $ref: "#/components/schemas/ArtifactEventMapEdge",
+      },
+    },
+  },
+  ArtifactProjectionDataEventMessage: {
+    type: "object",
+    additionalProperties: false,
+    required: ["kind", "eventMessage"],
+    properties: {
+      kind: {
+        type: "string",
+        const: "event_message",
+      },
+      eventMessage: {
+        $ref: "#/components/schemas/DesignScenarioEventMessage",
+      },
+    },
+  },
+  ArtifactProjectionDataEventNode: {
+    type: "object",
+    additionalProperties: false,
+    required: ["kind", "eventNode"],
+    properties: {
+      kind: {
+        type: "string",
+        const: "event_node",
+      },
+      eventNode: {
+        $ref: "#/components/schemas/ArtifactEventMapNode",
+      },
+    },
+  },
+  ArtifactProjectionDataEventOperation: {
+    type: "object",
+    additionalProperties: false,
+    required: ["kind", "eventOperation"],
+    properties: {
+      kind: {
+        type: "string",
+        const: "event_operation",
+      },
+      eventOperation: {
+        $ref: "#/components/schemas/DesignScenarioEventOperation",
+      },
+    },
+  },
+  ArtifactProjectionDataEventSchema: {
+    type: "object",
+    additionalProperties: false,
+    required: ["kind", "eventSchema"],
+    properties: {
+      kind: {
+        type: "string",
+        const: "event_schema",
+      },
+      eventSchema: {
+        $ref: "#/components/schemas/DesignScenarioEventSchema",
+      },
+    },
+  },
+  ArtifactProjectionDataEventServer: {
+    type: "object",
+    additionalProperties: false,
+    required: ["kind", "eventServer"],
+    properties: {
+      kind: {
+        type: "string",
+        const: "event_server",
+      },
+      eventServer: {
+        $ref: "#/components/schemas/DesignScenarioEventServer",
+      },
+    },
+  },
+  ArtifactProjectionDataFragment: {
+    type: "object",
+    additionalProperties: false,
+    required: ["kind", "fragment"],
+    properties: {
+      kind: {
+        type: "string",
+        const: "fragment",
+      },
+      fragment: {
+        $ref: "#/components/schemas/DesignScenarioFragment",
+      },
+    },
+  },
+  ArtifactProjectionDataParticipant: {
+    type: "object",
+    additionalProperties: false,
+    required: ["kind", "participant"],
+    properties: {
+      kind: {
+        type: "string",
+        const: "participant",
+      },
+      participant: {
+        $ref: "#/components/schemas/DesignScenarioParticipant",
+      },
+    },
+  },
+  ArtifactProjectionDataResponseEdge: {
+    type: "object",
+    additionalProperties: false,
+    required: ["kind", "responseEdge"],
+    properties: {
+      kind: {
+        type: "string",
+        const: "response_edge",
+      },
+      responseEdge: {
+        $ref: "#/components/schemas/ResponseRuleEdge",
+      },
+    },
+  },
+  ArtifactProjectionDataResponseNode: {
+    type: "object",
+    additionalProperties: false,
+    required: ["kind", "responseNode"],
+    properties: {
+      kind: {
+        type: "string",
+        const: "response_node",
+      },
+      responseNode: {
+        $ref: "#/components/schemas/ResponseRuleNode",
+      },
+    },
+  },
+  ArtifactProjectionDataResponseRule: {
+    type: "object",
+    additionalProperties: false,
+    required: ["kind", "responseRule"],
+    properties: {
+      kind: {
+        type: "string",
+        const: "response_rule",
+      },
+      responseRule: {
+        $ref: "#/components/schemas/ResponseRule",
+      },
+    },
+  },
+  ArtifactProjectionDataSequenceMessage: {
+    type: "object",
+    additionalProperties: false,
+    required: ["kind", "sequenceMessage"],
+    properties: {
+      kind: {
+        type: "string",
+        const: "sequence_message",
+      },
+      sequenceMessage: {
+        $ref: "#/components/schemas/DesignScenarioMessage",
+      },
+    },
+  },
+  ArtifactProjectionDataState: {
+    type: "object",
+    additionalProperties: false,
+    required: ["kind", "state"],
+    properties: {
+      kind: {
+        type: "string",
+        const: "state",
+      },
+      state: {
+        $ref: "#/components/schemas/StateDiagramState",
+      },
+    },
+  },
+  ArtifactProjectionDataStateDiagram: {
+    type: "object",
+    additionalProperties: false,
+    required: ["kind", "stateDiagram"],
+    properties: {
+      kind: {
+        type: "string",
+        const: "state_diagram",
+      },
+      stateDiagram: {
+        $ref: "#/components/schemas/StateDiagram",
+      },
+    },
+  },
+  ArtifactProjectionDataStateTransition: {
+    type: "object",
+    additionalProperties: false,
+    required: ["kind", "stateTransition"],
+    properties: {
+      kind: {
+        type: "string",
+        const: "state_transition",
+      },
+      stateTransition: {
+        $ref: "#/components/schemas/StateDiagramTransition",
+      },
+    },
+  },
+  ArtifactProjectionDataUnsupported: {
+    type: "object",
+    additionalProperties: false,
+    required: ["kind", "unsupported"],
+    properties: {
+      kind: {
+        type: "string",
+        const: "unsupported",
+      },
+      unsupported: {
+        $ref: "#/components/schemas/ArtifactUnsupportedData",
+      },
+    },
+  },
+  ArtifactProjectionItem: {
+    type: "object",
+    additionalProperties: false,
+    required: [
+      "id",
+      "kind",
+      "label",
+      "locator",
+      "objectHash",
+      "sourceNodeIds",
+      "data",
+      "diagnostics",
+    ],
+    properties: {
+      id: {
+        type: "string",
+      },
+      kind: {
+        type: "string",
+      },
+      label: {
+        type: "string",
+      },
+      locator: {
+        $ref: "#/components/schemas/ArtifactProjectionLocator",
+      },
+      bindingSelector: {
+        $ref: "#/components/schemas/EditorSelector",
+      },
+      objectHash: {
+        type: "string",
+        pattern: "^[a-f0-9]{64}$",
+      },
+      sourceNodeIds: {
+        type: "array",
+        items: {
+          type: "string",
+          format: "uuid",
+        },
+      },
+      data: {
+        $ref: "#/components/schemas/ArtifactProjectionData",
+      },
+      diagnostics: {
+        type: "array",
+        items: {
+          $ref: "#/components/schemas/ArtifactDiagnostic",
+        },
+      },
+    },
+  },
+  ArtifactProjectionLocator: {
+    type: "object",
+    additionalProperties: false,
+    required: ["pin", "view", "owner"],
+    properties: {
+      pin: {
+        $ref: "#/components/schemas/BackendArtifactPin",
+      },
+      view: {
+        type: "string",
+        enum: ["sequence", "states", "response_rules", "event_model"],
+      },
+      owner: {
+        $ref: "#/components/schemas/ArtifactOwnerAddress",
+      },
+      embedded: {
+        $ref: "#/components/schemas/ArtifactEmbeddedContract",
+      },
+    },
+  },
+  ArtifactUnsupportedData: {
+    type: "object",
+    additionalProperties: false,
+    required: ["documentJSON", "description"],
+    properties: {
+      documentJSON: {
+        type: "string",
+      },
+      description: {
+        type: "string",
+      },
+    },
+  },
+  BackendAnalysisAddress: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      recordType: {
+        type: "string",
+        enum: [
+          "node",
+          "edge",
+          "evidence",
+          "source",
+          "identity",
+          "artifact",
+          "desired",
+          "artifact_object",
+        ],
+      },
+      id: {
+        type: "string",
+        minLength: 1,
+        maxLength: 4096,
+      },
+    },
+    required: ["recordType", "id"],
+  },
+  BackendAnalysisArtifactChange: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      before: {
+        $ref: "#/components/schemas/ArtifactProjectionItem",
+      },
+      after: {
+        $ref: "#/components/schemas/ArtifactProjectionItem",
+      },
+      beforePin: {
+        $ref: "#/components/schemas/BackendArtifactPin",
+      },
+      afterPin: {
+        $ref: "#/components/schemas/BackendArtifactPin",
+      },
+    },
+    required: [],
+  },
+  BackendAnalysisCommandPreviewTarget: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      changeProposal: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          proposalId: {
+            type: "string",
+            format: "uuid",
+            pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            not: {
+              const: "00000000-0000-0000-0000-000000000000",
+            },
+          },
+          proposalRevisionId: {
+            type: "string",
+            format: "uuid",
+            pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            not: {
+              const: "00000000-0000-0000-0000-000000000000",
+            },
+          },
+        },
+        required: ["proposalId", "proposalRevisionId"],
+      },
+      expectedVersion: {
+        type: "integer",
+        format: "int64",
+        minimum: 1,
+        maximum: 9223372036854776000,
+      },
+      commands: {
+        type: "array",
+        items: {
+          $ref: "#/components/schemas/BackendChangeProposalCommand",
+        },
+        minItems: 1,
+        maxItems: 100,
+      },
+      candidateHash: {
+        type: "string",
+        pattern: "^[a-f0-9]{64}$",
+      },
+    },
+    required: ["changeProposal", "expectedVersion", "commands", "candidateHash"],
+  },
+  BackendAnalysisContextPreview: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      changeProposal: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          proposalId: {
+            type: "string",
+            format: "uuid",
+            pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            not: {
+              const: "00000000-0000-0000-0000-000000000000",
+            },
+          },
+          proposalRevisionId: {
+            type: "string",
+            format: "uuid",
+            pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            not: {
+              const: "00000000-0000-0000-0000-000000000000",
+            },
+          },
+        },
+        required: ["proposalId", "proposalRevisionId"],
+      },
+      expectedVersion: {
+        type: "integer",
+        format: "int64",
+        minimum: 1,
+        maximum: 9223372036854776000,
+      },
+      draftHash: {
+        type: "string",
+        pattern: "^[a-f0-9]{64}$",
+      },
+      candidateHash: {
+        type: "string",
+        pattern: "^[a-f0-9]{64}$",
+      },
+      commandsHash: {
+        type: "string",
+        pattern: "^[a-f0-9]{64}$",
+      },
+    },
+    required: ["changeProposal", "expectedVersion", "draftHash", "candidateHash", "commandsHash"],
+  },
+  BackendAnalysisContextTarget: {
+    oneOf: [
+      {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          revisionId: {
+            type: "string",
+            format: "uuid",
+            pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            not: {
+              const: "00000000-0000-0000-0000-000000000000",
+            },
+          },
+        },
+        required: ["revisionId"],
+      },
+      {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          proposal: {
+            type: "object",
+            additionalProperties: false,
+            properties: {
+              proposalId: {
+                type: "string",
+                format: "uuid",
+                pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+                not: {
+                  const: "00000000-0000-0000-0000-000000000000",
+                },
+              },
+              proposalRevisionId: {
+                type: "string",
+                format: "uuid",
+                pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+                not: {
+                  const: "00000000-0000-0000-0000-000000000000",
+                },
+              },
+            },
+            required: ["proposalId", "proposalRevisionId"],
+          },
+        },
+        required: ["proposal"],
+      },
+      {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          changeProposal: {
+            type: "object",
+            additionalProperties: false,
+            properties: {
+              proposalId: {
+                type: "string",
+                format: "uuid",
+                pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+                not: {
+                  const: "00000000-0000-0000-0000-000000000000",
+                },
+              },
+              proposalRevisionId: {
+                type: "string",
+                format: "uuid",
+                pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+                not: {
+                  const: "00000000-0000-0000-0000-000000000000",
+                },
+              },
+            },
+            required: ["proposalId", "proposalRevisionId"],
+          },
+        },
+        required: ["changeProposal"],
+      },
+      {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          commandPreview: {
+            $ref: "#/components/schemas/BackendAnalysisContextPreview",
+          },
+        },
+        required: ["commandPreview"],
+      },
+    ],
+  },
+  BackendAnalysisCoverage: {
+    oneOf: [
+      {
+        $ref: "#/components/schemas/BackendCoverage",
+      },
+      {
+        type: "object",
+        additionalProperties: false,
+        required: ["status", "denominator", "knownObjects", "gaps"],
+        properties: {
+          status: {
+            type: "string",
+            const: "",
+          },
+          denominator: {
+            type: "null",
+          },
+          knownObjects: {
+            type: "integer",
+            const: 0,
+          },
+          gaps: {
+            type: "array",
+            maxItems: 0,
+            items: {
+              type: "string",
+            },
+          },
+        },
+      },
+    ],
+  },
+  BackendAnalysisDependencyStep: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      artifact: {
+        $ref: "#/components/schemas/ArtifactProjectionLocator",
+      },
+      objectHash: {
+        type: "string",
+        pattern: "^[a-f0-9]{64}$",
+      },
+      kind: {
+        type: "string",
+      },
+      id: {
+        type: "string",
+      },
+      from: {
+        $ref: "#/components/schemas/BackendAnalysisResultAddress",
+      },
+      to: {
+        $ref: "#/components/schemas/BackendAnalysisResultAddress",
+      },
+      context: {
+        $ref: "#/components/schemas/BackendLineageValueRef",
+      },
+      evidence: {
+        type: "array",
+        items: {
+          $ref: "#/components/schemas/BackendAnalysisProofReference",
+        },
+      },
+    },
+    required: ["kind", "id", "from", "to", "evidence"],
+  },
+  BackendAnalysisDiagnostic: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      id: {
+        type: "string",
+      },
+      code: {
+        type: "string",
+      },
+      message: {
+        type: "string",
+      },
+      objects: {
+        type: "array",
+        items: {
+          $ref: "#/components/schemas/BackendAnalysisAddress",
+        },
+      },
+    },
+    required: ["id", "code", "message", "objects"],
+  },
+  BackendAnalysisDiffChange: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      object: {
+        $ref: "#/components/schemas/BackendAnalysisResultAddress",
+      },
+      facet: {
+        type: "string",
+      },
+      operation: {
+        type: "string",
+        enum: ["added", "removed", "modified"],
+      },
+      kind: {
+        type: "string",
+      },
+      paths: {
+        type: "array",
+        items: {
+          type: "string",
+        },
+      },
+      before: {},
+      after: {},
+    },
+    required: ["object", "facet", "operation", "kind", "paths", "before", "after"],
+  },
+  BackendAnalysisInputContext: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      documentVersion: {
+        type: "string",
+        const: "backend-analysis-context-v1",
+      },
+      kind: {
+        type: "string",
+        enum: ["diff", "impact"],
+      },
+      fromRevisionId: {
+        type: "string",
+        format: "uuid",
+        pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+        not: {
+          const: "00000000-0000-0000-0000-000000000000",
+        },
+      },
+      target: {
+        $ref: "#/components/schemas/BackendAnalysisContextTarget",
+      },
+      beforePins: {
+        $ref: "#/components/schemas/BackendEffectiveGraphPins",
+      },
+      afterPins: {
+        $ref: "#/components/schemas/BackendEffectiveGraphPins",
+      },
+      beforeSource: {
+        $ref: "#/components/schemas/BackendAnalysisSourcePins",
+      },
+      afterSource: {
+        $ref: "#/components/schemas/BackendAnalysisSourcePins",
+      },
+      scope: {
+        $ref: "#/components/schemas/BackendAnalysisScope",
+      },
+      limits: {
+        $ref: "#/components/schemas/BackendAnalysisLimits",
+      },
+      ruleSetVersion: {
+        type: "string",
+      },
+      traversalVersion: {
+        type: "string",
+      },
+      observationMode: {
+        type: "string",
+        const: "none",
+      },
+    },
+    required: [
+      "documentVersion",
+      "kind",
+      "fromRevisionId",
+      "target",
+      "beforePins",
+      "afterPins",
+      "beforeSource",
+      "afterSource",
+      "scope",
+      "limits",
+      "ruleSetVersion",
+      "traversalVersion",
+      "observationMode",
+    ],
+  },
+  BackendAnalysisJob: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      id: {
+        type: "string",
+        format: "uuid",
+        pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+        not: {
+          const: "00000000-0000-0000-0000-000000000000",
+        },
+      },
+      projectId: {
+        type: "string",
+        format: "uuid",
+        pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+        not: {
+          const: "00000000-0000-0000-0000-000000000000",
+        },
+      },
+      kind: {
+        type: "string",
+        enum: ["diff", "impact"],
+      },
+      status: {
+        type: "string",
+        enum: ["queued", "running", "completed", "failed", "cancelled", "interrupted"],
+      },
+      analysisInputHash: {
+        type: "string",
+        pattern: "^[a-f0-9]{64}$",
+      },
+      version: {
+        type: "integer",
+        format: "int64",
+        minimum: 1,
+        maximum: 9223372036854776000,
+      },
+      resultVersion: {
+        type: "integer",
+        format: "int64",
+        minimum: 1,
+        maximum: 9223372036854776000,
+      },
+      recommendedPollIntervalMs: {
+        type: "integer",
+        const: 2000,
+      },
+      progress: {
+        $ref: "#/components/schemas/BackendAnalysisProgress",
+      },
+      diagnostic: {
+        $ref: "#/components/schemas/BackendAnalysisDiagnostic",
+      },
+      createdAt: {
+        type: "string",
+        format: "date-time",
+      },
+      updatedAt: {
+        type: "string",
+        format: "date-time",
+      },
+    },
+    required: [
+      "id",
+      "projectId",
+      "kind",
+      "status",
+      "analysisInputHash",
+      "version",
+      "recommendedPollIntervalMs",
+      "progress",
+      "createdAt",
+      "updatedAt",
+    ],
+  },
+  BackendAnalysisJobDetail: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      job: {
+        $ref: "#/components/schemas/BackendAnalysisJob",
+      },
+      input: {
+        $ref: "#/components/schemas/BackendAnalysisInputContext",
+      },
+    },
+    required: ["job", "input"],
+  },
+  BackendAnalysisLimits: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      states: {
+        type: "integer",
+        format: "int64",
+        minimum: 1,
+        maximum: 10000,
+      },
+      dependencyVisits: {
+        type: "integer",
+        format: "int64",
+        minimum: 1,
+        maximum: 50000,
+      },
+      depth: {
+        type: "integer",
+        format: "int64",
+        minimum: 1,
+        maximum: 32,
+      },
+      findings: {
+        type: "integer",
+        format: "int64",
+        minimum: 1,
+        maximum: 10000,
+      },
+      records: {
+        type: "integer",
+        format: "int64",
+        minimum: 1,
+        maximum: 20000,
+      },
+      witnessesPerObject: {
+        type: "integer",
+        format: "int64",
+        minimum: 1,
+        maximum: 8,
+      },
+      resultBytes: {
+        type: "integer",
+        format: "int64",
+        minimum: 1,
+        maximum: 33554432,
+      },
+    },
+    required: [],
+  },
+  BackendAnalysisProgress: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      states: {
+        type: "integer",
+        format: "int64",
+        minimum: 0,
+        maximum: 9223372036854776000,
+      },
+      dependencyVisits: {
+        type: "integer",
+        format: "int64",
+        minimum: 0,
+        maximum: 9223372036854776000,
+      },
+      findings: {
+        type: "integer",
+        format: "int64",
+        minimum: 0,
+        maximum: 9223372036854776000,
+      },
+      records: {
+        type: "integer",
+        format: "int64",
+        minimum: 0,
+        maximum: 9223372036854776000,
+      },
+    },
+    required: ["states", "dependencyVisits", "findings", "records"],
+  },
+  BackendAnalysisProofReference: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      side: {
+        type: "string",
+        enum: ["before", "after"],
+      },
+      targetHash: {
+        type: "string",
+        pattern: "^[a-f0-9]{64}$",
+      },
+      effectiveSemanticHash: {
+        type: "string",
+        pattern: "^[a-f0-9]{64}$",
+      },
+      baseRevisionId: {
+        type: "string",
+        format: "uuid",
+        pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+        not: {
+          const: "00000000-0000-0000-0000-000000000000",
+        },
+      },
+      status: {
+        type: "string",
+      },
+      evidenceIds: {
+        type: "array",
+        items: {
+          type: "string",
+          format: "uuid",
+          pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+          not: {
+            const: "00000000-0000-0000-0000-000000000000",
+          },
+        },
+      },
+      assertions: {
+        type: "array",
+        items: {
+          $ref: "#/components/schemas/BackendBaseAssertionRef",
+        },
+      },
+      reasons: {
+        type: "array",
+        items: {
+          type: "string",
+        },
+      },
+    },
+    required: [
+      "side",
+      "targetHash",
+      "effectiveSemanticHash",
+      "baseRevisionId",
+      "status",
+      "evidenceIds",
+      "assertions",
+      "reasons",
+    ],
+  },
+  BackendAnalysisReportRef: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      jobId: {
+        type: "string",
+        format: "uuid",
+        pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+        not: {
+          const: "00000000-0000-0000-0000-000000000000",
+        },
+      },
+      resultVersion: {
+        type: "integer",
+        format: "int64",
+        minimum: 1,
+        maximum: 9223372036854776000,
+      },
+      inputHash: {
+        type: "string",
+        pattern: "^[a-f0-9]{64}$",
+      },
+      resultHash: {
+        type: "string",
+        pattern: "^[a-f0-9]{64}$",
+      },
+    },
+    required: ["jobId", "resultVersion", "inputHash", "resultHash"],
+  },
+  BackendAnalysisResultAddress: {
+    type: "object",
+    additionalProperties: false,
+    required: ["recordType", "id"],
+    properties: {
+      recordType: {
+        type: "string",
+        enum: [
+          "",
+          "node",
+          "edge",
+          "evidence",
+          "source",
+          "identity",
+          "artifact",
+          "desired",
+          "artifact_object",
+          "diagnostic",
+        ],
+      },
+      id: {
+        type: "string",
+      },
+    },
+  },
+  BackendAnalysisResultManifest: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      jobId: {
+        type: "string",
+        format: "uuid",
+        pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+        not: {
+          const: "00000000-0000-0000-0000-000000000000",
+        },
+      },
+      analysisInputHash: {
+        type: "string",
+        pattern: "^[a-f0-9]{64}$",
+      },
+      semanticResultHash: {
+        type: "string",
+        pattern: "^[a-f0-9]{64}$",
+      },
+      resultVersion: {
+        type: "integer",
+        format: "int64",
+        minimum: 1,
+        maximum: 9223372036854776000,
+      },
+      highWaterSequence: {
+        type: "integer",
+        format: "int64",
+        minimum: 0,
+        maximum: 9223372036854776000,
+      },
+      complete: {
+        type: "boolean",
+      },
+      sections: {
+        type: "array",
+        items: {
+          $ref: "#/components/schemas/BackendAnalysisSectionManifest",
+        },
+      },
+      changedIds: {
+        type: "array",
+        items: {
+          $ref: "#/components/schemas/BackendAnalysisAddress",
+        },
+      },
+      coveredChangedIds: {
+        type: "array",
+        items: {
+          $ref: "#/components/schemas/BackendAnalysisAddress",
+        },
+      },
+      gaps: {
+        type: "array",
+        items: {
+          $ref: "#/components/schemas/BackendAnalysisDiagnostic",
+        },
+      },
+      truncationReasons: {
+        type: "array",
+        items: {
+          $ref: "#/components/schemas/BackendAnalysisDiagnostic",
+        },
+      },
+      sourceCoverageBefore: {
+        $ref: "#/components/schemas/BackendAnalysisCoverage",
+      },
+      sourceCoverageAfter: {
+        $ref: "#/components/schemas/BackendAnalysisCoverage",
+      },
+      scope: {
+        $ref: "#/components/schemas/BackendAnalysisScope",
+      },
+      ruleSetVersion: {
+        type: "string",
+      },
+      traversalVersion: {
+        type: "string",
+      },
+      verdict: {
+        type: "string",
+      },
+      runtimeVerified: {
+        type: "boolean",
+        const: false,
+      },
+    },
+    required: [
+      "jobId",
+      "analysisInputHash",
+      "semanticResultHash",
+      "resultVersion",
+      "highWaterSequence",
+      "complete",
+      "sections",
+      "changedIds",
+      "coveredChangedIds",
+      "gaps",
+      "truncationReasons",
+      "sourceCoverageBefore",
+      "sourceCoverageAfter",
+      "scope",
+      "ruleSetVersion",
+      "traversalVersion",
+      "verdict",
+      "runtimeVerified",
+    ],
+    allOf: [
+      {
+        if: {
+          anyOf: [
+            {
+              properties: {
+                sourceCoverageBefore: {
+                  properties: {
+                    status: {
+                      const: "",
+                    },
+                  },
+                },
+              },
+            },
+            {
+              properties: {
+                sourceCoverageAfter: {
+                  properties: {
+                    status: {
+                      const: "",
+                    },
+                  },
+                },
+              },
+            },
+          ],
+        },
+        then: {
+          properties: {
+            complete: {
+              const: false,
+            },
+          },
+        },
+      },
+    ],
+  },
+  BackendAnalysisResultPage: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      manifest: {
+        $ref: "#/components/schemas/BackendAnalysisResultManifest",
+      },
+      section: {
+        type: "string",
+        enum: ["changes", "findings", "witnesses", "checks", "gaps"],
+      },
+      items: {
+        type: "array",
+        items: {
+          $ref: "#/components/schemas/BackendAnalysisResultRecord",
+        },
+      },
+      nextCursor: {
+        type: "string",
+      },
+    },
+    required: ["manifest", "section", "items", "nextCursor"],
+  },
+  BackendAnalysisResultRecord: {
+    type: "object",
+    additionalProperties: false,
+    required: ["id", "service", "kind", "certainty", "direction", "depth", "object", "detail"],
+    properties: {
+      id: {
+        type: "string",
+        pattern: "^[a-f0-9]{64}$",
+      },
+      service: {
+        type: "string",
+      },
+      kind: {
+        type: "string",
+      },
+      certainty: {
+        type: "string",
+        enum: ["confirmed", "possible", "unknown"],
+      },
+      direction: {
+        type: "string",
+        enum: ["upstream", "downstream", "both"],
+      },
+      depth: {
+        type: "integer",
+        minimum: 0,
+        maximum: 32,
+      },
+      object: {
+        $ref: "#/components/schemas/BackendAnalysisResultAddress",
+      },
+      detail: {
+        oneOf: [
+          {
+            $ref: "#/components/schemas/BackendAnalysisDiffChange",
+          },
+          {
+            $ref: "#/components/schemas/BackendAnalysisRuleResult",
+          },
+          {
+            $ref: "#/components/schemas/BackendAnalysisWitness",
+          },
+          {
+            $ref: "#/components/schemas/BackendAnalysisDiagnostic",
+          },
+          {
+            $ref: "#/components/schemas/BackendAnalysisArtifactChange",
+          },
+        ],
+      },
+    },
+  },
+  BackendAnalysisRuleResult: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      ruleId: {
+        type: "string",
+      },
+      version: {
+        type: "string",
+      },
+      prerequisites: {
+        type: "array",
+        items: {
+          type: "string",
+        },
+      },
+      object: {
+        $ref: "#/components/schemas/BackendAnalysisResultAddress",
+      },
+      status: {
+        type: "string",
+      },
+      severity: {
+        type: "string",
+      },
+      certainty: {
+        type: "string",
+        enum: ["confirmed", "possible", "unknown"],
+      },
+      message: {
+        type: "string",
+      },
+      evidence: {
+        type: "array",
+        items: {
+          $ref: "#/components/schemas/BackendAnalysisProofReference",
+        },
+      },
+    },
+    required: [
+      "ruleId",
+      "version",
+      "prerequisites",
+      "object",
+      "status",
+      "severity",
+      "certainty",
+      "message",
+      "evidence",
+    ],
+  },
+  BackendAnalysisScope: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      changedIds: {
+        type: "array",
+        items: {
+          $ref: "#/components/schemas/BackendAnalysisAddress",
+        },
+      },
+      service: {
+        type: "string",
+      },
+      kind: {
+        type: "string",
+      },
+      certainty: {
+        type: "string",
+        enum: ["", "confirmed", "possible", "unknown"],
+      },
+      direction: {
+        type: "string",
+        enum: ["", "upstream", "downstream", "both"],
+      },
+      depth: {
+        type: "integer",
+        format: "int64",
+        minimum: 0,
+        maximum: 32,
+      },
+    },
+    required: [],
+  },
+  BackendAnalysisSectionManifest: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      section: {
+        type: "string",
+        enum: ["changes", "findings", "witnesses", "checks", "gaps"],
+      },
+      count: {
+        type: "integer",
+        format: "int64",
+        minimum: 0,
+        maximum: 9223372036854776000,
+      },
+      bytes: {
+        type: "integer",
+        format: "int64",
+        minimum: 0,
+        maximum: 9223372036854776000,
+      },
+    },
+    required: ["section", "count", "bytes"],
+  },
+  BackendAnalysisSourcePins: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      revisionId: {
+        type: "string",
+        format: "uuid",
+        pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+        not: {
+          const: "00000000-0000-0000-0000-000000000000",
+        },
+      },
+      semanticHash: {
+        type: "string",
+        pattern: "^[a-f0-9]{64}$",
+      },
+      contentHash: {
+        anyOf: [
+          {
+            type: "string",
+            pattern: "^[a-f0-9]{64}$",
+          },
+          {
+            type: "string",
+            const: "",
+          },
+        ],
+      },
+      sourceVectorHash: {
+        type: "string",
+        pattern: "^[a-f0-9]{64}$",
+      },
+      sourceSnapshotIds: {
+        type: "array",
+        items: {
+          type: "string",
+          format: "uuid",
+          pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+          not: {
+            const: "00000000-0000-0000-0000-000000000000",
+          },
+        },
+      },
+    },
+    required: [
+      "revisionId",
+      "semanticHash",
+      "contentHash",
+      "sourceVectorHash",
+      "sourceSnapshotIds",
+    ],
+  },
+  BackendAnalysisTarget: {
+    oneOf: [
+      {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          revisionId: {
+            type: "string",
+            format: "uuid",
+            pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            not: {
+              const: "00000000-0000-0000-0000-000000000000",
+            },
+          },
+        },
+        required: ["revisionId"],
+      },
+      {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          proposal: {
+            type: "object",
+            additionalProperties: false,
+            properties: {
+              proposalId: {
+                type: "string",
+                format: "uuid",
+                pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+                not: {
+                  const: "00000000-0000-0000-0000-000000000000",
+                },
+              },
+              proposalRevisionId: {
+                type: "string",
+                format: "uuid",
+                pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+                not: {
+                  const: "00000000-0000-0000-0000-000000000000",
+                },
+              },
+            },
+            required: ["proposalId", "proposalRevisionId"],
+          },
+        },
+        required: ["proposal"],
+      },
+      {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          changeProposal: {
+            type: "object",
+            additionalProperties: false,
+            properties: {
+              proposalId: {
+                type: "string",
+                format: "uuid",
+                pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+                not: {
+                  const: "00000000-0000-0000-0000-000000000000",
+                },
+              },
+              proposalRevisionId: {
+                type: "string",
+                format: "uuid",
+                pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+                not: {
+                  const: "00000000-0000-0000-0000-000000000000",
+                },
+              },
+            },
+            required: ["proposalId", "proposalRevisionId"],
+          },
+        },
+        required: ["changeProposal"],
+      },
+      {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          commandPreview: {
+            $ref: "#/components/schemas/BackendAnalysisCommandPreviewTarget",
+          },
+        },
+        required: ["commandPreview"],
+      },
+    ],
+  },
+  BackendAnalysisWitness: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      side: {
+        type: "string",
+        enum: ["before", "after"],
+      },
+      seed: {
+        $ref: "#/components/schemas/BackendAnalysisResultAddress",
+      },
+      affected: {
+        $ref: "#/components/schemas/BackendAnalysisResultAddress",
+      },
+      steps: {
+        type: "array",
+        items: {
+          $ref: "#/components/schemas/BackendAnalysisDependencyStep",
+        },
+      },
+      status: {
+        type: "string",
+        enum: ["confirmed", "possible", "unknown"],
+      },
+    },
+    required: ["side", "seed", "affected", "steps", "status"],
+  },
+  BackendAPIArtifactBinding: {
+    type: "object",
+    additionalProperties: false,
+    required: ["sourceNodeId", "sourceKind", "sourceLastKnownLabel", "ref", "origin", "reason"],
+    properties: {
+      sourceNodeId: {
+        type: "string",
+        format: "uuid",
+      },
+      sourceKind: {
+        type: "string",
+        enum: ["http_operation", "api_field"],
+      },
+      sourceLastKnownLabel: {
+        type: "string",
+        maxLength: 4096,
+        description: "At most 4096 UTF-8 bytes.",
+      },
+      ref: {
+        $ref: "#/components/schemas/BackendArtifactRef",
+      },
+      origin: {
+        type: "string",
+        const: "manual",
+      },
+      reason: {
+        type: "string",
+        maxLength: 4096,
+        description: "At most 4096 UTF-8 bytes.",
+        minLength: 1,
       },
     },
   },
@@ -864,6 +2899,163 @@ export const backendChangeSchemas: Record<string, ChangeSchema> = {
       },
     },
   },
+  BackendArtifactPin: {
+    oneOf: [
+      {
+        type: "object",
+        additionalProperties: false,
+        required: ["kind", "id", "revisionId"],
+        properties: {
+          kind: {
+            type: "string",
+            not: {
+              enum: ["api_design", "design_scenario"],
+            },
+          },
+          id: {
+            type: "string",
+          },
+          revisionId: {
+            type: "string",
+          },
+        },
+      },
+      {
+        type: "object",
+        additionalProperties: false,
+        required: ["kind", "id", "revisionId", "contentHash"],
+        properties: {
+          kind: {
+            type: "string",
+            const: "api_design",
+          },
+          id: {
+            $ref: "#/components/schemas/APIArtifactID",
+          },
+          revisionId: {
+            $ref: "#/components/schemas/APIArtifactID",
+          },
+          contentHash: {
+            type: "string",
+            pattern: "^[a-f0-9]{64}$",
+          },
+        },
+      },
+      {
+        type: "object",
+        additionalProperties: false,
+        required: ["kind", "id", "revisionId", "contentHash"],
+        properties: {
+          kind: {
+            type: "string",
+            const: "design_scenario",
+          },
+          id: {
+            $ref: "#/components/schemas/APIArtifactID",
+          },
+          revisionId: {
+            $ref: "#/components/schemas/APIArtifactID",
+          },
+          contentHash: {
+            type: "string",
+            pattern: "^[a-f0-9]{64}$",
+          },
+        },
+      },
+    ],
+  },
+  BackendArtifactRef: {
+    type: "object",
+    additionalProperties: false,
+    required: [
+      "kind",
+      "artifactId",
+      "revisionId",
+      "contentHash",
+      "selector",
+      "objectHash",
+      "lastKnownLabel",
+      "resolvedPointer",
+    ],
+    properties: {
+      kind: {
+        type: "string",
+        const: "api_design",
+      },
+      artifactId: {
+        $ref: "#/components/schemas/APIArtifactID",
+      },
+      revisionId: {
+        $ref: "#/components/schemas/APIArtifactID",
+      },
+      contentHash: {
+        type: "string",
+        pattern: "^[a-f0-9]{64}$",
+      },
+      selector: {
+        $ref: "#/components/schemas/BackendAPIArtifactSelector",
+      },
+      objectHash: {
+        type: "string",
+        pattern: "^[a-f0-9]{64}$",
+      },
+      lastKnownLabel: {
+        type: "string",
+        maxLength: 4096,
+        description: "At most 4096 UTF-8 bytes.",
+      },
+      resolvedPointer: {
+        type: "string",
+        minLength: 1,
+        maxLength: 2048,
+        pattern: "^/(?:[^~/]|~[01])*(?:/(?:[^~/]|~[01])*){0,63}$",
+        description:
+          "RFC6901 pointer; at most 2048 UTF-8 bytes and 64 segments. Literal percent is retained.",
+      },
+    },
+  },
+  BackendBaseAssertionRef: {
+    type: "object",
+    additionalProperties: false,
+    required: [
+      "repositoryId",
+      "providerNamespace",
+      "recordType",
+      "externalKey",
+      "expectedId",
+      "assertionHash",
+    ],
+    properties: {
+      repositoryId: {
+        type: "string",
+        format: "uuid",
+      },
+      providerNamespace: {
+        type: "string",
+        minLength: 1,
+        maxLength: 200,
+        pattern: "^[^\\p{Cc}]+$",
+      },
+      recordType: {
+        type: "string",
+        enum: ["node", "edge"],
+      },
+      externalKey: {
+        type: "string",
+        minLength: 1,
+        maxLength: 200,
+        pattern: "^[^\\p{Cc}]+$",
+      },
+      expectedId: {
+        type: "string",
+        format: "uuid",
+      },
+      assertionHash: {
+        type: "string",
+        pattern: "^[a-f0-9]{64}$",
+      },
+    },
+  },
   BackendBranchAttributes: {
     type: "object",
     additionalProperties: false,
@@ -881,6 +3073,38 @@ export const backendChangeSchemas: Record<string, ChangeSchema> = {
         type: ["string", "null"],
       },
     },
+  },
+  BackendCarriedSourceBasis: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      revisionId: {
+        type: "string",
+        format: "uuid",
+        pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+        not: {
+          const: "00000000-0000-0000-0000-000000000000",
+        },
+      },
+      semanticHash: {
+        type: "string",
+        pattern: "^[a-f0-9]{64}$",
+      },
+    },
+    required: ["revisionId", "semanticHash"],
+  },
+  BackendChangeCarriedSourceIdentity: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      source: {
+        $ref: "#/components/schemas/BackendQualifiedSourceIdentity",
+      },
+      basis: {
+        $ref: "#/components/schemas/BackendCarriedSourceBasis",
+      },
+    },
+    required: ["source", "basis"],
   },
   BackendChangeColumnGroup: {
     oneOf: [
@@ -1740,6 +3964,23 @@ export const backendChangeSchemas: Record<string, ChangeSchema> = {
           },
         },
         required: ["kind", "recordType", "id"],
+      },
+      {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          kind: {
+            type: "string",
+            const: "carried_source_identity",
+          },
+          source: {
+            $ref: "#/components/schemas/BackendQualifiedSourceIdentity",
+          },
+          basis: {
+            $ref: "#/components/schemas/BackendCarriedSourceBasis",
+          },
+        },
+        required: ["kind", "source", "basis"],
       },
     ],
   },
@@ -6428,6 +8669,512 @@ export const backendChangeSchemas: Record<string, ChangeSchema> = {
       },
     ],
   },
+  BackendChangeRebaseArtifactValue: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      pin: {
+        $ref: "#/components/schemas/BackendArtifactPin",
+      },
+      apiBindings: {
+        type: "array",
+        items: {
+          $ref: "#/components/schemas/BackendAPIArtifactBinding",
+        },
+      },
+      editorBindings: {
+        type: "array",
+        items: {
+          $ref: "#/components/schemas/EditorBinding",
+        },
+      },
+    },
+    required: ["pin", "apiBindings", "editorBindings"],
+  },
+  BackendChangeRebaseIdentityResolution: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      oldSourceId: {
+        type: "string",
+        format: "uuid",
+        pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+        not: {
+          const: "00000000-0000-0000-0000-000000000000",
+        },
+      },
+      newSourceId: {
+        type: "string",
+        format: "uuid",
+        pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+        not: {
+          const: "00000000-0000-0000-0000-000000000000",
+        },
+      },
+      reason: {
+        type: "string",
+        minLength: 1,
+        maxLength: 4096,
+      },
+    },
+    required: ["oldSourceId", "newSourceId", "reason"],
+  },
+  BackendChangeRebasePropertyValue: {
+    anyOf: [
+      {
+        type: "string",
+      },
+      {
+        type: "null",
+      },
+      {
+        type: "object",
+        additionalProperties: false,
+        required: ["from", "to"],
+        properties: {
+          from: {
+            type: "string",
+            format: "uuid",
+          },
+          to: {
+            type: "string",
+            format: "uuid",
+          },
+        },
+      },
+      {
+        type: ["string", "null"],
+      },
+      {
+        type: "string",
+        enum: ["postgresql", "sqlite"],
+      },
+      {
+        type: "string",
+        enum: ["complete", "partial", "unsupported"],
+      },
+      {
+        type: "array",
+        items: {
+          type: "string",
+          minLength: 1,
+        },
+      },
+      {
+        type: "string",
+        minLength: 1,
+      },
+      {
+        type: ["string", "null"],
+        description:
+          "Literal UTF-8 source text; at most 65536 UTF-8 bytes, enforced atomically by the domain.",
+      },
+      {
+        type: "string",
+        description:
+          "Literal UTF-8 source text; at most 65536 UTF-8 bytes, enforced atomically by the domain.",
+      },
+      {
+        type: "array",
+        items: {
+          type: "string",
+          format: "uuid",
+        },
+        maxItems: 500,
+        uniqueItems: true,
+      },
+      {
+        type: "string",
+        enum: ["procedure", "function", "trigger"],
+      },
+      {
+        type: "string",
+        pattern: "^[A-Z]+$",
+        minLength: 1,
+      },
+      {
+        type: "string",
+        pattern: "^/",
+        minLength: 1,
+      },
+      {
+        $ref: "#/components/schemas/BackendKnownNativeString",
+      },
+      {
+        $ref: "#/components/schemas/BackendKnownTypeFamily",
+      },
+      {
+        $ref: "#/components/schemas/BackendKnownBoolean",
+      },
+      {
+        $ref: "#/components/schemas/BackendKnownNullableNativeString",
+      },
+      {
+        $ref: "#/components/schemas/BackendKnownOrdinal",
+      },
+      {
+        type: "string",
+        enum: ["primary_key", "unique", "check", "foreign_key"],
+      },
+      {
+        type: "array",
+        items: {
+          type: "string",
+          format: "uuid",
+        },
+        maxItems: 64,
+        uniqueItems: true,
+      },
+      {
+        $ref: "#/components/schemas/BackendKnownNullableBoolean",
+      },
+      {
+        type: "array",
+        items: {
+          $ref: "#/components/schemas/BackendIndexTerm",
+        },
+        minItems: 1,
+        maxItems: 64,
+      },
+      {
+        type: "boolean",
+      },
+      {
+        $ref: "#/components/schemas/BackendKnownMigrationOrder",
+      },
+      {
+        type: "array",
+        items: {
+          $ref: "#/components/schemas/BackendMigrationChange",
+        },
+        maxItems: 500,
+      },
+      {
+        type: "array",
+        items: {
+          type: "string",
+          minLength: 1,
+          maxLength: 4096,
+        },
+        maxItems: 500,
+      },
+      {
+        type: "string",
+        format: "uuid",
+      },
+      {
+        type: "string",
+        enum: ["complete", "partial", "unknown"],
+      },
+      {
+        type: "array",
+        items: {
+          $ref: "#/components/schemas/BackendFlowPort",
+        },
+        maxItems: 500,
+      },
+      {
+        $ref: "#/components/schemas/BackendTransactionContext",
+      },
+      {
+        type: ["string", "null"],
+        maxLength: 65536,
+      },
+      {
+        type: "string",
+        minLength: 1,
+        maxLength: 4096,
+      },
+      {
+        type: "string",
+        const: "input",
+      },
+      {
+        type: "string",
+        const: "authorization",
+      },
+      {
+        type: "string",
+        const: "validation",
+      },
+      {
+        type: "string",
+        const: "condition",
+      },
+      {
+        type: "string",
+        const: "call",
+      },
+      {
+        type: "string",
+        const: "query",
+      },
+      {
+        type: "string",
+        const: "transform",
+      },
+      {
+        type: "string",
+        const: "transaction_begin",
+      },
+      {
+        type: "string",
+        const: "transaction_commit",
+      },
+      {
+        type: "string",
+        const: "transaction_rollback",
+      },
+      {
+        type: "string",
+        const: "return",
+      },
+      {
+        type: "string",
+        const: "raise",
+      },
+      {
+        type: "string",
+        const: "loop",
+      },
+      {
+        type: "string",
+        const: "parallel",
+      },
+      {
+        type: "string",
+        const: "join",
+      },
+      {
+        type: "string",
+        const: "opaque",
+      },
+      {
+        type: "string",
+        const: "emit",
+      },
+      {
+        type: "string",
+        enum: ["postgresql", "sqlite", "unknown"],
+      },
+      {
+        type: "string",
+        const: "request",
+      },
+      {
+        type: "string",
+        const: "path",
+      },
+      {
+        $ref: "#/components/schemas/BackendAPIFieldNameSelector",
+      },
+      {
+        $ref: "#/components/schemas/BackendAPIFieldNativeType",
+      },
+      {
+        type: "array",
+        items: {
+          type: "string",
+          minLength: 1,
+          maxLength: 4096,
+          pattern: "^[^\\x00-\\x08\\x0b\\x0c\\x0e-\\x1f\\x7f-\\x9f]+$",
+        },
+        maxItems: 250000,
+      },
+      {
+        type: "string",
+        minLength: 1,
+        maxLength: 4096,
+        pattern: "^[^\\x00-\\x08\\x0b\\x0c\\x0e-\\x1f\\x7f-\\x9f]+$",
+      },
+      {
+        type: "string",
+        const: "header",
+      },
+      {
+        type: "string",
+        const: "cookie",
+      },
+      {
+        type: "string",
+        const: "body",
+      },
+      {
+        $ref: "#/components/schemas/BackendAPIFieldBodySelector",
+      },
+      {
+        type: "string",
+        pattern: "^[!#$%&'*+.^_`|~0-9a-z-]+/[!#$%&'*+.^_`|~0-9a-z-]+$",
+      },
+      {
+        type: "string",
+        const: "response",
+      },
+      {
+        type: "string",
+        pattern: "^([1-5][0-9][0-9]|[1-5]XX|default)$",
+      },
+      {
+        type: "array",
+        items: {
+          $ref: "#/components/schemas/BackendLineageValueRef",
+        },
+        maxItems: 64,
+        uniqueItems: true,
+      },
+      {
+        $ref: "#/components/schemas/BackendLineageValueRef",
+      },
+      {
+        $ref: "#/components/schemas/BackendLineageTransform",
+      },
+      {
+        $ref: "#/components/schemas/BackendLineageTransport",
+      },
+      {
+        $ref: "#/components/schemas/BackendEventsScalar",
+      },
+      {
+        $ref: "#/components/schemas/BackendEventsTrigger",
+      },
+      {
+        type: "string",
+        enum: ["payload", "headers", "key"],
+      },
+      {
+        type: "array",
+        items: {
+          $ref: "#/components/schemas/BackendAPIFieldPathSegment",
+        },
+        maxItems: 32,
+      },
+      {
+        type: "array",
+        minItems: 1,
+        maxItems: 32,
+        items: {
+          $ref: "#/components/schemas/BackendRepresentationPathSegment",
+        },
+      },
+      {
+        $ref: "#/components/schemas/BackendRepresentationKnownBoolean",
+      },
+      {
+        $ref: "#/components/schemas/BackendRepresentationKnownCardinality",
+      },
+      {
+        type: "array",
+        items: {
+          $ref: "#/components/schemas/BackendReferenceColumnPair",
+        },
+        maxItems: 64,
+      },
+      {
+        $ref: "#/components/schemas/BackendKnownReferentialAction",
+      },
+      {
+        $ref: "#/components/schemas/BackendKnownMatchType",
+      },
+      {
+        type: "string",
+        enum: ["error", "timeout", "retry"],
+      },
+      {
+        type: "string",
+        enum: ["read"],
+      },
+      {
+        type: "string",
+        minLength: 1,
+        maxLength: 200,
+        pattern: "^[^\\p{Cc}]+$",
+      },
+      {
+        type: "string",
+        enum: ["listed", "unknown"],
+      },
+      {
+        type: "string",
+        enum: ["insert", "update", "upsert"],
+      },
+      {
+        type: "string",
+        enum: ["delete"],
+      },
+      {
+        type: "string",
+        format: "uuid",
+        pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+        not: {
+          const: "00000000-0000-0000-0000-000000000000",
+        },
+      },
+      {
+        type: "string",
+        enum: ["declared", "unknown"],
+      },
+    ],
+  },
+  BackendChangeRebaseReplacementValue: {
+    anyOf: [
+      {
+        $ref: "#/components/schemas/BackendChangeRebasePropertyValue",
+      },
+      {
+        $ref: "#/components/schemas/BackendChangeRebaseArtifactValue",
+      },
+      {
+        $ref: "#/components/schemas/BackendChangeCriterion",
+      },
+    ],
+  },
+  BackendChangeRebaseResolution: {
+    oneOf: [
+      {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          conflictId: {
+            type: "string",
+            pattern: "^[a-f0-9]{64}$",
+          },
+          choice: {
+            type: "string",
+            enum: ["take_source", "keep_proposal"],
+          },
+          reason: {
+            type: "string",
+            minLength: 1,
+            maxLength: 4096,
+          },
+        },
+        required: ["conflictId", "choice", "reason"],
+      },
+      {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          conflictId: {
+            type: "string",
+            pattern: "^[a-f0-9]{64}$",
+          },
+          choice: {
+            type: "string",
+            const: "replace",
+          },
+          reason: {
+            type: "string",
+            minLength: 1,
+            maxLength: 4096,
+          },
+          value: {
+            $ref: "#/components/schemas/BackendChangeRebaseReplacementValue",
+          },
+        },
+        required: ["conflictId", "choice", "reason", "value"],
+      },
+    ],
+  },
   BackendChangeTestAttachment: {
     oneOf: [
       {
@@ -6537,6 +9284,35 @@ export const backendChangeSchemas: Record<string, ChangeSchema> = {
         required: ["kind", "artifact", "jsonPointer"],
       },
     ],
+  },
+  BackendCoverage: {
+    type: "object",
+    additionalProperties: false,
+    required: ["status", "denominator", "knownObjects", "gaps"],
+    properties: {
+      status: {
+        type: "string",
+        enum: ["partial", "complete"],
+      },
+      denominator: {
+        type: ["integer", "null"],
+        format: "int64",
+        minimum: 0,
+        maximum: 9223372036854776000,
+      },
+      knownObjects: {
+        type: "integer",
+        format: "int64",
+        minimum: 0,
+        maximum: 9223372036854776000,
+      },
+      gaps: {
+        type: "array",
+        items: {
+          type: "string",
+        },
+      },
+    },
   },
   BackendDatastoreLegacyAttributes: {
     type: "object",
@@ -7687,6 +10463,153 @@ export const backendChangeSchemas: Record<string, ChangeSchema> = {
       },
     },
   },
+  BackendEffectiveArtifactContext: {
+    oneOf: [
+      {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          documentVersion: {
+            type: "string",
+            enum: ["", "backend-editor-artifacts-v1"],
+          },
+          sourceContentHash: {
+            type: "string",
+          },
+          sourceSemanticHash: {
+            type: "string",
+          },
+          apiBindings: {
+            type: "array",
+            items: {
+              $ref: "#/components/schemas/BackendAPIArtifactBinding",
+            },
+          },
+          editorBindings: {
+            type: "array",
+            items: {
+              $ref: "#/components/schemas/EditorBinding",
+            },
+          },
+        },
+        required: [
+          "documentVersion",
+          "sourceContentHash",
+          "sourceSemanticHash",
+          "apiBindings",
+          "editorBindings",
+        ],
+      },
+      {
+        type: "object",
+        additionalProperties: false,
+        required: ["sourceContentHash", "sourceSemanticHash", "bindings"],
+        properties: {
+          sourceContentHash: {
+            type: "string",
+            pattern: "^[a-f0-9]{64}$",
+          },
+          sourceSemanticHash: {
+            type: "string",
+            pattern: "^[a-f0-9]{64}$",
+          },
+          bindings: {
+            type: "array",
+            items: {
+              $ref: "#/components/schemas/BackendAPIArtifactBinding",
+            },
+          },
+        },
+      },
+    ],
+  },
+  BackendEffectiveGraphPins: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      targetHash: {
+        type: "string",
+        pattern: "^[a-f0-9]{64}$",
+      },
+      viewSchemaVersion: {
+        type: "string",
+        enum: [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "proposal-relational-v1",
+          "proposal-graph-v1",
+          "import-candidate-v1",
+        ],
+      },
+      structuralSchemaVersion: {
+        type: "string",
+        enum: ["1", "2", "3", "4", "5", "6"],
+      },
+      effectiveSemanticHash: {
+        type: "string",
+        pattern: "^[a-f0-9]{64}$",
+      },
+      baseRevisionId: {
+        type: "string",
+        format: "uuid",
+        pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+        not: {
+          const: "00000000-0000-0000-0000-000000000000",
+        },
+      },
+      baseSemanticHash: {
+        type: "string",
+        pattern: "^[a-f0-9]{64}$",
+      },
+      sourceVectorHash: {
+        type: "string",
+        pattern: "^[a-f0-9]{64}$",
+      },
+      sourceSnapshotIds: {
+        type: "array",
+        items: {
+          type: "string",
+          format: "uuid",
+          pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+          not: {
+            const: "00000000-0000-0000-0000-000000000000",
+          },
+        },
+      },
+      artifactPins: {
+        type: "array",
+        items: {
+          $ref: "#/components/schemas/BackendArtifactPin",
+        },
+      },
+      artifactContext: {
+        anyOf: [
+          {
+            $ref: "#/components/schemas/BackendEffectiveArtifactContext",
+          },
+          {
+            type: "null",
+          },
+        ],
+      },
+    },
+    required: [
+      "targetHash",
+      "viewSchemaVersion",
+      "structuralSchemaVersion",
+      "effectiveSemanticHash",
+      "baseRevisionId",
+      "baseSemanticHash",
+      "sourceVectorHash",
+      "sourceSnapshotIds",
+      "artifactPins",
+      "artifactContext",
+    ],
+  },
   BackendEffectivePropertySelector: {
     oneOf: [
       {
@@ -7772,6 +10695,20 @@ export const backendChangeSchemas: Record<string, ChangeSchema> = {
           },
         },
         required: ["kind", "recordType", "id"],
+      },
+      {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          kind: {
+            type: "string",
+            const: "carried_source_identity",
+          },
+          carriedSourceIdentity: {
+            $ref: "#/components/schemas/BackendChangeCarriedSourceIdentity",
+          },
+        },
+        required: ["kind", "carriedSourceIdentity"],
       },
     ],
   },
@@ -12580,6 +15517,19 @@ export const backendChangeSchemas: Record<string, ChangeSchema> = {
       },
     ],
   },
+  CancelBackendAnalysisRequest: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      idempotencyKey: {
+        type: "string",
+        minLength: 1,
+        maxLength: 128,
+        pattern: "^[!-~]+$",
+      },
+    },
+    required: ["idempotencyKey"],
+  },
   CreateBackendChangeProposalRequest: {
     type: "object",
     additionalProperties: false,
@@ -12605,6 +15555,892 @@ export const backendChangeSchemas: Record<string, ChangeSchema> = {
       },
     },
     required: ["name", "baseRevisionId", "idempotencyKey"],
+  },
+  DesignScenarioBranchExecution: {
+    type: "object",
+    required: [],
+    properties: {
+      condition: {
+        $ref: "#/components/schemas/DesignScenarioExecutionCondition",
+      },
+      otherwise: {
+        type: "boolean",
+      },
+    },
+    additionalProperties: false,
+  },
+  DesignScenarioDataBinding: {
+    type: "object",
+    additionalProperties: false,
+    required: ["id", "sourceMessageId", "sourcePointer", "target"],
+    properties: {
+      id: {
+        type: "string",
+        pattern: "^[A-Za-z0-9_-]{1,100}$",
+        minLength: 1,
+        maxLength: 100,
+      },
+      sourceMessageId: {
+        type: "string",
+        minLength: 1,
+      },
+      sourcePointer: {
+        type: "string",
+        maxLength: 2000,
+        pattern: "^(?:/(?:[^~/]|~[01])*)*$",
+      },
+      target: {
+        $ref: "#/components/schemas/DesignScenarioDataBindingTarget",
+      },
+      prefix: {
+        type: "string",
+        maxLength: 50000,
+      },
+      transforms: {
+        type: "array",
+        maxItems: 8,
+        items: {
+          $ref: "#/components/schemas/DesignScenarioDataBindingTransform",
+        },
+        description:
+          "Ordered typed transformations before target validation and prefix. Numeric conversions accept strict JSON numeric strings and preserve exact number spelling.",
+      },
+    },
+  },
+  DesignScenarioDataBindingTarget: {
+    oneOf: [
+      {
+        type: "object",
+        additionalProperties: false,
+        required: ["kind", "name"],
+        properties: {
+          kind: {
+            type: "string",
+            enum: ["path", "query", "header"],
+          },
+          name: {
+            type: "string",
+            minLength: 1,
+            maxLength: 256,
+          },
+        },
+      },
+      {
+        type: "object",
+        additionalProperties: false,
+        required: ["kind", "pointer"],
+        properties: {
+          kind: {
+            type: "string",
+            enum: ["body"],
+          },
+          pointer: {
+            type: "string",
+            maxLength: 2000,
+            pattern: "^(?:/(?:[^~/]|~[01])*)*$",
+          },
+        },
+      },
+    ],
+  },
+  DesignScenarioDataBindingTransform: {
+    type: "object",
+    additionalProperties: false,
+    required: ["kind"],
+    properties: {
+      kind: {
+        type: "string",
+        enum: ["trim", "lower", "upper", "to_string", "to_number", "to_integer"],
+      },
+    },
+  },
+  DesignScenarioEventAPILink: {
+    type: "object",
+    additionalProperties: false,
+    required: ["contractId", "operationKey"],
+    properties: {
+      contractId: {
+        type: "string",
+        minLength: 1,
+      },
+      operationKey: {
+        type: "string",
+        minLength: 1,
+      },
+    },
+  },
+  DesignScenarioEventBinding: {
+    type: "object",
+    required: ["contractId", "operationId"],
+    properties: {
+      contractId: {
+        type: "string",
+        pattern: "^[A-Za-z0-9_-]{1,100}$",
+        minLength: 1,
+        maxLength: 100,
+      },
+      operationId: {
+        type: "string",
+        pattern: "^[A-Za-z0-9_-]{1,100}$",
+        minLength: 1,
+        maxLength: 100,
+      },
+    },
+    additionalProperties: false,
+  },
+  DesignScenarioEventChannel: {
+    type: "object",
+    required: ["id", "name", "description", "address", "serverIds", "messageIds"],
+    properties: {
+      id: {
+        type: "string",
+        pattern: "^[A-Za-z0-9_-]{1,100}$",
+        minLength: 1,
+        maxLength: 100,
+      },
+      name: {
+        type: "string",
+        maxLength: 50000,
+      },
+      description: {
+        type: "string",
+        maxLength: 50000,
+      },
+      address: {
+        type: "string",
+        maxLength: 50000,
+      },
+      serverIds: {
+        type: "array",
+        items: {
+          type: "string",
+          pattern: "^[A-Za-z0-9_-]{1,100}$",
+          minLength: 1,
+          maxLength: 100,
+        },
+        maxItems: 100,
+        uniqueItems: true,
+      },
+      messageIds: {
+        type: "array",
+        items: {
+          type: "string",
+          pattern: "^[A-Za-z0-9_-]{1,100}$",
+          minLength: 1,
+          maxLength: 100,
+        },
+        maxItems: 100,
+        uniqueItems: true,
+      },
+      discriminatorProperty: {
+        type: "string",
+        maxLength: 50000,
+      },
+      kafka: {
+        $ref: "#/components/schemas/DesignScenarioEventChannelKafka",
+      },
+    },
+    additionalProperties: false,
+  },
+  DesignScenarioEventChannelKafka: {
+    type: "object",
+    required: [],
+    properties: {
+      partitions: {
+        type: "integer",
+        minimum: 1,
+        maximum: 2147483647,
+      },
+      replicas: {
+        type: "integer",
+        minimum: 1,
+        maximum: 2147483647,
+      },
+    },
+    additionalProperties: false,
+  },
+  DesignScenarioEventContract: {
+    type: "object",
+    required: ["id", "name", "description", "participantId", "version", "operations"],
+    properties: {
+      id: {
+        type: "string",
+        pattern: "^[A-Za-z0-9_-]{1,100}$",
+        minLength: 1,
+        maxLength: 100,
+      },
+      name: {
+        type: "string",
+        maxLength: 50000,
+      },
+      description: {
+        type: "string",
+        maxLength: 50000,
+      },
+      participantId: {
+        type: "string",
+        minLength: 1,
+        maxLength: 50000,
+      },
+      version: {
+        type: "string",
+        maxLength: 50000,
+      },
+      operations: {
+        type: "array",
+        items: {
+          $ref: "#/components/schemas/DesignScenarioEventOperation",
+        },
+        maxItems: 2000,
+      },
+    },
+    additionalProperties: false,
+  },
+  DesignScenarioEventExample: {
+    type: "object",
+    required: ["name", "payloadJSON"],
+    properties: {
+      name: {
+        type: "string",
+        maxLength: 50000,
+      },
+      payloadJSON: {
+        type: "string",
+        maxLength: 262144,
+      },
+      headersJSON: {
+        type: "string",
+        maxLength: 262144,
+      },
+    },
+    additionalProperties: false,
+  },
+  DesignScenarioEventFailureRoutes: {
+    type: "object",
+    additionalProperties: false,
+    required: [],
+    properties: {
+      retryChannelId: {
+        type: "string",
+        pattern: "^[A-Za-z0-9_-]{1,100}$",
+        minLength: 1,
+        maxLength: 100,
+      },
+      deadLetterChannelId: {
+        type: "string",
+        pattern: "^[A-Za-z0-9_-]{1,100}$",
+        minLength: 1,
+        maxLength: 100,
+      },
+    },
+  },
+  DesignScenarioEventMessage: {
+    type: "object",
+    required: ["id", "name", "description", "examples"],
+    properties: {
+      id: {
+        type: "string",
+        pattern: "^[A-Za-z0-9_-]{1,100}$",
+        minLength: 1,
+        maxLength: 100,
+      },
+      name: {
+        type: "string",
+        maxLength: 50000,
+      },
+      description: {
+        type: "string",
+        maxLength: 50000,
+      },
+      payloadSchemaId: {
+        type: "string",
+        pattern: "^[A-Za-z0-9_-]{1,100}$",
+        minLength: 1,
+        maxLength: 100,
+      },
+      headersSchemaId: {
+        type: "string",
+        pattern: "^[A-Za-z0-9_-]{1,100}$",
+        minLength: 1,
+        maxLength: 100,
+      },
+      keySchemaId: {
+        type: "string",
+        pattern: "^[A-Za-z0-9_-]{1,100}$",
+        minLength: 1,
+        maxLength: 100,
+      },
+      examples: {
+        type: "array",
+        items: {
+          $ref: "#/components/schemas/DesignScenarioEventExample",
+        },
+        maxItems: 20,
+      },
+    },
+    additionalProperties: false,
+  },
+  DesignScenarioEventOperation: {
+    type: "object",
+    required: ["id", "name", "description", "action", "channelId", "messageId"],
+    properties: {
+      id: {
+        type: "string",
+        pattern: "^[A-Za-z0-9_-]{1,100}$",
+        minLength: 1,
+        maxLength: 100,
+      },
+      name: {
+        type: "string",
+        maxLength: 50000,
+      },
+      description: {
+        type: "string",
+        maxLength: 50000,
+      },
+      action: {
+        type: "string",
+        enum: ["send", "receive"],
+      },
+      channelId: {
+        type: "string",
+        pattern: "^[A-Za-z0-9_-]{1,100}$",
+        minLength: 1,
+        maxLength: 100,
+      },
+      messageId: {
+        type: "string",
+        pattern: "^[A-Za-z0-9_-]{1,100}$",
+        minLength: 1,
+        maxLength: 100,
+      },
+      kafka: {
+        $ref: "#/components/schemas/DesignScenarioEventOperationKafka",
+      },
+      failureRoutes: {
+        $ref: "#/components/schemas/DesignScenarioEventFailureRoutes",
+      },
+      apiLinks: {
+        type: "array",
+        items: {
+          $ref: "#/components/schemas/DesignScenarioEventAPILink",
+        },
+        maxItems: 100,
+      },
+      stateLinks: {
+        type: "array",
+        items: {
+          $ref: "#/components/schemas/DesignScenarioEventStateLink",
+        },
+        maxItems: 100,
+      },
+    },
+    additionalProperties: false,
+    allOf: [
+      {
+        if: {
+          required: ["failureRoutes"],
+        },
+        then: {
+          properties: {
+            action: {
+              const: "receive",
+            },
+          },
+        },
+      },
+    ],
+  },
+  DesignScenarioEventOperationKafka: {
+    type: "object",
+    required: [],
+    properties: {
+      groupId: {
+        type: "string",
+        minLength: 1,
+        maxLength: 256,
+        pattern: "^[^\r\n\u0000]+$",
+      },
+      clientId: {
+        type: "string",
+        minLength: 1,
+        maxLength: 256,
+        pattern: "^[^\r\n\u0000]+$",
+      },
+    },
+    additionalProperties: false,
+  },
+  DesignScenarioEventSchema: {
+    type: "object",
+    required: ["id", "name", "description", "schemaJSON"],
+    properties: {
+      id: {
+        type: "string",
+        pattern: "^[A-Za-z0-9_-]{1,100}$",
+        minLength: 1,
+        maxLength: 100,
+      },
+      name: {
+        type: "string",
+        maxLength: 50000,
+      },
+      description: {
+        type: "string",
+        maxLength: 50000,
+      },
+      schemaJSON: {
+        type: "string",
+        maxLength: 262144,
+        description:
+          "Original Draft 07 JSON text, preserved without numeric rounding. UTF-8 byte limit 256 KiB is checked by the server.",
+      },
+    },
+    additionalProperties: false,
+  },
+  DesignScenarioEventServer: {
+    type: "object",
+    required: ["id", "name", "description", "host", "protocol", "auth"],
+    properties: {
+      id: {
+        type: "string",
+        pattern: "^[A-Za-z0-9_-]{1,100}$",
+        minLength: 1,
+        maxLength: 100,
+      },
+      name: {
+        type: "string",
+        maxLength: 50000,
+      },
+      description: {
+        type: "string",
+        maxLength: 50000,
+      },
+      host: {
+        type: "string",
+        maxLength: 50000,
+      },
+      protocol: {
+        type: "string",
+        enum: ["kafka", "kafka-secure"],
+      },
+      auth: {
+        type: "string",
+        enum: ["unspecified", "none", "plain", "scramSha256", "scramSha512"],
+      },
+    },
+    additionalProperties: false,
+  },
+  DesignScenarioEventStateLink: {
+    type: "object",
+    additionalProperties: false,
+    required: ["contractId", "diagramId", "transitionId"],
+    properties: {
+      contractId: {
+        type: "string",
+        minLength: 1,
+      },
+      diagramId: {
+        type: "string",
+        minLength: 1,
+      },
+      transitionId: {
+        type: "string",
+        minLength: 1,
+      },
+    },
+  },
+  DesignScenarioExecutionAssertion: {
+    type: "object",
+    required: ["pointer", "equals"],
+    properties: {
+      pointer: {
+        type: "string",
+        maxLength: 2000,
+        description: "RFC 6901 JSON Pointer; empty string selects the whole response body.",
+      },
+      equals: {
+        description: "Any JSON value, compared structurally; null differs from a missing field.",
+      },
+    },
+    additionalProperties: false,
+  },
+  DesignScenarioExecutionCondition: {
+    type: "object",
+    required: ["variable", "operator"],
+    properties: {
+      variable: {
+        type: "string",
+        pattern: "^[A-Za-z_][A-Za-z0-9_]{0,99}$",
+      },
+      operator: {
+        type: "string",
+        enum: ["equals", "not_equals", "exists", "not_exists"],
+      },
+      value: {
+        type: "string",
+      },
+    },
+    additionalProperties: false,
+  },
+  DesignScenarioExecutionExtraction: {
+    type: "object",
+    required: ["name", "pointer"],
+    properties: {
+      name: {
+        type: "string",
+        pattern: "^[A-Za-z_][A-Za-z0-9_]{0,99}$",
+        maxLength: 100,
+      },
+      pointer: {
+        type: "string",
+        maxLength: 2000,
+        description: "RFC 6901 JSON Pointer; empty string selects the whole response body.",
+      },
+    },
+    additionalProperties: false,
+  },
+  DesignScenarioFragment: {
+    type: "object",
+    required: ["id", "kind", "label", "fromMessageId", "toMessageId"],
+    properties: {
+      id: {
+        type: "string",
+        minLength: 1,
+      },
+      kind: {
+        type: "string",
+        enum: ["opt", "loop", "alt"],
+      },
+      label: {
+        type: "string",
+      },
+      fromMessageId: {
+        type: "string",
+        minLength: 1,
+      },
+      toMessageId: {
+        type: "string",
+        minLength: 1,
+      },
+      parentFragmentId: {
+        type: "string",
+        minLength: 1,
+      },
+      parentBranchId: {
+        type: "string",
+        minLength: 1,
+      },
+      branches: {
+        type: "array",
+        minItems: 2,
+        maxItems: 100,
+        items: {
+          $ref: "#/components/schemas/DesignScenarioFragmentBranch",
+        },
+      },
+      execution: {
+        $ref: "#/components/schemas/DesignScenarioFragmentExecution",
+      },
+    },
+    additionalProperties: false,
+  },
+  DesignScenarioFragmentBranch: {
+    type: "object",
+    required: ["id", "label", "fromMessageId", "toMessageId"],
+    properties: {
+      id: {
+        type: "string",
+        minLength: 1,
+      },
+      label: {
+        type: "string",
+      },
+      fromMessageId: {
+        type: "string",
+        minLength: 1,
+      },
+      toMessageId: {
+        type: "string",
+        minLength: 1,
+      },
+      execution: {
+        $ref: "#/components/schemas/DesignScenarioBranchExecution",
+      },
+    },
+    additionalProperties: false,
+  },
+  DesignScenarioFragmentExecution: {
+    type: "object",
+    required: [],
+    properties: {
+      condition: {
+        $ref: "#/components/schemas/DesignScenarioExecutionCondition",
+      },
+      iterations: {
+        type: "integer",
+        minimum: 1,
+        maximum: 100,
+      },
+    },
+    additionalProperties: false,
+  },
+  DesignScenarioMessage: {
+    type: "object",
+    required: ["id", "fromId", "toId", "kind", "label", "description"],
+    properties: {
+      id: {
+        type: "string",
+        minLength: 1,
+      },
+      fromId: {
+        type: "string",
+        minLength: 1,
+      },
+      toId: {
+        type: "string",
+        minLength: 1,
+      },
+      kind: {
+        type: "string",
+        enum: ["request", "response", "event", "note"],
+      },
+      label: {
+        type: "string",
+      },
+      description: {
+        type: "string",
+      },
+      color: {
+        type: "string",
+        pattern: "^#[0-9a-fA-F]{6}$",
+        minLength: 7,
+        maxLength: 7,
+        description: "Message card fill as opaque #RRGGBB. Omit to use the default color.",
+      },
+      arrowColor: {
+        type: "string",
+        pattern: "^#[0-9a-fA-F]{6}$",
+        minLength: 7,
+        maxLength: 7,
+        description:
+          "Message arrow stroke and arrowhead as opaque #RRGGBB; not displayed for notes. Omit to use the default color.",
+      },
+      replyToId: {
+        type: "string",
+      },
+      operation: {
+        $ref: "#/components/schemas/DesignScenarioOperationBinding",
+      },
+      execution: {
+        $ref: "#/components/schemas/DesignScenarioStepExecution",
+      },
+      eventBindings: {
+        type: "array",
+        items: {
+          $ref: "#/components/schemas/DesignScenarioEventBinding",
+        },
+        maxItems: 2,
+        minItems: 1,
+        uniqueItems: true,
+      },
+    },
+    additionalProperties: false,
+    allOf: [
+      {
+        if: {
+          required: ["eventBindings"],
+        },
+        then: {
+          properties: {
+            kind: {
+              const: "event",
+            },
+            operation: {
+              not: {},
+            },
+          },
+        },
+      },
+    ],
+  },
+  DesignScenarioOperationBinding: {
+    type: "object",
+    required: ["contractId", "operationKey"],
+    properties: {
+      contractId: {
+        type: "string",
+        minLength: 1,
+      },
+      operationKey: {
+        type: "string",
+        minLength: 1,
+        description:
+          "Copy operationKey verbatim from x-mocker-canvas-operation-id on the selected operation, or x-mocker-canvas-operation-ids.<method> on its concrete path for an inherited Path Item operation, in the pinned contracts[].document. It is a stable opaque string, not the workspace opKey from find_operations, METHOD path, or OpenAPI operationId.",
+      },
+    },
+    additionalProperties: false,
+  },
+  DesignScenarioParticipant: {
+    type: "object",
+    required: ["id", "name", "kind", "description"],
+    properties: {
+      id: {
+        type: "string",
+        minLength: 1,
+      },
+      name: {
+        type: "string",
+      },
+      kind: {
+        type: "string",
+        enum: ["user", "client", "service", "external", "database", "queue", "other"],
+      },
+      description: {
+        type: "string",
+      },
+      color: {
+        type: "string",
+        pattern: "^#[0-9a-fA-F]{6}$",
+        minLength: 7,
+        maxLength: 7,
+        description: "Object card fill as opaque #RRGGBB. Omit to use the default color.",
+      },
+      offsetX: {
+        type: "integer",
+        minimum: 0,
+        maximum: 2000,
+        description:
+          "Additional horizontal space before this participant in pixels. Omit for zero.",
+      },
+    },
+    additionalProperties: false,
+  },
+  DesignScenarioStepExecution: {
+    type: "object",
+    required: ["enabled", "pathParams", "query", "headers", "body", "assertions", "extract"],
+    properties: {
+      enabled: {
+        type: "boolean",
+      },
+      pathParams: {
+        type: "object",
+        maxProperties: 100,
+        additionalProperties: {
+          type: "string",
+          maxLength: 50000,
+        },
+      },
+      query: {
+        type: "object",
+        maxProperties: 100,
+        additionalProperties: {
+          type: "string",
+          maxLength: 50000,
+        },
+      },
+      headers: {
+        type: "object",
+        maxProperties: 100,
+        additionalProperties: {
+          type: "string",
+          maxLength: 50000,
+        },
+      },
+      body: {
+        type: "string",
+        description: "Request body template; at most 1 MiB UTF-8.",
+      },
+      expectedStatus: {
+        type: "integer",
+        minimum: 100,
+        maximum: 599,
+      },
+      assertions: {
+        type: "array",
+        maxItems: 100,
+        items: {
+          $ref: "#/components/schemas/DesignScenarioExecutionAssertion",
+        },
+      },
+      extract: {
+        type: "array",
+        maxItems: 100,
+        items: {
+          $ref: "#/components/schemas/DesignScenarioExecutionExtraction",
+        },
+      },
+      bindings: {
+        type: "array",
+        items: {
+          $ref: "#/components/schemas/DesignScenarioDataBinding",
+        },
+        maxItems: 100,
+      },
+    },
+    additionalProperties: false,
+  },
+  EditorBinding: {
+    type: "object",
+    additionalProperties: false,
+    required: [
+      "artifactKind",
+      "artifactId",
+      "selector",
+      "sourceNodeIds",
+      "sourceLabels",
+      "objectHash",
+      "lastKnownLabel",
+      "origin",
+      "reason",
+    ],
+    properties: {
+      artifactKind: {
+        type: "string",
+        enum: ["api_design", "design_scenario"],
+      },
+      artifactId: {
+        $ref: "#/components/schemas/APIArtifactID",
+      },
+      selector: {
+        $ref: "#/components/schemas/EditorSelector",
+      },
+      sourceNodeIds: {
+        type: "array",
+        items: {
+          type: "string",
+          format: "uuid",
+        },
+        minItems: 1,
+        maxItems: 100,
+        uniqueItems: true,
+      },
+      sourceLabels: {
+        type: "array",
+        items: {
+          type: "string",
+          maxLength: 4096,
+        },
+        minItems: 1,
+        maxItems: 100,
+      },
+      objectHash: {
+        type: "string",
+        pattern: "^[a-f0-9]{64}$",
+      },
+      lastKnownLabel: {
+        type: "string",
+        maxLength: 4096,
+      },
+      origin: {
+        type: "string",
+        const: "manual",
+      },
+      reason: {
+        type: "string",
+        minLength: 1,
+        maxLength: 4096,
+      },
+    },
   },
   EditorSelector: {
     oneOf: [
@@ -12838,6 +16674,1123 @@ export const backendChangeSchemas: Record<string, ChangeSchema> = {
     },
     required: ["expectedVersion", "proposalRevisionId", "commands"],
   },
+  PreviewBackendChangeProposalRebaseRequest: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      expectedVersion: {
+        type: "integer",
+        format: "int64",
+        minimum: 1,
+        maximum: 9223372036854776000,
+      },
+      proposalRevisionId: {
+        type: "string",
+        format: "uuid",
+        pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+        not: {
+          const: "00000000-0000-0000-0000-000000000000",
+        },
+      },
+      newBaseRevisionId: {
+        type: "string",
+        format: "uuid",
+        pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+        not: {
+          const: "00000000-0000-0000-0000-000000000000",
+        },
+      },
+      identityResolutions: {
+        type: "array",
+        items: {
+          $ref: "#/components/schemas/BackendChangeRebaseIdentityResolution",
+        },
+      },
+      resolutions: {
+        type: "array",
+        items: {
+          $ref: "#/components/schemas/BackendChangeRebaseResolution",
+        },
+      },
+      repairCommands: {
+        type: "array",
+        items: {
+          $ref: "#/components/schemas/BackendChangeProposalCommand",
+        },
+        maxItems: 100,
+      },
+    },
+    required: [
+      "expectedVersion",
+      "proposalRevisionId",
+      "newBaseRevisionId",
+      "identityResolutions",
+      "resolutions",
+      "repairCommands",
+    ],
+  },
+  ResponseRule: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      id: {
+        type: "string",
+        pattern: "^[A-Za-z0-9_-]{1,80}$",
+      },
+      name: {
+        type: "string",
+        maxLength: 200,
+      },
+      binding: {
+        $ref: "#/components/schemas/ResponseRuleBinding",
+      },
+      nodes: {
+        type: "array",
+        items: {
+          $ref: "#/components/schemas/ResponseRuleNode",
+        },
+        maxItems: 100,
+      },
+      edges: {
+        type: "array",
+        items: {
+          $ref: "#/components/schemas/ResponseRuleEdge",
+        },
+        maxItems: 200,
+      },
+      examples: {
+        type: "array",
+        maxItems: 20,
+        items: {
+          $ref: "#/components/schemas/ResponseRuleExample",
+        },
+        description:
+          "Ordered named authoring-only simulations. Unique IDs, at most 256 KiB compact examples per rule; all requests preserve exact JSON text. Saving uses the whole-API version fence. Examples are omitted from applied execution copies.",
+      },
+    },
+    required: ["id", "name", "nodes", "edges"],
+  },
+  ResponseRuleBinding: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      method: {
+        type: "string",
+      },
+      path: {
+        type: "string",
+        maxLength: 2048,
+      },
+    },
+    required: ["method", "path"],
+  },
+  ResponseRuleCondition: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      in: {
+        type: "string",
+        maxLength: 256,
+        description:
+          "Semantic choices: query, header, body. Incomplete authoring values are retained and diagnosed during validation. At most 256 UTF-8 bytes.",
+      },
+      name: {
+        type: "string",
+        maxLength: 256,
+      },
+      op: {
+        type: "string",
+        maxLength: 256,
+        description:
+          "Semantic choices: equals, contains, exists. Incomplete authoring values are retained and diagnosed during validation. At most 256 UTF-8 bytes.",
+      },
+      value: {
+        type: "string",
+        maxLength: 4096,
+        description:
+          "Optional while authoring; equals/contains require a nonempty value for simulation. The exists operator forbids a supplied value.",
+      },
+    },
+    required: ["in", "name", "op"],
+    not: {
+      properties: {
+        op: {
+          const: "exists",
+        },
+      },
+      required: ["op", "value"],
+    },
+    description:
+      "Structural authoring shape. Missing or empty predicate values and incomplete source/operator names produce semantic diagnostics, so saved drafts can still be read and edited.",
+  },
+  ResponseRuleConditionNode: {
+    oneOf: [
+      {
+        $ref: "#/components/schemas/ResponseRuleRequestConditionNode",
+      },
+      {
+        $ref: "#/components/schemas/ResponseRuleResultConditionNode",
+      },
+    ],
+    description:
+      "Exactly one condition payload: legacy request condition or typed condition on a captured entity result.",
+  },
+  ResponseRuleDelayNode: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      id: {
+        type: "string",
+        pattern: "^[A-Za-z0-9_-]{1,80}$",
+      },
+      type: {
+        type: "string",
+        enum: ["delay"],
+      },
+      name: {
+        type: "string",
+        maxLength: 200,
+      },
+      x: {
+        type: "number",
+        minimum: -100000,
+        maximum: 100000,
+      },
+      y: {
+        type: "number",
+        minimum: -100000,
+        maximum: 100000,
+      },
+      delayMs: {
+        type: "integer",
+      },
+    },
+    required: ["id", "type", "name", "x", "y", "delayMs"],
+  },
+  ResponseRuleEdge: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      id: {
+        type: "string",
+        pattern: "^[A-Za-z0-9_-]{1,80}$",
+      },
+      from: {
+        type: "string",
+        pattern: "^[A-Za-z0-9_-]{1,80}$",
+      },
+      port: {
+        type: "string",
+      },
+      to: {
+        type: "string",
+        pattern: "^[A-Za-z0-9_-]{1,80}$",
+      },
+    },
+    required: ["id", "from", "port", "to"],
+  },
+  ResponseRuleEntityCreateNode: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      id: {
+        type: "string",
+        pattern: "^[A-Za-z0-9_-]{1,80}$",
+      },
+      type: {
+        type: "string",
+        const: "entity_create",
+      },
+      name: {
+        type: "string",
+        maxLength: 200,
+      },
+      x: {
+        type: "number",
+        minimum: -100000,
+        maximum: 100000,
+      },
+      y: {
+        type: "number",
+        minimum: -100000,
+        maximum: 100000,
+      },
+      entity: {
+        allOf: [
+          {
+            $ref: "#/components/schemas/ResponseRuleEntityOperation",
+          },
+          {
+            required: ["data"],
+            not: {
+              anyOf: [
+                {
+                  required: ["operation"],
+                },
+                {
+                  required: ["key"],
+                },
+              ],
+            },
+          },
+        ],
+      },
+    },
+    required: ["id", "type", "name", "x", "y", "entity"],
+  },
+  ResponseRuleEntityFixture: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      family: {
+        type: "string",
+        maxLength: 2048,
+      },
+      idField: {
+        type: "string",
+        maxLength: 256,
+      },
+      idType: {
+        type: "string",
+        enum: ["integer", "string"],
+      },
+      rows: {
+        type: "array",
+        items: {
+          $ref: "#/components/schemas/ResponseRuleEntityFixtureRow",
+        },
+        maxItems: 100,
+      },
+    },
+    required: ["family", "idField", "idType", "rows"],
+  },
+  ResponseRuleEntityFixtureRow: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      key: {
+        type: "string",
+        maxLength: 128,
+      },
+      scope: {
+        type: "array",
+        items: {
+          type: "string",
+          maxLength: 4096,
+        },
+        maxItems: 3,
+      },
+      dataJSON: {
+        type: "string",
+        maxLength: 65536,
+      },
+    },
+    required: ["key", "scope", "dataJSON"],
+  },
+  ResponseRuleEntityOperation: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      family: {
+        type: "string",
+        maxLength: 2048,
+      },
+      operation: {
+        type: "string",
+        enum: ["get", "list"],
+      },
+      scope: {
+        type: "array",
+        items: {
+          $ref: "#/components/schemas/ResponseRuleValueRef",
+        },
+        maxItems: 3,
+      },
+      key: {
+        $ref: "#/components/schemas/ResponseRuleValueRef",
+      },
+      data: {
+        $ref: "#/components/schemas/ResponseRuleValueRef",
+      },
+    },
+    required: ["family"],
+  },
+  ResponseRuleEntityReadNode: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      id: {
+        type: "string",
+        pattern: "^[A-Za-z0-9_-]{1,80}$",
+      },
+      type: {
+        type: "string",
+        const: "entity_read",
+      },
+      name: {
+        type: "string",
+        maxLength: 200,
+      },
+      x: {
+        type: "number",
+        minimum: -100000,
+        maximum: 100000,
+      },
+      y: {
+        type: "number",
+        minimum: -100000,
+        maximum: 100000,
+      },
+      entity: {
+        allOf: [
+          {
+            $ref: "#/components/schemas/ResponseRuleEntityOperation",
+          },
+          {
+            oneOf: [
+              {
+                properties: {
+                  operation: {
+                    const: "get",
+                  },
+                },
+                required: ["operation", "key"],
+                not: {
+                  required: ["data"],
+                },
+              },
+              {
+                properties: {
+                  operation: {
+                    const: "list",
+                  },
+                },
+                required: ["operation"],
+                not: {
+                  anyOf: [
+                    {
+                      required: ["key"],
+                    },
+                    {
+                      required: ["data"],
+                    },
+                  ],
+                },
+              },
+            ],
+          },
+        ],
+      },
+    },
+    required: ["id", "type", "name", "x", "y", "entity"],
+  },
+  ResponseRuleEntityUpdateNode: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      id: {
+        type: "string",
+        pattern: "^[A-Za-z0-9_-]{1,80}$",
+      },
+      type: {
+        type: "string",
+        const: "entity_update",
+      },
+      name: {
+        type: "string",
+        maxLength: 200,
+      },
+      x: {
+        type: "number",
+        minimum: -100000,
+        maximum: 100000,
+      },
+      y: {
+        type: "number",
+        minimum: -100000,
+        maximum: 100000,
+      },
+      entity: {
+        allOf: [
+          {
+            $ref: "#/components/schemas/ResponseRuleEntityOperation",
+          },
+          {
+            required: ["key", "data"],
+            not: {
+              required: ["operation"],
+            },
+          },
+        ],
+      },
+    },
+    required: ["id", "type", "name", "x", "y", "entity"],
+  },
+  ResponseRuleExample: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      id: {
+        type: "string",
+        pattern: "^[A-Za-z0-9_-]{1,80}$",
+      },
+      name: {
+        type: "string",
+        maxLength: 200,
+        pattern: "\\S",
+      },
+      request: {
+        $ref: "#/components/schemas/ResponseRuleRequest",
+      },
+    },
+    required: ["id", "name", "request"],
+  },
+  ResponseRuleFallbackNode: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      id: {
+        type: "string",
+        pattern: "^[A-Za-z0-9_-]{1,80}$",
+      },
+      type: {
+        type: "string",
+        enum: ["fallback"],
+      },
+      name: {
+        type: "string",
+        maxLength: 200,
+      },
+      x: {
+        type: "number",
+        minimum: -100000,
+        maximum: 100000,
+      },
+      y: {
+        type: "number",
+        minimum: -100000,
+        maximum: 100000,
+      },
+    },
+    required: ["id", "type", "name", "x", "y"],
+  },
+  ResponseRuleField: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      name: {
+        type: "string",
+        maxLength: 256,
+      },
+      value: {
+        type: "string",
+        maxLength: 4096,
+      },
+    },
+    required: ["name", "value"],
+  },
+  ResponseRuleNode: {
+    oneOf: [
+      {
+        $ref: "#/components/schemas/ResponseRuleStartNode",
+      },
+      {
+        $ref: "#/components/schemas/ResponseRuleConditionNode",
+      },
+      {
+        $ref: "#/components/schemas/ResponseRuleDelayNode",
+      },
+      {
+        $ref: "#/components/schemas/ResponseRuleResponseNode",
+      },
+      {
+        $ref: "#/components/schemas/ResponseRuleFallbackNode",
+      },
+      {
+        $ref: "#/components/schemas/ResponseRuleEntityReadNode",
+      },
+      {
+        $ref: "#/components/schemas/ResponseRuleEntityCreateNode",
+      },
+      {
+        $ref: "#/components/schemas/ResponseRuleEntityUpdateNode",
+      },
+    ],
+    discriminator: {
+      propertyName: "type",
+    },
+  },
+  ResponseRuleRequest: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      query: {
+        type: "array",
+        items: {
+          $ref: "#/components/schemas/ResponseRuleField",
+        },
+        maxItems: 100,
+      },
+      headers: {
+        type: "array",
+        items: {
+          $ref: "#/components/schemas/ResponseRuleField",
+        },
+        maxItems: 100,
+      },
+      bodyJSON: {
+        type: "string",
+        maxLength: 65536,
+        description:
+          "Exact JSON text, at most 65536 UTF-8 bytes and depth 64. Duplicate object keys and trailing data are invalid. Absence means no body; null is forbidden.",
+      },
+      path: {
+        type: "array",
+        items: {
+          $ref: "#/components/schemas/ResponseRuleField",
+        },
+        maxItems: 100,
+      },
+      entities: {
+        type: "array",
+        items: {
+          $ref: "#/components/schemas/ResponseRuleEntityFixture",
+        },
+        maxItems: 100,
+      },
+    },
+    required: ["query", "headers"],
+    description:
+      "Logical request, at most 128 KiB compact JSON. Ordered duplicate query/header rows are retained; headers use the first case-insensitive value. Body numbers retain source spelling.",
+  },
+  ResponseRuleRequestConditionNode: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      id: {
+        type: "string",
+        pattern: "^[A-Za-z0-9_-]{1,80}$",
+      },
+      type: {
+        type: "string",
+        enum: ["condition"],
+      },
+      name: {
+        type: "string",
+        maxLength: 200,
+      },
+      x: {
+        type: "number",
+        minimum: -100000,
+        maximum: 100000,
+      },
+      y: {
+        type: "number",
+        minimum: -100000,
+        maximum: 100000,
+      },
+      condition: {
+        $ref: "#/components/schemas/ResponseRuleCondition",
+      },
+    },
+    required: ["id", "type", "name", "x", "y", "condition"],
+  },
+  ResponseRuleResponse: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      status: {
+        type: "integer",
+      },
+      mediaType: {
+        type: "string",
+        description:
+          "Safe application/json or application/*+json media type; optional valid MIME parameters.",
+      },
+      headers: {
+        type: "array",
+        items: {
+          $ref: "#/components/schemas/ResponseRuleField",
+        },
+        maxItems: 100,
+      },
+      bodyJSON: {
+        type: "string",
+        maxLength: 65536,
+        description:
+          "Exact JSON text, at most 65536 UTF-8 bytes and depth 64. Duplicate object keys and trailing data are invalid. Absence means no body; null is forbidden.",
+      },
+      bodyFrom: {
+        $ref: "#/components/schemas/ResponseRuleValueRef",
+      },
+    },
+    required: ["status", "mediaType", "headers"],
+    description:
+      "Static response. Semantic validation requires status 200..599 and no body for 204/205/304 or bound HEAD. Unsafe media types and response headers are rejected even on save.",
+    not: {
+      required: ["bodyJSON", "bodyFrom"],
+    },
+  },
+  ResponseRuleResponseNode: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      id: {
+        type: "string",
+        pattern: "^[A-Za-z0-9_-]{1,80}$",
+      },
+      type: {
+        type: "string",
+        enum: ["response"],
+      },
+      name: {
+        type: "string",
+        maxLength: 200,
+      },
+      x: {
+        type: "number",
+        minimum: -100000,
+        maximum: 100000,
+      },
+      y: {
+        type: "number",
+        minimum: -100000,
+        maximum: 100000,
+      },
+      response: {
+        $ref: "#/components/schemas/ResponseRuleResponse",
+      },
+    },
+    required: ["id", "type", "name", "x", "y", "response"],
+  },
+  ResponseRuleResultAllCondition: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      all: {
+        type: "array",
+        minItems: 2,
+        maxItems: 16,
+        items: {
+          $ref: "#/components/schemas/ResponseRuleResultConditionLevel2",
+        },
+      },
+    },
+    required: ["all"],
+  },
+  ResponseRuleResultAnyCondition: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      any: {
+        type: "array",
+        minItems: 2,
+        maxItems: 16,
+        items: {
+          $ref: "#/components/schemas/ResponseRuleResultConditionLevel2",
+        },
+      },
+    },
+    required: ["any"],
+  },
+  ResponseRuleResultComparisonCondition: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      source: {
+        $ref: "#/components/schemas/ResponseRuleResultSource",
+      },
+      op: {
+        type: "string",
+        enum: ["equals", "not_equals"],
+      },
+      valueJSON: {
+        type: "string",
+        maxLength: 65536,
+        pattern:
+          '^[ \\t\\r\\n]*(null|true|false|-?(0|[1-9][0-9]*)(\\.[0-9]+)?([eE][+-]?[0-9]+)?|"([^"\\\\\\x00-\\x1F]|\\\\["\\\\/bfnrt]|\\\\u[0-9A-Fa-f]{4})*")[ \\t\\r\\n]*$',
+        description:
+          "Exactly one JSON scalar or null, at most 65536 UTF-8 bytes. Authored spelling is preserved. Non-null kinds must match; numbers compare by exact decimal value without float64 conversion. A missing pointer or container is an execution error.",
+      },
+    },
+    required: ["source", "op", "valueJSON"],
+  },
+  ResponseRuleResultCondition: {
+    oneOf: [
+      {
+        $ref: "#/components/schemas/ResponseRuleResultComparisonCondition",
+      },
+      {
+        $ref: "#/components/schemas/ResponseRuleResultExistenceCondition",
+      },
+      {
+        $ref: "#/components/schemas/ResponseRuleResultNumericCondition",
+      },
+      {
+        $ref: "#/components/schemas/ResponseRuleResultReferenceCondition",
+      },
+      {
+        $ref: "#/components/schemas/ResponseRuleResultAllCondition",
+      },
+      {
+        $ref: "#/components/schemas/ResponseRuleResultAnyCondition",
+      },
+    ],
+    description:
+      "One leaf, AND (all) or OR (any). At most four levels including the root and sixteen leaves total (domain-enforced). Groups evaluate left to right with short circuit; every referenced producer must dominate on all paths.",
+  },
+  ResponseRuleResultConditionLevel2: {
+    oneOf: [
+      {
+        $ref: "#/components/schemas/ResponseRuleResultComparisonCondition",
+      },
+      {
+        $ref: "#/components/schemas/ResponseRuleResultExistenceCondition",
+      },
+      {
+        $ref: "#/components/schemas/ResponseRuleResultNumericCondition",
+      },
+      {
+        $ref: "#/components/schemas/ResponseRuleResultReferenceCondition",
+      },
+      {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          all: {
+            type: "array",
+            minItems: 2,
+            maxItems: 16,
+            items: {
+              $ref: "#/components/schemas/ResponseRuleResultConditionLevel3",
+            },
+          },
+        },
+        required: ["all"],
+      },
+      {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          any: {
+            type: "array",
+            minItems: 2,
+            maxItems: 16,
+            items: {
+              $ref: "#/components/schemas/ResponseRuleResultConditionLevel3",
+            },
+          },
+        },
+        required: ["any"],
+      },
+    ],
+  },
+  ResponseRuleResultConditionLevel3: {
+    oneOf: [
+      {
+        $ref: "#/components/schemas/ResponseRuleResultComparisonCondition",
+      },
+      {
+        $ref: "#/components/schemas/ResponseRuleResultExistenceCondition",
+      },
+      {
+        $ref: "#/components/schemas/ResponseRuleResultNumericCondition",
+      },
+      {
+        $ref: "#/components/schemas/ResponseRuleResultReferenceCondition",
+      },
+      {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          all: {
+            type: "array",
+            minItems: 2,
+            maxItems: 16,
+            items: {
+              $ref: "#/components/schemas/ResponseRuleResultConditionLevel4",
+            },
+          },
+        },
+        required: ["all"],
+      },
+      {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          any: {
+            type: "array",
+            minItems: 2,
+            maxItems: 16,
+            items: {
+              $ref: "#/components/schemas/ResponseRuleResultConditionLevel4",
+            },
+          },
+        },
+        required: ["any"],
+      },
+    ],
+  },
+  ResponseRuleResultConditionLevel4: {
+    oneOf: [
+      {
+        $ref: "#/components/schemas/ResponseRuleResultComparisonCondition",
+      },
+      {
+        $ref: "#/components/schemas/ResponseRuleResultExistenceCondition",
+      },
+      {
+        $ref: "#/components/schemas/ResponseRuleResultNumericCondition",
+      },
+      {
+        $ref: "#/components/schemas/ResponseRuleResultReferenceCondition",
+      },
+    ],
+  },
+  ResponseRuleResultConditionNode: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      id: {
+        type: "string",
+        pattern: "^[A-Za-z0-9_-]{1,80}$",
+      },
+      type: {
+        type: "string",
+        enum: ["condition"],
+      },
+      name: {
+        type: "string",
+        maxLength: 200,
+      },
+      x: {
+        type: "number",
+        minimum: -100000,
+        maximum: 100000,
+      },
+      y: {
+        type: "number",
+        minimum: -100000,
+        maximum: 100000,
+      },
+      resultCondition: {
+        $ref: "#/components/schemas/ResponseRuleResultCondition",
+      },
+    },
+    required: ["id", "type", "name", "x", "y", "resultCondition"],
+  },
+  ResponseRuleResultExistenceCondition: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      source: {
+        $ref: "#/components/schemas/ResponseRuleResultSource",
+      },
+      op: {
+        type: "string",
+        enum: ["exists", "not_exists"],
+      },
+    },
+    required: ["source", "op"],
+    description:
+      "Tests pointer presence, including null, false, zero, empty strings and containers. valueJSON is forbidden, including explicit null.",
+  },
+  ResponseRuleResultNumericCondition: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      source: {
+        $ref: "#/components/schemas/ResponseRuleResultSource",
+      },
+      op: {
+        type: "string",
+        enum: ["greater_than", "greater_or_equal", "less_than", "less_or_equal"],
+      },
+      valueJSON: {
+        type: "string",
+        maxLength: 65536,
+        pattern: "^[ \\t\\r\\n]*-?(0|[1-9][0-9]*)(\\.[0-9]+)?([eE][+-]?[0-9]+)?[ \\t\\r\\n]*$",
+      },
+    },
+    required: ["source", "op", "valueJSON"],
+    description:
+      "Exact decimal ordering. Both operands must be JSON numbers; no coercion or exponent expansion.",
+  },
+  ResponseRuleResultReferenceCondition: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      source: {
+        $ref: "#/components/schemas/ResponseRuleResultSource",
+      },
+      op: {
+        type: "string",
+        enum: [
+          "equals",
+          "not_equals",
+          "greater_than",
+          "greater_or_equal",
+          "less_than",
+          "less_or_equal",
+        ],
+      },
+      valueFrom: {
+        $ref: "#/components/schemas/ResponseRuleResultSource",
+      },
+    },
+    required: ["source", "op", "valueFrom"],
+  },
+  ResponseRuleResultSource: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      source: {
+        type: "string",
+        const: "result",
+      },
+      pointer: {
+        type: "string",
+        maxLength: 2048,
+      },
+      nodeId: {
+        type: "string",
+        pattern: "^[A-Za-z0-9_-]{1,80}$",
+      },
+    },
+    required: ["source", "nodeId"],
+    description:
+      "Output captured from an earlier entity node in the same execution. The producer must dominate this condition; get/update references also require its found branch. Saved drafts may retain unavailable references until semantic validation.",
+  },
+  ResponseRuleStartNode: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      id: {
+        type: "string",
+        pattern: "^[A-Za-z0-9_-]{1,80}$",
+      },
+      type: {
+        type: "string",
+        enum: ["start"],
+      },
+      name: {
+        type: "string",
+        maxLength: 200,
+      },
+      x: {
+        type: "number",
+        minimum: -100000,
+        maximum: 100000,
+      },
+      y: {
+        type: "number",
+        minimum: -100000,
+        maximum: 100000,
+      },
+    },
+    required: ["id", "type", "name", "x", "y"],
+  },
+  ResponseRuleValueRef: {
+    oneOf: [
+      {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          source: {
+            type: "string",
+            const: "literal",
+          },
+          valueJSON: {
+            type: "string",
+            maxLength: 65536,
+          },
+        },
+        required: ["source", "valueJSON"],
+      },
+      {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          source: {
+            type: "string",
+            const: "path",
+          },
+          name: {
+            type: "string",
+            maxLength: 256,
+          },
+        },
+        required: ["source", "name"],
+      },
+      {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          source: {
+            type: "string",
+            const: "query",
+          },
+          name: {
+            type: "string",
+            maxLength: 256,
+          },
+        },
+        required: ["source", "name"],
+      },
+      {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          source: {
+            type: "string",
+            const: "header",
+          },
+          name: {
+            type: "string",
+            maxLength: 256,
+          },
+        },
+        required: ["source", "name"],
+      },
+      {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          source: {
+            type: "string",
+            const: "body",
+          },
+          pointer: {
+            type: "string",
+            maxLength: 2048,
+          },
+        },
+        required: ["source"],
+      },
+      {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          source: {
+            type: "string",
+            const: "result",
+          },
+          pointer: {
+            type: "string",
+            maxLength: 2048,
+          },
+          nodeId: {
+            type: "string",
+            pattern: "^[A-Za-z0-9_-]{1,80}$",
+          },
+        },
+        required: ["source", "nodeId"],
+      },
+    ],
+    discriminator: {
+      propertyName: "source",
+    },
+  },
   RestoreBackendChangeProposalRequest: {
     type: "object",
     additionalProperties: false,
@@ -12872,6 +17825,19 @@ export const backendChangeSchemas: Record<string, ChangeSchema> = {
       },
     },
     required: ["expectedVersion", "proposalRevisionId", "restoreRevisionId", "idempotencyKey"],
+  },
+  RetryBackendAnalysisRequest: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      idempotencyKey: {
+        type: "string",
+        minLength: 1,
+        maxLength: 128,
+        pattern: "^[!-~]+$",
+      },
+    },
+    required: ["idempotencyKey"],
   },
   ScenarioEditorBindingInput: {
     type: "object",
@@ -13065,5 +18031,202 @@ export const backendChangeSchemas: Record<string, ChangeSchema> = {
         },
       },
     ],
+  },
+  StartBackendAnalysisRequest: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      kind: {
+        type: "string",
+        enum: ["diff", "impact"],
+      },
+      fromRevisionId: {
+        type: "string",
+        format: "uuid",
+        pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+        not: {
+          const: "00000000-0000-0000-0000-000000000000",
+        },
+      },
+      target: {
+        $ref: "#/components/schemas/BackendAnalysisTarget",
+      },
+      scope: {
+        $ref: "#/components/schemas/BackendAnalysisScope",
+      },
+      limits: {
+        $ref: "#/components/schemas/BackendAnalysisLimits",
+      },
+      observationMode: {
+        type: "string",
+        const: "none",
+      },
+      observationPins: {
+        type: "array",
+        items: {},
+        maxItems: 0,
+      },
+      idempotencyKey: {
+        type: "string",
+        minLength: 1,
+        maxLength: 128,
+        pattern: "^[!-~]+$",
+      },
+    },
+    required: [
+      "kind",
+      "fromRevisionId",
+      "target",
+      "scope",
+      "limits",
+      "observationMode",
+      "idempotencyKey",
+    ],
+  },
+  StateDiagram: {
+    type: "object",
+    properties: {
+      id: {
+        type: "string",
+        pattern: "^[A-Za-z0-9_-]{1,80}$",
+      },
+      name: {
+        type: "string",
+      },
+      initialStateId: {
+        type: "string",
+      },
+      states: {
+        type: "array",
+        items: {
+          $ref: "#/components/schemas/StateDiagramState",
+        },
+      },
+      transitions: {
+        type: "array",
+        items: {
+          $ref: "#/components/schemas/StateDiagramTransition",
+        },
+      },
+      entity: {
+        $ref: "#/components/schemas/StateDiagramEntityBinding",
+      },
+    },
+    required: ["id", "name", "initialStateId", "states", "transitions"],
+    additionalProperties: false,
+  },
+  StateDiagramBinding: {
+    type: "object",
+    properties: {
+      method: {
+        type: "string",
+        enum: ["get", "post", "put", "patch", "delete", "head", "options", "trace"],
+      },
+      path: {
+        type: "string",
+      },
+    },
+    required: ["method", "path"],
+    additionalProperties: false,
+  },
+  StateDiagramEntityBinding: {
+    type: "object",
+    additionalProperties: false,
+    required: ["family", "keyParam", "stateField"],
+    properties: {
+      family: {
+        type: "string",
+        minLength: 1,
+        maxLength: 2048,
+      },
+      keyParam: {
+        type: "string",
+        minLength: 1,
+        maxLength: 256,
+      },
+      stateField: {
+        type: "string",
+        minLength: 1,
+        maxLength: 256,
+      },
+    },
+  },
+  StateDiagramGuard: {
+    type: "object",
+    properties: {
+      pointer: {
+        type: "string",
+      },
+      equalsJSON: {
+        type: "string",
+      },
+    },
+    required: ["pointer", "equalsJSON"],
+    additionalProperties: false,
+  },
+  StateDiagramState: {
+    type: "object",
+    properties: {
+      id: {
+        type: "string",
+        pattern: "^[A-Za-z0-9_-]{1,80}$",
+      },
+      name: {
+        type: "string",
+      },
+      x: {
+        type: "number",
+      },
+      y: {
+        type: "number",
+      },
+      terminal: {
+        type: "boolean",
+      },
+      value: {
+        type: "string",
+        minLength: 1,
+        maxLength: 256,
+        description: "Stored state value; absent uses the graph state id.",
+      },
+    },
+    required: ["id", "name", "x", "y", "terminal"],
+    additionalProperties: false,
+  },
+  StateDiagramTransition: {
+    type: "object",
+    properties: {
+      id: {
+        type: "string",
+        pattern: "^[A-Za-z0-9_-]{1,80}$",
+      },
+      name: {
+        type: "string",
+      },
+      from: {
+        type: "string",
+        pattern: "^[A-Za-z0-9_-]{1,80}$",
+      },
+      to: {
+        type: "string",
+        pattern: "^[A-Za-z0-9_-]{1,80}$",
+      },
+      binding: {
+        $ref: "#/components/schemas/StateDiagramBinding",
+      },
+      guard: {
+        $ref: "#/components/schemas/StateDiagramGuard",
+      },
+      patchJSON: {
+        type: "string",
+      },
+      responseStatus: {
+        type: "integer",
+        minimum: 100,
+        maximum: 599,
+      },
+    },
+    required: ["id", "name", "from", "to", "patchJSON", "responseStatus"],
+    additionalProperties: false,
   },
 };

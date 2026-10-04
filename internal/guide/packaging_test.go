@@ -236,6 +236,7 @@ func TestGuideInstallationModesKeepOnePinnedSet(t *testing.T) {
 				"backend-profile-go-sql", "backend-model", "backend-recovery",
 				"backend-inspect", "backend-flow-reference", "backend-analysis",
 				"backend-sync", "backend-change-proposals", "backend-annotations",
+				"backend-change-rebase", "backend-analysis-jobs",
 			} {
 				owner, ok := WorkflowForTopic(topic)
 				if !ok || owner.GuideSetID != CurrentGuideSetID() || owner.ManifestHash != CurrentGuideSetID() {

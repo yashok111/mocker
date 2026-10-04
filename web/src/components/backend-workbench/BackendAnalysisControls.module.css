@@ -1,0 +1,23 @@
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr));
+  align-items: end;
+  gap: var(--mantine-spacing-md);
+}
+
+.grid > * {
+  min-width: 0;
+}
+
+.start {
+  height: auto;
+  min-height: var(--button-height, 2.25rem);
+  padding-block: var(--mantine-spacing-xs);
+}
+
+.startLabel {
+  white-space: normal;
+  overflow: visible;
+  overflow-wrap: anywhere;
+  text-align: center;
+}

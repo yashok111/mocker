@@ -11,6 +11,14 @@ const roots = [
   "PreviewBackendChangeProposalCommandsRequest",
   "ApplyBackendChangeProposalCommandsRequest",
   "RestoreBackendChangeProposalRequest",
+  "StartBackendAnalysisRequest",
+  "CancelBackendAnalysisRequest",
+  "RetryBackendAnalysisRequest",
+  "PreviewBackendChangeProposalRebaseRequest",
+  "ApplyBackendChangeProposalRebaseRequest",
+  "ApplyBackendChangeProposalLifecycleRequest",
+  "BackendAnalysisJobDetail",
+  "BackendAnalysisResultPage",
 ];
 const definitions = {};
 function include(name) {
