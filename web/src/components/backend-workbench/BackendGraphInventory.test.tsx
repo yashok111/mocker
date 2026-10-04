@@ -330,3 +330,16 @@ it("shows retained ownership, stale reasons and provenance source role", async (
   );
   expect(within(inspector).getAllByText(/demo · foundation-graph-v1/)).not.toHaveLength(0);
 });
+
+it("opens an exact source object requested by an annotation", async () => {
+  fakeServer();
+  renderWithProviders(
+    <BackendGraphInventory
+      projectId={projectId}
+      revisionId={revisionId}
+      focusTarget={{ recordType: "node", id: nodeId }}
+    />,
+  );
+  expect(await screen.findByRole("region", { name: "Инспектор объекта" })).toBeInTheDocument();
+  expect(await screen.findByText("ListOrders", { exact: true })).toBeInTheDocument();
+});

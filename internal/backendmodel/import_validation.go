@@ -240,6 +240,12 @@ func commandAddress(c ImportCommand) (string, string, error) {
 	return "", "", semantic("commands/op", "Operation and addressed record do not agree")
 }
 func validateCommand(c ImportCommand, s *ImportSession) error {
+	if s.Mode == "composed" {
+		return validateComposedCommand(c, s)
+	}
+	if c.ClaimIdentity != nil || c.Resolution != nil || c.Node != nil && c.Node.ParentRef != nil || c.Edge != nil && (c.Edge.FromRef != nil || c.Edge.ToRef != nil) {
+		return semantic("commands", "Source6 members require composed mode")
+	}
 	typ, key, err := commandAddress(c)
 	if err != nil {
 		return err

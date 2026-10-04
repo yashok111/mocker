@@ -118,14 +118,16 @@ it("pins independent pages, announces truncation and restores keyboard focus fro
         }),
       );
     },
-    "GET /api/backend-projects/project/revisions/source/nodes/step1": () =>
-      json(200, node("step1")),
-    "GET /api/backend-projects/project/revisions/source/evidence": () =>
-      json(200, { items: [], nextCursor: "" }),
+    "GET /api/backend-projects/project/revisions/0197aaf9-5555-7000-8000-000000000119/nodes/step1":
+      () => json(200, node("step1")),
+    "GET /api/backend-projects/project/revisions/0197aaf9-5555-7000-8000-000000000119/evidence":
+      () => json(200, { items: [], nextCursor: "" }),
     "POST /api/backend-projects/project/graph/query": () =>
       json(200, { nodes: [], edges: [], nextCursor: "" }),
   });
-  renderWithProviders(<BackendFlow projectId="project" revisionId="source" />);
+  renderWithProviders(
+    <BackendFlow projectId="project" revisionId="0197aaf9-5555-7000-8000-000000000119" />,
+  );
   await userEvent.click(await screen.findByRole("button", { name: "Открыть Flow GET /orders" }));
   expect(await screen.findByText("Возможная связь")).toBeInTheDocument();
   expect(screen.getByText(/Поиск ограничен: call_hops/)).toBeInTheDocument();
@@ -139,7 +141,7 @@ it("pins independent pages, announces truncation and restores keyboard focus fro
   await userEvent.click(screen.getByRole("button", { name: "Следующие шаги" }));
   expect(await screen.findByRole("button", { name: "Открыть шаг step2" })).toBeInTheDocument();
   expect(requests.find((input) => input.cursor === "steps-next")).toMatchObject({
-    revisionId: "source",
+    revisionId: "0197aaf9-5555-7000-8000-000000000119",
     view: "steps",
     flowId: "flow",
   });
@@ -154,7 +156,9 @@ it("offers an explicit retry after a failed endpoint page", async () => {
         ? json(503, { error: "Unavailable" })
         : json(200, page(body as Record<string, unknown>, { entrypointItems: [] })),
   });
-  renderWithProviders(<BackendFlow projectId="project" revisionId="source" />);
+  renderWithProviders(
+    <BackendFlow projectId="project" revisionId="0197aaf9-5555-7000-8000-000000000119" />,
+  );
   await userEvent.click(
     await screen.findByRole("button", { name: "Повторить загрузку точек входа" }),
   );
@@ -209,7 +213,11 @@ it("scopes the visible coverage summary to inventory and expands details without
     },
   });
   renderWithProviders(
-    <BackendFlow projectId="project" revisionId="source" pin={{ flowId: "flow" }} />,
+    <BackendFlow
+      projectId="project"
+      revisionId="0197aaf9-5555-7000-8000-000000000119"
+      pin={{ flowId: "flow" }}
+    />,
   );
   expect((await screen.findAllByText(/Покрытие инвентаря ревизии: Полное/))[0]).toBeVisible();
   expect(await screen.findByRole("button", { name: "Открыть шаг partial-step" })).toHaveTextContent(
@@ -233,7 +241,7 @@ it("cancels late pages when the immutable source selection changes", async () =>
   let oldSignal: AbortSignal | null | undefined;
   vi.stubGlobal("fetch", async (_url: string, init?: RequestInit) => {
     const input = JSON.parse(String(init?.body)) as Record<string, unknown>;
-    if (input.revisionId === "source") {
+    if (input.revisionId === "0197aaf9-5555-7000-8000-000000000119") {
       oldSignal = init?.signal;
       return new Promise<Response>((resolve) => {
         finish = resolve;
@@ -256,10 +264,12 @@ it("cancels late pages when the immutable source selection changes", async () =>
     );
   });
   function Harness() {
-    const [revision, setRevision] = useState("source");
+    const [revision, setRevision] = useState("0197aaf9-5555-7000-8000-000000000119");
     return (
       <>
-        <button onClick={() => setRevision("new-source")}>Другой источник</button>
+        <button onClick={() => setRevision("0197aaf9-5555-7000-8000-000000000202")}>
+          Другой источник
+        </button>
         <BackendFlow projectId="project" revisionId={revision} />
       </>
     );
@@ -277,7 +287,7 @@ it("cancels late pages when the immutable source selection changes", async () =>
       json(
         200,
         page(
-          { revisionId: "source", view: "entrypoints" },
+          { revisionId: "0197aaf9-5555-7000-8000-000000000119", view: "entrypoints" },
           {
             entrypointItems: [
               {
@@ -297,7 +307,7 @@ it("cancels late pages when the immutable source selection changes", async () =>
   expect(
     screen.queryByRole("button", { name: "Открыть Flow GET /orders" }),
   ).not.toBeInTheDocument();
-  expect(screen.getByText(/ревизия new-source/)).toBeInTheDocument();
+  expect(screen.getByText(/ревизия 0197aaf9-5555-7000-8000-000000000202/)).toBeInTheDocument();
 });
 
 it("keeps long transaction collapse captions shrinkable and wrapped inside a375px workspace", async () => {
@@ -337,7 +347,11 @@ it("keeps long transaction collapse captions shrinkable and wrapped inside a375p
   });
   renderWithProviders(
     <div style={{ width: 375 }}>
-      <BackendFlow projectId="project" revisionId="source" pin={{ flowId: "flow" }} />
+      <BackendFlow
+        projectId="project"
+        revisionId="0197aaf9-5555-7000-8000-000000000119"
+        pin={{ flowId: "flow" }}
+      />
     </div>,
   );
   const collapse = await screen.findByRole("button", {

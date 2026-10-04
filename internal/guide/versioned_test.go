@@ -16,14 +16,14 @@ import (
 
 func TestVersionedWorkflowContract(t *testing.T) {
 	workflows := BackendWorkflows()
-	if len(workflows) != 4 {
+	if len(workflows) != 6 {
 		t.Fatalf("workflows = %#v", workflows)
 	}
 	w := workflows[0]
-	if w.WorkflowID != "mocker-backend-project" || w.WorkflowVersion != "1" || w.Entrypoint != "backend-overview" || w.GuideSetID != CurrentGuideSetID() || w.ManifestHash == "" {
+	if w.WorkflowID != "mocker-backend-project" || w.WorkflowVersion != "2" || w.Entrypoint != "backend-overview" || w.GuideSetID != CurrentGuideSetID() || w.ManifestHash == "" {
 		t.Fatalf("workflow = %#v", w)
 	}
-	if !slices.Equal(w.RequiredModelSchemaVersions, []string{"1"}) || !slices.Equal(w.RequiredCapabilities, []string{"backend-projects", "backend-project-metadata", "backend-revisions"}) {
+	if !slices.Equal(w.RequiredModelSchemaVersions, []string{"1"}) || !slices.Equal(w.RequiredCapabilities, []string{"backend-projects", "backend-project-metadata", "backend-revisions", "backend-annotations"}) {
 		t.Fatalf("requirements = %#v", w)
 	}
 	for _, topic := range w.Topics {
@@ -47,7 +47,7 @@ func TestImportWorkflowUsesPinnedAvailableTopics(t *testing.T) {
 			selected = workflow
 		}
 	}
-	if selected.Entrypoint != "backend-import" || selected.WorkflowVersion != "6" {
+	if selected.Entrypoint != "backend-import" || selected.WorkflowVersion != "7" {
 		t.Fatalf("source import workflow unavailable: %#v", selected)
 	}
 	if selected.GuideSetID != CurrentGuideSetID() || selected.ManifestHash != CurrentGuideSetID() {
@@ -58,7 +58,7 @@ func TestImportWorkflowUsesPinnedAvailableTopics(t *testing.T) {
 			t.Errorf("import workflow does not require %s", required)
 		}
 	}
-	if !slices.Equal(selected.RequiredModelSchemaVersions, []string{"1", "2", "3", "4", "5"}) || len(selected.Topics) == 0 {
+	if !slices.Equal(selected.RequiredModelSchemaVersions, []string{"1", "2", "3", "4", "5", "6"}) || len(selected.Topics) == 0 {
 		t.Fatal("import workflow has no supported schema or procedure")
 	}
 	for _, topic := range selected.Topics {
@@ -198,7 +198,7 @@ func TestGuideSyncDetectsChangesAndGeneratesStableIdentity(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	corrupted := strings.Replace(string(current), `workflowVersion: "1"`, `workflowVersion: "99"`, 1)
+	corrupted := strings.Replace(string(current), `workflowVersion: "2"`, `workflowVersion: "99"`, 1)
 	if err := os.WriteFile(owner, []byte(corrupted), 0600); err != nil {
 		t.Fatal(err)
 	}
@@ -209,7 +209,7 @@ func TestGuideSyncDetectsChangesAndGeneratesStableIdentity(t *testing.T) {
 
 func TestSkillFrontmatterInstallationContract(t *testing.T) {
 	allowed := map[string]bool{"name": true, "description": true, "license": true, "allowed-tools": true, "metadata": true}
-	for _, topic := range []string{"overview", "backend-overview", "backend-import", "backend-database", "backend-inspect"} {
+	for _, topic := range []string{"overview", "backend-overview", "backend-import", "backend-database", "backend-inspect", "backend-sync", "backend-change-proposals"} {
 		t.Run(topic, func(t *testing.T) {
 			raw, ok := Raw(topic + ".md")
 			if !ok {

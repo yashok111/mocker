@@ -22,19 +22,24 @@ const (
 
 // FlowQueryInput selects one immutable source-flow projection.
 type FlowQueryInput struct {
-	RevisionID   string `json:"revisionId"`
-	View         string `json:"view"`
-	Search       string `json:"search,omitempty"`
-	FlowID       string `json:"flowId,omitempty"`
-	EntrypointID string `json:"entrypointId,omitempty"`
-	DataNodeID   string `json:"dataNodeId,omitempty"`
-	AccessKind   string `json:"accessKind,omitempty"`
-	Limit        int    `json:"limit,omitzero"`
-	Cursor       string `json:"cursor,omitempty"`
-	present      map[string]bool
+	Proposal        *ProposalReadTarget        `json:"proposal,omitzero"`
+	ChangeProposal  *ProposalReadTarget        `json:"changeProposal,omitzero"`
+	ImportCandidate *ImportCandidateReadTarget `json:"importCandidate,omitzero"`
+	RevisionID      string                     `json:"revisionId,omitempty"`
+	View            string                     `json:"view"`
+	Search          string                     `json:"search,omitempty"`
+	FlowID          string                     `json:"flowId,omitempty"`
+	EntrypointID    string                     `json:"entrypointId,omitempty"`
+	DataNodeID      string                     `json:"dataNodeId,omitempty"`
+	AccessKind      string                     `json:"accessKind,omitempty"`
+	Limit           int                        `json:"limit,omitzero"`
+	Cursor          string                     `json:"cursor,omitempty"`
+	present         map[string]bool
 }
 
 type FlowPage struct {
+	Target            *BackendReadTarget   `json:"target,omitzero"`
+	Pins              *EffectiveGraphPins  `json:"pins,omitzero"`
 	ProjectID         string               `json:"projectId"`
 	RevisionID        string               `json:"revisionId"`
 	SemanticHash      string               `json:"semanticHash"`
@@ -78,6 +83,18 @@ type FlowAccessItem struct {
 }
 
 func (r *Repo) QueryFlow(ctx context.Context, projectID string, in FlowQueryInput) (*FlowPage, error) {
+	if in.Proposal != nil || in.ChangeProposal != nil || in.ImportCandidate != nil {
+		return r.queryEffectiveFlow(ctx, projectID, in)
+	}
+	if in.RevisionID != "" && in.Proposal == nil && in.ChangeProposal == nil {
+		revision, err := r.Revision(ctx, projectID, in.RevisionID)
+		if err != nil {
+			return nil, err
+		}
+		if revision.SchemaVersion == ComposedSchemaVersion {
+			return r.queryEffectiveFlow(ctx, projectID, in)
+		}
+	}
 	if err := in.validate(); err != nil {
 		return nil, err
 	}
@@ -85,7 +102,14 @@ func (r *Repo) QueryFlow(ctx context.Context, projectID string, in FlowQueryInpu
 	if err != nil {
 		return nil, err
 	}
-	page, err := projectRuntimeFlow(ctx, state, in)
+	var graph *SourceGraphSnapshot
+	if state.Revision.SchemaVersion == ComposedSchemaVersion {
+		graph, err = r.ResolveSourceGraph(ctx, projectID, in.RevisionID)
+		if err != nil {
+			return nil, err
+		}
+	}
+	page, err := projectRuntimeFlowWithSource(ctx, state, graph, in)
 	if err != nil {
 		return nil, err
 	}
@@ -98,6 +122,9 @@ func (r *Repo) QueryFlow(ctx context.Context, projectID string, in FlowQueryInpu
 }
 
 func (in *FlowQueryInput) UnmarshalJSON(b []byte) error {
+	if advancedReadQuery(b) {
+		return decodeAdvancedReadQuery(b, in)
+	}
 	m, err := relationalObject(b)
 	if err != nil {
 		return invalid("body", "Expected a strict flow query object")
@@ -129,6 +156,15 @@ func (in *FlowQueryInput) UnmarshalJSON(b []byte) error {
 }
 
 func (in FlowQueryInput) validate() error {
+	if in.Proposal != nil || in.ChangeProposal != nil || in.ImportCandidate != nil {
+		target := graphTarget(in.RevisionID, in.Proposal, in.ChangeProposal, in.ImportCandidate)
+		if err := target.Validate(); err != nil {
+			return err
+		}
+		if err := rejectStagedView(target); err != nil {
+			return err
+		}
+	}
 	has := func(key, value string) bool { return in.present[key] || value != "" }
 	if !slices.Contains([]string{"entrypoints", "steps", "transitions", "accesses"}, in.View) {
 		return invalid("view", "Select entrypoints, steps, transitions or accesses")
@@ -162,6 +198,9 @@ func (in FlowQueryInput) validate() error {
 }
 
 type runtimeFlowProjection struct {
+	effective        *EffectiveGraphSnapshot
+	schema           string
+	source           *SourceGraphSnapshot
 	state            *RevisionState
 	in               FlowQueryInput
 	page             *FlowPage
@@ -178,6 +217,17 @@ type runtimeFlowProjection struct {
 }
 
 func projectRuntimeFlow(ctx context.Context, state *RevisionState, in FlowQueryInput) (*FlowPage, error) {
+	return projectRuntimeFlowWithSource(ctx, state, nil, in)
+}
+func projectRuntimeFlowWithSource(ctx context.Context, state *RevisionState, sourceGraph *SourceGraphSnapshot, in FlowQueryInput) (*FlowPage, error) {
+	return projectRuntimeFlowWithEffective(ctx, state, sourceGraph, nil, in)
+}
+func projectRuntimeFlowWithEffective(ctx context.Context, state *RevisionState, sourceGraph *SourceGraphSnapshot, effective *EffectiveGraphSnapshot, in FlowQueryInput) (*FlowPage, error) {
+	schema, hash := state.Revision.SchemaVersion, state.Revision.SemanticHash
+	if effective != nil {
+		schema = effective.Pins.StructuralSchemaVersion
+		hash = effective.Pins.EffectiveSemanticHash
+	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -188,14 +238,22 @@ func projectRuntimeFlow(ctx context.Context, state *RevisionState, in FlowQueryI
 		return nil, notFound()
 	}
 	source := primarySource(*state)
-	if !isRuntimeSchema(state.Revision.SchemaVersion) || source == nil || !sourceProfilesMatch(state.Revision.SchemaVersion, source.Provider.Profiles) {
+	if effective == nil && sourceGraph == nil && (!isRuntimeSchema(schema) || source == nil || !sourceProfilesMatch(schema, source.Provider.Profiles)) {
 		return nil, &FaultError{Status: 422, Code: "backend_unsupported_scope", Message: "Flow reads require a pinned runtime-flow source revision"}
 	}
-	page := &FlowPage{ProjectID: state.Revision.ProjectID, RevisionID: state.Revision.ID, SemanticHash: state.Revision.SemanticHash, View: in.View, Coverage: RevisionCoverage{Coverage: state.Revision.Coverage, Snapshots: slices.Clone(state.Sources), Inventory: slices.Clone(state.Inventory), ReconciliationGaps: []string{}}, Limitations: []string{}, TruncationReasons: []string{}}
-	p := &runtimeFlowProjection{state: state, in: in, page: page, nodes: map[string]Node{}, edges: map[string]Edge{}, out: map[string][]Edge{}, children: map[string][]Node{}, evidence: map[string]Evidence{}, limitations: map[string]bool{}, truncations: map[string]bool{}, accesses: map[string]FlowAccessItem{}, selectedAccess: map[string]string{}, discoveredAccess: map[string]bool{}}
+	page := &FlowPage{ProjectID: state.Revision.ProjectID, RevisionID: state.Revision.ID, SemanticHash: hash, View: in.View, Coverage: RevisionCoverage{Coverage: state.Revision.Coverage, Snapshots: slices.Clone(state.Sources), Inventory: slices.Clone(state.Inventory), ReconciliationGaps: []string{}}, Limitations: []string{}, TruncationReasons: []string{}}
+	if sourceGraph != nil {
+		page.Coverage.Source = sourceVectorReadContext(sourceGraph)
+	}
+	p := &runtimeFlowProjection{effective: effective, schema: schema, source: sourceGraph, state: state, in: in, page: page, nodes: map[string]Node{}, edges: map[string]Edge{}, out: map[string][]Edge{}, children: map[string][]Node{}, evidence: map[string]Evidence{}, limitations: map[string]bool{}, truncations: map[string]bool{}, accesses: map[string]FlowAccessItem{}, selectedAccess: map[string]string{}, discoveredAccess: map[string]bool{}}
 	for _, n := range state.Nodes {
 		if err := ctx.Err(); err != nil {
 			return nil, err
+		}
+		if effective != nil {
+			n = effectiveNodeRecord(effective, n)
+		} else if sourceGraph != nil {
+			n.Source = sourceRecordReadContext(sourceGraph, "node", n.ID)
 		}
 		p.nodes[n.ID] = n
 		if n.ParentID != nil {
@@ -208,6 +266,11 @@ func projectRuntimeFlow(ctx context.Context, state *RevisionState, in FlowQueryI
 	for _, e := range state.Edges {
 		if err := ctx.Err(); err != nil {
 			return nil, err
+		}
+		if effective != nil {
+			e = effectiveEdgeRecord(effective, e)
+		} else if sourceGraph != nil {
+			e.Source = sourceRecordReadContext(sourceGraph, "edge", e.ID)
 		}
 		p.edges[e.ID] = e
 		p.out[e.From] = append(p.out[e.From], e)
@@ -230,17 +293,36 @@ func projectRuntimeFlow(ctx context.Context, state *RevisionState, in FlowQueryI
 	for _, gap := range state.Revision.Coverage.Gaps {
 		p.limitations[gap] = true
 	}
-	for _, limitation := range source.Provider.Limitations {
-		p.limitations[limitation] = true
+	if sourceGraph == nil {
+		for _, limitation := range source.Provider.Limitations {
+			p.limitations[limitation] = true
+		}
+	} else {
+		for _, part := range sourceGraph.SourceVector.Partitions {
+			for _, limitation := range part.Provider.Limitations {
+				p.limitations[limitation] = true
+			}
+		}
 	}
 	p.limitations["Source reachability does not verify runtime execution, branch feasibility or transaction atomicity"] = true
 	// The page size is intentionally excluded: continuation recomputes the same
 	// bounded projection, then selects a different-sized window over that result.
 	scope, err := requestDigest(struct {
 		ProjectID, RevisionID, SemanticHash, Policy, View, Search, FlowID, EntrypointID, DataNodeID, AccessKind string
-	}{page.ProjectID, page.RevisionID, page.SemanticHash, runtimePolicyForSchema(state.Revision.SchemaVersion), in.View, strings.ToLower(in.Search), in.FlowID, in.EntrypointID, in.DataNodeID, in.AccessKind})
+	}{page.ProjectID, page.RevisionID, page.SemanticHash, runtimePolicyForSchema(schema), in.View, strings.ToLower(in.Search), in.FlowID, in.EntrypointID, in.DataNodeID, in.AccessKind})
 	if err != nil {
 		return nil, err
+	}
+	if effective != nil {
+		page.Target = new(effective.Target)
+		page.Pins = new(effective.Pins)
+		scope, err = requestDigest(struct {
+			Scope string
+			Pins  EffectiveGraphPins
+		}{scope, effective.Pins})
+		if err != nil {
+			return nil, err
+		}
 	}
 	limit, after, err := decodeGraphPage(in.Limit, in.Cursor, "flow", page.ProjectID, scope, in.View != "accesses")
 	if err != nil {
@@ -260,7 +342,7 @@ func projectRuntimeFlow(ctx context.Context, state *RevisionState, in FlowQueryI
 				return nil, err
 			}
 			n := p.nodes[id]
-			if !runtimeEntrypointForSchema(p.state.Revision.SchemaVersion, n.Kind) || !strings.Contains(strings.ToLower(n.Name+" "+runtimeAttributeString(n.Attributes, "method")+" "+runtimeAttributeString(n.Attributes, "path")), strings.ToLower(in.Search)) {
+			if !sourceRuntimeEntrypoint(p.schema, n.Kind) || !strings.Contains(strings.ToLower(n.Name+" "+runtimeAttributeString(n.Attributes, "method")+" "+runtimeAttributeString(n.Attributes, "path")), strings.ToLower(in.Search)) {
 				continue
 			}
 			page.EntryPointItems = append(page.EntryPointItems, p.entrypoint(n))
@@ -300,7 +382,7 @@ func projectRuntimeFlow(ctx context.Context, state *RevisionState, in FlowQueryI
 				}
 				p.observeNode(n)
 				for _, e := range p.out[n.ID] {
-					if slices.Contains([]string{"next", "branch", "error", "returns", "calls", "begins", "commits", "rolls_back"}, e.Kind) || state.Revision.SchemaVersion == EventsSchemaVersion && e.Kind == "emits" {
+					if slices.Contains([]string{"next", "branch", "error", "returns", "calls", "begins", "commits", "rolls_back"}, e.Kind) || (schema == EventsSchemaVersion || sourceGraph != nil) && e.Kind == "emits" {
 						p.observeEdge(e)
 						page.TransitionItems = append(page.TransitionItems, e)
 					}
@@ -388,7 +470,7 @@ func runtimeWorseStatus(a, b string) string {
 		switch s {
 		case "explicit":
 			return 0
-		case "inferred":
+		case "desired", "inferred":
 			return 1
 		case "stale":
 			return 2
@@ -399,7 +481,7 @@ func runtimeWorseStatus(a, b string) string {
 		}
 	}
 	if weight(b) > weight(a) {
-		if slices.Contains([]string{"explicit", "inferred", "stale", "unresolved"}, b) {
+		if slices.Contains([]string{"explicit", "desired", "inferred", "stale", "unresolved"}, b) {
 			return b
 		}
 		return "inferred"
@@ -437,10 +519,10 @@ func (p *runtimeFlowProjection) nodeLimitations(n Node, limitations map[string]b
 
 func (p *runtimeFlowProjection) observeNode(n Node) {
 	p.nodeLimitations(n, p.limitations)
-	p.recordStatus(n.EvidenceIDs, n.Freshness, p.limitations)
+	p.sourceRecordStatus("node", n.ID, nil, n.EvidenceIDs, n.Freshness, p.limitations)
 }
 func (p *runtimeFlowProjection) observeEdge(e Edge) {
-	p.recordStatus(e.EvidenceIDs, e.Freshness, p.limitations)
+	p.sourceRecordStatus("edge", e.ID, nil, e.EvidenceIDs, e.Freshness, p.limitations)
 }
 
 func (p *runtimeFlowProjection) entrypoint(n Node) FlowEntrypointItem {
@@ -449,8 +531,8 @@ func (p *runtimeFlowProjection) entrypoint(n Node) FlowEntrypointItem {
 	proof := map[string]bool{}
 	observe := func(n Node) {
 		p.nodeLimitations(n, limitations)
-		p.recordStatus(n.EvidenceIDs, n.Freshness, limitations)
-		for _, id := range n.EvidenceIDs {
+		p.sourceRecordStatus("node", n.ID, nil, n.EvidenceIDs, n.Freshness, limitations)
+		for _, id := range p.sourceRecordEvidence("node", n.ID, nil, n.EvidenceIDs) {
 			proof[id] = true
 		}
 	}
@@ -461,8 +543,8 @@ func (p *runtimeFlowProjection) entrypoint(n Node) FlowEntrypointItem {
 			continue
 		}
 		handled = true
-		p.recordStatus(e.EvidenceIDs, e.Freshness, limitations)
-		for _, id := range e.EvidenceIDs {
+		p.sourceRecordStatus("edge", e.ID, nil, e.EvidenceIDs, e.Freshness, limitations)
+		for _, id := range p.sourceRecordEvidence("edge", e.ID, nil, e.EvidenceIDs) {
 			proof[id] = true
 		}
 		h, ok := p.nodes[e.To]
@@ -508,7 +590,7 @@ func (p *runtimeFlowProjection) selectAccesses() error {
 		if !ok {
 			return notFound()
 		}
-		if !runtimeEntrypointForSchema(p.state.Revision.SchemaVersion, n.Kind) {
+		if !sourceRuntimeEntrypoint(p.readSchema(), n.Kind) {
 			return invalid("entrypointId", "Selector must identify a supported pinned entrypoint")
 		}
 	}
@@ -578,7 +660,7 @@ func runtimeCompareWitness(a, b runtimeWitness) int {
 func (p *runtimeFlowProjection) relevant(n Node, e Edge) bool {
 	switch e.Kind {
 	case "handles":
-		return runtimeEntrypointForSchema(p.state.Revision.SchemaVersion, n.Kind)
+		return sourceRuntimeEntrypoint(p.readSchema(), n.Kind)
 	case "contains":
 		target := p.nodes[e.To]
 		return (n.Kind == "handler" || n.Kind == "symbol") && target.Kind == "flow" || n.Kind == "flow" && e.To == runtimeAttributeString(n.Attributes, "entryStepId")
@@ -597,7 +679,7 @@ func (p *runtimeFlowProjection) traverse(ctx context.Context) error {
 	seen := map[runtimeReachState]runtimeWitness{}
 	for _, id := range slices.Sorted(maps.Keys(p.nodes)) {
 		n := p.nodes[id]
-		if !runtimeEntrypointForSchema(p.state.Revision.SchemaVersion, n.Kind) || p.in.EntrypointID != "" && id != p.in.EntrypointID {
+		if !sourceRuntimeEntrypoint(p.readSchema(), n.Kind) || p.in.EntrypointID != "" && id != p.in.EntrypointID {
 			continue
 		}
 		w := runtimeWitness{runtimeReachState: runtimeReachState{entrypointID: id, nodeID: id}, nodes: []string{id}, edges: []string{}}
@@ -620,7 +702,7 @@ func (p *runtimeFlowProjection) traverse(ctx context.Context) error {
 		}
 		n := p.nodes[w.nodeID]
 		p.observeNode(n)
-		if runtimeEntrypointForSchema(p.state.Revision.SchemaVersion, n.Kind) {
+		if sourceRuntimeEntrypoint(p.readSchema(), n.Kind) {
 			p.entrypoint(n)
 		}
 		for _, e := range p.out[n.ID] {
@@ -735,8 +817,8 @@ func (p *runtimeFlowProjection) access(e Edge, w *runtimeWitness, relation strin
 				return key != escapeRelationalPointer(i.FacetKey)
 			})
 		}
-		i.Status = runtimeWorseStatus(i.Status, p.recordStatus(ids, n.Freshness, limitations))
-		for _, id := range ids {
+		i.Status = runtimeWorseStatus(i.Status, p.sourceRecordStatus("node", n.ID, &LineageValueRef{Kind: "column", NodeID: n.ID, FacetKey: i.FacetKey}, ids, n.Freshness, limitations))
+		for _, id := range p.sourceRecordEvidence("node", n.ID, &LineageValueRef{Kind: "column", NodeID: n.ID, FacetKey: i.FacetKey}, ids) {
 			evidence[id] = true
 		}
 		if n.Kind == "unresolved_target" {
@@ -744,8 +826,8 @@ func (p *runtimeFlowProjection) access(e Edge, w *runtimeWitness, relation strin
 		}
 	}
 	observeEdge := func(e Edge) {
-		i.Status = runtimeWorseStatus(i.Status, p.recordStatus(e.EvidenceIDs, e.Freshness, limitations))
-		for _, id := range e.EvidenceIDs {
+		i.Status = runtimeWorseStatus(i.Status, p.sourceRecordStatus("edge", e.ID, nil, e.EvidenceIDs, e.Freshness, limitations))
+		for _, id := range p.sourceRecordEvidence("edge", e.ID, nil, e.EvidenceIDs) {
 			evidence[id] = true
 		}
 	}
@@ -790,8 +872,10 @@ func (p *runtimeFlowProjection) access(e Edge, w *runtimeWitness, relation strin
 				Freshness      *AssertionFreshness `json:"freshness"`
 			}
 			if raw, found := facets[i.FacetKey]; found && json.Unmarshal(raw, &facet) == nil {
-				i.Status = runtimeWorseStatus(i.Status, p.recordStatus(facet.EvidenceIDs, facet.Freshness, limitations))
-				for _, id := range facet.EvidenceIDs {
+				if p.source == nil {
+					i.Status = runtimeWorseStatus(i.Status, p.recordStatus(facet.EvidenceIDs, facet.Freshness, limitations))
+				}
+				for _, id := range p.sourceRecordEvidence("node", target.ID, &LineageValueRef{Kind: "column", NodeID: target.ID, FacetKey: i.FacetKey}, facet.EvidenceIDs) {
 					evidence[id] = true
 				}
 				for _, gap := range facet.Gaps {
@@ -815,8 +899,65 @@ func (p *runtimeFlowProjection) access(e Edge, w *runtimeWitness, relation strin
 }
 
 func runtimePolicyForSchema(schema string) string {
+	if schema == ComposedSchemaVersion {
+		return "runtime-flow-reachability-source6-v1"
+	}
 	if schema == EventsSchemaVersion {
 		return EventsFlowTraversalPolicy
 	}
 	return runtimeTraversalPolicy
+}
+
+func sourceRuntimeEntrypoint(schema, kind string) bool {
+	return runtimeEntrypointForSchema(schema, kind) || schema == ComposedSchemaVersion && (kind == "consumer" || kind == "job")
+}
+func (p *runtimeFlowProjection) sourceRecordStatus(typ, id string, ref *LineageValueRef, ids []string, fresh *AssertionFreshness, limitations map[string]bool) string {
+	if p.effective != nil {
+		proof, err := effectiveRecordProof(p.effective, typ, id, ref)
+		if err != nil {
+			limitations[err.Error()] = true
+			return "unresolved"
+		}
+		for reason := range proof.reasons {
+			limitations[reason] = true
+		}
+		return proof.status
+	}
+	if p.source == nil {
+		return p.recordStatus(ids, fresh, limitations)
+	}
+	proof, err := sourceRecordProof(p.source, typ, id, ref)
+	if err != nil {
+		limitations[err.Error()] = true
+		return "unresolved"
+	}
+	for reason := range proof.reasons {
+		limitations[reason] = true
+	}
+	return proof.status
+}
+
+func (p *runtimeFlowProjection) sourceRecordEvidence(typ, id string, ref *LineageValueRef, legacy []string) []string {
+	if p.effective != nil {
+		proof, err := effectiveRecordProof(p.effective, typ, id, ref)
+		if err != nil {
+			return nil
+		}
+		return proof.evidenceIDs
+	}
+	if p.source == nil {
+		return legacy
+	}
+	proof, err := sourceRecordProof(p.source, typ, id, ref)
+	if err != nil {
+		return nil
+	}
+	return proof.evidenceIDs
+}
+
+func (p *runtimeFlowProjection) readSchema() string {
+	if p.schema != "" {
+		return p.schema
+	}
+	return p.state.Revision.SchemaVersion
 }

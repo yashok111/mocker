@@ -1,3 +1,4 @@
+import type { BackendNode } from "@/api/generated/schemas";
 import { useContext, useEffect, useRef, useState } from "react";
 import {
   Alert,
@@ -418,7 +419,9 @@ function ProposalEditor({
         { revisionId: base.proposal.baseRevisionId, recordType: "nodes" },
         signal,
       );
-      return datastoreScope(graph.nodes, base.proposal.datastoreId);
+      return datastoreScope(graph.nodes, base.proposal.datastoreId).filter(
+        (node): node is BackendNode => typeof node.externalKey === "string",
+      );
     },
   });
   function change(next: BackendProposalCommand[]) {

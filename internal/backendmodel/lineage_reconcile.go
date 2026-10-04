@@ -116,12 +116,20 @@ func validateLineageValueTarget(ref LineageValueRef, nodes map[string]Node) erro
 	return invalid("seed", "Value reference kind, facet or local port does not exist")
 }
 func validateLineageGraph(ctx context.Context, s *ImportSession, g *graphCandidate, diagnostics *[]ImportDiagnostic) error {
-	events := selectedProfile(s.Profile) == EventsProfile
+	return validateLineageGraphRules(ctx, selectedProfile(s.Profile), s, g, diagnostics)
+}
+
+func validateLineageGraphRules(ctx context.Context, profile string, s *ImportSession, g *graphCandidate, diagnostics *[]ImportDiagnostic) error {
+	events := profile == EventsProfile || profile == ComposedProfile
 	validator := validateLineageAttributes
 	schema := LineageSchemaVersion
 	if events {
 		validator = validateEventsLineageAttributes
 		schema = EventsSchemaVersion
+	}
+	if profile == ComposedProfile {
+		validator = validateRepresentationAttributes
+		schema = ComposedSchemaVersion
 	}
 	edges := map[string]Edge{}
 	handles := map[string][]Edge{}
@@ -165,6 +173,9 @@ func validateLineageGraph(ctx context.Context, s *ImportSession, g *graphCandida
 		}
 	}
 	proof := func(id string, ids []string, fresh *AssertionFreshness) {
+		if s == nil {
+			return
+		}
 		for _, eid := range ids {
 			e, ok := proofs[eid]
 			if !ok || e.SubjectID != id || e.Source.RepositoryID != s.RepositoryID || e.Source.StartLine == nil || e.Source.EndLine == nil || *e.Source.StartLine < 1 || *e.Source.EndLine < *e.Source.StartLine {
@@ -205,7 +216,12 @@ func validateLineageGraph(ctx context.Context, s *ImportSession, g *graphCandida
 				valid = v
 			}
 		}
-		if !valid || len(contains[n.ID]) != 1 || contains[n.ID][0].From != parent.ID || parent.Ownership == nil || parent.Ownership.RepositoryID != s.RepositoryID {
+		if profile == ComposedProfile {
+			if v, ok := representationContains(parent, n); ok {
+				valid = v
+			}
+		}
+		if !valid || len(contains[n.ID]) != 1 || contains[n.ID][0].From != parent.ID || s != nil && (parent.Ownership == nil || parent.Ownership.RepositoryID != s.RepositoryID) {
 			add(path+"/parentId", "Lineage nodes require one agreeing contains edge and a valid parent in the same repository")
 		}
 		if n.Kind == "api_field" {
@@ -234,7 +250,11 @@ func validateLineageGraph(ctx context.Context, s *ImportSession, g *graphCandida
 			continue
 		}
 		if events {
-			if err := validateEventsLineageMapping(n, a, nodes, edges, handles); err != nil {
+			mappingValidator := validateEventsLineageMapping
+			if profile == ComposedProfile {
+				mappingValidator = validateRepresentationLineageMapping
+			}
+			if err := mappingValidator(n, a, nodes, edges, handles); err != nil {
 				add(path+"/attributes", err.Error())
 			}
 		}
@@ -252,7 +272,7 @@ func validateLineageGraph(ctx context.Context, s *ImportSession, g *graphCandida
 				continue
 			}
 			target := nodes[ref.NodeID]
-			if target.Ownership == nil || target.Ownership.RepositoryID != s.RepositoryID {
+			if s != nil && (target.Ownership == nil || target.Ownership.RepositoryID != s.RepositoryID) {
 				add(refPath, "Lineage endpoints must belong to the same repository")
 			}
 		}

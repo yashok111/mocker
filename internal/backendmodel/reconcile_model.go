@@ -44,6 +44,8 @@ type RevisionState struct {
 	ArtifactContext    *ArtifactContext
 }
 type SourceChange struct {
+	RepositoryID      string             `json:"repositoryId,omitempty"`
+	ProviderNamespace string             `json:"providerNamespace,omitempty"`
 	Path              string             `json:"path"`
 	Kind              string             `json:"kind"`
 	AdditionConfirmed bool               `json:"additionConfirmed"`
@@ -52,10 +54,12 @@ type SourceChange struct {
 	After             *SourceFileSummary `json:"after"`
 }
 type SourceFileSummary struct {
-	SnapshotID     string `json:"snapshotId"`
-	Path           string `json:"path"`
-	ContentHash    string `json:"contentHash"`
-	AnalysisStatus string `json:"analysisStatus"`
+	RepositoryID      string `json:"repositoryId,omitempty"`
+	ProviderNamespace string `json:"providerNamespace,omitempty"`
+	SnapshotID        string `json:"snapshotId"`
+	Path              string `json:"path"`
+	ContentHash       string `json:"contentHash"`
+	AnalysisStatus    string `json:"analysisStatus"`
 }
 type HistoricalSubjectRef struct {
 	RevisionID string `json:"revisionId"`
@@ -80,10 +84,13 @@ type DeletionDecision struct {
 	OldEvidenceRefs []HistoricalEvidenceRef `json:"oldEvidenceRefs"`
 }
 type ImportChangeItem struct {
-	RecordType string            `json:"recordType"`
-	Source     *SourceChange     `json:"source,omitzero"`
-	Identity   *IdentityDecision `json:"identity,omitzero"`
-	Deletion   *DeletionDecision `json:"deletion,omitzero"`
+	AssertionConflict *SourceAssertionConflict     `json:"assertionConflict,omitzero"`
+	ClaimIdentity     *SourceClaimIdentityDecision `json:"claimIdentity,omitzero"`
+	Migration         *SourceMigrationDecision     `json:"migration,omitzero"`
+	RecordType        string                       `json:"recordType"`
+	Source            *SourceChange                `json:"source,omitzero"`
+	Identity          *IdentityDecision            `json:"identity,omitzero"`
+	Deletion          *DeletionDecision            `json:"deletion,omitzero"`
 }
 type ImportChangesPage struct {
 	SessionID      string             `json:"sessionId"`
@@ -116,25 +123,27 @@ type ComparisonRef struct {
 	Path       string `json:"path,omitempty"`
 }
 type ComparisonItem struct {
-	EditorArtifactBefore *EditorArtifactSide `json:"editorArtifactBefore,omitzero"`
-	EditorArtifactAfter  *EditorArtifactSide `json:"editorArtifactAfter,omitzero"`
-	ArtifactGroupBefore  *ArtifactGroupSide  `json:"artifactGroupBefore,omitzero"`
-	ArtifactGroupAfter   *ArtifactGroupSide  `json:"artifactGroupAfter,omitzero"`
-	ArtifactBefore       *ArtifactRef        `json:"artifactBefore,omitzero"`
-	ArtifactAfter        *ArtifactRef        `json:"artifactAfter,omitzero"`
-	ContextChanged       bool                `json:"contextChanged,omitzero"`
-	RecordType           string              `json:"recordType"`
-	ID                   string              `json:"id"`
-	ChangeKinds          []string            `json:"changeKinds"`
-	ChangedPaths         []string            `json:"changedPaths"`
-	Before               *ComparisonRef      `json:"before"`
-	After                *ComparisonRef      `json:"after"`
-	NameBefore           *string             `json:"nameBefore"`
-	NameAfter            *string             `json:"nameAfter"`
-	KeyBefore            *string             `json:"keyBefore"`
-	KeyAfter             *string             `json:"keyAfter"`
-	FreshnessBefore      *AssertionFreshness `json:"freshnessBefore"`
-	FreshnessAfter       *AssertionFreshness `json:"freshnessAfter"`
+	SourceClaimBefore    *SourceClaimComparisonSide `json:"sourceClaimBefore,omitzero"`
+	SourceClaimAfter     *SourceClaimComparisonSide `json:"sourceClaimAfter,omitzero"`
+	EditorArtifactBefore *EditorArtifactSide        `json:"editorArtifactBefore,omitzero"`
+	EditorArtifactAfter  *EditorArtifactSide        `json:"editorArtifactAfter,omitzero"`
+	ArtifactGroupBefore  *ArtifactGroupSide         `json:"artifactGroupBefore,omitzero"`
+	ArtifactGroupAfter   *ArtifactGroupSide         `json:"artifactGroupAfter,omitzero"`
+	ArtifactBefore       *ArtifactRef               `json:"artifactBefore,omitzero"`
+	ArtifactAfter        *ArtifactRef               `json:"artifactAfter,omitzero"`
+	ContextChanged       bool                       `json:"contextChanged,omitzero"`
+	RecordType           string                     `json:"recordType"`
+	ID                   string                     `json:"id"`
+	ChangeKinds          []string                   `json:"changeKinds"`
+	ChangedPaths         []string                   `json:"changedPaths"`
+	Before               *ComparisonRef             `json:"before"`
+	After                *ComparisonRef             `json:"after"`
+	NameBefore           *string                    `json:"nameBefore"`
+	NameAfter            *string                    `json:"nameAfter"`
+	KeyBefore            *string                    `json:"keyBefore"`
+	KeyAfter             *string                    `json:"keyAfter"`
+	FreshnessBefore      *AssertionFreshness        `json:"freshnessBefore"`
+	FreshnessAfter       *AssertionFreshness        `json:"freshnessAfter"`
 }
 type ComparisonCounts struct {
 	Added    int64 `json:"added"`
@@ -158,21 +167,24 @@ type ComparisonPin struct {
 	SourceSnapshotIDs []string `json:"sourceSnapshotIds"`
 }
 type RevisionComparison struct {
-	From              ComparisonPin     `json:"from"`
-	To                ComparisonPin     `json:"to"`
-	ComparisonVersion int64             `json:"comparisonVersion"`
-	ComparisonHash    string            `json:"comparisonHash"`
-	Summary           ComparisonSummary `json:"summary"`
-	CoverageBefore    Coverage          `json:"coverageBefore"`
-	CoverageAfter     Coverage          `json:"coverageAfter"`
-	Limitations       []string          `json:"limitations"`
-	Items             []ComparisonItem  `json:"items"`
-	NextCursor        string            `json:"nextCursor"`
+	SourceBefore      *SourceReadContext `json:"sourceBefore,omitzero"`
+	SourceAfter       *SourceReadContext `json:"sourceAfter,omitzero"`
+	From              ComparisonPin      `json:"from"`
+	To                ComparisonPin      `json:"to"`
+	ComparisonVersion int64              `json:"comparisonVersion"`
+	ComparisonHash    string             `json:"comparisonHash"`
+	Summary           ComparisonSummary  `json:"summary"`
+	CoverageBefore    Coverage           `json:"coverageBefore"`
+	CoverageAfter     Coverage           `json:"coverageAfter"`
+	Limitations       []string           `json:"limitations"`
+	Items             []ComparisonItem   `json:"items"`
+	NextCursor        string             `json:"nextCursor"`
 }
 type RecordSide struct {
-	EditorArtifact                   *EditorArtifactSide `json:"editorArtifact,omitzero"`
-	ArtifactGroup                    *ArtifactGroupSide  `json:"artifactGroup,omitzero"`
-	Artifact                         *ArtifactRef        `json:"artifact,omitzero"`
+	SourceClaim                      *SourceClaimComparisonSide `json:"sourceClaim,omitzero"`
+	EditorArtifact                   *EditorArtifactSide        `json:"editorArtifact,omitzero"`
+	ArtifactGroup                    *ArtifactGroupSide         `json:"artifactGroup,omitzero"`
+	Artifact                         *ArtifactRef               `json:"artifact,omitzero"`
 	RecordType, ID, SnapshotID, Path string
 	Name, Key                        *string
 	Freshness                        *AssertionFreshness
@@ -191,4 +203,13 @@ type StaleCounts struct {
 	Nodes    int64 `json:"nodes"`
 	Edges    int64 `json:"edges"`
 	Evidence int64 `json:"evidence"`
+}
+
+type SourceClaimComparisonSide struct {
+	Assertion        BaseAssertionRef             `json:"assertion"`
+	Property         *TypedSourcePropertySelector `json:"property,omitzero"`
+	Value            *SourcePropertyValue         `json:"value,omitzero"`
+	Currentness      SourceClaimCurrentness       `json:"currentness"`
+	Selections       []SourceAssertionResolution  `json:"selections"`
+	DependencyClaims []SourceDependencyBinding    `json:"dependencyClaims"`
 }

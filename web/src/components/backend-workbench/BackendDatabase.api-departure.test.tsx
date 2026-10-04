@@ -123,7 +123,7 @@ const nodes = [
 ].map((node) => ({ ...node, externalKey: node.id, evidenceIds: [] }));
 const pin = { kind: "api_design", id: "12", revisionId: "23", contentHash: hash };
 const revision = {
-  id: "base",
+  id: "0197aaf9-5555-7000-8000-000000000002",
   projectId: "project",
   schemaVersion: "4",
   semanticHash: hash,
@@ -139,7 +139,7 @@ const project = {
   id: "project",
   name: "Project",
   version: 4,
-  currentRevisionId: "base",
+  currentRevisionId: "0197aaf9-5555-7000-8000-000000000002",
   repositories: [],
   capabilities: [],
   createdAt: "2026-10-02",
@@ -170,16 +170,21 @@ function server() {
         id: "project",
         name: "Project",
         version: 4,
-        currentRevisionId: "base",
+        currentRevisionId: "0197aaf9-5555-7000-8000-000000000002",
         repositories: [],
         capabilities: [],
         createdAt: "2026-10-02",
         updatedAt: "2026-10-02",
       });
     if (path.endsWith("/coverage")) return json(200, coverage);
-    if (path.endsWith("/revisions/base")) return json(200, revision);
-    if (path.endsWith("/revisions/applied"))
-      return json(200, { ...revision, id: "applied", parentRevisionId: "base" });
+    if (path.endsWith("/revisions/0197aaf9-5555-7000-8000-000000000002"))
+      return json(200, revision);
+    if (path.endsWith("/revisions/0197aaf9-5555-7000-8000-000000000003"))
+      return json(200, {
+        ...revision,
+        id: "0197aaf9-5555-7000-8000-000000000003",
+        parentRevisionId: "0197aaf9-5555-7000-8000-000000000002",
+      });
     if (path.includes("/nodes/"))
       return json(
         200,
@@ -223,7 +228,7 @@ function server() {
     if (path.endsWith("/database/query"))
       return json(200, {
         projectId: "project",
-        revisionId: "base",
+        revisionId: "0197aaf9-5555-7000-8000-000000000002",
         semanticHash: hash,
         datastoreId: "db",
         facetKey: "sql",
@@ -247,7 +252,7 @@ function server() {
     if (path.endsWith("/lineage/query"))
       return json(200, {
         projectId: "project",
-        revisionId: "base",
+        revisionId: "0197aaf9-5555-7000-8000-000000000002",
         semanticHash: hash,
         seed: body.seed,
         direction: body.direction,
@@ -326,7 +331,7 @@ function server() {
       });
     if (path.endsWith("/api-artifacts/preview"))
       return json(200, {
-        baseRevisionId: "base",
+        baseRevisionId: "0197aaf9-5555-7000-8000-000000000002",
         expectedVersion: 4,
         candidateHash: hash,
         semanticHash: hash,
@@ -342,8 +347,16 @@ function server() {
       writes.push(String(init?.body));
       if (writes.length === 1) throw new TypeError("Lost reply after commit");
       return json(200, {
-        project: { ...project, version: 5, currentRevisionId: "applied" },
-        revision: { ...revision, id: "applied", parentRevisionId: "base" },
+        project: {
+          ...project,
+          version: 5,
+          currentRevisionId: "0197aaf9-5555-7000-8000-000000000003",
+        },
+        revision: {
+          ...revision,
+          id: "0197aaf9-5555-7000-8000-000000000003",
+          parentRevisionId: "0197aaf9-5555-7000-8000-000000000002",
+        },
       });
     }
     return json(200, { items: [], nextCursor: "" });
@@ -374,13 +387,17 @@ function Host({
     >
       <BackendSavedViewContext value={savedDirty ? ({ dirty: true } as never) : null}>
         {mode === "database" ? (
-          <BackendDatabase projectId="project" revisionId="base" />
+          <BackendDatabase projectId="project" revisionId="0197aaf9-5555-7000-8000-000000000002" />
         ) : mode === "inventory" ? (
-          <BackendGraphInventory projectId="project" revisionId="base" schemaVersion="4" />
+          <BackendGraphInventory
+            projectId="project"
+            revisionId="0197aaf9-5555-7000-8000-000000000002"
+            schemaVersion="4"
+          />
         ) : (
           <BackendRecordInspector
             projectId="project"
-            revisionId="base"
+            revisionId="0197aaf9-5555-7000-8000-000000000002"
             recordType="node"
             id="operation"
           />
@@ -562,7 +579,11 @@ it("keeps the real project Flow instance's unknown claim when a duplicate graph 
   renderInRouter(
     <BackendProjectPage
       projectId="project"
-      sourcePin={{ revisionId: "base", recordId: "field", recordType: "node" }}
+      sourcePin={{
+        revisionId: "0197aaf9-5555-7000-8000-000000000002",
+        recordId: "field",
+        recordType: "node",
+      }}
     />,
   );
   const inner = await screen.findByRole("region", { name: "Инспектор Flow" });

@@ -51,7 +51,9 @@ func BackendSchema(name string) (map[string]any, error) {
 }
 
 func expandBackendSchema(root any, definitions map[string]any) (any, error) {
-	remaining := 100000
+	// Effective responses repeat bounded provenance for each typed record arm.
+	// Keep a finite bound while allowing the complete public graph vocabulary.
+	remaining := 1000000
 	active := map[string]bool{}
 	var expand func(any, int) (any, error)
 	expand = func(value any, depth int) (any, error) {

@@ -1,3 +1,9 @@
+import {
+  backendReadTargetFrom,
+  backendReadTargetKey,
+  checkBackendProjectionPins,
+} from "./backendReadTargets";
+import { projectionTarget } from "./backendEffectiveProjectionReads";
 import { queryBackendArtifacts } from "@/api/generated/backend-projects/backend-projects";
 import { getDesignScenarioArtifactSnapshot } from "@/api/generated/design-scenarios/design-scenarios";
 import { sha256 } from "@noble/hashes/sha2.js";
@@ -6,7 +12,7 @@ import type {
   APIEditorBindingInput,
   ScenarioEditorBindingInput,
   ArtifactPinCommand,
-  ArtifactProjectionPage,
+  BackendArtifactProjectionResponse as ArtifactProjectionPage,
   QueryBackendArtifactsRequest,
   EditorBinding,
 } from "@/api/generated/schemas";
@@ -32,7 +38,8 @@ export function matchesProjection(
     exactArtifactId(pin.id) &&
     exactArtifactId(pin.revisionId) &&
     page.revisionId === scope.revisionId &&
-    input.revisionId === scope.revisionId &&
+    backendReadTargetKey(backendReadTargetFrom(input)) ===
+      backendReadTargetKey(projectionTarget(scope)) &&
     page.semanticHash === scope.semanticHash &&
     ordered(page.sourceSnapshotIds) === ordered(scope.sourceSnapshotIds) &&
     ordered(page.pins.map(pinIdentity)) === ordered(scope.artifactPins.map(pinIdentity)) &&
@@ -65,11 +72,25 @@ export async function readArtifactPage(
   first?: ArtifactProjectionPage,
 ): Promise<ArtifactProjectionPage> {
   signal.throwIfAborted();
+  const target = projectionTarget(scope);
+  if (target.proposal) throw new Error("Артефакты старого предложения не поддерживаются");
+  if (backendReadTargetKey(backendReadTargetFrom(input)) !== backendReadTargetKey(target))
+    throw new Error("Неверный источник проекции");
   const response = await queryBackendArtifacts(scope.projectId, input, { signal });
   signal.throwIfAborted();
   if (response.status !== 200 || !matchesProjection(scope, input, response.data))
     throw new Error("Изменился точный контекст проекции; перечитайте ревизию.");
   const page = response.data;
+  if (
+    ("effectivePins" in page ? page.effectivePins : undefined) ||
+    scope.pins ||
+    target.changeProposal
+  )
+    checkBackendProjectionPins(
+      { ...page, pins: "effectivePins" in page ? page.effectivePins : undefined },
+      target,
+      scope.pins,
+    );
   if (
     first &&
     (JSON.stringify(page.apiBindings) !== JSON.stringify(first.apiBindings) ||
@@ -181,6 +202,7 @@ export async function readPinnedScenario(
 ) {
   if (!exactArtifactId(id) || !exactArtifactId(revisionId) || !/^[a-f0-9]{64}$/.test(hash))
     throw new Error("Неверная точная ссылка сценария.");
+  signal.throwIfAborted();
   const response = await getDesignScenarioArtifactSnapshot(id, revisionId, { signal });
   signal.throwIfAborted();
   if (response.status !== 200) throw new Error("Не удалось прочитать закреплённый сценарий.");

@@ -119,14 +119,15 @@ func (s *Server) handleGetBackendProject(w http.ResponseWriter, r *http.Request)
 }
 
 func (s *Server) handleApplyBackendProjectCommands(w http.ResponseWriter, r *http.Request) {
-	if _, ok := s.requireUser(w, r); !ok {
+	user, ok := s.requireUser(w, r)
+	if !ok {
 		return
 	}
 	var in backendmodel.CommandsInput
-	if !s.backendBody(w, r, &in) {
+	if !s.backendBodyLimit(w, r, &in, min(s.cfg.MaxBody, int64(backendmodel.MaxProjectCommandBytes))) {
 		return
 	}
-	project, err := s.backendRepo.Apply(r.Context(), r.PathValue("id"), in)
+	project, err := s.backendRepo.ApplyAs(r.Context(), r.PathValue("id"), in, user.Name)
 	if err != nil {
 		s.backendError(w, err)
 		return
@@ -170,16 +171,20 @@ func (s *Server) handleGetBackendCapabilities(w http.ResponseWriter, r *http.Req
 	httpx.JSON(w, 200, map[string]any{
 		"modelSchemaVersions":      backendmodel.SupportedModelSchemaVersions(),
 		"workflowVersions":         guide.BackendWorkflows(),
-		"features":                 append(backendmodel.Features(), "backend-relational-import", "backend-database-query", "backend-database-er", "backend-db-proposals", "backend-db-typed-edits", "backend-runtime-flow-import", "backend-flow-query", "backend-data-access-query", "backend-saved-views", "backend-field-lineage-import", "backend-field-lineage-query", "backend-api-artifact-pins", "backend-editor-projections", "backend-events-import", "backend-events-query"),
-		"providerProfiles":         []string{backendmodel.GraphProfile, backendmodel.RelationalProfile, backendmodel.RuntimeProfile, backendmodel.LineageProfile, backendmodel.EventsProfile},
-		"supportedNodeKinds":       backendmodel.SupportedNodeKindsForProfile(backendmodel.EventsProfile),
-		"supportedEdgeKinds":       backendmodel.SupportedEdgeKindsForProfile(backendmodel.EventsProfile),
+		"features":                 backendCapabilityFeatures(),
+		"providerProfiles":         []string{backendmodel.GraphProfile, backendmodel.RelationalProfile, backendmodel.RuntimeProfile, backendmodel.LineageProfile, backendmodel.EventsProfile, backendmodel.ComposedProfile},
+		"supportedNodeKinds":       backendmodel.SupportedNodeKindsForProfile(backendmodel.ComposedProfile),
+		"supportedEdgeKinds":       backendmodel.SupportedEdgeKindsForProfile(backendmodel.ComposedProfile),
 		"guideSetId":               guide.CurrentGuideSetID(),
-		"viewSchemaVersions":       []string{backendmodel.ProposalDocumentVersion, backendmodel.SavedViewDocumentVersion, "api-artifact-pins-v1", backendmodel.EditorArtifactDocumentVersion},
-		"proposalDocumentVersions": []string{backendmodel.ProposalDocumentVersion},
+		"viewSchemaVersions":       []string{backendmodel.ProposalDocumentVersion, backendmodel.SavedViewDocumentVersion, "api-artifact-pins-v1", backendmodel.EditorArtifactDocumentVersion, backendmodel.ChangeProposalDocumentVersion, "import-candidate-v1", backendmodel.SavedViewV2DocumentVersion},
+		"proposalDocumentVersions": []string{backendmodel.ProposalDocumentVersion, backendmodel.ChangeProposalDocumentVersion},
+		"changeProposalCommands":   backendChangeProposalCommands(),
+		"sourceScopes":             []string{"add_repository", "reconcile", "add_provider", "migrate_provider"},
+		"syncPolicies":             []string{backendmodel.WholeSourcePolicy, backendmodel.IncrementalSourcePolicy},
+		"readTargetSupport":        backendReadTargetSupport(),
 		"proposalCommands":         []map[string]string{{"type": "alter_column", "property": "nullable"}, {"type": "alter_constraint", "action": "create", "constraintKind": "foreign_key"}, {"type": "alter_constraint", "action": "update", "constraintKind": "foreign_key"}, {"type": "set_criteria"}},
-		"importModes":              []string{"initial", "reconcile"},
-		"importCommands":           []string{"upsert_node", "upsert_edge", "upsert_evidence", "remove", "map_identity", "delete_assertion"},
+		"importModes":              []string{"initial", "reconcile", "composed"},
+		"importCommands":           []string{"upsert_node", "upsert_edge", "upsert_evidence", "remove", "map_identity", "delete_assertion", "claim_identity", "resolve_assertion"},
 		"reconciliationProfile":    map[string]string{"version": "1", "profile": backendmodel.GraphProfile, "scope": "whole-repository"},
 		"profileCapabilities": []map[string]any{
 			{"profile": backendmodel.GraphProfile, "modelSchemaVersions": []string{backendmodel.SchemaVersion}, "nodeKinds": backendmodel.SupportedNodeKindsForProfile(backendmodel.GraphProfile), "edgeKinds": backendmodel.SupportedEdgeKindsForProfile(backendmodel.GraphProfile), "importModes": []string{"initial", "reconcile"}},
@@ -187,17 +192,34 @@ func (s *Server) handleGetBackendCapabilities(w http.ResponseWriter, r *http.Req
 			{"profile": backendmodel.RuntimeProfile, "modelSchemaVersions": []string{backendmodel.RuntimeSchemaVersion}, "nodeKinds": backendmodel.SupportedNodeKindsForProfile(backendmodel.RuntimeProfile), "edgeKinds": backendmodel.SupportedEdgeKindsForProfile(backendmodel.RuntimeProfile), "importModes": []string{"initial", "reconcile"}},
 			{"profile": backendmodel.LineageProfile, "modelSchemaVersions": []string{backendmodel.LineageSchemaVersion}, "nodeKinds": backendmodel.SupportedNodeKindsForProfile(backendmodel.LineageProfile), "edgeKinds": backendmodel.SupportedEdgeKindsForProfile(backendmodel.LineageProfile), "importModes": []string{"initial", "reconcile"}},
 			{"profile": backendmodel.EventsProfile, "modelSchemaVersions": []string{backendmodel.EventsSchemaVersion}, "nodeKinds": backendmodel.SupportedNodeKindsForProfile(backendmodel.EventsProfile), "edgeKinds": backendmodel.SupportedEdgeKindsForProfile(backendmodel.EventsProfile), "importModes": []string{"initial", "reconcile"}},
+			{"profile": backendmodel.ComposedProfile, "modelSchemaVersions": []string{backendmodel.ComposedSchemaVersion}, "nodeKinds": backendmodel.SupportedNodeKindsForProfile(backendmodel.ComposedProfile), "edgeKinds": backendmodel.SupportedEdgeKindsForProfile(backendmodel.ComposedProfile), "importModes": []string{"composed"}},
 		},
-		"profileExtensions": []backendmodel.ImportProfileExtension{{FromProfile: backendmodel.GraphProfile, ToProfile: backendmodel.RelationalProfile}, {FromProfile: backendmodel.RelationalProfile, ToProfile: backendmodel.RuntimeProfile}, {FromProfile: backendmodel.RuntimeProfile, ToProfile: backendmodel.LineageProfile}, {FromProfile: backendmodel.LineageProfile, ToProfile: backendmodel.EventsProfile}},
+		"profileExtensions": []backendmodel.ImportProfileExtension{{FromProfile: backendmodel.GraphProfile, ToProfile: backendmodel.RelationalProfile}, {FromProfile: backendmodel.RelationalProfile, ToProfile: backendmodel.RuntimeProfile}, {FromProfile: backendmodel.RuntimeProfile, ToProfile: backendmodel.LineageProfile}, {FromProfile: backendmodel.LineageProfile, ToProfile: backendmodel.EventsProfile}, {FromProfile: backendmodel.EventsProfile, ToProfile: backendmodel.ComposedProfile}},
 		"reconciliationProfiles": []map[string]string{
 			{"version": "1", "profile": backendmodel.GraphProfile, "scope": "whole-repository"},
 			{"version": "1", "profile": backendmodel.RelationalProfile, "scope": "whole-repository-combined-graph"},
 			{"version": "1", "profile": backendmodel.RuntimeProfile, "scope": "whole-repository-combined-graph"},
 			{"version": "1", "profile": backendmodel.LineageProfile, "scope": "whole-repository-combined-graph"},
 			{"version": "1", "profile": backendmodel.EventsProfile, "scope": "whole-repository-combined-graph"},
+			{"version": "1", "profile": backendmodel.ComposedProfile, "scope": "provider-partition"},
 		},
 		"comparisonVersion": int64(1),
-		"limits": map[string]any{"maxNameLength": backendmodel.MaxNameLength, "maxIdempotencyKeyLength": backendmodel.MaxKeyLength, "defaultPageSize": backendmodel.DefaultPageSize, "maxPageSize": backendmodel.MaxPageSize, "maxCommands": 1, "maxBodyBytes": s.cfg.MaxBody,
+		"limits": map[string]any{"maxNameLength": backendmodel.MaxNameLength, "maxIdempotencyKeyLength": backendmodel.MaxKeyLength, "defaultPageSize": backendmodel.DefaultPageSize, "maxPageSize": backendmodel.MaxPageSize, "maxCommands": backendmodel.MaxProjectCommands, "maxBodyBytes": s.cfg.MaxBody,
+			"maxProjectCommandBytes":        min(s.cfg.MaxBody, int64(backendmodel.MaxProjectCommandBytes)),
+			"maxAnnotationBodyBytes":        min(s.cfg.MaxBody, int64(backendmodel.MaxAnnotationBodyBytes)),
+			"maxAnnotationIdentities":       backendmodel.MaxAnnotationIdentities,
+			"maxAnnotationTextBytes":        backendmodel.MaxAnnotationTextBytes,
+			"defaultAnnotationPageSize":     backendmodel.DefaultAnnotationPageSize,
+			"maxAnnotationPageSize":         backendmodel.MaxAnnotationPageSize,
+			"maxSourceRepositories":         backendmodel.MaxSourceRepositories,
+			"maxSourceProviders":            backendmodel.MaxSourceProviders,
+			"maxIncrementalSubjects":        backendmodel.MaxIncrementalSubjects,
+			"maxChangeProposalCommands":     backendmodel.MaxChangeProposalCommands,
+			"maxChangeProposalCommandBytes": min(s.cfg.MaxBody, int64(backendmodel.MaxChangeProposalCommandBytes)),
+			"maxChangeProposalCriteria":     backendmodel.MaxChangeProposalCriteria,
+			"maxChangeProposals":            backendmodel.MaxChangeProposals,
+			"maxChangeProposalRevisions":    backendmodel.MaxChangeProposalRevisions,
+			"maxChangeProposalBytes":        backendmodel.MaxChangeProposalBytes,
 			"maxEditorArtifactContextBytes": backendmodel.MaxEditorArtifactContextBytes, "maxEditorEventConstructionBytes": backendmodel.MaxEditorEventConstructionBytes, "maxEventMapBytes": designscenario.MaxEventMapBytes,
 			"maxImportBatchCommands": backendmodel.MaxImportCommands, "maxImportBatchBytes": min(s.cfg.MaxBody, int64(backendmodel.MaxImportBatchBytes)),
 			"maxManifestFiles": backendmodel.MaxManifestFiles, "maxSnippetBytes": backendmodel.MaxEvidenceSnippetBytes,

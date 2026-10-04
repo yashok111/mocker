@@ -1,8 +1,8 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import type {
-  BackendSavedView,
+  BackendSavedViewResponse,
   BackendSavedViewState,
-  BackendSavedViewTarget,
+  BackendReadTarget,
 } from "@/api/generated/schemas";
 import type { BackendSourcePin } from "./backendFlowReads";
 import type { BackendSavedViewSession } from "./useBackendSavedViewSession";
@@ -17,7 +17,7 @@ export type SavedLayoutProps = {
   onPositionsChange: (next: SavedViewState["positions"]) => void;
   onCollapsedGroupsChange: (ids: string[]) => void;
 };
-export function savedViewSourcePin(view: BackendSavedView): BackendSourcePin {
+export function savedViewSourcePin(view: BackendSavedViewResponse): BackendSourcePin {
   const state = view.state;
   return {
     revisionId: view.pins.revisionId,
@@ -38,22 +38,26 @@ export function savedViewStateEqual(a: SavedViewState | undefined, b: SavedViewS
           collapsedGroupIds: [...state.collapsedGroupIds].sort(),
         }
       : undefined;
-  const stable = (value: unknown) =>
-    JSON.stringify(value, (_key, item) =>
-      item && typeof item === "object" && !Array.isArray(item)
-        ? Object.fromEntries(Object.entries(item).sort(([a], [b]) => a.localeCompare(b)))
-        : item,
-    );
-  return stable(normalized(a)) === stable(normalized(b));
+  return stableSavedValue(normalized(a)) === stableSavedValue(normalized(b));
+}
+function stableSavedValue(value: unknown) {
+  return JSON.stringify(value, (_key, item) =>
+    item && typeof item === "object" && !Array.isArray(item)
+      ? Object.fromEntries(Object.entries(item).sort(([a], [b]) => a.localeCompare(b)))
+      : item,
+  );
+}
+export function sameSavedViewTarget(a: BackendReadTarget, b: BackendReadTarget) {
+  return stableSavedValue(a) === stableSavedValue(b);
 }
 export function sameViewBinding(
-  a: BackendSavedViewTarget,
+  a: BackendReadTarget,
   stateA: SavedViewState,
-  b: BackendSavedViewTarget,
+  b: BackendReadTarget,
   stateB: SavedViewState,
 ) {
   return (
-    JSON.stringify(a) === JSON.stringify(b) &&
+    sameSavedViewTarget(a, b) &&
     stateA.kind === stateB.kind &&
     (stateA.kind !== "database" ||
       stateB.kind !== "database" ||
@@ -63,9 +67,10 @@ export function sameViewBinding(
 }
 export const BackendSavedViewContext = createContext<BackendSavedViewSession | null>(null);
 export function useWorkspaceSavedState<S extends SavedViewState>(
-  target: BackendSavedViewTarget,
+  target: BackendReadTarget,
   initial: S,
   externalIdentity?: string,
+  documentVersion?: BackendSavedViewResponse["documentVersion"],
 ) {
   const session = useContext(BackendSavedViewContext);
   const [local, setLocal] = useState(initial);
@@ -98,13 +103,13 @@ export function useWorkspaceSavedState<S extends SavedViewState>(
     if (
       session?.state?.kind === initial.kind &&
       session.target &&
-      "proposal" in session.target &&
-      "proposal" in target &&
+      session.target.proposal &&
+      target.proposal &&
       session.target.proposal.proposalId === target.proposal.proposalId &&
       session.target.proposal.proposalRevisionId !== target.proposal.proposalRevisionId
     )
-      session.capture(target, initial);
-  }, [session, target, initial]);
+      session.capture(target, initial, documentVersion);
+  }, [session, target, initial, documentVersion]);
   function onStateChange(next: S) {
     setLocal(next);
     if (active) session?.setState(next);
@@ -113,7 +118,7 @@ export function useWorkspaceSavedState<S extends SavedViewState>(
     state,
     onStateChange,
     capture: () => {
-      if (!localPreview && !session?.preview) session?.capture(target, state);
+      if (!localPreview && !session?.preview) session?.capture(target, state, documentVersion);
     },
     captureDisabled: localPreview || !!session?.preview || !!session?.pending || !!session?.busy,
     canCapture: !!session,

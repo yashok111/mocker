@@ -9,6 +9,8 @@ export const Route = createFileRoute("/_authed/design-scenarios/$id")({
     "pinnedHash?": "string",
     "returnProjectId?": "string",
     "returnRevisionId?": "string",
+    "returnChangeProposalId?": "string",
+    "returnProposalRevisionId?": "string",
     "projectionView?": "string",
     "embeddedContractId?": "string",
   }).assert,

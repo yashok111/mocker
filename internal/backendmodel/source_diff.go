@@ -26,6 +26,9 @@ func completeFiles(s RevisionState) bool {
 	return false
 }
 func sourceChanges(before, after RevisionState) []SourceChange {
+	if before.Revision.SchemaVersion == ComposedSchemaVersion || after.Revision.SchemaVersion == ComposedSchemaVersion {
+		return composedSourceChanges(before, after)
+	}
 	old, next := map[string]SourceFileSummary{}, map[string]SourceFileSummary{}
 	fill := func(s RevisionState, m map[string]SourceFileSummary) {
 		if src := primarySource(s); src != nil {

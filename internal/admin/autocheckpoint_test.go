@@ -424,12 +424,12 @@ func TestAutoCheckpointPolicy_pinsEveryMutatingRoute(t *testing.T) {
 		// (D7.3), P6b's endpoint preview (D13), P6c's close and push
 		// (D9), A6's two asset writes (D3), A11's two entity writes,
 		// P4b's import and fork, then design-scenario validation, execution and archive, plus state-diagram validation and simulation — twenty-six.
-		cpGroupNeverTouchesLayer: 48, // Adds the source5 events POST read to event-map and pinned backend queries, plus API/generic artifact query/preview, proxy writes and scenario transfer export.
+		cpGroupNeverTouchesLayer: 49, // Includes full proposal preview alongside POST reads, artifact previews and non-model writes.
 		// Rows in another aggregate: runtime scenarios, checkpoints, API
 		// designs, four persisted design-scenario writes, run start/cancel, and four state-diagram writes.
-		cpGroupAnotherLayer: 45, // Includes backend metadata/import/proposal/saved-view writes API/generic pin apply and scenario transfer import.
+		cpGroupAnotherLayer: 48, // Includes full proposal create/apply/restore alongside existing model and artifact writes.
 		// Every GET in the table.
-		cpGroupRead: 75, // Includes source/proposal/saved-view reads, pinned aliases and exact API/scenario snapshots.
+		cpGroupRead: 87, // Includes annotations, full proposal history and exact source/full/candidate reads.
 	}
 
 	byPattern := checkpointPolicyByPattern(t)
@@ -453,8 +453,8 @@ func TestAutoCheckpointPolicy_pinsEveryMutatingRoute(t *testing.T) {
 		t.Errorf("the %d counted groups cover %d of %d rows — a group is missing from want", total, sum(got), table)
 	}
 
-	if len(byPattern) != 185 {
-		t.Fatalf("routes() registers %d patterns, want 185", len(byPattern))
+	if len(byPattern) != 201 {
+		t.Fatalf("routes() registers %d patterns, want 201", len(byPattern))
 	}
 
 	// A label is the ONE thing [Server.routeMux] reads off the policy, so a
@@ -507,10 +507,10 @@ func TestAutoCheckpointPolicy_pinsEveryMutatingRoute(t *testing.T) {
 	}
 	// Saved-view create/save append presentation versions in their own aggregate.
 	// Generic artifacts add three POSTs: two reads/previews and one pin apply.
-	// B3.2 adds POST events/query with cpNeverTouchesLayer: 110 write-shaped
-	// routes and 75 GETs cover the full 185-row table.
-	if len(mutating) != 110 {
-		t.Fatalf("routes() registers %d mutating patterns, want 110", len(mutating))
+	// B4.1 adds four full-proposal POSTs: 114 write-shaped
+	// routes and 87 GETs cover the full 201-row table.
+	if len(mutating) != 114 {
+		t.Fatalf("routes() registers %d mutating patterns, want 114", len(mutating))
 	}
 
 	// The two halves the group counts alone cannot state: a mutating route

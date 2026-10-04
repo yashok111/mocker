@@ -78,7 +78,22 @@ func artifactBaselineDigest(ctx context.Context, q importReader, pid, rid string
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return "", err
 	}
-	return requestDigest(struct{ Revision, Context, SourceContent, SourceSemantic string }{revision, document, sourceContent, sourceSemantic})
+	baseline := struct{ Revision, Context, SourceContent, SourceSemantic string }{revision, document, sourceContent, sourceSemantic}
+	var descriptor Revision
+	if err := json.Unmarshal([]byte(revision), &descriptor); err != nil {
+		return "", err
+	}
+	if descriptor.SchemaVersion == ComposedSchemaVersion {
+		sourceRows, err := source6ArtifactRowsDigest(ctx, q, rid)
+		if err != nil {
+			return "", err
+		}
+		return requestDigest(struct {
+			Baseline   any
+			SourceRows string
+		}{baseline, sourceRows})
+	}
+	return requestDigest(baseline)
 }
 
 func loadLegacyArtifactContext(ctx context.Context, q importReader, rid string) (*APIArtifactContext, error) {

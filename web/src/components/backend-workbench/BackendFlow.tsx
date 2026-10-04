@@ -1,3 +1,9 @@
+import type { BackendReadTarget, BackendEffectiveGraphPins } from "@/api/generated/schemas";
+import {
+  projectionTarget,
+  projectionKey,
+  projectionURLTarget,
+} from "./backendEffectiveProjectionReads";
 import { BackendValueInspector } from "./BackendValueInspector";
 import { useContext, useRef, useState } from "react";
 import {
@@ -13,7 +19,10 @@ import {
   Title,
 } from "@mantine/core";
 import { useQuery } from "@tanstack/react-query";
-import type { BackendFlowPage, QueryBackendFlowRequest } from "@/api/generated/schemas";
+import type {
+  BackendFlowResponse as BackendFlowPage,
+  QueryBackendFlowRequest,
+} from "@/api/generated/schemas";
 import { CoverageDetails, LoadState, Pages } from "./BackendGraphInventory";
 import { BackendFlowGraph } from "./BackendFlowGraph";
 import { BackendFlowInspector } from "./BackendFlowInspector";
@@ -41,7 +50,9 @@ import {
 
 type Props = {
   projectId: string;
-  revisionId: string;
+  revisionId?: string;
+  target?: BackendReadTarget;
+  pins?: BackendEffectiveGraphPins;
   pin?: BackendSourcePin;
   onPinChange?: (pin: BackendSourcePin) => void;
   onDatabaseNavigate?: (pin: BackendSourcePin) => void;
@@ -51,7 +62,7 @@ export function BackendFlow(props: Props) {
   const session = useContext(BackendSavedViewContext);
   return (
     <FlowWorkspace
-      key={`${props.projectId}:${props.revisionId}:${session?.restoreGeneration ?? 0}`}
+      key={`${props.projectId}:${projectionKey(projectionTarget(props), props.pins)}:${session?.restoreGeneration ?? 0}`}
       {...props}
     />
   );
@@ -59,17 +70,21 @@ export function BackendFlow(props: Props) {
 
 function FlowWorkspace({
   projectId,
-  revisionId,
+  revisionId: selectedRevision,
+  target: explicitTarget,
+  pins,
   pin: externalPin,
   onPinChange,
   onDatabaseNavigate,
 }: Props) {
+  const target = projectionTarget({ revisionId: selectedRevision, target: explicitTarget, pins });
+  const revisionId = pins?.baseRevisionId ?? selectedRevision ?? "";
   const [selectedValue, setSelectedValue] = useState<FlowSelection["valueRef"]>();
   const apiHost = useContext(BackendAPIArtifactsContext);
   const [localPin, setPin] = useState<BackendSourcePin>(externalPin ?? {});
   const initialPin = externalPin ?? localPin;
   const workspace = useWorkspaceSavedState<Extract<SavedViewState, { kind: "flow" }>>(
-    { revisionId },
+    target,
     {
       kind: "flow",
       scope: {
@@ -91,10 +106,11 @@ function FlowWorkspace({
       externalPin?.recordId,
       externalPin?.recordType,
     ]),
+    pins?.structuralSchemaVersion === "6" ? "saved-view-v2" : undefined,
   );
   const state = workspace.state;
   const pin = {
-    revisionId: initialPin.revisionId,
+    ...projectionURLTarget(target, revisionId),
     viewId: initialPin.viewId,
     viewVersion: initialPin.viewVersion,
     datastoreId: initialPin.datastoreId,
@@ -108,13 +124,17 @@ function FlowWorkspace({
   const [cursors, setCursors] = useState([""]);
   const origin = useRef<HTMLElement | null>(null);
   const heading = useRef<HTMLHeadingElement>(null);
-  const query = useFlowPage(projectId, {
-    revisionId,
-    view: "entrypoints",
-    search,
-    limit: 100,
-    cursor: cursors.at(-1) ?? "",
-  });
+  const query = useFlowPage(
+    projectId,
+    {
+      ...target,
+      view: "entrypoints",
+      search,
+      limit: 100,
+      cursor: cursors.at(-1) ?? "",
+    },
+    pins,
+  );
   const page = flowPageOf(query.data, "entrypoints");
   const selection: FlowSelection | null = pin.recordId
     ? { type: pin.recordType ?? "node", id: pin.recordId }
@@ -126,7 +146,8 @@ function FlowWorkspace({
   if (selectedValue && !activeValue) setSelectedValue(undefined);
   function update(next: BackendSourcePin) {
     if (apiHost?.guard && !apiHost.guard()) return;
-    const value = { ...next, revisionId };
+    const { revisionId: _previousRevision, ...details } = next;
+    const value = { ...details, ...projectionURLTarget(target, revisionId) };
     setPin(value);
     workspace.onStateChange({
       ...state,
@@ -156,7 +177,13 @@ function FlowWorkspace({
     onFlow: (entrypointId: string | undefined, flowId: string) =>
       update({ ...pin, entrypointId, flowId, recordId: undefined, recordType: undefined }),
     onDatabase: (dataNodeId: string, datastoreId: string, facetKey: string) => {
-      const value = { ...pin, revisionId, dataNodeId, datastoreId, facetKey };
+      const value = {
+        ...pin,
+        ...projectionURLTarget(target, revisionId),
+        dataNodeId,
+        datastoreId,
+        facetKey,
+      };
       update(value);
       onDatabaseNavigate?.(value);
     },
@@ -177,7 +204,10 @@ function FlowWorkspace({
           </Button>
         )}
         <Text size="sm" c="dimmed" style={databaseWrap}>
-          Статическая модель исходников · только чтение · ревизия {revisionId}
+          {target.changeProposal
+            ? "Желаемая структура предложения · базовая ревизия"
+            : "Статическая модель исходников · только чтение · ревизия"}{" "}
+          {revisionId}
         </Text>
         <Text size="sm">
           Шаги и переходы описывают исходный код. Списки упорядочены по идентификаторам; порядок
@@ -310,6 +340,8 @@ function FlowWorkspace({
             key={pin.flowId}
             projectId={projectId}
             revisionId={revisionId}
+            target={target}
+            pins={pins}
             flowId={pin.flowId}
             onSelect={select}
             positions={state.positions}
@@ -326,6 +358,8 @@ function FlowWorkspace({
             key={`forward:${pin.entrypointId}`}
             projectId={projectId}
             revisionId={revisionId}
+            target={target}
+            pins={pins}
             selector={{ entrypointId: pin.entrypointId }}
             kind={state.filters.accessKind}
             onKindChange={(accessKind) =>
@@ -339,6 +373,8 @@ function FlowWorkspace({
             key={`reverse:${pin.dataNodeId}`}
             projectId={projectId}
             revisionId={revisionId}
+            target={target}
+            pins={pins}
             selector={{ dataNodeId: pin.dataNodeId }}
             kind={state.filters.reverseAccessKind}
             onKindChange={(reverseAccessKind) =>
@@ -355,6 +391,8 @@ function FlowWorkspace({
             key={JSON.stringify(activeValue)}
             projectId={projectId}
             revisionId={revisionId}
+            target={target}
+            pins={pins}
             value={activeValue}
             onClose={close}
           />
@@ -364,6 +402,8 @@ function FlowWorkspace({
               key={`${selection.type}:${selection.id}`}
               projectId={projectId}
               revisionId={revisionId}
+              target={target}
+              pins={pins}
               selection={selection}
               selectedValue={activeValue}
               onSelect={select}
@@ -410,6 +450,8 @@ function FlowNotice({ page }: { page: BackendFlowPage }) {
 function FlowSteps({
   projectId,
   revisionId,
+  target: explicitTarget,
+  pins,
   flowId,
   onSelect,
   positions,
@@ -420,26 +462,37 @@ function FlowSteps({
 }: SavedLayoutProps & {
   onPreview?: (value: boolean) => void;
   projectId: string;
-  revisionId: string;
+  revisionId?: string;
+  target?: BackendReadTarget;
+  pins?: BackendEffectiveGraphPins;
   flowId: string;
   onSelect: (selection: FlowSelection, trigger?: HTMLElement) => void;
 }) {
+  const target = projectionTarget({ revisionId, target: explicitTarget, pins });
   const [stepCursors, setStepCursors] = useState([""]);
   const [transitionCursors, setTransitionCursors] = useState([""]);
-  const steps = useFlowPage(projectId, {
-    revisionId,
-    view: "steps",
-    flowId,
-    limit: 500,
-    cursor: stepCursors.at(-1) ?? "",
-  });
-  const transitions = useFlowPage(projectId, {
-    revisionId,
-    view: "transitions",
-    flowId,
-    limit: 500,
-    cursor: transitionCursors.at(-1) ?? "",
-  });
+  const steps = useFlowPage(
+    projectId,
+    {
+      ...target,
+      view: "steps",
+      flowId,
+      limit: 500,
+      cursor: stepCursors.at(-1) ?? "",
+    },
+    pins,
+  );
+  const transitions = useFlowPage(
+    projectId,
+    {
+      ...target,
+      view: "transitions",
+      flowId,
+      limit: 500,
+      cursor: transitionCursors.at(-1) ?? "",
+    },
+    pins,
+  );
   const stepPage = flowPageOf(steps.data, "steps");
   const transitionPage = flowPageOf(transitions.data, "transitions");
   const transactions = new Map<string, string[]>();
@@ -452,7 +505,7 @@ function FlowSteps({
       transactions.set(id, [...(transactions.get(id) ?? []), node.id]);
     }
   }
-  const groupKey = ["backend-flow-transactions", projectId, revisionId, flowId];
+  const groupKey = ["backend-flow-transactions", projectId, projectionKey(target, pins), flowId];
   useDatabaseCancellation(groupKey);
   const groupNames = useQuery({
     queryKey: groupKey,
@@ -462,8 +515,9 @@ function FlowSteps({
     queryFn: ({ signal }) =>
       readDatabaseGraph(
         projectId,
-        { revisionId, recordType: "nodes", kind: "transaction", parentId: flowId },
+        { ...target, recordType: "nodes", kind: "transaction", parentId: flowId },
         signal,
+        pins,
       ),
   });
   return (
@@ -657,6 +711,8 @@ function FlowSteps({
 function FlowAccesses({
   projectId,
   revisionId,
+  target: explicitTarget,
+  pins,
   selector,
   onSelect,
   onFlow,
@@ -667,22 +723,25 @@ function FlowAccesses({
   kind: "" | "reads" | "writes" | "deletes";
   onKindChange: (kind: "" | "reads" | "writes" | "deletes") => void;
   projectId: string;
-  revisionId: string;
+  revisionId?: string;
+  target?: BackendReadTarget;
+  pins?: BackendEffectiveGraphPins;
   selector: { entrypointId: string } | { dataNodeId: string };
   onSelect: (selection: FlowSelection, trigger?: HTMLElement) => void;
   onFlow: (entrypointId: string | undefined, flowId: string) => void;
   onDatabase: (dataNodeId: string, datastoreId: string, facetKey: string) => void;
 }) {
+  const target = projectionTarget({ revisionId, target: explicitTarget, pins });
   const [cursors, setCursors] = useState([""]);
   const input: QueryBackendFlowRequest = {
-    revisionId,
+    ...target,
     view: "accesses",
     ...selector,
     ...(kind ? { accessKind: kind } : {}),
     limit: 100,
     cursor: cursors.at(-1) ?? "",
   };
-  const query = useFlowPage(projectId, input);
+  const query = useFlowPage(projectId, input, pins);
   const page = flowPageOf(query.data, "accesses");
   const reverse = "dataNodeId" in selector;
   return (
@@ -757,7 +816,7 @@ function FlowAccesses({
                       onSelect({ type: "edge", id: item.accessEdgeId }, event.currentTarget)
                     }
                   >
-                    Основания доступа
+                    {item.status === "desired" ? "Основания базовых объектов" : "Основания доступа"}
                   </Button>
                   <Button
                     variant="default"

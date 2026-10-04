@@ -16,7 +16,7 @@ const api = vi.hoisted(() => ({
 vi.mock("@/api/generated/backend-projects/backend-projects", () => api);
 it("shows source nullable and saved NOT NULL intent with their distinct origins", async () => {
   const basis = {
-    revisionId: "base",
+    revisionId: "0197aaf9-5555-7000-8000-000000000021",
     semanticHash: "a".repeat(64),
     subjectId: "user-id",
     facetKey: "sql",
@@ -24,10 +24,10 @@ it("shows source nullable and saved NOT NULL intent with their distinct origins"
   const response: BackendProposalNodeRead = {
     viewSchemaVersion: "proposal-relational-v1",
     proposalPins: {
-      proposalId: "proposal",
-      proposalRevisionId: "saved",
+      proposalId: "0197aaf9-5555-7000-8000-000000000022",
+      proposalRevisionId: "0197aaf9-5555-7000-8000-000000000023",
       proposalSemanticHash: "b".repeat(64),
-      baseRevisionId: "base",
+      baseRevisionId: "0197aaf9-5555-7000-8000-000000000021",
       baseSemanticHash: "a".repeat(64),
       repositoryId: "repository",
       datastoreId: "db",
@@ -42,8 +42,8 @@ it("shows source nullable and saved NOT NULL intent with their distinct origins"
       sourceRecord: proposalNodes.find((node) => node.id === "user-id")!,
       effectiveFacet: {
         origin: "proposal",
-        proposalId: "proposal",
-        proposalRevisionId: "saved",
+        proposalId: "0197aaf9-5555-7000-8000-000000000022",
+        proposalRevisionId: "0197aaf9-5555-7000-8000-000000000023",
         facetKey: "sql",
         subjectId: "user-id",
         base: basis,
@@ -76,12 +76,19 @@ it("shows source nullable and saved NOT NULL intent with their distinct origins"
   });
   api.getBackendProposalEvidence.mockResolvedValue({
     status: 200,
-    data: { items: [], nextCursor: "" },
+    data: {
+      items: [],
+      nextCursor: "",
+      viewSchemaVersion: "proposal-relational-v1",
+      proposalPins: response.proposalPins,
+    },
     headers: new Headers(),
   });
   api.getBackendProposalCoverage.mockResolvedValue({
     status: 200,
     data: {
+      viewSchemaVersion: "proposal-relational-v1",
+      proposalPins: response.proposalPins,
       coverage: {
         status: "partial",
         denominator: null,
@@ -98,10 +105,13 @@ it("shows source nullable and saved NOT NULL intent with their distinct origins"
     <BackendDatabaseInspector
       context={{
         projectId: "project",
-        revisionId: "base",
+        revisionId: "0197aaf9-5555-7000-8000-000000000021",
         datastoreId: "db",
         facetKey: "sql",
-        proposal: { proposalId: "proposal", proposalRevisionId: "saved" },
+        proposal: {
+          proposalId: "0197aaf9-5555-7000-8000-000000000022",
+          proposalRevisionId: "0197aaf9-5555-7000-8000-000000000023",
+        },
       }}
       selection={{ type: "node", id: "user-id" }}
       onSelect={vi.fn()}
@@ -113,8 +123,8 @@ it("shows source nullable and saved NOT NULL intent with their distinct origins"
   expect(screen.getByText("Источник допускает NULL")).toBeInTheDocument();
   expect(api.getBackendProposalNode).toHaveBeenCalledWith(
     "project",
-    "proposal",
-    "saved",
+    "0197aaf9-5555-7000-8000-000000000022",
+    "0197aaf9-5555-7000-8000-000000000023",
     "user-id",
     expect.anything(),
   );
@@ -122,8 +132,8 @@ it("shows source nullable and saved NOT NULL intent with their distinct origins"
   expect(await screen.findByText("Writers not inspected")).toBeInTheDocument();
   expect(api.getBackendProposalCoverage).toHaveBeenCalledWith(
     "project",
-    "proposal",
-    "saved",
+    "0197aaf9-5555-7000-8000-000000000022",
+    "0197aaf9-5555-7000-8000-000000000023",
     expect.anything(),
   );
 });

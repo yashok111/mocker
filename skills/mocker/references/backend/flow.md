@@ -1,9 +1,36 @@
 # Source flow model and pinned reads
 
-Canonical owner: `mocker-backend-inspect` workflow6. Select/verify this owner's
+Canonical owner: `mocker-backend-inspect` workflow7. Select/verify this owner's
 identity and contentHash in the same global guide set before using the topic.
 Source schema3/4/5 and `runtime-flow-v1` extend relational source records. They do
 not describe runtime observation or the effect of a database proposal.
+
+## Source6, full drafts and READY candidate reads
+
+Choose exactly one selector: revisionId; proposal:{proposalId,proposalRevisionId} for legacy relational drafts; changeProposal:{proposalId,proposalRevisionId} for full drafts; or importCandidate:{importId,importVersion,candidateHash} for current READY staging. Mixed/duplicate/null tags and implicit head fallback are invalid. Use canonical UUIDs and exact signed-int64 numeric tokens in raw MCP; browser clients must refuse values they cannot preserve exactly.
+
+Graph/node/evidence/coverage accept the four appropriate basic read variants. get_backend_assertions accepts native source6, full proposals with source6 baseline, and composed READY candidates. Source5/legacy/full5 assertions return422. Keep every provider-qualified identity, losing claim, typed selection and own/dependency/field currentness visible. Full assertions and baselineEvidence do not confirm an edited intended value.
+
+Preserve returned complete pins across pages/details: target/hash, view/structural versions, selected base revision/semantic hash, source vector/snapshot IDs and artifact context. Native source6 uses view tag6; full and staged views use proposal-graph-v1 and import-candidate-v1. Older source1–5 response shapes remain supported. Exact graph id cannot combine with cursor/kind/search/parent/from/to; omit node-only search/parentId entirely for edges. Exact evidenceId cannot combine with subjectId/cursor.
+
+Artifact projections keep their artifact pins in pins and expose graph/effective context in effectivePins. Preserve both; artifact content/raw/authored hashes and graph semantic/candidate hashes are different contracts.
+
+Database/Flow/lineage/events/artifact queries support their exact source/full targets. Legacy proposal specialized support is limited to Database; Flow, lineage, events and both API/editor artifact projections reject proposal with422. Source API-artifact reads technically accept schemas1–5, including an empty bindings result; a meaningful source owner/pin workflow uses source4–6. Do not turn that read admission into legacy-proposal artifact support. Staging supports basic graph/node/evidence/coverage/assertions only: specialized queries and SavedViews reject importCandidate. New batches, Preview versions, Commit or Abort can invalidate staged pins. A stale candidate409 never switches to source.
+
+When original proof is historical_metadata, label it as historical metadata testimony and show its original source5 basis and semantic-support gap. Verify the original revision/project/schema/hash before opening that exact evidence ID. An unchanged selected provider claim can still have a stale dependent field; report both levels rather than promoting the entire record to current.
+
+
+## Explicit SavedView-v2 presentation
+
+For source6 or full-proposal presentations select saved-view-v2 support in this owner. create_backend_saved_view takes projectId, documentVersion:"saved-view-v2", name, exact target, complete state and idempotencyKey. Its target is source/legacy/full, never importCandidate. The selected Flow/Database query must itself be supported for that target and source vocabulary.
+
+State is a closed flow/database variant with scope, filters, selection (explicit object or null), positions and collapsedGroupIds. For example, a Flow catalog state is {kind:"flow",scope:{},filters:{search:"",accessKind:"",reverseAccessKind:""},selection:null,positions:[],collapsedGroupIds:[]}. Database state uses an explicit datastoreId/facetKey scope and its own filters. Layout is presentation, not source evidence or a proposal command.
+
+Read get_backend_saved_view at the returned viewId/version before model queries. Reopen that immutable target and its complete effective pins; discard old cursors and start at page one. save_backend_saved_view includes documentVersion:"saved-view-v2", exact old view expectedVersion, complete name/state and stable idempotencyKey. Target and kind are immutable: changing either creates a new view. No save follows a newer source or proposal head. An unknown response repeats its original body/key; a definite409 requires explicit reread/reconciliation or a deliberate new view. A replay may be historical.
+
+For a full target, pins.revisionId names its source baseline; it is not the selected proposal draft. Continue model reads through the saved target.changeProposal and pins.effective, without replacing it with a source-only request.
+
+Omitted documentVersion keeps the original v1 hash/decode/receipt branch. Keep old v1 requests and receipts byte-compatible; adding a v2 tag to a previously executed request is not a retry. Read saved-view-v1 and saved-view-v2 versions without silently upgrading either. These rules do not claim that browser QA or the pending integrated SDK examples have passed.
 
 ## Strict source records
 
@@ -126,7 +153,7 @@ Page size defaults100/max500 and does not change traversal or witnesses.
 
 ## Pinned saved Flow views
 
-Require inspect6, `backend-saved-views` and document `saved-view-v1`. Four tools:
+Require inspect7, `backend-saved-views` and document `saved-view-v1`. Four tools:
 `list_backend_saved_views`, `create_backend_saved_view`, `get_backend_saved_view`,
 `save_backend_saved_view`. Read-only list/get are idempotent; create/save use
 retained idempotency keys. A SavedView is an immutable version with id/projectId,
@@ -180,10 +207,10 @@ transaction atomicity claim appears. Canvas caps200nodes/600edges are distinct
 from collapse and pagination. Preview is local and Save is disabled until Apply
 or Cancel; one-step undo restores coordinates independently of collapse.
 
-## query_backend_lineage (inspect6)
+## query_backend_lineage (inspect7)
 
 Require source4/5, field-lineage-v1 and backend-field-lineage-query in the selected
-inspect6 set. Existing flow/access reads remain source3/4/5; source1/2 refuse them.
+inspect7 set. Existing flow/access reads remain source3/4/5; source1/2 refuse them.
 Lineage refuses source1–3 and proposals with422, rather than an empty answer.
 
 Input: projectId, exact revisionId, complete seed ValueRef, direction
@@ -223,9 +250,9 @@ revision/seed changes and discard mismatched late responses. Pin evidence,
 owner, column facet and exact port navigation to the same revision. Lineage
 panel state is transient; existing saved-view-v1 remains unchanged.
 
-## Manual exact API artifact associations (inspect6)
+## Manual exact API artifact associations (inspect7)
 
-Require the complete inspect6 workflow, feature `backend-api-artifact-pins` and
+Require the complete inspect7 workflow, feature `backend-api-artifact-pins` and
 contract `api-artifact-pins-v1` advertised in `viewSchemaVersions`. This contract
 is separate from source model1–5 and provider profiles; mutations require an
 imported source4/5 baseline. A question authorizes reads only. Select the source
@@ -428,7 +455,7 @@ The API-specific commands above retain legacy API-only v1 behavior. For a tagged
 backend-editor-artifacts-v1 context, API sets preserve the complete editor roster
 and shared revision; whole-group removal refuses existing editors. To remove
 the last API link while retaining editors use generic set_artifact_pin with
-apiBindings:[] and the complete retained editorBindings. Select inspect6 with
+apiBindings:[] and the complete retained editorBindings. Select inspect7 with
 backend-editor-projections and load backend-editor-projections for full replacement,
 raw snapshot/hash policies, linked/copy isolation and all generic budgets.
 
@@ -436,7 +463,7 @@ raw snapshot/hash policies, linked/copy isolation and all generic budgets.
 
 Consumer/job entrypoints and explicit call-step→http_operation→handles→owned
 flow are available on source5. Events routes/jobs/service_calls uses
-query_backend_events and backend-events under inspect6; retain exact pinned
+query_backend_events and backend-events under inspect7; retain exact pinned
 IDs and unknown external/dispatch boundaries. Flow policy runtime-flow-reachability-v2
 applies to source5; source3/4 retains its advertised v1 policy. Contextual field
 lineage uses field-lineage-traversal-v2 only on5; source4 remains v1. Each event

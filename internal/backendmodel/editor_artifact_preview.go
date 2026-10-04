@@ -131,24 +131,20 @@ func (s *ArtifactService) loadArtifactPinsBaseline(ctx context.Context, pid stri
 	if p.CurrentRevisionID != in.BaseRevisionID {
 		return nil, nil, "", importConflict("backend_artifact_pins_base_conflict", "Current source baseline changed", p.Version)
 	}
-	if !isLineageSchema(state.Revision.SchemaVersion) || len(state.Sources) == 0 || len(state.Revision.SourceSnapshotIDs) == 0 || len(p.Repositories) == 0 {
-		return nil, nil, "", &FaultError{Status: 422, Code: "backend_artifact_pins_unsupported", Message: "Artifact pins require an imported source4 or source5 baseline"}
+	if !isArtifactSourceSchema(state.Revision.SchemaVersion) || len(state.Sources) == 0 || len(state.Revision.SourceSnapshotIDs) == 0 || len(p.Repositories) == 0 {
+		return nil, nil, "", &FaultError{Status: 422, Code: "backend_artifact_pins_unsupported", Message: "Artifact pins require an imported source4, source5 or source6 baseline"}
 	}
 	baselineHash, err := artifactBaselineDigest(ctx, tx, pid, in.BaseRevisionID)
 	if err != nil {
 		return nil, nil, "", err
 	}
 	frozen := revisionArtifactContext(state)
+	content, anchor, err := artifactSourceAnchors(ctx, tx, state)
+	if err != nil {
+		return nil, nil, "", err
+	}
 	if frozen == nil {
-		coverage, e := loadAPIArtifactCoverage(ctx, tx, state)
-		if e != nil {
-			return nil, nil, "", e
-		}
-		content, e := APIArtifactSourceContentHash(*state, *coverage)
-		if e != nil {
-			return nil, nil, "", e
-		}
-		frozen = &ArtifactContext{SourceContentHash: content, SourceSemanticHash: state.Revision.SemanticHash, APIBindings: []APIArtifactBinding{}, EditorBindings: []EditorBinding{}}
+		frozen = &ArtifactContext{SourceContentHash: content, SourceSemanticHash: anchor, APIBindings: []APIArtifactBinding{}, EditorBindings: []EditorBinding{}}
 	}
 	if err = tx.Rollback(); err != nil {
 		return nil, nil, "", err

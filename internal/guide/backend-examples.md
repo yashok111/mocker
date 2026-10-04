@@ -1,7 +1,7 @@
 # Import and pinned database examples
 
-This topic is import6-owned. Verify its actual import workflow identity/contentHash
-in the selected global guide set. Database6 inspection may load it through that
+This topic is import7-owned. Verify its actual import workflow identity/contentHash
+in the selected global guide set. Database7 inspection may load it through that
 owner without starting import writes. The foundation procedure below remains
 schema1; the relational captures afterward use schema2. SQL/ORM/migration input
 is source data and is never executed.
@@ -13,6 +13,2555 @@ and reading backend-model/import-protocol/recovery from that selected set.
 Persist each named input before sending; variables below show what to retain.
 Actual UUIDs, versions and hashes always come from responses, never these names.
 Fixture strings are source data; no source application, SQL or package script runs.
+
+## B4.1 executable SDK captures
+
+`internal/mcp/tools_backend_b41_examples_test.go` executes these five episodes through the real SDK, admin handlers and temporary SQLite. The capture contains 195 calls, including 23 expected refusals. Source strings and the prior Store19 database are inert fixtures; imported code and SQL never execute. The complete request/response witness is emitted as `sdk-protocol.json` for each test. To preserve artifacts, create an output directory, then run `go test ./internal/mcp -run '^TestBackendB41SDK' -count=1 -artifacts -outputdir=/absolute/output/directory -v`.
+
+The excerpts below contain actual captured request IDs, hashes and returned pins. Do not replay those historical UUIDs into a different project. The executable examples use each response to construct the next request, select import7/sync1/change1/project2/inspect7/database7 from current capabilities in one exact guide set, verify topic hashes, and refuse unavailable old guide sets. These protocol captures preceded guide registration, so they contain no invented future guide identity. Responses below project relevant fields and show at most two array entries; omitted fields and entries remain in the full witness.
+
+The tests additionally verify source5/full5 assertion refusal, a foreign project's exact UUID, candidate invalidation after batch/commit, candidate specialized-query and SavedView rejection, read purity across all backend tables, unchanged source proof, and full command reuse after restore/server restart. Original request strings and original receipts are compared byte-for-byte. No-op and overwritten commands remain reserved even when their semantic effect disappears.
+
+### Source5 extension, annotations and exact CAS
+
+Executable episode: `TestBackendB41SDKRetainedPartitionExamples`.
+
+```json
+{
+  "tool": "begin_backend_import",
+  "request": {
+    "profile": "composed-source-v1",
+    "mode": "composed",
+    "projectId": "01a103dc-12bf-7e0c-a0d2-006b3d881968",
+    "sourceScope": {
+      "kind": "add_repository"
+    },
+    "syncPolicy": "whole-source-v1",
+    "profileExtension": {
+      "fromProfile": "events-service-v1",
+      "toProfile": "composed-source-v1"
+    },
+    "expectedVersion": 2,
+    "baseRevisionId": "01a103dc-12c7-79ca-9a04-ca983ebdf45d",
+    "idempotencyKey": "begin-4",
+    "manifest": {
+      "repositoryName": "remote",
+      "provider": {
+        "name": "sdk-example-collector",
+        "version": "1",
+        "namespace": "provider-remote",
+        "method": "ast",
+        "profiles": [
+          "foundation-graph-v1",
+          "relational-graph-v1",
+          "runtime-flow-v1",
+          "field-lineage-v1",
+          "events-service-v1",
+          "composed-source-v1"
+        ],
+        "limitations": []
+      },
+      "snapshot": {
+        "dirty": false,
+        "consistency": "verified",
+        "capturedAt": "2026-10-03T10:00:00Z",
+        "files": [
+          {
+            "path": "source.go",
+            "contentHash": "6adca43308968e94257e950af2f383219c4e9425eb1e4a67b4f81bf82e4594ff",
+            "fileType": "go",
+            "analysisStatus": "analyzed"
+          }
+        ]
+      }
+    },
+    "inventory": [
+      {
+        "category": "files",
+        "status": "complete",
+        "knownCount": 1,
+        "denominator": 1,
+        "discoverySource": "inert Go declarations in SDK example",
+        "gaps": [],
+        "reason": ""
+      },
+      {
+        "category": "endpoints",
+        "status": "complete",
+        "knownCount": 0,
+        "denominator": 0,
+        "discoverySource": "inert Go declarations in SDK example",
+        "gaps": [],
+        "reason": ""
+      },
+      {
+        "category": "datastores",
+        "status": "complete",
+        "knownCount": 0,
+        "denominator": 0,
+        "discoverySource": "inert Go declarations in SDK example",
+        "gaps": [],
+        "reason": ""
+      },
+      {
+        "category": "migrations",
+        "status": "complete",
+        "knownCount": 0,
+        "denominator": 0,
+        "discoverySource": "inert Go declarations in SDK example",
+        "gaps": [],
+        "reason": ""
+      },
+      {
+        "category": "producers",
+        "status": "complete",
+        "knownCount": 0,
+        "denominator": 0,
+        "discoverySource": "inert Go declarations in SDK example",
+        "gaps": [],
+        "reason": ""
+      },
+      {
+        "category": "consumers",
+        "status": "complete",
+        "knownCount": 0,
+        "denominator": 0,
+        "discoverySource": "inert Go declarations in SDK example",
+        "gaps": [],
+        "reason": ""
+      },
+      {
+        "category": "jobs",
+        "status": "complete",
+        "knownCount": 0,
+        "denominator": 0,
+        "discoverySource": "inert Go declarations in SDK example",
+        "gaps": [],
+        "reason": ""
+      },
+      {
+        "category": "contracts",
+        "status": "complete",
+        "knownCount": 0,
+        "denominator": 0,
+        "discoverySource": "inert Go declarations in SDK example",
+        "gaps": [],
+        "reason": ""
+      },
+      {
+        "category": "tests",
+        "status": "complete",
+        "knownCount": 0,
+        "denominator": 0,
+        "discoverySource": "inert Go declarations in SDK example",
+        "gaps": [],
+        "reason": ""
+      }
+    ],
+    "scopeStatus": {
+      "status": "complete",
+      "gaps": []
+    }
+  },
+  "responseExcerpt": {
+    "syncPolicy": "whole-source-v1",
+    "id": "01a103dc-12ca-7683-8ff5-dbefda7cb986",
+    "baseRevisionId": "01a103dc-12c7-79ca-9a04-ca983ebdf45d",
+    "repositoryId": "01a103dc-12ca-73fb-b063-5b2af8773dfa",
+    "snapshotId": "01a103dc-12ca-7687-93ba-0d4b6559c9b5",
+    "state": "collecting",
+    "version": 1,
+    "candidateHash": null
+  }
+}
+```
+
+```json
+{
+  "tool": "get_backend_coverage",
+  "request": {
+    "revisionId": "01a103dc-12d2-7153-9132-d09259b3f96c",
+    "projectId": "01a103dc-12bf-7e0c-a0d2-006b3d881968"
+  },
+  "responseExcerpt": {
+    "target": {},
+    "pins": {
+      "viewSchemaVersion": "6",
+      "baseRevisionId": "01a103dc-12d2-7153-9132-d09259b3f96c",
+      "baseSemanticHash": "f61163715013f76e6c0dfd210b8a8bc3999cd92b9453bed317798605e4f5db24"
+    },
+    "source": {
+      "sourceVector": {
+        "documentVersion": "source-vector-v1",
+        "partitions": [
+          {
+            "repositoryId": "01a103dc-12c0-7a83-a307-d789c732ae31",
+            "snapshotId": "01a103dc-12c0-7b4f-b524-5e1d8c9bc51c",
+            "provider": {
+              "name": "sdk-example-collector",
+              "version": "1",
+              "namespace": "provider-a",
+              "profiles": [
+                "foundation-graph-v1",
+                "relational-graph-v1"
+              ]
+            }
+          },
+          {
+            "repositoryId": "01a103dc-12ca-73fb-b063-5b2af8773dfa",
+            "snapshotId": "01a103dc-12ca-7687-93ba-0d4b6559c9b5",
+            "provider": {
+              "name": "sdk-example-collector",
+              "version": "1",
+              "namespace": "provider-remote",
+              "profiles": [
+                "foundation-graph-v1",
+                "relational-graph-v1"
+              ]
+            }
+          }
+        ],
+        "snapshots": [
+          {
+            "id": "01a103dc-12c0-7b4f-b524-5e1d8c9bc51c",
+            "repositoryId": "01a103dc-12c0-7a83-a307-d789c732ae31",
+            "provider": {
+              "name": "sdk-example-collector",
+              "version": "1",
+              "namespace": "provider-a",
+              "profiles": [
+                "foundation-graph-v1",
+                "relational-graph-v1"
+              ]
+            }
+          },
+          {
+            "id": "01a103dc-12ca-7687-93ba-0d4b6559c9b5",
+            "repositoryId": "01a103dc-12ca-73fb-b063-5b2af8773dfa",
+            "provider": {
+              "name": "sdk-example-collector",
+              "version": "1",
+              "namespace": "provider-remote",
+              "profiles": [
+                "foundation-graph-v1",
+                "relational-graph-v1"
+              ]
+            }
+          }
+        ]
+      },
+      "identities": [],
+      "currentness": [],
+      "legacyProofBases": []
+    },
+    "viewSchemaVersion": "6",
+    "snapshots": [
+      {
+        "id": "01a103dc-12c0-7b4f-b524-5e1d8c9bc51c",
+        "repositoryId": "01a103dc-12c0-7a83-a307-d789c732ae31",
+        "provider": {
+          "name": "sdk-example-collector",
+          "version": "1",
+          "namespace": "provider-a",
+          "profiles": [
+            "foundation-graph-v1",
+            "relational-graph-v1"
+          ]
+        }
+      },
+      {
+        "id": "01a103dc-12ca-7687-93ba-0d4b6559c9b5",
+        "repositoryId": "01a103dc-12ca-73fb-b063-5b2af8773dfa",
+        "provider": {
+          "name": "sdk-example-collector",
+          "version": "1",
+          "namespace": "provider-remote",
+          "profiles": [
+            "foundation-graph-v1",
+            "relational-graph-v1"
+          ]
+        }
+      }
+    ]
+  }
+}
+```
+
+```json
+{
+  "tool": "begin_backend_import",
+  "request": {
+    "idempotencyKey": "begin-8",
+    "manifest": {
+      "repositoryName": "primary",
+      "provider": {
+        "name": "sdk-example-collector",
+        "version": "1",
+        "namespace": "provider-a",
+        "method": "ast",
+        "profiles": [
+          "foundation-graph-v1",
+          "relational-graph-v1",
+          "runtime-flow-v1",
+          "field-lineage-v1",
+          "events-service-v1",
+          "composed-source-v1"
+        ],
+        "limitations": []
+      },
+      "snapshot": {
+        "dirty": false,
+        "consistency": "verified",
+        "capturedAt": "2026-10-03T10:00:00Z",
+        "files": [
+          {
+            "path": "source.go",
+            "contentHash": "ef83f7cf9ebbff9cad3a1d31f76b1a4c494e8dc6229af2a07a7964f0eb5ae43c",
+            "fileType": "go",
+            "analysisStatus": "analyzed"
+          }
+        ]
+      }
+    },
+    "inventory": [
+      {
+        "category": "files",
+        "status": "complete",
+        "knownCount": 1,
+        "denominator": 1,
+        "discoverySource": "inert Go declarations in SDK example",
+        "gaps": [],
+        "reason": ""
+      },
+      {
+        "category": "endpoints",
+        "status": "complete",
+        "knownCount": 0,
+        "denominator": 0,
+        "discoverySource": "inert Go declarations in SDK example",
+        "gaps": [],
+        "reason": ""
+      },
+      {
+        "category": "datastores",
+        "status": "complete",
+        "knownCount": 0,
+        "denominator": 0,
+        "discoverySource": "inert Go declarations in SDK example",
+        "gaps": [],
+        "reason": ""
+      },
+      {
+        "category": "migrations",
+        "status": "complete",
+        "knownCount": 0,
+        "denominator": 0,
+        "discoverySource": "inert Go declarations in SDK example",
+        "gaps": [],
+        "reason": ""
+      },
+      {
+        "category": "producers",
+        "status": "complete",
+        "knownCount": 0,
+        "denominator": 0,
+        "discoverySource": "inert Go declarations in SDK example",
+        "gaps": [],
+        "reason": ""
+      },
+      {
+        "category": "consumers",
+        "status": "complete",
+        "knownCount": 0,
+        "denominator": 0,
+        "discoverySource": "inert Go declarations in SDK example",
+        "gaps": [],
+        "reason": ""
+      },
+      {
+        "category": "jobs",
+        "status": "complete",
+        "knownCount": 0,
+        "denominator": 0,
+        "discoverySource": "inert Go declarations in SDK example",
+        "gaps": [],
+        "reason": ""
+      },
+      {
+        "category": "contracts",
+        "status": "complete",
+        "knownCount": 0,
+        "denominator": 0,
+        "discoverySource": "inert Go declarations in SDK example",
+        "gaps": [],
+        "reason": ""
+      },
+      {
+        "category": "tests",
+        "status": "complete",
+        "knownCount": 0,
+        "denominator": 0,
+        "discoverySource": "inert Go declarations in SDK example",
+        "gaps": [],
+        "reason": ""
+      }
+    ],
+    "projectId": "01a103dc-12bf-7e0c-a0d2-006b3d881968",
+    "sourceScope": {
+      "kind": "reconcile",
+      "repositoryId": "01a103dc-12c0-7a83-a307-d789c732ae31",
+      "providerNamespace": "provider-a"
+    },
+    "scopeStatus": {
+      "status": "complete",
+      "gaps": []
+    },
+    "profileExtension": {
+      "fromProfile": "events-service-v1",
+      "toProfile": "composed-source-v1"
+    },
+    "expectedVersion": 3,
+    "baseRevisionId": "01a103dc-12d2-7153-9132-d09259b3f96c",
+    "syncPolicy": "whole-source-v1",
+    "profile": "composed-source-v1",
+    "mode": "composed"
+  },
+  "responseExcerpt": {
+    "syncPolicy": "whole-source-v1",
+    "id": "01a103dc-12d6-713f-b4f4-1dfab8f6938e",
+    "baseRevisionId": "01a103dc-12d2-7153-9132-d09259b3f96c",
+    "repositoryId": "01a103dc-12c0-7a83-a307-d789c732ae31",
+    "snapshotId": "01a103dc-12d6-7140-b287-a86019f5d1da",
+    "state": "collecting",
+    "version": 1,
+    "candidateHash": null
+  }
+}
+```
+
+```json
+{
+  "tool": "get_backend_coverage",
+  "request": {
+    "revisionId": "01a103dc-12dc-7e93-8273-5d677b81d10b",
+    "projectId": "01a103dc-12bf-7e0c-a0d2-006b3d881968"
+  },
+  "responseExcerpt": {
+    "target": {},
+    "pins": {
+      "viewSchemaVersion": "6",
+      "baseRevisionId": "01a103dc-12dc-7e93-8273-5d677b81d10b",
+      "baseSemanticHash": "51e77f2e04bdbf2783339ac7c9989d86ce2842865dc9221fe3d6eafadb8bf936"
+    },
+    "source": {
+      "sourceVector": {
+        "documentVersion": "source-vector-v1",
+        "partitions": [
+          {
+            "repositoryId": "01a103dc-12c0-7a83-a307-d789c732ae31",
+            "snapshotId": "01a103dc-12d6-7140-b287-a86019f5d1da",
+            "provider": {
+              "name": "sdk-example-collector",
+              "version": "1",
+              "namespace": "provider-a",
+              "profiles": [
+                "foundation-graph-v1",
+                "relational-graph-v1"
+              ]
+            }
+          },
+          {
+            "repositoryId": "01a103dc-12ca-73fb-b063-5b2af8773dfa",
+            "snapshotId": "01a103dc-12ca-7687-93ba-0d4b6559c9b5",
+            "provider": {
+              "name": "sdk-example-collector",
+              "version": "1",
+              "namespace": "provider-remote",
+              "profiles": [
+                "foundation-graph-v1",
+                "relational-graph-v1"
+              ]
+            }
+          }
+        ],
+        "snapshots": [
+          {
+            "id": "01a103dc-12ca-7687-93ba-0d4b6559c9b5",
+            "repositoryId": "01a103dc-12ca-73fb-b063-5b2af8773dfa",
+            "provider": {
+              "name": "sdk-example-collector",
+              "version": "1",
+              "namespace": "provider-remote",
+              "profiles": [
+                "foundation-graph-v1",
+                "relational-graph-v1"
+              ]
+            }
+          },
+          {
+            "id": "01a103dc-12d6-7140-b287-a86019f5d1da",
+            "repositoryId": "01a103dc-12c0-7a83-a307-d789c732ae31",
+            "provider": {
+              "name": "sdk-example-collector",
+              "version": "1",
+              "namespace": "provider-a",
+              "profiles": [
+                "foundation-graph-v1",
+                "relational-graph-v1"
+              ]
+            }
+          }
+        ]
+      },
+      "identities": [],
+      "currentness": [],
+      "legacyProofBases": []
+    },
+    "viewSchemaVersion": "6",
+    "snapshots": [
+      {
+        "id": "01a103dc-12ca-7687-93ba-0d4b6559c9b5",
+        "repositoryId": "01a103dc-12ca-73fb-b063-5b2af8773dfa",
+        "provider": {
+          "name": "sdk-example-collector",
+          "version": "1",
+          "namespace": "provider-remote",
+          "profiles": [
+            "foundation-graph-v1",
+            "relational-graph-v1"
+          ]
+        }
+      },
+      {
+        "id": "01a103dc-12d6-7140-b287-a86019f5d1da",
+        "repositoryId": "01a103dc-12c0-7a83-a307-d789c732ae31",
+        "provider": {
+          "name": "sdk-example-collector",
+          "version": "1",
+          "namespace": "provider-a",
+          "profiles": [
+            "foundation-graph-v1",
+            "relational-graph-v1"
+          ]
+        }
+      }
+    ]
+  }
+}
+```
+
+```json
+{
+  "tool": "apply_backend_project_commands",
+  "request": {
+    "projectId": "01a103dc-12bf-7e0c-a0d2-006b3d881968",
+    "expectedVersion": 4,
+    "idempotencyKey": "notes-12",
+    "commands": [
+      {
+        "type": "create_annotation",
+        "annotationId": "01a103dc-12ed-7018-8d47-cfea16dfca2d",
+        "target": {
+          "recordType": "node",
+          "id": "01a103dc-12c1-7cd4-9f58-cdf7643aa212"
+        },
+        "body": "<em>Literal metadata</em>\nKeep exact whitespace.  "
+      },
+      {
+        "type": "create_annotation",
+        "annotationId": "01a103dc-12ed-701c-9066-88c52312dcd9",
+        "target": {
+          "recordType": "node",
+          "id": "01a103dc-12c1-7e9b-a080-ba6f4383212c"
+        },
+        "body": "Retain after proved deletion"
+      }
+    ]
+  },
+  "responseExcerpt": {
+    "id": "01a103dc-12bf-7e0c-a0d2-006b3d881968",
+    "name": "B4.1 public examples",
+    "version": 5,
+    "currentRevisionId": "01a103dc-12dc-7e93-8273-5d677b81d10b"
+  }
+}
+```
+
+```json
+{
+  "tool": "apply_backend_project_commands",
+  "request": {
+    "projectId": "01a103dc-12bf-7e0c-a0d2-006b3d881968",
+    "expectedVersion": 5,
+    "idempotencyKey": "update-note-13",
+    "commands": [
+      {
+        "type": "update_annotation",
+        "annotationId": "01a103dc-12ed-7018-8d47-cfea16dfca2d",
+        "target": {
+          "recordType": "node",
+          "id": "01a103dc-12c1-7cd4-9f58-cdf7643aa212"
+        },
+        "body": "<em>Literal metadata</em>\nKeep exact whitespace.  \nReviewed"
+      }
+    ]
+  },
+  "responseExcerpt": {
+    "id": "01a103dc-12bf-7e0c-a0d2-006b3d881968",
+    "name": "B4.1 public examples",
+    "version": 6,
+    "currentRevisionId": "01a103dc-12dc-7e93-8273-5d677b81d10b"
+  }
+}
+```
+
+```json
+{
+  "tool": "list_backend_annotations",
+  "request": {
+    "limit": 1,
+    "cursor": "eyJraW5kIjoiYW5ub3RhdGlvbnMiLCJwcm9qZWN0SWQiOiIwMWExMDNkYy0xMmJmLTdlMGMtYTBkMi0wMDZiM2Q4ODE5NjgiLCJwcm9qZWN0VmVyc2lvbiI6NSwicmV2aXNpb25JZCI6IjAxYTEwM2RjLTEyZGMtN2U5My04MjczLTVkNjc3YjgxZDEwYiIsImZpbHRlckhhc2giOiIxMjExNzJjYjE5OGEzNWRkZDg1NmFiMTVhN2VmMWE0OWRlNTIwNDI3MzZjMDNjOWQzNzVjYjQxMjA2MTRhYjJkIiwiYWZ0ZXIiOiIwMWExMDNkYy0xMmVkLTcwMTgtOGQ0Ny1jZmVhMTZkZmNhMmQifQ",
+    "projectId": "01a103dc-12bf-7e0c-a0d2-006b3d881968"
+  },
+  "error": "HTTP 409: {\"error\":{\"code\":\"backend_annotation_page_conflict\",\"message\":\"Project changed; restart annotation pagination\",\"retryable\":false,\"currentVersion\":6}}"
+}
+```
+
+```json
+{
+  "tool": "commit_backend_import",
+  "request": {
+    "candidateHash": "b27dfc38294b00c3903fa128c67f4154d0241362662f4e9520529cf0e73b985b",
+    "idempotencyKey": "old-project-cas-17",
+    "projectId": "01a103dc-12bf-7e0c-a0d2-006b3d881968",
+    "importId": "01a103dc-12f1-7620-a419-0b2c5b5cba80",
+    "expectedVersion": 6,
+    "expectedImportVersion": 3
+  },
+  "error": "HTTP 409: {\"error\":{\"code\":\"backend_version_conflict\",\"message\":\"Project changed; read before retrying\",\"retryable\":false,\"currentVersion\":7}}"
+}
+```
+
+```json
+{
+  "tool": "list_backend_annotations",
+  "request": {
+    "orphaned": true,
+    "projectId": "01a103dc-12bf-7e0c-a0d2-006b3d881968"
+  },
+  "responseExcerpt": {
+    "items": [
+      {
+        "id": "01a103dc-12ed-701c-9066-88c52312dcd9",
+        "target": {
+          "recordType": "node",
+          "id": "01a103dc-12c1-7e9b-a080-ba6f4383212c"
+        },
+        "body": "Retain after proved deletion",
+        "targetStatus": "orphaned"
+      }
+    ],
+    "nextCursor": ""
+  }
+}
+```
+
+### Qualified providers, conflict selection and stale dependency
+
+Executable episode: `TestBackendB41SDKProviderAndDependencyExamples`.
+
+```json
+{
+  "tool": "put_backend_import_batch",
+  "request": {
+    "batchId": "batch-5",
+    "expectedImportVersion": 1,
+    "payloadHash": "c5d1c5c0b79d4bcfb31935d8474a7dd2eca9c5380014e3bc016e79b7b85aec19",
+    "commands": [
+      {
+        "claimIdentity": {
+          "decisionId": "01a103dc-12cc-77f3-8d29-decb2e7a789a",
+          "recordType": "node",
+          "externalKey": "handler-b",
+          "target": {
+            "repositoryId": "01a103dc-12c0-7aa3-a830-9418eb447ec7",
+            "providerNamespace": "provider-a",
+            "recordType": "node",
+            "externalKey": "handler-a",
+            "expectedId": "01a103dc-12c2-71ba-a6fe-44c09e535539",
+            "assertionHash": "5f994ee41d82dd1eda7175c514402d752b82483e7a9023c5243016767c19c40c"
+          },
+          "reason": "Independent provider identifies this exact source declaration",
+          "evidenceKeys": [
+            "proof-handler-b"
+          ]
+        },
+        "op": "claim_identity"
+      },
+      {
+        "op": "upsert_node",
+        "node": {
+          "externalKey": "handler-b",
+          "kind": "handler",
+          "name": "Alternate",
+          "attributes": {},
+          "evidenceKeys": [
+            "proof-handler-b"
+          ]
+        }
+      },
+      {
+        "op": "upsert_evidence",
+        "evidence": {
+          "externalKey": "proof-handler-b",
+          "subjectType": "node",
+          "subjectKey": "handler-b",
+          "method": "ast",
+          "status": "explicit",
+          "source": {
+            "repositoryId": "01a103dc-12c0-7aa3-a830-9418eb447ec7",
+            "snapshotId": "01a103dc-12cb-7cee-95d6-46d466687cd1",
+            "file": "source.go",
+            "contentHash": "026a97327acdc2b676b5451b7f1f1e1391e3ba2ee324ee16271ee7339f7fe85c",
+            "startLine": 3,
+            "endLine": 3
+          },
+          "explanation": "The named function is declared at this exact source line"
+        }
+      }
+    ],
+    "projectId": "01a103dc-12bf-7e35-986b-2632d3940f05",
+    "importId": "01a103dc-12cb-7ced-8b0a-8b9683271929"
+  },
+  "responseExcerpt": {
+    "acceptedVersion": 2,
+    "identities": [
+      {
+        "recordType": "node",
+        "externalKey": "handler-b",
+        "id": "01a103dc-12c2-71ba-a6fe-44c09e535539"
+      },
+      {
+        "recordType": "evidence",
+        "externalKey": "proof-handler-b",
+        "id": "01a103dc-12cd-7887-b6a7-93861caea13a"
+      }
+    ]
+  }
+}
+```
+
+```json
+{
+  "tool": "preview_backend_import",
+  "request": {
+    "expectedImportVersion": 2,
+    "baseRevisionId": "01a103dc-12c8-7768-8163-0d3b570039de",
+    "projectId": "01a103dc-12bf-7e35-986b-2632d3940f05",
+    "importId": "01a103dc-12cb-7ced-8b0a-8b9683271929"
+  },
+  "responseExcerpt": {
+    "version": 3,
+    "state": "needs_resolution",
+    "candidateHash": null
+  }
+}
+```
+
+```json
+{
+  "tool": "get_backend_import_changes",
+  "request": {
+    "importId": "01a103dc-12cb-7ced-8b0a-8b9683271929",
+    "previewVersion": 3,
+    "recordType": "assertion_conflict",
+    "projectId": "01a103dc-12bf-7e35-986b-2632d3940f05"
+  },
+  "responseExcerpt": {
+    "candidateHash": null,
+    "recordType": "assertion_conflict",
+    "items": [
+      {
+        "recordType": "assertion_conflict"
+      }
+    ],
+    "nextCursor": ""
+  }
+}
+```
+
+```json
+{
+  "tool": "put_backend_import_batch",
+  "request": {
+    "expectedImportVersion": 3,
+    "payloadHash": "3c0b6312ee74f0ab72e65a9f80f5484177260c366a9fd39bafab6fde1c066fd7",
+    "commands": [
+      {
+        "resolution": {
+          "decisionId": "01a103dc-12d0-7497-b724-c00131156eb2",
+          "recordType": "node",
+          "id": "01a103dc-12c2-71ba-a6fe-44c09e535539",
+          "property": {
+            "kind": "name"
+          },
+          "conflictHash": "36c4acecd76e2bd32eff4d7971213f88203e6d32f3be6bbcbc983f2c56ab2657",
+          "select": {
+            "repositoryId": "01a103dc-12c0-7aa3-a830-9418eb447ec7",
+            "providerNamespace": "provider-b",
+            "assertionHash": "c0eaee803215a9d2dbc18425ea7ae3894d1bf4c8cac08aa770aecdb4e95c8346"
+          },
+          "reason": "Reviewed both declarations and chose provider-b for this exact conflict"
+        },
+        "op": "resolve_assertion"
+      }
+    ],
+    "projectId": "01a103dc-12bf-7e35-986b-2632d3940f05",
+    "importId": "01a103dc-12cb-7ced-8b0a-8b9683271929",
+    "batchId": "batch-6"
+  },
+  "responseExcerpt": {
+    "acceptedVersion": 4,
+    "identities": []
+  }
+}
+```
+
+```json
+{
+  "tool": "preview_backend_import",
+  "request": {
+    "projectId": "01a103dc-12bf-7e35-986b-2632d3940f05",
+    "importId": "01a103dc-12cb-7ced-8b0a-8b9683271929",
+    "expectedImportVersion": 4,
+    "baseRevisionId": "01a103dc-12c8-7768-8163-0d3b570039de"
+  },
+  "responseExcerpt": {
+    "version": 5,
+    "state": "ready",
+    "candidateHash": "81f9302dc97ba81e41bd9d5b9e6e2a08e5bffb31842618c9d59ff67163b450fc"
+  }
+}
+```
+
+```json
+{
+  "tool": "begin_backend_import",
+  "request": {
+    "inventory": [
+      {
+        "category": "files",
+        "status": "complete",
+        "knownCount": 1,
+        "denominator": 1,
+        "discoverySource": "inert Go declarations in SDK example",
+        "gaps": [],
+        "reason": ""
+      },
+      {
+        "category": "endpoints",
+        "status": "complete",
+        "knownCount": 0,
+        "denominator": 0,
+        "discoverySource": "inert Go declarations in SDK example",
+        "gaps": [],
+        "reason": ""
+      },
+      {
+        "category": "datastores",
+        "status": "complete",
+        "knownCount": 0,
+        "denominator": 0,
+        "discoverySource": "inert Go declarations in SDK example",
+        "gaps": [],
+        "reason": ""
+      },
+      {
+        "category": "migrations",
+        "status": "complete",
+        "knownCount": 0,
+        "denominator": 0,
+        "discoverySource": "inert Go declarations in SDK example",
+        "gaps": [],
+        "reason": ""
+      },
+      {
+        "category": "producers",
+        "status": "complete",
+        "knownCount": 0,
+        "denominator": 0,
+        "discoverySource": "inert Go declarations in SDK example",
+        "gaps": [],
+        "reason": ""
+      },
+      {
+        "category": "consumers",
+        "status": "complete",
+        "knownCount": 0,
+        "denominator": 0,
+        "discoverySource": "inert Go declarations in SDK example",
+        "gaps": [],
+        "reason": ""
+      },
+      {
+        "category": "jobs",
+        "status": "complete",
+        "knownCount": 0,
+        "denominator": 0,
+        "discoverySource": "inert Go declarations in SDK example",
+        "gaps": [],
+        "reason": ""
+      },
+      {
+        "category": "contracts",
+        "status": "complete",
+        "knownCount": 0,
+        "denominator": 0,
+        "discoverySource": "inert Go declarations in SDK example",
+        "gaps": [],
+        "reason": ""
+      },
+      {
+        "category": "tests",
+        "status": "complete",
+        "knownCount": 0,
+        "denominator": 0,
+        "discoverySource": "inert Go declarations in SDK example",
+        "gaps": [],
+        "reason": ""
+      }
+    ],
+    "syncPolicy": "whole-source-v1",
+    "profile": "composed-source-v1",
+    "idempotencyKey": "begin-8",
+    "projectId": "01a103dc-12bf-7e35-986b-2632d3940f05",
+    "sourceScope": {
+      "kind": "migrate_provider",
+      "repositoryId": "01a103dc-12c0-7aa3-a830-9418eb447ec7",
+      "fromProviderNamespace": "provider-b",
+      "fromSnapshotId": "01a103dc-12cb-7cee-95d6-46d466687cd1",
+      "reason": "Reviewed collector migration; old claims stay visible"
+    },
+    "scopeStatus": {
+      "status": "complete",
+      "gaps": []
+    },
+    "mode": "composed",
+    "expectedVersion": 3,
+    "baseRevisionId": "01a103dc-12d7-78a7-a6e1-d973117fc203",
+    "manifest": {
+      "repositoryName": "primary",
+      "provider": {
+        "name": "replacement-collector",
+        "version": "2",
+        "namespace": "provider-c",
+        "method": "ast",
+        "profiles": [
+          "foundation-graph-v1",
+          "relational-graph-v1",
+          "runtime-flow-v1",
+          "field-lineage-v1",
+          "events-service-v1",
+          "composed-source-v1"
+        ],
+        "limitations": []
+      },
+      "snapshot": {
+        "dirty": false,
+        "consistency": "verified",
+        "capturedAt": "2026-10-03T10:00:00Z",
+        "files": [
+          {
+            "path": "source.go",
+            "contentHash": "32dd87de0d396c3a63a2e15b62c670389de761478f765928af29772772b38199",
+            "fileType": "go",
+            "analysisStatus": "analyzed"
+          }
+        ]
+      }
+    }
+  },
+  "responseExcerpt": {
+    "syncPolicy": "whole-source-v1",
+    "id": "01a103dc-12da-7c7e-9dcd-188da4c01928",
+    "baseRevisionId": "01a103dc-12d7-78a7-a6e1-d973117fc203",
+    "repositoryId": "01a103dc-12c0-7aa3-a830-9418eb447ec7",
+    "snapshotId": "01a103dc-12da-7c83-a0e3-65e847e80cf0",
+    "state": "collecting",
+    "version": 1,
+    "candidateHash": null
+  }
+}
+```
+
+```json
+{
+  "tool": "put_backend_import_batch",
+  "request": {
+    "batchId": "batch-15",
+    "expectedImportVersion": 1,
+    "payloadHash": "5281b3cf9da53e6d6d0a9b81824ea2a807396d2d67b662c05a72e16d4e526504",
+    "commands": [
+      {
+        "op": "upsert_node",
+        "node": {
+          "externalKey": "caller",
+          "kind": "handler",
+          "name": "Caller",
+          "attributes": {},
+          "evidenceKeys": [
+            "proof-caller"
+          ]
+        }
+      },
+      {
+        "op": "upsert_evidence",
+        "evidence": {
+          "externalKey": "proof-caller",
+          "subjectType": "node",
+          "subjectKey": "caller",
+          "method": "ast",
+          "status": "explicit",
+          "source": {
+            "repositoryId": "01a103dc-12fc-7f60-8d4d-7626328e6db1",
+            "snapshotId": "01a103dc-12fd-7527-b095-263d32d73a0b",
+            "file": "source.go",
+            "contentHash": "4df9211499a048cd6c55eeb1e764207d836654a4ea79cbd00d9be523e4080be7",
+            "startLine": 3,
+            "endLine": 3
+          },
+          "explanation": "The named function is declared at this exact source line"
+        }
+      },
+      {
+        "op": "upsert_edge",
+        "edge": {
+          "fromRef": {
+            "localKey": "caller"
+          },
+          "toRef": {
+            "base": {
+              "repositoryId": "01a103dc-12e8-7056-aa86-989bccc97a16",
+              "providerNamespace": "provider-remote",
+              "recordType": "node",
+              "externalKey": "remote",
+              "expectedId": "01a103dc-12ee-7fd7-ae5c-c4c39c3bfd12",
+              "assertionHash": "2bbd86c4d0f255c25937bb6f609ada502699be7187b4c92300f6bfafa2a334e4"
+            }
+          },
+          "externalKey": "remote-call",
+          "kind": "calls",
+          "attributes": {},
+          "evidenceKeys": [
+            "proof-call"
+          ]
+        }
+      },
+      {
+        "op": "upsert_evidence",
+        "evidence": {
+          "externalKey": "proof-call",
+          "subjectType": "edge",
+          "subjectKey": "remote-call",
+          "method": "ast",
+          "status": "explicit",
+          "source": {
+            "repositoryId": "01a103dc-12fc-7f60-8d4d-7626328e6db1",
+            "snapshotId": "01a103dc-12fd-7527-b095-263d32d73a0b",
+            "file": "source.go",
+            "contentHash": "4df9211499a048cd6c55eeb1e764207d836654a4ea79cbd00d9be523e4080be7",
+            "startLine": 3,
+            "endLine": 3
+          },
+          "explanation": "The named function is declared at this exact source line"
+        }
+      }
+    ],
+    "projectId": "01a103dc-12bf-7e35-986b-2632d3940f05",
+    "importId": "01a103dc-12fd-7526-a328-292d22450f83"
+  },
+  "responseExcerpt": {
+    "acceptedVersion": 2,
+    "identities": [
+      {
+        "recordType": "node",
+        "externalKey": "caller",
+        "id": "01a103dc-12fe-7968-9802-84b30bfb9194"
+      },
+      {
+        "recordType": "evidence",
+        "externalKey": "proof-caller",
+        "id": "01a103dc-12fe-79f7-9b2e-7e7fc906e134"
+      }
+    ]
+  }
+}
+```
+
+```json
+{
+  "tool": "get_backend_assertions",
+  "request": {
+    "importCandidate": {
+      "importId": "01a103dc-12fd-7526-a328-292d22450f83",
+      "importVersion": 3,
+      "candidateHash": "376ee9912415e6d33dfb9e5da107a91b4b1a128cbc7ea0eea360d761405e4968"
+    },
+    "projectId": "01a103dc-12bf-7e35-986b-2632d3940f05",
+    "recordType": "edge",
+    "id": "01a103dc-12fe-7ab8-9fde-f4f3c4355b02",
+    "limit": 100
+  },
+  "responseExcerpt": {
+    "documentVersion": "source-assertions-v1",
+    "viewSchemaVersion": "import-candidate-v1",
+    "target": {},
+    "pins": {
+      "viewSchemaVersion": "import-candidate-v1",
+      "baseRevisionId": "01a103dc-12f9-7d47-9676-85df183d49bc",
+      "baseSemanticHash": "bfd538cdbea65f0f04f828e7b8e7d845e148ebfec1e4c1568f035968a1e62726"
+    },
+    "basis": "candidate",
+    "items": [
+      {
+        "assertion": {
+          "recordType": "edge",
+          "recordId": "01a103dc-12fe-7ab8-9fde-f4f3c4355b02",
+          "owner": {
+            "repositoryId": "01a103dc-12fc-7f60-8d4d-7626328e6db1"
+          },
+          "externalKey": "remote-call",
+          "assertionHash": "ef89fce67ffdc5c76f39f58e6873e23b605866e2c10be11ca7e82b5b7f3fae17",
+          "payload": {
+            "recordType": "edge",
+            "kind": "calls"
+          },
+          "evidenceIds": [
+            "01a103dc-12fe-7b3f-89a2-d09ddaf609f6"
+          ]
+        },
+        "currentness": {
+          "recordType": "edge",
+          "recordId": "01a103dc-12fe-7ab8-9fde-f4f3c4355b02",
+          "repositoryId": "01a103dc-12fc-7f60-8d4d-7626328e6db1",
+          "assertionHash": "ef89fce67ffdc5c76f39f58e6873e23b605866e2c10be11ca7e82b5b7f3fae17",
+          "own": {
+            "status": "current"
+          },
+          "dependency": {
+            "status": "current"
+          },
+          "fields": [
+            {
+              "property": {
+                "kind": "edge_endpoints"
+              },
+              "own": {
+                "status": "current"
+              },
+              "dependency": {
+                "status": "current"
+              }
+            }
+          ]
+        }
+      }
+    ],
+    "nextCursor": ""
+  }
+}
+```
+
+```json
+{
+  "tool": "get_backend_assertions",
+  "request": {
+    "revisionId": "01a103dc-1338-70c8-9dbd-022f46d947c4",
+    "projectId": "01a103dc-12bf-7e35-986b-2632d3940f05",
+    "recordType": "edge",
+    "id": "01a103dc-12fe-7ab8-9fde-f4f3c4355b02",
+    "limit": 100
+  },
+  "responseExcerpt": {
+    "documentVersion": "source-assertions-v1",
+    "viewSchemaVersion": "6",
+    "target": {},
+    "pins": {
+      "viewSchemaVersion": "6",
+      "baseRevisionId": "01a103dc-1338-70c8-9dbd-022f46d947c4",
+      "baseSemanticHash": "0957f9333af1872793d016a5d016ec33863f7fce205d242fb24a5249da5f79f0"
+    },
+    "basis": "source",
+    "items": [
+      {
+        "assertion": {
+          "recordType": "edge",
+          "recordId": "01a103dc-12fe-7ab8-9fde-f4f3c4355b02",
+          "owner": {
+            "repositoryId": "01a103dc-12fc-7f60-8d4d-7626328e6db1"
+          },
+          "externalKey": "remote-call",
+          "assertionHash": "ef89fce67ffdc5c76f39f58e6873e23b605866e2c10be11ca7e82b5b7f3fae17",
+          "payload": {
+            "recordType": "edge",
+            "kind": "calls"
+          },
+          "evidenceIds": [
+            "01a103dc-12fe-7b3f-89a2-d09ddaf609f6"
+          ]
+        },
+        "currentness": {
+          "recordType": "edge",
+          "recordId": "01a103dc-12fe-7ab8-9fde-f4f3c4355b02",
+          "repositoryId": "01a103dc-12fc-7f60-8d4d-7626328e6db1",
+          "assertionHash": "ef89fce67ffdc5c76f39f58e6873e23b605866e2c10be11ca7e82b5b7f3fae17",
+          "own": {
+            "status": "current"
+          },
+          "dependency": {
+            "status": "stale"
+          },
+          "fields": [
+            {
+              "property": {
+                "kind": "edge_endpoints"
+              },
+              "own": {
+                "status": "current"
+              },
+              "dependency": {
+                "status": "stale"
+              }
+            }
+          ]
+        }
+      }
+    ],
+    "nextCursor": ""
+  }
+}
+```
+
+### Full intent, permanent commands and SavedView-v2
+
+Executable episode: `TestBackendB41SDKChangeLedgerAndSavedViewExamples`.
+
+```json
+{
+  "tool": "preview_backend_change_proposal_commands",
+  "request": {
+    "expectedVersion": 1,
+    "proposalRevisionId": "01a103dc-12d7-7c7a-a5fd-04694b143bb1",
+    "commands": [
+      {
+        "target": {
+          "kind": "source_identity",
+          "source": {
+            "recordType": "node",
+            "id": "01a103dc-12c7-7506-a3b9-8dade44f4ddb",
+            "repositoryId": "01a103dc-12c5-77ca-a58d-4d9bbb9d3780",
+            "providerNamespace": "provider-a",
+            "externalKey": "handler-a",
+            "assertionHash": "416c47ab8b8396917e4482526a6d723af96664bcc90c89e0c47a6b623b8c4327"
+          }
+        },
+        "expectedExternalKey": "handler-a",
+        "newExternalKey": "desired-handler-a",
+        "type": "map_identity",
+        "commandId": "01a103dc-12dd-7e0e-b22e-a83c55780d6f",
+        "reason": "Only provider-a gets this intended alias"
+      },
+      {
+        "reason": "Desired structure only; no provider proof",
+        "kind": "module",
+        "name": "Planned module",
+        "parentId": null,
+        "commandId": "01a103dc-12dd-7e10-a033-85f250a34f26",
+        "id": "01a103dc-12dd-7e0c-86ab-b9881ebcf6f8",
+        "attributes": {},
+        "type": "create_node"
+      },
+      {
+        "type": "create_node",
+        "id": "01a103dc-12dd-7e0d-a08e-a70574dc57a0",
+        "attributes": {
+          "analysisStatus": "complete",
+          "gaps": [],
+          "qualifiedName": "example.PlannedDTO"
+        },
+        "commandId": "01a103dc-12dd-7e18-8225-3fd5fb5de229",
+        "reason": "Desired structure only; no provider proof",
+        "kind": "dto",
+        "name": "Planned DTO",
+        "parentId": "01a103dc-12dd-7e0c-86ab-b9881ebcf6f8"
+      },
+      {
+        "kind": "contains",
+        "from": "01a103dc-12dd-7e0c-86ab-b9881ebcf6f8",
+        "type": "upsert_edge",
+        "commandId": "01a103dc-12dd-7e19-afe0-1d486574796f",
+        "reason": "Exact desired containment",
+        "to": "01a103dc-12dd-7e0d-a08e-a70574dc57a0",
+        "attributes": {},
+        "id": "01a103dc-12dd-7e1a-a890-d0f5c95c2472"
+      },
+      {
+        "parentId": "01a103dc-12dd-7e0d-a08e-a70574dc57a0",
+        "attributes": {
+          "nullable": {
+            "status": "known",
+            "value": false
+          },
+          "cardinality": {
+            "status": "known",
+            "value": "one"
+          },
+          "analysisStatus": "complete",
+          "gaps": [],
+          "selector": [
+            {
+              "property": "value"
+            }
+          ],
+          "nativeType": {
+            "status": "known",
+            "value": "string"
+          }
+        },
+        "type": "create_node",
+        "commandId": "01a103dc-12dd-7e31-b717-34c7f54c4e31",
+        "reason": "Desired structure only; no provider proof",
+        "id": "01a103dc-12dd-7e08-ae2e-65b5986a7753",
+        "kind": "representation_field",
+        "name": "value"
+      },
+      {
+        "type": "upsert_edge",
+        "reason": "Exact desired containment",
+        "kind": "contains",
+        "to": "01a103dc-12dd-7e08-ae2e-65b5986a7753",
+        "attributes": {},
+        "commandId": "01a103dc-12dd-7e32-ade2-a9aff3b32b25",
+        "id": "01a103dc-12dd-7e35-9361-5c3c58b83074",
+        "from": "01a103dc-12dd-7e0d-a08e-a70574dc57a0"
+      },
+      {
+        "target": {
+          "kind": "intent_identity",
+          "recordType": "node",
+          "id": "01a103dc-12dd-7e08-ae2e-65b5986a7753"
+        },
+        "expectedExternalKey": null,
+        "newExternalKey": "planned.value",
+        "type": "map_identity",
+        "commandId": "01a103dc-12dd-7e36-99eb-8f109f9fc3ff",
+        "reason": "First key for a created desired field"
+      }
+    ],
+    "projectId": "01a103dc-12c4-7eb8-8609-ebd860078a2e",
+    "proposalId": "01a103dc-12d7-7c76-97e5-6c454e4dacd6"
+  },
+  "responseExcerpt": {
+    "proposalId": "01a103dc-12d7-7c76-97e5-6c454e4dacd6",
+    "proposalRevisionId": "01a103dc-12d7-7c7a-a5fd-04694b143bb1",
+    "baseRevisionId": "01a103dc-12d4-7502-a3a2-4967c977fcc9",
+    "baseSemanticHash": "f796133e98ed87dafba7c58d6ed1daf61256faefc5a3c940b468fa0470374e9c",
+    "documentVersion": "proposal-graph-v1",
+    "semanticHash": "414b31062cb3095fbd0b634185945e91e163166bc72ad435b18b2529820e6ac9",
+    "candidateHash": "98c0cb980d645c3a6ccb59d38b079e9ccddaa00beb826f43c3eb03a65dc3d757"
+  }
+}
+```
+
+```json
+{
+  "tool": "apply_backend_change_proposal_commands",
+  "request": {
+    "proposalRevisionId": "01a103dc-12d7-7c7a-a5fd-04694b143bb1",
+    "commands": [
+      {
+        "newExternalKey": "desired-handler-a",
+        "type": "map_identity",
+        "commandId": "01a103dc-12dd-7e0e-b22e-a83c55780d6f",
+        "reason": "Only provider-a gets this intended alias",
+        "target": {
+          "kind": "source_identity",
+          "source": {
+            "recordType": "node",
+            "id": "01a103dc-12c7-7506-a3b9-8dade44f4ddb",
+            "repositoryId": "01a103dc-12c5-77ca-a58d-4d9bbb9d3780",
+            "providerNamespace": "provider-a",
+            "externalKey": "handler-a",
+            "assertionHash": "416c47ab8b8396917e4482526a6d723af96664bcc90c89e0c47a6b623b8c4327"
+          }
+        },
+        "expectedExternalKey": "handler-a"
+      },
+      {
+        "type": "create_node",
+        "reason": "Desired structure only; no provider proof",
+        "id": "01a103dc-12dd-7e0c-86ab-b9881ebcf6f8",
+        "parentId": null,
+        "commandId": "01a103dc-12dd-7e10-a033-85f250a34f26",
+        "kind": "module",
+        "name": "Planned module",
+        "attributes": {}
+      },
+      {
+        "type": "create_node",
+        "commandId": "01a103dc-12dd-7e18-8225-3fd5fb5de229",
+        "reason": "Desired structure only; no provider proof",
+        "kind": "dto",
+        "name": "Planned DTO",
+        "parentId": "01a103dc-12dd-7e0c-86ab-b9881ebcf6f8",
+        "attributes": {
+          "qualifiedName": "example.PlannedDTO",
+          "analysisStatus": "complete",
+          "gaps": []
+        },
+        "id": "01a103dc-12dd-7e0d-a08e-a70574dc57a0"
+      },
+      {
+        "type": "upsert_edge",
+        "reason": "Exact desired containment",
+        "id": "01a103dc-12dd-7e1a-a890-d0f5c95c2472",
+        "kind": "contains",
+        "from": "01a103dc-12dd-7e0c-86ab-b9881ebcf6f8",
+        "commandId": "01a103dc-12dd-7e19-afe0-1d486574796f",
+        "to": "01a103dc-12dd-7e0d-a08e-a70574dc57a0",
+        "attributes": {}
+      },
+      {
+        "reason": "Desired structure only; no provider proof",
+        "id": "01a103dc-12dd-7e08-ae2e-65b5986a7753",
+        "kind": "representation_field",
+        "name": "value",
+        "parentId": "01a103dc-12dd-7e0d-a08e-a70574dc57a0",
+        "attributes": {
+          "cardinality": {
+            "status": "known",
+            "value": "one"
+          },
+          "analysisStatus": "complete",
+          "gaps": [],
+          "selector": [
+            {
+              "property": "value"
+            }
+          ],
+          "nativeType": {
+            "status": "known",
+            "value": "string"
+          },
+          "nullable": {
+            "status": "known",
+            "value": false
+          }
+        },
+        "type": "create_node",
+        "commandId": "01a103dc-12dd-7e31-b717-34c7f54c4e31"
+      },
+      {
+        "type": "upsert_edge",
+        "commandId": "01a103dc-12dd-7e32-ade2-a9aff3b32b25",
+        "reason": "Exact desired containment",
+        "kind": "contains",
+        "from": "01a103dc-12dd-7e0d-a08e-a70574dc57a0",
+        "to": "01a103dc-12dd-7e08-ae2e-65b5986a7753",
+        "id": "01a103dc-12dd-7e35-9361-5c3c58b83074",
+        "attributes": {}
+      },
+      {
+        "commandId": "01a103dc-12dd-7e36-99eb-8f109f9fc3ff",
+        "reason": "First key for a created desired field",
+        "target": {
+          "kind": "intent_identity",
+          "recordType": "node",
+          "id": "01a103dc-12dd-7e08-ae2e-65b5986a7753"
+        },
+        "expectedExternalKey": null,
+        "newExternalKey": "planned.value",
+        "type": "map_identity"
+      }
+    ],
+    "candidateHash": "98c0cb980d645c3a6ccb59d38b079e9ccddaa00beb826f43c3eb03a65dc3d757",
+    "idempotencyKey": "apply-8",
+    "projectId": "01a103dc-12c4-7eb8-8609-ebd860078a2e",
+    "proposalId": "01a103dc-12d7-7c76-97e5-6c454e4dacd6",
+    "expectedVersion": 1
+  },
+  "responseExcerpt": {
+    "revision": {
+      "id": "01a103dc-12e4-7a97-9653-21d62e2d3bfc",
+      "proposalId": "01a103dc-12d7-7c76-97e5-6c454e4dacd6",
+      "documentVersion": "proposal-graph-v1",
+      "baseRevisionId": "01a103dc-12d4-7502-a3a2-4967c977fcc9",
+      "baseSemanticHash": "f796133e98ed87dafba7c58d6ed1daf61256faefc5a3c940b468fa0470374e9c",
+      "sourceVector": {
+        "documentVersion": "source-vector-v1",
+        "partitions": [
+          {
+            "repositoryId": "01a103dc-12c5-77ca-a58d-4d9bbb9d3780",
+            "snapshotId": "01a103dc-12c5-7bd7-ba7f-906120874459",
+            "provider": {
+              "name": "sdk-example-collector",
+              "version": "1",
+              "namespace": "provider-a",
+              "profiles": [
+                "foundation-graph-v1",
+                "relational-graph-v1"
+              ]
+            }
+          },
+          {
+            "repositoryId": "01a103dc-12c5-77ca-a58d-4d9bbb9d3780",
+            "snapshotId": "01a103dc-12cf-71c2-82d5-b55c4fd2941b",
+            "provider": {
+              "name": "sdk-example-collector",
+              "version": "1",
+              "namespace": "provider-b",
+              "profiles": [
+                "foundation-graph-v1",
+                "relational-graph-v1"
+              ]
+            }
+          }
+        ],
+        "snapshots": [
+          {
+            "id": "01a103dc-12c5-7bd7-ba7f-906120874459",
+            "repositoryId": "01a103dc-12c5-77ca-a58d-4d9bbb9d3780",
+            "provider": {
+              "name": "sdk-example-collector",
+              "version": "1",
+              "namespace": "provider-a",
+              "profiles": [
+                "foundation-graph-v1",
+                "relational-graph-v1"
+              ]
+            }
+          },
+          {
+            "id": "01a103dc-12cf-71c2-82d5-b55c4fd2941b",
+            "repositoryId": "01a103dc-12c5-77ca-a58d-4d9bbb9d3780",
+            "provider": {
+              "name": "sdk-example-collector",
+              "version": "1",
+              "namespace": "provider-b",
+              "profiles": [
+                "foundation-graph-v1",
+                "relational-graph-v1"
+              ]
+            }
+          }
+        ]
+      },
+      "semanticHash": "414b31062cb3095fbd0b634185945e91e163166bc72ad435b18b2529820e6ac9"
+    },
+    "semanticHash": "414b31062cb3095fbd0b634185945e91e163166bc72ad435b18b2529820e6ac9"
+  }
+}
+```
+
+```json
+{
+  "tool": "get_backend_evidence",
+  "request": {
+    "subjectId": "01a103dc-12dd-7e08-ae2e-65b5986a7753",
+    "changeProposal": {
+      "proposalId": "01a103dc-12d7-7c76-97e5-6c454e4dacd6",
+      "proposalRevisionId": "01a103dc-12e4-7a97-9653-21d62e2d3bfc"
+    },
+    "projectId": "01a103dc-12c4-7eb8-8609-ebd860078a2e"
+  },
+  "responseExcerpt": {
+    "basis": "baseline",
+    "target": {},
+    "pins": {
+      "viewSchemaVersion": "proposal-graph-v1",
+      "baseRevisionId": "01a103dc-12d4-7502-a3a2-4967c977fcc9",
+      "baseSemanticHash": "f796133e98ed87dafba7c58d6ed1daf61256faefc5a3c940b468fa0470374e9c"
+    },
+    "source": {
+      "sourceVector": {
+        "documentVersion": "source-vector-v1",
+        "partitions": [
+          {
+            "repositoryId": "01a103dc-12c5-77ca-a58d-4d9bbb9d3780",
+            "snapshotId": "01a103dc-12c5-7bd7-ba7f-906120874459",
+            "provider": {
+              "name": "sdk-example-collector",
+              "version": "1",
+              "namespace": "provider-a",
+              "profiles": [
+                "foundation-graph-v1",
+                "relational-graph-v1"
+              ]
+            }
+          },
+          {
+            "repositoryId": "01a103dc-12c5-77ca-a58d-4d9bbb9d3780",
+            "snapshotId": "01a103dc-12cf-71c2-82d5-b55c4fd2941b",
+            "provider": {
+              "name": "sdk-example-collector",
+              "version": "1",
+              "namespace": "provider-b",
+              "profiles": [
+                "foundation-graph-v1",
+                "relational-graph-v1"
+              ]
+            }
+          }
+        ],
+        "snapshots": [
+          {
+            "id": "01a103dc-12c5-7bd7-ba7f-906120874459",
+            "repositoryId": "01a103dc-12c5-77ca-a58d-4d9bbb9d3780",
+            "provider": {
+              "name": "sdk-example-collector",
+              "version": "1",
+              "namespace": "provider-a",
+              "profiles": [
+                "foundation-graph-v1",
+                "relational-graph-v1"
+              ]
+            }
+          },
+          {
+            "id": "01a103dc-12cf-71c2-82d5-b55c4fd2941b",
+            "repositoryId": "01a103dc-12c5-77ca-a58d-4d9bbb9d3780",
+            "provider": {
+              "name": "sdk-example-collector",
+              "version": "1",
+              "namespace": "provider-b",
+              "profiles": [
+                "foundation-graph-v1",
+                "relational-graph-v1"
+              ]
+            }
+          }
+        ]
+      },
+      "identities": [],
+      "currentness": [],
+      "legacyProofBases": []
+    },
+    "viewSchemaVersion": "proposal-graph-v1",
+    "items": [],
+    "nextCursor": ""
+  }
+}
+```
+
+```json
+{
+  "tool": "create_backend_saved_view",
+  "request": {
+    "documentVersion": "saved-view-v2",
+    "name": "Exact desired presentation",
+    "target": {
+      "changeProposal": {
+        "proposalId": "01a103dc-12d7-7c76-97e5-6c454e4dacd6",
+        "proposalRevisionId": "01a103dc-12e4-7a97-9653-21d62e2d3bfc"
+      }
+    },
+    "state": {
+      "kind": "flow",
+      "scope": {},
+      "filters": {
+        "search": "",
+        "accessKind": "",
+        "reverseAccessKind": ""
+      },
+      "selection": null,
+      "positions": [],
+      "collapsedGroupIds": []
+    },
+    "idempotencyKey": "view-9",
+    "projectId": "01a103dc-12c4-7eb8-8609-ebd860078a2e"
+  },
+  "responseExcerpt": {
+    "id": "01a103dc-12fb-747e-b438-952f189c9c23",
+    "version": 1,
+    "documentVersion": "saved-view-v2",
+    "name": "Exact desired presentation",
+    "target": {},
+    "pins": {
+      "effective": {
+        "viewSchemaVersion": "proposal-graph-v1",
+        "baseRevisionId": "01a103dc-12d4-7502-a3a2-4967c977fcc9",
+        "baseSemanticHash": "f796133e98ed87dafba7c58d6ed1daf61256faefc5a3c940b468fa0470374e9c"
+      },
+      "semanticHash": "414b31062cb3095fbd0b634185945e91e163166bc72ad435b18b2529820e6ac9"
+    },
+    "state": {
+      "kind": "flow"
+    }
+  }
+}
+```
+
+```json
+{
+  "tool": "restore_backend_change_proposal",
+  "request": {
+    "idempotencyKey": "restore-14",
+    "projectId": "01a103dc-12c4-7eb8-8609-ebd860078a2e",
+    "proposalId": "01a103dc-12d7-7c76-97e5-6c454e4dacd6",
+    "expectedVersion": 6,
+    "proposalRevisionId": "01a103dc-130e-773b-98fe-3d3cc5b99cc2",
+    "restoreRevisionId": "01a103dc-12d7-7c7a-a5fd-04694b143bb1"
+  },
+  "responseExcerpt": {
+    "revision": {
+      "id": "01a103dc-130f-7d91-b6da-ca8143a6b761",
+      "proposalId": "01a103dc-12d7-7c76-97e5-6c454e4dacd6",
+      "documentVersion": "proposal-graph-v1",
+      "baseRevisionId": "01a103dc-12d4-7502-a3a2-4967c977fcc9",
+      "baseSemanticHash": "f796133e98ed87dafba7c58d6ed1daf61256faefc5a3c940b468fa0470374e9c",
+      "sourceVector": {
+        "documentVersion": "source-vector-v1",
+        "partitions": [
+          {
+            "repositoryId": "01a103dc-12c5-77ca-a58d-4d9bbb9d3780",
+            "snapshotId": "01a103dc-12c5-7bd7-ba7f-906120874459",
+            "provider": {
+              "name": "sdk-example-collector",
+              "version": "1",
+              "namespace": "provider-a",
+              "profiles": [
+                "foundation-graph-v1",
+                "relational-graph-v1"
+              ]
+            }
+          },
+          {
+            "repositoryId": "01a103dc-12c5-77ca-a58d-4d9bbb9d3780",
+            "snapshotId": "01a103dc-12cf-71c2-82d5-b55c4fd2941b",
+            "provider": {
+              "name": "sdk-example-collector",
+              "version": "1",
+              "namespace": "provider-b",
+              "profiles": [
+                "foundation-graph-v1",
+                "relational-graph-v1"
+              ]
+            }
+          }
+        ],
+        "snapshots": [
+          {
+            "id": "01a103dc-12c5-7bd7-ba7f-906120874459",
+            "repositoryId": "01a103dc-12c5-77ca-a58d-4d9bbb9d3780",
+            "provider": {
+              "name": "sdk-example-collector",
+              "version": "1",
+              "namespace": "provider-a",
+              "profiles": [
+                "foundation-graph-v1",
+                "relational-graph-v1"
+              ]
+            }
+          },
+          {
+            "id": "01a103dc-12cf-71c2-82d5-b55c4fd2941b",
+            "repositoryId": "01a103dc-12c5-77ca-a58d-4d9bbb9d3780",
+            "provider": {
+              "name": "sdk-example-collector",
+              "version": "1",
+              "namespace": "provider-b",
+              "profiles": [
+                "foundation-graph-v1",
+                "relational-graph-v1"
+              ]
+            }
+          }
+        ]
+      },
+      "semanticHash": "b9fda39a2bb99b64745bc732ff21e40bec8fad29a9ce306167ee1d7baaf80805"
+    },
+    "semanticHash": "b9fda39a2bb99b64745bc732ff21e40bec8fad29a9ce306167ee1d7baaf80805"
+  }
+}
+```
+
+```json
+{
+  "tool": "apply_backend_change_proposal_commands",
+  "request": {
+    "proposalRevisionId": "01a103dc-130f-7d91-b6da-ca8143a6b761",
+    "commands": [
+      {
+        "recordType": "node",
+        "name": "Handle",
+        "type": "rename",
+        "commandId": "01a103dc-12fb-7c76-9d81-3438c9cfccb4",
+        "reason": "Reviewed desired name",
+        "id": "01a103dc-12c7-7506-a3b9-8dade44f4ddb"
+      }
+    ],
+    "candidateHash": "0777b098d5a1a8a90fb14bba5d4ea9740ed17d29cace305003a35559d45eb982",
+    "idempotencyKey": "consumed-command-15",
+    "projectId": "01a103dc-12c4-7eb8-8609-ebd860078a2e",
+    "proposalId": "01a103dc-12d7-7c76-97e5-6c454e4dacd6",
+    "expectedVersion": 7
+  },
+  "error": "HTTP 409: {\"error\":{\"code\":\"backend_change_command_conflict\",\"message\":\"Command ID is permanently reserved by an accepted batch\",\"details\":{\"commandId\":\"01a103dc-12fb-7c76-9d81-3438c9cfccb4\"},\"retryable\":false}}"
+}
+```
+
+```json
+{
+  "tool": "apply_backend_change_proposal_commands",
+  "request": {
+    "expectedVersion": 2,
+    "proposalRevisionId": "01a103dc-12e4-7a97-9653-21d62e2d3bfc",
+    "commands": [
+      {
+        "type": "rename",
+        "commandId": "01a103dc-12fb-7c76-9d81-3438c9cfccb4",
+        "reason": "Reviewed desired name",
+        "id": "01a103dc-12c7-7506-a3b9-8dade44f4ddb",
+        "recordType": "node",
+        "name": "Handle"
+      }
+    ],
+    "candidateHash": "0777b098d5a1a8a90fb14bba5d4ea9740ed17d29cace305003a35559d45eb982",
+    "idempotencyKey": "apply-10",
+    "projectId": "01a103dc-12c4-7eb8-8609-ebd860078a2e",
+    "proposalId": "01a103dc-12d7-7c76-97e5-6c454e4dacd6"
+  },
+  "responseExcerpt": {
+    "revision": {
+      "id": "01a103dc-12ff-7a72-b7c9-55b7cce0699e",
+      "proposalId": "01a103dc-12d7-7c76-97e5-6c454e4dacd6",
+      "documentVersion": "proposal-graph-v1",
+      "baseRevisionId": "01a103dc-12d4-7502-a3a2-4967c977fcc9",
+      "baseSemanticHash": "f796133e98ed87dafba7c58d6ed1daf61256faefc5a3c940b468fa0470374e9c",
+      "sourceVector": {
+        "documentVersion": "source-vector-v1",
+        "partitions": [
+          {
+            "repositoryId": "01a103dc-12c5-77ca-a58d-4d9bbb9d3780",
+            "snapshotId": "01a103dc-12c5-7bd7-ba7f-906120874459",
+            "provider": {
+              "name": "sdk-example-collector",
+              "version": "1",
+              "namespace": "provider-a",
+              "profiles": [
+                "foundation-graph-v1",
+                "relational-graph-v1"
+              ]
+            }
+          },
+          {
+            "repositoryId": "01a103dc-12c5-77ca-a58d-4d9bbb9d3780",
+            "snapshotId": "01a103dc-12cf-71c2-82d5-b55c4fd2941b",
+            "provider": {
+              "name": "sdk-example-collector",
+              "version": "1",
+              "namespace": "provider-b",
+              "profiles": [
+                "foundation-graph-v1",
+                "relational-graph-v1"
+              ]
+            }
+          }
+        ],
+        "snapshots": [
+          {
+            "id": "01a103dc-12c5-7bd7-ba7f-906120874459",
+            "repositoryId": "01a103dc-12c5-77ca-a58d-4d9bbb9d3780",
+            "provider": {
+              "name": "sdk-example-collector",
+              "version": "1",
+              "namespace": "provider-a",
+              "profiles": [
+                "foundation-graph-v1",
+                "relational-graph-v1"
+              ]
+            }
+          },
+          {
+            "id": "01a103dc-12cf-71c2-82d5-b55c4fd2941b",
+            "repositoryId": "01a103dc-12c5-77ca-a58d-4d9bbb9d3780",
+            "provider": {
+              "name": "sdk-example-collector",
+              "version": "1",
+              "namespace": "provider-b",
+              "profiles": [
+                "foundation-graph-v1",
+                "relational-graph-v1"
+              ]
+            }
+          }
+        ]
+      },
+      "semanticHash": "414b31062cb3095fbd0b634185945e91e163166bc72ad435b18b2529820e6ac9"
+    },
+    "semanticHash": "414b31062cb3095fbd0b634185945e91e163166bc72ad435b18b2529820e6ac9"
+  }
+}
+```
+
+```json
+{
+  "tool": "save_backend_saved_view",
+  "request": {
+    "documentVersion": "saved-view-v2",
+    "name": "Same immutable desired target",
+    "state": {
+      "kind": "flow",
+      "scope": {},
+      "filters": {
+        "search": "",
+        "accessKind": "",
+        "reverseAccessKind": ""
+      },
+      "selection": null,
+      "positions": [],
+      "collapsedGroupIds": []
+    },
+    "expectedVersion": 1,
+    "idempotencyKey": "view-save-19",
+    "projectId": "01a103dc-12c4-7eb8-8609-ebd860078a2e",
+    "viewId": "01a103dc-12fb-747e-b438-952f189c9c23"
+  },
+  "responseExcerpt": {
+    "id": "01a103dc-12fb-747e-b438-952f189c9c23",
+    "version": 2,
+    "documentVersion": "saved-view-v2",
+    "name": "Same immutable desired target",
+    "target": {},
+    "pins": {
+      "effective": {
+        "viewSchemaVersion": "proposal-graph-v1",
+        "baseRevisionId": "01a103dc-12d4-7502-a3a2-4967c977fcc9",
+        "baseSemanticHash": "f796133e98ed87dafba7c58d6ed1daf61256faefc5a3c940b468fa0470374e9c"
+      },
+      "semanticHash": "414b31062cb3095fbd0b634185945e91e163166bc72ad435b18b2529820e6ac9"
+    },
+    "state": {
+      "kind": "flow"
+    }
+  }
+}
+```
+
+### Actual prior-binary metadata proof
+
+Executable episode: `TestBackendB41SDKPriorBinaryMetadataExamples`.
+
+The original DB hash is `3b8ff09b51a1deccf64fd0dd67c89f9736c0d715e864e0b400e5e5b258c0f3ee`, produced by prior binary `a5947af3e0104bd43339028022012896390b2a9e79c8c903c9e99efd1b59b558`. Original seed and actual later source5 head raw documents remain pinned. Five metadata pointers stay historical_metadata, the name proof stays legacy_semantic and broad proofs stay legacy_record. This service also has genuine broad support, so its record remains current; metadata-only witnesses are never promoted to typed semantic proof.
+
+```json
+{
+  "tool": "begin_backend_import",
+  "request": {
+    "syncPolicy": "whole-source-v1",
+    "profileExtension": {
+      "fromProfile": "events-service-v1",
+      "toProfile": "composed-source-v1"
+    },
+    "mode": "composed",
+    "idempotencyKey": "begin-1",
+    "inventory": [
+      {
+        "category": "files",
+        "status": "complete",
+        "knownCount": 1,
+        "denominator": 1,
+        "discoverySource": "inert Go declarations in SDK example",
+        "gaps": [],
+        "reason": ""
+      },
+      {
+        "category": "endpoints",
+        "status": "complete",
+        "knownCount": 0,
+        "denominator": 0,
+        "discoverySource": "inert Go declarations in SDK example",
+        "gaps": [],
+        "reason": ""
+      },
+      {
+        "category": "datastores",
+        "status": "complete",
+        "knownCount": 0,
+        "denominator": 0,
+        "discoverySource": "inert Go declarations in SDK example",
+        "gaps": [],
+        "reason": ""
+      },
+      {
+        "category": "migrations",
+        "status": "complete",
+        "knownCount": 0,
+        "denominator": 0,
+        "discoverySource": "inert Go declarations in SDK example",
+        "gaps": [],
+        "reason": ""
+      },
+      {
+        "category": "producers",
+        "status": "complete",
+        "knownCount": 0,
+        "denominator": 0,
+        "discoverySource": "inert Go declarations in SDK example",
+        "gaps": [],
+        "reason": ""
+      },
+      {
+        "category": "consumers",
+        "status": "complete",
+        "knownCount": 0,
+        "denominator": 0,
+        "discoverySource": "inert Go declarations in SDK example",
+        "gaps": [],
+        "reason": ""
+      },
+      {
+        "category": "jobs",
+        "status": "complete",
+        "knownCount": 0,
+        "denominator": 0,
+        "discoverySource": "inert Go declarations in SDK example",
+        "gaps": [],
+        "reason": ""
+      },
+      {
+        "category": "contracts",
+        "status": "complete",
+        "knownCount": 0,
+        "denominator": 0,
+        "discoverySource": "inert Go declarations in SDK example",
+        "gaps": [],
+        "reason": ""
+      },
+      {
+        "category": "tests",
+        "status": "complete",
+        "knownCount": 0,
+        "denominator": 0,
+        "discoverySource": "inert Go declarations in SDK example",
+        "gaps": [],
+        "reason": ""
+      }
+    ],
+    "projectId": "01a1016f-14fa-704d-87ae-378bbd3e8b47",
+    "sourceScope": {
+      "kind": "add_repository"
+    },
+    "scopeStatus": {
+      "status": "complete",
+      "gaps": []
+    },
+    "profile": "composed-source-v1",
+    "expectedVersion": 3,
+    "baseRevisionId": "01a1016f-15c7-7ed0-97ce-1337fb84993b",
+    "manifest": {
+      "repositoryName": "sdk-oracle-addition",
+      "provider": {
+        "name": "sdk-example-collector",
+        "version": "1",
+        "namespace": "sdk-new-provider",
+        "method": "ast",
+        "profiles": [
+          "foundation-graph-v1",
+          "relational-graph-v1",
+          "runtime-flow-v1",
+          "field-lineage-v1",
+          "events-service-v1",
+          "composed-source-v1"
+        ],
+        "limitations": []
+      },
+      "snapshot": {
+        "dirty": false,
+        "consistency": "verified",
+        "capturedAt": "2026-10-03T10:00:00Z",
+        "files": [
+          {
+            "path": "source.go",
+            "contentHash": "35f7ac3fe8a02ea5cdb114ea4517548ea8f71c9f7ee229b161e2ae91b2357794",
+            "fileType": "go",
+            "analysisStatus": "analyzed"
+          }
+        ]
+      }
+    }
+  },
+  "responseExcerpt": {
+    "syncPolicy": "whole-source-v1",
+    "id": "01a103dc-131b-716c-9c88-605f7c21a711",
+    "baseRevisionId": "01a1016f-15c7-7ed0-97ce-1337fb84993b",
+    "repositoryId": "01a103dc-131a-7cc4-8f8a-6632a773cf23",
+    "snapshotId": "01a103dc-131b-716d-ab88-4b502eb33f94",
+    "state": "collecting",
+    "version": 1,
+    "candidateHash": null
+  }
+}
+```
+
+```json
+{
+  "tool": "get_backend_evidence",
+  "request": {
+    "importCandidate": {
+      "importId": "01a103dc-131b-716c-9c88-605f7c21a711",
+      "importVersion": 3,
+      "candidateHash": "593fbdcbe9a329fb3cc7f7eca64a9a67f67ed3c2f9a6a1a744711f15ecc2f609"
+    },
+    "projectId": "01a1016f-14fa-704d-87ae-378bbd3e8b47",
+    "subjectId": "01a1016f-1523-7676-b7fa-da2865eba6eb"
+  },
+  "responseExcerpt": {
+    "basis": "candidate",
+    "target": {},
+    "pins": {
+      "viewSchemaVersion": "import-candidate-v1",
+      "baseRevisionId": "01a1016f-15c7-7ed0-97ce-1337fb84993b",
+      "baseSemanticHash": "2502e63a652004f30a118caf962f32d824fac9e465a09f7de49472b847aefcf0"
+    },
+    "source": {
+      "sourceVector": {
+        "documentVersion": "source-vector-v1",
+        "partitions": [
+          {
+            "repositoryId": "01a1016f-14ff-7c2d-9a53-8f06a060e36b",
+            "snapshotId": "01a1016f-14ff-7e72-a9ed-b08882bb6ba2",
+            "provider": {
+              "name": "orders-events-fixture",
+              "version": "1",
+              "namespace": "orders-events-fixture",
+              "profiles": [
+                "foundation-graph-v1",
+                "relational-graph-v1"
+              ]
+            }
+          },
+          {
+            "repositoryId": "01a103dc-131a-7cc4-8f8a-6632a773cf23",
+            "snapshotId": "01a103dc-131b-716d-ab88-4b502eb33f94",
+            "provider": {
+              "name": "sdk-example-collector",
+              "version": "1",
+              "namespace": "sdk-new-provider",
+              "profiles": [
+                "foundation-graph-v1",
+                "relational-graph-v1"
+              ]
+            }
+          }
+        ],
+        "snapshots": [
+          {
+            "id": "01a1016f-14ff-7e72-a9ed-b08882bb6ba2",
+            "repositoryId": "01a1016f-14ff-7c2d-9a53-8f06a060e36b",
+            "provider": {
+              "name": "orders-events-fixture",
+              "version": "1",
+              "namespace": "orders-events-fixture",
+              "profiles": [
+                "foundation-graph-v1",
+                "relational-graph-v1"
+              ]
+            }
+          },
+          {
+            "id": "01a103dc-131b-716d-ab88-4b502eb33f94",
+            "repositoryId": "01a103dc-131a-7cc4-8f8a-6632a773cf23",
+            "provider": {
+              "name": "sdk-example-collector",
+              "version": "1",
+              "namespace": "sdk-new-provider",
+              "profiles": [
+                "foundation-graph-v1",
+                "relational-graph-v1"
+              ]
+            }
+          }
+        ]
+      },
+      "identities": [
+        {
+          "recordType": "node",
+          "id": "01a1016f-1523-7676-b7fa-da2865eba6eb",
+          "repositoryId": "01a1016f-14ff-7c2d-9a53-8f06a060e36b",
+          "externalKey": "svc.orders",
+          "assertionHash": "b4e268a5014bb4bb5f33419c410f2ef6053805ced0cb5991ef8cf8b7b839b236"
+        }
+      ],
+      "currentness": [
+        {
+          "recordType": "node",
+          "recordId": "01a1016f-1523-7676-b7fa-da2865eba6eb",
+          "repositoryId": "01a1016f-14ff-7c2d-9a53-8f06a060e36b",
+          "assertionHash": "b4e268a5014bb4bb5f33419c410f2ef6053805ced0cb5991ef8cf8b7b839b236",
+          "own": {
+            "status": "current"
+          },
+          "dependency": {
+            "status": "current"
+          },
+          "fields": [
+            {
+              "property": {
+                "kind": "name"
+              },
+              "own": {
+                "status": "current"
+              },
+              "dependency": {
+                "status": "current"
+              }
+            }
+          ]
+        }
+      ],
+      "legacyProofBases": [
+        {
+          "documentVersion": "legacy-proof-basis-v1",
+          "sourceSchemaVersion": "5",
+          "sourceRevisionId": "01a1016f-15c7-7ed0-97ce-1337fb84993b",
+          "recordType": "node",
+          "recordId": "01a1016f-1523-7676-b7fa-da2865eba6eb",
+          "evidenceId": "01a1016f-1523-7466-92f0-ef47b0ec52ee",
+          "revisionDocumentHash": "28dae74e8ec83ed90b08922d022ef193fee7c0805c653e03f15e5f9d084351f0",
+          "sourceDocumentHash": "9fbe759e6d5ee99d3058910767b14f7c359cf24438b025be32b3262709e252b9",
+          "subjectDocumentHash": "735e6d85ce6bd284f67bcbebaa4eb04eac27314698f27df97b614e36033c881e",
+          "evidenceDocumentHash": "80a195e4780f3c1a54daddf90781aa1afba28f3796dc976b2b8a0bc3842b1893",
+          "support": "legacy_record"
+        },
+        {
+          "documentVersion": "legacy-proof-basis-v1",
+          "sourceSchemaVersion": "5",
+          "sourceRevisionId": "01a1016f-15c7-7ed0-97ce-1337fb84993b",
+          "recordType": "node",
+          "recordId": "01a1016f-1523-7676-b7fa-da2865eba6eb",
+          "evidenceId": "01a1016f-1569-7bf7-88f5-484865c29362",
+          "revisionDocumentHash": "28dae74e8ec83ed90b08922d022ef193fee7c0805c653e03f15e5f9d084351f0",
+          "sourceDocumentHash": "9fbe759e6d5ee99d3058910767b14f7c359cf24438b025be32b3262709e252b9",
+          "subjectDocumentHash": "735e6d85ce6bd284f67bcbebaa4eb04eac27314698f27df97b614e36033c881e",
+          "evidenceDocumentHash": "98fe7d511689db082c4b6de2a6749e8a5ce609c780421490685227a4395703ec",
+          "support": "historical_metadata"
+        }
+      ]
+    },
+    "viewSchemaVersion": "import-candidate-v1",
+    "items": [
+      {
+        "id": "01a1016f-1523-7466-92f0-ef47b0ec52ee",
+        "externalKey": "proof:node:svc.orders:0",
+        "status": "explicit",
+        "source": {
+          "repositoryId": "01a1016f-14ff-7c2d-9a53-8f06a060e36b",
+          "snapshotId": "01a1016f-14ff-7e72-a9ed-b08882bb6ba2"
+        }
+      },
+      {
+        "id": "01a1016f-1569-7bf7-88f5-484865c29362",
+        "externalKey": "b41-legacy-proof-0",
+        "status": "explicit",
+        "source": {
+          "repositoryId": "01a1016f-14ff-7c2d-9a53-8f06a060e36b",
+          "snapshotId": "01a1016f-14ff-7e72-a9ed-b08882bb6ba2"
+        }
+      }
+    ],
+    "nextCursor": ""
+  }
+}
+```
+
+```json
+{
+  "tool": "preview_backend_import",
+  "request": {
+    "expectedImportVersion": 2,
+    "baseRevisionId": "01a103dc-1905-7de3-bc18-41a99b418b74",
+    "projectId": "01a1016f-14fa-704d-87ae-378bbd3e8b47",
+    "importId": "01a103dc-1b71-7b99-9586-773415fc2daa"
+  },
+  "error": "HTTP 422: {\"error\":{\"code\":\"backend_import_invalid\",\"message\":\"Fresh proof must address an own semantic payload property\",\"details\":{\"path\":\"evidence.propertyPath\"},\"retryable\":false}}"
+}
+```
+
+```json
+{
+  "tool": "get_backend_evidence",
+  "request": {
+    "revisionId": "01a103dc-1905-7de3-bc18-41a99b418b74",
+    "projectId": "01a1016f-14fa-704d-87ae-378bbd3e8b47",
+    "evidenceId": "01a1016f-1569-7bf7-88f5-484865c29362"
+  },
+  "error": "HTTP 422: {\"error\":{\"code\":\"backend_import_invalid\",\"message\":\"Original proof basis hashes or membership changed\",\"details\":{\"path\":\"legacyProofBasis\"},\"retryable\":false}}"
+}
+```
+
+### Exact incremental scope and unchanged proof
+
+Executable episode: `TestBackendB41SDKIncrementalExample`.
+
+```json
+{
+  "tool": "begin_backend_import",
+  "request": {
+    "sourceScope": {
+      "kind": "reconcile",
+      "repositoryId": "01a103dc-12d1-7512-81a1-72a18a471e2b",
+      "providerNamespace": "provider-a"
+    },
+    "scopeStatus": {
+      "status": "complete",
+      "gaps": []
+    },
+    "syncPolicy": "incremental-source-v1",
+    "mode": "composed",
+    "baseRevisionId": "01a103dc-12d8-7ab8-be96-44105a6adba6",
+    "manifest": {
+      "repositoryName": "incremental",
+      "provider": {
+        "name": "sdk-example-collector",
+        "version": "1",
+        "namespace": "provider-a",
+        "method": "ast",
+        "profiles": [
+          "foundation-graph-v1",
+          "relational-graph-v1",
+          "runtime-flow-v1",
+          "field-lineage-v1",
+          "events-service-v1",
+          "composed-source-v1"
+        ],
+        "limitations": []
+      },
+      "snapshot": {
+        "dirty": false,
+        "consistency": "verified",
+        "capturedAt": "2026-10-03T10:00:00Z",
+        "files": [
+          {
+            "path": "source.go",
+            "contentHash": "c62143606d67249acf03c4bfece76be72d88f6d7135d51323fa1264ee7bef10f",
+            "fileType": "go",
+            "analysisStatus": "analyzed"
+          },
+          {
+            "path": "spare.go",
+            "contentHash": "378852932d230f7bcf1d374746d97157236009b113616557968ac4855a520141",
+            "fileType": "go",
+            "analysisStatus": "analyzed"
+          }
+        ]
+      }
+    },
+    "inventory": [
+      {
+        "category": "files",
+        "status": "complete",
+        "knownCount": 2,
+        "denominator": 2,
+        "discoverySource": "inert Go declarations in SDK example",
+        "gaps": [],
+        "reason": ""
+      },
+      {
+        "category": "endpoints",
+        "status": "complete",
+        "knownCount": 0,
+        "denominator": 0,
+        "discoverySource": "inert Go declarations in SDK example",
+        "gaps": [],
+        "reason": ""
+      },
+      {
+        "category": "datastores",
+        "status": "complete",
+        "knownCount": 0,
+        "denominator": 0,
+        "discoverySource": "inert Go declarations in SDK example",
+        "gaps": [],
+        "reason": ""
+      },
+      {
+        "category": "migrations",
+        "status": "complete",
+        "knownCount": 0,
+        "denominator": 0,
+        "discoverySource": "inert Go declarations in SDK example",
+        "gaps": [],
+        "reason": ""
+      },
+      {
+        "category": "producers",
+        "status": "complete",
+        "knownCount": 0,
+        "denominator": 0,
+        "discoverySource": "inert Go declarations in SDK example",
+        "gaps": [],
+        "reason": ""
+      },
+      {
+        "category": "consumers",
+        "status": "complete",
+        "knownCount": 0,
+        "denominator": 0,
+        "discoverySource": "inert Go declarations in SDK example",
+        "gaps": [],
+        "reason": ""
+      },
+      {
+        "category": "jobs",
+        "status": "complete",
+        "knownCount": 0,
+        "denominator": 0,
+        "discoverySource": "inert Go declarations in SDK example",
+        "gaps": [],
+        "reason": ""
+      },
+      {
+        "category": "contracts",
+        "status": "complete",
+        "knownCount": 0,
+        "denominator": 0,
+        "discoverySource": "inert Go declarations in SDK example",
+        "gaps": [],
+        "reason": ""
+      },
+      {
+        "category": "tests",
+        "status": "complete",
+        "knownCount": 0,
+        "denominator": 0,
+        "discoverySource": "inert Go declarations in SDK example",
+        "gaps": [],
+        "reason": ""
+      }
+    ],
+    "changeManifest": {
+      "scope": "affected-subgraph",
+      "files": [
+        {
+          "kind": "modified",
+          "path": "source.go",
+          "beforeHash": "6b7cb66049f59257a7b9a8882fb8942ec67a9799f7157aaf108bec916030da6c",
+          "afterHash": "c62143606d67249acf03c4bfece76be72d88f6d7135d51323fa1264ee7bef10f"
+        }
+      ],
+      "affectedRoots": [
+        {
+          "recordType": "node",
+          "id": "01a103dc-12d2-7dfb-a667-f1fab6220f96"
+        }
+      ]
+    },
+    "profile": "composed-source-v1",
+    "expectedVersion": 3,
+    "idempotencyKey": "begin-8",
+    "projectId": "01a103dc-12c8-7245-ab00-e8dc0813e797"
+  },
+  "responseExcerpt": {
+    "syncPolicy": "incremental-source-v1",
+    "id": "01a103dc-12dc-7be3-a3f9-a5e955528134",
+    "baseRevisionId": "01a103dc-12d8-7ab8-be96-44105a6adba6",
+    "repositoryId": "01a103dc-12d1-7512-81a1-72a18a471e2b",
+    "snapshotId": "01a103dc-12dc-7be7-a6ec-7a72f20c953b",
+    "state": "collecting",
+    "version": 1,
+    "candidateHash": null
+  }
+}
+```
+
+```json
+{
+  "tool": "preview_backend_import",
+  "request": {
+    "expectedImportVersion": 2,
+    "baseRevisionId": "01a103dc-12d8-7ab8-be96-44105a6adba6",
+    "projectId": "01a103dc-12c8-7245-ab00-e8dc0813e797",
+    "importId": "01a103dc-12dc-7be3-a3f9-a5e955528134"
+  },
+  "responseExcerpt": {
+    "version": 3,
+    "state": "ready",
+    "candidateHash": "ceaf5eda07034104b1e93b51960fc64d22ebae6e113d1284e31814cb7bcfbb80"
+  }
+}
+```
+
+```json
+{
+  "tool": "get_backend_assertions",
+  "request": {
+    "id": "01a103dc-12d3-7097-a880-078ee2c06239",
+    "limit": 100,
+    "revisionId": "01a103dc-12e4-7841-a1b3-96d9064aac89",
+    "projectId": "01a103dc-12c8-7245-ab00-e8dc0813e797",
+    "recordType": "node"
+  },
+  "responseExcerpt": {
+    "documentVersion": "source-assertions-v1",
+    "viewSchemaVersion": "6",
+    "target": {},
+    "pins": {
+      "viewSchemaVersion": "6",
+      "baseRevisionId": "01a103dc-12e4-7841-a1b3-96d9064aac89",
+      "baseSemanticHash": "34ca36f0f7232c9fa0cef39825522a9442f15d5a6f047ce3532beb6ca2b9f241"
+    },
+    "basis": "source",
+    "items": [
+      {
+        "assertion": {
+          "recordType": "node",
+          "recordId": "01a103dc-12d3-7097-a880-078ee2c06239",
+          "owner": {
+            "repositoryId": "01a103dc-12d1-7512-81a1-72a18a471e2b"
+          },
+          "externalKey": "spare",
+          "assertionHash": "17c254c6ee9c8624d531a90de0ee7b171ddfd3392b0f89f29a20784c7e7ffa5a",
+          "payload": {
+            "recordType": "node",
+            "kind": "handler",
+            "name": "Spare"
+          },
+          "evidenceIds": [
+            "01a103dc-12d3-71eb-956d-7e7d4d9e3d38"
+          ]
+        },
+        "currentness": {
+          "recordType": "node",
+          "recordId": "01a103dc-12d3-7097-a880-078ee2c06239",
+          "repositoryId": "01a103dc-12d1-7512-81a1-72a18a471e2b",
+          "assertionHash": "17c254c6ee9c8624d531a90de0ee7b171ddfd3392b0f89f29a20784c7e7ffa5a",
+          "own": {
+            "status": "current"
+          },
+          "dependency": {
+            "status": "current"
+          },
+          "fields": [
+            {
+              "property": {
+                "kind": "name"
+              },
+              "own": {
+                "status": "current"
+              },
+              "dependency": {
+                "status": "current"
+              }
+            }
+          ]
+        }
+      }
+    ],
+    "nextCursor": ""
+  }
+}
+```
 
 ## Shared fixture and helpers
 
@@ -583,8 +3132,8 @@ V2 committed revision `01a0f4e1-80e0-7f78-8d1b-b96d88fca034`. Its later read at 
 
 ### Inspection-only design request
 
-For typed schema designs use the separately negotiated database6 procedure.
-Source import6 examples above keep their original protocol and CAS.
+For typed schema designs use the separately negotiated database7 procedure.
+Source import7 examples above keep their original protocol and CAS.
 
 ## Actual SDK proposal examples: PostgreSQL and SQLite
 
@@ -1390,9 +3939,9 @@ the proposal. Ready/rebase belongs to B4; measured checks and impact are later.
 
 ## Public MCP source4 import → lineage query fixture
 
-Select import6 and inspect6 with complete requirements in one verified guide
+Select import7 and inspect7 with complete requirements in one verified guide
 set; load backend-model, backend-import-protocol, backend-recovery and the
-inspect6 flow/analysis references. This example is exercised by
+inspect7 flow/analysis references. This example is exercised by
 `internal/mcp/tools_backend_lineage_example_test.go`,
 `TestBackendLineageRealSDKGuideFixtureExample` through actual SDK tool calls.
 The independent bundle is `internal/backendmodel/testdata/lineage/orders/`:
@@ -1482,5 +4031,5 @@ On uncertain commit replay lineageCommit unchanged and require original receipt;
 never replace CAS/key with today's head. Evidence/owner/value inspector reads use
 lineagePin and complete facet/collection/opaque portKey. Redacted shape/explanation
 must omit sensitive constants and samples; source-local API field identity does
-not resolve external API pins; their separate inspect6 contract is in backend-flow-reference. Old foundation/relational examples above keep
+not resolve external API pins; their separate inspect7 contract is in backend-flow-reference. Old foundation/relational examples above keep
 their source1/2 formats and ordinary workflow; source3 flow examples stay source3.

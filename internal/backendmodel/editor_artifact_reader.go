@@ -31,6 +31,7 @@ type editorOwnerSnapshot struct {
 // consume budget; repeated identities reuse both the snapshot and lossless tree.
 // No cache survives the request. Methods are safe to call concurrently.
 type EditorArtifactRequest struct {
+	effective *EffectiveGraphSnapshot
 	ctx       context.Context
 	api       APIArtifactReader
 	scenario  ScenarioArtifactReader

@@ -13,6 +13,7 @@ import (
 )
 
 type graphCandidate struct {
+	Composed           *composedCandidate  `json:"-"`
 	ArtifactPins       []ArtifactPin       `json:"artifactPins,omitempty"`
 	APIArtifactContext *APIArtifactContext `json:"apiArtifactContext,omitzero"`
 	ArtifactContext    *ArtifactContext    `json:"artifactContext,omitzero"`
@@ -30,6 +31,13 @@ type graphCandidate struct {
 }
 
 func prepareGraph(ctx context.Context, q importReader, s *ImportSession) (*graphCandidate, []ImportDiagnostic, error) {
+	if s.Mode == "composed" {
+		candidate, diagnostics, err := prepareComposedGraph(ctx, q, s)
+		if err != nil {
+			return nil, nil, err
+		}
+		return candidate.Graph, diagnostics, nil
+	}
 	g := &graphCandidate{Nodes: []Node{}, Edges: []Edge{}, Evidence: []Evidence{}}
 	d := []ImportDiagnostic{}
 	add := func(p, m string) { d = append(d, ImportDiagnostic{Code: "backend_graph_invalid", Path: p, Message: m}) }
@@ -446,6 +454,9 @@ func unresolvedCount(g *graphCandidate) int64 {
 	return n
 }
 func candidateJSON(s *ImportSession, g *graphCandidate) ([]byte, error) {
+	if g.Composed != nil {
+		return source6CandidateJSON(s, g.Composed)
+	}
 	if g.ArtifactContext != nil {
 		if _, err := EncodeArtifactContext(*g.ArtifactContext, g.ArtifactPins); err != nil {
 			return nil, err
@@ -515,6 +526,9 @@ func (r *Repo) PreviewImport(ctx context.Context, pid, sid string, in PreviewImp
 		}
 		s.UpdatedAt = time.Now().UTC()
 		*result = ImportPreview{ModelSchemaVersion: modelSchemaVersion(s.Profile), ProfileExtension: s.ProfileExtension, SessionID: s.ID, Version: s.Version, State: s.State, CandidateHash: s.CandidateHash, ComparisonSummary: g.ComparisonSummary, SourceChangeCount: int64(len(g.SourceChanges)), IdentityDecisionCount: int64(len(g.IdentityDecisions)), DeletionDecisionCount: int64(len(g.DeletionDecisions)), Summary: ImportSummary{Nodes: int64(len(g.Nodes)), Edges: int64(len(g.Edges)), Evidence: int64(len(g.Evidence)), Unresolved: unresolvedCount(g)}, Diagnostics: diagnostics}
+		if g.Composed != nil {
+			result.AffectedScope = g.Composed.IncrementalScope
+		}
 		if err := saveSession(ctx, tx, s); err != nil {
 			return err
 		}
@@ -608,7 +622,13 @@ func (r *Repo) CommitImport(ctx context.Context, pid, sid string, in CommitImpor
 		}
 		now := time.Now().UTC()
 		rev := Revision{ID: uuid.NewV7().String(), ProjectID: pid, ParentRevisionID: new(current.BaseRevisionID), SchemaVersion: modelSchemaVersion(current.Profile), SemanticHash: hashBytes(b), SourceSnapshotIDs: sourceIDs(g.Sources), ArtifactPins: []ArtifactPin{}, Coverage: g.Coverage, Author: "agent", Summary: "Source-backed foundation graph import", CreatedAt: now}
-		if len(g.ArtifactPins) > 0 {
+		if g.Composed != nil {
+			rev.SemanticHash, err = source6SemanticHash(g.Composed.Source)
+			if err != nil {
+				return err
+			}
+			rev.ArtifactPins = g.ArtifactPins
+		} else if len(g.ArtifactPins) > 0 {
 			rev.ArtifactPins = g.ArtifactPins
 			rev.SemanticHash, err = importedArtifactSemanticHash(g)
 			if err != nil {
@@ -650,6 +670,9 @@ func (r *Repo) CommitImport(ctx context.Context, pid, sid string, in CommitImpor
 			if err != nil {
 				return err
 			}
+			if g.Composed != nil {
+				doc = g.Composed.Source.RawEvidence[e.ID]
+			}
 			if _, err := tx.ExecContext(ctx, `INSERT INTO backend_graph_records(project_id,revision_id,record_type,id,subject_id,document) VALUES(?,?,'evidence',?,?,?)`, pid, rev.ID, e.ID, e.SubjectID, string(doc)); err != nil {
 				return err
 			}
@@ -661,10 +684,18 @@ func (r *Repo) CommitImport(ctx context.Context, pid, sid string, in CommitImpor
 			return err
 		}
 		coverage := RevisionCoverage{Coverage: g.Coverage, Inventory: current.Inventory, Snapshots: g.Sources, StaleCounts: g.StaleCounts, ReconciliationGaps: g.ReconciliationGaps}
+		if g.Composed != nil {
+			if err := saveComposedContext(ctx, tx, pid, rev.ID, g.Composed); err != nil {
+				return err
+			}
+		}
 		decisions, err := json.Marshal(struct {
 			Identity []IdentityDecision `json:"identity"`
 			Deletion []DeletionDecision `json:"deletion"`
 		}{g.IdentityDecisions, g.DeletionDecisions})
+		if err == nil && g.Composed != nil {
+			decisions, err = source6RevisionDecisions(current, g.Composed)
+		}
 		if err != nil {
 			return err
 		}
@@ -672,6 +703,9 @@ func (r *Repo) CommitImport(ctx context.Context, pid, sid string, in CommitImpor
 			return err
 		}
 		sourceDoc, err := json.Marshal(coverage)
+		if err == nil && g.Composed != nil {
+			sourceDoc, err = json.Marshal(SourceRevisionContext{RevisionCoverage: coverage, ViewSchemaVersion: ComposedSchemaVersion, SourceVector: *g.Composed.Source.SourceVector, ClaimCurrentness: g.Composed.Source.Currentness, SourceContentHash: g.Composed.Source.SourceContentHash})
+		}
 		if err != nil {
 			return err
 		}
@@ -684,7 +718,7 @@ func (r *Repo) CommitImport(ctx context.Context, pid, sid string, in CommitImpor
 		p.Version++
 		p.CurrentRevisionID = rev.ID
 		p.UpdatedAt = now
-		if current.Mode != "reconcile" {
+		if current.Mode != "reconcile" && (current.Mode != "composed" || current.SourceScope.Kind == "add_repository") {
 			p.Repositories = append(p.Repositories, Repository{ID: current.RepositoryID, LogicalName: current.Manifest.RepositoryName})
 		}
 		if _, err := tx.ExecContext(ctx, `UPDATE backend_projects SET version=?,current_revision_id=?,updated_at=? WHERE id=?`, p.Version, rev.ID, now.Format(time.RFC3339Nano), pid); err != nil {

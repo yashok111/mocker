@@ -5,7 +5,7 @@ import { renderWithProviders } from "@/test/render";
 import { json } from "@/test/http";
 import { useBackendSavedViewSession } from "./useBackendSavedViewSession";
 import { BackendSavedViews } from "./BackendSavedViews";
-import type { BackendSavedView } from "@/api/generated/schemas";
+import type { BackendSavedView, BackendSavedViewResponse } from "@/api/generated/schemas";
 vi.mock("./BackendDatabaseGraph", () => ({ BackendDatabaseGraph: () => <div>DB canvas</div> }));
 vi.mock("./BackendFlowGraph", () => ({
   BackendFlowGraph: (props: {
@@ -30,8 +30,12 @@ const saved: BackendSavedView = {
   documentVersion: "saved-view-v1",
   createdAt: "2026-10-01",
   updatedAt: "2026-10-01",
-  target: { revisionId: "source" },
-  pins: { revisionId: "source", semanticHash: "a".repeat(64), proposal: null },
+  target: { revisionId: "0197aaf9-5555-7000-8000-000000000011" },
+  pins: {
+    revisionId: "0197aaf9-5555-7000-8000-000000000011",
+    semanticHash: "a".repeat(64),
+    proposal: null,
+  },
   state: {
     kind: "flow",
     scope: { entrypointId: "endpoint", flowId: "flow", dataNodeId: "table" },
@@ -120,7 +124,7 @@ it("restores submitted Flow search, both access kinds, focus, coordinates and co
     if (input.view)
       return json(200, {
         projectId: "project",
-        revisionId: "source",
+        revisionId: "0197aaf9-5555-7000-8000-000000000011",
         semanticHash: "a".repeat(64),
         view: input.view,
         coverage: {
@@ -148,7 +152,7 @@ it("restores submitted Flow search, both access kinds, focus, coordinates and co
     });
     return (
       <BackendSavedViewContext value={session}>
-        <BackendFlow projectId="project" revisionId="source" />
+        <BackendFlow projectId="project" revisionId="0197aaf9-5555-7000-8000-000000000011" />
         <button onClick={() => session.capture(saved.target, session.state!)}>Capture</button>
         <output data-testid="state">{JSON.stringify(session.state)}</output>
       </BackendSavedViewContext>
@@ -234,9 +238,16 @@ it.each([false, true])(
       ...proposalNodes.map((n) => (n.kind === "table" ? { ...n, parentId: "schema" } : n)),
       schema,
     ];
-    const source = proposal ? "base" : "source";
+    const source = proposal
+      ? "0197aaf9-5555-7000-8000-000000000012"
+      : "0197aaf9-5555-7000-8000-000000000011";
     const target = proposal
-      ? { proposal: { proposalId: "proposal", proposalRevisionId: "old-draft" } }
+      ? {
+          proposal: {
+            proposalId: "0197aaf9-5555-7000-8000-000000000013",
+            proposalRevisionId: "0197aaf9-5555-7000-8000-000000000014",
+          },
+        }
       : { revisionId: source };
     const state: BackendSavedView["state"] = {
       kind: "database",
@@ -260,10 +271,10 @@ it.each([false, true])(
         revisionId: source,
         proposal: proposal
           ? {
-              proposalId: "proposal",
-              proposalRevisionId: "old-draft",
+              proposalId: "0197aaf9-5555-7000-8000-000000000013",
+              proposalRevisionId: "0197aaf9-5555-7000-8000-000000000014",
               proposalSemanticHash: "b".repeat(64),
-              baseRevisionId: "base",
+              baseRevisionId: "0197aaf9-5555-7000-8000-000000000012",
               baseSemanticHash: "a".repeat(64),
               repositoryId: "repository",
               datastoreId: "db",
@@ -276,24 +287,48 @@ it.each([false, true])(
     vi.stubGlobal("fetch", async (url: string, init?: RequestInit) => {
       const input = init?.body ? JSON.parse(String(init.body)) : {};
       requests.push({ url, body: input });
+      const legacyRead = Boolean(input.proposal) || /\/proposals\/[^/]+\/revisions\//.test(url);
+      const scoped = (value: Record<string, unknown>) =>
+        json(
+          200,
+          legacyRead
+            ? {
+                ...value,
+                viewSchemaVersion: "proposal-relational-v1",
+                proposalPins: pinned.pins.proposal,
+              }
+            : value,
+        );
+
       if (url.includes("/saved-views")) return json(200, { items: [], nextCursor: "" });
-      if (url.includes("/proposals/proposal?"))
+      if (url.includes("/proposals/0197aaf9-5555-7000-8000-000000000013?"))
         return json(200, {
           ...proposalDetail,
-          proposal: { ...proposalDetail.proposal, draftRevisionId: "current-draft", version: 5 },
-          revision: { ...proposalDetail.revision, id: "old-draft" },
+          proposal: {
+            ...proposalDetail.proposal,
+            id: "0197aaf9-5555-7000-8000-000000000013",
+            baseRevisionId: source,
+            draftRevisionId: "0197aaf9-5555-7000-8000-000000000015",
+            version: 5,
+          },
+          revision: {
+            ...proposalDetail.revision,
+            proposalId: "0197aaf9-5555-7000-8000-000000000013",
+            baseRevisionId: source,
+            id: "0197aaf9-5555-7000-8000-000000000014",
+          },
           baseOutdated: true,
         });
       if (url.endsWith("/proposals?limit=500"))
         return json(200, { items: [proposalDetail.proposal], nextCursor: "" });
-      if (url.includes("/coverage")) return json(200, coverage);
+      if (url.includes("/coverage")) return scoped(coverage);
       if (url.includes("/nodes/"))
         return json(
           200,
           nodes.find((n) => n.id === "orders"),
         );
       if (input.recordType === "edges")
-        return json(200, {
+        return scoped({
           nodes: [],
           edges: [],
           nextCursor: "",
@@ -318,7 +353,7 @@ it.each([false, true])(
           },
         });
       if (url.endsWith("/database/query"))
-        return json(200, {
+        return scoped({
           projectId: "project",
           revisionId: source,
           semanticHash: "a".repeat(64),
@@ -344,7 +379,7 @@ it.each([false, true])(
               : [],
           relationshipItems: [],
         });
-      return json(200, { nodes, edges: [], nextCursor: "", items: [] });
+      return scoped({ nodes, edges: [], nextCursor: "", items: [] });
     });
     function DBHarness() {
       const session = useBackendSavedViewSession("project", pinned);
@@ -394,8 +429,8 @@ it.each([false, true])(
       expect(
         requests.some(
           (r) =>
-            r.url.includes("/proposals/proposal?") &&
-            !r.url.includes("proposalRevisionId=old-draft"),
+            r.url.includes("/proposals/0197aaf9-5555-7000-8000-000000000013?") &&
+            !r.url.includes("proposalRevisionId=0197aaf9-5555-7000-8000-000000000014"),
         ),
       ).toBe(false);
       expect(
@@ -509,7 +544,7 @@ it("captures actual Flow controls, creates and saves complete versions, then rem
       reads.push(input);
       return json(200, {
         projectId: "project",
-        revisionId: "source",
+        revisionId: "0197aaf9-5555-7000-8000-000000000011",
         semanticHash: "a".repeat(64),
         view: input.view,
         coverage,
@@ -555,14 +590,14 @@ it("captures actual Flow controls, creates and saves complete versions, then rem
       });
     return json(200, { items: [], nextCursor: "" });
   });
-  function CaptureHarness({ initial }: { initial?: BackendSavedView }) {
+  function CaptureHarness({ initial }: { initial?: BackendSavedViewResponse }) {
     const session = useBackendSavedViewSession("project", initial);
     return (
       <BackendSavedViewContext value={session}>
         <BackendSavedViews projectId="project" session={session} onOpen={() => {}} />
         <BackendFlow
           projectId="project"
-          revisionId="source"
+          revisionId="0197aaf9-5555-7000-8000-000000000011"
           pin={{ entrypointId: "endpoint", flowId: "flow", dataNodeId: "table" }}
         />
       </BackendSavedViewContext>
@@ -585,7 +620,7 @@ it("captures actual Flow controls, creates and saves complete versions, then rem
   await userEvent.click(screen.getByRole("button", { name: "Сохранить" }));
   await waitFor(() => expect(versions).toHaveLength(1));
   expect(writes[0]).toMatchObject({
-    target: { revisionId: "source" },
+    target: { revisionId: "0197aaf9-5555-7000-8000-000000000011" },
     state: {
       kind: "flow",
       scope: { entrypointId: "endpoint", flowId: "flow", dataNodeId: "table" },
@@ -614,7 +649,11 @@ it("captures actual Flow controls, creates and saves complete versions, then rem
   expect(screen.getByTestId("flowpositions")).toHaveTextContent('"x":320,"y":-20');
   expect(screen.getByTestId("flowgroups")).toHaveTextContent('["transaction"]');
   expect(await screen.findByLabelText("Инспектор Flow")).toBeInTheDocument();
-  expect(reads.every((input) => input.revisionId === "source" && input.cursor === "")).toBe(true);
+  expect(
+    reads.every(
+      (input) => input.revisionId === "0197aaf9-5555-7000-8000-000000000011" && input.cursor === "",
+    ),
+  ).toBe(true);
 });
 
 it("saves a validated source Database scope change with the opened version while keeping the same source target", async () => {
@@ -812,12 +851,12 @@ it("resolves every Open-latest intent freshly and gates a cached alias until ser
         id: "project",
         name: "Pinned project",
         version: 1,
-        currentRevisionId: "source",
+        currentRevisionId: "0197aaf9-5555-7000-8000-000000000011",
         repositories: [],
       });
-    if (url === "/api/backend-projects/project/revisions/source")
+    if (url === "/api/backend-projects/project/revisions/0197aaf9-5555-7000-8000-000000000011")
       return json(200, {
-        id: "source",
+        id: "0197aaf9-5555-7000-8000-000000000011",
         schemaVersion: "1",
         sourceSnapshotIds: [],
         coverage: { knownObjects: 0 },
@@ -867,7 +906,7 @@ it("keeps newer presentation edits when a legitimate save acknowledgement canoni
     });
   });
   function AckHarness() {
-    const [initial, setInitial] = useState(saved);
+    const [initial, setInitial] = useState<BackendSavedViewResponse>(saved);
     const session = useBackendSavedViewSession("project", initial, setInitial);
     return (
       <>

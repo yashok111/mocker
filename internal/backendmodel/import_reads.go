@@ -116,6 +116,18 @@ func (r *Repo) Import(ctx context.Context, pid, sid string, in ListInput) (*Impo
 	return out, rows.Err()
 }
 func (r *Repo) QueryGraph(ctx context.Context, pid string, in GraphQueryInput) (*GraphPage, error) {
+	if in.ChangeProposal != nil || in.ImportCandidate != nil {
+		return r.queryEffectiveGraph(ctx, pid, in)
+	}
+	if in.Proposal == nil && in.RevisionID != "" {
+		revision, err := r.Revision(ctx, pid, in.RevisionID)
+		if err != nil {
+			return nil, err
+		}
+		if revision.SchemaVersion == ComposedSchemaVersion {
+			return r.queryEffectiveGraph(ctx, pid, in)
+		}
+	}
 	target, err := r.resolveBackendTarget(ctx, pid, BackendReadTarget{RevisionID: in.RevisionID, Proposal: in.Proposal})
 	if err != nil {
 		return nil, err
@@ -131,7 +143,7 @@ func (r *Repo) QueryGraph(ctx context.Context, pid string, in GraphQueryInput) (
 	if err != nil {
 		return nil, err
 	}
-	metadata := RevisionState{Sources: coverage.Snapshots}
+	metadata := RevisionState{Revision: *revision, Sources: coverage.Snapshots}
 	if !slices.Contains([]string{"nodes", "edges"}, in.RecordType) {
 		return nil, semantic("recordType", "Query must select nodes or edges")
 	}
@@ -144,10 +156,14 @@ func (r *Repo) QueryGraph(ctx context.Context, pid string, in GraphQueryInput) (
 		kinds = SupportedEdgeKinds()
 		typ = "edge"
 	}
-	if isRelationalSchema(revision.SchemaVersion) {
-		kinds = SupportedNodeKindsForProfile(profileForSchema(revision.SchemaVersion))
+	if isRelationalSchema(revision.SchemaVersion) || revision.SchemaVersion == ComposedSchemaVersion {
+		profile := profileForSchema(revision.SchemaVersion)
+		if revision.SchemaVersion == ComposedSchemaVersion {
+			profile = ComposedProfile
+		}
+		kinds = SupportedNodeKindsForProfile(profile)
 		if typ == "edge" {
-			kinds = SupportedEdgeKindsForProfile(profileForSchema(revision.SchemaVersion))
+			kinds = SupportedEdgeKindsForProfile(profile)
 		}
 	}
 	if in.Kind != "" && !slices.Contains(kinds, in.Kind) {
@@ -207,6 +223,15 @@ func (r *Repo) QueryGraph(ctx context.Context, pid string, in GraphQueryInput) (
 	}
 	defer rows.Close()
 	out := &GraphPage{Nodes: []Node{}, Edges: []Edge{}}
+	var sourceGraph *SourceGraphSnapshot
+	if revision.SchemaVersion == ComposedSchemaVersion {
+		sourceGraph, err = r.ResolveSourceGraph(ctx, pid, target.revisionID)
+		if err != nil {
+			return nil, err
+		}
+		out.ViewSchemaVersion = ComposedSchemaVersion
+		out.Source = sourceVectorReadContext(sourceGraph)
+	}
 	if target.proposal != nil {
 		out.ViewSchemaVersion, out.ProposalPins = ProposalDocumentVersion, target.pins
 		out.ProposalProjection = &ProposalGraphProjection{Nodes: []ProposalProjectedNode{}, Edges: []ProposalProjectedEdge{}}
@@ -252,6 +277,9 @@ func (r *Repo) QueryGraph(ctx context.Context, pid string, in GraphQueryInput) (
 					return nil, err
 				}
 			}
+			if sourceGraph != nil {
+				n.Source = sourceRecordReadContext(sourceGraph, "node", n.ID)
+			}
 			out.Nodes = append(out.Nodes, n)
 			if target.proposal != nil {
 				projected, err := projectProposalNode(*target.proposal, new(target.draft.ID), &n, target.overlay(n.ID))
@@ -271,6 +299,9 @@ func (r *Repo) QueryGraph(ctx context.Context, pid string, in GraphQueryInput) (
 				if err != nil {
 					return nil, err
 				}
+			}
+			if sourceGraph != nil {
+				e.Source = sourceRecordReadContext(sourceGraph, "edge", e.ID)
 			}
 			out.Edges = append(out.Edges, e)
 			if target.proposal != nil {
@@ -306,16 +337,23 @@ func (r *Repo) Node(ctx context.Context, pid, rid, nid string) (*Node, error) {
 	if err != nil {
 		return nil, err
 	}
-	deriveMetadata(RevisionState{Sources: coverage.Snapshots}, &n.Ownership, &n.Freshness)
 	revision, err := r.Revision(ctx, pid, rid)
 	if err != nil {
 		return nil, err
 	}
+	deriveMetadata(RevisionState{Revision: *revision, Sources: coverage.Snapshots}, &n.Ownership, &n.Freshness)
 	if isRelationalSchema(revision.SchemaVersion) {
 		n.FacetComparison, err = CompareRelationalFacets(n.Kind, n.Attributes, false)
 		if err != nil {
 			return nil, err
 		}
+	}
+	if revision.SchemaVersion == ComposedSchemaVersion {
+		graph, err := r.ResolveSourceGraph(ctx, pid, rid)
+		if err != nil {
+			return nil, err
+		}
+		n.Source = sourceReadContext(graph, "node", n.ID, "")
 	}
 	return &n, nil
 }
@@ -323,7 +361,8 @@ func (r *Repo) Evidence(ctx context.Context, pid, rid string, in EvidenceQueryIn
 	return r.evidence(ctx, pid, rid, in, rid+":"+in.SubjectID+":"+in.EvidenceID)
 }
 func (r *Repo) evidence(ctx context.Context, pid, rid string, in EvidenceQueryInput, scope string) (*EvidencePage, error) {
-	if _, err := r.Revision(ctx, pid, rid); err != nil {
+	revision, err := r.Revision(ctx, pid, rid)
+	if err != nil {
 		return nil, err
 	}
 	if in.EvidenceID != "" && (!ValidID(in.EvidenceID) || in.SubjectID != "" || in.Cursor != "") {
@@ -358,6 +397,14 @@ func (r *Repo) evidence(ctx context.Context, pid, rid string, in EvidenceQueryIn
 	}
 	defer rows.Close()
 	out := &EvidencePage{Items: []Evidence{}}
+	var sourceGraph *SourceGraphSnapshot
+	if revision.SchemaVersion == ComposedSchemaVersion {
+		sourceGraph, err = r.ResolveSourceGraph(ctx, pid, rid)
+		if err != nil {
+			return nil, err
+		}
+		out.ViewSchemaVersion = ComposedSchemaVersion
+	}
 	last := ""
 	for rows.Next() {
 		var doc, id string
@@ -372,12 +419,25 @@ func (r *Repo) evidence(ctx context.Context, pid, rid string, in EvidenceQueryIn
 		if err := json.Unmarshal([]byte(doc), &e); err != nil {
 			return nil, err
 		}
-		deriveMetadata(RevisionState{Sources: coverage.Snapshots}, &e.Ownership, &e.Freshness)
+		deriveMetadata(RevisionState{Revision: *revision, Sources: coverage.Snapshots}, &e.Ownership, &e.Freshness)
 		out.Items = append(out.Items, e)
 		last = id
 	}
+	out.Source = evidencePageSourceContext(sourceGraph, out.Items)
 	return out, rows.Err()
 }
+
+func evidencePageSourceContext(graph *SourceGraphSnapshot, items []Evidence) *SourceReadContext {
+	if graph == nil {
+		return nil
+	}
+	evidenceIDs := make([]string, 0, len(items))
+	for _, item := range items {
+		evidenceIDs = append(evidenceIDs, item.ID)
+	}
+	return sourceEvidenceReadContext(graph, evidenceIDs)
+}
+
 func (r *Repo) RevisionCoverage(ctx context.Context, pid, rid string) (*RevisionCoverage, error) {
 	rev, err := r.Revision(ctx, pid, rid)
 	if err != nil {
@@ -395,11 +455,23 @@ func (r *Repo) RevisionCoverage(ctx context.Context, pid, rid string) (*Revision
 	if err := json.Unmarshal([]byte(doc), &out); err != nil {
 		return nil, err
 	}
-	if len(out.Snapshots) == 1 && out.Snapshots[0].Role == "" {
+	if rev.SchemaVersion != ComposedSchemaVersion && len(out.Snapshots) == 1 && out.Snapshots[0].Role == "" {
 		out.Snapshots[0].Role = "primary"
 	}
 	if out.ReconciliationGaps == nil {
 		out.ReconciliationGaps = []string{}
+	}
+	if rev.SchemaVersion == ComposedSchemaVersion {
+		var source SourceRevisionContext
+		if err := json.Unmarshal([]byte(doc), &source); err != nil {
+			return nil, err
+		}
+		graph, err := r.ResolveSourceGraph(ctx, pid, rid)
+		if err != nil {
+			return nil, err
+		}
+		out.Source = sourceVectorReadContext(graph)
+		out.ViewSchemaVersion = ComposedSchemaVersion
 	}
 	return &out, nil
 }

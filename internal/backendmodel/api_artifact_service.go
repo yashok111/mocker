@@ -102,6 +102,18 @@ func resolveAPIArtifact(ctx context.Context, snapshot *apidesign.ArtifactSnapsho
 }
 
 func (s *APIArtifactService) Query(ctx context.Context, pid string, in APIArtifactQueryInput) (*APIArtifactPage, error) {
+	if in.Proposal != nil || in.ChangeProposal != nil || in.ImportCandidate != nil {
+		return s.queryEffectiveAPIArtifacts(ctx, pid, in)
+	}
+	if in.RevisionID != "" && in.Proposal == nil && in.ChangeProposal == nil {
+		revision, err := s.repo.Revision(ctx, pid, in.RevisionID)
+		if err != nil {
+			return nil, err
+		}
+		if revision.SchemaVersion == ComposedSchemaVersion {
+			return s.queryEffectiveAPIArtifacts(ctx, pid, in)
+		}
+	}
 	if err := in.Validate(); err != nil {
 		return nil, err
 	}
@@ -113,6 +125,9 @@ func (s *APIArtifactService) Query(ctx context.Context, pid string, in APIArtifa
 	if err != nil {
 		return nil, err
 	}
+	return s.projectAPIArtifactBindings(ctx, pid, in, state, frozen, nil)
+}
+func (s *APIArtifactService) projectAPIArtifactBindings(ctx context.Context, pid string, in APIArtifactQueryInput, state *RevisionState, frozen *APIArtifactContext, effective *EffectiveGraphSnapshot) (*APIArtifactPage, error) {
 	bindings := artifactBindings(frozen)
 	bindings = slices.DeleteFunc(bindings, func(b APIArtifactBinding) bool { return in.SourceNodeID != "" && b.SourceNodeID != in.SourceNodeID })
 	sortArtifactBindings(bindings)
@@ -127,12 +142,28 @@ func (s *APIArtifactService) Query(ctx context.Context, pid string, in APIArtifa
 	if err != nil {
 		return nil, err
 	}
+	if effective != nil {
+		scope, err = requestDigest(struct {
+			Scope string
+			Pins  EffectiveGraphPins
+		}{scope, effective.Pins})
+		if err != nil {
+			return nil, err
+		}
+	}
 	_, after, err := decodeGraphPage(limit, in.Cursor, "api-artifacts", pid, scope, true)
 	if err != nil {
 		return nil, err
 	}
 	bindings = slices.DeleteFunc(bindings, func(b APIArtifactBinding) bool { return b.SourceNodeID <= after })
 	out := &APIArtifactPage{RevisionID: in.RevisionID, SemanticHash: state.Revision.SemanticHash, SourceSnapshotIDs: state.Revision.SourceSnapshotIDs, Pins: state.Revision.ArtifactPins, Items: []APIArtifactItem{}}
+	if effective != nil {
+		out.Target = new(effective.Target)
+		out.EffectivePins = new(effective.Pins)
+		out.SemanticHash = effective.Pins.EffectiveSemanticHash
+		out.Pins = effective.Pins.ArtifactPins
+		out.SourceSnapshotIDs = effective.Pins.SourceSnapshotIDs
+	}
 	if len(bindings) > limit {
 		out.NextCursor = encodeGraphPage("api-artifacts", pid, scope, bindings[limit-1].SourceNodeID)
 		bindings = bindings[:limit]
@@ -165,7 +196,7 @@ func (s *APIArtifactService) Query(ctx context.Context, pid string, in APIArtifa
 		}
 		if _, seen := heads[b.Ref.ArtifactID]; !seen {
 			heads[b.Ref.ArtifactID] = 0
-			if s.artifacts != nil {
+			if effective == nil && s.artifacts != nil {
 				head, e := s.artifacts.ArtifactHead(ctx, apiArtifactID(b.Ref.ArtifactID))
 				if err := fatalArtifactError(ctx, e); err != nil {
 					return nil, err

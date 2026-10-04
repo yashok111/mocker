@@ -77,8 +77,8 @@ func (s *APIArtifactService) prepare(ctx context.Context, pid string, in Preview
 	if p.CurrentRevisionID != in.BaseRevisionID {
 		return nil, importConflict("backend_api_pins_base_conflict", "Current source baseline changed", p.Version)
 	}
-	if !isLineageSchema(state.Revision.SchemaVersion) || len(state.Sources) == 0 || len(state.Revision.SourceSnapshotIDs) == 0 || len(p.Repositories) == 0 {
-		return nil, &FaultError{Status: 422, Code: "backend_api_pins_unsupported", Message: "API pins require an imported source4 or source5 baseline"}
+	if !isArtifactSourceSchema(state.Revision.SchemaVersion) || len(state.Sources) == 0 || len(state.Revision.SourceSnapshotIDs) == 0 || len(p.Repositories) == 0 {
+		return nil, &FaultError{Status: 422, Code: "backend_api_pins_unsupported", Message: "API pins require an imported source4, source5 or source6 baseline"}
 	}
 	frozen := state.APIArtifactContext
 	if state.ArtifactContext != nil && state.ArtifactContext.DocumentVersion == EditorArtifactDocumentVersion {
@@ -141,23 +141,16 @@ func (s *APIArtifactService) prepareV1APIPins(ctx context.Context, tx *sql.Tx, p
 	if err != nil {
 		return nil, err
 	}
-	coverage, err := loadAPIArtifactCoverage(ctx, tx, state)
+	content, anchor, err := artifactSourceAnchors(ctx, tx, state)
 	if err != nil {
 		return nil, err
 	}
-	baselineHash, err := requestDigest(struct {
-		Revision Revision
-		Context  *APIArtifactContext
-	}{state.Revision, frozen})
+	baselineHash, err := apiPinsSourceBaselineDigest(ctx, tx, pid, in.BaseRevisionID, state.Revision, frozen)
 	if err != nil {
 		return nil, err
 	}
 	if frozen == nil {
-		content, err := APIArtifactSourceContentHash(*state, *coverage)
-		if err != nil {
-			return nil, err
-		}
-		frozen = &APIArtifactContext{SourceContentHash: content, SourceSemanticHash: state.Revision.SemanticHash, Bindings: []APIArtifactBinding{}}
+		frozen = &APIArtifactContext{SourceContentHash: content, SourceSemanticHash: anchor, Bindings: []APIArtifactBinding{}}
 	}
 	if err := tx.Rollback(); err != nil {
 		return nil, err

@@ -1,10 +1,16 @@
+import {
+  projectionTarget,
+  projectionKey,
+  readProjectionNode,
+  type ProjectionReadProps,
+} from "./backendEffectiveProjectionReads";
+import { BackendProjectionSources } from "./BackendProjectionSources";
 import type { BackendLineageValueRef } from "@/api/generated/schemas";
 import { BackendValueSeeds } from "./BackendLineageActions";
 import { BackendAPIFields } from "./BackendAPIFields";
 import { useEffect, useRef, useState } from "react";
 import { Badge, Button, Code, Group, Paper, Stack, Text, Title } from "@mantine/core";
 import { useQuery } from "@tanstack/react-query";
-import { getBackendNode } from "@/api/generated/backend-projects/backend-projects";
 import { LoadState } from "./BackendGraphInventory";
 import { DatabaseEvidence } from "./BackendDatabaseInspector";
 import {
@@ -21,18 +27,21 @@ import { lineageRefKey, lineageRefLabel } from "./backendLineageReads";
 export function BackendFlowInspector({
   projectId,
   revisionId,
+  target: explicitTarget,
+  pins,
   selection,
   onSelect,
   onClose,
   selectedValue,
-}: {
+}: ProjectionReadProps & {
   projectId: string;
-  revisionId: string;
   selection: FlowSelection;
   onSelect: (selection: FlowSelection) => void;
   selectedValue?: BackendLineageValueRef;
   onClose: () => void;
 }) {
+  const target = projectionTarget({ revisionId, target: explicitTarget, pins });
+  const baseRevisionId = pins?.baseRevisionId ?? revisionId ?? "";
   const [valueSelection, setValueSelection] = useState<BackendLineageValueRef | undefined>(
     selectedValue,
   );
@@ -45,7 +54,13 @@ export function BackendFlowInspector({
     )
       onSelect({ type: "node", id: ref.nodeId, valueRef: ref });
   };
-  const key = ["backend-flow-inspector", projectId, revisionId, selection.type, selection.id];
+  const key = [
+    "backend-flow-inspector",
+    projectId,
+    projectionKey(target, pins),
+    selection.type,
+    selection.id,
+  ];
   useDatabaseCancellation(key);
   const heading = useRef<HTMLHeadingElement>(null);
   useEffect(() => {
@@ -59,16 +74,14 @@ export function BackendFlowInspector({
       if (selection.type === "edge") {
         const records = await readDatabaseGraph(
           projectId,
-          { revisionId, recordType: "edges", id: selection.id },
+          { ...target, recordType: "edges", id: selection.id },
           signal,
+          pins,
         );
         if (!records.edges[0]) throw new Error("Переход отсутствует в выбранной ревизии");
         return records.edges[0];
       }
-      const response = await getBackendNode(projectId, revisionId, selection.id, { signal });
-      signal.throwIfAborted();
-      if (response.status !== 200) throw new Error("Объект отсутствует в выбранной ревизии");
-      return response.data;
+      return readProjectionNode(projectId, target, selection.id, signal, pins);
     },
   });
   const links = useQuery({
@@ -80,10 +93,16 @@ export function BackendFlowInspector({
       const pages = await Promise.all([
         readDatabaseGraph(
           projectId,
-          { revisionId, recordType: "edges", from: selection.id },
+          { ...target, recordType: "edges", from: selection.id },
           signal,
+          pins,
         ),
-        readDatabaseGraph(projectId, { revisionId, recordType: "edges", to: selection.id }, signal),
+        readDatabaseGraph(
+          projectId,
+          { ...target, recordType: "edges", to: selection.id },
+          signal,
+          pins,
+        ),
       ]);
       return [
         ...new Map(pages.flatMap((page) => page.edges).map((edge) => [edge.id, edge])).values(),
@@ -112,6 +131,15 @@ export function BackendFlowInspector({
           Источник: {revisionId} · объект: {selection.id}
         </Text>
         <LoadState query={query} label="объекта Flow" />
+        {(pins || target.changeProposal) && (
+          <BackendProjectionSources
+            projectId={projectId}
+            target={target}
+            pins={pins}
+            recordType={selection.type}
+            id={selection.id}
+          />
+        )}
         {record && (
           <>
             <Badge>{record.kind}</Badge>
@@ -180,7 +208,9 @@ export function BackendFlowInspector({
             {"name" in record && (
               <BackendValueSeeds
                 projectId={projectId}
-                revisionId={revisionId}
+                revisionId={baseRevisionId}
+                target={target}
+                pins={pins}
                 node={record}
                 selected={valueSelection}
                 onValueSelect={selectValue}
@@ -189,7 +219,9 @@ export function BackendFlowInspector({
             {record.kind === "http_operation" && (
               <BackendAPIArtifacts
                 projectId={projectId}
-                revisionId={revisionId}
+                revisionId={baseRevisionId}
+                target={target}
+                pins={pins}
                 sourceNodeId={record.id}
                 sourceKind="http_operation"
               />
@@ -197,7 +229,9 @@ export function BackendFlowInspector({
             {record.kind === "api_field" && (
               <BackendAPIArtifacts
                 projectId={projectId}
-                revisionId={revisionId}
+                revisionId={baseRevisionId}
+                target={target}
+                pins={pins}
                 sourceNodeId={record.id}
                 sourceKind="api_field"
               />
@@ -205,7 +239,9 @@ export function BackendFlowInspector({
             {record.kind === "http_operation" && (
               <BackendAPIFields
                 projectId={projectId}
-                revisionId={revisionId}
+                revisionId={baseRevisionId}
+                target={target}
+                pins={pins}
                 operationId={record.id}
                 onValueSelect={selectValue}
               />
@@ -283,7 +319,14 @@ export function BackendFlowInspector({
               </>
             )}
             <DatabaseEvidence
-              context={{ projectId, revisionId, datastoreId: "", facetKey: "" }}
+              context={{
+                projectId,
+                revisionId: baseRevisionId,
+                target,
+                pins,
+                datastoreId: "",
+                facetKey: "",
+              }}
               subjectId={record.id}
             />
           </>

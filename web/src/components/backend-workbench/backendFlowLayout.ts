@@ -1,4 +1,7 @@
-import type { BackendNode, BackendEdge } from "@/api/generated/schemas";
+import type {
+  ProjectionNode as BackendNode,
+  ProjectionEdge as BackendEdge,
+} from "./backendEffectiveProjectionReads";
 import type { DiagramLayoutInput } from "../diagram/elkLayout";
 import { measureDiagramLabel } from "../diagram/elkX6";
 

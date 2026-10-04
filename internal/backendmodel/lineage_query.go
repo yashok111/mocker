@@ -19,12 +19,15 @@ const (
 
 // LineageQueryInput always selects an immutable source4 revision.
 type LineageQueryInput struct {
-	RevisionID string          `json:"revisionId"`
-	Seed       LineageValueRef `json:"seed"`
-	Direction  string          `json:"direction"`
-	MaxDepth   int             `json:"maxDepth,omitzero"`
-	Limit      int             `json:"limit,omitzero"`
-	Cursor     string          `json:"cursor,omitempty"`
+	Proposal        *ProposalReadTarget        `json:"proposal,omitzero"`
+	ChangeProposal  *ProposalReadTarget        `json:"changeProposal,omitzero"`
+	ImportCandidate *ImportCandidateReadTarget `json:"importCandidate,omitzero"`
+	RevisionID      string                     `json:"revisionId,omitempty"`
+	Seed            LineageValueRef            `json:"seed"`
+	Direction       string                     `json:"direction"`
+	MaxDepth        int                        `json:"maxDepth,omitzero"`
+	Limit           int                        `json:"limit,omitzero"`
+	Cursor          string                     `json:"cursor,omitempty"`
 }
 type LineageItem struct {
 	Mapping           Node              `json:"mapping"`
@@ -38,23 +41,28 @@ type LineageItem struct {
 	RequiresReview    bool              `json:"requiresReview"`
 }
 type LineagePage struct {
-	ProjectID            string           `json:"projectId"`
-	RevisionID           string           `json:"revisionId"`
-	SemanticHash         string           `json:"semanticHash"`
-	Policy               string           `json:"policy"`
-	Seed                 LineageValueRef  `json:"seed"`
-	Direction            string           `json:"direction"`
-	Items                []LineageItem    `json:"items"`
-	NextCursor           string           `json:"nextCursor"`
-	Coverage             RevisionCoverage `json:"coverage"`
-	Truncated            bool             `json:"truncated"`
-	TruncationReasons    []string         `json:"truncationReasons"`
-	Limitations          []string         `json:"limitations"`
-	VisitedValueCount    int              `json:"visitedValueCount"`
-	ExaminedMappingCount int              `json:"examinedMappingCount"`
+	Target               *BackendReadTarget  `json:"target,omitzero"`
+	Pins                 *EffectiveGraphPins `json:"pins,omitzero"`
+	ProjectID            string              `json:"projectId"`
+	RevisionID           string              `json:"revisionId"`
+	SemanticHash         string              `json:"semanticHash"`
+	Policy               string              `json:"policy"`
+	Seed                 LineageValueRef     `json:"seed"`
+	Direction            string              `json:"direction"`
+	Items                []LineageItem       `json:"items"`
+	NextCursor           string              `json:"nextCursor"`
+	Coverage             RevisionCoverage    `json:"coverage"`
+	Truncated            bool                `json:"truncated"`
+	TruncationReasons    []string            `json:"truncationReasons"`
+	Limitations          []string            `json:"limitations"`
+	VisitedValueCount    int                 `json:"visitedValueCount"`
+	ExaminedMappingCount int                 `json:"examinedMappingCount"`
 }
 
 func (in *LineageQueryInput) UnmarshalJSON(raw []byte) error {
+	if advancedReadQuery(raw) {
+		return decodeAdvancedReadQuery(raw, in)
+	}
 	m, err := relationalObject(raw)
 	if err != nil {
 		return invalid("body", "Expected a strict lineage query object")
@@ -65,7 +73,7 @@ func (in *LineageQueryInput) UnmarshalJSON(raw []byte) error {
 	for key, v := range m {
 		switch key {
 		case "seed":
-			if err := validateEventsLineageRef(v, true); err != nil {
+			if err := validateRepresentationLineageRef(v, true); err != nil {
 				return invalid("seed", err.Error())
 			}
 		case "maxDepth", "limit":
@@ -93,7 +101,16 @@ func (in *LineageQueryInput) UnmarshalJSON(raw []byte) error {
 	return in.validate()
 }
 func (in LineageQueryInput) validate() error {
-	if !ValidID(in.RevisionID) {
+	if in.Proposal != nil || in.ChangeProposal != nil || in.ImportCandidate != nil {
+		target := graphTarget(in.RevisionID, in.Proposal, in.ChangeProposal, in.ImportCandidate)
+		if err := target.Validate(); err != nil {
+			return err
+		}
+		if err := rejectStagedView(target); err != nil {
+			return err
+		}
+	}
+	if in.Proposal == nil && in.ChangeProposal == nil && !ValidID(in.RevisionID) {
 		return invalid("revisionId", "A pinned revision UUID is required")
 	}
 	if in.Direction != "forward" && in.Direction != "reverse" {
@@ -109,12 +126,24 @@ func (in LineageQueryInput) validate() error {
 	if err != nil {
 		return invalid("seed", "Invalid value reference")
 	}
-	if err = validateEventsLineageRef(raw, true); err != nil {
+	if err = validateRepresentationLineageRef(raw, true); err != nil {
 		return invalid("seed", err.Error())
 	}
 	return nil
 }
 func (r *Repo) QueryLineage(ctx context.Context, projectID string, in LineageQueryInput) (*LineagePage, error) {
+	if in.Proposal != nil || in.ChangeProposal != nil || in.ImportCandidate != nil {
+		return r.queryEffectiveLineage(ctx, projectID, in)
+	}
+	if in.RevisionID != "" && in.Proposal == nil && in.ChangeProposal == nil {
+		revision, err := r.Revision(ctx, projectID, in.RevisionID)
+		if err != nil {
+			return nil, err
+		}
+		if revision.SchemaVersion == ComposedSchemaVersion {
+			return r.queryEffectiveLineage(ctx, projectID, in)
+		}
+	}
 	if err := in.validate(); err != nil {
 		return nil, err
 	}
@@ -122,7 +151,16 @@ func (r *Repo) QueryLineage(ctx context.Context, projectID string, in LineageQue
 	if err != nil {
 		return nil, err
 	}
-	page, err := projectLineage(ctx, state, in)
+	var page *LineagePage
+	if state.Revision.SchemaVersion == ComposedSchemaVersion {
+		graph, e := r.ResolveSourceGraph(ctx, projectID, in.RevisionID)
+		if e != nil {
+			return nil, e
+		}
+		page, err = projectSourceLineage(ctx, graph, in)
+	} else {
+		page, err = projectLineage(ctx, state, in)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -145,9 +183,11 @@ type lineageReach struct {
 	reasons map[string]bool
 }
 type lineageProof struct {
-	status   string
-	reasons  map[string]bool
-	boundary bool
+	evidenceIDs []string
+	claims      []BaseAssertionRef
+	status      string
+	reasons     map[string]bool
+	boundary    bool
 }
 
 func (p *lineageProof) add(reason string, boundary bool) {
@@ -157,6 +197,23 @@ func (p *lineageProof) add(reason string, boundary bool) {
 
 // projectLineage never resolves a current head and never executes imported text.
 func projectLineage(ctx context.Context, state *RevisionState, in LineageQueryInput) (*LineagePage, error) {
+	return projectLineageWithSource(ctx, state, nil, in)
+}
+func projectSourceLineage(ctx context.Context, source *SourceGraphSnapshot, in LineageQueryInput) (*LineagePage, error) {
+	if source == nil || source.SourceVector == nil {
+		return nil, semantic("sourceVector", "Composed lineage requires full source snapshot")
+	}
+	return projectLineageWithSource(ctx, &source.State, source, in)
+}
+func projectLineageWithSource(ctx context.Context, state *RevisionState, sourceGraph *SourceGraphSnapshot, in LineageQueryInput) (*LineagePage, error) {
+	return projectLineageWithEffective(ctx, state, sourceGraph, nil, in)
+}
+func projectLineageWithEffective(ctx context.Context, state *RevisionState, sourceGraph *SourceGraphSnapshot, effective *EffectiveGraphSnapshot, in LineageQueryInput) (*LineagePage, error) {
+	schema, hash := state.Revision.SchemaVersion, state.Revision.SemanticHash
+	if effective != nil {
+		schema = effective.Pins.StructuralSchemaVersion
+		hash = effective.Pins.EffectiveSemanticHash
+	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -167,7 +224,7 @@ func projectLineage(ctx context.Context, state *RevisionState, in LineageQueryIn
 		return nil, notFound()
 	}
 	source := primarySource(*state)
-	if !isLineageSchema(state.Revision.SchemaVersion) || source == nil || !sourceProfilesMatch(state.Revision.SchemaVersion, source.Provider.Profiles) {
+	if effective == nil && sourceGraph == nil && (!isLineageSchema(schema) || source == nil || !sourceProfilesMatch(schema, source.Provider.Profiles)) {
 		return nil, &FaultError{Status: 422, Code: "backend_unsupported_scope", Message: "Lineage reads require a pinned source4 or source5 revision"}
 	}
 	rawSeed, err := json.Marshal(in.Seed)
@@ -175,8 +232,11 @@ func projectLineage(ctx context.Context, state *RevisionState, in LineageQueryIn
 		return nil, err
 	}
 	refValidator := validateLineageRef
-	if state.Revision.SchemaVersion == EventsSchemaVersion {
+	if schema == EventsSchemaVersion {
 		refValidator = validateEventsLineageRef
+	}
+	if effective != nil || sourceGraph != nil {
+		refValidator = validateRepresentationLineageRef
 	}
 	if err := refValidator(rawSeed, true); err != nil {
 		return nil, invalid("seed", err.Error())
@@ -187,7 +247,11 @@ func projectLineage(ctx context.Context, state *RevisionState, in LineageQueryIn
 	if in.Limit == 0 {
 		in.Limit = 50
 	}
-	page := &LineagePage{ProjectID: state.Revision.ProjectID, RevisionID: in.RevisionID, SemanticHash: state.Revision.SemanticHash, Policy: lineagePolicyForSchema(state.Revision.SchemaVersion), Seed: in.Seed, Direction: in.Direction, Items: []LineageItem{}, TruncationReasons: []string{}, Limitations: []string{}, Coverage: RevisionCoverage{Coverage: state.Revision.Coverage, Snapshots: slices.Clone(state.Sources), Inventory: slices.Clone(state.Inventory), ReconciliationGaps: []string{}}}
+	page := &LineagePage{ProjectID: state.Revision.ProjectID, RevisionID: in.RevisionID, SemanticHash: hash, Policy: lineagePolicyForSchema(schema), Seed: in.Seed, Direction: in.Direction, Items: []LineageItem{}, TruncationReasons: []string{}, Limitations: []string{}, Coverage: RevisionCoverage{Coverage: state.Revision.Coverage, Snapshots: slices.Clone(state.Sources), Inventory: slices.Clone(state.Inventory), ReconciliationGaps: []string{}}}
+	if sourceGraph != nil {
+		page.Coverage.Source = sourceVectorReadContext(sourceGraph)
+		page.Policy = "field-lineage-traversal-source6-v1"
+	}
 	scope, err := requestDigest(struct {
 		Project, Revision, Hash, Policy string
 		Seed                            LineageValueRef
@@ -196,6 +260,21 @@ func projectLineage(ctx context.Context, state *RevisionState, in LineageQueryIn
 	}{page.ProjectID, page.RevisionID, page.SemanticHash, page.Policy, in.Seed, in.Direction, in.MaxDepth, in.Limit})
 	if err != nil {
 		return nil, err
+	}
+	if effective != nil {
+		page.Target = new(effective.Target)
+		page.Pins = new(effective.Pins)
+		page.SemanticHash = effective.Pins.EffectiveSemanticHash
+		if effective.Target.ChangeProposal != nil {
+			page.Policy = "effective-field-lineage-v1"
+		}
+		scope, err = requestDigest(struct {
+			Scope string
+			Pins  EffectiveGraphPins
+		}{scope, effective.Pins})
+		if err != nil {
+			return nil, err
+		}
 	}
 	_, after, err := decodeGraphPage(in.Limit, in.Cursor, "lineage", page.ProjectID, scope, false)
 	if err != nil {
@@ -244,7 +323,7 @@ func projectLineage(ctx context.Context, state *RevisionState, in LineageQueryIn
 			page.Coverage.StaleCounts.Nodes++
 		}
 	}
-	if err := validateLineageValueTargetForSchema(in.Seed, nodes, edges, state.Revision.SchemaVersion); err != nil {
+	if err := validateLineageValueTargetForSchema(in.Seed, nodes, edges, schema); err != nil {
 		return nil, err
 	}
 	for _, e := range state.Evidence {
@@ -278,7 +357,7 @@ func projectLineage(ctx context.Context, state *RevisionState, in LineageQueryIn
 		if n.Kind != "field_mapping" {
 			continue
 		}
-		if state.Revision.SchemaVersion == EventsSchemaVersion {
+		if schema == EventsSchemaVersion || sourceGraph != nil {
 			if indexedMappings == lineageMaxExaminedMappings {
 				truncations["mapping_limit"] = true
 				break
@@ -294,7 +373,7 @@ func projectLineage(ctx context.Context, state *RevisionState, in LineageQueryIn
 			indexedMappings++
 			indexedIncidences += len(refs) + 1
 		}
-		attrs, err := decodeLineageMappingForSchema(n.Attributes, state.Revision.SchemaVersion)
+		attrs, err := decodeLineageMappingForSchema(n.Attributes, schema)
 		if err != nil {
 			return nil, err
 		}
@@ -316,7 +395,7 @@ func projectLineage(ctx context.Context, state *RevisionState, in LineageQueryIn
 		}
 		slices.SortFunc(mappings, func(a, b lineageIndexedMapping) int { return strings.Compare(a.node.ID, b.node.ID) })
 	}
-	proofReader := lineageProofReader{ctx: ctx, nodes: nodes, evidence: evidence, contains: contains, edges: edges, handles: handles, schema: state.Revision.SchemaVersion}
+	proofReader := lineageProofReader{effective: effective, source: sourceGraph, ctx: ctx, nodes: nodes, evidence: evidence, contains: contains, edges: edges, handles: handles, schema: schema}
 	visited := map[LineageValueRef]bool{in.Seed: true}
 	emitted := map[string]bool{}
 	queue := []lineageReach{{value: in.Seed, status: "explicit", reasons: map[string]bool{}}}
@@ -357,6 +436,16 @@ func projectLineage(ctx context.Context, state *RevisionState, in LineageQueryIn
 			}
 			depth := len(w.witness) + 1
 			item := LineageItem{Mapping: m.node, Via: w.value, Depth: depth, WitnessMappingIDs: append(slices.Clone(w.witness), m.node.ID), Status: proof.status, Expansion: "expanded", ExpandedValues: []LineageValueRef{}, Reasons: []string{}}
+			if effective != nil {
+				item.Mapping = effectiveNodeRecord(effective, item.Mapping)
+			} else if sourceGraph != nil {
+				item.Mapping.Source = sourceRecordReadContext(sourceGraph, "node", item.Mapping.ID)
+				mappingProof, err := sourceRecordProof(sourceGraph, "node", item.Mapping.ID, nil)
+				if err != nil {
+					return nil, err
+				}
+				item.Mapping.EvidenceIDs = slices.Clone(mappingProof.evidenceIDs)
+			}
 			emitted[m.node.ID] = true
 			next := []LineageValueRef{m.attrs.Destination}
 			if in.Direction == "reverse" {
@@ -440,13 +529,15 @@ func projectLineage(ctx context.Context, state *RevisionState, in LineageQueryIn
 func lineageItemKey(i LineageItem) string { return fmt.Sprintf("%02d/%s", i.Depth, i.Mapping.ID) }
 
 type lineageProofReader struct {
-	ctx      context.Context
-	nodes    map[string]Node
-	evidence map[string]Evidence
-	contains map[string][]Edge
-	edges    map[string]Edge
-	schema   string
-	handles  map[string][]Edge
+	effective *EffectiveGraphSnapshot
+	source    *SourceGraphSnapshot
+	ctx       context.Context
+	nodes     map[string]Node
+	evidence  map[string]Evidence
+	contains  map[string][]Edge
+	edges     map[string]Edge
+	schema    string
+	handles   map[string][]Edge
 }
 
 func (r lineageProofReader) record(p *lineageProof, ids []string, fresh *AssertionFreshness) error {
@@ -500,6 +591,24 @@ func lineageAnalysis(p *lineageProof, attrs map[string]jsontext.Value) {
 	}
 }
 func (r lineageProofReader) node(p *lineageProof, n Node, ref *LineageValueRef) error {
+	if r.effective != nil {
+		proof, err := effectiveRecordProof(r.effective, "node", n.ID, ref)
+		if err != nil {
+			return err
+		}
+		mergeSourceProof(p, proof)
+		lineageAnalysis(p, n.Attributes)
+		return nil
+	}
+	if r.source != nil {
+		proof, err := sourceRecordProof(r.source, "node", n.ID, ref)
+		if err != nil {
+			return err
+		}
+		mergeSourceProof(p, proof)
+		lineageAnalysis(p, n.Attributes)
+		return nil
+	}
 	ids := n.EvidenceIDs
 	if ref != nil && ref.Kind == "column" {
 		ids = slices.DeleteFunc(slices.Clone(ids), func(id string) bool {
@@ -559,7 +668,7 @@ func (r lineageProofReader) owner(p *lineageProof, n Node) error {
 		return err
 	}
 	for _, edge := range r.contains[n.ID] {
-		if err := r.record(p, edge.EvidenceIDs, edge.Freshness); err != nil {
+		if err := r.edge(p, edge); err != nil {
 			return err
 		}
 	}
@@ -598,7 +707,7 @@ func (r lineageProofReader) mapping(m lineageIndexedMapping) (lineageProof, erro
 			return p, err
 		}
 	}
-	if r.schema == EventsSchemaVersion && contextualLineageMapping(m.node.Kind, m.node.Attributes, false) {
+	if (r.schema == EventsSchemaVersion || r.source != nil) && contextualLineageMapping(m.node.Kind, m.node.Attributes, false) {
 		if err := validateEventsLineageMapping(m.node, m.attrs, r.nodes, r.edges, r.handles); err != nil {
 			p.status = runtimeWorseStatus(p.status, "unresolved")
 			p.add("invalid_event_tuple", true)
@@ -608,4 +717,24 @@ func (r lineageProofReader) mapping(m lineageIndexedMapping) (lineageProof, erro
 		}
 	}
 	return p, nil
+}
+
+func (r lineageProofReader) edge(p *lineageProof, e Edge) error {
+	if r.effective != nil {
+		proof, err := effectiveRecordProof(r.effective, "edge", e.ID, nil)
+		if err != nil {
+			return err
+		}
+		mergeSourceProof(p, proof)
+		return nil
+	}
+	if r.source == nil {
+		return r.record(p, e.EvidenceIDs, e.Freshness)
+	}
+	proof, err := sourceRecordProof(r.source, "edge", e.ID, nil)
+	if err != nil {
+		return err
+	}
+	mergeSourceProof(p, proof)
+	return nil
 }

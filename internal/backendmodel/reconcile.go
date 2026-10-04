@@ -34,7 +34,7 @@ func loadSourceState(ctx context.Context, q importReader, pid, rid string) (*Rev
 	} else if !errors.Is(err, sql.ErrNoRows) {
 		return nil, err
 	}
-	if len(state.Sources) == 1 && state.Sources[0].Role == "" {
+	if state.Revision.SchemaVersion != ComposedSchemaVersion && len(state.Sources) == 1 && state.Sources[0].Role == "" {
 		state.Sources[0].Role = "primary"
 	}
 	frozen, err := loadArtifactContext(ctx, q, rid, state.Revision.ArtifactPins)
@@ -94,6 +94,9 @@ func loadRevisionState(ctx context.Context, q importReader, pid, rid string) (*R
 	return state, rows.Err()
 }
 func deriveMetadata(state RevisionState, owner **AssertionOwnership, fresh **AssertionFreshness) {
+	if state.Revision.SchemaVersion == ComposedSchemaVersion {
+		return
+	}
 	src := primarySource(state)
 	if src == nil {
 		return

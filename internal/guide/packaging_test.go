@@ -44,7 +44,7 @@ func TestStandaloneImportPackageOwnsServedEntrypoint(t *testing.T) {
 	for _, topic := range []string{"backend-import", "backend-model", "backend-import-protocol", "backend-recovery", "backend-examples", "backend-profile-go-sql"} {
 		t.Run(topic, func(t *testing.T) {
 			workflow, ok := WorkflowForTopic(topic)
-			if !ok || workflow.WorkflowID != "mocker-backend-import" || workflow.WorkflowVersion != "6" || workflow.GuideSetID != CurrentGuideSetID() {
+			if !ok || workflow.WorkflowID != "mocker-backend-import" || workflow.WorkflowVersion != "7" || workflow.GuideSetID != CurrentGuideSetID() {
 				t.Fatalf("standalone reference has no compatible served identity: %s", topic)
 			}
 			markdown, ok := Topic(topic)
@@ -87,7 +87,7 @@ func TestStandaloneSkillMetadataAndIsolation(t *testing.T) {
 	}
 	for key, want := range map[string]string{
 		"workflowId":      "mocker-backend-import",
-		"workflowVersion": "6",
+		"workflowVersion": "7",
 		"guideSetId":      workflow.GuideSetID,
 		"manifestHash":    workflow.ManifestHash,
 	} {
@@ -96,11 +96,11 @@ func TestStandaloneSkillMetadataAndIsolation(t *testing.T) {
 		}
 	}
 	for key, want := range map[string][]string{
-		"requiredModelSchemaVersions": {"1", "2", "3", "4", "5"},
+		"requiredModelSchemaVersions": {"1", "2", "3", "4", "5", "6"},
 		"requiredCapabilities": {
 			"backend-projects", "backend-revisions", "backend-graph-query", "backend-source-import",
 			"backend-source-reconcile", "backend-revision-compare", "backend-relational-import",
-			"backend-database-query", "backend-database-er", "backend-runtime-flow-import", "backend-flow-query", "backend-data-access-query", "backend-field-lineage-import", "backend-field-lineage-query", "backend-events-import", "backend-events-query",
+			"backend-database-query", "backend-database-er", "backend-runtime-flow-import", "backend-flow-query", "backend-data-access-query", "backend-field-lineage-import", "backend-field-lineage-query", "backend-events-import", "backend-events-query", "backend-source-sync", "backend-representations",
 		},
 	} {
 		var got []string
@@ -155,9 +155,9 @@ func TestStandaloneDatabasePackageOwnsServedEntrypoint(t *testing.T) {
 	for _, item := range []struct {
 		topic, owner, version string
 	}{
-		{topic: "backend-database-reference", owner: "mocker-backend-database", version: "6"},
-		{topic: "backend-model", owner: "mocker-backend-import", version: "6"},
-		{topic: "backend-recovery", owner: "mocker-backend-import", version: "6"},
+		{topic: "backend-database-reference", owner: "mocker-backend-database", version: "7"},
+		{topic: "backend-model", owner: "mocker-backend-import", version: "7"},
+		{topic: "backend-recovery", owner: "mocker-backend-import", version: "7"},
 	} {
 		workflow, ok := WorkflowForTopic(item.topic)
 		if !ok || workflow.WorkflowID != item.owner || workflow.WorkflowVersion != item.version {
@@ -187,7 +187,9 @@ func TestGuideInstallationModesKeepOnePinnedSet(t *testing.T) {
 		{name: "import-only", packages: []string{"mocker-backend-import"}},
 		{name: "database-only", packages: []string{"mocker-backend-database"}},
 		{name: "inspect-only", packages: []string{"mocker-backend-inspect"}},
-		{name: "bundle", packages: []string{"mocker", "mocker-backend-import", "mocker-backend-database", "mocker-backend-inspect"}},
+		{name: "sync-only", packages: []string{"mocker-backend-sync"}},
+		{name: "change-only", packages: []string{"mocker-backend-change"}},
+		{name: "bundle", packages: []string{"mocker", "mocker-backend-import", "mocker-backend-database", "mocker-backend-inspect", "mocker-backend-sync", "mocker-backend-change"}},
 		{name: "server-only", packages: []string{}},
 	} {
 		t.Run(item.name, func(t *testing.T) {
@@ -205,6 +207,8 @@ func TestGuideInstallationModesKeepOnePinnedSet(t *testing.T) {
 				{topic: "backend-import", pkg: "mocker-backend-import", path: "SKILL.md"},
 				{topic: "backend-database", pkg: "mocker-backend-database", path: "SKILL.md"},
 				{topic: "backend-inspect", pkg: "mocker-backend-inspect", path: "SKILL.md"},
+				{topic: "backend-sync", pkg: "mocker-backend-sync", path: "SKILL.md"},
+				{topic: "backend-change-proposals", pkg: "mocker-backend-change", path: "SKILL.md"},
 			} {
 				path := filepath.Join(root, entry.pkg, entry.path)
 				if !slices.Contains(item.packages, entry.pkg) && slices.Contains(item.packages, "mocker") {
@@ -215,6 +219,10 @@ func TestGuideInstallationModesKeepOnePinnedSet(t *testing.T) {
 						path = filepath.Join(root, "mocker/references/backend/inspect.md")
 					case "backend-database":
 						path = filepath.Join(root, "mocker/references/backend/database-workflow.md")
+					case "backend-sync":
+						path = filepath.Join(root, "mocker/references/backend/sync.md")
+					case "backend-change-proposals":
+						path = filepath.Join(root, "mocker/references/backend/change-proposals.md")
 					}
 				}
 				if slices.Contains(item.packages, entry.pkg) || slices.Contains(item.packages, "mocker") {
@@ -227,6 +235,7 @@ func TestGuideInstallationModesKeepOnePinnedSet(t *testing.T) {
 				"overview", "backend-import", "backend-database", "backend-database-reference",
 				"backend-profile-go-sql", "backend-model", "backend-recovery",
 				"backend-inspect", "backend-flow-reference", "backend-analysis",
+				"backend-sync", "backend-change-proposals", "backend-annotations",
 			} {
 				owner, ok := WorkflowForTopic(topic)
 				if !ok || owner.GuideSetID != CurrentGuideSetID() || owner.ManifestHash != CurrentGuideSetID() {
@@ -307,6 +316,8 @@ func TestSkillEntrypointContextBudgets(t *testing.T) {
 		{"../../skills/mocker-backend-import/SKILL.md", 200},
 		{"../../skills/mocker-backend-database/SKILL.md", 200},
 		{"../../skills/mocker-backend-inspect/SKILL.md", 200},
+		{"../../skills/mocker-backend-sync/SKILL.md", 200},
+		{"../../skills/mocker-backend-change/SKILL.md", 200},
 	} {
 		data, err := os.ReadFile(item.path)
 		if err != nil {

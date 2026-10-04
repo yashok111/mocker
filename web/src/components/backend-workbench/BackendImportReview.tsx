@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   Alert,
   Badge,
@@ -24,8 +24,8 @@ import {
   useGetBackendProject,
 } from "@/api/generated/backend-projects/backend-projects";
 import type {
-  BackendImportChangeItem,
-  BackendImportPreview,
+  BackendComposedImportChangeItem,
+  BackendImportPreviewResponse,
   CommitBackendImportRequest,
   GetBackendImportChangesRecordType,
 } from "@/api/generated/schemas";
@@ -33,21 +33,38 @@ import { ApiFailure } from "@/api/client";
 import { describeApiFailureDetailed } from "@/api/errors";
 import { BackendRecordInspector, LoadState, Pages } from "./BackendGraphInventory";
 import { ComparisonSummary } from "./BackendRevisionCompare";
+import { BackendIncrementalSync } from "./BackendIncrementalSync";
+import type { ImportCandidateTarget } from "./backendImportAttempts";
 
 const wrap = { overflowWrap: "anywhere" as const, whiteSpace: "pre-wrap" as const };
-export function BackendImportReview(props: { projectId: string; currentRevisionId: string }) {
+type ImportReviewProps = {
+  projectId: string;
+  currentRevisionId: string;
+  onDirty?: (value: boolean) => void;
+  onCandidateChange?: (target: ImportCandidateTarget | null) => void;
+  onCommitted?: (revisionId: string) => void;
+};
+export function BackendImportReview(props: ImportReviewProps) {
   return <ImportReview key={props.projectId} {...props} />;
 }
 function ImportReview({
   projectId,
   currentRevisionId,
-}: {
-  projectId: string;
-  currentRevisionId: string;
-}) {
+  onDirty,
+  onCandidateChange,
+  onCommitted,
+}: ImportReviewProps) {
   const [cursors, setCursors] = useState([""]);
-  const [selected, setSelected] = useState<string | null>(null);
+  const [selected, setSelected] = useState<{ id?: string; composed: boolean } | null>(null);
   const [locked, setLocked] = useState(false);
+  const [setupVersion, setSetupVersion] = useState(0);
+  const onLock = useCallback(
+    (value: boolean) => {
+      setLocked(value);
+      onDirty?.(value);
+    },
+    [onDirty],
+  );
   const cursor = cursors.at(-1) ?? "";
   const query = useQuery({
     queryKey: ["backend-imports", projectId, cursor],
@@ -60,21 +77,31 @@ function ImportReview({
       <Stack>
         <Title order={2}>Импорты исходников</Title>
         <Text size="sm" c="dimmed">
-          Выберите подготовленную агентом сессию, изучите сохранённый Preview и подтвердите импорт.
+          Создайте синхронизацию из выбранных JSON-файлов или откройте подготовленную сессию.
         </Text>
+        <Button
+          variant="default"
+          disabled={locked}
+          onClick={() => {
+            setSetupVersion((value) => value + 1);
+            setSelected({ composed: true });
+          }}
+        >
+          Новая синхронизация
+        </Button>
         <LoadState query={query} label="импортов" />
         {page?.items.length === 0 && <Text>Сессий импорта пока нет</Text>}
         {page?.items.map((session) => (
           <Button
             key={session.id}
-            variant={selected === session.id ? "light" : "subtle"}
+            variant={selected?.id === session.id ? "light" : "subtle"}
             aria-label={`Открыть импорт ${session.id}`}
-            aria-pressed={selected === session.id}
-            disabled={locked && selected !== session.id}
+            aria-pressed={selected?.id === session.id}
+            disabled={locked && selected?.id !== session.id}
             h="auto"
             py="sm"
             styles={{ label: wrap }}
-            onClick={() => setSelected(session.id)}
+            onClick={() => setSelected({ id: session.id, composed: session.mode === "composed" })}
           >
             {session.manifest.repositoryName} · {session.state} · {session.id}
           </Button>
@@ -86,13 +113,23 @@ function ImportReview({
           busy={query.isFetching || locked}
           setCursors={setCursors}
         />
-        {selected && (
-          <ImportSessionReview
-            key={`${projectId}:${selected}`}
+        {selected?.composed && (
+          <BackendIncrementalSync
+            key={`${projectId}:${selected.id ?? `new-${setupVersion}`}`}
             projectId={projectId}
-            sessionId={selected}
+            initialSessionId={selected.id}
+            onDirty={onLock}
+            onCandidateChange={onCandidateChange}
+            onCommitted={onCommitted}
+          />
+        )}
+        {selected && !selected.composed && selected.id && (
+          <ImportSessionReview
+            key={`${projectId}:${selected.id}`}
+            projectId={projectId}
+            sessionId={selected.id}
             currentRevisionId={currentRevisionId}
-            onLock={setLocked}
+            onLock={onLock}
           />
         )}
       </Stack>
@@ -434,7 +471,7 @@ function SavedPreview({
 }: {
   projectId: string;
   sessionId: string;
-  preview: BackendImportPreview;
+  preview: BackendImportPreviewResponse;
 }) {
   const [recordType, setRecordType] = useState<GetBackendImportChangesRecordType>("source");
   const [cursors, setCursors] = useState([""]);
@@ -519,7 +556,13 @@ function SavedPreview({
     </Stack>
   );
 }
-function SavedChange({ projectId, item }: { projectId: string; item: BackendImportChangeItem }) {
+function SavedChange({
+  projectId,
+  item,
+}: {
+  projectId: string;
+  item: BackendComposedImportChangeItem;
+}) {
   const [selection, setSelection] = useState<{
     revisionId: string;
     recordType: "node" | "edge" | "evidence";
@@ -539,6 +582,12 @@ function SavedChange({ projectId, item }: { projectId: string; item: BackendImpo
           {JSON.stringify({ before: item.source.before, after: item.source.after }, null, 2)}
         </Code>
       </Paper>
+    );
+  if (item.recordType !== "identity" && item.recordType !== "deletion")
+    return (
+      <Code block style={wrap}>
+        {JSON.stringify(item, null, 2)}
+      </Code>
     );
   const decision = item.recordType === "identity" ? item.identity : item.deletion;
   const old = decision.oldSubject;

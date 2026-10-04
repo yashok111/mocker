@@ -5,6 +5,7 @@ import (
 	"encoding/json/v2"
 	"net/http"
 	"net/url"
+	"slices"
 	"strconv"
 
 	"github.com/yashok111/mocker/internal/backendmodel"
@@ -71,8 +72,8 @@ func (s *Server) handleGetBackendImportChanges(w http.ResponseWriter, r *http.Re
 		}
 	}
 	in := backendmodel.ImportChangesInput{RecordType: q.Get("recordType"), Cursor: q.Get("cursor")}
-	in.PreviewVersion, err = strconv.ParseInt(q.Get("previewVersion"), 10, 64)
-	if err != nil || in.PreviewVersion < 1 || (in.RecordType != "source" && in.RecordType != "identity" && in.RecordType != "deletion") {
+	in.PreviewVersion, err = backendPositiveDecimal(q.Get("previewVersion"))
+	if err != nil || !slices.Contains([]string{"source", "identity", "deletion", "assertion_conflict", "claim_identity", "migration"}, in.RecordType) {
 		s.backendError(w, backendQueryError())
 		return
 	}

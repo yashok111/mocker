@@ -1,11 +1,25 @@
 # Import recovery and pinned reads
 
 
-This topic is canonically import v6-owned. Database v6 readers explicitly select
+This topic is canonically import v7-owned. Database v7 readers explicitly select
 its supported import owner in the same global set and verify the actual returned
 owner tuple/contentHash. Use it from the selected set before commit
 and whenever a response is lost, a session resumes, or CAS fails. Recheck selected
 workflow identity after a server change without discarding original receipts.
+
+## Composed and full-proposal recovery
+
+Persist an exact pending request before transport, including Begin/Create before a server session/proposal ID exists. Keep its project, original source base and scope discoverable after restart even when the current head changes. A browser restore waits for explicit retry. Storage failure or invalid recovery must be visible; do not silently send from memory alone or replace an unknown request with a new key.
+
+Composed Begin additionally preserves sourceScope, scopeStatus, syncPolicy, changeManifest and per-partition profileExtension. Decision batches preserve decision IDs, conflictHash/offered contender, batchId/hash and original import CAS. Full proposal Create/Apply/Restore have their own path IDs, selected draft, commands/command IDs, candidateHash and idempotency key. An exact successful receipt is historical output, not current head metadata.
+
+Composed session scope/base/vector remains the captured context. If that context no longer applies, recover the original request first, then explicitly abort/start a new compatible session; do not mutate its saved base/CAS merely to clear409. Annotation/rename can stale project CAS while semantic head stays fixed. Reread metadata, then review a fresh preview and capture a new Commit only after the unknown old result is resolved.
+
+get_backend_import_changes reads saved details by previewVersion even for NEEDS_RESOLUTION. Candidate reads require the current matching READY version/hash and become unavailable after invalidation/terminal state. Clear any old candidate view as soon as a newer session state is admitted, independently of whether a parallel project GET succeeds.
+
+Import Preview itself advances the session version and has no idempotency key/receipt. After a lost Preview response, read durable session status and its saved preview; do not invent a receipt or replay a changed current version automatically. Full-proposal Preview is read-only and reserves no command IDs.
+
+Full proposal accepted command IDs remain consumed after no-op, criteria-only or overwritten writes, restore and restart. A fresh request key with one of those IDs gets backend_change_command_conflict409 at valid current CAS. Exact old receipt replay still wins. Continue unchanged local IDs and explicitly copy as new edits are separate choices; no automatic regeneration. See change1 for the complete protocol and project2 for annotation cursor/CAS recovery.
 
 ## Save complete requests before sending
 
@@ -14,7 +28,7 @@ and UUID mapping. Persist entire mutation inputs and their original keys:
 
 | Operation | Fields that an exact replay preserves |
 |---|---|
-| Begin | expectedVersion, baseRevisionId, mode/profile including omission, profileExtension/repositoryId/graphScope when used, manifest, inventory, idempotencyKey and path IDs. |
+| Begin | expectedVersion, baseRevisionId, mode/profile including omission; legacy profileExtension/repositoryId/graphScope or composed sourceScope/scopeStatus/syncPolicy/changeManifest when applicable, manifest, inventory, idempotencyKey and path IDs. |
 | Batch | batchId, expectedImportVersion, payloadHash, exact commands and path IDs. |
 | Commit | expectedVersion, expectedImportVersion, candidateHash, idempotencyKey and path IDs. |
 | Abort | expectedImportVersion, idempotencyKey and path IDs. |
@@ -65,7 +79,7 @@ Do not retry a changed payload under an old idempotencyKey/batchId.
   repair only unaccepted work with a new batchId. New batches invalidate preview.
 - Metadata changed with the same head: reread project, preserve concurrent fields,
   reconcile intent and use current project CAS with a new commit key.
-- Head changed: read both exact revisions and compare them; explicitly preview
+- Legacy source head changed: read both exact revisions and compare them; under the selected legacy protocol explicitly preview
   against the chosen current base using current session version. For sourced
   bases use the same-provider reconciliation procedure. Mapping expectedId/aliases
   and deletion proof are revalidated; preserve acknowledged UUIDs. Inspect the
@@ -140,10 +154,10 @@ and then initiate extension/commit or present a rounded column ordinal. Restart
 recovery preserves schema1 history and schema2/profile decisions, with historical
 proof still read through its exact revision/snapshot.
 
-## Proposal recovery
+## Existing legacy relational proposal recovery
 
 Proposal create/apply uses a separate retained exact request and idempotencyKey.
-Before a new mutation after restart/update select a compatible database6 workflow,
+Before a new mutation after restart/update select a compatible database7 workflow,
 view proposal-relational-v1, exact set/hash and proposal/edit capabilities. For an
 uncertain acknowledgement retry the identical request/key three times with
 1/2/4-second backoff, then preserve request, key, proposal and base/draft pins as
@@ -156,4 +170,4 @@ Do not patch only expectedVersion or use project CAS. A new source head leaves
 the proposal baseline intact and reports baseOutdated. Historical graph cursors
 remain pinned; history-list continuation after a save must restart. Wrong ownership
 or designed-object source evidence gives404. Unsupported ready/rebase/impact
-remains a later boundary. These rules do not alter import6 batch/commit recovery.
+remains a later boundary. These rules do not alter import7 batch/commit recovery.

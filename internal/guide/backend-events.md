@@ -1,11 +1,25 @@
 # Pinned source events, jobs and service calls
 
-Canonical owner: `mocker-backend-inspect` workflow6. Select its complete supported
+Canonical owner: `mocker-backend-inspect` workflow7. Select its complete supported
 requirements, including source schemas3/4/5 and `backend-events-query`, in one
 immutable guideSetId/manifestHash. Verify this topic's actual owner/version/hash.
-Import6 owns source5 `events-service-v1` admission and all inherited profiles.
-Database6 owns relational inspection/proposals; saved-view-v1 and artifact pin
+Import7 owns source5 `events-service-v1` admission and all inherited profiles.
+Database7 owns relational inspection/proposals; saved-view-v1 and artifact pin
 contracts retain their existing versions. Event selection is transient.
+
+## Source6, full drafts and READY candidate reads
+
+Choose exactly one selector: revisionId; proposal:{proposalId,proposalRevisionId} for legacy relational drafts; changeProposal:{proposalId,proposalRevisionId} for full drafts; or importCandidate:{importId,importVersion,candidateHash} for current READY staging. Mixed/duplicate/null tags and implicit head fallback are invalid. Use canonical UUIDs and exact signed-int64 numeric tokens in raw MCP; browser clients must refuse values they cannot preserve exactly.
+
+Graph/node/evidence/coverage accept the four appropriate basic read variants. get_backend_assertions accepts native source6, full proposals with source6 baseline, and composed READY candidates. Source5/legacy/full5 assertions return422. Keep every provider-qualified identity, losing claim, typed selection and own/dependency/field currentness visible. Full assertions and baselineEvidence do not confirm an edited intended value.
+
+Preserve returned complete pins across pages/details: target/hash, view/structural versions, selected base revision/semantic hash, source vector/snapshot IDs and artifact context. Native source6 uses view tag6; full and staged views use proposal-graph-v1 and import-candidate-v1. Older source1–5 response shapes remain supported. Exact graph id cannot combine with cursor/kind/search/parent/from/to; omit node-only search/parentId entirely for edges. Exact evidenceId cannot combine with subjectId/cursor.
+
+Artifact projections keep their artifact pins in pins and expose graph/effective context in effectivePins. Preserve both; artifact content/raw/authored hashes and graph semantic/candidate hashes are different contracts.
+
+Database/Flow/lineage/events/artifact queries support their exact source/full targets. Legacy proposal specialized support is limited to Database; Flow, lineage, events and both API/editor artifact projections reject proposal with422. Source API-artifact reads technically accept schemas1–5, including an empty bindings result; a meaningful source owner/pin workflow uses source4–6. Do not turn that read admission into legacy-proposal artifact support. Staging supports basic graph/node/evidence/coverage/assertions only: specialized queries and SavedViews reject importCandidate. New batches, Preview versions, Commit or Abort can invalidate staged pins. A stale candidate409 never switches to source.
+
+When original proof is historical_metadata, label it as historical metadata testimony and show its original source5 basis and semantic-support gap. Verify the original revision/project/schema/hash before opening that exact evidence ID. An unchanged selected provider claim can still have a stale dependent field; report both levels rather than promoting the entire record to current.
 
 ## Source5 admission and proof
 
@@ -146,7 +160,7 @@ ValueRefs, bounded fragment, evidence IDs and source repository/snapshot/path/
 hash/physical lines, inspected/search scope, question and completion criterion.
 Export prepares input to external investigation; it schedules or spawns nothing.
 Pure questions authorize reads. Evidence publication follows the explicitly
-authorized full compatible import6 procedure, not a gap-only/incremental API.
+authorized full compatible import7 procedure, not a gap-only/incremental API.
 
 Supported example: in the inert orders fixture, consumer.fraud is registered by
 plugin key fraud-v1 but baseline has no plugin source. Criterion: exact fraud-v1

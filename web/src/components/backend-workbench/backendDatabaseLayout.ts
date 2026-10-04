@@ -1,5 +1,5 @@
 import type {
-  BackendDatabaseRelationshipItem,
+  BackendPinnedDatabaseRelationshipItem as BackendDatabaseRelationshipItem,
   BackendDatabaseTableItem,
 } from "@/api/generated/schemas";
 import type { DiagramLayoutInput } from "../diagram/elkLayout";

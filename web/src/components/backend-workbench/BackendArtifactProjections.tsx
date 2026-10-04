@@ -1,3 +1,11 @@
+import { readBackendCoverage } from "./backendGraphReads";
+import {
+  projectionTarget,
+  projectionKey,
+  projectionReturnTarget,
+  projectionURLTarget,
+  type ProjectionReadProps,
+} from "./backendEffectiveProjectionReads";
 import { useContext, useEffect, useId, useRef, useState } from "react";
 import {
   Alert,
@@ -42,9 +50,8 @@ import { ArtifactDeltaSide, ArtifactTypedContent } from "./BackendArtifactConten
 import { PinnedScenarioArtifact } from "../design-canvas/PinnedScenarioArtifact";
 import { PinnedAPIArtifact } from "../api-designer/PinnedAPIArtifact";
 const button = { h: "auto", py: "xs", maw: "100%", styles: databaseButtonStyles };
-type Props = {
+type Props = ProjectionReadProps & {
   projectId: string;
-  revisionId: string;
   sourceNodeId?: string;
   readOnly?: boolean;
   initialArtifact?: string;
@@ -54,7 +61,7 @@ type Props = {
 export function BackendArtifactProjections(props: Props) {
   return (
     <ProjectionPanel
-      key={`${props.projectId}:${props.revisionId}:${props.sourceNodeId ?? "all"}`}
+      key={`${props.projectId}:${projectionKey(projectionTarget(props), props.pins)}:${props.sourceNodeId ?? "all"}`}
       {...props}
     />
   );
@@ -69,18 +76,48 @@ function fault(error: unknown) {
 const hostInitialView = "";
 function ProjectionPanel({
   projectId,
-  revisionId,
+  revisionId: selectedRevision,
+  target: explicitTarget,
+  pins: providedPins,
   sourceNodeId,
   readOnly = false,
   initialArtifact = "",
   initialView = hostInitialView,
   initialEmbedded = "",
 }: Props) {
+  const target = projectionTarget({
+    revisionId: selectedRevision,
+    target: explicitTarget,
+    pins: providedPins,
+  });
+  const contextKey = [
+    "artifact-projection-context",
+    projectId,
+    projectionKey(target, providedPins),
+  ];
+  useDatabaseCancellation(contextKey);
+  const contextQuery = useQuery({
+    queryKey: contextKey,
+    enabled: !providedPins && !!explicitTarget,
+    queryFn: ({ signal }) => readBackendCoverage(projectId, target, signal),
+    staleTime: Infinity,
+    retry: false,
+  });
+  const effectivePins =
+    providedPins ??
+    (contextQuery.data && "pins" in contextQuery.data ? contextQuery.data.pins : undefined);
+  const revisionId = effectivePins?.baseRevisionId ?? target.revisionId ?? selectedRevision ?? "";
+  readOnly = readOnly || !!target.changeProposal || !!target.proposal;
+
   const host = useContext(BackendAPIArtifactsContext);
   const instanceId = useId();
   const revisionQuery = useQuery({
-    queryKey: ["artifact-projection-revision", projectId, revisionId],
-    enabled: host?.revision.id !== revisionId,
+    queryKey: ["artifact-projection-revision", projectId, projectionKey(target, effectivePins)],
+    enabled:
+      !effectivePins &&
+      !!target.revisionId &&
+      (!explicitTarget || contextQuery.isSuccess) &&
+      host?.revision.id !== revisionId,
     retry: false,
     queryFn: async ({ signal }) => {
       const response = await getBackendRevision(projectId, revisionId, { signal });
@@ -94,16 +131,31 @@ function ProjectionPanel({
       return response.data;
     },
   });
-  const revision = host?.revision.id === revisionId ? host.revision : revisionQuery.data;
-  const scope: APIArtifactScope | undefined = revision
+  const revision =
+    !target.changeProposal && (!explicitTarget || providedPins || contextQuery.isSuccess)
+      ? host?.revision.id === revisionId
+        ? host.revision
+        : revisionQuery.data
+      : undefined;
+  const scope: APIArtifactScope | undefined = effectivePins
     ? {
         projectId,
         revisionId,
-        semanticHash: revision.semanticHash,
-        sourceSnapshotIds: revision.sourceSnapshotIds,
-        artifactPins: revision.artifactPins,
+        target,
+        pins: effectivePins,
+        semanticHash: effectivePins.effectiveSemanticHash,
+        sourceSnapshotIds: effectivePins.sourceSnapshotIds,
+        artifactPins: effectivePins.artifactPins,
       }
-    : undefined;
+    : revision
+      ? {
+          projectId,
+          revisionId,
+          semanticHash: revision.semanticHash,
+          sourceSnapshotIds: revision.sourceSnapshotIds,
+          artifactPins: revision.artifactPins,
+        }
+      : undefined;
   const [selection, setSelection] = useState(initialArtifact);
   const [view, setView] = useState(
     initialView ||
@@ -178,14 +230,14 @@ function ProjectionPanel({
     window.addEventListener("beforeunload", listener);
     return () => window.removeEventListener("beforeunload", listener);
   }, [dirty]);
-  const pins = (revision?.artifactPins ?? []).filter(
+  const pins = (effectivePins?.artifactPins ?? revision?.artifactPins ?? []).filter(
     (p) => ["api_design", "design_scenario"].includes(p.kind) && "contentHash" in p,
   );
   const pin = selection ? pins.find((p) => `${p.kind}:${p.id}` === selection) : pins[0];
   let input: QueryBackendArtifactsRequest | undefined;
   if (pin?.kind === "api_design" && (view === "states" || view === "response_rules"))
     input = {
-      revisionId,
+      ...target,
       artifact: { kind: "api_design", id: pin.id },
       view,
       limit: 50,
@@ -194,7 +246,7 @@ function ProjectionPanel({
   if (pin?.kind === "design_scenario") {
     if (view === "sequence" || view === "event_model")
       input = {
-        revisionId,
+        ...target,
         artifact: { kind: "design_scenario", id: pin.id },
         view,
         limit: 50,
@@ -202,7 +254,7 @@ function ProjectionPanel({
       };
     else if ((view === "states" || view === "response_rules") && embedded)
       input = {
-        revisionId,
+        ...target,
         artifact: { kind: "design_scenario", id: pin.id },
         view,
         embeddedContractId: embedded,
@@ -564,7 +616,7 @@ function ProjectionPanel({
           pinnedRevisionId: pin.revisionId,
           pinnedHash: pin.contentHash,
           returnProjectId: projectId,
-          returnRevisionId: revisionId,
+          ...projectionReturnTarget(target, revisionId),
         }
       : undefined;
   const href =
@@ -593,7 +645,12 @@ function ProjectionPanel({
           Бэкенд {revisionId} · хеш {scope?.semanticHash} · исходные снимки{" "}
           {scope?.sourceSnapshotIds.join(", ")}
         </Text>
-        {!revision && <LoadState query={revisionQuery} label="ревизии моделей" />}
+        {!providedPins && explicitTarget && (
+          <LoadState query={contextQuery} label="контекста модели" />
+        )}
+        {!revision && !effectivePins && (!explicitTarget || contextQuery.isSuccess) && (
+          <LoadState query={revisionQuery} label="ревизии моделей" />
+        )}
         <NativeSelect
           label="Закреплённый артефакт"
           value={pin ? `${pin.kind}:${pin.id}` : ""}
@@ -740,7 +797,7 @@ function ProjectionPanel({
                     {...button}
                     component="a"
                     variant="subtle"
-                    href={`/backend-projects/${projectId}${defaultStringifySearch({ revisionId, recordType: "node", recordId: id })}`}
+                    href={`/backend-projects/${projectId}${defaultStringifySearch({ ...projectionURLTarget(target, revisionId), recordType: "node", recordId: id })}`}
                   >
                     Исходный узел {id}
                   </Button>
@@ -843,7 +900,7 @@ function ProjectionPanel({
               onOpenCurrent={() => setRaw(false)}
             />
           ))}
-        {host?.canEdit && !readOnly && !editing && (
+        {host?.canEdit && host.revision.id === revisionId && !readOnly && !editing && (
           <Group>
             <Button {...button} ref={trigger} onClick={() => begin()} disabled={!page || busy}>
               Изменить закреплённую группу
@@ -977,12 +1034,16 @@ function ProjectionPanel({
                       side={d.before}
                       projectId={projectId}
                       revisionId={revisionId}
+                      target={target}
+                      pins={effectivePins}
                     />
                     <Title order={5}>После</Title>
                     <ArtifactDeltaSide
                       side={d.after}
                       projectId={projectId}
                       revisionId={revisionId}
+                      target={target}
+                      pins={effectivePins}
                     />
                     {d.changes.map((c, i) => (
                       <Code key={i} block style={databaseWrap}>

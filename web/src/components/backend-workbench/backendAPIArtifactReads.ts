@@ -1,7 +1,10 @@
+import type { BackendEffectiveGraphPins, BackendReadTarget } from "@/api/generated/schemas";
+import { checkBackendProjectionPins } from "./backendReadTargets";
+import { projectionTarget } from "./backendEffectiveProjectionReads";
 import { queryBackendAPIArtifacts } from "@/api/generated/backend-projects/backend-projects";
 import type {
   BackendAPIArtifactItem,
-  BackendAPIArtifactPage,
+  BackendAPIArtifactResponse as BackendAPIArtifactPage,
   BackendAPIArtifactSelector,
   BackendAPIPinCommand,
   BackendArtifactPin,
@@ -9,6 +12,8 @@ import type {
 
 export type APIArtifactScope = {
   projectId: string;
+  target?: BackendReadTarget;
+  pins?: BackendEffectiveGraphPins;
   revisionId: string;
   semanticHash: string;
   sourceSnapshotIds: string[];
@@ -61,6 +66,8 @@ export async function readAPIArtifacts(
   sourceNodeId: string | undefined,
   signal: AbortSignal,
 ): Promise<BackendAPIArtifactPage> {
+  const target = projectionTarget(scope);
+  if (target.proposal) throw new Error("Артефакты старого предложения не поддерживаются");
   let cursor = "";
   const seen = new Set<string>();
   const items: BackendAPIArtifactItem[] = [];
@@ -73,7 +80,7 @@ export async function readAPIArtifacts(
     const response = await queryBackendAPIArtifacts(
       scope.projectId,
       {
-        revisionId: scope.revisionId,
+        ...target,
         ...(sourceNodeId ? { sourceNodeId } : {}),
         limit: 100,
         cursor,
@@ -83,6 +90,16 @@ export async function readAPIArtifacts(
     signal.throwIfAborted();
     if (response.status !== 200) throw new Error("Не удалось прочитать связи API");
     result = response.data;
+    if (
+      ("effectivePins" in result ? result.effectivePins : undefined) ||
+      scope.pins ||
+      target.changeProposal
+    )
+      checkBackendProjectionPins(
+        { ...result, pins: "effectivePins" in result ? result.effectivePins : undefined },
+        target,
+        scope.pins,
+      );
     if (!matchesArtifactScope(scope, result))
       throw new Error("Изменился контекст связей API; перечитайте источник");
     for (const item of result.items) {

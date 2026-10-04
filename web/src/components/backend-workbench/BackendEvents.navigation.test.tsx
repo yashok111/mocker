@@ -52,8 +52,13 @@ function fixture() {
   vi.stubGlobal("fetch", async (url: RequestInfo | URL, init?: RequestInit) => {
     const path = String(url).split("?")[0] ?? "",
       input = init?.body ? JSON.parse(String(init.body)) : {};
-    if (path.endsWith("/revisions/rev"))
-      return json(200, { id: "rev", projectId: "project", schemaVersion: "5", semanticHash: hash });
+    if (path.endsWith("/revisions/0197aaf9-5555-7000-8000-000000000115"))
+      return json(200, {
+        id: "0197aaf9-5555-7000-8000-000000000115",
+        projectId: "project",
+        schemaVersion: "5",
+        semanticHash: hash,
+      });
     if (path.endsWith("/nodes/producer")) return json(200, producer);
     if (path.endsWith("/nodes/field")) return json(200, field);
     if (path.endsWith("/graph/query")) return json(200, { nodes: [], edges: [], nextCursor: "" });
@@ -61,7 +66,7 @@ function fixture() {
     if (path.endsWith("/events/query"))
       return json(200, {
         projectId: "project",
-        revisionId: "rev",
+        revisionId: "0197aaf9-5555-7000-8000-000000000115",
         semanticHash: hash,
         policy: "source-events-projection-v1",
         view: "routes",
@@ -120,7 +125,7 @@ function fixture() {
     if (path.endsWith("/lineage/query"))
       return json(200, {
         projectId: "project",
-        revisionId: "rev",
+        revisionId: "0197aaf9-5555-7000-8000-000000000115",
         semanticHash: hash,
         policy: "field-lineage-traversal-v2",
         seed: input.seed,
@@ -199,11 +204,15 @@ it.each(["events record", "event endpoint"])(
     const user = userEvent.setup();
     renderWithProviders(
       entry === "events record" ? (
-        <BackendEvents projectId="project" revisionId="rev" semanticHash={hash} />
+        <BackendEvents
+          projectId="project"
+          revisionId="0197aaf9-5555-7000-8000-000000000115"
+          semanticHash={hash}
+        />
       ) : (
         <BackendValueInspector
           projectId="project"
-          revisionId="rev"
+          revisionId="0197aaf9-5555-7000-8000-000000000115"
           value={{ kind: "event_field", nodeId: "field", endpointId: "producer", routeId: "emit" }}
           onClose={() => {}}
         />
@@ -243,7 +252,7 @@ it("returns keyboard focus to the nested endpoint launch button after closing it
   renderWithProviders(
     <BackendValueInspector
       projectId="project"
-      revisionId="rev"
+      revisionId="0197aaf9-5555-7000-8000-000000000115"
       value={{ kind: "event_field", nodeId: "field", endpointId: "producer", routeId: "emit" }}
       onClose={() => {}}
     />,

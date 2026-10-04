@@ -5,10 +5,20 @@ import "slices"
 // Contextual values require the exact addressed route, including the message
 // UUID and endpoint. A producer address and consumer address remain distinct.
 func validateLineageValueTargetForSchema(ref LineageValueRef, nodes map[string]Node, edges map[string]Edge, schema string) error {
+	if ref.Kind == "representation_field" {
+		if schema == ComposedSchemaVersion && nodes[ref.NodeID].Kind == "representation_field" && ref == (LineageValueRef{Kind: ref.Kind, NodeID: ref.NodeID}) {
+			return nil
+		}
+		return invalid("seed", "Representation references require an exact source6 field")
+	}
 	if ref.Kind != "event_field" {
 		return validateLineageValueTarget(ref, nodes)
 	}
-	if schema != EventsSchemaVersion {
+	return validateEventsLineageValueTarget(ref, nodes, edges, schema)
+}
+
+func validateEventsLineageValueTarget(ref LineageValueRef, nodes map[string]Node, edges map[string]Edge, schema string) error {
+	if schema != EventsSchemaVersion && schema != ComposedSchemaVersion {
 		return invalid("seed", "Contextual event refs require source5")
 	}
 	field, ok := nodes[ref.NodeID]

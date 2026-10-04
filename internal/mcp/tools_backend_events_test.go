@@ -14,6 +14,8 @@ func TestBackendEventsSDKExactPins(t *testing.T) {
 }
 
 func TestBackendEventsSDKStrictViewSelectors(t *testing.T) {
+	calls := &recordingCaller{status: 200, body: []byte(`{}`)}
+	fixture := newToolFixture(calls)
 	base := `{"projectId":"` + backendTestID + `","revisionId":"` + backendTestID + `","view":`
 	for _, view := range []string{"routes", "jobs", "service_calls"} {
 		selector, wrong := "serviceId", "seedNodeId"
@@ -21,22 +23,22 @@ func TestBackendEventsSDKStrictViewSelectors(t *testing.T) {
 			selector, wrong = wrong, selector
 		}
 		valid := base + `"` + view + `"`
-		calls := &recordingCaller{status: 200, body: []byte(`{}`)}
-		_, msg := callTool(t, calls, "query_backend_events", valid+`,"`+selector+`":"`+backendTestID+`","limit":100}`)
+		*calls = recordingCaller{status: 200, body: []byte(`{}`)}
+		_, msg := fixture.Call(t, "query_backend_events", valid+`,"`+selector+`":"`+backendTestID+`","limit":100}`)
 		if msg != "" || calls.method != "POST" || !strings.Contains(string(calls.sent), `"`+selector+`":"`+backendTestID+`"`) {
 			t.Fatalf("valid selector refused %s %s", msg, calls.sent)
 		}
 		for _, suffix := range []string{`,"` + wrong + `":"` + backendTestID + `"}`, `,"` + selector + `":null}`, `,"` + selector + `":""}`, `,"proposal":{}}`, `,"extra":true}`, `,"limit":null}`, `,"limit":0}`, `,"limit":101}`, `,"view":"routes"}`, `,"cursor":null}`} {
-			calls := &recordingCaller{status: 200, body: []byte(`{}`)}
-			_, msg := callTool(t, calls, "query_backend_events", valid+suffix)
+			*calls = recordingCaller{status: 200, body: []byte(`{}`)}
+			_, msg := fixture.Call(t, "query_backend_events", valid+suffix)
 			if msg == "" || calls.method != "" {
 				t.Errorf("invalid events input reached route %s %s", suffix, msg)
 			}
 		}
 	}
 	for _, args := range []string{`{"projectId":"` + backendTestID + `","view":"routes"}`, base + `"other"}`} {
-		calls := &recordingCaller{status: 200, body: []byte(`{}`)}
-		_, msg := callTool(t, calls, "query_backend_events", args)
+		*calls = recordingCaller{status: 200, body: []byte(`{}`)}
+		_, msg := fixture.Call(t, "query_backend_events", args)
 		if msg == "" || calls.method != "" {
 			t.Error("invalid pin/view reached route", args, msg)
 		}

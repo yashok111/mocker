@@ -25,8 +25,8 @@ func TestBackendAPIArtifactContractExactIDsAndOperations(t *testing.T) {
 			}
 		}
 	}
-	if count != 185 {
-		t.Fatalf("operation count=%d want185", count)
+	if count != 201 {
+		t.Fatalf("operation count=%d want201", count)
 	}
 	schema, err := BackendSchema("APIArtifactID")
 	if err != nil {

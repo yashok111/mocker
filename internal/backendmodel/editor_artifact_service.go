@@ -43,6 +43,18 @@ func NewArtifactServiceWithBodyLimit(repo *Repo, api APIArtifactReader, scenario
 }
 
 func (s *ArtifactService) Query(ctx context.Context, pid string, in ArtifactQueryInput) (*ArtifactProjectionPage, error) {
+	if in.Proposal != nil || in.ChangeProposal != nil || in.ImportCandidate != nil {
+		return s.queryEffectiveArtifact(ctx, pid, in)
+	}
+	if in.RevisionID != "" && in.Proposal == nil && in.ChangeProposal == nil {
+		revision, err := s.repo.Revision(ctx, pid, in.RevisionID)
+		if err != nil {
+			return nil, err
+		}
+		if revision.SchemaVersion == ComposedSchemaVersion {
+			return s.queryEffectiveArtifact(ctx, pid, in)
+		}
+	}
 	if err := in.Validate(); err != nil {
 		return nil, err
 	}

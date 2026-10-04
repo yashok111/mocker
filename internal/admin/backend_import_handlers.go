@@ -347,14 +347,14 @@ func backendImportShape(raw jsontext.Value, typ reflect.Type, path string) error
 		}
 		if value, supplied := fields["profile"]; supplied {
 			var profile string
-			if err := json.Unmarshal(value, &profile); err != nil || !slices.Contains([]string{backendmodel.GraphProfile, backendmodel.RelationalProfile, backendmodel.RuntimeProfile, backendmodel.LineageProfile, backendmodel.EventsProfile}, profile) {
+			if err := json.Unmarshal(value, &profile); err != nil || !slices.Contains([]string{backendmodel.GraphProfile, backendmodel.RelationalProfile, backendmodel.RuntimeProfile, backendmodel.LineageProfile, backendmodel.EventsProfile, backendmodel.ComposedProfile}, profile) {
 				return fmt.Errorf("%s/profile must select a supported import profile", path)
 			}
 		}
 		if value, supplied := fields["mode"]; supplied {
 			var mode string
-			if err := json.Unmarshal(value, &mode); err != nil || (mode != "initial" && mode != "reconcile") {
-				return fmt.Errorf("%s/mode must be initial or reconcile", path)
+			if err := json.Unmarshal(value, &mode); err != nil || !slices.Contains([]string{"initial", "reconcile", "composed"}, mode) {
+				return fmt.Errorf("%s/mode must select a supported import mode", path)
 			}
 		}
 	}
@@ -367,7 +367,7 @@ func backendImportShape(raw jsontext.Value, typ reflect.Type, path string) error
 		if err := json.Unmarshal(fields["op"], &op); err != nil {
 			return err
 		}
-		member := map[string]string{"upsert_node": "node", "upsert_edge": "edge", "upsert_evidence": "evidence", "remove": "remove", "map_identity": "identity", "delete_assertion": "deletion"}[op]
+		member := map[string]string{"upsert_node": "node", "upsert_edge": "edge", "upsert_evidence": "evidence", "remove": "remove", "map_identity": "identity", "delete_assertion": "deletion", "claim_identity": "claimIdentity", "resolve_assertion": "resolution"}[op]
 		if member == "" || len(fields) != 2 || fields[member] == nil {
 			return fmt.Errorf("%s must contain only op and its command member", path)
 		}

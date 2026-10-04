@@ -1,5 +1,8 @@
 import { PinnedScenarioArtifact } from "./PinnedScenarioArtifact";
-import type { PinnedAPIContext } from "../api-designer/PinnedAPIArtifact";
+import {
+  pinnedBackendReturnTarget,
+  type PinnedAPIContext,
+} from "../api-designer/PinnedAPIArtifact";
 import { BackendArtifactProjections } from "../backend-workbench/BackendArtifactProjections";
 import { suggestScenarioTests } from "./scenarioTestSuggestionsApi";
 import { useCallback, useEffect, useRef, useState, type ReactElement } from "react";
@@ -95,6 +98,7 @@ function ServerCanvasEditor({
   detail: DesignScenarioDetail;
   onReload: () => Promise<DesignScenarioDetail | null>;
 }): ReactElement {
+  const returnTarget = pin ? pinnedBackendReturnTarget(pin) : undefined;
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [stored] = useState(() => readStoredDraft(id));
@@ -540,10 +544,10 @@ function ServerCanvasEditor({
           )}
         </>
       )}
-      {pin?.returnProjectId && pin.returnRevisionId && pin.projectionView && (
+      {pin?.returnProjectId && returnTarget && pin.projectionView && (
         <BackendArtifactProjections
           projectId={pin.returnProjectId}
-          revisionId={pin.returnRevisionId}
+          target={returnTarget}
           readOnly
           initialArtifact={`design_scenario:${id}`}
           initialView={pin.projectionView}

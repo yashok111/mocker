@@ -51,10 +51,13 @@ type APIPinCommand struct {
 	Reason     string               `json:"reason"`
 }
 type APIArtifactQueryInput struct {
-	RevisionID   string `json:"revisionId"`
-	SourceNodeID string `json:"sourceNodeId,omitempty"`
-	Limit        int    `json:"limit,omitzero"`
-	Cursor       string `json:"cursor,omitempty"`
+	Proposal        *ProposalReadTarget        `json:"proposal,omitzero"`
+	ChangeProposal  *ProposalReadTarget        `json:"changeProposal,omitzero"`
+	ImportCandidate *ImportCandidateReadTarget `json:"importCandidate,omitzero"`
+	RevisionID      string                     `json:"revisionId"`
+	SourceNodeID    string                     `json:"sourceNodeId,omitempty"`
+	Limit           int                        `json:"limit,omitzero"`
+	Cursor          string                     `json:"cursor,omitempty"`
 }
 type PreviewAPIPinsInput struct {
 	BaseRevisionID  string          `json:"baseRevisionId"`
@@ -86,12 +89,14 @@ type APIArtifactItem struct {
 	Resolution APIArtifactResolution `json:"resolution"`
 }
 type APIArtifactPage struct {
-	RevisionID        string            `json:"revisionId"`
-	SemanticHash      string            `json:"semanticHash"`
-	SourceSnapshotIDs []string          `json:"sourceSnapshotIds"`
-	Pins              []ArtifactPin     `json:"pins"`
-	Items             []APIArtifactItem `json:"items"`
-	NextCursor        string            `json:"nextCursor"`
+	Target            *BackendReadTarget  `json:"target,omitzero"`
+	EffectivePins     *EffectiveGraphPins `json:"effectivePins,omitzero"`
+	RevisionID        string              `json:"revisionId"`
+	SemanticHash      string              `json:"semanticHash"`
+	SourceSnapshotIDs []string            `json:"sourceSnapshotIds"`
+	Pins              []ArtifactPin       `json:"pins"`
+	Items             []APIArtifactItem   `json:"items"`
+	NextCursor        string              `json:"nextCursor"`
 }
 type APIArtifactObjectChange struct {
 	Pointer    string `json:"pointer"`
@@ -342,7 +347,16 @@ func (in ApplyAPIPinsInput) Validate() error {
 	return validateKey(in.IdempotencyKey)
 }
 func (in APIArtifactQueryInput) Validate() error {
-	if !ValidID(in.RevisionID) || (in.SourceNodeID != "" && !ValidID(in.SourceNodeID)) || in.Limit < 0 || in.Limit > 100 || !validAPIText(in.Cursor, 0, 4096) {
+	if in.Proposal != nil || in.ChangeProposal != nil || in.ImportCandidate != nil {
+		target := graphTarget(in.RevisionID, in.Proposal, in.ChangeProposal, in.ImportCandidate)
+		if err := target.Validate(); err != nil {
+			return err
+		}
+		if err := rejectStagedView(target); err != nil {
+			return err
+		}
+	}
+	if (in.Proposal == nil && in.ChangeProposal == nil && !ValidID(in.RevisionID)) || (in.SourceNodeID != "" && !ValidID(in.SourceNodeID)) || in.Limit < 0 || in.Limit > 100 || !validAPIText(in.Cursor, 0, 4096) {
 		return invalid("query", "Invalid explicit revision, source filter, page limit or cursor")
 	}
 	return nil
@@ -370,6 +384,18 @@ func (in *ApplyAPIPinsInput) UnmarshalJSON(raw []byte) error {
 	return in.Validate()
 }
 func (in *APIArtifactQueryInput) UnmarshalJSON(raw []byte) error {
+	if advancedReadQuery(raw) {
+		if err := validateAdvancedQueryWire(raw, nil, 100); err != nil {
+			return err
+		}
+		type plain APIArtifactQueryInput
+		var value plain
+		if err := json.Unmarshal(raw, &value, json.RejectUnknownMembers(true)); err != nil {
+			return err
+		}
+		*in = APIArtifactQueryInput(value)
+		return in.Validate()
+	}
 	*in = APIArtifactQueryInput{}
 	type plain APIArtifactQueryInput
 	if err := strictAPIObject(raw, []string{"revisionId"}, []string{"sourceNodeId", "limit", "cursor"}, (*plain)(in)); err != nil {

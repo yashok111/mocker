@@ -1,3 +1,4 @@
+import { exactCoverage, exactEnvelope, exactIDs, exactSource } from "@/test/backendExact";
 import { useState } from "react";
 import { afterEach, expect, it, vi } from "vitest";
 import { screen, waitFor } from "@testing-library/react";
@@ -10,7 +11,7 @@ import { BackendAPIArtifactsContext } from "./BackendAPIArtifacts";
 const hash = "a".repeat(64);
 const pin = { kind: "design_scenario", id: "12", revisionId: "23", contentHash: hash };
 const revision = {
-  id: "base",
+  id: "0197aaf9-5555-7000-8000-000000000101",
   projectId: "project",
   semanticHash: hash,
   sourceSnapshotIds: ["snap"],
@@ -20,15 +21,15 @@ const binding = {
   artifactKind: "design_scenario" as const,
   artifactId: "12",
   selector: { kind: "participant" as const, participantId: "deleted" },
-  sourceNodeIds: ["source"],
+  sourceNodeIds: ["0197aaf9-5555-7000-8000-000000000119"],
   sourceLabels: ["Frozen source"],
   objectHash: hash,
   lastKnownLabel: "Deleted participant",
   origin: "manual" as const,
-  reason: "old",
+  reason: "0197aaf9-5555-7000-8000-000000000109",
 };
 const page: ArtifactProjectionPage = {
-  revisionId: "base",
+  revisionId: "0197aaf9-5555-7000-8000-000000000101",
   semanticHash: hash,
   sourceSnapshotIds: ["snap"],
   pins: [pin],
@@ -74,7 +75,10 @@ function mount() {
     <BackendAPIArtifactsContext
       value={{ revision, projectVersion: 4, canEdit: true, onDirty: vi.fn(), onApplied }}
     >
-      <BackendArtifactProjections projectId="project" revisionId="base" />
+      <BackendArtifactProjections
+        projectId="project"
+        revisionId="0197aaf9-5555-7000-8000-000000000101"
+      />
     </BackendAPIArtifactsContext>,
   );
   return onApplied;
@@ -109,7 +113,11 @@ it("preserves unrelated deleted roster and retries exact unknown body and key", 
         if (applies.length === 1) throw new TypeError("lost response");
         return json(200, {
           project: { id: "project", version: 5 },
-          revision: { ...revision, id: "next", parentRevisionId: "base" },
+          revision: {
+            ...revision,
+            id: "0197aaf9-5555-7000-8000-000000000108",
+            parentRevisionId: "0197aaf9-5555-7000-8000-000000000101",
+          },
         });
       }
       throw new Error(path);
@@ -120,7 +128,10 @@ it("preserves unrelated deleted roster and retries exact unknown body and key", 
   await screen.findByText("Authored participant · participant");
   await user.click(screen.getByRole("button", { name: "Изменить закреплённую группу" }));
   await user.type(screen.getByLabelText("Причина изменения"), "explicit intent");
-  await user.type(screen.getByLabelText("Точные исходные узлы для выбранного объекта"), "source");
+  await user.type(
+    screen.getByLabelText("Точные исходные узлы для выбранного объекта"),
+    "0197aaf9-5555-7000-8000-000000000119",
+  );
   await user.click(screen.getByRole("button", { name: "Связать выбранный объект" }));
   await user.click(screen.getByRole("button", { name: "Предпросмотр полной группы" }));
   await waitFor(() => expect(previews).toHaveLength(1));
@@ -128,8 +139,11 @@ it("preserves unrelated deleted roster and retries exact unknown body and key", 
     commands: [
       {
         editorBindings: [
-          { selector: binding.selector, sourceNodeIds: ["source"] },
-          { selector: { kind: "participant", participantId: "p" }, sourceNodeIds: ["source"] },
+          { selector: binding.selector, sourceNodeIds: ["0197aaf9-5555-7000-8000-000000000119"] },
+          {
+            selector: { kind: "participant", participantId: "p" },
+            sourceNodeIds: ["0197aaf9-5555-7000-8000-000000000119"],
+          },
         ],
       },
     ],
@@ -209,7 +223,10 @@ it("aborts query ownership on unmount", async () => {
     <BackendAPIArtifactsContext
       value={{ revision, projectVersion: 4, canEdit: true, onDirty: vi.fn(), onApplied: vi.fn() }}
     >
-      <BackendArtifactProjections projectId="project" revisionId="base" />
+      <BackendArtifactProjections
+        projectId="project"
+        revisionId="0197aaf9-5555-7000-8000-000000000101"
+      />
     </BackendAPIArtifactsContext>,
   );
   await waitFor(() => expect(signal).toBeDefined());
@@ -233,8 +250,14 @@ it("refuses a second editor instance claim", async () => {
         claim,
       }}
     >
-      <BackendArtifactProjections projectId="project" revisionId="base" />
-      <BackendArtifactProjections projectId="project" revisionId="base" />
+      <BackendArtifactProjections
+        projectId="project"
+        revisionId="0197aaf9-5555-7000-8000-000000000101"
+      />
+      <BackendArtifactProjections
+        projectId="project"
+        revisionId="0197aaf9-5555-7000-8000-000000000101"
+      />
     </BackendAPIArtifactsContext>,
   );
   const triggers = await screen.findAllByRole("button", { name: "Изменить закреплённую группу" });
@@ -267,7 +290,7 @@ it("allows paging during editing and keeps the complete frozen replacement vecto
       }
       return json(200, {
         ...page,
-        nextCursor: input.cursor ? "" : "next",
+        nextCursor: input.cursor ? "" : "0197aaf9-5555-7000-8000-000000000108",
         items: input.cursor
           ? [
               {
@@ -287,7 +310,7 @@ it("allows paging during editing and keeps the complete frozen replacement vecto
   await userEvent.type(screen.getByLabelText("Причина изменения"), "page intent");
   await userEvent.type(
     screen.getByLabelText("Точные исходные узлы для выбранного объекта"),
-    "source",
+    "0197aaf9-5555-7000-8000-000000000119",
   );
   await userEvent.click(screen.getByRole("button", { name: "Следующие строки" }));
   await screen.findByText("Second page · participant");
@@ -298,8 +321,11 @@ it("allows paging during editing and keeps the complete frozen replacement vecto
     commands: [
       {
         editorBindings: [
-          { selector: binding.selector, sourceNodeIds: ["source"] },
-          { selector: { kind: "participant", participantId: "q" }, sourceNodeIds: ["source"] },
+          { selector: binding.selector, sourceNodeIds: ["0197aaf9-5555-7000-8000-000000000119"] },
+          {
+            selector: { kind: "participant", participantId: "q" },
+            sourceNodeIds: ["0197aaf9-5555-7000-8000-000000000119"],
+          },
         ],
       },
     ],
@@ -384,7 +410,10 @@ it("does not adopt a late successful apply over a newer project head", async () 
             onApplied,
           }}
         >
-          <BackendArtifactProjections projectId="project" revisionId="base" />
+          <BackendArtifactProjections
+            projectId="project"
+            revisionId="0197aaf9-5555-7000-8000-000000000101"
+          />
         </BackendAPIArtifactsContext>
       </>
     );
@@ -403,7 +432,11 @@ it("does not adopt a late successful apply over a newer project head", async () 
   resolve(
     json(200, {
       project: { id: "project", version: 5 },
-      revision: { ...revision, id: "next", parentRevisionId: "base" },
+      revision: {
+        ...revision,
+        id: "0197aaf9-5555-7000-8000-000000000108",
+        parentRevisionId: "0197aaf9-5555-7000-8000-000000000101",
+      },
     }),
   );
   await screen.findByText(/Применение подтверждено/);
@@ -458,3 +491,210 @@ it.each([413, 422])(
     expect(screen.queryByText(/Результат неизвестен/)).not.toBeInTheDocument();
   },
 );
+
+it.each([
+  ["source", false],
+  ["full", false],
+  ["source", true],
+  ["full", true],
+] as const)(
+  "loads embedded owner projection from a %s link; explicit context %s",
+  async (kind, explicitContext) => {
+    const target =
+      kind === "full"
+        ? {
+            changeProposal: { proposalId: exactIDs.project, proposalRevisionId: exactIDs.snapshot },
+          }
+        : { revisionId: exactIDs.revision };
+    const artifactPin = {
+      kind: "design_scenario",
+      id: "12",
+      revisionId: "23",
+      contentHash: "a".repeat(64),
+    };
+    const envelope = exactEnvelope(target);
+    const pins = { ...envelope.pins, artifactPins: [artifactPin] };
+    const artifactRequests: unknown[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url, init) => {
+        const path = String(url);
+        if (path.includes("/artifacts/query")) {
+          artifactRequests.push(JSON.parse(String(init?.body)));
+          return json(200, {
+            target,
+            effectivePins: pins,
+            viewSchemaVersion: pins.viewSchemaVersion,
+            revisionId: pins.baseRevisionId,
+            semanticHash: pins.effectiveSemanticHash,
+            sourceSnapshotIds: pins.sourceSnapshotIds,
+            pins: [artifactPin],
+            selectedPin: artifactPin,
+            hashPolicy: "design-scenario-envelope-v1",
+            view: "sequence",
+            apiBindings: [],
+            editorBindings: [],
+            bindingsComplete: true,
+            items: [],
+            nextCursor: "",
+            resolution: { status: "resolved", diagnostics: [], updateAvailable: false },
+            diagnostics: [],
+            coverage: {
+              itemsReturned: 0,
+              totalItems: 0,
+              nodesReturned: 0,
+              edgesReturned: 0,
+              diagnosticsReturned: 0,
+              truncatedReasons: [],
+            },
+            complete: true,
+          });
+        }
+        if (path.includes("coverage"))
+          return json(200, { ...envelope, pins, ...exactCoverage, source: exactSource() });
+        return json(200, {
+          id: exactIDs.revision,
+          projectId: exactIDs.project,
+          semanticHash: pins.effectiveSemanticHash,
+          sourceSnapshotIds: pins.sourceSnapshotIds,
+          artifactPins: [artifactPin],
+          schemaVersion: "6",
+        });
+      }),
+    );
+    renderWithProviders(
+      <BackendArtifactProjections
+        projectId={exactIDs.project}
+        target={target}
+        {...(explicitContext
+          ? kind === "full"
+            ? { pins }
+            : { revisionId: exactIDs.revision }
+          : {})}
+        readOnly
+        initialArtifact="design_scenario:12"
+        initialView="sequence"
+      />,
+    );
+    await waitFor(() => expect(artifactRequests).toHaveLength(1));
+    expect(artifactRequests[0]).toMatchObject(target);
+  },
+);
+
+it.each(["source", "full"] as const)(
+  "does not fall back to host/source metadata when %s owner context resolution fails",
+  async (kind) => {
+    const target =
+      kind === "source"
+        ? { revisionId: exactIDs.revision }
+        : {
+            changeProposal: { proposalId: exactIDs.project, proposalRevisionId: exactIDs.snapshot },
+          };
+    const requests: string[] = [];
+    vi.stubGlobal("fetch", async (url: RequestInfo | URL) => {
+      requests.push(String(url));
+      return json(500, { error: { message: "Context unavailable" } });
+    });
+    renderWithProviders(
+      <BackendAPIArtifactsContext
+        value={{
+          revision: {
+            id: exactIDs.revision,
+            projectId: exactIDs.project,
+            semanticHash: hash,
+            sourceSnapshotIds: [],
+            artifactPins: [pin],
+          } as never,
+          projectVersion: 1,
+          canEdit: true,
+          onDirty: vi.fn(),
+          onApplied: vi.fn(),
+        }}
+      >
+        <BackendArtifactProjections
+          projectId={exactIDs.project}
+          target={target}
+          readOnly
+          initialArtifact="design_scenario:12"
+          initialView="sequence"
+        />
+      </BackendAPIArtifactsContext>,
+    );
+    await screen.findByRole("button", { name: "Повторить загрузку контекста модели" });
+    expect(requests).toHaveLength(1);
+    expect(requests[0]).toContain("/coverage");
+    expect(
+      requests.some((url) => url.includes("/artifacts/query") || url.endsWith("/revisions/")),
+    ).toBe(false);
+  },
+);
+
+it("aborts old owner coverage when a full target changes and keeps the new immutable draft", async () => {
+  const first = {
+    changeProposal: { proposalId: exactIDs.project, proposalRevisionId: exactIDs.snapshot },
+  };
+  const second = {
+    changeProposal: { proposalId: exactIDs.project, proposalRevisionId: exactIDs.repository },
+  };
+  const artifactPin = { kind: "design_scenario", id: "12", revisionId: "23", contentHash: hash };
+  let oldSignal: AbortSignal | undefined;
+  let finish!: (response: Response) => void;
+  const requests: Record<string, unknown>[] = [];
+  const envelope = exactEnvelope(second);
+  const pins = { ...envelope.pins, artifactPins: [artifactPin] };
+  vi.stubGlobal("fetch", async (url: RequestInfo | URL, init?: RequestInit) => {
+    const path = String(url);
+    if (path.includes(first.changeProposal.proposalRevisionId) && path.endsWith("/coverage")) {
+      oldSignal = init?.signal as AbortSignal;
+      return new Promise<Response>((resolve) => {
+        finish = resolve;
+      });
+    }
+    if (path.endsWith("/coverage"))
+      return json(200, { ...envelope, pins, ...exactCoverage, source: exactSource() });
+    if (path.includes("/artifacts/query")) {
+      requests.push(JSON.parse(String(init?.body)));
+      return json(200, {
+        ...page,
+        revisionId: pins.baseRevisionId,
+        semanticHash: pins.effectiveSemanticHash,
+        sourceSnapshotIds: pins.sourceSnapshotIds,
+        target: second,
+        effectivePins: pins,
+        pins: [artifactPin],
+        selectedPin: artifactPin,
+        editorBindings: [],
+      });
+    }
+    return json(500, { error: { message: "Unexpected source fallback" } });
+  });
+  const props = {
+    projectId: exactIDs.project,
+    readOnly: true,
+    initialArtifact: "design_scenario:12",
+    initialView: "sequence",
+  };
+  function Host() {
+    const [target, setTarget] = useState(first);
+    return (
+      <>
+        <button onClick={() => setTarget(second)}>Change owner target</button>
+        <BackendArtifactProjections {...props} target={target} />
+      </>
+    );
+  }
+  renderWithProviders(<Host />);
+  await waitFor(() => expect(oldSignal).toBeDefined());
+  await userEvent.click(screen.getByRole("button", { name: "Change owner target" }));
+  await waitFor(() => expect(oldSignal?.aborted).toBe(true));
+  finish(
+    json(200, {
+      ...exactEnvelope(first),
+      ...exactCoverage,
+      pins: { ...exactEnvelope(first).pins, artifactPins: [artifactPin] },
+      source: exactSource(),
+    }),
+  );
+  await waitFor(() => expect(requests).toHaveLength(1));
+  expect(requests[0]).toMatchObject(second);
+});

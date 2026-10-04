@@ -1,14 +1,19 @@
+import type { BackendEffectiveGraphPins } from "@/api/generated/schemas";
+import { backendReadTargetFrom, checkBackendProjectionPins } from "./backendReadTargets";
+import { projectionTarget, projectionKey } from "./backendEffectiveProjectionReads";
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, useState, type Dispatch, type SetStateAction } from "react";
 import { queryBackendFlow } from "@/api/generated/backend-projects/backend-projects";
 import type {
-  BackendFlowPage,
+  BackendFlowResponse as BackendFlowPage,
   QueryBackendFlowRequest,
   BackendLineageValueRef,
 } from "@/api/generated/schemas";
 import { useDatabaseCancellation } from "./backendDatabaseReads";
 
 export type BackendSourcePin = {
+  changeProposalId?: string;
+  proposalRevisionId?: string;
   viewId?: string;
   viewVersion?: number;
   revisionId?: string;
@@ -60,6 +65,12 @@ export function parseBackendSourcePin(search: Record<string, unknown>): BackendS
     const value = search[field];
     if (typeof value === "string" && value.length > 0 && value.length <= 200) pin[field] = value;
   }
+  if (Object.hasOwn(search, "changeProposalId") || Object.hasOwn(search, "proposalRevisionId")) {
+    for (const field of ["changeProposalId", "proposalRevisionId"] as const) {
+      const value = search[field];
+      pin[field] = typeof value === "string" && value.length <= 200 ? value : "";
+    }
+  }
   if (search.recordType === "node" || search.recordType === "edge")
     pin.recordType = search.recordType;
   if (search.viewId !== undefined) {
@@ -92,23 +103,41 @@ export async function readFlowPage(
   projectId: string,
   input: QueryBackendFlowRequest,
   signal: AbortSignal,
+  pins?: BackendEffectiveGraphPins,
 ): Promise<BackendFlowPage> {
   signal.throwIfAborted();
+  const target = projectionTarget({ target: backendReadTargetFrom(input), pins });
+  if (target.proposal) throw new Error("Flow старого предложения не поддерживается");
   const response = await queryBackendFlow(projectId, input, { signal });
   signal.throwIfAborted();
   if (response.status !== 200) throw new Error("Не удалось загрузить Flow");
-  if (response.data.projectId !== projectId || response.data.revisionId !== input.revisionId)
+  const checkedPins = checkBackendProjectionPins(response.data, target, pins);
+  if (
+    response.data.projectId !== projectId ||
+    response.data.revisionId !== (checkedPins?.baseRevisionId ?? input.revisionId)
+  )
     throw new Error("Получена другая ревизия Flow; обновите выбранный источник");
+  if (checkedPins && response.data.semanticHash !== checkedPins.effectiveSemanticHash)
+    throw new Error("Получен другой хеш Flow");
   if (response.data.view !== input.view) throw new Error("Получено другое представление Flow");
   return response.data;
 }
 
-export function useFlowPage(projectId: string, input: QueryBackendFlowRequest) {
-  const key = ["backend-flow", projectId, input.revisionId, JSON.stringify(input)];
+export function useFlowPage(
+  projectId: string,
+  input: QueryBackendFlowRequest,
+  pins?: BackendEffectiveGraphPins,
+) {
+  const key = [
+    "backend-flow",
+    projectId,
+    projectionKey(backendReadTargetFrom(input), pins),
+    JSON.stringify(input),
+  ];
   useDatabaseCancellation(key);
   return useQuery({
     queryKey: key,
-    queryFn: ({ signal }) => readFlowPage(projectId, input, signal),
+    queryFn: ({ signal }) => readFlowPage(projectId, input, signal, pins),
     staleTime: Infinity,
     retry: false,
   });

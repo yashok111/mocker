@@ -131,10 +131,10 @@ func (r *Repo) CreateSavedView(ctx context.Context, pid string, in CreateSavedVi
 	if found, err := readSavedReceipt(ctx, r.db.R, scope, in.IdempotencyKey, digest, out); err != nil || found {
 		return out, err
 	}
-	if err := validateSavedViewTarget(in.Target); err != nil {
+	if err := validateSavedViewVersionTarget(in.DocumentVersion, in.Target); err != nil {
 		return nil, err
 	}
-	pins, err := resolveSavedReferences(ctx, r.db.R, pid, in.Target, in.State)
+	pins, err := resolveSavedVersionReferences(ctx, r.db.R, pid, in.DocumentVersion, in.Target, in.State)
 	if err != nil {
 		return nil, err
 	}
@@ -143,7 +143,7 @@ func (r *Repo) CreateSavedView(ctx context.Context, pid string, in CreateSavedVi
 			return err
 		}
 		now := time.Now().UTC()
-		*out = SavedView{ID: uuid.NewV7().String(), ProjectID: pid, Version: 1, DocumentVersion: SavedViewDocumentVersion, Name: name, Target: in.Target, Pins: *pins, State: in.State, CreatedAt: now, UpdatedAt: now}
+		*out = SavedView{ID: uuid.NewV7().String(), ProjectID: pid, Version: 1, DocumentVersion: selectedSavedViewVersion(in.DocumentVersion), Name: name, Target: in.Target, Pins: *pins, State: in.State, CreatedAt: now, UpdatedAt: now}
 		raw, err := json.Marshal(out)
 		if err != nil {
 			return err
@@ -198,13 +198,16 @@ func (r *Repo) SaveSavedView(ctx context.Context, pid, vid string, in SaveSavedV
 	if err != nil {
 		return nil, err
 	}
+	if selectedSavedViewVersion(in.DocumentVersion) != current.DocumentVersion {
+		return nil, invalid("documentVersion", "Save tag must match immutable saved view version")
+	}
 	if current.State.kind() != in.State.kind() {
 		return nil, invalid("state.kind", "Saved view kind is immutable")
 	}
 	if current.Target.Proposal != nil && current.State.Database.Scope != in.State.Database.Scope {
 		return nil, invalid("state.scope", "Proposal scope is immutable")
 	}
-	pins, err := resolveSavedReferences(ctx, r.db.R, pid, current.Target, in.State)
+	pins, err := resolveSavedVersionReferences(ctx, r.db.R, pid, current.DocumentVersion, current.Target, in.State)
 	if err != nil {
 		return nil, err
 	}

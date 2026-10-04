@@ -24,6 +24,9 @@ type FacetComparison struct {
 // CompareRelationalFacets compares source claims without mutating or copying
 // proof vectors into the computed read summary. Paths are facet-relative.
 func CompareRelationalFacets(kind string, attrs map[string]jsontext.Value, edge bool) (*FacetComparison, error) {
+	return compareRelationalFacetsMode(kind, attrs, edge, true)
+}
+func compareRelationalFacetsMode(kind string, attrs map[string]jsontext.Value, edge, sourceAdmission bool) (*FacetComparison, error) {
 	if !relationalSubject(kind, attrs, edge) {
 		return nil, nil
 	}
@@ -34,7 +37,7 @@ func CompareRelationalFacets(kind string, attrs map[string]jsontext.Value, edge 
 	keys := slices.Sorted(maps.Keys(fs))
 	objects := map[string]map[string]jsontext.Value{}
 	for _, key := range keys {
-		if _, err := decodeRelationalFacet(kind, fs[key], true); err != nil {
+		if _, err := decodeRelationalFacetMode(kind, fs[key], true, sourceAdmission); err != nil {
 			return nil, err
 		}
 		objects[key], err = relationalObject(fs[key])

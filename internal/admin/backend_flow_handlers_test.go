@@ -25,7 +25,7 @@ func TestBackendFlowRoutePinnedScopeAndStrictInput(t *testing.T) {
 		{`{"revisionId":"` + p.CurrentRevisionID + `","view":"entrypoints","limit":0}`, 400, "backend_invalid"},
 		{`{"revisionId":"` + p.CurrentRevisionID + `","view":"entrypoints","limit":null}`, 400, "backend_invalid"},
 		{`{"revisionId":"` + p.CurrentRevisionID + `","view":"entrypoints","view":"steps"}`, 400, "backend_invalid"},
-		{`{"proposal":{"proposalId":"` + p.ID + `","proposalRevisionId":"` + p.ID + `"},"view":"entrypoints"}`, 400, "backend_invalid"},
+		{`{"proposal":{"proposalId":"` + p.ID + `","proposalRevisionId":"` + p.ID + `"},"view":"entrypoints"}`, 422, "backend_unsupported_scope"},
 	} {
 		status, raw, err := s.CallAsMCP(t.Context(), loopbackTestSrc(), "POST", route, []byte(tc.body))
 		if err != nil || status != tc.status || !strings.Contains(string(raw), tc.code) {

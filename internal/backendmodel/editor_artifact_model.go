@@ -474,19 +474,31 @@ func (in *ApplyArtifactPinsInput) UnmarshalJSON(raw []byte) error {
 }
 
 type ArtifactQueryInput struct {
-	RevisionID         string      `json:"revisionId"`
-	Artifact           ArtifactKey `json:"artifact"`
-	View               string      `json:"view"`
-	EmbeddedContractID string      `json:"embeddedContractId,omitempty"`
-	Limit              int         `json:"limit,omitzero"`
-	Cursor             string      `json:"cursor,omitempty"`
+	Proposal           *ProposalReadTarget        `json:"proposal,omitzero"`
+	ChangeProposal     *ProposalReadTarget        `json:"changeProposal,omitzero"`
+	ImportCandidate    *ImportCandidateReadTarget `json:"importCandidate,omitzero"`
+	RevisionID         string                     `json:"revisionId"`
+	Artifact           ArtifactKey                `json:"artifact"`
+	View               string                     `json:"view"`
+	EmbeddedContractID string                     `json:"embeddedContractId,omitempty"`
+	Limit              int                        `json:"limit,omitzero"`
+	Cursor             string                     `json:"cursor,omitempty"`
 }
 
 func (in ArtifactQueryInput) Validate() error {
+	if in.Proposal != nil || in.ChangeProposal != nil || in.ImportCandidate != nil {
+		target := graphTarget(in.RevisionID, in.Proposal, in.ChangeProposal, in.ImportCandidate)
+		if err := target.Validate(); err != nil {
+			return err
+		}
+		if err := rejectStagedView(target); err != nil {
+			return err
+		}
+	}
 	if err := in.Artifact.Validate(); err != nil {
 		return err
 	}
-	if !ValidID(in.RevisionID) || in.Limit < 0 || in.Limit > 100 || !validAPIText(in.Cursor, 0, 4096) {
+	if (in.Proposal == nil && in.ChangeProposal == nil && !ValidID(in.RevisionID)) || in.Limit < 0 || in.Limit > 100 || !validAPIText(in.Cursor, 0, 4096) {
 		return invalid("query", "Invalid revision, page limit or cursor")
 	}
 	switch in.View {
@@ -508,6 +520,18 @@ func (in ArtifactQueryInput) Validate() error {
 	return nil
 }
 func (in *ArtifactQueryInput) UnmarshalJSON(raw []byte) error {
+	if advancedReadQuery(raw) {
+		if err := validateAdvancedQueryWire(raw, []string{"artifact", "view"}, 100); err != nil {
+			return err
+		}
+		type plain ArtifactQueryInput
+		var value plain
+		if err := json.Unmarshal(raw, &value, json.RejectUnknownMembers(true)); err != nil {
+			return err
+		}
+		*in = ArtifactQueryInput(value)
+		return in.Validate()
+	}
 	*in = ArtifactQueryInput{}
 	type plain ArtifactQueryInput
 	if err := strictAPIObject(raw, []string{"revisionId", "artifact", "view"}, []string{"embeddedContractId", "limit", "cursor"}, (*plain)(in)); err != nil {
@@ -761,6 +785,8 @@ type ArtifactProjectionCoverage struct {
 	TruncatedReasons    []string `json:"truncatedReasons"`
 }
 type ArtifactProjectionPage struct {
+	Target             *BackendReadTarget         `json:"target,omitzero"`
+	EffectivePins      *EffectiveGraphPins        `json:"effectivePins,omitzero"`
 	RevisionID         string                     `json:"revisionId"`
 	SemanticHash       string                     `json:"semanticHash"`
 	SourceSnapshotIDs  []string                   `json:"sourceSnapshotIds"`

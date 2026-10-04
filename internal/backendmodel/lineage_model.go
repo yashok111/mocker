@@ -83,7 +83,7 @@ type APIFieldAttributes struct {
 }
 
 func (r *LineageValueRef) UnmarshalJSON(raw []byte) error {
-	if err := validateEventsLineageRef(raw, true); err != nil {
+	if err := validateRepresentationLineageRef(raw, true); err != nil {
 		return err
 	}
 	type plain LineageValueRef
@@ -101,7 +101,7 @@ func (a *LineageMappingAttributes) UnmarshalJSON(raw []byte) error {
 	if err != nil {
 		return err
 	}
-	if err = validateEventsLineageAttributes("field_mapping", m, false, true); err != nil {
+	if err = validateRepresentationAttributes("field_mapping", m, false, true); err != nil {
 		return err
 	}
 	type plain LineageMappingAttributes
@@ -137,6 +137,9 @@ func decodeLineageMappingForSchema(attrs map[string]jsontext.Value, schema strin
 	validator := validateLineageAttributes
 	if schema == EventsSchemaVersion {
 		validator = validateEventsLineageAttributes
+	}
+	if schema == ComposedSchemaVersion {
+		validator = validateRepresentationAttributes
 	}
 	if err := validator("field_mapping", attrs, false, true); err != nil {
 		return out, err

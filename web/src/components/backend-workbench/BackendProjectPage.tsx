@@ -1,3 +1,4 @@
+import { BackendAnnotations, type BackendAnnotationsProps } from "./BackendAnnotations";
 import { BackendArtifactProjections } from "./BackendArtifactProjections";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -20,6 +21,7 @@ import {
   getGetBackendProjectQueryKey,
   getGetBackendRevisionQueryKey,
   getBackendRevision,
+  getBackendChangeProposal,
   getListBackendProjectsQueryKey,
   useApplyBackendProjectCommands,
   useGetBackendProject,
@@ -30,20 +32,31 @@ import {
 } from "@/api/generated/backend-projects/backend-projects";
 import type {
   ApplyBackendProjectCommandsRequest,
-  BackendSavedView,
+  BackendSavedViewResponse,
   BackendProject,
+  BackendReadTarget,
 } from "@/api/generated/schemas";
 import { ApiFailure } from "@/api/client";
 import { describeApiFailureDetailed } from "@/api/errors";
 import { BackendGraphInventory } from "./BackendGraphInventory";
+import { BackendEffectiveViews } from "./BackendEffectiveViews";
 import { BackendRevisionCompare } from "./BackendRevisionCompare";
 import { BackendImportReview } from "./BackendImportReview";
+import { BackendImportCandidate } from "./BackendImportCandidate";
+import { BackendChangeProposals } from "./BackendChangeProposals";
+import type { ImportCandidateTarget } from "./backendImportAttempts";
 import { BackendDatabase } from "./BackendDatabase";
 import { BackendFlow } from "./BackendFlow";
 import { BackendEvents } from "./BackendEvents";
 import { usePinnedValue, type BackendSourcePin } from "./backendFlowReads";
 import { BackendSavedViews } from "./BackendSavedViews";
 import { BackendSavedViewContext, savedViewSourcePin } from "./backendSavedViewState";
+import { checkBackendSavedView } from "./backendSavedViewReads";
+import { backendReadTargetKey } from "./backendReadTargets";
+import { verifyChangeDetail } from "./backendChangeReads";
+import { readBackendCoverage } from "./backendGraphReads";
+import { checkBackendReadPins, BackendReadError } from "./backendReadTargets";
+import { LoadState } from "./BackendReadUI";
 import { useBackendSavedViewSession } from "./useBackendSavedViewSession";
 import { BackendAPIArtifacts, BackendAPIArtifactsContext } from "./BackendAPIArtifacts";
 
@@ -51,11 +64,81 @@ type ProjectPageProps = {
   projectId: string;
   sourcePin?: BackendSourcePin;
   onSourceNavigate?: (pin: BackendSourcePin, replace?: boolean) => void;
-  initialSaved?: BackendSavedView;
+  initialSaved?: BackendSavedViewResponse;
+  initialFullTarget?: BackendReadTarget;
+  onImportCandidateChange?: (target: ImportCandidateTarget | null) => void;
 };
 
 export function BackendProjectPage(props: ProjectPageProps) {
+  const full =
+    props.sourcePin?.changeProposalId !== undefined ||
+    props.sourcePin?.proposalRevisionId !== undefined;
+  if (full && props.sourcePin?.viewId !== undefined)
+    return (
+      <Alert color="red" role="alert">
+        Выберите один точный источник: сохранённый вид или черновик предложения.
+      </Alert>
+    );
+  if (full) return <BackendProjectFullGate key={props.projectId} {...props} />;
   return <BackendProjectSavedGate key={props.projectId} {...props} />;
+}
+
+function BackendProjectFullGate(props: ProjectPageProps) {
+  const proposalId = props.sourcePin?.changeProposalId ?? "";
+  const proposalRevisionId = props.sourcePin?.proposalRevisionId ?? "";
+  const target: BackendReadTarget = { changeProposal: { proposalId, proposalRevisionId } };
+  let valid = true;
+  try {
+    backendReadTargetKey(target);
+  } catch {
+    valid = false;
+  }
+  const query = useQuery({
+    queryKey: ["backend-project-full-target", props.projectId, proposalId, proposalRevisionId],
+    enabled: valid,
+    retry: false,
+    staleTime: Infinity,
+    queryFn: async ({ signal }) => {
+      const response = await getBackendChangeProposal(
+        props.projectId,
+        proposalId,
+        { proposalRevisionId, limit: 1 },
+        { signal },
+      );
+      signal.throwIfAborted();
+      if (response.status !== 200)
+        throw new Error("Не удалось прочитать точный черновик предложения");
+      const detail = verifyChangeDetail(
+        response.data,
+        props.projectId,
+        proposalId,
+        proposalRevisionId,
+      );
+      backendReadTargetKey({ revisionId: detail.revision.baseRevisionId });
+      return detail;
+    },
+  });
+  if (!valid || query.isError)
+    return (
+      <Alert color="red" role="alert">
+        {valid
+          ? describeApiFailureDetailed(query.error)
+          : "Укажите точные идентификаторы предложения и черновика."}
+        <Group>
+          <Button disabled={!valid} onClick={() => void query.refetch()}>
+            Повторить загрузку предложения
+          </Button>
+        </Group>
+      </Alert>
+    );
+  if (!query.data) return <Loader aria-label="Загружаем точный черновик" />;
+  return (
+    <BackendProjectDetail
+      {...props}
+      initialFullTarget={target}
+      sourcePin={{ ...props.sourcePin, revisionId: query.data.revision.baseRevisionId }}
+    />
+  );
 }
 
 function BackendProjectSavedGate(props: ProjectPageProps) {
@@ -105,16 +188,7 @@ function BackendProjectSavedGate(props: ProjectPageProps) {
       );
       signal.throwIfAborted();
       if (response.status !== 200) throw new Error("Не удалось прочитать сохранённый вид");
-      const value = response.data;
-      if (
-        value.id !== viewId ||
-        value.projectId !== projectId ||
-        !Number.isSafeInteger(value.version) ||
-        value.version < 1 ||
-        (version !== undefined && value.version !== version) ||
-        value.documentVersion !== "saved-view-v1"
-      )
-        throw new Error("Получен другой сохранённый вид или версия");
+      const value = checkBackendSavedView(response.data, projectId, { id: viewId, version });
       return value;
     },
   });
@@ -169,7 +243,18 @@ function BackendProjectDetail({
   sourcePin,
   onSourceNavigate,
   initialSaved,
+  initialFullTarget,
+  onImportCandidateChange,
 }: ProjectPageProps) {
+  const fullTarget =
+    initialFullTarget ??
+    (initialSaved?.documentVersion === "saved-view-v2" && initialSaved.target.changeProposal
+      ? initialSaved.target
+      : undefined);
+  const fullPins =
+    initialSaved?.documentVersion === "saved-view-v2" && initialSaved.target.changeProposal
+      ? initialSaved.pins.effective
+      : undefined;
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const query = useGetBackendProject(projectId);
@@ -181,6 +266,20 @@ function BackendProjectDetail({
   const pinIdentity = JSON.stringify(sourcePin ?? {});
   const [pin, setPin] = usePinnedValue<BackendSourcePin>(pinIdentity, sourcePin ?? {});
   const [databaseDirty, setDatabaseDirty] = useState(false);
+  const [annotationDirty, setAnnotationDirty] = useState(false);
+  const [syncDirty, setSyncDirty] = useState(false);
+  const [changeDirty, setChangeDirty] = useState(false);
+  const [importCandidate, setImportCandidate] = useState<ImportCandidateTarget | null>(null);
+  const onCandidateChange = useCallback(
+    (target: ImportCandidateTarget | null) => {
+      setImportCandidate(target);
+      onImportCandidateChange?.(target);
+    },
+    [onImportCandidateChange],
+  );
+  const [annotationSelection, setAnnotationSelection] =
+    useState<BackendAnnotationsProps["selection"]>();
+  const [annotationSelectionPin, setAnnotationSelectionPin] = useState("");
   const [apiDirty, setAPIDirty] = useState<Record<string, boolean>>({});
   const apiEditorOwner = useRef<string | null>(null);
   const onAPIDirty = useCallback((value: boolean, identity = "panel") => {
@@ -198,7 +297,13 @@ function BackendProjectDetail({
     onSourceNavigate?.(savedViewSourcePin(value), true);
   });
   const dirty =
-    databaseDirty || Object.values(apiDirty).some(Boolean) || session.dirty || !!session.pending;
+    changeDirty ||
+    syncDirty ||
+    annotationDirty ||
+    databaseDirty ||
+    Object.values(apiDirty).some(Boolean) ||
+    session.dirty ||
+    !!session.pending;
   useBlocker({
     shouldBlockFn: ({ current, next }) => {
       if (acknowledgedNavigation.current) {
@@ -212,6 +317,8 @@ function BackendProjectDetail({
         nextPin.viewId === currentPin.viewId &&
         nextPin.viewVersion === currentPin.viewVersion &&
         nextPin.revisionId === currentPin.revisionId &&
+        nextPin.changeProposalId === currentPin.changeProposalId &&
+        nextPin.proposalRevisionId === currentPin.proposalRevisionId &&
         nextPin.recordId === currentPin.recordId &&
         nextPin.recordType === currentPin.recordType &&
         nextPin.entrypointId === currentPin.entrypointId &&
@@ -232,6 +339,8 @@ function BackendProjectDetail({
   const [compareOpen, setCompareOpen] = useState(false);
   const [importsOpen, setImportsOpen] = useState(false);
   const [importsMounted, setImportsMounted] = useState(false);
+  const [changesOpen, setChangesOpen] = useState(false);
+  const [changesMounted, setChangesMounted] = useState(false);
   const [historyCursors, setHistoryCursors] = useState([""]);
   const historyCursor = historyCursors.at(-1) ?? "";
   const historyQuery = useListBackendRevisions(
@@ -248,6 +357,51 @@ function BackendProjectDetail({
     },
   );
   const revision = revisionQuery.data?.status === 200 ? revisionQuery.data.data : undefined;
+  const expectedSourcePins =
+    initialSaved?.documentVersion === "saved-view-v2" && initialSaved.target.revisionId
+      ? initialSaved.pins.effective
+      : undefined;
+  const sourceContext = useQuery({
+    queryKey: [
+      "backend-project-source-context",
+      projectId,
+      revision?.id ?? null,
+      expectedSourcePins?.targetHash ?? null,
+    ],
+    enabled: revision?.schemaVersion === "6" && !fullTarget,
+    retry: false,
+    staleTime: Infinity,
+    queryFn: async ({ signal }) => {
+      const target = { revisionId: revision!.id };
+      const coverage = await readBackendCoverage(projectId, target, signal, expectedSourcePins);
+      const pins = checkBackendReadPins(coverage, target, expectedSourcePins);
+      if (!pins || pins.viewSchemaVersion !== "6")
+        throw new BackendReadError("Источник source6 вернул несовместимый контекст графа.");
+      return pins;
+    },
+  });
+  const sourcePins = sourceContext.data;
+  const sourceReady = revision?.schemaVersion !== "6" || !!sourcePins;
+  const displayedRevisionID = revision?.id;
+  const annotationFocusIdentity = JSON.stringify([
+    displayedRevisionID,
+    pin.recordId,
+    pin.recordType,
+  ]);
+  const onAnnotationDirty = useCallback(
+    (value: boolean) => {
+      setAnnotationDirty(value);
+      if (value && displayedRevisionID) setSelectedRevisionId(displayedRevisionID);
+    },
+    [displayedRevisionID, setSelectedRevisionId],
+  );
+  const onChangeDirty = useCallback(
+    (value: boolean) => {
+      setChangeDirty(value);
+      if (value && displayedRevisionID) setSelectedRevisionId(displayedRevisionID);
+    },
+    [displayedRevisionID, setSelectedRevisionId],
+  );
   if (revision && ["3", "4", "5"].includes(revision.schemaVersion) && selectedRevisionId === null) {
     setSelectedRevisionId(revision.id);
     setPin({ ...pin, revisionId: revision.id });
@@ -535,6 +689,16 @@ function BackendProjectDetail({
                 >
                   Проверить импорты
                 </Button>
+                <Button
+                  variant="default"
+                  aria-expanded={changesOpen}
+                  onClick={() => {
+                    setChangesMounted(true);
+                    setChangesOpen((value) => !value);
+                  }}
+                >
+                  Предложения изменений
+                </Button>
               </Group>
               {compareOpen && (
                 <BackendRevisionCompare
@@ -547,6 +711,21 @@ function BackendProjectDetail({
                   <BackendImportReview
                     projectId={projectId}
                     currentRevisionId={project.currentRevisionId}
+                    onDirty={setSyncDirty}
+                    onCandidateChange={onCandidateChange}
+                    onCommitted={(revisionId) => navigateSource({ revisionId })}
+                  />
+                  <BackendImportCandidate projectId={projectId} target={importCandidate} />
+                </div>
+              )}
+              {changesMounted && revision && (
+                <div hidden={!changesOpen}>
+                  <BackendChangeProposals
+                    projectId={projectId}
+                    baseRevisionId={revision.id}
+                    baseSchemaVersion={String(revision.schemaVersion)}
+                    readOnly={!!initialSaved}
+                    onDirty={onChangeDirty}
                   />
                 </div>
               )}
@@ -561,184 +740,272 @@ function BackendProjectDetail({
               )}
               {revision && (
                 <>
-                  {["4", "5"].includes(revision.schemaVersion) && (
-                    <>
-                      <BackendAPIArtifacts projectId={projectId} revisionId={revision.id} />
-                      <BackendArtifactProjections projectId={projectId} revisionId={revision.id} />
-                    </>
-                  )}
-                  {["2", "3", "4", "5"].includes(revision.schemaVersion) && (
-                    <BackendDatabase
+                  {fullTarget ? (
+                    <BackendEffectiveViews
                       projectId={projectId}
-                      revisionId={revision.id}
-                      repositoryId={project.repositories[0]?.id}
-                      pin={pin}
-                      onFlowNavigate={
-                        ["3", "4", "5"].includes(revision.schemaVersion)
-                          ? (value) => {
-                              navigateSource(value);
-                              requestAnimationFrame(() =>
-                                document
-                                  .querySelector<HTMLElement>('[aria-label="Flow исходников"] h2')
-                                  ?.focus(),
-                              );
-                            }
-                          : undefined
-                      }
-                      onDirty={(dirty) => {
-                        setDatabaseDirty(dirty);
-                        if (dirty) setSelectedRevisionId((current) => current ?? revision.id);
+                      target={fullTarget}
+                      pins={fullPins}
+                      initialPin={pin}
+                      savedKind={initialSaved?.state.kind}
+                      onBaseNavigate={(revisionId) => {
+                        if (
+                          dirty &&
+                          !window.confirm("Есть несохранённые изменения. Открыть базовый источник?")
+                        )
+                          return;
+                        acknowledgedNavigation.current = true;
+                        navigateSource({ revisionId });
                       }}
-                    />
-                  )}
-                  {revision.schemaVersion === "5" && (
-                    <BackendEvents
-                      projectId={projectId}
-                      revisionId={revision.id}
-                      semanticHash={revision.semanticHash}
-                      onFlowNavigate={(value) => {
-                        navigateSource(value);
-                        requestAnimationFrame(() =>
-                          document
-                            .querySelector<HTMLElement>('[aria-label="Flow исходников"] h2')
-                            ?.focus(),
-                        );
-                      }}
-                    />
-                  )}
-                  {["3", "4", "5"].includes(revision.schemaVersion) && (
-                    <BackendFlow
-                      projectId={projectId}
-                      revisionId={revision.id}
-                      pin={pin}
-                      onPinChange={navigateSource}
-                      onDatabaseNavigate={() => {
-                        requestAnimationFrame(() =>
-                          document
-                            .querySelector<HTMLElement>('[aria-label="База данных"]')
-                            ?.scrollIntoView({ block: "start" }),
-                        );
-                      }}
-                    />
-                  )}
-                  {revision.sourceSnapshotIds.length > 0 ? (
-                    <BackendGraphInventory
-                      key={`${projectId}:${revision.id}`}
-                      projectId={projectId}
-                      revisionId={revision.id}
-                      schemaVersion={revision.schemaVersion}
                     />
                   ) : (
-                    <Paper withBorder p="lg">
+                    <>
+                      {revision.schemaVersion === "6" && (
+                        <LoadState query={sourceContext} label="точного контекста источника" />
+                      )}
+                      {sourceReady && ["4", "5", "6"].includes(revision.schemaVersion) && (
+                        <>
+                          <BackendAPIArtifacts
+                            projectId={projectId}
+                            revisionId={revision.id}
+                            pins={sourcePins}
+                          />
+                          <BackendArtifactProjections
+                            projectId={projectId}
+                            revisionId={revision.id}
+                            pins={sourcePins}
+                          />
+                        </>
+                      )}
+                      {sourceReady &&
+                        ["2", "3", "4", "5", "6"].includes(revision.schemaVersion) && (
+                          <BackendDatabase
+                            projectId={projectId}
+                            revisionId={revision.id}
+                            pins={sourcePins}
+                            repositoryId={
+                              revision.schemaVersion === "6"
+                                ? undefined
+                                : project.repositories[0]?.id
+                            }
+                            pin={pin}
+                            onFlowNavigate={
+                              ["3", "4", "5", "6"].includes(revision.schemaVersion)
+                                ? (value) => {
+                                    navigateSource(value);
+                                    requestAnimationFrame(() =>
+                                      document
+                                        .querySelector<HTMLElement>(
+                                          '[aria-label="Flow исходников"] h2',
+                                        )
+                                        ?.focus(),
+                                    );
+                                  }
+                                : undefined
+                            }
+                            onDirty={(dirty) => {
+                              setDatabaseDirty(dirty);
+                              if (dirty) setSelectedRevisionId((current) => current ?? revision.id);
+                            }}
+                          />
+                        )}
+                      {sourceReady && ["5", "6"].includes(revision.schemaVersion) && (
+                        <BackendEvents
+                          projectId={projectId}
+                          revisionId={revision.id}
+                          pins={sourcePins}
+                          semanticHash={revision.semanticHash}
+                          onFlowNavigate={(value) => {
+                            navigateSource(value);
+                            requestAnimationFrame(() =>
+                              document
+                                .querySelector<HTMLElement>('[aria-label="Flow исходников"] h2')
+                                ?.focus(),
+                            );
+                          }}
+                        />
+                      )}
+                      {sourceReady && ["3", "4", "5", "6"].includes(revision.schemaVersion) && (
+                        <BackendFlow
+                          projectId={projectId}
+                          revisionId={revision.id}
+                          pins={sourcePins}
+                          pin={pin}
+                          onPinChange={navigateSource}
+                          onDatabaseNavigate={() => {
+                            requestAnimationFrame(() =>
+                              document
+                                .querySelector<HTMLElement>('[aria-label="База данных"]')
+                                ?.scrollIntoView({ block: "start" }),
+                            );
+                          }}
+                        />
+                      )}
+                      {revision.sourceSnapshotIds.length > 0 ? (
+                        sourceReady && (
+                          <BackendGraphInventory
+                            key={`${projectId}:${revision.id}`}
+                            projectId={projectId}
+                            revisionId={revision.id}
+                            schemaVersion={revision.schemaVersion}
+                            pins={sourcePins}
+                            focusTarget={
+                              pin.recordId && pin.recordType
+                                ? { recordType: pin.recordType, id: pin.recordId }
+                                : undefined
+                            }
+                            onSelectionChange={(value) => {
+                              setAnnotationSelection(value);
+                              setAnnotationSelectionPin(annotationFocusIdentity);
+                            }}
+                          />
+                        )
+                      ) : (
+                        <Paper withBorder p="lg">
+                          <Stack gap="sm">
+                            <Group justify="space-between">
+                              <Title order={2}>Модель бэкенда</Title>
+                              <Badge color="yellow">Покрытие неизвестно</Badge>
+                            </Group>
+                            <Text>
+                              Исходный код ещё не импортирован. Список таблиц, связей и endpoint’ов
+                              пока не исследован.
+                            </Text>
+                            <Text c="dimmed" size="sm">
+                              Импортируйте первый граф исходников через агента, выбрав совместимые
+                              инструкции импорта. Покрытие и основания появятся в новой ревизии.
+                            </Text>
+                            <Text size="sm">
+                              Объектов в модели: {revision.coverage.knownObjects}. Общее количество
+                              неизвестно.
+                            </Text>
+                          </Stack>
+                        </Paper>
+                      )}
+                      <BackendAnnotations
+                        projectId={projectId}
+                        selection={
+                          annotationSelectionPin === annotationFocusIdentity
+                            ? annotationSelection
+                            : pin.recordId && pin.recordType
+                              ? {
+                                  recordType: pin.recordType,
+                                  id: pin.recordId,
+                                  revisionId: revision.id,
+                                }
+                              : undefined
+                        }
+                        onDirtyChange={onAnnotationDirty}
+                        onNavigate={(target) => {
+                          if (
+                            dirty &&
+                            !window.confirm("Есть несохранённые изменения. Открыть цель заметки?")
+                          )
+                            return;
+                          navigateSource({
+                            revisionId: target.revisionId ?? project.currentRevisionId,
+                            recordType: target.recordType,
+                            recordId: target.id,
+                          });
+                          requestAnimationFrame(() =>
+                            document
+                              .querySelector<HTMLElement>('[aria-label="Инспектор объекта"]')
+                              ?.scrollIntoView({ block: "start" }),
+                          );
+                        }}
+                      />
                       <Stack gap="sm">
                         <Group justify="space-between">
-                          <Title order={2}>Модель бэкенда</Title>
-                          <Badge color="yellow">Покрытие неизвестно</Badge>
-                        </Group>
-                        <Text>
-                          Исходный код ещё не импортирован. Список таблиц, связей и endpoint’ов пока
-                          не исследован.
-                        </Text>
-                        <Text c="dimmed" size="sm">
-                          Импортируйте первый граф исходников через агента, выбрав совместимые
-                          инструкции импорта. Покрытие и основания появятся в новой ревизии.
-                        </Text>
-                        <Text size="sm">
-                          Объектов в модели: {revision.coverage.knownObjects}. Общее количество
-                          неизвестно.
-                        </Text>
-                      </Stack>
-                    </Paper>
-                  )}
-                  <Stack gap="sm">
-                    <Group justify="space-between">
-                      <Title order={2}>
-                        {revision.id === project.currentRevisionId
-                          ? "Текущая ревизия"
-                          : "Ревизия модели"}
-                      </Title>
-                      <Button
-                        variant="default"
-                        aria-expanded={historyOpen}
-                        onClick={() => setHistoryOpen((open) => !open)}
-                      >
-                        История ревизий
-                      </Button>
-                    </Group>
-                    {historyOpen && (
-                      <Stack gap="xs" aria-label="История ревизий">
-                        {historyQuery.isPending && <Loader aria-label="Загружаем историю" />}
-                        {historyQuery.isError && (
-                          <Alert color="red" role="alert">
-                            {describeApiFailureDetailed(historyQuery.error)}
-                            <Button variant="light" onClick={() => void historyQuery.refetch()}>
-                              Повторить загрузку истории
-                            </Button>
-                          </Alert>
-                        )}
-                        {history?.items.map((item) => (
+                          <Title order={2}>
+                            {revision.id === project.currentRevisionId
+                              ? "Текущая ревизия"
+                              : "Ревизия модели"}
+                          </Title>
                           <Button
-                            key={item.id}
-                            variant={item.id === revision.id ? "light" : "subtle"}
-                            w="fit-content"
-                            maw="100%"
-                            onClick={() => {
-                              if (
-                                !dirty ||
-                                window.confirm(
-                                  "В предложении есть несохранённые изменения. Открыть другую ревизию источника?",
-                                )
-                              ) {
-                                setDatabaseDirty(false);
-                                setSelectedRevisionId(item.id);
-                                navigateSource({ revisionId: item.id });
-                              }
-                            }}
-                            aria-label={`Открыть ревизию ${item.id}`}
+                            variant="default"
+                            aria-expanded={historyOpen}
+                            onClick={() => setHistoryOpen((open) => !open)}
                           >
-                            {new Date(item.createdAt).toLocaleString("ru-RU")}
-                            {item.id === project.currentRevisionId ? " · текущая" : ""}
+                            История ревизий
                           </Button>
-                        ))}
-                        {(historyCursors.length > 1 || history?.nextCursor) && (
-                          <Group>
-                            <Button
-                              variant="default"
-                              disabled={historyCursors.length === 1 || historyQuery.isFetching}
-                              onClick={() => setHistoryCursors((previous) => previous.slice(0, -1))}
-                            >
-                              Предыдущие ревизии
-                            </Button>
-                            <Button
-                              variant="default"
-                              disabled={!history?.nextCursor || historyQuery.isFetching}
-                              onClick={() => {
-                                if (history?.nextCursor)
-                                  setHistoryCursors((previous) => [
-                                    ...previous,
-                                    history.nextCursor,
-                                  ]);
-                              }}
-                            >
-                              Следующие ревизии
-                            </Button>
-                          </Group>
+                        </Group>
+                        {historyOpen && (
+                          <Stack gap="xs" aria-label="История ревизий">
+                            {historyQuery.isPending && <Loader aria-label="Загружаем историю" />}
+                            {historyQuery.isError && (
+                              <Alert color="red" role="alert">
+                                {describeApiFailureDetailed(historyQuery.error)}
+                                <Button variant="light" onClick={() => void historyQuery.refetch()}>
+                                  Повторить загрузку истории
+                                </Button>
+                              </Alert>
+                            )}
+                            {history?.items.map((item) => (
+                              <Button
+                                key={item.id}
+                                variant={item.id === revision.id ? "light" : "subtle"}
+                                w="fit-content"
+                                maw="100%"
+                                onClick={() => {
+                                  if (
+                                    !dirty ||
+                                    window.confirm(
+                                      "В предложении есть несохранённые изменения. Открыть другую ревизию источника?",
+                                    )
+                                  ) {
+                                    setDatabaseDirty(false);
+                                    setSelectedRevisionId(item.id);
+                                    navigateSource({ revisionId: item.id });
+                                  }
+                                }}
+                                aria-label={`Открыть ревизию ${item.id}`}
+                              >
+                                {new Date(item.createdAt).toLocaleString("ru-RU")}
+                                {item.id === project.currentRevisionId ? " · текущая" : ""}
+                              </Button>
+                            ))}
+                            {(historyCursors.length > 1 || history?.nextCursor) && (
+                              <Group>
+                                <Button
+                                  variant="default"
+                                  disabled={historyCursors.length === 1 || historyQuery.isFetching}
+                                  onClick={() =>
+                                    setHistoryCursors((previous) => previous.slice(0, -1))
+                                  }
+                                >
+                                  Предыдущие ревизии
+                                </Button>
+                                <Button
+                                  variant="default"
+                                  disabled={!history?.nextCursor || historyQuery.isFetching}
+                                  onClick={() => {
+                                    if (history?.nextCursor)
+                                      setHistoryCursors((previous) => [
+                                        ...previous,
+                                        history.nextCursor,
+                                      ]);
+                                  }}
+                                >
+                                  Следующие ревизии
+                                </Button>
+                              </Group>
+                            )}
+                          </Stack>
                         )}
+                        <Text size="sm" c="dimmed">
+                          Создана {new Date(revision.createdAt).toLocaleString("ru-RU")}. Название
+                          проекта хранится отдельно от модели.
+                        </Text>
+                        <Text size="sm">ID ревизии</Text>
+                        <Code block style={{ overflowWrap: "anywhere", whiteSpace: "pre-wrap" }}>
+                          {revision.id}
+                        </Code>
+                        <Text size="sm">Хеш содержимого</Text>
+                        <Code block style={{ overflowWrap: "anywhere", whiteSpace: "pre-wrap" }}>
+                          {revision.semanticHash}
+                        </Code>
                       </Stack>
-                    )}
-                    <Text size="sm" c="dimmed">
-                      Создана {new Date(revision.createdAt).toLocaleString("ru-RU")}. Название
-                      проекта хранится отдельно от модели.
-                    </Text>
-                    <Text size="sm">ID ревизии</Text>
-                    <Code block style={{ overflowWrap: "anywhere", whiteSpace: "pre-wrap" }}>
-                      {revision.id}
-                    </Code>
-                    <Text size="sm">Хеш содержимого</Text>
-                    <Code block style={{ overflowWrap: "anywhere", whiteSpace: "pre-wrap" }}>
-                      {revision.semanticHash}
-                    </Code>
-                  </Stack>
+                    </>
+                  )}
                 </>
               )}
             </>

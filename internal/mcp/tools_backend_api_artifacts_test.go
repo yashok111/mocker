@@ -48,6 +48,8 @@ func TestBackendAPIArtifactToolsRoutesAndPrecision(t *testing.T) {
 }
 
 func TestBackendAPIArtifactToolsStrictAdmissionAndRawCarrier(t *testing.T) {
+	calls := &recordingCaller{status: 200, body: []byte(`{}`)}
+	fixture := newToolFixture(calls)
 	const id = backendTestID
 	const valid = `{"projectId":"` + id + `","baseRevisionId":"` + id + `","expectedVersion":1,"commands":[{"type":"set_api_pin","artifactId":"9007199254740993","revisionId":"9223372036854775807","bindings":[{"sourceNodeId":"` + id + `","selector":{"objectKey":"orders"}}],"reason":"manual"}]}`
 	for _, tc := range []struct{ old, next string }{
@@ -63,20 +65,20 @@ func TestBackendAPIArtifactToolsStrictAdmissionAndRawCarrier(t *testing.T) {
 		{`"reason":"manual"`, `"reason":"manual","unknown":true`},
 		{`"reason":"manual"`, `"reason":"` + strings.Repeat("é", 2049) + `"`},
 	} {
-		calls := &recordingCaller{status: 200, body: []byte(`{}`)}
-		_, msg := callTool(t, calls, "preview_backend_api_pins", strings.Replace(valid, tc.old, tc.next, 1))
+		*calls = recordingCaller{status: 200, body: []byte(`{}`)}
+		_, msg := fixture.Call(t, "preview_backend_api_pins", strings.Replace(valid, tc.old, tc.next, 1))
 		if msg == "" || calls.method != "" {
 			t.Fatalf("invalid input reached admin: %s => %s", tc.old, tc.next)
 		}
 	}
 	for _, value := range []string{`1`, `"01"`, `"0"`, `"9223372036854775808"`, `null`} {
-		calls := &recordingCaller{status: 200, body: []byte(`{}`)}
-		_, msg := callTool(t, calls, "get_api_artifact_snapshot", `{"artifactId":`+value+`,"revisionId":"1"}`)
+		*calls = recordingCaller{status: 200, body: []byte(`{}`)}
+		_, msg := fixture.Call(t, "get_api_artifact_snapshot", `{"artifactId":`+value+`,"revisionId":"1"}`)
 		if msg == "" || calls.method != "" {
 			t.Fatal("invalid exact ID admitted", value)
 		}
 	}
-	calls := &recordingCaller{status: 200, body: []byte("{\n \"version\":9007199254740995, \"name\":\"<literal>&\"\n}\n")}
+	*calls = recordingCaller{status: 200, body: []byte("{\n \"version\":9007199254740995, \"name\":\"<literal>&\"\n}\n")}
 	endpoint := New(calls, testKey, testConfig(), nil).Handler()
 	rec := doMCP(t, endpoint, `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"preview_backend_api_pins","arguments":`+valid+`}}`, map[string]string{"Authorization": "Bearer " + testKey})
 	var env struct {
@@ -116,7 +118,7 @@ func TestBackendAPIArtifactToolsPublishSchemasAndHints(t *testing.T) {
 		t.Fatal(err)
 	}
 	expected := map[string]bool{"query_backend_api_artifacts": true, "preview_backend_api_pins": true, "apply_backend_api_pins": false, "get_api_artifact_snapshot": true}
-	if len(env.Result.Tools) != 195 {
+	if len(env.Result.Tools) != 203 {
 		t.Fatal("surface count", len(env.Result.Tools))
 	}
 	for _, tool := range env.Result.Tools {

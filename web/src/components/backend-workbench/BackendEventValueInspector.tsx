@@ -1,10 +1,14 @@
+import {
+  projectionTarget,
+  projectionKey,
+  projectionURLTarget,
+  readProjectionNode,
+  type ProjectionReadProps,
+} from "./backendEffectiveProjectionReads";
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { Alert, Button, Code, Group, Paper, Stack, Text, Title } from "@mantine/core";
 import { useQuery } from "@tanstack/react-query";
-import {
-  getBackendRevision,
-  getBackendNode,
-} from "@/api/generated/backend-projects/backend-projects";
+import { getBackendRevision } from "@/api/generated/backend-projects/backend-projects";
 import type { BackendLineageValueRef } from "@/api/generated/schemas";
 import { LoadState, Pages } from "./BackendGraphInventory";
 import { DatabaseEvidence } from "./BackendDatabaseInspector";
@@ -26,18 +30,21 @@ const BackendFlow = lazy(() =>
 
 export function BackendEventValueInspector({
   projectId,
-  revisionId,
+  revisionId: selectedRevision,
+  target: explicitTarget,
+  pins,
   value,
   onClose,
   onValueSelect,
-}: {
+}: ProjectionReadProps & {
   projectId: string;
-  revisionId: string;
   value: Extract<BackendLineageValueRef, { kind: "event_field" }>;
   onClose: () => void;
   onValueSelect: (ref: BackendLineageValueRef) => void;
 }) {
-  const key = ["backend-event-value", projectId, revisionId, lineageRefKey(value)];
+  const target = projectionTarget({ revisionId: selectedRevision, target: explicitTarget, pins });
+  const revisionId = pins?.baseRevisionId ?? selectedRevision ?? "";
+  const key = ["backend-event-value", projectId, projectionKey(target, pins), lineageRefKey(value)];
   useDatabaseCancellation(key);
   const heading = useRef<HTMLHeadingElement>(null);
   const origin = useRef<HTMLElement | null>(null);
@@ -53,30 +60,24 @@ export function BackendEventValueInspector({
     staleTime: Infinity,
     retry: false,
     queryFn: async ({ signal }) => {
-      const [revision, node] = await Promise.all([
-        getBackendRevision(projectId, revisionId, { signal }),
-        getBackendNode(projectId, revisionId, value.nodeId, { signal }),
-      ]);
+      const node = await readProjectionNode(projectId, target, value.nodeId, signal, pins);
+      if (node.kind !== "event_field")
+        throw new Error("Значение события отсутствует в выбранном графе");
+      if (pins) return { semanticHash: pins.effectiveSemanticHash, node };
+      if (target.changeProposal) throw new Error("Нет точных pins предложения");
+      const revision = await getBackendRevision(projectId, revisionId, { signal });
       signal.throwIfAborted();
       if (
         revision.status !== 200 ||
         revision.data.id !== revisionId ||
         revision.data.projectId !== projectId ||
-        revision.data.schemaVersion !== "5" ||
-        node.status !== 200 ||
-        node.data.id !== value.nodeId ||
-        node.data.kind !== "event_field"
+        !["5", "6"].includes(revision.data.schemaVersion)
       )
-        throw new Error("Значение события отсутствует в выбранном source5");
-      return { revision: revision.data, node: node.data };
+        throw new Error("Значение события отсутствует в выбранном источнике");
+      return { semanticHash: revision.data.semanticHash, node };
     },
   });
-  const routeKey = [
-    ...key,
-    "routes",
-    source.data?.revision.semanticHash ?? "",
-    cursors.at(-1) ?? "",
-  ];
+  const routeKey = [...key, "routes", source.data?.semanticHash ?? "", cursors.at(-1) ?? ""];
   useDatabaseCancellation(routeKey);
   const routes = useQuery({
     queryKey: routeKey,
@@ -87,14 +88,15 @@ export function BackendEventValueInspector({
       readEventsPage(
         projectId,
         {
-          revisionId,
+          ...target,
           view: "routes",
           seedNodeId: value.endpointId,
           limit: 100,
           cursor: cursors.at(-1) ?? "",
         },
-        source.data!.revision.semanticHash,
+        source.data!.semanticHash,
         signal,
+        pins,
       ),
   });
   const exact = routes.data?.items.filter((item) => {
@@ -163,6 +165,8 @@ export function BackendEventValueInspector({
         <BackendLineageActions
           projectId={projectId}
           revisionId={revisionId}
+          target={target}
+          pins={pins}
           seed={value}
           onValueSelect={onValueSelect}
         />
@@ -180,7 +184,7 @@ export function BackendEventValueInspector({
               </Code>
             </details>
             <DatabaseEvidence
-              context={{ projectId, revisionId, datastoreId: "", facetKey: "" }}
+              context={{ projectId, revisionId, target, pins, datastoreId: "", facetKey: "" }}
               subjectId={value.nodeId}
             />
           </>
@@ -225,7 +229,7 @@ export function BackendEventValueInspector({
                       onClick={() =>
                         depart(() =>
                           setFlow({
-                            revisionId,
+                            ...projectionURLTarget(target, revisionId),
                             entrypointId: refs.consumerId,
                             flowId,
                             recordId: dispatch.handlerId,
@@ -270,6 +274,8 @@ export function BackendEventValueInspector({
             key={lineageRefKey(selection.valueRef)}
             projectId={projectId}
             revisionId={revisionId}
+            target={target}
+            pins={pins}
             value={selection.valueRef}
             onClose={closeRecord}
           />
@@ -279,6 +285,8 @@ export function BackendEventValueInspector({
               key={JSON.stringify(selection)}
               projectId={projectId}
               revisionId={revisionId}
+              target={target}
+              pins={pins}
               selection={selection}
               onSelect={(next) => depart(() => setSelection(next))}
               onClose={closeRecord}
@@ -296,6 +304,8 @@ export function BackendEventValueInspector({
             <BackendFlow
               projectId={projectId}
               revisionId={revisionId}
+              target={target}
+              pins={pins}
               pin={flow}
               onPinChange={setFlow}
             />

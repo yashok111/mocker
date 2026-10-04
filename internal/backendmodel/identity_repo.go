@@ -13,6 +13,16 @@ func reconciliationFault(code, message string) error {
 }
 
 func validateImportMode(in BeginImportInput) error {
+	if in.Mode == "composed" || in.Profile == ComposedProfile {
+		return validateComposedMode(in)
+	}
+	if in.SourceScope != nil || in.ScopeStatus != nil || in.SyncPolicy != "" || in.ChangeManifest != nil {
+		return semantic("sourceScope", "Source composition fields require composed mode")
+	}
+	return validateLegacyImportMode(in)
+}
+
+func validateLegacyImportMode(in BeginImportInput) error {
 	if in.Mode != "" && in.Mode != "initial" && in.Mode != "reconcile" {
 		return semantic("mode", "Mode must be initial or reconcile")
 	}
@@ -41,6 +51,9 @@ func validateImportMode(in BeginImportInput) error {
 }
 
 func requireImportBase(ctx context.Context, q importReader, s *ImportSession) error {
+	if s.Mode == "composed" {
+		return requireComposedBase(ctx, q, s)
+	}
 	if s.Mode != "reconcile" {
 		return requireEmptyBase(ctx, q, s.ProjectID, s.BaseRevisionID)
 	}
@@ -287,6 +300,25 @@ func stateIdentity(s RevisionState, typ, key string) (string, string) {
 }
 
 func publishBindings(ctx context.Context, tx *sql.Tx, s *ImportSession, g *graphCandidate, rid string) error {
+	if g.Composed != nil {
+		selected := &graphCandidate{Nodes: []Node{}, Edges: []Edge{}, Evidence: []Evidence{}}
+		for _, a := range g.Composed.Source.Assertions {
+			if a.Owner.RepositoryID != s.RepositoryID || a.Owner.ProviderNamespace != s.Manifest.Provider.Namespace {
+				continue
+			}
+			if a.RecordType == "node" {
+				selected.Nodes = append(selected.Nodes, Node{ID: a.RecordID, ExternalKey: a.ExternalKey})
+			} else {
+				selected.Edges = append(selected.Edges, Edge{ID: a.RecordID, ExternalKey: a.ExternalKey})
+			}
+		}
+		for _, e := range g.Evidence {
+			if e.Ownership != nil && e.Ownership.RepositoryID == s.RepositoryID && e.Ownership.ProviderNamespace == s.Manifest.Provider.Namespace {
+				selected.Evidence = append(selected.Evidence, e)
+			}
+		}
+		return publishBindings(ctx, tx, s, selected, rid)
+	}
 	// Retire first so a mapped active alias can be inserted under the unique index.
 	if _, err := tx.ExecContext(ctx, `UPDATE backend_identity_bindings SET state='retired',revision_id=? WHERE project_id=? AND repository_id=? AND provider_namespace=? AND state='active'`, rid, s.ProjectID, s.RepositoryID, s.Manifest.Provider.Namespace); err != nil {
 		return err

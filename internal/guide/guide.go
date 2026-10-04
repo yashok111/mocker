@@ -47,12 +47,16 @@ const (
 	TopicBackendAnalysis          = "backend-analysis"
 	TopicBackendEditorProjections = "backend-editor-projections"
 	TopicBackendEvents            = "backend-events"
+	TopicBackendSync              = "backend-sync"
+	TopicBackendChangeProposals   = "backend-change-proposals"
+	TopicBackendAnnotations       = "backend-annotations"
 )
 
 //go:embed instructions.md overview.md tools.md shapes.md cookbook.md http.md design.md functions.md backend-overview.md backend-import.md backend-model.md backend-import-protocol.md backend-recovery.md backend-examples.md manifest.json
 //go:embed backend-database.md backend-database-reference.md backend-profile-go-sql.md
 //go:embed backend-inspect.md backend-flow-reference.md backend-analysis.md
 //go:embed backend-editor-projections.md backend-events.md
+//go:embed backend-sync.md backend-change-proposals.md backend-annotations.md
 var files embed.FS
 
 // topicFiles maps a topic to its embedded file. overview.md is SKILL.md
@@ -81,6 +85,9 @@ var topicFiles = map[string]string{
 	TopicBackendAnalysis:          "backend-analysis.md",
 	TopicBackendEditorProjections: "backend-editor-projections.md",
 	TopicBackendEvents:            "backend-events.md",
+	TopicBackendSync:              "backend-sync.md",
+	TopicBackendChangeProposals:   "backend-change-proposals.md",
+	TopicBackendAnnotations:       "backend-annotations.md",
 }
 
 // Topics is the ordered list of topic names get_guide accepts.
@@ -93,6 +100,7 @@ func Topics() []string {
 		TopicBackendProfileGoSQL,
 		TopicBackendInspect, TopicBackendFlowReference, TopicBackendAnalysis,
 		TopicBackendEditorProjections, TopicBackendEvents,
+		TopicBackendSync, TopicBackendChangeProposals, TopicBackendAnnotations,
 	}
 }
 
@@ -113,7 +121,7 @@ func Topic(name string) (string, bool) {
 	}
 	text := mustRead(file)
 	switch name {
-	case TopicOverview, TopicBackendOverview, TopicBackendImport, TopicBackendDatabase, TopicBackendInspect:
+	case TopicOverview, TopicBackendOverview, TopicBackendImport, TopicBackendDatabase, TopicBackendInspect, TopicBackendSync, TopicBackendChangeProposals:
 		text = stripFrontmatter(text)
 	}
 	return text, true

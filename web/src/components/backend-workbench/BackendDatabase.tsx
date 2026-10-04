@@ -1,3 +1,9 @@
+import {
+  projectionTarget,
+  projectionKey,
+  type ProjectionNode as BackendNode,
+} from "./backendEffectiveProjectionReads";
+import type { BackendReadTarget, BackendEffectiveGraphPins } from "@/api/generated/schemas";
 import { useContext, useMemo, useRef, useState } from "react";
 import {
   Badge,
@@ -11,8 +17,6 @@ import {
   Title,
 } from "@mantine/core";
 import { useQuery } from "@tanstack/react-query";
-import { queryBackendDatabase } from "@/api/generated/backend-projects/backend-projects";
-import type { BackendNode } from "@/api/generated/schemas";
 import { CoverageDetails, LoadState, Pages } from "./BackendGraphInventory";
 import { BackendDatabaseInspector } from "./BackendDatabaseInspector";
 import { BackendDatabaseGraph } from "./BackendDatabaseGraph";
@@ -25,6 +29,7 @@ import {
   databaseWrap,
   datastoreScope,
   readDatabaseGraph,
+  readDatabasePage,
   relationalFacets,
   useDatabaseCancellation,
   type DatabaseContext,
@@ -47,7 +52,9 @@ type SourceNavigation = {
 export function BackendDatabase(
   props: SourceNavigation & {
     projectId: string;
-    revisionId: string;
+    revisionId?: string;
+    target?: BackendReadTarget;
+    pins?: BackendEffectiveGraphPins;
     repositoryId?: string;
     onDirty?: (dirty: boolean) => void;
   },
@@ -55,7 +62,7 @@ export function BackendDatabase(
   const session = useContext(BackendSavedViewContext);
   return (
     <DatabaseDiscovery
-      key={`${props.projectId}:${props.revisionId}:${session?.restoreGeneration ?? 0}`}
+      key={`${props.projectId}:${projectionKey(projectionTarget(props), props.pins)}:${session?.restoreGeneration ?? 0}`}
       {...props}
     />
   );
@@ -63,24 +70,30 @@ export function BackendDatabase(
 
 function DatabaseDiscovery({
   projectId,
-  revisionId,
+  revisionId: selectedRevision,
+  target: explicitTarget,
+  pins,
   repositoryId,
   onDirty,
   pin,
   onFlowNavigate,
 }: SourceNavigation & {
   projectId: string;
-  revisionId: string;
+  revisionId?: string;
+  target?: BackendReadTarget;
+  pins?: BackendEffectiveGraphPins;
   repositoryId?: string;
   onDirty?: (dirty: boolean) => void;
 }) {
-  const key = ["backend-database-discovery", projectId, revisionId];
+  const target = projectionTarget({ revisionId: selectedRevision, target: explicitTarget, pins });
+  const revisionId = pins?.baseRevisionId ?? selectedRevision ?? "";
+  const key = ["backend-database-discovery", projectId, projectionKey(target, pins)];
   const depart = useBackendAPIDeparture();
   useDatabaseCancellation(key);
   const query = useQuery({
     queryKey: key,
     queryFn: ({ signal }) =>
-      readDatabaseGraph(projectId, { revisionId, recordType: "nodes" }, signal),
+      readDatabaseGraph(projectId, { ...target, recordType: "nodes" }, signal, pins),
     staleTime: Infinity,
     retry: false,
   });
@@ -97,7 +110,10 @@ function DatabaseDiscovery({
       <Stack aria-label="База данных">
         <Title order={2}>База данных</Title>
         <Text size="sm" c="dimmed">
-          Объявленная схема исходников · только чтение · ревизия {revisionId}
+          {target.changeProposal
+            ? "Желаемая схема предложения · базовая ревизия"
+            : "Объявленная схема исходников · только чтение · ревизия"}{" "}
+          {revisionId}
         </Text>
         <LoadState query={query} label="схемы" />
         {query.data && datastores.length === 0 && (
@@ -135,6 +151,8 @@ function DatabaseDiscovery({
               key={selected.id}
               projectId={projectId}
               revisionId={revisionId}
+              target={target}
+              pins={pins}
               repositoryId={repositoryId}
               onDirty={(value) => {
                 setDirty(value);
@@ -244,7 +262,9 @@ function DatabaseFacetWorkspace({
 }) {
   const savedSession = useContext(BackendSavedViewContext);
   const savedProposal =
-    savedSession?.saved?.state.kind === "database" && "proposal" in savedSession.saved.target
+    savedSession?.saved?.state.kind === "database" &&
+    "proposal" in savedSession.saved.target &&
+    !!savedSession.saved.target.proposal
       ? {
           ...savedSession.saved.target.proposal,
           baseRevisionId: savedSession.saved.pins.revisionId,
@@ -282,23 +302,31 @@ function DatabaseFacetWorkspace({
     : nodes;
   return (
     <>
-      {repositoryId && (
-        <BackendDatabaseProposal
-          context={context}
-          repositoryId={repositoryId}
-          onView={setView}
-          onDirty={onDirty}
-          initialColumnId={initialColumnId}
-          initialView={savedProposal ?? undefined}
-        />
-      )}
+      {repositoryId &&
+        !context.target?.changeProposal &&
+        context.pins?.structuralSchemaVersion !== "6" && (
+          <BackendDatabaseProposal
+            context={context}
+            repositoryId={repositoryId}
+            onView={setView}
+            onDirty={onDirty}
+            initialColumnId={initialColumnId}
+            initialView={savedProposal ?? undefined}
+          />
+        )}
       {needsBaseline && <LoadState query={baseline} label="объекты основания предложения" />}
       {selectedNodes && (
         <DatabaseLists
           key={view ? `${view.proposalId}:${view.proposalRevisionId}` : "source"}
           context={effective}
           nodes={selectedNodes}
-          onRequireColumn={repositoryId ? setInitialColumnId : undefined}
+          onRequireColumn={
+            repositoryId &&
+            !context.target?.changeProposal &&
+            context.pins?.structuralSchemaVersion !== "6"
+              ? setInitialColumnId
+              : undefined
+          }
           pin={pin}
           onFlowNavigate={onFlowNavigate}
         />
@@ -332,6 +360,7 @@ function DatabaseLists({
       collapsedGroupIds: [],
     },
     JSON.stringify([pin?.dataNodeId, pin?.recordId, pin?.recordType]),
+    context.pins?.structuralSchemaVersion === "6" ? "saved-view-v2" : undefined,
   );
   const state = workspace.state;
   const [draft, setDraft] = useState(state.filters.search);
@@ -389,14 +418,13 @@ function DatabaseLists({
   };
   const tables = useQuery({
     queryKey: [...key, "tables", tablesInput],
-    queryFn: ({ signal }) => queryBackendDatabase(context.projectId, tablesInput, { signal }),
+    queryFn: ({ signal }) => readDatabasePage(context, tablesInput, signal),
     staleTime: Infinity,
     retry: false,
   });
   const relationships = useQuery({
     queryKey: [...key, "relationships", relationshipsInput],
-    queryFn: ({ signal }) =>
-      queryBackendDatabase(context.projectId, relationshipsInput, { signal }),
+    queryFn: ({ signal }) => readDatabasePage(context, relationshipsInput, signal),
     staleTime: Infinity,
     retry: false,
   });

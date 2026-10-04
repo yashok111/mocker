@@ -23,10 +23,7 @@ it("admits message members with each independently known exact endpoint and edge
     const records =
       input.kind === "event_field"
         ? {
-            nodes: [
-              { id: "field", kind: "event_field", parentId: "message" },
-              { id: "foreign", kind: "event_field", parentId: "other-message" },
-            ],
+            nodes: [{ id: "field", kind: "event_field", parentId: "message" }],
             edges: [],
           }
         : input.recordType === "edges"
@@ -60,7 +57,12 @@ it("admits message members with each independently known exact endpoint and edge
             };
     return json(200, { ...records, nextCursor: "" });
   });
-  const known = await readEventsFieldSeeds("project", "source", refs, new AbortController().signal);
+  const known = await readEventsFieldSeeds(
+    "project",
+    "0197aaf9-5555-7000-8000-000000000119",
+    refs,
+    new AbortController().signal,
+  );
   expect(known.addresses).toEqual([
     { endpointId: "producer", routeId: "emit" },
     { endpointId: "consumer", routeId: "delivery" },
@@ -69,7 +71,7 @@ it("admits message members with each independently known exact endpoint and edge
   unresolved = true;
   const boundary = await readEventsFieldSeeds(
     "project",
-    "source",
+    "0197aaf9-5555-7000-8000-000000000119",
     refs,
     new AbortController().signal,
   );
@@ -78,7 +80,7 @@ it("admits message members with each independently known exact endpoint and edge
   unresolved = false;
   const orphan = await readEventsFieldSeeds(
     "project",
-    "source",
+    "0197aaf9-5555-7000-8000-000000000119",
     {
       messageId: "message",
       channelId: "channel",
@@ -91,7 +93,7 @@ it("admits message members with each independently known exact endpoint and edge
 });
 const hash = "a".repeat(64);
 const request = {
-  revisionId: "source",
+  revisionId: "0197aaf9-5555-7000-8000-000000000119",
   view: "routes" as const,
   seedNodeId: "consumer",
   limit: 50,
@@ -114,7 +116,7 @@ const page = {
 };
 it.each([
   { projectId: "other" },
-  { revisionId: "head" },
+  { revisionId: "0197aaf9-5555-7000-8000-000000000105" },
   { semanticHash: "b".repeat(64) },
   { view: "jobs" },
   { seedNodeId: "producer" },
@@ -135,7 +137,7 @@ it("reads the exact source and forwards cancellation without replacing a pin wit
   });
   const signal = new AbortController().signal;
   expect(await readEventsPage("project", request, hash, signal)).toMatchObject({
-    revisionId: "source",
+    revisionId: "0197aaf9-5555-7000-8000-000000000119",
     seedNodeId: "consumer",
   });
   expect(JSON.parse(String(captured?.body))).toEqual(request);
@@ -202,7 +204,12 @@ it("discloses missing and paginated proof and rejects evidence from another subj
   } as never;
   vi.stubGlobal("fetch", async () => json(200, { items: [], nextCursor: "more" }));
   expect(
-    await readEventsGapEvidence("project", "source", item, new AbortController().signal),
+    await readEventsGapEvidence(
+      "project",
+      "0197aaf9-5555-7000-8000-000000000119",
+      item,
+      new AbortController().signal,
+    ),
   ).toMatchObject({
     missingEvidenceIds: ["missing"],
     truncated: true,
@@ -212,6 +219,11 @@ it("discloses missing and paginated proof and rejects evidence from another subj
     json(200, { items: [{ id: "missing", subjectId: "foreign" }], nextCursor: "" }),
   );
   await expect(
-    readEventsGapEvidence("project", "source", item, new AbortController().signal),
+    readEventsGapEvidence(
+      "project",
+      "0197aaf9-5555-7000-8000-000000000119",
+      item,
+      new AbortController().signal,
+    ),
   ).rejects.toThrow(/другого/);
 });

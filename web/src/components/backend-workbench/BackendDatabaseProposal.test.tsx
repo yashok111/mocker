@@ -5,9 +5,20 @@ import userEvent from "@testing-library/user-event";
 import { renderWithProviders } from "@/test/render";
 import { ApiFailure } from "@/api/client";
 import { BackendDatabaseProposal } from "./BackendDatabaseProposal";
-import { proposalDetail, proposalNodes } from "./backendProposalTestFixtures";
+import {
+  proposalDetail as originalProposalDetail,
+  proposalNodes,
+} from "./backendProposalTestFixtures";
 import type { BackendProposalPreview } from "@/api/generated/schemas";
 
+const proposalDetail = structuredClone(originalProposalDetail);
+proposalDetail.proposal.id = "0197aaf9-5555-7000-8000-000000000111";
+proposalDetail.proposal.baseRevisionId = "0197aaf9-5555-7000-8000-000000000101";
+proposalDetail.proposal.draftRevisionId = "0197aaf9-5555-7000-8000-000000000103";
+proposalDetail.revision.id = proposalDetail.proposal.draftRevisionId;
+proposalDetail.revision.proposalId = proposalDetail.proposal.id;
+proposalDetail.revision.baseRevisionId = proposalDetail.proposal.baseRevisionId;
+proposalDetail.history[0]!.id = proposalDetail.revision.id;
 const api = vi.hoisted(() => ({
   listBackendProposals: vi.fn(),
   createBackendProposal: vi.fn(),
@@ -21,10 +32,10 @@ const api = vi.hoisted(() => ({
 vi.mock("@/api/generated/backend-projects/backend-projects", () => api);
 const ok = (data: unknown) => ({ data, status: 200, headers: new Headers() });
 const preview: BackendProposalPreview = {
-  proposalId: "proposal",
-  baseRevisionId: "base",
+  proposalId: "0197aaf9-5555-7000-8000-000000000111",
+  baseRevisionId: "0197aaf9-5555-7000-8000-000000000101",
   baseSemanticHash: "a".repeat(64),
-  draftRevisionId: "draft",
+  draftRevisionId: "0197aaf9-5555-7000-8000-000000000103",
   draftHash: "b".repeat(64),
   expectedVersion: 1,
   candidateHash: "d".repeat(64),
@@ -62,7 +73,7 @@ beforeEach(() => {
   api.getBackendProposal.mockResolvedValue(ok(proposalDetail));
   api.getBackendRevision.mockResolvedValue(
     ok({
-      id: "base",
+      id: "0197aaf9-5555-7000-8000-000000000101",
       projectId: "project",
       semanticHash: "a".repeat(64),
       sourceSnapshotIds: ["snap"],
@@ -71,7 +82,7 @@ beforeEach(() => {
   );
   api.queryBackendAPIArtifacts.mockResolvedValue(
     ok({
-      revisionId: "base",
+      revisionId: "0197aaf9-5555-7000-8000-000000000101",
       semanticHash: "a".repeat(64),
       sourceSnapshotIds: ["snap"],
       pins: [],
@@ -113,7 +124,7 @@ it("reads API associations from the proposal immutable base when project source 
     <BackendDatabaseProposal
       context={{
         projectId: "project",
-        revisionId: "newer-source",
+        revisionId: "0197aaf9-5555-7000-8000-000000000301",
         datastoreId: "db",
         facetKey: "sql",
       }}
@@ -121,16 +132,19 @@ it("reads API associations from the proposal immutable base when project source 
     />,
   );
   await screen.findByRole("option", { name: "Required users" });
-  await userEvent.selectOptions(await screen.findByLabelText("Предложение изменений"), "proposal");
+  await userEvent.selectOptions(
+    await screen.findByLabelText("Предложение изменений"),
+    "0197aaf9-5555-7000-8000-000000000111",
+  );
   expect(await screen.findByText("Ручных связей API нет.")).toBeInTheDocument();
   expect(api.getBackendRevision).toHaveBeenCalledWith(
     "project",
-    "base",
+    "0197aaf9-5555-7000-8000-000000000101",
     expect.objectContaining({ signal: expect.any(AbortSignal) }),
   );
   expect(api.queryBackendAPIArtifacts).toHaveBeenCalledWith(
     "project",
-    { revisionId: "base", limit: 100, cursor: "" },
+    { revisionId: "0197aaf9-5555-7000-8000-000000000101", limit: 100, cursor: "" },
     expect.objectContaining({ signal: expect.any(AbortSignal) }),
   );
   expect(screen.queryByRole("button", { name: "Добавить связь API" })).not.toBeInTheDocument();
@@ -141,7 +155,12 @@ afterEach(() => {
   sessionStorage.clear();
 });
 it("uses the latest callbacks on unmount without clearing the selection on rerender", async () => {
-  const context = { projectId: "project", revisionId: "base", datastoreId: "db", facetKey: "sql" };
+  const context = {
+    projectId: "project",
+    revisionId: "0197aaf9-5555-7000-8000-000000000101",
+    datastoreId: "db",
+    facetKey: "sql",
+  };
   const oldView = vi.fn(),
     oldDirty = vi.fn(),
     newView = vi.fn(),
@@ -162,10 +181,15 @@ it("uses the latest callbacks on unmount without clearing the selection on reren
   }
   const rendered = renderWithProviders(<Harness />);
   await screen.findByRole("option", { name: "Required users" });
-  await userEvent.selectOptions(screen.getByLabelText("Предложение изменений"), "proposal");
+  await userEvent.selectOptions(
+    screen.getByLabelText("Предложение изменений"),
+    "0197aaf9-5555-7000-8000-000000000111",
+  );
   await screen.findByLabelText("Колонка");
   await userEvent.click(screen.getByRole("button", { name: "Replace callbacks" }));
-  expect(screen.getByLabelText("Предложение изменений")).toHaveValue("proposal");
+  expect(screen.getByLabelText("Предложение изменений")).toHaveValue(
+    "0197aaf9-5555-7000-8000-000000000111",
+  );
   expect(newView).not.toHaveBeenCalledWith(null);
   oldView.mockClear();
   oldDirty.mockClear();
@@ -179,12 +203,20 @@ async function edit() {
   const user = userEvent.setup();
   renderWithProviders(
     <BackendDatabaseProposal
-      context={{ projectId: "project", revisionId: "base", datastoreId: "db", facetKey: "sql" }}
+      context={{
+        projectId: "project",
+        revisionId: "0197aaf9-5555-7000-8000-000000000101",
+        datastoreId: "db",
+        facetKey: "sql",
+      }}
       repositoryId="repository"
     />,
   );
   await screen.findByRole("option", { name: "Required users" });
-  await user.selectOptions(await screen.findByLabelText("Предложение изменений"), "proposal");
+  await user.selectOptions(
+    await screen.findByLabelText("Предложение изменений"),
+    "0197aaf9-5555-7000-8000-000000000111",
+  );
   await user.selectOptions(await screen.findByLabelText("Колонка"), "user-id");
   await user.selectOptions(screen.getByLabelText("Допускает NULL"), "false");
   await user.type(screen.getByRole("textbox", { name: /Причина изменения/ }), "Require users");
@@ -201,10 +233,10 @@ it("previews intent separately, then saves the exact pinned command", async () =
   await waitFor(() =>
     expect(api.applyBackendProposalCommands).toHaveBeenCalledWith(
       "project",
-      "proposal",
+      "0197aaf9-5555-7000-8000-000000000111",
       expect.objectContaining({
         expectedVersion: 1,
-        draftRevisionId: "draft",
+        draftRevisionId: "0197aaf9-5555-7000-8000-000000000103",
         candidateHash: "d".repeat(64),
         commands: [
           expect.objectContaining({ type: "alter_column", columnId: "user-id", nullable: false }),
@@ -263,12 +295,20 @@ it("recovers an uncertain save after leaving and reopening the proposal", async 
   cleanup();
   renderWithProviders(
     <BackendDatabaseProposal
-      context={{ projectId: "project", revisionId: "base", datastoreId: "db", facetKey: "sql" }}
+      context={{
+        projectId: "project",
+        revisionId: "0197aaf9-5555-7000-8000-000000000101",
+        datastoreId: "db",
+        facetKey: "sql",
+      }}
       repositoryId="repository"
     />,
   );
   await screen.findByRole("option", { name: "Required users" });
-  await user.selectOptions(screen.getByLabelText("Предложение изменений"), "proposal");
+  await user.selectOptions(
+    screen.getByLabelText("Предложение изменений"),
+    "0197aaf9-5555-7000-8000-000000000111",
+  );
   await user.click(await screen.findByRole("button", { name: "Повторить сохранение" }));
   await screen.findByText("Предложение сохранено");
   expect(api.applyBackendProposalCommands.mock.calls[1]![2]).toEqual(original);

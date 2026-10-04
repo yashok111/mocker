@@ -78,7 +78,7 @@ it.each(["column", "port", "event_field"])(
       const input = JSON.parse(String(init?.body));
       return json(200, {
         projectId: "project",
-        revisionId: "rev",
+        revisionId: "0197aaf9-5555-7000-8000-000000000115",
         view: input.view,
         semanticHash: "hash",
         entrypointItems: [],
@@ -95,19 +95,40 @@ it.each(["column", "port", "event_field"])(
     });
     function Harness() {
       const [pin, setPin] = useState<BackendSourcePin>({
-        revisionId: "rev",
+        revisionId: "0197aaf9-5555-7000-8000-000000000115",
         recordType: "node",
         recordId: "start",
       });
       return (
         <>
-          <button onClick={() => setPin({ revisionId: "rev", recordType: "node", recordId: "B" })}>
+          <button
+            onClick={() =>
+              setPin({
+                revisionId: "0197aaf9-5555-7000-8000-000000000115",
+                recordType: "node",
+                recordId: "B",
+              })
+            }
+          >
             External B
           </button>
-          <button onClick={() => setPin({ revisionId: "rev", recordType: "node", recordId: "A" })}>
+          <button
+            onClick={() =>
+              setPin({
+                revisionId: "0197aaf9-5555-7000-8000-000000000115",
+                recordType: "node",
+                recordId: "A",
+              })
+            }
+          >
             External A
           </button>
-          <BackendFlow projectId="project" revisionId="rev" pin={pin} onPinChange={setPin} />
+          <BackendFlow
+            projectId="project"
+            revisionId="0197aaf9-5555-7000-8000-000000000115"
+            pin={pin}
+            onPinChange={setPin}
+          />
         </>
       );
     }

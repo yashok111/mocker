@@ -1,13 +1,20 @@
+import type {
+  BackendReadTarget,
+  BackendEffectiveGraphPins,
+  QueryBackendDatabaseRequest,
+} from "@/api/generated/schemas";
+import { readBackendGraph, readBackendEvidence } from "./backendGraphReads";
+import {
+  projectionTarget,
+  projectionKey,
+  type ProjectionNode,
+  type ProjectionEdge,
+} from "./backendEffectiveProjectionReads";
+import { checkBackendProjectionPins, backendReadTargetFrom } from "./backendReadTargets";
+import { queryBackendDatabase } from "@/api/generated/backend-projects/backend-projects";
 import { useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import {
-  getBackendEvidence,
-  getBackendProposalEvidence,
-  queryBackendGraph,
-} from "@/api/generated/backend-projects/backend-projects";
 import type {
-  BackendEdge,
-  BackendNode,
   BackendEvidence,
   QueryBackendGraphRequest,
   BackendDatastoreFacet,
@@ -27,14 +34,16 @@ import type {
 export type DatabaseContext = {
   projectId: string;
   revisionId: string;
+  target?: BackendReadTarget;
+  pins?: BackendEffectiveGraphPins;
   datastoreId: string;
   facetKey: string;
   proposal?: { proposalId: string; proposalRevisionId: string };
 };
 export const databaseTarget = (context: DatabaseContext) =>
-  context.proposal ? { proposal: context.proposal } : { revisionId: context.revisionId };
+  context.proposal ? { proposal: context.proposal } : projectionTarget(context);
 export type DatabaseSelection = { type: "node" | "edge"; id: string; revisionId?: string };
-type Facet =
+type SourceFacet =
   | BackendDatastoreFacet
   | BackendDatabaseSchemaFacet
   | BackendTableFacet
@@ -45,11 +54,17 @@ type Facet =
   | BackendMigrationFacet
   | BackendRoutineFacet
   | BackendReferenceFacet;
+type Facet = SourceFacet extends infer F
+  ? F extends SourceFacet
+    ? Omit<F, "sourceKind" | "evidenceIds" | "freshness" | "sourceSnapshotId"> &
+        Partial<Pick<F, "sourceKind" | "evidenceIds" | "freshness" | "sourceSnapshotId">>
+    : never
+  : never;
 export const databaseKey = (context: DatabaseContext) =>
   [
     "backend-database",
     context.projectId,
-    context.revisionId,
+    projectionKey(databaseTarget(context), context.pins),
     context.datastoreId,
     context.facetKey,
     ...(context.proposal ? [context.proposal.proposalId, context.proposal.proposalRevisionId] : []),
@@ -66,7 +81,7 @@ export function useDatabaseCancellation(key: readonly string[]) {
   );
 }
 
-export function relationalFacets(record: BackendNode | BackendEdge): Record<string, Facet> {
+export function relationalFacets(record: ProjectionNode | ProjectionEdge): Record<string, Facet> {
   const attributes = record.attributes;
   if ("facets" in attributes) return attributes.facets;
   if ("relational" in attributes) return attributes.relational.facets;
@@ -79,29 +94,34 @@ export async function readDatabaseGraph(
   projectId: string,
   input: QueryBackendGraphRequest,
   signal: AbortSignal,
+  pins?: BackendEffectiveGraphPins,
 ) {
-  const nodes: BackendNode[] = [],
-    edges: BackendEdge[] = [],
+  const target = backendReadTargetFrom(input);
+  const nodes: ProjectionNode[] = [],
+    edges: ProjectionEdge[] = [],
     proposalNodes: BackendProposalProjectedNode[] = [],
     proposalEdges: BackendProposalProjectedEdge[] = [],
     seen = new Set<string>();
   let cursor = "";
+  let expectedPins = pins;
   do {
     signal.throwIfAborted();
-    const response = await queryBackendGraph(
+    const page = await readBackendGraph(
       projectId,
+      target,
       { ...input, limit: 500, ...(cursor ? { cursor } : {}) },
-      { signal },
+      signal,
+      expectedPins,
     );
     signal.throwIfAborted();
-    if (response.status !== 200) throw new Error("Не удалось загрузить полный список объектов");
-    nodes.push(...response.data.nodes);
-    edges.push(...response.data.edges);
-    if (response.data.proposalProjection) {
-      proposalNodes.push(...response.data.proposalProjection.nodes);
-      proposalEdges.push(...response.data.proposalProjection.edges);
+    if ("pins" in page) expectedPins = page.pins;
+    nodes.push(...page.nodes);
+    edges.push(...page.edges);
+    if ("proposalProjection" in page && page.proposalProjection) {
+      proposalNodes.push(...page.proposalProjection.nodes);
+      proposalEdges.push(...page.proposalProjection.edges);
     }
-    cursor = response.data.nextCursor;
+    cursor = page.nextCursor;
     if (cursor && seen.has(cursor)) throw new Error("Повтор страницы: список объектов неполон");
     seen.add(cursor);
   } while (cursor);
@@ -119,30 +139,27 @@ export async function readDatabaseEvidence(
   do {
     signal.throwIfAborted();
     const params = { subjectId, limit: 500, ...(cursor ? { cursor } : {}) };
-    const response = context.proposal
-      ? await getBackendProposalEvidence(
-          context.projectId,
-          context.proposal.proposalId,
-          context.proposal.proposalRevisionId,
-          params,
-          { signal },
-        )
-      : await getBackendEvidence(context.projectId, context.revisionId, params, { signal });
+    const page = await readBackendEvidence(
+      context.projectId,
+      databaseTarget(context),
+      params,
+      signal,
+      context.pins,
+    );
     signal.throwIfAborted();
-    if (response.status !== 200) throw new Error("Основания загружены не полностью");
-    items.push(...response.data.items);
-    cursor = response.data.nextCursor;
+    items.push(...page.items);
+    cursor = page.nextCursor;
     if (cursor && seen.has(cursor)) throw new Error("Повтор страницы: основания неполны");
     seen.add(cursor);
   } while (cursor);
   return items;
 }
 
-export function datastoreScope(nodes: BackendNode[], datastoreId: string) {
+export function datastoreScope(nodes: ProjectionNode[], datastoreId: string) {
   const byId = new Map(nodes.map((node) => [node.id, node]));
   return nodes.filter((node) => {
     const seen = new Set<string>();
-    let current: BackendNode | undefined = node;
+    let current: ProjectionNode | undefined = node;
     while (current && !seen.has(current.id)) {
       if (current.id === datastoreId) return true;
       seen.add(current.id);
@@ -178,8 +195,33 @@ export function databaseStatus(status: string) {
         inferred: "Предположение",
         unresolved: "Цель не установлена",
         proposed: "Предложено",
+        desired: "Желаемая структура",
         unverified: "Не проверено",
       } as Record<string, string>
     )[status] ?? status
   );
+}
+
+export async function readDatabasePage(
+  context: DatabaseContext,
+  input: QueryBackendDatabaseRequest,
+  signal: AbortSignal,
+) {
+  const target = projectionTarget({ ...context, target: databaseTarget(context) });
+  signal.throwIfAborted();
+  const response = await queryBackendDatabase(context.projectId, input, { signal });
+  signal.throwIfAborted();
+  if (response.status !== 200) throw new Error("Не удалось загрузить схему базы данных");
+  const checkedPins = checkBackendProjectionPins(response.data, target, context.pins);
+  if (
+    checkedPins &&
+    (response.data.projectId !== context.projectId ||
+      response.data.revisionId !== checkedPins.baseRevisionId ||
+      response.data.semanticHash !== checkedPins.effectiveSemanticHash ||
+      response.data.datastoreId !== context.datastoreId ||
+      response.data.facetKey !== context.facetKey ||
+      response.data.recordType !== input.recordType)
+  )
+    throw new Error("Получена другая область базы данных");
+  return response;
 }

@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type {
-  BackendNode,
-  BackendEdge,
+  BackendStructuralNodeResponse,
+  BackendStructuralEdgeResponse,
   BackendDatabaseTableItem,
   BackendDatabaseRelationshipItem,
+  BackendPinnedDatabaseRelationshipItem,
 } from "@/api/generated/schemas";
 import type { DiagramLayoutResult } from "../diagram/elkLayout";
 import type { SavedViewState } from "./backendSavedViewState";
@@ -51,7 +52,11 @@ export function overlaySavedPositions(
     }),
   };
 }
-export function collapseFlowScene(nodes: BackendNode[], edges: BackendEdge[], groups: string[]) {
+export function collapseFlowScene(
+  nodes: BackendStructuralNodeResponse[],
+  edges: BackendStructuralEdgeResponse[],
+  groups: string[],
+) {
   const hidden = new Set(
     nodes
       .filter(
@@ -72,7 +77,7 @@ export function collapseFlowScene(nodes: BackendNode[], edges: BackendEdge[], gr
 }
 export function collapseDatabaseScene(
   tables: BackendDatabaseTableItem[],
-  relationships: BackendDatabaseRelationshipItem[],
+  relationships: (BackendDatabaseRelationshipItem | BackendPinnedDatabaseRelationshipItem)[],
   groups: string[],
 ) {
   const hidden = new Set(

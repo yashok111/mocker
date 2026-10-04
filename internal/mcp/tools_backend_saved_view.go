@@ -13,8 +13,8 @@ func addBackendSavedViewTools(s *sdk.Server, lb *loopback) {
 	}{
 		{"list_backend_saved_views", "GET " + base, "", "Lists current saved view summaries with project/kind/limit-bound paging. Names and versions may advance between pages.", true},
 		{"get_backend_saved_view", "GET " + base + "/{vid}", "", "Reads one immutable saved presentation at an exact version, or resolves latest once when version is omitted. Use its exact pins; reopening starts at the first page.", true},
-		{"create_backend_saved_view", "POST " + base, "CreateBackendSavedViewRequest", "Creates a saved-view-v1 presentation bound to an exact source or database proposal revision. No source or proposal semantics change. Retry uncertain results with the identical request and key.", false},
-		{"save_backend_saved_view", "POST " + base + "/{vid}/save", "SaveBackendSavedViewRequest", "Appends a presentation version using saved view CAS. Target and kind are immutable. Retry uncertain results with the identical request/key; on conflict reload or save as new.", false},
+		{"create_backend_saved_view", "POST " + base, "CreateBackendSavedViewRequest", "Creates a presentation bound to an exact target. Omit documentVersion for legacy saved-view-v1 or explicitly select saved-view-v2 for source6/full changeProposal. Source Flow requires schema3–6; Database requires schema2–6; legacy proposal supports Database only, full baseline5/6 supports both. importCandidate is unsupported. No graph semantics change; retry an uncertain result with the identical request/key.", false},
+		{"save_backend_saved_view", "POST " + base + "/{vid}/save", "SaveBackendSavedViewRequest", "Appends a saved presentation using version CAS. Keep the opened documentVersion: omit legacy saved-view-v1, explicitly send saved-view-v2. Target and kind are immutable; another full draft needs Save as new. Retry uncertain results with identical body/key; on 409 reload or save as new.", false},
 	} {
 		var schema map[string]any
 		if spec.contract != "" {

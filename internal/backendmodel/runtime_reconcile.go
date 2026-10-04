@@ -47,6 +47,9 @@ func runtimeReferences(kind string, attrs map[string]jsontext.Value, edge, persi
 }
 
 func sourceAttributeReferences(kind string, attrs map[string]jsontext.Value, edge, persisted bool) ([]relationalReference, error) {
+	if representationSubject(kind, edge) || representationMapping(kind, attrs, edge) {
+		return representationReferences(kind, attrs, edge, persisted)
+	}
 	if eventsSubject(kind, edge) || eventsEmit(kind, attrs, edge) {
 		return eventsReferences(kind, attrs, edge, persisted)
 	}
@@ -192,6 +195,11 @@ func decodeRuntimeAttributes(attrs map[string]jsontext.Value) runtimeAttributes 
 }
 
 func validateRuntimeGraph(ctx context.Context, _ importReader, s *ImportSession, g *graphCandidate, diagnostics *[]ImportDiagnostic) error {
+	return validateRuntimeGraphRules(ctx, selectedProfile(s.Profile), s, g, diagnostics)
+}
+
+// A nil admission session selects the shared structural rules only.
+func validateRuntimeGraphRules(ctx context.Context, profile string, s *ImportSession, g *graphCandidate, diagnostics *[]ImportDiagnostic) error {
 	add := func(path, message string) {
 		*diagnostics = append(*diagnostics, ImportDiagnostic{Code: "backend_graph_invalid", Path: path, Message: message})
 	}
@@ -239,6 +247,9 @@ func validateRuntimeGraph(ctx context.Context, _ importReader, s *ImportSession,
 		return ""
 	}
 	boundedProof := func(id string, ids []string, fresh *AssertionFreshness) {
+		if s == nil {
+			return
+		}
 		found := false
 		for _, eid := range ids {
 			e, ok := proofs[eid]
@@ -272,7 +283,7 @@ func validateRuntimeGraph(ctx context.Context, _ importReader, s *ImportSession,
 			path = "edges/" + id
 		}
 		validator := validateRuntimeAttributes
-		if selectedProfile(s.Profile) == EventsProfile {
+		if profile == EventsProfile {
 			validator = validateEventsAttributes
 		}
 		if err := validator(kind, attrs, edge, true); err != nil {
@@ -287,7 +298,7 @@ func validateRuntimeGraph(ctx context.Context, _ importReader, s *ImportSession,
 		}
 		for _, ref := range refs {
 			target, ok := nodes[ref.ID]
-			if !ok || target.Kind != ref.Kind || target.Ownership == nil || target.Ownership.RepositoryID != s.RepositoryID {
+			if !ok || target.Kind != ref.Kind || s != nil && (target.Ownership == nil || target.Ownership.RepositoryID != s.RepositoryID) {
 				add(path+ref.Path, "Nested reference must survive with its declared kind in the same repository")
 			}
 		}
@@ -430,7 +441,7 @@ func validateRuntimeGraph(ctx context.Context, _ importReader, s *ImportSession,
 		if e.Kind == "calls" && from.Kind == "flow_step" {
 			if to.Kind == "unresolved_target" {
 				expected := runtimeString(to.Attributes["expectedKind"])
-				valid := slices.Contains([]string{"symbol", "handler", "external_system", "query"}, expected) || selectedProfile(s.Profile) == EventsProfile && expected == "http_operation"
+				valid := slices.Contains([]string{"symbol", "handler", "external_system", "query"}, expected) || profile == EventsProfile && expected == "http_operation"
 				if attributes[from.ID].StepKind == "query" {
 					valid = expected == "query"
 				}

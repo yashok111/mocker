@@ -142,7 +142,7 @@ func (s *ArtifactService) applyArtifactPinsTx(ctx context.Context, tx *sql.Tx, p
 	if err = json.Unmarshal([]byte(document), &revision); err != nil {
 		return err
 	}
-	if !isLineageSchema(revision.SchemaVersion) {
+	if !isArtifactSourceSchema(revision.SchemaVersion) {
 		return importConflict("backend_artifact_pins_base_conflict", "Source baseline schema changed", p.Version)
 	}
 	if _, err = loadArtifactContext(ctx, tx, in.BaseRevisionID, revision.ArtifactPins); err != nil {
@@ -178,6 +178,11 @@ func persistArtifactPins(ctx context.Context, tx *sql.Tx, pid string, in ApplyAr
 		`INSERT INTO backend_revision_decisions(revision_id,document) SELECT ?,document FROM backend_revision_decisions WHERE revision_id=?`,
 	} {
 		if _, err = tx.ExecContext(ctx, query, revision.ID, in.BaseRevisionID); err != nil {
+			return err
+		}
+	}
+	if revision.SchemaVersion == ComposedSchemaVersion {
+		if err = copySource6ArtifactContext(ctx, tx, pid, in.BaseRevisionID, revision.ID); err != nil {
 			return err
 		}
 	}

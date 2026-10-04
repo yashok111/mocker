@@ -73,8 +73,11 @@ type CreateInput struct {
 }
 
 type Command struct {
-	Type string `json:"type"`
-	Name string `json:"name"`
+	Type         string            `json:"type"`
+	Name         string            `json:"name"`
+	AnnotationID string            `json:"annotationId,omitempty"`
+	Target       *AnnotationTarget `json:"target,omitempty"`
+	Body         string            `json:"body,omitempty"`
 }
 
 type CommandsInput struct {

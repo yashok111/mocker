@@ -9,7 +9,7 @@ const (
 )
 
 func hasLineageProfile(profile string) bool {
-	return profile == LineageProfile || profile == EventsProfile
+	return profile == LineageProfile || profile == EventsProfile || profile == ComposedProfile
 }
 func isLineageSchema(schema string) bool {
 	return schema == LineageSchemaVersion || schema == EventsSchemaVersion

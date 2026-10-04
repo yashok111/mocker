@@ -146,19 +146,51 @@
       "source": "references/backend/events.md",
       "embedded": "backend-events.md",
       "workflowId": "mocker-backend-inspect"
+    },
+    {
+      "topic": "backend-sync",
+      "package": "mocker-backend-sync",
+      "source": "SKILL.md",
+      "embedded": "backend-sync.md",
+      "workflowId": "mocker-backend-sync",
+      "copies": [
+        {
+          "package": "mocker",
+          "path": "references/backend/sync.md"
+        }
+      ]
+    },
+    {
+      "topic": "backend-change-proposals",
+      "package": "mocker-backend-change",
+      "source": "SKILL.md",
+      "embedded": "backend-change-proposals.md",
+      "workflowId": "mocker-backend-change",
+      "copies": [
+        {
+          "package": "mocker",
+          "path": "references/backend/change-proposals.md"
+        }
+      ]
+    },
+    {
+      "topic": "backend-annotations",
+      "source": "references/backend/annotations.md",
+      "embedded": "backend-annotations.md",
+      "workflowId": "mocker-backend-project"
     }
   ],
   "workflows": [
     {
       "workflowId": "mocker-routing",
-      "workflowVersion": "1",
+      "workflowVersion": "2",
       "entrypoint": "overview",
       "requiredModelSchemaVersions": [],
       "requiredCapabilities": []
     },
     {
       "workflowId": "mocker-backend-project",
-      "workflowVersion": "1",
+      "workflowVersion": "2",
       "entrypoint": "backend-overview",
       "requiredModelSchemaVersions": [
         "1"
@@ -166,19 +198,21 @@
       "requiredCapabilities": [
         "backend-projects",
         "backend-project-metadata",
-        "backend-revisions"
+        "backend-revisions",
+        "backend-annotations"
       ]
     },
     {
       "workflowId": "mocker-backend-import",
-      "workflowVersion": "6",
+      "workflowVersion": "7",
       "entrypoint": "backend-import",
       "requiredModelSchemaVersions": [
         "1",
         "2",
         "3",
         "4",
-        "5"
+        "5",
+        "6"
       ],
       "requiredCapabilities": [
         "backend-projects",
@@ -196,18 +230,21 @@
         "backend-field-lineage-import",
         "backend-field-lineage-query",
         "backend-events-import",
-        "backend-events-query"
+        "backend-events-query",
+        "backend-source-sync",
+        "backend-representations"
       ]
     },
     {
       "workflowId": "mocker-backend-database",
-      "workflowVersion": "6",
+      "workflowVersion": "7",
       "entrypoint": "backend-database",
       "requiredModelSchemaVersions": [
         "2",
         "3",
         "4",
-        "5"
+        "5",
+        "6"
       ],
       "requiredCapabilities": [
         "backend-projects",
@@ -221,21 +258,27 @@
         "backend-data-access-query",
         "backend-saved-views",
         "backend-field-lineage-query",
-        "backend-events-query"
+        "backend-events-query",
+        "backend-change-proposals",
+        "backend-source-assertions",
+        "backend-saved-views-v2"
       ],
       "requiredViewSchemaVersions": [
         "proposal-relational-v1",
-        "saved-view-v1"
+        "saved-view-v1",
+        "proposal-graph-v1",
+        "saved-view-v2"
       ]
     },
     {
       "workflowId": "mocker-backend-inspect",
-      "workflowVersion": "6",
+      "workflowVersion": "7",
       "entrypoint": "backend-inspect",
       "requiredModelSchemaVersions": [
         "3",
         "4",
-        "5"
+        "5",
+        "6"
       ],
       "requiredCapabilities": [
         "backend-projects",
@@ -247,12 +290,65 @@
         "backend-field-lineage-query",
         "backend-api-artifact-pins",
         "backend-editor-projections",
-        "backend-events-query"
+        "backend-events-query",
+        "backend-source-assertions",
+        "backend-import-candidate",
+        "backend-change-proposals",
+        "backend-representations",
+        "backend-saved-views-v2"
       ],
       "requiredViewSchemaVersions": [
         "saved-view-v1",
         "api-artifact-pins-v1",
-        "backend-editor-artifacts-v1"
+        "backend-editor-artifacts-v1",
+        "proposal-graph-v1",
+        "saved-view-v2",
+        "import-candidate-v1"
+      ]
+    },
+    {
+      "workflowId": "mocker-backend-sync",
+      "workflowVersion": "1",
+      "entrypoint": "backend-sync",
+      "requiredModelSchemaVersions": [
+        "1",
+        "5",
+        "6"
+      ],
+      "requiredViewSchemaVersions": [
+        "import-candidate-v1"
+      ],
+      "requiredCapabilities": [
+        "backend-projects",
+        "backend-revisions",
+        "backend-graph-query",
+        "backend-source-import",
+        "backend-source-sync",
+        "backend-source-incremental-sync",
+        "backend-source-assertions",
+        "backend-import-candidate",
+        "backend-representations"
+      ]
+    },
+    {
+      "workflowId": "mocker-backend-change",
+      "workflowVersion": "1",
+      "entrypoint": "backend-change-proposals",
+      "requiredModelSchemaVersions": [
+        "5",
+        "6"
+      ],
+      "requiredViewSchemaVersions": [
+        "proposal-graph-v1"
+      ],
+      "requiredCapabilities": [
+        "backend-projects",
+        "backend-revisions",
+        "backend-graph-query",
+        "backend-change-proposals",
+        "backend-change-typed-edits",
+        "backend-source-assertions",
+        "backend-representations"
       ]
     }
   ]

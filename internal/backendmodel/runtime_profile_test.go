@@ -63,7 +63,7 @@ func TestRuntimeProfileInitialAndExtension(t *testing.T) {
 			}
 		})
 	}
-	if !slices.Equal(SupportedModelSchemaVersions(), []string{"1", "2", "3", "4", "5"}) {
+	if !slices.Equal(SupportedModelSchemaVersions(), []string{"1", "2", "3", "4", "5", "6"}) {
 		t.Fatal("schema3 missing")
 	}
 	if slices.Contains(SupportedNodeKindsForProfile(RelationalProfile), "flow") || !slices.Contains(SupportedNodeKindsForProfile("runtime-flow-v1"), "flow") {

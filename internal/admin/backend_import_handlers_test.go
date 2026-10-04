@@ -269,119 +269,6 @@ func validateBackendImportResponse(t *testing.T, method, path string, data []byt
 	t.Helper()
 	path, _, _ = strings.Cut(path, "?")
 	parts := strings.Split(strings.Trim(path, "/"), "/")
-	name := ""
-	if len(parts) == 4 && parts[3] == "imports" {
-		if method == "GET" {
-			name = "BackendImportPage"
-		} else {
-			name = "BackendImportSession"
-		}
-	}
-	if len(parts) == 5 && parts[3] == "imports" {
-		name = "BackendImportStatus"
-	}
-	if len(parts) == 7 && parts[5] == "batches" {
-		name = "BackendBatchReceipt"
-	}
-	if len(parts) == 6 && parts[3] == "imports" {
-		switch parts[5] {
-		case "changes":
-			name = "BackendImportChangesPage"
-		case "preview":
-			name = "BackendImportPreview"
-		case "commit":
-			name = "BackendImportCommitResult"
-		case "abort":
-			name = "BackendImportSession"
-		}
-	}
-	if len(parts) == 5 && parts[3] == "revisions" && parts[4] == "compare" {
-		name = "BackendRevisionComparison"
-	}
-	if len(parts) == 5 && parts[3] == "graph" {
-		name = "BackendGraphPage"
-	}
-	if len(parts) == 7 && parts[5] == "nodes" {
-		name = "BackendNode"
-	}
-	if len(parts) == 6 && parts[3] == "revisions" {
-		switch parts[5] {
-		case "coverage":
-			name = "BackendRevisionCoverage"
-		case "evidence":
-			name = "BackendEvidencePage"
-		}
-	}
-
-	if len(parts) >= 4 && parts[3] == "proposals" {
-		if len(parts) == 4 {
-			if method == "GET" {
-				name = "BackendProposalPage"
-			} else {
-				name = "BackendProposalDetail"
-			}
-		}
-		if len(parts) == 5 {
-			name = "BackendProposalDetail"
-		}
-		if len(parts) == 6 {
-			if parts[5] == "preview" {
-				name = "BackendProposalPreview"
-			} else {
-				name = "BackendProposalApplyResult"
-			}
-		}
-		if len(parts) == 8 {
-			if parts[7] == "coverage" {
-				name = "BackendRevisionCoverage"
-			} else if parts[7] == "evidence" {
-				name = "BackendEvidencePage"
-			}
-		}
-		if len(parts) == 9 {
-			name = "BackendProposalNodeRead"
-		}
-	}
-	if len(parts) == 3 && parts[2] == "capabilities" {
-		name = "BackendCapabilities"
-	}
-	if len(parts) == 5 && parts[3] == "revisions" && parts[4] != "compare" {
-		name = "BackendRevision"
-	}
-	if len(parts) == 5 && parts[4] == "query" {
-		switch parts[3] {
-		case "events":
-			name = "BackendEventsPage"
-		case "lineage":
-			name = "BackendLineagePage"
-		case "flow":
-			name = "BackendFlowPage"
-		case "database":
-			name = "BackendDatabasePage"
-		}
-	}
-	if len(parts) >= 4 && parts[3] == "saved-views" {
-		if len(parts) == 4 && method == "GET" {
-			name = "BackendSavedViewPage"
-		} else {
-			name = "BackendSavedView"
-		}
-	}
-	if len(parts) == 5 && parts[3] == "api-artifacts" {
-		name = map[string]string{"query": "BackendAPIArtifactPage", "preview": "BackendAPIPinsPreview", "commands": "BackendAPIPinsResult"}[parts[4]]
-	}
-	if len(parts) == 6 && parts[1] == "designs" && parts[5] == "artifact-snapshot" {
-		name = "APIArtifactSnapshot"
-	}
-	if len(parts) == 5 && parts[3] == "artifacts" {
-		name = map[string]string{"query": "ArtifactProjectionPage", "preview": "ArtifactPinsPreview", "commands": "ArtifactPinsResult"}[parts[4]]
-	}
-	if len(parts) == 6 && parts[1] == "design-scenarios" && parts[5] == "artifact-snapshot" {
-		name = "DesignScenarioArtifactSnapshot"
-	}
-	if name == "" {
-		t.Fatalf("No response schema selected for %s %s", method, path)
-	}
 	raw, err := os.ReadFile(specPath)
 	if err != nil {
 		t.Fatal(err)
@@ -391,6 +278,43 @@ func validateBackendImportResponse(t *testing.T, method, path string, data []byt
 	var document any
 	if err := decoder.Decode(&document); err != nil {
 		t.Fatal(err)
+	}
+	name := ""
+	best := -1
+	paths := document.(map[string]any)["paths"].(map[string]any)
+	for template, item := range paths {
+		segments := strings.Split(strings.Trim(template, "/"), "/")
+		if len(segments) != len(parts) {
+			continue
+		}
+		score, matches := 0, true
+		for i, segment := range segments {
+			if strings.HasPrefix(segment, "{") {
+				continue
+			}
+			if segment != parts[i] {
+				matches = false
+				break
+			}
+			score++
+		}
+		operation, exists := item.(map[string]any)[strings.ToLower(method)].(map[string]any)
+		if !matches || !exists || score <= best {
+			continue
+		}
+		response, exists := operation["responses"].(map[string]any)["200"].(map[string]any)
+		if !exists {
+			continue
+		}
+		responseSchema := response["content"].(map[string]any)["application/json"].(map[string]any)["schema"].(map[string]any)
+		reference, exists := responseSchema["$ref"].(string)
+		if !exists {
+			t.Fatalf("Expected named response schema for %s", template)
+		}
+		name, best = strings.TrimPrefix(reference, "#/components/schemas/"), score
+	}
+	if name == "" {
+		t.Fatalf("No response schema selected for %s %s", method, path)
 	}
 	compiler := jsonschema.NewCompiler()
 	const uri = "https://mocker.invalid/openapi.json"

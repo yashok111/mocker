@@ -2,37 +2,51 @@ import { LoadState } from "./BackendGraphInventory";
 import { useEffect, useRef, useState } from "react";
 import { Button, Group, Stack, Text } from "@mantine/core";
 import { useGetBackendRevision } from "@/api/generated/backend-projects/backend-projects";
-import type { BackendLineageValueRef, BackendNode } from "@/api/generated/schemas";
+import type {
+  BackendLineageValueRef,
+  BackendNode,
+  BackendComposedNode,
+  BackendReadTarget,
+  BackendEffectiveGraphPins,
+} from "@/api/generated/schemas";
 import { lineageRefKey } from "./backendLineageReads";
 import { BackendLineage } from "./BackendLineage";
-import { databaseButtonStyles, databaseWrap, relationalFacets } from "./backendDatabaseReads";
+import { databaseButtonStyles, databaseWrap } from "./backendDatabaseReads";
 export function BackendLineageActions({
   projectId,
   revisionId,
+  target: selectedTarget,
+  pins,
   seed,
   onValueSelect,
   proposal = false,
 }: {
   projectId: string;
-  revisionId: string;
+  revisionId?: string;
+  target?: BackendReadTarget;
+  pins?: BackendEffectiveGraphPins;
   seed: BackendLineageValueRef;
   onValueSelect: (ref: BackendLineageValueRef) => void;
   proposal?: boolean;
 }) {
-  const revision = useGetBackendRevision(projectId, revisionId, {
-    query: { enabled: !proposal, retry: false },
+  const target = selectedTarget ?? { revisionId: revisionId ?? "" };
+  const sourceTarget = target.revisionId;
+  const revision = useGetBackendRevision(projectId, sourceTarget ?? "", {
+    query: { enabled: Boolean(sourceTarget) && !proposal, retry: false },
   });
   const [direction, setDirection] = useState<"forward" | "reverse" | null>(null);
   const [launchId, setLaunchId] = useState(0);
   const trigger = useRef<HTMLButtonElement | null>(null);
   if (
     proposal ||
-    (revision.data?.status === 200 && !["4", "5"].includes(revision.data.data.schemaVersion))
+    target.proposal ||
+    target.importCandidate ||
+    (revision.data?.status === 200 && !["4", "5", "6"].includes(revision.data.data.schemaVersion))
   )
     return (
       <Text size="sm">
-        Происхождение значения доступно только в снимке source4 или source5; предложения не
-        поддерживаются.
+        Происхождение значения доступно только в снимке source4–6 или полном предложении. Для этого
+        графа оно недоступно.
       </Text>
     );
   return (
@@ -43,7 +57,7 @@ export function BackendLineageActions({
           <Button
             key={value}
             variant="default"
-            disabled={revision.data?.status !== 200}
+            disabled={Boolean(sourceTarget) && revision.data?.status !== 200}
             onClick={(event) => {
               trigger.current = event.currentTarget;
               setDirection(value);
@@ -58,7 +72,8 @@ export function BackendLineageActions({
         <BackendLineage
           key={launchId}
           projectId={projectId}
-          revisionId={revisionId}
+          target={target}
+          pins={pins}
           seed={seed}
           initialDirection={direction}
           onValueSelect={onValueSelect}
@@ -74,13 +89,17 @@ export function BackendLineageActions({
 export function BackendValueSeeds({
   projectId,
   revisionId,
+  target,
+  pins,
   node,
   onValueSelect,
   selected,
 }: {
   projectId: string;
-  revisionId: string;
-  node: BackendNode;
+  revisionId?: string;
+  target?: BackendReadTarget;
+  pins?: BackendEffectiveGraphPins;
+  node: BackendNode | BackendComposedNode;
   onValueSelect: (ref: BackendLineageValueRef) => void;
   selected?: BackendLineageValueRef;
 }) {
@@ -89,10 +108,12 @@ export function BackendValueSeeds({
     if (selected?.nodeId === node.id) exact.current?.focus();
   }, [selected, node.id]);
   const seeds: { ref: BackendLineageValueRef; label: string }[] = [];
+  if (node.kind === "representation_field")
+    seeds.push({ ref: { kind: "representation_field", nodeId: node.id }, label: node.name });
   if (node.kind === "api_field")
     seeds.push({ ref: { kind: "api_field", nodeId: node.id }, label: node.name });
   if (node.kind === "column")
-    for (const facetKey of Object.keys(relationalFacets(node)))
+    for (const facetKey of Object.keys(node.attributes.facets))
       seeds.push({
         ref: { kind: "column", nodeId: node.id, facetKey },
         label: `${node.name} · ${facetKey}`,
@@ -135,6 +156,8 @@ export function BackendValueSeeds({
           <BackendLineageActions
             projectId={projectId}
             revisionId={revisionId}
+            target={target}
+            pins={pins}
             seed={ref}
             onValueSelect={onValueSelect}
           />

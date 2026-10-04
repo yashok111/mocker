@@ -11,7 +11,7 @@ import {
 const hash = "a".repeat(64);
 const scope = {
   projectId: "project",
-  revisionId: "revision",
+  revisionId: "0197aaf9-5555-7000-8000-000000000118",
   semanticHash: hash,
   sourceSnapshotIds: ["snapshot"],
   artifactPins: [{ kind: "api_design" as const, id: "12", revisionId: "23", contentHash: hash }],
@@ -103,14 +103,14 @@ it.each(["semanticHash", "sourceSnapshotIds", "pins", "revisionId"])(
           ...scope,
           pins: scope.artifactPins,
           items: [],
-          nextCursor: ++page === 1 ? "next" : "",
+          nextCursor: ++page === 1 ? "0197aaf9-5555-7000-8000-000000000108" : "",
           ...(page === 2
             ? {
                 [field]:
                   field === "pins"
                     ? [{ kind: "api_design", id: "12", revisionId: "24", contentHash: hash }]
                     : field === "sourceSnapshotIds"
-                      ? ["new"]
+                      ? ["0197aaf9-5555-7000-8000-000000000106"]
                       : "wrong",
               }
             : {}),

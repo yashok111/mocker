@@ -146,6 +146,11 @@ func (s *APIArtifactService) Apply(ctx context.Context, pid string, in ApplyAPIP
 				return err
 			}
 		}
+		if revision.SchemaVersion == ComposedSchemaVersion {
+			if err := copySource6ArtifactContext(ctx, tx, pid, in.BaseRevisionID, revision.ID); err != nil {
+				return err
+			}
+		}
 		if err := savePreparedAPIPinsContext(ctx, tx, revision, prepared); err != nil {
 			return err
 		}
@@ -182,18 +187,14 @@ func saveAPIArtifactContext(ctx context.Context, tx *sql.Tx, rid string, frozen 
 }
 
 func apiPinsBaselineDigest(ctx context.Context, tx *sql.Tx, pid, revisionID string, revision Revision, context *APIArtifactContext, prepared *preparedAPIPins) (string, error) {
-	baselineHash, err := requestDigest(struct {
-		Revision Revision
-		Context  *APIArtifactContext
-	}{revision, context})
 	if prepared.fullContext != nil {
-		baselineHash, err = artifactBaselineDigest(ctx, tx, pid, revisionID)
+		return artifactBaselineDigest(ctx, tx, pid, revisionID)
 	}
-	return baselineHash, err
+	return apiPinsSourceBaselineDigest(ctx, tx, pid, revisionID, revision, context)
 }
 
 func (s *APIArtifactService) checkFullArtifactDigests(ctx context.Context, tx *sql.Tx, prepared *preparedAPIPins, version int64, baselineHash, schemaVersion string) error {
-	if baselineHash != prepared.baselineHash || !isLineageSchema(schemaVersion) {
+	if baselineHash != prepared.baselineHash || !isArtifactSourceSchema(schemaVersion) {
 		return importConflict("backend_api_pins_base_conflict", "Frozen source baseline changed", version)
 	}
 	if prepared.fullContext != nil {

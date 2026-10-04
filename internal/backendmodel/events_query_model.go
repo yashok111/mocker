@@ -12,13 +12,16 @@ const (
 
 // EventsQueryInput selects a pure projection of one immutable source5 revision.
 type EventsQueryInput struct {
-	RevisionID string `json:"revisionId"`
-	View       string `json:"view"`
-	SeedNodeID string `json:"seedNodeId,omitempty"`
-	ServiceID  string `json:"serviceId,omitempty"`
-	Limit      int    `json:"limit,omitzero"`
-	Cursor     string `json:"cursor,omitempty"`
-	present    map[string]bool
+	Proposal        *ProposalReadTarget        `json:"proposal,omitzero"`
+	ChangeProposal  *ProposalReadTarget        `json:"changeProposal,omitzero"`
+	ImportCandidate *ImportCandidateReadTarget `json:"importCandidate,omitzero"`
+	RevisionID      string                     `json:"revisionId,omitempty"`
+	View            string                     `json:"view"`
+	SeedNodeID      string                     `json:"seedNodeId,omitempty"`
+	ServiceID       string                     `json:"serviceId,omitempty"`
+	Limit           int                        `json:"limit,omitzero"`
+	Cursor          string                     `json:"cursor,omitempty"`
+	present         map[string]bool
 }
 
 type EventsQueryLimits struct {
@@ -32,25 +35,27 @@ type EventsQueryLimits struct {
 }
 
 type EventsPage struct {
-	ProjectID            string            `json:"projectId"`
-	RevisionID           string            `json:"revisionId"`
-	SemanticHash         string            `json:"semanticHash"`
-	Policy               string            `json:"policy"`
-	View                 string            `json:"view"`
-	SeedNodeID           string            `json:"seedNodeId,omitempty"`
-	ServiceID            string            `json:"serviceId,omitempty"`
-	Items                []EventsItem      `json:"items"`
-	NextCursor           string            `json:"nextCursor"`
-	Coverage             RevisionCoverage  `json:"coverage"`
-	Limits               EventsQueryLimits `json:"limits"`
-	Complete             bool              `json:"complete"`
-	Truncated            bool              `json:"truncated"`
-	TruncationReasons    []string          `json:"truncationReasons"`
-	Limitations          []string          `json:"limitations"`
-	TotalEdgeCount       int               `json:"totalEdgeCount"`
-	ExaminedEdgeCount    int               `json:"examinedEdgeCount"`
-	ConstructedItemCount int               `json:"constructedItemCount"`
-	AuxiliaryRecordCount int               `json:"auxiliaryRecordCount"`
+	Target               *BackendReadTarget  `json:"target,omitzero"`
+	Pins                 *EffectiveGraphPins `json:"pins,omitzero"`
+	ProjectID            string              `json:"projectId"`
+	RevisionID           string              `json:"revisionId"`
+	SemanticHash         string              `json:"semanticHash"`
+	Policy               string              `json:"policy"`
+	View                 string              `json:"view"`
+	SeedNodeID           string              `json:"seedNodeId,omitempty"`
+	ServiceID            string              `json:"serviceId,omitempty"`
+	Items                []EventsItem        `json:"items"`
+	NextCursor           string              `json:"nextCursor"`
+	Coverage             RevisionCoverage    `json:"coverage"`
+	Limits               EventsQueryLimits   `json:"limits"`
+	Complete             bool                `json:"complete"`
+	Truncated            bool                `json:"truncated"`
+	TruncationReasons    []string            `json:"truncationReasons"`
+	Limitations          []string            `json:"limitations"`
+	TotalEdgeCount       int                 `json:"totalEdgeCount"`
+	ExaminedEdgeCount    int                 `json:"examinedEdgeCount"`
+	ConstructedItemCount int                 `json:"constructedItemCount"`
+	AuxiliaryRecordCount int                 `json:"auxiliaryRecordCount"`
 }
 
 // EventsItem is a named discriminated union. Exactly one payload agrees with Kind.

@@ -112,7 +112,11 @@ import { MockTester } from "./MockTester";
 import { SourceDiff, SourceEditor } from "./SourceEditor";
 import { hasUnsafeJsonNumber } from "./jsonNumberPrecision";
 import classes from "./ApiDesigner.module.css";
-import { PinnedAPIArtifact, type PinnedAPIContext } from "./PinnedAPIArtifact";
+import {
+  PinnedAPIArtifact,
+  pinnedBackendReturnTarget,
+  type PinnedAPIContext,
+} from "./PinnedAPIArtifact";
 
 const POLL_MS = 5_000;
 const StateDiagramEditor = lazy(() => import("../state-diagram/StateDiagramEditor"));
@@ -164,6 +168,7 @@ function Workbench({
   reviewId?: number;
   pinnedAPI?: PinnedAPIContext;
 }): ReactElement {
+  const returnTarget = pinnedAPI ? pinnedBackendReturnTarget(pinnedAPI) : undefined;
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const narrow = useMediaQuery("(max-width: 62em)", false, { getInitialValueInEffect: false });
@@ -798,10 +803,10 @@ function Workbench({
           }}
         />
       )}
-      {pinnedAPI?.returnProjectId && pinnedAPI.returnRevisionId && pinnedAPI.projectionView && (
+      {pinnedAPI?.returnProjectId && returnTarget && pinnedAPI.projectionView && (
         <BackendArtifactProjections
           projectId={pinnedAPI.returnProjectId}
-          revisionId={pinnedAPI.returnRevisionId}
+          target={returnTarget}
           readOnly
           initialArtifact={`api_design:${id}`}
           initialView={pinnedAPI.projectionView}

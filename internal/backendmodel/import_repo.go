@@ -158,7 +158,26 @@ func stagingBytes(ctx context.Context, tx *sql.Tx, pid string) (int64, error) {
       (SELECT COALESCE(SUM(length(CAST(d.document AS BLOB))),0) FROM backend_import_decisions d JOIN backend_import_sessions s ON s.id=d.session_id WHERE s.project_id=?) +
       (SELECT COALESCE(SUM(length(CAST(p.document AS BLOB))+length(CAST(p.details AS BLOB))),0) FROM backend_import_previews p JOIN backend_import_sessions s ON s.id=p.session_id WHERE s.project_id=?) +
       (SELECT COALESCE(SUM(length(a.external_key)+length(a.source_key)+128),0) FROM backend_import_aliases a JOIN backend_import_sessions s ON s.id=a.session_id WHERE s.project_id=?)`, pid, pid, pid).Scan(&extra)
-	return n + extra, err
+	if err != nil {
+		return 0, err
+	}
+	var exists int
+	if err := tx.QueryRowContext(ctx, `SELECT count(*) FROM sqlite_master WHERE type='table' AND name='backend_import_source_decisions'`).Scan(&exists); err != nil {
+		return 0, err
+	}
+	var sourceBytes int64
+	if exists != 0 {
+		err = tx.QueryRowContext(ctx, `SELECT COALESCE(SUM(length(CAST(d.document AS BLOB))+length(CAST(d.decision_key AS BLOB))+length(d.decision_id)+length(d.input_hash)+128),0) FROM backend_import_source_decisions d JOIN backend_import_sessions s ON s.id=d.session_id WHERE s.project_id=?`, pid).Scan(&sourceBytes)
+	} else {
+		var version int
+		if err := tx.QueryRowContext(ctx, `PRAGMA user_version`).Scan(&version); err != nil {
+			return 0, err
+		}
+		if version >= 20 {
+			return 0, errors.New("source decision storage is missing from a schema20 store")
+		}
+	}
+	return n + extra + sourceBytes, err
 }
 func (r *Repo) checkStaging(ctx context.Context, tx *sql.Tx, pid string, reserved int64) error {
 	n, err := stagingBytes(ctx, tx, pid)
@@ -193,11 +212,10 @@ func (r *Repo) BeginImport(ctx context.Context, pid string, in BeginImportInput)
 		if mode == "" {
 			mode = "initial"
 		}
-		repositoryID := uuid.NewV7().String()
-		if in.RepositoryID != nil {
-			repositoryID = *in.RepositoryID
-		}
+		repositoryID := importRepositoryID(in)
 		baseSession := &ImportSession{ProjectID: pid, BaseRevisionID: in.BaseRevisionID, RepositoryID: repositoryID, Manifest: in.Manifest, Mode: mode, GraphScope: in.GraphScope, Profile: selectedProfile(in.Profile), ProfileExtension: in.ProfileExtension}
+		baseSession.SourceScope, baseSession.ScopeStatus, baseSession.SyncPolicy = in.SourceScope, in.ScopeStatus, in.SyncPolicy
+		baseSession.ChangeManifest = in.ChangeManifest
 		if err := requireImportBase(ctx, tx, baseSession); err != nil {
 			return err
 		}
@@ -221,6 +239,13 @@ func (r *Repo) BeginImport(ctx context.Context, pid string, in BeginImportInput)
 		}
 		now := time.Now().UTC()
 		*result = ImportSession{ID: uuid.NewV7().String(), ProjectID: pid, BaseRevisionID: in.BaseRevisionID, Mode: mode, GraphScope: in.GraphScope, Profile: selectedProfile(in.Profile), ProfileExtension: in.ProfileExtension, RepositoryID: repositoryID, SnapshotID: uuid.NewV7().String(), ManifestHash: mh, Manifest: in.Manifest, Inventory: in.Inventory, State: "collecting", Version: 1, CreatedAt: now, UpdatedAt: now}
+		result.SourceScope, result.ScopeStatus, result.SyncPolicy = in.SourceScope, in.ScopeStatus, in.SyncPolicy
+		result.ChangeManifest = in.ChangeManifest
+		result.BaseVectorHash, result.SelectedPartition = baseSession.BaseVectorHash, baseSession.SelectedPartition
+		if mode == "composed" {
+			result.BasePartition = baseSession.BasePartition
+			result.SelectedPartition = new(selectedSourcePartition(result))
+		}
 		b, err := json.Marshal(result)
 		if err != nil {
 			return err
@@ -239,6 +264,18 @@ func (r *Repo) BeginImport(ctx context.Context, pid string, in BeginImportInput)
 	}
 	return result, nil
 }
+
+func importRepositoryID(in BeginImportInput) string {
+	repositoryID := uuid.NewV7().String()
+	if in.RepositoryID != nil {
+		repositoryID = *in.RepositoryID
+	}
+	if in.SourceScope != nil && in.SourceScope.Kind != "add_repository" {
+		repositoryID = in.SourceScope.RepositoryID
+	}
+	return repositoryID
+}
+
 func (r *Repo) PutImportBatch(ctx context.Context, pid, sid, bid string, in ImportBatchInput) (*BatchReceipt, error) {
 	if err := validateKey(bid); err != nil {
 		return nil, invalid("batchId", "Invalid batch ID")
@@ -254,6 +291,13 @@ func (r *Repo) PutImportBatch(ctx context.Context, pid, sid, bid string, in Impo
 			return err
 		}
 		var prior, response string
+		if s.Mode == "composed" {
+			for _, command := range in.Commands {
+				if err := validateComposedWireMembers(command); err != nil {
+					return err
+				}
+			}
+		}
 		err = tx.QueryRowContext(ctx, `SELECT request_hash,receipt FROM backend_import_batches WHERE session_id=? AND batch_id=?`, sid, bid).Scan(&prior, &response)
 		if err == nil {
 			if prior != requestHash {
@@ -297,49 +341,55 @@ func (r *Repo) PutImportBatch(ctx context.Context, pid, sid, bid string, in Impo
 				return err
 			}
 		}
-		seen := map[string]bool{}
-		result.Identities = []RecordIdentity{}
-		for _, c := range in.Commands {
-			typ, key, err := commandAddress(c)
-			if err != nil {
+		if s.Mode == "composed" {
+			if err := putComposedCommands(ctx, tx, s, in.Commands, result); err != nil {
 				return err
 			}
-			address := typ + "\x00" + key
-			if seen[address] {
-				return semantic("commands", "Duplicate addressed command in one batch")
-			}
-			seen[address] = true
-			if err := validateCommand(c, s); err != nil {
-				return err
-			}
-			id, err := reserveIdentity(ctx, tx, s, c, typ, key, base)
-			if err != nil {
-				return err
-			}
-			result.Identities = append(result.Identities, RecordIdentity{RecordType: typ, ExternalKey: key, ID: id})
-			if c.Op == "remove" {
-				if _, err := tx.ExecContext(ctx, `DELETE FROM backend_import_decisions WHERE session_id=? AND record_type=? AND external_key=?`, sid, typ, key); err != nil {
-					return err
-				}
-				_, err = tx.ExecContext(ctx, `DELETE FROM backend_import_records WHERE session_id=? AND record_type=? AND external_key=?`, sid, typ, key)
-			} else if c.Identity != nil || c.Deletion != nil {
-				b, err := json.Marshal(c)
+		} else {
+			seen := map[string]bool{}
+			result.Identities = []RecordIdentity{}
+			for _, c := range in.Commands {
+				typ, key, err := commandAddress(c)
 				if err != nil {
 					return err
 				}
-				_, err = tx.ExecContext(ctx, `INSERT INTO backend_import_decisions(session_id,record_type,external_key,document) VALUES(?,?,?,?) ON CONFLICT(session_id,record_type,external_key) DO UPDATE SET document=excluded.document`, sid, typ, key, string(b))
+				address := typ + "\x00" + key
+				if seen[address] {
+					return semantic("commands", "Duplicate addressed command in one batch")
+				}
+				seen[address] = true
+				if err := validateCommand(c, s); err != nil {
+					return err
+				}
+				id, err := reserveIdentity(ctx, tx, s, c, typ, key, base)
 				if err != nil {
 					return err
 				}
-			} else {
-				b, marshalErr := json.Marshal(c)
-				if marshalErr != nil {
-					return marshalErr
+				result.Identities = append(result.Identities, RecordIdentity{RecordType: typ, ExternalKey: key, ID: id})
+				if c.Op == "remove" {
+					if _, err := tx.ExecContext(ctx, `DELETE FROM backend_import_decisions WHERE session_id=? AND record_type=? AND external_key=?`, sid, typ, key); err != nil {
+						return err
+					}
+					_, err = tx.ExecContext(ctx, `DELETE FROM backend_import_records WHERE session_id=? AND record_type=? AND external_key=?`, sid, typ, key)
+				} else if c.Identity != nil || c.Deletion != nil {
+					b, err := json.Marshal(c)
+					if err != nil {
+						return err
+					}
+					_, err = tx.ExecContext(ctx, `INSERT INTO backend_import_decisions(session_id,record_type,external_key,document) VALUES(?,?,?,?) ON CONFLICT(session_id,record_type,external_key) DO UPDATE SET document=excluded.document`, sid, typ, key, string(b))
+					if err != nil {
+						return err
+					}
+				} else {
+					b, marshalErr := json.Marshal(c)
+					if marshalErr != nil {
+						return marshalErr
+					}
+					_, err = tx.ExecContext(ctx, `INSERT INTO backend_import_records(session_id,record_type,external_key,document) VALUES(?,?,?,?) ON CONFLICT(session_id,record_type,external_key) DO UPDATE SET document=excluded.document`, sid, typ, key, string(b))
 				}
-				_, err = tx.ExecContext(ctx, `INSERT INTO backend_import_records(session_id,record_type,external_key,document) VALUES(?,?,?,?) ON CONFLICT(session_id,record_type,external_key) DO UPDATE SET document=excluded.document`, sid, typ, key, string(b))
-			}
-			if err != nil {
-				return err
+				if err != nil {
+					return err
+				}
 			}
 		}
 		s.Version++

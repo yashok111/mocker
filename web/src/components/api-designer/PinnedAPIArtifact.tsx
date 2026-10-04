@@ -20,6 +20,8 @@ import { LoadState } from "../backend-workbench/BackendGraphInventory";
 import { listCanvasOperations } from "../design-canvas/canvasOperations";
 import { escapeJsonPointerToken, isRecord } from "./documentModel";
 import { findJsonPointerRange } from "./monaco/jsonPointerRange";
+import type { BackendReadTarget } from "@/api/generated/schemas";
+import { backendReadTargetKey } from "../backend-workbench/backendReadTargets";
 
 const pinButtonProps = { h: "auto", py: "xs", maw: "100%", styles: databaseButtonStyles };
 
@@ -33,19 +35,47 @@ export type PinnedAPIContext = {
   pinnedSelectorPointer?: string;
   returnProjectId?: string;
   returnRevisionId?: string;
+  returnChangeProposalId?: string;
+  returnProposalRevisionId?: string;
   returnSourceNodeId?: string;
 };
 const uuid = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/;
-export function pinnedBackendReturnHref(pin: PinnedAPIContext): string | undefined {
+export function pinnedBackendReturnTarget(pin: PinnedAPIContext): BackendReadTarget | undefined {
   if (
     !pin.returnProjectId ||
     !uuid.test(pin.returnProjectId) ||
-    !pin.returnRevisionId ||
-    !uuid.test(pin.returnRevisionId) ||
     (pin.returnSourceNodeId !== undefined && !uuid.test(pin.returnSourceNodeId))
   )
     return undefined;
-  const search = new URLSearchParams({ revisionId: pin.returnRevisionId });
+  const full =
+    pin.returnChangeProposalId !== undefined || pin.returnProposalRevisionId !== undefined;
+  if (full && pin.returnRevisionId !== undefined) return undefined;
+  const target: BackendReadTarget = full
+    ? {
+        changeProposal: {
+          proposalId: pin.returnChangeProposalId ?? "",
+          proposalRevisionId: pin.returnProposalRevisionId ?? "",
+        },
+      }
+    : { revisionId: pin.returnRevisionId ?? "" };
+  try {
+    backendReadTargetKey(target);
+  } catch {
+    return undefined;
+  }
+  return target;
+}
+export function pinnedBackendReturnHref(pin: PinnedAPIContext): string | undefined {
+  const target = pinnedBackendReturnTarget(pin);
+  if (!target) return undefined;
+  const search = new URLSearchParams(
+    target.changeProposal
+      ? {
+          changeProposalId: target.changeProposal.proposalId,
+          proposalRevisionId: target.changeProposal.proposalRevisionId,
+        }
+      : { revisionId: target.revisionId! },
+  );
   if (pin.returnSourceNodeId) {
     search.set("recordId", pin.returnSourceNodeId);
     search.set("recordType", "node");

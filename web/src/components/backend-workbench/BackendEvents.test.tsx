@@ -62,7 +62,7 @@ const evidence = {
   externalKey: "proof",
   method: "static",
   status: "explicit",
-  explanation: "source",
+  explanation: "0197aaf9-5555-7000-8000-000000000119",
   source: {
     repositoryId: "repo",
     snapshotId: "snap",
@@ -133,14 +133,14 @@ function fixture() {
               ];
       return json(200, {
         projectId: "project",
-        revisionId: "rev",
+        revisionId: "0197aaf9-5555-7000-8000-000000000115",
         semanticHash: hash,
         policy: "source-events-projection-v1",
         view: body.view,
         ...(body.seedNodeId ? { seedNodeId: body.seedNodeId } : {}),
         ...(body.serviceId ? { serviceId: body.serviceId } : {}),
         items,
-        nextCursor: body.cursor ? "" : "next",
+        nextCursor: body.cursor ? "" : "0197aaf9-5555-7000-8000-000000000108",
         complete: true,
         truncated: false,
         truncationReasons: [],
@@ -223,8 +223,13 @@ function fixture() {
             : [],
         nextCursor: "",
       });
-    if (String(url).endsWith("/revisions/rev"))
-      return json(200, { id: "rev", projectId: "project", schemaVersion: "5", semanticHash: hash });
+    if (String(url).endsWith("/revisions/0197aaf9-5555-7000-8000-000000000115"))
+      return json(200, {
+        id: "0197aaf9-5555-7000-8000-000000000115",
+        projectId: "project",
+        schemaVersion: "5",
+        semanticHash: hash,
+      });
     return json(200, { items: [], nextCursor: "" });
   });
   return requests;
@@ -236,14 +241,14 @@ it("navigates exact forward and reverse routes and each handler Flow using the s
   renderWithProviders(
     <BackendEvents
       projectId="project"
-      revisionId="rev"
+      revisionId="0197aaf9-5555-7000-8000-000000000115"
       semanticHash={hash}
       onFlowNavigate={navigate}
     />,
   );
   fireEvent.click((await screen.findAllByRole("button", { name: "Открыть Flow flow" }))[0]!);
   expect(navigate).toHaveBeenCalledWith({
-    revisionId: "rev",
+    revisionId: "0197aaf9-5555-7000-8000-000000000115",
     entrypointId: "consumer",
     flowId: "flow",
     recordId: "handler",
@@ -252,7 +257,7 @@ it("navigates exact forward and reverse routes and each handler Flow using the s
   fireEvent.click(screen.getAllByRole("button", { name: "Маршруты получателя consumer" })[0]!);
   await waitFor(() =>
     expect(requests.at(-1)).toMatchObject({
-      revisionId: "rev",
+      revisionId: "0197aaf9-5555-7000-8000-000000000115",
       seedNodeId: "consumer",
       cursor: "",
     }),
@@ -270,7 +275,13 @@ it("navigates exact forward and reverse routes and each handler Flow using the s
 });
 it("uses message membership plus endpoint and edge to seed distinct event values", async () => {
   fixture();
-  renderWithProviders(<BackendEvents projectId="project" revisionId="rev" semanticHash={hash} />);
+  renderWithProviders(
+    <BackendEvents
+      projectId="project"
+      revisionId="0197aaf9-5555-7000-8000-000000000115"
+      semanticHash={hash}
+    />,
+  );
   fireEvent.click((await screen.findAllByRole("button", { name: "Поля сообщения message" }))[0]!);
   const a = await screen.findByRole("button", {
     name: /Открыть значение Order ID.*consumer.*delivery-a/,
@@ -287,18 +298,31 @@ it("uses message membership plus endpoint and edge to seed distinct event values
 });
 it("resets page and selectors when changing to jobs and service calls and retains static unknowns", async () => {
   const requests = fixture();
-  renderWithProviders(<BackendEvents projectId="project" revisionId="rev" semanticHash={hash} />);
+  renderWithProviders(
+    <BackendEvents
+      projectId="project"
+      revisionId="0197aaf9-5555-7000-8000-000000000115"
+      semanticHash={hash}
+    />,
+  );
   fireEvent.click(await screen.findByRole("button", { name: "Следующие событий" }));
-  await waitFor(() => expect(requests.at(-1)).toMatchObject({ cursor: "next" }));
+  await waitFor(() =>
+    expect(requests.at(-1)).toMatchObject({ cursor: "0197aaf9-5555-7000-8000-000000000108" }),
+  );
   fireEvent.change(screen.getByLabelText("Представление событий"), { target: { value: "jobs" } });
   await screen.findByText(/timezone unknown/);
-  expect(requests.at(-1)).toEqual({ revisionId: "rev", view: "jobs", limit: 50, cursor: "" });
+  expect(requests.at(-1)).toEqual({
+    revisionId: "0197aaf9-5555-7000-8000-000000000115",
+    view: "jobs",
+    limit: 50,
+    cursor: "",
+  });
   fireEvent.change(screen.getByLabelText("Представление событий"), {
     target: { value: "service_calls" },
   });
   expect(await screen.findByRole("button", { name: "Операция remote-operation" })).toBeVisible();
   expect(requests.at(-1)).toEqual({
-    revisionId: "rev",
+    revisionId: "0197aaf9-5555-7000-8000-000000000115",
     view: "service_calls",
     limit: 50,
     cursor: "",
@@ -306,7 +330,13 @@ it("resets page and selectors when changing to jobs and service calls and retain
 });
 it("exports only a captured fragment with physical source proof, question and criterion through reads", async () => {
   fixture();
-  renderWithProviders(<BackendEvents projectId="project" revisionId="rev" semanticHash={hash} />);
+  renderWithProviders(
+    <BackendEvents
+      projectId="project"
+      revisionId="0197aaf9-5555-7000-8000-000000000115"
+      semanticHash={hash}
+    />,
+  );
   fireEvent.click(
     (await screen.findAllByRole("button", { name: "Подготовить исследование пробела" }))[2]!,
   );
@@ -324,7 +354,7 @@ it("exports only a captured fragment with physical source proof, question and cr
   const captured = JSON.parse(text.textContent!);
   expect(captured).toMatchObject({
     projectId: "project",
-    revisionId: "rev",
+    revisionId: "0197aaf9-5555-7000-8000-000000000115",
     semanticHash: hash,
     question: "Where is the handler?",
     completionCriterion: "Evidence or reason + inspected scope",
@@ -341,7 +371,11 @@ it("honors dirty editor departure guards when changing event selection", async (
   const requests = fixture();
   renderWithProviders(
     <BackendAPIArtifactsContext value={{ guard: () => false } as never}>
-      <BackendEvents projectId="project" revisionId="rev" semanticHash={hash} />
+      <BackendEvents
+        projectId="project"
+        revisionId="0197aaf9-5555-7000-8000-000000000115"
+        semanticHash={hash}
+      />
     </BackendAPIArtifactsContext>,
   );
   fireEvent.click(

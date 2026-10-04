@@ -161,6 +161,14 @@ func relationalScalarValue(raw jsontext.Value, typ string, nullable bool, choice
 	return nil
 }
 func validateRelationalAttributes(kind string, attrs map[string]jsontext.Value, edge, persisted bool) error {
+	return validateRelationalAttributesMode(kind, attrs, edge, persisted, true)
+}
+
+func validateRelationalStructureAttributes(kind string, attrs map[string]jsontext.Value, edge bool) error {
+	return validateRelationalAttributesMode(kind, attrs, edge, true, false)
+}
+
+func validateRelationalAttributesMode(kind string, attrs map[string]jsontext.Value, edge, persisted, sourceAdmission bool) error {
 	if !relationalSubject(kind, attrs, edge) {
 		return validateAttributes(kind, attrs, edge)
 	}
@@ -195,13 +203,19 @@ func validateRelationalAttributes(kind string, attrs map[string]jsontext.Value, 
 		if !externalKey(key) {
 			return semantic("facets", "Invalid facet key")
 		}
-		if _, err = decodeRelationalFacet(kind, raw, persisted); err != nil {
+		if _, err = decodeRelationalFacetMode(kind, raw, persisted, sourceAdmission); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 func decodeRelationalFacet(kind string, raw jsontext.Value, persisted bool) (*relationalFacet, error) {
+	return decodeRelationalFacetMode(kind, raw, persisted, true)
+}
+
+// Source provenance is admitted only on import paths. Desired facets use the
+// same typed values and UUID references without manufacturing source proof.
+func decodeRelationalFacetMode(kind string, raw jsontext.Value, persisted, sourceAdmission bool) (*relationalFacet, error) {
 	m, err := relationalObject(raw)
 	if err != nil {
 		return nil, err
@@ -212,10 +226,16 @@ func decodeRelationalFacet(kind string, raw jsontext.Value, persisted bool) (*re
 		}
 		return key + "Ids"
 	}
-	required := []string{"sourceKind", "dialect", "analysisStatus", "gaps", refs("evidence")}
+	required := []string{"dialect", "analysisStatus", "gaps"}
 	optional := []string{}
+	provenance := []string{"sourceKind", refs("evidence")}
 	if persisted {
-		required = append(required, "freshness", "sourceSnapshotId")
+		provenance = append(provenance, "freshness", "sourceSnapshotId")
+	}
+	if sourceAdmission {
+		required = append(required, provenance...)
+	} else {
+		optional = append(optional, provenance...)
 	}
 	switch kind {
 	case "datastore":
@@ -280,16 +300,18 @@ func decodeRelationalFacet(kind string, raw jsontext.Value, persisted bool) (*re
 			}
 		}
 	}
-	evidence, err := relationalStrings(m[refs("evidence")], MaxRevisionEvidence, persisted)
-	if err != nil {
-		return nil, err
-	}
-	if len(evidence) == 0 {
-		return nil, semantic("facets", "Facet proof is required")
-	}
-	if persisted {
-		if !ValidID(f.SourceSnapshotID) || f.Freshness == nil || !slices.Contains([]string{"current", "stale"}, f.Freshness.Status) || f.Freshness.ConfirmedSnapshotID != f.SourceSnapshotID || f.Freshness.Reasons == nil {
-			return nil, semantic("facets", "Invalid persisted facet provenance")
+	if sourceAdmission {
+		evidence, err := relationalStrings(m[refs("evidence")], MaxRevisionEvidence, persisted)
+		if err != nil {
+			return nil, err
+		}
+		if len(evidence) == 0 {
+			return nil, semantic("facets", "Facet proof is required")
+		}
+		if persisted {
+			if !ValidID(f.SourceSnapshotID) || f.Freshness == nil || !slices.Contains([]string{"current", "stale"}, f.Freshness.Status) || f.Freshness.ConfirmedSnapshotID != f.SourceSnapshotID || f.Freshness.Reasons == nil {
+				return nil, semantic("facets", "Invalid persisted facet provenance")
+			}
 		}
 	}
 	for _, key := range []string{"qualifiedName", "databaseName", "targetReason"} {
@@ -480,6 +502,10 @@ func escapeRelationalPointer(s string) string {
 	return strings.ReplaceAll(strings.ReplaceAll(s, "~", "~0"), "/", "~1")
 }
 func relationalReferences(kind string, attrs map[string]jsontext.Value, edge, persisted bool) ([]relationalReference, error) {
+	return relationalReferencesMode(kind, attrs, edge, persisted, true)
+}
+
+func relationalReferencesMode(kind string, attrs map[string]jsontext.Value, edge, persisted, sourceAdmission bool) ([]relationalReference, error) {
 	out := []relationalReference{}
 	if !relationalSubject(kind, attrs, edge) {
 		return out, nil
@@ -489,7 +515,7 @@ func relationalReferences(kind string, attrs map[string]jsontext.Value, edge, pe
 		return nil, err
 	}
 	for fk, raw := range fs {
-		f, err := decodeRelationalFacet(kind, raw, persisted)
+		f, err := decodeRelationalFacetMode(kind, raw, persisted, sourceAdmission)
 		if err != nil {
 			return nil, err
 		}

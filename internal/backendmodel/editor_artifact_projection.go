@@ -80,6 +80,15 @@ func editorProjectionDiagnostic(code, message string) ArtifactDiagnostic {
 // Only items are paged; the selected group's complete frozen roster is retained
 // even when the owner cannot be read or any referenced source/object is missing.
 func (r *EditorArtifactRequest) Project(state *RevisionState, c ArtifactContext, in ArtifactQueryInput) (*ArtifactProjectionPage, error) {
+	if state == nil {
+		return nil, invalid("revisionId", "Projection needs an exact loaded backend revision")
+	}
+	artifactPins, semanticHash, snapshotIDs := state.Revision.ArtifactPins, state.Revision.SemanticHash, state.Revision.SourceSnapshotIDs
+	if r.effective != nil {
+		artifactPins = r.effective.Pins.ArtifactPins
+		semanticHash = r.effective.Pins.EffectiveSemanticHash
+		snapshotIDs = r.effective.Pins.SourceSnapshotIDs
+	}
 	if err := r.ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -89,7 +98,7 @@ func (r *EditorArtifactRequest) Project(state *RevisionState, c ArtifactContext,
 	if state == nil || state.Revision.ID != in.RevisionID {
 		return nil, invalid("revisionId", "Projection needs the exact loaded backend revision")
 	}
-	if err := c.Validate(state.Revision.ArtifactPins); err != nil {
+	if err := c.Validate(artifactPins); err != nil {
 		return nil, err
 	}
 	if c.DocumentVersion == EditorArtifactDocumentVersion {
@@ -97,15 +106,9 @@ func (r *EditorArtifactRequest) Project(state *RevisionState, c ArtifactContext,
 			return nil, err
 		}
 	}
-	var pin ArtifactPin
-	found := false
-	for _, p := range state.Revision.ArtifactPins {
-		if p.Kind == in.Artifact.Kind && p.ID == in.Artifact.ID {
-			pin, found = p, true
-		}
-	}
-	if !found {
-		return nil, invalid("artifact", "Artifact is not pinned in this backend revision")
+	pin, err := editorProjectionPin(artifactPins, in.Artifact)
+	if err != nil {
+		return nil, err
 	}
 	limit := in.Limit
 	if limit == 0 {
@@ -115,6 +118,15 @@ func (r *EditorArtifactRequest) Project(state *RevisionState, c ArtifactContext,
 	if err != nil {
 		return nil, err
 	}
+	if r.effective != nil {
+		scope, err = requestDigest(struct {
+			Scope string
+			Pins  EffectiveGraphPins
+		}{scope, r.effective.Pins})
+		if err != nil {
+			return nil, err
+		}
+	}
 	offset, err := editorProjectionOffset(scope, in.Cursor)
 	if err != nil {
 		return nil, err
@@ -123,7 +135,11 @@ func (r *EditorArtifactRequest) Project(state *RevisionState, c ArtifactContext,
 	if err != nil {
 		return nil, err
 	}
-	page := &ArtifactProjectionPage{RevisionID: state.Revision.ID, SemanticHash: state.Revision.SemanticHash, SourceSnapshotIDs: slices.Clone(state.Revision.SourceSnapshotIDs), Pins: slices.Clone(state.Revision.ArtifactPins), SelectedPin: pin, View: in.View, EmbeddedContractID: in.EmbeddedContractID, APIBindings: api, EditorBindings: editor, BindingsComplete: true, Items: []ArtifactProjectionItem{}, Resolution: ArtifactResolution{Status: "resolved", Diagnostics: []ArtifactDiagnostic{}}, Diagnostics: []ArtifactDiagnostic{}, Coverage: ArtifactProjectionCoverage{TruncatedReasons: []string{}}, Complete: true}
+	page := &ArtifactProjectionPage{RevisionID: state.Revision.ID, SemanticHash: semanticHash, SourceSnapshotIDs: slices.Clone(snapshotIDs), Pins: slices.Clone(artifactPins), SelectedPin: pin, View: in.View, EmbeddedContractID: in.EmbeddedContractID, APIBindings: api, EditorBindings: editor, BindingsComplete: true, Items: []ArtifactProjectionItem{}, Resolution: ArtifactResolution{Status: "resolved", Diagnostics: []ArtifactDiagnostic{}}, Diagnostics: []ArtifactDiagnostic{}, Coverage: ArtifactProjectionCoverage{TruncatedReasons: []string{}}, Complete: true}
+	if r.effective != nil {
+		page.Target = new(r.effective.Target)
+		page.EffectivePins = new(r.effective.Pins)
+	}
 	if page.SourceSnapshotIDs == nil {
 		page.SourceSnapshotIDs = []string{}
 	}
@@ -133,6 +149,20 @@ func (r *EditorArtifactRequest) Project(state *RevisionState, c ArtifactContext,
 		page.HashPolicy = "api-design-raw-document-v1"
 	}
 	return r.populateProjectionPage(state, c, in, page, scope, offset, limit)
+}
+
+func editorProjectionPin(artifactPins []ArtifactPin, artifact ArtifactKey) (ArtifactPin, error) {
+	var pin ArtifactPin
+	found := false
+	for _, p := range artifactPins {
+		if p.Kind == artifact.Kind && p.ID == artifact.ID {
+			pin, found = p, true
+		}
+	}
+	if !found {
+		return ArtifactPin{}, invalid("artifact", "Artifact is not pinned in this backend revision")
+	}
+	return pin, nil
 }
 
 func (r *EditorArtifactRequest) editorLinkedSources(c ArtifactContext, e ArtifactEmbeddedContract, key string) []string {

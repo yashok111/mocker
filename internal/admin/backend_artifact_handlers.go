@@ -17,7 +17,7 @@ func (s *Server) backendArtifactBody(w http.ResponseWriter, r *http.Request, out
 		s.backendError(w, &backendmodel.FaultError{Status: 413, Code: "backend_too_large", Message: "Request exceeds artifact body limit"})
 		return false
 	}
-	return s.backendBodyLimit(w, r, out, limit)
+	return s.backendProjectionBody(w, r, out, limit)
 }
 
 func (s *Server) handleQueryBackendArtifacts(w http.ResponseWriter, r *http.Request) {

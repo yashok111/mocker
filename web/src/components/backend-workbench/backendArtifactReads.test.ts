@@ -6,7 +6,7 @@ const hash = "a".repeat(64);
 const pin = { kind: "design_scenario", id: "12", revisionId: "23", contentHash: hash };
 const scope = {
   projectId: "project",
-  revisionId: "base",
+  revisionId: "0197aaf9-5555-7000-8000-000000000101",
   semanticHash: hash,
   sourceSnapshotIds: ["snap"],
   artifactPins: [pin],
@@ -20,10 +20,10 @@ const binding = {
   objectHash: hash,
   lastKnownLabel: "Deleted participant",
   origin: "manual" as const,
-  reason: "old",
+  reason: "0197aaf9-5555-7000-8000-000000000109",
 };
 const page = {
-  revisionId: "base",
+  revisionId: "0197aaf9-5555-7000-8000-000000000101",
   semanticHash: hash,
   sourceSnapshotIds: ["snap"],
   pins: [pin],
@@ -34,7 +34,7 @@ const page = {
   editorBindings: [binding],
   bindingsComplete: true as const,
   items: [],
-  nextCursor: "next",
+  nextCursor: "0197aaf9-5555-7000-8000-000000000108",
   resolution: { status: "broken", diagnostics: [], updateAvailable: false },
   diagnostics: [],
   coverage: {
@@ -48,7 +48,7 @@ const page = {
   complete: false,
 };
 const input = {
-  revisionId: "base",
+  revisionId: "0197aaf9-5555-7000-8000-000000000101",
   artifact: { kind: "design_scenario", id: "12" },
   view: "sequence",
 } as const;
@@ -79,7 +79,12 @@ it("refuses changing full roster between pages", async () => {
     vi.fn(() => Promise.resolve(json(200, { ...page, editorBindings: [] }))),
   );
   await expect(
-    readArtifactPage(scope, { ...input, cursor: "next" }, new AbortController().signal, page),
+    readArtifactPage(
+      scope,
+      { ...input, cursor: "0197aaf9-5555-7000-8000-000000000108" },
+      new AbortController().signal,
+      page,
+    ),
   ).rejects.toThrow();
 });
 it("supports all four exact views and checks explicit embedded scope", async () => {

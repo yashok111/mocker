@@ -1,3 +1,9 @@
+import {
+  projectionTarget,
+  projectionKey,
+  projectionURLTarget,
+  type ProjectionReadProps,
+} from "./backendEffectiveProjectionReads";
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import {
   Alert,
@@ -15,7 +21,7 @@ import {
 } from "@mantine/core";
 import { useQuery } from "@tanstack/react-query";
 import type {
-  BackendEventsPage,
+  BackendEventsResponse as BackendEventsPage,
   BackendEventsScalar,
   BackendEventsTrigger,
   BackendLineageValueRef,
@@ -45,10 +51,9 @@ import { BackendFlowInspector } from "./BackendFlowInspector";
 import type { BackendSourcePin, FlowSelection } from "./backendFlowReads";
 import { useBackendAPIDeparture } from "./useBackendAPIDeparture";
 
-type Props = {
+type Props = ProjectionReadProps & {
   projectId: string;
-  revisionId: string;
-  semanticHash: string;
+  semanticHash?: string;
   onFlowNavigate?: (pin: BackendSourcePin) => void;
 };
 const BackendFlow = lazy(() =>
@@ -57,12 +62,22 @@ const BackendFlow = lazy(() =>
 export function BackendEvents(props: Props) {
   return (
     <EventsWorkspace
-      key={`${props.projectId}:${props.revisionId}:${props.semanticHash}`}
+      key={`${props.projectId}:${projectionKey(projectionTarget(props), props.pins)}:${props.semanticHash}`}
       {...props}
     />
   );
 }
-function EventsWorkspace({ projectId, revisionId, semanticHash, onFlowNavigate }: Props) {
+function EventsWorkspace({
+  projectId,
+  revisionId: selectedRevision,
+  target: explicitTarget,
+  pins,
+  semanticHash: selectedHash,
+  onFlowNavigate,
+}: Props) {
+  const target = projectionTarget({ revisionId: selectedRevision, target: explicitTarget, pins });
+  const revisionId = pins?.baseRevisionId ?? selectedRevision ?? "";
+  const semanticHash = pins?.effectiveSemanticHash ?? selectedHash ?? "";
   const [view, setView] = useState<BackendEventsPage["view"]>("routes");
   const [filter, setFilter] = useState("");
   const [draft, setDraft] = useState("");
@@ -78,20 +93,20 @@ function EventsWorkspace({ projectId, revisionId, semanticHash, onFlowNavigate }
   const input: QueryBackendEventsRequest =
     view === "routes"
       ? {
-          revisionId,
+          ...target,
           view,
           ...(filter ? { seedNodeId: filter } : {}),
           limit: 50,
           cursor: cursors.at(-1) ?? "",
         }
       : {
-          revisionId,
+          ...target,
           view,
           ...(filter ? { serviceId: filter } : {}),
           limit: 50,
           cursor: cursors.at(-1) ?? "",
         };
-  const query = useEventsPage(projectId, input, semanticHash);
+  const query = useEventsPage(projectId, input, semanticHash, pins);
   const page = query.data;
   function reset(nextFilter: string, nextView = view) {
     depart(() => {
@@ -148,7 +163,10 @@ function EventsWorkspace({ projectId, revisionId, semanticHash, onFlowNavigate }
           События и задачи
         </Title>
         <Text size="sm" c="dimmed" style={databaseWrap}>
-          Статическая модель исходников · только чтение · ревизия {revisionId}
+          {target.changeProposal
+            ? "Желаемая структура предложения · базовая ревизия"
+            : "Статическая модель исходников · только чтение · ревизия"}{" "}
+          {revisionId}
         </Text>
         <Text size="sm">
           Объявленные маршруты, расписания и вызовы. Доставка, запуск задачи и атомарность доставки
@@ -298,7 +316,7 @@ function EventsWorkspace({ projectId, revisionId, semanticHash, onFlowNavigate }
                               styles={databaseButtonStyles}
                               onClick={() =>
                                 openFlow({
-                                  revisionId,
+                                  ...projectionURLTarget(target, revisionId),
                                   entrypointId: refs.consumerId ?? refs.jobId ?? refs.operationId,
                                   flowId,
                                   ...(dispatch.handlerId
@@ -366,7 +384,7 @@ function EventsWorkspace({ projectId, revisionId, semanticHash, onFlowNavigate }
                             styles={databaseButtonStyles}
                             onClick={() =>
                               openFlow({
-                                revisionId,
+                                ...projectionURLTarget(target, revisionId),
                                 flowId: payload.emitContext!.flowId,
                                 recordId: refs.producerId,
                                 recordType: "node",
@@ -402,7 +420,10 @@ function EventsWorkspace({ projectId, revisionId, semanticHash, onFlowNavigate }
                       </Text>
                     ))}
                     <Text size="xs" style={databaseWrap}>
-                      Основания: {payload.witness.evidenceIds.join(", ") || "не указаны"}
+                      {payload.witness.provenance === "desired"
+                        ? "Исторические основания объектов базовой ревизии"
+                        : "Основания"}
+                      : {payload.witness.evidenceIds.join(", ") || "не указаны"}
                     </Text>
                     <Group>
                       {refs.messageId && (
@@ -452,6 +473,8 @@ function EventsWorkspace({ projectId, revisionId, semanticHash, onFlowNavigate }
             key={eventsItemKey(fields)}
             projectId={projectId}
             revisionId={revisionId}
+            target={target}
+            pins={pins}
             item={fields}
             onValueSelect={(ref, trigger) =>
               depart(() => {
@@ -466,6 +489,8 @@ function EventsWorkspace({ projectId, revisionId, semanticHash, onFlowNavigate }
             key={lineageRefKey(value)}
             projectId={projectId}
             revisionId={revisionId}
+            target={target}
+            pins={pins}
             value={value}
             onClose={() =>
               depart(() => {
@@ -480,6 +505,8 @@ function EventsWorkspace({ projectId, revisionId, semanticHash, onFlowNavigate }
             key={lineageRefKey(selection.valueRef)}
             projectId={projectId}
             revisionId={revisionId}
+            target={target}
+            pins={pins}
             value={selection.valueRef}
             onClose={() =>
               depart(() => {
@@ -494,6 +521,8 @@ function EventsWorkspace({ projectId, revisionId, semanticHash, onFlowNavigate }
               key={JSON.stringify(selection)}
               projectId={projectId}
               revisionId={revisionId}
+              target={target}
+              pins={pins}
               selection={selection}
               onSelect={(next) => openRecord(next)}
               onClose={() =>
@@ -516,6 +545,8 @@ function EventsWorkspace({ projectId, revisionId, semanticHash, onFlowNavigate }
             <BackendFlow
               projectId={projectId}
               revisionId={revisionId}
+              target={target}
+              pins={pins}
               pin={flow}
               onPinChange={setFlow}
             />
@@ -592,27 +623,29 @@ export function EventsNotice({ page }: { page: BackendEventsPage }) {
 function EventFieldSeeds({
   projectId,
   revisionId,
+  target: explicitTarget,
+  pins,
   item,
   onValueSelect,
-}: {
+}: ProjectionReadProps & {
   projectId: string;
-  revisionId: string;
   item: EventsItem;
   onValueSelect: (ref: BackendLineageValueRef, trigger: HTMLElement) => void;
 }) {
+  const target = projectionTarget({ revisionId, target: explicitTarget, pins });
   const refs = eventsPayload(item).references;
   const heading = useRef<HTMLHeadingElement>(null);
   useEffect(() => {
     heading.current?.focus();
   }, []);
-  const key = ["backend-event-fields", projectId, revisionId, eventsItemKey(item)];
+  const key = ["backend-event-fields", projectId, projectionKey(target, pins), eventsItemKey(item)];
   useDatabaseCancellation(key);
   const query = useQuery({
     queryKey: key,
     retry: false,
     staleTime: Infinity,
     enabled: !!refs.messageId,
-    queryFn: ({ signal }) => readEventsFieldSeeds(projectId, revisionId, refs, signal),
+    queryFn: ({ signal }) => readEventsFieldSeeds(projectId, target, refs, signal, pins),
   });
   return (
     <Stack aria-label="Значения сообщения">
@@ -649,6 +682,8 @@ function EventFieldSeeds({
                 <BackendLineageActions
                   projectId={projectId}
                   revisionId={revisionId}
+                  target={target}
+                  pins={pins}
                   seed={ref}
                   onValueSelect={(next) =>
                     onValueSelect(next, document.activeElement as HTMLElement)
@@ -680,6 +715,8 @@ function EventsGap({
   const [capture] = useState(() => {
     let filesRemaining = 256;
     return {
+      target: ("target" in page ? page.target : undefined) ?? { revisionId: page.revisionId },
+      pins: "pins" in page ? page.pins : undefined,
       revisionId: page.revisionId,
       semanticHash: page.semanticHash,
       ...captureEventsFragment(item),
@@ -713,7 +750,7 @@ function EventsGap({
   const key = [
     "backend-events-gap",
     projectId,
-    capture.revisionId,
+    projectionKey(capture.target, capture.pins),
     capture.semanticHash,
     eventsItemKey(item),
   ];
@@ -723,7 +760,8 @@ function EventsGap({
     enabled: !!requested,
     retry: false,
     staleTime: Infinity,
-    queryFn: ({ signal }) => readEventsGapEvidence(projectId, capture.revisionId, item, signal),
+    queryFn: ({ signal }) =>
+      readEventsGapEvidence(projectId, capture.target, item, signal, capture.pins),
   });
   const heading = useRef<HTMLHeadingElement>(null);
   useEffect(() => {

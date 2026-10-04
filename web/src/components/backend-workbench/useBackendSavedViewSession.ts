@@ -7,14 +7,17 @@ import {
   getGetBackendSavedViewQueryKey,
 } from "@/api/generated/backend-projects/backend-projects";
 import type {
-  BackendSavedView,
+  BackendSavedViewResponse,
+  BackendSavedViewV2Target,
   BackendSavedViewState,
-  BackendSavedViewTarget,
+  BackendReadTarget,
   CreateBackendSavedViewRequest,
   SaveBackendSavedViewRequest,
 } from "@/api/generated/schemas";
 import { ApiFailure } from "@/api/client";
-import { sameViewBinding, savedViewStateEqual } from "./backendSavedViewState";
+import { sameViewBinding, savedViewStateEqual, sameSavedViewTarget } from "./backendSavedViewState";
+import { checkBackendSavedView } from "./backendSavedViewReads";
+import { backendReadTargetKey } from "./backendReadTargets";
 export type SavedViewAttempt =
   | { kind: "create"; input: CreateBackendSavedViewRequest }
   | { kind: "save"; viewId: string; input: SaveBackendSavedViewRequest };
@@ -25,15 +28,18 @@ const uncertain = (failure: unknown) =>
   failure.status === 429;
 export function useBackendSavedViewSession(
   projectId: string,
-  initial?: BackendSavedView,
-  onSaved?: (saved: BackendSavedView) => void,
+  initial?: BackendSavedViewResponse,
+  onSaved?: (saved: BackendSavedViewResponse) => void,
 ) {
   const client = useQueryClient();
   const [saved, setSaved] = useState(initial);
+  const [documentVersion, setDocumentVersion] = useState<
+    BackendSavedViewResponse["documentVersion"]
+  >(initial?.documentVersion ?? "saved-view-v1");
   const [restoreGeneration, setRestoreGeneration] = useState(0);
   const [boundaryGeneration, setBoundaryGeneration] = useState(0);
   const [state, setState] = useState(initial?.state);
-  const [target, setTarget] = useState(initial?.target);
+  const [target, setTarget] = useState<BackendSavedViewV2Target | undefined>(initial?.target);
   const [name, setName] = useState(initial?.name ?? "");
   const [preview, setPreview] = useState(false);
   const [pending, setPending] = useState<SavedViewAttempt | null>(null);
@@ -78,6 +84,7 @@ export function useBackendSavedViewSession(
     if (!initial) {
       setRestoreGeneration((v) => v + 1);
       setSaved(undefined);
+      setDocumentVersion("saved-view-v1");
       setState(undefined);
       setTarget(undefined);
       setName("");
@@ -85,6 +92,7 @@ export function useBackendSavedViewSession(
     } else if (saved?.id !== initial.id || saved?.version !== initial.version) {
       setRestoreGeneration((v) => v + 1);
       setSaved(initial);
+      setDocumentVersion(initial.documentVersion);
       setState(initial.state);
       setTarget(initial.target);
       setName(initial.name);
@@ -95,16 +103,39 @@ export function useBackendSavedViewSession(
     !!saved &&
     !!state &&
     !!target &&
-    (sameViewBinding(saved.target, saved.state, target, state) ||
+    ((saved.documentVersion === "saved-view-v2" &&
+      sameSavedViewTarget(saved.target, target) &&
+      saved.state.kind === state.kind) ||
+      sameViewBinding(saved.target, saved.state, target, state) ||
       ("revisionId" in saved.target &&
         "revisionId" in target &&
         saved.target.revisionId === target.revisionId &&
         saved.state.kind === state.kind));
   const dirty =
     !!state && (!bound || !savedViewStateEqual(state, saved?.state) || name !== saved?.name);
-  function capture(nextTarget: BackendSavedViewTarget, nextState: BackendSavedViewState) {
+  function capture(
+    nextTarget: BackendReadTarget,
+    nextState: BackendSavedViewState,
+    version?: BackendSavedViewResponse["documentVersion"],
+  ) {
     if (attemptRef.current || running.current || preview) return;
-    setTarget(nextTarget);
+    if (nextTarget.importCandidate) {
+      setError("Сохранение подготовленного графа импорта не поддерживается.");
+      return;
+    }
+    const selectedVersion = nextTarget.changeProposal
+      ? "saved-view-v2"
+      : (version ?? documentVersion);
+    if (selectedVersion === "saved-view-v2") {
+      try {
+        backendReadTargetKey(nextTarget);
+      } catch {
+        setError("Выберите точный граф перед сохранением вида.");
+        return;
+      }
+    }
+    setDocumentVersion(selectedVersion);
+    setTarget(structuredClone(nextTarget) as BackendSavedViewV2Target);
     setState(nextState);
     setPreview(false);
     setError("");
@@ -131,19 +162,21 @@ export function useBackendSavedViewSession(
       abort.signal.throwIfAborted();
       if (current !== epoch.current) return;
       if (response.status !== 200) throw new Error("Не удалось сохранить вид");
-      const value = response.data;
-      if (
-        !Number.isSafeInteger(value.version) ||
-        value.version < 1 ||
-        value.projectId !== projectId
-      )
-        throw new Error("Ответ сохранения содержит неверный проект или версию");
+      const value = checkBackendSavedView(response.data, projectId, {
+        ...(attempt.kind === "save" ? { id: attempt.viewId } : {}),
+        target: attempt.kind === "create" ? attempt.input.target : saved?.target,
+        documentVersion:
+          "documentVersion" in attempt.input ? attempt.input.documentVersion : "saved-view-v1",
+      });
+      if (value.state.kind !== attempt.input.state.kind)
+        throw new Error("Ответ сохранения содержит другой тип вида");
       // Adopt only the acknowledged baseline. Edits made during the request remain dirty.
       setState((current) =>
         savedViewStateEqual(current, attempt.input.state) ? value.state : current,
       );
       setName((current) => (current.trim() === attempt.input.name ? value.name : current));
       setSaved(value);
+      setDocumentVersion(value.documentVersion);
       setTarget(value.target);
       attemptRef.current = null;
       setPending(null);
@@ -189,14 +222,35 @@ export function useBackendSavedViewSession(
       state,
       idempotencyKey: crypto.randomUUID(),
     });
-    if (asNew || !saved)
-      await execute({ kind: "create", input: { ...input, target: structuredClone(target) } });
-    else if (Number.isSafeInteger(saved.version) && saved.version > 0)
+    if (asNew || !saved) {
+      if (documentVersion === "saved-view-v2")
+        await execute({
+          kind: "create",
+          input: { ...input, documentVersion: "saved-view-v2", target: structuredClone(target) },
+        });
+      else if (target.revisionId)
+        await execute({
+          kind: "create",
+          input: { ...input, target: { revisionId: target.revisionId } },
+        });
+      else if (target.proposal)
+        await execute({
+          kind: "create",
+          input: { ...input, target: { proposal: structuredClone(target.proposal) } },
+        });
+    } else if (Number.isSafeInteger(saved.version) && saved.version > 0) {
       await execute({
         kind: "save",
         viewId: saved.id,
-        input: { ...input, expectedVersion: saved.version },
+        input: {
+          ...input,
+          expectedVersion: saved.version,
+          ...(saved.documentVersion === "saved-view-v2"
+            ? { documentVersion: "saved-view-v2" as const }
+            : {}),
+        },
       });
+    }
   }
   async function retry() {
     if (attemptRef.current) await execute(attemptRef.current);
@@ -221,8 +275,14 @@ export function useBackendSavedViewSession(
         response.data.projectId !== projectId
       )
         throw new Error("Не удалось загрузить текущий вид");
+      checkBackendSavedView(response.data, projectId, {
+        id: saved.id,
+        target: saved.target,
+        documentVersion: saved.documentVersion,
+      });
       setRestoreGeneration((v) => v + 1);
       setSaved(response.data);
+      setDocumentVersion(response.data.documentVersion);
       setState(response.data.state);
       setTarget(response.data.target);
       setName(response.data.name);
@@ -246,6 +306,7 @@ export function useBackendSavedViewSession(
     }
   }
   return {
+    documentVersion,
     restoreGeneration,
     state,
     setState,

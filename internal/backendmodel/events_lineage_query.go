@@ -13,7 +13,7 @@ func (r lineageProofReader) eventRef(p *lineageProof, ref LineageValueRef) error
 		p.add("unresolved_event_route", true)
 		return nil
 	}
-	if err := r.record(p, route.EvidenceIDs, route.Freshness); err != nil {
+	if err := r.edge(p, route); err != nil {
 		return err
 	}
 	if len(route.EvidenceIDs) == 0 {
@@ -73,7 +73,7 @@ func (r lineageProofReader) eventMapping(p *lineageProof, m lineageIndexedMappin
 		for _, edge := range r.handles[ref.EndpointID] {
 			if edge.Kind == "handles" && edge.From == ref.EndpointID && edge.To == *flow.ParentID {
 				found = true
-				if err := r.record(p, edge.EvidenceIDs, edge.Freshness); err != nil {
+				if err := r.edge(p, edge); err != nil {
 					return err
 				}
 				if len(edge.EvidenceIDs) == 0 {

@@ -1,3 +1,6 @@
+import { CoverageDetails, LoadState, Pages } from "./BackendReadUI";
+import { BackendExactGraph, BackendExactRecordInspector } from "./BackendExactGraph";
+export { CoverageDetails, LoadState, Pages } from "./BackendReadUI";
 import { BackendAPIFields } from "./BackendAPIFields";
 import { BackendValueInspector } from "./BackendValueInspector";
 import { BackendValueSeeds } from "./BackendLineageActions";
@@ -10,7 +13,6 @@ import {
   Code,
   Divider,
   Group,
-  Loader,
   NativeSelect,
   Paper,
   Stack,
@@ -27,11 +29,12 @@ import {
 } from "@/api/generated/backend-projects/backend-projects";
 import type {
   BackendEdge,
+  BackendComposedEdge,
   BackendNode,
-  BackendRevisionCoverage,
+  BackendEffectiveGraphPins,
   QueryBackendGraphRequest,
 } from "@/api/generated/schemas";
-import { describeApiFailureDetailed } from "@/api/errors";
+import { usePinnedValue } from "./backendFlowReads";
 import { useBackendAPIDeparture } from "./useBackendAPIDeparture";
 
 const wrap = { overflowWrap: "anywhere" as const, whiteSpace: "pre-wrap" as const };
@@ -64,98 +67,58 @@ const kinds = [
   "job",
   "event_field",
 ];
-const categories: Record<string, string> = {
-  files: "Файлы",
-  endpoints: "Точки входа",
-  datastores: "Хранилища",
-  migrations: "Миграции",
-  producers: "Отправители событий",
-  consumers: "Получатели событий",
-  jobs: "Фоновые задачи",
-  contracts: "Контракты",
-  tests: "Тесты",
+type Props = {
+  projectId: string;
+  revisionId: string;
+  schemaVersion?: string;
+  pins?: BackendEffectiveGraphPins;
+  focusTarget?: { recordType: "node" | "edge"; id: string };
+  onSelectionChange?: (
+    selection: { recordType: "node" | "edge"; id: string; revisionId: string } | undefined,
+  ) => void;
 };
-const statuses: Record<string, string> = {
-  complete: "Полное",
-  partial: "Частичное",
-  unsupported: "Не поддерживается",
-  excluded: "Исключено",
-};
-type Props = { projectId: string; revisionId: string; schemaVersion?: string };
-type Selection = { type: "node"; id: string } | { type: "edge"; edge: BackendEdge };
+type GraphEdge = BackendEdge | BackendComposedEdge;
+type Selection = { type: "node"; id: string } | { type: "edge"; id: string; edge?: GraphEdge };
 
 export function BackendGraphInventory(props: Props) {
+  if (props.schemaVersion === "6")
+    return (
+      <BackendExactGraph
+        projectId={props.projectId}
+        target={{ revisionId: props.revisionId }}
+        pins={props.pins}
+        focusTarget={props.focusTarget}
+        onSelectionChange={(selection) =>
+          props.onSelectionChange?.(
+            selection ? { ...selection, revisionId: props.revisionId } : undefined,
+          )
+        }
+      />
+    );
   return <Inventory key={`${props.projectId}:${props.revisionId}`} {...props} />;
 }
 
-function useGraphPage(projectId: string, input: QueryBackendGraphRequest) {
+function useGraphPage(projectId: string, input: QueryBackendGraphRequest, enabled = true) {
   return useQuery({
     queryKey: ["backend-graph", projectId, input],
-    queryFn: ({ signal }) => queryBackendGraph(projectId, input, { signal }),
+    enabled,
+    queryFn: async ({ signal }) => {
+      const response = await queryBackendGraph(projectId, input, { signal });
+      if (response.status !== 200) throw new Error("Не удалось прочитать граф.");
+      return { ...response, data: response.data };
+    },
     staleTime: Infinity,
     retry: false,
   });
 }
 
-export function LoadState({
-  query,
-  label,
-}: {
-  query: { isPending: boolean; isError: boolean; error: unknown; refetch: () => unknown };
-  label: string;
-}) {
-  return (
-    <>
-      {query.isPending && <Loader aria-label={`Загружаем ${label}`} />}
-      {query.isError && (
-        <Alert color="red" role="alert">
-          {describeApiFailureDetailed(query.error)}
-          <Button mt="sm" variant="light" onClick={() => void query.refetch()}>
-            Повторить загрузку {label}
-          </Button>
-        </Alert>
-      )}
-    </>
-  );
-}
-
-export function Pages({
-  label,
-  cursors,
-  next,
-  busy,
-  setCursors,
-}: {
-  label: string;
-  cursors: string[];
-  next?: string;
-  busy: boolean;
-  setCursors: (update: (previous: string[]) => string[]) => void;
-}) {
-  if (cursors.length === 1 && !next) return null;
-  return (
-    <Group>
-      <Button
-        variant="default"
-        disabled={busy || cursors.length === 1}
-        onClick={() => setCursors((previous) => previous.slice(0, -1))}
-      >
-        Предыдущие {label}
-      </Button>
-      <Button
-        variant="default"
-        disabled={busy || !next}
-        onClick={() => {
-          if (next) setCursors((previous) => [...previous, next]);
-        }}
-      >
-        Следующие {label}
-      </Button>
-    </Group>
-  );
-}
-
-function Inventory({ projectId, revisionId, schemaVersion }: Props) {
+function Inventory({
+  projectId,
+  revisionId,
+  schemaVersion,
+  focusTarget,
+  onSelectionChange,
+}: Props) {
   const depart = useBackendAPIDeparture();
   const coverageQuery = useGetBackendCoverage(projectId, revisionId, {
     query: { staleTime: Infinity, retry: false },
@@ -165,9 +128,15 @@ function Inventory({ projectId, revisionId, schemaVersion }: Props) {
   const [kindDraft, setKindDraft] = useState("");
   const [filter, setFilter] = useState({ search: "", kind: "" });
   const [cursors, setCursors] = useState([""]);
-  const [selection, setRawSelection] = useState<Selection | null>(null);
+  const [selection, setRawSelection] = usePinnedValue<Selection | null>(
+    JSON.stringify(focusTarget ?? null),
+    focusTarget ? { type: focusTarget.recordType, id: focusTarget.id } : null,
+  );
   const setSelection = (next: Selection | null) => {
-    depart(() => setRawSelection(next));
+    depart(() => {
+      setRawSelection(next);
+      onSelectionChange?.(next ? { recordType: next.type, id: next.id, revisionId } : undefined);
+    });
   };
   const query = useGraphPage(projectId, {
     revisionId,
@@ -256,7 +225,7 @@ function Inventory({ projectId, revisionId, schemaVersion }: Props) {
               onClick={() => setSelection({ type: "node", id: node.id })}
             >
               {node.kind} · {node.name}
-              {node.freshness?.status === "stale" ? " · Устарело" : ""}
+              {"freshness" in node && node.freshness?.status === "stale" ? " · Устарело" : ""}
             </Button>
           ))}
           <Pages
@@ -289,25 +258,15 @@ function Inventory({ projectId, revisionId, schemaVersion }: Props) {
                 projectId={projectId}
                 revisionId={revisionId}
                 nodeId={selection.id}
-                onEdge={(edge) => setSelection({ type: "edge", edge })}
+                onEdge={(edge) => setSelection({ type: "edge", id: edge.id, edge })}
               />
             ) : (
-              <>
-                <Text fw={600}>{selection.edge.kind}</Text>
-                <AssertionDetails record={selection.edge} />
-                <Code block style={wrap}>
-                  {selection.edge.from} → {selection.edge.to}
-                </Code>
-                <Code block style={wrap}>
-                  {JSON.stringify(selection.edge.attributes, null, 2)}
-                </Code>
-                <EvidenceDetails
-                  key={selection.edge.id}
-                  projectId={projectId}
-                  revisionId={revisionId}
-                  subjectId={selection.edge.id}
-                />
-              </>
+              <AnnotationEdgeDetails
+                projectId={projectId}
+                revisionId={revisionId}
+                edgeId={selection.id}
+                selectedEdge={selection.edge}
+              />
             )}
           </Stack>
         </Paper>
@@ -316,97 +275,55 @@ function Inventory({ projectId, revisionId, schemaVersion }: Props) {
   );
 }
 
-export function CoverageDetails({ data }: { data: BackendRevisionCoverage }) {
+function AnnotationEdgeDetails({
+  projectId,
+  revisionId,
+  edgeId,
+  selectedEdge,
+}: {
+  projectId: string;
+  revisionId: string;
+  edgeId: string;
+  selectedEdge?: GraphEdge;
+}) {
+  const query = useGraphPage(
+    projectId,
+    { revisionId, recordType: "edges", id: edgeId },
+    !selectedEdge,
+  );
+  const edge =
+    selectedEdge ??
+    (query.data?.status === 200
+      ? query.data.data.edges.find((item) => item.id === edgeId)
+      : undefined);
+  if (edge && "source" in edge)
+    return (
+      <BackendExactRecordInspector
+        projectId={projectId}
+        target={{ revisionId }}
+        claimsSupported
+        recordType="edge"
+        id={edgeId}
+      />
+    );
   return (
-    <Stack gap="sm">
-      <Group>
-        <Badge color={data.coverage.status === "complete" ? "green" : "yellow"}>
-          {data.coverage.status === "complete" ? "Полное покрытие" : "Частичное покрытие"}
-        </Badge>
-        <Text size="sm">
-          Объектов: {data.coverage.knownObjects}.{" "}
-          {data.coverage.denominator === null
-            ? "Общее количество неизвестно."
-            : `Всего: ${data.coverage.denominator}.`}
-        </Text>
-      </Group>
-      {data.staleCounts && (
-        <Text size="sm">
-          Устаревшие: объекты {data.staleCounts.nodes} · связи {data.staleCounts.edges} · основания{" "}
-          {data.staleCounts.evidence}
-        </Text>
+    <Stack>
+      {!selectedEdge && <LoadState query={query} label="связи" />}
+      {!query.isPending && !query.isError && !edge && (
+        <Alert color="yellow">Связь отсутствует в выбранной ревизии.</Alert>
       )}
-      {data.reconciliationGaps?.map((gap, index) => (
-        <Text key={`reconcile:${index}`} size="sm" style={wrap}>
-          {gap}
-        </Text>
-      ))}
-      {data.coverage.gaps.map((gap, index) => (
-        <Text key={index} size="sm" style={wrap}>
-          {gap}
-        </Text>
-      ))}
-      {data.snapshots.length === 0 && <Text c="dimmed">Исходный код ещё не импортирован.</Text>}
-      {data.snapshots.map((snapshot) => (
-        <div key={snapshot.id}>
-          <Group gap="sm">
-            <Text fw={600}>Снимок исходников</Text>
-            <Badge color="gray">
-              {snapshot.role === "retained_provenance"
-                ? "Историческое основание"
-                : "Основной снимок"}
-            </Badge>
-            <Badge color={snapshot.consistency === "verified" ? "teal" : "yellow"}>
-              {snapshot.consistency === "verified"
-                ? "Стабильность проверена агентом"
-                : "Стабильность не проверена"}
-            </Badge>
-            {snapshot.dirty && <Badge color="gray">Рабочее дерево изменено</Badge>}
-          </Group>
-          <Text size="sm" style={wrap}>
-            {snapshot.id}
-          </Text>
-          <Text size="sm" c="dimmed" style={wrap}>
-            {snapshot.provider.name} · {snapshot.provider.version} ·{" "}
-            {new Date(snapshot.capturedAt).toLocaleString("ru-RU")}
-          </Text>
-          <Text size="sm" style={wrap}>
-            Хеш manifest: {snapshot.manifestHash}
-          </Text>
-        </div>
-      ))}
-      {data.inventory.length > 0 && (
-        <Stack gap="xs" aria-label="Инвентаризация исходников">
-          {data.inventory.map((item) => (
-            <div key={item.category}>
-              <Group gap="sm">
-                <Text fw={500} size="sm">
-                  {categories[item.category] ?? item.category}
-                </Text>
-                <Badge color={item.status === "complete" ? "teal" : "gray"}>
-                  {statuses[item.status] ?? item.status}
-                </Badge>
-                <Text size="sm">
-                  {item.knownCount}
-                  {item.denominator === null ? " · всего неизвестно" : ` / ${item.denominator}`}
-                </Text>
-              </Group>
-              <Text size="xs" c="dimmed" style={wrap}>
-                Источник: {item.discoverySource}
-              </Text>
-              {item.reason && (
-                <Text size="sm" style={wrap}>
-                  {item.reason}
-                </Text>
-              )}
-              {item.gaps.map((gap, index) => (
-                <Text key={index} size="sm" c="dimmed" style={wrap}>
-                  {gap}
-                </Text>
-              ))}
-            </div>
-          ))}
-        </Stack>
+      {edge && (
+        <>
+          <Text fw={600}>{edge.kind}</Text>
+          <AssertionDetails record={edge} />
+          <Code block style={wrap}>
+            {edge.from} → {edge.to}
+          </Code>
+          <Code block style={wrap}>
+            {JSON.stringify(edge.attributes, null, 2)}
+          </Code>
+          <EvidenceDetails projectId={projectId} revisionId={revisionId} subjectId={edgeId} />
+        </>
       )}
     </Stack>
   );
@@ -417,9 +334,9 @@ function NodeDetails({
   revisionId,
   nodeId,
   onEdge: selectEdge,
-}: Props & { nodeId: string; onEdge: (edge: BackendEdge) => void }) {
+}: Props & { nodeId: string; onEdge: (edge: GraphEdge) => void }) {
   const depart = useBackendAPIDeparture();
-  const onEdge = (next: BackendEdge) => {
+  const onEdge = (next: GraphEdge) => {
     depart(() => selectEdge(next));
   };
   const [selectedValue, setSelectedValue] = useState<BackendLineageValueRef>();
@@ -432,7 +349,19 @@ function NodeDetails({
   const query = useGetBackendNode(projectId, revisionId, nodeId, {
     query: { staleTime: Infinity, retry: false },
   });
-  const node: BackendNode | undefined = query.data?.status === 200 ? query.data.data : undefined;
+  const read = query.data?.status === 200 ? query.data.data : undefined;
+  const node: BackendNode | undefined = read && "id" in read ? read : undefined;
+  if (read && "node" in read)
+    return (
+      <BackendExactRecordInspector
+        projectId={projectId}
+        target={{ revisionId }}
+        pins={read.pins}
+        claimsSupported
+        recordType="node"
+        id={nodeId}
+      />
+    );
   return (
     <>
       <LoadState query={query} label="объекта" />
@@ -508,7 +437,7 @@ function Relationships({
   nodeId,
   direction,
   onEdge,
-}: Props & { nodeId: string; direction: "in" | "out"; onEdge: (edge: BackendEdge) => void }) {
+}: Props & { nodeId: string; direction: "in" | "out"; onEdge: (edge: GraphEdge) => void }) {
   const [cursors, setCursors] = useState([""]);
   const query = useGraphPage(projectId, {
     revisionId,
@@ -627,7 +556,12 @@ function EvidenceDetails({
   );
 }
 
-function AssertionDetails({ record }: { record: Pick<BackendNode, "ownership" | "freshness"> }) {
+function AssertionDetails({
+  record,
+}: {
+  record: Pick<BackendNode, "ownership" | "freshness"> | BackendComposedEdge;
+}) {
+  if ("source" in record) return null;
   return (
     <Stack gap="xs">
       {record.freshness && (
@@ -677,7 +611,7 @@ function RecordInspector({
   id,
 }: Props & { recordType: "node" | "edge" | "evidence"; id: string }) {
   const depart = useBackendAPIDeparture();
-  const [edge, setEdge] = useState<BackendEdge | null>(null);
+  const [edge, setEdge] = useState<GraphEdge | null>(null);
   if (recordType === "node" && !edge)
     return (
       <NodeDetails
@@ -697,6 +631,16 @@ function RecordInspector({
 function EdgeDetails({ projectId, revisionId, id }: Props & { id: string }) {
   const query = useGraphPage(projectId, { revisionId, recordType: "edges", id, limit: 1 });
   const edge = query.data?.status === 200 ? query.data.data.edges[0] : undefined;
+  if (edge && "source" in edge)
+    return (
+      <BackendExactRecordInspector
+        projectId={projectId}
+        target={{ revisionId }}
+        claimsSupported
+        recordType="edge"
+        id={edge.id}
+      />
+    );
   return (
     <Stack>
       <LoadState query={query} label="связи" />

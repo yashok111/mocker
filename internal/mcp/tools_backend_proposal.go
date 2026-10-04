@@ -1,6 +1,8 @@
 package mcp
 
 import (
+	"fmt"
+
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/yashok111/mocker/api"
 )
@@ -48,8 +50,24 @@ func addBackendProposalTools(s *sdk.Server, lb *loopback) {
 
 func backendReadToolTarget(schema map[string]any) {
 	properties := schema["properties"].(map[string]any)
-	properties["proposal"] = designScenarioSchemaObject([]string{"proposalId", "proposalRevisionId"}, map[string]any{"proposalId": map[string]any{"type": "string", "format": "uuid"}, "proposalRevisionId": map[string]any{"type": "string", "format": "uuid"}})
-	required := schema["required"].([]any)
+	for key, name := range map[string]string{"proposal": "BackendProposalReadTarget", "changeProposal": "BackendProposalReadTarget", "importCandidate": "BackendImportCandidateReadTarget"} {
+		value, err := api.BackendSchema(name)
+		if err != nil {
+			panic(err)
+		}
+		properties[key] = value
+	}
+	var required []any
+	switch values := schema["required"].(type) {
+	case []any:
+		required = values
+	case []string:
+		for _, value := range values {
+			required = append(required, value)
+		}
+	default:
+		panic(fmt.Sprintf("unexpected required schema %T", values))
+	}
 	var kept []any
 	for _, member := range required {
 		if member != "revisionId" {
@@ -57,5 +75,15 @@ func backendReadToolTarget(schema map[string]any) {
 		}
 	}
 	schema["required"] = kept
-	schema["oneOf"] = []any{map[string]any{"required": []string{"revisionId"}, "not": map[string]any{"required": []string{"proposal"}}}, map[string]any{"required": []string{"proposal"}, "not": map[string]any{"required": []string{"revisionId"}}}}
+	alternatives := make([]any, 0, 4)
+	for _, key := range []string{"revisionId", "proposal", "changeProposal", "importCandidate"} {
+		var excluded []any
+		for _, other := range []string{"revisionId", "proposal", "changeProposal", "importCandidate"} {
+			if other != key {
+				excluded = append(excluded, map[string]any{"required": []string{other}})
+			}
+		}
+		alternatives = append(alternatives, map[string]any{"required": []string{key}, "not": map[string]any{"anyOf": excluded}})
+	}
+	schema["oneOf"] = alternatives
 }

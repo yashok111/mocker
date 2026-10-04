@@ -16,7 +16,7 @@ func addBackendArtifactTools(s *sdk.Server, lb *loopback) {
 		name, route, contract, description string
 		readOnly                           bool
 	}{
-		{"query_backend_artifacts", "POST /api/backend-projects/{id}/artifacts/query", "QueryBackendArtifactsRequest", "Reads one exact pinned editor projection with the full selected API/editor binding roster on every page. Auxiliary rows retain typed locators; current draft is advisory.", true},
+		{"query_backend_artifacts", "POST /api/backend-projects/{id}/artifacts/query", "QueryBackendArtifactsRequest", "Reads an exact pinned editor projection for source1 through source6 or full changeProposal with source5/6 baseline. Useful artifact models are source4 through source6; selected artifact/context must exist. Legacy proposal and importCandidate targets are unsupported. Every page keeps the full frozen binding roster, typed locators and exact desired owner revision/hash. Current draft is advisory.", true},
 		{"preview_backend_artifact_pins", "POST /api/backend-projects/{id}/artifacts/preview", "PreviewBackendArtifactPinsRequest", "Previews complete API/editor pin groups without writes. API set requires both collections; scenario set requires editorBindings and forbids apiBindings. Missing prior selectors and truncation block apply.", true},
 		{"apply_backend_artifact_pins", "POST /api/backend-projects/{id}/artifacts/commands", "ApplyBackendArtifactPinsRequest", "Atomically applies manual exact artifact pins with CAS, candidate hash and a required idempotency key. Retry the identical body/key for the original receipt bytes.", false},
 	} {

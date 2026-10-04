@@ -2,7 +2,7 @@ import { Graph } from "@antv/x6";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Alert, Stack, Text } from "@mantine/core";
 import type {
-  BackendDatabaseRelationshipItem,
+  BackendPinnedDatabaseRelationshipItem as BackendDatabaseRelationshipItem,
   BackendDatabaseTableItem,
 } from "@/api/generated/schemas";
 import DiagramViewport from "../diagram/DiagramViewport";

@@ -1,7 +1,10 @@
 import { Graph } from "@antv/x6";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Alert, Button, Stack, Text } from "@mantine/core";
-import type { BackendNode, BackendEdge } from "@/api/generated/schemas";
+import type {
+  ProjectionNode as BackendNode,
+  ProjectionEdge as BackendEdge,
+} from "./backendEffectiveProjectionReads";
 import DiagramViewport from "../diagram/DiagramViewport";
 import { useDiagramLayout } from "../diagram/useDiagramLayout";
 import { applyDiagramRoutes } from "../diagram/elkX6";

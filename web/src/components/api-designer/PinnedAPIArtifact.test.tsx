@@ -253,3 +253,36 @@ it("rejects a mismatching historical owner revision instead of using the current
     /идентичность владельца/,
   );
 });
+
+it("returns from an authored snapshot to the exact full draft without a source fallback", () => {
+  const project = "0197aaf9-5555-7000-8000-000000000001";
+  const proposal = "0197aaf9-5555-7000-8000-000000000002";
+  const revision = "0197aaf9-5555-7000-8000-000000000003";
+  const href = pinnedBackendReturnHref({
+    returnProjectId: project,
+    returnChangeProposalId: proposal,
+    returnProposalRevisionId: revision,
+    returnSourceNodeId: revision,
+  });
+  expect(href).toBe(
+    `/backend-projects/${project}?changeProposalId=${proposal}&proposalRevisionId=${revision}&recordId=${revision}&recordType=node`,
+  );
+  expect(
+    pinnedBackendReturnHref({ returnProjectId: project, returnChangeProposalId: proposal }),
+  ).toBeUndefined();
+  expect(
+    pinnedBackendReturnHref({
+      returnProjectId: project,
+      returnChangeProposalId: proposal,
+      returnProposalRevisionId: revision,
+      returnRevisionId: revision,
+    }),
+  ).toBeUndefined();
+  expect(
+    pinnedBackendReturnHref({
+      returnProjectId: project,
+      returnChangeProposalId: "bad",
+      returnProposalRevisionId: revision,
+    }),
+  ).toBeUndefined();
+});

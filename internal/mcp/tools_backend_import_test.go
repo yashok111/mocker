@@ -286,10 +286,11 @@ func TestBackendImportBatchIDsSurviveRealSDKLoopback(t *testing.T) {
 		begin.Inventory = append(begin.Inventory, backendmodel.InventoryItem{Category: category, Status: "unsupported", KnownCount: 0, Denominator: nil, DiscoverySource: "collector", Gaps: []string{}, Reason: "unsupported"})
 	}
 	var session backendmodel.ImportSession
+	type beginFields backendmodel.BeginImportInput
 	if err := json.Unmarshal(invoke(t, "begin_backend_import", struct {
 		ProjectID string `json:"projectId"`
-		backendmodel.BeginImportInput
-	}{ProjectID: project.ID, BeginImportInput: begin}), &session); err != nil {
+		beginFields
+	}{ProjectID: project.ID, beginFields: beginFields(begin)}), &session); err != nil {
 		t.Fatal(err)
 	}
 	version := session.Version

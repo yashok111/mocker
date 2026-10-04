@@ -2,7 +2,7 @@ import { afterEach, expect, it, vi } from "vitest";
 import { screen, fireEvent, waitFor } from "@testing-library/react";
 import { renderWithProviders } from "@/test/render";
 import { json } from "@/test/http";
-import { BackendValueSeeds } from "./BackendLineageActions";
+import { BackendLineageActions, BackendValueSeeds } from "./BackendLineageActions";
 import type { BackendNode } from "@/api/generated/schemas";
 afterEach(() => vi.unstubAllGlobals());
 it.each(["inputs", "outputs", "parameters", "results"] as const)(
@@ -15,13 +15,13 @@ it.each(["inputs", "outputs", "parameters", "results"] as const)(
         requests.push(body);
         return json(422, {});
       }
-      return json(200, { id: "rev", schemaVersion: "4" });
+      return json(200, { id: "0197aaf9-5555-7000-8000-000000000002", schemaVersion: "4" });
     });
     const select = vi.fn();
     renderWithProviders(
       <BackendValueSeeds
         projectId="project"
-        revisionId="rev"
+        revisionId="0197aaf9-5555-7000-8000-000000000002"
         node={
           {
             id: "owner",
@@ -45,7 +45,7 @@ it.each(["inputs", "outputs", "parameters", "results"] as const)(
     fireEvent.click(launch);
     await waitFor(() =>
       expect(requests).toContainEqual({
-        revisionId: "rev",
+        revisionId: "0197aaf9-5555-7000-8000-000000000002",
         seed: { kind: "port", nodeId: "owner", collection, portKey: "opaque-key" },
         direction: "reverse",
         maxDepth: 8,
@@ -59,13 +59,13 @@ it.each(["inputs", "outputs", "parameters", "results"] as const)(
 );
 it("explains source3 unsupported without requesting lineage", async () => {
   const fetch = vi.fn(async (_url: RequestInfo | URL) =>
-    json(200, { id: "rev", schemaVersion: "3" }),
+    json(200, { id: "0197aaf9-5555-7000-8000-000000000002", schemaVersion: "3" }),
   );
   vi.stubGlobal("fetch", fetch);
   renderWithProviders(
     <BackendValueSeeds
       projectId="project"
-      revisionId="rev"
+      revisionId="0197aaf9-5555-7000-8000-000000000002"
       node={
         {
           id: "field",
@@ -82,11 +82,13 @@ it("explains source3 unsupported without requesting lineage", async () => {
 });
 it("offers independent exact column facet values", () => {
   const select = vi.fn();
-  vi.stubGlobal("fetch", async () => json(200, { id: "rev", schemaVersion: "4" }));
+  vi.stubGlobal("fetch", async () =>
+    json(200, { id: "0197aaf9-5555-7000-8000-000000000002", schemaVersion: "4" }),
+  );
   renderWithProviders(
     <BackendValueSeeds
       projectId="project"
-      revisionId="rev"
+      revisionId="0197aaf9-5555-7000-8000-000000000002"
       node={
         {
           id: "column",
@@ -107,13 +109,13 @@ it.each(["opposite direction", "internal direction", "boundary and paging"])(
     const seed = { kind: "api_field" as const, nodeId: "original" };
     const destination = { kind: "api_field" as const, nodeId: "boundary" };
     vi.stubGlobal("fetch", async (url: RequestInfo | URL, init?: RequestInit) => {
-      if (String(url).endsWith("/revisions/rev"))
-        return json(200, { id: "rev", schemaVersion: "4" });
+      if (String(url).endsWith("/revisions/0197aaf9-5555-7000-8000-000000000002"))
+        return json(200, { id: "0197aaf9-5555-7000-8000-000000000002", schemaVersion: "4" });
       if (init?.method !== "POST") return json(200, { items: [], nextCursor: "" });
       const body = JSON.parse(String(init.body));
       return json(200, {
         projectId: "project",
-        revisionId: "rev",
+        revisionId: "0197aaf9-5555-7000-8000-000000000002",
         seed: body.seed,
         direction: body.direction,
         semanticHash: "hash",
@@ -156,7 +158,7 @@ it.each(["opposite direction", "internal direction", "boundary and paging"])(
     renderWithProviders(
       <BackendLineageActions
         projectId="project"
-        revisionId="rev"
+        revisionId="0197aaf9-5555-7000-8000-000000000002"
         seed={seed}
         onValueSelect={() => {}}
       />,
@@ -189,6 +191,30 @@ it.each(["opposite direction", "internal direction", "boundary and paging"])(
     expect(screen.queryByText(/Отдельный запрос за границей/)).not.toBeInTheDocument();
     expect(await screen.findByText("Страница 1")).toBeVisible();
     expect(screen.getByLabelText("Глубина происхождения")).toHaveValue("8");
-    expect(screen.getByText("Ревизия: rev · original · поле API")).toBeVisible();
+    expect(
+      screen.getByText("Ревизия: 0197aaf9-5555-7000-8000-000000000002 · original · поле API"),
+    ).toBeVisible();
   },
 );
+
+it("opens full proposal lineage without reading a source head", async () => {
+  const target = {
+    changeProposal: {
+      proposalId: "0197aaf9-5555-7000-8000-000000000001",
+      proposalRevisionId: "0197aaf9-5555-7000-8000-000000000003",
+    },
+  };
+  const fetcher = vi.fn(async () => json(422, {}));
+  vi.stubGlobal("fetch", fetcher);
+  renderWithProviders(
+    <BackendLineageActions
+      projectId="project"
+      target={target}
+      seed={{ kind: "representation_field", nodeId: "field" }}
+      onValueSelect={() => {}}
+    />,
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Происхождение значения" }));
+  await waitFor(() => expect(fetcher).toHaveBeenCalled());
+  expect(fetcher.mock.calls).toHaveLength(1);
+});

@@ -1,9 +1,13 @@
 # Source import protocol
 
 
-This topic belongs to import v6; verify its owner identity/contentHash in the
+This topic belongs to import v7; verify its owner identity/contentHash in the
 selected immutable global set before staging. Use its `backend-model` for record semantics and `backend-recovery`
 before commit or any retry. Select compatibility before the first write.
+
+## Protocol boundary in import7
+
+Capture, source fidelity, batch hashing, exact recovery and the independent pre-commit audit remain required for source6. Composed Begin/scope/reference/claim/resolution/incremental rules belong to sync1/backend-sync. Read that complete owner before a composed write. The legacy key-based Begin/commands/adjacent transitions below retain source1–5 semantics and do not permit composed requests to borrow their old fields. In particular, selected retained-five-profile extension is decided per partition, even when the head is schema6.
 
 ## Source capture and inventory
 
@@ -88,7 +92,7 @@ preview below. That audit is a required transition before the first commit send.
 Historical retained proof stays at its original snapshot; do not recheck it as
 current source or assign it new capture hashes.
 
-## Begin a durable session
+## Legacy source1–5 Begin
 
 `begin_backend_import` takes this input (projectId is the MCP path argument):
 
@@ -108,7 +112,7 @@ reconciliation, not incremental import. Save the full begin input before sending
 The returned `id` is importId for subsequent calls; also save repositoryId,
 snapshotId and session version. Begin leaves project head/metadata unchanged.
 
-## Commands and identity order
+## Legacy key-based commands and identity order
 
 Each command has op and exactly one matching addressed record:
 
@@ -362,7 +366,7 @@ revision/evidence bytes remain unchanged. If preview cannot resolve a decision,
 repair or remove that staged decision and preview again; never claim complete zero
 to bypass proof. A missing object in partial analysis remains stale.
 
-## Explicit one-way profile extension
+## Existing source1–5 adjacent profile extensions
 
 For relational initial import, explicitly select profile relational-graph-v1 with
 provider profiles exactly foundation plus relational. It may publish schema2 over
@@ -458,7 +462,7 @@ runtime, downgrade, automatic provider migration and proposal→source fail.
 Schema1/2 history and receipt bytes stay unchanged; omitted old records stay stale
 at original snapshots and proofs instead of gaining new UUIDs/current claims.
 
-Select inspect6 in this same global set and verify backend-flow-reference before
+Select inspect7 in this same global set and verify backend-flow-reference before
 staging schema3. Its typed flow/step/query/transaction and control/access/boundary
 shapes use external Keys on import and Ids after preview. Keep entry/exits in the
 owning flow; local transaction membership does not propagate to callees. Calls
@@ -482,28 +486,28 @@ call and access references plus the usual complete scope/inventory/proof gates.
 An authorized focused gap investigation changes source analysis focus, not the
 whole-scope import protocol. Unavailable/inconclusive source retains unknowns
 and produces a concrete limitation, never an empty progress commit. Requery the
-new acknowledged source revision through inspect6; imported witnesses still do
+new acknowledged source revision through inspect7; imported witnesses still do
 not establish execution, all writers, atomicity or impact.
 
 ## Reimport with frozen API associations
 
-Import6 accepts no API pin/binding input. Reconcile carries the base's frozen
+Import7 accepts no API pin/binding input. Reconcile carries the base's frozen
 API artifact pins and bindings without re-resolving or revalidating the manual
 association. It updates the source hash anchor, while stale source status and
 last-known source/object labels remain visible. Explicit source deletion retains
 the binding as orphaned; query_backend_api_artifacts with that sourceNodeId
-returns200 at the new exact revision. Use inspect6's full API procedure for a
+returns200 at the new exact revision. Use inspect7's full API procedure for a
 separately authorized remap or removal. Never attach a current API draft during
 import or rewrite an old source revision/SavedView/proposal base.
 
 ## Source5 event/profile proof and reconciliation
 
-Import6 admits events-service-v1/schema5 initial only with all five exact profiles.
+Import7 admits events-service-v1/schema5 initial only with all five exact profiles.
 Explicit source4→5 reconcile adds only events-service-v1 with
 profileExtension:{fromProfile:"field-lineage-v1",toProfile:"events-service-v1"},
 matching graphScope/profile and same sole repository/provider identity. No silent
 upgrade/source1–3 jump/downgrade; same5→5 omits extension. Preserve earlier
-profiles/UUIDs/bytes/hashes/receipts. Load backend-model and select inspect6/
+profiles/UUIDs/bytes/hashes/receipts. Load backend-model and select inspect7/
 backend-events for typed attrs, node+endpoint+edge route refs and transport pairs.
 Check every message/channel/handler/edge reference and analyzed member/hash/
 physical line claim in the accepted candidate; no runtime execution.

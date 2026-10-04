@@ -153,10 +153,10 @@ plugin-pack: ## Tarball of @yashok111/mocker-test for hand distribution: package
 # golang.org/x/crypto/argon2: tried, the detector then reports FALSE races
 # on the hash goroutines' results in three packages.
 TEST_P ?= 2
-# The MCP package's aggregate race suite exceeded Go's default 10m budget
-# while individual tests kept advancing. Allow 15m per package; operation
-# deadlines stay enforced by their existing tests. Override for slower hosts.
-TEST_TIMEOUT ?= 15m
+# The expanded MCP race suite outgrew the 15m/30m package budgets while tests
+# kept advancing through SDK schema registration. Allow 45m for the aggregate;
+# individual operation deadlines stay enforced. Override for slower hosts.
+TEST_TIMEOUT ?= 45m
 test: ## Test suite scoped to ./cmd ./internal, race detector, memory-capped (see CAP above and the comment above)
 	$(CAP) go test ./cmd/... ./internal/... -race -count=1 -p $(TEST_P) -timeout $(TEST_TIMEOUT) -gcflags='modernc.org/...=-race=false'
 

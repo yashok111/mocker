@@ -10,4 +10,4 @@ For analyst API authoring use `list_api_designs` → `get_api_design` → `save_
 
 For sequence-canvas scenarios use `list_design_scenarios` → `get_design_scenario`. `run_design_scenario {scenarioId, revisionId, runId, variables?, name?}` starts a complete saved sequence asynchronously; poll `get_design_scenario_run` until `status` is passed, failed or cancelled, then inspect every failed step's request, response and assertions. A successful start is not a passed run. Variable overrides do not change the document. Use a fresh runId for each experiment; after a lost response read the known ID before retrying. `list_design_scenario_runs` and `cancel_design_scenario_run` manage persisted results also visible in the UI. `get_guide {topic: "design"}` has the complete workflow.
 
-Source5 events/jobs/service calls use inspect6/backend-events; import6 owns source admission/reimport.
+Events: inspect7/backend-events. Sources: import7/backend-import or sync1/backend-sync. Edits: change1/backend-change-proposals.

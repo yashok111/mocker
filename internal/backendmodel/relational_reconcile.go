@@ -358,7 +358,7 @@ func relationalContains(from, to Node) (bool, bool) {
 			return false, true
 		}
 		for _, raw := range fs {
-			f, err := decodeRelationalFacet(to.Kind, raw, true)
+			f, err := decodeRelationalFacetMode(to.Kind, raw, true, false)
 			if err != nil {
 				return false, true
 			}
@@ -375,6 +375,12 @@ func relationalContains(from, to Node) (bool, bool) {
 	return false, true
 }
 func validateRelationalGraph(ctx context.Context, q importReader, s *ImportSession, g *graphCandidate, diagnostics *[]ImportDiagnostic) error {
+	return validateRelationalGraphRules(ctx, q, s, g, diagnostics)
+}
+
+// The import wrapper supplies its admission session and database reader. Pure
+// final-graph validation has neither; historical ownership is checked by its caller.
+func validateRelationalGraphRules(ctx context.Context, q importReader, s *ImportSession, g *graphCandidate, diagnostics *[]ImportDiagnostic) error {
 	add := func(path, message string) {
 		*diagnostics = append(*diagnostics, ImportDiagnostic{Code: "backend_graph_invalid", Path: path, Message: message})
 	}
@@ -388,7 +394,10 @@ func validateRelationalGraph(ctx context.Context, q importReader, s *ImportSessi
 	}
 	ancestors := map[string]bool{}
 	historical := map[string]*RevisionState{}
-	rid := s.BaseRevisionID
+	rid := ""
+	if s != nil {
+		rid = s.BaseRevisionID
+	}
 	for rid != "" {
 		if err := ctx.Err(); err != nil {
 			return err
@@ -436,24 +445,30 @@ func validateRelationalGraph(ctx context.Context, q importReader, s *ImportSessi
 		if edge {
 			path = "edges/" + id
 		}
-		if err := validateRelationalAttributes(kind, attrs, edge, true); err != nil {
+		if err := validateRelationalAttributesMode(kind, attrs, edge, true, s != nil); err != nil {
 			add(path, err.Error())
 			return nil
 		}
 		fs, _, _ := relationalFacetObject(kind, attrs)
-		refs, err := relationalReferences(kind, attrs, edge, true)
+		refs, err := relationalReferencesMode(kind, attrs, edge, true, s != nil)
 		if err != nil {
 			add(path, err.Error())
 			return nil
 		}
 		for _, ref := range refs {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
 			if ref.Kind == "evidence" {
-				if e, ok := evidence[ref.ID]; !ok || e.SubjectID != id || !slices.Contains(proofs, ref.ID) {
+				if e, ok := evidence[ref.ID]; s != nil && (!ok || e.SubjectID != id || !slices.Contains(proofs, ref.ID)) {
 					add(path+ref.Path, "Facet proof must belong to subject and top-level evidenceIds")
 				}
 				continue
 			}
 			if ref.HistoricalRevisionID != "" {
+				if s == nil {
+					continue
+				}
 				if !ancestors[ref.HistoricalRevisionID] {
 					add(path+ref.Path, "Historical pin must be a base or ancestor revision")
 					continue
@@ -479,7 +494,7 @@ func validateRelationalGraph(ctx context.Context, q importReader, s *ImportSessi
 				continue
 			}
 			target, ok := nodes[ref.ID]
-			if !ok || target.Ownership == nil || target.Ownership.RepositoryID != s.RepositoryID {
+			if !ok || s != nil && (target.Ownership == nil || target.Ownership.RepositoryID != s.RepositoryID) {
 				add(path+ref.Path, "Nested reference must survive in the same repository")
 				continue
 			}
@@ -495,7 +510,11 @@ func validateRelationalGraph(ctx context.Context, q importReader, s *ImportSessi
 			}
 		}
 		for fk, raw := range fs {
-			f, _ := decodeRelationalFacet(kind, raw, true)
+			f, err := decodeRelationalFacetMode(kind, raw, true, s != nil)
+			if err != nil {
+				add(path, err.Error())
+				continue
+			}
 			subject := nodes[id]
 			store := datastore(id)
 			if edge {
@@ -543,7 +562,7 @@ func validateRelationalGraph(ctx context.Context, q importReader, s *ImportSessi
 				}
 			}
 			for _, proofID := range f.EvidenceIDs {
-				if e, ok := evidence[proofID]; ok && e.Source.SnapshotID != f.SourceSnapshotID {
+				if e, ok := evidence[proofID]; s != nil && ok && e.Source.SnapshotID != f.SourceSnapshotID {
 					add(path, "Facet sourceSnapshotId must match its proof")
 				}
 			}
@@ -561,7 +580,7 @@ func validateRelationalGraph(ctx context.Context, q importReader, s *ImportSessi
 							add(path, "Complete migration derivation requires supporting parent facet")
 							continue
 						}
-						pf, err := decodeRelationalFacet(p.Kind, pr, true)
+						pf, err := decodeRelationalFacetMode(p.Kind, pr, true, s != nil)
 						if err == nil && (pf.DerivationStatus != "complete" || pf.Order.Status != "known" || string(pf.Order.Value) == "null") {
 							add(path, "Incomplete migration parent prevents complete derivation")
 						}
@@ -579,6 +598,9 @@ func validateRelationalGraph(ctx context.Context, q importReader, s *ImportSessi
 		return nil
 	}
 	for _, n := range g.Nodes {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		if relationalSubject(n.Kind, n.Attributes, false) && n.Kind != "datastore" && n.ParentID == nil {
 			add("nodes/"+n.ID, "Relational subject requires structural parent")
 		}
@@ -587,6 +609,9 @@ func validateRelationalGraph(ctx context.Context, q importReader, s *ImportSessi
 		}
 	}
 	for _, e := range g.Edges {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		if err := check(e.ID, e.Kind, e.Attributes, true, e.EvidenceIDs); err != nil {
 			return err
 		}
@@ -600,11 +625,11 @@ func validateRelationalGraph(ctx context.Context, q importReader, s *ImportSessi
 		}
 		cfs, _, _ := relationalFacetObject(from.Kind, from.Attributes)
 		for fk, raw := range fs {
-			f, err := decodeRelationalFacet(e.Kind, raw, true)
+			f, err := decodeRelationalFacetMode(e.Kind, raw, true, s != nil)
 			if err != nil {
 				continue
 			}
-			constraint, err := decodeRelationalFacet(from.Kind, cfs[fk], true)
+			constraint, err := decodeRelationalFacetMode(from.Kind, cfs[fk], true, s != nil)
 			if err != nil || constraint.ConstraintKind != "foreign_key" || from.ParentID == nil {
 				add("edges/"+e.ID, "References must originate from a foreign-key constraint with matching facet")
 				continue
@@ -664,14 +689,14 @@ func validateRelationalGraph(ctx context.Context, q importReader, s *ImportSessi
 		}
 		migrationFacets[n.ID] = map[string]*relationalFacet{}
 		for fk, raw := range fs {
-			f, err := decodeRelationalFacet(n.Kind, raw, true)
+			f, err := decodeRelationalFacetMode(n.Kind, raw, true, s != nil)
 			if err != nil {
 				continue
 			}
 			migrationFacets[n.ID][fk] = f
 			for _, change := range f.Changes {
 				target := change.Target
-				if target.Kind != "source_only" {
+				if target.Kind != "source_only" || s == nil {
 					continue
 				}
 				for _, active := range g.Nodes {
@@ -699,7 +724,7 @@ func validateRelationalGraph(ctx context.Context, q importReader, s *ImportSessi
 		}
 	}
 	for _, n := range g.Nodes {
-		if n.Kind == "migration" || !relationalSubject(n.Kind, n.Attributes, false) {
+		if s == nil || n.Kind == "migration" || !relationalSubject(n.Kind, n.Attributes, false) {
 			continue
 		}
 		fs, _, err := relationalFacetObject(n.Kind, n.Attributes)
@@ -707,7 +732,7 @@ func validateRelationalGraph(ctx context.Context, q importReader, s *ImportSessi
 			continue
 		}
 		for fk, raw := range fs {
-			f, err := decodeRelationalFacet(n.Kind, raw, true)
+			f, err := decodeRelationalFacetMode(n.Kind, raw, true, s != nil)
 			if err != nil || f.SourceKind != "migration" {
 				continue
 			}

@@ -2,11 +2,38 @@
 
 
 Load as `backend-database-reference` from the selected global guideSetId. Its
-canonical owner is `mocker-backend-database` v6. Import v6 explicitly selects
+canonical owner is `mocker-backend-database` v7. Import v7 explicitly selects
 that supported owner in the same set and verifies the actual returned owner
 workflow/version/set/manifestHash/contentHash against the owner's manifest.
 Do not expect this topic to return import identity. For shared UUID/provenance/
-recovery semantics, model/recovery topics keep import v6 ownership.
+recovery semantics, model/recovery topics keep import v7 ownership.
+
+## Source6, full drafts and READY candidate reads
+
+Choose exactly one selector: revisionId; proposal:{proposalId,proposalRevisionId} for legacy relational drafts; changeProposal:{proposalId,proposalRevisionId} for full drafts; or importCandidate:{importId,importVersion,candidateHash} for current READY staging. Mixed/duplicate/null tags and implicit head fallback are invalid. Use canonical UUIDs and exact signed-int64 numeric tokens in raw MCP; browser clients must refuse values they cannot preserve exactly.
+
+Graph/node/evidence/coverage accept the four appropriate basic read variants. get_backend_assertions accepts native source6, full proposals with source6 baseline, and composed READY candidates. Source5/legacy/full5 assertions return422. Keep every provider-qualified identity, losing claim, typed selection and own/dependency/field currentness visible. Full assertions and baselineEvidence do not confirm an edited intended value.
+
+Preserve returned complete pins across pages/details: target/hash, view/structural versions, selected base revision/semantic hash, source vector/snapshot IDs and artifact context. Native source6 uses view tag6; full and staged views use proposal-graph-v1 and import-candidate-v1. Older source1–5 response shapes remain supported. Exact graph id cannot combine with cursor/kind/search/parent/from/to; omit node-only search/parentId entirely for edges. Exact evidenceId cannot combine with subjectId/cursor.
+
+Artifact projections keep their artifact pins in pins and expose graph/effective context in effectivePins. Preserve both; artifact content/raw/authored hashes and graph semantic/candidate hashes are different contracts.
+
+Database/Flow/lineage/events/artifact queries support their exact source/full targets. Legacy proposal specialized support is limited to Database; Flow, lineage, events and both API/editor artifact projections reject proposal with422. Source API-artifact reads technically accept schemas1–5, including an empty bindings result; a meaningful source owner/pin workflow uses source4–6. Do not turn that read admission into legacy-proposal artifact support. Staging supports basic graph/node/evidence/coverage/assertions only: specialized queries and SavedViews reject importCandidate. New batches, Preview versions, Commit or Abort can invalidate staged pins. A stale candidate409 never switches to source.
+
+When original proof is historical_metadata, label it as historical metadata testimony and show its original source5 basis and semantic-support gap. Verify the original revision/project/schema/hash before opening that exact evidence ID. An unchanged selected provider claim can still have a stale dependent field; report both levels rather than promoting the entire record to current.
+
+
+## Explicit SavedView-v2 presentation
+
+For source6 or full-proposal presentations select saved-view-v2 support in this owner. create_backend_saved_view takes projectId, documentVersion:"saved-view-v2", name, exact target, complete state and idempotencyKey. Its target is source/legacy/full, never importCandidate. The selected Flow/Database query must itself be supported for that target and source vocabulary.
+
+State is a closed flow/database variant with scope, filters, selection (explicit object or null), positions and collapsedGroupIds. For example, a Flow catalog state is {kind:"flow",scope:{},filters:{search:"",accessKind:"",reverseAccessKind:""},selection:null,positions:[],collapsedGroupIds:[]}. Database state uses an explicit datastoreId/facetKey scope and its own filters. Layout is presentation, not source evidence or a proposal command.
+
+Read get_backend_saved_view at the returned viewId/version before model queries. Reopen that immutable target and its complete effective pins; discard old cursors and start at page one. save_backend_saved_view includes documentVersion:"saved-view-v2", exact old view expectedVersion, complete name/state and stable idempotencyKey. Target and kind are immutable: changing either creates a new view. No save follows a newer source or proposal head. An unknown response repeats its original body/key; a definite409 requires explicit reread/reconciliation or a deliberate new view. A replay may be historical.
+
+For a full target, pins.revisionId names its source baseline; it is not the selected proposal draft. Continue model reads through the saved target.changeProposal and pins.effective, without replacing it with a source-only request.
+
+Omitted documentVersion keeps the original v1 hash/decode/receipt branch. Keep old v1 requests and receipts byte-compatible; adding a v2 tag to a previously executed request is not a retry. Read saved-view-v1 and saved-view-v2 versions without silently upgrading either. These rules do not claim that browser QA or the pending integrated SDK examples have passed.
 
 ## Declared source model
 
@@ -244,7 +271,7 @@ never truncate. They are validation bounds, not measured performance claims.
 Canvas visibility is at most 200 tables/600 FKs with explicit scope counts; the
 paginated list, relationship table and inspector preserve full read access.
 
-Source schema3/4/5 supports imported scoped endpoint accesses through inspect6 and
+Source schema3/4/5 supports imported scoped endpoint accesses through inspect7 and
 query_backend_flow. Select that owner in this same set, then page accesses at
 the exact source revision with dataNodeId; table-level unknown-column access is
 possible, never a confirmed column reader/writer. Open query/edge/witness proof.
@@ -306,7 +333,7 @@ truncation, extra open-proposal cap or performance claim is implied.
 
 ## Pinned saved Database views and executable SDK example
 
-Require database6, `backend-saved-views` and `saved-view-v1`, preserving source
+Require database7, `backend-saved-views` and `saved-view-v1`, preserving source
 schemas2/3 and proposal-relational-v1 requirements. List/get/create/save use the
 four `*_backend_saved_view[s]` tools; no delete or rebind exists. GET resolves an
 exact immutable saved version before reading its source/proposal model. Share
@@ -365,10 +392,10 @@ disabled during preview. Name/search limits200characters; finite x/y within
 search drafts, cursors, graph bodies, source text or credentials. Ordinary-agent
 acceptance and live agent evaluation remain deferred.
 
-## Source4 column lineage belongs to inspect6
+## Source4 column lineage belongs to inspect7
 
-Database6 reads source2/3/4/5 and existing proposal-relational-v1/saved-view-v1.
-For source4/5 lineage select inspect6 in the same guideSetId/manifestHash, verify
+Database7 reads source2/3/4/5 and existing proposal-relational-v1/saved-view-v1.
+For source4/5 lineage select inspect7 in the same guideSetId/manifestHash, verify
 its schema3/4/5 and field-lineage-v1 support, all required capabilities including
 backend-field-lineage-query, and actual flow-reference/analysis topic hashes.
 Use exact {kind:"column",nodeId,facetKey}, revisionId and reverse for origins or
@@ -376,19 +403,19 @@ forward for downstream. Preserve facet identity, ordered co-inputs, unknown
 boundary destination/actions, coverage and truncation. Do not issue lineage for
 source2/3 or proposals; an exact source-base navigation does not turn designed
 intent into source lineage. No SQL/application/migration execution or latest-pin
-fallback. Query procedure and evidence interpretation belong to inspect6.
+fallback. Query procedure and evidence interpretation belong to inspect7.
 
 ## Exact API links from a database value
 
-Select the complete inspect6 owner in this same guide set, including
+Select the complete inspect7 owner in this same guide set, including
 backend-api-artifact-pins and api-artifact-pins-v1 in viewSchemaVersions. Follow
 backend-flow-reference for a manually chosen API-field association reached through
 column lineage; column names/types create no automatic correspondence. Query a
 proposal's exact baseRevisionId and a SavedView's exact source target. Orphaned
 source UUIDs remain queryable/removable with their frozen labels. New head or API
-draft observations never replace these pins. Database6 and its proposal contract
+draft observations never replace these pins. Database7 and its proposal contract
 remain unchanged; source1–3 keep their supported reads.
 
-Source5 column→message fields delegates to inspect6/backend-events with full
+Source5 column→message fields delegates to inspect7/backend-events with full
 node+endpoint+edge route refs and explicit transport. Source2/3/proposals never
 acquire contextual event lineage through schema or name matching.

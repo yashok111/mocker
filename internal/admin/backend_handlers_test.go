@@ -158,7 +158,7 @@ func TestBackendCapabilitiesExposeReconciliationContract(t *testing.T) {
 	if err := json.Unmarshal(data, &got); err != nil {
 		t.Fatal(err)
 	}
-	if strings.Join(got.ImportModes, ",") != "initial,reconcile" || strings.Join(got.ImportCommands, ",") != "upsert_node,upsert_edge,upsert_evidence,remove,map_identity,delete_assertion" || got.ReconciliationProfile.Version != "1" || got.ReconciliationProfile.Profile != backendmodel.GraphProfile || got.ReconciliationProfile.Scope != "whole-repository" || got.ComparisonVersion != 1 {
+	if strings.Join(got.ImportModes, ",") != "initial,reconcile,composed" || strings.Join(got.ImportCommands, ",") != "upsert_node,upsert_edge,upsert_evidence,remove,map_identity,delete_assertion,claim_identity,resolve_assertion" || got.ReconciliationProfile.Version != "1" || got.ReconciliationProfile.Profile != backendmodel.GraphProfile || got.ReconciliationProfile.Scope != "whole-repository" || got.ComparisonVersion != 1 {
 		t.Fatalf("missing reconciliation contract: %s", data)
 	}
 }

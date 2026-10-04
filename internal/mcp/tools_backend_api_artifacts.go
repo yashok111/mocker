@@ -16,7 +16,7 @@ func addBackendAPIArtifactTools(s *sdk.Server, lb *loopback) {
 		name, route, contract, description string
 		readOnly                           bool
 	}{
-		{"query_backend_api_artifacts", "POST /api/backend-projects/{id}/api-artifacts/query", "QueryBackendAPIArtifactsRequest", "Reads frozen API associations at one exact backend revision. Broken/orphaned refs retain their original IDs and labels; current draft is advisory.", true},
+		{"query_backend_api_artifacts", "POST /api/backend-projects/{id}/api-artifacts/query", "QueryBackendAPIArtifactsRequest", "Reads frozen API associations for exact source1 through source6 or full changeProposal with source5/6 baseline. Useful artifact models are source4 through source6 and require actual frozen pins. Legacy proposal and importCandidate targets are unsupported. Broken/orphaned refs keep IDs/labels; current owner draft is advisory.", true},
 		{"preview_backend_api_pins", "POST /api/backend-projects/{id}/api-artifacts/preview", "PreviewBackendAPIPinsRequest", "Previews the full API association vector without writes. Preserve every diff row, including missing prior selectors; truncation blocks apply.", true},
 		{"apply_backend_api_pins", "POST /api/backend-projects/{id}/api-artifacts/commands", "ApplyBackendAPIPinsRequest", "Atomically applies manual exact API pins with CAS, candidate hash and a required idempotency key. Retry the identical body/key for the original receipt bytes.", false},
 	} {

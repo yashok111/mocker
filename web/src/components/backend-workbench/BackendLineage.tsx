@@ -1,4 +1,6 @@
-import { getBackendNode } from "@/api/generated/backend-projects/backend-projects";
+import { readBackendNode, backendReadQueryKey } from "./backendGraphReads";
+import { backendReadTargetFrom, backendReadTargetKey } from "./backendReadTargets";
+import { BackendExactEvidence } from "./BackendExactEvidence";
 import { useEffect, useRef, useState } from "react";
 import {
   Alert,
@@ -13,9 +15,12 @@ import {
   Title,
 } from "@mantine/core";
 import { useQuery } from "@tanstack/react-query";
-import type { BackendLineageValueRef } from "@/api/generated/schemas";
+import type {
+  BackendLineageValueRef,
+  BackendReadTarget,
+  BackendEffectiveGraphPins,
+} from "@/api/generated/schemas";
 import { LoadState } from "./BackendGraphInventory";
-import { DatabaseEvidence } from "./BackendDatabaseInspector";
 import {
   databaseButtonStyles,
   databaseStatus,
@@ -25,42 +30,60 @@ import {
 import { lineageRefKey, lineageRefLabel, readLineagePage } from "./backendLineageReads";
 export type LineageProps = {
   projectId: string;
-  revisionId: string;
+  revisionId?: string;
+  target?: BackendReadTarget;
+  pins?: BackendEffectiveGraphPins;
   seed: BackendLineageValueRef;
   onClose: () => void;
   onValueSelect: (ref: BackendLineageValueRef) => void;
   initialDirection?: "forward" | "reverse";
 };
 export function BackendLineage(props: LineageProps) {
+  const target = props.target ?? backendReadTargetFrom({ revisionId: props.revisionId });
+  if (target.importCandidate || target.proposal)
+    return <Text>Происхождение значений недоступно для этого графа.</Text>;
   return (
     <LineagePanel
-      key={JSON.stringify([props.projectId, props.revisionId, lineageRefKey(props.seed)])}
+      key={JSON.stringify([
+        props.projectId,
+        backendReadTargetKey(target),
+        lineageRefKey(props.seed),
+      ])}
       {...props}
+      target={target}
     />
   );
 }
 function LineagePanel({
   projectId,
-  revisionId,
+  target,
+  pins,
   seed,
   onClose,
   onValueSelect,
   initialDirection = "forward",
-}: LineageProps) {
+}: LineageProps & { target: BackendReadTarget }) {
+  const responsePins = useRef(pins);
   const [direction, setDirection] = useState(initialDirection);
   const [depth, setDepth] = useState(8);
   const [cursors, setCursors] = useState([""]);
   const [separate, setSeparate] = useState<BackendLineageValueRef | null>(null);
   const active = separate ?? seed;
   const input = {
-    revisionId,
+    ...target,
     seed: active,
     direction,
     maxDepth: depth,
     limit: 50,
     cursor: cursors.at(-1) ?? "",
   };
-  const key = ["backend-lineage", projectId, revisionId, JSON.stringify(input)];
+  const key = [
+    "backend-lineage",
+    projectId,
+    backendReadTargetKey(target),
+    pins?.targetHash ?? "",
+    JSON.stringify(input),
+  ];
   useDatabaseCancellation(key);
   const heading = useRef<HTMLHeadingElement>(null);
   useEffect(() => {
@@ -70,7 +93,11 @@ function LineagePanel({
     queryKey: key,
     staleTime: Infinity,
     retry: false,
-    queryFn: ({ signal }) => readLineagePage(projectId, input, signal),
+    queryFn: async ({ signal }) => {
+      const page = await readLineagePage(projectId, input, signal, responsePins.current);
+      if ("pins" in page) responsePins.current = page.pins;
+      return page;
+    },
   });
   const page = query.data;
   function value(ref: BackendLineageValueRef, boundary = false) {
@@ -78,7 +105,8 @@ function LineagePanel({
       <LineageValue
         key={lineageRefKey(ref)}
         projectId={projectId}
-        revisionId={revisionId}
+        target={target}
+        pins={page && "pins" in page ? page.pins : pins}
         value={ref}
         onValueSelect={onValueSelect}
         onSeparate={
@@ -110,7 +138,10 @@ function LineagePanel({
           </Button>
         </Group>
         <Text size="xs" style={databaseWrap}>
-          Ревизия: {revisionId} · {lineageRefLabel(active)}
+          {target.revisionId
+            ? `Ревизия: ${target.revisionId}`
+            : `Предложение: ${target.changeProposal?.proposalId} · черновик ${target.changeProposal?.proposalRevisionId}`}{" "}
+          · {lineageRefLabel(active)}
         </Text>
         {separate && (
           <Alert color="yellow">
@@ -170,8 +201,9 @@ function LineagePanel({
               {page.coverage.coverage.denominator ?? "неизвестно"}.
             </Text>
             <Text size="sm">
-              Статические зависимости исходника; свидетельство — один объясняющий путь, не трасса
-              исполнения.
+              {target.changeProposal
+                ? "Зависимости выбранного предложения. Намерения не подтверждают выполнение программы."
+                : "Статические зависимости исходника; свидетельство — один объясняющий путь, не трасса исполнения."}
             </Text>
             {page.truncated && (
               <Alert color="yellow">Обход ограничен: {page.truncationReasons.join(", ")}</Alert>
@@ -183,8 +215,7 @@ function LineagePanel({
             ))}
             {page.items.length === 0 && (
               <Text>
-                Нет импортированных соответствий в этой области. Наличие других зависимостей
-                неизвестно.
+                Нет явных соответствий в этой области. Наличие других зависимостей неизвестно.
               </Text>
             )}
             {page.items.map((item) => {
@@ -209,7 +240,9 @@ function LineagePanel({
                     {item.mapping.name}
                   </Title>
                   <Group>
-                    <Badge>{databaseStatus(item.status)}</Badge>
+                    <Badge>
+                      {item.status === "desired" ? "Намерение" : databaseStatus(item.status)}
+                    </Badge>
                     <Badge>
                       {item.expansion === "boundary" ? "Граница обхода" : "Продолжение"}
                     </Badge>
@@ -255,8 +288,10 @@ function LineagePanel({
                   <Text size="sm" style={databaseWrap}>
                     Основания: {item.mapping.evidenceIds.join(", ") || "не указаны"}
                   </Text>
-                  <DatabaseEvidence
-                    context={{ projectId, revisionId, datastoreId: "", facetKey: "" }}
+                  <BackendExactEvidence
+                    projectId={projectId}
+                    target={target}
+                    pins={"pins" in page ? page.pins : pins}
                     subjectId={item.mapping.id}
                   />
                 </Stack>
@@ -295,29 +330,31 @@ function LineagePanel({
 
 function LineageValue({
   projectId,
-  revisionId,
+  target,
+  pins,
   value,
   onValueSelect,
   onSeparate,
 }: {
   projectId: string;
-  revisionId: string;
+  target: BackendReadTarget;
+  pins?: BackendEffectiveGraphPins;
   value: BackendLineageValueRef;
   onValueSelect: (ref: BackendLineageValueRef) => void;
   onSeparate?: () => void;
 }) {
-  const key = ["backend-lineage-value", projectId, revisionId, value.nodeId];
-  useDatabaseCancellation(key);
+  const key = backendReadQueryKey("lineage-value", projectId, target, value.nodeId);
   const query = useQuery({
     queryKey: key,
     retry: false,
     staleTime: Infinity,
     queryFn: async ({ signal }) => {
-      const response = await getBackendNode(projectId, revisionId, value.nodeId, { signal });
-      signal.throwIfAborted();
-      if (response.status !== 200 || response.data.id !== value.nodeId)
-        throw new Error("Значение отсутствует в выбранном снимке");
-      return response.data;
+      const response = await readBackendNode(projectId, target, value.nodeId, signal, pins);
+      return "node" in response
+        ? response.node
+        : "proposalProjection" in response
+          ? response.proposalProjection
+          : response;
     },
   });
   const node = query.data;
@@ -325,6 +362,7 @@ function LineageValue({
   if (value.kind === "column") label += ` · колонка · ${value.facetKey}`;
   if (value.kind === "port") label += ` · ${value.collection} · ${value.portKey}`;
   if (value.kind === "api_field") label += " · поле API";
+  if (value.kind === "representation_field") label += " · поле представления";
   if (value.kind === "event_field")
     label += ` · поле события · ${value.endpointId} · маршрут ${value.routeId}`;
   return (

@@ -1,3 +1,8 @@
+import {
+  projectionTarget,
+  projectionKey,
+  type ProjectionReadProps,
+} from "./backendEffectiveProjectionReads";
 import { useBackendAPIDeparture } from "./useBackendAPIDeparture";
 import type { BackendLineageValueRef } from "@/api/generated/schemas";
 import { BackendFlowInspector } from "./BackendFlowInspector";
@@ -10,16 +15,19 @@ import { BackendEventValueInspector } from "./BackendEventValueInspector";
 export function BackendValueInspector({
   projectId,
   revisionId,
+  target: explicitTarget,
+  pins,
   value,
   onClose,
-}: {
+}: ProjectionReadProps & {
   projectId: string;
-  revisionId: string;
   value: BackendLineageValueRef;
   onClose: () => void;
 }) {
+  const target = projectionTarget({ revisionId, target: explicitTarget, pins });
+  const baseRevisionId = pins?.baseRevisionId ?? revisionId ?? "";
   const [selection, setSelection] = usePinnedValue<FlowSelection>(
-    `${projectId}:${revisionId}:${lineageRefKey(value)}`,
+    `${projectId}:${projectionKey(target, pins)}:${lineageRefKey(value)}`,
     {
       type: "node",
       id: value.nodeId,
@@ -37,14 +45,23 @@ export function BackendValueInspector({
     <BackendEventValueInspector
       key={lineageRefKey(selection.valueRef)}
       projectId={projectId}
-      revisionId={revisionId}
+      revisionId={baseRevisionId}
+      target={target}
+      pins={pins}
       value={selection.valueRef}
       onValueSelect={(next) => select({ type: "node", id: next.nodeId, valueRef: next })}
       onClose={close}
     />
   ) : selection.valueRef?.kind === "column" ? (
     <BackendDatabaseInspector
-      context={{ projectId, revisionId, datastoreId: "", facetKey: selection.valueRef.facetKey }}
+      context={{
+        projectId,
+        revisionId: baseRevisionId,
+        target,
+        pins,
+        datastoreId: "",
+        facetKey: selection.valueRef.facetKey,
+      }}
       valueRef={selection.valueRef}
       selection={selection}
       onSelect={select}
@@ -54,7 +71,9 @@ export function BackendValueInspector({
     <BackendFlowInspector
       key={JSON.stringify(selection)}
       projectId={projectId}
-      revisionId={revisionId}
+      revisionId={baseRevisionId}
+      target={target}
+      pins={pins}
       selection={selection}
       selectedValue={selection.valueRef}
       onSelect={select}

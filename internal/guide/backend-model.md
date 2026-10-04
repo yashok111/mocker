@@ -1,9 +1,9 @@
 # Source-backed graph model
 
 
-This topic belongs to `mocker-backend-import` v6. Pin it to the selected global
+This topic belongs to `mocker-backend-import` v7. Pin it to the selected global
 guideSetId and verify the import owner tuple/contentHash, including when database
-or inspect6 loads it as a shared reference. Schema1 remains the foundation format;
+or inspect7 loads it as a shared reference. Schema1 remains the foundation format;
 schema2 is relational and schema3 adds typed source flow/query/access records; source4 adds explicit field lineage; source5 adds event/job/service records and
 contextual message-field lineage.
 Old immutable schema1/2/3/4 bytes/UUIDs/hashes/receipts keep their interpretation.
@@ -11,6 +11,18 @@ Model schema `"1"`, profile
 `foundation-graph-v1`, supports the foundation shapes below.
 Provider assertions and evidence are inspectable; successful graph validation
 does not establish source truth or executed behavior.
+
+## Source6 composition and exact read contexts
+
+Native source6 uses composed-source-v1 and a source-vector-v1 roster of repository/provider partitions and snapshots. Structural node/edge projections have a source context containing all qualified identities, assertion references, selections, currentness and legacy proof bases. They do not invent one externalKey/owner/freshness for a shared UUID. Source6 detail responses wrap the node with viewSchemaVersion:"6", target and complete graph pins; older source1–5 node responses keep their original wire.
+
+One qualified source identity has recordType/id/repositoryId/providerNamespace/externalKey/assertionHash. A base import reference uses expectedId instead of id. Source6 import references are strictly localKey or qualified base; old source1–5 key fields remain unchanged. Source proof belongs to its provider/repository/snapshot and an analyzed captured file/hash. Retaining an old assertion does not refresh that proof under a new snapshot.
+
+Typed domain_entity/dto/api_schema owners and representation_field children have explicit UUID/parent/selector identity. A representation path is an ordered property-segment list; name/type equality creates no mapping. Known native type/nullability/cardinality and unknown reasons remain typed. Representation lineage uses {kind:"representation_field",nodeId}, distinct from api_field and event-field/port/facet references.
+
+An original source5 legacy-proof-basis-v1 is a response-only, verified historical basis. historical_metadata is shown as metadata testimony with a legacy_metadata_only semantic-support gap. legacy_record has broad record scope; no typed semantic property is invented. Keep source revision/semantic/document/evidence hashes and exact original evidence navigation. Submitting a copied basis or a metadata pointer as fresh source6 proof is invalid.
+
+Source synchronization belongs to sync1. Full desired changes belong to change1. Their full projection retains baseline claims/evidence separately from intent origins; a new desired field has no fabricated provider evidence. The legacy source record rules below keep their original meanings.
 
 ## Kinds and attributes
 
@@ -120,7 +132,7 @@ whole-repository combined graph under the same sole provider, not one provider
 per SQL/ORM facet. Provider profiles are exactly foundation plus relational.
 A proven SQL/ORM match shares one stable subject; names alone never merge objects.
 For exact fields and ER semantics load `backend-database-reference` from the same
-set after selecting/verifying the supported database v6 owner identity.
+set after selecting/verifying the supported database v7 owner identity.
 
 A facet is a stable map entry keyed by facetKey (1–200 printable characters),
 with sourceKind sql/orm/migration, dialect postgresql/sqlite, analysisStatus
@@ -193,7 +205,7 @@ source schema2 baseline. It is never import data or source schema3. Shared reads
 select exclusive source revisionId or exact proposal/proposalRevisionId. Keep
 sourceRecord, desired effectiveFacet, propertyOrigins and unverified criteria
 separate. New designed objects have no sourceRecord or source evidence. Read the
-verified database6 reference for commands, projection and ER assumptions. Import6
+verified database7 reference for commands, projection and ER assumptions. Import7
 continues to mutate only source snapshots with its original receipts and CAS.
 
 ## Source4 explicit field lineage
@@ -249,7 +261,7 @@ selector and forbids mediaType; header names are lowercase HTTP tokens. Unknown
 status/media is a gap, never guessed identity. Operation+direction+location+
 selector+status+media is unique (≤500fields/operation), while stable UUID binding
 uses the provider external key. Shape membership does not establish mapping.
-Manual external API associations use inspect6 and api-artifact-pins-v1. They
+Manual external API associations use inspect7 and api-artifact-pins-v1. They
 freeze api_design artifact/revision decimal strings, raw contentHash and selected
 object refs separately from imported source API fields; see backend-flow-reference.
 
@@ -262,7 +274,7 @@ without claiming behavioral impact; old pinned revisions remain readable.
 
 ## Saved editor content alongside source4
 
-Inspect6 owns backend-editor-projections and the tagged context contract
+Inspect7 owns backend-editor-projections and the tagged context contract
 backend-editor-artifacts-v1. Source models span schema1–5/store19; authored
 sequence/state/rule/EventModel content does not introduce source event records.
 The editor topic defines exact owner/object/source identities, separate envelope/
@@ -296,6 +308,6 @@ deliveryEdgeKey (IDs persisted), exact matching message/channel tuple and
 routeIds. Matching field schemas create no transport. Nested node/edge reference
 resolution, deletion closure and retained staleness apply. Stale/unknown/unresolved
 route proof blocks traversal; source4 rejects these new refs/transport.
-For reads select inspect6/backend-events in the same guide set and verify all
+For reads select inspect7/backend-events in the same guide set and verify all
 owner requirements; source5 remains eligible for inherited Database/Flow/lineage/
 proposals/SavedView and pin operations without changing their document versions.

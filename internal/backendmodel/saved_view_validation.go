@@ -23,10 +23,14 @@ func resolveSavedReferences(ctx context.Context, q importReader, pid string, in 
 		return nil, err
 	}
 	pins := &SavedViewPins{RevisionID: state.Revision.ID, SemanticHash: state.Revision.SemanticHash, Proposal: target.pins}
-	if s.Flow != nil && (target.proposal != nil || !isRuntimeSchema(state.Revision.SchemaVersion)) {
+	return validateSavedGraphReferences(target, state, pins, s, false)
+}
+func validateSavedGraphReferences(target *resolvedBackendTarget, state *RevisionState, pins *SavedViewPins, s SavedViewState, effective bool) (*SavedViewPins, error) {
+	var err error
+	if s.Flow != nil && (target.proposal != nil || !isRuntimeSchema(state.Revision.SchemaVersion) && !effective) {
 		return nil, savedUnsupported()
 	}
-	if s.Database != nil && !isRelationalSchema(state.Revision.SchemaVersion) {
+	if s.Database != nil && !isRelationalSchema(state.Revision.SchemaVersion) && !effective {
 		return nil, savedUnsupported()
 	}
 	nodes := map[string]Node{}
@@ -69,7 +73,7 @@ func resolveSavedReferences(ctx context.Context, q importReader, pid string, in 
 			if err != nil {
 				return nil, err
 			}
-			if !runtimeEntrypointForSchema(state.Revision.SchemaVersion, entry.Kind) {
+			if !sourceRuntimeEntrypoint(state.Revision.SchemaVersion, entry.Kind) {
 				return nil, invalid("state.scope.entrypointId", "Expected a supported pinned entrypoint")
 			}
 		}
@@ -240,6 +244,9 @@ func resolveSavedReferences(ctx context.Context, q importReader, pid string, in 
 }
 
 func validateSavedViewTarget(t BackendReadTarget) error {
+	if t.ChangeProposal != nil || t.ImportCandidate != nil {
+		return invalid("target", "SavedView-v1 rejects full/staged targets")
+	}
 	if (t.RevisionID == "") == (t.Proposal == nil) {
 		return invalid("target", "Select exactly one source or pinned proposal")
 	}

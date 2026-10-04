@@ -9,6 +9,9 @@ import (
 )
 
 func (in *EventsQueryInput) UnmarshalJSON(raw []byte) error {
+	if advancedReadQuery(raw) {
+		return decodeAdvancedReadQuery(raw, in)
+	}
 	m, err := relationalObject(raw)
 	if err != nil {
 		return invalid("body", "Expected a strict events query object")
@@ -43,8 +46,8 @@ func (in *EventsQueryInput) UnmarshalJSON(raw []byte) error {
 }
 
 func (in EventsQueryInput) validate() error {
-	if !ValidID(in.RevisionID) {
-		return invalid("revisionId", "A pinned revision UUID is required")
+	if err := in.validateReadTarget(); err != nil {
+		return err
 	}
 	if !slices.Contains([]string{"routes", "jobs", "service_calls"}, in.View) {
 		return invalid("view", "Select routes, jobs or service_calls")
@@ -65,7 +68,35 @@ func (in EventsQueryInput) validate() error {
 	return nil
 }
 
+func (in EventsQueryInput) validateReadTarget() error {
+	if in.Proposal != nil || in.ChangeProposal != nil || in.ImportCandidate != nil {
+		target := graphTarget(in.RevisionID, in.Proposal, in.ChangeProposal, in.ImportCandidate)
+		if err := target.Validate(); err != nil {
+			return err
+		}
+		if err := rejectStagedView(target); err != nil {
+			return err
+		}
+	}
+	if in.Proposal == nil && in.ChangeProposal == nil && !ValidID(in.RevisionID) {
+		return invalid("revisionId", "A pinned revision UUID is required")
+	}
+	return nil
+}
+
 func (r *Repo) QueryEvents(ctx context.Context, pid string, in EventsQueryInput) (*EventsPage, error) {
+	if in.Proposal != nil || in.ChangeProposal != nil || in.ImportCandidate != nil {
+		return r.queryEffectiveEvents(ctx, pid, in)
+	}
+	if in.RevisionID != "" && in.Proposal == nil && in.ChangeProposal == nil {
+		revision, err := r.Revision(ctx, pid, in.RevisionID)
+		if err != nil {
+			return nil, err
+		}
+		if revision.SchemaVersion == ComposedSchemaVersion {
+			return r.queryEffectiveEvents(ctx, pid, in)
+		}
+	}
 	if err := in.validate(); err != nil {
 		return nil, err
 	}
@@ -73,7 +104,14 @@ func (r *Repo) QueryEvents(ctx context.Context, pid string, in EventsQueryInput)
 	if err != nil {
 		return nil, err
 	}
-	page, err := projectEvents(ctx, state, in)
+	var graph *SourceGraphSnapshot
+	if state.Revision.SchemaVersion == ComposedSchemaVersion {
+		graph, err = r.ResolveSourceGraph(ctx, pid, in.RevisionID)
+		if err != nil {
+			return nil, err
+		}
+	}
+	page, err := projectEventsWithSource(ctx, state, graph, in)
 	if err != nil {
 		return nil, err
 	}
@@ -86,6 +124,8 @@ func (r *Repo) QueryEvents(ctx context.Context, pid string, in EventsQueryInput)
 }
 
 type eventsProjection struct {
+	effective     *EffectiveGraphSnapshot
+	source        *SourceGraphSnapshot
 	ctx           context.Context
 	state         *RevisionState
 	in            EventsQueryInput
@@ -106,6 +146,12 @@ type eventsOrderedItem struct {
 }
 
 func projectEvents(ctx context.Context, state *RevisionState, in EventsQueryInput) (*EventsPage, error) {
+	return projectEventsWithSource(ctx, state, nil, in)
+}
+func projectEventsWithSource(ctx context.Context, state *RevisionState, sourceGraph *SourceGraphSnapshot, in EventsQueryInput) (*EventsPage, error) {
+	return projectEventsWithEffective(ctx, state, sourceGraph, nil, in)
+}
+func projectEventsWithEffective(ctx context.Context, state *RevisionState, sourceGraph *SourceGraphSnapshot, effective *EffectiveGraphSnapshot, in EventsQueryInput) (*EventsPage, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -116,7 +162,7 @@ func projectEvents(ctx context.Context, state *RevisionState, in EventsQueryInpu
 		return nil, notFound()
 	}
 	source := primarySource(*state)
-	if state.Revision.SchemaVersion != EventsSchemaVersion || source == nil || !sourceProfilesMatch(EventsSchemaVersion, source.Provider.Profiles) {
+	if effective == nil && !eventsReadScope(state, sourceGraph, source) {
 		return nil, &FaultError{Status: 422, Code: "backend_unsupported_scope", Message: "Event reads require a pinned events-service source5 revision"}
 	}
 	limit := in.Limit
@@ -125,12 +171,24 @@ func projectEvents(ctx context.Context, state *RevisionState, in EventsQueryInpu
 	}
 	page := &EventsPage{ProjectID: state.Revision.ProjectID, RevisionID: state.Revision.ID, SemanticHash: state.Revision.SemanticHash, Policy: EventsQueryPolicy, View: in.View, SeedNodeID: in.SeedNodeID, ServiceID: in.ServiceID, Items: []EventsItem{}, Complete: true, TotalEdgeCount: len(state.Edges), Coverage: RevisionCoverage{Coverage: state.Revision.Coverage, Snapshots: slices.Clone(state.Sources), Inventory: slices.Clone(state.Inventory), ReconciliationGaps: []string{}}, Limits: EventsQueryLimits{MaxExaminedEdges: EventsMaxExaminedEdges, MaxItems: EventsMaxItems, MaxAuxiliaryRecords: EventsMaxAuxiliaryRecords, MaxWitnessRecords: EventsMaxWitnessRecords, DefaultPageSize: DefaultPageSize, MaxPageSize: MaxPageSize, ScanPolicy: "complete-scan-admission"}, TruncationReasons: []string{}, Limitations: []string{"Configured source relationships do not verify broker delivery, deployment, job execution or transaction atomicity"}}
 	page.Limitations = append(page.Limitations, state.Revision.Coverage.Gaps...)
-	page.Limitations = append(page.Limitations, source.Provider.Limitations...)
+	page.Limitations = append(page.Limitations, sourceProjectionLimitations(sourceGraph, source)...)
+	if sourceGraph != nil {
+		page.Policy = "events-source6-query-v1"
+	}
+
+	if effective != nil {
+		page.Target = new(effective.Target)
+		page.Pins = new(effective.Pins)
+		page.SemanticHash = effective.Pins.EffectiveSemanticHash
+		if effective.Target.ChangeProposal != nil {
+			page.Policy = "effective-events-v1"
+		}
+	}
 	scope, after, err := eventsQueryCursor(page, in, limit)
 	if err != nil {
 		return nil, err
 	}
-	p := &eventsProjection{ctx: ctx, state: state, in: in, page: page, nodes: map[string]Node{}, edges: map[string]Edge{}, out: map[string][]Edge{}, evidence: map[string]Evidence{}, truncations: map[string]bool{}, dispatchCache: map[string][]EventsDispatch{}, relatedCache: map[string][]EventsRelatedRoute{}, emitCache: map[string]*EventsEmitContext{}}
+	p := &eventsProjection{effective: effective, source: sourceGraph, ctx: ctx, state: state, in: in, page: page, nodes: map[string]Node{}, edges: map[string]Edge{}, out: map[string][]Edge{}, evidence: map[string]Evidence{}, truncations: map[string]bool{}, dispatchCache: map[string][]EventsDispatch{}, relatedCache: map[string][]EventsRelatedRoute{}, emitCache: map[string]*EventsEmitContext{}}
 	if err := p.indexNodes(); err != nil {
 		return nil, err
 	}
@@ -146,15 +204,7 @@ func projectEvents(ctx context.Context, state *RevisionState, in EventsQueryInpu
 	if err := p.indexRecords(); err != nil {
 		return nil, err
 	}
-	switch in.View {
-	case "routes":
-		err = p.routes()
-	case "jobs":
-		err = p.jobs()
-	case "service_calls":
-		err = p.serviceCalls()
-	}
-	if err != nil {
+	if err := p.projectView(); err != nil {
 		return nil, err
 	}
 	if err := ctx.Err(); err != nil {
@@ -162,6 +212,18 @@ func projectEvents(ctx context.Context, state *RevisionState, in EventsQueryInpu
 	}
 	return p.finish(limit, after, scope), nil
 }
+func (p *eventsProjection) projectView() error {
+	switch p.in.View {
+	case "routes":
+		return p.routes()
+	case "jobs":
+		return p.jobs()
+	case "service_calls":
+		return p.serviceCalls()
+	}
+	return nil
+}
+
 func (p *eventsProjection) indexNodes() error {
 	for _, n := range p.state.Nodes {
 		if err := p.ctx.Err(); err != nil {
@@ -303,6 +365,15 @@ func eventsQueryCursor(page *EventsPage, in EventsQueryInput, limit int) (string
 	if err != nil {
 		return "", "", err
 	}
+	if page.Pins != nil {
+		scope, err = requestDigest(struct {
+			Scope string
+			Pins  *EffectiveGraphPins
+		}{scope, page.Pins})
+		if err != nil {
+			return "", "", err
+		}
+	}
 	_, after, err := decodeGraphPage(limit, in.Cursor, "events", page.ProjectID, scope, false)
 	if err != nil {
 		return "", "", err
@@ -311,4 +382,11 @@ func eventsQueryCursor(page *EventsPage, in EventsQueryInput, limit int) (string
 		return "", "", invalid("cursor", "Invalid events ordering key")
 	}
 	return scope, after, nil
+}
+
+func eventsReadScope(state *RevisionState, graph *SourceGraphSnapshot, source *SourceSnapshot) bool {
+	if graph != nil {
+		return state.Revision.SchemaVersion == ComposedSchemaVersion && graph.SourceVector != nil
+	}
+	return state.Revision.SchemaVersion == EventsSchemaVersion && source != nil && sourceProfilesMatch(EventsSchemaVersion, source.Provider.Profiles)
 }

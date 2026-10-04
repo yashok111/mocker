@@ -1,19 +1,22 @@
-import { useQuery } from "@tanstack/react-query";
-import {
-  queryBackendEvents,
-  getBackendEvidence,
-} from "@/api/generated/backend-projects/backend-projects";
 import type {
-  BackendEventsPage,
+  BackendPinnedEventsWitness,
+  BackendPinnedEventsDispatch,
+  BackendPinnedEventsRelatedRoute,
+  BackendPinnedEventsEmitContext,
+  BackendEventsScalar,
+  BackendEventsTrigger,
+} from "@/api/generated/schemas";
+import type { BackendEffectiveGraphPins, BackendReadTarget } from "@/api/generated/schemas";
+import { backendReadTargetFrom, checkBackendProjectionPins } from "./backendReadTargets";
+import { projectionTarget, projectionKey } from "./backendEffectiveProjectionReads";
+import { readBackendEvidence } from "./backendGraphReads";
+import { useQuery } from "@tanstack/react-query";
+import { queryBackendEvents } from "@/api/generated/backend-projects/backend-projects";
+import type {
+  BackendEventsResponse as BackendEventsPage,
   QueryBackendEventsRequest,
   BackendEvidence,
   BackendEventsReferences,
-  BackendEventsWitness,
-  BackendEventsDispatch,
-  BackendEventsScalar,
-  BackendEventsTrigger,
-  BackendEventsRelatedRoute,
-  BackendEventsEmitContext,
 } from "@/api/generated/schemas";
 import { BackendEventsQueryLimitsValue } from "@/api/generated/schemas";
 import { readDatabaseGraph, useDatabaseCancellation } from "./backendDatabaseReads";
@@ -21,13 +24,13 @@ import { readDatabaseGraph, useDatabaseCancellation } from "./backendDatabaseRea
 export type EventsItem = BackendEventsPage["items"][number];
 export type EventsPayload = {
   references: BackendEventsReferences;
-  witness: BackendEventsWitness;
-  dispatch: BackendEventsDispatch[];
+  witness: BackendPinnedEventsWitness;
+  dispatch: BackendPinnedEventsDispatch[];
   condition?: BackendEventsScalar;
   group?: BackendEventsScalar;
   trigger?: BackendEventsTrigger;
-  related?: BackendEventsRelatedRoute[];
-  emitContext?: BackendEventsEmitContext;
+  related?: BackendPinnedEventsRelatedRoute[];
+  emitContext?: BackendPinnedEventsEmitContext;
 };
 export function eventsPayload(item: EventsItem): EventsPayload {
   switch (item.kind) {
@@ -117,20 +120,30 @@ export async function readEventsPage(
   input: QueryBackendEventsRequest,
   semanticHash: string,
   signal: AbortSignal,
+  pins?: BackendEffectiveGraphPins,
 ): Promise<BackendEventsPage> {
   signal.throwIfAborted();
+  const target = projectionTarget({ target: backendReadTargetFrom(input), pins });
+  if (target.proposal) throw new Error("События старого предложения не поддерживаются");
   const response = await queryBackendEvents(projectId, input, { signal });
   signal.throwIfAborted();
   if (response.status !== 200) throw new Error("Не удалось загрузить события выбранной ревизии");
   const page = response.data;
+  const checkedPins = checkBackendProjectionPins(page, target, pins);
   const selectors = page as { seedNodeId?: string; serviceId?: string };
   const expected = input as { seedNodeId?: string; serviceId?: string };
   if (
     page.projectId !== projectId ||
-    page.revisionId !== input.revisionId ||
-    page.semanticHash !== semanticHash ||
+    page.revisionId !== (checkedPins?.baseRevisionId ?? input.revisionId) ||
+    page.semanticHash !== (checkedPins?.effectiveSemanticHash ?? semanticHash) ||
+    (semanticHash !== "" && page.semanticHash !== semanticHash) ||
     page.view !== input.view ||
-    page.policy !== "source-events-projection-v1" ||
+    page.policy !==
+      (target.changeProposal
+        ? "effective-events-v1"
+        : checkedPins?.structuralSchemaVersion === "6"
+          ? "events-source6-query-v1"
+          : "source-events-projection-v1") ||
     selectors.seedNodeId !== expected.seedNodeId ||
     selectors.serviceId !== expected.serviceId
   )
@@ -147,26 +160,39 @@ export function useEventsPage(
   projectId: string,
   input: QueryBackendEventsRequest,
   semanticHash: string,
+  pins?: BackendEffectiveGraphPins,
 ) {
-  const key = ["backend-events", projectId, semanticHash, JSON.stringify(input)];
+  const key = [
+    "backend-events",
+    projectId,
+    projectionKey(backendReadTargetFrom(input), pins),
+    semanticHash,
+    JSON.stringify(input),
+  ];
   useDatabaseCancellation(key);
   return useQuery({
     queryKey: key,
-    queryFn: ({ signal }) => readEventsPage(projectId, input, semanticHash, signal),
+    queryFn: ({ signal }) => readEventsPage(projectId, input, semanticHash, signal, pins),
     staleTime: Infinity,
     retry: false,
   });
 }
 export async function readEventsFieldSeeds(
   projectId: string,
-  revisionId: string,
+  source: string | BackendReadTarget,
   refs: BackendEventsReferences,
   signal: AbortSignal,
+  pins?: BackendEffectiveGraphPins,
 ) {
+  const target = projectionTarget({
+    target: typeof source === "string" ? { revisionId: source } : source,
+    pins,
+  });
   const graph = await readDatabaseGraph(
     projectId,
-    { revisionId, recordType: "nodes", kind: "event_field", parentId: refs.messageId },
+    { ...target, recordType: "nodes", kind: "event_field", parentId: refs.messageId },
     signal,
+    pins,
   );
   const nodes = graph.nodes.filter(
     (node) => node.kind === "event_field" && node.parentId === refs.messageId,
@@ -182,10 +208,16 @@ export async function readEventsFieldSeeds(
     const [owner, relationship] = await Promise.all([
       readDatabaseGraph(
         projectId,
-        { revisionId, recordType: "nodes", id: side.endpointId },
+        { ...target, recordType: "nodes", id: side.endpointId },
         signal,
+        pins,
       ),
-      readDatabaseGraph(projectId, { revisionId, recordType: "edges", id: side.routeId }, signal),
+      readDatabaseGraph(
+        projectId,
+        { ...target, recordType: "edges", id: side.routeId },
+        signal,
+        pins,
+      ),
     ]);
     const endpoint = owner.nodes.find((node) => node.id === side.endpointId),
       edge = relationship.edges.find((edge) => edge.id === side.routeId);
@@ -217,10 +249,15 @@ export async function readEventsFieldSeeds(
 // One bounded evidence page per captured witness subject. Never chase global source proof.
 export async function readEventsGapEvidence(
   projectId: string,
-  revisionId: string,
+  source: string | BackendReadTarget,
   item: EventsItem,
   signal: AbortSignal,
+  pins?: BackendEffectiveGraphPins,
 ) {
+  const target = projectionTarget({
+    target: typeof source === "string" ? { revisionId: source } : source,
+    pins,
+  });
   const payload = eventsPayload(item);
   const witnesses = [
     payload.witness,
@@ -235,17 +272,17 @@ export async function readEventsGapEvidence(
   const inspectedSubjects: string[] = [];
   for (const subjectId of subjects.slice(0, 256)) {
     signal.throwIfAborted();
-    const result = await getBackendEvidence(
+    const result = await readBackendEvidence(
       projectId,
-      revisionId,
+      target,
       { subjectId, limit: 100 },
-      { signal },
+      signal,
+      pins,
     );
     signal.throwIfAborted();
-    if (result.status !== 200) throw new Error("Основания выбранного фрагмента недоступны");
     inspectedSubjects.push(subjectId);
-    if (result.data.nextCursor) truncated = true;
-    for (const record of result.data.items) {
+    if (result.nextCursor) truncated = true;
+    for (const record of result.items) {
       if (record.subjectId !== subjectId) throw new Error("Получены основания другого объекта");
       if (expected.includes(record.id) && evidence.size < 256) evidence.set(record.id, record);
     }

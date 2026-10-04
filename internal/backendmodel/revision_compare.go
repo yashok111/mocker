@@ -115,12 +115,16 @@ func CompareRevisionStates(ctx context.Context, before, after RevisionState) (*R
 		} else if change.After == nil && change.DeletionConfirmed {
 			facet = "removed"
 		}
-		delta := RecordDelta{RecordType: "source", ID: change.Path, ChangeKinds: []string{facet}, ChangedPaths: []string{"/" + change.Kind}}
+		sourceID := change.Path
+		if change.RepositoryID != "" || change.ProviderNamespace != "" {
+			sourceID = change.RepositoryID + "/" + change.ProviderNamespace + "/" + change.Path
+		}
+		delta := RecordDelta{RecordType: "source", ID: sourceID, ChangeKinds: []string{facet}, ChangedPaths: []string{"/" + change.Kind}}
 		if change.Before != nil {
-			delta.Before = &RecordSide{RecordType: "source", ID: change.Path, SnapshotID: change.Before.SnapshotID, Path: change.Path, Name: new(change.Path)}
+			delta.Before = &RecordSide{RecordType: "source", ID: sourceID, SnapshotID: change.Before.SnapshotID, Path: change.Path, Name: new(change.Path)}
 		}
 		if change.After != nil {
-			delta.After = &RecordSide{RecordType: "source", ID: change.Path, SnapshotID: change.After.SnapshotID, Path: change.Path, Name: new(change.Path)}
+			delta.After = &RecordSide{RecordType: "source", ID: sourceID, SnapshotID: change.After.SnapshotID, Path: change.Path, Name: new(change.Path)}
 		}
 		out.Changes = append(out.Changes, delta)
 		out.Summary.SourceChanges++
@@ -260,6 +264,29 @@ func (r *Repo) CompareRevisions(ctx context.Context, pid string, in CompareRevis
 	if err != nil {
 		return nil, err
 	}
+	var sourceBefore, sourceAfter *SourceReadContext
+	var sourceGraphBefore, sourceGraphAfter *SourceGraphSnapshot
+	if from.Revision.SchemaVersion == ComposedSchemaVersion {
+		graph, err := r.ResolveSourceGraph(ctx, pid, in.FromRevisionID)
+		if err != nil {
+			return nil, err
+		}
+		sourceGraphBefore = graph
+		sourceBefore = sourceReadContext(graph, "", "", "")
+	}
+	if to.Revision.SchemaVersion == ComposedSchemaVersion {
+		graph, err := r.ResolveSourceGraph(ctx, pid, in.ToRevisionID)
+		if err != nil {
+			return nil, err
+		}
+		sourceGraphAfter = graph
+		sourceAfter = sourceReadContext(graph, "", "", "")
+	}
+	if sourceGraphBefore != nil || sourceGraphAfter != nil {
+		if err := appendSourceClaimDeltas(ctx, delta, sourceGraphBefore, sourceGraphAfter); err != nil {
+			return nil, err
+		}
+	}
 	left, right := comparisonPin(*from), comparisonPin(*to)
 	hash, err := requestDigest(struct {
 		Version  int
@@ -268,6 +295,17 @@ func (r *Repo) CompareRevisions(ctx context.Context, pid string, in CompareRevis
 	}{1, left, right, delta.Changes})
 	if err != nil {
 		return nil, err
+	}
+	if sourceBefore != nil || sourceAfter != nil {
+		hash, err = requestDigest(struct {
+			Version                   int
+			From, To                  ComparisonPin
+			Changes                   []RecordDelta
+			SourceBefore, SourceAfter *SourceReadContext
+		}{1, left, right, delta.Changes, sourceBefore, sourceAfter})
+		if err != nil {
+			return nil, err
+		}
 	}
 	scope, err := requestDigest(struct{ Hash, RecordType, ChangeKind string }{hash, in.RecordType, in.ChangeKind})
 	if err != nil {
@@ -284,7 +322,7 @@ func (r *Repo) CompareRevisions(ctx context.Context, pid string, in CompareRevis
 			return nil, invalid("cursor", "Invalid comparison offset")
 		}
 	}
-	out := &RevisionComparison{From: left, To: right, ComparisonVersion: 1, ComparisonHash: hash, Summary: delta.Summary, CoverageBefore: from.Revision.Coverage, CoverageAfter: to.Revision.Coverage, Limitations: []string{"Structural comparison describes provider assertions; it does not verify runtime behavior or impact safety."}, Items: []ComparisonItem{}}
+	out := &RevisionComparison{SourceBefore: sourceBefore, SourceAfter: sourceAfter, From: left, To: right, ComparisonVersion: 1, ComparisonHash: hash, Summary: delta.Summary, CoverageBefore: from.Revision.Coverage, CoverageAfter: to.Revision.Coverage, Limitations: []string{"Structural comparison describes provider assertions; it does not verify runtime behavior or impact safety."}, Items: []ComparisonItem{}}
 	for _, state := range []*RevisionState{from, to} {
 		for _, gap := range state.Revision.Coverage.Gaps {
 			out.Limitations = append(out.Limitations, gap)
@@ -310,6 +348,7 @@ func (r *Repo) CompareRevisions(ctx context.Context, pid string, in CompareRevis
 		item := ComparisonItem{RecordType: change.RecordType, ID: change.ID, ChangeKinds: change.ChangeKinds, ChangedPaths: change.ChangedPaths}
 		item.ContextChanged = change.ContextChanged
 		if change.Before != nil {
+			item.SourceClaimBefore = change.Before.SourceClaim
 			item.EditorArtifactBefore = change.Before.EditorArtifact
 			item.ArtifactGroupBefore = change.Before.ArtifactGroup
 			item.ArtifactBefore = change.Before.Artifact
@@ -319,6 +358,7 @@ func (r *Repo) CompareRevisions(ctx context.Context, pid string, in CompareRevis
 			item.FreshnessBefore = change.Before.Freshness
 		}
 		if change.After != nil {
+			item.SourceClaimAfter = change.After.SourceClaim
 			item.EditorArtifactAfter = change.After.EditorArtifact
 			item.ArtifactGroupAfter = change.After.ArtifactGroup
 			item.ArtifactAfter = change.After.Artifact

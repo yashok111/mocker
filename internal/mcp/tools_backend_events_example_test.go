@@ -70,7 +70,7 @@ func TestBackendEventsRealSDKGuideFixtureExample(t *testing.T) {
 		var out GetGuideOutput
 		call("get_guide", map[string]any{"topic": topic, "guideSetId": guide.CurrentGuideSetID()}, &out)
 		owner, ok := guide.WorkflowForTopic(topic)
-		if !ok || out.WorkflowID != owner.WorkflowID || out.WorkflowVersion != "6" || out.GuideSetID != guide.CurrentGuideSetID() || out.ManifestHash != guide.CurrentGuideSetID() || out.ContentHash != fmt.Sprintf("sha256:%x", sha256.Sum256([]byte(out.Markdown))) {
+		if !ok || out.WorkflowID != owner.WorkflowID || out.WorkflowVersion != "7" || out.GuideSetID != guide.CurrentGuideSetID() || out.ManifestHash != guide.CurrentGuideSetID() || out.ContentHash != fmt.Sprintf("sha256:%x", sha256.Sum256([]byte(out.Markdown))) {
 			t.Fatalf("unqualified guide: %+v", out)
 		}
 	}

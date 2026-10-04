@@ -12,15 +12,17 @@ import (
 )
 
 type DatabaseQueryInput struct {
-	RevisionID                  string              `json:"revisionId,omitempty"`
-	Proposal                    *ProposalReadTarget `json:"proposal,omitzero"`
-	DatastoreID                 string              `json:"datastoreId"`
-	FacetKey                    string              `json:"facetKey"`
-	RecordType                  string              `json:"recordType"`
-	Search                      string              `json:"search,omitempty"`
-	TableID                     string              `json:"tableId,omitempty"`
-	Limit                       int                 `json:"limit,omitzero"`
-	Cursor                      string              `json:"cursor,omitempty"`
+	ChangeProposal              *ProposalReadTarget        `json:"changeProposal,omitzero"`
+	ImportCandidate             *ImportCandidateReadTarget `json:"importCandidate,omitzero"`
+	RevisionID                  string                     `json:"revisionId,omitempty"`
+	Proposal                    *ProposalReadTarget        `json:"proposal,omitzero"`
+	DatastoreID                 string                     `json:"datastoreId"`
+	FacetKey                    string                     `json:"facetKey"`
+	RecordType                  string                     `json:"recordType"`
+	Search                      string                     `json:"search,omitempty"`
+	TableID                     string                     `json:"tableId,omitempty"`
+	Limit                       int                        `json:"limit,omitzero"`
+	Cursor                      string                     `json:"cursor,omitempty"`
 	searchPresent, tablePresent bool
 }
 
@@ -98,23 +100,28 @@ type RelationshipItem struct {
 	TargetReason      *string              `json:"targetReason"`
 }
 type DatabasePage struct {
-	ViewSchemaVersion string             `json:"viewSchemaVersion,omitempty"`
-	ProposalPins      *ProposalReadPins  `json:"proposalPins,omitzero"`
-	ProjectID         string             `json:"projectId"`
-	RevisionID        string             `json:"revisionId"`
-	SemanticHash      string             `json:"semanticHash"`
-	DatastoreID       string             `json:"datastoreId"`
-	FacetKey          string             `json:"facetKey"`
-	RecordType        string             `json:"recordType"`
-	Coverage          RevisionCoverage   `json:"coverage"`
-	FacetStatus       string             `json:"facetStatus"`
-	Limitations       []string           `json:"limitations"`
-	TableItems        []TableItem        `json:"tableItems"`
-	RelationshipItems []RelationshipItem `json:"relationshipItems"`
-	NextCursor        string             `json:"nextCursor"`
+	Target            *BackendReadTarget  `json:"target,omitzero"`
+	Pins              *EffectiveGraphPins `json:"pins,omitzero"`
+	ViewSchemaVersion string              `json:"viewSchemaVersion,omitempty"`
+	ProposalPins      *ProposalReadPins   `json:"proposalPins,omitzero"`
+	ProjectID         string              `json:"projectId"`
+	RevisionID        string              `json:"revisionId"`
+	SemanticHash      string              `json:"semanticHash"`
+	DatastoreID       string              `json:"datastoreId"`
+	FacetKey          string              `json:"facetKey"`
+	RecordType        string              `json:"recordType"`
+	Coverage          RevisionCoverage    `json:"coverage"`
+	FacetStatus       string              `json:"facetStatus"`
+	Limitations       []string            `json:"limitations"`
+	TableItems        []TableItem         `json:"tableItems"`
+	RelationshipItems []RelationshipItem  `json:"relationshipItems"`
+	NextCursor        string              `json:"nextCursor"`
 }
 
 type databaseProjection struct {
+	effective     *EffectiveGraphSnapshot
+	source        *SourceGraphSnapshot
+	sourceProof   map[*relationalFacet]lineageProof
 	proposal      *resolvedBackendTarget
 	in            DatabaseQueryInput
 	nodes         map[string]Node
@@ -159,6 +166,9 @@ func (p *databaseProjection) observe(id string) *relationalFacet {
 		p.limitation("Missing selected facet proof for " + id)
 		return nil
 	}
+	if p.source != nil || p.effective != nil {
+		return p.observeSourceFacet(id, f)
+	}
 	if f.Freshness != nil && f.Freshness.Status == "stale" {
 		p.stale("Stale selected facet for " + id)
 	}
@@ -176,6 +186,10 @@ func (p *databaseProjection) observe(id string) *relationalFacet {
 	return f
 }
 func (p *databaseProjection) proofCurrent(f *relationalFacet) bool {
+	if p.source != nil || p.effective != nil {
+		proof, ok := p.sourceProof[f]
+		return ok && (proof.status == "explicit" || proof.status == "desired") && !proof.boundary
+	}
 	if f == nil || f.Freshness == nil || f.Freshness.Status != "current" || len(f.EvidenceIDs) == 0 {
 		return false
 	}
@@ -188,6 +202,10 @@ func (p *databaseProjection) proofCurrent(f *relationalFacet) bool {
 	return true
 }
 func (p *databaseProjection) proofStale(f *relationalFacet) bool {
+	if p.source != nil || p.effective != nil {
+		proof, ok := p.sourceProof[f]
+		return ok && proof.status == "stale"
+	}
 	if f == nil {
 		return false
 	}
@@ -203,13 +221,45 @@ func (p *databaseProjection) proofStale(f *relationalFacet) bool {
 }
 
 func (r *Repo) QueryDatabase(ctx context.Context, pid string, in DatabaseQueryInput) (*DatabasePage, error) {
+	return r.queryDatabaseWithEffective(ctx, pid, in, nil)
+}
+func (r *Repo) queryDatabaseWithEffective(ctx context.Context, pid string, in DatabaseQueryInput, effective *EffectiveGraphSnapshot) (*DatabasePage, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	target, err := r.resolveBackendTarget(ctx, pid, BackendReadTarget{RevisionID: in.RevisionID, Proposal: in.Proposal})
-	if err != nil {
-		return nil, err
+	var target *resolvedBackendTarget
+	var err error
+	if effective == nil && in.RevisionID != "" && in.Proposal == nil && in.ChangeProposal == nil {
+		revision, e := r.Revision(ctx, pid, in.RevisionID)
+		if e != nil {
+			return nil, e
+		}
+		if revision.SchemaVersion == ComposedSchemaVersion {
+			effective, err = r.ResolveEffectiveGraph(ctx, pid, BackendReadTarget{RevisionID: in.RevisionID})
+			if err != nil {
+				return nil, err
+			}
+		}
 	}
+	if effective != nil {
+		target = &resolvedBackendTarget{revisionID: effective.State.Revision.ID}
+	} else if in.ChangeProposal != nil || in.ImportCandidate != nil {
+		selector := graphTarget(in.RevisionID, in.Proposal, in.ChangeProposal, in.ImportCandidate)
+		if err := rejectStagedView(selector); err != nil {
+			return nil, err
+		}
+		effective, err = r.ResolveEffectiveGraph(ctx, pid, selector)
+		if err != nil {
+			return nil, err
+		}
+		target = &resolvedBackendTarget{revisionID: effective.State.Revision.ID}
+	} else {
+		target, err = r.resolveBackendTarget(ctx, pid, BackendReadTarget{RevisionID: in.RevisionID, Proposal: in.Proposal})
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	if target.proposal != nil && (in.DatastoreID != target.proposal.DatastoreID || in.FacetKey != target.proposal.FacetKey) {
 		return nil, invalid("selection", "Proposal datastore and facet must match its baseline selection")
 	}
@@ -232,11 +282,26 @@ func (r *Repo) QueryDatabase(ctx context.Context, pid string, in DatabaseQueryIn
 	if in.tablePresent && in.TableID == "" || in.TableID != "" && !ValidID(in.TableID) {
 		return nil, invalid("tableId", "Table selector must be a canonical UUID")
 	}
-	state, err := loadRevisionState(ctx, r.db.R, pid, in.RevisionID)
+	var state *RevisionState
+	if effective != nil {
+		state = new(effective.State)
+	} else {
+		state, err = loadRevisionState(ctx, r.db.R, pid, in.RevisionID)
+	}
 	if err != nil {
 		return nil, err
 	}
-	p := &databaseProjection{proposal: target, in: in, nodes: map[string]Node{}, children: map[string][]Node{}, facets: map[string]map[string]*relationalFacet{}, evidence: map[string]Evidence{}, stores: map[string]string{}, observed: map[string]bool{}, limitations: map[string]bool{}, uniqueResults: map[string]databaseUniqueness{}}
+	p := &databaseProjection{effective: effective, proposal: target, in: in, nodes: map[string]Node{}, children: map[string][]Node{}, facets: map[string]map[string]*relationalFacet{}, evidence: map[string]Evidence{}, stores: map[string]string{}, observed: map[string]bool{}, limitations: map[string]bool{}, uniqueResults: map[string]databaseUniqueness{}}
+	if effective != nil {
+		p.source = effective.Source
+		p.sourceProof = map[*relationalFacet]lineageProof{}
+	} else if state.Revision.SchemaVersion == ComposedSchemaVersion {
+		p.source, err = r.ResolveSourceGraph(ctx, pid, in.RevisionID)
+		if err != nil {
+			return nil, err
+		}
+		p.sourceProof = map[*relationalFacet]lineageProof{}
+	}
 	if target.proposal != nil {
 		state.Nodes = append([]Node{}, state.Nodes...)
 		state.Edges = append([]Edge{}, state.Edges...)
@@ -271,7 +336,7 @@ func (r *Repo) QueryDatabase(ctx context.Context, pid string, in DatabaseQueryIn
 	if !ok {
 		return nil, notFound()
 	}
-	if !isRelationalSchema(state.Revision.SchemaVersion) || ds.Kind != "datastore" || !relationalSubject(ds.Kind, ds.Attributes, false) {
+	if (effective == nil && !isRelationalSchema(state.Revision.SchemaVersion) && state.Revision.SchemaVersion != ComposedSchemaVersion) || ds.Kind != "datastore" || !relationalSubject(ds.Kind, ds.Attributes, false) {
 		return nil, &FaultError{Status: 422, Code: "backend_relational_unavailable", Message: "Pinned revision has no relational datastore descriptor"}
 	}
 	var store func(string) string
@@ -311,6 +376,11 @@ func (r *Repo) QueryDatabase(ctx context.Context, pid string, in DatabaseQueryIn
 		return nil, err
 	}
 	p.page = &DatabasePage{ProjectID: pid, RevisionID: in.RevisionID, SemanticHash: state.Revision.SemanticHash, DatastoreID: in.DatastoreID, FacetKey: in.FacetKey, RecordType: in.RecordType, Coverage: *coverage, FacetStatus: "current", Limitations: []string{}, TableItems: []TableItem{}, RelationshipItems: []RelationshipItem{}}
+	if effective != nil {
+		p.page.Target = new(effective.Target)
+		p.page.Pins = new(effective.Pins)
+		p.page.SemanticHash = effective.Pins.EffectiveSemanticHash
+	}
 	decode := func(id, kind string, attrs map[string]jsontext.Value, edge bool) error {
 		if o := target.overlay(id); o != nil && o.Base == nil {
 			return nil
@@ -324,11 +394,28 @@ func (r *Repo) QueryDatabase(ctx context.Context, pid string, in DatabaseQueryIn
 		}
 		p.facets[id] = map[string]*relationalFacet{}
 		for key, raw := range fs {
-			f, err := decodeRelationalFacet(kind, raw, true)
+			f, err := decodeRelationalFacetMode(kind, raw, true, p.source == nil && p.effective == nil)
 			if err != nil {
 				return err
 			}
 			p.facets[id][key] = f
+			if p.source != nil || p.effective != nil {
+				typ := "node"
+				if edge {
+					typ = "edge"
+				}
+				var proof lineageProof
+				var err error
+				if p.effective != nil {
+					proof, err = effectiveFacetProof(p.effective, typ, id, key)
+				} else {
+					proof, err = sourceRecordProof(p.source, typ, id, &LineageValueRef{Kind: "column", NodeID: id, FacetKey: key})
+				}
+				if err != nil {
+					return err
+				}
+				p.sourceProof[f] = proof
+			}
 		}
 		return nil
 	}
@@ -412,7 +499,7 @@ func (r *Repo) QueryDatabase(ctx context.Context, pid string, in DatabaseQueryIn
 		if in.RecordType != "tables" || !strings.Contains(strings.ToLower(f.QualifiedName), strings.ToLower(in.Search)) {
 			continue
 		}
-		comparison, err := CompareRelationalFacets(n.Kind, n.Attributes, false)
+		comparison, err := compareRelationalFacetsMode(n.Kind, n.Attributes, false, p.source == nil && p.effective == nil)
 		if err != nil {
 			return nil, err
 		}
@@ -463,6 +550,15 @@ func (r *Repo) QueryDatabase(ctx context.Context, pid string, in DatabaseQueryIn
 			return nil, err
 		}
 	}
+	if effective != nil {
+		scope, err = requestDigest(struct {
+			Scope string
+			Pins  EffectiveGraphPins
+		}{scope, effective.Pins})
+		if err != nil {
+			return nil, err
+		}
+	}
 	limit, after, err := decodeGraphPage(in.Limit, in.Cursor, "database", pid, scope, true)
 	if err != nil {
 		return nil, err
@@ -487,7 +583,11 @@ func (r *Repo) QueryDatabase(ctx context.Context, pid string, in DatabaseQueryIn
 
 func (p *databaseProjection) relationship(e Edge, f, cf *relationalFacet) RelationshipItem {
 	constraint := p.nodes[e.From]
-	item := RelationshipItem{EdgeID: e.ID, ConstraintID: e.From, SourceTableID: *constraint.ParentID, ColumnPairs: []DatabaseColumnPair{}, EvidenceIDs: slices.Clone(f.EvidenceIDs), SourceCardinality: Cardinality{Basis: []string{}}, TargetCardinality: Cardinality{Basis: []string{}}, Status: "explicit"}
+	proofIDs := slices.Clone(f.EvidenceIDs)
+	if p.source != nil {
+		proofIDs = slices.Clone(p.sourceProof[f].evidenceIDs)
+	}
+	item := RelationshipItem{EdgeID: e.ID, ConstraintID: e.From, SourceTableID: *constraint.ParentID, ColumnPairs: []DatabaseColumnPair{}, EvidenceIDs: proofIDs, SourceCardinality: Cardinality{Basis: []string{}}, TargetCardinality: Cardinality{Basis: []string{}}, Status: "explicit"}
 	if to := p.nodes[e.To]; to.Kind == "table" {
 		item.TargetTableID = new(to.ID)
 	}
@@ -559,7 +659,10 @@ func (p *databaseProjection) relationship(e Edge, f, cf *relationalFacet) Relati
 	allNotNull, nullable, unknown := true, false, false
 	for _, id := range fromColumns {
 		n := p.selected(id).Nullable
-		basis := "Selected source column " + id + " nullable " + n.Status + " " + string(n.Value) + " with evidence " + strings.Join(p.selected(id).EvidenceIDs, ",")
+		basis := "Selected source column " + id + " nullable " + n.Status + " " + string(n.Value) + " with evidence " + p.selectedEvidence(p.selected(id))
+		if effectiveBasis := p.effectiveNullableBasis(id, n.Value); effectiveBasis != "" {
+			basis = effectiveBasis
+		}
 		if designed {
 			if overlay := p.proposal.overlay(id); overlay != nil && overlay.PropertyOrigins["/nullable"].Kind == "intent" {
 				basis = "Desired column " + id + " nullable " + string(n.Value) + " from command " + overlay.PropertyOrigins["/nullable"].CommandID + "; runtime is unverified"
@@ -580,6 +683,9 @@ func (p *databaseProjection) relationship(e Edge, f, cf *relationalFacet) Relati
 			item.TargetCardinality.Min = new(int64(0))
 		}
 		basis := "Current explicit nondeferrable MATCH SIMPLE " + e.From + " with selected source nullability"
+		if p.effectiveRelationshipIntent(e) {
+			basis = "Desired nondeferrable MATCH SIMPLE " + e.From + " with desired nullability; runtime enforcement is unverified"
+		}
 		if designed {
 			basis = "Designed nondeferrable MATCH SIMPLE " + e.From + " with desired nullability; runtime enforcement is unverified"
 		}
@@ -673,11 +779,11 @@ func (p *databaseProjection) unique(table string, columns []string, ordered bool
 			continue
 		}
 		if !match(candidate) {
-			basis = append(basis, "Current explicit nonmatching global key "+n.ID+" with evidence "+strings.Join(f.EvidenceIDs, ","))
+			basis = append(basis, "Current explicit nonmatching global key "+n.ID+" with evidence "+p.selectedEvidence(f))
 			continue
 		}
 		unique = true
-		basis = append(basis, "Current explicit complete key "+n.ID+" with evidence "+strings.Join(f.EvidenceIDs, ","))
+		basis = append(basis, "Current explicit complete key "+n.ID+" with evidence "+p.selectedEvidence(f))
 	}
 	if !unique {
 		if complete {
@@ -687,4 +793,30 @@ func (p *databaseProjection) unique(table string, columns []string, ordered bool
 		}
 	}
 	return
+}
+
+func (p *databaseProjection) observeSourceFacet(id string, f *relationalFacet) *relationalFacet {
+	proof := p.sourceProof[f]
+	if proof.status == "desired" {
+		p.page.FacetStatus = "desired"
+	} else if proof.status == "stale" {
+		p.stale("Stale selected source property for " + id)
+	} else if proof.status != "explicit" {
+		p.limitation("Missing explicit selected source property proof for " + id)
+	}
+	for reason := range proof.reasons {
+		if reason == "desired_structure" {
+			p.page.Limitations = append(p.page.Limitations, "Desired structure; source proof does not confirm this intended value")
+			continue
+		}
+		if proof.status == "stale" {
+			p.stale(reason)
+		} else {
+			p.limitation(reason)
+		}
+	}
+	if f.AnalysisStatus != "complete" || f.ColumnsStatus != "" && f.ColumnsStatus != "complete" || f.ConstraintsStatus != "" && f.ConstraintsStatus != "complete" {
+		p.limitation("Incomplete selected analysis for " + id)
+	}
+	return f
 }

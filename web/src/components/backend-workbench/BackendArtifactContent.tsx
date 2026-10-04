@@ -1,3 +1,4 @@
+import type { ProjectionReadProps } from "./backendEffectiveProjectionReads";
 import { Badge, Code, Stack, Text } from "@mantine/core";
 import type {
   ArtifactProjectionData,
@@ -119,10 +120,12 @@ export function ArtifactDeltaSide({
   side,
   projectId,
   revisionId,
-}: {
+  target,
+  pins,
+}: ProjectionReadProps & {
   side?: ArtifactComparisonSide;
   projectId: string;
-  revisionId: string;
+  revisionId?: string;
 }) {
   if (!side) return <Text>Отсутствует</Text>;
   if ("api" in side)
@@ -131,6 +134,8 @@ export function ArtifactDeltaSide({
         reference={side.api}
         projectId={projectId}
         revisionId={revisionId}
+        target={target}
+        pins={pins}
       />
     );
   return <ArtifactEditorSide side={"editor" in side ? side.editor : side.group} />;

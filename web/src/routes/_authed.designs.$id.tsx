@@ -14,6 +14,8 @@ const designSearch = type({
   "pinnedSelectorPointer?": "string",
   "returnProjectId?": "string",
   "returnRevisionId?": "string",
+  "returnChangeProposalId?": "string",
+  "returnProposalRevisionId?": "string",
   "returnSourceNodeId?": "string",
 });
 export const validateDesignSearch = designSearch.assert;

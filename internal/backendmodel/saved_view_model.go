@@ -10,6 +10,7 @@ import (
 )
 
 const SavedViewDocumentVersion = "saved-view-v1"
+const SavedViewV2DocumentVersion = "saved-view-v2"
 const MaxSavedViewBodyBytes = 128 << 10
 const MaxSavedViews = 1000
 const MaxSavedViewVersions = 1000
@@ -114,12 +115,14 @@ func (s SavedViewState) kind() string {
 }
 
 type CreateSavedViewInput struct {
-	Name           string            `json:"name"`
-	Target         BackendReadTarget `json:"target"`
-	State          SavedViewState    `json:"state"`
-	IdempotencyKey string            `json:"idempotencyKey"`
+	DocumentVersion string            `json:"documentVersion,omitempty"`
+	Name            string            `json:"name"`
+	Target          BackendReadTarget `json:"target"`
+	State           SavedViewState    `json:"state"`
+	IdempotencyKey  string            `json:"idempotencyKey"`
 }
 type SaveSavedViewInput struct {
+	DocumentVersion string         `json:"documentVersion,omitempty"`
 	Name            string         `json:"name"`
 	State           SavedViewState `json:"state"`
 	ExpectedVersion int64          `json:"expectedVersion"`
@@ -132,9 +135,10 @@ type SavedViewListInput struct {
 }
 type GetSavedViewInput struct{ Version int64 }
 type SavedViewPins struct {
-	RevisionID   string            `json:"revisionId"`
-	SemanticHash string            `json:"semanticHash"`
-	Proposal     *ProposalReadPins `json:"proposal"`
+	Effective    *EffectiveGraphPins `json:"effective,omitzero"`
+	RevisionID   string              `json:"revisionId"`
+	SemanticHash string              `json:"semanticHash"`
+	Proposal     *ProposalReadPins   `json:"proposal"`
 }
 type SavedView struct {
 	ID              string            `json:"id"`
@@ -179,7 +183,7 @@ func (in *CreateSavedViewInput) UnmarshalJSON(b []byte) error {
 	if err := savedViewDecode(b, &out, "body"); err != nil {
 		return err
 	}
-	if err := validateSavedViewTarget(out.Target); err != nil {
+	if err := validateSavedViewVersionTarget(out.DocumentVersion, out.Target); err != nil {
 		return err
 	}
 	if _, err := normalizeName(out.Name); err != nil {
@@ -195,6 +199,9 @@ func (in *SaveSavedViewInput) UnmarshalJSON(b []byte) error {
 	type input SaveSavedViewInput
 	var out input
 	if err := savedViewDecode(b, &out, "body"); err != nil {
+		return err
+	}
+	if err := validateSavedViewVersion(out.DocumentVersion); err != nil {
 		return err
 	}
 	if out.ExpectedVersion <= 0 {
@@ -237,12 +244,10 @@ func savedViewWire(b []byte, typ reflect.Type, path string) error {
 			return invalid(path, "Expected a strict object")
 		}
 		if typ == reflect.TypeFor[BackendReadTarget]() {
-			_, a := m["revisionId"]
-			_, c := m["proposal"]
-			if a == c {
-				return invalid(path, "Select exactly one source or proposal")
-			}
+			var target BackendReadTarget
+			return json.Unmarshal(b, &target)
 		}
+
 		allowed := map[string]bool{}
 		for i := range typ.NumField() {
 			f := typ.Field(i)

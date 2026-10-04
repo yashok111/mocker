@@ -82,7 +82,7 @@ func (b *eventsWitnessBuilder) node(id string) {
 		b.limitations["Missing source node "+id] = true
 		return
 	}
-	b.observe(n.EvidenceIDs, n.Freshness)
+	b.sourceObserve("node", n.ID, n.EvidenceIDs, n.Freshness)
 	if n.Kind == "unresolved_target" {
 		b.witness.Status = "unresolved"
 		b.limitations["Unresolved source target "+id] = true
@@ -114,7 +114,7 @@ func (b *eventsWitnessBuilder) edge(id string) {
 		b.limitations["Missing source edge "+id] = true
 		return
 	}
-	b.observe(e.EvidenceIDs, e.Freshness)
+	b.sourceObserve("edge", e.ID, e.EvidenceIDs, e.Freshness)
 	if slices.Contains([]string{"emits", "delivered_to"}, e.Kind) && runtimeAttributeString(e.Attributes, "deliveryStatus") != "declared" {
 		b.witness.Status = runtimeWorseStatus(b.witness.Status, "unresolved")
 		b.limitations["Unknown configured delivery "+id] = true
@@ -164,7 +164,7 @@ func (p *eventsProjection) dispatch(id string) []EventsDispatch {
 		}
 		origin := p.witness([]string{id}, nil)
 		originNode := p.nodes[id]
-		originProof := (&runtimeFlowProjection{evidence: p.evidence}).recordStatus(originNode.EvidenceIDs, originNode.Freshness, map[string]bool{})
+		originProof := (&runtimeFlowProjection{effective: p.effective, source: p.source, evidence: p.evidence}).sourceRecordStatus("node", originNode.ID, nil, originNode.EvidenceIDs, originNode.Freshness, map[string]bool{})
 		d := EventsDispatch{HandlesEdgeID: e.ID, FlowIDs: []string{}, Witness: p.witness([]string{e.To}, []string{e.ID})}
 		h, ok := p.nodes[e.To]
 		if !ok || h.Kind != "handler" {
@@ -349,5 +349,52 @@ func (p *eventsProjection) dispatchFlows(d *EventsDispatch, h Node) {
 	}
 	if len(d.FlowIDs) == 0 {
 		eventsWitnessReason(&d.Witness, "Missing discovered handler flow "+h.ID, "unresolved")
+	}
+}
+
+func (b *eventsWitnessBuilder) sourceObserve(typ, id string, ids []string, fresh *AssertionFreshness) {
+	if b.projection.effective != nil {
+		proof, err := effectiveRecordProof(b.projection.effective, typ, id, nil)
+		if err != nil {
+			b.witness.Status = "unresolved"
+			b.limitations[err.Error()] = true
+			return
+		}
+		b.witness.Status = runtimeWorseStatus(b.witness.Status, proof.status)
+		for reason := range proof.reasons {
+			b.limitations[reason] = true
+		}
+		for _, eid := range proof.evidenceIDs {
+			if len(b.evidence) == EventsMaxWitnessRecords {
+				b.projection.truncations["witness_limit"] = true
+				break
+			}
+			b.evidence[eid] = true
+		}
+		if proof.status == "desired" {
+			b.witness.Provenance = "desired"
+		}
+		return
+	}
+	if b.projection.source == nil {
+		b.observe(ids, fresh)
+		return
+	}
+	proof, err := sourceRecordProof(b.projection.source, typ, id, nil)
+	if err != nil {
+		b.witness.Status = "unresolved"
+		b.limitations[err.Error()] = true
+		return
+	}
+	b.witness.Status = runtimeWorseStatus(b.witness.Status, proof.status)
+	for reason := range proof.reasons {
+		b.limitations[reason] = true
+	}
+	for _, eid := range proof.evidenceIDs {
+		if len(b.evidence) == EventsMaxWitnessRecords {
+			b.projection.truncations["witness_limit"] = true
+			break
+		}
+		b.evidence[eid] = true
 	}
 }

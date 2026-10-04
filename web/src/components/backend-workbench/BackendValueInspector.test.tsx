@@ -8,9 +8,9 @@ import { useState } from "react";
 afterEach(() => vi.unstubAllGlobals());
 it("updates the full event address when the selected field stays the same", async () => {
   vi.stubGlobal("fetch", async (url: RequestInfo | URL, init?: RequestInit) => {
-    if (String(url).endsWith("/revisions/rev"))
+    if (String(url).endsWith("/revisions/0197aaf9-5555-7000-8000-000000000115"))
       return json(200, {
-        id: "rev",
+        id: "0197aaf9-5555-7000-8000-000000000115",
         projectId: "project",
         schemaVersion: "5",
         semanticHash: "a".repeat(64),
@@ -34,7 +34,7 @@ it("updates the full event address when the selected field stays the same", asyn
         <button onClick={() => setRouteId("delivery-b")}>Other route</button>
         <BackendValueInspector
           projectId="project"
-          revisionId="rev"
+          revisionId="0197aaf9-5555-7000-8000-000000000115"
           value={{ kind: "event_field", nodeId: "field", endpointId: "consumer", routeId }}
           onClose={() => {}}
         />
@@ -74,13 +74,14 @@ it("opens the exact query result collection/key and its owner in the pinned insp
         evidenceIds: [],
         attributes: {},
       });
-    if (String(url).endsWith("/revisions/rev")) return json(200, { id: "rev", schemaVersion: "4" });
+    if (String(url).endsWith("/revisions/0197aaf9-5555-7000-8000-000000000115"))
+      return json(200, { id: "0197aaf9-5555-7000-8000-000000000115", schemaVersion: "4" });
     return json(200, { items: [], nextCursor: "" });
   });
   renderWithProviders(
     <BackendValueInspector
       projectId="project"
-      revisionId="rev"
+      revisionId="0197aaf9-5555-7000-8000-000000000115"
       value={{ kind: "port", nodeId: "query", collection: "results", portKey: "same-key" }}
       onClose={() => {}}
     />,
@@ -93,14 +94,16 @@ it("opens the exact query result collection/key and its owner in the pinned insp
   fireEvent.click(screen.getByRole("button", { name: "Открыть владельца значения flow" }));
   await screen.findByRole("heading", { name: "Owner flow" });
   expect(
-    urls.filter((url) => url.includes("/nodes/")).every((url) => url.includes("/revisions/rev/")),
+    urls
+      .filter((url) => url.includes("/nodes/"))
+      .every((url) => url.includes("/revisions/0197aaf9-5555-7000-8000-000000000115/")),
   ).toBe(true);
   expect(screen.queryByText(/Выбранное значение:/)).not.toBeInTheDocument();
 });
 it("opens a lineage API field as its source node with pinned manual artifact evidence and guards owner navigation", async () => {
   const hash = "a".repeat(64);
   const revision = {
-    id: "historical",
+    id: "0197aaf9-5555-7000-8000-000000000204",
     projectId: "project",
     semanticHash: hash,
     sourceSnapshotIds: ["snap"],
@@ -115,7 +118,7 @@ it("opens a lineage API field as its source node with pinned manual artifact evi
     attributes: {
       direction: "response",
       location: "body",
-      selector: { kind: "json_pointer", value: "/from/source" },
+      selector: { kind: "json_pointer", value: "/from/0197aaf9-5555-7000-8000-000000000119" },
     },
   };
   const calls: Array<{ url: string; body: unknown }> = [];
@@ -176,7 +179,7 @@ it("opens a lineage API field as its source node with pinned manual artifact evi
     >
       <BackendValueInspector
         projectId="project"
-        revisionId="historical"
+        revisionId="0197aaf9-5555-7000-8000-000000000204"
         value={{ kind: "api_field", nodeId: "field" }}
         onClose={vi.fn()}
       />
@@ -195,5 +198,5 @@ it("opens a lineage API field as its source node with pinned manual artifact evi
   expect(calls.some((call) => call.url.endsWith("/nodes/operation"))).toBe(false);
   expect(
     calls.filter((call) => call.url.endsWith("api-artifacts/query")).map((call) => call.body),
-  ).toEqual([{ revisionId: "historical", limit: 100, cursor: "" }]);
+  ).toEqual([{ revisionId: "0197aaf9-5555-7000-8000-000000000204", limit: 100, cursor: "" }]);
 });

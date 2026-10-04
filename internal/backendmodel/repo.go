@@ -64,6 +64,11 @@ func initialRevision(p *Project, now time.Time) Revision {
 }
 
 func (r *Repo) Apply(ctx context.Context, id string, in CommandsInput) (*Project, error) {
+	return r.ApplyAs(ctx, id, in, "system")
+}
+
+// ApplyAs attributes annotation edits to the authenticated caller, outside the request digest.
+func (r *Repo) ApplyAs(ctx context.Context, id string, in CommandsInput, actor string) (*Project, error) {
 	if !ValidID(id) {
 		return nil, notFound()
 	}
@@ -73,15 +78,18 @@ func (r *Repo) Apply(ctx context.Context, id string, in CommandsInput) (*Project
 	if in.ExpectedVersion <= 0 {
 		return nil, invalid("expectedVersion", "expectedVersion must be positive")
 	}
-	if len(in.Commands) != 1 || in.Commands[0].Type != "rename_project" {
-		return nil, invalid("commands", "Exactly one rename_project command is supported")
-	}
-	name, err := normalizeName(in.Commands[0].Name)
+	commands, err := normalizeProjectCommands(in.Commands)
 	if err != nil {
 		return nil, err
 	}
-	// Copy the slice: normalization must not mutate the caller's request.
-	in.Commands = []Command{{Type: "rename_project", Name: name}}
+	in.Commands = commands
+	raw, err := json.Marshal(in)
+	if err != nil {
+		return nil, err
+	}
+	if len(raw) > MaxProjectCommandBytes {
+		return nil, invalid("body", "Project commands exceed 1 MiB")
+	}
 	return r.mutate(ctx, "project:"+id, in.IdempotencyKey, in, func(tx *sql.Tx) (*Project, error) {
 		p, err := scanProject(tx.QueryRowContext(ctx, `SELECT `+projectColumns+` FROM backend_projects WHERE id=?`, id))
 		if err != nil {
@@ -93,8 +101,26 @@ func (r *Repo) Apply(ctx context.Context, id string, in CommandsInput) (*Project
 		if p.Version == math.MaxInt64 {
 			return nil, &FaultError{Status: 409, Code: "backend_version_exhausted", Message: "Project version cannot be incremented", CurrentVersion: p.Version}
 		}
-		p.Name, p.Version, p.UpdatedAt = name, p.Version+1, time.Now().UTC()
-		_, err = tx.ExecContext(ctx, `UPDATE backend_projects SET name=?,version=?,updated_at=? WHERE id=?`, p.Name, p.Version, p.UpdatedAt.Format(time.RFC3339Nano), id)
+		now := time.Now().UTC()
+		annotationsChanged := false
+		for _, c := range commands {
+			if c.Type == "rename_project" {
+				p.Name = c.Name
+				continue
+			}
+			if err := applyAnnotationCommand(ctx, tx, p, c, actor, now); err != nil {
+				return nil, err
+			}
+			annotationsChanged = true
+		}
+		if annotationsChanged {
+			if err := checkAnnotationQuota(ctx, tx, id); err != nil {
+				return nil, err
+			}
+		}
+		p.Version++
+		p.UpdatedAt = now
+		_, err = tx.ExecContext(ctx, `UPDATE backend_projects SET name=?,version=?,updated_at=? WHERE id=?`, p.Name, p.Version, now.Format(time.RFC3339Nano), id)
 		return p, err
 	})
 }

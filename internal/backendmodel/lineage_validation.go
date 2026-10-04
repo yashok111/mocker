@@ -29,6 +29,9 @@ func validateEventsLineageRef(raw jsontext.Value, persisted bool) error {
 	return validateLineageRefMode(raw, persisted, true)
 }
 func validateLineageRefMode(raw jsontext.Value, persisted, events bool) error {
+	return validateLineageRefProfile(raw, persisted, events, false)
+}
+func validateLineageRefProfile(raw jsontext.Value, persisted, events, representations bool) error {
 	m, err := relationalObject(raw)
 	if err != nil {
 		return err
@@ -44,6 +47,10 @@ func validateLineageRefMode(raw jsontext.Value, persisted, events bool) error {
 	case "port":
 		required = append(required, "collection", "portKey")
 	case "api_field":
+	case "representation_field":
+		if !representations || !persisted {
+			return semantic("kind", "Representation references require scoped source6 input or normalized UUIDs")
+		}
 	case "event_field":
 		if !events {
 			return semantic("kind", "Event references require source5")
@@ -76,6 +83,9 @@ func validateEventsLineageAttributes(kind string, a map[string]jsontext.Value, e
 	return validateLineageAttributesMode(kind, a, edge, persisted, true)
 }
 func validateLineageAttributesMode(kind string, a map[string]jsontext.Value, edge, persisted, events bool) error {
+	return validateLineageAttributesProfile(kind, a, edge, persisted, events, false)
+}
+func validateLineageAttributesProfile(kind string, a map[string]jsontext.Value, edge, persisted, events, representations bool) error {
 	if !lineageSubject(kind, edge) {
 		return validateRuntimeAttributes(kind, a, edge, persisted)
 	}
@@ -117,13 +127,17 @@ func validateLineageAttributesMode(kind string, a map[string]jsontext.Value, edg
 	if kind == "api_field" {
 		return validateAPIField(a)
 	}
+	return validateLineageMappingValues(a, persisted, events, representations, status)
+}
+
+func validateLineageMappingValues(a map[string]jsontext.Value, persisted, events, representations bool, status string) error {
 	sources, err := relationalArray(a["sources"], MaxLineageSources)
 	if err != nil {
 		return err
 	}
 	seen := map[ImportLineageValueRef]bool{}
 	for _, raw := range append(slices.Clone(sources), a["destination"]) {
-		if err := validateLineageRefMode(raw, persisted, events); err != nil {
+		if err := validateLineageRefProfile(raw, persisted, events, representations); err != nil {
 			return err
 		}
 	}
@@ -143,7 +157,11 @@ func validateLineageAttributesMode(kind string, a map[string]jsontext.Value, edg
 	if err := validateLineageTransport(a, persisted); err != nil {
 		return err
 	}
-	tr, err := relationalObject(a["transform"])
+	return validateLineageTransform(a["transform"], len(sources), status)
+}
+
+func validateLineageTransform(raw jsontext.Value, count int, status string) error {
+	tr, err := relationalObject(raw)
 	if err != nil {
 		return err
 	}
@@ -158,7 +176,6 @@ func validateLineageAttributesMode(kind string, a map[string]jsontext.Value, edg
 		return semantic("transform/redacted", "Required boolean")
 	}
 	transform := runtimeString(tr["kind"])
-	count := len(sources)
 	valid := false
 	switch transform {
 	case "copy", "rename":

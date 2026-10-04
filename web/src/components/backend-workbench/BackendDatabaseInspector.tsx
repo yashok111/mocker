@@ -1,3 +1,10 @@
+import {
+  readProjectionNode,
+  projectionURLTarget,
+  type ProjectionNode as BackendNode,
+  type ProjectionEdge as BackendEdge,
+} from "./backendEffectiveProjectionReads";
+import { BackendProjectionSources } from "./BackendProjectionSources";
 import { BackendValueInspector } from "./BackendValueInspector";
 import { useBackendAPIDeparture } from "./useBackendAPIDeparture";
 import type { BackendLineageValueRef } from "@/api/generated/schemas";
@@ -5,14 +12,14 @@ import { BackendValueSeeds } from "./BackendLineageActions";
 import { useEffect, useRef, useState } from "react";
 import { Badge, Button, Code, Group, Paper, Stack, Text, Title } from "@mantine/core";
 import { useQuery } from "@tanstack/react-query";
-import { getBackendNode } from "@/api/generated/backend-projects/backend-projects";
-import type { BackendEdge, BackendNode, BackendFacetComparison } from "@/api/generated/schemas";
+import type { BackendFacetComparison } from "@/api/generated/schemas";
 import { LoadState } from "./BackendGraphInventory";
 import { BackendDatabaseProposalInspector } from "./BackendDatabaseProposalInspector";
 import type { BackendSourcePin } from "./backendFlowReads";
 import {
   databaseButtonStyles,
   databaseKey,
+  databaseTarget,
   databaseStatus,
   databaseWrap,
   readDatabaseEvidence,
@@ -64,7 +71,15 @@ function SourceDatabaseInspector({
   const closeValue = () => {
     depart(() => setValueSelection(undefined));
   };
-  const context = { ...original, revisionId: selection.revisionId ?? original.revisionId };
+  const context =
+    selection.revisionId && selection.revisionId !== original.revisionId
+      ? {
+          ...original,
+          revisionId: selection.revisionId,
+          target: { revisionId: selection.revisionId },
+          pins: undefined,
+        }
+      : original;
   const key = [...databaseKey(context), "inspector", selection.type, selection.id];
   useDatabaseCancellation(key);
   const heading = useRef<HTMLHeadingElement>(null);
@@ -77,18 +92,20 @@ function SourceDatabaseInspector({
       if (selection.type === "edge") {
         const page = await readDatabaseGraph(
           context.projectId,
-          { revisionId: context.revisionId, recordType: "edges", id: selection.id },
+          { ...databaseTarget(context), recordType: "edges", id: selection.id },
           signal,
+          context.pins,
         );
         if (!page.edges[0]) throw new Error("Связь отсутствует в выбранной ревизии");
         return page.edges[0];
       }
-      const response = await getBackendNode(context.projectId, context.revisionId, selection.id, {
+      return readProjectionNode(
+        context.projectId,
+        databaseTarget(context),
+        selection.id,
         signal,
-      });
-      signal.throwIfAborted();
-      if (response.status !== 200) throw new Error("Объект отсутствует в выбранной ревизии");
-      return response.data;
+        context.pins,
+      );
     },
     staleTime: Infinity,
     retry: false,
@@ -115,6 +132,15 @@ function SourceDatabaseInspector({
           Ревизия: {context.revisionId} · объект: {selection.id}
         </Text>
         <LoadState query={query} label="объекта базы данных" />
+        {(context.pins || context.target?.changeProposal) && (
+          <BackendProjectionSources
+            projectId={context.projectId}
+            target={databaseTarget(context)}
+            pins={context.pins}
+            recordType={selection.type}
+            id={selection.id}
+          />
+        )}
         {record && (
           <>
             <Badge>{record.kind}</Badge>
@@ -122,6 +148,8 @@ function SourceDatabaseInspector({
               <BackendValueSeeds
                 projectId={context.projectId}
                 revisionId={context.revisionId}
+                target={databaseTarget(context)}
+                pins={context.pins}
                 node={record}
                 selected={valueRef}
                 onValueSelect={selectValue}
@@ -132,6 +160,8 @@ function SourceDatabaseInspector({
                 key={JSON.stringify(valueSelection)}
                 projectId={context.projectId}
                 revisionId={context.revisionId}
+                target={databaseTarget(context)}
+                pins={context.pins}
                 value={valueSelection}
                 onClose={closeValue}
               />
@@ -141,7 +171,7 @@ function SourceDatabaseInspector({
                 variant="default"
                 onClick={() =>
                   onFlowNavigate({
-                    revisionId: context.revisionId,
+                    ...projectionURLTarget(databaseTarget(context), context.revisionId),
                     dataNodeId: record.id,
                     datastoreId: context.datastoreId,
                     facetKey: context.facetKey,
@@ -263,14 +293,15 @@ function RecordFacets({
           </summary>
           <Stack gap="xs" pl="sm" style={{ minWidth: 0 }}>
             <Text size="sm">
-              {databaseStatus(facet.analysisStatus)} · {databaseStatus(facet.freshness.status)}
+              {databaseStatus(facet.analysisStatus)} ·{" "}
+              {databaseStatus(facet.freshness?.status ?? "unknown")}
             </Text>
             {facet.gaps.map((gap) => (
               <Text key={gap} style={databaseWrap} size="sm">
                 {gap}
               </Text>
             ))}
-            {facet.freshness.reasons.map((reason) => (
+            {facet.freshness?.reasons.map((reason) => (
               <Text key={reason} style={databaseWrap} size="sm">
                 {reason}
               </Text>
@@ -279,7 +310,7 @@ function RecordFacets({
               Снимок источника: {facet.sourceSnapshotId}
             </Text>
             <Text size="xs" style={databaseWrap}>
-              Подтверждающий снимок: {facet.freshness.confirmedSnapshotId}
+              Подтверждающий снимок: {facet.freshness?.confirmedSnapshotId}
             </Text>
             {Object.entries(facet)
               .filter(
@@ -308,7 +339,7 @@ function RecordFacets({
                 </div>
               ))}
             <Text size="xs" style={databaseWrap}>
-              Доказательства: {facet.evidenceIds.join(", ")}
+              Доказательства: {facet.evidenceIds?.join(", ")}
             </Text>
           </Stack>
         </details>
@@ -484,8 +515,9 @@ function TableChildren({
     queryFn: ({ signal }) =>
       readDatabaseGraph(
         context.projectId,
-        { revisionId: context.revisionId, recordType: "nodes", parentId: nodeId },
+        { ...databaseTarget(context), recordType: "nodes", parentId: nodeId },
         signal,
+        context.pins,
       ),
     staleTime: Infinity,
     retry: false,
@@ -544,8 +576,9 @@ function ConstraintReferences({
           constraintIds.map((from) =>
             readDatabaseGraph(
               context.projectId,
-              { revisionId: context.revisionId, recordType: "edges", from, kind: "references" },
+              { ...databaseTarget(context), recordType: "edges", from, kind: "references" },
               signal,
+              context.pins,
             ),
           ),
         )

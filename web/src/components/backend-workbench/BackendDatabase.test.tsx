@@ -12,8 +12,16 @@ import type {
 } from "@/api/generated/schemas";
 import { BackendDatabase } from "./BackendDatabase";
 import { BackendDatabaseProposalInspector } from "./BackendDatabaseProposalInspector";
-import { proposalDetail } from "./backendProposalTestFixtures";
+import { proposalDetail as originalProposalDetail } from "./backendProposalTestFixtures";
 
+const proposalDetail = structuredClone(originalProposalDetail);
+proposalDetail.proposal.id = "0197aaf9-5555-7000-8000-000000000111";
+proposalDetail.proposal.baseRevisionId = "0197aaf9-5555-7000-8000-000000000101";
+proposalDetail.proposal.draftRevisionId = "0197aaf9-5555-7000-8000-000000000103";
+proposalDetail.revision.id = proposalDetail.proposal.draftRevisionId;
+proposalDetail.revision.proposalId = proposalDetail.proposal.id;
+proposalDetail.revision.baseRevisionId = proposalDetail.proposal.baseRevisionId;
+proposalDetail.history[0]!.id = proposalDetail.revision.id;
 vi.mock("./BackendDatabaseGraph", () => ({ BackendDatabaseGraph: () => <div>ER canvas</div> }));
 
 it("uses old baseline objects when a proposal is selected under a newer source head", async () => {
@@ -44,7 +52,8 @@ it("uses old baseline objects when a proposal is selected under a newer source h
     graph: (input) =>
       input.recordType === "nodes"
         ? json(200, {
-            nodes: input.revisionId === "base" ? nodes : currentNodes,
+            nodes:
+              input.revisionId === "0197aaf9-5555-7000-8000-000000000101" ? nodes : currentNodes,
             edges: [],
             nextCursor: "",
           })
@@ -54,22 +63,29 @@ it("uses old baseline objects when a proposal is selected under a newer source h
     const pathname = new URL(String(url), "http://localhost").pathname;
     if (pathname.endsWith("/proposals"))
       return json(200, { items: [proposalDetail.proposal], nextCursor: "" });
-    if (pathname.endsWith("/proposals/proposal"))
+    if (pathname.endsWith("/proposals/0197aaf9-5555-7000-8000-000000000111"))
       return json(200, {
         ...proposalDetail,
         baseOutdated: true,
-        currentSourceRevisionId: "current",
+        currentSourceRevisionId: "0197aaf9-5555-7000-8000-000000000102",
       });
     return original(url, init);
   });
   renderWithProviders(
-    <BackendDatabase projectId="project" revisionId="current" repositoryId="repository" />,
+    <BackendDatabase
+      projectId="project"
+      revisionId="0197aaf9-5555-7000-8000-000000000102"
+      repositoryId="repository"
+    />,
   );
   expect(
     await screen.findByRole("button", { name: "Открыть миграцию 003_column_change" }),
   ).toBeInTheDocument();
   await screen.findByRole("option", { name: "Required users" });
-  await user.selectOptions(screen.getByLabelText("Предложение изменений"), "proposal");
+  await user.selectOptions(
+    screen.getByLabelText("Предложение изменений"),
+    "0197aaf9-5555-7000-8000-000000000111",
+  );
   await screen.findByText(/Источник обновился/);
   await waitFor(() =>
     expect(
@@ -95,7 +111,7 @@ it("links table accesses to the selected immutable source revision", async () =>
   renderWithProviders(
     <BackendDatabase
       projectId="project"
-      revisionId="frozen-source"
+      revisionId="0197aaf9-5555-7000-8000-000000000104"
       onFlowNavigate={onFlowNavigate}
     />,
   );
@@ -106,7 +122,7 @@ it("links table accesses to the selected immutable source revision", async () =>
     await screen.findByRole("button", { name: "Чтения и записи в исходном Flow" }),
   );
   expect(onFlowNavigate).toHaveBeenCalledWith({
-    revisionId: "frozen-source",
+    revisionId: "0197aaf9-5555-7000-8000-000000000104",
     dataNodeId: "orders",
     datastoreId: "db",
     facetKey: "sql",
@@ -118,8 +134,8 @@ it("keeps an unavailable datastore URL selection explicit instead of substitutin
   renderWithProviders(
     <BackendDatabase
       projectId="project"
-      revisionId="frozen-source"
-      pin={{ revisionId: "frozen-source", datastoreId: "missing" }}
+      revisionId="0197aaf9-5555-7000-8000-000000000104"
+      pin={{ revisionId: "0197aaf9-5555-7000-8000-000000000104", datastoreId: "missing" }}
     />,
   );
   expect(await screen.findByText(/Выбранное хранилище missing отсутствует/)).toBeInTheDocument();
@@ -155,10 +171,13 @@ it("links a proposed table to source Flow at its exact baseline without a propos
     <BackendDatabaseProposalInspector
       context={{
         projectId: "project",
-        revisionId: "old-baseline",
+        revisionId: "0197aaf9-5555-7000-8000-000000000110",
         datastoreId: "db",
         facetKey: "sql",
-        proposal: { proposalId: "proposal", proposalRevisionId: "draft" },
+        proposal: {
+          proposalId: "0197aaf9-5555-7000-8000-000000000111",
+          proposalRevisionId: "0197aaf9-5555-7000-8000-000000000103",
+        },
       }}
       selection={{ type: "node", id: "orders" }}
       onSelect={() => {}}
@@ -179,7 +198,7 @@ it("links a proposed table to source Flow at its exact baseline without a propos
     false,
   );
   expect(onFlowNavigate).toHaveBeenCalledWith({
-    revisionId: "old-baseline",
+    revisionId: "0197aaf9-5555-7000-8000-000000000110",
     dataNodeId: "orders",
     datastoreId: "db",
     facetKey: "sql",
@@ -288,7 +307,11 @@ const nodes: BackendNode[] = [
           ...columnFacet,
           sourceKind: "orm",
           nullable: { status: "known", value: true },
-          freshness: { status: "stale", confirmedSnapshotId: "old", reasons: ["ORM unavailable"] },
+          freshness: {
+            status: "stale",
+            confirmedSnapshotId: "0197aaf9-5555-7000-8000-000000000109",
+            reasons: ["ORM unavailable"],
+          },
         },
       },
     },
@@ -407,7 +430,7 @@ function fakeServer(
           {
             id: "proof",
             externalKey: "proof",
-            subjectId: "column",
+            subjectId: path.searchParams.get("subjectId"),
             status: "explicit",
             method: "sql",
             source: {
@@ -445,7 +468,7 @@ function databasePage(input: Record<string, unknown>) {
     facetKey: input.facetKey,
     recordType: input.recordType,
     coverage,
-    facetStatus: input.facetKey === "orm" ? "unknown" : "current",
+    facetStatus: input.facetKey === "orm" ? "unknown" : "0197aaf9-5555-7000-8000-000000000102",
     limitations: input.facetKey === "orm" ? ["Datastore has no selected ORM proof"] : [],
     tableItems:
       input.recordType === "tables"
@@ -490,7 +513,9 @@ function databasePage(input: Record<string, unknown>) {
 
 it("inspects ordered composite FK/actions/proof and discovers ORM from children with keyboard", async () => {
   const fetchMock = fakeServer();
-  renderWithProviders(<BackendDatabase projectId="project" revisionId="revision" />);
+  renderWithProviders(
+    <BackendDatabase projectId="project" revisionId="0197aaf9-5555-7000-8000-000000000118" />,
+  );
   const facet = await screen.findByRole("combobox", { name: "Источник схемы" });
   expect(within(facet).getByRole("option", { name: "orm" })).toBeInTheDocument();
   const fk = await screen.findByRole("button", { name: "Открыть FK fk" });
@@ -513,9 +538,12 @@ it("inspects ordered composite FK/actions/proof and discovers ORM from children 
   expect(within(column).getByText("ORM unavailable")).toBeInTheDocument();
   expect(within(column).getAllByText(/Устарело/).length).toBeGreaterThan(0);
   const reads = fetchMock.mock.calls.filter(([url]) => String(url).endsWith("/database/query"));
-  expect(reads.every(([, init]) => JSON.parse(String(init?.body)).revisionId === "revision")).toBe(
-    true,
-  );
+  expect(
+    reads.every(
+      ([, init]) =>
+        JSON.parse(String(init?.body)).revisionId === "0197aaf9-5555-7000-8000-000000000118",
+    ),
+  ).toBe(true);
 });
 
 it("cancels and ignores a late database response after revision switch", async () => {
@@ -523,7 +551,7 @@ it("cancels and ignores a late database response after revision switch", async (
   let oldSignal: AbortSignal | null | undefined;
   fakeServer({
     database: (input, signal) =>
-      input.revisionId === "old"
+      input.revisionId === "0197aaf9-5555-7000-8000-000000000109"
         ? new Promise((done) => {
             if (input.recordType === "tables") {
               resolve = done;
@@ -533,10 +561,12 @@ it("cancels and ignores a late database response after revision switch", async (
         : json(200, databasePage(input)),
   });
   function Host() {
-    const [revision, setRevision] = useState("old");
+    const [revision, setRevision] = useState("0197aaf9-5555-7000-8000-000000000109");
     return (
       <>
-        <button onClick={() => setRevision("new")}>Сменить ревизию</button>
+        <button onClick={() => setRevision("0197aaf9-5555-7000-8000-000000000106")}>
+          Сменить ревизию
+        </button>
         <BackendDatabase projectId="project" revisionId={revision} />
       </>
     );
@@ -548,7 +578,11 @@ it("cancels and ignores a late database response after revision switch", async (
   await act(async () =>
     resolve?.(
       json(200, {
-        ...databasePage({ revisionId: "old", recordType: "tables", facetKey: "sql" }),
+        ...databasePage({
+          revisionId: "0197aaf9-5555-7000-8000-000000000109",
+          recordType: "tables",
+          facetKey: "sql",
+        }),
         tableItems: [{ tableId: "old-table", qualifiedName: "obsolete", columnCount: 1 }],
       }),
     ),
@@ -599,7 +633,9 @@ it.each(["ordinal", "order"])(
       property === "ordinal" ? "9007199254740993" : "9007199254740995",
     );
     fakeServer({ graph: () => new Response(body, { status: 200 }) });
-    renderWithProviders(<BackendDatabase projectId="project" revisionId="revision" />);
+    renderWithProviders(
+      <BackendDatabase projectId="project" revisionId="0197aaf9-5555-7000-8000-000000000118" />,
+    );
     expect(await screen.findByRole("alert")).toHaveTextContent("без потери точности");
     expect(screen.queryByRole("combobox", { name: "Источник схемы" })).not.toBeInTheDocument();
   },
@@ -618,7 +654,9 @@ it("retries inspector reads and does not label an incomplete evidence aggregate 
         ? json(200, { items: [], nextCursor: "missing-proof-page" })
         : json(500, { error: { code: "failed", message: "Second proof page unavailable" } }),
   });
-  renderWithProviders(<BackendDatabase projectId="project" revisionId="revision" />);
+  renderWithProviders(
+    <BackendDatabase projectId="project" revisionId="0197aaf9-5555-7000-8000-000000000118" />,
+  );
   await userEvent.click(
     await screen.findByRole("button", { name: "Открыть таблицу public.orders" }),
   );
@@ -648,7 +686,9 @@ it("shows schema unavailable responses as errors instead of an empty database", 
         },
       }),
   });
-  renderWithProviders(<BackendDatabase projectId="project" revisionId="revision" />);
+  renderWithProviders(
+    <BackendDatabase projectId="project" revisionId="0197aaf9-5555-7000-8000-000000000118" />,
+  );
   expect(await screen.findAllByRole("alert")).not.toHaveLength(0);
   expect(screen.getAllByRole("alert")[0]).toHaveTextContent("Database facet is unavailable");
   expect(screen.queryByText("В выбранном источнике таблицы не найдены")).not.toBeInTheDocument();
@@ -665,7 +705,9 @@ it("shows discovery read errors with retry and a separate no-relational state", 
         ? json(500, { error: { code: "failed", message: "Discovery unavailable" } })
         : json(200, { nodes: [], edges: [], nextCursor: "" }),
   });
-  renderWithProviders(<BackendDatabase projectId="project" revisionId="revision" />);
+  renderWithProviders(
+    <BackendDatabase projectId="project" revisionId="0197aaf9-5555-7000-8000-000000000118" />,
+  );
   expect(await screen.findByRole("alert")).toHaveTextContent("Discovery unavailable");
   expect(
     screen.queryByText("Реляционная схема в этой ревизии отсутствует"),
@@ -726,7 +768,9 @@ it("follows discovery, child, outgoing FK and evidence cursors without hiding cr
         nextCursor: proofPages === 1 ? "proof-next" : "",
       }),
   });
-  renderWithProviders(<BackendDatabase projectId="project" revisionId="revision" />);
+  renderWithProviders(
+    <BackendDatabase projectId="project" revisionId="0197aaf9-5555-7000-8000-000000000118" />,
+  );
   await userEvent.click(
     await screen.findByRole("button", { name: "Открыть таблицу public.orders" }),
   );
@@ -755,7 +799,9 @@ it("keeps off-page targets inspectable and sends disjoint search/relationship se
           input.recordType === "tables" && !input.cursor && !input.search ? "tables-next" : "",
       }),
   });
-  renderWithProviders(<BackendDatabase projectId="project" revisionId="revision" />);
+  renderWithProviders(
+    <BackendDatabase projectId="project" revisionId="0197aaf9-5555-7000-8000-000000000118" />,
+  );
   expect(
     await screen.findByText("Целевая таблица вне текущей страницы; доступна в инспекторе"),
   ).toBeInTheDocument();
@@ -814,7 +860,9 @@ it.each(["facet", "datastore"])(
             })
           : json(200, databasePage(input)),
     });
-    renderWithProviders(<BackendDatabase projectId="project" revisionId="revision" />);
+    renderWithProviders(
+      <BackendDatabase projectId="project" revisionId="0197aaf9-5555-7000-8000-000000000118" />,
+    );
     await waitFor(() => expect(resolve).toBeDefined());
     await userEvent.click(await screen.findByRole("button", { name: "Открыть FK fk" }));
     await screen.findByRole("region", { name: "Инспектор базы данных" });
@@ -829,8 +877,17 @@ it.each(["facet", "datastore"])(
     await act(async () =>
       resolve?.(
         json(200, {
-          ...databasePage({ revisionId: "revision", recordType: "tables" }),
-          tableItems: [{ tableId: "old", qualifiedName: "obsolete", columnCount: 1 }],
+          ...databasePage({
+            revisionId: "0197aaf9-5555-7000-8000-000000000118",
+            recordType: "tables",
+          }),
+          tableItems: [
+            {
+              tableId: "0197aaf9-5555-7000-8000-000000000109",
+              qualifiedName: "obsolete",
+              columnCount: 1,
+            },
+          ],
         }),
       ),
     );
@@ -857,7 +914,9 @@ it.each(["page", "search"])(
         });
       },
     });
-    renderWithProviders(<BackendDatabase projectId="project" revisionId="revision" />);
+    renderWithProviders(
+      <BackendDatabase projectId="project" revisionId="0197aaf9-5555-7000-8000-000000000118" />,
+    );
     await screen.findByRole("button", { name: "Открыть таблицу public.orders" });
     const scope = screen.getByRole("combobox", { name: "Связи таблицы" });
     await userEvent.selectOptions(scope, "orders");
@@ -913,7 +972,7 @@ it.each(["page", "search"])(
     ).toMatchObject({
       tableId: "orders",
       cursor: "fk-next",
-      revisionId: "revision",
+      revisionId: "0197aaf9-5555-7000-8000-000000000118",
       facetKey: "sql",
     });
     await userEvent.selectOptions(scope, "users");
@@ -963,7 +1022,11 @@ const nativeObjects: BackendNode[] = [
             {
               operation: "drop",
               description: "Historical drop",
-              target: { kind: "historical", objectId: "old-orders", revisionId: "old-revision" },
+              target: {
+                kind: "historical",
+                objectId: "old-orders",
+                revisionId: "0197aaf9-5555-7000-8000-000000000203",
+              },
             },
             {
               operation: "unknown",
@@ -1045,7 +1108,9 @@ it("opens native hierarchy objects and navigates migration historical targets wi
           : [...nodes, ...nativeObjects].find((node) => node.id === id),
       ),
   });
-  renderWithProviders(<BackendDatabase projectId="project" revisionId="revision" />);
+  renderWithProviders(
+    <BackendDatabase projectId="project" revisionId="0197aaf9-5555-7000-8000-000000000118" />,
+  );
   for (const [name, heading] of [
     ["Открыть хранилище Orders", "Orders"],
     ["Открыть схему public", "public"],
@@ -1083,12 +1148,12 @@ it("opens native hierarchy objects and navigates migration historical targets wi
   ).toBeInTheDocument();
   expect(
     fetchMock.mock.calls.some(([url]) =>
-      String(url).includes("/revisions/old-revision/nodes/old-orders"),
+      String(url).includes("/revisions/0197aaf9-5555-7000-8000-000000000203/nodes/old-orders"),
     ),
   ).toBe(true);
   expect(
     fetchMock.mock.calls.some(([url]) =>
-      String(url).includes("/revisions/revision/nodes/old-orders"),
+      String(url).includes("/revisions/0197aaf9-5555-7000-8000-000000000118/nodes/old-orders"),
     ),
   ).toBe(false);
   expect(fetchMock.mock.calls.some(([url]) => String(url).includes("/nodes/source-obsolete"))).toBe(
@@ -1123,7 +1188,9 @@ it.each([
         [...nodes, ...nativeObjects].find((node) => node.id === id),
       ),
   });
-  renderWithProviders(<BackendDatabase projectId="project" revisionId="revision" />);
+  renderWithProviders(
+    <BackendDatabase projectId="project" revisionId="0197aaf9-5555-7000-8000-000000000118" />,
+  );
   const entry = await screen.findByRole("button", { name });
   await userEvent.click(entry);
   const inspector = screen.getByRole("region", { name: "Инспектор базы данных" });
@@ -1153,7 +1220,9 @@ it("cancels a late native migration inspector read after switching facet", async
             nodes.find((node) => node.id === id),
           ),
   });
-  renderWithProviders(<BackendDatabase projectId="project" revisionId="revision" />);
+  renderWithProviders(
+    <BackendDatabase projectId="project" revisionId="0197aaf9-5555-7000-8000-000000000118" />,
+  );
   await userEvent.click(
     await screen.findByRole("button", { name: "Открыть миграцию Drop obsolete" }),
   );

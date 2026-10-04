@@ -124,6 +124,10 @@ func (v eventsGraphValidator) add(path, message string) {
 	*v.diagnostics = append(*v.diagnostics, ImportDiagnostic{Code: "backend_graph_invalid", Path: path, Message: message})
 }
 func validateEventsGraph(ctx context.Context, s *ImportSession, g *graphCandidate, d *[]ImportDiagnostic) error {
+	return validateEventsGraphRules(ctx, s, g, d)
+}
+
+func validateEventsGraphRules(ctx context.Context, s *ImportSession, g *graphCandidate, d *[]ImportDiagnostic) error {
 	v := newEventsGraphValidator(s, g, d)
 	for _, n := range g.Nodes {
 		if err := ctx.Err(); err != nil {
@@ -141,6 +145,9 @@ func validateEventsGraph(ctx context.Context, s *ImportSession, g *graphCandidat
 	}
 	// A complete containing flow also discloses unresolved new emission/route assertions.
 	for _, n := range g.Nodes {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		v.containingFlow(n)
 	}
 	return nil
@@ -173,6 +180,9 @@ func newEventsGraphValidator(s *ImportSession, g *graphCandidate, d *[]ImportDia
 	return eventsGraphValidator{session: s, diagnostics: d, nodes: nodes, proofs: proofs, contains: contains, out: out, files: files, fields: map[string]int{}, selectors: map[string]bool{}}
 }
 func (v eventsGraphValidator) proof(id string, ids []string, fresh *AssertionFreshness) {
+	if v.session == nil {
+		return
+	}
 	for _, eid := range ids {
 		e, ok := v.proofs[eid]
 		if !ok || e.SubjectID != id || e.Source.RepositoryID != v.session.RepositoryID || e.Source.StartLine == nil || e.Source.EndLine == nil || *e.Source.StartLine < 1 || *e.Source.EndLine < *e.Source.StartLine {
@@ -200,7 +210,7 @@ func (v eventsGraphValidator) check(id, kind string, a map[string]jsontext.Value
 	}
 	for _, r := range refs {
 		target := v.nodes[r.ID]
-		if (target.Kind != r.Kind && !eventsUnresolved(target, r.Kind)) || target.Ownership == nil || target.Ownership.RepositoryID != v.session.RepositoryID {
+		if (target.Kind != r.Kind && !eventsUnresolved(target, r.Kind)) || v.session != nil && (target.Ownership == nil || target.Ownership.RepositoryID != v.session.RepositoryID) {
 			v.add("subjects/"+id+r.Path, "Nested event reference must survive with its declared kind in the same repository")
 		}
 	}
@@ -218,7 +228,7 @@ func (v eventsGraphValidator) node(n Node) error {
 	}
 	if event {
 		valid, _ := eventsContains(parent, n)
-		if !valid || len(v.contains[n.ID]) != 1 || v.contains[n.ID][0].From != parent.ID || parent.Ownership == nil || parent.Ownership.RepositoryID != v.session.RepositoryID {
+		if !valid || len(v.contains[n.ID]) != 1 || v.contains[n.ID][0].From != parent.ID || v.session != nil && (parent.Ownership == nil || parent.Ownership.RepositoryID != v.session.RepositoryID) {
 			v.add("nodes/"+n.ID+"/parentId", "Event node requires one agreeing contains edge and a valid parent in the same repository")
 		}
 	}
@@ -292,7 +302,7 @@ func (v eventsGraphValidator) edge(e Edge) {
 	} else if adjacent || e.Kind == "calls" && to.Kind == "http_operation" {
 		v.proof(e.ID, e.EvidenceIDs, e.Freshness)
 	}
-	if eventsSubject(e.Kind, true) || adjacent || e.Kind == "calls" && to.Kind == "http_operation" {
+	if v.session != nil && (eventsSubject(e.Kind, true) || adjacent || e.Kind == "calls" && to.Kind == "http_operation") {
 		if from.Ownership == nil || to.Ownership == nil || from.Ownership.RepositoryID != v.session.RepositoryID || to.Ownership.RepositoryID != v.session.RepositoryID {
 			v.add("edges/"+e.ID, "Event relation endpoints must belong to the same repository")
 		}

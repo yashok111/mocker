@@ -23,9 +23,9 @@ const ref = {
   resolvedPointer: "/paths/~1orders/get",
 };
 const revision = {
-  id: "base",
+  id: "0197aaf9-5555-7000-8000-000000000101",
   projectId: "project",
-  parentRevisionId: "base",
+  parentRevisionId: "0197aaf9-5555-7000-8000-000000000101",
   semanticHash: hash,
   sourceSnapshotIds: ["snap"],
   artifactPins: [{ kind: "api_design", id: "12", revisionId: "23", contentHash: hash }],
@@ -44,7 +44,7 @@ function mount(onDirty = vi.fn(), onApplied = vi.fn()) {
       >
         <BackendAPIArtifacts
           projectId="project"
-          revisionId="base"
+          revisionId="0197aaf9-5555-7000-8000-000000000101"
           sourceNodeId="selected"
           sourceKind="http_operation"
         />
@@ -121,14 +121,16 @@ function server(
       const input = JSON.parse(String(init?.body));
       return json(200, {
         revisionId: input.revisionId,
-        semanticHash: input.revisionId === "new-base" ? "b".repeat(64) : hash,
-        sourceSnapshotIds: input.revisionId === "new-base" ? ["new-snap"] : ["snap"],
+        semanticHash:
+          input.revisionId === "0197aaf9-5555-7000-8000-000000000201" ? "b".repeat(64) : hash,
+        sourceSnapshotIds:
+          input.revisionId === "0197aaf9-5555-7000-8000-000000000201" ? ["new-snap"] : ["snap"],
         pins: revision.artifactPins,
         items: [
           {
             binding: {
               sourceNodeId: input.cursor
-                ? input.revisionId === "new-base"
+                ? input.revisionId === "0197aaf9-5555-7000-8000-000000000201"
                   ? "new-other"
                   : "other"
                 : "selected",
@@ -146,7 +148,7 @@ function server(
             },
           },
         ],
-        nextCursor: input.cursor ? "" : "next",
+        nextCursor: input.cursor ? "" : "0197aaf9-5555-7000-8000-000000000108",
       });
     }
     if (path === "/api/designs") return json(200, { designs: [{ id: 12, name: "Orders" }] });
@@ -187,7 +189,8 @@ function server(
         semanticHash: hash,
         pins: revision.artifactPins,
         bindings: [],
-        sourceSnapshotIds: body.baseRevisionId === "new-base" ? ["new-snap"] : ["snap"],
+        sourceSnapshotIds:
+          body.baseRevisionId === "0197aaf9-5555-7000-8000-000000000201" ? ["new-snap"] : ["snap"],
         canApply: !options.truncated,
         diffTruncated: !!options.truncated,
         diagnostics: [],
@@ -311,7 +314,7 @@ it("keeps unknown command/key through project head observation and never substit
         >
           <BackendAPIArtifacts
             projectId="project"
-            revisionId="base"
+            revisionId="0197aaf9-5555-7000-8000-000000000101"
             sourceNodeId="selected"
             sourceKind="http_operation"
           />
@@ -346,7 +349,7 @@ it("preserves explicit remap intent after CAS reread and does not reuse the fail
     >
       <BackendAPIArtifacts
         projectId="project"
-        revisionId="base"
+        revisionId="0197aaf9-5555-7000-8000-000000000101"
         sourceNodeId="selected"
         sourceKind="http_operation"
       />
@@ -378,7 +381,7 @@ it("exposes orphan group removal in the project roster without a live source ins
         onApplied: vi.fn(),
       }}
     >
-      <BackendAPIArtifacts projectId="project" revisionId="base" />
+      <BackendAPIArtifacts projectId="project" revisionId="0197aaf9-5555-7000-8000-000000000101" />
     </BackendAPIArtifactsContext>,
   );
   await userEvent.click((await screen.findAllByRole("button", { name: "Изменить связь API" }))[0]!);
@@ -418,7 +421,7 @@ it("explicitly rereads an advanced source head without remounting or discarding 
         reread: async () => ({
           revision: {
             ...revision,
-            id: "new-base",
+            id: "0197aaf9-5555-7000-8000-000000000201",
             semanticHash: "b".repeat(64),
             sourceSnapshotIds: ["new-snap"],
           } as never,
@@ -428,7 +431,7 @@ it("explicitly rereads an advanced source head without remounting or discarding 
     >
       <BackendAPIArtifacts
         projectId="project"
-        revisionId="base"
+        revisionId="0197aaf9-5555-7000-8000-000000000101"
         sourceNodeId="selected"
         sourceKind="http_operation"
       />
@@ -439,15 +442,17 @@ it("explicitly rereads an advanced source head without remounting or discarding 
   await userEvent.click(
     await screen.findByRole("button", { name: "Перечитать источник и повторить предпросмотр" }),
   );
-  expect(await screen.findByText(/База редактирования: new-base/)).toHaveTextContent(
-    "снимки new-snap · версия проекта 8",
-  );
+  expect(
+    await screen.findByText(/База редактирования: 0197aaf9-5555-7000-8000-000000000201/),
+  ).toHaveTextContent("снимки new-snap · версия проекта 8");
   expect(screen.getByLabelText("Object key операции")).toHaveValue("op-explicit");
   expect(screen.getByLabelText(/Причина связи API/)).toHaveValue("Explicit intent");
   await userEvent.click(screen.getByRole("button", { name: "Предпросмотр связей API" }));
-  expect(await screen.findByText(/База предпросмотра: new-base/)).toBeInTheDocument();
+  expect(
+    await screen.findByText(/База предпросмотра: 0197aaf9-5555-7000-8000-000000000201/),
+  ).toBeInTheDocument();
   expect(bodies[2]).toMatchObject({
-    baseRevisionId: "new-base",
+    baseRevisionId: "0197aaf9-5555-7000-8000-000000000201",
     expectedVersion: 8,
     commands: [
       {
@@ -485,7 +490,7 @@ it("aborts and discards a delayed preview when the selected source node changes"
         >
           <BackendAPIArtifacts
             projectId="project"
-            revisionId="base"
+            revisionId="0197aaf9-5555-7000-8000-000000000101"
             sourceNodeId={source}
             sourceKind="http_operation"
           />
@@ -503,7 +508,7 @@ it("aborts and discards a delayed preview when the selected source node changes"
   expect(signal?.aborted).toBe(true);
   resolve(
     json(200, {
-      baseRevisionId: "base",
+      baseRevisionId: "0197aaf9-5555-7000-8000-000000000101",
       expectedVersion: 4,
       candidateHash: hash,
       semanticHash: hash,
@@ -573,4 +578,29 @@ it("legacy last-node unlink uses generic set and preserves invisible editor asso
     ],
   });
   expect(bodies[0]).not.toHaveProperty("commands.0.editorBindings.0.objectHash");
+});
+it("keeps a full proposal in the artifact owner backlink without replacing it with baseline", () => {
+  const target = {
+    changeProposal: {
+      proposalId: "0197aaf9-5555-7000-8000-000000000001",
+      proposalRevisionId: "0197aaf9-5555-7000-8000-000000000002",
+    },
+  };
+  const href = artifactNavigationHref(
+    ref as never,
+    "project",
+    "0197aaf9-5555-7000-8000-000000000003",
+    "field",
+    target,
+  );
+  const search = defaultParseSearch(href!.slice(href!.indexOf("?")));
+  expect(search).toMatchObject({
+    pinnedRevisionId: "23",
+    pinnedHash: hash,
+    returnProjectId: "project",
+    returnChangeProposalId: target.changeProposal.proposalId,
+    returnProposalRevisionId: target.changeProposal.proposalRevisionId,
+    returnSourceNodeId: "field",
+  });
+  expect(search).not.toHaveProperty("returnRevisionId");
 });

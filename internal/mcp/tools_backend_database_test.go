@@ -26,27 +26,29 @@ func TestBackendDatabaseRealSDKReachesPinnedDomain(t *testing.T) {
 }
 
 func TestBackendDatabaseSDKStrictSelectorsAndRawResponse(t *testing.T) {
+	calls := &recordingCaller{status: 200, body: []byte(`{}`)}
+	fixture := newToolFixture(calls)
 	prefix := `{"projectId":"` + backendTestID + `","revisionId":"` + backendTestID + `","datastoreId":"` + backendTestID + `","facetKey":"sql","recordType":`
 	for _, body := range []string{
 		prefix + `"relationships","search":""}`, prefix + `"tables","tableId":""}`,
 		prefix + `"tables","limit":0}`, prefix + `"tables","limit":501}`, prefix + `"tables","limit":null}`,
 		prefix + `"tables","facetKey":"sql"}`, prefix + `"tables","unknown":true}`, prefix + `null}`,
 	} {
-		calls := &recordingCaller{status: 200, body: []byte(`{}`)}
-		_, msg := callTool(t, calls, "query_backend_database", body)
+		*calls = recordingCaller{status: 200, body: []byte(`{}`)}
+		_, msg := fixture.Call(t, "query_backend_database", body)
 		if msg == "" || calls.method != "" {
 			t.Fatalf("invalid selector reached loopback: %s %s", body, msg)
 		}
 	}
 	for _, suffix := range []string{`"tables"}`, `"tables","search":""}`, `"relationships","tableId":"` + backendTestID + `"}`} {
-		calls := &recordingCaller{status: 200, body: []byte(`{"tableItems":[{"columnCount":9223372036854775807}],"coverage":{"inventory":[{"knownCount":9007199254740993}]}}`)}
-		raw, msg := callTool(t, calls, "query_backend_database", prefix+suffix)
+		*calls = recordingCaller{status: 200, body: []byte(`{"tableItems":[{"columnCount":9223372036854775807}],"coverage":{"inventory":[{"knownCount":9007199254740993}]}}`)}
+		raw, msg := fixture.Call(t, "query_backend_database", prefix+suffix)
 		if msg != "" || !strings.Contains(string(raw), "9223372036854775807") || !strings.Contains(string(calls.sent), `"revisionId":"`+backendTestID+`"`) || strings.Contains(string(calls.sent), "projectId") {
 			t.Fatalf("raw pinned SDK transport: %s %s %s", raw, calls.sent, msg)
 		}
 	}
-	calls := &recordingCaller{status: 422, body: []byte(`{"error":{"code":"backend_relational_unavailable","details":{"value":9223372036854775807}}}`)}
-	_, msg := callTool(t, calls, "query_backend_database", prefix+`"tables"}`)
+	*calls = recordingCaller{status: 422, body: []byte(`{"error":{"code":"backend_relational_unavailable","details":{"value":9223372036854775807}}}`)}
+	_, msg := fixture.Call(t, "query_backend_database", prefix+`"tables"}`)
 	if !strings.Contains(msg, "HTTP 422: "+string(calls.body)) {
 		t.Fatalf("domain error bytes changed: %s", msg)
 	}

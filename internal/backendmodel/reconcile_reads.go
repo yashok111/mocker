@@ -12,6 +12,9 @@ import (
 
 func savePreview(ctx context.Context, tx *sql.Tx, s *ImportSession, p *ImportPreview, g *graphCandidate) error {
 	items := []ImportChangeItem{}
+	if g.Composed != nil {
+		items = append(items, source6ChangeItems(s, g.Composed)...)
+	}
 	for _, x := range g.SourceChanges {
 		items = append(items, ImportChangeItem{RecordType: "source", Source: &x})
 	}
@@ -23,6 +26,12 @@ func savePreview(ctx context.Context, tx *sql.Tx, s *ImportSession, p *ImportPre
 	}
 	key := func(x ImportChangeItem) string {
 		switch x.RecordType {
+		case "assertion_conflict":
+			return x.AssertionConflict.RecordType + "/" + x.AssertionConflict.ID + "/" + sourcePropertyKey(x.AssertionConflict.Property)
+		case "claim_identity":
+			return x.ClaimIdentity.Command.DecisionID
+		case "migration":
+			return x.Migration.RepositoryID + "/" + x.Migration.Provider.Namespace
 		case "source":
 			return x.Source.Path
 		case "identity":
@@ -50,18 +59,23 @@ func savePreview(ctx context.Context, tx *sql.Tx, s *ImportSession, p *ImportPre
 	return err
 }
 func (r *Repo) ImportChanges(ctx context.Context, pid, sid string, in ImportChangesInput) (*ImportChangesPage, error) {
-	if _, err := loadSession(ctx, r.db.R, pid, sid); err != nil {
+	session, err := loadSession(ctx, r.db.R, pid, sid)
+	if err != nil {
 		return nil, err
 	}
 	if in.PreviewVersion <= 0 {
 		return nil, invalid("previewVersion", "A positive saved preview version is required")
 	}
-	if in.RecordType != "" && !slices.Contains([]string{"source", "identity", "deletion"}, in.RecordType) {
+	types := []string{"source", "identity", "deletion"}
+	if session.Mode == "composed" {
+		types = append(types, "assertion_conflict", "claim_identity", "migration")
+	}
+	if in.RecordType != "" && !slices.Contains(types, in.RecordType) {
 		return nil, invalid("recordType", "Select source, identity or deletion")
 	}
 	var version int64
 	var doc, details string
-	err := r.db.R.QueryRowContext(ctx, `SELECT version,document,details FROM backend_import_previews WHERE session_id=?`, sid).Scan(&version, &doc, &details)
+	err = r.db.R.QueryRowContext(ctx, `SELECT version,document,details FROM backend_import_previews WHERE session_id=?`, sid).Scan(&version, &doc, &details)
 	if errors.Is(err, sql.ErrNoRows) || err == nil && version != in.PreviewVersion {
 		return nil, importConflict("backend_import_preview_conflict", "Saved preview changed or was cleared", version)
 	}

@@ -14,6 +14,8 @@ type ImportProfileExtension struct {
 
 func SupportedNodeKindsForProfile(profile string) []string {
 	switch profile {
+	case ComposedProfile:
+		return append(SupportedNodeKindsForProfile(EventsProfile), "domain_entity", "dto", "api_schema", "representation_field")
 	case GraphProfile:
 		return SupportedNodeKinds()
 	case RelationalProfile:
@@ -31,6 +33,8 @@ func SupportedNodeKindsForProfile(profile string) []string {
 
 func SupportedEdgeKindsForProfile(profile string) []string {
 	switch profile {
+	case ComposedProfile:
+		return SupportedEdgeKindsForProfile(EventsProfile)
 	case GraphProfile:
 		return SupportedEdgeKinds()
 	case RelationalProfile:
@@ -47,7 +51,7 @@ func SupportedEdgeKindsForProfile(profile string) []string {
 }
 
 func SupportedModelSchemaVersions() []string {
-	return []string{SchemaVersion, RelationalSchemaVersion, RuntimeSchemaVersion, LineageSchemaVersion, EventsSchemaVersion}
+	return []string{SchemaVersion, RelationalSchemaVersion, RuntimeSchemaVersion, LineageSchemaVersion, EventsSchemaVersion, ComposedSchemaVersion}
 }
 
 func selectedProfile(profile string) string {
@@ -58,6 +62,9 @@ func selectedProfile(profile string) string {
 }
 
 func modelSchemaVersion(profile string) string {
+	if profile == ComposedProfile {
+		return ComposedSchemaVersion
+	}
 	if profile == EventsProfile {
 		return EventsSchemaVersion
 	}

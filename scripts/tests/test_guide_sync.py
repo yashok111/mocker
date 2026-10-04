@@ -132,9 +132,9 @@ class GuideSyncPackagingTests(unittest.TestCase):
             "`mocker-backend-database` workflow1",
         ):
             with self.subTest(label=label):
-                topic.write_text(original.replace("database v6", label))
+                topic.write_text(original.replace("database v7", label))
                 self.assert_invalid_without_changes(
-                    "stale live guide owner database1; expected database6"
+                    "stale live guide owner database1; expected database7"
                 )
         topic.write_text(original)
 
@@ -144,12 +144,12 @@ class GuideSyncPackagingTests(unittest.TestCase):
         topic = self.root / "skills/mocker-backend-import/SKILL.md"
         original = topic.read_text()
         stale = original.replace(
-            "| mocker-backend-inspect | 6 |", "| mocker-backend-inspect | 1 |"
+            "| mocker-backend-inspect | 7 |", "| mocker-backend-inspect | 1 |"
         )
         self.assertNotEqual(stale, original, "owner mutation must change the fixture")
         topic.write_text(stale)
         self.assert_invalid_without_changes(
-            "stale live guide owner inspect1; expected inspect6"
+            "stale live guide owner inspect1; expected inspect7"
         )
 
     def test_explicit_historical_owner_preserves_prose(self):
@@ -203,14 +203,14 @@ class GuideSyncPackagingTests(unittest.TestCase):
         self.load_published_relational_sources()
         self.generate()
         manifest = json.loads((self.root / "internal/guide/manifest.json").read_text())
-        self.assertEqual(len(manifest["sources"]), 21)
+        self.assertEqual(len(manifest["sources"]), 24)
         workflows = {w["workflowId"]: w for w in manifest["workflows"]}
-        self.assertEqual(len(workflows), 5)
+        self.assertEqual(len(workflows), 7)
         importing = workflows["mocker-backend-import"]
         database = workflows["mocker-backend-database"]
-        self.assertEqual(importing["workflowVersion"], "6")
-        self.assertEqual(importing["requiredModelSchemaVersions"], ["1", "2", "3", "4", "5"])
-        self.assertEqual(database["requiredModelSchemaVersions"], ["2", "3", "4", "5"])
+        self.assertEqual(importing["workflowVersion"], "7")
+        self.assertEqual(importing["requiredModelSchemaVersions"], ["1", "2", "3", "4", "5", "6"])
+        self.assertEqual(database["requiredModelSchemaVersions"], ["2", "3", "4", "5", "6"])
         self.assertIn(
             "backend-database-reference",
             [topic["topic"] for topic in database["topics"]],
@@ -250,6 +250,7 @@ class GuideSyncPackagingTests(unittest.TestCase):
         changed_identity = self.generate()
         self.assertNotEqual(changed_identity, identity)
         self.assertEqual(path.read_bytes(), embedded.read_bytes())
+
         manifest = json.loads((self.root / "internal/guide/manifest.json").read_text())
         owner = next(w for w in manifest["workflows"] if w["workflowId"] == "mocker-backend-inspect")
         topic = next(t for t in owner["topics"] if t["topic"] == "backend-editor-projections")
@@ -265,6 +266,33 @@ class GuideSyncPackagingTests(unittest.TestCase):
         self.assertEqual(self.generated_files(), before)
         self.generate()
         self.assertEqual(path.read_bytes(), embedded.read_bytes())
+
+    def test_b41_sync_change_and_annotations_keep_exact_owners(self):
+        self.load_published_relational_sources()
+        identity = self.generate()
+        manifest = json.loads((self.root / "internal/guide/manifest.json").read_text())
+        workflows = {w["workflowId"]: w for w in manifest["workflows"]}
+        for topic, owner, version, models, views in (
+            ("backend-sync", "mocker-backend-sync", "1", ["1", "5", "6"], ["import-candidate-v1"]),
+            ("backend-change-proposals", "mocker-backend-change", "1", ["5", "6"], ["proposal-graph-v1"]),
+            ("backend-annotations", "mocker-backend-project", "2", ["1"], []),
+        ):
+            with self.subTest(topic=topic):
+                workflow = workflows[owner]
+                self.assertEqual(workflow["workflowVersion"], version)
+                self.assertEqual(workflow["requiredModelSchemaVersions"], models)
+                self.assertEqual(workflow.get("requiredViewSchemaVersions", []), views)
+                self.assertEqual(workflow["guideSetId"], identity)
+                self.assertEqual(workflow["manifestHash"], identity)
+                self.assertIn(topic, [item["topic"] for item in workflow["topics"]])
+        for package, alias, embedded in (
+            ("mocker-backend-sync", "sync.md", "backend-sync.md"),
+            ("mocker-backend-change", "change-proposals.md", "backend-change-proposals.md"),
+        ):
+            leaf = (self.root / "skills" / package / "SKILL.md").read_bytes()
+            self.assertEqual(leaf, (self.root / "skills/mocker/references/backend" / alias).read_bytes())
+            self.assertEqual(leaf, (self.root / "internal/guide" / embedded).read_bytes())
+        self.assertEqual(self.run_sync("--check").returncode, 0)
 
     def test_events_owner_mutation_changes_set_and_detects_embedded_drift(self):
         self.load_published_relational_sources()
@@ -307,8 +335,8 @@ class GuideSyncPackagingTests(unittest.TestCase):
             for w in manifest["workflows"]
             if w["workflowId"] == "mocker-backend-inspect"
         )
-        self.assertEqual(owner["workflowVersion"], "6")
-        self.assertEqual(owner["requiredModelSchemaVersions"], ["3", "4", "5"])
+        self.assertEqual(owner["workflowVersion"], "7")
+        self.assertEqual(owner["requiredModelSchemaVersions"], ["3", "4", "5", "6"])
         self.assertEqual(owner["guideSetId"], identity)
         self.assertEqual(
             {t["topic"] for t in owner["topics"]},
@@ -324,14 +352,14 @@ class GuideSyncPackagingTests(unittest.TestCase):
         )
         importer = (self.root / "skills/mocker-backend-import/SKILL.md").read_text()
         self.assertIn(
-            "| `backend-flow-reference` / `backend-analysis` / `backend-editor-projections` | inspect v6 |", importer
+            "| `backend-flow-reference` / `backend-analysis` / `backend-editor-projections` | inspect v7 |", importer
         )
         inspector = leaf.decode()
         self.assertIn("Inspect workflow1 was released", inspector)
         self.assertNotIn("no released older inspect version", inspector)
         self.assertEqual(
             owner["requiredViewSchemaVersions"],
-            ["saved-view-v1", "api-artifact-pins-v1", "backend-editor-artifacts-v1"],
+            ["saved-view-v1", "api-artifact-pins-v1", "backend-editor-artifacts-v1", "proposal-graph-v1", "saved-view-v2", "import-candidate-v1"],
         )
         for capability in (
             "backend-flow-query",
@@ -354,6 +382,8 @@ class GuideSyncPackagingTests(unittest.TestCase):
             "mocker-backend-import",
             "mocker-backend-database",
             "mocker-backend-inspect",
+            "mocker-backend-sync",
+            "mocker-backend-change",
         ):
             text = (self.root / "skills" / package / "SKILL.md").read_text()
             self.assertIn(f'guideSetId: "{current}"', text)

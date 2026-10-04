@@ -14,7 +14,7 @@ const target = {
 };
 const page = {
   projectId: "project",
-  revisionId: "rev",
+  revisionId: "0197aaf9-5555-7000-8000-000000000002",
   seed,
   direction: "forward",
   semanticHash: "hash",
@@ -64,7 +64,7 @@ it("shows complete ordered co-inputs, boundary destination, transform and explic
   renderWithProviders(
     <BackendLineage
       projectId="project"
-      revisionId="rev"
+      revisionId="0197aaf9-5555-7000-8000-000000000002"
       seed={seed}
       onClose={() => {}}
       onValueSelect={select}
@@ -90,7 +90,8 @@ it.each(["seed", "revision"])(
     let finish!: (response: Response) => void;
     vi.stubGlobal("fetch", (_url: unknown, init: RequestInit) => {
       const body = JSON.parse(String(init.body));
-      return body.seed.nodeId === "request" && body.revisionId === "rev"
+      return body.seed.nodeId === "request" &&
+        body.revisionId === "0197aaf9-5555-7000-8000-000000000002"
         ? new Promise<Response>((resolve) => {
             finish = resolve;
           })
@@ -100,12 +101,14 @@ it.each(["seed", "revision"])(
     });
     function Harness() {
       const [next, setNext] = useState(seed);
-      const [revision, setRevision] = useState("rev");
+      const [revision, setRevision] = useState("0197aaf9-5555-7000-8000-000000000002");
       return (
         <>
           <button
             onClick={() =>
-              change === "seed" ? setNext({ ...seed, nodeId: "B" }) : setRevision("B")
+              change === "seed"
+                ? setNext({ ...seed, nodeId: "B" })
+                : setRevision("0197aaf9-5555-7000-8000-000000000003")
             }
           >
             Switch seed
@@ -122,7 +125,7 @@ it.each(["seed", "revision"])(
     }
     renderWithProviders(<Harness />);
     fireEvent.click(screen.getByRole("button", { name: "Switch seed" }));
-    await screen.findByText(/Нет импортированных/);
+    await screen.findByText(/Нет явных/);
     finish(json(200, page));
     expect(screen.queryByText("unknown calculation")).not.toBeInTheDocument();
   },
@@ -143,7 +146,7 @@ it("binds paging, direction, depth and separate boundary requests to the immutab
   renderWithProviders(
     <BackendLineage
       projectId="project"
-      revisionId="rev"
+      revisionId="0197aaf9-5555-7000-8000-000000000002"
       seed={seed}
       onClose={() => {}}
       onValueSelect={() => {}}
@@ -156,14 +159,22 @@ it("binds paging, direction, depth and separate boundary requests to the immutab
     target: { value: "reverse" },
   });
   await vi.waitFor(() =>
-    expect(requests.at(-1)).toMatchObject({ revisionId: "rev", direction: "reverse", cursor: "" }),
+    expect(requests.at(-1)).toMatchObject({
+      revisionId: "0197aaf9-5555-7000-8000-000000000002",
+      direction: "reverse",
+      cursor: "",
+    }),
   );
   fireEvent.click(
     await screen.findByRole("button", { name: "Начать отдельный запрос query · parameters · tax" }),
   );
   await screen.findByText(/Отдельный запрос за границей/);
   await vi.waitFor(() =>
-    expect(requests.at(-1)).toMatchObject({ revisionId: "rev", seed: target, cursor: "" }),
+    expect(requests.at(-1)).toMatchObject({
+      revisionId: "0197aaf9-5555-7000-8000-000000000002",
+      seed: target,
+      cursor: "",
+    }),
   );
 });
 it("shows zero-source unknown inputs explicitly without labeling them as a constant", async () => {
@@ -189,7 +200,7 @@ it("shows zero-source unknown inputs explicitly without labeling them as a const
   renderWithProviders(
     <BackendLineage
       projectId="project"
-      revisionId="rev"
+      revisionId="0197aaf9-5555-7000-8000-000000000002"
       seed={seed}
       onClose={() => {}}
       onValueSelect={() => {}}

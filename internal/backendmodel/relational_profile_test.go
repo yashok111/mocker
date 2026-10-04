@@ -42,8 +42,8 @@ func TestRelationalProfileEmptyStoreReopen(t *testing.T) {
 		t.Fatalf("empty revision changed on reopen: %s, %v", after, err)
 	}
 	var schema int
-	if err := reopened.R.QueryRowContext(t.Context(), `PRAGMA user_version`).Scan(&schema); err != nil || schema != 19 {
-		t.Fatalf("schema17 compatibility: %d, %v", schema, err)
+	if err := reopened.R.QueryRowContext(t.Context(), `PRAGMA user_version`).Scan(&schema); err != nil || schema != 20 {
+		t.Fatalf("schema20 compatibility: %d, %v", schema, err)
 	}
 	in := relationalInput(firstImportFixture(p), false)
 	s, err := r.BeginImport(t.Context(), p.ID, in)
@@ -105,7 +105,7 @@ func TestRelationalProfileInitialAndDefault(t *testing.T) {
 			}
 		})
 	}
-	if SchemaVersion != "1" || !slices.Equal(SupportedModelSchemaVersions(), []string{"1", "2", "3", "4", "5"}) {
+	if SchemaVersion != "1" || !slices.Equal(SupportedModelSchemaVersions(), []string{"1", "2", "3", "4", "5", "6"}) {
 		t.Fatal("foundation schema constant or supported versions changed")
 	}
 	if !slices.Equal(SupportedNodeKindsForProfile(GraphProfile), SupportedNodeKinds()) || !slices.Equal(SupportedEdgeKindsForProfile(GraphProfile), SupportedEdgeKinds()) {

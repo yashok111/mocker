@@ -1,3 +1,9 @@
+import {
+  projectionTarget,
+  projectionKey,
+  projectionReturnTarget,
+  type ProjectionReadProps,
+} from "./backendEffectiveProjectionReads";
 import { completeArtifactSet, readArtifactPage } from "./backendArtifactReads";
 import { ArtifactDeltaSide } from "./BackendArtifactContent";
 import type { ArtifactPinsPreview, ApplyBackendArtifactPinsRequest } from "@/api/generated/schemas";
@@ -32,9 +38,10 @@ import type {
   BackendAPIArtifactSelector,
   BackendAPIPinCommand,
   BackendAPIPinsPreview,
-  BackendAPIPinsResult,
+  BackendAPIPinsResultResponse,
   BackendArtifactRef,
-  BackendRevision,
+  BackendReadTarget,
+  BackendRevisionResponse,
   PreviewBackendAPIPinsRequest,
   PreviewBackendArtifactPinsRequest,
 } from "@/api/generated/schemas";
@@ -57,14 +64,14 @@ import {
 const pinButtonProps = { h: "auto", py: "xs", maw: "100%", styles: databaseButtonStyles };
 
 type Host = {
-  revision: BackendRevision;
+  revision: BackendRevisionResponse;
   projectVersion: number;
   canEdit: boolean;
   onDirty: (dirty: boolean, identity?: string) => void;
-  onApplied: (result: BackendAPIPinsResult) => void;
-  reread?: () => Promise<{ revision: BackendRevision; projectVersion: number }>;
+  onApplied: (result: BackendAPIPinsResultResponse) => void;
+  reread?: () => Promise<{ revision: BackendRevisionResponse; projectVersion: number }>;
   onCurrentHead?: (
-    context: { revision: BackendRevision; projectVersion: number },
+    context: { revision: BackendRevisionResponse; projectVersion: number },
     identity: string,
   ) => boolean;
   guard?: () => boolean;
@@ -77,6 +84,7 @@ export function artifactNavigationHref(
   projectId: string,
   backendRevisionId: string,
   sourceNodeId?: string,
+  target?: BackendReadTarget,
 ): string | undefined {
   if (safeLegacyId(ref.artifactId) === undefined || safeLegacyId(ref.revisionId) === undefined)
     return undefined;
@@ -84,7 +92,7 @@ export function artifactNavigationHref(
     pinnedRevisionId: ref.revisionId,
     pinnedHash: ref.contentHash,
     returnProjectId: projectId,
-    returnRevisionId: backendRevisionId,
+    ...projectionReturnTarget(target, backendRevisionId),
   };
   if (ref.resolvedPointer) search.pinnedPointer = ref.resolvedPointer;
   if ("objectKey" in ref.selector) search.pinnedObjectKey = ref.selector.objectKey;
@@ -96,16 +104,16 @@ export function BackendArtifactReference({
   reference,
   projectId,
   revisionId,
+  target,
   sourceNodeId,
   separate = false,
-}: {
+}: ProjectionReadProps & {
   reference: BackendArtifactRef;
   projectId: string;
-  revisionId: string;
   sourceNodeId?: string;
   separate?: boolean;
 }) {
-  const href = artifactNavigationHref(reference, projectId, revisionId, sourceNodeId);
+  const href = artifactNavigationHref(reference, projectId, revisionId ?? "", sourceNodeId, target);
   return (
     <Stack gap="xs" style={{ minWidth: 0 }}>
       <Text fw={600} style={databaseWrap}>
@@ -148,9 +156,8 @@ export function BackendArtifactReference({
     </Stack>
   );
 }
-type Props = {
+type Props = ProjectionReadProps & {
   projectId: string;
-  revisionId: string;
   sourceNodeId?: string;
   sourceKind?: "http_operation" | "api_field";
   readOnly?: boolean;
@@ -160,33 +167,49 @@ export function BackendAPIArtifacts(props: Props) {
   return (
     <>
       <ArtifactPanel
-        key={`${props.projectId}:${props.revisionId}:${props.sourceNodeId ?? "all"}`}
+        key={`${props.projectId}:${projectionKey(projectionTarget(props), props.pins)}:${props.sourceNodeId ?? "all"}`}
         {...props}
       />
-      {props.sourceNodeId && host && ["4", "5"].includes(host.revision.schemaVersion) && (
-        <BackendArtifactProjections {...props} />
-      )}
+      {props.sourceNodeId &&
+        (props.pins || (host && ["4", "5"].includes(host.revision.schemaVersion))) && (
+          <BackendArtifactProjections {...props} />
+        )}
     </>
   );
 }
 function ArtifactPanel({
   projectId,
-  revisionId,
+  revisionId: selectedRevision,
+  target: explicitTarget,
+  pins: effectivePins,
   sourceNodeId,
   sourceKind,
   readOnly = false,
 }: Props) {
+  const target = projectionTarget({
+    revisionId: selectedRevision,
+    target: explicitTarget,
+    pins: effectivePins,
+  });
+  const revisionId = effectivePins?.baseRevisionId ?? selectedRevision ?? "";
+  readOnly = readOnly || !!target.changeProposal || !!target.proposal;
+
   const instanceId = useId();
   const host = useContext(BackendAPIArtifactsContext);
   const latestHost = useRef(host);
   useEffect(() => {
     latestHost.current = host;
   }, [host]);
-  const key = ["backend-api-artifacts", projectId, revisionId, sourceNodeId ?? "all"];
+  const key = [
+    "backend-api-artifacts",
+    projectId,
+    projectionKey(target, effectivePins),
+    sourceNodeId ?? "all",
+  ];
   useDatabaseCancellation(key);
   const revisionQuery = useQuery({
     queryKey: [...key, "revision"],
-    enabled: host?.revision.id !== revisionId,
+    enabled: !effectivePins && !target.changeProposal && host?.revision.id !== revisionId,
     retry: false,
     queryFn: async ({ signal }) => {
       const result = await getBackendRevision(projectId, revisionId, { signal });
@@ -201,15 +224,25 @@ function ArtifactPanel({
     },
   });
   const revision = host?.revision.id === revisionId ? host.revision : revisionQuery.data;
-  const scope = revision
+  const scope: APIArtifactScope | undefined = effectivePins
     ? {
         projectId,
         revisionId,
-        semanticHash: revision.semanticHash,
-        sourceSnapshotIds: revision.sourceSnapshotIds,
-        artifactPins: revision.artifactPins,
+        target,
+        pins: effectivePins,
+        semanticHash: effectivePins.effectiveSemanticHash,
+        sourceSnapshotIds: effectivePins.sourceSnapshotIds,
+        artifactPins: effectivePins.artifactPins,
       }
-    : undefined;
+    : revision
+      ? {
+          projectId,
+          revisionId,
+          semanticHash: revision.semanticHash,
+          sourceSnapshotIds: revision.sourceSnapshotIds,
+          artifactPins: revision.artifactPins,
+        }
+      : undefined;
   const scopeIdentity = JSON.stringify(scope);
   const query = useQuery({
     queryKey: [...key, scopeIdentity],
@@ -305,7 +338,7 @@ function ArtifactPanel({
       return result.data;
     },
   });
-  const editable = !!host?.canEdit && !readOnly;
+  const editable = !!host?.canEdit && host.revision.id === revisionId && !readOnly;
   function invalidatePreview() {
     request.current.generation++;
     request.current.controller?.abort();
@@ -566,10 +599,12 @@ function ArtifactPanel({
           доказывает соответствие схеме или полноту lineage.
         </Text>
         <Text size="xs" style={databaseWrap}>
-          Снимки исходников: {revision?.sourceSnapshotIds.join(", ") || "не загружены"} · ревизия{" "}
+          Снимки исходников: {scope?.sourceSnapshotIds.join(", ") || "не загружены"} · ревизия{" "}
           {revisionId}
         </Text>
-        {!revision && <LoadState query={revisionQuery} label="ревизии связей API" />}
+        {!revision && !effectivePins && (
+          <LoadState query={revisionQuery} label="ревизии связей API" />
+        )}
         <LoadState query={query} label="связей API" />
         <Button
           {...pinButtonProps}
@@ -599,6 +634,8 @@ function ArtifactPanel({
               reference={item.binding.ref}
               projectId={projectId}
               revisionId={revisionId}
+              target={target}
+              pins={effectivePins}
               sourceNodeId={item.binding.sourceNodeId}
               separate={dirty}
             />
@@ -846,8 +883,16 @@ function ArtifactPanel({
                     side={d.before}
                     projectId={projectId}
                     revisionId={revisionId}
+                    target={target}
+                    pins={effectivePins}
                   />
-                  <ArtifactDeltaSide side={d.after} projectId={projectId} revisionId={revisionId} />
+                  <ArtifactDeltaSide
+                    side={d.after}
+                    projectId={projectId}
+                    revisionId={revisionId}
+                    target={target}
+                    pins={effectivePins}
+                  />
                 </Stack>
               ))}
               {genericPreview.diagnostics.map((d, i) => (
