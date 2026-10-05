@@ -1,6 +1,6 @@
 # Package, structural conformance and lifecycle handoff
 
-This procedure is change4-owned. Negotiate that exact workflow in the selected immutable guide set, then verify this topic's owner/contentHash. Inspect10 remains read-only and routes authorized analysis here. Shared recovery remains import8-owned. Require backend-change-package, backend-conformance, backend-change-implemented, backend-change-archive and backend-change-unarchive. Endpoint review additionally uses backend-endpoint-review.
+This procedure is change4-owned. Negotiate that exact workflow in the selected immutable guide set, then verify this topic's owner/contentHash. Inspect11 remains read-only and routes authorized analysis here. Shared recovery remains import8-owned. Require backend-change-package, backend-conformance, backend-change-implemented, backend-change-archive and backend-change-unarchive. Endpoint review additionally uses backend-endpoint-review.
 
 Check analysisSupport.kinds for change_package/conformance/endpoint_review, documentVersions for backend-analysis-context-v2, inputDocumentVersions for backend-analysis-input/v2 and ruleSetVersions for b43-rules/v1. Legacy singular documentVersion/ruleSetVersion remain backend-analysis-context-v1/b42-rules/v1; traversalVersion remains b42-traversal/v1. The arrays are additive negotiation, not replacement fields. No new route/tool or execution capability is implied.
 

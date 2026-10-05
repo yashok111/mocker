@@ -160,6 +160,7 @@ func TestGuideRequiredCapabilitiesHaveMCPTools(t *testing.T) {
 		"backend-change-archive":          {"apply_backend_change_proposal_lifecycle"},
 		"backend-diagrams":                {"create_backend_diagram", "save_backend_diagram", "fork_backend_diagram", "list_backend_diagrams", "get_backend_diagram", "query_backend_diagram", "compare_backend_diagrams"},
 		"backend-interactions":            {"build_backend_interactions", "query_backend_diagram", "compare_backend_diagrams"},
+		"backend-lifecycle":               {"build_backend_lifecycle", "query_backend_diagram", "compare_backend_diagrams"},
 		"backend-architecture":            {"query_backend_diagram", "compare_backend_diagrams"},
 		"backend-diagram-views":           {"create_backend_diagram_view", "save_backend_diagram_view", "list_backend_diagram_views", "get_backend_diagram_view"},
 		"backend-change-unarchive":        {"apply_backend_change_proposal_lifecycle"},

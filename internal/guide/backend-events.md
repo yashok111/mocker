@@ -1,6 +1,6 @@
 # Pinned source events, jobs and service calls
 
-Canonical owner: `mocker-backend-inspect` workflow10. Select its complete supported
+Canonical owner: `mocker-backend-inspect` workflow11. Select its complete supported
 requirements, including source schemas3/4/5 and `backend-events-query`, in one
 immutable guideSetId/manifestHash. Verify this topic's actual owner/version/hash.
 Import8 owns source5 `events-service-v1` admission and all inherited profiles.

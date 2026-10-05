@@ -23,6 +23,12 @@ export function BackendWorkspaceNavigation() {
       </Button>
       <Button
         variant="default"
+        onClick={() => focusWorkspaceRegion('[data-testid="backend-lifecycle"] h3')}
+      >
+        Жизненный цикл
+      </Button>
+      <Button
+        variant="default"
         onClick={() => focusWorkspaceRegion('[data-testid="backend-project-page"]')}
       >
         Инвентарь и отчёты

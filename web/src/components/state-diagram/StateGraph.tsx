@@ -20,6 +20,7 @@ const FIT_PADDING = 86;
 const SIDES = ["top", "right", "bottom", "left"] as const;
 
 type Props = {
+  readOnly?: boolean;
   diagram: StateDiagram;
   layout?: DiagramLayoutResult | null;
   selection: Selection;
@@ -61,6 +62,8 @@ export default function StateGraph(props: Props) {
         },
       },
       interacting: {
+        nodeMovable: () => !current.current.readOnly,
+        magnetConnectable: () => !current.current.readOnly,
         edgeMovable: false,
         edgeLabelMovable: false,
         arrowheadMovable: false,
@@ -86,6 +89,7 @@ export default function StateGraph(props: Props) {
     });
     graph.on("blank:click", () => current.current.onSelect(null));
     graph.on("node:moved", ({ node }) => {
+      if (current.current.readOnly) return;
       if (node.id.startsWith("state:")) {
         const p = node.position();
         current.current.onMove(node.id.slice(6), Math.round(p.x), Math.round(p.y));
@@ -93,6 +97,10 @@ export default function StateGraph(props: Props) {
     });
     graph.on("edge:connected", ({ edge, isNew }) => {
       if (!isNew) return;
+      if (current.current.readOnly) {
+        graph.removeEdge(edge);
+        return;
+      }
       const from = edge.getSourceCellId();
       const to = edge.getTargetCellId();
       graph.removeEdge(edge);
@@ -249,7 +257,7 @@ export default function StateGraph(props: Props) {
       hostRef={host}
       graphRef={graphRef}
       className={styles.graph}
-      ariaLabel={`Диаграмма ${props.diagram.name}. ${props.diagram.states.length} состояний. Редактирование доступно в списках ниже.`}
+      ariaLabel={`Диаграмма ${props.diagram.name}. ${props.diagram.states.length} состояний. ${props.readOnly ? "Основания доступны в списке ниже." : "Редактирование доступно в списках ниже."}`}
       zoomLabel="диаграмму"
       fitPadding={FIT_PADDING}
     />

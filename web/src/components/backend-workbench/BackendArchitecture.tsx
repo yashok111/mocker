@@ -59,6 +59,8 @@ const BackendArchitectureGraph = lazy(() =>
 import { BackendArchitectureInspector } from "./BackendArchitectureInspector";
 import { BackendArtifactProjections } from "./BackendArtifactProjections";
 import { BackendInteractions, BackendInteractionsEditor } from "./BackendInteractions";
+import { BackendLifecycle, BackendLifecycleEditor } from "./BackendLifecycle";
+import { BackendLifecycleBuilder } from "./BackendLifecycleBuilder";
 import { BackendArchitectureEditor } from "./BackendArchitectureEditor";
 import { focusWorkspaceRegion } from "./BackendWorkspaceNavigation";
 
@@ -382,6 +384,16 @@ function ArchitectureContent(props: Props) {
             Создать interactions
           </Button>
         </Group>
+        <BackendLifecycleBuilder
+          key={buildScope}
+          projectId={projectId}
+          target={target}
+          disabled={contentDirty || building || creating}
+          onCandidate={(d) => {
+            setNewDoc(d);
+            setCreating(true);
+          }}
+        />
         {buildError && (
           <Alert color="red" role="alert">
             {buildError}
@@ -527,7 +539,12 @@ function ArchitectureWorkspace({
       : undefined;
   const [viewName, setViewName] = usePinnedValue<string>(
     activeView ? `${activeView.id}:${activeView.version}` : `new:${semanticIdentity}`,
-    activeView?.name ?? (architecture ? "C4 architecture" : "Static interactions"),
+    activeView?.name ??
+      (architecture
+        ? "C4 architecture"
+        : diagram?.document.kind === "lifecycle"
+          ? "Lifecycle"
+          : "Static interactions"),
   );
   const viewDirty =
     !!activeView &&
@@ -681,9 +698,11 @@ function ArchitectureWorkspace({
     if (state) {
       changeState({ ...state, selection });
       focusWorkspaceRegion(
-        diagram?.document.kind === "interactions"
-          ? "#interactions-inspector-title"
-          : "#c4-inspector-title",
+        diagram?.document.kind === "lifecycle"
+          ? "#lifecycle-inspector-title"
+          : diagram?.document.kind === "interactions"
+            ? "#interactions-inspector-title"
+            : "#c4-inspector-title",
       );
     }
   };
@@ -709,7 +728,11 @@ function ArchitectureWorkspace({
       row.rowType === "architecture_element" ? [row.data] : [],
     ) ?? [];
   const layoutElements =
-    diagram?.document.kind === "interactions" ? diagram.document.payload.participants : es;
+    diagram?.document.kind === "lifecycle"
+      ? diagram.document.payload.states
+      : diagram?.document.kind === "interactions"
+        ? diagram.document.payload.participants
+        : es;
   const ls =
     links.data?.items.flatMap((row) => (row.rowType === "architecture_link" ? [row.data] : [])) ??
     [];
@@ -962,14 +985,18 @@ function ArchitectureWorkspace({
                   ]}
                 />
                 <TextInput
-                  label={architecture ? "Координата X" : "Смещение участника по X"}
+                  label={
+                    diagram.document.kind !== "interactions"
+                      ? "Координата X"
+                      : "Смещение участника по X"
+                  }
                   type="number"
                   value={layoutX}
                   onChange={(e) => setLayoutX(e.currentTarget.value)}
                 />
                 <TextInput
                   label="Координата Y"
-                  disabled={!architecture}
+                  disabled={diagram.document.kind === "interactions"}
                   type="number"
                   value={layoutY}
                   onChange={(e) => setLayoutY(e.currentTarget.value)}
@@ -989,7 +1016,7 @@ function ArchitectureWorkspace({
                         {
                           id: layoutNode,
                           x: Number(layoutX),
-                          y: architecture ? Number(layoutY) : 0,
+                          y: diagram.document.kind === "interactions" ? 0 : Number(layoutY),
                         },
                       ],
                     })
@@ -1045,6 +1072,19 @@ function ArchitectureWorkspace({
               presentation={state}
             />
           )}
+          {diagram.document.kind === "lifecycle" && (
+            <BackendLifecycle
+              payload={diagram.document.payload}
+              gaps={diagram.gaps}
+              selection={state.selection}
+              onSelect={select}
+              onOpen={open}
+              disabled={dirty}
+              search={state.search}
+              origin={state.origin}
+              presentation={state}
+            />
+          )}
           {artifactRef && (
             <Paper withBorder p="md">
               <Stack>
@@ -1083,7 +1123,13 @@ function ArchitectureWorkspace({
             <Stack>
               <Title order={3}>Сохранить точный вид</Title>
               <TextInput
-                label={architecture ? "Название C4 вида" : "Название interactions вида"}
+                label={
+                  architecture
+                    ? "Название C4 вида"
+                    : diagram.document.kind === "lifecycle"
+                      ? "Название lifecycle вида"
+                      : "Название interactions вида"
+                }
                 value={viewName}
                 onChange={(e) => setViewName(e.currentTarget.value)}
               />
@@ -1097,7 +1143,11 @@ function ArchitectureWorkspace({
                     })
                   }
                 >
-                  {architecture ? "Сохранить новый C4 вид" : "Сохранить новый interactions вид"}
+                  {architecture
+                    ? "Сохранить новый C4 вид"
+                    : diagram.document.kind === "lifecycle"
+                      ? "Сохранить новый lifecycle вид"
+                      : "Сохранить новый interactions вид"}
                 </Button>
                 <Button
                   disabled={dirty || !activeView}
@@ -1277,14 +1327,14 @@ function ArchitectureSavedLists({
       <Stack>
         <Title order={3}>Сохранённые виды проекта</Title>
         <NativeSelect
-          label="Открыть сохранённый C4 / interactions / Flow / Database вид"
+          label="Открыть сохранённый C4 / interactions / lifecycle / Flow / Database вид"
           value={selection}
           onChange={(e) => setSelection(e.currentTarget.value)}
           data={[
             { value: "", label: "Выберите точный вид" },
             ...(diagrams.data?.items ?? []).map((v) => ({
               value: JSON.stringify({ diagramViewId: v.id, diagramViewVersion: v.version }),
-              label: `${v.kind === "interactions" ? "Interactions" : "C4"} · ${v.name} · v${v.version}`,
+              label: `${v.kind === "lifecycle" ? "Lifecycle" : v.kind === "interactions" ? "Interactions" : "C4"} · ${v.name} · v${v.version}`,
             })),
             ...(legacy.data?.items ?? []).map((v) => ({
               value: JSON.stringify({ viewId: v.id, viewVersion: v.version }),
@@ -1344,6 +1394,8 @@ function DiagramEditor(props: {
 }) {
   return props.document.kind === "architecture" ? (
     <BackendArchitectureEditor {...props} document={props.document} />
+  ) : props.document.kind === "lifecycle" ? (
+    <BackendLifecycleEditor {...props} document={props.document} />
   ) : (
     <BackendInteractionsEditor {...props} document={props.document} />
   );

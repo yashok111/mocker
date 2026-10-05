@@ -56,6 +56,9 @@ func (r *Repo) CompareDiagrams(ctx context.Context, pid string, in DiagramCompar
 		return nil, err
 	}
 	metadataID := ""
+	if before.Document.Kind == "lifecycle" {
+		metadataID = lifecycleComparisonMetadataID(before.Document.Lifecycle, after.Document.Lifecycle)
+	}
 	if before.Document.Kind == "interactions" {
 		metadataID, err = interactionComparisonMetadataID(before.Document.Interactions, after.Document.Interactions)
 		if err != nil {
@@ -91,6 +94,9 @@ func (r *Repo) CompareDiagrams(ctx context.Context, pid string, in DiagramCompar
 func diagramComparisonRows(ctx context.Context, v *DiagramVersion, g *EffectiveGraphSnapshot, metadataID string) (map[string]map[string]jsontext.Value, error) {
 	if v.TargetHash != g.Pins.TargetHash {
 		return nil, diagramPinMismatch()
+	}
+	if v.Document.Lifecycle != nil {
+		return lifecycleComparisonRows(v.Document.Lifecycle, metadataID)
 	}
 	rows := map[string]map[string]jsontext.Value{}
 	add := func(id string, value any) error {

@@ -1,6 +1,6 @@
 # Source flow model and pinned reads
 
-Canonical owner: `mocker-backend-inspect` workflow10. Select/verify this owner's
+Canonical owner: `mocker-backend-inspect` workflow11. Select/verify this owner's
 identity and contentHash in the same global guide set before using the topic.
 Source schema3/4/5 and `runtime-flow-v1` extend relational source records. They do
 not describe runtime observation or the effect of a database proposal.
@@ -153,7 +153,7 @@ Page size defaults100/max500 and does not change traversal or witnesses.
 
 ## Pinned saved Flow views
 
-Require inspect10, `backend-saved-views` and document `saved-view-v1`. Four tools:
+Require inspect11, `backend-saved-views` and document `saved-view-v1`. Four tools:
 `list_backend_saved_views`, `create_backend_saved_view`, `get_backend_saved_view`,
 `save_backend_saved_view`. Read-only list/get are idempotent; create/save use
 retained idempotency keys. A SavedView is an immutable version with id/projectId,
@@ -207,10 +207,10 @@ transaction atomicity claim appears. Canvas caps200nodes/600edges are distinct
 from collapse and pagination. Preview is local and Save is disabled until Apply
 or Cancel; one-step undo restores coordinates independently of collapse.
 
-## query_backend_lineage (inspect10)
+## query_backend_lineage (inspect11)
 
 Require source4/5, field-lineage-v1 and backend-field-lineage-query in the selected
-inspect10 set. Existing flow/access reads remain source3/4/5; source1/2 refuse them.
+inspect11 set. Existing flow/access reads remain source3/4/5; source1/2 refuse them.
 Lineage refuses source1–3 and proposals with422, rather than an empty answer.
 
 Input: projectId, exact revisionId, complete seed ValueRef, direction
@@ -250,9 +250,9 @@ revision/seed changes and discard mismatched late responses. Pin evidence,
 owner, column facet and exact port navigation to the same revision. Lineage
 panel state is transient; existing saved-view-v1 remains unchanged.
 
-## Manual exact API artifact associations (inspect10)
+## Manual exact API artifact associations (inspect11)
 
-Require the complete inspect10 workflow, feature `backend-api-artifact-pins` and
+Require the complete inspect11 workflow, feature `backend-api-artifact-pins` and
 contract `api-artifact-pins-v1` advertised in `viewSchemaVersions`. This contract
 is separate from source model1–5 and provider profiles; mutations require an
 imported source4/5 baseline. A question authorizes reads only. Select the source
@@ -455,7 +455,7 @@ The API-specific commands above retain legacy API-only v1 behavior. For a tagged
 backend-editor-artifacts-v1 context, API sets preserve the complete editor roster
 and shared revision; whole-group removal refuses existing editors. To remove
 the last API link while retaining editors use generic set_artifact_pin with
-apiBindings:[] and the complete retained editorBindings. Select inspect10 with
+apiBindings:[] and the complete retained editorBindings. Select inspect11 with
 backend-editor-projections and load backend-editor-projections for full replacement,
 raw snapshot/hash policies, linked/copy isolation and all generic budgets.
 
@@ -463,7 +463,7 @@ raw snapshot/hash policies, linked/copy isolation and all generic budgets.
 
 Consumer/job entrypoints and explicit call-step→http_operation→handles→owned
 flow are available on source5. Events routes/jobs/service_calls uses
-query_backend_events and backend-events under inspect10; retain exact pinned
+query_backend_events and backend-events under inspect11; retain exact pinned
 IDs and unknown external/dispatch boundaries. Flow policy runtime-flow-reachability-v2
 applies to source5; source3/4 retains its advertised v1 policy. Contextual field
 lineage uses field-lineage-traversal-v2 only on5; source4 remains v1. Each event

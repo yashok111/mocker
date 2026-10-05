@@ -73,6 +73,9 @@ func (v *InteractionPayload) UnmarshalJSON(b []byte) error {
 // Keep the architecture wire byte shape unchanged while admitting a second typed arm.
 func (d DiagramDocument) MarshalJSON() ([]byte, error) {
 	var payload any = d.Payload
+	if d.Kind == "lifecycle" {
+		payload = d.Lifecycle
+	}
 	if d.Kind == "interactions" {
 		payload = d.Interactions
 	}

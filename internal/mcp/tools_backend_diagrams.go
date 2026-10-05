@@ -13,6 +13,7 @@ func addBackendDiagramTools(s *sdk.Server, lb *loopback) {
 		read                  bool
 	}{
 		{"build_backend_interactions", "POST /api/backend-projects/{id}/diagrams/interactions/build", "BuildBackendInteractionsRequest", true},
+		{"build_backend_lifecycle", "POST /api/backend-projects/{id}/diagrams/lifecycle/build", "BuildBackendLifecycleRequest", true},
 		{"create_backend_diagram", "POST /api/backend-projects/{id}/diagrams", "CreateBackendDiagramRequest", false},
 		{"save_backend_diagram", "POST /api/backend-projects/{id}/diagrams/{did}/save", "SaveBackendDiagramRequest", false},
 		{"fork_backend_diagram", "POST /api/backend-projects/{id}/diagrams/fork", "ForkBackendDiagramRequest", false},
@@ -45,7 +46,7 @@ func addBackendDiagramTools(s *sdk.Server, lb *loopback) {
 			props := map[string]any{"projectId": id}
 			required := []string{"projectId"}
 			if strings.HasPrefix(spec.name, "list_") {
-				props["kind"] = map[string]any{"type": "string", "enum": []string{"architecture", "interactions"}}
+				props["kind"] = map[string]any{"type": "string", "enum": []string{"architecture", "interactions", "lifecycle"}}
 				props["limit"] = map[string]any{"type": "integer", "minimum": 1, "maximum": 500}
 				props["cursor"] = map[string]any{"type": "string", "maxLength": 4096}
 			} else {
@@ -63,6 +64,6 @@ func addBackendDiagramTools(s *sdk.Server, lb *loopback) {
 			}
 			schema = designScenarioSchemaObject(required, props)
 		}
-		addBackendImportTool(s, lb, &sdk.Tool{Name: spec.name, Description: "Exact architecture/interactions companion mapping or pinned diagram-view-v1. Query/compare are read-only. Authored intent is not source proof. No-op saves retain versions; replay identical keys before CAS. A new semantic pin requires a new saved view.", InputSchema: schema, Annotations: &sdk.ToolAnnotations{ReadOnlyHint: spec.read, IdempotentHint: true}}, spec.route)
+		addBackendImportTool(s, lb, &sdk.Tool{Name: spec.name, Description: "Exact architecture/interactions/lifecycle companion mapping or pinned diagram-view-v1. Query/compare are read-only. Authored intent is not source proof. No-op saves retain versions; replay identical keys before CAS. A new semantic pin requires a new saved view.", InputSchema: schema, Annotations: &sdk.ToolAnnotations{ReadOnlyHint: spec.read, IdempotentHint: true}}, spec.route)
 	}
 }

@@ -228,6 +228,7 @@ func (s *Server) routes() []route {
 		{"GET /api/backend-projects/{id}/diagrams", s.handleListBackendDiagrams, mcpAllow, cpRead},
 		{"GET /api/backend-projects/{id}/diagrams/{did}/versions/{v}", s.handleGetBackendDiagram, mcpAllow, cpRead},
 		{"POST /api/backend-projects/{id}/diagrams/interactions/build", s.handleBuildBackendInteractions, mcpAllow, cpNeverTouchesLayer},
+		{"POST /api/backend-projects/{id}/diagrams/lifecycle/build", s.handleBuildBackendLifecycle, mcpAllow, cpNeverTouchesLayer},
 		{"POST /api/backend-projects/{id}/diagrams/query", s.handleQueryBackendDiagram, mcpAllow, cpNeverTouchesLayer},
 		{"POST /api/backend-projects/{id}/diagrams/compare", s.handleCompareBackendDiagrams, mcpAllow, cpNeverTouchesLayer},
 		{"POST /api/backend-projects/{id}/diagram-views", s.handleCreateBackendDiagramView, mcpAllow, cpAnotherLayer},

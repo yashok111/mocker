@@ -33,6 +33,9 @@ func normalizeDiagram(d DiagramDocument) (DiagramDocument, error) {
 			return cmp.Compare(aa, bb)
 		})
 	}
+	if out.Lifecycle != nil {
+		normalizeLifecycle(out.Lifecycle, normalize)
+	}
 	if out.Interactions != nil {
 		normalizeInteractions(out.Interactions, normalize)
 	}
@@ -48,6 +51,12 @@ func normalizeDiagram(d DiagramDocument) (DiagramDocument, error) {
 }
 func diagramSemanticRows(d DiagramDocument) map[string]string {
 	rows := map[string]string{}
+	if d.Lifecycle != nil {
+		for id, v := range lifecycleRows(d.Lifecycle) {
+			rows[id], _ = requestDigest(v)
+		}
+		return rows
+	}
 	if d.Interactions != nil {
 		for id, v := range interactionRows(d.Interactions) {
 			rows[id], _ = requestDigest(v)

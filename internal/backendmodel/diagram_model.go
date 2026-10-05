@@ -40,6 +40,7 @@ type DiagramDocument struct {
 	Kind         string              `json:"kind"`
 	Target       BackendReadTarget   `json:"target"`
 	Payload      ArchitecturePayload `json:"payload"`
+	Lifecycle    *LifecyclePayload   `json:"-"`
 	Interactions *InteractionPayload `json:"-"`
 }
 type DiagramProvenanceEvent struct {

@@ -6,8 +6,8 @@ metadata:
   workflowVersion: "2"
   requiredModelSchemaVersions: "[]"
   requiredCapabilities: "[]"
-  guideSetId: "sha256:e1f00d9119dbb5380734835aedbc848decd5c3d1a10a889765a6bae194f8fc41"
-  manifestHash: "sha256:e1f00d9119dbb5380734835aedbc848decd5c3d1a10a889765a6bae194f8fc41"
+  guideSetId: "sha256:96b6de85f4a0e672df760000a85fe97e8812ab4275da6f6bbdf2cd46181b7bfe"
+  manifestHash: "sha256:96b6de85f4a0e672df760000a85fe97e8812ab4275da6f6bbdf2cd46181b7bfe"
 ---
 
 # mocker
@@ -19,7 +19,7 @@ foundation or PostgreSQL/SQLite relational source-facet import, explicit
 same-provider snapshot reconciliation and pinned database/ER, structural
 comparison and evidence reads. Typed NULL/NOT NULL and FK proposals use separate pinned preview/apply and unverified criteria;
 source schema3 adds pinned endpoint flows and imported scoped data accesses;
-source4 adds explicit field lineage and manual exact API associations through inspect10;
+source4 adds explicit field lineage and manual exact API associations through inspect11;
 source5 adds evidence-backed event routes/jobs/service calls and contextual fields; source6 incremental synchronization uses sync2; static diff/impact uses durable pinned jobs with runtime unverified. For mocks, one OpenAPI
 spec is imported once; every WORKSPACE
 bound to it serves the spec's routes on its own host with deterministic
@@ -75,11 +75,11 @@ Route the task before listing or changing resources. Keep ordinary mock workspac
 | Create/rename a backend project; source-object annotations | project2 / backend-overview, then backend-annotations |
 | Existing source1–5 import, adjacent profile transition or revision comparison | import8 / backend-import |
 | Composed source6 addition/reconcile/provider migration or authorized incremental sync | sync2 / backend-sync |
-| Exact graph/proof/Flow/lineage/events/artifact inspection | inspect10 / backend-inspect |
+| Exact graph/proof/Flow/lineage/events/artifact inspection | inspect11 / backend-inspect |
 | Relational source/full inspection or existing typed relational proposals | database7 / backend-database |
 | Full desired graph proposal, qualified intended keys, history/restore | change4 / backend-change-proposals |
 | Three-way rebase, durable diff/impact, exact impact report to ready | change4 / backend-change-rebase, backend-analysis-jobs |
-| Saved Flow/Database presentation | inspect10/database7 with the matching v1/v2 view contract |
+| Saved Flow/Database presentation | inspect11/database7 with the matching v1/v2 view contract |
 
 Prefer the installed independent leaf; root-only clients use its generated compatibility reference or get_guide entrypoint. Verify actual advertised workflowId/version/set/manifest/topic hashes and all requirements. On local mismatch use the complete compatible server procedure in the same selected immutable set. Unknown guide sets fail; tool presence alone is insufficient. Every shared topic keeps its canonical owner. No compatible procedure means supported reads only.
 
@@ -151,7 +151,7 @@ fresh runId and the returned revisionId/name/variables, then verify the actual
 controlFlow and refresh coverage. Generation is read-only; unresolved paths
 include reasons. See `references/design.md` for the workflow and limits.
 
-Saved Flow/Database presentation tasks select inspect10/database7 respectively,
+Saved Flow/Database presentation tasks select inspect11/database7 respectively,
 requiring backend-saved-views and saved-view-v1 in that same pinned set. Read the
 saved version before model reads, preserve exact targets and both URL viewId/
 viewVersion, and use the owner's complete saved-view example. Create/save are
@@ -160,15 +160,15 @@ CAS. Failed saved reads have no head fallback. Proposal intent/unknown runtime
 checks stay explicit; layouts/collapse infer no source behavior or field lineage.
 Source import continues to select import8. Live agent acceptance remains deferred.
 
-For authored sequence/state/rule/EventModel projections select inspect10 with
+For authored sequence/state/rule/EventModel projections select inspect11 with
 backend-editor-projections and backend-editor-artifacts-v1; load
 `backend-editor-projections` before reads or authorized generic pin changes.
 Keep authored completeness, origin verification, source evidence and runtime
 completeness separate; saved copy content remains independent.
 
-Source5 event/job/service-call questions select inspect10 with backend-events-query
+Source5 event/job/service-call questions select inspect11 with backend-events-query
 and load backend-events from its verified owner in this set. Import8 owns
 events-service-v1/schema5, exact five-profile initial imports and explicit4→5
-extension. Database7 delegates column→event-field navigation to inspect10.
+extension. Database7 delegates column→event-field navigation to inspect11.
 Keep exact route/full field context, explicit transport, unknown boundaries and
 static source provenance; no scheduling or runtime delivery is inferred.

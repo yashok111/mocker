@@ -72,6 +72,15 @@ func diagramBases(d DiagramDocument) map[string]struct {
 			}{o, refs}
 		}
 	}
+	if d.Lifecycle != nil {
+		for id, v := range lifecycleRows(d.Lifecycle) {
+			o, refs := lifecycleRowBasis(v)
+			out[id] = struct {
+				origin DiagramOrigin
+				refs   []DiagramRef
+			}{o, refs}
+		}
+	}
 	return out
 }
 func resolveDiagramEvidence(ctx context.Context, g *EffectiveGraphSnapshot, d DiagramDocument, previous *DiagramVersion) ([]DiagramGap, error) {
@@ -126,6 +135,11 @@ func resolveDiagramEvidence(ctx context.Context, g *EffectiveGraphSnapshot, d Di
 		return nil, err
 	}
 	gaps = append(gaps, extra...)
+	lifecycleGaps, err := resolveLifecycleGaps(ctx, resolver, d, previous, nodes, edges)
+	if err != nil {
+		return nil, err
+	}
+	gaps = append(gaps, lifecycleGaps...)
 	slices.SortFunc(gaps, func(a, b DiagramGap) int {
 		if a.ID < b.ID {
 			return -1

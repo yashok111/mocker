@@ -80409,6 +80409,9 @@
           },
           {
             "$ref": "#/components/schemas/BackendInteractionDocument"
+          },
+          {
+            "$ref": "#/components/schemas/BackendLifecycleDocument"
           }
         ],
         "discriminator": {
@@ -80866,6 +80869,15 @@
           },
           {
             "$ref": "#/components/schemas/BackendDiagramRowOrder"
+          },
+          {
+            "$ref": "#/components/schemas/BackendDiagramRowState"
+          },
+          {
+            "$ref": "#/components/schemas/BackendDiagramRowTransition"
+          },
+          {
+            "$ref": "#/components/schemas/BackendDiagramRowRule"
           }
         ],
         "discriminator": {
@@ -81231,7 +81243,8 @@
                   "type": "string",
                   "enum": [
                     "architecture",
-                    "interactions"
+                    "interactions",
+                    "lifecycle"
                   ]
                 },
                 "pin": {
@@ -81283,7 +81296,8 @@
                   "type": "string",
                   "enum": [
                     "architecture",
-                    "interactions"
+                    "interactions",
+                    "lifecycle"
                   ]
                 },
                 "version": {
@@ -81833,6 +81847,446 @@
           "gaps",
           "visitedObjects",
           "truncated"
+        ]
+      },
+      "BackendLifecycleValue": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "json": {
+            "type": "string",
+            "maxLength": 65536
+          }
+        },
+        "required": [
+          "json"
+        ]
+      },
+      "BackendLifecycleGuard": {
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "none"
+                ]
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "opaque"
+                ]
+              },
+              "text": {
+                "type": "string",
+                "maxLength": 4096
+              }
+            },
+            "required": [
+              "kind",
+              "text"
+            ]
+          }
+        ],
+        "discriminator": {
+          "propertyName": "kind"
+        }
+      },
+      "BackendLifecycleState": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "label": {
+            "type": "string",
+            "maxLength": 256
+          },
+          "origin": {
+            "$ref": "#/components/schemas/BackendDiagramOrigin"
+          },
+          "refs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendDiagramRef"
+            },
+            "maxItems": 100
+          },
+          "initial": {
+            "type": "boolean"
+          },
+          "terminal": {
+            "type": "boolean"
+          },
+          "value": {
+            "$ref": "#/components/schemas/BackendLifecycleValue"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "origin",
+          "refs",
+          "initial",
+          "terminal"
+        ]
+      },
+      "BackendLifecycleTransition": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "label": {
+            "type": "string",
+            "maxLength": 256
+          },
+          "origin": {
+            "$ref": "#/components/schemas/BackendDiagramOrigin"
+          },
+          "refs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendDiagramRef"
+            },
+            "maxItems": 100
+          },
+          "from": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "to": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "triggers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendDiagramRef"
+            },
+            "maxItems": 100
+          },
+          "writes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendDiagramRef"
+            },
+            "maxItems": 100
+          },
+          "events": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendDiagramRef"
+            },
+            "maxItems": 100
+          },
+          "guard": {
+            "$ref": "#/components/schemas/BackendLifecycleGuard"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "origin",
+          "refs",
+          "from",
+          "to",
+          "triggers",
+          "writes",
+          "events",
+          "guard"
+        ]
+      },
+      "BackendLifecycleRule": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "from": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "to": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "trigger": {
+            "$ref": "#/components/schemas/BackendDiagramRef"
+          },
+          "verdict": {
+            "type": "string",
+            "enum": [
+              "allowed",
+              "forbidden"
+            ]
+          },
+          "origin": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "authored"
+                ]
+              },
+              "reason": {
+                "type": "string",
+                "maxLength": 4096
+              }
+            },
+            "required": [
+              "kind",
+              "reason"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "from",
+          "to",
+          "trigger",
+          "verdict",
+          "origin"
+        ]
+      },
+      "BackendLifecyclePayload": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "entity": {
+            "$ref": "#/components/schemas/BackendDiagramRef"
+          },
+          "stateFields": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendDiagramRef"
+            },
+            "maxItems": 100,
+            "minItems": 1
+          },
+          "compoundMappingReason": {
+            "type": "string",
+            "maxLength": 4096
+          },
+          "states": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendLifecycleState"
+            },
+            "maxItems": 1000
+          },
+          "transitions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendLifecycleTransition"
+            },
+            "maxItems": 3000
+          },
+          "rules": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendLifecycleRule"
+            },
+            "maxItems": 1000
+          },
+          "coverage": {
+            "type": "string",
+            "enum": [
+              "partial",
+              "declared_complete"
+            ]
+          },
+          "coverageOrigin": {
+            "$ref": "#/components/schemas/BackendDiagramOrigin"
+          }
+        },
+        "required": [
+          "entity",
+          "stateFields",
+          "states",
+          "transitions",
+          "rules",
+          "coverage",
+          "coverageOrigin"
+        ]
+      },
+      "BackendLifecycleDocument": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "format": {
+            "type": "string",
+            "enum": [
+              "backend-diagram-v1"
+            ]
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "lifecycle"
+            ]
+          },
+          "target": {
+            "$ref": "#/components/schemas/BackendDiagramTarget"
+          },
+          "payload": {
+            "$ref": "#/components/schemas/BackendLifecyclePayload"
+          }
+        },
+        "required": [
+          "format",
+          "kind",
+          "target",
+          "payload"
+        ]
+      },
+      "BackendDiagramRowState": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "rowType": {
+            "type": "string",
+            "enum": [
+              "state"
+            ]
+          },
+          "data": {
+            "$ref": "#/components/schemas/BackendLifecycleState"
+          }
+        },
+        "required": [
+          "rowType",
+          "data"
+        ]
+      },
+      "BackendDiagramRowTransition": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "rowType": {
+            "type": "string",
+            "enum": [
+              "transition"
+            ]
+          },
+          "data": {
+            "$ref": "#/components/schemas/BackendLifecycleTransition"
+          }
+        },
+        "required": [
+          "rowType",
+          "data"
+        ]
+      },
+      "BackendDiagramRowRule": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "rowType": {
+            "type": "string",
+            "enum": [
+              "rule"
+            ]
+          },
+          "data": {
+            "$ref": "#/components/schemas/BackendLifecycleRule"
+          }
+        },
+        "required": [
+          "rowType",
+          "data"
+        ]
+      },
+      "BuildBackendLifecycleRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "target": {
+            "$ref": "#/components/schemas/BackendDiagramTarget"
+          },
+          "stateDiagram": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "locator": {
+                "$ref": "#/components/schemas/ArtifactProjectionLocator"
+              },
+              "rowId": {
+                "type": "string",
+                "maxLength": 4096
+              }
+            },
+            "required": [
+              "locator",
+              "rowId"
+            ]
+          },
+          "entity": {
+            "$ref": "#/components/schemas/BackendDiagramRef"
+          },
+          "stateFields": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendDiagramRef"
+            },
+            "maxItems": 100,
+            "minItems": 1
+          },
+          "compoundMappingReason": {
+            "type": "string",
+            "maxLength": 4096
+          }
+        },
+        "required": [
+          "target",
+          "stateDiagram",
+          "entity",
+          "stateFields"
+        ]
+      },
+      "BackendLifecycleCandidate": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "document": {
+            "$ref": "#/components/schemas/BackendLifecycleDocument"
+          },
+          "targetHash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "gaps": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendDiagramGap"
+            },
+            "maxItems": 10000
+          }
+        },
+        "required": [
+          "document",
+          "targetHash",
+          "gaps"
         ]
       }
     }
@@ -102712,7 +103166,8 @@
               "type": "string",
               "enum": [
                 "architecture",
-                "interactions"
+                "interactions",
+                "lifecycle"
               ]
             }
           },
@@ -103586,7 +104041,8 @@
               "type": "string",
               "enum": [
                 "architecture",
-                "interactions"
+                "interactions",
+                "lifecycle"
               ]
             }
           },
@@ -104061,6 +104517,124 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/BuildBackendInteractionsRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/backend-projects/{id}/diagrams/lifecycle/build": {
+      "post": {
+        "tags": [
+          "backend-projects"
+        ],
+        "operationId": "buildBackendLifecycle",
+        "summary": "Build an authored lifecycle from exact pinned States",
+        "description": "Read-only, partial authored intent. Guards remain opaque; enum values do not imply transitions. Explicit create persists the exact candidate.",
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendLifecycleCandidate"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BuildBackendLifecycleRequest"
               }
             }
           }

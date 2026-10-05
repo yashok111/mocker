@@ -309,7 +309,7 @@ func diagramQueryFields(q url.Values, mode string, in *backendmodel.DiagramListI
 				return diagramAdmissionError()
 			}
 		case "kind":
-			if mode != "list" || (values[0] != "architecture" && values[0] != "interactions") {
+			if mode != "list" || (values[0] != "architecture" && values[0] != "interactions" && values[0] != "lifecycle") {
 				return diagramAdmissionError()
 			}
 			in.Kind = values[0]
@@ -344,6 +344,23 @@ func (s *Server) handleBuildBackendInteractions(w http.ResponseWriter, r *http.R
 		return
 	}
 	out, err := s.backendRepo.BuildInteractions(ctx, r.PathValue("id"), in)
+	if err != nil {
+		s.diagramError(w, err)
+		return
+	}
+	httpx.JSON(w, 200, out)
+}
+
+func (s *Server) handleBuildBackendLifecycle(w http.ResponseWriter, r *http.Request) {
+	ctx, ok := s.diagramContext(w, r.Context(), r)
+	if !ok {
+		return
+	}
+	var in backendmodel.DiagramLifecycleBuildInput
+	if !s.diagramBody(w, r, &in, 1<<20) {
+		return
+	}
+	out, err := s.backendRepo.BuildLifecycle(ctx, r.PathValue("id"), in)
 	if err != nil {
 		s.diagramError(w, err)
 		return

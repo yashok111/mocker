@@ -67,7 +67,7 @@ func TestBackendDiagramRESTOperationsAndStrictAdmission(t *testing.T) {
 	call("POST", base+"/diagram-views/"+view.ID+"/save", backendmodel.DiagramSaveViewInput{Name: "Changed", State: state, ExpectedVersion: 1, IdempotencyKey: "layout"}, 200)
 	call("GET", base+"/diagram-views", nil, 200)
 	call("GET", base+"/diagram-views/"+view.ID+"/versions/1", nil, 200)
-	for _, query := range []string{"?limit=0", "?limit=501", "?limit=1&limit=2", "?unknown=x", "?kind=lifecycle"} {
+	for _, query := range []string{"?limit=0", "?limit=501", "?limit=1&limit=2", "?unknown=x", "?kind=business_map"} {
 		call("GET", base+"/diagrams"+query, nil, 422)
 	}
 	call("GET", path+"/versions/1", nil, 422)
@@ -98,7 +98,7 @@ func TestBackendDiagramCapabilitiesAdmittedKinds(t *testing.T) {
 	if err = json.Unmarshal(raw, &value); err != nil {
 		t.Fatal(err)
 	}
-	if len(value.DiagramSupport.Kinds) != 2 || value.DiagramSupport.Kinds[1] != "interactions" || value.DiagramSupport.Kinds[0] != "architecture" || value.DiagramSupport.DocumentVersion != "backend-diagram-v1" || value.DiagramSupport.ViewDocumentVersion != "diagram-view-v1" {
+	if len(value.DiagramSupport.Kinds) != 3 || value.DiagramSupport.Kinds[2] != "lifecycle" || value.DiagramSupport.Kinds[1] != "interactions" || value.DiagramSupport.Kinds[0] != "architecture" || value.DiagramSupport.DocumentVersion != "backend-diagram-v1" || value.DiagramSupport.ViewDocumentVersion != "diagram-view-v1" {
 		t.Fatalf("architecture capability missing/overclaims future kinds: %+v", value)
 	}
 }

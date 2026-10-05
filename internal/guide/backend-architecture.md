@@ -1,6 +1,6 @@
 # Exact C4 architecture mappings
 
-Negotiate inspect10 and `backend-diagrams`, `backend-architecture`,
+Negotiate inspect11 and `backend-diagrams`, `backend-architecture`,
 `backend-diagram-views`, `backend-diagram-v1` and `diagram-view-v1`. `architecture` and `interactions` are admitted. See `backend-interactions` for
 static behavior; lifecycle/business_map are not delivered capabilities. Source schemas1–6 and legacy saved-view-v1/v2 are unchanged.
 

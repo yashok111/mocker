@@ -1,0 +1,150 @@
+{
+  "format": "backend-diagram-v1",
+  "kind": "lifecycle",
+  "target": {
+    "revisionId": "46000000-0000-4000-8000-000000000090"
+  },
+  "payload": {
+    "entity": {
+      "kind": "record",
+      "recordType": "node",
+      "id": "46000000-0000-4000-8000-000000000100"
+    },
+    "stateFields": [
+      {
+        "kind": "record",
+        "recordType": "node",
+        "id": "46000000-0000-4000-8000-000000000101"
+      }
+    ],
+    "states": [
+      {
+        "id": "46000000-0000-4000-8000-000000000001",
+        "label": "Created",
+        "origin": {
+          "kind": "authored",
+          "reason": "Explicit lifecycle declaration"
+        },
+        "refs": [],
+        "initial": true,
+        "terminal": false,
+        "value": {
+          "json": "\"Created\""
+        }
+      },
+      {
+        "id": "46000000-0000-4000-8000-000000000002",
+        "label": "Paid",
+        "origin": {
+          "kind": "authored",
+          "reason": "Explicit lifecycle declaration"
+        },
+        "refs": [],
+        "initial": false,
+        "terminal": false,
+        "value": {
+          "json": "\"Paid\""
+        }
+      },
+      {
+        "id": "46000000-0000-4000-8000-000000000003",
+        "label": "Shipped",
+        "origin": {
+          "kind": "authored",
+          "reason": "Explicit lifecycle declaration"
+        },
+        "refs": [],
+        "initial": false,
+        "terminal": true,
+        "value": {
+          "json": "\"Shipped\""
+        }
+      },
+      {
+        "id": "46000000-0000-4000-8000-000000000004",
+        "label": "Cancelled",
+        "origin": {
+          "kind": "authored",
+          "reason": "Explicit lifecycle declaration"
+        },
+        "refs": [],
+        "initial": false,
+        "terminal": false,
+        "value": {
+          "json": "\"Cancelled\""
+        }
+      }
+    ],
+    "transitions": [
+      {
+        "id": "46000000-0000-4000-8000-000000000010",
+        "label": "Pay",
+        "origin": {
+          "kind": "authored",
+          "reason": "Explicit lifecycle declaration"
+        },
+        "refs": [],
+        "from": "46000000-0000-4000-8000-000000000001",
+        "to": "46000000-0000-4000-8000-000000000002",
+        "triggers": [
+          {
+            "kind": "record",
+            "recordType": "node",
+            "id": "46000000-0000-4000-8000-000000000102"
+          }
+        ],
+        "writes": [],
+        "events": [],
+        "guard": {
+          "kind": "none"
+        }
+      },
+      {
+        "id": "46000000-0000-4000-8000-000000000011",
+        "label": "Ship",
+        "origin": {
+          "kind": "authored",
+          "reason": "Explicit lifecycle declaration"
+        },
+        "refs": [],
+        "from": "46000000-0000-4000-8000-000000000002",
+        "to": "46000000-0000-4000-8000-000000000003",
+        "triggers": [
+          {
+            "kind": "record",
+            "recordType": "node",
+            "id": "46000000-0000-4000-8000-000000000102"
+          }
+        ],
+        "writes": [],
+        "events": [],
+        "guard": {
+          "kind": "opaque",
+          "text": "external approval is unknown"
+        }
+      }
+    ],
+    "rules": [
+      {
+        "id": "46000000-0000-4000-8000-000000000020",
+        "from": "46000000-0000-4000-8000-000000000002",
+        "to": "46000000-0000-4000-8000-000000000004",
+        "trigger": {
+          "kind": "record",
+          "recordType": "node",
+          "id": "46000000-0000-4000-8000-000000000102"
+        },
+        "verdict": "forbidden",
+        "origin": {
+          "kind": "authored",
+          "reason": "Explicit lifecycle declaration"
+        }
+      }
+    ],
+    "coverage": "partial",
+    "coverageOrigin": {
+      "kind": "authored",
+      "reason": "Explicit lifecycle declaration"
+    }
+  }
+}
