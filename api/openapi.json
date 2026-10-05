@@ -14896,7 +14896,9 @@
                   "type": "string",
                   "enum": [
                     "architecture",
-                    "interactions"
+                    "interactions",
+                    "lifecycle",
+                    "business_map"
                   ]
                 }
               },
@@ -80412,6 +80414,9 @@
           },
           {
             "$ref": "#/components/schemas/BackendLifecycleDocument"
+          },
+          {
+            "$ref": "#/components/schemas/BackendBusinessMapDocument"
           }
         ],
         "discriminator": {
@@ -80676,6 +80681,9 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 128
+          },
+          "architecture": {
+            "$ref": "#/components/schemas/BackendDiagramPin"
           }
         },
         "required": [
@@ -80878,6 +80886,12 @@
           },
           {
             "$ref": "#/components/schemas/BackendDiagramRowRule"
+          },
+          {
+            "$ref": "#/components/schemas/BackendDiagramRowBusinessElement"
+          },
+          {
+            "$ref": "#/components/schemas/BackendDiagramRowBusinessLink"
           }
         ],
         "discriminator": {
@@ -81244,7 +81258,8 @@
                   "enum": [
                     "architecture",
                     "interactions",
-                    "lifecycle"
+                    "lifecycle",
+                    "business_map"
                   ]
                 },
                 "pin": {
@@ -81297,7 +81312,8 @@
                   "enum": [
                     "architecture",
                     "interactions",
-                    "lifecycle"
+                    "lifecycle",
+                    "business_map"
                   ]
                 },
                 "version": {
@@ -82287,6 +82303,205 @@
           "document",
           "targetHash",
           "gaps"
+        ]
+      },
+      "BackendBusinessElement": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "label": {
+            "type": "string",
+            "maxLength": 256
+          },
+          "origin": {
+            "$ref": "#/components/schemas/BackendDiagramOrigin"
+          },
+          "refs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendDiagramRef"
+            },
+            "maxItems": 100
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "actor",
+              "command",
+              "business_event",
+              "policy",
+              "read_model",
+              "question"
+            ]
+          },
+          "responsibility": {
+            "type": "string",
+            "maxLength": 4096
+          },
+          "architectureElementId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "origin",
+          "refs",
+          "role",
+          "responsibility"
+        ]
+      },
+      "BackendBusinessLink": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "label": {
+            "type": "string",
+            "maxLength": 256
+          },
+          "origin": {
+            "$ref": "#/components/schemas/BackendDiagramOrigin"
+          },
+          "refs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendDiagramRef"
+            },
+            "maxItems": 100
+          },
+          "from": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "to": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "relation": {
+            "type": "string",
+            "enum": [
+              "initiates",
+              "produces",
+              "reacts_to",
+              "issues",
+              "updates",
+              "reads",
+              "questions"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "origin",
+          "refs",
+          "from",
+          "to",
+          "relation"
+        ]
+      },
+      "BackendBusinessMapPayload": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "architecture": {
+            "$ref": "#/components/schemas/BackendDiagramPin"
+          },
+          "elements": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendBusinessElement"
+            },
+            "maxItems": 1000
+          },
+          "links": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendBusinessLink"
+            },
+            "maxItems": 3000
+          }
+        },
+        "required": [
+          "elements",
+          "links"
+        ]
+      },
+      "BackendBusinessMapDocument": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "format": {
+            "type": "string",
+            "enum": [
+              "backend-diagram-v1"
+            ]
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "business_map"
+            ]
+          },
+          "target": {
+            "$ref": "#/components/schemas/BackendDiagramTarget"
+          },
+          "payload": {
+            "$ref": "#/components/schemas/BackendBusinessMapPayload"
+          }
+        },
+        "required": [
+          "format",
+          "kind",
+          "target",
+          "payload"
+        ]
+      },
+      "BackendDiagramRowBusinessElement": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "rowType": {
+            "type": "string",
+            "enum": [
+              "business_element"
+            ]
+          },
+          "data": {
+            "$ref": "#/components/schemas/BackendBusinessElement"
+          }
+        },
+        "required": [
+          "rowType",
+          "data"
+        ]
+      },
+      "BackendDiagramRowBusinessLink": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "rowType": {
+            "type": "string",
+            "enum": [
+              "business_link"
+            ]
+          },
+          "data": {
+            "$ref": "#/components/schemas/BackendBusinessLink"
+          }
+        },
+        "required": [
+          "rowType",
+          "data"
         ]
       }
     }
@@ -103167,7 +103382,8 @@
               "enum": [
                 "architecture",
                 "interactions",
-                "lifecycle"
+                "lifecycle",
+                "business_map"
               ]
             }
           },
@@ -104042,7 +104258,8 @@
               "enum": [
                 "architecture",
                 "interactions",
-                "lifecycle"
+                "lifecycle",
+                "business_map"
               ]
             }
           },

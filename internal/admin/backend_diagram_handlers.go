@@ -309,7 +309,7 @@ func diagramQueryFields(q url.Values, mode string, in *backendmodel.DiagramListI
 				return diagramAdmissionError()
 			}
 		case "kind":
-			if mode != "list" || (values[0] != "architecture" && values[0] != "interactions" && values[0] != "lifecycle") {
+			if mode != "list" || (values[0] != "architecture" && values[0] != "interactions" && values[0] != "lifecycle" && values[0] != "business_map") {
 				return diagramAdmissionError()
 			}
 			in.Kind = values[0]

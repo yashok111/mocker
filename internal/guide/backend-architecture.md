@@ -1,8 +1,8 @@
 # Exact C4 architecture mappings
 
-Negotiate inspect11 and `backend-diagrams`, `backend-architecture`,
+Negotiate inspect12 and `backend-diagrams`, `backend-architecture`,
 `backend-diagram-views`, `backend-diagram-v1` and `diagram-view-v1`. `architecture` and `interactions` are admitted. See `backend-interactions` for
-static behavior; lifecycle/business_map are not delivered capabilities. Source schemas1–6 and legacy saved-view-v1/v2 are unchanged.
+static behavior; lifecycle and business_map are admitted companion views. Source schemas1–6 and legacy saved-view-v1/v2 are unchanged.
 
 A diagram is an immutable companion to `{revisionId}` or
 `{changeProposal:{proposalId,proposalRevisionId}}`. Legacy DB proposals and

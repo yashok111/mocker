@@ -1,0 +1,185 @@
+{
+  "format": "backend-diagram-v1",
+  "kind": "business_map",
+  "target": {
+    "revisionId": "47000000-0000-4000-8000-000000000999"
+  },
+  "payload": {
+    "elements": [
+      {
+        "id": "47000000-0000-4000-8000-000000000001",
+        "label": "Customer",
+        "role": "actor",
+        "responsibility": "Orders",
+        "origin": {
+          "kind": "authored",
+          "reason": "Explicit Orders business intent; not inferred runtime behavior"
+        },
+        "refs": []
+      },
+      {
+        "id": "47000000-0000-4000-8000-000000000002",
+        "label": "PayOrder",
+        "role": "command",
+        "responsibility": "Orders",
+        "origin": {
+          "kind": "authored",
+          "reason": "Explicit Orders business intent; not inferred runtime behavior"
+        },
+        "refs": []
+      },
+      {
+        "id": "47000000-0000-4000-8000-000000000003",
+        "label": "OrderPaid",
+        "role": "business_event",
+        "responsibility": "Orders",
+        "origin": {
+          "kind": "authored",
+          "reason": "Explicit Orders business intent; not inferred runtime behavior"
+        },
+        "refs": []
+      },
+      {
+        "id": "47000000-0000-4000-8000-000000000004",
+        "label": "FulfilmentPolicy",
+        "role": "policy",
+        "responsibility": "Orders",
+        "origin": {
+          "kind": "authored",
+          "reason": "Explicit Orders business intent; not inferred runtime behavior"
+        },
+        "refs": []
+      },
+      {
+        "id": "47000000-0000-4000-8000-000000000005",
+        "label": "StartFulfilment",
+        "role": "command",
+        "responsibility": "Orders",
+        "origin": {
+          "kind": "authored",
+          "reason": "Explicit Orders business intent; not inferred runtime behavior"
+        },
+        "refs": []
+      },
+      {
+        "id": "47000000-0000-4000-8000-000000000006",
+        "label": "OrderReadModel",
+        "role": "read_model",
+        "responsibility": "Orders",
+        "origin": {
+          "kind": "authored",
+          "reason": "Explicit Orders business intent; not inferred runtime behavior"
+        },
+        "refs": []
+      },
+      {
+        "id": "47000000-0000-4000-8000-000000000007",
+        "label": "Delivery unknown",
+        "role": "business_event",
+        "responsibility": "Orders",
+        "origin": {
+          "kind": "authored",
+          "reason": "Explicit Orders business intent; not inferred runtime behavior"
+        },
+        "refs": []
+      },
+      {
+        "id": "47000000-0000-4000-8000-000000000008",
+        "label": "Who owns delivery?",
+        "role": "question",
+        "responsibility": "Orders",
+        "origin": {
+          "kind": "authored",
+          "reason": "Explicit Orders business intent; not inferred runtime behavior"
+        },
+        "refs": []
+      }
+    ],
+    "links": [
+      {
+        "id": "47000000-0000-4000-8000-000000000101",
+        "label": "initiates",
+        "origin": {
+          "kind": "authored",
+          "reason": "Explicit Orders business intent; not inferred runtime behavior"
+        },
+        "refs": [],
+        "from": "47000000-0000-4000-8000-000000000001",
+        "to": "47000000-0000-4000-8000-000000000002",
+        "relation": "initiates"
+      },
+      {
+        "id": "47000000-0000-4000-8000-000000000102",
+        "label": "produces",
+        "origin": {
+          "kind": "authored",
+          "reason": "Explicit Orders business intent; not inferred runtime behavior"
+        },
+        "refs": [],
+        "from": "47000000-0000-4000-8000-000000000002",
+        "to": "47000000-0000-4000-8000-000000000003",
+        "relation": "produces"
+      },
+      {
+        "id": "47000000-0000-4000-8000-000000000103",
+        "label": "reacts_to",
+        "origin": {
+          "kind": "authored",
+          "reason": "Explicit Orders business intent; not inferred runtime behavior"
+        },
+        "refs": [],
+        "from": "47000000-0000-4000-8000-000000000003",
+        "to": "47000000-0000-4000-8000-000000000004",
+        "relation": "reacts_to"
+      },
+      {
+        "id": "47000000-0000-4000-8000-000000000104",
+        "label": "issues",
+        "origin": {
+          "kind": "authored",
+          "reason": "Explicit Orders business intent; not inferred runtime behavior"
+        },
+        "refs": [],
+        "from": "47000000-0000-4000-8000-000000000004",
+        "to": "47000000-0000-4000-8000-000000000005",
+        "relation": "issues"
+      },
+      {
+        "id": "47000000-0000-4000-8000-000000000105",
+        "label": "updates",
+        "origin": {
+          "kind": "authored",
+          "reason": "Explicit Orders business intent; not inferred runtime behavior"
+        },
+        "refs": [],
+        "from": "47000000-0000-4000-8000-000000000003",
+        "to": "47000000-0000-4000-8000-000000000006",
+        "relation": "updates"
+      },
+      {
+        "id": "47000000-0000-4000-8000-000000000106",
+        "label": "reads",
+        "origin": {
+          "kind": "authored",
+          "reason": "Explicit Orders business intent; not inferred runtime behavior"
+        },
+        "refs": [],
+        "from": "47000000-0000-4000-8000-000000000001",
+        "to": "47000000-0000-4000-8000-000000000006",
+        "relation": "reads"
+      },
+      {
+        "id": "47000000-0000-4000-8000-000000000107",
+        "label": "questions",
+        "origin": {
+          "kind": "authored",
+          "reason": "Explicit Orders business intent; not inferred runtime behavior"
+        },
+        "refs": [],
+        "from": "47000000-0000-4000-8000-000000000008",
+        "to": "47000000-0000-4000-8000-000000000007",
+        "relation": "questions"
+      }
+    ]
+  }
+}

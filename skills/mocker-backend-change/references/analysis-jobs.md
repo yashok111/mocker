@@ -1,6 +1,6 @@
 # Durable static diff and impact jobs
 
-This topic belongs to change4. Verify its exact guideSetId/manifestHash/contentHash and all advertised owner requirements. `backend-analysis` remains inspect11's source inspection procedure; shared recovery remains import8-owned. Check capabilities.analysisSupport for supported kinds, targets, observation modes, document/rule/traversal versions before starting. Analysis reads stored graphs, claims, proof and pinned artifact documents. It never executes imported code, SQL, jobs, scripts or a broker.
+This topic belongs to change4. Verify its exact guideSetId/manifestHash/contentHash and all advertised owner requirements. `backend-analysis` remains inspect12's source inspection procedure; shared recovery remains import8-owned. Check capabilities.analysisSupport for supported kinds, targets, observation modes, document/rule/traversal versions before starting. Analysis reads stored graphs, claims, proof and pinned artifact documents. It never executes imported code, SQL, jobs, scripts or a broker.
 
 ## Start from immutable input
 

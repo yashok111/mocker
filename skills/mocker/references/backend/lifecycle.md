@@ -3,7 +3,7 @@
 Require `backend-lifecycle`, admitted `lifecycle`, `backend-diagram-v1` and
 `diagram-view-v1` from the selected inspect guide set. Existing States artifacts,
 source schemas1–6, Store22 and Flow/Database views retain their original formats.
-Business maps, B5 diagnostics/export/replay and B6 observation acceptance remain open.
+Business maps are available through shared diagram APIs. B5 diagnostics/export/replay and B6 observation acceptance remain open.
 
 Select an exact source `{revisionId}` or full
 `{changeProposal:{proposalId,proposalRevisionId}}` target. Read its entity and

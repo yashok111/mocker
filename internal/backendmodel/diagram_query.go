@@ -31,6 +31,8 @@ type DiagramMember struct {
 
 // Each row has exactly one typed data arm; no free-form response payloads.
 type DiagramRow struct {
+	BusinessElement     *BusinessElement
+	BusinessLink        *BusinessLink
 	State               *LifecycleState
 	Transition          *LifecycleTransition
 	Rule                *LifecycleRule
@@ -46,6 +48,16 @@ type DiagramRow struct {
 
 func (r DiagramRow) MarshalJSON() ([]byte, error) {
 	kind, data, count := marshalInteractionRow(r)
+	if r.BusinessElement != nil {
+		count++
+		kind = "business_element"
+		data = r.BusinessElement
+	}
+	if r.BusinessLink != nil {
+		count++
+		kind = "business_link"
+		data = r.BusinessLink
+	}
 	if r.State != nil {
 		count++
 		kind = "state"
@@ -137,6 +149,9 @@ func (r *Repo) QueryDiagram(ctx context.Context, pid string, in DiagramQueryInpu
 	v, err := r.GetDiagram(ctx, pid, in.Pin)
 	if err != nil {
 		return nil, err
+	}
+	if v.Document.Kind == "business_map" {
+		return ProjectBusinessMap(ctx, v, in)
 	}
 	if v.Document.Kind == "lifecycle" {
 		return ProjectLifecycle(ctx, v, in)

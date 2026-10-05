@@ -5,6 +5,7 @@ import type {
   BackendChangeProposalCommand,
   BackendChangeCriterion,
   BackendEffectiveIdentity,
+  BackendDiagramRef,
 } from "@/api/generated/schemas";
 import { backendChangeSchemas } from "./backendChangeSchema";
 import { BackendChangeSchemaField, ChangeSchemaProfileContext } from "./BackendChangeSchemaField";
@@ -80,6 +81,7 @@ export function BackendChangeCommandForms({
   onCancel,
   onDirtyChange,
   criteria = [],
+  implementationRefs = [],
 }: {
   baseSchemaVersion: "5" | "6";
   initial?: BackendChangeProposalCommand;
@@ -88,6 +90,7 @@ export function BackendChangeCommandForms({
   onCancel?: () => void;
   onDirtyChange?: (dirty: boolean) => void;
   criteria?: BackendChangeCriterion[];
+  implementationRefs?: BackendDiagramRef[];
 }) {
   const [type, setType] = useState<BackendChangeProposalCommand["type"]>(initial?.type ?? "rename");
   const [value, setValue] = useState<ChangeObject>(() =>
@@ -147,6 +150,37 @@ export function BackendChangeCommandForms({
   };
   return (
     <Stack gap="sm">
+      {implementationRefs.length > 0 && (
+        <Stack aria-label="Точные соответствия бизнес-карты">
+          <Text>
+            Выберите основание для явной команды. Preview и применение выполняются отдельно.
+          </Text>
+          {implementationRefs.map((ref, index) => (
+            <Stack key={index} gap="xs">
+              <Text size="xs" style={{ overflowWrap: "anywhere" }}>
+                {JSON.stringify(ref)}
+              </Text>
+              {ref.kind === "record" && (
+                <Button
+                  variant="default"
+                  disabled={ref.recordType !== "node" || type !== "rename"}
+                  onClick={() => {
+                    onDirtyChange?.(true);
+                    setValue((previous) => ({
+                      ...previous,
+                      id: ref.id,
+                      recordType: ref.recordType,
+                    }));
+                    setError("");
+                  }}
+                >
+                  Использовать точный узел {index + 1} для переименования
+                </Button>
+              )}
+            </Stack>
+          ))}
+        </Stack>
+      )}
       <NativeSelect
         label="Команда изменения"
         value={type}

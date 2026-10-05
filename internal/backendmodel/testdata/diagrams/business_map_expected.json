@@ -1,0 +1,16 @@
+{
+  "eventId": "47000000-0000-4000-8000-000000000003",
+  "questionId": "47000000-0000-4000-8000-000000000008",
+  "elements": 8,
+  "links": 7,
+  "eventCount": 2,
+  "relations": [
+    "initiates",
+    "produces",
+    "reacts_to",
+    "issues",
+    "updates",
+    "reads",
+    "questions"
+  ]
+}

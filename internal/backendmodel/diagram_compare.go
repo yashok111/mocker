@@ -56,6 +56,19 @@ func (r *Repo) CompareDiagrams(ctx context.Context, pid string, in DiagramCompar
 		return nil, err
 	}
 	metadataID := ""
+	if before.Document.Kind == "business_map" {
+		occupied := businessMapRows(before.Document.BusinessMap)
+		for id, v := range businessMapRows(after.Document.BusinessMap) {
+			occupied[id] = v
+		}
+		for salt := 0; salt <= len(occupied); salt++ {
+			id := diagramIdentity("business-map-metadata-v1", strconv.Itoa(salt))
+			if _, ok := occupied[id]; !ok {
+				metadataID = id
+				break
+			}
+		}
+	}
 	if before.Document.Kind == "lifecycle" {
 		metadataID = lifecycleComparisonMetadataID(before.Document.Lifecycle, after.Document.Lifecycle)
 	}
@@ -110,6 +123,22 @@ func diagramComparisonRows(ctx context.Context, v *DiagramVersion, g *EffectiveG
 		}
 		rows[id] = fields
 		return nil
+	}
+	if v.Document.BusinessMap != nil {
+		for id, value := range businessMapRows(v.Document.BusinessMap) {
+			if err := add(id, value); err != nil {
+				return nil, err
+			}
+		}
+		if !ValidID(metadataID) {
+			return nil, invalid("comparison", "Exact free metadata identity required")
+		}
+		dependency, err := canonicalJSON(v.Document.BusinessMap.Architecture)
+		if err != nil {
+			return nil, err
+		}
+		rows[metadataID] = map[string]jsontext.Value{"architecture": dependency}
+		return rows, nil
 	}
 	if v.Document.Interactions != nil {
 		for id, value := range interactionRows(v.Document.Interactions) {

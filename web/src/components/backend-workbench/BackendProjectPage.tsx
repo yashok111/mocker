@@ -1,3 +1,4 @@
+import { BackendDiagramChangeProvider } from "./BackendDiagramChangeContext";
 import { BackendArchitecture } from "./BackendArchitecture";
 import { BackendWorkspaceNavigation } from "./BackendWorkspaceNavigation";
 import { parseBackendSourcePin } from "./backendFlowReads";
@@ -137,35 +138,37 @@ export function BackendProjectPage(props: ProjectPageProps) {
     withResolver: false,
   });
   return (
-    <BackendAnalysisRecoveryProvider key={props.projectId} projectId={props.projectId}>
-      <BackendAnalysisRecoveryNotice projectId={props.projectId} />
-      <BackendLegacyRecoveryNotice projectId={props.projectId} />
-      <BackendWorkspaceNavigation />
-      {backPins.length > 0 && (
-        <Button
-          variant="subtle"
-          disabled={diagramDirty}
-          onClick={() => {
-            const pin = backPins.at(-1)!;
-            setBackPins((previous) => previous.slice(0, -1));
-            props.onSourceNavigate?.(pin);
-          }}
-        >
-          Назад к точному виду
-        </Button>
-      )}
-      <BackendArchitecture
-        projectId={props.projectId}
-        search={props.sourcePin ?? {}}
-        onNavigate={navigateDiagram}
-        onDetailedNavigate={navigateDiagram}
-        onDirty={onDiagramDirty}
-        onTargetResolved={onTargetResolved}
-      />
-      <div hidden={diagramSelected && !target}>
-        <BackendProjectGate {...props} sourcePin={legacyPin} />
-      </div>
-    </BackendAnalysisRecoveryProvider>
+    <BackendDiagramChangeProvider key={props.projectId}>
+      <BackendAnalysisRecoveryProvider key={props.projectId} projectId={props.projectId}>
+        <BackendAnalysisRecoveryNotice projectId={props.projectId} />
+        <BackendLegacyRecoveryNotice projectId={props.projectId} />
+        <BackendWorkspaceNavigation />
+        {backPins.length > 0 && (
+          <Button
+            variant="subtle"
+            disabled={diagramDirty}
+            onClick={() => {
+              const pin = backPins.at(-1)!;
+              setBackPins((previous) => previous.slice(0, -1));
+              props.onSourceNavigate?.(pin);
+            }}
+          >
+            Назад к точному виду
+          </Button>
+        )}
+        <BackendArchitecture
+          projectId={props.projectId}
+          search={props.sourcePin ?? {}}
+          onNavigate={navigateDiagram}
+          onDetailedNavigate={navigateDiagram}
+          onDirty={onDiagramDirty}
+          onTargetResolved={onTargetResolved}
+        />
+        <div hidden={diagramSelected && !target}>
+          <BackendProjectGate {...props} sourcePin={legacyPin} />
+        </div>
+      </BackendAnalysisRecoveryProvider>
+    </BackendDiagramChangeProvider>
   );
 }
 function BackendProjectGate(props: ProjectPageProps) {
