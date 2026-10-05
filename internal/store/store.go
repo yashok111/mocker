@@ -105,7 +105,10 @@ func dsn(path string, writer bool) string {
 	if writer {
 		q.Set("_txlock", "immediate")
 	}
-	return "file:" + path + "?" + q.Encode()
+	// Paths may contain URI delimiters (including testing subtest names).
+	// Encode them so distinct files never collapse onto one database.
+	file := &url.URL{Path: filepath.ToSlash(path)}
+	return "file:" + file.EscapedPath() + "?" + q.Encode()
 }
 
 // Close shuts both pools down.
