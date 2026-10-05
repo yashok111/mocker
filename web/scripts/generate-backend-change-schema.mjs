@@ -19,6 +19,8 @@ const roots = [
   "ApplyBackendChangeProposalLifecycleRequest",
   "BackendAnalysisJobDetail",
   "BackendAnalysisResultPage",
+  "BackendChangeProposalApplyResult",
+  "BackendChangeProposalLifecycleEventV1",
 ];
 const definitions = {};
 function include(name) {

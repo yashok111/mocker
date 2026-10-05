@@ -130,7 +130,7 @@ func TestGlobalGuideSetHasOneOwnerForEveryServedTopic(t *testing.T) {
 		"overview": "mocker-routing", "tools": "mocker-routing", "shapes": "mocker-routing",
 		"cookbook": "mocker-routing", "http": "mocker-routing", "design": "mocker-routing", "functions": "mocker-routing",
 		"backend-overview": "mocker-backend-project", "backend-annotations": "mocker-backend-project",
-		"backend-change-rebase": "mocker-backend-change", "backend-analysis-jobs": "mocker-backend-change",
+		"backend-change-rebase": "mocker-backend-change", "backend-analysis-jobs": "mocker-backend-change", "backend-change-handoff": "mocker-backend-change", "backend-endpoint-review": "mocker-backend-change",
 		"backend-sync": "mocker-backend-sync", "backend-change-proposals": "mocker-backend-change",
 		"backend-import": "mocker-backend-import", "backend-model": "mocker-backend-import",
 		"backend-import-protocol": "mocker-backend-import", "backend-recovery": "mocker-backend-import",

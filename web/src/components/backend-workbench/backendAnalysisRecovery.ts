@@ -43,19 +43,27 @@ const schemas = {
   cancel: "CancelBackendAnalysisRequest",
   rebase: "ApplyBackendChangeProposalRebaseRequest",
   ready: "ApplyBackendChangeProposalLifecycleRequest",
+  implemented: "ApplyBackendChangeProposalLifecycleRequest",
+  archive: "ApplyBackendChangeProposalLifecycleRequest",
+  unarchive: "ApplyBackendChangeProposalLifecycleRequest",
 } as const;
 type Inputs = {
   start: StartBackendAnalysisRequest;
   retry: RetryBackendAnalysisRequest;
   cancel: CancelBackendAnalysisRequest;
   rebase: ApplyBackendChangeProposalRebaseRequest;
-  ready: ApplyBackendChangeProposalLifecycleRequest;
+  ready: Extract<ApplyBackendChangeProposalLifecycleRequest, { action: "ready" }>;
+  implemented: Extract<ApplyBackendChangeProposalLifecycleRequest, { action: "implemented" }>;
+  archive: Extract<ApplyBackendChangeProposalLifecycleRequest, { action: "archive" }>;
+  unarchive: Extract<ApplyBackendChangeProposalLifecycleRequest, { action: "unarchive" }>;
 };
 export type AnalysisOwner = { projectId: string; proposalId?: string; jobId?: string };
 export type AnalysisAcceptance = {
   jobId?: string;
   analysisInputHash?: string;
   draftHash?: string;
+  resultSemanticHash?: string;
+  associationHash?: string;
   oldRevisionId?: string;
   newBaseSemanticHash?: string;
   sourceVectorHash?: string;
@@ -83,6 +91,12 @@ export function makeAnalysisAttempt<K extends keyof Inputs>(
   acceptance: AnalysisAcceptance = {},
 ): Extract<AnalysisAttempt, { kind: K }> {
   if (!owner || typeof owner !== "object") throw new Error("Нет владельца запроса");
+  if (!(kind in schemas)) throw new Error("Неизвестная операция");
+  if (
+    ["ready", "implemented", "archive", "unarchive"].includes(kind) &&
+    (!("action" in input) || input.action !== kind)
+  )
+    throw new Error("Операция не соответствует тегу восстановления");
   const body = JSON.stringify(input);
   const copy = parseBrowserSafeJson(body);
   if (
@@ -93,16 +107,20 @@ export function makeAnalysisAttempt<K extends keyof Inputs>(
   if (
     (kind === "start" && (owner.jobId || owner.proposalId)) ||
     ((kind === "retry" || kind === "cancel") && owner.proposalId) ||
-    ((kind === "rebase" || kind === "ready") && owner.jobId) ||
+    (["rebase", "ready", "implemented", "archive", "unarchive"].includes(kind) && owner.jobId) ||
     !uuid.test(owner.projectId) ||
     Object.keys(owner).some((k) => !["projectId", "proposalId", "jobId"].includes(k)) ||
     ((kind === "retry" || kind === "cancel") && (!owner.jobId || !uuid.test(owner.jobId))) ||
-    ((kind === "ready" || kind === "rebase") && (!owner.proposalId || !uuid.test(owner.proposalId)))
+    (["ready", "rebase", "implemented", "archive", "unarchive"].includes(kind) &&
+      (!owner.proposalId || !uuid.test(owner.proposalId)))
   )
     throw new Error("Восстановление требует точного владельца запроса.");
   const hash = (v: unknown) => typeof v === "string" && /^[a-f0-9]{64}$/.test(v);
   if (
-    (kind === "ready" && !hash(acceptance.draftHash)) ||
+    (["ready", "implemented", "archive", "unarchive"].includes(kind) &&
+      !hash(acceptance.draftHash)) ||
+    (kind === "implemented" && !hash(acceptance.resultSemanticHash)) ||
+    (kind === "archive" && !hash(acceptance.associationHash)) ||
     (kind === "rebase" &&
       (!hash(acceptance.newBaseSemanticHash) ||
         !hash(acceptance.sourceVectorHash) ||
@@ -152,6 +170,8 @@ function decode(raw: string, key: string): AnalysisAttempt {
           "jobId",
           "analysisInputHash",
           "draftHash",
+          "resultSemanticHash",
+          "associationHash",
           "oldRevisionId",
           "newBaseSemanticHash",
           "sourceVectorHash",
@@ -167,6 +187,8 @@ function decode(raw: string, key: string): AnalysisAttempt {
       ([k, v]) =>
         [
           "draftHash",
+          "resultSemanticHash",
+          "associationHash",
           "newBaseSemanticHash",
           "candidateSemanticHash",
           "sourceVectorHash",
@@ -287,6 +309,68 @@ export async function verifyAnalysisMutation(attempt: AnalysisAttempt, result: u
       throw new Error("Ответ относится к другому заданию.");
     return;
   }
+  if (
+    attempt.kind === "implemented" ||
+    attempt.kind === "archive" ||
+    attempt.kind === "unarchive"
+  ) {
+    const d = result as BackendChangeProposalApplyResult;
+    const status =
+      attempt.kind === "archive"
+        ? "archived"
+        : attempt.kind === "unarchive"
+          ? "draft"
+          : "implemented";
+    if (
+      !d?.proposal ||
+      !d.revision ||
+      d.proposal.projectId !== attempt.owner.projectId ||
+      d.proposal.id !== attempt.owner.proposalId ||
+      d.revision.proposalId !== attempt.owner.proposalId ||
+      d.revision.id !== attempt.input.proposalRevisionId ||
+      d.revision.semanticHash !== attempt.acceptance.draftHash ||
+      d.proposal.currentDraftRevisionId !== d.revision.id ||
+      d.proposal.currentDraftHash !== d.revision.semanticHash ||
+      !Number.isSafeInteger(d.proposal.version) ||
+      d.proposal.version !== attempt.input.expectedVersion + 1 ||
+      d.proposal.status !== status
+    )
+      throw new Error("Переход не подтвердил владельца, точный черновик, версию и статус.");
+    if (
+      attempt.kind === "archive" &&
+      (await hashBackendJSON({
+        readyReference: d.proposal.readyReference ?? null,
+        implementedReference: d.proposal.implementedReference ?? null,
+      })) !== attempt.acceptance.associationHash
+    )
+      throw new Error("Архив не сохранил точные ассоциации.");
+    if (
+      attempt.kind === "unarchive" &&
+      (d.proposal.readyReference || d.proposal.implementedReference)
+    )
+      throw new Error("Возврат в черновик не очистил активные ассоциации.");
+    if (attempt.kind === "implemented") {
+      const ref = d.proposal.implementedReference;
+      // The server sorts associations; compare canonically without changing the persisted replay body.
+      const normalize = (values: Inputs["implemented"]["exceptions"]) =>
+        [...values].sort((a, b) =>
+          a.criterionKey < b.criterionKey ? -1 : a.criterionKey > b.criterionKey ? 1 : 0,
+        );
+      if (
+        !ref ||
+        ref.proposalRevisionId !== d.revision.id ||
+        ref.draftHash !== attempt.acceptance.draftHash ||
+        ref.resultRevisionId !== attempt.input.resultRevisionId ||
+        ref.resultSemanticHash !== attempt.acceptance.resultSemanticHash ||
+        ref.behaviorStatus !== "unverified" ||
+        (await hashBackendJSON(ref.report)) !== (await hashBackendJSON(attempt.input.report)) ||
+        (await hashBackendJSON(normalize(ref.exceptions))) !==
+          (await hashBackendJSON(normalize(attempt.input.exceptions)))
+      )
+        throw new Error("Реализация не подтвердила отчёт, источник и точные исключения.");
+    }
+    return;
+  }
   if (attempt.kind === "ready") {
     const d = result as BackendChangeProposalApplyResult;
     if (
@@ -352,6 +436,9 @@ async function send(attempt: AnalysisAttempt) {
       if (r.status !== 200) throw new Error("Rebase не подтверждён");
       return r.data;
     }
+    case "implemented":
+    case "archive":
+    case "unarchive":
     case "ready": {
       const r = await applyBackendChangeProposalLifecycle(projectId, proposalId!, attempt.input);
       if (r.status !== 200) throw new Error("Ready не подтверждён");

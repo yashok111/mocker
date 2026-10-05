@@ -41,14 +41,17 @@ type AnalysisTarget struct {
 	CommandPreview *CommandPreviewTarget            `json:"commandPreview,omitzero"`
 }
 type StartInput struct {
-	Kind            string           `json:"kind"`
-	FromRevisionID  string           `json:"fromRevisionId"`
-	Target          AnalysisTarget   `json:"target"`
-	Scope           Scope            `json:"scope"`
-	Limits          Limits           `json:"limits"`
-	ObservationMode string           `json:"observationMode"`
-	ObservationPins []jsontext.Value `json:"observationPins"`
-	IdempotencyKey  string           `json:"idempotencyKey"`
+	Package         *StartPackageInput        `json:"-"`
+	Conformance     *StartConformanceInput    `json:"-"`
+	EndpointReview  *StartEndpointReviewInput `json:"-"`
+	Kind            string                    `json:"kind"`
+	FromRevisionID  string                    `json:"fromRevisionId"`
+	Target          AnalysisTarget            `json:"target"`
+	Scope           Scope                     `json:"scope"`
+	Limits          Limits                    `json:"limits"`
+	ObservationMode string                    `json:"observationMode"`
+	ObservationPins []jsontext.Value          `json:"observationPins"`
+	IdempotencyKey  string                    `json:"idempotencyKey"`
 }
 type CancelInput struct {
 	IdempotencyKey string `json:"idempotencyKey"`
@@ -57,6 +60,7 @@ type RetryInput struct {
 	IdempotencyKey string `json:"idempotencyKey"`
 }
 type ImmutableInput struct {
+	V2               *ImmutableInputV2                 `json:"-"`
 	DocumentVersion  string                            `json:"documentVersion"`
 	Kind             string                            `json:"kind"`
 	ProjectID        string                            `json:"projectId"`

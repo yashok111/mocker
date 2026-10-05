@@ -192,6 +192,20 @@
       "source": "references/analysis-jobs.md",
       "embedded": "backend-analysis-jobs.md",
       "workflowId": "mocker-backend-change"
+    },
+    {
+      "topic": "backend-change-handoff",
+      "package": "mocker-backend-change",
+      "source": "references/handoff.md",
+      "embedded": "backend-change-handoff.md",
+      "workflowId": "mocker-backend-change"
+    },
+    {
+      "topic": "backend-endpoint-review",
+      "package": "mocker-backend-change",
+      "source": "references/endpoint-review.md",
+      "embedded": "backend-endpoint-review.md",
+      "workflowId": "mocker-backend-change"
     }
   ],
   "workflows": [
@@ -286,7 +300,7 @@
     },
     {
       "workflowId": "mocker-backend-inspect",
-      "workflowVersion": "7",
+      "workflowVersion": "8",
       "entrypoint": "backend-inspect",
       "requiredModelSchemaVersions": [
         "3",
@@ -349,7 +363,7 @@
     },
     {
       "workflowId": "mocker-backend-change",
-      "workflowVersion": "2",
+      "workflowVersion": "3",
       "entrypoint": "backend-change-proposals",
       "requiredModelSchemaVersions": [
         "5",
@@ -370,7 +384,13 @@
         "backend-analysis-diff",
         "backend-analysis-impact",
         "backend-change-rebase",
-        "backend-change-ready"
+        "backend-change-ready",
+        "backend-change-package",
+        "backend-conformance",
+        "backend-endpoint-review",
+        "backend-change-implemented",
+        "backend-change-archive",
+        "backend-change-unarchive"
       ]
     }
   ]

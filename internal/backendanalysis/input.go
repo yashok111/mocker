@@ -108,6 +108,15 @@ func (in *StartInput) UnmarshalJSON(raw []byte) error {
 	if len(raw) > maxInputBytes {
 		return fault(413, "input_limit", "Input exceeds 2 MiB")
 	}
+	var discriminator struct {
+		Kind string `json:"kind"`
+	}
+	if err := json.Unmarshal(raw, &discriminator); err != nil {
+		return malformed(err.Error())
+	}
+	if b43Kind(discriminator.Kind) {
+		return in.unmarshalB43(raw, discriminator.Kind)
+	}
 	if _, err := closed(raw, []string{"kind", "fromRevisionId", "target", "scope", "limits", "observationMode", "idempotencyKey"}, []string{"observationPins"}); err != nil {
 		return err
 	}
@@ -296,6 +305,9 @@ func decodePins(p persistedPins) (backendmodel.EffectiveGraphPins, error) {
 	return out, nil
 }
 func (in ImmutableInput) MarshalJSON() ([]byte, error) {
+	if in.V2 != nil {
+		return json.Marshal(in.V2, json.Deterministic(true))
+	}
 	type plain ImmutableInput
 	before, err := encodePins(in.BeforePins)
 	if err != nil {
@@ -312,6 +324,20 @@ func (in ImmutableInput) MarshalJSON() ([]byte, error) {
 	}{(*plain)(&in), before, after}, json.Deterministic(true))
 }
 func (in *ImmutableInput) UnmarshalJSON(raw []byte) error {
+	var version struct {
+		DocumentVersion string `json:"documentVersion"`
+	}
+	if err := json.Unmarshal(raw, &version); err != nil {
+		return err
+	}
+	if version.DocumentVersion == "backend-analysis-input/v2" {
+		var v ImmutableInputV2
+		if err := json.Unmarshal(raw, &v); err != nil {
+			return err
+		}
+		*in = ImmutableInput{V2: &v, DocumentVersion: v.DocumentVersion, Kind: v.Kind, ProjectID: v.ProjectID, Limits: v.Limits, RuleSetVersion: v.RuleSetVersion, TraversalVersion: v.TraversalVersion, ObservationMode: v.ObservationMode, Scope: normalizedScope(Scope{})}
+		return nil
+	}
 	type plain ImmutableInput
 	var next ImmutableInput
 	wire := struct {

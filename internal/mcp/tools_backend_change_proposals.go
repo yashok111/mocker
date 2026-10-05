@@ -49,7 +49,7 @@ func addBackendChangeProposalTools(s *sdk.Server, lb *loopback) {
 				required = append(required, "proposalId")
 			} else {
 				fields["baseRevisionId"] = id
-				fields["status"] = map[string]any{"type": "string", "enum": []string{"draft", "ready"}}
+				fields["status"] = map[string]any{"type": "string", "enum": []string{"draft", "ready", "implemented", "archived"}}
 			}
 			schema = designScenarioSchemaObject(required, fields)
 		}

@@ -25,7 +25,11 @@ func TestB42GuideOwnership(t *testing.T) {
 	}
 	for _, topic := range []string{"backend-sync", "backend-change-proposals"} {
 		owner, _ := WorkflowForTopic(topic)
-		if owner.WorkflowVersion != "2" || !slices.Contains(owner.RequiredCapabilities, "backend-analysis-jobs") {
+		wantVersion := "2"
+		if topic == "backend-change-proposals" {
+			wantVersion = "3"
+		}
+		if owner.WorkflowVersion != wantVersion || !slices.Contains(owner.RequiredCapabilities, "backend-analysis-jobs") {
 			t.Errorf("%s does not negotiate B4.2: %+v", topic, owner)
 		}
 	}
@@ -58,7 +62,7 @@ func TestB42ChangeReferencesArePortable(t *testing.T) {
 					t.Errorf("unresolvable installed reference %s: %v", target, err)
 				}
 			}
-			for topic, local := range map[string]string{"backend-change-rebase": "references/rebase.md", "backend-analysis-jobs": "references/analysis-jobs.md"} {
+			for topic, local := range map[string]string{"backend-change-rebase": "references/rebase.md", "backend-analysis-jobs": "references/analysis-jobs.md", "backend-change-handoff": "references/handoff.md", "backend-endpoint-review": "references/endpoint-review.md"} {
 				call := `get_guide {topic:"` + topic + `",guideSetId:selected.guideSetId}`
 				if !strings.Contains(text, call) {
 					t.Errorf("%s has no exact pinned fallback for %s", mode.pkg, topic)

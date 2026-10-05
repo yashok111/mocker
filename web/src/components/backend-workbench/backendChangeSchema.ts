@@ -104,6 +104,37 @@ export const backendChangeSchemas: Record<string, ChangeSchema> = {
       },
     ],
   },
+  ApplyBackendChangeProposalArchiveRequest: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      action: {
+        type: "string",
+        const: "archive",
+      },
+      expectedVersion: {
+        type: "integer",
+        format: "int64",
+        minimum: 1,
+        maximum: 9223372036854776000,
+      },
+      proposalRevisionId: {
+        type: "string",
+        format: "uuid",
+        pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+        not: {
+          const: "00000000-0000-0000-0000-000000000000",
+        },
+      },
+      idempotencyKey: {
+        type: "string",
+        minLength: 1,
+        maxLength: 128,
+        pattern: "^[!-~]+$",
+      },
+    },
+    required: ["action", "expectedVersion", "proposalRevisionId", "idempotencyKey"],
+  },
   ApplyBackendChangeProposalCommandsRequest: {
     type: "object",
     additionalProperties: false,
@@ -149,7 +180,83 @@ export const backendChangeSchemas: Record<string, ChangeSchema> = {
       "idempotencyKey",
     ],
   },
+  ApplyBackendChangeProposalImplementedRequest: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      action: {
+        type: "string",
+        const: "implemented",
+      },
+      expectedVersion: {
+        type: "integer",
+        format: "int64",
+        minimum: 1,
+        maximum: 9223372036854776000,
+      },
+      proposalRevisionId: {
+        type: "string",
+        format: "uuid",
+        pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+        not: {
+          const: "00000000-0000-0000-0000-000000000000",
+        },
+      },
+      idempotencyKey: {
+        type: "string",
+        minLength: 1,
+        maxLength: 128,
+        pattern: "^[!-~]+$",
+      },
+      report: {
+        $ref: "#/components/schemas/BackendAnalysisReportRef",
+      },
+      resultRevisionId: {
+        type: "string",
+        format: "uuid",
+        pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+        not: {
+          const: "00000000-0000-0000-0000-000000000000",
+        },
+      },
+      exceptions: {
+        type: "array",
+        items: {
+          $ref: "#/components/schemas/BackendChangeProposalException",
+        },
+        maxItems: 100,
+        uniqueItems: true,
+        description: "Unique saved criterion keys. Exceptions never bypass required outcomes.",
+      },
+    },
+    required: [
+      "action",
+      "expectedVersion",
+      "proposalRevisionId",
+      "idempotencyKey",
+      "report",
+      "resultRevisionId",
+      "exceptions",
+    ],
+  },
   ApplyBackendChangeProposalLifecycleRequest: {
+    oneOf: [
+      {
+        $ref: "#/components/schemas/ApplyBackendChangeProposalReadyRequest",
+      },
+      {
+        $ref: "#/components/schemas/ApplyBackendChangeProposalImplementedRequest",
+      },
+      {
+        $ref: "#/components/schemas/ApplyBackendChangeProposalArchiveRequest",
+      },
+      {
+        $ref: "#/components/schemas/ApplyBackendChangeProposalUnarchiveRequest",
+      },
+    ],
+    type: "object",
+  },
+  ApplyBackendChangeProposalReadyRequest: {
     type: "object",
     additionalProperties: false,
     properties: {
@@ -264,6 +371,37 @@ export const backendChangeSchemas: Record<string, ChangeSchema> = {
       "candidateHash",
       "idempotencyKey",
     ],
+  },
+  ApplyBackendChangeProposalUnarchiveRequest: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      action: {
+        type: "string",
+        const: "unarchive",
+      },
+      expectedVersion: {
+        type: "integer",
+        format: "int64",
+        minimum: 1,
+        maximum: 9223372036854776000,
+      },
+      proposalRevisionId: {
+        type: "string",
+        format: "uuid",
+        pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+        not: {
+          const: "00000000-0000-0000-0000-000000000000",
+        },
+      },
+      idempotencyKey: {
+        type: "string",
+        minLength: 1,
+        maxLength: 128,
+        pattern: "^[!-~]+$",
+      },
+    },
+    required: ["action", "expectedVersion", "proposalRevisionId", "idempotencyKey"],
   },
   ArtifactAPIOperationData: {
     type: "object",
@@ -1062,6 +1200,294 @@ export const backendChangeSchemas: Record<string, ChangeSchema> = {
     },
     required: ["changeProposal", "expectedVersion", "commands", "candidateHash"],
   },
+  BackendAnalysisConformanceContextV2: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      documentVersion: {
+        type: "string",
+        const: "backend-analysis-context-v2",
+      },
+      kind: {
+        type: "string",
+        const: "conformance",
+      },
+      payload: {
+        $ref: "#/components/schemas/BackendAnalysisConformancePayload",
+      },
+      limits: {
+        $ref: "#/components/schemas/BackendAnalysisLimits",
+      },
+      ruleSetVersion: {
+        type: "string",
+        const: "b43-rules/v1",
+      },
+      traversalVersion: {
+        type: "string",
+        const: "b42-traversal/v1",
+      },
+      observationMode: {
+        type: "string",
+        const: "none",
+      },
+    },
+    required: [
+      "documentVersion",
+      "kind",
+      "payload",
+      "limits",
+      "ruleSetVersion",
+      "traversalVersion",
+      "observationMode",
+    ],
+  },
+  BackendAnalysisConformanceCriterionDetail: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      documentVersion: {
+        type: "string",
+        const: "backend-b43-result-v1",
+      },
+      type: {
+        type: "string",
+        const: "conformance_criterion",
+      },
+      criterionKey: {
+        type: "string",
+        minLength: 1,
+        maxLength: 200,
+      },
+      criterionKind: {
+        type: "string",
+        enum: [
+          "object_exists",
+          "object_absent",
+          "edge_exists",
+          "field_equals",
+          "artifact_object_matches",
+          "test_attachment",
+          "runtime_check",
+        ],
+      },
+      required: {
+        type: "boolean",
+      },
+      outcome: {
+        type: "string",
+        enum: ["satisfied", "violated", "unverified"],
+      },
+      reason: {
+        type: "string",
+        minLength: 1,
+        maxLength: 4096,
+        pattern: "\\S",
+        description: "Nonblank UTF-8 text, at most 4096 encoded bytes (server enforced).",
+      },
+      basis: {
+        type: "array",
+        items: {
+          $ref: "#/components/schemas/BackendAnalysisProofReference",
+        },
+      },
+      proposalObject: {
+        oneOf: [
+          {
+            $ref: "#/components/schemas/BackendAnalysisResultAddress",
+          },
+          {
+            type: "null",
+          },
+        ],
+      },
+      sourceObject: {
+        oneOf: [
+          {
+            $ref: "#/components/schemas/BackendAnalysisResultAddress",
+          },
+          {
+            type: "null",
+          },
+        ],
+      },
+      deletionBasis: {
+        type: "array",
+        items: {
+          $ref: "#/components/schemas/BackendAnalysisDeletionProof",
+        },
+      },
+    },
+    required: [
+      "documentVersion",
+      "type",
+      "criterionKey",
+      "criterionKind",
+      "required",
+      "outcome",
+      "reason",
+      "basis",
+      "proposalObject",
+      "sourceObject",
+      "deletionBasis",
+    ],
+  },
+  BackendAnalysisConformancePayload: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      changeProposal: {
+        $ref: "#/components/schemas/BackendProposalReadTarget",
+      },
+      baseRevisionId: {
+        type: "string",
+        format: "uuid",
+        pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+        not: {
+          const: "00000000-0000-0000-0000-000000000000",
+        },
+      },
+      basePins: {
+        $ref: "#/components/schemas/BackendEffectiveGraphPins",
+      },
+      draftPins: {
+        $ref: "#/components/schemas/BackendEffectiveGraphPins",
+      },
+      baseSource: {
+        $ref: "#/components/schemas/BackendAnalysisSourcePins",
+      },
+      draftSource: {
+        $ref: "#/components/schemas/BackendAnalysisSourcePins",
+      },
+      evidencePins: {
+        type: "array",
+        items: {
+          $ref: "#/components/schemas/BackendAnalysisEvidenceDocumentPin",
+        },
+        uniqueItems: true,
+      },
+      resultRevisionId: {
+        type: "string",
+        format: "uuid",
+        pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+        not: {
+          const: "00000000-0000-0000-0000-000000000000",
+        },
+      },
+      resultPins: {
+        $ref: "#/components/schemas/BackendEffectiveGraphPins",
+      },
+      resultSource: {
+        $ref: "#/components/schemas/BackendAnalysisSourcePins",
+      },
+      identityMap: {
+        type: "array",
+        items: {
+          $ref: "#/components/schemas/BackendAnalysisIdentityMapEntry",
+        },
+        maxItems: 10000,
+        uniqueItems: true,
+        description:
+          "One-to-one proposalNodeId/sourceNodeId; server rejects duplicate IDs in either column.",
+      },
+      testAttachments: {
+        type: "array",
+        items: {
+          $ref: "#/components/schemas/BackendAnalysisCriterionAttachment",
+        },
+        maxItems: 100,
+        uniqueItems: true,
+        description: "Unique criterionKey entries in the exact saved draft.",
+      },
+    },
+    required: [
+      "changeProposal",
+      "baseRevisionId",
+      "basePins",
+      "draftPins",
+      "baseSource",
+      "draftSource",
+      "evidencePins",
+      "resultRevisionId",
+      "resultPins",
+      "resultSource",
+      "identityMap",
+      "testAttachments",
+    ],
+  },
+  BackendAnalysisConformanceSummaryDetail: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      documentVersion: {
+        type: "string",
+        const: "backend-b43-result-v1",
+      },
+      type: {
+        type: "string",
+        const: "conformance_summary",
+      },
+      changeProposal: {
+        $ref: "#/components/schemas/BackendProposalReadTarget",
+      },
+      draftHash: {
+        type: "string",
+        pattern: "^[a-f0-9]{64}$",
+      },
+      resultRevisionId: {
+        type: "string",
+        format: "uuid",
+        pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+        not: {
+          const: "00000000-0000-0000-0000-000000000000",
+        },
+      },
+      resultSemanticHash: {
+        type: "string",
+        pattern: "^[a-f0-9]{64}$",
+      },
+      criteriaCount: {
+        type: "integer",
+        minimum: 0,
+        maximum: 9007199254740991,
+      },
+      satisfiedCount: {
+        type: "integer",
+        minimum: 0,
+        maximum: 9007199254740991,
+      },
+      violatedCount: {
+        type: "integer",
+        minimum: 0,
+        maximum: 9007199254740991,
+      },
+      unverifiedCount: {
+        type: "integer",
+        minimum: 0,
+        maximum: 9007199254740991,
+      },
+      requiredSatisfied: {
+        type: "boolean",
+      },
+      behaviorStatus: {
+        type: "string",
+        const: "unverified",
+      },
+    },
+    required: [
+      "documentVersion",
+      "type",
+      "changeProposal",
+      "draftHash",
+      "resultRevisionId",
+      "resultSemanticHash",
+      "criteriaCount",
+      "satisfiedCount",
+      "violatedCount",
+      "unverifiedCount",
+      "requiredSatisfied",
+      "behaviorStatus",
+    ],
+  },
   BackendAnalysisContextPreview: {
     type: "object",
     additionalProperties: false,
@@ -1231,6 +1657,86 @@ export const backendChangeSchemas: Record<string, ChangeSchema> = {
       },
     ],
   },
+  BackendAnalysisCriterionAttachment: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      criterionKey: {
+        type: "string",
+        minLength: 1,
+        maxLength: 200,
+      },
+      attachment: {
+        $ref: "#/components/schemas/BackendChangeTestAttachment",
+      },
+    },
+    required: ["criterionKey", "attachment"],
+  },
+  BackendAnalysisDeletionProof: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      revisionId: {
+        type: "string",
+        format: "uuid",
+        pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+        not: {
+          const: "00000000-0000-0000-0000-000000000000",
+        },
+      },
+      baselineRevisionId: {
+        type: "string",
+        format: "uuid",
+        pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+        not: {
+          const: "00000000-0000-0000-0000-000000000000",
+        },
+      },
+      record: {
+        $ref: "#/components/schemas/BackendAnalysisResultAddress",
+      },
+      owner: {
+        $ref: "#/components/schemas/BackendAssertionOwnership",
+      },
+      externalKey: {
+        type: "string",
+      },
+      decisionPin: {
+        $ref: "#/components/schemas/BackendAnalysisEvidenceDocumentPin",
+      },
+      coveragePin: {
+        $ref: "#/components/schemas/BackendAnalysisEvidenceDocumentPin",
+      },
+      decisionPointer: {
+        type: "string",
+      },
+      coveragePointer: {
+        type: "string",
+      },
+      oldSubject: {
+        $ref: "#/components/schemas/BackendHistoricalSubjectRef",
+      },
+      oldEvidenceRefs: {
+        type: "array",
+        items: {
+          $ref: "#/components/schemas/BackendHistoricalEvidenceRef",
+        },
+      },
+    },
+    required: [
+      "revisionId",
+      "baselineRevisionId",
+      "record",
+      "owner",
+      "externalKey",
+      "decisionPin",
+      "coveragePin",
+      "decisionPointer",
+      "coveragePointer",
+      "oldSubject",
+      "oldEvidenceRefs",
+    ],
+  },
   BackendAnalysisDependencyStep: {
     type: "object",
     additionalProperties: false,
@@ -1316,7 +1822,322 @@ export const backendChangeSchemas: Record<string, ChangeSchema> = {
     },
     required: ["object", "facet", "operation", "kind", "paths", "before", "after"],
   },
+  BackendAnalysisEndpointChangeDetail: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      documentVersion: {
+        type: "string",
+        const: "backend-b43-result-v1",
+      },
+      type: {
+        type: "string",
+        const: "endpoint_change",
+      },
+      change: {
+        $ref: "#/components/schemas/BackendAnalysisDiffChange",
+      },
+    },
+    required: ["documentVersion", "type", "change"],
+  },
+  BackendAnalysisEndpointCheckDetail: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      documentVersion: {
+        type: "string",
+        const: "backend-b43-result-v1",
+      },
+      type: {
+        type: "string",
+        const: "endpoint_check",
+      },
+      check: {
+        $ref: "#/components/schemas/BackendAnalysisRuleResult",
+      },
+      required: {
+        type: "boolean",
+      },
+      origin: {
+        type: "string",
+        enum: ["criterion", "analysis_rule"],
+      },
+      criterionKey: {
+        oneOf: [
+          {
+            type: "string",
+            minLength: 1,
+            maxLength: 200,
+          },
+          {
+            type: "null",
+          },
+        ],
+      },
+    },
+    required: ["documentVersion", "type", "check", "required", "origin", "criterionKey"],
+    oneOf: [
+      {
+        properties: {
+          origin: {
+            type: "string",
+            const: "analysis_rule",
+          },
+          required: {
+            type: "boolean",
+            const: false,
+          },
+          criterionKey: {
+            type: "null",
+          },
+        },
+      },
+      {
+        properties: {
+          origin: {
+            type: "string",
+            const: "criterion",
+          },
+          criterionKey: {
+            type: "string",
+            minLength: 1,
+            maxLength: 200,
+          },
+        },
+      },
+    ],
+  },
+  BackendAnalysisEndpointItemDetail: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      documentVersion: {
+        type: "string",
+        const: "backend-b43-result-v1",
+      },
+      type: {
+        type: "string",
+        const: "endpoint_item",
+      },
+      category: {
+        type: "string",
+        enum: ["write", "error_branch", "emitted_event", "affected_consumer"],
+      },
+      side: {
+        type: "string",
+        enum: ["before", "after"],
+      },
+      object: {
+        $ref: "#/components/schemas/BackendAnalysisResultAddress",
+      },
+      witness: {
+        $ref: "#/components/schemas/BackendAnalysisWitness",
+      },
+      proof: {
+        type: "array",
+        items: {
+          $ref: "#/components/schemas/BackendAnalysisProofReference",
+        },
+      },
+      behaviorStatus: {
+        type: "string",
+        const: "unverified",
+      },
+    },
+    required: [
+      "documentVersion",
+      "type",
+      "category",
+      "side",
+      "object",
+      "witness",
+      "proof",
+      "behaviorStatus",
+    ],
+  },
+  BackendAnalysisEndpointReviewContextV2: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      documentVersion: {
+        type: "string",
+        const: "backend-analysis-context-v2",
+      },
+      kind: {
+        type: "string",
+        const: "endpoint_review",
+      },
+      payload: {
+        $ref: "#/components/schemas/BackendAnalysisEndpointReviewPayload",
+      },
+      limits: {
+        $ref: "#/components/schemas/BackendAnalysisLimits",
+      },
+      ruleSetVersion: {
+        type: "string",
+        const: "b43-rules/v1",
+      },
+      traversalVersion: {
+        type: "string",
+        const: "b42-traversal/v1",
+      },
+      observationMode: {
+        type: "string",
+        const: "none",
+      },
+    },
+    required: [
+      "documentVersion",
+      "kind",
+      "payload",
+      "limits",
+      "ruleSetVersion",
+      "traversalVersion",
+      "observationMode",
+    ],
+  },
+  BackendAnalysisEndpointReviewPayload: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      fromRevisionId: {
+        type: "string",
+        format: "uuid",
+        pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+        not: {
+          const: "00000000-0000-0000-0000-000000000000",
+        },
+      },
+      toRevisionId: {
+        type: "string",
+        format: "uuid",
+        pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+        not: {
+          const: "00000000-0000-0000-0000-000000000000",
+        },
+      },
+      beforeEndpointId: {
+        type: "string",
+        format: "uuid",
+        pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+        not: {
+          const: "00000000-0000-0000-0000-000000000000",
+        },
+      },
+      afterEndpointId: {
+        oneOf: [
+          {
+            type: "string",
+            format: "uuid",
+            pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            not: {
+              const: "00000000-0000-0000-0000-000000000000",
+            },
+          },
+          {
+            type: "null",
+          },
+        ],
+      },
+      beforePins: {
+        $ref: "#/components/schemas/BackendEffectiveGraphPins",
+      },
+      afterPins: {
+        $ref: "#/components/schemas/BackendEffectiveGraphPins",
+      },
+      beforeSource: {
+        $ref: "#/components/schemas/BackendAnalysisSourcePins",
+      },
+      afterSource: {
+        $ref: "#/components/schemas/BackendAnalysisSourcePins",
+      },
+      evidencePins: {
+        type: "array",
+        items: {
+          $ref: "#/components/schemas/BackendAnalysisEvidenceDocumentPin",
+        },
+        uniqueItems: true,
+      },
+      intent: {
+        $ref: "#/components/schemas/BackendAnalysisPackagePayload",
+      },
+    },
+    required: [
+      "fromRevisionId",
+      "toRevisionId",
+      "beforeEndpointId",
+      "afterEndpointId",
+      "beforePins",
+      "afterPins",
+      "beforeSource",
+      "afterSource",
+      "evidencePins",
+    ],
+  },
+  BackendAnalysisEvidenceDocumentPin: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      revisionId: {
+        type: "string",
+        format: "uuid",
+        pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+        not: {
+          const: "00000000-0000-0000-0000-000000000000",
+        },
+      },
+      kind: {
+        type: "string",
+        enum: ["revision_decisions", "revision_coverage"],
+      },
+      contentHash: {
+        type: "string",
+        pattern: "^[a-f0-9]{64}$",
+      },
+    },
+    required: ["revisionId", "kind", "contentHash"],
+  },
+  BackendAnalysisIdentityMapEntry: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      proposalNodeId: {
+        type: "string",
+        format: "uuid",
+        pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+        not: {
+          const: "00000000-0000-0000-0000-000000000000",
+        },
+      },
+      sourceNodeId: {
+        type: "string",
+        format: "uuid",
+        pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+        not: {
+          const: "00000000-0000-0000-0000-000000000000",
+        },
+      },
+      reason: {
+        type: "string",
+        minLength: 1,
+        maxLength: 4096,
+        pattern: "\\S",
+        description: "Nonblank UTF-8 text, at most 4096 encoded bytes (server enforced).",
+      },
+    },
+    required: ["proposalNodeId", "sourceNodeId", "reason"],
+  },
   BackendAnalysisInputContext: {
+    oneOf: [
+      {
+        $ref: "#/components/schemas/BackendAnalysisInputContextV1",
+      },
+      {
+        $ref: "#/components/schemas/BackendAnalysisInputContextV2",
+      },
+    ],
+  },
+  BackendAnalysisInputContextV1: {
     type: "object",
     additionalProperties: false,
     properties: {
@@ -1384,6 +2205,19 @@ export const backendChangeSchemas: Record<string, ChangeSchema> = {
       "observationMode",
     ],
   },
+  BackendAnalysisInputContextV2: {
+    oneOf: [
+      {
+        $ref: "#/components/schemas/BackendAnalysisPackageContextV2",
+      },
+      {
+        $ref: "#/components/schemas/BackendAnalysisConformanceContextV2",
+      },
+      {
+        $ref: "#/components/schemas/BackendAnalysisEndpointReviewContextV2",
+      },
+    ],
+  },
   BackendAnalysisJob: {
     type: "object",
     additionalProperties: false,
@@ -1406,7 +2240,7 @@ export const backendChangeSchemas: Record<string, ChangeSchema> = {
       },
       kind: {
         type: "string",
-        enum: ["diff", "impact"],
+        enum: ["diff", "impact", "change_package", "conformance", "endpoint_review"],
       },
       status: {
         type: "string",
@@ -1522,6 +2356,235 @@ export const backendChangeSchemas: Record<string, ChangeSchema> = {
     },
     required: [],
   },
+  BackendAnalysisOutsideIntentChangeDetail: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      documentVersion: {
+        type: "string",
+        const: "backend-b43-result-v1",
+      },
+      type: {
+        type: "string",
+        const: "outside_intent_change",
+      },
+      change: {
+        $ref: "#/components/schemas/BackendAnalysisDiffChange",
+      },
+    },
+    required: ["documentVersion", "type", "change"],
+  },
+  BackendAnalysisPackageChangeDetail: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      documentVersion: {
+        type: "string",
+        const: "backend-b43-result-v1",
+      },
+      type: {
+        type: "string",
+        const: "package_change",
+      },
+      change: {
+        $ref: "#/components/schemas/BackendAnalysisDiffChange",
+      },
+    },
+    required: ["documentVersion", "type", "change"],
+  },
+  BackendAnalysisPackageContextV2: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      documentVersion: {
+        type: "string",
+        const: "backend-analysis-context-v2",
+      },
+      kind: {
+        type: "string",
+        const: "change_package",
+      },
+      payload: {
+        $ref: "#/components/schemas/BackendAnalysisPackagePayload",
+      },
+      limits: {
+        $ref: "#/components/schemas/BackendAnalysisLimits",
+      },
+      ruleSetVersion: {
+        type: "string",
+        const: "b43-rules/v1",
+      },
+      traversalVersion: {
+        type: "string",
+        const: "b42-traversal/v1",
+      },
+      observationMode: {
+        type: "string",
+        const: "none",
+      },
+    },
+    required: [
+      "documentVersion",
+      "kind",
+      "payload",
+      "limits",
+      "ruleSetVersion",
+      "traversalVersion",
+      "observationMode",
+    ],
+  },
+  BackendAnalysisPackageCriterionDetail: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      documentVersion: {
+        type: "string",
+        const: "backend-b43-result-v1",
+      },
+      type: {
+        type: "string",
+        const: "package_criterion",
+      },
+      criterion: {
+        $ref: "#/components/schemas/BackendChangeCriterion",
+      },
+    },
+    required: ["documentVersion", "type", "criterion"],
+  },
+  BackendAnalysisPackageEvidenceDetail: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      documentVersion: {
+        type: "string",
+        const: "backend-b43-result-v1",
+      },
+      type: {
+        type: "string",
+        const: "package_evidence",
+      },
+      object: {
+        $ref: "#/components/schemas/BackendAnalysisResultAddress",
+      },
+      origin: {
+        type: "string",
+        enum: ["baseline", "intent"],
+      },
+      proof: {
+        $ref: "#/components/schemas/BackendAnalysisProofReference",
+      },
+    },
+    required: ["documentVersion", "type", "object", "origin", "proof"],
+  },
+  BackendAnalysisPackageHeaderDetail: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      documentVersion: {
+        type: "string",
+        const: "backend-b43-result-v1",
+      },
+      type: {
+        type: "string",
+        const: "package_header",
+      },
+      changeProposal: {
+        $ref: "#/components/schemas/BackendProposalReadTarget",
+      },
+      baseRevisionId: {
+        type: "string",
+        format: "uuid",
+        pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+        not: {
+          const: "00000000-0000-0000-0000-000000000000",
+        },
+      },
+      basePins: {
+        $ref: "#/components/schemas/BackendEffectiveGraphPins",
+      },
+      draftPins: {
+        $ref: "#/components/schemas/BackendEffectiveGraphPins",
+      },
+      baseSource: {
+        $ref: "#/components/schemas/BackendAnalysisSourcePins",
+      },
+      draftSource: {
+        $ref: "#/components/schemas/BackendAnalysisSourcePins",
+      },
+      evidencePins: {
+        type: "array",
+        items: {
+          $ref: "#/components/schemas/BackendAnalysisEvidenceDocumentPin",
+        },
+        uniqueItems: true,
+      },
+      packageHash: {
+        type: "string",
+        pattern: "^[a-f0-9]{64}$",
+      },
+      complete: {
+        type: "boolean",
+      },
+    },
+    required: [
+      "documentVersion",
+      "type",
+      "changeProposal",
+      "baseRevisionId",
+      "basePins",
+      "draftPins",
+      "baseSource",
+      "draftSource",
+      "evidencePins",
+      "packageHash",
+      "complete",
+    ],
+  },
+  BackendAnalysisPackagePayload: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      changeProposal: {
+        $ref: "#/components/schemas/BackendProposalReadTarget",
+      },
+      baseRevisionId: {
+        type: "string",
+        format: "uuid",
+        pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+        not: {
+          const: "00000000-0000-0000-0000-000000000000",
+        },
+      },
+      basePins: {
+        $ref: "#/components/schemas/BackendEffectiveGraphPins",
+      },
+      draftPins: {
+        $ref: "#/components/schemas/BackendEffectiveGraphPins",
+      },
+      baseSource: {
+        $ref: "#/components/schemas/BackendAnalysisSourcePins",
+      },
+      draftSource: {
+        $ref: "#/components/schemas/BackendAnalysisSourcePins",
+      },
+      evidencePins: {
+        type: "array",
+        items: {
+          $ref: "#/components/schemas/BackendAnalysisEvidenceDocumentPin",
+        },
+        uniqueItems: true,
+      },
+    },
+    required: [
+      "changeProposal",
+      "baseRevisionId",
+      "basePins",
+      "draftPins",
+      "baseSource",
+      "draftSource",
+      "evidencePins",
+    ],
+  },
   BackendAnalysisProgress: {
     type: "object",
     additionalProperties: false,
@@ -1614,6 +2677,32 @@ export const backendChangeSchemas: Record<string, ChangeSchema> = {
       "assertions",
       "reasons",
     ],
+  },
+  BackendAnalysisRecommendedCheckDetail: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      documentVersion: {
+        type: "string",
+        const: "backend-b43-result-v1",
+      },
+      type: {
+        type: "string",
+        const: "recommended_check",
+      },
+      check: {
+        $ref: "#/components/schemas/BackendAnalysisRuleResult",
+      },
+      required: {
+        type: "boolean",
+        const: false,
+      },
+      origin: {
+        type: "string",
+        const: "analysis_rule",
+      },
+    },
+    required: ["documentVersion", "type", "check", "required", "origin"],
   },
   BackendAnalysisReportRef: {
     type: "object",
@@ -1886,6 +2975,39 @@ export const backendChangeSchemas: Record<string, ChangeSchema> = {
           {
             $ref: "#/components/schemas/BackendAnalysisArtifactChange",
           },
+          {
+            $ref: "#/components/schemas/BackendAnalysisPackageHeaderDetail",
+          },
+          {
+            $ref: "#/components/schemas/BackendAnalysisPackageChangeDetail",
+          },
+          {
+            $ref: "#/components/schemas/BackendAnalysisPackageEvidenceDetail",
+          },
+          {
+            $ref: "#/components/schemas/BackendAnalysisPackageCriterionDetail",
+          },
+          {
+            $ref: "#/components/schemas/BackendAnalysisRecommendedCheckDetail",
+          },
+          {
+            $ref: "#/components/schemas/BackendAnalysisConformanceCriterionDetail",
+          },
+          {
+            $ref: "#/components/schemas/BackendAnalysisConformanceSummaryDetail",
+          },
+          {
+            $ref: "#/components/schemas/BackendAnalysisOutsideIntentChangeDetail",
+          },
+          {
+            $ref: "#/components/schemas/BackendAnalysisEndpointItemDetail",
+          },
+          {
+            $ref: "#/components/schemas/BackendAnalysisEndpointChangeDetail",
+          },
+          {
+            $ref: "#/components/schemas/BackendAnalysisEndpointCheckDetail",
+          },
         ],
       },
     },
@@ -2048,6 +3170,237 @@ export const backendChangeSchemas: Record<string, ChangeSchema> = {
       "sourceVectorHash",
       "sourceSnapshotIds",
     ],
+  },
+  BackendAnalysisStartConformance: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      kind: {
+        type: "string",
+        const: "conformance",
+      },
+      limits: {
+        $ref: "#/components/schemas/BackendAnalysisLimits",
+      },
+      observationMode: {
+        type: "string",
+        const: "none",
+      },
+      observationPins: {
+        type: "array",
+        items: {},
+        maxItems: 0,
+      },
+      idempotencyKey: {
+        type: "string",
+        minLength: 1,
+        maxLength: 128,
+        pattern: "^[!-~]+$",
+      },
+      changeProposal: {
+        $ref: "#/components/schemas/BackendProposalReadTarget",
+      },
+      resultRevisionId: {
+        type: "string",
+        format: "uuid",
+        pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+        not: {
+          const: "00000000-0000-0000-0000-000000000000",
+        },
+      },
+      identityMap: {
+        type: "array",
+        items: {
+          $ref: "#/components/schemas/BackendAnalysisIdentityMapEntry",
+        },
+        maxItems: 10000,
+        uniqueItems: true,
+        description:
+          "One-to-one proposalNodeId/sourceNodeId; server rejects duplicate IDs in either column.",
+      },
+      testAttachments: {
+        type: "array",
+        items: {
+          $ref: "#/components/schemas/BackendAnalysisCriterionAttachment",
+        },
+        maxItems: 100,
+        uniqueItems: true,
+        description: "Unique criterionKey entries in the exact saved draft.",
+      },
+    },
+    required: [
+      "kind",
+      "limits",
+      "observationMode",
+      "idempotencyKey",
+      "changeProposal",
+      "resultRevisionId",
+      "identityMap",
+      "testAttachments",
+    ],
+  },
+  BackendAnalysisStartEndpointReview: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      kind: {
+        type: "string",
+        const: "endpoint_review",
+      },
+      limits: {
+        $ref: "#/components/schemas/BackendAnalysisLimits",
+      },
+      observationMode: {
+        type: "string",
+        const: "none",
+      },
+      observationPins: {
+        type: "array",
+        items: {},
+        maxItems: 0,
+      },
+      idempotencyKey: {
+        type: "string",
+        minLength: 1,
+        maxLength: 128,
+        pattern: "^[!-~]+$",
+      },
+      fromRevisionId: {
+        type: "string",
+        format: "uuid",
+        pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+        not: {
+          const: "00000000-0000-0000-0000-000000000000",
+        },
+      },
+      toRevisionId: {
+        type: "string",
+        format: "uuid",
+        pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+        not: {
+          const: "00000000-0000-0000-0000-000000000000",
+        },
+      },
+      beforeEndpointId: {
+        type: "string",
+        format: "uuid",
+        pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+        not: {
+          const: "00000000-0000-0000-0000-000000000000",
+        },
+      },
+      afterEndpointId: {
+        oneOf: [
+          {
+            type: "string",
+            format: "uuid",
+            pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            not: {
+              const: "00000000-0000-0000-0000-000000000000",
+            },
+          },
+          {
+            type: "null",
+          },
+        ],
+      },
+      changeProposal: {
+        $ref: "#/components/schemas/BackendProposalReadTarget",
+      },
+    },
+    required: [
+      "kind",
+      "limits",
+      "observationMode",
+      "idempotencyKey",
+      "fromRevisionId",
+      "toRevisionId",
+      "beforeEndpointId",
+      "afterEndpointId",
+    ],
+  },
+  BackendAnalysisStartLegacy: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      kind: {
+        type: "string",
+        enum: ["diff", "impact"],
+      },
+      fromRevisionId: {
+        type: "string",
+        format: "uuid",
+        pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+        not: {
+          const: "00000000-0000-0000-0000-000000000000",
+        },
+      },
+      target: {
+        $ref: "#/components/schemas/BackendAnalysisTarget",
+      },
+      scope: {
+        $ref: "#/components/schemas/BackendAnalysisScope",
+      },
+      limits: {
+        $ref: "#/components/schemas/BackendAnalysisLimits",
+      },
+      observationMode: {
+        type: "string",
+        const: "none",
+      },
+      observationPins: {
+        type: "array",
+        items: {},
+        maxItems: 0,
+      },
+      idempotencyKey: {
+        type: "string",
+        minLength: 1,
+        maxLength: 128,
+        pattern: "^[!-~]+$",
+      },
+    },
+    required: [
+      "kind",
+      "fromRevisionId",
+      "target",
+      "scope",
+      "limits",
+      "observationMode",
+      "idempotencyKey",
+    ],
+  },
+  BackendAnalysisStartPackage: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      kind: {
+        type: "string",
+        const: "change_package",
+      },
+      limits: {
+        $ref: "#/components/schemas/BackendAnalysisLimits",
+      },
+      observationMode: {
+        type: "string",
+        const: "none",
+      },
+      observationPins: {
+        type: "array",
+        items: {},
+        maxItems: 0,
+      },
+      idempotencyKey: {
+        type: "string",
+        minLength: 1,
+        maxLength: 128,
+        pattern: "^[!-~]+$",
+      },
+      changeProposal: {
+        $ref: "#/components/schemas/BackendProposalReadTarget",
+      },
+    },
+    required: ["kind", "limits", "observationMode", "idempotencyKey", "changeProposal"],
   },
   BackendAnalysisTarget: {
     oneOf: [
@@ -3014,6 +4367,23 @@ export const backendChangeSchemas: Record<string, ChangeSchema> = {
       },
     },
   },
+  BackendAssertionOwnership: {
+    type: "object",
+    additionalProperties: false,
+    required: ["repositoryId", "providerNamespace", "profile"],
+    properties: {
+      repositoryId: {
+        type: "string",
+        format: "uuid",
+      },
+      providerNamespace: {
+        type: "string",
+      },
+      profile: {
+        type: "string",
+      },
+    },
+  },
   BackendBaseAssertionRef: {
     type: "object",
     additionalProperties: false,
@@ -3092,6 +4462,22 @@ export const backendChangeSchemas: Record<string, ChangeSchema> = {
       },
     },
     required: ["revisionId", "semanticHash"],
+  },
+  BackendChangeArtifactIntent: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      artifact: {
+        $ref: "#/components/schemas/ArtifactKey",
+      },
+      removed: {
+        type: "boolean",
+      },
+      origin: {
+        $ref: "#/components/schemas/BackendChangeOrigin",
+      },
+    },
+    required: ["artifact", "removed", "origin"],
   },
   BackendChangeCarriedSourceIdentity: {
     type: "object",
@@ -3269,6 +4655,31 @@ export const backendChangeSchemas: Record<string, ChangeSchema> = {
       "deferrable",
       "initiallyDeferred",
     ],
+  },
+  BackendChangeCreatedRecord: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      recordType: {
+        type: "string",
+        enum: ["node", "edge"],
+      },
+      id: {
+        type: "string",
+        format: "uuid",
+        pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+        not: {
+          const: "00000000-0000-0000-0000-000000000000",
+        },
+      },
+      payload: {
+        $ref: "#/components/schemas/BackendSourceAssertionPayload",
+      },
+      origin: {
+        $ref: "#/components/schemas/BackendChangeOrigin",
+      },
+    },
+    required: ["recordType", "id", "payload", "origin"],
   },
   BackendChangeCriterion: {
     oneOf: [
@@ -3858,6 +5269,85 @@ export const backendChangeSchemas: Record<string, ChangeSchema> = {
       },
     ],
   },
+  BackendChangeDelta: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      created: {
+        type: "array",
+        items: {
+          $ref: "#/components/schemas/BackendChangeCreatedRecord",
+        },
+      },
+      removed: {
+        type: "array",
+        items: {
+          $ref: "#/components/schemas/BackendChangeRemoval",
+        },
+      },
+      properties: {
+        type: "array",
+        items: {
+          $ref: "#/components/schemas/BackendChangeProperty",
+        },
+      },
+      identityIntents: {
+        type: "array",
+        items: {
+          $ref: "#/components/schemas/BackendChangeIdentityIntent",
+        },
+      },
+      artifactIntents: {
+        type: "array",
+        items: {
+          $ref: "#/components/schemas/BackendChangeArtifactIntent",
+        },
+      },
+      edgeNames: {
+        type: "array",
+        items: {
+          $ref: "#/components/schemas/BackendChangeEdgeName",
+        },
+      },
+      carriedIdentities: {
+        type: "array",
+        items: {
+          $ref: "#/components/schemas/BackendChangeCarriedSourceIdentity",
+        },
+      },
+    },
+    required: [
+      "created",
+      "removed",
+      "properties",
+      "identityIntents",
+      "artifactIntents",
+      "edgeNames",
+    ],
+  },
+  BackendChangeEdgeName: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      id: {
+        type: "string",
+        format: "uuid",
+        pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+        not: {
+          const: "00000000-0000-0000-0000-000000000000",
+        },
+      },
+      name: {
+        type: "string",
+        minLength: 1,
+        maxLength: 200,
+      },
+      origin: {
+        $ref: "#/components/schemas/BackendChangeOrigin",
+      },
+    },
+    required: ["id", "name", "origin"],
+  },
   BackendChangeExpectedValue: {
     oneOf: [
       {
@@ -3925,6 +5415,31 @@ export const backendChangeSchemas: Record<string, ChangeSchema> = {
       },
     },
     required: ["id", "targetTableId", "columnPairs", "updateAction", "deleteAction", "matchType"],
+  },
+  BackendChangeIdentityIntent: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      target: {
+        $ref: "#/components/schemas/BackendChangeIdentityTarget",
+      },
+      externalKey: {
+        anyOf: [
+          {
+            type: "string",
+            minLength: 1,
+            maxLength: 200,
+          },
+          {
+            type: "null",
+          },
+        ],
+      },
+      origin: {
+        $ref: "#/components/schemas/BackendChangeOrigin",
+      },
+    },
+    required: ["target", "externalKey", "origin"],
   },
   BackendChangeIdentityTarget: {
     oneOf: [
@@ -4607,6 +6122,263 @@ export const backendChangeSchemas: Record<string, ChangeSchema> = {
         required: ["kind", "group", "parentId"],
       },
     ],
+  },
+  BackendChangeOrigin: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      kind: {
+        type: "string",
+        enum: ["base", "intent"],
+      },
+      commandId: {
+        type: "string",
+        format: "uuid",
+        pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+        not: {
+          const: "00000000-0000-0000-0000-000000000000",
+        },
+      },
+      reason: {
+        type: "string",
+      },
+      baseRef: {
+        $ref: "#/components/schemas/BackendChangeOriginBaseRef",
+      },
+      rebaseResolution: {
+        $ref: "#/components/schemas/BackendRebaseResolutionOrigin",
+      },
+    },
+    required: ["kind"],
+    allOf: [
+      {
+        if: {
+          required: ["rebaseResolution"],
+        },
+        then: {
+          properties: {
+            kind: {
+              type: "string",
+              const: "intent",
+            },
+          },
+          not: {
+            anyOf: [
+              {
+                required: ["commandId"],
+              },
+              {
+                required: ["reason"],
+              },
+            ],
+          },
+        },
+      },
+    ],
+  },
+  BackendChangeOriginBaseRef: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      revisionId: {
+        type: "string",
+        format: "uuid",
+        pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+        not: {
+          const: "00000000-0000-0000-0000-000000000000",
+        },
+      },
+      semanticHash: {
+        type: "string",
+        pattern: "^[a-f0-9]{64}$",
+      },
+      recordType: {
+        type: "string",
+        enum: ["node", "edge"],
+      },
+      id: {
+        type: "string",
+        format: "uuid",
+        pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+        not: {
+          const: "00000000-0000-0000-0000-000000000000",
+        },
+      },
+    },
+    required: ["revisionId", "semanticHash", "recordType", "id"],
+  },
+  BackendChangeProperty: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      recordType: {
+        type: "string",
+        enum: ["node", "edge"],
+      },
+      id: {
+        type: "string",
+        format: "uuid",
+        pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+        not: {
+          const: "00000000-0000-0000-0000-000000000000",
+        },
+      },
+      selector: {
+        $ref: "#/components/schemas/BackendSourcePropertySelector",
+      },
+      value: {
+        $ref: "#/components/schemas/BackendSourcePropertyValue",
+      },
+      origin: {
+        $ref: "#/components/schemas/BackendChangeOrigin",
+      },
+    },
+    required: ["recordType", "id", "selector", "value", "origin"],
+  },
+  BackendChangeProposal: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      id: {
+        type: "string",
+        format: "uuid",
+        pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+        not: {
+          const: "00000000-0000-0000-0000-000000000000",
+        },
+      },
+      projectId: {
+        type: "string",
+        format: "uuid",
+        pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+        not: {
+          const: "00000000-0000-0000-0000-000000000000",
+        },
+      },
+      name: {
+        type: "string",
+        minLength: 1,
+        maxLength: 200,
+      },
+      version: {
+        type: "integer",
+        format: "int64",
+        minimum: 1,
+        maximum: 9223372036854776000,
+      },
+      status: {
+        type: "string",
+        enum: ["draft", "ready", "implemented", "archived"],
+      },
+      currentDraftRevisionId: {
+        type: "string",
+        format: "uuid",
+        pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+        not: {
+          const: "00000000-0000-0000-0000-000000000000",
+        },
+      },
+      currentDraftHash: {
+        type: "string",
+        pattern: "^[a-f0-9]{64}$",
+      },
+      createdAt: {
+        type: "string",
+        format: "date-time",
+      },
+      updatedAt: {
+        type: "string",
+        format: "date-time",
+      },
+      readyReference: {
+        $ref: "#/components/schemas/BackendChangeProposalReadyReference",
+      },
+      implementedReference: {
+        $ref: "#/components/schemas/BackendChangeProposalImplementedReference",
+      },
+    },
+    required: [
+      "id",
+      "projectId",
+      "name",
+      "version",
+      "status",
+      "currentDraftRevisionId",
+      "currentDraftHash",
+      "createdAt",
+      "updatedAt",
+    ],
+  },
+  BackendChangeProposalApplyResult: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      proposal: {
+        $ref: "#/components/schemas/BackendChangeProposal",
+      },
+      revision: {
+        $ref: "#/components/schemas/BackendChangeProposalRevision",
+      },
+      changes: {
+        type: "array",
+        items: {
+          $ref: "#/components/schemas/BackendChangeProposalChange",
+        },
+      },
+      semanticHash: {
+        type: "string",
+        pattern: "^[a-f0-9]{64}$",
+      },
+    },
+    required: ["proposal", "revision", "changes", "semanticHash"],
+  },
+  BackendChangeProposalChange: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      commandId: {
+        type: "string",
+        format: "uuid",
+        pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+        not: {
+          const: "00000000-0000-0000-0000-000000000000",
+        },
+      },
+      type: {
+        type: "string",
+        enum: [
+          "create_node",
+          "update_node",
+          "rename",
+          "remove_node",
+          "remove_edge",
+          "upsert_edge",
+          "alter_column",
+          "alter_constraint",
+          "alter_index",
+          "edit_flow_step",
+          "edit_branch",
+          "set_field_mapping",
+          "set_artifact_pin",
+          "remove_artifact_pin",
+          "map_identity",
+          "set_criteria",
+        ],
+      },
+      recordType: {
+        type: "string",
+        enum: ["node", "edge"],
+      },
+      id: {
+        type: "string",
+        format: "uuid",
+        pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+        not: {
+          const: "00000000-0000-0000-0000-000000000000",
+        },
+      },
+    },
+    required: ["commandId", "type"],
   },
   BackendChangeProposalCommand: {
     oneOf: [
@@ -8669,6 +10441,356 @@ export const backendChangeSchemas: Record<string, ChangeSchema> = {
       },
     ],
   },
+  BackendChangeProposalException: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      criterionKey: {
+        type: "string",
+        minLength: 1,
+        maxLength: 200,
+      },
+      author: {
+        type: "string",
+        minLength: 1,
+        maxLength: 4096,
+        pattern: "\\S",
+        description: "Nonblank UTF-8 text, at most 4096 encoded bytes (server enforced).",
+      },
+      reason: {
+        type: "string",
+        minLength: 1,
+        maxLength: 4096,
+        pattern: "\\S",
+        description: "Nonblank UTF-8 text, at most 4096 encoded bytes (server enforced).",
+      },
+    },
+    required: ["criterionKey", "author", "reason"],
+  },
+  BackendChangeProposalImplementedReference: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      report: {
+        $ref: "#/components/schemas/BackendAnalysisReportRef",
+      },
+      proposalRevisionId: {
+        type: "string",
+        format: "uuid",
+        pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+        not: {
+          const: "00000000-0000-0000-0000-000000000000",
+        },
+      },
+      draftHash: {
+        type: "string",
+        pattern: "^[a-f0-9]{64}$",
+      },
+      resultRevisionId: {
+        type: "string",
+        format: "uuid",
+        pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+        not: {
+          const: "00000000-0000-0000-0000-000000000000",
+        },
+      },
+      resultSemanticHash: {
+        type: "string",
+        pattern: "^[a-f0-9]{64}$",
+      },
+      exceptions: {
+        type: "array",
+        items: {
+          $ref: "#/components/schemas/BackendChangeProposalException",
+        },
+        maxItems: 100,
+        uniqueItems: true,
+        description: "Unique saved criterion keys. Exceptions never bypass required outcomes.",
+      },
+      behaviorStatus: {
+        type: "string",
+        const: "unverified",
+      },
+    },
+    required: [
+      "report",
+      "proposalRevisionId",
+      "draftHash",
+      "resultRevisionId",
+      "resultSemanticHash",
+      "exceptions",
+      "behaviorStatus",
+    ],
+  },
+  BackendChangeProposalLifecycleAssociation: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      documentVersion: {
+        type: "string",
+        const: "backend-change-lifecycle/v1",
+      },
+      readyReference: {
+        oneOf: [
+          {
+            $ref: "#/components/schemas/BackendChangeProposalReadyReference",
+          },
+          {
+            type: "null",
+          },
+        ],
+      },
+      implementedReference: {
+        oneOf: [
+          {
+            $ref: "#/components/schemas/BackendChangeProposalImplementedReference",
+          },
+          {
+            type: "null",
+          },
+        ],
+      },
+    },
+    required: ["documentVersion", "readyReference", "implementedReference"],
+  },
+  BackendChangeProposalLifecycleEventV1: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      documentVersion: {
+        type: "string",
+        const: "backend-change-lifecycle-event/v1",
+      },
+      action: {
+        type: "string",
+        enum: ["implemented", "archive", "unarchive"],
+      },
+      revisionId: {
+        type: "string",
+        format: "uuid",
+        pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+        not: {
+          const: "00000000-0000-0000-0000-000000000000",
+        },
+      },
+      version: {
+        type: "integer",
+        format: "int64",
+        minimum: 1,
+        maximum: 9223372036854776000,
+      },
+      createdAt: {
+        type: "string",
+        format: "date-time",
+      },
+      previousStatus: {
+        type: "string",
+        enum: ["draft", "ready", "implemented", "archived"],
+      },
+      status: {
+        type: "string",
+        enum: ["draft", "ready", "implemented", "archived"],
+      },
+      previousAssociation: {
+        $ref: "#/components/schemas/BackendChangeProposalLifecycleAssociation",
+      },
+      association: {
+        $ref: "#/components/schemas/BackendChangeProposalLifecycleAssociation",
+      },
+    },
+    required: [
+      "documentVersion",
+      "action",
+      "revisionId",
+      "version",
+      "createdAt",
+      "previousStatus",
+      "status",
+      "previousAssociation",
+      "association",
+    ],
+  },
+  BackendChangeProposalReadyReference: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      report: {
+        $ref: "#/components/schemas/BackendAnalysisReportRef",
+      },
+      proposalRevisionId: {
+        type: "string",
+        format: "uuid",
+        pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+        not: {
+          const: "00000000-0000-0000-0000-000000000000",
+        },
+      },
+      draftHash: {
+        type: "string",
+        pattern: "^[a-f0-9]{64}$",
+      },
+      acknowledgedGapIds: {
+        type: "array",
+        items: {
+          type: "string",
+        },
+      },
+    },
+    required: ["report", "proposalRevisionId", "draftHash", "acknowledgedGapIds"],
+  },
+  BackendChangeProposalRevision: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      id: {
+        type: "string",
+        format: "uuid",
+        pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+        not: {
+          const: "00000000-0000-0000-0000-000000000000",
+        },
+      },
+      proposalId: {
+        type: "string",
+        format: "uuid",
+        pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+        not: {
+          const: "00000000-0000-0000-0000-000000000000",
+        },
+      },
+      parentRevisionId: {
+        anyOf: [
+          {
+            type: "string",
+            format: "uuid",
+            pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            not: {
+              const: "00000000-0000-0000-0000-000000000000",
+            },
+          },
+          {
+            type: "null",
+          },
+        ],
+      },
+      documentVersion: {
+        type: "string",
+        const: "proposal-graph-v1",
+      },
+      baseRevisionId: {
+        type: "string",
+        format: "uuid",
+        pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+        not: {
+          const: "00000000-0000-0000-0000-000000000000",
+        },
+      },
+      baseSemanticHash: {
+        type: "string",
+        pattern: "^[a-f0-9]{64}$",
+      },
+      baseSchemaVersion: {
+        type: "string",
+        enum: ["5", "6"],
+      },
+      sourceSnapshotIds: {
+        type: "array",
+        items: {
+          type: "string",
+          format: "uuid",
+          pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+          not: {
+            const: "00000000-0000-0000-0000-000000000000",
+          },
+        },
+      },
+      sourceVector: {
+        $ref: "#/components/schemas/BackendSourceVector",
+      },
+      artifactPins: {
+        type: "array",
+        items: {
+          $ref: "#/components/schemas/BackendArtifactPin",
+        },
+      },
+      artifactContext: {
+        $ref: "#/components/schemas/BackendEffectiveArtifactContext",
+      },
+      delta: {
+        $ref: "#/components/schemas/BackendChangeDelta",
+      },
+      criteria: {
+        type: "array",
+        items: {
+          $ref: "#/components/schemas/BackendChangeCriterion",
+        },
+        maxItems: 100,
+      },
+      semanticHash: {
+        type: "string",
+        pattern: "^[a-f0-9]{64}$",
+      },
+      acceptedBatchRevisionId: {
+        type: "string",
+        format: "uuid",
+        pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+        not: {
+          const: "00000000-0000-0000-0000-000000000000",
+        },
+      },
+      author: {
+        type: "string",
+      },
+      summary: {
+        type: "string",
+      },
+      createdAt: {
+        type: "string",
+        format: "date-time",
+      },
+      rebase: {
+        $ref: "#/components/schemas/BackendChangeRebaseAction",
+      },
+    },
+    required: [
+      "id",
+      "proposalId",
+      "parentRevisionId",
+      "documentVersion",
+      "baseRevisionId",
+      "baseSemanticHash",
+      "baseSchemaVersion",
+      "sourceSnapshotIds",
+      "sourceVector",
+      "artifactPins",
+      "artifactContext",
+      "delta",
+      "criteria",
+      "semanticHash",
+      "acceptedBatchRevisionId",
+      "author",
+      "summary",
+      "createdAt",
+    ],
+  },
+  BackendChangeRebaseAction: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      protocol: {
+        type: "string",
+        const: "backend-change-rebase-v1",
+      },
+      input: {
+        $ref: "#/components/schemas/PreviewBackendChangeProposalRebaseRequest",
+      },
+      candidateHash: {
+        type: "string",
+        pattern: "^[a-f0-9]{64}$",
+      },
+    },
+    required: ["protocol", "input", "candidateHash"],
+  },
   BackendChangeRebaseArtifactValue: {
     type: "object",
     additionalProperties: false,
@@ -9174,6 +11296,28 @@ export const backendChangeSchemas: Record<string, ChangeSchema> = {
         required: ["conflictId", "choice", "reason", "value"],
       },
     ],
+  },
+  BackendChangeRemoval: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      recordType: {
+        type: "string",
+        enum: ["node", "edge"],
+      },
+      id: {
+        type: "string",
+        format: "uuid",
+        pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+        not: {
+          const: "00000000-0000-0000-0000-000000000000",
+        },
+      },
+      origin: {
+        $ref: "#/components/schemas/BackendChangeOrigin",
+      },
+    },
+    required: ["recordType", "id", "origin"],
   },
   BackendChangeTestAttachment: {
     oneOf: [
@@ -10451,6 +12595,554 @@ export const backendChangeSchemas: Record<string, ChangeSchema> = {
       "dependencyIds",
       "materialized",
       "dependenciesStatus",
+    ],
+  },
+  BackendEdgeAssertionPayload: {
+    oneOf: [
+      {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          recordType: {
+            type: "string",
+            const: "edge",
+          },
+          kind: {
+            type: "string",
+            enum: ["contains", "handles", "calls", "derived_from"],
+          },
+          attributes: {
+            $ref: "#/components/schemas/BackendEdgeAttributes",
+          },
+          from: {
+            type: "string",
+            format: "uuid",
+            pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            not: {
+              const: "00000000-0000-0000-0000-000000000000",
+            },
+          },
+          to: {
+            type: "string",
+            format: "uuid",
+            pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            not: {
+              const: "00000000-0000-0000-0000-000000000000",
+            },
+          },
+        },
+        required: ["recordType", "kind", "attributes", "from", "to"],
+      },
+      {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          recordType: {
+            type: "string",
+            const: "edge",
+          },
+          kind: {
+            type: "string",
+            const: "references",
+          },
+          attributes: {
+            $ref: "#/components/schemas/BackendDesiredReferenceAttributes",
+          },
+          from: {
+            type: "string",
+            format: "uuid",
+            pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            not: {
+              const: "00000000-0000-0000-0000-000000000000",
+            },
+          },
+          to: {
+            type: "string",
+            format: "uuid",
+            pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            not: {
+              const: "00000000-0000-0000-0000-000000000000",
+            },
+          },
+        },
+        required: ["recordType", "kind", "attributes", "from", "to"],
+      },
+      {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          recordType: {
+            type: "string",
+            const: "edge",
+          },
+          kind: {
+            type: "string",
+            const: "next",
+          },
+          attributes: {
+            $ref: "#/components/schemas/BackendEdgeAttributes",
+          },
+          from: {
+            type: "string",
+            format: "uuid",
+            pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            not: {
+              const: "00000000-0000-0000-0000-000000000000",
+            },
+          },
+          to: {
+            type: "string",
+            format: "uuid",
+            pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            not: {
+              const: "00000000-0000-0000-0000-000000000000",
+            },
+          },
+        },
+        required: ["recordType", "kind", "attributes", "from", "to"],
+      },
+      {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          recordType: {
+            type: "string",
+            const: "edge",
+          },
+          kind: {
+            type: "string",
+            const: "branch",
+          },
+          attributes: {
+            $ref: "#/components/schemas/BackendBranchAttributes",
+          },
+          from: {
+            type: "string",
+            format: "uuid",
+            pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            not: {
+              const: "00000000-0000-0000-0000-000000000000",
+            },
+          },
+          to: {
+            type: "string",
+            format: "uuid",
+            pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            not: {
+              const: "00000000-0000-0000-0000-000000000000",
+            },
+          },
+        },
+        required: ["recordType", "kind", "attributes", "from", "to"],
+      },
+      {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          recordType: {
+            type: "string",
+            const: "edge",
+          },
+          kind: {
+            type: "string",
+            const: "error",
+          },
+          attributes: {
+            $ref: "#/components/schemas/BackendErrorTransitionAttributes",
+          },
+          from: {
+            type: "string",
+            format: "uuid",
+            pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            not: {
+              const: "00000000-0000-0000-0000-000000000000",
+            },
+          },
+          to: {
+            type: "string",
+            format: "uuid",
+            pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            not: {
+              const: "00000000-0000-0000-0000-000000000000",
+            },
+          },
+        },
+        required: ["recordType", "kind", "attributes", "from", "to"],
+      },
+      {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          recordType: {
+            type: "string",
+            const: "edge",
+          },
+          kind: {
+            type: "string",
+            const: "returns",
+          },
+          attributes: {
+            $ref: "#/components/schemas/BackendReturnAttributes",
+          },
+          from: {
+            type: "string",
+            format: "uuid",
+            pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            not: {
+              const: "00000000-0000-0000-0000-000000000000",
+            },
+          },
+          to: {
+            type: "string",
+            format: "uuid",
+            pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            not: {
+              const: "00000000-0000-0000-0000-000000000000",
+            },
+          },
+        },
+        required: ["recordType", "kind", "attributes", "from", "to"],
+      },
+      {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          recordType: {
+            type: "string",
+            const: "edge",
+          },
+          kind: {
+            type: "string",
+            const: "begins",
+          },
+          attributes: {
+            $ref: "#/components/schemas/BackendEdgeAttributes",
+          },
+          from: {
+            type: "string",
+            format: "uuid",
+            pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            not: {
+              const: "00000000-0000-0000-0000-000000000000",
+            },
+          },
+          to: {
+            type: "string",
+            format: "uuid",
+            pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            not: {
+              const: "00000000-0000-0000-0000-000000000000",
+            },
+          },
+        },
+        required: ["recordType", "kind", "attributes", "from", "to"],
+      },
+      {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          recordType: {
+            type: "string",
+            const: "edge",
+          },
+          kind: {
+            type: "string",
+            const: "commits",
+          },
+          attributes: {
+            $ref: "#/components/schemas/BackendEdgeAttributes",
+          },
+          from: {
+            type: "string",
+            format: "uuid",
+            pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            not: {
+              const: "00000000-0000-0000-0000-000000000000",
+            },
+          },
+          to: {
+            type: "string",
+            format: "uuid",
+            pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            not: {
+              const: "00000000-0000-0000-0000-000000000000",
+            },
+          },
+        },
+        required: ["recordType", "kind", "attributes", "from", "to"],
+      },
+      {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          recordType: {
+            type: "string",
+            const: "edge",
+          },
+          kind: {
+            type: "string",
+            const: "rolls_back",
+          },
+          attributes: {
+            $ref: "#/components/schemas/BackendEdgeAttributes",
+          },
+          from: {
+            type: "string",
+            format: "uuid",
+            pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            not: {
+              const: "00000000-0000-0000-0000-000000000000",
+            },
+          },
+          to: {
+            type: "string",
+            format: "uuid",
+            pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            not: {
+              const: "00000000-0000-0000-0000-000000000000",
+            },
+          },
+        },
+        required: ["recordType", "kind", "attributes", "from", "to"],
+      },
+      {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          recordType: {
+            type: "string",
+            const: "edge",
+          },
+          kind: {
+            type: "string",
+            const: "reads",
+          },
+          attributes: {
+            $ref: "#/components/schemas/BackendReadsAttributes",
+          },
+          from: {
+            type: "string",
+            format: "uuid",
+            pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            not: {
+              const: "00000000-0000-0000-0000-000000000000",
+            },
+          },
+          to: {
+            type: "string",
+            format: "uuid",
+            pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            not: {
+              const: "00000000-0000-0000-0000-000000000000",
+            },
+          },
+        },
+        required: ["recordType", "kind", "attributes", "from", "to"],
+      },
+      {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          recordType: {
+            type: "string",
+            const: "edge",
+          },
+          kind: {
+            type: "string",
+            const: "writes",
+          },
+          attributes: {
+            $ref: "#/components/schemas/BackendWritesAttributes",
+          },
+          from: {
+            type: "string",
+            format: "uuid",
+            pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            not: {
+              const: "00000000-0000-0000-0000-000000000000",
+            },
+          },
+          to: {
+            type: "string",
+            format: "uuid",
+            pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            not: {
+              const: "00000000-0000-0000-0000-000000000000",
+            },
+          },
+        },
+        required: ["recordType", "kind", "attributes", "from", "to"],
+      },
+      {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          recordType: {
+            type: "string",
+            const: "edge",
+          },
+          kind: {
+            type: "string",
+            const: "deletes",
+          },
+          attributes: {
+            $ref: "#/components/schemas/BackendDeletesAttributes",
+          },
+          from: {
+            type: "string",
+            format: "uuid",
+            pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            not: {
+              const: "00000000-0000-0000-0000-000000000000",
+            },
+          },
+          to: {
+            type: "string",
+            format: "uuid",
+            pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            not: {
+              const: "00000000-0000-0000-0000-000000000000",
+            },
+          },
+        },
+        required: ["recordType", "kind", "attributes", "from", "to"],
+      },
+      {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          recordType: {
+            type: "string",
+            const: "edge",
+          },
+          kind: {
+            type: "string",
+            const: "emits",
+          },
+          attributes: {
+            $ref: "#/components/schemas/BackendEventsEmitsAttributes",
+          },
+          from: {
+            type: "string",
+            format: "uuid",
+            pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            not: {
+              const: "00000000-0000-0000-0000-000000000000",
+            },
+          },
+          to: {
+            type: "string",
+            format: "uuid",
+            pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            not: {
+              const: "00000000-0000-0000-0000-000000000000",
+            },
+          },
+        },
+        required: ["recordType", "kind", "attributes", "from", "to"],
+      },
+      {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          recordType: {
+            type: "string",
+            const: "edge",
+          },
+          kind: {
+            type: "string",
+            const: "delivered_to",
+          },
+          attributes: {
+            $ref: "#/components/schemas/BackendEventsDeliveredToAttributes",
+          },
+          from: {
+            type: "string",
+            format: "uuid",
+            pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            not: {
+              const: "00000000-0000-0000-0000-000000000000",
+            },
+          },
+          to: {
+            type: "string",
+            format: "uuid",
+            pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            not: {
+              const: "00000000-0000-0000-0000-000000000000",
+            },
+          },
+        },
+        required: ["recordType", "kind", "attributes", "from", "to"],
+      },
+      {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          recordType: {
+            type: "string",
+            const: "edge",
+          },
+          kind: {
+            type: "string",
+            const: "retries",
+          },
+          attributes: {
+            $ref: "#/components/schemas/BackendEventsRetriesAttributes",
+          },
+          from: {
+            type: "string",
+            format: "uuid",
+            pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            not: {
+              const: "00000000-0000-0000-0000-000000000000",
+            },
+          },
+          to: {
+            type: "string",
+            format: "uuid",
+            pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            not: {
+              const: "00000000-0000-0000-0000-000000000000",
+            },
+          },
+        },
+        required: ["recordType", "kind", "attributes", "from", "to"],
+      },
+      {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          recordType: {
+            type: "string",
+            const: "edge",
+          },
+          kind: {
+            type: "string",
+            const: "dead_letters",
+          },
+          attributes: {
+            $ref: "#/components/schemas/BackendEventsDeadLettersAttributes",
+          },
+          from: {
+            type: "string",
+            format: "uuid",
+            pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            not: {
+              const: "00000000-0000-0000-0000-000000000000",
+            },
+          },
+          to: {
+            type: "string",
+            format: "uuid",
+            pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            not: {
+              const: "00000000-0000-0000-0000-000000000000",
+            },
+          },
+        },
+        required: ["recordType", "kind", "attributes", "from", "to"],
+      },
     ],
   },
   BackendEdgeAttributes: {
@@ -13345,6 +16037,40 @@ export const backendChangeSchemas: Record<string, ChangeSchema> = {
       },
     },
   },
+  BackendHistoricalEvidenceRef: {
+    type: "object",
+    additionalProperties: false,
+    required: ["revisionId", "evidenceId"],
+    properties: {
+      revisionId: {
+        type: "string",
+        format: "uuid",
+      },
+      evidenceId: {
+        type: "string",
+        format: "uuid",
+      },
+    },
+  },
+  BackendHistoricalSubjectRef: {
+    type: "object",
+    additionalProperties: false,
+    required: ["revisionId", "recordType", "id"],
+    properties: {
+      revisionId: {
+        type: "string",
+        format: "uuid",
+      },
+      recordType: {
+        type: "string",
+        enum: ["node", "edge", "evidence"],
+      },
+      id: {
+        type: "string",
+        format: "uuid",
+      },
+    },
+  },
   BackendHttpOperationAttributes: {
     type: "object",
     additionalProperties: false,
@@ -13407,6 +16133,63 @@ export const backendChangeSchemas: Record<string, ChangeSchema> = {
         },
       },
     ],
+  },
+  BackendInventoryItem: {
+    type: "object",
+    additionalProperties: false,
+    required: [
+      "category",
+      "status",
+      "knownCount",
+      "denominator",
+      "discoverySource",
+      "gaps",
+      "reason",
+    ],
+    properties: {
+      category: {
+        type: "string",
+        enum: [
+          "files",
+          "endpoints",
+          "datastores",
+          "migrations",
+          "producers",
+          "consumers",
+          "jobs",
+          "contracts",
+          "tests",
+        ],
+      },
+      status: {
+        type: "string",
+        enum: ["complete", "partial", "unsupported", "excluded"],
+      },
+      knownCount: {
+        type: "integer",
+        format: "int64",
+        minimum: 0,
+        maximum: 9223372036854776000,
+      },
+      denominator: {
+        type: ["integer", "null"],
+        format: "int64",
+        minimum: 0,
+        maximum: 9223372036854776000,
+      },
+      discoverySource: {
+        type: "string",
+      },
+      gaps: {
+        type: "array",
+        items: {
+          type: "string",
+        },
+      },
+      reason: {
+        type: "string",
+      },
+    },
   },
   BackendKnownBoolean: {
     oneOf: [
@@ -14098,6 +16881,30 @@ export const backendChangeSchemas: Record<string, ChangeSchema> = {
       },
     },
   },
+  BackendManifestFile: {
+    type: "object",
+    additionalProperties: false,
+    required: ["path", "contentHash", "fileType", "analysisStatus"],
+    properties: {
+      path: {
+        type: "string",
+      },
+      contentHash: {
+        type: "string",
+        pattern: "^[a-f0-9]{64}$",
+      },
+      fileType: {
+        type: "string",
+      },
+      analysisStatus: {
+        type: "string",
+        enum: ["analyzed", "excluded", "unsupported"],
+      },
+      reason: {
+        type: "string",
+      },
+    },
+  },
   BackendMigrationCandidateTarget: {
     type: "object",
     additionalProperties: false,
@@ -14209,6 +17016,1173 @@ export const backendChangeSchemas: Record<string, ChangeSchema> = {
     properties: {
       description: {
         type: ["string", "null"],
+      },
+    },
+  },
+  BackendNodeAssertionPayload: {
+    oneOf: [
+      {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          recordType: {
+            type: "string",
+            const: "node",
+          },
+          kind: {
+            type: "string",
+            const: "system",
+          },
+          attributes: {
+            $ref: "#/components/schemas/BackendSystemAttributes",
+          },
+          name: {
+            type: "string",
+          },
+          parentId: {
+            anyOf: [
+              {
+                type: "string",
+                format: "uuid",
+                pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+                not: {
+                  const: "00000000-0000-0000-0000-000000000000",
+                },
+              },
+              {
+                type: "null",
+              },
+            ],
+          },
+        },
+        required: ["recordType", "kind", "attributes"],
+      },
+      {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          recordType: {
+            type: "string",
+            const: "node",
+          },
+          kind: {
+            type: "string",
+            const: "service",
+          },
+          attributes: {
+            $ref: "#/components/schemas/BackendServiceAttributes",
+          },
+          name: {
+            type: "string",
+          },
+          parentId: {
+            anyOf: [
+              {
+                type: "string",
+                format: "uuid",
+                pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+                not: {
+                  const: "00000000-0000-0000-0000-000000000000",
+                },
+              },
+              {
+                type: "null",
+              },
+            ],
+          },
+        },
+        required: ["recordType", "kind", "attributes"],
+      },
+      {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          recordType: {
+            type: "string",
+            const: "node",
+          },
+          kind: {
+            type: "string",
+            const: "module",
+          },
+          attributes: {
+            $ref: "#/components/schemas/BackendModuleAttributes",
+          },
+          name: {
+            type: "string",
+          },
+          parentId: {
+            anyOf: [
+              {
+                type: "string",
+                format: "uuid",
+                pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+                not: {
+                  const: "00000000-0000-0000-0000-000000000000",
+                },
+              },
+              {
+                type: "null",
+              },
+            ],
+          },
+        },
+        required: ["recordType", "kind", "attributes"],
+      },
+      {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          recordType: {
+            type: "string",
+            const: "node",
+          },
+          kind: {
+            type: "string",
+            const: "external_system",
+          },
+          attributes: {
+            $ref: "#/components/schemas/BackendExternalSystemAttributes",
+          },
+          name: {
+            type: "string",
+          },
+          parentId: {
+            anyOf: [
+              {
+                type: "string",
+                format: "uuid",
+                pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+                not: {
+                  const: "00000000-0000-0000-0000-000000000000",
+                },
+              },
+              {
+                type: "null",
+              },
+            ],
+          },
+        },
+        required: ["recordType", "kind", "attributes"],
+      },
+      {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          recordType: {
+            type: "string",
+            const: "node",
+          },
+          kind: {
+            type: "string",
+            const: "datastore",
+          },
+          attributes: {
+            $ref: "#/components/schemas/BackendDesiredDatastoreAttributes",
+          },
+          name: {
+            type: "string",
+          },
+          parentId: {
+            anyOf: [
+              {
+                type: "string",
+                format: "uuid",
+                pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+                not: {
+                  const: "00000000-0000-0000-0000-000000000000",
+                },
+              },
+              {
+                type: "null",
+              },
+            ],
+          },
+        },
+        required: ["recordType", "kind", "attributes"],
+      },
+      {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          recordType: {
+            type: "string",
+            const: "node",
+          },
+          kind: {
+            type: "string",
+            const: "symbol",
+          },
+          attributes: {
+            $ref: "#/components/schemas/BackendDesiredRoutineAttributes",
+          },
+          name: {
+            type: "string",
+          },
+          parentId: {
+            anyOf: [
+              {
+                type: "string",
+                format: "uuid",
+                pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+                not: {
+                  const: "00000000-0000-0000-0000-000000000000",
+                },
+              },
+              {
+                type: "null",
+              },
+            ],
+          },
+        },
+        required: ["recordType", "kind", "attributes"],
+      },
+      {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          recordType: {
+            type: "string",
+            const: "node",
+          },
+          kind: {
+            type: "string",
+            const: "http_operation",
+          },
+          attributes: {
+            $ref: "#/components/schemas/BackendHttpOperationAttributes",
+          },
+          name: {
+            type: "string",
+          },
+          parentId: {
+            anyOf: [
+              {
+                type: "string",
+                format: "uuid",
+                pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+                not: {
+                  const: "00000000-0000-0000-0000-000000000000",
+                },
+              },
+              {
+                type: "null",
+              },
+            ],
+          },
+        },
+        required: ["recordType", "kind", "attributes"],
+      },
+      {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          recordType: {
+            type: "string",
+            const: "node",
+          },
+          kind: {
+            type: "string",
+            const: "handler",
+          },
+          attributes: {
+            $ref: "#/components/schemas/BackendHandlerAttributes",
+          },
+          name: {
+            type: "string",
+          },
+          parentId: {
+            anyOf: [
+              {
+                type: "string",
+                format: "uuid",
+                pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+                not: {
+                  const: "00000000-0000-0000-0000-000000000000",
+                },
+              },
+              {
+                type: "null",
+              },
+            ],
+          },
+        },
+        required: ["recordType", "kind", "attributes"],
+      },
+      {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          recordType: {
+            type: "string",
+            const: "node",
+          },
+          kind: {
+            type: "string",
+            const: "unresolved_target",
+          },
+          attributes: {
+            $ref: "#/components/schemas/BackendUnresolvedTargetAttributes",
+          },
+          name: {
+            type: "string",
+          },
+          parentId: {
+            anyOf: [
+              {
+                type: "string",
+                format: "uuid",
+                pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+                not: {
+                  const: "00000000-0000-0000-0000-000000000000",
+                },
+              },
+              {
+                type: "null",
+              },
+            ],
+          },
+        },
+        required: ["recordType", "kind", "attributes"],
+      },
+      {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          recordType: {
+            type: "string",
+            const: "node",
+          },
+          kind: {
+            type: "string",
+            const: "db_schema",
+          },
+          attributes: {
+            $ref: "#/components/schemas/BackendDesiredDatabaseSchemaAttributes",
+          },
+          name: {
+            type: "string",
+          },
+          parentId: {
+            anyOf: [
+              {
+                type: "string",
+                format: "uuid",
+                pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+                not: {
+                  const: "00000000-0000-0000-0000-000000000000",
+                },
+              },
+              {
+                type: "null",
+              },
+            ],
+          },
+        },
+        required: ["recordType", "kind", "attributes"],
+      },
+      {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          recordType: {
+            type: "string",
+            const: "node",
+          },
+          kind: {
+            type: "string",
+            const: "table",
+          },
+          attributes: {
+            $ref: "#/components/schemas/BackendDesiredTableAttributes",
+          },
+          name: {
+            type: "string",
+          },
+          parentId: {
+            anyOf: [
+              {
+                type: "string",
+                format: "uuid",
+                pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+                not: {
+                  const: "00000000-0000-0000-0000-000000000000",
+                },
+              },
+              {
+                type: "null",
+              },
+            ],
+          },
+        },
+        required: ["recordType", "kind", "attributes"],
+      },
+      {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          recordType: {
+            type: "string",
+            const: "node",
+          },
+          kind: {
+            type: "string",
+            const: "column",
+          },
+          attributes: {
+            $ref: "#/components/schemas/BackendDesiredColumnAttributes",
+          },
+          name: {
+            type: "string",
+          },
+          parentId: {
+            anyOf: [
+              {
+                type: "string",
+                format: "uuid",
+                pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+                not: {
+                  const: "00000000-0000-0000-0000-000000000000",
+                },
+              },
+              {
+                type: "null",
+              },
+            ],
+          },
+        },
+        required: ["recordType", "kind", "attributes"],
+      },
+      {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          recordType: {
+            type: "string",
+            const: "node",
+          },
+          kind: {
+            type: "string",
+            const: "constraint",
+          },
+          attributes: {
+            $ref: "#/components/schemas/BackendDesiredConstraintAttributes",
+          },
+          name: {
+            type: "string",
+          },
+          parentId: {
+            anyOf: [
+              {
+                type: "string",
+                format: "uuid",
+                pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+                not: {
+                  const: "00000000-0000-0000-0000-000000000000",
+                },
+              },
+              {
+                type: "null",
+              },
+            ],
+          },
+        },
+        required: ["recordType", "kind", "attributes"],
+      },
+      {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          recordType: {
+            type: "string",
+            const: "node",
+          },
+          kind: {
+            type: "string",
+            const: "index",
+          },
+          attributes: {
+            $ref: "#/components/schemas/BackendDesiredIndexAttributes",
+          },
+          name: {
+            type: "string",
+          },
+          parentId: {
+            anyOf: [
+              {
+                type: "string",
+                format: "uuid",
+                pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+                not: {
+                  const: "00000000-0000-0000-0000-000000000000",
+                },
+              },
+              {
+                type: "null",
+              },
+            ],
+          },
+        },
+        required: ["recordType", "kind", "attributes"],
+      },
+      {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          recordType: {
+            type: "string",
+            const: "node",
+          },
+          kind: {
+            type: "string",
+            const: "view",
+          },
+          attributes: {
+            $ref: "#/components/schemas/BackendDesiredViewAttributes",
+          },
+          name: {
+            type: "string",
+          },
+          parentId: {
+            anyOf: [
+              {
+                type: "string",
+                format: "uuid",
+                pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+                not: {
+                  const: "00000000-0000-0000-0000-000000000000",
+                },
+              },
+              {
+                type: "null",
+              },
+            ],
+          },
+        },
+        required: ["recordType", "kind", "attributes"],
+      },
+      {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          recordType: {
+            type: "string",
+            const: "node",
+          },
+          kind: {
+            type: "string",
+            const: "migration",
+          },
+          attributes: {
+            $ref: "#/components/schemas/BackendDesiredMigrationAttributes",
+          },
+          name: {
+            type: "string",
+          },
+          parentId: {
+            anyOf: [
+              {
+                type: "string",
+                format: "uuid",
+                pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+                not: {
+                  const: "00000000-0000-0000-0000-000000000000",
+                },
+              },
+              {
+                type: "null",
+              },
+            ],
+          },
+        },
+        required: ["recordType", "kind", "attributes"],
+      },
+      {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          recordType: {
+            type: "string",
+            const: "node",
+          },
+          kind: {
+            type: "string",
+            const: "flow",
+          },
+          attributes: {
+            $ref: "#/components/schemas/BackendFlowAttributes",
+          },
+          name: {
+            type: "string",
+          },
+          parentId: {
+            anyOf: [
+              {
+                type: "string",
+                format: "uuid",
+                pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+                not: {
+                  const: "00000000-0000-0000-0000-000000000000",
+                },
+              },
+              {
+                type: "null",
+              },
+            ],
+          },
+        },
+        required: ["recordType", "kind", "attributes"],
+      },
+      {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          recordType: {
+            type: "string",
+            const: "node",
+          },
+          kind: {
+            type: "string",
+            const: "flow_step",
+          },
+          attributes: {
+            $ref: "#/components/schemas/BackendFlowStepAttributes",
+          },
+          name: {
+            type: "string",
+          },
+          parentId: {
+            anyOf: [
+              {
+                type: "string",
+                format: "uuid",
+                pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+                not: {
+                  const: "00000000-0000-0000-0000-000000000000",
+                },
+              },
+              {
+                type: "null",
+              },
+            ],
+          },
+        },
+        required: ["recordType", "kind", "attributes"],
+      },
+      {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          recordType: {
+            type: "string",
+            const: "node",
+          },
+          kind: {
+            type: "string",
+            const: "query",
+          },
+          attributes: {
+            $ref: "#/components/schemas/BackendQueryAttributes",
+          },
+          name: {
+            type: "string",
+          },
+          parentId: {
+            anyOf: [
+              {
+                type: "string",
+                format: "uuid",
+                pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+                not: {
+                  const: "00000000-0000-0000-0000-000000000000",
+                },
+              },
+              {
+                type: "null",
+              },
+            ],
+          },
+        },
+        required: ["recordType", "kind", "attributes"],
+      },
+      {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          recordType: {
+            type: "string",
+            const: "node",
+          },
+          kind: {
+            type: "string",
+            const: "transaction",
+          },
+          attributes: {
+            $ref: "#/components/schemas/BackendTransactionAttributes",
+          },
+          name: {
+            type: "string",
+          },
+          parentId: {
+            anyOf: [
+              {
+                type: "string",
+                format: "uuid",
+                pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+                not: {
+                  const: "00000000-0000-0000-0000-000000000000",
+                },
+              },
+              {
+                type: "null",
+              },
+            ],
+          },
+        },
+        required: ["recordType", "kind", "attributes"],
+      },
+      {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          recordType: {
+            type: "string",
+            const: "node",
+          },
+          kind: {
+            type: "string",
+            const: "api_field",
+          },
+          attributes: {
+            $ref: "#/components/schemas/BackendAPIFieldAttributes",
+          },
+          name: {
+            type: "string",
+          },
+          parentId: {
+            anyOf: [
+              {
+                type: "string",
+                format: "uuid",
+                pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+                not: {
+                  const: "00000000-0000-0000-0000-000000000000",
+                },
+              },
+              {
+                type: "null",
+              },
+            ],
+          },
+        },
+        required: ["recordType", "kind", "attributes"],
+      },
+      {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          recordType: {
+            type: "string",
+            const: "node",
+          },
+          kind: {
+            type: "string",
+            const: "field_mapping",
+          },
+          attributes: {
+            $ref: "#/components/schemas/BackendLineageMappingAttributes",
+          },
+          name: {
+            type: "string",
+          },
+          parentId: {
+            anyOf: [
+              {
+                type: "string",
+                format: "uuid",
+                pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+                not: {
+                  const: "00000000-0000-0000-0000-000000000000",
+                },
+              },
+              {
+                type: "null",
+              },
+            ],
+          },
+        },
+        required: ["recordType", "kind", "attributes"],
+      },
+      {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          recordType: {
+            type: "string",
+            const: "node",
+          },
+          kind: {
+            type: "string",
+            const: "channel",
+          },
+          attributes: {
+            $ref: "#/components/schemas/BackendEventsChannelAttributes",
+          },
+          name: {
+            type: "string",
+          },
+          parentId: {
+            anyOf: [
+              {
+                type: "string",
+                format: "uuid",
+                pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+                not: {
+                  const: "00000000-0000-0000-0000-000000000000",
+                },
+              },
+              {
+                type: "null",
+              },
+            ],
+          },
+        },
+        required: ["recordType", "kind", "attributes"],
+      },
+      {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          recordType: {
+            type: "string",
+            const: "node",
+          },
+          kind: {
+            type: "string",
+            const: "message",
+          },
+          attributes: {
+            $ref: "#/components/schemas/BackendEventsMessageAttributes",
+          },
+          name: {
+            type: "string",
+          },
+          parentId: {
+            anyOf: [
+              {
+                type: "string",
+                format: "uuid",
+                pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+                not: {
+                  const: "00000000-0000-0000-0000-000000000000",
+                },
+              },
+              {
+                type: "null",
+              },
+            ],
+          },
+        },
+        required: ["recordType", "kind", "attributes"],
+      },
+      {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          recordType: {
+            type: "string",
+            const: "node",
+          },
+          kind: {
+            type: "string",
+            const: "consumer",
+          },
+          attributes: {
+            $ref: "#/components/schemas/BackendEventsConsumerAttributes",
+          },
+          name: {
+            type: "string",
+          },
+          parentId: {
+            anyOf: [
+              {
+                type: "string",
+                format: "uuid",
+                pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+                not: {
+                  const: "00000000-0000-0000-0000-000000000000",
+                },
+              },
+              {
+                type: "null",
+              },
+            ],
+          },
+        },
+        required: ["recordType", "kind", "attributes"],
+      },
+      {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          recordType: {
+            type: "string",
+            const: "node",
+          },
+          kind: {
+            type: "string",
+            const: "job",
+          },
+          attributes: {
+            $ref: "#/components/schemas/BackendEventsJobAttributes",
+          },
+          name: {
+            type: "string",
+          },
+          parentId: {
+            anyOf: [
+              {
+                type: "string",
+                format: "uuid",
+                pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+                not: {
+                  const: "00000000-0000-0000-0000-000000000000",
+                },
+              },
+              {
+                type: "null",
+              },
+            ],
+          },
+        },
+        required: ["recordType", "kind", "attributes"],
+      },
+      {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          recordType: {
+            type: "string",
+            const: "node",
+          },
+          kind: {
+            type: "string",
+            const: "event_field",
+          },
+          attributes: {
+            $ref: "#/components/schemas/BackendEventsEventFieldAttributes",
+          },
+          name: {
+            type: "string",
+          },
+          parentId: {
+            anyOf: [
+              {
+                type: "string",
+                format: "uuid",
+                pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+                not: {
+                  const: "00000000-0000-0000-0000-000000000000",
+                },
+              },
+              {
+                type: "null",
+              },
+            ],
+          },
+        },
+        required: ["recordType", "kind", "attributes"],
+      },
+      {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          recordType: {
+            type: "string",
+            const: "node",
+          },
+          kind: {
+            type: "string",
+            const: "domain_entity",
+          },
+          attributes: {
+            $ref: "#/components/schemas/BackendRepresentationAttributes",
+          },
+          name: {
+            type: "string",
+          },
+          parentId: {
+            anyOf: [
+              {
+                type: "string",
+                format: "uuid",
+                pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+                not: {
+                  const: "00000000-0000-0000-0000-000000000000",
+                },
+              },
+              {
+                type: "null",
+              },
+            ],
+          },
+        },
+        required: ["recordType", "kind", "attributes"],
+      },
+      {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          recordType: {
+            type: "string",
+            const: "node",
+          },
+          kind: {
+            type: "string",
+            const: "dto",
+          },
+          attributes: {
+            $ref: "#/components/schemas/BackendRepresentationAttributes",
+          },
+          name: {
+            type: "string",
+          },
+          parentId: {
+            anyOf: [
+              {
+                type: "string",
+                format: "uuid",
+                pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+                not: {
+                  const: "00000000-0000-0000-0000-000000000000",
+                },
+              },
+              {
+                type: "null",
+              },
+            ],
+          },
+        },
+        required: ["recordType", "kind", "attributes"],
+      },
+      {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          recordType: {
+            type: "string",
+            const: "node",
+          },
+          kind: {
+            type: "string",
+            const: "api_schema",
+          },
+          attributes: {
+            $ref: "#/components/schemas/BackendRepresentationAttributes",
+          },
+          name: {
+            type: "string",
+          },
+          parentId: {
+            anyOf: [
+              {
+                type: "string",
+                format: "uuid",
+                pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+                not: {
+                  const: "00000000-0000-0000-0000-000000000000",
+                },
+              },
+              {
+                type: "null",
+              },
+            ],
+          },
+        },
+        required: ["recordType", "kind", "attributes"],
+      },
+      {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          recordType: {
+            type: "string",
+            const: "node",
+          },
+          kind: {
+            type: "string",
+            const: "representation_field",
+          },
+          attributes: {
+            $ref: "#/components/schemas/BackendRepresentationFieldAttributes",
+          },
+          name: {
+            type: "string",
+          },
+          parentId: {
+            anyOf: [
+              {
+                type: "string",
+                format: "uuid",
+                pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+                not: {
+                  const: "00000000-0000-0000-0000-000000000000",
+                },
+              },
+              {
+                type: "null",
+              },
+            ],
+          },
+        },
+        required: ["recordType", "kind", "attributes"],
+      },
+    ],
+  },
+  BackendProposalReadTarget: {
+    type: "object",
+    additionalProperties: false,
+    required: ["proposalId", "proposalRevisionId"],
+    properties: {
+      proposalId: {
+        type: "string",
+        format: "uuid",
+      },
+      proposalRevisionId: {
+        type: "string",
+        format: "uuid",
+      },
+    },
+  },
+  BackendProvider: {
+    type: "object",
+    additionalProperties: false,
+    required: ["name", "version", "namespace", "method", "profiles", "limitations"],
+    properties: {
+      name: {
+        type: "string",
+      },
+      version: {
+        type: "string",
+      },
+      namespace: {
+        type: "string",
+      },
+      method: {
+        type: "string",
+        enum: ["ast", "sql", "orm", "contract", "agent", "manual", "trace", "test"],
+      },
+      profiles: {
+        type: "array",
+        items: {
+          type: "string",
+        },
+      },
+      limitations: {
+        type: "array",
+        items: {
+          type: "string",
+        },
       },
     },
   },
@@ -14418,6 +18392,30 @@ export const backendChangeSchemas: Record<string, ChangeSchema> = {
         },
       },
     ],
+  },
+  BackendRebaseResolutionOrigin: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      proposalRevisionId: {
+        type: "string",
+        format: "uuid",
+        pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+        not: {
+          const: "00000000-0000-0000-0000-000000000000",
+        },
+      },
+      resolutionId: {
+        type: "string",
+        pattern: "^[a-f0-9]{64}$",
+      },
+      reason: {
+        type: "string",
+        minLength: 1,
+        maxLength: 4096,
+      },
+    },
+    required: ["proposalRevisionId", "resolutionId", "reason"],
   },
   BackendReferenceColumnPair: {
     type: "object",
@@ -14686,6 +18684,64 @@ export const backendChangeSchemas: Record<string, ChangeSchema> = {
         type: ["string", "null"],
       },
     },
+  },
+  BackendSourceAssertionPayload: {
+    oneOf: [
+      {
+        $ref: "#/components/schemas/BackendNodeAssertionPayload",
+      },
+      {
+        $ref: "#/components/schemas/BackendEdgeAssertionPayload",
+      },
+    ],
+  },
+  BackendSourcePartition: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      repositoryId: {
+        type: "string",
+        format: "uuid",
+        pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+        not: {
+          const: "00000000-0000-0000-0000-000000000000",
+        },
+      },
+      providerNamespace: {
+        type: "string",
+        minLength: 1,
+        maxLength: 200,
+      },
+      snapshotId: {
+        type: "string",
+        format: "uuid",
+        pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+        not: {
+          const: "00000000-0000-0000-0000-000000000000",
+        },
+      },
+      provider: {
+        $ref: "#/components/schemas/BackendProvider",
+      },
+      inventory: {
+        type: "array",
+        items: {
+          $ref: "#/components/schemas/BackendInventoryItem",
+        },
+        maxItems: 9,
+      },
+      scopeStatus: {
+        $ref: "#/components/schemas/BackendSourceScopeStatus",
+      },
+    },
+    required: [
+      "repositoryId",
+      "providerNamespace",
+      "snapshotId",
+      "provider",
+      "inventory",
+      "scopeStatus",
+    ],
   },
   BackendSourcePropertyJSONValue: {
     anyOf: [
@@ -15310,6 +19366,143 @@ export const backendChangeSchemas: Record<string, ChangeSchema> = {
         },
       },
     ],
+  },
+  BackendSourcePropertyValue: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      present: {
+        type: "boolean",
+      },
+      value: {
+        $ref: "#/components/schemas/BackendSourcePropertyJSONValue",
+      },
+    },
+    required: ["present"],
+  },
+  BackendSourceScopeStatus: {
+    oneOf: [
+      {
+        type: "object",
+        additionalProperties: false,
+        required: ["status", "gaps"],
+        properties: {
+          status: {
+            const: "complete",
+            type: "string",
+          },
+          gaps: {
+            type: "array",
+            items: {
+              type: "string",
+              minLength: 1,
+              pattern: "\\S",
+            },
+            maxItems: 0,
+          },
+        },
+      },
+      {
+        type: "object",
+        additionalProperties: false,
+        required: ["status", "gaps"],
+        properties: {
+          status: {
+            const: "partial",
+            type: "string",
+          },
+          gaps: {
+            type: "array",
+            items: {
+              type: "string",
+              minLength: 1,
+              pattern: "\\S",
+            },
+            minItems: 1,
+          },
+        },
+      },
+    ],
+  },
+  BackendSourceSnapshot: {
+    type: "object",
+    additionalProperties: false,
+    required: [
+      "id",
+      "repositoryId",
+      "manifestHash",
+      "dirty",
+      "consistency",
+      "capturedAt",
+      "files",
+      "provider",
+    ],
+    properties: {
+      id: {
+        type: "string",
+        format: "uuid",
+      },
+      repositoryId: {
+        type: "string",
+        format: "uuid",
+      },
+      manifestHash: {
+        type: "string",
+        pattern: "^[a-f0-9]{64}$",
+      },
+      commit: {
+        type: "string",
+      },
+      dirty: {
+        type: "boolean",
+      },
+      consistency: {
+        type: "string",
+        enum: ["verified", "unverified"],
+      },
+      capturedAt: {
+        type: "string",
+        format: "date-time",
+      },
+      files: {
+        type: "array",
+        items: {
+          $ref: "#/components/schemas/BackendManifestFile",
+        },
+        maxItems: 100000,
+      },
+      provider: {
+        $ref: "#/components/schemas/BackendProvider",
+      },
+      role: {
+        type: "string",
+        enum: ["primary", "retained_provenance", "active_source"],
+      },
+    },
+  },
+  BackendSourceVector: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      documentVersion: {
+        type: "string",
+        const: "source-vector-v1",
+      },
+      partitions: {
+        type: "array",
+        items: {
+          $ref: "#/components/schemas/BackendSourcePartition",
+        },
+        maxItems: 256,
+      },
+      snapshots: {
+        type: "array",
+        items: {
+          $ref: "#/components/schemas/BackendSourceSnapshot",
+        },
+      },
+    },
+    required: ["documentVersion", "partitions", "snapshots"],
   },
   BackendSystemAttributes: {
     type: "object",
@@ -18033,55 +22226,21 @@ export const backendChangeSchemas: Record<string, ChangeSchema> = {
     ],
   },
   StartBackendAnalysisRequest: {
-    type: "object",
-    additionalProperties: false,
-    properties: {
-      kind: {
-        type: "string",
-        enum: ["diff", "impact"],
+    oneOf: [
+      {
+        $ref: "#/components/schemas/BackendAnalysisStartLegacy",
       },
-      fromRevisionId: {
-        type: "string",
-        format: "uuid",
-        pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
-        not: {
-          const: "00000000-0000-0000-0000-000000000000",
-        },
+      {
+        $ref: "#/components/schemas/BackendAnalysisStartPackage",
       },
-      target: {
-        $ref: "#/components/schemas/BackendAnalysisTarget",
+      {
+        $ref: "#/components/schemas/BackendAnalysisStartConformance",
       },
-      scope: {
-        $ref: "#/components/schemas/BackendAnalysisScope",
+      {
+        $ref: "#/components/schemas/BackendAnalysisStartEndpointReview",
       },
-      limits: {
-        $ref: "#/components/schemas/BackendAnalysisLimits",
-      },
-      observationMode: {
-        type: "string",
-        const: "none",
-      },
-      observationPins: {
-        type: "array",
-        items: {},
-        maxItems: 0,
-      },
-      idempotencyKey: {
-        type: "string",
-        minLength: 1,
-        maxLength: 128,
-        pattern: "^[!-~]+$",
-      },
-    },
-    required: [
-      "kind",
-      "fromRevisionId",
-      "target",
-      "scope",
-      "limits",
-      "observationMode",
-      "idempotencyKey",
     ],
+    type: "object",
   },
   StateDiagram: {
     type: "object",

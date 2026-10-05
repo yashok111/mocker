@@ -220,6 +220,9 @@ func NewEngine(graphs GraphReader, artifacts ArtifactProjectionReader) Engine {
 	return &analysisEngine{graphs: graphs, artifacts: artifacts}
 }
 func (e *analysisEngine) Analyze(ctx context.Context, in *ImmutableInput, emit func(PreparedSnapshot) error) (*TerminalSnapshot, error) {
+	if in.V2 != nil {
+		return e.analyzeB43(ctx, in, emit)
+	}
 	var target backendmodel.BackendReadTarget
 	var preview *backendmodel.AnalysisCommandPreviewInput
 	if in.To != nil {
@@ -276,6 +279,8 @@ func (e *analysisEngine) Analyze(ctx context.Context, in *ImmutableInput, emit f
 }
 
 type reportBuilder struct {
+	endpoint                         bool
+	endpointObjects                  map[ObjectAddress]bool
 	seeds                            map[ObjectAddress]bool
 	paths                            map[string]Witness
 	before, after                    *backendmodel.EffectiveGraphSnapshot
@@ -464,6 +469,10 @@ func (r *reportBuilder) finish(before, after *backendmodel.EffectiveGraphSnapsho
 	for _, g := range diagnostics(r.gaps) {
 		r.add("gaps", ObjectAddress{RecordType: "diagnostic", ID: g.ID}, "gap", "unknown", 0, g)
 	}
+	return r.complete(before, after)
+}
+
+func (r *reportBuilder) complete(before, after *backendmodel.EffectiveGraphSnapshot) (*TerminalSnapshot, error) {
 	verdict := "compatible_within_scope"
 	if r.potential {
 		verdict = "potential"

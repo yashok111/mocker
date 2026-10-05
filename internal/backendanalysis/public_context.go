@@ -27,6 +27,7 @@ type AnalysisContextTarget struct {
 	CommandPreview *AnalysisContextPreview          `json:"commandPreview,omitzero"`
 }
 type AnalysisInputContext struct {
+	V2               *InputContextV2                 `json:"-"`
 	DocumentVersion  string                          `json:"documentVersion"`
 	Kind             string                          `json:"kind"`
 	FromRevisionID   string                          `json:"fromRevisionId"`
@@ -43,6 +44,9 @@ type AnalysisInputContext struct {
 }
 
 func (in AnalysisInputContext) MarshalJSON() ([]byte, error) {
+	if in.V2 != nil {
+		return json.Marshal(in.V2)
+	}
 	type plain AnalysisInputContext
 	before, err := encodePins(in.BeforePins)
 	if err != nil {
@@ -76,6 +80,9 @@ func (r *Repo) Detail(ctx context.Context, pid, id string) (*JobDetail, error) {
 	var saved ImmutableInput
 	if err = json.Unmarshal(raw, &saved); err != nil {
 		return nil, err
+	}
+	if v := saved.V2; v != nil {
+		return &JobDetail{Job: job, Input: AnalysisInputContext{V2: &InputContextV2{DocumentVersion: "backend-analysis-context-v2", Kind: v.Kind, Payload: v.Payload, Limits: v.Limits, RuleSetVersion: v.RuleSetVersion, TraversalVersion: v.TraversalVersion, ObservationMode: v.ObservationMode}}}, nil
 	}
 	target := AnalysisContextTarget{}
 	if saved.CommandPreview != nil {

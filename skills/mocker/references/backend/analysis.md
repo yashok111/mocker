@@ -1,10 +1,10 @@
 # Bounded source analysis and blocking gaps
 
-This topic belongs to `mocker-backend-inspect` workflow7. Load and verify it
+This topic belongs to `mocker-backend-inspect` workflow8. Load and verify it
 against that actual owner's manifest in the selected immutable global guide set.
-It explains static source scope; this inspection procedure starts no durable job. For an authorized static diff/impact job select change2 and verify its `backend-analysis-jobs` topic in the same guide set.
+It explains static source scope; this inspection procedure starts no durable job. For an authorized static diff/impact job select change3 and verify its `backend-analysis-jobs` topic in the same guide set.
 
-## Baseline, candidate and intent in inspect7
+## Baseline, candidate and intent in inspect8
 
 Pin the full read target and complete response pins, not only a base revision. Native source6 retains all provider claims and separate own/dependency/field currentness. Full proposal origins distinguish intent from baseline support; changing an effective property does not refresh its baseline proof. Staged basic reads concern a current READY candidate and support no specialized traversal. A historical_metadata basis remains metadata testimony with its source5 hash/location and a semantic-support gap.
 
@@ -62,9 +62,9 @@ events/external services are atomic with the transaction. Unknown connection,
 isolation or membership stays unknown. A finite static witness does not prove
 termination, actual execution, measured behavior, all writers, data safety or
 proposal conformance. Source4 lineage and saved presentations have separate pinned procedures.
-Manual API pins use the separate inspect7 contract in backend-flow-reference.
-Source5 event navigation uses backend-events in this inspect7 set. Backend
-durable impact/rebase procedures belong to change2; runtime observations remain unavailable.
+Manual API pins use the separate inspect8 contract in backend-flow-reference.
+Source5 event navigation uses backend-events in this inspect8 set. Backend
+durable impact/rebase procedures belong to change3; runtime observations remain unavailable.
 
 ## Blocking source gap decision
 
@@ -95,7 +95,7 @@ specific inspected scope/missing input/reason, preserve the unknown and create
 no empty revision to imply progress. No compatible update procedure, no
 authorization or an unsupported provider transition means reads only.
 
-## Field-lineage certainty (inspect7)
+## Field-lineage certainty (inspect8)
 
 Explicit source4/5 mappings describe static dependencies. Aggregation retains all
 ordered co-inputs, not several independent equivalent transforms. Branch

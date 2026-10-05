@@ -24,7 +24,7 @@ func requireReadyDraft(p *ChangeProposal, in ApplyChangeProposalLifecycleInput) 
 // ApplyChangeProposalLifecycle binds a saved completed report without creating a
 // structural revision. Preparation is read-only; receipt and CAS are repeated at
 // the transaction boundary so concurrent edits cannot make evidence applicable.
-func (r *Repo) ApplyChangeProposalLifecycle(ctx context.Context, pid, id string, in ApplyChangeProposalLifecycleInput, reader AnalysisGateReader) (*ChangeProposalApplyResult, error) {
+func (r *Repo) applyChangeReady(ctx context.Context, pid, id string, in ApplyChangeProposalLifecycleInput, reader AnalysisGateReader) (*ChangeProposalApplyResult, error) {
 	if err := validateKey(in.IdempotencyKey); err != nil {
 		return nil, err
 	}
@@ -211,4 +211,12 @@ func validateReadyEvidence(pid, id string, in ApplyChangeProposalLifecycleInput,
 		return readyConflict("Acknowledge the complete unique documented gap set")
 	}
 	return nil
+}
+
+func (r *Repo) ApplyChangeProposalLifecycle(ctx context.Context, pid, id string, in ApplyChangeProposalLifecycleInput, reader AnalysisGateReader) (*ChangeProposalApplyResult, error) {
+	if in.Action != "ready" {
+		conformance, _ := reader.(ConformanceEvidenceReader)
+		return r.applyChangeLifecycleB43(ctx, pid, id, in, conformance)
+	}
+	return r.applyChangeReady(ctx, pid, id, in, reader)
 }

@@ -195,6 +195,9 @@ func (r *reportBuilder) traverse(ctx context.Context, before, after *backendmode
 		indexes[side] = idx
 	}
 	queue := initialQueue(indexes, seeds)
+	return r.traverseIndexes(ctx, indexes, queue)
+}
+func (r *reportBuilder) traverseIndexes(ctx context.Context, indexes map[string]*graphIndex, queue []traversalState) error {
 	visited := map[traversalKey]bool{}
 	scheduled := map[traversalKey]bool{}
 	for _, s := range queue {
@@ -425,6 +428,11 @@ type witnessKey struct {
 
 func (r *reportBuilder) followTransition(idx *graphIndex, s traversalState, t transition, witnesses map[ObjectAddress]int, emitted map[witnessKey]bool) (traversalState, bool) {
 	p := selectedProof(idx, s, t)
+	if r.endpoint {
+		r.endpointObjects[t.from] = true
+		r.endpointObjects[t.to] = true
+		r.endpointObjects[ObjectAddress{RecordType: "edge", ID: t.id}] = true
+	}
 	status := s.status
 	if p.Status == "desired" {
 		status = "desired"
@@ -441,7 +449,8 @@ func (r *reportBuilder) followTransition(idx *graphIndex, s traversalState, t tr
 		step.Context = new(value)
 	}
 	path := append(slices.Clone(s.steps), step)
-	if cyclicWitness(s, t.to, value) {
+	cyclic := cyclicWitness(s, t.to, value)
+	if cyclic && !r.endpoint {
 		return traversalState{}, false
 	}
 	witness := Witness{Side: s.side, Seed: s.seed, Affected: t.to, Steps: path, Status: status}
@@ -452,6 +461,9 @@ func (r *reportBuilder) followTransition(idx *graphIndex, s traversalState, t tr
 		}
 	}
 	wk := witnessKey{s.side, status, s.seed, t.to, value}
+	if r.endpoint {
+		wk.value = backendmodel.LineageValueRef{Kind: "endpoint_transition", NodeID: t.id}
+	}
 	if emitted[wk] {
 		return traversalState{}, false
 	}
@@ -460,7 +472,11 @@ func (r *reportBuilder) followTransition(idx *graphIndex, s traversalState, t tr
 		r.truncate("witness_limit")
 	} else {
 		witnesses[t.to]++
-		r.add("witnesses", t.to, idx.nodes[t.to.ID].Kind, status, len(path), witness)
+		if r.endpoint {
+			r.addEndpointItem(idx, t, witness, step.Evidence)
+		} else {
+			r.add("witnesses", t.to, idx.nodes[t.to.ID].Kind, status, len(path), witness)
+		}
 	}
 	if status == "unknown" {
 		reason := t.boundary
@@ -470,9 +486,14 @@ func (r *reportBuilder) followTransition(idx *graphIndex, s traversalState, t tr
 		r.gap(reason, t.to)
 		return traversalState{}, false
 	}
-	finding := RuleResult{RuleID: "declared-dependency", Version: "1", Object: t.to, Prerequisites: []string{"declared_typed_transition", "current_or_desired_proof"}, Status: "potential", Severity: "review", Certainty: status, Message: "Declared consumer may be affected", Evidence: step.Evidence}
-	r.add("findings", t.to, idx.nodes[t.to.ID].Kind, status, len(path), finding)
-	r.potential = true
+	if cyclic {
+		return traversalState{}, false
+	}
+	if !r.endpoint {
+		finding := RuleResult{RuleID: "declared-dependency", Version: "1", Object: t.to, Prerequisites: []string{"declared_typed_transition", "current_or_desired_proof"}, Status: "potential", Severity: "review", Certainty: status, Message: "Declared consumer may be affected", Evidence: step.Evidence}
+		r.add("findings", t.to, idx.nodes[t.to.ID].Kind, status, len(path), finding)
+		r.potential = true
+	}
 	return traversalState{side: s.side, kind: t.kind, seed: s.seed, object: t.to, value: value, steps: path, status: status}, true
 }
 

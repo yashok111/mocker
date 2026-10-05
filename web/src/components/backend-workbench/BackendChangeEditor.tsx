@@ -1,3 +1,4 @@
+import { BackendChangeLifecycle } from "./BackendChangeLifecycle";
 import { BackendAnalysisJobs } from "./BackendAnalysisJobs";
 import { BackendChangeRebase } from "./BackendChangeRebase";
 import { useBackendAnalysisRecovery, type AnalysisAttempt } from "./backendAnalysisRecovery";
@@ -56,6 +57,11 @@ export function BackendChangeEditor({
 }) {
   const recoveryKey = `backend-change-attempt:${projectId}:${detail.proposal.id}`;
   const [base, setBase] = useState(detail);
+  const [selectedReport, setSelectedReport] = useState<{
+    jobId: string;
+    resultVersion: number;
+    requestId?: string;
+  }>();
   const analysisRecovery = useBackendAnalysisRecovery(projectId);
   const [rebaseDirty, setRebaseDirty] = useState(false);
   const [inputEpoch, setInputEpoch] = useState(0);
@@ -88,7 +94,9 @@ export function BackendChangeEditor({
     onDirtyRef.current = onDirty;
   }, [onDirty]);
   const historical = base.revision.id !== base.proposal.currentDraftRevisionId;
+  const terminal = base.proposal.status === "implemented" || base.proposal.status === "archived";
   const locked =
+    terminal ||
     rebaseDirty ||
     analysisRecovery.blocked ||
     busy ||
@@ -131,7 +139,9 @@ export function BackendChangeEditor({
       const accepted = (event as CustomEvent<{ attempt: AnalysisAttempt; result: unknown }>).detail;
       if (
         !accepted ||
-        !["ready", "rebase"].includes(accepted.attempt.kind) ||
+        !["ready", "rebase", "implemented", "archive", "unarchive"].includes(
+          accepted.attempt.kind,
+        ) ||
         accepted.attempt.owner.proposalId !== base.proposal.id ||
         !("proposalRevisionId" in accepted.attempt.input) ||
         accepted.attempt.input.proposalRevisionId !== base.revision.id
@@ -469,7 +479,7 @@ export function BackendChangeEditor({
           </Stack>
         </Alert>
       )}
-      {!historical && !readOnly && (
+      {!historical && !readOnly && !terminal && (
         <Paper withBorder p="md">
           <fieldset
             disabled={locked || (commands.length >= 100 && editing === null)}
@@ -610,7 +620,7 @@ export function BackendChangeEditor({
           ))}
         </ol>
       </Stack>
-      {!readOnly && !historical && (
+      {!readOnly && !historical && !terminal && (
         <Group>
           <Button
             variant="light"
@@ -650,7 +660,7 @@ export function BackendChangeEditor({
           </Text>
         </Stack>
       )}
-      {!readOnly && !historical && (
+      {!readOnly && !historical && !terminal && (
         <fieldset
           disabled={locked || formDirty || commands.length > 0}
           style={{ border: "1px solid var(--mantine-color-default-border)", padding: 12 }}
@@ -698,7 +708,27 @@ export function BackendChangeEditor({
           ))}
         </ol>
       </details>
+      <BackendChangeLifecycle
+        onReport={(report) => setSelectedReport({ ...report, requestId: crypto.randomUUID() })}
+        projectId={projectId}
+        proposal={base}
+        disabled={
+          readOnly ||
+          historical ||
+          busy ||
+          commands.length > 0 ||
+          formDirty ||
+          rebaseDirty ||
+          recovery.blocked
+        }
+        onSaved={(value) => {
+          setBase(value);
+          onSaved(value);
+        }}
+      />
       <BackendAnalysisJobs
+        key={selectedReport?.requestId ?? "analysis"}
+        selectedReport={selectedReport}
         projectId={projectId}
         sourceRevisionId={base.revision.baseRevisionId}
         proposal={readOnly || historical ? undefined : base}
@@ -730,7 +760,7 @@ export function BackendChangeEditor({
           onSaved(value);
         }}
       />
-      {!readOnly && !historical && (
+      {!readOnly && !historical && !terminal && (
         <BackendChangeRebase
           key={base.revision.id}
           projectId={projectId}

@@ -153,6 +153,12 @@ func TestGuideRequiredCapabilitiesHaveMCPTools(t *testing.T) {
 		"backend-analysis-impact":         {"start_backend_analysis", "get_backend_analysis_results"},
 		"backend-change-rebase":           {"preview_backend_change_proposal_rebase", "apply_backend_change_proposal_rebase"},
 		"backend-change-ready":            {"apply_backend_change_proposal_lifecycle"},
+		"backend-change-package":          {"start_backend_analysis", "get_backend_analysis_results"},
+		"backend-conformance":             {"start_backend_analysis", "get_backend_analysis_results"},
+		"backend-endpoint-review":         {"start_backend_analysis", "get_backend_analysis_results"},
+		"backend-change-implemented":      {"apply_backend_change_proposal_lifecycle"},
+		"backend-change-archive":          {"apply_backend_change_proposal_lifecycle"},
+		"backend-change-unarchive":        {"apply_backend_change_proposal_lifecycle"},
 	}
 	if !inventory["get_backend_capabilities"] {
 		t.Error("workflow discovery tool is missing")

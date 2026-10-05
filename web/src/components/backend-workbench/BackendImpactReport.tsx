@@ -1,3 +1,4 @@
+import { BackendB43Report } from "./BackendB43Report";
 import classes from "./BackendAnalysisControls.module.css";
 import { BackendAnalysisArtifact } from "./BackendAnalysisArtifact";
 import { ArtifactTypedContent } from "./BackendArtifactContent";
@@ -18,6 +19,7 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import type {
   BackendAnalysisJobDetail,
+  BackendAnalysisInputContextV1,
   BackendAnalysisResultRecord,
   BackendChangeProposalDetail,
   BackendReadTarget,
@@ -46,7 +48,12 @@ export function BackendImpactReport(props: {
   dirty?: boolean;
   onSaved?: (value: BackendChangeProposalDetail) => void;
 }) {
-  return <ReportPage key={`${props.detail.job.id}:${props.resultVersion}`} {...props} />;
+  if (props.detail.input.documentVersion !== "backend-analysis-context-v1")
+    return <BackendB43Report key={`${props.detail.job.id}:${props.resultVersion}`} {...props} />;
+  const detail = { ...props.detail, input: props.detail.input };
+  return (
+    <ReportPage key={`${props.detail.job.id}:${props.resultVersion}`} {...props} detail={detail} />
+  );
 }
 function ReportPage({
   projectId,
@@ -57,7 +64,7 @@ function ReportPage({
   onSaved,
 }: {
   projectId: string;
-  detail: BackendAnalysisJobDetail;
+  detail: BackendAnalysisJobDetail & { input: BackendAnalysisInputContextV1 };
   resultVersion: number;
   proposal?: BackendChangeProposalDetail;
   dirty?: boolean;
@@ -281,7 +288,7 @@ function ReportRecord({
   item,
 }: {
   projectId: string;
-  detail: BackendAnalysisJobDetail;
+  detail: BackendAnalysisJobDetail & { input: BackendAnalysisInputContextV1 };
   item: BackendAnalysisResultRecord;
 }) {
   const [selection, setSelection] = useState<{
@@ -388,8 +395,10 @@ function ReportRecord({
         ) : (
           <>
             <AnalysisValue label="Изменение артефакта с точными pins" value={value} />
-            {value.before && <ArtifactTypedContent data={value.before.data} />}{" "}
-            {value.after && <ArtifactTypedContent data={value.after.data} />}
+            {"before" in value && value.before && (
+              <ArtifactTypedContent data={value.before.data} />
+            )}{" "}
+            {"after" in value && value.after && <ArtifactTypedContent data={value.after.data} />}
           </>
         )}
         {selection && (

@@ -15,7 +15,7 @@ func backendChangeProposalQuery(r *http.Request, detail bool) (url.Values, int, 
 	if r.ContentLength != 0 || r.TransferEncoding != nil {
 		return nil, 0, backendQueryError()
 	}
-	query, limit, err := backendProposalQueryStatuses(r, detail, []string{"draft", "ready"})
+	query, limit, err := backendProposalQueryStatuses(r, detail, []string{"draft", "ready", "implemented", "archived"})
 	if err != nil {
 		return nil, 0, err
 	}

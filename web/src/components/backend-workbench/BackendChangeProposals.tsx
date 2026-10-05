@@ -40,6 +40,7 @@ function ChangeProposalPanel({
   const recovery = useBackendChangeRecovery(changeCreateRecoveryKey(projectId), projectId);
   const attempt = recovery.attempt;
   const [name, setName] = useState(() => (attempt?.kind === "create" ? attempt.input.name : ""));
+  const [statusFilter, setStatusFilter] = useState("");
   const [selected, setSelected] = useState("");
   const [detail, setDetail] = useState<BackendChangeProposalDetail | null>(null);
   const [historical, setHistorical] = useState("");
@@ -231,6 +232,19 @@ function ChangeProposalPanel({
           </Button>
         </Alert>
       )}
+      <NativeSelect
+        label="Статус предложений"
+        value={statusFilter}
+        data={[
+          { value: "", label: "Все статусы" },
+          ...["draft", "ready", "implemented", "archived"].map((value) => ({
+            value,
+            label: value,
+          })),
+        ]}
+        disabled={busy || editorDirty || !!attempt || recovery.blocked}
+        onChange={(e) => setStatusFilter(e.currentTarget.value)}
+      />
       <Group align="end">
         <NativeSelect
           label="Полное предложение"
@@ -238,10 +252,14 @@ function ChangeProposalPanel({
           disabled={busy || editorDirty || !!attempt || recovery.blocked}
           data={[
             { value: "", label: list.isPending ? "Загрузка…" : "Выберите предложение" },
-            ...(list.data ?? []).map((item) => ({
-              value: item.id,
-              label: `${item.name} · версия ${item.version}`,
-            })),
+            ...(list.data ?? [])
+              .filter(
+                (item) => !statusFilter || item.status === statusFilter || item.id === selected,
+              )
+              .map((item) => ({
+                value: item.id,
+                label: `${item.name} · ${item.status} · версия ${item.version}`,
+              })),
           ]}
           onChange={(event) => {
             if (event.currentTarget.value) void load(event.currentTarget.value);

@@ -25,7 +25,7 @@ func scanChangeProposal(row interface{ Scan(...any) error }) (*ChangeProposal, e
 		return nil, err
 	}
 	if ready != nil {
-		if err = json.Unmarshal([]byte(*ready), &p.ReadyReference); err != nil {
+		if err = decodeLifecycleAssociation([]byte(*ready), p); err != nil {
 			return nil, err
 		}
 	}
@@ -279,7 +279,8 @@ func checkChangeProposalQuota(ctx context.Context, q importReader, pid, id strin
  (SELECT COALESCE(sum(length(CAST(document AS BLOB))),0) FROM backend_change_proposal_identities WHERE project_id=?)+
  (SELECT COALESCE(sum(length(CAST(document AS BLOB))+length(CAST(commands AS BLOB))),0) FROM backend_change_proposal_batches WHERE project_id=?)+
  (SELECT COALESCE(sum(length(CAST(c.document AS BLOB))),0) FROM backend_change_proposal_commands c JOIN backend_change_proposals p ON p.id=c.proposal_id WHERE p.project_id=?)+
- (SELECT COALESCE(sum(length(CAST(response AS BLOB))),0) FROM backend_command_receipts WHERE scope=? OR scope LIKE ?)`, pid, id, pid, pid, pid, pid, pid, "change-proposal-create:"+pid, "change-proposal-%:"+pid+":%").Scan(&proposals, &revisions, &retained)
+ (SELECT COALESCE(sum(length(CAST(ready_reference AS BLOB))),0) FROM backend_change_proposals WHERE project_id=? AND json_extract(ready_reference,'$.documentVersion')='backend-change-lifecycle/v1')+
+ (SELECT COALESCE(sum(length(CAST(response AS BLOB))),0) FROM backend_command_receipts WHERE scope=? OR scope LIKE ?)`, pid, id, pid, pid, pid, pid, pid, pid, "change-proposal-create:"+pid, "change-proposal-%:"+pid+":%").Scan(&proposals, &revisions, &retained)
 	if err != nil {
 		return err
 	}
@@ -356,7 +357,7 @@ func (r *Repo) ListChangeProposals(ctx context.Context, pid string, in ChangePro
 	if _, err := r.Get(ctx, pid); err != nil {
 		return nil, err
 	}
-	if in.Status != "" && in.Status != "draft" && in.Status != "ready" {
+	if in.Status != "" && !slices.Contains([]string{"draft", "ready", "implemented", "archived"}, in.Status) {
 		return nil, &FaultError{Status: 422, Code: "backend_unsupported_scope", Message: "Only draft and ready proposals are supported"}
 	}
 	if in.BaseRevisionID != "" && !ValidID(in.BaseRevisionID) {

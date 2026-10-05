@@ -398,7 +398,7 @@ func validatePrepared(p PreparedStart) (*ImmutableInput, error) {
 	if err := json.Unmarshal(p.InputJSON, &in); err != nil {
 		return nil, err
 	}
-	if in.ProjectID != p.ProjectID || in.Kind != "diff" && in.Kind != "impact" {
+	if in.ProjectID != p.ProjectID || in.Kind != "diff" && in.Kind != "impact" && !b43Kind(in.Kind) {
 		return nil, malformed("Invalid immutable input")
 	}
 	if p.OutputReservation < terminalHeadroom || p.OutputReservation > maxResultBytes {

@@ -17,16 +17,17 @@ const (
 )
 
 type ChangeProposal struct {
-	ReadyReference         *ChangeProposalReadyReference `json:"readyReference,omitzero"`
-	ID                     string                        `json:"id"`
-	ProjectID              string                        `json:"projectId"`
-	Name                   string                        `json:"name"`
-	Version                int64                         `json:"version"`
-	Status                 string                        `json:"status"`
-	CurrentDraftRevisionID string                        `json:"currentDraftRevisionId"`
-	CurrentDraftHash       string                        `json:"currentDraftHash"`
-	CreatedAt              time.Time                     `json:"createdAt"`
-	UpdatedAt              time.Time                     `json:"updatedAt"`
+	ImplementedReference   *ChangeProposalImplementedReference `json:"implementedReference,omitzero"`
+	ReadyReference         *ChangeProposalReadyReference       `json:"readyReference,omitzero"`
+	ID                     string                              `json:"id"`
+	ProjectID              string                              `json:"projectId"`
+	Name                   string                              `json:"name"`
+	Version                int64                               `json:"version"`
+	Status                 string                              `json:"status"`
+	CurrentDraftRevisionID string                              `json:"currentDraftRevisionId"`
+	CurrentDraftHash       string                              `json:"currentDraftHash"`
+	CreatedAt              time.Time                           `json:"createdAt"`
+	UpdatedAt              time.Time                           `json:"updatedAt"`
 }
 
 type ChangeRecordRef struct {

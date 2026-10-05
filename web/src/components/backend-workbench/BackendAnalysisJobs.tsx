@@ -1,3 +1,6 @@
+import { BackendChangePackage } from "./BackendChangePackage";
+import { BackendConformance } from "./BackendConformance";
+import { BackendEndpointReview } from "./BackendEndpointReview";
 import classes from "./BackendAnalysisControls.module.css";
 import { useState } from "react";
 import {
@@ -14,6 +17,7 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { useListBackendRevisions } from "@/api/generated/backend-projects/backend-projects";
 import type {
+  StartBackendAnalysisRequest,
   BackendAnalysisJob,
   BackendAnalysisTarget,
   BackendChangeProposalDetail,
@@ -32,6 +36,7 @@ export function BackendAnalysisJobs({
   inputEpoch = 0,
   disabled = false,
   onSaved,
+  selectedReport,
 }: {
   projectId: string;
   sourceRevisionId: string;
@@ -40,6 +45,7 @@ export function BackendAnalysisJobs({
   dirty?: boolean;
   inputEpoch?: number;
   disabled?: boolean;
+  selectedReport?: { jobId: string; resultVersion: number };
   onSaved?: (value: BackendChangeProposalDetail) => void;
 }) {
   const recovery = useBackendAnalysisRecovery(projectId);
@@ -47,8 +53,8 @@ export function BackendAnalysisJobs({
     [to, setTo] = useState(sourceRevisionId);
   const [kind, setKind] = useState<"diff" | "impact">("impact");
   const [cursors, setCursors] = useState([""]),
-    [selected, setSelected] = useState("");
-  const [version, setVersion] = useState<number>();
+    [selected, setSelected] = useState(selectedReport?.jobId ?? "");
+  const [version, setVersion] = useState<number | undefined>(selectedReport?.resultVersion);
   const [error, setError] = useState("");
   const [epochs, setEpochs] = useState<Record<string, number>>({});
   const [initialEpoch] = useState(inputEpoch);
@@ -71,6 +77,21 @@ export function BackendAnalysisJobs({
   function chooseJob(id: string) {
     setSelected(id);
     setVersion(undefined);
+  }
+  const savedDisabled =
+    disabled || dirty || !!(target && "commandPreview" in target) || recovery.blocked;
+  async function startB43(input: StartBackendAnalysisRequest) {
+    if (recovery.blocked) return;
+    try {
+      const result = await recovery.execute(makeAnalysisAttempt("start", { projectId }, input));
+      if (result && "id" in result) {
+        setEpochs((old) => ({ ...old, [result.id]: inputEpoch }));
+        chooseJob(result.id);
+        void list.refetch();
+      }
+    } catch (failure) {
+      setError(changeMessage(failure));
+    }
   }
   async function start() {
     if (disabled || recovery.blocked) return;
@@ -204,6 +225,29 @@ export function BackendAnalysisJobs({
           </details>
         )}
         {disabled && <Text size="sm">Завершите ввод и предпросмотр перед анализом буфера.</Text>}
+        {proposal && (
+          <>
+            {savedDisabled && (
+              <Text size="sm">
+                Пакет и соответствие требуют сохранённого черновика без локальных изменений.
+              </Text>
+            )}
+            <BackendChangePackage proposal={proposal} disabled={savedDisabled} onStart={startB43} />
+            <BackendConformance
+              key={proposal.revision.id}
+              proposal={proposal}
+              disabled={savedDisabled}
+              onStart={startB43}
+            />
+          </>
+        )}
+        <BackendEndpointReview
+          sourceRevisionId={sourceRevisionId}
+          proposal={proposal}
+          disabled={recovery.blocked}
+          intentDisabled={savedDisabled}
+          onStart={startB43}
+        />
         <LoadState query={list} label="заданий анализа" />
         <NativeSelect
           label="Задание анализа"

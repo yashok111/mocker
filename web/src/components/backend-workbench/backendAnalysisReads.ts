@@ -15,7 +15,10 @@ export async function readAnalysis(projectId: string, jobId: string, signal?: Ab
   if (
     response.status !== 200 ||
     response.data.job.id !== jobId ||
-    response.data.job.projectId !== projectId
+    response.data.job.projectId !== projectId ||
+    response.data.input.kind !== response.data.job.kind ||
+    (response.data.input.documentVersion === "backend-analysis-context-v1") !==
+      ["diff", "impact"].includes(response.data.job.kind)
   )
     throw new Error("Получено другое задание анализа.");
   return response.data;
@@ -59,6 +62,7 @@ export function analysisReadyReason(
   const { job, input } = detail,
     revision = proposal.revision;
   if (proposal.proposal.status === "ready") return "Черновик уже готов.";
+  if (proposal.proposal.status !== "draft") return "Готовность доступна только для черновика.";
   if (
     job.projectId !== proposal.proposal.projectId ||
     manifest.jobId !== job.id ||
@@ -71,6 +75,8 @@ export function analysisReadyReason(
     job.resultVersion !== manifest.resultVersion
   )
     return "Нужна финальная версия завершённого анализа влияния.";
+  if (input.documentVersion !== "backend-analysis-context-v1")
+    return "Нужен отчёт анализа влияния.";
   if (
     !("changeProposal" in input.target) ||
     input.target.changeProposal.proposalId !== proposal.proposal.id ||
@@ -89,5 +95,99 @@ export function analysisReadyReason(
   );
   if (manifest.changedIds.some((x) => !covered.has(JSON.stringify([x.recordType, x.id]))))
     return "Отчёт охватывает только часть изменённых объектов.";
+  return "";
+}
+
+/** Read every criterion page at the selected publication, never the mutable latest version. */
+export async function readConformanceCriteria(
+  projectId: string,
+  detail: BackendAnalysisJobDetail,
+  resultVersion: number,
+  signal?: AbortSignal,
+) {
+  const items: import("@/api/generated/schemas").BackendAnalysisConformanceCriterionDetail[] = [];
+  const seen = new Set<string>();
+  let cursor = "",
+    hash = "";
+  do {
+    const page = await readAnalysisResults(
+      projectId,
+      detail,
+      { section: "checks", resultVersion, limit: 100, ...(cursor ? { cursor } : {}) },
+      signal,
+    );
+    if (hash && hash !== page.manifest.semanticResultHash)
+      throw new Error("Хеш выбранного отчёта изменился");
+    hash = page.manifest.semanticResultHash;
+    for (const item of page.items)
+      if ("type" in item.detail && item.detail.type === "conformance_criterion")
+        items.push(item.detail);
+    if (items.length > 100) throw new Error("Реестр критериев превышает лимит");
+    cursor = page.nextCursor;
+    if (cursor && seen.has(cursor)) throw new Error("Неполный реестр критериев");
+    seen.add(cursor);
+  } while (cursor);
+  return { items, resultHash: hash };
+}
+export function analysisImplementedReason(
+  detail: BackendAnalysisJobDetail,
+  manifest: BackendAnalysisResultManifest | undefined,
+  proposal: BackendChangeProposalDetail | undefined,
+  criteria:
+    | import("@/api/generated/schemas").BackendAnalysisConformanceCriterionDetail[]
+    | undefined,
+  dirty: boolean,
+) {
+  if (dirty) return "Есть несохранённые изменения. Сначала сохраните черновик.";
+  if (!proposal || !manifest || !criteria)
+    return "Дождитесь точного отчёта и полного реестра критериев.";
+  if (proposal.proposal.status !== "ready")
+    return "Реализацию можно отметить только для готового предложения.";
+  if (
+    detail.input.documentVersion !== "backend-analysis-context-v2" ||
+    detail.input.kind !== "conformance"
+  )
+    return "Нужен отчёт соответствия.";
+  const p = detail.input.payload,
+    r = proposal.revision;
+  if (
+    detail.job.projectId !== proposal.proposal.projectId ||
+    detail.job.kind !== "conformance" ||
+    detail.job.status !== "completed" ||
+    detail.job.resultVersion !== manifest.resultVersion ||
+    manifest.jobId !== detail.job.id ||
+    manifest.analysisInputHash !== detail.job.analysisInputHash
+  )
+    return "Нужна финальная версия завершённого задания того же проекта.";
+  if (!manifest.complete || manifest.truncationReasons.length)
+    return "Неполный или усечённый отчёт блокирует реализацию.";
+  if (
+    p.changeProposal.proposalId !== proposal.proposal.id ||
+    p.changeProposal.proposalRevisionId !== r.id ||
+    proposal.proposal.currentDraftRevisionId !== r.id ||
+    proposal.proposal.currentDraftHash !== r.semanticHash ||
+    p.draftPins.effectiveSemanticHash !== r.semanticHash ||
+    p.baseRevisionId !== r.baseRevisionId ||
+    p.baseSource.semanticHash !== r.baseSemanticHash
+  )
+    return "Отчёт относится к другой базе или сохранённому черновику.";
+  if (
+    criteria.length !== r.criteria.length ||
+    r.criteria.some(
+      (c) =>
+        criteria.filter(
+          (row) =>
+            row.criterionKey === c.key &&
+            row.criterionKind === c.kind &&
+            row.required === c.required,
+        ).length !== 1,
+    )
+  )
+    return "Реестр отчёта не совпадает с критериями сохранённого черновика.";
+  const blockers = criteria.filter(
+    (c) => c.required && (c.outcome !== "satisfied" || c.criterionKind === "runtime_check"),
+  );
+  if (blockers.length)
+    return `Обязательные критерии не подтверждены: ${blockers.map((c) => c.criterionKey).join(", ")}. Исключения не обходят этот запрет.`;
   return "";
 }

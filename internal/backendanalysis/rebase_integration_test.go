@@ -17,14 +17,17 @@ import (
 // These tests cross the actual import, proposal, rebase, durable job admission
 // and engine boundaries. No graph or rebase result is fabricated for the engine.
 type rebaseAnalysisFixture struct {
-	t       *testing.T
-	graphs  *model.Repo
-	jobs    *Repo
-	db      *store.DB
-	project model.Project
-	schema  string
-	session *model.ImportSession
-	node    string
+	t                   *testing.T
+	graphs              *model.Repo
+	jobs                *Repo
+	db                  *store.DB
+	project             model.Project
+	schema              string
+	session             *model.ImportSession
+	node                string
+	extraEdges          int
+	extraEdgeAttributes map[string]jsontext.Value
+	withEndpoint        bool
 }
 
 func newRebaseAnalysisFixture(t *testing.T, schema string) *rebaseAnalysisFixture {
@@ -53,7 +56,7 @@ func (f *rebaseAnalysisFixture) importSource(key, name string, remove bool, shar
 		Profile: model.EventsProfile, Manifest: model.SourceManifest{RepositoryName: "orders", Provider: model.SourceProvider{Name: "fixture", Version: "1", Namespace: "provider-a", Method: "ast", Profiles: profiles, Limitations: []string{}}, Snapshot: model.SnapshotManifest{Consistency: "verified", CapturedAt: time.Date(2026, 10, 4, 0, 0, 0, 0, time.UTC), Files: []model.ManifestFile{{Path: "main.go", ContentHash: hash, FileType: "go", AnalysisStatus: "analyzed"}}}}}
 	for _, category := range []string{"files", "endpoints", "datastores", "migrations", "producers", "consumers", "jobs", "contracts", "tests"} {
 		count := int64(0)
-		if category == "files" {
+		if category == "files" || category == "endpoints" && f.withEndpoint {
 			count = 1
 		}
 		in.Inventory = append(in.Inventory, model.InventoryItem{Category: category, Status: "complete", KnownCount: count, Denominator: new(count), DiscoverySource: "fixture", Gaps: []string{}})
@@ -87,6 +90,36 @@ func (f *rebaseAnalysisFixture) importSource(key, name string, remove bool, shar
 	commands := []model.ImportCommand{
 		{Op: "upsert_node", Node: &model.ImportNode{ExternalKey: "handler", Kind: "handler", Name: name, Attributes: map[string]jsontext.Value{}, EvidenceKeys: []string{"proof"}}},
 		{Op: "upsert_evidence", Evidence: &model.ImportEvidence{ExternalKey: "proof", SubjectType: "node", SubjectKey: "handler", Method: "ast", Status: "explicit", Source: model.EvidenceSource{RepositoryID: session.RepositoryID, SnapshotID: session.SnapshotID, File: "main.go", ContentHash: hash}}},
+	}
+	if f.withEndpoint {
+		edge := &model.ImportEdge{ExternalKey: "endpoint-handles", Kind: "handles", Attributes: map[string]jsontext.Value{}, EvidenceKeys: []string{"endpoint-handles-proof"}}
+		if f.schema == "6" {
+			edge.FromRef = &model.ImportRecordRef{LocalKey: "endpoint"}
+			edge.ToRef = &model.ImportRecordRef{LocalKey: "handler"}
+		} else {
+			edge.FromKey = "endpoint"
+			edge.ToKey = "handler"
+		}
+		commands = append(commands, model.ImportCommand{Op: "upsert_node", Node: &model.ImportNode{ExternalKey: "endpoint", Kind: "http_operation", Name: "Cancel order", Attributes: map[string]jsontext.Value{"method": []byte(`"POST"`), "path": []byte(`"/orders/{id}/cancel"`)}, EvidenceKeys: []string{"endpoint-proof"}}}, model.ImportCommand{Op: "upsert_edge", Edge: edge})
+		for _, subject := range []struct{ typ, key string }{{"node", "endpoint"}, {"edge", "endpoint-handles"}} {
+			commands = append(commands, model.ImportCommand{Op: "upsert_evidence", Evidence: &model.ImportEvidence{ExternalKey: subject.key + "-proof", SubjectType: subject.typ, SubjectKey: subject.key, Method: "ast", Status: "explicit", Source: model.EvidenceSource{RepositoryID: session.RepositoryID, SnapshotID: session.SnapshotID, File: "main.go", ContentHash: hash}}})
+		}
+	}
+	for i := range f.extraEdges {
+		key := fmt.Sprintf("calls-%d", i)
+		proofKey := key + "-proof"
+		edge := &model.ImportEdge{ExternalKey: key, Kind: "calls", Attributes: map[string]jsontext.Value{}, EvidenceKeys: []string{proofKey}}
+		if f.extraEdgeAttributes != nil {
+			edge.Attributes = f.extraEdgeAttributes
+		}
+		if f.schema == "6" {
+			edge.FromRef = &model.ImportRecordRef{LocalKey: "handler"}
+			edge.ToRef = &model.ImportRecordRef{LocalKey: "handler"}
+		} else {
+			edge.FromKey = "handler"
+			edge.ToKey = "handler"
+		}
+		commands = append(commands, model.ImportCommand{Op: "upsert_edge", Edge: edge}, model.ImportCommand{Op: "upsert_evidence", Evidence: &model.ImportEvidence{ExternalKey: proofKey, SubjectType: "edge", SubjectKey: key, Method: "ast", Status: "explicit", Source: model.EvidenceSource{RepositoryID: session.RepositoryID, SnapshotID: session.SnapshotID, File: "main.go", ContentHash: hash}}})
 	}
 	if shared != nil {
 		commands = append([]model.ImportCommand{{Op: "claim_identity", ClaimIdentity: &model.SourceClaimIdentity{DecisionID: uuid.NewV7().String(), RecordType: "node", ExternalKey: "handler", Target: *shared, Reason: "Same explicit source object", EvidenceKeys: []string{"proof"}}}}, commands...)

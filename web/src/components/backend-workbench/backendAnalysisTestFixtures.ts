@@ -1,5 +1,6 @@
 import type {
   BackendAnalysisJobDetail,
+  BackendAnalysisInputContextV1,
   BackendAnalysisResultManifest,
 } from "@/api/generated/schemas";
 import { backendChangeSchemas } from "./backendChangeSchema";
@@ -9,10 +10,11 @@ import {
   changeTestID,
   changeHash,
 } from "./backendChangeTestFixtures";
-export function analysisTestDetail(): BackendAnalysisJobDetail {
+type LegacyDetail = BackendAnalysisJobDetail & { input: BackendAnalysisInputContextV1 };
+export function analysisTestDetail(): LegacyDetail {
   const value = changeFixtureValue(
     backendChangeSchemas.BackendAnalysisJobDetail!,
-  ) as unknown as BackendAnalysisJobDetail;
+  ) as unknown as LegacyDetail;
   const proposal = changeTestDetail();
   value.job = {
     ...value.job,

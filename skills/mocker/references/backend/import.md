@@ -6,8 +6,8 @@ metadata:
   workflowVersion: "7"
   requiredModelSchemaVersions: "[\"1\",\"2\",\"3\",\"4\",\"5\",\"6\"]"
   requiredCapabilities: "[\"backend-projects\",\"backend-revisions\",\"backend-graph-query\",\"backend-source-import\",\"backend-source-reconcile\",\"backend-revision-compare\",\"backend-relational-import\",\"backend-database-query\",\"backend-database-er\",\"backend-runtime-flow-import\",\"backend-flow-query\",\"backend-data-access-query\",\"backend-field-lineage-import\",\"backend-field-lineage-query\",\"backend-events-import\",\"backend-events-query\",\"backend-source-sync\",\"backend-representations\"]"
-  guideSetId: "sha256:dfb9851bf1c8ba63fe44094c929a300267ffbe0761f365ab1914fca3ead729b5"
-  manifestHash: "sha256:dfb9851bf1c8ba63fe44094c929a300267ffbe0761f365ab1914fca3ead729b5"
+  guideSetId: "sha256:97e79de75fb95af18f6e7fd9d6e1593feac23382e8b828c42a22c783b5ad563b"
+  manifestHash: "sha256:97e79de75fb95af18f6e7fd9d6e1593feac23382e8b828c42a22c783b5ad563b"
 ---
 
 # Source graph import and reconciliation
@@ -18,7 +18,7 @@ claims with evidence, not runtime observations. Relational import retains native
 ordered keys/FKs, unknowns and contradictions without choosing a truth by name. This workflow does
 not execute the inspected application, package scripts, SQL, migrations or bodies. Runtime source
 flows/query accesses use schema3/4/5; field lineage uses source4/5. Source5 adds evidence-backed
-events/jobs/service calls and contextual fields. DB edits remain separate draft proposals. The legacy procedure below does not provide incremental scopes or provider migration; select sync2 for those composed-source operations. Durable static diff/impact uses change2/backend-analysis-jobs in the same guide set. No source claim is executed application
+events/jobs/service calls and contextual fields. DB edits remain separate draft proposals. The legacy procedure below does not provide incremental scopes or provider migration; select sync2 for those composed-source operations. Durable static diff/impact uses change3/backend-analysis-jobs in the same guide set. No source claim is executed application
 behavior.
 
 ## Select a compatible complete procedure before writes
@@ -58,10 +58,10 @@ This independently installable leaf fetches references with `get_guide
 | `backend-examples` | import v7 | When a concrete fixture or recovery sequence is needed. |
 | `backend-profile-go-sql` | import v7 | For Go, SQL, ORM and migration source extraction. |
 | `backend-database-reference` | database v7 | For relational details, pinned ER, drift and unknown bounds. |
-| `backend-flow-reference` / `backend-analysis` / `backend-editor-projections` | inspect v7 | For schema3/4/5 flow/access and source4/5 lineage reads, bounded source certainty. |
+| `backend-flow-reference` / `backend-analysis` / `backend-editor-projections` | inspect v8 | For schema3/4/5 flow/access and source4/5 lineage reads, bounded source certainty. |
 
 Verify import-owned topics against this manifest. For database or inspect topics, select the
-advertised supported database7 or inspect7 owner in this same global set/hash, check all its
+advertised supported database7 or inspect8 owner in this same global set/hash, check all its
 schemas/capabilities and verify the returned actual owner tuple/contentHash. A dependency is not
 import-owned because import uses it. Project creation selects project2 at backend-overview before
 writes; then return to import.
@@ -167,7 +167,7 @@ protocol's Local audit gate.
     all required results and inspect full ordered columns/FKs/native definitions/evidence.
     Return project URL `/backend-projects/{projectId}`, revision ID, selected facet, source
     consistency, coverage/gaps/stale counts, unresolved objects and drift/unknown limitations.
-    Flow/access answers select inspect7 in this set and query the exact source3/4/5 committed
+    Flow/access answers select inspect8 in this set and query the exact source3/4/5 committed
     pin, page relevant results and open each record proof.
 
 ## Deletion, replay and comparison boundaries
@@ -183,7 +183,7 @@ then inspect before/after evidence; structural change proves no impact or execut
 Require schema4/field-lineage-v1 and both lineage capabilities under import7;
 load backend-model's full source4 shapes/upgrade/redaction/proof before staging.
 Preserve ordered inputs/exact nodeKey addresses; zero-input unknown is not constant.
-After commit select inspect7 at the exact source4 pin. Reimport carries frozen API
+After commit select inspect8 at the exact source4 pin. Reimport carries frozen API
 pins/bindings and stale/orphan labels; no new pin input.
 
 ## Owner dependency requirements in the proposed guide set
@@ -194,6 +194,6 @@ pins/bindings and stale/orphan labels; no new pin input.
 | mocker-backend-project | 2 | 1 |  | backend-projects, backend-project-metadata, backend-revisions, backend-annotations |
 | mocker-backend-import | 7 | 1,2,3,4,5,6 |  | backend-projects, backend-revisions, backend-graph-query, backend-source-import, backend-source-reconcile, backend-revision-compare, backend-relational-import, backend-database-query, backend-database-er, backend-runtime-flow-import, backend-flow-query, backend-data-access-query, backend-field-lineage-import, backend-field-lineage-query, backend-events-import, backend-events-query, backend-source-sync, backend-representations |
 | mocker-backend-database | 7 | 2,3,4,5,6 | proposal-relational-v1,saved-view-v1,proposal-graph-v1,saved-view-v2 | backend-projects, backend-revisions, backend-graph-query, backend-database-query, backend-database-er, backend-db-proposals, backend-db-typed-edits, backend-flow-query, backend-data-access-query, backend-saved-views, backend-field-lineage-query, backend-events-query, backend-change-proposals, backend-source-assertions, backend-saved-views-v2 |
-| mocker-backend-inspect | 7 | 3,4,5,6 | saved-view-v1,api-artifact-pins-v1,backend-editor-artifacts-v1,proposal-graph-v1,saved-view-v2,import-candidate-v1 | backend-projects, backend-revisions, backend-graph-query, backend-flow-query, backend-data-access-query, backend-saved-views, backend-field-lineage-query, backend-api-artifact-pins, backend-editor-projections, backend-events-query, backend-source-assertions, backend-import-candidate, backend-change-proposals, backend-representations, backend-saved-views-v2 |
+| mocker-backend-inspect | 8 | 3,4,5,6 | saved-view-v1,api-artifact-pins-v1,backend-editor-artifacts-v1,proposal-graph-v1,saved-view-v2,import-candidate-v1 | backend-projects, backend-revisions, backend-graph-query, backend-flow-query, backend-data-access-query, backend-saved-views, backend-field-lineage-query, backend-api-artifact-pins, backend-editor-projections, backend-events-query, backend-source-assertions, backend-import-candidate, backend-change-proposals, backend-representations, backend-saved-views-v2 |
 | mocker-backend-sync | 2 | 1,5,6 | import-candidate-v1 | backend-projects, backend-revisions, backend-graph-query, backend-source-import, backend-source-sync, backend-source-incremental-sync, backend-source-assertions, backend-import-candidate, backend-representations, backend-analysis-jobs, backend-analysis-diff, backend-analysis-impact |
-| mocker-backend-change | 2 | 5,6 | proposal-graph-v1 | backend-projects, backend-revisions, backend-graph-query, backend-change-proposals, backend-change-typed-edits, backend-source-assertions, backend-representations, backend-analysis-jobs, backend-analysis-diff, backend-analysis-impact, backend-change-rebase, backend-change-ready |
+| mocker-backend-change | 3 | 5,6 | proposal-graph-v1 | backend-projects, backend-revisions, backend-graph-query, backend-change-proposals, backend-change-typed-edits, backend-source-assertions, backend-representations, backend-analysis-jobs, backend-analysis-diff, backend-analysis-impact, backend-change-rebase, backend-change-ready, backend-change-package, backend-conformance, backend-endpoint-review, backend-change-implemented, backend-change-archive, backend-change-unarchive |

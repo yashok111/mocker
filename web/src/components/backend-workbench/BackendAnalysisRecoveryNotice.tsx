@@ -16,7 +16,12 @@ export function BackendAnalysisRecoveryNotice({ projectId }: { projectId: string
   });
   if (!attempt && !recovery.error && !recovery.message) return null;
   return (
-    <Alert color="yellow" aria-live="polite" title="Восстановление операции">
+    <Alert
+      color="yellow"
+      aria-live="polite"
+      title="Восстановление операции"
+      styles={{ title: { color: "var(--mantine-color-text)" } }}
+    >
       <Stack gap="xs">
         {recovery.error && <Text>{recovery.error.message}</Text>}
         {recovery.message && <Text>{recovery.message}</Text>}

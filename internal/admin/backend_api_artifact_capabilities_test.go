@@ -38,7 +38,7 @@ func TestBackendAPIArtifactCapabilityNegotiation(t *testing.T) {
 	}{
 		{"mocker-backend-import", "7", []string{"1", "2", "3", "4", "5", "6"}},
 		{"mocker-backend-database", "7", []string{"2", "3", "4", "5", "6"}},
-		{"mocker-backend-inspect", "7", []string{"3", "4", "5", "6"}},
+		{"mocker-backend-inspect", "8", []string{"3", "4", "5", "6"}},
 	} {
 		i := slices.IndexFunc(out.WorkflowVersions, func(w guide.Workflow) bool { return w.WorkflowID == want.owner })
 		if i < 0 || out.WorkflowVersions[i].WorkflowVersion != want.version {

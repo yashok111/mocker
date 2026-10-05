@@ -1,14 +1,14 @@
 ---
 name: mocker-backend-change
-description: Prepare typed backend graph proposals, resolve three-way rebase conflicts, run durable static diff/impact jobs and associate exact saved-draft reports with ready. Use for desired backend changes, source comparison or analysis recovery; inspection alone starts no job.
+description: Prepare typed backend graph proposals, resolve three-way rebase conflicts, run durable package/conformance/endpoint review jobs and bind exact saved-draft reports to ready/implemented lifecycle. Use for desired backend changes, source comparison or analysis recovery; inspection alone starts no job.
 metadata:
   workflowId: "mocker-backend-change"
-  workflowVersion: "2"
+  workflowVersion: "3"
   requiredModelSchemaVersions: "[\"5\",\"6\"]"
   requiredViewSchemaVersions: "[\"proposal-graph-v1\"]"
-  requiredCapabilities: "[\"backend-projects\",\"backend-revisions\",\"backend-graph-query\",\"backend-change-proposals\",\"backend-change-typed-edits\",\"backend-source-assertions\",\"backend-representations\",\"backend-analysis-jobs\",\"backend-analysis-diff\",\"backend-analysis-impact\",\"backend-change-rebase\",\"backend-change-ready\"]"
-  guideSetId: "sha256:dfb9851bf1c8ba63fe44094c929a300267ffbe0761f365ab1914fca3ead729b5"
-  manifestHash: "sha256:dfb9851bf1c8ba63fe44094c929a300267ffbe0761f365ab1914fca3ead729b5"
+  requiredCapabilities: "[\"backend-projects\",\"backend-revisions\",\"backend-graph-query\",\"backend-change-proposals\",\"backend-change-typed-edits\",\"backend-source-assertions\",\"backend-representations\",\"backend-analysis-jobs\",\"backend-analysis-diff\",\"backend-analysis-impact\",\"backend-change-rebase\",\"backend-change-ready\",\"backend-change-package\",\"backend-conformance\",\"backend-endpoint-review\",\"backend-change-implemented\",\"backend-change-archive\",\"backend-change-unarchive\"]"
+  guideSetId: "sha256:97e79de75fb95af18f6e7fd9d6e1593feac23382e8b828c42a22c783b5ad563b"
+  manifestHash: "sha256:97e79de75fb95af18f6e7fd9d6e1593feac23382e8b828c42a22c783b5ad563b"
 ---
 
 # Prepare a full graph proposal
@@ -17,7 +17,7 @@ A full proposal keeps one immutable source baseline and an independent sequence 
 
 ## Pin the procedure and baseline
 
-Read `get_server_config`/`get_backend_capabilities`. Select advertised change2, proposal-graph-v1, all required capabilities and a compatible immutable guide set. Verify workflowId/version/guideSetId/manifestHash/contentHash; on mismatch use the complete pinned server `backend-change-proposals` entrypoint. Unknown sets fail. Shared source semantics use import7; exact read/lineage/proof procedures use inspect7; database facets use database7. Verify each actual owner in the same set.
+Read `get_server_config`/`get_backend_capabilities`. Select advertised change3, proposal-graph-v1, all required capabilities and a compatible immutable guide set. Verify workflowId/version/guideSetId/manifestHash/contentHash; on mismatch use the complete pinned server `backend-change-proposals` entrypoint. Unknown sets fail. Shared source semantics use import7; exact read/lineage/proof procedures use inspect8; database facets use database7. Verify each actual owner in the same set.
 
 Read the chosen source revision explicitly. Source5 is supported with source5 vocabulary; a full proposal's structural schema6 tag does not upgrade that baseline or grant representation commands. Source6 admits domain_entity, dto, api_schema and representation_field. Select source6 explicitly at creation when those kinds are needed.
 
@@ -92,7 +92,7 @@ Every accepted commandId stays consumed, including no-ops, criteria-only changes
 
 Criteria are authored statements about desired structure, not evidence of test execution. The 10 closed variants cover object_exists/object_absent for node or edge, edge_exists, field_equals with typed selector/present-value, artifact_object_matches for the two artifact namespaces, test_attachment with exact source/owner references, and runtime_check. Required flags, target UUIDs, attachment scope and unknown status remain explicit. Empty criteria means none declared, not passed runtime checks.
 
-Page history with the selected immutable draft pinned. Source baseline/vector/artifact context belong to that historical revision, not newer aggregate metadata. Restore uses `restore_backend_change_proposal {projectId,proposalId,expectedVersion,proposalRevisionId,restoreRevisionId,idempotencyKey}` after explicit review. It appends a new draft on the same base; it neither replays old commands nor releases command/object IDs. Explicit rebase and ready follow the references below. Implemented/archive remain unavailable. Local undo changes only unsaved commands.
+Page history with the selected immutable draft pinned. Source baseline/vector/artifact context belong to that historical revision, not newer aggregate metadata. Restore uses `restore_backend_change_proposal {projectId,proposalId,expectedVersion,proposalRevisionId,restoreRevisionId,idempotencyKey}` after explicit review. It appends a new draft on the same base; it neither replays old commands nor releases command/object IDs. Explicit rebase and ready follow the references below. Implemented/archive/unarchive follow the handoff procedure below. Local undo changes only unsaved commands.
 
 ## Read intent and baseline separately
 
@@ -100,7 +100,7 @@ Use `{changeProposal:{proposalId,proposalRevisionId}}` with graph/node/evidence/
 
 Full-target assertions/evidence describe the exact baseline. Edited properties carry intent command/reason origins and no invented supporting provider proof. A newly created desired field may have no provider evidence. Source6 losing claims remain inspectable. Assertions are unsupported for source5 and full proposals based on source5; use their exact baseline evidence instead. Historical metadata proof retains its original source5 basis and cannot confirm the intended semantic value.
 
-Presentation saving belongs to inspect7/database7. For a full target, explicitly create/save SavedView-v2 with the exact target and returned view pins. The presentation does not update this proposal. Candidate staging cannot be saved as a view.
+Presentation saving belongs to inspect8/database7. For a full target, explicitly create/save SavedView-v2 with the exact target and returned view pins. The presentation does not update this proposal. Candidate staging cannot be saved as a view.
 
 ## Recover without changing an unknown request
 
@@ -110,8 +110,12 @@ For an unknown outcome, repeat exactly the saved request/key. For definitive 409
 
 ## Rebase and static analysis
 
-Read `get_guide {topic:"backend-change-rebase",guideSetId:selected.guideSetId}` before moving a saved draft to an explicitly selected source base. B/O/N conflicts need exact selectors, choices and reasons; ordered repair commands remain real commands. Read `get_guide {topic:"backend-analysis-jobs",guideSetId:selected.guideSetId}` before starting durable diff/impact, cancelling/retrying a job or marking ready. Both topics belong to change2 in this exact set; verify their returned owner/contentHash.
+Read `get_guide {topic:"backend-change-rebase",guideSetId:selected.guideSetId}` before moving a saved draft to an explicitly selected source base. B/O/N conflicts need exact selectors, choices and reasons; ordered repair commands remain real commands. Read `get_guide {topic:"backend-analysis-jobs",guideSetId:selected.guideSetId}` before starting durable diff/impact, cancelling/retrying a job or marking ready. Both topics belong to change3 in this exact set; verify their returned owner/contentHash.
 
 Only in a standalone `mocker-backend-change` installation, the local files relative to that package's SKILL.md are `references/rebase.md` and `references/analysis-jobs.md`. Root-only compatibility and server-topic readers use the pinned get_guide calls above; those leaf-local paths are not relative to the generated compatibility document.
 
 Ready is a static review association with an exact complete saved full-draft impact report. It is never runtime verification. Normal Apply, Restore and Rebase return to draft and clear ready association; older receipts and source/proposal bytes remain immutable. Source5 may retain snapshots with an empty contentHash and has a nonempty derived source vector. Preserve the returned legacy artifact context and exact pins instead of synthesizing source6 facts.
+
+## Structural handoff and endpoint review
+
+Read `get_guide {topic:"backend-change-handoff",guideSetId:selected.guideSetId}` for saved-only package, exact result-source conformance and implemented/archive/unarchive. Read `get_guide {topic:"backend-endpoint-review",guideSetId:selected.guideSetId}` for exact before/after endpoint IDs and explicit null removal. Both topics are change3-owned. Standalone local paths are `references/handoff.md` and `references/endpoint-review.md`; root-only installations use the pinned server topics. No step verifies runtime behavior.
