@@ -31,6 +31,7 @@ func immutableBytes(t *testing.T, r *Repo) map[string]string {
 	return out
 }
 func TestIdentityUpgradePreservesBytesAndCommittedAllocations(t *testing.T) {
+	t.Parallel()
 	r, db := testRepo(t)
 	p := createProject(t, r, "create")
 	in := firstImportFixture(p)

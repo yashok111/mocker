@@ -42,6 +42,7 @@ func emptyIncrementalChanges() ChangeManifest {
 }
 
 func TestIncrementalRecoveryReadyRestartAndExactReplay(t *testing.T) {
+	t.Parallel()
 	r, db := testRepo(t)
 	p := createProject(t, r, "incremental")
 	baseSession, base := commitSource6Fixture(t, r, p, source6Input(t, p))
@@ -144,6 +145,7 @@ func TestIncrementalRecoveryReadyRestartAndExactReplay(t *testing.T) {
 }
 
 func TestIncrementalRecoveryCancellationWritesNothing(t *testing.T) {
+	t.Parallel()
 	r, _ := testRepo(t)
 	p := createProject(t, r, "cancel")
 	baseSession, base := commitSource6Fixture(t, r, p, source6Input(t, p))
@@ -175,6 +177,7 @@ func TestIncrementalRecoveryCancellationWritesNothing(t *testing.T) {
 }
 
 func TestIncrementalScopeRepoUpdateRequiresDeclaredRoot(t *testing.T) {
+	t.Parallel()
 	r, _ := testRepo(t)
 	p := createProject(t, r, "scope")
 	baseSession, base := commitSource6Fixture(t, r, p, source6Input(t, p))
@@ -285,6 +288,7 @@ func TestIncrementalDeletionExplicitAndVerified(t *testing.T) {
 }
 
 func TestIncrementalCurrentnessCannotOverwriteProofWithoutReobservedClaim(t *testing.T) {
+	t.Parallel()
 	r, _ := testRepo(t)
 	p := createProject(t, r, "proof-only")
 	baseSession, base := commitSource6Fixture(t, r, p, source6Input(t, p))
@@ -309,6 +313,7 @@ func TestIncrementalCurrentnessCannotOverwriteProofWithoutReobservedClaim(t *tes
 }
 
 func TestIncrementalRecoveryCandidateFencesManifestAndCAS(t *testing.T) {
+	t.Parallel()
 	r, _ := testRepo(t)
 	p := createProject(t, r, "fences")
 	baseSession, base := commitSource6Fixture(t, r, p, source6Input(t, p))
@@ -375,6 +380,7 @@ func TestIncrementalRecoveryCandidateFencesManifestAndCAS(t *testing.T) {
 }
 
 func TestIncrementalCurrentnessForeignCallerRetainsProofAndGetsDependencyGap(t *testing.T) {
+	t.Parallel()
 	r, _ := testRepo(t)
 	p := createProject(t, r, "foreign")
 	selected, first := commitSource6Fixture(t, r, p, source6Input(t, p))
@@ -439,6 +445,7 @@ func TestIncrementalCurrentnessForeignCallerRetainsProofAndGetsDependencyGap(t *
 }
 
 func TestIncrementalDeletionRetainedMappingPreventsPortRemoval(t *testing.T) {
+	t.Parallel()
 	r, _ := testRepo(t)
 	p := createProject(t, r, "ports")
 	s, err := r.BeginImport(t.Context(), p.ID, source6Input(t, p))

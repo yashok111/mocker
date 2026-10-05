@@ -13,6 +13,7 @@ import (
 )
 
 func TestProposalProvenanceDoesNotRewriteSource(t *testing.T) {
+	t.Parallel()
 	r, detail, base, ids := proposalEvaluationFixture(t, "postgresql")
 	before := proposalSourceBytes(t, r)
 	c := proposalFK(ids)
@@ -83,6 +84,7 @@ func TestProposalNullableUnknownStaleAndSameValue(t *testing.T) {
 }
 
 func TestProposalFKUnknownUniqueness(t *testing.T) {
+	t.Parallel()
 	_, detail, base, ids := proposalEvaluationFixture(t, "postgresql")
 	for i, n := range base.Nodes {
 		if n.ID != ids["table:users"] && n.ID != ids["constraint:users:pk"] {
@@ -107,6 +109,7 @@ func TestProposalFKUnknownUniqueness(t *testing.T) {
 }
 
 func TestProposalFKReferencesAndDuplicateNames(t *testing.T) {
+	t.Parallel()
 	_, detail, base, ids := proposalEvaluationFixture(t, "postgresql")
 	for _, tc := range []struct {
 		name   string
@@ -137,6 +140,7 @@ func TestProposalFKReferencesAndDuplicateNames(t *testing.T) {
 }
 
 func TestProposalFKSelfAndCycles(t *testing.T) {
+	t.Parallel()
 	_, detail, base, ids := proposalEvaluationFixture(t, "postgresql")
 	self := proposalFK(ids)
 	self.CommandID = "self"
@@ -180,6 +184,7 @@ func TestProposalCommandLimits(t *testing.T) {
 }
 
 func TestProposalCriteriaKeyCollision(t *testing.T) {
+	t.Parallel()
 	_, detail, base, ids := proposalEvaluationFixture(t, "sqlite")
 	first, err := evaluateProposal(base, detail.Proposal, detail.Revision, []ProposalCommand{proposalNullable(ids, "require", false)})
 	if err != nil {
@@ -195,6 +200,7 @@ func TestProposalCriteriaKeyCollision(t *testing.T) {
 }
 
 func TestProposalUpdatesDesignedFK(t *testing.T) {
+	t.Parallel()
 	_, detail, base, ids := proposalEvaluationFixture(t, "sqlite")
 	first, err := evaluateProposal(base, detail.Proposal, detail.Revision, []ProposalCommand{proposalFK(ids)})
 	if err != nil {
@@ -220,6 +226,7 @@ func TestProposalUpdatesDesignedFK(t *testing.T) {
 }
 
 func TestProposalPreservesAllInheritedNativeFields(t *testing.T) {
+	t.Parallel()
 	_, detail, base, ids := proposalEvaluationFixture(t, "postgresql")
 	got, err := evaluateProposal(base, detail.Proposal, detail.Revision, []ProposalCommand{proposalNullable(ids, "require", false)})
 	if err != nil {
@@ -337,6 +344,7 @@ func TestProposalDesignedUUIDOracle(t *testing.T) {
 }
 
 func TestProposalCriteriaCollisionInReverseOrder(t *testing.T) {
+	t.Parallel()
 	_, detail, base, ids := proposalEvaluationFixture(t, "sqlite")
 	first, err := evaluateProposal(base, detail.Proposal, detail.Revision, []ProposalCommand{proposalNullable(ids, "require", false)})
 	if err != nil {
@@ -350,6 +358,7 @@ func TestProposalCriteriaCollisionInReverseOrder(t *testing.T) {
 }
 
 func TestProposalCriteriaCanTargetSelectedRelationship(t *testing.T) {
+	t.Parallel()
 	_, detail, base, ids := proposalEvaluationFixture(t, "postgresql")
 	edgeID := ""
 	for _, edge := range base.Edges {
@@ -402,6 +411,7 @@ func TestProposalCriteriaPairAndPayloadLimits(t *testing.T) {
 }
 
 func TestProposalProjectionSeparatesSourceAndIntent(t *testing.T) {
+	t.Parallel()
 	_, detail, base, ids := proposalEvaluationFixture(t, "postgresql")
 	candidate, err := evaluateProposal(base, detail.Proposal, detail.Revision, []ProposalCommand{proposalNullable(ids, "require", false), proposalFK(ids)})
 	if err != nil {
@@ -429,6 +439,7 @@ func TestProposalProjectionSeparatesSourceAndIntent(t *testing.T) {
 }
 
 func TestProposalProjectionRejectsMixedSubjects(t *testing.T) {
+	t.Parallel()
 	_, detail, base, ids := proposalEvaluationFixture(t, "sqlite")
 	candidate, err := evaluateProposal(base, detail.Proposal, detail.Revision, []ProposalCommand{proposalNullable(ids, "require", false)})
 	if err != nil {

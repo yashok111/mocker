@@ -882,6 +882,25 @@ make smoke-tls  # the HTTPS overlay end to end (see "HTTPS"); same requirements
 make plugin-test # @yashok111/mocker-test against ./bin/mocker (packages/mocker-test: install, tsc, oxlint, vitest)
 ```
 
+For the edit loop, select the package/test or UI file you are changing:
+
+```bash
+make test-fast TEST_PKGS=./internal/backendmodel TEST_RUN=TestInitialRevision
+make ui-test-fast UI_TEST_ARGS=src/components/design-canvas/ScenarioExecutionPanel.test.tsx
+```
+
+`test-fast` runs without race instrumentation and permits Go's test-result
+cache. With no filter it runs `./cmd/... ./internal/... ./api`. `ui-test-fast`
+runs Vitest without repeating typecheck. These are feedback commands; CI still
+uses the full uncached race gate and `ui-test` (typecheck plus all UI tests).
+Run `go test ./api -race -count=1` separately for contract changes: `make test`
+retains its existing `cmd`/`internal` scope. A cached PASS is not a fresh run. Independent fixtures use up to four test
+slots per package (`TEST_PARALLEL=4`); `TEST_P` separately bounds packages.
+
+Test database fixtures copy a closed, migrated empty image into independent
+files. Existing paths are never replaced, so restart tests retain their data;
+store migration tests still exercise empty/older schemas through `store.Open`.
+
 The scope is `./cmd` and `./internal`, not `./...`: `web/node_modules` now sits
 inside this Go module, and a single `.go` file of a transitive npm dependency
 would break build/vet/gofmt for everyone — unfixably, since it is not a project file.

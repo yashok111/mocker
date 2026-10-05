@@ -34,6 +34,7 @@ func applyPinTest(t *testing.T, s *APIArtifactService, pid string, in PreviewAPI
 }
 
 func TestAPIArtifactApplyCopiesAndReplaysBeforeDependencies(t *testing.T) {
+	t.Parallel()
 	s, base, ids, api := apiPinFixture(t)
 	in := pinTestInput(base, ids, api)
 	for _, table := range []string{"backend_graph_records", "backend_revision_sources"} {
@@ -84,6 +85,7 @@ func TestAPIArtifactApplyCopiesAndReplaysBeforeDependencies(t *testing.T) {
 }
 
 func TestAPIArtifactApplyABAClearAndContextOnlyChange(t *testing.T) {
+	t.Parallel()
 	s, base, ids, api := apiPinFixture(t)
 	a, _ := applyPinTest(t, s, base.Project.ID, pinTestInput(base, ids, api), "A")
 	owner := s.artifacts.(*apidesign.Repo)
@@ -211,6 +213,7 @@ func pinTestInput(out *ImportCommitResult, ids map[string]string, api *apidesign
 }
 
 func TestAPIArtifactPreviewExactSource4AndLegacyQuery(t *testing.T) {
+	t.Parallel()
 	s, out, ids, api := apiPinFixture(t)
 	// Find the source operation from the fixture rather than guessing correspondence.
 	state, err := loadRevisionState(t.Context(), s.repo.db.R, out.Project.ID, out.Revision.ID)

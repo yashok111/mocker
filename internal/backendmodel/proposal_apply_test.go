@@ -27,6 +27,7 @@ func proposalApplyInput(t *testing.T, r *Repo, d *ProposalDetail, key string, co
 }
 
 func TestProposalPreviewNoWrites(t *testing.T) {
+	t.Parallel()
 	r, detail, _, ids := proposalEvaluationFixture(t, "sqlite")
 	before := proposalSourceBytes(t, r)
 	var count, changes int64
@@ -59,6 +60,7 @@ func TestProposalPreviewNoWrites(t *testing.T) {
 }
 
 func TestProposalApplyCASAndReceipt(t *testing.T) {
+	t.Parallel()
 	r, detail, _, ids := proposalEvaluationFixture(t, "postgresql")
 	before := proposalSourceBytes(t, r)
 	in := proposalApplyInput(t, r, detail, "apply", proposalNullable(ids, "required", false))
@@ -157,6 +159,7 @@ func TestProposalApplyPreparedRace(t *testing.T) {
 }
 
 func TestProposalRollbackOnFault(t *testing.T) {
+	t.Parallel()
 	r, detail, _, ids := proposalEvaluationFixture(t, "postgresql")
 	in := proposalApplyInput(t, r, detail, "fault", proposalNullable(ids, "required", false))
 	before := proposalSourceBytes(t, r)
@@ -180,6 +183,7 @@ func TestProposalRollbackOnFault(t *testing.T) {
 }
 
 func TestProposalApplyReplayAfterRestart(t *testing.T) {
+	t.Parallel()
 	r, detail, _, ids := proposalEvaluationFixture(t, "sqlite")
 	one := proposalApplyInput(t, r, detail, "first", proposalFK(ids))
 	first, err := r.ApplyProposal(t.Context(), detail.Proposal.ProjectID, detail.Proposal.ID, one)
@@ -236,6 +240,7 @@ func TestProposalApplyReplayAfterRestart(t *testing.T) {
 }
 
 func TestProposalApplyHashDraftAndVersionPrecision(t *testing.T) {
+	t.Parallel()
 	r, detail, _, ids := proposalEvaluationFixture(t, "postgresql")
 	in := proposalApplyInput(t, r, detail, "hash", proposalNullable(ids, "required", false))
 	wrong := in
@@ -287,6 +292,7 @@ func TestProposalPreviewStrictWireAndExactVersion(t *testing.T) {
 }
 
 func TestProposalBaseOutdatedIsolation(t *testing.T) {
+	t.Parallel()
 	r, _ := testRepo(t)
 	out, ids := commitRelationalFixture(t, r, "postgresql", "v1")
 	detail, err := r.CreateProposal(t.Context(), out.Project.ID, proposalCreateInput(out, ids, "historical-preview"))
@@ -314,6 +320,7 @@ func TestProposalBaseOutdatedIsolation(t *testing.T) {
 }
 
 func TestProposalReadHistoricalHashAndCriteriaOnlyChange(t *testing.T) {
+	t.Parallel()
 	r, detail, _, ids := proposalEvaluationFixture(t, "sqlite")
 	one := proposalApplyInput(t, r, detail, "one", proposalNullable(ids, "require", false))
 	first, err := r.ApplyProposal(t.Context(), detail.Proposal.ProjectID, detail.Proposal.ID, one)

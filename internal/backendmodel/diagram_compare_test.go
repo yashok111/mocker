@@ -6,6 +6,7 @@ import (
 )
 
 func TestDiagramCompareStableIdentity(t *testing.T) {
+	t.Parallel()
 	r, _ := testRepo(t)
 	p := createProject(t, r, "compare")
 	doc := diagramTestDocument(p.CurrentRevisionID)

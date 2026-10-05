@@ -231,6 +231,7 @@ func TestSavedViewDatabaseScopeAndPinnedProposal(t *testing.T) {
 }
 
 func TestSavedViewWholeScopeAndUnknownTransaction(t *testing.T) {
+	t.Parallel()
 	r, db := testRepo(t)
 	p := createProject(t, r, "whole-scope")
 	s := runtimeQueryFixture(t)

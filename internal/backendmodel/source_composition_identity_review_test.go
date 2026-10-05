@@ -54,6 +54,7 @@ func TestSource6RenamePreservesStableKind(t *testing.T) {
 }
 
 func TestSource6RenameRejectsSourceAndTargetUpserts(t *testing.T) {
+	t.Parallel()
 	r, _ := testRepo(t)
 	p := createProject(t, r, "two-keys")
 	old, base := commitSource6Fixture(t, r, p, source6Input(t, p))

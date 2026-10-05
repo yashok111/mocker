@@ -89,6 +89,7 @@ func TestSource6LegacyProofBasis(t *testing.T) {
 }
 
 func TestSource6RetainedPartitionExtension(t *testing.T) {
+	t.Parallel()
 	r, _ := testRepo(t)
 	p := createProject(t, r, "legacy")
 	old, err := r.BeginImport(t.Context(), p.ID, eventsProfileInput(firstImportFixture(p), false))
@@ -137,6 +138,7 @@ func TestSource6RetainedPartitionExtension(t *testing.T) {
 }
 
 func TestSource6FreshProofCannotClaimLegacyBasis(t *testing.T) {
+	t.Parallel()
 	r, _ := testRepo(t)
 	p := createProject(t, r, "fresh")
 	s, err := r.BeginImport(t.Context(), p.ID, source6Input(t, p))
@@ -157,6 +159,7 @@ func TestSource6FreshProofCannotClaimLegacyBasis(t *testing.T) {
 }
 
 func TestSource6BootstrapPreservesPartialForeignKeyFacet(t *testing.T) {
+	t.Parallel()
 	r, _ := testRepo(t)
 	p := createProject(t, r, "partial-fk")
 	in := eventsProfileInput(relationalFixtureInput(t, p, "postgresql", "v1"), false)
@@ -192,6 +195,7 @@ func TestSource6BootstrapPreservesPartialForeignKeyFacet(t *testing.T) {
 }
 
 func TestSource6LegacyBranchBytesWithOptionalParent(t *testing.T) {
+	t.Parallel()
 	r, _ := testRepo(t)
 	p := createProject(t, r, "optional-parent")
 	s, err := r.BeginImport(t.Context(), p.ID, eventsProfileInput(firstImportFixture(p), false))

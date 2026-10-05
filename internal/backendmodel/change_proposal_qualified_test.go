@@ -7,6 +7,7 @@ import (
 )
 
 func TestChangeProposalTwoProvidersRetainIndependentIntendedKeys(t *testing.T) {
+	t.Parallel()
 	r, _ := testRepo(t)
 	p := createProject(t, r, "qualified")
 	firstSession, first := commitSource6Fixture(t, r, p, source6Input(t, p))

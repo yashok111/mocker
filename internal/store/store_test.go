@@ -2,6 +2,7 @@ package store_test
 
 import (
 	"os"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -262,4 +263,31 @@ func insertLegacyEntity(t *testing.T, db *store.DB, resourceID int64, scopeKey, 
 		t.Fatalf("legacy entity id: %v", err)
 	}
 	return id
+}
+
+// URI delimiters in a filesystem path must not redirect two fixtures to the
+// same truncated filename (testing's duplicate subtest names contain '#').
+func TestOpenEscapesFilenameDelimiters(t *testing.T) {
+	t.Chdir(t.TempDir())
+	for _, name := range []string{"one#fragment.db", "two?query.db", "three%20literal.db", "relative#name.db"} {
+		if runtime.GOOS == "windows" && strings.Contains(name, "?") {
+			continue
+		}
+		path := t.TempDir() + "/" + name
+		if strings.HasPrefix(name, "relative") {
+			path = name
+		}
+		db, err := store.Open(t.Context(), path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() {
+			if err := db.Close(); err != nil {
+				t.Error(err)
+			}
+		})
+		if _, err := os.Stat(path); err != nil {
+			t.Fatalf("database not created at literal path %q: %v", path, err)
+		}
+	}
 }

@@ -54,7 +54,7 @@ CAP := $(shell command -v systemd-run >/dev/null 2>&1 && \
 	grep -qw memory /sys/fs/cgroup/user.slice/user-$$(id -u).slice/cgroup.controllers 2>/dev/null && \
 	echo systemd-run --user --scope --quiet -p MemoryMax=$(CAP_MEM) -p MemorySwapMax=$(CAP_SWAP) --)
 
-.PHONY: build run release dist ui ui-dev ui-gen ui-lint ui-test plugin-test plugin-build plugin-pack guide-sync test lint fmt docker init up down up-tls down-tls tls-init tls-root smoke smoke-tls hash-password clean
+.PHONY: build run release dist ui ui-dev ui-gen ui-lint ui-test plugin-test plugin-build plugin-pack guide-sync test test-fast ui-test-fast lint fmt docker init up down up-tls down-tls tls-init tls-root smoke smoke-tls hash-password clean
 
 build: ## Build the mocker binary into ./bin
 	mkdir -p bin
@@ -118,6 +118,12 @@ guide-sync: ## Generate guides, aliases and manifests from canonical owners in s
 ui-test: ## vitest + tsc --noEmit over web/
 	$(CAP) sh -c 'cd web && corepack yarn typecheck && corepack yarn test'
 
+# Pass a file/path filter for the edit loop; ui-test remains the full typecheck
+# and test gate used by CI.
+UI_TEST_ARGS ?=
+ui-test-fast: ## Run Vitest only; e.g. UI_TEST_ARGS=src/components/ScenariosPage.test.tsx
+	$(CAP) sh -c 'cd web && corepack yarn test $(UI_TEST_ARGS)'
+
 plugin-test: build ## @yashok111/mocker-test (packages/mocker-test): install, typecheck, lint, vitest against ./bin/mocker; memory-capped
 	$(CAP) sh -c 'cd packages/mocker-test && corepack yarn install --immutable && corepack yarn typecheck && corepack yarn lint && corepack yarn test'
 
@@ -152,13 +158,26 @@ plugin-pack: ## Tarball of @yashok111/mocker-test for hand distribution: package
 # code is upstream's to find. Do NOT extend the pattern to
 # golang.org/x/crypto/argon2: tried, the detector then reports FALSE races
 # on the hash goroutines' results in three packages.
+# Start the measured longest packages first; Go de-duplicates the explicit
+# paths against the wildcard, which still discovers every new package.
+TEST_SUITE := ./internal/backendmodel ./internal/mcp ./cmd/... ./internal/...
 TEST_P ?= 2
+# Bound independent per-test fixtures separately from package concurrency.
+TEST_PARALLEL ?= 4
 # The expanded MCP race suite outgrew the 15m/30m package budgets while tests
 # kept advancing through SDK schema registration. Allow 45m for the aggregate;
 # individual operation deadlines stay enforced. Override for slower hosts.
 TEST_TIMEOUT ?= 45m
 test: ## Test suite scoped to ./cmd ./internal, race detector, memory-capped (see CAP above and the comment above)
-	$(CAP) go test ./cmd/... ./internal/... -race -count=1 -p $(TEST_P) -timeout $(TEST_TIMEOUT) -gcflags='modernc.org/...=-race=false'
+	$(CAP) go test $(TEST_SUITE) -race -count=1 -p $(TEST_P) -parallel $(TEST_PARALLEL) -timeout $(TEST_TIMEOUT) -gcflags='modernc.org/...=-race=false'
+
+# Keep the uncached race gate above unchanged. Local edits can select packages
+# and tests, and unchanged packages may use Go's normal test-result cache.
+TEST_PKGS ?= $(TEST_SUITE) ./api
+TEST_RUN ?= .
+TEST_FAST_TIMEOUT ?= 5m
+test-fast: ## Non-race edit loop; e.g. TEST_PKGS=./internal/backendmodel TEST_RUN=TestInitialRevision
+	$(CAP) go test $(TEST_PKGS) -p $(TEST_P) -parallel $(TEST_PARALLEL) -timeout $(TEST_FAST_TIMEOUT) -run '$(TEST_RUN)'
 
 lint: ## go vet, gofmt and golangci-lint, scoped to ./cmd ./internal, memory-capped (see CAP above and the comment above test)
 	$(CAP) go vet ./cmd/... ./internal/...

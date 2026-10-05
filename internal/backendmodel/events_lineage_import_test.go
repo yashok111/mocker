@@ -37,6 +37,7 @@ func eventsLineageCommands(t *testing.T, s *ImportSession) []ImportCommand {
 	return cs
 }
 func TestEventsLineageImportExactRouteResolution(t *testing.T) {
+	t.Parallel()
 	r, _ := testRepo(t)
 	p := createProject(t, r, "create")
 	s, err := r.BeginImport(t.Context(), p.ID, eventsInput(p))
@@ -72,6 +73,7 @@ func TestEventsLineageImportExactRouteResolution(t *testing.T) {
 }
 
 func TestEventsLineageQueryTransportWitnessAndStaleBoundary(t *testing.T) {
+	t.Parallel()
 	r, _ := testRepo(t)
 	p := createProject(t, r, "create")
 	s, err := r.BeginImport(t.Context(), p.ID, eventsInput(p))
@@ -317,6 +319,7 @@ func eventsLineageAddMapping(t *testing.T, cs []ImportCommand, key, parent strin
 	return cs
 }
 func TestEventsLineageSameFieldTwoRoutesAndDeserialization(t *testing.T) {
+	t.Parallel()
 	r, _ := testRepo(t)
 	p := createProject(t, r, "create")
 	s, err := r.BeginImport(t.Context(), p.ID, eventsInput(p))

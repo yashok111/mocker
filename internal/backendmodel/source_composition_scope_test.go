@@ -6,6 +6,7 @@ import (
 )
 
 func TestSource6InventoryUsesFinalSelectedClaims(t *testing.T) {
+	t.Parallel()
 	r, _ := testRepo(t)
 	p := createProject(t, r, "inventory")
 	in := source6Input(t, p)

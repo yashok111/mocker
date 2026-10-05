@@ -3,26 +3,18 @@ package backendmodel
 import (
 	"encoding/json/v2"
 	"errors"
-	"log/slog"
 	"math"
-	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
 
 	"github.com/yashok111/mocker/internal/store"
+	"github.com/yashok111/mocker/internal/testkit"
 )
 
 func testRepo(t *testing.T) (*Repo, *store.DB) {
 	t.Helper()
-	db, err := store.Open(t.Context(), filepath.Join(t.TempDir(), "backend.db"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = db.Close() })
-	if err := db.Migrate(t.Context(), slog.Default()); err != nil {
-		t.Fatal(err)
-	}
+	db := testkit.NewDB(t)
 	return NewRepo(db), db
 }
 
@@ -50,6 +42,7 @@ func renameInput(version int64, key, name string) CommandsInput {
 }
 
 func TestInitialRevisionAndMetadataIsolation(t *testing.T) {
+	t.Parallel()
 	r, _ := testRepo(t)
 	p := createProject(t, r, "create")
 	if !ValidID(p.ID) || !ValidID(p.CurrentRevisionID) || p.Version != 1 || len(p.Repositories) != 0 {
@@ -91,6 +84,7 @@ func TestInitialRevisionAndMetadataIsolation(t *testing.T) {
 }
 
 func TestReceiptsSurviveRestartAndReplayOriginalResponse(t *testing.T) {
+	t.Parallel()
 	r, db := testRepo(t)
 	p := createProject(t, r, "create")
 	first, err := r.Apply(t.Context(), p.ID, renameInput(1, "rename", "Shipping"))
@@ -162,6 +156,7 @@ func TestConcurrentMetadataWritesUseCAS(t *testing.T) {
 }
 
 func TestPaginationValidationAndScope(t *testing.T) {
+	t.Parallel()
 	r, _ := testRepo(t)
 	for _, key := range []string{"a", "b", "c"} {
 		createProject(t, r, key)
@@ -195,6 +190,7 @@ func TestPaginationValidationAndScope(t *testing.T) {
 }
 
 func TestInvalidMutationsAndVersionOverflowAreAtomic(t *testing.T) {
+	t.Parallel()
 	r, db := testRepo(t)
 	for _, in := range []CreateInput{{Name: "", IdempotencyKey: "key"}, {Name: strings.Repeat("界", 201), IdempotencyKey: "key"}, {Name: "ok"}, {Name: "ok", IdempotencyKey: "a\nb"}} {
 		_, err := r.Create(t.Context(), in)

@@ -78,6 +78,7 @@ func TestCompareDeterminismDeletionAndCancellation(t *testing.T) {
 }
 
 func TestComparePinnedDatabasePagesAndHeadChanges(t *testing.T) {
+	t.Parallel()
 	r, _ := testRepo(t)
 	p := createProject(t, r, "compare-project")
 	s, err := r.BeginImport(t.Context(), p.ID, firstImportFixture(p))

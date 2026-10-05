@@ -107,6 +107,7 @@ func assertJSONEqual(t *testing.T, a, b any) {
 }
 
 func TestProposalReadCursorExclusiveTarget(t *testing.T) {
+	t.Parallel()
 	r, d, _, ids := proposalEvaluationFixture(t, "sqlite")
 	pid := d.Proposal.ProjectID
 	p := &ProposalReadTarget{ProposalID: d.Proposal.ID, ProposalRevisionID: d.Revision.ID}

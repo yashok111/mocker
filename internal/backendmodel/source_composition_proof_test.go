@@ -71,6 +71,7 @@ func TestSource6RuntimeRelationsRequireBoundedProof(t *testing.T) {
 }
 
 func TestSource6ReferencesBindFinalCandidateAndExactBase(t *testing.T) {
+	t.Parallel()
 	r, _ := testRepo(t)
 	p := createProject(t, r, "dependency")
 	s, err := r.BeginImport(t.Context(), p.ID, source6Input(t, p))
@@ -167,6 +168,7 @@ func TestSource6UnselectedFacetKeepsPriorCurrentness(t *testing.T) {
 }
 
 func TestSource6UnresolvedCoveragePartial(t *testing.T) {
+	t.Parallel()
 	r, _ := testRepo(t)
 	p := createProject(t, r, "unresolved")
 	s, err := r.BeginImport(t.Context(), p.ID, source6Input(t, p))

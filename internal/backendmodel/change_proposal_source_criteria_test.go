@@ -7,6 +7,7 @@ import (
 )
 
 func TestChangeProposalSourceCriterionTopLevelTypes(t *testing.T) {
+	t.Parallel()
 	r, _, d := changeFixture(t)
 	source, err := r.ResolveSourceGraph(t.Context(), d.Proposal.ProjectID, d.Revision.BaseRevisionID)
 	if err != nil {

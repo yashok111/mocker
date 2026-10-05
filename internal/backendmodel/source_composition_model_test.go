@@ -38,6 +38,7 @@ func source6Input(t *testing.T, p *Project) BeginImportInput {
 }
 
 func TestSource6ProfileAdmission(t *testing.T) {
+	t.Parallel()
 	r, _ := testRepo(t)
 	p := createProject(t, r, "source6")
 	in := source6Input(t, p)

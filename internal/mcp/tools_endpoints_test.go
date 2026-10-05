@@ -578,7 +578,7 @@ func TestDeactivateScenario_500IsToolError(t *testing.T) {
 func TestListEndpoints_carriesKindAndStream(t *testing.T) {
 	t.Parallel()
 	fc := &fakeCaller{status: http.StatusOK, body: []byte(`{"endpoints":[{"id":3,"method":"GET","path":"/events","canonicalPath":"/events","overrideOn":true,"routeOff":false,"activeStatus":200,"responses":{},"kind":"sse","stream":{"tick":{"intervalMs":500,"schema":{"type":"object"}}},"createdAt":0,"updatedAt":0,"editVersion":1}]}`)}
-	h := New(fc, testKey, testConfig(), nil).Handler()
+	h := newToolFixture(fc).Handler()
 	rec := doMCP(t, h, `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"list_endpoints","arguments":{"workspaceId":7}}}`,
 		map[string]string{"Authorization": "Bearer " + testKey})
 	body := rec.Body.String()

@@ -91,7 +91,7 @@ func TestBackendArtifactToolsStrictAdmissionAndRawCarrier(t *testing.T) {
 		}
 	}
 	*calls = recordingCaller{status: 200, body: []byte("{\n \"version\":9007199254740995, \"name\":\"<literal>&\"\n}\n")}
-	endpoint := New(calls, testKey, testConfig(), nil).Handler()
+	endpoint := newToolFixture(calls).Handler()
 	rec := doMCP(t, endpoint, `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"preview_backend_artifact_pins","arguments":`+valid+`}}`, map[string]string{"Authorization": "Bearer " + testKey})
 	var env struct {
 		Result struct {
@@ -161,7 +161,7 @@ func TestBackendArtifactToolsPublicParity(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler := New(server, testKey, testConfig(), nil).Handler()
+	handler := newToolFixture(server).Handler()
 	var lastText string
 	call := func(name string, input any, out any) []byte {
 		t.Helper()
@@ -423,7 +423,7 @@ func TestBackendArtifactApplyReservationCompactMCP(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler := New(server, testKey, testConfig(), nil).Handler()
+	handler := newToolFixture(server).Handler()
 	var lastText string
 	call := func(name string, input any, out any) []byte {
 		t.Helper()
@@ -589,7 +589,7 @@ func TestBackendArtifactApplyReservationConfiguredMCP(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler := New(server, testKey, testConfig(), nil).Handler()
+	handler := newToolFixture(server).Handler()
 	var lastText string
 	call := func(name string, input any, out any) []byte {
 		t.Helper()

@@ -10,6 +10,7 @@ import (
 )
 
 func TestRelationalProfileEmptyStoreReopen(t *testing.T) {
+	t.Parallel()
 	r, db := testRepo(t)
 	p := createProject(t, r, "create")
 	rev, err := r.Revision(t.Context(), p.ID, p.CurrentRevisionID)
@@ -340,6 +341,7 @@ func TestRelationalProfileExtensionPublishesOnlyOnCommit(t *testing.T) {
 }
 
 func TestRelationalProfileB04ReceiptsAfterExtensionRestart(t *testing.T) {
+	t.Parallel()
 	r, db := testRepo(t)
 	p := createProject(t, r, "create")
 	begin := firstImportFixture(p)

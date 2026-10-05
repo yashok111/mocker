@@ -11,6 +11,7 @@ import (
 )
 
 func TestSourceReadFixComparisonCurrentness(t *testing.T) {
+	t.Parallel()
 	r, _ := testRepo(t)
 	p := createProject(t, r, "review-currentness-only")
 	initial, first := commitSource6Fixture(t, r, p, source6Input(t, p))
@@ -190,6 +191,7 @@ func TestSourceReadFixFlowNestedWireAndProof(t *testing.T) {
 }
 
 func TestSourceReadFixDatabaseForeignKeyProofNavigation(t *testing.T) {
+	t.Parallel()
 	r, _ := testRepo(t)
 	p := createProject(t, r, "source6-fk-proof")
 	in := source6Input(t, p)
@@ -242,6 +244,7 @@ func TestSourceReadFixDatabaseForeignKeyProofNavigation(t *testing.T) {
 }
 
 func TestSourceReadFixRealDependencyOnlyComparisonAndSelection(t *testing.T) {
+	t.Parallel()
 	f := sourceReviewSharedValue(t, "column", "different")
 	session, batch := f.mapping(t, f.a)
 	before := sourceReviewCommit(t, f.repo, f.project, session, batch.AcceptedVersion, "provider-a")

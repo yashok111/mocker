@@ -20,6 +20,7 @@ func source6SharedInput(t *testing.T, r *Repo, p *Project, repository string) (B
 }
 
 func TestSource6BatchClaimBeforeUpsert(t *testing.T) {
+	t.Parallel()
 	r, _ := testRepo(t)
 	p := createProject(t, r, "shared")
 	a, first := commitSource6Fixture(t, r, p, source6Input(t, p))
@@ -73,6 +74,7 @@ func TestSource6BatchClaimBeforeUpsert(t *testing.T) {
 }
 
 func TestSource6BatchRejectsReverseOrder(t *testing.T) {
+	t.Parallel()
 	r, _ := testRepo(t)
 	p := createProject(t, r, "reverse")
 	a, first := commitSource6Fixture(t, r, p, source6Input(t, p))
@@ -97,6 +99,7 @@ func TestSource6BatchRejectsReverseOrder(t *testing.T) {
 }
 
 func TestSource6FieldConflicts(t *testing.T) {
+	t.Parallel()
 	r, _ := testRepo(t)
 	p := createProject(t, r, "conflict")
 	a, first := commitSource6Fixture(t, r, p, source6Input(t, p))
@@ -172,6 +175,7 @@ func TestSource6FieldConflicts(t *testing.T) {
 }
 
 func TestSource6BatchDistinctScopedValues(t *testing.T) {
+	t.Parallel()
 	r, _ := testRepo(t)
 	p := createProject(t, r, "distinct-values")
 	s, err := r.BeginImport(t.Context(), p.ID, source6Input(t, p))

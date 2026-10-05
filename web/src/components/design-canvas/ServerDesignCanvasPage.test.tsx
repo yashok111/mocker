@@ -46,6 +46,20 @@ function detailFixture(version = 1, title = "Оформление заказа")
   };
 }
 
+// These cases assert persisted state, not wall-clock latency. Install the clock
+// before the edit so the real autosave effect still schedules and executes.
+async function changeAndAdvanceAutosave(element: HTMLElement, value: string) {
+  vi.useFakeTimers();
+  try {
+    fireEvent.change(element, { target: { value } });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1000);
+    });
+  } finally {
+    vi.useRealTimers();
+  }
+}
+
 async function scenarioAction(name: string) {
   await userEvent.click(await screen.findByRole("button", { name: "Действия" }));
   return screen.findByRole("menuitem", { name });
@@ -491,7 +505,7 @@ describe("ServerDesignCanvasPage", () => {
     });
     renderInRouter(<ServerDesignCanvasPage id={12} />);
     const title = await screen.findByRole("textbox", { name: "Название сценария" });
-    fireEvent.change(title, { target: { value: "Первая правка" } });
+    await changeAndAdvanceAutosave(title, "Первая правка");
     expect(await screen.findByText("Не удалось сохранить")).toBeInTheDocument();
     vi.useFakeTimers();
     try {
@@ -795,7 +809,7 @@ describe("ServerDesignCanvasPage", () => {
     );
     renderInRouter(<ServerDesignCanvasPage id={12} />);
     const title = await screen.findByRole("textbox", { name: "Название сценария" });
-    fireEvent.change(title, { target: { value: "Сохранённая правка" } });
+    await changeAndAdvanceAutosave(title, "Сохранённая правка");
     await screen.findByText("Сохранено");
     await userEvent.click(await scenarioAction("Контракты API"));
     const dialog = await screen.findByRole("dialog", { name: "Контракты API" });
@@ -830,7 +844,7 @@ describe("ServerDesignCanvasPage", () => {
     });
     renderInRouter(<ServerDesignCanvasPage id={12} />);
     const title = await screen.findByRole("textbox", { name: "Название сценария" });
-    fireEvent.change(title, { target: { value: "Сохранённая правка" } });
+    await changeAndAdvanceAutosave(title, "Сохранённая правка");
     await screen.findByText("Сохранено");
     await userEvent.click(await scenarioAction("Контракты API"));
     const dialog = await screen.findByRole("dialog", { name: "Контракты API" });
@@ -1028,7 +1042,7 @@ describe("ServerDesignCanvasPage", () => {
     });
     renderInRouter(<ServerDesignCanvasPage id={12} />);
     const title = await screen.findByRole("textbox", { name: "Название сценария" });
-    fireEvent.change(title, { target: { value: "Сохранённая правка" } });
+    await changeAndAdvanceAutosave(title, "Сохранённая правка");
     await waitFor(() => expect(screen.getByText("Сохранено")).toBeInTheDocument());
     expect(screen.getByRole("button", { name: "Отменить" })).toBeEnabled();
     await userEvent.click(await scenarioAction("История"));
@@ -1074,11 +1088,11 @@ describe("ServerDesignCanvasPage", () => {
 
     const title = await screen.findByRole("textbox", { name: "Название сценария" });
     expect(screen.queryByRole("button", { name: "Проверить" })).not.toBeInTheDocument();
-    fireEvent.change(title, { target: { value: "С предупреждением" } });
+    await changeAndAdvanceAutosave(title, "С предупреждением");
     expect(await screen.findByText("Связь с удалённой операцией")).toBeInTheDocument();
     expect(screen.getByText("Сохранено")).toBeInTheDocument();
 
-    fireEvent.change(title, { target: { value: "Исправленный сценарий" } });
+    await changeAndAdvanceAutosave(title, "Исправленный сценарий");
     await waitFor(() => expect(writes).toBe(2));
     await waitFor(() =>
       expect(screen.queryByText("Связь с удалённой операцией")).not.toBeInTheDocument(),

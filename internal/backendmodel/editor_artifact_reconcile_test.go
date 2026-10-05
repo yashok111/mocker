@@ -12,6 +12,7 @@ import (
 )
 
 func TestArtifactCarryKeepsFrozenEditorsAndSourceAnchor(t *testing.T) {
+	t.Parallel()
 	s, base, ids, d := artifactServiceFixture(t)
 	a, _ := applyArtifactTest(t, s, base.Project.ID, scenarioSet(base, ids, d), "scenario")
 	state, err := loadRevisionState(t.Context(), s.repo.db.R, base.Project.ID, a.Revision.ID)
@@ -66,6 +67,7 @@ func TestArtifactComparisonManyToOneEmbeddedAndGroups(t *testing.T) {
 	}
 }
 func TestArtifactLegacyWrappersGuardAndRetainV2(t *testing.T) {
+	t.Parallel()
 	s, base, ids, d := artifactServiceFixture(t)
 	scenario, _ := applyArtifactTest(t, s, base.Project.ID, scenarioSet(base, ids, d), "scenario")
 	owner := s.api.(*apidesign.Repo)
@@ -119,6 +121,7 @@ func TestArtifactLegacyWrappersGuardAndRetainV2(t *testing.T) {
 }
 
 func TestArtifactReimportCommitCarriesV2WithoutOwners(t *testing.T) {
+	t.Parallel()
 	s, base, ids, d := artifactServiceFixture(t)
 	a, _ := applyArtifactTest(t, s, base.Project.ID, scenarioSet(base, ids, d), "scenario")
 	input := lineageOrdersInput(t, &a.Project)
@@ -164,6 +167,7 @@ func TestArtifactReimportCommitCarriesV2WithoutOwners(t *testing.T) {
 }
 
 func TestArtifactOptionalLinkedOriginAndSeparateCopies(t *testing.T) {
+	t.Parallel()
 	s, base, ids, d := artifactServiceFixture(t)
 	apiOwner := s.api.(*apidesign.Repo)
 	api, err := apiOwner.Create(t.Context(), apidesign.CreateInput{Name: "Exact state API", Document: editorAPIDocument, Source: "ui"})
@@ -203,6 +207,7 @@ func TestArtifactOptionalLinkedOriginAndSeparateCopies(t *testing.T) {
 }
 
 func TestArtifactReceiptScopesAreIndependent(t *testing.T) {
+	t.Parallel()
 	s, base, ids, d := artifactServiceFixture(t)
 	legacy := NewAPIArtifactService(s.repo, s.api)
 	pin, err := NewEditorArtifactRequest(t.Context(), s.api, nil).SnapshotPin(ArtifactKey{"api_design", "1"}, "1")

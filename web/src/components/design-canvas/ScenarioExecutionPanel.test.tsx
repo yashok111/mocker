@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from "react";
 import { MantineProvider } from "@mantine/core";
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ScenarioExecutionPanel } from "./ScenarioExecutionPanel";
 import type { CanvasDocument, DataFlowAnalysis } from "./types";
@@ -621,47 +621,80 @@ describe("ScenarioExecutionPanel", () => {
   });
 
   it("follows new MCP runs through polling until the user explicitly selects an older report", async () => {
-    const handlers = props();
-    const first = { ...report("agent-first"), source: "mcp" as const };
-    const second = { ...report("agent-second"), source: "mcp" as const, startedAt: 2000 };
-    const third = { ...report("agent-third"), source: "mcp" as const, startedAt: 3000 };
-    let list = [first];
-    handlers.listRuns.mockImplementation(async () => list);
-    handlers.getRun.mockImplementation(async (id) =>
-      [first, second, third].find((item) => item.id === id)!,
-    );
-    renderPanel(<ScenarioExecutionPanel {...handlers} />);
-    fireEvent.click(screen.getByRole("tab", { name: "Результат" }));
-    const selector = screen.getByRole("combobox", { name: "Сохранённый прогон" });
-    await waitFor(() => expect(selector).toHaveValue(first.id));
-    list = [second, first];
-    await waitFor(() => expect(selector).toHaveValue(second.id), { timeout: 3000 });
-    fireEvent.change(selector, { target: { value: first.id } });
-    list = [third, second, first];
-    fireEvent.click(screen.getByRole("button", { name: "Обновить отчёт" }));
-    await waitFor(() => expect(screen.getAllByRole("option")).toHaveLength(3));
-    expect(selector).toHaveValue(first.id);
-    expect(handlers.runScenario).not.toHaveBeenCalled();
+    vi.useFakeTimers();
+    try {
+      const handlers = props();
+      const first = { ...report("agent-first"), source: "mcp" as const };
+      const second = { ...report("agent-second"), source: "mcp" as const, startedAt: 2000 };
+      const third = { ...report("agent-third"), source: "mcp" as const, startedAt: 3000 };
+      let list = [first];
+      handlers.listRuns.mockImplementation(async () => list);
+      handlers.getRun.mockImplementation(async (id) =>
+        [first, second, third].find((item) => item.id === id)!,
+      );
+      await act(async () => {
+        renderPanel(<ScenarioExecutionPanel {...handlers} />);
+      });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      fireEvent.click(screen.getByRole("tab", { name: "Результат" }));
+      const selector = screen.getByRole("combobox", { name: "Сохранённый прогон" });
+      expect(selector).toHaveValue(first.id);
+      list = [second, first];
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(2000);
+      });
+      expect(selector).toHaveValue(second.id);
+      fireEvent.change(selector, { target: { value: first.id } });
+      list = [third, second, first];
+      await act(async () => {
+        fireEvent.click(screen.getByRole("button", { name: "Обновить отчёт" }));
+      });
+      expect(screen.getAllByRole("option")).toHaveLength(3);
+      expect(selector).toHaveValue(first.id);
+      expect(handlers.runScenario).not.toHaveBeenCalled();
+    } finally {
+      cleanup();
+      vi.useRealTimers();
+    }
   });
 
   it("announces new MCP activity while preserving an unfinished settings form", async () => {
-    const handlers = props();
-    const agentRun = {
-      ...report("agent-live", "running"),
-      source: "mcp" as const,
-      name: "Проверка гостя",
-    };
-    let list: CanvasExecutionReport[] = [];
-    handlers.listRuns.mockImplementation(async () => list);
-    handlers.getRun.mockResolvedValue(agentRun);
-    renderPanel(<ScenarioExecutionPanel {...handlers} />);
-    fireEvent.change(screen.getByLabelText("Тело запроса"), { target: { value: "unfinished" } });
-    list = [agentRun];
-    expect(
-      await screen.findByRole("status", { name: /Прогон MCP: Проверка гостя/ }, { timeout: 3000 }),
-    ).toHaveTextContent("Выполняется");
-    expect(screen.getByRole("tab", { name: "Настройка" })).toHaveAttribute("aria-selected", "true");
-    expect(screen.getByLabelText("Тело запроса")).toHaveValue("unfinished");
+    vi.useFakeTimers();
+    try {
+      const handlers = props();
+      const agentRun = {
+        ...report("agent-live", "running"),
+        source: "mcp" as const,
+        name: "Проверка гостя",
+      };
+      let list: CanvasExecutionReport[] = [];
+      handlers.listRuns.mockImplementation(async () => list);
+      handlers.getRun.mockResolvedValue(agentRun);
+      await act(async () => {
+        renderPanel(<ScenarioExecutionPanel {...handlers} />);
+      });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      fireEvent.change(screen.getByLabelText("Тело запроса"), { target: { value: "unfinished" } });
+      list = [agentRun];
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(2000);
+      });
+      expect(screen.getByRole("status", { name: /Прогон MCP: Проверка гостя/ })).toHaveTextContent(
+        "Выполняется",
+      );
+      expect(screen.getByRole("tab", { name: "Настройка" })).toHaveAttribute(
+        "aria-selected",
+        "true",
+      );
+      expect(screen.getByLabelText("Тело запроса")).toHaveValue("unfinished");
+    } finally {
+      cleanup();
+      vi.useRealTimers();
+    }
   });
 
   it("cancels its own run even when an MCP report is currently selected", async () => {

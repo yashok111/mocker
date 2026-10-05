@@ -22,6 +22,7 @@ func diagramTestDocument(rid string) DiagramDocument {
 }
 
 func TestDiagramSaveReplayBeforeCAS(t *testing.T) {
+	t.Parallel()
 	r, db := testRepo(t)
 	p := createProject(t, r, "diagram-project")
 	doc := diagramTestDocument(p.CurrentRevisionID)

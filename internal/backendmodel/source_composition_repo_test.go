@@ -27,6 +27,7 @@ func commitSource6Fixture(t *testing.T, r *Repo, p *Project, in BeginImportInput
 }
 
 func TestSource6WholeComposition(t *testing.T) {
+	t.Parallel()
 	r, _ := testRepo(t)
 	p := createProject(t, r, "source6")
 	a, first := commitSource6Fixture(t, r, p, source6Input(t, p))

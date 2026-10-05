@@ -7,6 +7,7 @@ import (
 )
 
 func TestEffectiveSourceGraphPinsAndDetachedBaseline(t *testing.T) {
+	t.Parallel()
 	r, _ := testRepo(t)
 	p := createProject(t, r, "effective-source")
 	_, base := commitSource6Fixture(t, r, p, source6Input(t, p))
@@ -30,6 +31,7 @@ func TestEffectiveSourceGraphPinsAndDetachedBaseline(t *testing.T) {
 }
 
 func TestEffectiveFullDraftHistoryAndIntentProof(t *testing.T) {
+	t.Parallel()
 	r, base, initial := changeFixture(t)
 	id := lineageQueryID(900999)
 	command := changeCommand(t, "create_node", `"id":"`+id+`","kind":"service","name":"Desired","parentId":null,"attributes":{}`)
@@ -66,6 +68,7 @@ func TestEffectiveFullDraftHistoryAndIntentProof(t *testing.T) {
 }
 
 func TestEffectiveReadyCandidateRebuildPinsPurityAndInvalidation(t *testing.T) {
+	t.Parallel()
 	r, _ := testRepo(t)
 	p := createProject(t, r, "staged-effective")
 	session, err := r.BeginImport(t.Context(), p.ID, source6Input(t, p))
@@ -104,6 +107,7 @@ func TestEffectiveReadyCandidateRebuildPinsPurityAndInvalidation(t *testing.T) {
 }
 
 func TestEffectiveGraphQueriesUseDesiredFiltersAndPins(t *testing.T) {
+	t.Parallel()
 	r, base, initial := changeFixture(t)
 	id := lineageQueryID(900998)
 	command := changeCommand(t, "create_node", `"id":"`+id+`","kind":"service","name":"Desired service","parentId":null,"attributes":{}`)
@@ -128,6 +132,7 @@ func TestEffectiveGraphQueriesUseDesiredFiltersAndPins(t *testing.T) {
 }
 
 func TestEffectiveBasicReadsShareBaselineAndIntentPins(t *testing.T) {
+	t.Parallel()
 	r, base, initial := changeFixture(t)
 	id := lineageQueryID(900997)
 	command := changeCommand(t, "create_node", `"id":"`+id+`","kind":"service","name":"Desired","parentId":null,"attributes":{}`)

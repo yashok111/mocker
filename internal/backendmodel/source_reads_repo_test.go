@@ -7,6 +7,7 @@ import (
 )
 
 func TestSource6AssertionsAndLineageFromImmutableRepository(t *testing.T) {
+	t.Parallel()
 	r, _ := testRepo(t)
 	p := createProject(t, r, "source-read-chain")
 	in := source6Input(t, p)
@@ -124,6 +125,7 @@ func TestSource6AssertionsAndLineageFromImmutableRepository(t *testing.T) {
 }
 
 func TestSource6HistoricalAssertionCursorSurvivesLaterHead(t *testing.T) {
+	t.Parallel()
 	r, _ := testRepo(t)
 	p := createProject(t, r, "historical-source-pages")
 	_, first := commitSource6Fixture(t, r, p, source6Input(t, p))

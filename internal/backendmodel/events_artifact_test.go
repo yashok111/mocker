@@ -28,6 +28,7 @@ func upgradeEventsArtifactFixture(t *testing.T, s *ArtifactService, base *Import
 	return out, session
 }
 func TestEventsArtifactMutationGatesAndReplay(t *testing.T) {
+	t.Parallel()
 	s, base, ids, d := artifactServiceFixture(t)
 	up, _ := upgradeEventsArtifactFixture(t, s, base)
 	// Source5 admits both generic preview/apply and legacy API preview/apply.
@@ -59,6 +60,7 @@ func TestEventsArtifactMutationGatesAndReplay(t *testing.T) {
 	}
 }
 func TestEventsUpgradeCarriesFrozenV2AndInheritedLineage(t *testing.T) {
+	t.Parallel()
 	s, base, ids, d := artifactServiceFixture(t)
 	pinned, _ := applyArtifactTest(t, s, base.Project.ID, scenarioSet(base, ids, d), "scenario-before-upgrade")
 	old, err := loadRevisionState(t.Context(), s.repo.db.R, base.Project.ID, pinned.Revision.ID)
@@ -98,6 +100,7 @@ func TestEventsUpgradeCarriesFrozenV2AndInheritedLineage(t *testing.T) {
 	}
 }
 func TestEventsDatabaseProposalAndSavedViewEligibility(t *testing.T) {
+	t.Parallel()
 	s, base, ids, _ := artifactServiceFixture(t)
 	up, _ := upgradeEventsArtifactFixture(t, s, base)
 	state, err := loadRevisionState(t.Context(), s.repo.db.R, base.Project.ID, up.Revision.ID)
@@ -128,6 +131,7 @@ func TestEventsDatabaseProposalAndSavedViewEligibility(t *testing.T) {
 	}
 }
 func TestEventsUpgradeCarriesFrozenV1(t *testing.T) {
+	t.Parallel()
 	s, base, ids, _ := artifactServiceFixture(t)
 	legacy := NewAPIArtifactService(s.repo, s.api)
 	in := PreviewAPIPinsInput{BaseRevisionID: base.Revision.ID, ExpectedVersion: base.Project.Version, Commands: []APIPinCommand{{Type: "set_api_pin", ArtifactID: "1", RevisionID: "1", Bindings: []APIPinBindingInput{{SourceNodeID: ids["http"], Selector: APIArtifactSelector{ObjectKey: "orders-read"}}}, Reason: "Source4 API association"}}}

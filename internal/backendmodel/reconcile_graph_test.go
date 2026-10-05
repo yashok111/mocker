@@ -155,6 +155,7 @@ func TestReconcileSourcePartialGapAndSavedPages(t *testing.T) {
 	}
 }
 func TestReconcileStaleEdgesAndDependency(t *testing.T) {
+	t.Parallel()
 	r, _ := testRepo(t)
 	p := createProject(t, r, "create")
 	s, err := r.BeginImport(t.Context(), p.ID, firstImportFixture(p))

@@ -1014,7 +1014,7 @@ func TestSetOperationResponse_PUT500IsToolError(t *testing.T) {
 func TestAddOperationTools_registersSixToolsWithHonestAnnotations(t *testing.T) {
 	t.Parallel()
 	fc := &scriptedCaller{t: t}
-	ep := New(fc, testKey, testConfig(), nil)
+	ep := newToolFixture(fc)
 	h := ep.Handler()
 
 	rec := doMCP(t, h, `{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}`,

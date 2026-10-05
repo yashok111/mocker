@@ -135,6 +135,7 @@ func source6ArtifactTableDocuments(t *testing.T, r *Repo, table, rid string) []s
 }
 
 func TestSource6ArtifactPinRawCopyClearAndReplay(t *testing.T) {
+	t.Parallel()
 	s, old, ids, scenario := artifactServiceFixture(t)
 	base := source6ArtifactBaseline(t, s.repo, old)
 	base = source6ArtifactResolvedProvider(t, s.repo, base)
@@ -241,6 +242,7 @@ func source6ArtifactRowCounts(t *testing.T, r *Repo) map[string]int {
 }
 
 func TestSource6ArtifactRawBaselineCAS(t *testing.T) {
+	t.Parallel()
 	s, old, ids, scenario := artifactServiceFixture(t)
 	base := source6ArtifactBaseline(t, s.repo, old)
 	in := scenarioSet(base, ids, scenario)
@@ -267,6 +269,7 @@ func TestSource6ArtifactRawBaselineCAS(t *testing.T) {
 }
 
 func TestSource6ArtifactLegacyAPIWrapperCopiesClaims(t *testing.T) {
+	t.Parallel()
 	s, old, ids, api := apiPinFixture(t)
 	base := source6ArtifactBaseline(t, s.repo, old)
 	before := source6ArtifactDocuments(t, s.repo, base.Revision.ID)

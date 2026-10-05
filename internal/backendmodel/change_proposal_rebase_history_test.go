@@ -138,6 +138,7 @@ func TestChangeRebaseReadyNoopRepairReplayQuotaAndRestart(t *testing.T) {
 	}
 }
 func TestChangeRebaseVersionOverflowAndCandidateMismatchReserveNothing(t *testing.T) {
+	t.Parallel()
 	r, base, d := changeFixture(t)
 	in := PreviewChangeProposalRebaseInput{ExpectedVersion: d.Proposal.Version, ProposalRevisionID: d.Revision.ID, NewBaseRevisionID: base.Revision.ID}
 	preview, err := r.PreviewChangeProposalRebase(t.Context(), base.Project.ID, d.Proposal.ID, in)
@@ -162,6 +163,7 @@ func TestChangeRebaseVersionOverflowAndCandidateMismatchReserveNothing(t *testin
 	assertFault(t, err, "backend_change_version_conflict")
 }
 func TestChangeRebaseSource5UpgradeAndDowngradeRejection(t *testing.T) {
+	t.Parallel()
 	service, old, _, _ := artifactServiceFixture(t)
 	base, _ := upgradeEventsArtifactFixture(t, service, old)
 	r := service.repo

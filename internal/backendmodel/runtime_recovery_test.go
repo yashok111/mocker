@@ -9,6 +9,7 @@ import (
 )
 
 func TestRuntimeSourceReceiptReplayRollbackAndCancellation(t *testing.T) {
+	t.Parallel()
 	r, db := testRepo(t)
 	p := createProject(t, r, "create")
 	begin := runtimeInput(p)

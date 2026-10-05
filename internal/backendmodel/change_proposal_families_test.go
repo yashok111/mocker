@@ -106,6 +106,7 @@ func TestChangeProposalForeignKeyExplicitIdentityAndFacetRemoval(t *testing.T) {
 }
 
 func TestChangeProposalFlowMappingAndEdgeNames(t *testing.T) {
+	t.Parallel()
 	r, _, d := changeFixture(t)
 	service, flow, input, output := uuid.NewV7().String(), uuid.NewV7().String(), uuid.NewV7().String(), uuid.NewV7().String()
 	step := func(kind string) map[string]any {
@@ -154,6 +155,7 @@ func TestChangeProposalFlowMappingAndEdgeNames(t *testing.T) {
 }
 
 func TestChangeProposalQualifiedAndCreatedIdentity(t *testing.T) {
+	t.Parallel()
 	r, _, d := changeFixture(t)
 	source, err := loadComposedBase(t.Context(), r.db.R, d.Proposal.ProjectID, d.Revision.BaseRevisionID)
 	if err != nil {
@@ -186,6 +188,7 @@ func TestChangeProposalQualifiedAndCreatedIdentity(t *testing.T) {
 }
 
 func TestChangeProposalSource6CallEndpointVocabulary(t *testing.T) {
+	t.Parallel()
 	r, _, d := changeFixture(t)
 	handler, operation := uuid.NewV7().String(), uuid.NewV7().String()
 	d, _ = saveChange(t, r, d, "source6-call", changeCreateNode(t, handler, "handler", nil, map[string]any{}), changeCreateNode(t, operation, "http_operation", nil, map[string]any{"method": "GET", "path": "/planned"}), changeMapCommand(t, "upsert_edge", map[string]any{"id": uuid.NewV7().String(), "kind": "calls", "from": handler, "to": operation, "attributes": map[string]any{}}))

@@ -7,6 +7,7 @@ import (
 )
 
 func TestChangeRebaseSameBaseReceiptAndHistory(t *testing.T) {
+	t.Parallel()
 	r, base, d := changeFixture(t)
 	before := immutableBytes(t, r)
 	in := PreviewChangeProposalRebaseInput{ExpectedVersion: d.Proposal.Version, ProposalRevisionID: d.Revision.ID, NewBaseRevisionID: base.Revision.ID}
@@ -51,6 +52,7 @@ func TestChangeRebaseSameBaseReceiptAndHistory(t *testing.T) {
 }
 
 func TestChangeRebaseNewSourcePreservesDesiredName(t *testing.T) {
+	t.Parallel()
 	r, base, d := changeFixture(t)
 	graph := changeReadSnapshot(t, r, d)
 	id := graph.Nodes[0].ID
@@ -103,6 +105,7 @@ func rebaseDeletedSource(t *testing.T, r *Repo, base *ImportCommitResult, id str
 	return commitStaged(t, r, &base.Project, s, batch.AcceptedVersion, "delete")
 }
 func TestChangeRebaseHistoricalImportedIDsRemainReserved(t *testing.T) {
+	t.Parallel()
 	r, base, d := changeFixture(t)
 	node := changeReadSnapshot(t, r, d).Nodes[0]
 	next := rebaseDeletedSource(t, r, base, node.ID)
@@ -123,6 +126,7 @@ func TestChangeRebaseHistoricalImportedIDsRemainReserved(t *testing.T) {
 	assertFault(t, err, "backend_change_identity_conflict")
 }
 func TestChangeRebasePersistedCarryAndResolutionHash(t *testing.T) {
+	t.Parallel()
 	r, base, d := changeFixture(t)
 	node := changeReadSnapshot(t, r, d).Nodes[0]
 	d, _ = saveChange(t, r, d, "rename", changeMapCommand(t, "rename", map[string]any{"recordType": "node", "id": node.ID, "name": "Retain"}))
@@ -204,6 +208,7 @@ func TestChangeRebasePersistedCarryAndResolutionHash(t *testing.T) {
 }
 
 func TestChangeRebaseRepeatedCarryKeepsAuthorshipAndResolvesCurrentClaim(t *testing.T) {
+	t.Parallel()
 	r, base, d := changeFixture(t)
 	id := changeReadSnapshot(t, r, d).Nodes[0].ID
 	d, _ = saveChange(t, r, d, "desired", changeMapCommand(t, "rename", map[string]any{"recordType": "node", "id": id, "name": "Desired"}))

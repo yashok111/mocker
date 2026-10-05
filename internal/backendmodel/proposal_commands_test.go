@@ -121,6 +121,7 @@ func TestProposalFKOrderedPairs(t *testing.T) {
 }
 
 func TestProposalFKFinalGraphValidation(t *testing.T) {
+	t.Parallel()
 	_, detail, base, ids := proposalEvaluationFixture(t, "postgresql")
 	fk := proposalFK(ids)
 	fk.DeleteAction = "set_null"
@@ -171,6 +172,7 @@ func TestProposalDialectValidation(t *testing.T) {
 }
 
 func TestProposalCriteriaCannotClaimVerified(t *testing.T) {
+	t.Parallel()
 	_, detail, base, ids := proposalEvaluationFixture(t, "sqlite")
 	set := ProposalCommand{Type: "set_criteria", CommandID: "supplement", Reason: "Review rollout", Criteria: []ProposalCriterionInput{{Key: "rollout", Kind: "migration_plan", TargetIDs: []string{ids["table:orders"]}, Description: "Review rollout and rollback"}}}
 	first, err := evaluateProposal(base, detail.Proposal, detail.Revision, []ProposalCommand{proposalNullable(ids, "required", false), set})
@@ -195,6 +197,7 @@ func TestProposalCriteriaCannotClaimVerified(t *testing.T) {
 }
 
 func TestProposalCanonicalHash(t *testing.T) {
+	t.Parallel()
 	_, detail, base, ids := proposalEvaluationFixture(t, "postgresql")
 	command := proposalNullable(ids, "required", false)
 	first, err := evaluateProposal(base, detail.Proposal, detail.Revision, []ProposalCommand{command})

@@ -54,6 +54,7 @@ func runtimeCommands(t *testing.T, s *ImportSession) []ImportCommand {
 }
 
 func TestRuntimeGraphSourceAndNativeReferences(t *testing.T) {
+	t.Parallel()
 	r, _ := testRepo(t)
 	p := createProject(t, r, "create")
 	s, err := r.BeginImport(t.Context(), p.ID, runtimeInput(p))

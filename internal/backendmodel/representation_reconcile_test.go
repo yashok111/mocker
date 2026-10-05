@@ -33,6 +33,7 @@ func representationCommands(s *ImportSession) []ImportCommand {
 }
 
 func TestRepresentationSource6Import(t *testing.T) {
+	t.Parallel()
 	r, _ := testRepo(t)
 	p := createProject(t, r, "representations")
 	s, err := r.BeginImport(t.Context(), p.ID, source6Input(t, p))
@@ -140,6 +141,7 @@ func TestRepresentationSourceProofRequired(t *testing.T) {
 }
 
 func TestRepresentationMappingSource6Import(t *testing.T) {
+	t.Parallel()
 	r, _ := testRepo(t)
 	p := createProject(t, r, "mapping-chain")
 	in := source6Input(t, p)

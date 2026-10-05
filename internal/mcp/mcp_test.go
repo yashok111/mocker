@@ -50,11 +50,11 @@ func (f *fakeCaller) CallAsMCP(_ context.Context, _ *http.Request, _, _ string, 
 	return f.status, f.body, nil
 }
 
-// newTestEndpoint builds an Endpoint over a fakeCaller and testKey/
+// newTestEndpoint builds an isolated fixture over a fakeCaller and testKey/
 // testConfig — the shared starting point every test in this package needs.
-func newTestEndpoint(t *testing.T) *Endpoint {
+func newTestEndpoint(t *testing.T) *toolFixture {
 	t.Helper()
-	return New(&fakeCaller{status: http.StatusOK, body: []byte(`{}`)}, testKey, testConfig(), nil)
+	return newToolFixture(&fakeCaller{status: http.StatusOK, body: []byte(`{}`)})
 }
 
 // doMCP issues one /mcp request against h with the two headers every

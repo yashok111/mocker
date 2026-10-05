@@ -40,6 +40,7 @@ func putFixture(t *testing.T, r *Repo, p *Project, s *ImportSession) *BatchRecei
 	return b
 }
 func TestImportDurableFirstCommit(t *testing.T) {
+	t.Parallel()
 	r, db := testRepo(t)
 	p := createProject(t, r, "create")
 	s, err := r.BeginImport(t.Context(), p.ID, firstImportFixture(p))
@@ -119,6 +120,7 @@ func commitFixture(t *testing.T, r *Repo, p *Project, s *ImportSession, v *Impor
 	return r.CommitImport(t.Context(), p.ID, s.ID, CommitImportInput{ExpectedVersion: p.Version, ExpectedImportVersion: v.Version, CandidateHash: *v.CandidateHash, IdempotencyKey: key})
 }
 func TestImportCommitRollbackCompetingAndRename(t *testing.T) {
+	t.Parallel()
 	r, db := testRepo(t)
 	p := createProject(t, r, "create")
 	in := firstImportFixture(p)
@@ -178,6 +180,7 @@ func TestImportCommitRollbackCompetingAndRename(t *testing.T) {
 	}
 }
 func TestImportBatchRepairsInvalidationAndStableIDs(t *testing.T) {
+	t.Parallel()
 	r, _ := testRepo(t)
 	p := createProject(t, r, "create")
 	s, err := r.BeginImport(t.Context(), p.ID, firstImportFixture(p))
@@ -237,6 +240,7 @@ func TestImportBatchRepairsInvalidationAndStableIDs(t *testing.T) {
 	}
 }
 func TestImportStrictValidationAtomicBatches(t *testing.T) {
+	t.Parallel()
 	r, _ := testRepo(t)
 	p := createProject(t, r, "create")
 	s, err := r.BeginImport(t.Context(), p.ID, firstImportFixture(p))
@@ -357,6 +361,7 @@ func TestImportHashPythonSpecialStringsAndNull(t *testing.T) {
 }
 
 func TestImportCapabilitiesAndReplayPriority(t *testing.T) {
+	t.Parallel()
 	r, _ := testRepo(t)
 	p := createProject(t, r, "create")
 	found := false
@@ -379,6 +384,7 @@ func TestImportCapabilitiesAndReplayPriority(t *testing.T) {
 }
 
 func TestImportQueriesPaginationAndCoverage(t *testing.T) {
+	t.Parallel()
 	r, _ := testRepo(t)
 	p := createProject(t, r, "create")
 	s, err := r.BeginImport(t.Context(), p.ID, firstImportFixture(p))
@@ -565,6 +571,7 @@ func TestImportConcurrentCommitReceipts(t *testing.T) {
 	}
 }
 func TestImportStatusAndEvidencePages(t *testing.T) {
+	t.Parallel()
 	r, _ := testRepo(t)
 	p := createProject(t, r, "create")
 	in := firstImportFixture(p)

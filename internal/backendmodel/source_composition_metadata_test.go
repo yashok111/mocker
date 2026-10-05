@@ -9,6 +9,7 @@ import (
 )
 
 func TestSource6SelectedPartitionMetadataRestartReplay(t *testing.T) {
+	t.Parallel()
 	r, db := testRepo(t)
 	p := createProject(t, r, "metadata")
 	firstInput := source6Input(t, p)

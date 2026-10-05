@@ -13,6 +13,7 @@ import (
 )
 
 func TestB43ArchiveUnarchiveReceiptAndAssociation(t *testing.T) {
+	t.Parallel()
 	r, base, d := changeFixture(t)
 	in := ApplyChangeProposalLifecycleInput{ExpectedVersion: d.Proposal.Version, ProposalRevisionID: d.Revision.ID, Action: "archive", IdempotencyKey: "archive"}
 	archived, err := r.ApplyChangeProposalLifecycle(t.Context(), base.Project.ID, d.Proposal.ID, in, nil)
@@ -137,6 +138,7 @@ func TestB43ArchiveAtomicFailuresAndConcurrentCAS(t *testing.T) {
 }
 
 func TestB43LifecycleConformanceGateRoster(t *testing.T) {
+	t.Parallel()
 	r, base, d := changeFixture(t)
 	target := BackendReadTarget{ChangeProposal: &ProposalReadTarget{ProposalID: d.Proposal.ID, ProposalRevisionID: d.Revision.ID}}
 	graph, err := r.ResolveEffectiveGraph(t.Context(), base.Project.ID, target)

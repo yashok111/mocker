@@ -47,6 +47,9 @@ func NewDB(t testing.TB) *store.DB {
 // only ever deriving it once, inline, inside t.TempDir()+"/mocker.db".
 func NewDBAt(t testing.TB, path string) *store.DB {
 	t.Helper()
+	if err := seedDB(path); err != nil {
+		t.Fatalf("seed db: %v", err)
+	}
 	db, err := store.Open(t.Context(), path)
 	if err != nil {
 		t.Fatalf("open db: %v", err)

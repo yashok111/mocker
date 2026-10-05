@@ -8,6 +8,7 @@ import (
 )
 
 func TestEffectiveFixEffectiveNativeIdentityOriginsRoundTrip(t *testing.T) {
+	t.Parallel()
 	r, _ := testRepo(t)
 	p := createProject(t, r, "review-source-origin")
 	_, base := commitSource6Fixture(t, r, p, source6Input(t, p))
@@ -28,6 +29,7 @@ func TestEffectiveFixEffectiveNativeIdentityOriginsRoundTrip(t *testing.T) {
 	}
 }
 func TestEffectiveFixEffectiveRenamedEdgePublicProjection(t *testing.T) {
+	t.Parallel()
 	r, base, _ := effectiveRepresentationFixture(t)
 	source, err := r.ResolveEffectiveGraph(t.Context(), base.Project.ID, BackendReadTarget{RevisionID: base.Revision.ID})
 	if err != nil {
@@ -58,6 +60,7 @@ func TestEffectiveFixEffectiveRenamedEdgePublicProjection(t *testing.T) {
 	}
 }
 func TestEffectiveFixEffectiveCoverageRetainsReconciliationMetadata(t *testing.T) {
+	t.Parallel()
 	r, _ := testRepo(t)
 	p := createProject(t, r, "review-coverage")
 	first, base := commitSource6Fixture(t, r, p, source6Input(t, p))
@@ -101,6 +104,7 @@ func TestEffectiveFixEffectiveCoverageRetainsReconciliationMetadata(t *testing.T
 	}
 }
 func TestEffectiveFixSavedV2RejectsUnsupportedSourceFlow(t *testing.T) {
+	t.Parallel()
 	r, _ := testRepo(t)
 	p := createProject(t, r, "review-source1-view")
 	if _, err := r.QueryFlow(t.Context(), p.ID, FlowQueryInput{RevisionID: p.CurrentRevisionID, View: "entrypoints"}); err == nil {
@@ -112,6 +116,7 @@ func TestEffectiveFixSavedV2RejectsUnsupportedSourceFlow(t *testing.T) {
 	}
 }
 func TestEffectiveFixEffectiveUnchangedSourceFiveKeepsSelectedFacetProof(t *testing.T) {
+	t.Parallel()
 	r, _ := testRepo(t)
 	p := createProject(t, r, "review-desired-fk")
 	input := relationalFixtureInput(t, p, "postgresql", "v1")
@@ -186,6 +191,7 @@ func effectiveFiveRelationalFixture(t *testing.T) (*Repo, *ImportCommitResult, m
 	return r, base, ids
 }
 func TestEffectiveFixSelectedFacetParityAndNullableIntent(t *testing.T) {
+	t.Parallel()
 	r, base, ids := effectiveFiveRelationalFixture(t)
 	draft, err := r.CreateChangeProposal(t.Context(), base.Project.ID, CreateChangeProposalInput{Name: "Facet parity", BaseRevisionID: base.Revision.ID, IdempotencyKey: "parity"})
 	if err != nil {
@@ -238,6 +244,7 @@ func TestEffectiveFixSelectedFacetParityAndNullableIntent(t *testing.T) {
 }
 
 func TestEffectiveFixForeignKeyIntentDoesNotReuseSelectedProof(t *testing.T) {
+	t.Parallel()
 	r, base, ids := effectiveFiveRelationalFixture(t)
 	draft, err := r.CreateChangeProposal(t.Context(), base.Project.ID, CreateChangeProposalInput{Name: "Desired FK", BaseRevisionID: base.Revision.ID, IdempotencyKey: "fk-intent"})
 	if err != nil {
@@ -276,6 +283,7 @@ func TestEffectiveFixForeignKeyIntentDoesNotReuseSelectedProof(t *testing.T) {
 }
 
 func TestEffectiveFixEdgeNamePagingAndHistoricalTargets(t *testing.T) {
+	t.Parallel()
 	r, base, _ := effectiveRepresentationFixture(t)
 	source, err := r.ResolveEffectiveGraph(t.Context(), base.Project.ID, BackendReadTarget{RevisionID: base.Revision.ID})
 	if err != nil {
@@ -383,6 +391,7 @@ func TestEffectiveFixSavedV2ProfileAdmissionMatrix(t *testing.T) {
 }
 
 func TestEffectiveFixFullCoveragePreservesNonzeroStoredStaleCounts(t *testing.T) {
+	t.Parallel()
 	r, _ := testRepo(t)
 	p := createProject(t, r, "coverage-stale-source5")
 	in := firstImportFixture(p)

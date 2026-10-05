@@ -11,6 +11,7 @@ import (
 )
 
 func TestChangeProposalCriteriaSemanticsAndAttachments(t *testing.T) {
+	t.Parallel()
 	r, base, d := changeFixture(t)
 	source, err := r.ResolveSourceGraph(t.Context(), base.Project.ID, base.Revision.ID)
 	if err != nil {
@@ -74,6 +75,7 @@ func mapsCriterion(in map[string]any) map[string]any {
 }
 
 func TestChangeProposalSource5VocabularyAndArtifactOwnerIsolation(t *testing.T) {
+	t.Parallel()
 	service, old, ids, scenario := artifactServiceFixture(t)
 	base, _ := upgradeEventsArtifactFixture(t, service, old)
 	r := service.repo

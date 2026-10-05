@@ -30,6 +30,7 @@ func changeCommand(t *testing.T, typ, payload string) ChangeProposalCommand {
 }
 
 func TestChangeProposalCreateReplayAndSemanticCandidate(t *testing.T) {
+	t.Parallel()
 	r, base, d := changeFixture(t)
 	if d.Proposal.Version != 1 || d.Revision.BaseRevisionID != base.Revision.ID || d.Revision.DocumentVersion != "proposal-graph-v1" {
 		t.Fatalf("wrong draft: %+v", d)

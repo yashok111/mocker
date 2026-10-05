@@ -12,7 +12,7 @@ import (
 // scriptedCaller-style fake that records the request it received.
 func importSpecCall(t *testing.T, calls Caller, args string) (ImportSpecOutput, string) {
 	t.Helper()
-	h := New(calls, testKey, testConfig(), nil).Handler()
+	h := newToolFixture(calls).Handler()
 	rec := doMCP(t, h,
 		`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"import_spec","arguments":`+args+`}}`,
 		map[string]string{"Authorization": "Bearer " + testKey})
