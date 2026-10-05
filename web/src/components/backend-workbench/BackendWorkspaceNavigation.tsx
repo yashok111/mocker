@@ -17,6 +17,12 @@ export function BackendWorkspaceNavigation() {
       </Button>
       <Button
         variant="default"
+        onClick={() => focusWorkspaceRegion('[data-testid="backend-interactions"] h3')}
+      >
+        Взаимодействия
+      </Button>
+      <Button
+        variant="default"
         onClick={() => focusWorkspaceRegion('[data-testid="backend-project-page"]')}
       >
         Инвентарь и отчёты

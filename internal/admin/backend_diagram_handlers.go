@@ -46,7 +46,13 @@ func (s *Server) diagramBody(w http.ResponseWriter, r *http.Request, out any, li
 		return false
 	}
 	if err := json.Unmarshal(raw, out, json.RejectUnknownMembers(true)); err != nil {
-		s.diagramError(w, diagramAdmissionError())
+		// Scope admission is a domain refusal, not malformed JSON. Keep its
+		// public code while other wire failures retain the closed-schema error.
+		if fault, ok := errors.AsType[*backendmodel.FaultError](err); ok && fault.Code == "backend_unsupported_scope" {
+			s.diagramError(w, fault)
+		} else {
+			s.diagramError(w, diagramAdmissionError())
+		}
 		return false
 	}
 	return true
@@ -303,7 +309,7 @@ func diagramQueryFields(q url.Values, mode string, in *backendmodel.DiagramListI
 				return diagramAdmissionError()
 			}
 		case "kind":
-			if mode != "list" || values[0] != "architecture" {
+			if mode != "list" || (values[0] != "architecture" && values[0] != "interactions") {
 				return diagramAdmissionError()
 			}
 			in.Kind = values[0]
@@ -326,4 +332,21 @@ func diagramQueryFields(q url.Values, mode string, in *backendmodel.DiagramListI
 	}
 
 	return nil
+}
+
+func (s *Server) handleBuildBackendInteractions(w http.ResponseWriter, r *http.Request) {
+	ctx, ok := s.diagramContext(w, r.Context(), r)
+	if !ok {
+		return
+	}
+	var in backendmodel.DiagramInteractionBuildInput
+	if !s.diagramBody(w, r, &in, 1<<20) {
+		return
+	}
+	out, err := s.backendRepo.BuildInteractions(ctx, r.PathValue("id"), in)
+	if err != nil {
+		s.diagramError(w, err)
+		return
+	}
+	httpx.JSON(w, 200, out)
 }

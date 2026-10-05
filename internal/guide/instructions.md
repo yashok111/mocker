@@ -10,8 +10,8 @@ For analyst API authoring use `list_api_designs` → `get_api_design` → `save_
 
 Sequences: `list_design_scenarios` → `get_design_scenario`. `run_design_scenario {scenarioId,revisionId,runId,variables?,name?}` starts a complete saved sequence asynchronously; poll `get_design_scenario_run` to a terminal status and inspect failed steps. Start is not success; variables do not edit the document. Use fresh runId per experiment, but after a lost response read that ID before retrying. `list_design_scenario_runs`/`cancel_design_scenario_run` manage persisted UI-visible results. Read topic design for the full procedure.
 
-Events: inspect9/backend-events. Sources: import8/backend-import or sync2/backend-sync. Edits: change4/backend-change-proposals.
+Events: inspect10/backend-events. Sources: import8/backend-import or sync2/backend-sync. Edits: change4/backend-change-proposals.
 
 Handoff: change4/backend-change-handoff. Endpoint review: change4/backend-endpoint-review. Runtime stays unverified.
 
-Architecture: inspect9/backend-architecture. Exact diagram-view-v1 pins never advance; authored intent is not source proof. Only architecture is supported.
+C4: inspect10/backend-architecture. Interactions: inspect10/backend-interactions. Build never saves/runs. Pins never advance; static claims are not runtime proof.

@@ -48,11 +48,11 @@ func TestDiagramCompareReportsEffectiveDependencyRemoval(t *testing.T) {
 	changed.Pins.TargetHash = "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
 	changed.Pins.BaseRevisionID = after.Document.Target.RevisionID
 	after.TargetHash = changed.Pins.TargetHash
-	oldRows, err := diagramComparisonRows(t.Context(), before, g)
+	oldRows, err := diagramComparisonRows(t.Context(), before, g, "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	newRows, err := diagramComparisonRows(t.Context(), &after, &changed)
+	newRows, err := diagramComparisonRows(t.Context(), &after, &changed, "")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -10,7 +10,10 @@ import {
   Title,
 } from "@mantine/core";
 import { useState } from "react";
-import type { BackendDiagramDocument, BackendArchitectureElement } from "@/api/generated/schemas";
+import type {
+  BackendArchitectureDocument,
+  BackendArchitectureElement,
+} from "@/api/generated/schemas";
 export function BackendArchitectureEditor({
   document,
   onChange,
@@ -18,8 +21,8 @@ export function BackendArchitectureEditor({
   onCancel,
   busy,
 }: {
-  document: BackendDiagramDocument;
-  onChange: (d: BackendDiagramDocument) => void;
+  document: BackendArchitectureDocument;
+  onChange: (d: BackendArchitectureDocument) => void;
   onSave: () => void;
   onCancel: () => void;
   busy: boolean;
@@ -33,7 +36,7 @@ export function BackendArchitectureEditor({
   const [relation, setRelation] = useState("calls");
   const [raw, setRaw] = useState<string | null>(null);
   const [error, setError] = useState("");
-  const update = (next: BackendDiagramDocument) => {
+  const update = (next: BackendArchitectureDocument) => {
     if (error) return;
     setRaw(null);
     onChange(next);

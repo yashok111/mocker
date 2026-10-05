@@ -8,6 +8,9 @@ import (
 
 func normalizeDiagram(d DiagramDocument) (DiagramDocument, error) {
 	// Detach slices before canonical ordering; caller buffers must remain unchanged.
+	if err := d.Validate(); err != nil {
+		return d, err
+	}
 	raw, err := json.Marshal(d)
 	if err != nil {
 		return d, err
@@ -30,6 +33,9 @@ func normalizeDiagram(d DiagramDocument) (DiagramDocument, error) {
 			return cmp.Compare(aa, bb)
 		})
 	}
+	if out.Interactions != nil {
+		normalizeInteractions(out.Interactions, normalize)
+	}
 	for i := range out.Payload.Elements {
 		e := &out.Payload.Elements[i]
 		normalize(&e.Origin, e.Refs)
@@ -42,6 +48,12 @@ func normalizeDiagram(d DiagramDocument) (DiagramDocument, error) {
 }
 func diagramSemanticRows(d DiagramDocument) map[string]string {
 	rows := map[string]string{}
+	if d.Interactions != nil {
+		for id, v := range interactionRows(d.Interactions) {
+			rows[id], _ = requestDigest(v)
+		}
+		return rows
+	}
 	for _, e := range d.Payload.Elements {
 		rows[e.ID], _ = requestDigest(e)
 	}

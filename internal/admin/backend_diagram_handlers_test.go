@@ -82,7 +82,7 @@ func TestBackendDiagramRESTOperationsAndStrictAdmission(t *testing.T) {
 	call("GET", "/api/backend-projects/"+other.ID+"/diagrams/"+v.Pin.ID+"/versions/1?hash="+v.Pin.ContentHash, nil, 404)
 }
 
-func TestBackendDiagramCapabilitiesOnlyArchitecture(t *testing.T) {
+func TestBackendDiagramCapabilitiesAdmittedKinds(t *testing.T) {
 	s := loopbackTestServer(t, nil)
 	status, raw, err := s.CallAsMCP(t.Context(), loopbackTestSrc(), "GET", "/api/backend-projects/capabilities", nil)
 	if err != nil || status != 200 {
@@ -98,7 +98,7 @@ func TestBackendDiagramCapabilitiesOnlyArchitecture(t *testing.T) {
 	if err = json.Unmarshal(raw, &value); err != nil {
 		t.Fatal(err)
 	}
-	if len(value.DiagramSupport.Kinds) != 1 || value.DiagramSupport.Kinds[0] != "architecture" || value.DiagramSupport.DocumentVersion != "backend-diagram-v1" || value.DiagramSupport.ViewDocumentVersion != "diagram-view-v1" {
+	if len(value.DiagramSupport.Kinds) != 2 || value.DiagramSupport.Kinds[1] != "interactions" || value.DiagramSupport.Kinds[0] != "architecture" || value.DiagramSupport.DocumentVersion != "backend-diagram-v1" || value.DiagramSupport.ViewDocumentVersion != "diagram-view-v1" {
 		t.Fatalf("architecture capability missing/overclaims future kinds: %+v", value)
 	}
 }
@@ -125,7 +125,7 @@ func TestBackendDiagramRESTCSRF(t *testing.T) {
 		t.Fatal(err)
 	}
 	base := "/api/backend-projects/10000000-0000-4000-8000-000000000001"
-	for _, suffix := range []string{"/diagrams", "/diagrams/fork", "/diagrams/query", "/diagrams/compare", "/diagrams/10000000-0000-4000-8000-000000000002/save", "/diagram-views", "/diagram-views/10000000-0000-4000-8000-000000000002/save"} {
+	for _, suffix := range []string{"/diagrams/interactions/build", "/diagrams", "/diagrams/fork", "/diagrams/query", "/diagrams/compare", "/diagrams/10000000-0000-4000-8000-000000000002/save", "/diagram-views", "/diagram-views/10000000-0000-4000-8000-000000000002/save"} {
 		for _, foreign := range []bool{false, true} {
 			req := httptest.NewRequest(http.MethodPost, "http://mocker.local"+base+suffix, strings.NewReader(`{}`))
 			req.Header.Set("Content-Type", "application/json")

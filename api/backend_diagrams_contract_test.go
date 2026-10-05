@@ -76,7 +76,7 @@ func TestBackendDiagramClosedCanonicalContract(t *testing.T) {
 			}
 		}
 	}
-	if count != 11 {
-		t.Fatalf("diagram REST operation count=%d, want11", count)
+	if count != 12 {
+		t.Fatalf("diagram REST operation count=%d, want12", count)
 	}
 }

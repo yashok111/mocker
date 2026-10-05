@@ -84,7 +84,7 @@ export function diagramSearch(
     diagramId: pin.id,
     diagramVersion: pin.version,
     diagramHash: pin.contentHash,
-    diagramLevel: state?.level ?? "context",
+    ...(state?.level ? { diagramLevel: state.level } : {}),
     ...(state?.rootId ? { diagramRoot: state.rootId } : {}),
     ...(state?.selection
       ? { diagramSelection: `${state.selection.type}:${state.selection.id}` }

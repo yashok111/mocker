@@ -5,16 +5,16 @@
       "source": "SKILL.md",
       "embedded": "overview.md",
       "workflowId": "mocker-routing",
-      "sourceHash": "sha256:c1cb7f71caa7bd48527aaeb3e875dbaa38db7b7e757bfa6ec62f6bddd30e520e",
-      "contentHash": "sha256:d74be03b2ebcb3121f50ddd3530907a97e87806ed11b9e41088f917d9f19d1f5"
+      "sourceHash": "sha256:aa149a61ac1d7e6ce7b89e92be4232fba7e5bc240327042ee1ed31958b779978",
+      "contentHash": "sha256:1d12a228f267a7d05fa20cd83ac738cee6b892aeb4c55cfa09c707d868f2be1e"
     },
     {
       "topic": "tools",
       "source": "references/tools.md",
       "embedded": "tools.md",
       "workflowId": "mocker-routing",
-      "sourceHash": "sha256:db1edeb08894a7339a9571776d05afd5feb70b98e1ef12fa2d9d19f716df3ec4",
-      "contentHash": "sha256:db1edeb08894a7339a9571776d05afd5feb70b98e1ef12fa2d9d19f716df3ec4"
+      "sourceHash": "sha256:e26445610ece5b620f7e20a703c1da7297798103a1d8ae44ef793b5da53575e0",
+      "contentHash": "sha256:e26445610ece5b620f7e20a703c1da7297798103a1d8ae44ef793b5da53575e0"
     },
     {
       "topic": "shapes",
@@ -45,8 +45,8 @@
       "source": "references/design.md",
       "embedded": "design.md",
       "workflowId": "mocker-routing",
-      "sourceHash": "sha256:143263ac873f8725ffef9c8e97c62aa1d06519fdd82fa1c17e6f6f42797d4cf0",
-      "contentHash": "sha256:143263ac873f8725ffef9c8e97c62aa1d06519fdd82fa1c17e6f6f42797d4cf0"
+      "sourceHash": "sha256:095709ed45831a6116c55afb5f13ce59245d4b32b58e3c33358a2fbdfd718292",
+      "contentHash": "sha256:095709ed45831a6116c55afb5f13ce59245d4b32b58e3c33358a2fbdfd718292"
     },
     {
       "topic": "functions",
@@ -61,8 +61,8 @@
       "source": "references/backend/overview.md",
       "embedded": "backend-overview.md",
       "workflowId": "mocker-backend-project",
-      "sourceHash": "sha256:f2e3b9a73dbf15bbc0025edd99015e90543c55666d203abe5e495df4842b5913",
-      "contentHash": "sha256:8482105e9c65ba66215eb7376cfb87f5f9410a30eafc106460b44669c0fba1b9"
+      "sourceHash": "sha256:bfbc595e39cbf650b637f17ebe04918314a4b2b80886d314b440aad37edac84b",
+      "contentHash": "sha256:67592a476e7423b3e91aeb12608bf53c16fc85ec03e18b184307db33c77a9055"
     },
     {
       "topic": "backend-import",
@@ -76,24 +76,24 @@
           "path": "references/backend/import.md"
         }
       ],
-      "sourceHash": "sha256:4c1a7ee8478e69893c8a05345fabca798016da84dfb7b33c6e6a725a6484fab1",
-      "contentHash": "sha256:14719806c2a8535a998083aa2cdcd72a27994d0ca068bf5de993d902fdb07979"
+      "sourceHash": "sha256:65859d0393f76f299ac2795475523c832cb525f2bc938b0405a67cc12d9f86c9",
+      "contentHash": "sha256:5bb10f63979fafbe8d8f79060289fb7432acbb2721a45aa3532e960543720df3"
     },
     {
       "topic": "backend-model",
       "source": "references/backend/model.md",
       "embedded": "backend-model.md",
       "workflowId": "mocker-backend-import",
-      "sourceHash": "sha256:150b54e7b7d9cfa540f96c2d45bd1db5cb5775ed78ebf5b4b778f9365e260240",
-      "contentHash": "sha256:150b54e7b7d9cfa540f96c2d45bd1db5cb5775ed78ebf5b4b778f9365e260240"
+      "sourceHash": "sha256:bfc399486e0b95f690ed1cda8d3bb06f984d6d77a42832b4bc75acb58b0d922a",
+      "contentHash": "sha256:bfc399486e0b95f690ed1cda8d3bb06f984d6d77a42832b4bc75acb58b0d922a"
     },
     {
       "topic": "backend-import-protocol",
       "source": "references/backend/import-protocol.md",
       "embedded": "backend-import-protocol.md",
       "workflowId": "mocker-backend-import",
-      "sourceHash": "sha256:a58891f4c4246254268eb26d48f6bf9d250947457cc876f6625959b71e69a28a",
-      "contentHash": "sha256:a58891f4c4246254268eb26d48f6bf9d250947457cc876f6625959b71e69a28a"
+      "sourceHash": "sha256:34a72b3ca8831c8566f36cfb205d161778e0fd345ade0fce6c8ecacc770b1dca",
+      "contentHash": "sha256:34a72b3ca8831c8566f36cfb205d161778e0fd345ade0fce6c8ecacc770b1dca"
     },
     {
       "topic": "backend-recovery",
@@ -108,8 +108,8 @@
       "source": "references/backend/examples.md",
       "embedded": "backend-examples.md",
       "workflowId": "mocker-backend-import",
-      "sourceHash": "sha256:92953d98e0f91a2bb594902ea1b5ec175dc0f47cf4e07ec546a27a835a865c49",
-      "contentHash": "sha256:92953d98e0f91a2bb594902ea1b5ec175dc0f47cf4e07ec546a27a835a865c49"
+      "sourceHash": "sha256:1ff2546ae347e7aac4e03275e86155908c51f329f64935a0755857ccc0fbdf01",
+      "contentHash": "sha256:1ff2546ae347e7aac4e03275e86155908c51f329f64935a0755857ccc0fbdf01"
     },
     {
       "topic": "backend-database",
@@ -123,24 +123,24 @@
           "path": "references/backend/database-workflow.md"
         }
       ],
-      "sourceHash": "sha256:e2446fe60a1a0b899c18af8de012480099d0c0838dd937512e93cbe39e667a92",
-      "contentHash": "sha256:bbfb66d77b2defd7281d67f168fca39d1800811f26e21ae8052b0af48850eeb0"
+      "sourceHash": "sha256:510e0cca9a909c99713fb5dbe63573a357123f52cae80c9e489a81e5f6c3f50e",
+      "contentHash": "sha256:54d908484344ca15aeda444573d8da0391b5525bd25a5db5d8fba77309d27d5c"
     },
     {
       "topic": "backend-database-reference",
       "source": "references/backend/database.md",
       "embedded": "backend-database-reference.md",
       "workflowId": "mocker-backend-database",
-      "sourceHash": "sha256:c2fcd0d06c8a127d45183545b0ee2401aaa5e09f18e683620b4d036af5e4789d",
-      "contentHash": "sha256:c2fcd0d06c8a127d45183545b0ee2401aaa5e09f18e683620b4d036af5e4789d"
+      "sourceHash": "sha256:79479449667ff6b0207a046930ff51c491eee59adf9d9055c44e37d667b86922",
+      "contentHash": "sha256:79479449667ff6b0207a046930ff51c491eee59adf9d9055c44e37d667b86922"
     },
     {
       "topic": "backend-profile-go-sql",
       "source": "references/backend/profiles/go-sql.md",
       "embedded": "backend-profile-go-sql.md",
       "workflowId": "mocker-backend-import",
-      "sourceHash": "sha256:4ad54ff205dac98447e89b1a5de69cdbae16261cacae2588b332702d1c33c2cf",
-      "contentHash": "sha256:4ad54ff205dac98447e89b1a5de69cdbae16261cacae2588b332702d1c33c2cf"
+      "sourceHash": "sha256:a4c034e5222e498e73178ced50e6c7a6a068bb2d72a6aef9a031c5b0e8e3b2c6",
+      "contentHash": "sha256:a4c034e5222e498e73178ced50e6c7a6a068bb2d72a6aef9a031c5b0e8e3b2c6"
     },
     {
       "topic": "backend-inspect",
@@ -154,40 +154,40 @@
           "path": "references/backend/inspect.md"
         }
       ],
-      "sourceHash": "sha256:9e4798a1acad901e81b81058093ef3664a8881bc217ff92cff11e7e986becea5",
-      "contentHash": "sha256:d700fadf464503f95a525fb90d1e8a978543ebe96f8e11a87da53e262a0f3442"
+      "sourceHash": "sha256:473076d65586c8d9cbf514777329d69f19aed09d96ec726fd5abd542d4bd8f5c",
+      "contentHash": "sha256:d74b09f3efee06c8e5671e38f5e61ceec640bcd44949649e6e624ef40d84e125"
     },
     {
       "topic": "backend-flow-reference",
       "source": "references/backend/flow.md",
       "embedded": "backend-flow-reference.md",
       "workflowId": "mocker-backend-inspect",
-      "sourceHash": "sha256:c30fa8c54b960beba094a7680634f2891ea4a7c34749f0ca8bc965b243eaab56",
-      "contentHash": "sha256:c30fa8c54b960beba094a7680634f2891ea4a7c34749f0ca8bc965b243eaab56"
+      "sourceHash": "sha256:51b32eff8289fe9b9dbe99c727e931167983c7fa5b5faceaaee5abb36bbc85aa",
+      "contentHash": "sha256:51b32eff8289fe9b9dbe99c727e931167983c7fa5b5faceaaee5abb36bbc85aa"
     },
     {
       "topic": "backend-analysis",
       "source": "references/backend/analysis.md",
       "embedded": "backend-analysis.md",
       "workflowId": "mocker-backend-inspect",
-      "sourceHash": "sha256:a4b4e0c6a29de6b48d262bb1ef3a4b2f1829fa8ae62e14eee1b9248b2a484538",
-      "contentHash": "sha256:a4b4e0c6a29de6b48d262bb1ef3a4b2f1829fa8ae62e14eee1b9248b2a484538"
+      "sourceHash": "sha256:b5afce97a5d72d3388e5804c36059a1fd4f7e36c0c538114c4662355fbd5fa2a",
+      "contentHash": "sha256:b5afce97a5d72d3388e5804c36059a1fd4f7e36c0c538114c4662355fbd5fa2a"
     },
     {
       "topic": "backend-editor-projections",
       "source": "references/backend/editor-projections.md",
       "embedded": "backend-editor-projections.md",
       "workflowId": "mocker-backend-inspect",
-      "sourceHash": "sha256:84d329789b970b976058303d4f029f7816b2727dee4bec5118b0c83204fc3391",
-      "contentHash": "sha256:84d329789b970b976058303d4f029f7816b2727dee4bec5118b0c83204fc3391"
+      "sourceHash": "sha256:11eac8e2b75cecbaee4e03373c316c67ef0faeccff11a693d36895e339f1171e",
+      "contentHash": "sha256:11eac8e2b75cecbaee4e03373c316c67ef0faeccff11a693d36895e339f1171e"
     },
     {
       "topic": "backend-events",
       "source": "references/backend/events.md",
       "embedded": "backend-events.md",
       "workflowId": "mocker-backend-inspect",
-      "sourceHash": "sha256:5881e310382d2ad45214ca131c04539afe31b6e2605f86b38d11b51b3c7e3639",
-      "contentHash": "sha256:5881e310382d2ad45214ca131c04539afe31b6e2605f86b38d11b51b3c7e3639"
+      "sourceHash": "sha256:fd59083a070a14465649f394c94b75d37f1ab377fc4540d473b55c93300924d9",
+      "contentHash": "sha256:fd59083a070a14465649f394c94b75d37f1ab377fc4540d473b55c93300924d9"
     },
     {
       "topic": "backend-sync",
@@ -201,8 +201,8 @@
           "path": "references/backend/sync.md"
         }
       ],
-      "sourceHash": "sha256:558dc5a929c2a3a3389db44502de3206f97218b95eb5e842d3f34c8e0364300f",
-      "contentHash": "sha256:b4288151f8f0917a82995171760d9db6cd818a79d05815c6698f24c7c679de36"
+      "sourceHash": "sha256:8650673fe2f0f27bbf1cc2b36246014995d7b6b35b2b7688ef37e86f1d1312a5",
+      "contentHash": "sha256:5f1127366fd4bfeb3e5e38b4e8dcd2f8bf293e9e9d71c470965affe28e888bdc"
     },
     {
       "topic": "backend-change-proposals",
@@ -216,8 +216,8 @@
           "path": "references/backend/change-proposals.md"
         }
       ],
-      "sourceHash": "sha256:0827f3d4923383a57630adb33e9bb31fbcff325cc508405b590a4409d78830c8",
-      "contentHash": "sha256:6e11dcf528747df8b15f5bdf5df4c69131be4e209632986a465579f2c095dec8"
+      "sourceHash": "sha256:374f3344b13357e14ff949162158dfab02c26a2363e899e5e1413c05533b7727",
+      "contentHash": "sha256:05a60baba4205a6a74858c29965ec6a898070d9c639b7467e03f083a6b542331"
     },
     {
       "topic": "backend-annotations",
@@ -233,8 +233,8 @@
       "source": "references/rebase.md",
       "embedded": "backend-change-rebase.md",
       "workflowId": "mocker-backend-change",
-      "sourceHash": "sha256:fd62113e1d96cebae51009b171c7afc74c7d21e7b0fb8d0827c04077ac159e7a",
-      "contentHash": "sha256:fd62113e1d96cebae51009b171c7afc74c7d21e7b0fb8d0827c04077ac159e7a"
+      "sourceHash": "sha256:503d9861d5fb9b12ad464702badedffaa7d92f7498d941176aaf3e0289ec7ca1",
+      "contentHash": "sha256:503d9861d5fb9b12ad464702badedffaa7d92f7498d941176aaf3e0289ec7ca1"
     },
     {
       "topic": "backend-analysis-jobs",
@@ -242,8 +242,8 @@
       "source": "references/analysis-jobs.md",
       "embedded": "backend-analysis-jobs.md",
       "workflowId": "mocker-backend-change",
-      "sourceHash": "sha256:40e96527a6dc9a34366d7a349e5e00ec800e929ae71d15f6ff72459dccbac8ff",
-      "contentHash": "sha256:40e96527a6dc9a34366d7a349e5e00ec800e929ae71d15f6ff72459dccbac8ff"
+      "sourceHash": "sha256:57d95f8e399b519dd1e0502cf93266a984b5526cc373299deef8f78c59b7621c",
+      "contentHash": "sha256:57d95f8e399b519dd1e0502cf93266a984b5526cc373299deef8f78c59b7621c"
     },
     {
       "topic": "backend-change-handoff",
@@ -251,8 +251,8 @@
       "source": "references/handoff.md",
       "embedded": "backend-change-handoff.md",
       "workflowId": "mocker-backend-change",
-      "sourceHash": "sha256:a8851736b5b90b4c5102ba3e5088f34b4a235809a03882b765c3ee85b1e23517",
-      "contentHash": "sha256:a8851736b5b90b4c5102ba3e5088f34b4a235809a03882b765c3ee85b1e23517"
+      "sourceHash": "sha256:1c1e503c04f5645e5acfdf95f469a8bc2845648e9fd32e2dd00c44400d0f4f02",
+      "contentHash": "sha256:1c1e503c04f5645e5acfdf95f469a8bc2845648e9fd32e2dd00c44400d0f4f02"
     },
     {
       "topic": "backend-endpoint-review",
@@ -260,16 +260,24 @@
       "source": "references/endpoint-review.md",
       "embedded": "backend-endpoint-review.md",
       "workflowId": "mocker-backend-change",
-      "sourceHash": "sha256:a2da5ee39684abf8e0785596e2aa6cd2734b4615c1156eafcc233df11f8bb28a",
-      "contentHash": "sha256:a2da5ee39684abf8e0785596e2aa6cd2734b4615c1156eafcc233df11f8bb28a"
+      "sourceHash": "sha256:282ece407b7fd50ce5a58178575f179ce104db2e05e4d6809237acb38b185aca",
+      "contentHash": "sha256:282ece407b7fd50ce5a58178575f179ce104db2e05e4d6809237acb38b185aca"
     },
     {
       "topic": "backend-architecture",
       "source": "references/backend/architecture.md",
       "embedded": "backend-architecture.md",
       "workflowId": "mocker-backend-inspect",
-      "sourceHash": "sha256:888d8319c9ae339098dc84fd0c45aaf762dadaae942f5206c092d4bd1904d3de",
-      "contentHash": "sha256:888d8319c9ae339098dc84fd0c45aaf762dadaae942f5206c092d4bd1904d3de"
+      "sourceHash": "sha256:582c95fe2e76e2b762ba3a4db58a1f269c616467de458b80ab5856e6a05717ca",
+      "contentHash": "sha256:582c95fe2e76e2b762ba3a4db58a1f269c616467de458b80ab5856e6a05717ca"
+    },
+    {
+      "topic": "backend-interactions",
+      "source": "references/backend/interactions.md",
+      "embedded": "backend-interactions.md",
+      "workflowId": "mocker-backend-inspect",
+      "sourceHash": "sha256:4f4c9e660a54a976a7334a318d715087bf6a85f502f89c1f62b0f9d1b6aea989",
+      "contentHash": "sha256:4f4c9e660a54a976a7334a318d715087bf6a85f502f89c1f62b0f9d1b6aea989"
     }
   ],
   "workflows": [
@@ -279,16 +287,16 @@
       "entrypoint": "overview",
       "requiredModelSchemaVersions": [],
       "requiredCapabilities": [],
-      "guideSetId": "sha256:bb35d120a8bd525039096a0fddb9efd25d22beaf5c750aaa89df51fa11abeb91",
-      "manifestHash": "sha256:bb35d120a8bd525039096a0fddb9efd25d22beaf5c750aaa89df51fa11abeb91",
+      "guideSetId": "sha256:e1f00d9119dbb5380734835aedbc848decd5c3d1a10a889765a6bae194f8fc41",
+      "manifestHash": "sha256:e1f00d9119dbb5380734835aedbc848decd5c3d1a10a889765a6bae194f8fc41",
       "topics": [
         {
           "topic": "overview",
-          "contentHash": "sha256:d74be03b2ebcb3121f50ddd3530907a97e87806ed11b9e41088f917d9f19d1f5"
+          "contentHash": "sha256:1d12a228f267a7d05fa20cd83ac738cee6b892aeb4c55cfa09c707d868f2be1e"
         },
         {
           "topic": "tools",
-          "contentHash": "sha256:db1edeb08894a7339a9571776d05afd5feb70b98e1ef12fa2d9d19f716df3ec4"
+          "contentHash": "sha256:e26445610ece5b620f7e20a703c1da7297798103a1d8ae44ef793b5da53575e0"
         },
         {
           "topic": "shapes",
@@ -304,7 +312,7 @@
         },
         {
           "topic": "design",
-          "contentHash": "sha256:143263ac873f8725ffef9c8e97c62aa1d06519fdd82fa1c17e6f6f42797d4cf0"
+          "contentHash": "sha256:095709ed45831a6116c55afb5f13ce59245d4b32b58e3c33358a2fbdfd718292"
         },
         {
           "topic": "functions",
@@ -325,12 +333,12 @@
         "backend-revisions",
         "backend-annotations"
       ],
-      "guideSetId": "sha256:bb35d120a8bd525039096a0fddb9efd25d22beaf5c750aaa89df51fa11abeb91",
-      "manifestHash": "sha256:bb35d120a8bd525039096a0fddb9efd25d22beaf5c750aaa89df51fa11abeb91",
+      "guideSetId": "sha256:e1f00d9119dbb5380734835aedbc848decd5c3d1a10a889765a6bae194f8fc41",
+      "manifestHash": "sha256:e1f00d9119dbb5380734835aedbc848decd5c3d1a10a889765a6bae194f8fc41",
       "topics": [
         {
           "topic": "backend-overview",
-          "contentHash": "sha256:8482105e9c65ba66215eb7376cfb87f5f9410a30eafc106460b44669c0fba1b9"
+          "contentHash": "sha256:67592a476e7423b3e91aeb12608bf53c16fc85ec03e18b184307db33c77a9055"
         },
         {
           "topic": "backend-annotations",
@@ -370,20 +378,20 @@
         "backend-source-sync",
         "backend-representations"
       ],
-      "guideSetId": "sha256:bb35d120a8bd525039096a0fddb9efd25d22beaf5c750aaa89df51fa11abeb91",
-      "manifestHash": "sha256:bb35d120a8bd525039096a0fddb9efd25d22beaf5c750aaa89df51fa11abeb91",
+      "guideSetId": "sha256:e1f00d9119dbb5380734835aedbc848decd5c3d1a10a889765a6bae194f8fc41",
+      "manifestHash": "sha256:e1f00d9119dbb5380734835aedbc848decd5c3d1a10a889765a6bae194f8fc41",
       "topics": [
         {
           "topic": "backend-import",
-          "contentHash": "sha256:14719806c2a8535a998083aa2cdcd72a27994d0ca068bf5de993d902fdb07979"
+          "contentHash": "sha256:5bb10f63979fafbe8d8f79060289fb7432acbb2721a45aa3532e960543720df3"
         },
         {
           "topic": "backend-model",
-          "contentHash": "sha256:150b54e7b7d9cfa540f96c2d45bd1db5cb5775ed78ebf5b4b778f9365e260240"
+          "contentHash": "sha256:bfc399486e0b95f690ed1cda8d3bb06f984d6d77a42832b4bc75acb58b0d922a"
         },
         {
           "topic": "backend-import-protocol",
-          "contentHash": "sha256:a58891f4c4246254268eb26d48f6bf9d250947457cc876f6625959b71e69a28a"
+          "contentHash": "sha256:34a72b3ca8831c8566f36cfb205d161778e0fd345ade0fce6c8ecacc770b1dca"
         },
         {
           "topic": "backend-recovery",
@@ -391,11 +399,11 @@
         },
         {
           "topic": "backend-examples",
-          "contentHash": "sha256:92953d98e0f91a2bb594902ea1b5ec175dc0f47cf4e07ec546a27a835a865c49"
+          "contentHash": "sha256:1ff2546ae347e7aac4e03275e86155908c51f329f64935a0755857ccc0fbdf01"
         },
         {
           "topic": "backend-profile-go-sql",
-          "contentHash": "sha256:4ad54ff205dac98447e89b1a5de69cdbae16261cacae2588b332702d1c33c2cf"
+          "contentHash": "sha256:a4c034e5222e498e73178ced50e6c7a6a068bb2d72a6aef9a031c5b0e8e3b2c6"
         }
       ]
     },
@@ -433,22 +441,22 @@
         "proposal-graph-v1",
         "saved-view-v2"
       ],
-      "guideSetId": "sha256:bb35d120a8bd525039096a0fddb9efd25d22beaf5c750aaa89df51fa11abeb91",
-      "manifestHash": "sha256:bb35d120a8bd525039096a0fddb9efd25d22beaf5c750aaa89df51fa11abeb91",
+      "guideSetId": "sha256:e1f00d9119dbb5380734835aedbc848decd5c3d1a10a889765a6bae194f8fc41",
+      "manifestHash": "sha256:e1f00d9119dbb5380734835aedbc848decd5c3d1a10a889765a6bae194f8fc41",
       "topics": [
         {
           "topic": "backend-database",
-          "contentHash": "sha256:bbfb66d77b2defd7281d67f168fca39d1800811f26e21ae8052b0af48850eeb0"
+          "contentHash": "sha256:54d908484344ca15aeda444573d8da0391b5525bd25a5db5d8fba77309d27d5c"
         },
         {
           "topic": "backend-database-reference",
-          "contentHash": "sha256:c2fcd0d06c8a127d45183545b0ee2401aaa5e09f18e683620b4d036af5e4789d"
+          "contentHash": "sha256:79479449667ff6b0207a046930ff51c491eee59adf9d9055c44e37d667b86922"
         }
       ]
     },
     {
       "workflowId": "mocker-backend-inspect",
-      "workflowVersion": "9",
+      "workflowVersion": "10",
       "entrypoint": "backend-inspect",
       "requiredModelSchemaVersions": [
         "3",
@@ -474,7 +482,8 @@
         "backend-saved-views-v2",
         "backend-diagrams",
         "backend-architecture",
-        "backend-diagram-views"
+        "backend-diagram-views",
+        "backend-interactions"
       ],
       "requiredViewSchemaVersions": [
         "saved-view-v1",
@@ -486,32 +495,36 @@
         "backend-diagram-v1",
         "diagram-view-v1"
       ],
-      "guideSetId": "sha256:bb35d120a8bd525039096a0fddb9efd25d22beaf5c750aaa89df51fa11abeb91",
-      "manifestHash": "sha256:bb35d120a8bd525039096a0fddb9efd25d22beaf5c750aaa89df51fa11abeb91",
+      "guideSetId": "sha256:e1f00d9119dbb5380734835aedbc848decd5c3d1a10a889765a6bae194f8fc41",
+      "manifestHash": "sha256:e1f00d9119dbb5380734835aedbc848decd5c3d1a10a889765a6bae194f8fc41",
       "topics": [
         {
           "topic": "backend-inspect",
-          "contentHash": "sha256:d700fadf464503f95a525fb90d1e8a978543ebe96f8e11a87da53e262a0f3442"
+          "contentHash": "sha256:d74b09f3efee06c8e5671e38f5e61ceec640bcd44949649e6e624ef40d84e125"
         },
         {
           "topic": "backend-flow-reference",
-          "contentHash": "sha256:c30fa8c54b960beba094a7680634f2891ea4a7c34749f0ca8bc965b243eaab56"
+          "contentHash": "sha256:51b32eff8289fe9b9dbe99c727e931167983c7fa5b5faceaaee5abb36bbc85aa"
         },
         {
           "topic": "backend-analysis",
-          "contentHash": "sha256:a4b4e0c6a29de6b48d262bb1ef3a4b2f1829fa8ae62e14eee1b9248b2a484538"
+          "contentHash": "sha256:b5afce97a5d72d3388e5804c36059a1fd4f7e36c0c538114c4662355fbd5fa2a"
         },
         {
           "topic": "backend-editor-projections",
-          "contentHash": "sha256:84d329789b970b976058303d4f029f7816b2727dee4bec5118b0c83204fc3391"
+          "contentHash": "sha256:11eac8e2b75cecbaee4e03373c316c67ef0faeccff11a693d36895e339f1171e"
         },
         {
           "topic": "backend-events",
-          "contentHash": "sha256:5881e310382d2ad45214ca131c04539afe31b6e2605f86b38d11b51b3c7e3639"
+          "contentHash": "sha256:fd59083a070a14465649f394c94b75d37f1ab377fc4540d473b55c93300924d9"
         },
         {
           "topic": "backend-architecture",
-          "contentHash": "sha256:888d8319c9ae339098dc84fd0c45aaf762dadaae942f5206c092d4bd1904d3de"
+          "contentHash": "sha256:582c95fe2e76e2b762ba3a4db58a1f269c616467de458b80ab5856e6a05717ca"
+        },
+        {
+          "topic": "backend-interactions",
+          "contentHash": "sha256:4f4c9e660a54a976a7334a318d715087bf6a85f502f89c1f62b0f9d1b6aea989"
         }
       ]
     },
@@ -541,12 +554,12 @@
         "backend-analysis-diff",
         "backend-analysis-impact"
       ],
-      "guideSetId": "sha256:bb35d120a8bd525039096a0fddb9efd25d22beaf5c750aaa89df51fa11abeb91",
-      "manifestHash": "sha256:bb35d120a8bd525039096a0fddb9efd25d22beaf5c750aaa89df51fa11abeb91",
+      "guideSetId": "sha256:e1f00d9119dbb5380734835aedbc848decd5c3d1a10a889765a6bae194f8fc41",
+      "manifestHash": "sha256:e1f00d9119dbb5380734835aedbc848decd5c3d1a10a889765a6bae194f8fc41",
       "topics": [
         {
           "topic": "backend-sync",
-          "contentHash": "sha256:b4288151f8f0917a82995171760d9db6cd818a79d05815c6698f24c7c679de36"
+          "contentHash": "sha256:5f1127366fd4bfeb3e5e38b4e8dcd2f8bf293e9e9d71c470965affe28e888bdc"
         }
       ]
     },
@@ -586,32 +599,32 @@
         "backend-architecture",
         "backend-diagram-views"
       ],
-      "guideSetId": "sha256:bb35d120a8bd525039096a0fddb9efd25d22beaf5c750aaa89df51fa11abeb91",
-      "manifestHash": "sha256:bb35d120a8bd525039096a0fddb9efd25d22beaf5c750aaa89df51fa11abeb91",
+      "guideSetId": "sha256:e1f00d9119dbb5380734835aedbc848decd5c3d1a10a889765a6bae194f8fc41",
+      "manifestHash": "sha256:e1f00d9119dbb5380734835aedbc848decd5c3d1a10a889765a6bae194f8fc41",
       "topics": [
         {
           "topic": "backend-change-proposals",
-          "contentHash": "sha256:6e11dcf528747df8b15f5bdf5df4c69131be4e209632986a465579f2c095dec8"
+          "contentHash": "sha256:05a60baba4205a6a74858c29965ec6a898070d9c639b7467e03f083a6b542331"
         },
         {
           "topic": "backend-change-rebase",
-          "contentHash": "sha256:fd62113e1d96cebae51009b171c7afc74c7d21e7b0fb8d0827c04077ac159e7a"
+          "contentHash": "sha256:503d9861d5fb9b12ad464702badedffaa7d92f7498d941176aaf3e0289ec7ca1"
         },
         {
           "topic": "backend-analysis-jobs",
-          "contentHash": "sha256:40e96527a6dc9a34366d7a349e5e00ec800e929ae71d15f6ff72459dccbac8ff"
+          "contentHash": "sha256:57d95f8e399b519dd1e0502cf93266a984b5526cc373299deef8f78c59b7621c"
         },
         {
           "topic": "backend-change-handoff",
-          "contentHash": "sha256:a8851736b5b90b4c5102ba3e5088f34b4a235809a03882b765c3ee85b1e23517"
+          "contentHash": "sha256:1c1e503c04f5645e5acfdf95f469a8bc2845648e9fd32e2dd00c44400d0f4f02"
         },
         {
           "topic": "backend-endpoint-review",
-          "contentHash": "sha256:a2da5ee39684abf8e0785596e2aa6cd2734b4615c1156eafcc233df11f8bb28a"
+          "contentHash": "sha256:282ece407b7fd50ce5a58178575f179ce104db2e05e4d6809237acb38b185aca"
         }
       ]
     }
   ],
-  "guideSetId": "sha256:bb35d120a8bd525039096a0fddb9efd25d22beaf5c750aaa89df51fa11abeb91",
-  "manifestHash": "sha256:bb35d120a8bd525039096a0fddb9efd25d22beaf5c750aaa89df51fa11abeb91"
+  "guideSetId": "sha256:e1f00d9119dbb5380734835aedbc848decd5c3d1a10a889765a6bae194f8fc41",
+  "manifestHash": "sha256:e1f00d9119dbb5380734835aedbc848decd5c3d1a10a889765a6bae194f8fc41"
 }

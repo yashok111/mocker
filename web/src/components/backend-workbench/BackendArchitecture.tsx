@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useState, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Alert,
@@ -16,6 +16,7 @@ import {
   Title,
 } from "@mantine/core";
 import {
+  buildBackendInteractions,
   createBackendDiagram,
   saveBackendDiagram,
   forkBackendDiagram,
@@ -57,6 +58,7 @@ const BackendArchitectureGraph = lazy(() =>
 );
 import { BackendArchitectureInspector } from "./BackendArchitectureInspector";
 import { BackendArtifactProjections } from "./BackendArtifactProjections";
+import { BackendInteractions, BackendInteractionsEditor } from "./BackendInteractions";
 import { BackendArchitectureEditor } from "./BackendArchitectureEditor";
 import { focusWorkspaceRegion } from "./BackendWorkspaceNavigation";
 
@@ -96,8 +98,12 @@ function initialState(
   const [type, id] = (search.diagramSelection ?? "").split(":");
   return {
     diagram: d.pin,
-    level: search.diagramLevel ?? "context",
-    rootId: search.diagramRoot ?? d.document.payload.primarySystemId,
+    ...(d.document.kind === "architecture"
+      ? {
+          level: search.diagramLevel ?? "context",
+          rootId: search.diagramRoot ?? d.document.payload.primarySystemId,
+        }
+      : {}),
     search: "",
     origin: "all",
     selection: (type === "element" || type === "link") && id ? { type, id } : null,
@@ -194,6 +200,10 @@ function ArchitectureContent(props: Props) {
     queryFn: ({ signal }) => readDiagram(projectId, chosen!, signal),
   });
   const [creating, setCreating] = useState(false);
+  const [entrypoint, setEntrypoint] = useState("");
+  const [building, setBuilding] = useState(false);
+  const buildAbort = useRef<AbortController | null>(null);
+  const [buildError, setBuildError] = useState("");
   const [contentDirty, setContentDirty] = useState(false);
   const notifyDirty = useCallback(
     (dirty: boolean) => {
@@ -240,6 +250,42 @@ function ArchitectureContent(props: Props) {
     });
     setCreating(true);
   };
+  const buildScope = JSON.stringify([projectId, target, chosen]);
+  useEffect(
+    () => () => {
+      buildAbort.current?.abort();
+    },
+    [buildScope],
+  );
+  const buildInteractions = async () => {
+    if (!target || building || contentDirty) return;
+    setBuilding(true);
+    setBuildError("");
+    const controller = new AbortController();
+    buildAbort.current = controller;
+    try {
+      const response = await buildBackendInteractions(
+        projectId,
+        {
+          target,
+          entrypointId: entrypoint,
+          maxSteps: 200,
+          ...(diagramQuery.data?.document.kind === "architecture"
+            ? { architecture: diagramQuery.data.pin }
+            : {}),
+        },
+        { signal: controller.signal },
+      );
+      controller.signal.throwIfAborted();
+      if (response.status !== 200) throw new Error("Кандидат interactions недоступен");
+      setNewDoc(response.data.document);
+      setCreating(true);
+    } catch (error) {
+      if (!controller.signal.aborted) setBuildError(describeApiFailureDetailed(error));
+    } finally {
+      if (buildAbort.current === controller) setBuilding(false);
+    }
+  };
   const selected = diagramQuery.data;
   useEffect(() => {
     if (!selected) return;
@@ -282,7 +328,7 @@ function ArchitectureContent(props: Props) {
               { value: "", label: "Выберите mapping" },
               ...(catalog.data?.items ?? []).map((item) => ({
                 value: JSON.stringify(item.pin),
-                label: `${item.id} · v${item.pin.version}`,
+                label: `${item.kind} · ${item.id} · v${item.pin.version}`,
               })),
             ]}
           />
@@ -294,6 +340,53 @@ function ArchitectureContent(props: Props) {
             Создать mapping
           </Button>
         </Group>
+        <Group align="end">
+          <TextInput
+            label="Entrypoint ID для interactions"
+            value={entrypoint}
+            onChange={(e) => setEntrypoint(e.currentTarget.value)}
+            disabled={contentDirty || building}
+          />
+          <Button
+            variant="default"
+            disabled={!target || !entrypoint || contentDirty || building || creating}
+            loading={building}
+            onClick={() => void buildInteractions()}
+          >
+            Предложить interactions
+          </Button>
+          <Button
+            variant="default"
+            disabled={!target || contentDirty || building || creating}
+            onClick={() => {
+              if (target) {
+                setNewDoc({
+                  format: "backend-diagram-v1",
+                  kind: "interactions",
+                  target,
+                  payload: {
+                    ...(diagramQuery.data?.document.kind === "architecture"
+                      ? { architecture: diagramQuery.data.pin }
+                      : {}),
+                    scopeRefs: [],
+                    participants: [],
+                    steps: [],
+                    branches: [],
+                    order: [],
+                  },
+                });
+                setCreating(true);
+              }
+            }}
+          >
+            Создать interactions
+          </Button>
+        </Group>
+        {buildError && (
+          <Alert color="red" role="alert">
+            {buildError}
+          </Alert>
+        )}
         {catalog.isError && (
           <Alert color="red" role="alert">
             Список mappings недоступен.{" "}
@@ -345,7 +438,7 @@ function ArchitectureContent(props: Props) {
         )}
         {((selected && !error) || (creating && newDoc)) && (
           <ArchitectureWorkspace
-            key={creating ? "create" : `${projectId}:${selected!.pin.id}`}
+            key={creating ? `create:${newDoc?.kind}` : `${projectId}:${selected!.pin.id}`}
             {...props}
             onDirty={notifyDirty}
             diagram={creating ? undefined : selected}
@@ -383,6 +476,8 @@ function ArchitectureWorkspace({
   savedView?: BackendDiagramView;
   onCreated: () => void;
 }) {
+  const architecture =
+    diagram?.document.kind === "architecture" ? diagram.document.payload : undefined;
   const [draft, setDraft] = useState<BackendDiagramDocument | undefined>(initialDocument);
   const fallback = diagram ? initialState(diagram, search) : undefined;
   const semanticIdentity = JSON.stringify(diagram?.pin);
@@ -432,7 +527,7 @@ function ArchitectureWorkspace({
       : undefined;
   const [viewName, setViewName] = usePinnedValue<string>(
     activeView ? `${activeView.id}:${activeView.version}` : `new:${semanticIdentity}`,
-    activeView?.name ?? "C4 architecture",
+    activeView?.name ?? (architecture ? "C4 architecture" : "Static interactions"),
   );
   const viewDirty =
     !!activeView &&
@@ -442,6 +537,7 @@ function ArchitectureWorkspace({
   const [comparison, setComparison] = useState<BackendDiagramComparison>();
   const [forkTarget, setForkTarget] = useState("");
   const [forkReason, setForkReason] = useState("");
+  const [forkArchitecture, setForkArchitecture] = useState("");
   const dirty = !!draft || !!pending || busy;
   useEffect(() => {
     onDirty?.(dirty || viewDirty);
@@ -561,8 +657,9 @@ function ArchitectureWorkspace({
       if ("pin" in result)
         onNavigate(
           diagramSearch(result.pin, {
-            level: "context",
-            rootId: result.document.payload.primarySystemId,
+            ...(result.document.kind === "architecture"
+              ? { level: "context" as const, rootId: result.document.payload.primarySystemId }
+              : {}),
             selection: null,
           }),
         );
@@ -583,7 +680,11 @@ function ArchitectureWorkspace({
   const select = (selection: NonNullable<BackendDiagramViewState["selection"]>) => {
     if (state) {
       changeState({ ...state, selection });
-      focusWorkspaceRegion("#c4-inspector-title");
+      focusWorkspaceRegion(
+        diagram?.document.kind === "interactions"
+          ? "#interactions-inspector-title"
+          : "#c4-inspector-title",
+      );
     }
   };
   const open = (ref: BackendDiagramRef) => {
@@ -607,6 +708,8 @@ function ArchitectureWorkspace({
     elements.data?.items.flatMap((row) =>
       row.rowType === "architecture_element" ? [row.data] : [],
     ) ?? [];
+  const layoutElements =
+    diagram?.document.kind === "interactions" ? diagram.document.payload.participants : es;
   const ls =
     links.data?.items.flatMap((row) => (row.rowType === "architecture_link" ? [row.data] : [])) ??
     [];
@@ -626,7 +729,7 @@ function ArchitectureWorkspace({
         </Alert>
       )}
       {draft && (
-        <BackendArchitectureEditor
+        <DiagramEditor
           document={draft}
           onChange={setDraft}
           busy={busy || !!pending}
@@ -665,72 +768,70 @@ function ArchitectureWorkspace({
           <Code style={{ whiteSpace: "normal", overflowWrap: "anywhere" }}>
             {JSON.stringify(diagram.document.target)}
           </Code>
-          <Group grow align="end">
-            <NativeSelect
-              label="Уровень C4"
-              value={state.level}
-              disabled={dirty}
-              onChange={(e) => {
-                const level = e.currentTarget.value as BackendDiagramViewState["level"];
-                const root =
-                  level === "components"
-                    ? diagram.document.payload.elements.find((n) => n.role === "application")?.id
-                    : diagram.document.payload.primarySystemId;
-                if (root)
+          {architecture && (
+            <Group grow align="end">
+              <NativeSelect
+                label="Уровень C4"
+                value={state.level}
+                disabled={dirty}
+                onChange={(e) => {
+                  const level = e.currentTarget.value as BackendDiagramViewState["level"];
+                  const root =
+                    level === "components"
+                      ? architecture!.elements.find((n) => n.role === "application")?.id
+                      : architecture!.primarySystemId;
+                  if (root)
+                    changeState({
+                      ...state,
+                      level,
+                      rootId: root,
+                      selection: null,
+                      positions: [],
+                      collapsedIds: [],
+                    });
+                  else setMessage("Для Components сначала добавьте application mapping.");
+                }}
+                data={["context", "containers", "components"]}
+              />
+              <NativeSelect
+                label="Корень C4"
+                value={state.rootId}
+                disabled={dirty}
+                onChange={(e) =>
                   changeState({
                     ...state,
-                    level,
-                    rootId: root,
+                    rootId: e.currentTarget.value,
                     selection: null,
                     positions: [],
                     collapsedIds: [],
-                  });
-                else setMessage("Для Components сначала добавьте application mapping.");
-              }}
-              data={["context", "containers", "components"]}
-            />
-            <NativeSelect
-              label="Корень C4"
-              value={state.rootId}
-              disabled={dirty}
-              onChange={(e) =>
-                changeState({
-                  ...state,
-                  rootId: e.currentTarget.value,
-                  selection: null,
-                  positions: [],
-                  collapsedIds: [],
-                })
-              }
-              data={diagram.document.payload.elements
-                .filter(
-                  (n) =>
-                    n.role === (state.level === "components" ? "application" : "software_system"),
-                )
-                .map((n) => ({ value: n.id, label: n.label }))}
-            />
-            <Button
-              variant="subtle"
-              disabled={dirty}
-              onClick={() =>
-                changeState({
-                  ...state,
-                  level: "context",
-                  rootId: diagram.document.payload.primarySystemId,
-                  selection: null,
-                  positions: [],
-                  collapsedIds: [],
-                })
-              }
-            >
-              Context /{" "}
-              {
-                diagram.document.payload.elements.find(
-                  (n) => n.id === diagram.document.payload.primarySystemId,
-                )?.label
-              }
-            </Button>
-          </Group>
+                  })
+                }
+                data={architecture!.elements
+                  .filter(
+                    (n) =>
+                      n.role === (state.level === "components" ? "application" : "software_system"),
+                  )
+                  .map((n) => ({ value: n.id, label: n.label }))}
+              />
+              <Button
+                variant="subtle"
+                disabled={dirty}
+                onClick={() =>
+                  changeState({
+                    ...state,
+                    level: "context",
+                    rootId: architecture!.primarySystemId,
+                    selection: null,
+                    positions: [],
+                    collapsedIds: [],
+                  })
+                }
+              >
+                Context /{" "}
+                {architecture!.elements.find((n) => n.id === architecture!.primarySystemId)?.label}
+              </Button>
+            </Group>
+          )}
           <Group grow>
             <TextInput
               label="Поиск по всей проекции"
@@ -768,83 +869,85 @@ function ArchitectureWorkspace({
               </Button>
             </Alert>
           )}
-          <SimpleGrid cols={{ base: 1, lg: 2 }}>
-            <Stack>
-              <Title order={3}>Элементы · {elements.data?.total ?? 0}</Title>
-              {es.map((e) => (
-                <Group key={e.id} wrap="wrap">
+          {architecture && (
+            <SimpleGrid cols={{ base: 1, lg: 2 }}>
+              <Stack>
+                <Title order={3}>Элементы · {elements.data?.total ?? 0}</Title>
+                {es.map((e) => (
+                  <Group key={e.id} wrap="wrap">
+                    <Button
+                      variant="default"
+                      h="auto"
+                      style={{ whiteSpace: "normal", overflowWrap: "anywhere" }}
+                      disabled={dirty}
+                      data-c4-selection={e.id}
+                      onClick={() => select({ type: "element", id: e.id })}
+                    >
+                      {e.label} · {e.role} · {e.origin.kind === "authored" ? "Замысел" : "Source"}
+                    </Button>
+                    {["software_system", "application"].includes(e.role) && (
+                      <Button
+                        variant="subtle"
+                        disabled={dirty}
+                        onClick={() =>
+                          changeState({
+                            ...state,
+                            level: e.role === "application" ? "components" : "containers",
+                            rootId: e.id,
+                            selection: null,
+                            positions: [],
+                            collapsedIds: [],
+                          })
+                        }
+                      >
+                        Что внутри {e.label}
+                      </Button>
+                    )}
+                  </Group>
+                ))}
+                <Group>
+                  <Button disabled={ec.length === 1} onClick={() => setEC((c) => c.slice(0, -1))}>
+                    Предыдущие элементы
+                  </Button>
                   <Button
+                    disabled={!elements.data?.nextCursor}
+                    onClick={() => setEC((c) => [...c, elements.data!.nextCursor])}
+                  >
+                    Следующие элементы
+                  </Button>
+                </Group>
+              </Stack>
+              <Stack>
+                <Title order={3}>Зависимости · {links.data?.total ?? 0}</Title>
+                {ls.map((l) => (
+                  <Button
+                    key={l.id}
                     variant="default"
                     h="auto"
                     style={{ whiteSpace: "normal", overflowWrap: "anywhere" }}
                     disabled={dirty}
-                    data-c4-selection={e.id}
-                    onClick={() => select({ type: "element", id: e.id })}
+                    data-c4-selection={l.id}
+                    onClick={() => select({ type: "link", id: l.id })}
                   >
-                    {e.label} · {e.role} · {e.origin.kind === "authored" ? "Замысел" : "Source"}
+                    {es.find((e) => e.id === l.from)?.label ?? l.from} →{" "}
+                    {es.find((e) => e.id === l.to)?.label ?? l.to} · {l.relation} ·{" "}
+                    {l.origin.kind === "authored" ? "Замысел" : "Source"}
                   </Button>
-                  {["software_system", "application"].includes(e.role) && (
-                    <Button
-                      variant="subtle"
-                      disabled={dirty}
-                      onClick={() =>
-                        changeState({
-                          ...state,
-                          level: e.role === "application" ? "components" : "containers",
-                          rootId: e.id,
-                          selection: null,
-                          positions: [],
-                          collapsedIds: [],
-                        })
-                      }
-                    >
-                      Что внутри {e.label}
-                    </Button>
-                  )}
+                ))}
+                <Group>
+                  <Button disabled={lc.length === 1} onClick={() => setLC((c) => c.slice(0, -1))}>
+                    Предыдущие связи
+                  </Button>
+                  <Button
+                    disabled={!links.data?.nextCursor}
+                    onClick={() => setLC((c) => [...c, links.data!.nextCursor])}
+                  >
+                    Следующие связи
+                  </Button>
                 </Group>
-              ))}
-              <Group>
-                <Button disabled={ec.length === 1} onClick={() => setEC((c) => c.slice(0, -1))}>
-                  Предыдущие элементы
-                </Button>
-                <Button
-                  disabled={!elements.data?.nextCursor}
-                  onClick={() => setEC((c) => [...c, elements.data!.nextCursor])}
-                >
-                  Следующие элементы
-                </Button>
-              </Group>
-            </Stack>
-            <Stack>
-              <Title order={3}>Зависимости · {links.data?.total ?? 0}</Title>
-              {ls.map((l) => (
-                <Button
-                  key={l.id}
-                  variant="default"
-                  h="auto"
-                  style={{ whiteSpace: "normal", overflowWrap: "anywhere" }}
-                  disabled={dirty}
-                  data-c4-selection={l.id}
-                  onClick={() => select({ type: "link", id: l.id })}
-                >
-                  {es.find((e) => e.id === l.from)?.label ?? l.from} →{" "}
-                  {es.find((e) => e.id === l.to)?.label ?? l.to} · {l.relation} ·{" "}
-                  {l.origin.kind === "authored" ? "Замысел" : "Source"}
-                </Button>
-              ))}
-              <Group>
-                <Button disabled={lc.length === 1} onClick={() => setLC((c) => c.slice(0, -1))}>
-                  Предыдущие связи
-                </Button>
-                <Button
-                  disabled={!links.data?.nextCursor}
-                  onClick={() => setLC((c) => [...c, links.data!.nextCursor])}
-                >
-                  Следующие связи
-                </Button>
-              </Group>
-            </Stack>
-          </SimpleGrid>
+              </Stack>
+            </SimpleGrid>
+          )}
           <Paper withBorder p="md">
             <Stack gap="xs">
               <Text fw={600}>Расположение и свёрнутые элементы</Text>
@@ -855,17 +958,18 @@ function ArchitectureWorkspace({
                   onChange={(e) => setLayoutNode(e.currentTarget.value)}
                   data={[
                     { value: "", label: "Выберите элемент" },
-                    ...es.map((e) => ({ value: e.id, label: e.label })),
+                    ...layoutElements.map((e) => ({ value: e.id, label: e.label })),
                   ]}
                 />
                 <TextInput
-                  label="Координата X"
+                  label={architecture ? "Координата X" : "Смещение участника по X"}
                   type="number"
                   value={layoutX}
                   onChange={(e) => setLayoutX(e.currentTarget.value)}
                 />
                 <TextInput
                   label="Координата Y"
+                  disabled={!architecture}
                   type="number"
                   value={layoutY}
                   onChange={(e) => setLayoutY(e.currentTarget.value)}
@@ -882,7 +986,11 @@ function ArchitectureWorkspace({
                       ...state,
                       positions: [
                         ...state.positions.filter((p) => p.id !== layoutNode),
-                        { id: layoutNode, x: Number(layoutX), y: Number(layoutY) },
+                        {
+                          id: layoutNode,
+                          x: Number(layoutX),
+                          y: architecture ? Number(layoutY) : 0,
+                        },
                       ],
                     })
                   }
@@ -906,20 +1014,37 @@ function ArchitectureWorkspace({
               </Group>
             </Stack>
           </Paper>
-          <Suspense fallback={<Loader aria-label="Загружаем C4 canvas" />}>
-            <BackendArchitectureGraph elements={es} links={ls} state={state} onSelect={select} />
-          </Suspense>
-          <BackendArchitectureInspector
-            projectId={projectId}
-            diagram={diagram}
-            state={state}
-            onOpen={open}
-            onClose={() => {
-              const id = state.selection?.id;
-              changeState({ ...state, selection: null });
-              if (id) focusWorkspaceRegion(`[data-c4-selection="${id}"]`);
-            }}
-          />
+          {architecture && (
+            <Suspense fallback={<Loader aria-label="Загружаем C4 canvas" />}>
+              <BackendArchitectureGraph elements={es} links={ls} state={state} onSelect={select} />
+            </Suspense>
+          )}
+          {architecture && (
+            <BackendArchitectureInspector
+              projectId={projectId}
+              diagram={diagram}
+              state={state}
+              onOpen={open}
+              onClose={() => {
+                const id = state.selection?.id;
+                changeState({ ...state, selection: null });
+                if (id) focusWorkspaceRegion(`[data-c4-selection="${id}"]`);
+              }}
+            />
+          )}
+          {diagram.document.kind === "interactions" && (
+            <BackendInteractions
+              payload={diagram.document.payload}
+              gaps={diagram.gaps}
+              selection={state.selection}
+              onSelect={select}
+              onOpen={open}
+              disabled={dirty}
+              search={state.search}
+              origin={state.origin}
+              presentation={state}
+            />
+          )}
           {artifactRef && (
             <Paper withBorder p="md">
               <Stack>
@@ -958,7 +1083,7 @@ function ArchitectureWorkspace({
             <Stack>
               <Title order={3}>Сохранить точный вид</Title>
               <TextInput
-                label="Название C4 вида"
+                label={architecture ? "Название C4 вида" : "Название interactions вида"}
                 value={viewName}
                 onChange={(e) => setViewName(e.currentTarget.value)}
               />
@@ -972,7 +1097,7 @@ function ArchitectureWorkspace({
                     })
                   }
                 >
-                  Сохранить новый C4 вид
+                  {architecture ? "Сохранить новый C4 вид" : "Сохранить новый interactions вид"}
                 </Button>
                 <Button
                   disabled={dirty || !activeView}
@@ -1006,6 +1131,13 @@ function ArchitectureWorkspace({
                 value={forkTarget}
                 onChange={(e) => setForkTarget(e.currentTarget.value)}
               />
+              {diagram.document.kind === "interactions" && (
+                <TextInput
+                  label="Точный architecture pin для нового target (JSON)"
+                  value={forkArchitecture}
+                  onChange={(e) => setForkArchitecture(e.currentTarget.value)}
+                />
+              )}
               <TextInput
                 label="Причина fork"
                 value={forkReason}
@@ -1020,6 +1152,7 @@ function ArchitectureWorkspace({
                       body: {
                         source: diagram.pin,
                         target: JSON.parse(forkTarget),
+                        ...(forkArchitecture ? { architecture: JSON.parse(forkArchitecture) } : {}),
                         reason: forkReason,
                         idempotencyKey: crypto.randomUUID(),
                       },
@@ -1144,14 +1277,14 @@ function ArchitectureSavedLists({
       <Stack>
         <Title order={3}>Сохранённые виды проекта</Title>
         <NativeSelect
-          label="Открыть сохранённый C4 / Flow / Database вид"
+          label="Открыть сохранённый C4 / interactions / Flow / Database вид"
           value={selection}
           onChange={(e) => setSelection(e.currentTarget.value)}
           data={[
             { value: "", label: "Выберите точный вид" },
             ...(diagrams.data?.items ?? []).map((v) => ({
               value: JSON.stringify({ diagramViewId: v.id, diagramViewVersion: v.version }),
-              label: `C4 · ${v.name} · v${v.version}`,
+              label: `${v.kind === "interactions" ? "Interactions" : "C4"} · ${v.name} · v${v.version}`,
             })),
             ...(legacy.data?.items ?? []).map((v) => ({
               value: JSON.stringify({ viewId: v.id, viewVersion: v.version }),
@@ -1199,5 +1332,19 @@ function ArchitectureSavedLists({
         </Group>
       </Stack>
     </Paper>
+  );
+}
+
+function DiagramEditor(props: {
+  document: BackendDiagramDocument;
+  onChange: (d: BackendDiagramDocument) => void;
+  onSave: () => void;
+  onCancel: () => void;
+  busy: boolean;
+}) {
+  return props.document.kind === "architecture" ? (
+    <BackendArchitectureEditor {...props} document={props.document} />
+  ) : (
+    <BackendInteractionsEditor {...props} document={props.document} />
   );
 }

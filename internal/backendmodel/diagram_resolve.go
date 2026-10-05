@@ -50,6 +50,28 @@ func diagramBases(d DiagramDocument) map[string]struct {
 			refs   []DiagramRef
 		}{e.Origin, e.Refs}
 	}
+	if d.Interactions != nil {
+		for id, v := range interactionRows(d.Interactions) {
+			var o DiagramOrigin
+			refs := []DiagramRef{}
+			switch v := v.(type) {
+			case InteractionParticipant:
+				o = v.Origin
+				refs = v.Refs
+			case InteractionStep:
+				o = v.Origin
+				refs = v.Refs
+			case InteractionBranch:
+				o = v.Origin
+			case InteractionOrder:
+				o = v.Origin
+			}
+			out[id] = struct {
+				origin DiagramOrigin
+				refs   []DiagramRef
+			}{o, refs}
+		}
+	}
 	return out
 }
 func resolveDiagramEvidence(ctx context.Context, g *EffectiveGraphSnapshot, d DiagramDocument, previous *DiagramVersion) ([]DiagramGap, error) {
@@ -99,6 +121,11 @@ func resolveDiagramEvidence(ctx context.Context, g *EffectiveGraphSnapshot, d Di
 			gaps = append(gaps, diagramGap(id, "authored_unresolved", "Authored boundary or relation has no source mapping"))
 		}
 	}
+	extra, err := resolveInteractionGaps(resolver, d, previous, nodes, edges)
+	if err != nil {
+		return nil, err
+	}
+	gaps = append(gaps, extra...)
 	slices.SortFunc(gaps, func(a, b DiagramGap) int {
 		if a.ID < b.ID {
 			return -1
@@ -233,4 +260,28 @@ func (r *diagramArtifactResolver) resolve(ref DiagramRef) (bool, error) {
 		r.known[key] = found
 	}
 	return found, err
+}
+
+func resolveInteractionGaps(resolver *diagramArtifactResolver, d DiagramDocument, previous *DiagramVersion, nodes, edges map[string]bool) ([]DiagramGap, error) {
+	gaps := []DiagramGap{}
+	if d.Interactions != nil {
+		oldRefs := []DiagramRef{}
+		if previous != nil && previous.Document.Interactions != nil {
+			oldRefs = previous.Document.Interactions.ScopeRefs
+		}
+		scopeGaps, err := diagramReferenceGaps(resolver, diagramIdentity("interaction-scope-v1"), d.Interactions.ScopeRefs, oldRefs, nodes, edges)
+		if err != nil {
+			return nil, err
+		}
+		gaps = append(gaps, scopeGaps...)
+		for _, step := range d.Interactions.Steps {
+			if step.Kind == "boundary" {
+				gaps = append(gaps, diagramGap(step.ID, "interaction_boundary", "Explicit static boundary; behavior beyond it is unverified"))
+			}
+			if step.To == "" {
+				gaps = append(gaps, diagramGap(step.ID, "unresolved_receiver", "Receiver is not established; no receive or reply was inferred"))
+			}
+		}
+	}
+	return gaps, nil
 }

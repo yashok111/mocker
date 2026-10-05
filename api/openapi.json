@@ -14895,7 +14895,8 @@
                 "items": {
                   "type": "string",
                   "enum": [
-                    "architecture"
+                    "architecture",
+                    "interactions"
                   ]
                 }
               },
@@ -80402,34 +80403,17 @@
         ]
       },
       "BackendDiagramDocument": {
-        "type": "object",
-        "additionalProperties": false,
-        "properties": {
-          "format": {
-            "type": "string",
-            "enum": [
-              "backend-diagram-v1"
-            ]
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/BackendArchitectureDocument"
           },
-          "kind": {
-            "type": "string",
-            "enum": [
-              "architecture"
-            ]
-          },
-          "target": {
-            "$ref": "#/components/schemas/BackendDiagramTarget"
-          },
-          "payload": {
-            "$ref": "#/components/schemas/BackendArchitecturePayload"
+          {
+            "$ref": "#/components/schemas/BackendInteractionDocument"
           }
-        },
-        "required": [
-          "format",
-          "kind",
-          "target",
-          "payload"
-        ]
+        ],
+        "discriminator": {
+          "propertyName": "kind"
+        }
       },
       "BackendDiagramGap": {
         "type": "object",
@@ -80754,8 +80738,6 @@
         },
         "required": [
           "pin",
-          "level",
-          "rootId",
           "search",
           "origin",
           "section",
@@ -80872,6 +80854,18 @@
           },
           {
             "$ref": "#/components/schemas/BackendDiagramRowGap"
+          },
+          {
+            "$ref": "#/components/schemas/BackendDiagramRowParticipant"
+          },
+          {
+            "$ref": "#/components/schemas/BackendDiagramRowStep"
+          },
+          {
+            "$ref": "#/components/schemas/BackendDiagramRowBranch"
+          },
+          {
+            "$ref": "#/components/schemas/BackendDiagramRowOrder"
           }
         ],
         "discriminator": {
@@ -80945,7 +80939,6 @@
           }
         },
         "required": [
-          "projection",
           "pin",
           "targetHash",
           "total",
@@ -81129,8 +81122,6 @@
         },
         "required": [
           "diagram",
-          "level",
-          "rootId",
           "search",
           "origin",
           "selection",
@@ -81239,7 +81230,8 @@
                 "kind": {
                   "type": "string",
                   "enum": [
-                    "architecture"
+                    "architecture",
+                    "interactions"
                   ]
                 },
                 "pin": {
@@ -81290,7 +81282,8 @@
                 "kind": {
                   "type": "string",
                   "enum": [
-                    "architecture"
+                    "architecture",
+                    "interactions"
                   ]
                 },
                 "version": {
@@ -81423,6 +81416,424 @@
         "discriminator": {
           "propertyName": "kind"
         }
+      },
+      "BackendInteractionParticipant": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "label": {
+            "type": "string",
+            "maxLength": 256
+          },
+          "origin": {
+            "$ref": "#/components/schemas/BackendDiagramOrigin"
+          },
+          "refs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendDiagramRef"
+            },
+            "maxItems": 100
+          },
+          "architectureElementId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "origin",
+          "refs"
+        ]
+      },
+      "BackendInteractionStep": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "label": {
+            "type": "string",
+            "maxLength": 256
+          },
+          "origin": {
+            "$ref": "#/components/schemas/BackendDiagramOrigin"
+          },
+          "refs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendDiagramRef"
+            },
+            "maxItems": 100
+          },
+          "from": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "to": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "request",
+              "response",
+              "send",
+              "receive",
+              "error",
+              "boundary"
+            ]
+          },
+          "branchPath": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "maxItems": 1000
+          },
+          "replyTo": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "origin",
+          "refs",
+          "from",
+          "kind",
+          "branchPath"
+        ]
+      },
+      "BackendInteractionOrder": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "from": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "to": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "origin": {
+            "$ref": "#/components/schemas/BackendDiagramOrigin"
+          }
+        },
+        "required": [
+          "id",
+          "from",
+          "to",
+          "origin"
+        ]
+      },
+      "BackendInteractionBranch": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "parentId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "groupId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "label": {
+            "type": "string",
+            "maxLength": 256
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "alternative",
+              "parallel",
+              "loop"
+            ]
+          },
+          "guardText": {
+            "type": "string",
+            "maxLength": 4096
+          },
+          "origin": {
+            "$ref": "#/components/schemas/BackendDiagramOrigin"
+          }
+        },
+        "required": [
+          "id",
+          "groupId",
+          "label",
+          "kind",
+          "guardText",
+          "origin"
+        ]
+      },
+      "BackendInteractionPayload": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "architecture": {
+            "$ref": "#/components/schemas/BackendDiagramPin"
+          },
+          "scopeRefs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendDiagramRef"
+            },
+            "maxItems": 100
+          },
+          "participants": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendInteractionParticipant"
+            },
+            "maxItems": 1000
+          },
+          "steps": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendInteractionStep"
+            },
+            "maxItems": 1000
+          },
+          "order": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendInteractionOrder"
+            },
+            "maxItems": 3000
+          },
+          "branches": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendInteractionBranch"
+            },
+            "maxItems": 1000
+          }
+        },
+        "required": [
+          "scopeRefs",
+          "participants",
+          "steps",
+          "order",
+          "branches"
+        ]
+      },
+      "BackendArchitectureDocument": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "format": {
+            "type": "string",
+            "enum": [
+              "backend-diagram-v1"
+            ]
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "architecture"
+            ]
+          },
+          "target": {
+            "$ref": "#/components/schemas/BackendDiagramTarget"
+          },
+          "payload": {
+            "$ref": "#/components/schemas/BackendArchitecturePayload"
+          }
+        },
+        "required": [
+          "format",
+          "kind",
+          "target",
+          "payload"
+        ]
+      },
+      "BackendInteractionDocument": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "format": {
+            "type": "string",
+            "enum": [
+              "backend-diagram-v1"
+            ]
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "interactions"
+            ]
+          },
+          "target": {
+            "$ref": "#/components/schemas/BackendDiagramTarget"
+          },
+          "payload": {
+            "$ref": "#/components/schemas/BackendInteractionPayload"
+          }
+        },
+        "required": [
+          "format",
+          "kind",
+          "target",
+          "payload"
+        ]
+      },
+      "BackendDiagramRowParticipant": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "rowType": {
+            "type": "string",
+            "enum": [
+              "participant"
+            ]
+          },
+          "data": {
+            "$ref": "#/components/schemas/BackendInteractionParticipant"
+          }
+        },
+        "required": [
+          "rowType",
+          "data"
+        ]
+      },
+      "BackendDiagramRowStep": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "rowType": {
+            "type": "string",
+            "enum": [
+              "step"
+            ]
+          },
+          "data": {
+            "$ref": "#/components/schemas/BackendInteractionStep"
+          }
+        },
+        "required": [
+          "rowType",
+          "data"
+        ]
+      },
+      "BackendDiagramRowBranch": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "rowType": {
+            "type": "string",
+            "enum": [
+              "branch"
+            ]
+          },
+          "data": {
+            "$ref": "#/components/schemas/BackendInteractionBranch"
+          }
+        },
+        "required": [
+          "rowType",
+          "data"
+        ]
+      },
+      "BackendDiagramRowOrder": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "rowType": {
+            "type": "string",
+            "enum": [
+              "order"
+            ]
+          },
+          "data": {
+            "$ref": "#/components/schemas/BackendInteractionOrder"
+          }
+        },
+        "required": [
+          "rowType",
+          "data"
+        ]
+      },
+      "BuildBackendInteractionsRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "target": {
+            "$ref": "#/components/schemas/BackendDiagramTarget"
+          },
+          "entrypointId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "architecture": {
+            "$ref": "#/components/schemas/BackendDiagramPin"
+          },
+          "maxSteps": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1000,
+            "default": 200
+          }
+        },
+        "required": [
+          "target",
+          "entrypointId"
+        ]
+      },
+      "BackendInteractionCandidate": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "document": {
+            "$ref": "#/components/schemas/BackendInteractionDocument"
+          },
+          "targetHash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "gaps": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendDiagramGap"
+            },
+            "maxItems": 10000
+          },
+          "visitedObjects": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 250000
+          },
+          "truncated": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "document",
+          "targetHash",
+          "gaps",
+          "visitedObjects",
+          "truncated"
+        ]
       }
     }
   },
@@ -102300,7 +102711,8 @@
             "schema": {
               "type": "string",
               "enum": [
-                "architecture"
+                "architecture",
+                "interactions"
               ]
             }
           },
@@ -103173,7 +103585,8 @@
             "schema": {
               "type": "string",
               "enum": [
-                "architecture"
+                "architecture",
+                "interactions"
               ]
             }
           },
@@ -103532,6 +103945,124 @@
           },
           "415": {
             "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        }
+      }
+    },
+    "/api/backend-projects/{id}/diagrams/interactions/build": {
+      "post": {
+        "tags": [
+          "backend-projects"
+        ],
+        "operationId": "buildBackendInteractions",
+        "summary": "Build a bounded static interaction candidate",
+        "description": "Read-only candidate on an exact target. Source assertions are static claims, never execution proof. Explicit create is required to persist the candidate.",
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendInteractionCandidate"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BuildBackendInteractionsRequest"
+              }
+            }
           }
         }
       }

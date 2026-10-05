@@ -31,6 +31,10 @@ type DiagramMember struct {
 
 // Each row has exactly one typed data arm; no free-form response payloads.
 type DiagramRow struct {
+	Participant         *InteractionParticipant
+	Step                *InteractionStep
+	Branch              *InteractionBranch
+	Order               *InteractionOrder
 	ArchitectureElement *ArchitectureElement
 	ArchitectureLink    *ArchitectureLink
 	Member              *DiagramMember
@@ -38,9 +42,7 @@ type DiagramRow struct {
 }
 
 func (r DiagramRow) MarshalJSON() ([]byte, error) {
-	count := 0
-	var kind string
-	var data any
+	kind, data, count := marshalInteractionRow(r)
 	if r.ArchitectureElement != nil {
 		count++
 		kind = "architecture_element"
@@ -62,7 +64,7 @@ func (r DiagramRow) MarshalJSON() ([]byte, error) {
 		data = r.Gap
 	}
 	if count != 1 {
-		return nil, invalid("row", "Exactly one architecture row arm required")
+		return nil, invalid("row", "Exactly one diagram row arm required")
 	}
 	return json.Marshal(struct {
 		RowType string `json:"rowType"`
@@ -90,7 +92,7 @@ func (in DiagramQueryInput) Validate() error {
 	if err := in.Pin.Validate(); err != nil {
 		return err
 	}
-	if !slices.Contains([]string{"context", "containers", "components"}, in.Level) || !ValidID(in.RootID) {
+	if (in.Level != "" || in.RootID != "") && (!slices.Contains([]string{"context", "containers", "components"}, in.Level) || !ValidID(in.RootID)) {
 		return invalid("projection", "Exact architecture level and root required")
 	}
 	if !slices.Contains([]string{"all", "source_assertion", "authored"}, in.Origin) || !validAPIText(in.Search, 0, 4096) {
@@ -117,6 +119,9 @@ func (r *Repo) QueryDiagram(ctx context.Context, pid string, in DiagramQueryInpu
 	v, err := r.GetDiagram(ctx, pid, in.Pin)
 	if err != nil {
 		return nil, err
+	}
+	if v.Document.Kind == "interactions" {
+		return ProjectInteractions(ctx, v, in)
 	}
 	graph, err := r.ResolveEffectiveGraph(ctx, pid, v.Document.Target)
 	if err != nil {

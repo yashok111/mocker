@@ -83,6 +83,12 @@ type ProjectPageProps = {
 
 export function BackendProjectPage(props: ProjectPageProps) {
   const [diagramDirty, setDiagramDirty] = useState(false);
+  const [backPins, setBackPins] = useState<BackendWorkspaceSearch[]>([]);
+  const navigateDiagram = (pin: BackendWorkspaceSearch, replace = false) => {
+    if (!replace && props.sourcePin && JSON.stringify(props.sourcePin) !== JSON.stringify(pin))
+      setBackPins((previous) => [...previous, structuredClone(props.sourcePin!)]);
+    props.onSourceNavigate?.(pin, replace);
+  };
   const diagramDirtyRef = useRef(false);
   const onDiagramDirty = useCallback((value: boolean) => {
     diagramDirtyRef.current = value;
@@ -135,11 +141,24 @@ export function BackendProjectPage(props: ProjectPageProps) {
       <BackendAnalysisRecoveryNotice projectId={props.projectId} />
       <BackendLegacyRecoveryNotice projectId={props.projectId} />
       <BackendWorkspaceNavigation />
+      {backPins.length > 0 && (
+        <Button
+          variant="subtle"
+          disabled={diagramDirty}
+          onClick={() => {
+            const pin = backPins.at(-1)!;
+            setBackPins((previous) => previous.slice(0, -1));
+            props.onSourceNavigate?.(pin);
+          }}
+        >
+          Назад к точному виду
+        </Button>
+      )}
       <BackendArchitecture
         projectId={props.projectId}
         search={props.sourcePin ?? {}}
-        onNavigate={(pin, replace) => props.onSourceNavigate?.(pin, replace)}
-        onDetailedNavigate={(pin) => props.onSourceNavigate?.(pin)}
+        onNavigate={navigateDiagram}
+        onDetailedNavigate={navigateDiagram}
         onDirty={onDiagramDirty}
         onTargetResolved={onTargetResolved}
       />

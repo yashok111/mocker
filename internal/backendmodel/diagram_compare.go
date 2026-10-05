@@ -6,6 +6,7 @@ import (
 	"encoding/json/v2"
 	"maps"
 	"slices"
+	"strconv"
 )
 
 type DiagramCompareInput struct {
@@ -54,11 +55,18 @@ func (r *Repo) CompareDiagrams(ctx context.Context, pid string, in DiagramCompar
 	if err != nil {
 		return nil, err
 	}
-	a, err := diagramComparisonRows(ctx, before, oldGraph)
+	metadataID := ""
+	if before.Document.Kind == "interactions" {
+		metadataID, err = interactionComparisonMetadataID(before.Document.Interactions, after.Document.Interactions)
+		if err != nil {
+			return nil, err
+		}
+	}
+	a, err := diagramComparisonRows(ctx, before, oldGraph, metadataID)
 	if err != nil {
 		return nil, err
 	}
-	b, err := diagramComparisonRows(ctx, after, newGraph)
+	b, err := diagramComparisonRows(ctx, after, newGraph, metadataID)
 	if err != nil {
 		return nil, err
 	}
@@ -80,7 +88,7 @@ func (r *Repo) CompareDiagrams(ctx context.Context, pid string, in DiagramCompar
 // Compare has no level selector. Its canonical relationship view is Context at
 // each document's primary system; payload rows still expose container/component
 // edits. Pins retain the before-side graph so removed members remain readable.
-func diagramComparisonRows(ctx context.Context, v *DiagramVersion, g *EffectiveGraphSnapshot) (map[string]map[string]jsontext.Value, error) {
+func diagramComparisonRows(ctx context.Context, v *DiagramVersion, g *EffectiveGraphSnapshot, metadataID string) (map[string]map[string]jsontext.Value, error) {
 	if v.TargetHash != g.Pins.TargetHash {
 		return nil, diagramPinMismatch()
 	}
@@ -96,6 +104,32 @@ func diagramComparisonRows(ctx context.Context, v *DiagramVersion, g *EffectiveG
 		}
 		rows[id] = fields
 		return nil
+	}
+	if v.Document.Interactions != nil {
+		for id, value := range interactionRows(v.Document.Interactions) {
+			if err := add(id, value); err != nil {
+				return nil, err
+			}
+		}
+
+		id := metadataID
+		if !ValidID(id) {
+			return nil, invalid("comparison", "Exact metadata identity required")
+		}
+		if rows[id] == nil {
+			rows[id] = map[string]jsontext.Value{}
+		}
+		scope, err := canonicalJSON(v.Document.Interactions.ScopeRefs)
+		if err != nil {
+			return nil, err
+		}
+		dependency, err := canonicalJSON(v.Document.Interactions.Architecture)
+		if err != nil {
+			return nil, err
+		}
+		rows[id]["scopeRefs"] = scope
+		rows[id]["architecture"] = dependency
+		return rows, nil
 	}
 	for _, e := range v.Document.Payload.Elements {
 		if err := add(e.ID, e); err != nil {
@@ -171,4 +205,26 @@ func diagramDifferences(a, b map[string]map[string]jsontext.Value) []DiagramDiff
 		items = append(items, diff)
 	}
 	return items
+}
+
+// Choose one free metadata identity jointly for both pins. Semantic IDs remain
+// caller-controlled; even an intentional namespace collision cannot hide a removal.
+func interactionComparisonMetadataID(before, after *InteractionPayload) (string, error) {
+	occupied := map[string]bool{}
+	for _, payload := range []*InteractionPayload{before, after} {
+		for id := range interactionRows(payload) {
+			occupied[id] = true
+		}
+	}
+	id := diagramIdentity("interaction-document-metadata-v1")
+	if !occupied[id] {
+		return id, nil
+	}
+	for salt := range len(occupied) + 1 {
+		id = diagramIdentity("interaction-document-metadata-v1", strconv.Itoa(salt))
+		if !occupied[id] {
+			return id, nil
+		}
+	}
+	return "", invalid("comparison", "Metadata identity collision budget exhausted")
 }

@@ -5,11 +5,11 @@ import userEvent from "@testing-library/user-event";
 import { renderWithProviders } from "@/test/render";
 import { fill } from "@/test/user";
 import { BackendArchitectureEditor } from "./BackendArchitectureEditor";
-import type { BackendDiagramDocument } from "@/api/generated/schemas";
+import type { BackendArchitectureDocument } from "@/api/generated/schemas";
 it("keeps structured edits and valid advanced JSON on the same draft", async () => {
   const user = userEvent.setup();
   const id = "10000000-0000-4000-8000-000000000001";
-  const initial: BackendDiagramDocument = {
+  const initial: BackendArchitectureDocument = {
     format: "backend-diagram-v1",
     kind: "architecture",
     target: { revisionId: id },

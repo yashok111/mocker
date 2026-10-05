@@ -55,12 +55,13 @@ const (
 	TopicBackendEndpointReview    = "backend-endpoint-review"
 	TopicBackendAnnotations       = "backend-annotations"
 	TopicBackendArchitecture      = "backend-architecture"
+	TopicBackendInteractions      = "backend-interactions"
 )
 
 //go:embed instructions.md overview.md tools.md shapes.md cookbook.md http.md design.md functions.md backend-overview.md backend-import.md backend-model.md backend-import-protocol.md backend-recovery.md backend-examples.md manifest.json
 //go:embed backend-database.md backend-database-reference.md backend-profile-go-sql.md
 //go:embed backend-inspect.md backend-flow-reference.md backend-analysis.md
-//go:embed backend-editor-projections.md backend-events.md backend-architecture.md
+//go:embed backend-editor-projections.md backend-events.md backend-architecture.md backend-interactions.md
 //go:embed backend-sync.md backend-change-proposals.md backend-annotations.md
 //go:embed backend-change-rebase.md backend-analysis-jobs.md backend-change-handoff.md backend-endpoint-review.md
 var files embed.FS
@@ -99,6 +100,7 @@ var topicFiles = map[string]string{
 	TopicBackendChangeHandoff:     "backend-change-handoff.md",
 	TopicBackendEndpointReview:    "backend-endpoint-review.md",
 	TopicBackendArchitecture:      "backend-architecture.md",
+	TopicBackendInteractions:      "backend-interactions.md",
 }
 
 // Topics is the ordered list of topic names get_guide accepts.
@@ -112,7 +114,7 @@ func Topics() []string {
 		TopicBackendInspect, TopicBackendFlowReference, TopicBackendAnalysis,
 		TopicBackendEditorProjections, TopicBackendEvents,
 		TopicBackendSync, TopicBackendChangeProposals, TopicBackendAnnotations,
-		TopicBackendChangeRebase, TopicBackendAnalysisJobs, TopicBackendChangeHandoff, TopicBackendEndpointReview, TopicBackendArchitecture,
+		TopicBackendChangeRebase, TopicBackendAnalysisJobs, TopicBackendChangeHandoff, TopicBackendEndpointReview, TopicBackendArchitecture, TopicBackendInteractions,
 	}
 }
 

@@ -48,9 +48,11 @@ export function useDiagramPage(
       if (
         response.status !== 200 ||
         !sameDiagramPin(response.data.pin, input.pin) ||
-        response.data.projection.policy !== "architecture-v1" ||
-        response.data.projection.level !== input.level ||
-        response.data.projection.rootId !== input.rootId
+        (input.level
+          ? response.data.projection?.policy !== "architecture-v1" ||
+            response.data.projection?.level !== input.level ||
+            response.data.projection?.rootId !== input.rootId
+          : response.data.projection !== undefined)
       )
         throw new Error("Ответ относится к другой C4 проекции");
       return response.data;

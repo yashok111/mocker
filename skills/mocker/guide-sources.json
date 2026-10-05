@@ -212,6 +212,12 @@
       "source": "references/backend/architecture.md",
       "embedded": "backend-architecture.md",
       "workflowId": "mocker-backend-inspect"
+    },
+    {
+      "topic": "backend-interactions",
+      "source": "references/backend/interactions.md",
+      "embedded": "backend-interactions.md",
+      "workflowId": "mocker-backend-inspect"
     }
   ],
   "workflows": [
@@ -306,7 +312,7 @@
     },
     {
       "workflowId": "mocker-backend-inspect",
-      "workflowVersion": "9",
+      "workflowVersion": "10",
       "entrypoint": "backend-inspect",
       "requiredModelSchemaVersions": [
         "3",
@@ -332,7 +338,8 @@
         "backend-saved-views-v2",
         "backend-diagrams",
         "backend-architecture",
-        "backend-diagram-views"
+        "backend-diagram-views",
+        "backend-interactions"
       ],
       "requiredViewSchemaVersions": [
         "saved-view-v1",

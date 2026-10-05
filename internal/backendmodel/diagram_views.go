@@ -114,7 +114,22 @@ func (r *Repo) validateDiagramView(ctx context.Context, pid, name string, s Diag
 	if err != nil {
 		return err
 	}
-	p, err := projectArchitecture(ctx, v, graph, q)
+	var p *architectureProjection
+	if v.Document.Interactions != nil {
+		if q.Level != "" || q.RootID != "" {
+			return invalid("projection", "Architecture projection forbidden for interactions")
+		}
+		p = &architectureProjection{elements: map[string]ArchitectureElement{}, links: map[string]ArchitectureLink{}}
+		for id, value := range interactionRows(v.Document.Interactions) {
+			if _, ok := value.(InteractionOrder); ok {
+				p.links[id] = ArchitectureLink{ID: id}
+			} else {
+				p.elements[id] = ArchitectureElement{ID: id}
+			}
+		}
+	} else {
+		p, err = projectArchitecture(ctx, v, graph, q)
+	}
 	if err != nil {
 		return err
 	}
@@ -299,7 +314,11 @@ func persistDiagramView(ctx context.Context, tx *sql.Tx, pid, id, op, key, hash 
 		return diagramQuota()
 	}
 	if id == "" {
-		if _, err = tx.ExecContext(ctx, `INSERT INTO backend_diagram_views(project_id,id,version,kind,name) VALUES(?,?,1,'architecture',?)`, pid, newID, name); err != nil {
+		diagram, loadErr := loadDiagram(ctx, tx, pid, out.State.Diagram.ID, out.State.Diagram.Version)
+		if loadErr != nil {
+			return loadErr
+		}
+		if _, err = tx.ExecContext(ctx, `INSERT INTO backend_diagram_views(project_id,id,version,kind,name) VALUES(?,?,1,?,?)`, pid, newID, diagram.Document.Kind, name); err != nil {
 			return err
 		}
 	}

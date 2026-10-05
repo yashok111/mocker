@@ -25,7 +25,7 @@ func TestB43GuideHandoffOwners(t *testing.T) {
 	}
 	inspect, _ := WorkflowForTopic("backend-inspect")
 	recovery, _ := WorkflowForTopic("backend-recovery")
-	if inspect.WorkflowVersion != "9" || recovery.WorkflowID != "mocker-backend-import" || recovery.WorkflowVersion != "8" {
+	if inspect.WorkflowVersion != "10" || recovery.WorkflowID != "mocker-backend-import" || recovery.WorkflowVersion != "8" {
 		t.Fatal("incorrect inspection/recovery owners", inspect, recovery)
 	}
 }

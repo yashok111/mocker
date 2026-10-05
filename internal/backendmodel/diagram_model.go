@@ -36,10 +36,11 @@ type DiagramGap struct {
 	Explanation string `json:"explanation"`
 }
 type DiagramDocument struct {
-	Format  string              `json:"format"`
-	Kind    string              `json:"kind"`
-	Target  BackendReadTarget   `json:"target"`
-	Payload ArchitecturePayload `json:"payload"`
+	Format       string              `json:"format"`
+	Kind         string              `json:"kind"`
+	Target       BackendReadTarget   `json:"target"`
+	Payload      ArchitecturePayload `json:"payload"`
+	Interactions *InteractionPayload `json:"-"`
 }
 type DiagramProvenanceEvent struct {
 	Pin       DiagramPin `json:"pin"`

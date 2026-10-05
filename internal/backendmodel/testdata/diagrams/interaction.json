@@ -1,0 +1,184 @@
+{
+  "format": "backend-diagram-v1",
+  "kind": "interactions",
+  "target": {
+    "revisionId": "00000000-0000-4000-8000-000000000999"
+  },
+  "payload": {
+    "scopeRefs": [],
+    "participants": [
+      {
+        "id": "00000000-0000-4000-8000-000000000001",
+        "label": "Orders",
+        "origin": {
+          "kind": "authored",
+          "reason": "Independently authored oracle; static intent, not an execution"
+        },
+        "refs": []
+      },
+      {
+        "id": "00000000-0000-4000-8000-000000000002",
+        "label": "Payments",
+        "origin": {
+          "kind": "authored",
+          "reason": "Independently authored oracle; static intent, not an execution"
+        },
+        "refs": []
+      }
+    ],
+    "steps": [
+      {
+        "id": "00000000-0000-4000-8000-000000000010",
+        "label": "A: order call",
+        "origin": {
+          "kind": "authored",
+          "reason": "Independently authored oracle; static intent, not an execution"
+        },
+        "refs": [],
+        "kind": "request",
+        "from": "00000000-0000-4000-8000-000000000001",
+        "to": "00000000-0000-4000-8000-000000000002",
+        "branchPath": []
+      },
+      {
+        "id": "00000000-0000-4000-8000-000000000011",
+        "label": "B: payment success",
+        "origin": {
+          "kind": "authored",
+          "reason": "Independently authored oracle; static intent, not an execution"
+        },
+        "refs": [],
+        "kind": "response",
+        "from": "00000000-0000-4000-8000-000000000002",
+        "to": "00000000-0000-4000-8000-000000000001",
+        "replyTo": "00000000-0000-4000-8000-000000000010",
+        "branchPath": [
+          "00000000-0000-4000-8000-000000000020"
+        ]
+      },
+      {
+        "id": "00000000-0000-4000-8000-000000000012",
+        "label": "C: payment failure",
+        "origin": {
+          "kind": "authored",
+          "reason": "Independently authored oracle; static intent, not an execution"
+        },
+        "refs": [],
+        "kind": "error",
+        "from": "00000000-0000-4000-8000-000000000002",
+        "to": "00000000-0000-4000-8000-000000000001",
+        "branchPath": [
+          "00000000-0000-4000-8000-000000000021"
+        ]
+      },
+      {
+        "id": "00000000-0000-4000-8000-000000000013",
+        "label": "D: send notification",
+        "origin": {
+          "kind": "authored",
+          "reason": "Independently authored oracle; static intent, not an execution"
+        },
+        "refs": [],
+        "kind": "send",
+        "from": "00000000-0000-4000-8000-000000000001",
+        "branchPath": []
+      },
+      {
+        "id": "00000000-0000-4000-8000-000000000014",
+        "label": "Parallel one",
+        "origin": {
+          "kind": "authored",
+          "reason": "Independently authored oracle; static intent, not an execution"
+        },
+        "refs": [],
+        "kind": "request",
+        "from": "00000000-0000-4000-8000-000000000001",
+        "to": "00000000-0000-4000-8000-000000000002",
+        "branchPath": [
+          "00000000-0000-4000-8000-000000000022"
+        ]
+      },
+      {
+        "id": "00000000-0000-4000-8000-000000000015",
+        "label": "Parallel two",
+        "origin": {
+          "kind": "authored",
+          "reason": "Independently authored oracle; static intent, not an execution"
+        },
+        "refs": [],
+        "kind": "request",
+        "from": "00000000-0000-4000-8000-000000000001",
+        "to": "00000000-0000-4000-8000-000000000002",
+        "branchPath": [
+          "00000000-0000-4000-8000-000000000023"
+        ]
+      }
+    ],
+    "order": [
+      {
+        "id": "00000000-0000-4000-8000-000000000030",
+        "from": "00000000-0000-4000-8000-000000000010",
+        "to": "00000000-0000-4000-8000-000000000011",
+        "origin": {
+          "kind": "authored",
+          "reason": "Independently authored oracle; static intent, not an execution"
+        }
+      },
+      {
+        "id": "00000000-0000-4000-8000-000000000031",
+        "from": "00000000-0000-4000-8000-000000000010",
+        "to": "00000000-0000-4000-8000-000000000012",
+        "origin": {
+          "kind": "authored",
+          "reason": "Independently authored oracle; static intent, not an execution"
+        }
+      }
+    ],
+    "branches": [
+      {
+        "id": "00000000-0000-4000-8000-000000000020",
+        "groupId": "00000000-0000-4000-8000-000000000040",
+        "label": "Success",
+        "kind": "alternative",
+        "guardText": "payment accepted",
+        "origin": {
+          "kind": "authored",
+          "reason": "Independently authored oracle; static intent, not an execution"
+        }
+      },
+      {
+        "id": "00000000-0000-4000-8000-000000000021",
+        "groupId": "00000000-0000-4000-8000-000000000040",
+        "label": "Failure",
+        "kind": "alternative",
+        "guardText": "payment rejected",
+        "origin": {
+          "kind": "authored",
+          "reason": "Independently authored oracle; static intent, not an execution"
+        }
+      },
+      {
+        "id": "00000000-0000-4000-8000-000000000022",
+        "groupId": "00000000-0000-4000-8000-000000000041",
+        "label": "One",
+        "kind": "parallel",
+        "guardText": "",
+        "origin": {
+          "kind": "authored",
+          "reason": "Independently authored oracle; static intent, not an execution"
+        }
+      },
+      {
+        "id": "00000000-0000-4000-8000-000000000023",
+        "groupId": "00000000-0000-4000-8000-000000000041",
+        "label": "Two",
+        "kind": "parallel",
+        "guardText": "",
+        "origin": {
+          "kind": "authored",
+          "reason": "Independently authored oracle; static intent, not an execution"
+        }
+      }
+    ]
+  }
+}

@@ -75,7 +75,7 @@ func (h *b41SDKExamples) negotiate(t *testing.T) {
 		if !slices.Equal(capabilities.ModelSchemaVersions, []string{"1", "2", "3", "4", "5", "6"}) || !slices.Contains(capabilities.ProviderProfiles, "composed-source-v1") || len(capabilities.Workflows) != 6 {
 			t.Fatalf("incomplete source6 discovery: %+v", capabilities)
 		}
-		versions := map[string]string{"mocker-backend-project": "2", "mocker-backend-import": "8", "mocker-backend-database": "7", "mocker-backend-inspect": "9", "mocker-backend-sync": "2", "mocker-backend-change": "4"}
+		versions := map[string]string{"mocker-backend-project": "2", "mocker-backend-import": "8", "mocker-backend-database": "7", "mocker-backend-inspect": "10", "mocker-backend-sync": "2", "mocker-backend-change": "4"}
 		selectedSet := ""
 		for _, owner := range capabilities.Workflows {
 			if versions[owner.WorkflowID] != owner.WorkflowVersion || owner.GuideSetID == "" || owner.ManifestHash != owner.GuideSetID || selectedSet != "" && selectedSet != owner.GuideSetID {

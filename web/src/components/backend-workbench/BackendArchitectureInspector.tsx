@@ -37,7 +37,10 @@ export function BackendArchitectureInspector({
     !!state.selection,
   );
   if (!state.selection) return null;
-  const element = diagram.document.payload.elements.find((e) => e.id === state.selection?.id);
+  const element =
+    diagram.document.kind === "architecture"
+      ? diagram.document.payload.elements.find((e) => e.id === state.selection?.id)
+      : undefined;
   const provenance = diagram.provenance.elements.find((e) => e.elementId === state.selection?.id);
   return (
     <Paper withBorder p="md">

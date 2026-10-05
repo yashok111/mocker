@@ -95,8 +95,21 @@ func (v *DiagramDocument) UnmarshalJSON(b []byte) error {
 	if err := json.Unmarshal(b, &head); err != nil {
 		return err
 	}
-	if head.Format != DiagramDocumentVersion || head.Kind != "architecture" {
+	if head.Format != DiagramDocumentVersion || (head.Kind != "architecture" && head.Kind != "interactions") {
 		return diagramUnsupported()
+	}
+	if head.Kind == "interactions" {
+		var wire struct {
+			Format  string             `json:"format"`
+			Kind    string             `json:"kind"`
+			Target  BackendReadTarget  `json:"target"`
+			Payload InteractionPayload `json:"payload"`
+		}
+		if err := strictAPIObject(b, []string{"format", "kind", "target", "payload"}, nil, &wire); err != nil {
+			return err
+		}
+		*v = DiagramDocument{Format: wire.Format, Kind: wire.Kind, Target: wire.Target, Interactions: &wire.Payload}
+		return v.Validate()
 	}
 	type plain DiagramDocument
 	*v = DiagramDocument{}

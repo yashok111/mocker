@@ -7,7 +7,7 @@ import (
 )
 
 func diagramUnsupported() error {
-	return &FaultError{Status: 422, Code: "backend_unsupported_scope", Message: "Only architecture diagrams on exact source/full proposal targets are supported"}
+	return &FaultError{Status: 422, Code: "backend_unsupported_scope", Message: "Only architecture/interactions diagrams on exact source/full proposal targets are supported"}
 }
 func validateDiagramTarget(t BackendReadTarget) error {
 	if err := t.Validate(); err != nil {
@@ -84,12 +84,21 @@ func validateDiagramBase(id, label string, origin DiagramOrigin, refs []DiagramR
 	return nil
 }
 func (d DiagramDocument) Validate() error {
-	if d.Format != DiagramDocumentVersion || d.Kind != "architecture" {
+	if d.Format == DiagramDocumentVersion && d.Kind == "interactions" {
+		if err := validateDiagramTarget(d.Target); err != nil {
+			return err
+		}
+		return validateInteractions(d)
+	}
+	if d.Interactions != nil || d.Format != DiagramDocumentVersion || d.Kind != "architecture" {
 		return diagramUnsupported()
 	}
 	if err := validateDiagramTarget(d.Target); err != nil {
 		return err
 	}
+	return validateArchitectureDocument(d)
+}
+func validateArchitectureDocument(d DiagramDocument) error {
 	p := d.Payload
 	if p.Elements == nil || p.Links == nil || len(p.Elements) > 1000 || len(p.Links) > 3000 {
 		return invalid("payload", "Required arrays exceed architecture limits")

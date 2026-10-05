@@ -35,7 +35,7 @@ type DiagramViewListPage struct {
 }
 
 func diagramListScope(ctx context.Context, q importReader, pid, kind string, in DiagramListInput) (string, int64, error) {
-	if in.Kind != "" && in.Kind != "architecture" {
+	if in.Kind != "" && in.Kind != "architecture" && in.Kind != "interactions" {
 		return "", 0, diagramUnsupported()
 	}
 	if in.Limit < 1 || in.Limit > 500 {

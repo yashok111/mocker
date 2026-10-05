@@ -147,7 +147,7 @@ func (r *Repo) ForkDiagram(ctx context.Context, pid string, in DiagramForkInput)
 	if err := validateDiagramTarget(in.Target); err != nil {
 		return nil, err
 	}
-	if in.Architecture != nil || !validAPIText(in.Reason, 1, 4096) {
+	if !validAPIText(in.Reason, 1, 4096) {
 		return nil, invalid("fork", "Architecture fork requires a reason and no dependency pin")
 	}
 	digest, err := requestDigest(in)
@@ -168,6 +168,19 @@ func (r *Repo) ForkDiagram(ctx context.Context, pid string, in DiagramForkInput)
 	doc, err := normalizeDiagram(previous.Document)
 	if err != nil {
 		return nil, err
+	}
+	if doc.Interactions == nil && in.Architecture != nil {
+		return nil, invalid("architecture", "Architecture document has no dependency")
+	}
+	if doc.Interactions != nil {
+		a, _ := requestDigest(doc.Target)
+		b, _ := requestDigest(in.Target)
+		if a != b && doc.Interactions.Architecture != nil && in.Architecture == nil {
+			return nil, invalid("architecture", "New-target fork requires an explicit architecture pin")
+		}
+		if in.Architecture != nil {
+			doc.Interactions.Architecture = in.Architecture
+		}
 	}
 	doc.Target = in.Target
 	return r.mutateDiagram(ctx, diagramMutation{pid: pid, op: "fork", key: in.IdempotencyKey, digest: digest, document: doc, previous: previous, reason: in.Reason})
@@ -209,6 +222,11 @@ func (r *Repo) mutateDiagram(ctx context.Context, m diagramMutation) (*DiagramVe
 	if err != nil {
 		return nil, err
 	}
+	dependencyGaps, err := r.resolveInteractionArchitecture(ctx, m.pid, m.graph, m.document, m.previous)
+	if err != nil {
+		return nil, err
+	}
+	m.gaps = append(m.gaps, dependencyGaps...)
 	var out *DiagramVersion
 	err = r.db.Write(ctx, func(tx *sql.Tx) error {
 		out, err = r.writeDiagramMutation(ctx, tx, m)
@@ -225,6 +243,9 @@ func validateDiagramSave(previous *DiagramVersion, d DiagramDocument) error {
 	b, _ := requestDigest(d.Target)
 	if previous.Document.Kind != d.Kind || a != b {
 		return invalid("document", "Diagram kind and target are immutable; use fork")
+	}
+	if d.Interactions != nil && !interactionDependencyEqual(previous.Document.Interactions, d.Interactions) {
+		return invalid("architecture", "Architecture dependency is immutable; use fork")
 	}
 	return nil
 }

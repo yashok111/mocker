@@ -1,6 +1,6 @@
 # Exact before/after endpoint review
 
-This topic belongs to change4, not the read-only inspect9 workflow. After authorized analysis, verify the selected guideSetId/manifestHash/contentHash and capability backend-endpoint-review. Negotiate backend-analysis-context-v2, backend-analysis-input/v2 and b43-rules/v1 through analysisSupport's additive version arrays; keep b42-traversal/v1. Source/schema compatibility follows the selected immutable source pins.
+This topic belongs to change4, not the read-only inspect10 workflow. After authorized analysis, verify the selected guideSetId/manifestHash/contentHash and capability backend-endpoint-review. Negotiate backend-analysis-context-v2, backend-analysis-input/v2 and b43-rules/v1 through analysisSupport's additive version arrays; keep b42-traversal/v1. Source/schema compatibility follows the selected immutable source pins.
 
 Resolve exact before and after source revisions, then use their exact HTTP operation UUIDs. Similar route or method names never select identity. An optional full proposal must be a saved exact draft, with both proposalId and proposalRevisionId. A commandPreview or local dirty buffer cannot replace it.
 

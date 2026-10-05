@@ -7,8 +7,8 @@ metadata:
   requiredModelSchemaVersions: "[\"5\",\"6\"]"
   requiredViewSchemaVersions: "[\"proposal-graph-v1\",\"backend-diagram-v1\",\"diagram-view-v1\"]"
   requiredCapabilities: "[\"backend-projects\",\"backend-revisions\",\"backend-graph-query\",\"backend-change-proposals\",\"backend-change-typed-edits\",\"backend-source-assertions\",\"backend-representations\",\"backend-analysis-jobs\",\"backend-analysis-diff\",\"backend-analysis-impact\",\"backend-change-rebase\",\"backend-change-ready\",\"backend-change-package\",\"backend-conformance\",\"backend-endpoint-review\",\"backend-change-implemented\",\"backend-change-archive\",\"backend-change-unarchive\",\"backend-diagrams\",\"backend-architecture\",\"backend-diagram-views\"]"
-  guideSetId: "sha256:bb35d120a8bd525039096a0fddb9efd25d22beaf5c750aaa89df51fa11abeb91"
-  manifestHash: "sha256:bb35d120a8bd525039096a0fddb9efd25d22beaf5c750aaa89df51fa11abeb91"
+  guideSetId: "sha256:e1f00d9119dbb5380734835aedbc848decd5c3d1a10a889765a6bae194f8fc41"
+  manifestHash: "sha256:e1f00d9119dbb5380734835aedbc848decd5c3d1a10a889765a6bae194f8fc41"
 ---
 
 # Prepare a full graph proposal
@@ -17,7 +17,7 @@ A full proposal keeps one immutable source baseline and an independent sequence 
 
 ## Pin the procedure and baseline
 
-Read `get_server_config`/`get_backend_capabilities`. Select advertised change4, proposal-graph-v1, all required capabilities and a compatible immutable guide set. Verify workflowId/version/guideSetId/manifestHash/contentHash; on mismatch use the complete pinned server `backend-change-proposals` entrypoint. Unknown sets fail. Shared source semantics use import8; exact read/lineage/proof procedures use inspect9; database facets use database7. Verify each actual owner in the same set.
+Read `get_server_config`/`get_backend_capabilities`. Select advertised change4, proposal-graph-v1, all required capabilities and a compatible immutable guide set. Verify workflowId/version/guideSetId/manifestHash/contentHash; on mismatch use the complete pinned server `backend-change-proposals` entrypoint. Unknown sets fail. Shared source semantics use import8; exact read/lineage/proof procedures use inspect10; database facets use database7. Verify each actual owner in the same set.
 
 Read the chosen source revision explicitly. Source5 is supported with source5 vocabulary; a full proposal's structural schema6 tag does not upgrade that baseline or grant representation commands. Source6 admits domain_entity, dto, api_schema and representation_field. Select source6 explicitly at creation when those kinds are needed.
 
@@ -100,7 +100,7 @@ Use `{changeProposal:{proposalId,proposalRevisionId}}` with graph/node/evidence/
 
 Full-target assertions/evidence describe the exact baseline. Edited properties carry intent command/reason origins and no invented supporting provider proof. A newly created desired field may have no provider evidence. Source6 losing claims remain inspectable. Assertions are unsupported for source5 and full proposals based on source5; use their exact baseline evidence instead. Historical metadata proof retains its original source5 basis and cannot confirm the intended semantic value.
 
-Presentation saving belongs to inspect9/database7. For a full target, explicitly create/save SavedView-v2 with the exact target and returned view pins. The presentation does not update this proposal. Candidate staging cannot be saved as a view.
+Presentation saving belongs to inspect10/database7. For a full target, explicitly create/save SavedView-v2 with the exact target and returned view pins. The presentation does not update this proposal. Candidate staging cannot be saved as a view.
 
 ## Recover without changing an unknown request
 
@@ -123,3 +123,5 @@ Read `get_guide {topic:"backend-change-handoff",guideSetId:selected.guideSetId}`
 ## Architecture companion boundary
 
 C4 mapping edits do not apply source/proposal commands. For a new exact proposal target, explicitly fork the mapping and retain historical evidence/provenance gaps. Read backend-architecture from the same guide set. Diagram compare/query is read-only and never starts an analysis or lifecycle operation.
+
+Interaction edits use the shared diagram save/fork APIs, separately from proposal commands. Target and architecture dependency are immutable within an ID. A new-target dependent fork needs an exact architecture pin on the new target. Read `backend-interactions` under its inspect owner; B5 replay/export and B6 observations remain unavailable.
