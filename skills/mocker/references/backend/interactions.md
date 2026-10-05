@@ -3,7 +3,7 @@
 Require `backend-interactions`, admitted `interactions`, `backend-diagram-v1`
 and `diagram-view-v1` from the selected immutable guide set. Source schemas1–6,
 legacy Flow/Database saved views and existing Sequence artifacts are unchanged.
-Business_map, B5 export/check/replay and B6 observed-run acceptance remain
+B5 export/check/replay and B6 observed-run acceptance remain
 open. This view never applies or runs a scenario.
 
 ## Read, then explicitly accept

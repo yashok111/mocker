@@ -224,6 +224,12 @@
       "source": "references/backend/lifecycle.md",
       "embedded": "backend-lifecycle.md",
       "workflowId": "mocker-backend-inspect"
+    },
+    {
+      "topic": "backend-business-map",
+      "source": "references/backend/business-map.md",
+      "embedded": "backend-business-map.md",
+      "workflowId": "mocker-backend-inspect"
     }
   ],
   "workflows": [
@@ -318,7 +324,7 @@
     },
     {
       "workflowId": "mocker-backend-inspect",
-      "workflowVersion": "11",
+      "workflowVersion": "12",
       "entrypoint": "backend-inspect",
       "requiredModelSchemaVersions": [
         "3",
@@ -346,7 +352,8 @@
         "backend-architecture",
         "backend-diagram-views",
         "backend-interactions",
-        "backend-lifecycle"
+        "backend-lifecycle",
+        "backend-business-map"
       ],
       "requiredViewSchemaVersions": [
         "saved-view-v1",

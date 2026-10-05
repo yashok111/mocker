@@ -7,7 +7,7 @@ import (
 )
 
 func diagramUnsupported() error {
-	return &FaultError{Status: 422, Code: "backend_unsupported_scope", Message: "Only architecture/interactions/lifecycle diagrams on exact source/full proposal targets are supported"}
+	return &FaultError{Status: 422, Code: "backend_unsupported_scope", Message: "Only architecture/interactions/lifecycle/business_map diagrams on exact source/full proposal targets are supported"}
 }
 func validateDiagramTarget(t BackendReadTarget) error {
 	if err := t.Validate(); err != nil {
@@ -84,6 +84,15 @@ func validateDiagramBase(id, label string, origin DiagramOrigin, refs []DiagramR
 	return nil
 }
 func (d DiagramDocument) Validate() error {
+	if d.Format == DiagramDocumentVersion && d.Kind == "business_map" {
+		if err := validateDiagramTarget(d.Target); err != nil {
+			return err
+		}
+		return validateBusinessMap(d)
+	}
+	if d.BusinessMap != nil {
+		return diagramUnsupported()
+	}
 	if d.Format == DiagramDocumentVersion && d.Kind == "lifecycle" {
 		if err := validateDiagramTarget(d.Target); err != nil {
 			return err

@@ -1,4 +1,6 @@
-import { lazy, Suspense, useCallback, useEffect, useState, useRef } from "react";
+import { useDiagramChangeHandoff } from "./BackendDiagramChangeContext";
+import { businessMapArchitectureSearch } from "./backendBusinessMapNavigation";
+import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useState, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Alert,
@@ -60,6 +62,7 @@ import { BackendArchitectureInspector } from "./BackendArchitectureInspector";
 import { BackendArtifactProjections } from "./BackendArtifactProjections";
 import { BackendInteractions, BackendInteractionsEditor } from "./BackendInteractions";
 import { BackendLifecycle, BackendLifecycleEditor } from "./BackendLifecycle";
+import { BackendBusinessMap, BackendBusinessMapEditor } from "./BackendBusinessMap";
 import { BackendLifecycleBuilder } from "./BackendLifecycleBuilder";
 import { BackendArchitectureEditor } from "./BackendArchitectureEditor";
 import { focusWorkspaceRegion } from "./BackendWorkspaceNavigation";
@@ -384,6 +387,29 @@ function ArchitectureContent(props: Props) {
             Создать interactions
           </Button>
         </Group>
+        <Button
+          variant="default"
+          disabled={!target || contentDirty || creating}
+          onClick={() => {
+            if (target) {
+              setNewDoc({
+                format: "backend-diagram-v1",
+                kind: "business_map",
+                target,
+                payload: {
+                  elements: [],
+                  links: [],
+                  ...(diagramQuery.data?.document.kind === "architecture"
+                    ? { architecture: diagramQuery.data.pin }
+                    : {}),
+                },
+              });
+              setCreating(true);
+            }
+          }}
+        >
+          Создать business map
+        </Button>
         <BackendLifecycleBuilder
           key={buildScope}
           projectId={projectId}
@@ -542,9 +568,11 @@ function ArchitectureWorkspace({
     activeView?.name ??
       (architecture
         ? "C4 architecture"
-        : diagram?.document.kind === "lifecycle"
-          ? "Lifecycle"
-          : "Static interactions"),
+        : diagram?.document.kind === "business_map"
+          ? "Business map"
+          : diagram?.document.kind === "lifecycle"
+            ? "Lifecycle"
+            : "Static interactions"),
   );
   const viewDirty =
     !!activeView &&
@@ -556,6 +584,16 @@ function ArchitectureWorkspace({
   const [forkReason, setForkReason] = useState("");
   const [forkArchitecture, setForkArchitecture] = useState("");
   const dirty = !!draft || !!pending || busy;
+  const changeHandoff = useDiagramChangeHandoff();
+  const c4Read = useRef<AbortController | null>(null);
+  const c4Scope = useRef("");
+  useLayoutEffect(() => {
+    c4Scope.current = JSON.stringify([routeIdentity, dirty]);
+    return () => {
+      c4Read.current?.abort();
+    };
+  }, [routeIdentity, dirty]);
+
   useEffect(() => {
     onDirty?.(dirty || viewDirty);
     return () => onDirty?.(false);
@@ -698,11 +736,13 @@ function ArchitectureWorkspace({
     if (state) {
       changeState({ ...state, selection });
       focusWorkspaceRegion(
-        diagram?.document.kind === "lifecycle"
-          ? "#lifecycle-inspector-title"
-          : diagram?.document.kind === "interactions"
-            ? "#interactions-inspector-title"
-            : "#c4-inspector-title",
+        diagram?.document.kind === "business_map"
+          ? "#business-map-inspector-title"
+          : diagram?.document.kind === "lifecycle"
+            ? "#lifecycle-inspector-title"
+            : diagram?.document.kind === "interactions"
+              ? "#interactions-inspector-title"
+              : "#c4-inspector-title",
       );
     }
   };
@@ -728,11 +768,13 @@ function ArchitectureWorkspace({
       row.rowType === "architecture_element" ? [row.data] : [],
     ) ?? [];
   const layoutElements =
-    diagram?.document.kind === "lifecycle"
-      ? diagram.document.payload.states
-      : diagram?.document.kind === "interactions"
-        ? diagram.document.payload.participants
-        : es;
+    diagram?.document.kind === "business_map"
+      ? diagram.document.payload.elements
+      : diagram?.document.kind === "lifecycle"
+        ? diagram.document.payload.states
+        : diagram?.document.kind === "interactions"
+          ? diagram.document.payload.participants
+          : es;
   const ls =
     links.data?.items.flatMap((row) => (row.rowType === "architecture_link" ? [row.data] : [])) ??
     [];
@@ -1072,6 +1114,48 @@ function ArchitectureWorkspace({
               presentation={state}
             />
           )}
+          {diagram.document.kind === "business_map" && (
+            <BackendBusinessMap
+              payload={diagram.document.payload}
+              gaps={diagram.gaps}
+              selection={state.selection}
+              onSelect={select}
+              onOpen={open}
+              disabled={dirty}
+              search={state.search}
+              origin={state.origin}
+              presentation={state}
+              onDesign={
+                changeHandoff
+                  ? (refs) => {
+                      changeHandoff.setHandoff({
+                        projectId,
+                        diagram: diagram.pin,
+                        target: diagram.document.target,
+                        refs: structuredClone(refs),
+                      });
+                      focusWorkspaceRegion("#backend-change-proposals-title");
+                    }
+                  : undefined
+              }
+              onArchitecture={(pin, elementId) => {
+                if (dirty) return;
+                c4Read.current?.abort();
+                const controller = new AbortController();
+                c4Read.current = controller;
+                const scope = c4Scope.current;
+                void readDiagram(projectId, pin, controller.signal)
+                  .then((arch) => {
+                    if (controller.signal.aborted || scope !== c4Scope.current) return;
+                    onNavigate(businessMapArchitectureSearch(arch, diagram.targetHash, elementId));
+                  })
+                  .catch((error) => {
+                    if (!controller.signal.aborted && scope === c4Scope.current)
+                      setMessage(describeApiFailureDetailed(error));
+                  });
+              }}
+            />
+          )}
           {diagram.document.kind === "lifecycle" && (
             <BackendLifecycle
               payload={diagram.document.payload}
@@ -1126,9 +1210,11 @@ function ArchitectureWorkspace({
                 label={
                   architecture
                     ? "Название C4 вида"
-                    : diagram.document.kind === "lifecycle"
-                      ? "Название lifecycle вида"
-                      : "Название interactions вида"
+                    : diagram.document.kind === "business_map"
+                      ? "Название business map вида"
+                      : diagram.document.kind === "lifecycle"
+                        ? "Название lifecycle вида"
+                        : "Название interactions вида"
                 }
                 value={viewName}
                 onChange={(e) => setViewName(e.currentTarget.value)}
@@ -1145,9 +1231,11 @@ function ArchitectureWorkspace({
                 >
                   {architecture
                     ? "Сохранить новый C4 вид"
-                    : diagram.document.kind === "lifecycle"
-                      ? "Сохранить новый lifecycle вид"
-                      : "Сохранить новый interactions вид"}
+                    : diagram.document.kind === "business_map"
+                      ? "Сохранить новый business map вид"
+                      : diagram.document.kind === "lifecycle"
+                        ? "Сохранить новый lifecycle вид"
+                        : "Сохранить новый interactions вид"}
                 </Button>
                 <Button
                   disabled={dirty || !activeView}
@@ -1181,7 +1269,8 @@ function ArchitectureWorkspace({
                 value={forkTarget}
                 onChange={(e) => setForkTarget(e.currentTarget.value)}
               />
-              {diagram.document.kind === "interactions" && (
+              {(diagram.document.kind === "interactions" ||
+                diagram.document.kind === "business_map") && (
                 <TextInput
                   label="Точный architecture pin для нового target (JSON)"
                   value={forkArchitecture}
@@ -1327,14 +1416,14 @@ function ArchitectureSavedLists({
       <Stack>
         <Title order={3}>Сохранённые виды проекта</Title>
         <NativeSelect
-          label="Открыть сохранённый C4 / interactions / lifecycle / Flow / Database вид"
+          label="Открыть сохранённый C4 / interactions / lifecycle / business map / Flow / Database вид"
           value={selection}
           onChange={(e) => setSelection(e.currentTarget.value)}
           data={[
             { value: "", label: "Выберите точный вид" },
             ...(diagrams.data?.items ?? []).map((v) => ({
               value: JSON.stringify({ diagramViewId: v.id, diagramViewVersion: v.version }),
-              label: `${v.kind === "lifecycle" ? "Lifecycle" : v.kind === "interactions" ? "Interactions" : "C4"} · ${v.name} · v${v.version}`,
+              label: `${v.kind === "business_map" ? "Business map" : v.kind === "lifecycle" ? "Lifecycle" : v.kind === "interactions" ? "Interactions" : "C4"} · ${v.name} · v${v.version}`,
             })),
             ...(legacy.data?.items ?? []).map((v) => ({
               value: JSON.stringify({ viewId: v.id, viewVersion: v.version }),
@@ -1394,6 +1483,8 @@ function DiagramEditor(props: {
 }) {
   return props.document.kind === "architecture" ? (
     <BackendArchitectureEditor {...props} document={props.document} />
+  ) : props.document.kind === "business_map" ? (
+    <BackendBusinessMapEditor {...props} document={props.document} />
   ) : props.document.kind === "lifecycle" ? (
     <BackendLifecycleEditor {...props} document={props.document} />
   ) : (

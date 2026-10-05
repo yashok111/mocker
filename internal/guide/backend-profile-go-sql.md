@@ -91,7 +91,7 @@ endpoint access or impact safety.
 
 Runtime source3 adds imported net/http handlers, flow steps, call candidates,
 query definitions and explicit table/column accesses. Read backend-flow-reference
-and backend-analysis under inspect11 in this same set for exact shapes and limits.
+and backend-analysis under inspect12 in this same set for exact shapes and limits.
 Capture Go/query text as original source bytes and physical spans; do not launch
 the service, package scripts, SQL or migrations. Dynamic dispatch gets candidate
 proof plus an unresolved remainder when scope is partial/unknown. A table-level
@@ -111,4 +111,4 @@ heuristic creates a consumer or operation. Preserve local transaction/control
 proof without claiming broker/database atomicity. Explicit serialization,
 transport edge pairs and deserialization supply contextual message fields;
 matching schemas never supply transport. For read/navigation and gap outcomes
-select inspect11/backend-events in this same immutable set.
+select inspect12/backend-events in this same immutable set.

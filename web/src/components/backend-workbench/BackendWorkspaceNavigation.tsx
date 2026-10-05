@@ -29,6 +29,12 @@ export function BackendWorkspaceNavigation() {
       </Button>
       <Button
         variant="default"
+        onClick={() => focusWorkspaceRegion('[data-testid="backend-business-map"] h3')}
+      >
+        Бизнес-события
+      </Button>
+      <Button
+        variant="default"
         onClick={() => focusWorkspaceRegion('[data-testid="backend-project-page"]')}
       >
         Инвентарь и отчёты

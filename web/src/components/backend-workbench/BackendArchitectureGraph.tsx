@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef } from "react";
 import { Stack, Text } from "@mantine/core";
 import type {
   BackendArchitectureElement,
+  BackendBusinessElement,
   BackendArchitectureLink,
   BackendDiagramViewState,
 } from "@/api/generated/schemas";
@@ -23,8 +24,10 @@ export function BackendArchitectureGraph({
   links,
   state,
   onSelect,
+  graphName = "C4",
 }: {
-  elements: BackendArchitectureElement[];
+  elements: (BackendArchitectureElement | BackendBusinessElement)[];
+  graphName?: string;
   links: BackendArchitectureLink[];
   state: BackendDiagramViewState;
   onSelect: (selection: NonNullable<BackendDiagramViewState["selection"]>) => void;
@@ -114,8 +117,8 @@ export function BackendArchitectureGraph({
         hostRef={host}
         graphRef={graphRef}
         className={styles.host}
-        ariaLabel="C4 выбранных страниц; клавиатурная альтернатива в списках"
-        zoomLabel="C4"
+        ariaLabel={`${graphName}; клавиатурная альтернатива в списках`}
+        zoomLabel={graphName}
       />
     </Stack>
   );

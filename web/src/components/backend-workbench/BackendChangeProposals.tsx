@@ -152,7 +152,9 @@ function ChangeProposalPanel({
   }
   return (
     <Stack gap="md">
-      <Title order={3}>Изменения модели</Title>
+      <Title order={3} id="backend-change-proposals-title" tabIndex={-1}>
+        Изменения модели
+      </Title>
       <Text size="sm" c="dimmed">
         Предложение закрепляет исходную ревизию. Локальные команды сохраняются после предпросмотра.
       </Text>

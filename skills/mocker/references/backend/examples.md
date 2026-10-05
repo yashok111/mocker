@@ -54,7 +54,7 @@ Persist that complete request before transport. The example's accelerated poll t
 
 `internal/mcp/tools_backend_b41_examples_test.go` executes these five episodes through the real SDK, admin handlers and temporary SQLite. The capture contains 195 calls, including 23 expected refusals. Source strings and the prior Store19 database are inert fixtures; imported code and SQL never execute. The complete request/response witness is emitted as `sdk-protocol.json` for each test. To preserve artifacts, create an output directory, then run `go test ./internal/mcp -run '^TestBackendB41SDK' -count=1 -artifacts -outputdir=/absolute/output/directory -v`.
 
-The excerpts below contain actual captured request IDs, hashes and returned pins. Do not replay those historical UUIDs into a different project. The executable examples use each response to construct the next request, select import8/sync2/change4/project2/inspect11/database7 from current capabilities in one exact guide set, verify topic hashes, and refuse unavailable old guide sets. These protocol captures preceded guide registration, so they contain no invented future guide identity. Responses below project relevant fields and show at most two array entries; omitted fields and entries remain in the full witness.
+The excerpts below contain actual captured request IDs, hashes and returned pins. Do not replay those historical UUIDs into a different project. The executable examples use each response to construct the next request, select import8/sync2/change4/project2/inspect12/database7 from current capabilities in one exact guide set, verify topic hashes, and refuse unavailable old guide sets. These protocol captures preceded guide registration, so they contain no invented future guide identity. Responses below project relevant fields and show at most two array entries; omitted fields and entries remain in the full witness.
 
 The tests additionally verify source5/full5 assertion refusal, a foreign project's exact UUID, candidate invalidation after batch/commit, candidate specialized-query and SavedView rejection, read purity across all backend tables, unchanged source proof, and full command reuse after restore/server restart. Original request strings and original receipts are compared byte-for-byte. No-op and overwritten commands remain reserved even when their semantic effect disappears.
 
@@ -3975,9 +3975,9 @@ the proposal. Legacy relational ready/rebase remain unsupported. Authorized stat
 
 ## Public MCP source4 import → lineage query fixture
 
-Select import8 and inspect11 with complete requirements in one verified guide
+Select import8 and inspect12 with complete requirements in one verified guide
 set; load backend-model, backend-import-protocol, backend-recovery and the
-inspect11 flow/analysis references. This example is exercised by
+inspect12 flow/analysis references. This example is exercised by
 `internal/mcp/tools_backend_lineage_example_test.go`,
 `TestBackendLineageRealSDKGuideFixtureExample` through actual SDK tool calls.
 The independent bundle is `internal/backendmodel/testdata/lineage/orders/`:
@@ -4067,5 +4067,5 @@ On uncertain commit replay lineageCommit unchanged and require original receipt;
 never replace CAS/key with today's head. Evidence/owner/value inspector reads use
 lineagePin and complete facet/collection/opaque portKey. Redacted shape/explanation
 must omit sensitive constants and samples; source-local API field identity does
-not resolve external API pins; their separate inspect11 contract is in backend-flow-reference. Old foundation/relational examples above keep
+not resolve external API pins; their separate inspect12 contract is in backend-flow-reference. Old foundation/relational examples above keep
 their source1/2 formats and ordinary workflow; source3 flow examples stay source3.

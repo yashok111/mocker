@@ -115,7 +115,18 @@ func (r *Repo) validateDiagramView(ctx context.Context, pid, name string, s Diag
 		return err
 	}
 	var p *architectureProjection
-	if v.Document.Lifecycle != nil {
+	if v.Document.BusinessMap != nil {
+		if q.Level != "" || q.RootID != "" {
+			return invalid("projection", "Architecture selectors forbidden for business map")
+		}
+		p = &architectureProjection{elements: map[string]ArchitectureElement{}, links: map[string]ArchitectureLink{}}
+		for _, e := range v.Document.BusinessMap.Elements {
+			p.elements[e.ID] = ArchitectureElement{ID: e.ID}
+		}
+		for _, e := range v.Document.BusinessMap.Links {
+			p.links[e.ID] = ArchitectureLink{ID: e.ID}
+		}
+	} else if v.Document.Lifecycle != nil {
 		if q.Level != "" || q.RootID != "" {
 			return invalid("projection", "Architecture selectors forbidden for lifecycle")
 		}

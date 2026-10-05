@@ -1,6 +1,6 @@
-# Exact saved editor projections (inspect11)
+# Exact saved editor projections (inspect12)
 
-Canonical owner: `mocker-backend-inspect` workflow11. Select its complete advertised
+Canonical owner: `mocker-backend-inspect` workflow12. Select its complete advertised
 requirements in one guideSetId/manifestHash before using this topic. Require
 `backend-editor-projections` and viewSchemaVersions `backend-editor-artifacts-v1`,
 retaining `backend-api-artifact-pins`, `api-artifact-pins-v1`, saved views and
@@ -8,7 +8,7 @@ source schemas3/4/5. This is a tagged backend artifact context contract; source
 schema5 is eligible and store is19. Source1–4/legacy contexts retain their supported
 reads. Authored EventModel is saved design intent; it supplies no source event
 proof, runtime execution or delivery guarantee. Source5/events-service-v1 and
-job source semantics use the separate backend-events topic under inspect11.
+job source semantics use the separate backend-events topic under inspect12.
 Ordinary-agent acceptance/live evaluation is DEFERRED by the user.
 
 ## Source6, full drafts and READY candidate reads

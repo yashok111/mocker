@@ -36,6 +36,7 @@ type DiagramGap struct {
 	Explanation string `json:"explanation"`
 }
 type DiagramDocument struct {
+	BusinessMap  *BusinessMapPayload `json:"-"`
 	Format       string              `json:"format"`
 	Kind         string              `json:"kind"`
 	Target       BackendReadTarget   `json:"target"`

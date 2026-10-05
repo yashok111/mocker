@@ -72,6 +72,15 @@ func diagramBases(d DiagramDocument) map[string]struct {
 			}{o, refs}
 		}
 	}
+	if d.BusinessMap != nil {
+		for id, v := range businessMapRows(d.BusinessMap) {
+			o, refs := businessMapBasis(v)
+			out[id] = struct {
+				origin DiagramOrigin
+				refs   []DiagramRef
+			}{o, refs}
+		}
+	}
 	if d.Lifecycle != nil {
 		for id, v := range lifecycleRows(d.Lifecycle) {
 			o, refs := lifecycleRowBasis(v)
@@ -140,6 +149,7 @@ func resolveDiagramEvidence(ctx context.Context, g *EffectiveGraphSnapshot, d Di
 		return nil, err
 	}
 	gaps = append(gaps, lifecycleGaps...)
+	gaps = append(gaps, businessMapImplementationGaps(g, d.BusinessMap)...)
 	slices.SortFunc(gaps, func(a, b DiagramGap) int {
 		if a.ID < b.ID {
 			return -1

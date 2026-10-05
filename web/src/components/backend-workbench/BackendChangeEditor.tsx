@@ -1,3 +1,4 @@
+import { useDiagramChangeHandoff } from "./BackendDiagramChangeContext";
 import { BackendChangeLifecycle } from "./BackendChangeLifecycle";
 import { BackendAnalysisJobs } from "./BackendAnalysisJobs";
 import { BackendChangeRebase } from "./BackendChangeRebase";
@@ -55,6 +56,7 @@ export function BackendChangeEditor({
   onDirty?: (dirty: boolean) => void;
   readOnly?: boolean;
 }) {
+  const handoff = useDiagramChangeHandoff()?.handoff;
   const recoveryKey = `backend-change-attempt:${projectId}:${detail.proposal.id}`;
   const [base, setBase] = useState(detail);
   const [selectedReport, setSelectedReport] = useState<{
@@ -491,6 +493,16 @@ export function BackendChangeEditor({
               baseSchemaVersion={base.revision.baseSchemaVersion}
               initial={editIndex >= 0 ? commands[editIndex] : undefined}
               identities={availableIdentities}
+              implementationRefs={
+                handoff?.projectId === projectId &&
+                ("revisionId" in handoff.target
+                  ? handoff.target.revisionId === base.revision.baseRevisionId
+                  : handoff.target.changeProposal.proposalId === base.proposal.id &&
+                    handoff.target.changeProposal.proposalRevisionId === base.revision.id)
+                  ? handoff.refs
+                  : undefined
+              }
+
               criteria={
                 (editIndex >= 0 ? commands.slice(0, editIndex) : commands).findLast(
                   (command) => command.type === "set_criteria",

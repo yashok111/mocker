@@ -169,7 +169,7 @@ func (r *Repo) ForkDiagram(ctx context.Context, pid string, in DiagramForkInput)
 	if err != nil {
 		return nil, err
 	}
-	if doc.Interactions == nil && in.Architecture != nil {
+	if doc.Interactions == nil && doc.BusinessMap == nil && in.Architecture != nil {
 		return nil, invalid("architecture", "Architecture document has no dependency")
 	}
 	if doc.Interactions != nil {
@@ -180,6 +180,16 @@ func (r *Repo) ForkDiagram(ctx context.Context, pid string, in DiagramForkInput)
 		}
 		if in.Architecture != nil {
 			doc.Interactions.Architecture = in.Architecture
+		}
+	}
+	if doc.BusinessMap != nil {
+		a, _ := requestDigest(doc.Target)
+		b, _ := requestDigest(in.Target)
+		if a != b && doc.BusinessMap.Architecture != nil && in.Architecture == nil {
+			return nil, invalid("architecture", "New-target fork requires an explicit architecture pin")
+		}
+		if in.Architecture != nil {
+			doc.BusinessMap.Architecture = in.Architecture
 		}
 	}
 	doc.Target = in.Target
@@ -227,6 +237,11 @@ func (r *Repo) mutateDiagram(ctx context.Context, m diagramMutation) (*DiagramVe
 		return nil, err
 	}
 	m.gaps = append(m.gaps, dependencyGaps...)
+	businessGaps, err := r.resolveBusinessMapArchitecture(ctx, m.pid, m.graph, m.document, m.previous)
+	if err != nil {
+		return nil, err
+	}
+	m.gaps = append(m.gaps, businessGaps...)
 	var out *DiagramVersion
 	err = r.db.Write(ctx, func(tx *sql.Tx) error {
 		out, err = r.writeDiagramMutation(ctx, tx, m)
@@ -243,6 +258,9 @@ func validateDiagramSave(previous *DiagramVersion, d DiagramDocument) error {
 	b, _ := requestDigest(d.Target)
 	if previous.Document.Kind != d.Kind || a != b {
 		return invalid("document", "Diagram kind and target are immutable; use fork")
+	}
+	if d.BusinessMap != nil && !businessMapDependencyEqual(previous.Document.BusinessMap, d.BusinessMap) {
+		return invalid("architecture", "Architecture dependency is immutable; use fork")
 	}
 	if d.Interactions != nil && !interactionDependencyEqual(previous.Document.Interactions, d.Interactions) {
 		return invalid("architecture", "Architecture dependency is immutable; use fork")
