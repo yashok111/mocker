@@ -8,6 +8,7 @@ import (
 )
 
 func TestAPIArtifactReimportCarriesPinsAndComparison(t *testing.T) {
+	t.Parallel()
 	s, base, ids, api := apiPinFixture(t)
 	pinned, _ := applyPinTest(t, s, base.Project.ID, pinTestInput(base, ids, api), "pin")
 	comparison, err := s.repo.CompareRevisions(t.Context(), base.Project.ID, CompareRevisionsInput{FromRevisionID: base.Revision.ID, ToRevisionID: pinned.Revision.ID, RecordType: "artifact"})
@@ -134,6 +135,7 @@ func TestAPIArtifactConcurrentImportAndPinWriters(t *testing.T) {
 }
 
 func TestAPIArtifactReimportWithoutComparisonStillCarriesBindings(t *testing.T) {
+	t.Parallel()
 	s, base, ids, api := apiPinFixture(t)
 	pinned, _ := applyPinTest(t, s, base.Project.ID, pinTestInput(base, ids, api), "pin")
 	in := lineageOrdersInput(t, &pinned.Project)
@@ -163,6 +165,7 @@ func TestAPIArtifactReimportWithoutComparisonStillCarriesBindings(t *testing.T) 
 }
 
 func TestAPIArtifactHistoricalProposalSavedViewAndFlowPins(t *testing.T) {
+	t.Parallel()
 	s, base, ids, api := apiPinFixture(t)
 	pinned, _ := applyPinTest(t, s, base.Project.ID, pinTestInput(base, ids, api), "pin")
 	source := &ImportCommitResult{Project: pinned.Project, Revision: pinned.Revision}

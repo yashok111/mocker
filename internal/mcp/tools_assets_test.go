@@ -30,7 +30,7 @@ func (f *rawFakeCaller) CallAsMCPRaw(_ context.Context, _ *http.Request, method,
 func TestUploadAsset_sendsTheFileUnderItsOwnType(t *testing.T) {
 	caller := &rawFakeCaller{fakeCaller: fakeCaller{status: http.StatusCreated,
 		body: []byte(`{"name":"pic.jpg","mediaType":"image/jpeg","sizeBytes":3,"sha256":"abc","createdAt":1,"updatedAt":1,"url":"http://alex.mock.local/__mocker/assets/pic.jpg"}`)}}
-	ep := New(caller, testKey, testConfig(), nil)
+	ep := newToolFixture(caller)
 
 	data := base64.StdEncoding.EncodeToString([]byte{0xFF, 0xD8, 0xFF})
 	rec := doMCP(t, ep.Handler(), `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"upload_asset","arguments":{"workspaceId":7,"name":"pic.jpg","mediaType":"image/jpeg; charset=binary","dataBase64":"`+data+`"}}}`,

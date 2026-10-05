@@ -25,6 +25,7 @@ func relationalPublishedCounts(t *testing.T, r *Repo, pid string) string {
 	return string(b)
 }
 func TestRelationalAtomicRollbackAndRestartReplay(t *testing.T) {
+	t.Parallel()
 	r, db := testRepo(t)
 	p := createProject(t, r, "create")
 	begin := relationalFixtureInput(t, p, "postgresql", "v1")
@@ -99,6 +100,7 @@ func TestRelationalAtomicRollbackAndRestartReplay(t *testing.T) {
 	}
 }
 func TestRelationalCompetingCommitsSameBase(t *testing.T) {
+	t.Parallel()
 	r, _ := testRepo(t)
 	p := createProject(t, r, "create")
 	sessions := []*ImportSession{}

@@ -141,6 +141,7 @@ func TestInteractionsOrderDuplicates(t *testing.T) {
 	}
 }
 func TestInteractionsHistoricalCompare(t *testing.T) {
+	t.Parallel()
 	r, _ := testRepo(t)
 	p := createProject(t, r, "interaction-history")
 	doc := interactionFixture(t)
@@ -185,6 +186,7 @@ func TestInteractionsHistoricalCompare(t *testing.T) {
 }
 
 func TestInteractionsOrderIdentity(t *testing.T) {
+	t.Parallel()
 	r, _ := testRepo(t)
 	p := createProject(t, r, "order-identity")
 	doc := interactionFixture(t)
@@ -286,6 +288,7 @@ func TestInteractionsForkMembershipGapSurvivesSave(t *testing.T) {
 }
 
 func TestInteractionsComparisonMetadataCannotShadowSemanticIdentity(t *testing.T) {
+	t.Parallel()
 	r, _ := testRepo(t)
 	project := createProject(t, r, "metadata-collision")
 	doc := interactionFixture(t)

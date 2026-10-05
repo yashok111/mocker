@@ -8,6 +8,7 @@ import (
 )
 
 func TestIncrementalProjectionIncludesSharedConsumers(t *testing.T) {
+	t.Parallel()
 	f := sourceReviewSharedValue(t, "column", "equal")
 	consumerSession, batch := f.mapping(t, f.b)
 	base := sourceReviewCommit(t, f.repo, f.project, consumerSession, batch.AcceptedVersion, "fixture")

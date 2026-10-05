@@ -121,6 +121,7 @@ func commitRelationalFixture(t *testing.T, r *Repo, dialect, version string) (*I
 	return out, ids
 }
 func TestRelationalSourceFixtureImport(t *testing.T) {
+	t.Parallel()
 	for _, dialect := range []string{"postgresql", "sqlite"} {
 		t.Run(dialect, func(t *testing.T) {
 			r, _ := testRepo(t)
@@ -388,6 +389,7 @@ func assertRelationalOracle(t *testing.T, r *Repo, out *ImportCommitResult, ids 
 	}
 }
 func TestRelationalIndependentSourceOracle(t *testing.T) {
+	t.Parallel()
 	for _, dialect := range []string{"postgresql", "sqlite"} {
 		t.Run(dialect, func(t *testing.T) {
 			r, _ := testRepo(t)

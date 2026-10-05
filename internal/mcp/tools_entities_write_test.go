@@ -16,14 +16,6 @@ func callTool(t *testing.T, calls Caller, name, args string) (json.RawMessage, s
 	return newToolFixture(calls).Call(t, name, args)
 }
 
-type toolFixture struct {
-	handler http.Handler
-}
-
-func newToolFixture(calls Caller) *toolFixture {
-	return &toolFixture{handler: New(calls, testKey, testConfig(), nil).Handler()}
-}
-
 func (fixture *toolFixture) Call(t *testing.T, name, args string) (json.RawMessage, string) {
 	t.Helper()
 	rec := doMCP(t, fixture.handler,

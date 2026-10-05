@@ -184,6 +184,7 @@ func TestAPIArtifactDiffCancellationDuringTraversal(t *testing.T) {
 }
 
 func TestAPIArtifactPreviewPathOverflowDisablesApply(t *testing.T) {
+	t.Parallel()
 	s, base, ids, api := apiPinFixture(t)
 	owner := s.artifacts.(*apidesign.Repo)
 	key := strings.Repeat("界~/", 512)

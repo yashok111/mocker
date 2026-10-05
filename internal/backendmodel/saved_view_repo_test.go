@@ -199,6 +199,7 @@ func savedDatabaseInput(out *ImportCommitResult, ids map[string]string, key stri
 }
 
 func TestSavedViewNormalizationPagingAndUnsupportedTargets(t *testing.T) {
+	t.Parallel()
 	r, _ := testRepo(t)
 	source, ids := commitRelationalFixture(t, r, "postgresql", "v1")
 	in := savedDatabaseInput(source, ids, "normal")
@@ -322,6 +323,7 @@ func TestSavedViewReplayRejectsNilRequiredArrays(t *testing.T) {
 }
 
 func TestSavedViewHistoryCASReplayAndPurity(t *testing.T) {
+	t.Parallel()
 	r, db := testRepo(t)
 	out, ids := commitRelationalFixture(t, r, "sqlite", "v1")
 	before := savedHistoricalBytes(t, r)

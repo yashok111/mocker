@@ -37,6 +37,7 @@ func TestSource6QuotaCountsDecisionDocuments(t *testing.T) {
 }
 
 func TestSource6CommitRollback(t *testing.T) {
+	t.Parallel()
 	r, _ := testRepo(t)
 	p := createProject(t, r, "rollback")
 	s, err := r.BeginImport(t.Context(), p.ID, source6Input(t, p))

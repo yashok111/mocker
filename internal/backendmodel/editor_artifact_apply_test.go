@@ -28,6 +28,7 @@ func applyArtifactTest(t *testing.T, s *ArtifactService, pid string, in PreviewA
 	return out, request
 }
 func TestArtifactApplyRawCopyReceiptAndClear(t *testing.T) {
+	t.Parallel()
 	s, base, ids, d := artifactServiceFixture(t)
 	for _, table := range []string{"backend_graph_records", "backend_revision_sources", "backend_revision_decisions"} {
 		if _, err := s.repo.db.W.ExecContext(t.Context(), `UPDATE `+table+` SET document=char(10)||'  '||document||char(10) WHERE revision_id=?`, base.Revision.ID); err != nil {
@@ -175,6 +176,7 @@ func TestArtifactApplyCASRollbackAndOneWinner(t *testing.T) {
 
 // A changed request body after preview must conflict without a persisted successor.
 func TestArtifactApplyCandidateReasonAndScope(t *testing.T) {
+	t.Parallel()
 	s, base, ids, d := artifactServiceFixture(t)
 	in := scenarioSet(base, ids, d)
 	p, err := s.Preview(t.Context(), base.Project.ID, in)
@@ -238,6 +240,7 @@ func artifactOwnerRows(t *testing.T, repo *Repo) []byte {
 }
 
 func TestArtifactApplyKeepsAbsentDecisionRow(t *testing.T) {
+	t.Parallel()
 	s, base, ids, d := artifactServiceFixture(t)
 	if _, err := s.repo.db.W.ExecContext(t.Context(), `DELETE FROM backend_revision_decisions WHERE revision_id=?`, base.Revision.ID); err != nil {
 		t.Fatal(err)

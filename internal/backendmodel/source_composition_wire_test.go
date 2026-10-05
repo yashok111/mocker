@@ -36,6 +36,7 @@ func TestSource6WireRejectsLegacyMemberPresence(t *testing.T) {
 }
 
 func TestSource6WirePreservesLegacyNullParentAdmission(t *testing.T) {
+	t.Parallel()
 	r, _ := testRepo(t)
 	p := createProject(t, r, "legacy-wire")
 	s, err := r.BeginImport(t.Context(), p.ID, firstImportFixture(p))

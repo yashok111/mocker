@@ -101,6 +101,7 @@ func TestSource6SelectedValueUpdatesDependencyCurrentness(t *testing.T) {
 }
 
 func TestSource6SelectionCurrentnessCycleReconfirms(t *testing.T) {
+	t.Parallel()
 	f := sourceReviewSharedValue(t, "port", "borrow")
 	graph, err := f.repo.ResolveSourceGraph(t.Context(), f.project.ID, f.project.CurrentRevisionID)
 	if err != nil {

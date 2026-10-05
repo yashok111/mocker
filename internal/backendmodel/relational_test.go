@@ -166,6 +166,7 @@ func TestRelationalNestedGraphReferences(t *testing.T) {
 	}
 }
 func TestRelationalArrayAndFacetBounds(t *testing.T) {
+	t.Parallel()
 	r, p, s, cs := relationalTestSession(t)
 	base := relationalCommand(cs, "column:orders:total").Node
 	fs, _, _ := relationalFacetObject(base.Kind, base.Attributes)
@@ -178,6 +179,7 @@ func TestRelationalArrayAndFacetBounds(t *testing.T) {
 	assertFault(t, err, "backend_import_limit")
 }
 func TestRelationalStrictDuplicateJSON(t *testing.T) {
+	t.Parallel()
 	_, _, _, cs := relationalTestSession(t)
 	a := relationalCommand(cs, "column:orders:total").Node.Attributes
 	fs, _, _ := relationalFacetObject("column", a)
@@ -213,6 +215,7 @@ func relationalSelect(cs []ImportCommand, keys ...string) []ImportCommand {
 	return out
 }
 func TestRelationalRetainedFacetProofCannotBeOverwritten(t *testing.T) {
+	t.Parallel()
 	r, p, s, cs := relationalTestSession(t)
 	key := "column:orders:status"
 	sqlProof := "proof:v1:" + key + ":sql"
@@ -333,6 +336,7 @@ func partialRelationalInput(t *testing.T, p *Project, repository, version, key s
 	return in
 }
 func TestRelationalFacetEndpointConflict(t *testing.T) {
+	t.Parallel()
 	r, p, s, cs := relationalTestSession(t)
 	v, ids := stageRelational(t, r, p, s, cs, "base")
 	out, err := commitFixture(t, r, p, s, v, "base-commit")
@@ -382,6 +386,7 @@ func TestRelationalFacetEndpointConflict(t *testing.T) {
 	}
 }
 func TestRelationalMappedRenameNestedDeletionHistory(t *testing.T) {
+	t.Parallel()
 	for _, dialect := range []string{"postgresql", "sqlite"} {
 		t.Run(dialect, func(t *testing.T) {
 			r, _ := testRepo(t)
@@ -694,6 +699,7 @@ func TestRelationalReferenceAndNativeBounds(t *testing.T) {
 	}
 }
 func TestRelationalUnresolvedReferenceTarget(t *testing.T) {
+	t.Parallel()
 	r, p, s, cs := relationalTestSession(t)
 	key := "references:orders:user_fk"
 	edge := relationalCommand(cs, key).Edge
@@ -718,6 +724,7 @@ func TestRelationalUnresolvedReferenceTarget(t *testing.T) {
 	}
 }
 func TestRelationalFoundationDatastoreOwnershipPreserved(t *testing.T) {
+	t.Parallel()
 	r, _ := testRepo(t)
 	p := createProject(t, r, "create")
 	in := relationalFixtureInput(t, p, "postgresql", "v1")
@@ -836,6 +843,7 @@ func TestRelationalDeletionScopeGuards(t *testing.T) {
 	}
 }
 func TestRelationalDescriptionRetainsExistingStringContract(t *testing.T) {
+	t.Parallel()
 	r, p, s, cs := relationalTestSession(t)
 	relationalCommand(cs, "table:orders").Node.Attributes["description"] = relationalRaw(t, strings.Repeat("x", MaxRelationalNativeBytes+1))
 	v, _ := stageRelational(t, r, p, s, cs, "description")
@@ -844,6 +852,7 @@ func TestRelationalDescriptionRetainsExistingStringContract(t *testing.T) {
 	}
 }
 func TestRelationalRevisionCompareExactIntegerTokens(t *testing.T) {
+	t.Parallel()
 	r, _ := testRepo(t)
 	out, ids := commitRelationalFixture(t, r, "postgresql", "v1")
 	before, err := loadRevisionState(t.Context(), r.db.R, out.Project.ID, out.Revision.ID)

@@ -47,6 +47,7 @@ func changeReadSnapshot(t *testing.T, r *Repo, d *ChangeProposalDetail) *ChangeE
 }
 
 func TestChangeProposalCommandLedgerRestoreReplay(t *testing.T) {
+	t.Parallel()
 	r, base, initial := changeFixture(t)
 	id := uuid.NewV7().String()
 	create := changeCommand(t, "create_node", fmt.Sprintf(`"id":%q,"kind":"service","name":"One","parentId":null,"attributes":{}`, id))
@@ -119,6 +120,7 @@ func TestChangeProposalCommandLedgerRestoreReplay(t *testing.T) {
 }
 
 func TestChangeProposalFinalReferenceRepairAndOrigins(t *testing.T) {
+	t.Parallel()
 	r, _, d := changeFixture(t)
 	parent, child, edge := uuid.NewV7().String(), uuid.NewV7().String(), uuid.NewV7().String()
 	createParent := changeCommand(t, "create_node", fmt.Sprintf(`"id":%q,"kind":"service","name":"Parent","parentId":null,"attributes":{}`, parent))

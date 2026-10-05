@@ -30,6 +30,7 @@ func TestChangeRebaseCarriedIdentityCodec(t *testing.T) {
 }
 
 func TestChangeRebaseKeepsDeletedSourceAsHistoricalCarry(t *testing.T) {
+	t.Parallel()
 	r, _, d := changeFixture(t)
 	source, err := loadChangeSourceForDraft(t.Context(), r.db.R, d.Proposal.ProjectID, &d.Revision)
 	if err != nil {

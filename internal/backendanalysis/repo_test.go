@@ -9,12 +9,12 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/yashok111/mocker/internal/backendmodel"
 	"github.com/yashok111/mocker/internal/store"
+	"github.com/yashok111/mocker/internal/testkit"
 	"github.com/yashok111/mocker/internal/testleak"
 )
 
@@ -25,15 +25,8 @@ const revisionID = "11111111-1111-4111-8111-111111111111"
 
 func testRepo(t *testing.T) (*Repo, *store.DB) {
 	t.Helper()
-	db, err := store.Open(t.Context(), filepath.Join(t.TempDir(), "analysis.db"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = db.Close() })
-	if err = db.Migrate(t.Context(), slog.New(slog.NewTextHandler(io.Discard, nil))); err != nil {
-		t.Fatal(err)
-	}
-	err = db.Write(t.Context(), func(tx *sql.Tx) error {
+	db := testkit.NewDB(t)
+	err := db.Write(t.Context(), func(tx *sql.Tx) error {
 		if _, e := tx.ExecContext(t.Context(), `INSERT INTO backend_projects VALUES (?,?,1,?,?,?)`, projectID, "Analysis", revisionID, "now", "now"); e != nil {
 			return e
 		}

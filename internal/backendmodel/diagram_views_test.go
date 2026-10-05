@@ -3,6 +3,7 @@ package backendmodel
 import "testing"
 
 func TestDiagramViewsKeepExactPinAndIndependentCatalog(t *testing.T) {
+	t.Parallel()
 	r, _ := testRepo(t)
 	p := createProject(t, r, "views")
 	doc := diagramTestDocument(p.CurrentRevisionID)

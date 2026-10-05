@@ -14,6 +14,7 @@ func savedV2FlowState() SavedViewState {
 	return SavedViewState{Flow: &SavedFlowViewState{Kind: "flow", Filters: SavedFlowViewFilters{}, Positions: []SavedViewPosition{}, CollapsedGroupIDs: []string{}}}
 }
 func TestSavedViewV2FullDraftExactHistoryAndReplay(t *testing.T) {
+	t.Parallel()
 	r, base, initial := changeFixture(t)
 	target := BackendReadTarget{ChangeProposal: &ProposalReadTarget{ProposalID: initial.Proposal.ID, ProposalRevisionID: initial.Revision.ID}}
 	input := CreateSavedViewInput{DocumentVersion: SavedViewV2DocumentVersion, Name: "Full flow presentation", Target: target, State: savedV2FlowState(), IdempotencyKey: "saved-v2"}
@@ -62,6 +63,7 @@ func TestSavedViewV2FullDraftExactHistoryAndReplay(t *testing.T) {
 	}
 }
 func TestSavedViewV2StrictTagAndStagingRejection(t *testing.T) {
+	t.Parallel()
 	r, base, initial := changeFixture(t)
 	state := savedV2FlowState()
 	full := BackendReadTarget{ChangeProposal: &ProposalReadTarget{ProposalID: initial.Proposal.ID, ProposalRevisionID: initial.Revision.ID}}
@@ -82,6 +84,7 @@ func TestSavedViewV2StrictTagAndStagingRejection(t *testing.T) {
 }
 
 func TestSavedViewV2CASRollbackRestartAndV1ReceiptParity(t *testing.T) {
+	t.Parallel()
 	r, base, initial := changeFixture(t)
 	target := BackendReadTarget{ChangeProposal: &ProposalReadTarget{ProposalID: initial.Proposal.ID, ProposalRevisionID: initial.Revision.ID}}
 	input := CreateSavedViewInput{DocumentVersion: SavedViewV2DocumentVersion, Name: "Exact saved target", Target: target, State: savedV2FlowState(), IdempotencyKey: "v2-create"}

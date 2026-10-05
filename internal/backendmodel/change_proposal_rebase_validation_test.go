@@ -10,6 +10,7 @@ import (
 )
 
 func TestChangeRebaseRetainedArtifactBindingRequiresLiveTarget(t *testing.T) {
+	t.Parallel()
 	service, old, ids, scenario := artifactServiceFixture(t)
 	base, _ := upgradeEventsArtifactFixture(t, service, old)
 	r := service.repo
@@ -41,6 +42,7 @@ func TestChangeRebaseRetainedArtifactBindingRequiresLiveTarget(t *testing.T) {
 }
 
 func TestChangeRebaseRejectsBeforeUnreservedDraftDecode(t *testing.T) {
+	t.Parallel()
 	r, base, d := changeFixture(t)
 	// A valid JSON number outside float64 exposes generic decoding before the
 	// memory gate. This corrupt sentinel lives only in this isolated test DB.

@@ -81,6 +81,7 @@ func assertProposalSourceBytes(t *testing.T, r *Repo, before map[string][]string
 }
 
 func TestProposalCreateIsolationAndReplay(t *testing.T) {
+	t.Parallel()
 	for _, dialect := range []string{"postgresql", "sqlite"} {
 		t.Run(dialect, func(t *testing.T) {
 			r, _ := testRepo(t)
@@ -130,6 +131,7 @@ func TestProposalCreateIsolationAndReplay(t *testing.T) {
 }
 
 func TestProposalCreateHistoricalBase(t *testing.T) {
+	t.Parallel()
 	r, _ := testRepo(t)
 	out, ids := commitRelationalFixture(t, r, "postgresql", "v1")
 	in := proposalCreateInput(out, ids, "historical")
@@ -157,6 +159,7 @@ func TestProposalCreateHistoricalBase(t *testing.T) {
 }
 
 func TestProposalCreateForeignOrSchema1Base(t *testing.T) {
+	t.Parallel()
 	r, _ := testRepo(t)
 	out, ids := commitRelationalFixture(t, r, "sqlite", "v1")
 	other := createProject(t, r, "other")
@@ -187,6 +190,7 @@ func TestProposalCreateForeignOrSchema1Base(t *testing.T) {
 }
 
 func TestProposalCreateRollback(t *testing.T) {
+	t.Parallel()
 	r, db := testRepo(t)
 	out, ids := commitRelationalFixture(t, r, "postgresql", "v1")
 	before := proposalSourceBytes(t, r)
@@ -263,6 +267,7 @@ func TestProposalCreationConcurrentKey(t *testing.T) {
 }
 
 func TestProposalCreateReplayAfterRestart(t *testing.T) {
+	t.Parallel()
 	r, db := testRepo(t)
 	out, ids := commitRelationalFixture(t, r, "postgresql", "v1")
 	in := proposalCreateInput(out, ids, "restart")
@@ -302,6 +307,7 @@ func TestProposalCreateReplayAfterRestart(t *testing.T) {
 }
 
 func TestProposalHistoryCursorPin(t *testing.T) {
+	t.Parallel()
 	r, _ := testRepo(t)
 	out, ids := commitRelationalFixture(t, r, "sqlite", "v1")
 	created, err := r.CreateProposal(t.Context(), out.Project.ID, proposalCreateInput(out, ids, "history"))
@@ -470,6 +476,7 @@ func TestProposalCreateB11StoreUpgrade(t *testing.T) {
 }
 
 func TestProposalCreateDatabaseOwnershipAndImmutability(t *testing.T) {
+	t.Parallel()
 	r, db := testRepo(t)
 	out, ids := commitRelationalFixture(t, r, "postgresql", "v1")
 	one, err := r.CreateProposal(t.Context(), out.Project.ID, proposalCreateInput(out, ids, "one"))

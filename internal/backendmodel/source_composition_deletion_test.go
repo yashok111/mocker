@@ -6,6 +6,7 @@ import (
 )
 
 func TestSource6LastClaimDeletion(t *testing.T) {
+	t.Parallel()
 	r, _ := testRepo(t)
 	p := createProject(t, r, "delete")
 	a, first := commitSource6Fixture(t, r, p, source6Input(t, p))

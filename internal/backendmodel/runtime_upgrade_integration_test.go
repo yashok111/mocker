@@ -49,6 +49,7 @@ func runtimeRelationalFixture(t *testing.T, r *Repo, dialect string) (*ImportCom
 }
 
 func TestRuntimeRelationalProposalEligibility(t *testing.T) {
+	t.Parallel()
 	for _, dialect := range []string{"postgresql", "sqlite"} {
 		t.Run(dialect, func(t *testing.T) {
 			r, _ := testRepo(t)
@@ -91,6 +92,7 @@ func TestRuntimeRelationalProposalEligibility(t *testing.T) {
 }
 
 func TestRuntimeUpgradePreservesOldDocumentsAndReceipts(t *testing.T) {
+	t.Parallel()
 	r, db := testRepo(t)
 	out, ids := commitRelationalFixture(t, r, "sqlite", "v1")
 	p := &out.Project

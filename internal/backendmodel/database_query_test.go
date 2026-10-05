@@ -14,6 +14,7 @@ import (
 )
 
 func TestDatabaseIndependentFixtureProjection(t *testing.T) {
+	t.Parallel()
 	for _, dialect := range []string{"postgresql", "sqlite"} {
 		for _, version := range []string{"v1", "v2"} {
 			t.Run(dialect+"/"+version, func(t *testing.T) {
@@ -105,6 +106,7 @@ func TestDatabaseIndependentFixtureProjection(t *testing.T) {
 }
 
 func TestDatabaseStrictPresenceAndPinnedCursor(t *testing.T) {
+	t.Parallel()
 	r, _ := testRepo(t)
 	out, ids := commitRelationalFixture(t, r, "postgresql", "v1")
 	base := DatabaseQueryInput{RevisionID: out.Revision.ID, DatastoreID: ids["database:orders"], FacetKey: "sql", RecordType: "tables", Limit: 1}
@@ -579,6 +581,7 @@ func TestDatabaseInferredProofLimitsWholeSelectedProjection(t *testing.T) {
 // Matching FK constraint facets are mandatory on legal imports. This test
 // deliberately damages only an isolated test store to exercise defensive reads.
 func TestDatabaseDefensiveStoredConstraintProofMissing(t *testing.T) {
+	t.Parallel()
 	r, _ := testRepo(t)
 	out, ids := commitRelationalFixture(t, r, "postgresql", "v1")
 	state, err := loadRevisionState(t.Context(), r.db.R, out.Project.ID, out.Revision.ID)
@@ -603,6 +606,7 @@ func TestDatabaseDefensiveStoredConstraintProofMissing(t *testing.T) {
 }
 
 func TestDatabaseSchema1AndMissingDescriptorReadContracts(t *testing.T) {
+	t.Parallel()
 	r, _ := testRepo(t)
 	p := createProject(t, r, "create")
 	in := relationalFixtureInput(t, p, "postgresql", "v1")
@@ -648,6 +652,7 @@ func TestDatabaseSchema1AndMissingDescriptorReadContracts(t *testing.T) {
 }
 
 func TestDatabaseDependencyStaleExplicitProofIsNotInferred(t *testing.T) {
+	t.Parallel()
 	r, _ := testRepo(t)
 	first, ids := commitRelationalFixture(t, r, "postgresql", "v1")
 	status, err := r.Import(t.Context(), first.Project.ID, first.SessionID, ListInput{})

@@ -208,6 +208,7 @@ func TestChangeReadyEditResetsAndReplay(t *testing.T) {
 	}
 }
 func TestChangeReadyListPagination(t *testing.T) {
+	t.Parallel()
 	r, base, d := changeFixture(t)
 	pid := base.Project.ID
 	for _, key := range []string{"two", "three"} {
@@ -362,6 +363,7 @@ func TestChangeReadyConcurrentCAS(t *testing.T) {
 }
 
 func TestChangeReadyRetainsPreparationLease(t *testing.T) {
+	t.Parallel()
 	r, _, d := changeFixture(t)
 	in, e := readyEvidence(t, r, d)
 	prepared, err := r.prepareChangeReady(t.Context(), d.Proposal.ProjectID, d.Proposal.ID, in, fixedReady(e))
@@ -375,6 +377,7 @@ func TestChangeReadyRetainsPreparationLease(t *testing.T) {
 }
 
 func TestChangeReadyReleasesPreparedLease(t *testing.T) {
+	t.Parallel()
 	r, _, d := changeFixture(t)
 	in, e := readyEvidence(t, r, d)
 	prepared, err := r.prepareChangeReady(t.Context(), d.Proposal.ProjectID, d.Proposal.ID, in, fixedReady(e))

@@ -12,6 +12,7 @@ import (
 )
 
 func TestRelationalFacetComparisonIndependentOracle(t *testing.T) {
+	t.Parallel()
 	for _, dialect := range []string{"postgresql", "sqlite"} {
 		for _, version := range []string{"v1", "v2"} {
 			t.Run(dialect+"/"+version, func(t *testing.T) {
@@ -99,6 +100,7 @@ func comparisonPair(t *testing.T, c *FacetComparison, a, b string) FacetPairDiff
 }
 
 func TestRelationalFacetComparisonKnownNullUnknownAndDefinition(t *testing.T) {
+	t.Parallel()
 	r, _ := testRepo(t)
 	out, ids := commitRelationalFixture(t, r, "postgresql", "v1")
 	n, err := r.Node(t.Context(), out.Project.ID, out.Revision.ID, ids["column:payments:amount"])
@@ -147,6 +149,7 @@ func TestRelationalFacetComparisonKnownNullUnknownAndDefinition(t *testing.T) {
 }
 
 func TestRelationalComputedReadMetadataIsNotStored(t *testing.T) {
+	t.Parallel()
 	r, _ := testRepo(t)
 	out, ids := commitRelationalFixture(t, r, "postgresql", "v1")
 	n, err := r.Node(t.Context(), out.Project.ID, out.Revision.ID, ids["column:orders:user_id"])
@@ -224,6 +227,7 @@ func TestRelationalComputedReadMetadataIsNotStored(t *testing.T) {
 }
 
 func TestRelationalFacetComparisonIncompleteChangesDoNotAssertAbsence(t *testing.T) {
+	t.Parallel()
 	r, _ := testRepo(t)
 	out, ids := commitRelationalFixture(t, r, "postgresql", "v1")
 	n, err := r.Node(t.Context(), out.Project.ID, out.Revision.ID, ids["migration:001_initial"])
@@ -244,6 +248,7 @@ func TestRelationalFacetComparisonIncompleteChangesDoNotAssertAbsence(t *testing
 }
 
 func TestRelationalFacetComparisonExactIntegersAndOrderedPairs(t *testing.T) {
+	t.Parallel()
 	r, _ := testRepo(t)
 	out, ids := commitRelationalFixture(t, r, "postgresql", "v1")
 	n, err := r.Node(t.Context(), out.Project.ID, out.Revision.ID, ids["column:orders:total"])

@@ -32,6 +32,7 @@ func scenarioSet(base *ImportCommitResult, ids map[string]string, d *designscena
 }
 
 func TestArtifactServicePreviewFullReplacement(t *testing.T) {
+	t.Parallel()
 	s, base, ids, d := artifactServiceFixture(t)
 	in := scenarioSet(base, ids, d)
 	before, _ := s.repo.Get(t.Context(), base.Project.ID)
@@ -61,6 +62,7 @@ func TestArtifactServicePreviewFullReplacement(t *testing.T) {
 }
 
 func TestArtifactDiscriminatorLoadAndQualifiedQuery(t *testing.T) {
+	t.Parallel()
 	s, base, ids, d := artifactServiceFixture(t)
 	p, err := s.Preview(t.Context(), base.Project.ID, scenarioSet(base, ids, d))
 	if err != nil {
@@ -109,6 +111,7 @@ func TestArtifactDiscriminatorLoadAndQualifiedQuery(t *testing.T) {
 }
 
 func TestArtifactPersistentMixedVersionRejected(t *testing.T) {
+	t.Parallel()
 	s, base, ids, api := apiPinFixture(t)
 	pinned, _ := applyPinTest(t, s, base.Project.ID, pinTestInput(base, ids, api), "v1")
 	var original string
@@ -128,6 +131,7 @@ func TestArtifactPersistentMixedVersionRejected(t *testing.T) {
 }
 
 func TestArtifactForeignOrMissingBaseIsNotFound(t *testing.T) {
+	t.Parallel()
 	s, base, ids, d := artifactServiceFixture(t)
 	foreign, err := s.repo.Create(t.Context(), CreateInput{Name: "Foreign", IdempotencyKey: "foreign"})
 	if err != nil {

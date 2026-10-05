@@ -10,6 +10,7 @@ import (
 )
 
 func TestAnalysisProofDesiredProperty(t *testing.T) {
+	t.Parallel()
 	r, base, d := changeFixture(t)
 	id := uuid.NewV7().String()
 	c := changeCommand(t, "create_node", fmt.Sprintf(`"id":%q,"kind":"service","name":"Desired","parentId":null,"attributes":{}`, id))
@@ -32,6 +33,7 @@ func TestAnalysisProofDesiredProperty(t *testing.T) {
 	}
 }
 func TestAnalysisProofLegacySource5SupportAndStale(t *testing.T) {
+	t.Parallel()
 	r, base, ids := effectiveFiveRelationalFixture(t)
 	graph, err := r.ResolveEffectiveGraph(t.Context(), base.Project.ID, BackendReadTarget{RevisionID: base.Revision.ID})
 	if err != nil {
@@ -60,6 +62,7 @@ func TestAnalysisProofLegacySource5SupportAndStale(t *testing.T) {
 	}
 }
 func TestAnalysisProofLegacyDesiredNoOpKeepsIntent(t *testing.T) {
+	t.Parallel()
 	r, base, ids := effectiveFiveRelationalFixture(t)
 	d, err := r.CreateProposal(t.Context(), base.Project.ID, proposalCreateInput(base, ids, "legacy-proof"))
 	if err != nil {
@@ -154,6 +157,7 @@ func TestAnalysisProofProjectEffectiveSharesFailedOwnerBudgetAcrossSides(t *test
 	}
 }
 func TestAnalysisProofValueSelectedFacetIgnoresStaleSibling(t *testing.T) {
+	t.Parallel()
 	r, base, ids := effectiveFiveRelationalFixture(t)
 	graph, err := r.ResolveEffectiveGraph(t.Context(), base.Project.ID, BackendReadTarget{RevisionID: base.Revision.ID})
 	if err != nil {
@@ -241,6 +245,7 @@ func TestAnalysisProofEventValueRequiresExactContextualRoute(t *testing.T) {
 	}
 }
 func TestAnalysisProofIntentIdentityUsesExistingOrigin(t *testing.T) {
+	t.Parallel()
 	r, base, d := changeFixture(t)
 	id := uuid.NewV7().String()
 	create := changeCommand(t, "create_node", fmt.Sprintf(`"id":%q,"kind":"service","name":"Desired","parentId":null,"attributes":{}`, id))

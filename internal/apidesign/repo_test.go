@@ -3,28 +3,20 @@ package apidesign
 import (
 	"database/sql"
 	"errors"
-	"log/slog"
-	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
 
 	"github.com/yashok111/mocker/internal/config"
 	"github.com/yashok111/mocker/internal/store"
+	"github.com/yashok111/mocker/internal/testkit"
 )
 
 const testDocument = `{"openapi":"3.1.0","info":{"title":"Orders","version":"1"},"paths":{"/orders":{"get":{"operationId":"orders","responses":{"200":{"description":"OK","content":{"application/json":{"example":{"n":9007199254740993},"schema":{"type":"object"}}}}}}}},"x-retained":{"value":true}}`
 
 func testRepo(t *testing.T) (*Repo, *store.DB) {
 	t.Helper()
-	db, err := store.Open(t.Context(), filepath.Join(t.TempDir(), "test.db"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = db.Close() })
-	if err := db.Migrate(t.Context(), slog.Default()); err != nil {
-		t.Fatal(err)
-	}
+	db := testkit.NewDB(t)
 	return NewRepo(db, &config.Config{MaxBody: 1 << 20}), db
 }
 

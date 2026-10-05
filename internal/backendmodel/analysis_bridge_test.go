@@ -14,6 +14,7 @@ import (
 )
 
 func TestFrozenPreviewSurvivesLaterApplyAndLedgerGrowth(t *testing.T) {
+	t.Parallel()
 	r, base, d := changeFixture(t)
 	id := uuid.NewV7().String()
 	c := changeCommand(t, "create_node", fmt.Sprintf(`"id":%q,"kind":"service","name":"Desired","parentId":null,"attributes":{}`, id))
@@ -65,6 +66,7 @@ func TestFrozenPreviewSurvivesLaterApplyAndLedgerGrowth(t *testing.T) {
 }
 
 func TestFrozenPreviewRetainsNewArtifactAndTestOwnerAfterAdvancement(t *testing.T) {
+	t.Parallel()
 	service, old, ids, scenario := artifactServiceFixture(t)
 	base, _ := upgradeEventsArtifactFixture(t, service, old)
 	r := service.repo
@@ -187,6 +189,7 @@ func roundTripAnalysisFrozen(t *testing.T, frozen *FrozenChangePreview) *FrozenC
 }
 
 func TestAnalysisLeaseOrdinaryPreviewAndApplyRejectUnadmittedInputs(t *testing.T) {
+	t.Parallel()
 	r, base, first := changeFixture(t)
 	same, err := r.CreateChangeProposal(t.Context(), base.Project.ID, CreateChangeProposalInput{Name: "Other draft", BaseRevisionID: base.Revision.ID, IdempotencyKey: "lease-other-draft"})
 	if err != nil {
@@ -253,6 +256,7 @@ func assertAnalysisLeaseDenied(t *testing.T, err error) {
 }
 
 func TestAnalysisLeaseOrdinaryPreparationRejectsBeforeIdentityDecode(t *testing.T) {
+	t.Parallel()
 	r, base, d := changeFixture(t)
 	f, err := r.AnalysisPairInputFootprint(t.Context(), base.Project.ID, base.Revision.ID, BackendReadTarget{RevisionID: base.Revision.ID}, nil)
 	if err != nil {
@@ -276,6 +280,7 @@ func TestAnalysisLeaseOrdinaryPreparationRejectsBeforeIdentityDecode(t *testing.
 }
 
 func TestAnalysisLeaseOrdinaryPreparationRejectsBeforeOtherGraphDecode(t *testing.T) {
+	t.Parallel()
 	r, base, _ := changeFixture(t)
 	in := source6Input(t, &base.Project)
 	in.IdempotencyKey = "poison-other-base"
@@ -324,6 +329,7 @@ func TestAnalysisLeaseCannotBorrowOversizedPreparation(t *testing.T) {
 }
 
 func TestAnalysisLeaseAdmittedFreezeRemainsExactAndReceiptsRemainFirst(t *testing.T) {
+	t.Parallel()
 	r, base, d := changeFixture(t)
 	other, err := r.CreateChangeProposal(t.Context(), base.Project.ID, CreateChangeProposalInput{Name: "Not admitted", BaseRevisionID: base.Revision.ID, IdempotencyKey: "freeze-other"})
 	if err != nil {

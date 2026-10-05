@@ -6,6 +6,7 @@ import (
 )
 
 func TestSource6MigrationAddsNamespaceAndPreservesOld(t *testing.T) {
+	t.Parallel()
 	r, _ := testRepo(t)
 	p := createProject(t, r, "migration")
 	a, base := commitSource6Fixture(t, r, p, source6Input(t, p))

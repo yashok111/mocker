@@ -7,6 +7,7 @@ import (
 )
 
 func TestSource6WholeCompositionCarriesV2ArtifactContext(t *testing.T) {
+	t.Parallel()
 	service, source, ids, scenario := artifactServiceFixture(t)
 	pinned, _ := applyArtifactTest(t, service, source.Project.ID, scenarioSet(source, ids, scenario), "pin-v2")
 	in := eventsProfileInput(lineageOrdersInput(t, &pinned.Project), true)

@@ -31,9 +31,10 @@ func TestBackendB43SDKClosedArmsAndList(t *testing.T) {
 
 func TestBackendB43SDKLifecycleRawInt64(t *testing.T) {
 	id := backendTestID
-	for _, version := range []string{"9007199254740993", "9223372036854775807"} {
-		for _, action := range []string{"implemented", "archive", "unarchive"} {
-			raw := `{"projectId":"` + id + `","proposalId":"` + id + `","expectedVersion":` + version + `,"proposalRevisionId":"` + id + `","action":"` + action + `","idempotencyKey":"key"`
+	for _, action := range []string{"implemented", "archive", "unarchive"} {
+		var raw string
+		for _, version := range []string{"9007199254740993", "9223372036854775807"} {
+			raw = `{"projectId":"` + id + `","proposalId":"` + id + `","expectedVersion":` + version + `,"proposalRevisionId":"` + id + `","action":"` + action + `","idempotencyKey":"key"`
 			if action == "implemented" {
 				raw += `,"report":{"jobId":"` + id + `","resultVersion":` + version + `,"inputHash":"` + strings.Repeat("a", 64) + `","resultHash":"` + strings.Repeat("b", 64) + `"},"resultRevisionId":"` + id + `","exceptions":[]`
 			}
@@ -43,20 +44,23 @@ func TestBackendB43SDKLifecycleRawInt64(t *testing.T) {
 			if msg != "" || !strings.Contains(string(calls.sent), `"expectedVersion":`+version) {
 				t.Fatal(msg, string(calls.sent))
 			}
-			for _, badVersion := range []string{"1.0", "1e0", "9223372036854775808", "null"} {
-				bad := strings.Replace(raw, `"expectedVersion":`+version, `"expectedVersion":`+badVersion, 1)
-				calls := &recordingCaller{status: 200}
-				_, msg := callTool(t, calls, "apply_backend_change_proposal_lifecycle", bad)
-				if msg == "" || calls.method != "" {
-					t.Fatal("accepted", bad)
-				}
+		}
+		// Replacing expectedVersion erases its original value. Exercise each
+		// invalid token once per action, not once per valid boundary value.
+		const version = "9223372036854775807"
+		for _, badVersion := range []string{"1.0", "1e0", "9223372036854775808", "null"} {
+			bad := strings.Replace(raw, `"expectedVersion":`+version, `"expectedVersion":`+badVersion, 1)
+			calls := &recordingCaller{status: 200}
+			_, msg := callTool(t, calls, "apply_backend_change_proposal_lifecycle", bad)
+			if msg == "" || calls.method != "" {
+				t.Fatal("accepted", bad)
 			}
-			for _, bad := range []string{strings.Replace(raw, `"action":"`+action+`"`, `"action":"`+action+`","acknowledgedGapIds":[]`, 1), strings.Replace(raw, `"expectedVersion":`+version, `"expectedVersion":`+version+`,"expectedVersion":1`, 1)} {
-				calls := &recordingCaller{status: 200}
-				_, msg := callTool(t, calls, "apply_backend_change_proposal_lifecycle", bad)
-				if msg == "" || calls.method != "" {
-					t.Fatal("accepted", bad)
-				}
+		}
+		for _, bad := range []string{strings.Replace(raw, `"action":"`+action+`"`, `"action":"`+action+`","acknowledgedGapIds":[]`, 1), strings.Replace(raw, `"expectedVersion":`+version, `"expectedVersion":`+version+`,"expectedVersion":1`, 1)} {
+			calls := &recordingCaller{status: 200}
+			_, msg := callTool(t, calls, "apply_backend_change_proposal_lifecycle", bad)
+			if msg == "" || calls.method != "" {
+				t.Fatal("accepted", bad)
 			}
 		}
 	}

@@ -47,6 +47,7 @@ func TestSource6ExactEventClaimContexts(t *testing.T) {
 }
 
 func TestSource6MissingSelectedCurrentnessIsUnsafe(t *testing.T) {
+	t.Parallel()
 	f := sourceReviewSharedValue(t, "column", "borrow")
 	graph, err := f.repo.ResolveSourceGraph(t.Context(), f.project.ID, f.project.CurrentRevisionID)
 	if err != nil {

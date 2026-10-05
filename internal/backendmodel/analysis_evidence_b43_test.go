@@ -6,6 +6,7 @@ import (
 )
 
 func TestB43EvidenceUnionAndPinAdmission(t *testing.T) {
+	t.Parallel()
 	r, base, d := changeFixture(t)
 	target := BackendReadTarget{ChangeProposal: &ProposalReadTarget{ProposalID: d.Proposal.ID, ProposalRevisionID: d.Revision.ID}}
 	rid, err := r.AnalysisProposalBaseRevision(t.Context(), base.Project.ID, *target.ChangeProposal)

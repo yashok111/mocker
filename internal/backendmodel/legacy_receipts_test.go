@@ -114,6 +114,7 @@ func TestLegacyImportSessionReceiptsPreserveWireShape(t *testing.T) {
 	}
 }
 func TestLegacyProjectAndCommitReceiptsKeepOriginalCapabilities(t *testing.T) {
+	t.Parallel()
 	r, _ := testRepo(t)
 	p := createProject(t, r, "project")
 	begin := firstImportFixture(p)

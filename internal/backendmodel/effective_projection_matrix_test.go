@@ -35,6 +35,7 @@ func effectiveRepresentationFixture(t *testing.T) (*Repo, *ImportCommitResult, m
 	return r, base, ids
 }
 func TestEffectiveLineageIntentCallbackAndExactPins(t *testing.T) {
+	t.Parallel()
 	r, base, ids := effectiveRepresentationFixture(t)
 	draft, err := r.CreateChangeProposal(t.Context(), base.Project.ID, CreateChangeProposalInput{Name: "Desired mapping", BaseRevisionID: base.Revision.ID, IdempotencyKey: "desired"})
 	if err != nil {
@@ -62,6 +63,7 @@ func TestEffectiveLineageIntentCallbackAndExactPins(t *testing.T) {
 }
 
 func TestEffectiveProjectionPinsAndPropertyOriginsMatrix(t *testing.T) {
+	t.Parallel()
 	r, base, ids := effectiveRepresentationFixture(t)
 	draft, err := r.CreateChangeProposal(t.Context(), base.Project.ID, CreateChangeProposalInput{Name: "Desired nullable", BaseRevisionID: base.Revision.ID, IdempotencyKey: "matrix"})
 	if err != nil {
@@ -151,6 +153,7 @@ func TestEffectiveProjectionPinsAndPropertyOriginsMatrix(t *testing.T) {
 }
 
 func TestEffectiveFullSource5Structural6KeepsLegacyProofAndArtifactPins(t *testing.T) {
+	t.Parallel()
 	service, old, ids, scenario := artifactServiceFixture(t)
 	base, _ := upgradeEventsArtifactFixture(t, service, old)
 	draft, err := service.repo.CreateChangeProposal(t.Context(), base.Project.ID, CreateChangeProposalInput{Name: "Source5 full6", BaseRevisionID: base.Revision.ID, IdempotencyKey: "source5-full"})

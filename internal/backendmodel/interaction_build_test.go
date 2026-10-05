@@ -82,6 +82,7 @@ func TestInteractionsBuildControlOrder(t *testing.T) {
 }
 
 func TestInteractionsBuildCandidateReadPurity(t *testing.T) {
+	t.Parallel()
 	r, db := testRepo(t)
 	project := createProject(t, r, "builder-purity")
 	s := runtimeQueryFixture(t)
@@ -109,6 +110,7 @@ func TestInteractionsBuildCandidateReadPurity(t *testing.T) {
 }
 
 func TestInteractionsFrontierSurvivesSave(t *testing.T) {
+	t.Parallel()
 	r, _ := testRepo(t)
 	project := createProject(t, r, "frontier-persistence")
 	s := runtimeQueryFixture(t)
