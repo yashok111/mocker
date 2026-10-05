@@ -6,8 +6,8 @@ metadata:
   workflowVersion: "2"
   requiredModelSchemaVersions: "[]"
   requiredCapabilities: "[]"
-  guideSetId: "sha256:97e79de75fb95af18f6e7fd9d6e1593feac23382e8b828c42a22c783b5ad563b"
-  manifestHash: "sha256:97e79de75fb95af18f6e7fd9d6e1593feac23382e8b828c42a22c783b5ad563b"
+  guideSetId: "sha256:bb35d120a8bd525039096a0fddb9efd25d22beaf5c750aaa89df51fa11abeb91"
+  manifestHash: "sha256:bb35d120a8bd525039096a0fddb9efd25d22beaf5c750aaa89df51fa11abeb91"
 ---
 
 # mocker
@@ -19,7 +19,7 @@ foundation or PostgreSQL/SQLite relational source-facet import, explicit
 same-provider snapshot reconciliation and pinned database/ER, structural
 comparison and evidence reads. Typed NULL/NOT NULL and FK proposals use separate pinned preview/apply and unverified criteria;
 source schema3 adds pinned endpoint flows and imported scoped data accesses;
-source4 adds explicit field lineage and manual exact API associations through inspect8;
+source4 adds explicit field lineage and manual exact API associations through inspect9;
 source5 adds evidence-backed event routes/jobs/service calls and contextual fields; source6 incremental synchronization uses sync2; static diff/impact uses durable pinned jobs with runtime unverified. For mocks, one OpenAPI
 spec is imported once; every WORKSPACE
 bound to it serves the spec's routes on its own host with deterministic
@@ -28,7 +28,7 @@ remember. The agent talks to it through MCP (`POST /mcp`, bearer key) — the
 same admin API the human panel uses, one tool per verb — spec import included
 (`import_spec`, JSON or YAML) since A8.
 
-Source6 supports explicit multi-provider source synchronization through sync2. Full desired graph changes use change3; annotations use project2. Read the selected owner's exact contract before any write.
+Source6 supports explicit multi-provider source synchronization through sync2. Full desired graph changes use change4; annotations use project2. Read the selected owner's exact contract before any write.
 
 ## Mental model
 
@@ -73,17 +73,17 @@ Route the task before listing or changing resources. Keep ordinary mock workspac
 | Task | Select the complete pinned owner |
 | --- | --- |
 | Create/rename a backend project; source-object annotations | project2 / backend-overview, then backend-annotations |
-| Existing source1–5 import, adjacent profile transition or revision comparison | import7 / backend-import |
+| Existing source1–5 import, adjacent profile transition or revision comparison | import8 / backend-import |
 | Composed source6 addition/reconcile/provider migration or authorized incremental sync | sync2 / backend-sync |
-| Exact graph/proof/Flow/lineage/events/artifact inspection | inspect8 / backend-inspect |
+| Exact graph/proof/Flow/lineage/events/artifact inspection | inspect9 / backend-inspect |
 | Relational source/full inspection or existing typed relational proposals | database7 / backend-database |
-| Full desired graph proposal, qualified intended keys, history/restore | change3 / backend-change-proposals |
-| Three-way rebase, durable diff/impact, exact impact report to ready | change3 / backend-change-rebase, backend-analysis-jobs |
-| Saved Flow/Database presentation | inspect8/database7 with the matching v1/v2 view contract |
+| Full desired graph proposal, qualified intended keys, history/restore | change4 / backend-change-proposals |
+| Three-way rebase, durable diff/impact, exact impact report to ready | change4 / backend-change-rebase, backend-analysis-jobs |
+| Saved Flow/Database presentation | inspect9/database7 with the matching v1/v2 view contract |
 
 Prefer the installed independent leaf; root-only clients use its generated compatibility reference or get_guide entrypoint. Verify actual advertised workflowId/version/set/manifest/topic hashes and all requirements. On local mismatch use the complete compatible server procedure in the same selected immutable set. Unknown guide sets fail; tool presence alone is insufficient. Every shared topic keeps its canonical owner. No compatible procedure means supported reads only.
 
-Inspection starts no source/metadata/proposal mutation. A requested source correction chooses import7 for its legacy source scope or sync2 for composed source scope, retaining capture/proof/audit rules. A human annotation is metadata; a full proposal is intent; neither repairs source evidence. READY staging has exact basic reads and cannot be used for specialized queries or saved presentations. Select change3/backend-analysis-jobs for durable diff/impact and exact report-to-ready; change3/backend-change-rebase for explicit three-way rebase. Imported code, SQL and jobs never execute.
+Inspection starts no source/metadata/proposal mutation. A requested source correction chooses import8 for its legacy source scope or sync2 for composed source scope, retaining capture/proof/audit rules. A human annotation is metadata; a full proposal is intent; neither repairs source evidence. READY staging has exact basic reads and cannot be used for specialized queries or saved presentations. Select change4/backend-analysis-jobs for durable diff/impact and exact report-to-ready; change4/backend-change-rebase for explicit three-way rebase. Imported code, SQL and jobs never execute.
 
 ## Mock workspace workflow
 
@@ -151,24 +151,24 @@ fresh runId and the returned revisionId/name/variables, then verify the actual
 controlFlow and refresh coverage. Generation is read-only; unresolved paths
 include reasons. See `references/design.md` for the workflow and limits.
 
-Saved Flow/Database presentation tasks select inspect8/database7 respectively,
+Saved Flow/Database presentation tasks select inspect9/database7 respectively,
 requiring backend-saved-views and saved-view-v1 in that same pinned set. Read the
 saved version before model reads, preserve exact targets and both URL viewId/
 viewVersion, and use the owner's complete saved-view example. Create/save are
 explicit presentation writes with retained exact keys/requests and old-version
 CAS. Failed saved reads have no head fallback. Proposal intent/unknown runtime
 checks stay explicit; layouts/collapse infer no source behavior or field lineage.
-Source import continues to select import7. Live agent acceptance remains deferred.
+Source import continues to select import8. Live agent acceptance remains deferred.
 
-For authored sequence/state/rule/EventModel projections select inspect8 with
+For authored sequence/state/rule/EventModel projections select inspect9 with
 backend-editor-projections and backend-editor-artifacts-v1; load
 `backend-editor-projections` before reads or authorized generic pin changes.
 Keep authored completeness, origin verification, source evidence and runtime
 completeness separate; saved copy content remains independent.
 
-Source5 event/job/service-call questions select inspect8 with backend-events-query
-and load backend-events from its verified owner in this set. Import7 owns
+Source5 event/job/service-call questions select inspect9 with backend-events-query
+and load backend-events from its verified owner in this set. Import8 owns
 events-service-v1/schema5, exact five-profile initial imports and explicit4→5
-extension. Database7 delegates column→event-field navigation to inspect8.
+extension. Database7 delegates column→event-field navigation to inspect9.
 Keep exact route/full field context, explicit transport, unknown boundaries and
 static source provenance; no scheduling or runtime delivery is inferred.

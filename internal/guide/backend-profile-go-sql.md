@@ -2,7 +2,7 @@
 
 
 Load `backend-profile-go-sql` only for this source family, pinned to the selected
-import v7 owner identity/global guideSetId. Read database-reference through its
+import v8 owner identity/global guideSetId. Read database-reference through its
 supported database v7 owner in that same verified set for exact relational types.
 
 Inventory source files before collecting assertions. Read Go declarations,
@@ -91,18 +91,18 @@ endpoint access or impact safety.
 
 Runtime source3 adds imported net/http handlers, flow steps, call candidates,
 query definitions and explicit table/column accesses. Read backend-flow-reference
-and backend-analysis under inspect8 in this same set for exact shapes and limits.
+and backend-analysis under inspect9 in this same set for exact shapes and limits.
 Capture Go/query text as original source bytes and physical spans; do not launch
 the service, package scripts, SQL or migrations. Dynamic dispatch gets candidate
 proof plus an unresolved remainder when scope is partial/unknown. A table-level
 unknown-column operation stays possible for a selected column, never a confirmed
 reader/writer of every column. Preserve local begin/commit/rollback source edges,
 unknown connection/isolation and boundaries without claiming all-path atomicity.
-The ordinary import7 source audit/reconcile/replay rules apply unchanged.
+The ordinary import8 source audit/reconcile/replay rules apply unchanged.
 
 ## Source5 event extraction
 
-Use import7 for events-service-v1/schema5 and its explicit adjacent4→5 profile
+Use import8 for events-service-v1/schema5 and its explicit adjacent4→5 profile
 extension; all inherited relational/runtime/lineage audit requirements remain.
 Capture explicit broker registration/emission and job/service-call declarations
 as inert source with analyzed member hash/physical lines. Keep native configured
@@ -111,4 +111,4 @@ heuristic creates a consumer or operation. Preserve local transaction/control
 proof without claiming broker/database atomicity. Explicit serialization,
 transport edge pairs and deserialization supply contextual message fields;
 matching schemas never supply transport. For read/navigation and gap outcomes
-select inspect8/backend-events in this same immutable set.
+select inspect9/backend-events in this same immutable set.

@@ -96,9 +96,9 @@ func TestCrossOwnerRelationalGuideSDKUsesAdvertisedPinnedSet(t *testing.T) {
 	}{
 		{topic: "backend-database", owner: "mocker-backend-database", version: "7"},
 		{topic: "backend-database-reference", owner: "mocker-backend-database", version: "7"},
-		{topic: "backend-model", owner: "mocker-backend-import", version: "7"},
-		{topic: "backend-recovery", owner: "mocker-backend-import", version: "7"},
-		{topic: "backend-profile-go-sql", owner: "mocker-backend-import", version: "7"},
+		{topic: "backend-model", owner: "mocker-backend-import", version: "8"},
+		{topic: "backend-recovery", owner: "mocker-backend-import", version: "8"},
+		{topic: "backend-profile-go-sql", owner: "mocker-backend-import", version: "8"},
 	} {
 		t.Run(item.topic, func(t *testing.T) {
 			ownerIndex := slices.IndexFunc(capabilities.WorkflowVersions, func(w guide.Workflow) bool { return w.WorkflowID == item.owner })

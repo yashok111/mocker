@@ -37,7 +37,7 @@ func TestStandaloneImportReferencesThroughPinnedMCP(t *testing.T) {
 			t.Fatal(message)
 		}
 		wantHash := fmt.Sprintf("sha256:%x", sha256.Sum256([]byte(out.Markdown)))
-		if out.WorkflowID != "mocker-backend-import" || out.WorkflowVersion != "7" || out.GuideSetID != guide.CurrentGuideSetID() || out.ManifestHash != guide.CurrentGuideSetID() || out.ContentHash != wantHash {
+		if out.WorkflowID != "mocker-backend-import" || out.WorkflowVersion != "8" || out.GuideSetID != guide.CurrentGuideSetID() || out.ManifestHash != guide.CurrentGuideSetID() || out.ContentHash != wantHash {
 			t.Fatalf("pinned topic %s: %#v", topic, out)
 		}
 	}
@@ -158,6 +158,9 @@ func TestGuideRequiredCapabilitiesHaveMCPTools(t *testing.T) {
 		"backend-endpoint-review":         {"start_backend_analysis", "get_backend_analysis_results"},
 		"backend-change-implemented":      {"apply_backend_change_proposal_lifecycle"},
 		"backend-change-archive":          {"apply_backend_change_proposal_lifecycle"},
+		"backend-diagrams":                {"create_backend_diagram", "save_backend_diagram", "fork_backend_diagram", "list_backend_diagrams", "get_backend_diagram", "query_backend_diagram", "compare_backend_diagrams"},
+		"backend-architecture":            {"query_backend_diagram", "compare_backend_diagrams"},
+		"backend-diagram-views":           {"create_backend_diagram_view", "save_backend_diagram_view", "list_backend_diagram_views", "get_backend_diagram_view"},
 		"backend-change-unarchive":        {"apply_backend_change_proposal_lifecycle"},
 	}
 	if !inventory["get_backend_capabilities"] {
@@ -189,7 +192,7 @@ func TestObsoleteImportGuideSetDoesNotSubstituteV4(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if out.WorkflowVersion != "7" || out.WorkflowID != "mocker-backend-import" || out.GuideSetID != guide.CurrentGuideSetID() {
+	if out.WorkflowVersion != "8" || out.WorkflowID != "mocker-backend-import" || out.GuideSetID != guide.CurrentGuideSetID() {
 		t.Fatalf("current import guide identity: %#v", out)
 	}
 }

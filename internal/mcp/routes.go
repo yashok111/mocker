@@ -76,6 +76,17 @@ var toolRoutes = map[string][]string{
 	"preview_backend_api_pins":                 {"POST /api/backend-projects/{id}/api-artifacts/preview"},
 	"apply_backend_api_pins":                   {"POST /api/backend-projects/{id}/api-artifacts/commands"},
 	"get_api_artifact_snapshot":                {"GET /api/designs/{id}/revisions/{rid}/artifact-snapshot"},
+	"create_backend_diagram":                   {"POST /api/backend-projects/{id}/diagrams"},
+	"save_backend_diagram":                     {"POST /api/backend-projects/{id}/diagrams/{did}/save"},
+	"fork_backend_diagram":                     {"POST /api/backend-projects/{id}/diagrams/fork"},
+	"list_backend_diagrams":                    {"GET /api/backend-projects/{id}/diagrams"},
+	"get_backend_diagram":                      {"GET /api/backend-projects/{id}/diagrams/{did}/versions/{v}"},
+	"query_backend_diagram":                    {"POST /api/backend-projects/{id}/diagrams/query"},
+	"compare_backend_diagrams":                 {"POST /api/backend-projects/{id}/diagrams/compare"},
+	"create_backend_diagram_view":              {"POST /api/backend-projects/{id}/diagram-views"},
+	"save_backend_diagram_view":                {"POST /api/backend-projects/{id}/diagram-views/{vid}/save"},
+	"list_backend_diagram_views":               {"GET /api/backend-projects/{id}/diagram-views"},
+	"get_backend_diagram_view":                 {"GET /api/backend-projects/{id}/diagram-views/{vid}/versions/{v}"},
 	"list_backend_saved_views":                 {"GET /api/backend-projects/{id}/saved-views"},
 	"create_backend_saved_view":                {"POST /api/backend-projects/{id}/saved-views"},
 	"get_backend_saved_view":                   {"GET /api/backend-projects/{id}/saved-views/{vid}"},
@@ -362,7 +373,7 @@ var toolRoutes = map[string][]string{
 // production.
 // B1.2 adds five isolated database proposal operations. B24 adds four exact
 // API artifact snapshot/query/preview/apply operations.
-const toolCount = 212
+const toolCount = 223
 
 // toolPath resolves ONE call a tool makes into the (method, path) pair
 // loopback.do/call take.

@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"slices"
 	"strconv"
+	"strings"
 
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/santhosh-tekuri/jsonschema/v6"
@@ -117,7 +118,7 @@ func addBackendImportTool(s *sdk.Server, lb *loopback, tool *sdk.Tool, route str
 			return backendAdmissionFault(selectErr), nil
 		}
 		var params []any
-		for _, key := range []string{"projectId", "importId", "proposalId", "jobId", "viewId", "revisionId", "nodeId", "batchId"} {
+		for _, key := range []string{"projectId", "importId", "proposalId", "jobId", "viewId", "diagramId", "revisionId", "nodeId", "batchId"} {
 			raw, ok := in[key]
 			if !ok {
 				continue
@@ -147,12 +148,17 @@ func addBackendImportTool(s *sdk.Server, lb *loopback, tool *sdk.Tool, route str
 			}
 			delete(in, key)
 		}
+		var pathErr error
+		params, pathErr = backendDiagramVersionParam(selectedRoute, in, params)
+		if pathErr != nil {
+			return designScenarioToolErrorResult(pathErr), nil
+		}
 		method, path := toolPath(tool.Name, selectedRoute, params...)
 		var body []byte
 		var err error
 		if method == "GET" {
 			q := url.Values{}
-			for _, key := range []string{"limit", "cursor", "subjectId", "evidenceId", "previewVersion", "recordType", "baseRevisionId", "status", "proposalRevisionId", "kind", "version", "importVersion", "candidateHash", "id", "repositoryId", "providerNamespace", "resultVersion", "section", "service", "certainty", "direction", "depth"} {
+			for _, key := range []string{"hash", "limit", "cursor", "subjectId", "evidenceId", "previewVersion", "recordType", "baseRevisionId", "status", "proposalRevisionId", "kind", "version", "importVersion", "candidateHash", "id", "repositoryId", "providerNamespace", "resultVersion", "section", "service", "certainty", "direction", "depth"} {
 				if raw, ok := in[key]; ok {
 					if slices.Contains([]string{"limit", "previewVersion", "version", "importVersion", "resultVersion", "depth"}, key) {
 						var value int64
@@ -235,4 +241,19 @@ func backendToolPathSchema(schema map[string]any, ids []string) {
 		required = append(required, id)
 	}
 	schema["required"] = required
+}
+
+func backendDiagramVersionParam(route string, in map[string]jsonx.RawMessage, params []any) ([]any, error) {
+	if !strings.Contains(route, "{v}") {
+		return params, nil
+	}
+	var version int64
+	if err := json.Unmarshal(in["version"], &version); err != nil {
+		return nil, err
+	}
+	if version <= 0 {
+		return nil, fmt.Errorf("exact positive int64 version required")
+	}
+	delete(in, "version")
+	return append(params, strconv.FormatInt(version, 10)), nil
 }

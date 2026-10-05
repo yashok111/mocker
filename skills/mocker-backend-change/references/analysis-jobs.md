@@ -1,6 +1,6 @@
 # Durable static diff and impact jobs
 
-This topic belongs to change3. Verify its exact guideSetId/manifestHash/contentHash and all advertised owner requirements. `backend-analysis` remains inspect8's source inspection procedure; shared recovery remains import7-owned. Check capabilities.analysisSupport for supported kinds, targets, observation modes, document/rule/traversal versions before starting. Analysis reads stored graphs, claims, proof and pinned artifact documents. It never executes imported code, SQL, jobs, scripts or a broker.
+This topic belongs to change4. Verify its exact guideSetId/manifestHash/contentHash and all advertised owner requirements. `backend-analysis` remains inspect9's source inspection procedure; shared recovery remains import8-owned. Check capabilities.analysisSupport for supported kinds, targets, observation modes, document/rule/traversal versions before starting. Analysis reads stored graphs, claims, proof and pinned artifact documents. It never executes imported code, SQL, jobs, scripts or a broker.
 
 ## Start from immutable input
 
@@ -46,8 +46,8 @@ Persist before sending `apply_backend_change_proposal_lifecycle`:
  acknowledgedGapIds:[every exact manifest gap ID],idempotencyKey}
 ```
 
-Use the complete sorted unique gap set; unknown, duplicate or missing IDs reject. Never submit a client pass/runtime flag. Readiness increments aggregate version and records the exact report association without changing draft ID/hash. New-key ready while already ready is409; original exact key replays. Normal Apply/Restore/Rebase resets current status to draft and clears current association; history/report/receipts remain unchanged after restart. Implemented/archive/unarchive use change3/backend-change-handoff. Live runtime collection remains unsupported.
+Use the complete sorted unique gap set; unknown, duplicate or missing IDs reject. Never submit a client pass/runtime flag. Readiness increments aggregate version and records the exact report association without changing draft ID/hash. New-key ready while already ready is409; original exact key replays. Normal Apply/Restore/Rebase resets current status to draft and clears current association; history/report/receipts remain unchanged after restart. Implemented/archive/unarchive use change4/backend-change-handoff. Live runtime collection remains unsupported.
 
 Executable developer examples live in `internal/mcp/tools_backend_b42_examples_test.go` and use real SDK/admin operations with inert source data. They are not ordinary or live-agent acceptance evidence.
 
-New package/conformance/endpoint_review jobs use closed context-v2 payloads and b43-rules/v1; legacy diff/impact retains context-v1. Read backend-change-handoff and backend-endpoint-review under change3 for exact start fields. The five physical result sections and explicit immutable resultVersion paging remain shared.
+New package/conformance/endpoint_review jobs use closed context-v2 payloads and b43-rules/v1; legacy diff/impact retains context-v1. Read backend-change-handoff and backend-endpoint-review under change4 for exact start fields. The five physical result sections and explicit immutable resultVersion paging remain shared.

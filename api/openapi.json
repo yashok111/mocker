@@ -13763,7 +13763,8 @@
           "syncPolicies",
           "changeProposalCommands",
           "readTargetSupport",
-          "analysisSupport"
+          "analysisSupport",
+          "diagramSupport"
         ],
         "properties": {
           "modelSchemaVersions": {
@@ -13903,7 +13904,17 @@
               "maxAnalysisFindings",
               "maxAnalysisRecords",
               "maxAnalysisWitnessesPerObject",
-              "recommendedAnalysisPollIntervalMs"
+              "recommendedAnalysisPollIntervalMs",
+              "maxDiagramDocumentBytes",
+              "maxDiagramElements",
+              "maxDiagramLinks",
+              "maxDiagrams",
+              "maxDiagramVersions",
+              "maxDiagramProjectBytes",
+              "maxDiagramViewBytes",
+              "maxDiagramViews",
+              "maxDiagramViewVersions",
+              "maxDiagramViewProjectBytes"
             ],
             "properties": {
               "maxNameLength": {
@@ -14439,6 +14450,46 @@
                 "format": "int64",
                 "minimum": 1,
                 "maximum": 9223372036854775807
+              },
+              "maxDiagramDocumentBytes": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "maxDiagramElements": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "maxDiagramLinks": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "maxDiagrams": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "maxDiagramVersions": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "maxDiagramProjectBytes": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "maxDiagramViewBytes": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "maxDiagramViews": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "maxDiagramViewVersions": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "maxDiagramViewProjectBytes": {
+                "type": "integer",
+                "minimum": 1
               }
             }
           },
@@ -14539,7 +14590,9 @@
                 "backend-editor-artifacts-v1",
                 "proposal-graph-v1",
                 "import-candidate-v1",
-                "saved-view-v2"
+                "saved-view-v2",
+                "backend-diagram-v1",
+                "diagram-view-v1"
               ]
             }
           },
@@ -14810,6 +14863,68 @@
                   ]
                 },
                 "uniqueItems": true
+              }
+            }
+          },
+          "diagramSupport": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "documentVersion",
+              "viewDocumentVersion",
+              "kinds",
+              "targets",
+              "projectionPolicy",
+              "levels"
+            ],
+            "properties": {
+              "documentVersion": {
+                "type": "string",
+                "enum": [
+                  "backend-diagram-v1"
+                ]
+              },
+              "viewDocumentVersion": {
+                "type": "string",
+                "enum": [
+                  "diagram-view-v1"
+                ]
+              },
+              "kinds": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "architecture"
+                  ]
+                }
+              },
+              "targets": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "revisionId",
+                    "changeProposal"
+                  ]
+                }
+              },
+              "projectionPolicy": {
+                "type": "string",
+                "enum": [
+                  "architecture-v1"
+                ]
+              },
+              "levels": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "context",
+                    "containers",
+                    "components"
+                  ]
+                }
               }
             }
           }
@@ -79949,6 +80064,1365 @@
           "proposalRevisionId",
           "idempotencyKey"
         ]
+      },
+      "BackendDiagramPin": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "version": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1,
+            "maximum": 9223372036854775807
+          },
+          "contentHash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          }
+        },
+        "required": [
+          "id",
+          "version",
+          "contentHash"
+        ]
+      },
+      "BackendDiagramTarget": {
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "revisionId": {
+                "type": "string",
+                "format": "uuid"
+              }
+            },
+            "required": [
+              "revisionId"
+            ]
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "changeProposal": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "proposalId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "proposalRevisionId": {
+                    "type": "string",
+                    "format": "uuid"
+                  }
+                },
+                "required": [
+                  "proposalId",
+                  "proposalRevisionId"
+                ]
+              }
+            },
+            "required": [
+              "changeProposal"
+            ]
+          }
+        ]
+      },
+      "BackendDiagramEvidenceRef": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "revisionId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "evidenceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "subjectId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "required": [
+          "revisionId",
+          "evidenceId",
+          "subjectId"
+        ]
+      },
+      "BackendDiagramOrigin": {
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "source_assertion"
+                ]
+              },
+              "evidence": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/BackendDiagramEvidenceRef"
+                },
+                "maxItems": 20,
+                "minItems": 1
+              }
+            },
+            "required": [
+              "kind",
+              "evidence"
+            ]
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "authored"
+                ]
+              },
+              "reason": {
+                "type": "string",
+                "maxLength": 4096,
+                "minLength": 1
+              }
+            },
+            "required": [
+              "kind",
+              "reason"
+            ]
+          }
+        ],
+        "discriminator": {
+          "propertyName": "kind"
+        }
+      },
+      "BackendDiagramRef": {
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "record"
+                ]
+              },
+              "recordType": {
+                "type": "string",
+                "enum": [
+                  "node",
+                  "edge"
+                ]
+              },
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              }
+            },
+            "required": [
+              "kind",
+              "recordType",
+              "id"
+            ]
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "artifact"
+                ]
+              },
+              "locator": {
+                "$ref": "#/components/schemas/ArtifactProjectionLocator"
+              },
+              "rowId": {
+                "type": "string",
+                "maxLength": 4096,
+                "minLength": 1
+              }
+            },
+            "required": [
+              "kind",
+              "locator",
+              "rowId"
+            ]
+          }
+        ],
+        "discriminator": {
+          "propertyName": "kind"
+        }
+      },
+      "BackendArchitectureElement": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "label": {
+            "type": "string",
+            "maxLength": 256,
+            "minLength": 1
+          },
+          "origin": {
+            "$ref": "#/components/schemas/BackendDiagramOrigin"
+          },
+          "refs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendDiagramRef"
+            },
+            "maxItems": 100
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "person",
+              "software_system",
+              "application",
+              "data_store",
+              "component"
+            ]
+          },
+          "parentId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "responsibility": {
+            "type": "string",
+            "maxLength": 4096
+          },
+          "technology": {
+            "type": "string",
+            "maxLength": 4096
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "origin",
+          "refs",
+          "role",
+          "responsibility",
+          "technology"
+        ]
+      },
+      "BackendArchitectureLink": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "label": {
+            "type": "string",
+            "maxLength": 256,
+            "minLength": 1
+          },
+          "origin": {
+            "$ref": "#/components/schemas/BackendDiagramOrigin"
+          },
+          "refs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendDiagramRef"
+            },
+            "maxItems": 100
+          },
+          "from": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "to": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "relation": {
+            "type": "string",
+            "maxLength": 256,
+            "minLength": 1
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "origin",
+          "refs",
+          "from",
+          "to",
+          "relation"
+        ]
+      },
+      "BackendArchitecturePayload": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "elements": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendArchitectureElement"
+            },
+            "maxItems": 1000
+          },
+          "links": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendArchitectureLink"
+            },
+            "maxItems": 3000
+          },
+          "primarySystemId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "required": [
+          "elements",
+          "links",
+          "primarySystemId"
+        ]
+      },
+      "BackendDiagramDocument": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "format": {
+            "type": "string",
+            "enum": [
+              "backend-diagram-v1"
+            ]
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "architecture"
+            ]
+          },
+          "target": {
+            "$ref": "#/components/schemas/BackendDiagramTarget"
+          },
+          "payload": {
+            "$ref": "#/components/schemas/BackendArchitecturePayload"
+          }
+        },
+        "required": [
+          "format",
+          "kind",
+          "target",
+          "payload"
+        ]
+      },
+      "BackendDiagramGap": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "subjectId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "code": {
+            "type": "string"
+          },
+          "explanation": {
+            "type": "string",
+            "maxLength": 4096
+          }
+        },
+        "required": [
+          "id",
+          "subjectId",
+          "code",
+          "explanation"
+        ]
+      },
+      "BackendDiagramProvenanceEvent": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "pin": {
+            "$ref": "#/components/schemas/BackendDiagramPin"
+          },
+          "elementId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "author": {
+            "type": "string"
+          },
+          "at": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "pin",
+          "elementId",
+          "author",
+          "at"
+        ]
+      },
+      "BackendDiagramElementProvenance": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "elementId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "introduced": {
+            "$ref": "#/components/schemas/BackendDiagramProvenanceEvent"
+          },
+          "lastEdited": {
+            "$ref": "#/components/schemas/BackendDiagramProvenanceEvent"
+          },
+          "inheritedFrom": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "pin": {
+                "$ref": "#/components/schemas/BackendDiagramPin"
+              },
+              "elementId": {
+                "type": "string",
+                "format": "uuid"
+              }
+            },
+            "required": [
+              "pin",
+              "elementId"
+            ]
+          }
+        },
+        "required": [
+          "elementId",
+          "introduced",
+          "lastEdited"
+        ]
+      },
+      "BackendDiagramProvenance": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "format": {
+            "type": "string",
+            "enum": [
+              "backend-diagram-provenance-v1"
+            ]
+          },
+          "action": {
+            "type": "string",
+            "enum": [
+              "create",
+              "save",
+              "fork"
+            ]
+          },
+          "previous": {
+            "$ref": "#/components/schemas/BackendDiagramPin"
+          },
+          "fork": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "source": {
+                "$ref": "#/components/schemas/BackendDiagramPin"
+              },
+              "sourceProvenanceHash": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              },
+              "reason": {
+                "type": "string",
+                "maxLength": 4096
+              }
+            },
+            "required": [
+              "source",
+              "sourceProvenanceHash",
+              "reason"
+            ]
+          },
+          "elements": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendDiagramElementProvenance"
+            }
+          }
+        },
+        "required": [
+          "format",
+          "action",
+          "elements"
+        ]
+      },
+      "BackendDiagramVersion": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "pin": {
+            "$ref": "#/components/schemas/BackendDiagramPin"
+          },
+          "projectId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "document": {
+            "$ref": "#/components/schemas/BackendDiagramDocument"
+          },
+          "targetHash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "author": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "gaps": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendDiagramGap"
+            }
+          },
+          "provenance": {
+            "$ref": "#/components/schemas/BackendDiagramProvenance"
+          },
+          "provenanceHash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          }
+        },
+        "required": [
+          "pin",
+          "projectId",
+          "document",
+          "targetHash",
+          "author",
+          "createdAt",
+          "gaps",
+          "provenance",
+          "provenanceHash"
+        ]
+      },
+      "CreateBackendDiagramRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "document": {
+            "$ref": "#/components/schemas/BackendDiagramDocument"
+          },
+          "idempotencyKey": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          }
+        },
+        "required": [
+          "document",
+          "idempotencyKey"
+        ]
+      },
+      "SaveBackendDiagramRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "expectedVersion": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1,
+            "maximum": 9223372036854775807
+          },
+          "document": {
+            "$ref": "#/components/schemas/BackendDiagramDocument"
+          },
+          "idempotencyKey": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          }
+        },
+        "required": [
+          "expectedVersion",
+          "document",
+          "idempotencyKey"
+        ]
+      },
+      "ForkBackendDiagramRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "source": {
+            "$ref": "#/components/schemas/BackendDiagramPin"
+          },
+          "target": {
+            "$ref": "#/components/schemas/BackendDiagramTarget"
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 4096,
+            "minLength": 1
+          },
+          "idempotencyKey": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          }
+        },
+        "required": [
+          "source",
+          "target",
+          "reason",
+          "idempotencyKey"
+        ]
+      },
+      "QueryBackendDiagramRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "pin": {
+            "$ref": "#/components/schemas/BackendDiagramPin"
+          },
+          "level": {
+            "type": "string",
+            "enum": [
+              "context",
+              "containers",
+              "components"
+            ]
+          },
+          "rootId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "search": {
+            "type": "string",
+            "maxLength": 4096
+          },
+          "origin": {
+            "type": "string",
+            "enum": [
+              "all",
+              "source_assertion",
+              "authored"
+            ]
+          },
+          "section": {
+            "type": "string",
+            "enum": [
+              "elements",
+              "links",
+              "members",
+              "gaps"
+            ]
+          },
+          "subjectId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 500
+          },
+          "cursor": {
+            "type": "string",
+            "maxLength": 4096
+          }
+        },
+        "required": [
+          "pin",
+          "level",
+          "rootId",
+          "search",
+          "origin",
+          "section",
+          "limit"
+        ]
+      },
+      "BackendDiagramMember": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "ref": {
+            "$ref": "#/components/schemas/BackendDiagramRef"
+          },
+          "origin": {
+            "$ref": "#/components/schemas/BackendDiagramProjectedOrigin"
+          },
+          "targetHash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          }
+        },
+        "required": [
+          "ref",
+          "origin",
+          "targetHash"
+        ]
+      },
+      "BackendDiagramRowArchitectureElement": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "rowType": {
+            "type": "string",
+            "enum": [
+              "architecture_element"
+            ]
+          },
+          "data": {
+            "$ref": "#/components/schemas/BackendArchitectureElement"
+          }
+        },
+        "required": [
+          "rowType",
+          "data"
+        ]
+      },
+      "BackendDiagramRowArchitectureLink": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "rowType": {
+            "type": "string",
+            "enum": [
+              "architecture_link"
+            ]
+          },
+          "data": {
+            "$ref": "#/components/schemas/BackendArchitectureProjectedLink"
+          }
+        },
+        "required": [
+          "rowType",
+          "data"
+        ]
+      },
+      "BackendDiagramRowMember": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "rowType": {
+            "type": "string",
+            "enum": [
+              "member"
+            ]
+          },
+          "data": {
+            "$ref": "#/components/schemas/BackendDiagramMember"
+          }
+        },
+        "required": [
+          "rowType",
+          "data"
+        ]
+      },
+      "BackendDiagramRowGap": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "rowType": {
+            "type": "string",
+            "enum": [
+              "gap"
+            ]
+          },
+          "data": {
+            "$ref": "#/components/schemas/BackendDiagramGap"
+          }
+        },
+        "required": [
+          "rowType",
+          "data"
+        ]
+      },
+      "BackendDiagramRow": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/BackendDiagramRowArchitectureElement"
+          },
+          {
+            "$ref": "#/components/schemas/BackendDiagramRowArchitectureLink"
+          },
+          {
+            "$ref": "#/components/schemas/BackendDiagramRowMember"
+          },
+          {
+            "$ref": "#/components/schemas/BackendDiagramRowGap"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "rowType"
+        }
+      },
+      "BackendArchitectureProjection": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "policy": {
+            "type": "string",
+            "enum": [
+              "architecture-v1"
+            ]
+          },
+          "level": {
+            "type": "string",
+            "enum": [
+              "context",
+              "containers",
+              "components"
+            ]
+          },
+          "rootId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "required": [
+          "policy",
+          "level",
+          "rootId"
+        ]
+      },
+      "BackendDiagramPage": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "projection": {
+            "$ref": "#/components/schemas/BackendArchitectureProjection"
+          },
+          "pin": {
+            "$ref": "#/components/schemas/BackendDiagramPin"
+          },
+          "targetHash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "total": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "nextCursor": {
+            "type": "string"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendDiagramRow"
+            }
+          },
+          "gaps": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendDiagramGap"
+            }
+          },
+          "truncated": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "projection",
+          "pin",
+          "targetHash",
+          "total",
+          "nextCursor",
+          "items",
+          "gaps",
+          "truncated"
+        ]
+      },
+      "CompareBackendDiagramsRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "before": {
+            "$ref": "#/components/schemas/BackendDiagramPin"
+          },
+          "after": {
+            "$ref": "#/components/schemas/BackendDiagramPin"
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 500
+          },
+          "cursor": {
+            "type": "string",
+            "maxLength": 4096
+          }
+        },
+        "required": [
+          "before",
+          "after",
+          "limit"
+        ]
+      },
+      "BackendDiagramComparison": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "before": {
+            "$ref": "#/components/schemas/BackendDiagramPin"
+          },
+          "after": {
+            "$ref": "#/components/schemas/BackendDiagramPin"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "kind": {
+                  "type": "string",
+                  "enum": [
+                    "added",
+                    "removed",
+                    "changed"
+                  ]
+                },
+                "fields": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "required": [
+                "id",
+                "kind",
+                "fields"
+              ]
+            }
+          },
+          "nextCursor": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "before",
+          "after",
+          "items",
+          "nextCursor"
+        ]
+      },
+      "BackendDiagramViewState": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "diagram": {
+            "$ref": "#/components/schemas/BackendDiagramPin"
+          },
+          "level": {
+            "type": "string",
+            "enum": [
+              "context",
+              "containers",
+              "components"
+            ]
+          },
+          "rootId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "search": {
+            "type": "string",
+            "maxLength": 4096
+          },
+          "origin": {
+            "type": "string",
+            "enum": [
+              "all",
+              "source_assertion",
+              "authored"
+            ]
+          },
+          "selection": {
+            "oneOf": [
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "element",
+                      "link"
+                    ]
+                  },
+                  "id": {
+                    "type": "string",
+                    "format": "uuid"
+                  }
+                },
+                "required": [
+                  "type",
+                  "id"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "positions": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "x": {
+                  "type": "number"
+                },
+                "y": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "id",
+                "x",
+                "y"
+              ]
+            },
+            "maxItems": 1000
+          },
+          "collapsedIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "maxItems": 1000
+          }
+        },
+        "required": [
+          "diagram",
+          "level",
+          "rootId",
+          "search",
+          "origin",
+          "selection",
+          "positions",
+          "collapsedIds"
+        ]
+      },
+      "CreateBackendDiagramViewRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 256,
+            "minLength": 1
+          },
+          "state": {
+            "$ref": "#/components/schemas/BackendDiagramViewState"
+          },
+          "idempotencyKey": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          }
+        },
+        "required": [
+          "name",
+          "state",
+          "idempotencyKey"
+        ]
+      },
+      "SaveBackendDiagramViewRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 256,
+            "minLength": 1
+          },
+          "state": {
+            "$ref": "#/components/schemas/BackendDiagramViewState"
+          },
+          "idempotencyKey": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "expectedVersion": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1,
+            "maximum": 9223372036854775807
+          }
+        },
+        "required": [
+          "name",
+          "state",
+          "idempotencyKey",
+          "expectedVersion"
+        ]
+      },
+      "BackendDiagramView": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "version": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1,
+            "maximum": 9223372036854775807
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 256
+          },
+          "state": {
+            "$ref": "#/components/schemas/BackendDiagramViewState"
+          }
+        },
+        "required": [
+          "id",
+          "version",
+          "name",
+          "state"
+        ]
+      },
+      "BackendDiagramListPage": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "kind": {
+                  "type": "string",
+                  "enum": [
+                    "architecture"
+                  ]
+                },
+                "pin": {
+                  "$ref": "#/components/schemas/BackendDiagramPin"
+                },
+                "targetHash": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$"
+                }
+              },
+              "required": [
+                "id",
+                "kind",
+                "pin",
+                "targetHash"
+              ]
+            }
+          },
+          "nextCursor": {
+            "type": "string"
+          },
+          "catalogVersion": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "items",
+          "nextCursor",
+          "catalogVersion"
+        ]
+      },
+      "BackendDiagramViewListPage": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "kind": {
+                  "type": "string",
+                  "enum": [
+                    "architecture"
+                  ]
+                },
+                "version": {
+                  "type": "integer",
+                  "format": "int64",
+                  "minimum": 1,
+                  "maximum": 9223372036854775807
+                },
+                "name": {
+                  "type": "string",
+                  "maxLength": 256
+                }
+              },
+              "required": [
+                "id",
+                "kind",
+                "version",
+                "name"
+              ]
+            }
+          },
+          "nextCursor": {
+            "type": "string"
+          },
+          "catalogVersion": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "items",
+          "nextCursor",
+          "catalogVersion"
+        ]
+      },
+      "BackendArchitectureProjectedLink": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "label": {
+            "type": "string",
+            "maxLength": 256,
+            "minLength": 1
+          },
+          "origin": {
+            "$ref": "#/components/schemas/BackendDiagramProjectedOrigin"
+          },
+          "refs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendDiagramRef"
+            }
+          },
+          "from": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "to": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "relation": {
+            "type": "string",
+            "maxLength": 256,
+            "minLength": 1
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "origin",
+          "refs",
+          "from",
+          "to",
+          "relation"
+        ]
+      },
+      "BackendDiagramProjectedOrigin": {
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "source_assertion"
+                ]
+              },
+              "evidence": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/BackendDiagramEvidenceRef"
+                },
+                "minItems": 1
+              }
+            },
+            "required": [
+              "kind",
+              "evidence"
+            ]
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "authored"
+                ]
+              },
+              "reason": {
+                "type": "string",
+                "maxLength": 4096,
+                "minLength": 1
+              }
+            },
+            "required": [
+              "kind",
+              "reason"
+            ]
+          }
+        ],
+        "discriminator": {
+          "propertyName": "kind"
+        }
       }
     }
   },
@@ -100677,6 +102151,1389 @@
           }
         },
         "description": "Uses exact immutable pins and project ownership. Analysis is static and never executes source, SQL, jobs or brokers."
+      }
+    },
+    "/api/backend-projects/{id}/diagrams": {
+      "post": {
+        "tags": [
+          "backend-projects"
+        ],
+        "operationId": "createBackendDiagram",
+        "summary": "createBackendDiagram",
+        "description": "Exact architecture companion document. Source assertions, authored intent and gaps remain distinct. Mutation recovery replays the identical key/body; saved diagram view pins never advance automatically.",
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendDiagramVersion"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateBackendDiagramRequest"
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "backend-projects"
+        ],
+        "operationId": "listBackendDiagrams",
+        "summary": "listBackendDiagrams",
+        "description": "Exact architecture companion document. Source assertions, authored intent and gaps remain distinct. Mutation recovery replays the identical key/body; saved diagram view pins never advance automatically.",
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "kind",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "architecture"
+              ]
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500,
+              "default": 100
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 4096
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendDiagramListPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        }
+      }
+    },
+    "/api/backend-projects/{id}/diagrams/{did}/save": {
+      "post": {
+        "tags": [
+          "backend-projects"
+        ],
+        "operationId": "saveBackendDiagram",
+        "summary": "saveBackendDiagram",
+        "description": "Exact architecture companion document. Source assertions, authored intent and gaps remain distinct. Mutation recovery replays the identical key/body; saved diagram view pins never advance automatically.",
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "did",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendDiagramVersion"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SaveBackendDiagramRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/backend-projects/{id}/diagrams/fork": {
+      "post": {
+        "tags": [
+          "backend-projects"
+        ],
+        "operationId": "forkBackendDiagram",
+        "summary": "forkBackendDiagram",
+        "description": "Exact architecture companion document. Source assertions, authored intent and gaps remain distinct. Mutation recovery replays the identical key/body; saved diagram view pins never advance automatically.",
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendDiagramVersion"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ForkBackendDiagramRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/backend-projects/{id}/diagrams/{did}/versions/{v}": {
+      "get": {
+        "tags": [
+          "backend-projects"
+        ],
+        "operationId": "getBackendDiagram",
+        "summary": "getBackendDiagram",
+        "description": "Exact architecture companion document. Source assertions, authored intent and gaps remain distinct. Mutation recovery replays the identical key/body; saved diagram view pins never advance automatically.",
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "did",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "v",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1,
+              "maximum": 9223372036854775807
+            }
+          },
+          {
+            "name": "hash",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendDiagramVersion"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        }
+      }
+    },
+    "/api/backend-projects/{id}/diagrams/query": {
+      "post": {
+        "tags": [
+          "backend-projects"
+        ],
+        "operationId": "queryBackendDiagram",
+        "summary": "queryBackendDiagram",
+        "description": "Exact architecture companion document. Source assertions, authored intent and gaps remain distinct. Mutation recovery replays the identical key/body; saved diagram view pins never advance automatically.",
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendDiagramPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/QueryBackendDiagramRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/backend-projects/{id}/diagrams/compare": {
+      "post": {
+        "tags": [
+          "backend-projects"
+        ],
+        "operationId": "compareBackendDiagrams",
+        "summary": "compareBackendDiagrams",
+        "description": "Exact architecture companion document. Source assertions, authored intent and gaps remain distinct. Mutation recovery replays the identical key/body; saved diagram view pins never advance automatically.",
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendDiagramComparison"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CompareBackendDiagramsRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/backend-projects/{id}/diagram-views": {
+      "post": {
+        "tags": [
+          "backend-projects"
+        ],
+        "operationId": "createBackendDiagramView",
+        "summary": "createBackendDiagramView",
+        "description": "Exact architecture companion document. Source assertions, authored intent and gaps remain distinct. Mutation recovery replays the identical key/body; saved diagram view pins never advance automatically.",
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendDiagramView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateBackendDiagramViewRequest"
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "backend-projects"
+        ],
+        "operationId": "listBackendDiagramViews",
+        "summary": "listBackendDiagramViews",
+        "description": "Exact architecture companion document. Source assertions, authored intent and gaps remain distinct. Mutation recovery replays the identical key/body; saved diagram view pins never advance automatically.",
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "kind",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "architecture"
+              ]
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500,
+              "default": 100
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 4096
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendDiagramViewListPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        }
+      }
+    },
+    "/api/backend-projects/{id}/diagram-views/{vid}/save": {
+      "post": {
+        "tags": [
+          "backend-projects"
+        ],
+        "operationId": "saveBackendDiagramView",
+        "summary": "saveBackendDiagramView",
+        "description": "Exact architecture companion document. Source assertions, authored intent and gaps remain distinct. Mutation recovery replays the identical key/body; saved diagram view pins never advance automatically.",
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "vid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendDiagramView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SaveBackendDiagramViewRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/backend-projects/{id}/diagram-views/{vid}/versions/{v}": {
+      "get": {
+        "tags": [
+          "backend-projects"
+        ],
+        "operationId": "getBackendDiagramView",
+        "summary": "getBackendDiagramView",
+        "description": "Exact architecture companion document. Source assertions, authored intent and gaps remain distinct. Mutation recovery replays the identical key/body; saved diagram view pins never advance automatically.",
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "vid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "v",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1,
+              "maximum": 9223372036854775807
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendDiagramView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        }
       }
     }
   }

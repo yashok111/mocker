@@ -31,10 +31,10 @@ func TestDatabaseProposalWorkflowNegotiation(t *testing.T) {
 	if err := json.Unmarshal(fields["requiredViewSchemaVersions"], &views); err != nil || !slices.Equal(views, []string{"proposal-relational-v1", "saved-view-v1", "proposal-graph-v1", "saved-view-v2"}) {
 		t.Fatalf("view negotiation missing: %s %v", raw, err)
 	}
-	// Model/recovery/examples keep their import7 owner in this exact set.
+	// Model/recovery/examples keep their import8 owner in this exact set.
 	for _, topic := range []string{"backend-model", "backend-recovery", "backend-examples"} {
 		owner, ok := WorkflowForTopic(topic)
-		if !ok || owner.WorkflowID != "mocker-backend-import" || owner.WorkflowVersion != "7" || owner.GuideSetID != w.GuideSetID {
+		if !ok || owner.WorkflowID != "mocker-backend-import" || owner.WorkflowVersion != "8" || owner.GuideSetID != w.GuideSetID {
 			t.Fatalf("shared owner changed for %s", topic)
 		}
 	}

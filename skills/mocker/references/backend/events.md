@@ -1,9 +1,9 @@
 # Pinned source events, jobs and service calls
 
-Canonical owner: `mocker-backend-inspect` workflow8. Select its complete supported
+Canonical owner: `mocker-backend-inspect` workflow9. Select its complete supported
 requirements, including source schemas3/4/5 and `backend-events-query`, in one
 immutable guideSetId/manifestHash. Verify this topic's actual owner/version/hash.
-Import7 owns source5 `events-service-v1` admission and all inherited profiles.
+Import8 owns source5 `events-service-v1` admission and all inherited profiles.
 Database7 owns relational inspection/proposals; saved-view-v1 and artifact pin
 contracts retain their existing versions. Event selection is transient.
 
@@ -160,7 +160,7 @@ ValueRefs, bounded fragment, evidence IDs and source repository/snapshot/path/
 hash/physical lines, inspected/search scope, question and completion criterion.
 Export prepares input to external investigation; it schedules or spawns nothing.
 Pure questions authorize reads. Evidence publication follows the explicitly
-authorized full compatible import7 procedure, not a gap-only/incremental API.
+authorized full compatible import8 procedure, not a gap-only/incremental API.
 
 Supported example: in the inert orders fixture, consumer.fraud is registered by
 plugin key fraud-v1 but baseline has no plugin source. Criterion: exact fraud-v1

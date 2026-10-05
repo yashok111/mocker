@@ -26,7 +26,7 @@ func TestRuntimeGuideSDKOwnersAndDiscovery(t *testing.T) {
 		if err := json.Unmarshal(raw, &out); err != nil {
 			t.Fatal(err)
 		}
-		if out.WorkflowID != "mocker-backend-inspect" || out.WorkflowVersion != "8" || out.ManifestHash != owner.ManifestHash || out.GuideSetID != owner.GuideSetID || out.ContentHash != fmt.Sprintf("sha256:%x", sha256.Sum256([]byte(out.Markdown))) {
+		if out.WorkflowID != "mocker-backend-inspect" || out.WorkflowVersion != "9" || out.ManifestHash != owner.ManifestHash || out.GuideSetID != owner.GuideSetID || out.ContentHash != fmt.Sprintf("sha256:%x", sha256.Sum256([]byte(out.Markdown))) {
 			t.Fatalf("SDK cannot verify %s against the selected inspect owner: %#v", topic, out)
 		}
 		if !slices.Contains(out.Topics, topic) || strings.HasPrefix(out.Markdown, "---") {

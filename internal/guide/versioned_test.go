@@ -47,7 +47,7 @@ func TestImportWorkflowUsesPinnedAvailableTopics(t *testing.T) {
 			selected = workflow
 		}
 	}
-	if selected.Entrypoint != "backend-import" || selected.WorkflowVersion != "7" {
+	if selected.Entrypoint != "backend-import" || selected.WorkflowVersion != "8" {
 		t.Fatalf("source import workflow unavailable: %#v", selected)
 	}
 	if selected.GuideSetID != CurrentGuideSetID() || selected.ManifestHash != CurrentGuideSetID() {

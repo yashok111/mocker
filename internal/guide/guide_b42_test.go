@@ -27,7 +27,7 @@ func TestB42GuideOwnership(t *testing.T) {
 		owner, _ := WorkflowForTopic(topic)
 		wantVersion := "2"
 		if topic == "backend-change-proposals" {
-			wantVersion = "3"
+			wantVersion = "4"
 		}
 		if owner.WorkflowVersion != wantVersion || !slices.Contains(owner.RequiredCapabilities, "backend-analysis-jobs") {
 			t.Errorf("%s does not negotiate B4.2: %+v", topic, owner)

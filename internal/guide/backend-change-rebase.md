@@ -1,6 +1,6 @@
 # Rebase a saved full proposal
 
-This topic belongs to change3. Negotiate `mocker-backend-change` in one exact guideSetId/manifestHash and verify this topic's owner/contentHash. Shared `backend-recovery` remains import7-owned; `backend-analysis` remains inspect8-owned. Rebase changes desired history only, never imported source, evidence, annotations or artifact owner documents.
+This topic belongs to change4. Negotiate `mocker-backend-change` in one exact guideSetId/manifestHash and verify this topic's owner/contentHash. Shared `backend-recovery` remains import8-owned; `backend-analysis` remains inspect9-owned. Rebase changes desired history only, never imported source, evidence, annotations or artifact owner documents.
 
 ## Capture B, O and N
 

@@ -67,6 +67,7 @@ func TestIdentityUpgradePreservesBytesAndCommittedAllocations(t *testing.T) {
 	err = db.Write(t.Context(), func(tx *sql.Tx) error {
 		for _, table := range []string{
 			"backend_analysis_receipts", "backend_analysis_chunks", "backend_analysis_manifests",
+			"backend_diagram_receipts", "backend_diagram_catalog", "backend_diagram_view_versions", "backend_diagram_views", "backend_diagram_versions", "backend_diagrams",
 			"backend_analysis_jobs", "backend_analysis_inputs",
 			"backend_change_proposal_commands", "backend_change_proposal_batches",
 			"backend_change_proposal_identities", "backend_change_proposal_events",

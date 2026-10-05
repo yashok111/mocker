@@ -424,12 +424,12 @@ func TestAutoCheckpointPolicy_pinsEveryMutatingRoute(t *testing.T) {
 		// (D7.3), P6b's endpoint preview (D13), P6c's close and push
 		// (D9), A6's two asset writes (D3), A11's two entity writes,
 		// P4b's import and fork, then design-scenario validation, execution and archive, plus state-diagram validation and simulation — twenty-six.
-		cpGroupNeverTouchesLayer: 50, // Includes full proposal preview alongside POST reads, artifact previews and non-model writes.
+		cpGroupNeverTouchesLayer: 52, // Includes full proposal preview alongside POST reads, artifact previews and non-model writes.
 		// Rows in another aggregate: runtime scenarios, checkpoints, API
 		// designs, four persisted design-scenario writes, run start/cancel, and four state-diagram writes.
-		cpGroupAnotherLayer: 53, // Includes full proposal create/apply/restore alongside existing model and artifact writes.
+		cpGroupAnotherLayer: 58, // Includes full proposal create/apply/restore alongside existing model and artifact writes.
 		// Every GET in the table.
-		cpGroupRead: 90, // Includes annotations, full proposal history and exact source/full/candidate reads.
+		cpGroupRead: 94, // Includes annotations, full proposal history and exact source/full/candidate reads.
 	}
 
 	byPattern := checkpointPolicyByPattern(t)
@@ -453,8 +453,8 @@ func TestAutoCheckpointPolicy_pinsEveryMutatingRoute(t *testing.T) {
 		t.Errorf("the %d counted groups cover %d of %d rows — a group is missing from want", total, sum(got), table)
 	}
 
-	if len(byPattern) != 210 {
-		t.Fatalf("routes() registers %d patterns, want 210", len(byPattern))
+	if len(byPattern) != 221 {
+		t.Fatalf("routes() registers %d patterns, want 221", len(byPattern))
 	}
 
 	// A label is the ONE thing [Server.routeMux] reads off the policy, so a
@@ -509,8 +509,8 @@ func TestAutoCheckpointPolicy_pinsEveryMutatingRoute(t *testing.T) {
 	// Generic artifacts add three POSTs: two reads/previews and one pin apply.
 	// B4.1 adds four full-proposal POSTs: 114 write-shaped
 	// routes and 87 GETs cover the full 201-row table.
-	if len(mutating) != 120 {
-		t.Fatalf("routes() registers %d mutating patterns, want 120", len(mutating))
+	if len(mutating) != 127 {
+		t.Fatalf("routes() registers %d mutating patterns, want 127", len(mutating))
 	}
 
 	// The two halves the group counts alone cannot state: a mutating route

@@ -1,10 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { BackendProjectPage } from "@/components/backend-workbench/BackendProjectPage";
-import { parseBackendSourcePin } from "@/components/backend-workbench/backendFlowReads";
+import { parseBackendWorkspaceSearch } from "@/components/backend-workbench/backendWorkspaceSearch";
 
 export const Route = createFileRoute("/_authed/backend-projects/$projectId")({
   component: Page,
-  validateSearch: parseBackendSourcePin,
+  validateSearch: parseBackendWorkspaceSearch,
 });
 
 function Page() {

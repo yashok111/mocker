@@ -1,6 +1,6 @@
 # Package, structural conformance and lifecycle handoff
 
-This procedure is change3-owned. Negotiate that exact workflow in the selected immutable guide set, then verify this topic's owner/contentHash. Inspect8 remains read-only and routes authorized analysis here. Shared recovery remains import7-owned. Require backend-change-package, backend-conformance, backend-change-implemented, backend-change-archive and backend-change-unarchive. Endpoint review additionally uses backend-endpoint-review.
+This procedure is change4-owned. Negotiate that exact workflow in the selected immutable guide set, then verify this topic's owner/contentHash. Inspect9 remains read-only and routes authorized analysis here. Shared recovery remains import8-owned. Require backend-change-package, backend-conformance, backend-change-implemented, backend-change-archive and backend-change-unarchive. Endpoint review additionally uses backend-endpoint-review.
 
 Check analysisSupport.kinds for change_package/conformance/endpoint_review, documentVersions for backend-analysis-context-v2, inputDocumentVersions for backend-analysis-input/v2 and ruleSetVersions for b43-rules/v1. Legacy singular documentVersion/ruleSetVersion remain backend-analysis-context-v1/b42-rules/v1; traversalVersion remains b42-traversal/v1. The arrays are additive negotiation, not replacement fields. No new route/tool or execution capability is implied.
 
@@ -64,7 +64,7 @@ No report, exceptions or gap fields belong to these arms. Archive retains associ
 
 ## Durable recovery and executable SDK evidence
 
-Persist and read back exact owner/path IDs, action, original body/key and acceptance pins before sending. Validate response owner, draft/hash, version+1, target status, exact report/source and normalized exceptions before clearing. Unknown replies preserve body/key; replay exact bytes before current-state/CAS checks. A definitive409 stays a conflict until explicit reconciliation; do not silently retry with a fresh key. Accepted cleanup failure stays accepted and must not offer resend. Browser reload sends nothing. Historical v1 change recovery and v2 analysis records retain their action meaning. See import7/backend-recovery for shared rules and change3/backend-analysis-jobs for job polling/cancellation.
+Persist and read back exact owner/path IDs, action, original body/key and acceptance pins before sending. Validate response owner, draft/hash, version+1, target status, exact report/source and normalized exceptions before clearing. Unknown replies preserve body/key; replay exact bytes before current-state/CAS checks. A definitive409 stays a conflict until explicit reconciliation; do not silently retry with a fresh key. Accepted cleanup failure stays accepted and must not offer resend. Browser reload sends nothing. Historical v1 change recovery and v2 analysis records retain their action meaning. See import8/backend-recovery for shared rules and change4/backend-analysis-jobs for job polling/cancellation.
 
 Run the actual public SDK example from repository root. It creates fresh inert source data, polls real workers, validates actual SDK schemas/pages, executes impact→ready→implemented→archive→unarchive and replays the old implemented receipt:
 

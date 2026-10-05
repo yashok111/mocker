@@ -206,6 +206,12 @@
       "source": "references/endpoint-review.md",
       "embedded": "backend-endpoint-review.md",
       "workflowId": "mocker-backend-change"
+    },
+    {
+      "topic": "backend-architecture",
+      "source": "references/backend/architecture.md",
+      "embedded": "backend-architecture.md",
+      "workflowId": "mocker-backend-inspect"
     }
   ],
   "workflows": [
@@ -232,7 +238,7 @@
     },
     {
       "workflowId": "mocker-backend-import",
-      "workflowVersion": "7",
+      "workflowVersion": "8",
       "entrypoint": "backend-import",
       "requiredModelSchemaVersions": [
         "1",
@@ -300,7 +306,7 @@
     },
     {
       "workflowId": "mocker-backend-inspect",
-      "workflowVersion": "8",
+      "workflowVersion": "9",
       "entrypoint": "backend-inspect",
       "requiredModelSchemaVersions": [
         "3",
@@ -323,7 +329,10 @@
         "backend-import-candidate",
         "backend-change-proposals",
         "backend-representations",
-        "backend-saved-views-v2"
+        "backend-saved-views-v2",
+        "backend-diagrams",
+        "backend-architecture",
+        "backend-diagram-views"
       ],
       "requiredViewSchemaVersions": [
         "saved-view-v1",
@@ -331,7 +340,9 @@
         "backend-editor-artifacts-v1",
         "proposal-graph-v1",
         "saved-view-v2",
-        "import-candidate-v1"
+        "import-candidate-v1",
+        "backend-diagram-v1",
+        "diagram-view-v1"
       ]
     },
     {
@@ -363,14 +374,16 @@
     },
     {
       "workflowId": "mocker-backend-change",
-      "workflowVersion": "3",
+      "workflowVersion": "4",
       "entrypoint": "backend-change-proposals",
       "requiredModelSchemaVersions": [
         "5",
         "6"
       ],
       "requiredViewSchemaVersions": [
-        "proposal-graph-v1"
+        "proposal-graph-v1",
+        "backend-diagram-v1",
+        "diagram-view-v1"
       ],
       "requiredCapabilities": [
         "backend-projects",
@@ -390,7 +403,10 @@
         "backend-endpoint-review",
         "backend-change-implemented",
         "backend-change-archive",
-        "backend-change-unarchive"
+        "backend-change-unarchive",
+        "backend-diagrams",
+        "backend-architecture",
+        "backend-diagram-views"
       ]
     }
   ]

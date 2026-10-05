@@ -18,7 +18,7 @@ func TestRelationalGuideTopicsHaveServedOwnerAndBody(t *testing.T) {
 	}{
 		{topic: "backend-database", owner: "mocker-backend-database", version: "7"},
 		{topic: "backend-database-reference", owner: "mocker-backend-database", version: "7"},
-		{topic: "backend-profile-go-sql", owner: "mocker-backend-import", version: "7"},
+		{topic: "backend-profile-go-sql", owner: "mocker-backend-import", version: "8"},
 	} {
 		t.Run(item.topic, func(t *testing.T) {
 			t.Parallel()
@@ -65,7 +65,7 @@ func TestRelationalGuideWorkflowRequirements(t *testing.T) {
 		schemas, capabilities      []string
 	}{
 		{
-			entrypoint: "backend-import", owner: "mocker-backend-import", version: "7",
+			entrypoint: "backend-import", owner: "mocker-backend-import", version: "8",
 			schemas: []string{"1", "2", "3", "4", "5", "6"},
 			capabilities: []string{
 				"backend-projects", "backend-revisions", "backend-graph-query", "backend-source-import",
@@ -136,7 +136,7 @@ func TestGlobalGuideSetHasOneOwnerForEveryServedTopic(t *testing.T) {
 		"backend-import-protocol": "mocker-backend-import", "backend-recovery": "mocker-backend-import",
 		"backend-examples": "mocker-backend-import", "backend-profile-go-sql": "mocker-backend-import",
 		"backend-database": "mocker-backend-database", "backend-database-reference": "mocker-backend-database",
-		"backend-inspect": "mocker-backend-inspect", "backend-flow-reference": "mocker-backend-inspect", "backend-analysis": "mocker-backend-inspect", "backend-editor-projections": "mocker-backend-inspect", "backend-events": "mocker-backend-inspect",
+		"backend-inspect": "mocker-backend-inspect", "backend-flow-reference": "mocker-backend-inspect", "backend-analysis": "mocker-backend-inspect", "backend-editor-projections": "mocker-backend-inspect", "backend-events": "mocker-backend-inspect", "backend-architecture": "mocker-backend-inspect",
 	}
 	seen := make(map[string]string)
 	for _, owner := range manifest.Workflows {

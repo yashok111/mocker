@@ -44,7 +44,7 @@ func TestStandaloneImportPackageOwnsServedEntrypoint(t *testing.T) {
 	for _, topic := range []string{"backend-import", "backend-model", "backend-import-protocol", "backend-recovery", "backend-examples", "backend-profile-go-sql"} {
 		t.Run(topic, func(t *testing.T) {
 			workflow, ok := WorkflowForTopic(topic)
-			if !ok || workflow.WorkflowID != "mocker-backend-import" || workflow.WorkflowVersion != "7" || workflow.GuideSetID != CurrentGuideSetID() {
+			if !ok || workflow.WorkflowID != "mocker-backend-import" || workflow.WorkflowVersion != "8" || workflow.GuideSetID != CurrentGuideSetID() {
 				t.Fatalf("standalone reference has no compatible served identity: %s", topic)
 			}
 			markdown, ok := Topic(topic)
@@ -87,7 +87,7 @@ func TestStandaloneSkillMetadataAndIsolation(t *testing.T) {
 	}
 	for key, want := range map[string]string{
 		"workflowId":      "mocker-backend-import",
-		"workflowVersion": "7",
+		"workflowVersion": "8",
 		"guideSetId":      workflow.GuideSetID,
 		"manifestHash":    workflow.ManifestHash,
 	} {
@@ -156,8 +156,8 @@ func TestStandaloneDatabasePackageOwnsServedEntrypoint(t *testing.T) {
 		topic, owner, version string
 	}{
 		{topic: "backend-database-reference", owner: "mocker-backend-database", version: "7"},
-		{topic: "backend-model", owner: "mocker-backend-import", version: "7"},
-		{topic: "backend-recovery", owner: "mocker-backend-import", version: "7"},
+		{topic: "backend-model", owner: "mocker-backend-import", version: "8"},
+		{topic: "backend-recovery", owner: "mocker-backend-import", version: "8"},
 	} {
 		workflow, ok := WorkflowForTopic(item.topic)
 		if !ok || workflow.WorkflowID != item.owner || workflow.WorkflowVersion != item.version {

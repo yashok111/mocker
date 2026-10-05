@@ -1,6 +1,6 @@
 # Import and pinned database examples
 
-This topic is import7-owned. Verify its actual import workflow identity/contentHash
+This topic is import8-owned. Verify its actual import workflow identity/contentHash
 in the selected global guide set. Database7 inspection may load it through that
 owner without starting import writes. The foundation procedure below remains
 schema1; the relational captures afterward use schema2. SQL/ORM/migration input
@@ -16,7 +16,7 @@ Fixture strings are source data; no source application, SQL or package script ru
 
 ## B4.2 executable public workflow
 
-`internal/mcp/tools_backend_b42_examples_test.go` runs `TestBackendB42SDKPublicWorkflowExample` through the actual MCP SDK, real authenticated REST/session/CSRF handlers, temporary SQLite and the real static worker. Source is inert Go declaration text. The example negotiates current sync2/change3 alongside the retained owners and verifies each fetched topic hash. It preserves legacy artifact-context wire bytes instead of decoding them as a new writable context.
+`internal/mcp/tools_backend_b42_examples_test.go` runs `TestBackendB42SDKPublicWorkflowExample` through the actual MCP SDK, real authenticated REST/session/CSRF handlers, temporary SQLite and the real static worker. Source is inert Go declaration text. The example negotiates current sync2/change4 alongside the retained owners and verifies each fetched topic hash. It preserves legacy artifact-context wire bytes instead of decoding them as a new writable context.
 
 Run from the repository root, retaining artifacts:
 
@@ -48,13 +48,13 @@ apply_backend_change_proposal_lifecycle({projectId,proposalId,
   action:"ready",report,acknowledgedGapIds,idempotencyKey:savedReadyKey})
 ```
 
-Persist that complete request before transport. The example's accelerated poll timing is for tests; production clients honor recommendedPollIntervalMs. These examples validate developer protocol usage. Ordinary/live-agent acceptance remains deferred, and static ready never means runtime tested or deployed. For complete request/limit/recovery contracts read change3's `backend-analysis-jobs` and `backend-change-rebase` in this set.
+Persist that complete request before transport. The example's accelerated poll timing is for tests; production clients honor recommendedPollIntervalMs. These examples validate developer protocol usage. Ordinary/live-agent acceptance remains deferred, and static ready never means runtime tested or deployed. For complete request/limit/recovery contracts read change4's `backend-analysis-jobs` and `backend-change-rebase` in this set.
 
 ## B4.1 executable SDK captures
 
 `internal/mcp/tools_backend_b41_examples_test.go` executes these five episodes through the real SDK, admin handlers and temporary SQLite. The capture contains 195 calls, including 23 expected refusals. Source strings and the prior Store19 database are inert fixtures; imported code and SQL never execute. The complete request/response witness is emitted as `sdk-protocol.json` for each test. To preserve artifacts, create an output directory, then run `go test ./internal/mcp -run '^TestBackendB41SDK' -count=1 -artifacts -outputdir=/absolute/output/directory -v`.
 
-The excerpts below contain actual captured request IDs, hashes and returned pins. Do not replay those historical UUIDs into a different project. The executable examples use each response to construct the next request, select import7/sync2/change3/project2/inspect8/database7 from current capabilities in one exact guide set, verify topic hashes, and refuse unavailable old guide sets. These protocol captures preceded guide registration, so they contain no invented future guide identity. Responses below project relevant fields and show at most two array entries; omitted fields and entries remain in the full witness.
+The excerpts below contain actual captured request IDs, hashes and returned pins. Do not replay those historical UUIDs into a different project. The executable examples use each response to construct the next request, select import8/sync2/change4/project2/inspect9/database7 from current capabilities in one exact guide set, verify topic hashes, and refuse unavailable old guide sets. These protocol captures preceded guide registration, so they contain no invented future guide identity. Responses below project relevant fields and show at most two array entries; omitted fields and entries remain in the full witness.
 
 The tests additionally verify source5/full5 assertion refusal, a foreign project's exact UUID, candidate invalidation after batch/commit, candidate specialized-query and SavedView rejection, read purity across all backend tables, unchanged source proof, and full command reuse after restore/server restart. Original request strings and original receipts are compared byte-for-byte. No-op and overwritten commands remain reserved even when their semantic effect disappears.
 
@@ -3169,7 +3169,7 @@ V2 committed revision `01a0f4e1-80e0-7f78-8d1b-b96d88fca034`. Its later read at 
 ### Inspection-only design request
 
 For typed schema designs use the separately negotiated database7 procedure.
-Source import7 examples above keep their original protocol and CAS.
+Source import8 examples above keep their original protocol and CAS.
 
 ## Actual SDK proposal examples: PostgreSQL and SQLite
 
@@ -3575,7 +3575,7 @@ NOT NULL apply request/key returned byte-for-byte the original receipt.
 Creation replay also returned its original acknowledgement. Reading the old
 proposal revision still returned its immutable original draft; current CAS
 version was 4. A later source head is reported as baseOutdated, without rebasing
-the proposal. Legacy relational ready/rebase remain unsupported. Authorized static diff/impact now uses change3/backend-analysis-jobs with the exact `proposal:{proposalId,proposalRevisionId}` target; measured runtime checks remain unavailable. The captured JSON above records the historical response unchanged.
+the proposal. Legacy relational ready/rebase remain unsupported. Authorized static diff/impact now uses change4/backend-analysis-jobs with the exact `proposal:{proposalId,proposalRevisionId}` target; measured runtime checks remain unavailable. The captured JSON above records the historical response unchanged.
 
 ### sqlite: nullable legacy_note to desired NOT NULL
 
@@ -3971,13 +3971,13 @@ NOT NULL apply request/key returned byte-for-byte the original receipt.
 Creation replay also returned its original acknowledgement. Reading the old
 proposal revision still returned its immutable original draft; current CAS
 version was 4. A later source head is reported as baseOutdated, without rebasing
-the proposal. Legacy relational ready/rebase remain unsupported. Authorized static diff/impact now uses change3/backend-analysis-jobs with the exact `proposal:{proposalId,proposalRevisionId}` target; measured runtime checks remain unavailable. The captured JSON above records the historical response unchanged.
+the proposal. Legacy relational ready/rebase remain unsupported. Authorized static diff/impact now uses change4/backend-analysis-jobs with the exact `proposal:{proposalId,proposalRevisionId}` target; measured runtime checks remain unavailable. The captured JSON above records the historical response unchanged.
 
 ## Public MCP source4 import → lineage query fixture
 
-Select import7 and inspect8 with complete requirements in one verified guide
+Select import8 and inspect9 with complete requirements in one verified guide
 set; load backend-model, backend-import-protocol, backend-recovery and the
-inspect8 flow/analysis references. This example is exercised by
+inspect9 flow/analysis references. This example is exercised by
 `internal/mcp/tools_backend_lineage_example_test.go`,
 `TestBackendLineageRealSDKGuideFixtureExample` through actual SDK tool calls.
 The independent bundle is `internal/backendmodel/testdata/lineage/orders/`:
@@ -4067,5 +4067,5 @@ On uncertain commit replay lineageCommit unchanged and require original receipt;
 never replace CAS/key with today's head. Evidence/owner/value inspector reads use
 lineagePin and complete facet/collection/opaque portKey. Redacted shape/explanation
 must omit sensitive constants and samples; source-local API field identity does
-not resolve external API pins; their separate inspect8 contract is in backend-flow-reference. Old foundation/relational examples above keep
+not resolve external API pins; their separate inspect9 contract is in backend-flow-reference. Old foundation/relational examples above keep
 their source1/2 formats and ordinary workflow; source3 flow examples stay source3.

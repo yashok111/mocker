@@ -1,3 +1,8 @@
+import { BackendArchitecture } from "./BackendArchitecture";
+import { BackendWorkspaceNavigation } from "./BackendWorkspaceNavigation";
+import { parseBackendSourcePin } from "./backendFlowReads";
+import type { BackendDiagramTarget } from "@/api/generated/schemas";
+import type { BackendWorkspaceSearch } from "./backendWorkspaceSearch";
 import { BackendLegacyRecoveryNotice } from "./BackendLegacyRecoveryNotice";
 import { BackendAnalysisJobs } from "./BackendAnalysisJobs";
 import {
@@ -69,19 +74,78 @@ import { BackendAPIArtifacts, BackendAPIArtifactsContext } from "./BackendAPIArt
 
 type ProjectPageProps = {
   projectId: string;
-  sourcePin?: BackendSourcePin;
-  onSourceNavigate?: (pin: BackendSourcePin, replace?: boolean) => void;
+  sourcePin?: BackendWorkspaceSearch;
+  onSourceNavigate?: (pin: BackendWorkspaceSearch, replace?: boolean) => void;
   initialSaved?: BackendSavedViewResponse;
   initialFullTarget?: BackendReadTarget;
   onImportCandidateChange?: (target: ImportCandidateTarget | null) => void;
 };
 
 export function BackendProjectPage(props: ProjectPageProps) {
+  const [diagramDirty, setDiagramDirty] = useState(false);
+  const diagramDirtyRef = useRef(false);
+  const onDiagramDirty = useCallback((value: boolean) => {
+    diagramDirtyRef.current = value;
+    setDiagramDirty(value);
+  }, []);
+  const selector = JSON.stringify([
+    props.sourcePin?.diagramId,
+    props.sourcePin?.diagramVersion,
+    props.sourcePin?.diagramHash,
+    props.sourcePin?.diagramViewId,
+    props.sourcePin?.diagramViewVersion,
+  ]);
+  const [resolved, setResolved] = useState<{ selector: string; target: BackendDiagramTarget }>();
+  const onTargetResolved = useCallback(
+    (target: BackendDiagramTarget) =>
+      setResolved((previous) =>
+        previous?.selector === selector &&
+        JSON.stringify(previous.target) === JSON.stringify(target)
+          ? previous
+          : { selector, target },
+      ),
+    [selector],
+  );
+  const diagramSelected = !!(props.sourcePin?.diagramId || props.sourcePin?.diagramViewId);
+  const target = resolved?.selector === selector ? resolved.target : undefined;
+  const legacyPin =
+    diagramSelected && target
+      ? parseBackendSourcePin({
+          recordId: props.sourcePin?.recordId,
+          recordType: props.sourcePin?.recordType,
+          ...("revisionId" in target
+            ? { revisionId: target.revisionId }
+            : {
+                changeProposalId: target.changeProposal.proposalId,
+                proposalRevisionId: target.changeProposal.proposalRevisionId,
+              }),
+        })
+      : props.sourcePin;
+  useBlocker({
+    shouldBlockFn: () =>
+      diagramDirtyRef.current &&
+      !window.confirm(
+        "Есть несохранённый mapping или неизвестный результат запроса. Покинуть текущий выбор?",
+      ),
+    enableBeforeUnload: diagramDirty,
+    withResolver: false,
+  });
   return (
     <BackendAnalysisRecoveryProvider key={props.projectId} projectId={props.projectId}>
       <BackendAnalysisRecoveryNotice projectId={props.projectId} />
       <BackendLegacyRecoveryNotice projectId={props.projectId} />
-      <BackendProjectGate {...props} />
+      <BackendWorkspaceNavigation />
+      <BackendArchitecture
+        projectId={props.projectId}
+        search={props.sourcePin ?? {}}
+        onNavigate={(pin, replace) => props.onSourceNavigate?.(pin, replace)}
+        onDetailedNavigate={(pin) => props.onSourceNavigate?.(pin)}
+        onDirty={onDiagramDirty}
+        onTargetResolved={onTargetResolved}
+      />
+      <div hidden={diagramSelected && !target}>
+        <BackendProjectGate {...props} sourcePin={legacyPin} />
+      </div>
     </BackendAnalysisRecoveryProvider>
   );
 }
@@ -328,10 +392,14 @@ function BackendProjectDetail({
         acknowledgedNavigation.current = false;
         return false;
       }
-      const nextPin = next.search as BackendSourcePin,
-        currentPin = current.search as BackendSourcePin;
+      const nextPin = next.search as BackendWorkspaceSearch,
+        currentPin = current.search as BackendWorkspaceSearch;
       const sameWorkspace =
         current.pathname === next.pathname &&
+        nextPin.diagramId === currentPin.diagramId &&
+        nextPin.diagramVersion === currentPin.diagramVersion &&
+        nextPin.diagramViewId === currentPin.diagramViewId &&
+        nextPin.diagramViewVersion === currentPin.diagramViewVersion &&
         nextPin.viewId === currentPin.viewId &&
         nextPin.viewVersion === currentPin.viewVersion &&
         nextPin.revisionId === currentPin.revisionId &&
@@ -568,7 +636,7 @@ function BackendProjectDetail({
       }
     >
       <BackendSavedViewContext value={session}>
-        <Stack gap="xl" data-testid="backend-project-page">
+        <Stack gap="xl" data-testid="backend-project-page" tabIndex={-1}>
           <Button
             variant="subtle"
             w="fit-content"
