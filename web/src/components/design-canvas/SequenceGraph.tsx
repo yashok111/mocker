@@ -224,7 +224,7 @@ export default function SequenceGraph({
     graph.on("translate", clearHover);
     const updateHeaders = () => {
       if (!fittingRef.current) {
-        positionSequenceHeaders(graph, layoutRef.current, readOnlyRef.current);
+        positionSequenceHeaders(graph, layoutRef.current);
       }
     };
     graph.on("translate", updateHeaders);
@@ -260,7 +260,7 @@ export default function SequenceGraph({
             origin.x - offsetX,
             Math.min(origin.x + MAX_PARTICIPANT_OFFSET_X - offsetX, position.x),
           ),
-          stickyParticipantY(graph, origin.y, readOnlyRef.current),
+          stickyParticipantY(graph, origin.y),
         );
       }
       if (data.role === "messageGrip") node.setPosition(origin.x, position.y);
@@ -296,9 +296,7 @@ export default function SequenceGraph({
       } finally {
         node.setPosition(
           origin.x,
-          data.role === "participantGrip"
-            ? stickyParticipantY(graph, origin.y, readOnlyRef.current)
-            : origin.y,
+          data.role === "participantGrip" ? stickyParticipantY(graph, origin.y) : origin.y,
         );
       }
     });
@@ -343,7 +341,7 @@ export default function SequenceGraph({
       }
       fitOnFirstRenderRef.current = false;
     }
-    positionSequenceHeaders(graph, layoutRef.current, readOnly);
+    positionSequenceHeaders(graph, layoutRef.current);
   }, [document, selection, readOnly, highlights, executionStatuses]);
 
   const zoomBy = (delta: number) => {
@@ -357,11 +355,11 @@ export default function SequenceGraph({
     if (!graph || layoutRef.current.participants.length === 0) return;
     fittingRef.current = true;
     try {
-      positionSequenceHeaders(graph, layoutRef.current, readOnly, true);
+      positionSequenceHeaders(graph, layoutRef.current, true);
       graph.zoomToFit({ padding: readOnly ? readOnlyFitPadding : fitPadding, maxScale: 1 });
     } finally {
       fittingRef.current = false;
-      positionSequenceHeaders(graph, layoutRef.current, readOnly);
+      positionSequenceHeaders(graph, layoutRef.current);
     }
   };
 

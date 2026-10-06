@@ -2,16 +2,15 @@ import type { Graph } from "@antv/x6";
 import type { SequenceLayout } from "./sequenceLayout";
 import { cellId } from "./sequenceProjection";
 
-export function stickyParticipantY(graph: Graph, originalY: number, readOnly: boolean): number {
-  // Screen pixels: leave room for the zoom controls in the editable canvas.
-  const inset = readOnly ? 12 : 64;
+export function stickyParticipantY(graph: Graph, originalY: number): number {
+  // Keep the inset in screen pixels so zoom does not change the top clearance.
+  const inset = 12;
   return Math.max(originalY, (inset - graph.translate().ty) / graph.zoom());
 }
 
 export function positionSequenceHeaders(
   graph: Graph,
   layout: SequenceLayout,
-  readOnly: boolean,
   restore = false,
 ): void {
   for (const participant of layout.participants) {
@@ -19,9 +18,7 @@ export function positionSequenceHeaders(
     const node = graph.getCellById(id);
     if (!node?.isNode()) continue;
     const position = node.getPosition();
-    const y = restore
-      ? participant.header.y
-      : stickyParticipantY(graph, participant.header.y, readOnly);
+    const y = restore ? participant.header.y : stickyParticipantY(graph, participant.header.y);
     const delta = y - position.y;
     if (delta === 0) continue;
     node.setPosition(position.x, y);

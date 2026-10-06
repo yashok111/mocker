@@ -561,7 +561,7 @@ export function DesignCanvasEditor({
               </Button>
             </div>
           ) : null}
-          <div className={classes.topOverlay}>
+          <div className={classes.bottomOverlay}>
             <Menu position="bottom-start" width={260} shadow="md" withinPortal>
               <Menu.Target>
                 <ActionIcon
@@ -603,7 +603,8 @@ export function DesignCanvasEditor({
                 </Menu.Item>
               </Menu.Dropdown>
             </Menu>
-
+          </div>
+          <div className={classes.topOverlay}>
             {draft.error ? (
               <Alert color="red" role="alert" withCloseButton onClose={() => draft.setError("")}>
                 {draft.error}

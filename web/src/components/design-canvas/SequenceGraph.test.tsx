@@ -508,17 +508,17 @@ describe("SequenceGraph sticky participants", () => {
     }
   }
 
-  it("pins headers below controls while preserving columns and message positions", () => {
+  it("pins headers 12 pixels from the top while preserving columns and message positions", () => {
     render(view(documentOf()));
     const originalX = cell("participant:client").x;
     const originalY = cell("participant:client").y;
     const messageY = cell("message-label:call").y;
     viewport(-200);
-    expect(cell("participant:client").y - 200).toBe(64);
+    expect(cell("participant:client").y - 200).toBe(12);
     expect(cell("participant:client").x).toBe(originalX);
     expect(cell("message-label:call").y).toBe(messageY);
     viewport(-400, 2);
-    expect(cell("participant:client").y * 2 - 400).toBe(64);
+    expect(cell("participant:client").y * 2 - 400).toBe(12);
     viewport(100);
     expect(cell("participant:client").y).toBe(originalY);
   });
@@ -531,11 +531,11 @@ describe("SequenceGraph sticky participants", () => {
     const gap = cell("participant:client").y - cell("highlight:participant:client").y;
     viewport(-200);
     result.rerender(view(doc, { kind: "participant", id: "client" }, { highlights }));
-    expect(cell("participant:client").y - 200).toBe(64);
+    expect(cell("participant:client").y - 200).toBe(12);
     expect(cell("participant:client").y - cell("highlight:participant:client").y).toBe(gap);
   });
 
-  it("uses a smaller inset without controls in read-only mode", () => {
+  it("uses the same top inset in read-only mode", () => {
     render(view(documentOf(), null, { readOnly: true }));
     viewport(-200, 0.5);
     expect(cell("participant:client").y * 0.5 - 200).toBe(12);
@@ -554,11 +554,11 @@ describe("SequenceGraph sticky participants", () => {
     for (const [event, handler] of graph.on.mock.calls) {
       if (event === "node:moving") handler({ node });
     }
-    expect(node.setPosition).toHaveBeenLastCalledWith(cell("participant:client").x + 50, 264);
+    expect(node.setPosition).toHaveBeenLastCalledWith(cell("participant:client").x + 50, 212);
     graph.zoomToFit.mockImplementationOnce(() => {
       expect(cell("participant:client").y).toBe(originalY);
     });
     fireEvent.click(screen.getByRole("button", { name: "Показать всё" }));
-    expect(cell("participant:client").y).toBe(264);
+    expect(cell("participant:client").y).toBe(212);
   });
 });

@@ -62,6 +62,12 @@
 .historyTools {
   justify-content: flex-end;
 }
+.bottomOverlay {
+  position: absolute;
+  bottom: 12px;
+  left: 12px;
+  z-index: 30;
+}
 .topOverlay {
   position: absolute;
   inset: 12px 12px 112px;
