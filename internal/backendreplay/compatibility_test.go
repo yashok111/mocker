@@ -1,4 +1,4 @@
-package backendreplay
+package backendreplay_test
 
 import (
 	"bytes"
@@ -17,8 +17,11 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
+	"uuid"
 
 	"github.com/yashok111/mocker/internal/backendmodel"
+	replay "github.com/yashok111/mocker/internal/backendreplay"
 	p "github.com/yashok111/mocker/internal/ordersprotocol"
 	"github.com/yashok111/mocker/internal/ordersreference"
 	"github.com/yashok111/mocker/internal/probe"
@@ -29,7 +32,7 @@ import (
 // following local imports and embedded files. No ignored manifests or generated
 // oracle artifacts are needed. This describes test fixture build inputs, not a
 // claim that the separately linked standalone binary was executed.
-func compatibilityProvenance(t *testing.T, variant string) Provenance {
+func compatibilityProvenance(t *testing.T, variant string) replay.Provenance {
 	t.Helper()
 	root, err := filepath.Abs("../..")
 	if err != nil {
@@ -75,7 +78,7 @@ func compatibilityProvenance(t *testing.T, variant string) Provenance {
 		}
 	}
 	visit("cmd/orders-reference")
-	provenance := Provenance{SourceFiles: []p.SourceFile{}}
+	provenance := replay.Provenance{SourceFiles: []p.SourceFile{}}
 	for path := range paths {
 		absolute := filepath.Join(root, filepath.FromSlash(path))
 		info, err := os.Lstat(absolute)
@@ -101,7 +104,7 @@ func compatibilityProvenance(t *testing.T, variant string) Provenance {
 	return provenance
 }
 
-func runOrdersCompatibility(t *testing.T, variant, drop string) *Run {
+func runOrdersCompatibility(t *testing.T, variant, drop string) *replay.Run {
 	t.Helper()
 	provenance := compatibilityProvenance(t, variant)
 	buildHash, err := p.BuildHash(provenance.Build)
@@ -109,7 +112,7 @@ func runOrdersCompatibility(t *testing.T, variant, drop string) *Run {
 		t.Fatal(err)
 	}
 	token := "compatibility-only-token-01234567890123456789"
-	isolation := newReplayID()
+	isolation := uuid.NewV7().String()
 	fixturePath := filepath.Join(t.TempDir(), "orders.sqlite")
 	fixture, err := ordersreference.Open(ordersreference.Config{DBPath: fixturePath, Token: token, IsolationID: isolation, TargetID: "compatibility", ConfigVersion: 1}, ordersreference.Build{Variant: variant, ServiceVersion: provenance.Build.ServiceVersion, SourceTreeHash: provenance.Build.SourceTreeHash, BuildHash: buildHash})
 	if err != nil {
@@ -153,7 +156,7 @@ func runOrdersCompatibility(t *testing.T, variant, drop string) *Run {
 			return
 		}
 		var persisted []byte
-		if err = db.R.QueryRowContext(r.Context(), `SELECT request_json FROM backend_replay_steps WHERE run_id=? AND request_key=?`, fence.RunID, fence.RequestKey).Scan(&persisted); err != nil || !bytes.Equal(raw, persisted) {
+		if err := db.R.QueryRowContext(r.Context(), `SELECT request_json FROM backend_replay_steps_documents WHERE run_id=? AND request_key=?`, fence.RunID, fence.RequestKey).Scan(&persisted); err != nil || !bytes.Equal(raw, persisted) {
 			t.Errorf("mutation arrived without durable exact request: %v", err)
 			http.Error(w, "not durable", 500)
 			return
@@ -184,16 +187,16 @@ func runOrdersCompatibility(t *testing.T, variant, drop string) *Run {
 		t.Fatalf("identity: %v", err)
 	}
 	graphs := backendmodel.NewRepo(db)
-	project, err := graphs.Create(t.Context(), backendmodel.CreateInput{Name: "Compatibility", IdempotencyKey: newReplayID()})
+	project, err := graphs.Create(t.Context(), backendmodel.CreateInput{Name: "Compatibility", IdempotencyKey: uuid.NewV7().String()})
 	if err != nil {
 		t.Fatal(err)
 	}
-	s := NewService(NewRepo(db), graphs, []Target{{TargetInfo: TargetInfo{ID: "compatibility", Version: 1, IsolationID: isolation}, Transport: transport, ConfigFingerprint: transport.(interface{ ConfigHash() string }).ConfigHash()}})
+	s := replay.NewService(replay.NewRepo(db), graphs, []replay.Target{{TargetInfo: replay.TargetInfo{ID: "compatibility", Version: 1, IsolationID: isolation}, Transport: transport, ConfigFingerprint: transport.(interface{ ConfigHash() string }).ConfigHash()}})
 	s.ActorAllowed = func(_ context.Context, actor string) bool { return actor == "compatibility-actor" }
 	if err = s.RecoverInterrupted(t.Context()); err != nil {
 		t.Fatal(err)
 	}
-	profile, err := s.Connect(t.Context(), project.ID, "compatibility-actor", ConnectInput{ConfiguredTargetID: "compatibility", ExpectedIdentityHash: live.Payload.IdentityHash, AllowReset: true, IdempotencyKey: newReplayID()})
+	profile, err := s.Connect(t.Context(), project.ID, "compatibility-actor", replay.ConnectInput{ConfiguredTargetID: "compatibility", ExpectedIdentityHash: live.Payload.IdentityHash, AllowReset: true, IdempotencyKey: uuid.NewV7().String()})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -202,30 +205,58 @@ func runOrdersCompatibility(t *testing.T, variant, drop string) *Run {
 	if err != nil {
 		t.Fatal(err)
 	}
-	pkg := Template()
+	pkg := replay.Template()
 	pkg.Profile = profile.Pin
 	pkg.Target = target
 	pkg.TargetHash = graph.Pins.TargetHash
-	saved, err := s.SavePackage(t.Context(), project.ID, "compatibility-actor", SavePackageInput{ID: newReplayID(), Package: pkg, Provenance: provenance, IdempotencyKey: newReplayID()})
+	saved, err := s.SavePackage(t.Context(), project.ID, "compatibility-actor", replay.SavePackageInput{ID: uuid.NewV7().String(), Package: pkg, Provenance: provenance, IdempotencyKey: uuid.NewV7().String()})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if posts.Load() != 0 {
 		t.Fatal("connect/save caused an effect")
 	}
-	run, err := s.Start(t.Context(), project.ID, "compatibility-actor", StartInput{Package: saved.Pin, Profile: profile.Pin, ExpectedIdentityHash: profile.IdentityHash, ResetAuthorizationID: profile.Authorization.ID, ResetAuthorizationVersion: profile.Authorization.Version, IdempotencyKey: newReplayID()})
+	run, err := s.Start(t.Context(), project.ID, "compatibility-actor", replay.StartInput{Package: saved.Pin, Profile: profile.Pin, ExpectedIdentityHash: profile.IdentityHash, ResetAuthorizationID: profile.Authorization.ID, ResetAuthorizationVersion: profile.Authorization.Version, IdempotencyKey: uuid.NewV7().String()})
 	if err != nil {
 		t.Fatal(err)
 	}
-	claimed, actor, err := s.claim(t.Context())
-	if err != nil || claimed == nil || claimed.ID != run.ID {
-		t.Fatalf("claim: %v", err)
-	}
-	if err = s.execute(t.Context(), actor, claimed); err != nil {
+	workerCtx, stopWorkers := context.WithCancel(t.Context())
+	workerDone := make(chan error, 1)
+	go func() { workerDone <- s.Run(workerCtx) }()
+	t.Cleanup(func() {
+		stopWorkers()
+		select {
+		case err := <-workerDone:
+			if err != nil {
+				t.Errorf("worker shutdown: %v", err)
+			}
+		case <-time.After(10 * time.Second):
+			t.Error("replay workers did not stop")
+		}
+	})
+	waitCtx, cancelWait := context.WithTimeout(t.Context(), 10*time.Second)
+	defer cancelWait()
+	if err := s.WaitRunning(waitCtx); err != nil {
 		t.Fatal(err)
 	}
-	terminal, err := s.Get(t.Context(), project.ID, run.ID)
-	if err != nil {
+	ticker := time.NewTicker(5 * time.Millisecond)
+	defer ticker.Stop()
+	var terminal *replay.Run
+	for {
+		terminal, err = s.Get(waitCtx, project.ID, run.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if terminal.Status != "queued" && terminal.Status != "running" {
+			break
+		}
+		select {
+		case <-waitCtx.Done():
+			t.Fatalf("replay did not finish: %v", waitCtx.Err())
+		case <-ticker.C:
+		}
+	}
+	if err := s.Close(waitCtx); err != nil {
 		t.Fatal(err)
 	}
 	want := "succeeded"
@@ -305,13 +336,13 @@ func runOrdersCompatibility(t *testing.T, variant, drop string) *Run {
 }
 
 func TestOrdersServiceReplayCompatibility(t *testing.T) {
-	var buggy, fixed *Run
+	var buggy, fixed *replay.Run
 	t.Run("buggy", func(t *testing.T) { buggy = runOrdersCompatibility(t, "buggy", "") })
 	t.Run("fixed", func(t *testing.T) { fixed = runOrdersCompatibility(t, "fixed", "") })
 	t.Run("lost_reset_reply", func(t *testing.T) { runOrdersCompatibility(t, "fixed", "reset") })
 	t.Run("lost_first_order_reply", func(t *testing.T) { runOrdersCompatibility(t, "fixed", "order") })
 	if buggy != nil && fixed != nil {
-		comparison, err := Compare(buggy.Input, *buggy.Report, fixed.Input, *fixed.Report)
+		comparison, err := replay.Compare(buggy.Input, *buggy.Report, fixed.Input, *fixed.Report)
 		if err != nil || !comparison.Reproduced || !comparison.Fixed {
 			t.Fatalf("actual regression compare: %+v %v", comparison, err)
 		}
