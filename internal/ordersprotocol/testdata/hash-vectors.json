@@ -1,0 +1,4 @@
+{
+  "fixtureWire": "{\"version\":\"payment-write-retry-v1\",\"failurePoint\":\"orders.persist.after_payment\",\"order\":{\"sku\":\"widget\",\"quantity\":1,\"amountMinor\":1000,\"currency\":\"USD\"},\"paymentScope\":\"mocked\",\"persistenceScope\":\"actual_fixture\"}",
+  "fixtureHash": "3b8ebae13dbdffbfcaba257afba7a0169eda8c52862dde020dac1b97b20b52ce"
+}
