@@ -43,6 +43,9 @@ package admin
 // from the slice reads as a to-do list rather than a set.
 func (s *Server) Ready() []string {
 	var missing []string
+	if s.backendReplay == nil {
+		missing = append(missing, "SetBackendReplay")
+	}
 	if s.backendAnalysis == nil || s.backendAnalysisRepo == nil {
 		missing = append(missing, "SetBackendAnalysis")
 	}

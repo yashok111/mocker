@@ -20,6 +20,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
+	"github.com/yashok111/mocker/internal/ordersprotocol"
 	"github.com/yashok111/mocker/internal/probe"
 )
 
@@ -68,8 +69,12 @@ type TrustProxy struct {
 	CIDRs []netip.Prefix
 }
 
+// TestTarget is an immutable operator-owned replay target.
+type TestTarget = probe.TestTarget
+
 // Config is the fully-validated runtime configuration.
 type Config struct {
+	TestTargets    []TestTarget
 	ProxyAllowlist []string
 	ProxyCAPEM     []byte
 	Addr           string
@@ -233,6 +238,8 @@ func Load() (*Config, error) {
 
 		Dev: boolEnv("MOCKER_DEV"),
 	}
+
+	c.TestTargets = loadTestTargets(env("MOCKER_TEST_TARGETS", "[]"), &errs)
 
 	c.DefaultSpecID = defaultSpecID(env("MOCKER_DEFAULT_SPEC", ""), &errs)
 
@@ -719,4 +726,28 @@ func loadProxy(c *Config) error {
 	}
 
 	return errors.Join(errs...)
+}
+
+func loadTestTargets(raw string, errs *[]error) []TestTarget {
+	var targets []TestTarget
+	if err := ordersprotocol.Decode([]byte(raw), &targets, 64<<10); err != nil || targets == nil {
+		*errs = append(*errs, errors.New("MOCKER_TEST_TARGETS: invalid target registry JSON"))
+		return nil
+	}
+	seen := map[string]bool{}
+	isolations := map[string]bool{}
+	for _, target := range targets {
+		if err := target.Validate(); err != nil {
+			*errs = append(*errs, fmt.Errorf("MOCKER_TEST_TARGETS: %w", err))
+		}
+		if seen[target.ID] {
+			*errs = append(*errs, errors.New("MOCKER_TEST_TARGETS: duplicate target ID"))
+		}
+		seen[target.ID] = true
+		if isolations[target.IsolationID] {
+			*errs = append(*errs, errors.New("MOCKER_TEST_TARGETS: duplicate isolation ID"))
+		}
+		isolations[target.IsolationID] = true
+	}
+	return targets
 }

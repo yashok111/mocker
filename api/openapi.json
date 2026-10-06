@@ -13769,7 +13769,8 @@
           "analysisSupport",
           "diagramSupport",
           "installationId",
-          "portableSupport"
+          "portableSupport",
+          "replaySupport"
         ],
         "properties": {
           "modelSchemaVersions": {
@@ -14623,7 +14624,8 @@
                 "backend-diagram-v1",
                 "diagram-view-v1",
                 "artifact-context-v3",
-                "backend-portable-v1"
+                "backend-portable-v1",
+                "backend-replay-v1"
               ]
             }
           },
@@ -15027,6 +15029,59 @@
                 "const": false
               }
             }
+          },
+          "replaySupport": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "packageVersion": {
+                "type": "string",
+                "const": "backend-replay-v1"
+              },
+              "protocolVersion": {
+                "type": "string",
+                "const": "orders-replay-v1"
+              },
+              "checkerVersion": {
+                "type": "string",
+                "const": "orders-checker-v1"
+              },
+              "queueLimit": {
+                "type": "integer",
+                "const": 20
+              },
+              "workers": {
+                "type": "integer",
+                "const": 2
+              },
+              "executionSeconds": {
+                "type": "integer",
+                "const": 60
+              },
+              "paymentScope": {
+                "type": "string",
+                "const": "mocked"
+              },
+              "persistenceScope": {
+                "type": "string",
+                "const": "actual_fixture"
+              },
+              "requiresExplicitConsent": {
+                "type": "boolean",
+                "const": true
+              }
+            },
+            "required": [
+              "packageVersion",
+              "protocolVersion",
+              "checkerVersion",
+              "queueLimit",
+              "workers",
+              "executionSeconds",
+              "paymentScope",
+              "persistenceScope",
+              "requiresExplicitConsent"
+            ]
           }
         }
       },
@@ -84832,6 +84887,1070 @@
             }
           }
         }
+      },
+      "BackendReplayPin": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "version": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "contentHash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          }
+        },
+        "required": [
+          "id",
+          "version",
+          "contentHash"
+        ]
+      },
+      "BackendReplayIdentity": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "protocol": {
+            "type": "string"
+          },
+          "service": {
+            "type": "string"
+          },
+          "serviceVersion": {
+            "type": "string"
+          },
+          "isolationId": {
+            "type": "string"
+          },
+          "instanceId": {
+            "type": "string"
+          },
+          "variant": {
+            "type": "string"
+          },
+          "sourcePolicy": {
+            "type": "string"
+          },
+          "buildHash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "sourceTreeHash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "fixtureHash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "testOnly": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "required": [
+          "protocol",
+          "service",
+          "serviceVersion",
+          "isolationId",
+          "instanceId",
+          "variant",
+          "sourcePolicy",
+          "buildHash",
+          "sourceTreeHash",
+          "fixtureHash",
+          "testOnly"
+        ]
+      },
+      "BackendReplayAuthorization": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "version": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "targetId": {
+            "type": "string"
+          },
+          "configVersion": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "identityHash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "isolationId": {
+            "type": "string"
+          },
+          "allowReset": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "required": [
+          "id",
+          "version",
+          "targetId",
+          "configVersion",
+          "identityHash",
+          "isolationId",
+          "allowReset"
+        ]
+      },
+      "BackendReplayProfile": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "pin": {
+            "$ref": "#/components/schemas/BackendReplayPin"
+          },
+          "targetId": {
+            "type": "string"
+          },
+          "configVersion": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "identity": {
+            "$ref": "#/components/schemas/BackendReplayIdentity"
+          },
+          "identityHash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "authorization": {
+            "$ref": "#/components/schemas/BackendReplayAuthorization"
+          }
+        },
+        "required": [
+          "pin",
+          "targetId",
+          "configVersion",
+          "identity",
+          "identityHash",
+          "authorization"
+        ]
+      },
+      "BackendReplayProvenance": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "sourceFiles": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "path": {
+                  "type": "string"
+                },
+                "sha256": {
+                  "type": "string",
+                  "pattern": "^[a-f0-9]{64}$"
+                }
+              },
+              "required": [
+                "path",
+                "sha256"
+              ]
+            }
+          },
+          "build": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "serviceVersion": {
+                "type": "string"
+              },
+              "variant": {
+                "type": "string",
+                "enum": [
+                  "buggy",
+                  "fixed"
+                ]
+              },
+              "sourceTreeHash": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              },
+              "toolchain": {
+                "type": "string"
+              },
+              "goos": {
+                "type": "string"
+              },
+              "goarch": {
+                "type": "string"
+              },
+              "buildFlags": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "required": [
+              "serviceVersion",
+              "variant",
+              "sourceTreeHash",
+              "toolchain",
+              "goos",
+              "goarch",
+              "buildFlags"
+            ]
+          }
+        },
+        "required": [
+          "sourceFiles",
+          "build"
+        ]
+      },
+      "BackendReplayBinding": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "diagram": {
+            "$ref": "#/components/schemas/BackendDiagramPin"
+          },
+          "elementId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "stepId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "assertionIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        },
+        "required": [
+          "diagram",
+          "elementId",
+          "stepId",
+          "assertionIds"
+        ]
+      },
+      "BackendReplayPackage": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "format": {
+            "type": "string",
+            "const": "backend-replay-v1"
+          },
+          "target": {
+            "$ref": "#/components/schemas/BackendDiagramTarget"
+          },
+          "targetHash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "artifactPins": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendArtifactPin"
+            }
+          },
+          "findingFingerprint": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "profile": {
+            "$ref": "#/components/schemas/BackendReplayPin"
+          },
+          "fixtureHash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "failurePoint": {
+            "type": "string",
+            "const": "orders.persist.after_payment"
+          },
+          "steps": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "kind": {
+                  "type": "string"
+                },
+                "scope": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "kind",
+                "scope"
+              ]
+            }
+          },
+          "assertions": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "kind": {
+                  "type": "string"
+                },
+                "stepId": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "expected": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "id",
+                "kind",
+                "stepId",
+                "expected"
+              ]
+            }
+          },
+          "diagramScope": {
+            "$ref": "#/components/schemas/BackendDiagramScopeInput"
+          },
+          "diagramScopeHash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "diagramBindings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendReplayBinding"
+            }
+          },
+          "excludedIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "format",
+          "target",
+          "targetHash",
+          "artifactPins",
+          "profile",
+          "fixtureHash",
+          "failurePoint",
+          "steps",
+          "assertions",
+          "excludedIds"
+        ]
+      },
+      "BackendReplaySavedPackage": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "pin": {
+            "$ref": "#/components/schemas/BackendReplayPin"
+          },
+          "package": {
+            "$ref": "#/components/schemas/BackendReplayPackage"
+          },
+          "provenance": {
+            "$ref": "#/components/schemas/BackendReplayProvenance"
+          }
+        },
+        "required": [
+          "pin",
+          "package",
+          "provenance"
+        ]
+      },
+      "ConnectBackendReplayProfileRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "configuredTargetId": {
+            "type": "string"
+          },
+          "expectedIdentityHash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "allowReset": {
+            "type": "boolean",
+            "const": true
+          },
+          "idempotencyKey": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "required": [
+          "configuredTargetId",
+          "expectedIdentityHash",
+          "allowReset",
+          "idempotencyKey"
+        ]
+      },
+      "RevokeBackendReplayAuthorizationRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "profile": {
+            "$ref": "#/components/schemas/BackendReplayPin"
+          },
+          "idempotencyKey": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "required": [
+          "profile",
+          "idempotencyKey"
+        ]
+      },
+      "SaveBackendReplayPackageRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "expectedVersion": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "package": {
+            "$ref": "#/components/schemas/BackendReplayPackage"
+          },
+          "provenance": {
+            "$ref": "#/components/schemas/BackendReplayProvenance"
+          },
+          "idempotencyKey": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "required": [
+          "id",
+          "expectedVersion",
+          "package",
+          "provenance",
+          "idempotencyKey"
+        ]
+      },
+      "StartBackendReplayRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "package": {
+            "$ref": "#/components/schemas/BackendReplayPin"
+          },
+          "profile": {
+            "$ref": "#/components/schemas/BackendReplayPin"
+          },
+          "expectedIdentityHash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "resetAuthorizationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "resetAuthorizationVersion": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "idempotencyKey": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "acknowledgedPreviousRunId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "required": [
+          "package",
+          "profile",
+          "expectedIdentityHash",
+          "resetAuthorizationId",
+          "resetAuthorizationVersion",
+          "idempotencyKey"
+        ]
+      },
+      "CancelBackendReplayRunRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {},
+        "required": []
+      },
+      "CompareBackendReplayRunsRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "leftRunId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "rightRunId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "required": [
+          "leftRunId",
+          "rightRunId"
+        ]
+      },
+      "BackendReplayReport": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "runId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "status": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "checkerVersion": {
+            "type": "string"
+          },
+          "package": {
+            "$ref": "#/components/schemas/BackendReplayPin"
+          },
+          "profile": {
+            "$ref": "#/components/schemas/BackendReplayPin"
+          },
+          "identity": {
+            "$ref": "#/components/schemas/BackendReplayIdentity"
+          },
+          "provenance": {
+            "$ref": "#/components/schemas/BackendReplayProvenance"
+          },
+          "assertions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendReplayAssertionResult"
+            }
+          },
+          "bindings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendReplayBindingEvidence"
+            }
+          },
+          "receipts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendReplayReceipt"
+            }
+          }
+        },
+        "required": [
+          "runId",
+          "status",
+          "checkerVersion",
+          "package",
+          "profile",
+          "identity",
+          "provenance",
+          "assertions",
+          "bindings",
+          "receipts"
+        ]
+      },
+      "BackendReplayComparison": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "left": {
+            "$ref": "#/components/schemas/BackendReplayReport"
+          },
+          "right": {
+            "$ref": "#/components/schemas/BackendReplayReport"
+          },
+          "reproduced": {
+            "type": "boolean"
+          },
+          "fixed": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "left",
+          "right",
+          "reproduced",
+          "fixed"
+        ]
+      },
+      "BackendReplayRunInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "runId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "start": {
+            "$ref": "#/components/schemas/StartBackendReplayRequest"
+          },
+          "package": {
+            "$ref": "#/components/schemas/BackendReplayPackage"
+          },
+          "profile": {
+            "$ref": "#/components/schemas/BackendReplayProfile"
+          },
+          "businessKey": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "requests": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "runId": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "stepId": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "requestKey": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "epoch": {
+                  "type": "integer",
+                  "format": "int64"
+                },
+                "identityHash": {
+                  "type": "string",
+                  "pattern": "^[a-f0-9]{64}$"
+                }
+              },
+              "required": [
+                "runId",
+                "stepId",
+                "requestKey",
+                "epoch",
+                "identityHash"
+              ]
+            }
+          }
+        },
+        "required": [
+          "runId",
+          "start",
+          "package",
+          "profile",
+          "businessKey",
+          "requests"
+        ]
+      },
+      "BackendReplayRun": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "projectId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "queued",
+              "running",
+              "succeeded",
+              "failed",
+              "unverified",
+              "cancelled",
+              "interrupted"
+            ]
+          },
+          "input": {
+            "$ref": "#/components/schemas/BackendReplayRunInput"
+          },
+          "provenance": {
+            "$ref": "#/components/schemas/BackendReplayProvenance"
+          },
+          "report": {
+            "$ref": "#/components/schemas/BackendReplayReport"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "projectId",
+          "status",
+          "input",
+          "provenance",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "BackendReplayAssertionResult": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "expected": {
+            "type": "integer"
+          },
+          "actual": {
+            "type": "integer"
+          },
+          "passed": {
+            "type": "boolean"
+          },
+          "scope": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "expected",
+          "actual",
+          "passed",
+          "scope"
+        ]
+      },
+      "BackendReplayBindingEvidence": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "package": {
+            "$ref": "#/components/schemas/BackendReplayPin"
+          },
+          "binding": {
+            "$ref": "#/components/schemas/BackendReplayBinding"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "executed",
+              "mocked",
+              "skipped",
+              "unverified",
+              "failed"
+            ]
+          },
+          "assertionIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        },
+        "required": [
+          "package",
+          "binding",
+          "status",
+          "assertionIds"
+        ]
+      },
+      "ReconcileBackendReplayRunRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {},
+        "required": []
+      },
+      "BackendReplayTemplate": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "format": {
+            "type": "string",
+            "const": "backend-replay-v1"
+          },
+          "fixtureHash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "failurePoint": {
+            "type": "string",
+            "const": "orders.persist.after_payment"
+          },
+          "steps": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "kind": {
+                  "type": "string"
+                },
+                "scope": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "kind",
+                "scope"
+              ]
+            }
+          },
+          "assertions": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "kind": {
+                  "type": "string"
+                },
+                "stepId": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "expected": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "id",
+                "kind",
+                "stepId",
+                "expected"
+              ]
+            }
+          },
+          "artifactPins": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendArtifactPin"
+            }
+          },
+          "excludedIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "format",
+          "fixtureHash",
+          "failurePoint",
+          "steps",
+          "assertions",
+          "artifactPins",
+          "excludedIds"
+        ]
+      },
+      "ListBackendReplayTargetsResult": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "version": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1
+            },
+            "isolationId": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "version",
+            "isolationId"
+          ]
+        }
+      },
+      "ListBackendReplayProfilesResult": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/BackendReplayProfile"
+        }
+      },
+      "RevokeBackendReplayAuthorizationResult": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "revoked": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "revoked"
+        ]
+      },
+      "ListBackendReplayPackagesResult": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/BackendReplaySavedPackage"
+        }
+      },
+      "ListBackendReplayRunsResult": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/BackendReplayRun"
+        }
+      },
+      "BackendReplayReceipt": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "runId": {
+            "type": "string"
+          },
+          "stepId": {
+            "type": "string"
+          },
+          "requestKey": {
+            "type": "string"
+          },
+          "identityHash": {
+            "type": "string"
+          },
+          "endpoint": {
+            "type": "string"
+          },
+          "requestHash": {
+            "type": "string"
+          },
+          "outcome": {
+            "type": "string"
+          },
+          "businessKey": {
+            "type": "string"
+          },
+          "orderId": {
+            "type": "string"
+          },
+          "chargeId": {
+            "type": "string"
+          },
+          "epoch": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "httpStatus": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "resultEpoch": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "attempt": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "sequence": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "counters": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "orders": {
+                "type": "integer"
+              },
+              "charges": {
+                "type": "integer"
+              },
+              "attempts": {
+                "type": "integer"
+              },
+              "triggers": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "orders",
+              "charges",
+              "attempts",
+              "triggers"
+            ]
+          }
+        },
+        "required": [
+          "runId",
+          "stepId",
+          "requestKey",
+          "identityHash",
+          "endpoint",
+          "requestHash",
+          "outcome",
+          "epoch",
+          "httpStatus",
+          "resultEpoch",
+          "sequence",
+          "counters"
+        ]
       }
     }
   },
@@ -108874,6 +109993,2137 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/ResolveBackendPortableSelectionRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/backend-projects/{id}/replay/targets": {
+      "get": {
+        "tags": [
+          "backend-projects"
+        ],
+        "operationId": "listBackendReplayTargets",
+        "summary": "ListBackendReplayTargets",
+        "description": "Project-owned immutable replay pins. Only explicit connect grants reset consent; only explicit start queues trusted Orders execution. Selecting or saving never executes imported source.",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListBackendReplayTargetsResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/api/backend-projects/{id}/replay/template": {
+      "get": {
+        "tags": [
+          "backend-projects"
+        ],
+        "operationId": "getBackendReplayTemplate",
+        "summary": "GetBackendReplayTemplate",
+        "description": "Project-owned immutable replay pins. Only explicit connect grants reset consent; only explicit start queues trusted Orders execution. Selecting or saving never executes imported source.",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendReplayTemplate"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/api/backend-projects/{id}/replay/profiles": {
+      "post": {
+        "tags": [
+          "backend-projects"
+        ],
+        "operationId": "connectBackendReplayProfile",
+        "summary": "ConnectBackendReplayProfile",
+        "description": "Project-owned immutable replay pins. Only explicit connect grants reset consent; only explicit start queues trusted Orders execution. Selecting or saving never executes imported source.",
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendReplayProfile"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConnectBackendReplayProfileRequest"
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "backend-projects"
+        ],
+        "operationId": "listBackendReplayProfiles",
+        "summary": "ListBackendReplayProfiles",
+        "description": "Project-owned immutable replay pins. Only explicit connect grants reset consent; only explicit start queues trusted Orders execution. Selecting or saving never executes imported source.",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListBackendReplayProfilesResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/api/backend-projects/{id}/replay/revoke": {
+      "post": {
+        "tags": [
+          "backend-projects"
+        ],
+        "operationId": "revokeBackendReplayAuthorization",
+        "summary": "RevokeBackendReplayAuthorization",
+        "description": "Project-owned immutable replay pins. Only explicit connect grants reset consent; only explicit start queues trusted Orders execution. Selecting or saving never executes imported source.",
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RevokeBackendReplayAuthorizationResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RevokeBackendReplayAuthorizationRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/backend-projects/{id}/replay/packages": {
+      "post": {
+        "tags": [
+          "backend-projects"
+        ],
+        "operationId": "saveBackendReplayPackage",
+        "summary": "SaveBackendReplayPackage",
+        "description": "Project-owned immutable replay pins. Only explicit connect grants reset consent; only explicit start queues trusted Orders execution. Selecting or saving never executes imported source.",
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendReplaySavedPackage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SaveBackendReplayPackageRequest"
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "backend-projects"
+        ],
+        "operationId": "listBackendReplayPackages",
+        "summary": "ListBackendReplayPackages",
+        "description": "Project-owned immutable replay pins. Only explicit connect grants reset consent; only explicit start queues trusted Orders execution. Selecting or saving never executes imported source.",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListBackendReplayPackagesResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/api/backend-projects/{id}/replay/profiles/{item}/versions/{v}": {
+      "get": {
+        "tags": [
+          "backend-projects"
+        ],
+        "operationId": "getBackendReplayProfile",
+        "summary": "GetBackendReplayProfile",
+        "description": "Project-owned immutable replay pins. Only explicit connect grants reset consent; only explicit start queues trusted Orders execution. Selecting or saving never executes imported source.",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "item",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "v",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendReplayProfile"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/api/backend-projects/{id}/replay/packages/{item}/versions/{v}": {
+      "get": {
+        "tags": [
+          "backend-projects"
+        ],
+        "operationId": "getBackendReplayPackage",
+        "summary": "GetBackendReplayPackage",
+        "description": "Project-owned immutable replay pins. Only explicit connect grants reset consent; only explicit start queues trusted Orders execution. Selecting or saving never executes imported source.",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "item",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "v",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendReplaySavedPackage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/api/backend-projects/{id}/replay/runs": {
+      "post": {
+        "tags": [
+          "backend-projects"
+        ],
+        "operationId": "startBackendReplay",
+        "summary": "StartBackendReplay",
+        "description": "Project-owned immutable replay pins. Only explicit connect grants reset consent; only explicit start queues trusted Orders execution. Selecting or saving never executes imported source.",
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendReplayRun"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StartBackendReplayRequest"
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "backend-projects"
+        ],
+        "operationId": "listBackendReplayRuns",
+        "summary": "ListBackendReplayRuns",
+        "description": "Project-owned immutable replay pins. Only explicit connect grants reset consent; only explicit start queues trusted Orders execution. Selecting or saving never executes imported source.",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListBackendReplayRunsResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/api/backend-projects/{id}/replay/runs/{rid}": {
+      "get": {
+        "tags": [
+          "backend-projects"
+        ],
+        "operationId": "getBackendReplayRun",
+        "summary": "GetBackendReplayRun",
+        "description": "Project-owned immutable replay pins. Only explicit connect grants reset consent; only explicit start queues trusted Orders execution. Selecting or saving never executes imported source.",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "rid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendReplayRun"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/api/backend-projects/{id}/replay/runs/{rid}/cancel": {
+      "post": {
+        "tags": [
+          "backend-projects"
+        ],
+        "operationId": "cancelBackendReplayRun",
+        "summary": "CancelBackendReplayRun",
+        "description": "Project-owned immutable replay pins. Only explicit connect grants reset consent; only explicit start queues trusted Orders execution. Selecting or saving never executes imported source.",
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "rid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendReplayRun"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CancelBackendReplayRunRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/backend-projects/{id}/replay/compare": {
+      "post": {
+        "tags": [
+          "backend-projects"
+        ],
+        "operationId": "compareBackendReplayRuns",
+        "summary": "CompareBackendReplayRuns",
+        "description": "Project-owned immutable replay pins. Only explicit connect grants reset consent; only explicit start queues trusted Orders execution. Selecting or saving never executes imported source.",
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendReplayComparison"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CompareBackendReplayRunsRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/backend-projects/{id}/replay/runs/{rid}/reconcile": {
+      "post": {
+        "tags": [
+          "backend-projects"
+        ],
+        "operationId": "reconcileBackendReplayRun",
+        "summary": "ReconcileBackendReplayRun",
+        "description": "Project-owned immutable replay pins. Only explicit connect grants reset consent; only explicit start queues trusted Orders execution. Selecting or saving never executes imported source.",
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "rid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendReplayRun"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReconcileBackendReplayRunRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/backend-projects/{id}/diagrams/resolve-scope": {
+      "post": {
+        "tags": [
+          "backend-projects"
+        ],
+        "operationId": "resolveBackendDiagramScope",
+        "summary": "Resolve exact read-only diagram scope",
+        "description": "Resolves the complete exact semantic/projection scope without connecting, saving or executing replay.",
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendDiagramScope"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BackendDiagramScopeInput"
               }
             }
           }

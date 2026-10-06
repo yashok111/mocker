@@ -13,6 +13,7 @@ import (
 	"github.com/yashok111/mocker/internal/admin"
 	"github.com/yashok111/mocker/internal/auth"
 	"github.com/yashok111/mocker/internal/backendanalysis"
+	"github.com/yashok111/mocker/internal/backendreplay"
 	"github.com/yashok111/mocker/internal/store"
 	"github.com/yashok111/mocker/internal/stream"
 	"github.com/yashok111/mocker/internal/workspaces"
@@ -62,6 +63,7 @@ func TestServerReadyReportsEverySetterUntilItRuns(t *testing.T) {
 		name string
 		wire func(*admin.Server)
 	}{
+		{"SetBackendReplay", func(s *admin.Server) { s.SetBackendReplay(backendreplay.NewService(nil, nil, nil)) }},
 		{"SetBackendAnalysis", func(s *admin.Server) {
 			s.SetBackendAnalysis(backendanalysis.NewService(nil, nil, nil), backendanalysis.NewRepo(nil))
 		}},
@@ -107,6 +109,7 @@ func TestServerReadyIgnoresMCP(t *testing.T) {
 	t.Parallel()
 
 	srv := newReadyServer(t)
+	srv.SetBackendReplay(backendreplay.NewService(nil, nil, nil))
 	srv.SetBackendAnalysis(backendanalysis.NewService(nil, nil, nil), backendanalysis.NewRepo(nil))
 	srv.SetLiveState(readyLiveState{})
 	srv.SetTraffic(readyTraffic{})

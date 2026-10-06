@@ -51,6 +51,22 @@ import (
 var noRoute = []string{}
 
 var toolRoutes = map[string][]string{
+	"resolve_backend_diagram_scope":            {"POST /api/backend-projects/{id}/diagrams/resolve-scope"},
+	"list_backend_replay_targets":              {"GET /api/backend-projects/{id}/replay/targets"},
+	"get_backend_replay_template":              {"GET /api/backend-projects/{id}/replay/template"},
+	"connect_backend_replay_profile":           {"POST /api/backend-projects/{id}/replay/profiles"},
+	"list_backend_replay_profiles":             {"GET /api/backend-projects/{id}/replay/profiles"},
+	"revoke_backend_replay_authorization":      {"POST /api/backend-projects/{id}/replay/revoke"},
+	"save_backend_replay_package":              {"POST /api/backend-projects/{id}/replay/packages"},
+	"list_backend_replay_packages":             {"GET /api/backend-projects/{id}/replay/packages"},
+	"get_backend_replay_profile":               {"GET /api/backend-projects/{id}/replay/profiles/{item}/versions/{v}"},
+	"get_backend_replay_package":               {"GET /api/backend-projects/{id}/replay/packages/{item}/versions/{v}"},
+	"start_backend_replay":                     {"POST /api/backend-projects/{id}/replay/runs"},
+	"list_backend_replay_runs":                 {"GET /api/backend-projects/{id}/replay/runs"},
+	"get_backend_replay_run":                   {"GET /api/backend-projects/{id}/replay/runs/{rid}"},
+	"cancel_backend_replay_run":                {"POST /api/backend-projects/{id}/replay/runs/{rid}/cancel"},
+	"reconcile_backend_replay_run":             {"POST /api/backend-projects/{id}/replay/runs/{rid}/reconcile"},
+	"compare_backend_replay_runs":              {"POST /api/backend-projects/{id}/replay/compare"},
 	"start_backend_analysis":                   {"POST /api/backend-projects/{id}/analyses"},
 	"list_backend_analysis":                    {"GET /api/backend-projects/{id}/analyses"},
 	"get_backend_analysis":                     {"GET /api/backend-projects/{id}/analyses/{aid}"},

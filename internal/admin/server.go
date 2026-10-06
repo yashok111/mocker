@@ -24,6 +24,7 @@ import (
 	"github.com/yashok111/mocker/internal/backendmaterialize"
 	"github.com/yashok111/mocker/internal/backendmodel"
 	"github.com/yashok111/mocker/internal/backendportable"
+	"github.com/yashok111/mocker/internal/backendreplay"
 	"github.com/yashok111/mocker/internal/checkpoints"
 	"github.com/yashok111/mocker/internal/config"
 	"github.com/yashok111/mocker/internal/customep"
@@ -74,6 +75,7 @@ const readyzTimeout = 2 * time.Second
 
 // Server holds the admin plane's dependencies and builds its HTTP handler.
 type Server struct {
+	backendReplay       *backendreplay.Service
 	backendAnalysis     *backendanalysis.Service
 	backendAnalysisRepo *backendanalysis.Repo
 	proxyRepo           *recordproxy.Repo
@@ -543,3 +545,6 @@ func (s *Server) SetBackendAnalysis(service *backendanalysis.Service, repo *back
 	s.backendAnalysis = service
 	s.backendAnalysisRepo = repo
 }
+
+// SetBackendReplay binds the replay worker owner before serving.
+func (s *Server) SetBackendReplay(service *backendreplay.Service) { s.backendReplay = service }

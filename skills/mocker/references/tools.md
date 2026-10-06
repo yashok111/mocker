@@ -454,3 +454,8 @@ Portable tools: `resolve_backend_portable_selection`, `export_backend_project`,
 `commit_backend_portable_import`, `abort_backend_portable_import` and
 `query_backend_namespaced_artifact`. Read `backend-portable` for the complete
 exact-pin workflow, recovery, explicit artifact mapping and cleanup.
+
+
+## Trusted Orders replay (replay1)
+
+Negotiate `mocker-backend-replay` and read `backend-replay` in the pinned guide set. Discover configured targets; explicit connect grants reset consent. Save immutable package/source/build/profile pins; only explicit start executes the trusted fixture. Tools: list_backend_replay_targets, get_backend_replay_template, connect_backend_replay_profile, list_backend_replay_profiles, get_backend_replay_profile, revoke_backend_replay_authorization, save_backend_replay_package, list_backend_replay_packages, get_backend_replay_package, start_backend_replay, list_backend_replay_runs, get_backend_replay_run, cancel_backend_replay_run, compare_backend_replay_runs. Payment is mocked, order persistence actual_fixture. Preserve exact request/keys across lost replies. No arbitrary targets or imported application execution.

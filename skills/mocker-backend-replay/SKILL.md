@@ -1,0 +1,36 @@
+---
+name: mocker-backend-replay
+description: Execute explicitly authorized trusted Orders fixture replays with immutable package, profile, source and build provenance; compare independently evidenced regression runs.
+metadata:
+  workflowId: "mocker-backend-replay"
+  workflowVersion: "1"
+  requiredModelSchemaVersions: "[\"5\",\"6\"]"
+  requiredViewSchemaVersions: "[\"backend-replay-v1\",\"backend-diagram-v1\"]"
+  requiredCapabilities: "[\"backend-replay\",\"backend-test-profiles\",\"backend-replay-bindings\"]"
+  guideSetId: "sha256:6f7bd965821a068a6e44c418cd19823acfcb38ad7e5beb05c5127da80a6858db"
+  manifestHash: "sha256:6f7bd965821a068a6e44c418cd19823acfcb38ad7e5beb05c5127da80a6858db"
+---
+
+# Trusted Orders replay
+
+Negotiate replay1 through get_backend_capabilities and read this complete backend-replay topic from the selected immutable guide set. This workflow runs only the operator-configured, test-only Orders reference fixture. It never runs imported application code, package scripts, SQL, jobs or brokers. Payment is mocked; order persistence uses actual fixture SQLite. B6 observation remains unavailable.
+
+1. List configured targets with list_backend_replay_targets {projectId}. Target IDs/config versions/isolation IDs are public; origins and credentials are never public inputs. Obtain expectedIdentityHash and independent source/build manifest from the fixture operator. Missing compatible provenance remains unverified; an imported artifact/API hash cannot replace sourceTreeHash.
+2. Only after explicit user consent, persist the full connect_backend_replay_profile request {projectId,configuredTargetId,expectedIdentityHash,allowReset:true,idempotencyKey}. Connect reads identity and stores immutable profile/reset authorization, never resets. Merely selecting a diagram, package or target does not connect or start.
+3. Read get_backend_replay_template. Fill exact source revision or full changeProposal target, targetHash, artifactPins, optional findingFingerprint and exact profile pin. Save through save_backend_replay_package {projectId,id,expectedVersion,package,provenance,idempotencyKey}. New package uses expectedVersion=0; new version uses exact prior version. Provenance is {sourceFiles:[{path,sha256}],build:{serviceVersion,variant,sourceTreeHash,toolchain,goos,goarch,buildFlags}} from the operator's build manifest. Save checks exact owner/membership and creates no reset consent. Retain returned pin; never silently pick latest.
+4. Optional I4 bindings use exact diagram pin, semantic elementId, stepId and assertionIds belonging to this saved package version. Architecture selections first resolve projection scope; a projected edge ID is not a semantic element ID. Include exact diagramScopeHash with diagramScope and explicit excludedIds for unsupported members. Incomplete/truncated scope cannot establish verification.
+5. Only explicit Start calls start_backend_replay with exact package/profile pins, expectedIdentityHash, resetAuthorizationId/version and a persisted idempotencyKey. The same canonical request/key returns the same durable run, including after restart; changed input under a key conflicts. The engine performs identity→reset→arm→first order→retry→journal→identity→local checker. Save/select never starts. List/get runs to poll; do not start again because an HTTP reply was lost.
+6. Persist complete mutation requests before transport. On lost reply retry only identical connect/save/start/revoke request and key. The runner never speculatively retries uncertain fixture mutations; only positive journal evidence permits progression. Target leases fence uncertain cancelled/interrupted runs. An explicit new run can acknowledge an old uncertain run using acknowledgedPreviousRunId; this is an operator decision, never automatic recovery. Restart interrupts queued/running work without resuming it.
+7. cancel_backend_replay_run {projectId,replayRunId} stops future dispatch; an in-flight request may still have effects. revoke_backend_replay_authorization {projectId,profile,idempotencyKey} blocks future mutations for that exact consent. Closing a view only stops local reads. Terminal reports stay immutable; later evidence does not turn a cancelled/interrupted run into success.
+8. Read local assertions and bindings separately: executed, mocked, skipped, unverified, failed. Desired Orders assertions are orders=1, charges=1, attempts=2, triggers=1. Buggy produces two mocked charges and fails; fixed produces one mocked charge and succeeds only with complete exact evidence. Missing trigger/reset/provenance is unverified, not reproduced. A replay does not prove other branches, the whole lifecycle or unrelated architecture members.
+9. For a fixed build connect its explicit profile and save an explicit new package version with changed source/build/profile pins. compare_backend_replay_runs {projectId,leftRunId,rightRunId} requires identical program/fixture/assertions/bindings, retains both reports and both provenance sets, and does not execute. Full package hashes may differ; unrelated programs refuse comparison.
+
+Versioned reads: get_backend_replay_profile/get_backend_replay_package take projectId,replayItemId,version. Run reads/cancel take projectId,replayRunId. No public tool exposes reset/arm/order endpoints or accepts arbitrary URLs, headers or scripts. REST paths are /api/backend-projects/{id}/replay/{targets,template,profiles,packages,runs,revoke,compare}; all retain normal session/CSRF/project ownership and MCP CallAsMCP policy.
+
+Explicit `reconcile_backend_replay_run {projectId,replayRunId}` reads identity and journal, appends recovery evidence and may release an uncertain lease only with complete positive witnesses. It never resets/orders, never treats absence as no effect, and never rewrites terminal status.
+
+The durable dispatch-intent commit is the in-flight boundary. Revocation and cancellation block future dispatch intentions; they cannot roll back an already-admitted request, even when its network send or reply races the revocation. Treat that outcome as uncertain until positive journal evidence resolves it.
+
+I4 UI preparation: select an element in any of architecture/interactions/lifecycle/business-map, then explicitly choose “prepare supported replay”. The read-only `resolve_backend_diagram_scope` tool (REST POST /api/backend-projects/{id}/diagrams/resolve-scope) takes the closed exact DiagramScopeInput and retains projected relation context. Preparation reads exact referenced nodes and accepts only actual http_operation attributes method=POST,path=/orders, never labels. Projected refs require a unique original semantic link; ambiguous mappings and unsupported artifact/edge/other endpoint refs stay visibly excluded. Choose a profile explicitly and transfer the prepared draft into the editor; then fill provenance, Save and Start separately. Opening/changing selection never prepares, connects or executes.
+
+Reports expose ordered verified receipts (including reset epoch/counters, armed, injected HTTP503 persistence_failed, and persisted retry). An unverified report contains only the verified prefix. Receipt counters do not override the local assertion verdict; charges remain mocked.

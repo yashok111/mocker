@@ -178,6 +178,7 @@ func (s *Server) handleGetBackendCapabilities(w http.ResponseWriter, r *http.Req
 	}
 	httpx.JSON(w, 200, map[string]any{
 		"installationId":           installation,
+		"replaySupport":            map[string]any{"packageVersion": "backend-replay-v1", "protocolVersion": "orders-replay-v1", "checkerVersion": "orders-checker-v1", "queueLimit": 20, "workers": 2, "executionSeconds": 60, "paymentScope": "mocked", "persistenceScope": "actual_fixture", "requiresExplicitConsent": true},
 		"portableSupport":          map[string]any{"format": "backend-portable-v1", "sourceSchemaVersions": []string{"5", "6"}, "artifactContextVersion": "artifact-context-v3", "maxChunkBytes": 1048576, "maxChunkRecords": 500, "maxBundleBytes": 268435456, "maxArtifactMappings": 20, "importMode": "new_project", "previewPublishes": false},
 		"modelSchemaVersions":      backendmodel.SupportedModelSchemaVersions(),
 		"workflowVersions":         guide.BackendWorkflows(),
@@ -188,7 +189,7 @@ func (s *Server) handleGetBackendCapabilities(w http.ResponseWriter, r *http.Req
 		"supportedNodeKinds":       backendmodel.SupportedNodeKindsForProfile(backendmodel.ComposedProfile),
 		"supportedEdgeKinds":       backendmodel.SupportedEdgeKindsForProfile(backendmodel.ComposedProfile),
 		"guideSetId":               guide.CurrentGuideSetID(),
-		"viewSchemaVersions":       []string{backendmodel.ProposalDocumentVersion, backendmodel.SavedViewDocumentVersion, "api-artifact-pins-v1", backendmodel.EditorArtifactDocumentVersion, backendmodel.ChangeProposalDocumentVersion, "import-candidate-v1", backendmodel.SavedViewV2DocumentVersion, "backend-diagram-v1", "diagram-view-v1", "artifact-context-v3", "backend-portable-v1"},
+		"viewSchemaVersions":       []string{backendmodel.ProposalDocumentVersion, backendmodel.SavedViewDocumentVersion, "api-artifact-pins-v1", backendmodel.EditorArtifactDocumentVersion, backendmodel.ChangeProposalDocumentVersion, "import-candidate-v1", backendmodel.SavedViewV2DocumentVersion, "backend-diagram-v1", "diagram-view-v1", "artifact-context-v3", "backend-portable-v1", "backend-replay-v1"},
 		"proposalDocumentVersions": []string{backendmodel.ProposalDocumentVersion, backendmodel.ChangeProposalDocumentVersion},
 		"changeProposalCommands":   backendChangeProposalCommands(),
 		"sourceScopes":             []string{"add_repository", "reconcile", "add_provider", "migrate_provider"},

@@ -13,8 +13,8 @@
       "source": "references/tools.md",
       "embedded": "tools.md",
       "workflowId": "mocker-routing",
-      "sourceHash": "sha256:be6f45644736d63a07443030bb712df92b0390609b073b9a8d00c7c85a415ea6",
-      "contentHash": "sha256:be6f45644736d63a07443030bb712df92b0390609b073b9a8d00c7c85a415ea6"
+      "sourceHash": "sha256:516d9680f49202a63e32b0fdac37b2e89af093103328494a06dd2ca705d36ca0",
+      "contentHash": "sha256:516d9680f49202a63e32b0fdac37b2e89af093103328494a06dd2ca705d36ca0"
     },
     {
       "topic": "shapes",
@@ -320,6 +320,15 @@
       "workflowId": "mocker-backend-project",
       "sourceHash": "sha256:2704788f4e9482ebb634f9b4313d416ead9b6373de41762ceece28f0a5f1aa94",
       "contentHash": "sha256:2704788f4e9482ebb634f9b4313d416ead9b6373de41762ceece28f0a5f1aa94"
+    },
+    {
+      "topic": "backend-replay",
+      "package": "mocker-backend-replay",
+      "source": "SKILL.md",
+      "embedded": "backend-replay.md",
+      "workflowId": "mocker-backend-replay",
+      "sourceHash": "sha256:8197b74f51103df5694d80be6d37ed2228174d2ca21a9f7e4967adb7e18152c1",
+      "contentHash": "sha256:36b3826b690637b4b701278425c2befb061f110bc361bca8e9061e2b27bcfeee"
     }
   ],
   "workflows": [
@@ -329,8 +338,8 @@
       "entrypoint": "overview",
       "requiredModelSchemaVersions": [],
       "requiredCapabilities": [],
-      "guideSetId": "sha256:f959dc6364785f8b1b3fb3f0ff44a4e39e1bd0384c03331d41cc1f4e3d43cbb0",
-      "manifestHash": "sha256:f959dc6364785f8b1b3fb3f0ff44a4e39e1bd0384c03331d41cc1f4e3d43cbb0",
+      "guideSetId": "sha256:6f7bd965821a068a6e44c418cd19823acfcb38ad7e5beb05c5127da80a6858db",
+      "manifestHash": "sha256:6f7bd965821a068a6e44c418cd19823acfcb38ad7e5beb05c5127da80a6858db",
       "topics": [
         {
           "topic": "overview",
@@ -338,7 +347,7 @@
         },
         {
           "topic": "tools",
-          "contentHash": "sha256:be6f45644736d63a07443030bb712df92b0390609b073b9a8d00c7c85a415ea6"
+          "contentHash": "sha256:516d9680f49202a63e32b0fdac37b2e89af093103328494a06dd2ca705d36ca0"
         },
         {
           "topic": "shapes",
@@ -375,8 +384,8 @@
         "backend-revisions",
         "backend-annotations"
       ],
-      "guideSetId": "sha256:f959dc6364785f8b1b3fb3f0ff44a4e39e1bd0384c03331d41cc1f4e3d43cbb0",
-      "manifestHash": "sha256:f959dc6364785f8b1b3fb3f0ff44a4e39e1bd0384c03331d41cc1f4e3d43cbb0",
+      "guideSetId": "sha256:6f7bd965821a068a6e44c418cd19823acfcb38ad7e5beb05c5127da80a6858db",
+      "manifestHash": "sha256:6f7bd965821a068a6e44c418cd19823acfcb38ad7e5beb05c5127da80a6858db",
       "topics": [
         {
           "topic": "backend-overview",
@@ -424,8 +433,8 @@
         "backend-source-sync",
         "backend-representations"
       ],
-      "guideSetId": "sha256:f959dc6364785f8b1b3fb3f0ff44a4e39e1bd0384c03331d41cc1f4e3d43cbb0",
-      "manifestHash": "sha256:f959dc6364785f8b1b3fb3f0ff44a4e39e1bd0384c03331d41cc1f4e3d43cbb0",
+      "guideSetId": "sha256:6f7bd965821a068a6e44c418cd19823acfcb38ad7e5beb05c5127da80a6858db",
+      "manifestHash": "sha256:6f7bd965821a068a6e44c418cd19823acfcb38ad7e5beb05c5127da80a6858db",
       "topics": [
         {
           "topic": "backend-import",
@@ -487,8 +496,8 @@
         "proposal-graph-v1",
         "saved-view-v2"
       ],
-      "guideSetId": "sha256:f959dc6364785f8b1b3fb3f0ff44a4e39e1bd0384c03331d41cc1f4e3d43cbb0",
-      "manifestHash": "sha256:f959dc6364785f8b1b3fb3f0ff44a4e39e1bd0384c03331d41cc1f4e3d43cbb0",
+      "guideSetId": "sha256:6f7bd965821a068a6e44c418cd19823acfcb38ad7e5beb05c5127da80a6858db",
+      "manifestHash": "sha256:6f7bd965821a068a6e44c418cd19823acfcb38ad7e5beb05c5127da80a6858db",
       "topics": [
         {
           "topic": "backend-database",
@@ -543,8 +552,8 @@
         "backend-diagram-v1",
         "diagram-view-v1"
       ],
-      "guideSetId": "sha256:f959dc6364785f8b1b3fb3f0ff44a4e39e1bd0384c03331d41cc1f4e3d43cbb0",
-      "manifestHash": "sha256:f959dc6364785f8b1b3fb3f0ff44a4e39e1bd0384c03331d41cc1f4e3d43cbb0",
+      "guideSetId": "sha256:6f7bd965821a068a6e44c418cd19823acfcb38ad7e5beb05c5127da80a6858db",
+      "manifestHash": "sha256:6f7bd965821a068a6e44c418cd19823acfcb38ad7e5beb05c5127da80a6858db",
       "topics": [
         {
           "topic": "backend-inspect",
@@ -610,8 +619,8 @@
         "backend-analysis-diff",
         "backend-analysis-impact"
       ],
-      "guideSetId": "sha256:f959dc6364785f8b1b3fb3f0ff44a4e39e1bd0384c03331d41cc1f4e3d43cbb0",
-      "manifestHash": "sha256:f959dc6364785f8b1b3fb3f0ff44a4e39e1bd0384c03331d41cc1f4e3d43cbb0",
+      "guideSetId": "sha256:6f7bd965821a068a6e44c418cd19823acfcb38ad7e5beb05c5127da80a6858db",
+      "manifestHash": "sha256:6f7bd965821a068a6e44c418cd19823acfcb38ad7e5beb05c5127da80a6858db",
       "topics": [
         {
           "topic": "backend-sync",
@@ -655,8 +664,8 @@
         "backend-architecture",
         "backend-diagram-views"
       ],
-      "guideSetId": "sha256:f959dc6364785f8b1b3fb3f0ff44a4e39e1bd0384c03331d41cc1f4e3d43cbb0",
-      "manifestHash": "sha256:f959dc6364785f8b1b3fb3f0ff44a4e39e1bd0384c03331d41cc1f4e3d43cbb0",
+      "guideSetId": "sha256:6f7bd965821a068a6e44c418cd19823acfcb38ad7e5beb05c5127da80a6858db",
+      "manifestHash": "sha256:6f7bd965821a068a6e44c418cd19823acfcb38ad7e5beb05c5127da80a6858db",
       "topics": [
         {
           "topic": "backend-change-proposals",
@@ -697,8 +706,8 @@
         "backend-analysis-diagnostics",
         "backend-finding-review"
       ],
-      "guideSetId": "sha256:f959dc6364785f8b1b3fb3f0ff44a4e39e1bd0384c03331d41cc1f4e3d43cbb0",
-      "manifestHash": "sha256:f959dc6364785f8b1b3fb3f0ff44a4e39e1bd0384c03331d41cc1f4e3d43cbb0",
+      "guideSetId": "sha256:6f7bd965821a068a6e44c418cd19823acfcb38ad7e5beb05c5127da80a6858db",
+      "manifestHash": "sha256:6f7bd965821a068a6e44c418cd19823acfcb38ad7e5beb05c5127da80a6858db",
       "topics": [
         {
           "topic": "backend-verify",
@@ -709,8 +718,34 @@
           "contentHash": "sha256:cfda27c913e91b556a2ddb8af2f6210347defb99d28f987ec170b3a35e01977f"
         }
       ]
+    },
+    {
+      "workflowId": "mocker-backend-replay",
+      "workflowVersion": "1",
+      "entrypoint": "backend-replay",
+      "requiredModelSchemaVersions": [
+        "5",
+        "6"
+      ],
+      "requiredViewSchemaVersions": [
+        "backend-replay-v1",
+        "backend-diagram-v1"
+      ],
+      "requiredCapabilities": [
+        "backend-replay",
+        "backend-test-profiles",
+        "backend-replay-bindings"
+      ],
+      "guideSetId": "sha256:6f7bd965821a068a6e44c418cd19823acfcb38ad7e5beb05c5127da80a6858db",
+      "manifestHash": "sha256:6f7bd965821a068a6e44c418cd19823acfcb38ad7e5beb05c5127da80a6858db",
+      "topics": [
+        {
+          "topic": "backend-replay",
+          "contentHash": "sha256:36b3826b690637b4b701278425c2befb061f110bc361bca8e9061e2b27bcfeee"
+        }
+      ]
     }
   ],
-  "guideSetId": "sha256:f959dc6364785f8b1b3fb3f0ff44a4e39e1bd0384c03331d41cc1f4e3d43cbb0",
-  "manifestHash": "sha256:f959dc6364785f8b1b3fb3f0ff44a4e39e1bd0384c03331d41cc1f4e3d43cbb0"
+  "guideSetId": "sha256:6f7bd965821a068a6e44c418cd19823acfcb38ad7e5beb05c5127da80a6858db",
+  "manifestHash": "sha256:6f7bd965821a068a6e44c418cd19823acfcb38ad7e5beb05c5127da80a6858db"
 }
