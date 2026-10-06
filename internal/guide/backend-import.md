@@ -6,8 +6,8 @@ metadata:
   workflowVersion: "8"
   requiredModelSchemaVersions: "[\"1\",\"2\",\"3\",\"4\",\"5\",\"6\"]"
   requiredCapabilities: "[\"backend-projects\",\"backend-revisions\",\"backend-graph-query\",\"backend-source-import\",\"backend-source-reconcile\",\"backend-revision-compare\",\"backend-relational-import\",\"backend-database-query\",\"backend-database-er\",\"backend-runtime-flow-import\",\"backend-flow-query\",\"backend-data-access-query\",\"backend-field-lineage-import\",\"backend-field-lineage-query\",\"backend-events-import\",\"backend-events-query\",\"backend-source-sync\",\"backend-representations\"]"
-  guideSetId: "sha256:ab94a2a0f4b60bb7e870d09e7aca06521607f2a96ac9024582a86090c4bae277"
-  manifestHash: "sha256:ab94a2a0f4b60bb7e870d09e7aca06521607f2a96ac9024582a86090c4bae277"
+  guideSetId: "sha256:69eae1f24ccca6ea59a0cf125d65ec0dd48d2e6a62f0350cd6fee2d38f532d83"
+  manifestHash: "sha256:69eae1f24ccca6ea59a0cf125d65ec0dd48d2e6a62f0350cd6fee2d38f532d83"
 ---
 
 # Source graph import and reconciliation
@@ -206,3 +206,5 @@ implementation as gaps. Exact C4/implementation refs and historical pins survive
 save/fork; layout-only views do not change semantics. Design change passes exact
 refs to explicit proposal commands, never an implicit graph/API/scenario write.
 No automatic process inference or policy execution; B5/B6 acceptance stays open.
+
+For static diagnostic jobs and separate finding review, negotiate **verify1** and read `backend-verify` / `backend-diagnostics` from the same immutable guide set. Inspection alone starts no job; review is not runtime proof.

@@ -11,6 +11,8 @@ import (
 	"fmt"
 	"slices"
 	"time"
+
+	"github.com/yashok111/mocker/internal/backendmodel"
 )
 
 var sections = []string{"changes", "findings", "witnesses", "checks", "gaps"}
@@ -237,7 +239,40 @@ func (r *Repo) Finalize(ctx context.Context, pid, id, token string, t TerminalSn
 			return err
 		}
 		out, err = readJob(ctx, tx, pid, id)
-		return err
+		if err != nil {
+			return err
+		}
+		if out.Kind == "diagnostics" && t.Status == "completed" {
+			findings := []backendmodel.Finding{}
+			checks := []backendmodel.FindingCheck{}
+			for _, chunk := range s.Chunks {
+				var records []ResultRecord
+				if err = json.Unmarshal(chunk.ItemsJSON, &records); err != nil {
+					return err
+				}
+				for _, record := range records {
+					if chunk.Section == "findings" {
+						var f backendmodel.Finding
+						if err = json.Unmarshal(record.Detail, &f); err != nil {
+							return err
+						}
+						findings = append(findings, f)
+					}
+					if chunk.Section == "checks" {
+						var c backendmodel.FindingCheck
+						if err = json.Unmarshal(record.Detail, &c); err != nil {
+							return err
+						}
+						if !s.Manifest.Complete && c.Status == "absent" {
+							c.Status = "unknown"
+						}
+						checks = append(checks, c)
+					}
+				}
+			}
+			return backendmodel.IndexFindingReportTx(ctx, tx, pid, backendmodel.FindingAnalysisRef{JobID: id, ResultVersion: s.Manifest.ResultVersion}, findings, checks)
+		}
+		return nil
 	})
 	return out, err
 }

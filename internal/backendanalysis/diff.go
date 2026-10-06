@@ -223,6 +223,9 @@ func (e *analysisEngine) Analyze(ctx context.Context, in *ImmutableInput, emit f
 	if in.V2 != nil {
 		return e.analyzeB43(ctx, in, emit)
 	}
+	if in.Kind == "diagnostics" {
+		return e.analyzeDiagnostics(ctx, in)
+	}
 	var target backendmodel.BackendReadTarget
 	var preview *backendmodel.AnalysisCommandPreviewInput
 	if in.To != nil {

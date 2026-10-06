@@ -76132,6 +76132,9 @@
           },
           {
             "$ref": "#/components/schemas/BackendAnalysisStartEndpointReview"
+          },
+          {
+            "$ref": "#/components/schemas/BackendAnalysisStartDiagnostics"
           }
         ],
         "type": "object"
@@ -76256,7 +76259,8 @@
               "impact",
               "change_package",
               "conformance",
-              "endpoint_review"
+              "endpoint_review",
+              "diagnostics"
             ]
           },
           "status": {
@@ -76694,6 +76698,9 @@
           "runtimeVerified": {
             "type": "boolean",
             "const": false
+          },
+          "diagramScope": {
+            "$ref": "#/components/schemas/BackendDiagramScope"
           }
         },
         "required": [
@@ -78918,7 +78925,8 @@
             "type": "string",
             "enum": [
               "diff",
-              "impact"
+              "impact",
+              "diagnostics"
             ]
           },
           "fromRevisionId": {
@@ -78959,6 +78967,9 @@
           "observationMode": {
             "type": "string",
             "const": "none"
+          },
+          "diagramScope": {
+            "$ref": "#/components/schemas/BackendDiagramScope"
           }
         },
         "required": [
@@ -82502,6 +82513,578 @@
         "required": [
           "rowType",
           "data"
+        ]
+      },
+      "BackendDiagramScopeSelector": {
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "semantic",
+                "type": "string"
+              },
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              }
+            },
+            "required": [
+              "kind",
+              "id"
+            ]
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "architecture_relation",
+                "type": "string"
+              },
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "projection": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "policy": {
+                    "const": "architecture-v1",
+                    "type": "string"
+                  },
+                  "level": {
+                    "type": "string",
+                    "enum": [
+                      "context",
+                      "containers",
+                      "components"
+                    ]
+                  },
+                  "rootId": {
+                    "type": "string",
+                    "format": "uuid"
+                  }
+                },
+                "required": [
+                  "policy",
+                  "level",
+                  "rootId"
+                ]
+              }
+            },
+            "required": [
+              "kind",
+              "id",
+              "projection"
+            ]
+          }
+        ]
+      },
+      "BackendDiagramScopeInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "pin": {
+            "$ref": "#/components/schemas/BackendDiagramPin"
+          },
+          "selectors": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendDiagramScopeSelector"
+            },
+            "maxItems": 1000,
+            "minItems": 1
+          }
+        },
+        "required": [
+          "pin",
+          "selectors"
+        ]
+      },
+      "BackendDiagramScope": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "pin": {
+            "$ref": "#/components/schemas/BackendDiagramPin"
+          },
+          "selectors": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendDiagramScopeSelector"
+            },
+            "maxItems": 1000
+          },
+          "target": {
+            "$ref": "#/components/schemas/BackendDiagramTarget"
+          },
+          "targetHash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "scopeHash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "sourceRefs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendDiagramRef"
+            },
+            "maxItems": 250000
+          },
+          "members": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendDiagramMember"
+            },
+            "maxItems": 250000
+          },
+          "gaps": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendDiagramGap"
+            },
+            "maxItems": 250000
+          },
+          "truncated": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "pin",
+          "selectors",
+          "target",
+          "targetHash",
+          "scopeHash",
+          "sourceRefs",
+          "members",
+          "gaps",
+          "truncated"
+        ]
+      },
+      "BackendDiagnosticFinding": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "fingerprint": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "basisHash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "rule": {
+            "type": "string"
+          },
+          "ruleVersion": {
+            "type": "string"
+          },
+          "severity": {
+            "type": "string"
+          },
+          "certainty": {
+            "type": "string",
+            "enum": [
+              "confirmed",
+              "possible",
+              "unknown"
+            ]
+          },
+          "subjects": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendChangeRecordRef"
+            },
+            "maxItems": 10000
+          },
+          "evidenceIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "maxItems": 10000
+          },
+          "prerequisites": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 10000
+          },
+          "gaps": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 10000
+          },
+          "message": {
+            "type": "string"
+          },
+          "targetHash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "diagramScope": {
+            "$ref": "#/components/schemas/BackendDiagramScope"
+          },
+          "witness": {
+            "$ref": "#/components/schemas/BackendFindingWitness"
+          }
+        },
+        "required": [
+          "fingerprint",
+          "basisHash",
+          "rule",
+          "ruleVersion",
+          "severity",
+          "certainty",
+          "subjects",
+          "evidenceIds",
+          "prerequisites",
+          "gaps",
+          "message",
+          "targetHash",
+          "witness"
+        ]
+      },
+      "BackendFindingAnalysisRef": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "jobId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "resultVersion": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1,
+            "maximum": 9223372036854775807
+          }
+        },
+        "required": [
+          "jobId",
+          "resultVersion"
+        ]
+      },
+      "ReviewBackendFindingRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "expectedVersion": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1,
+            "maximum": 9223372036854775807
+          },
+          "basisHash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "open",
+              "accepted_risk",
+              "false_positive",
+              "resolved"
+            ]
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096
+          },
+          "idempotencyKey": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "resolutionAnalysis": {
+            "$ref": "#/components/schemas/BackendFindingAnalysisRef"
+          }
+        },
+        "required": [
+          "expectedVersion",
+          "basisHash",
+          "status",
+          "reason",
+          "idempotencyKey"
+        ],
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "status": {
+                  "const": "resolved"
+                }
+              }
+            },
+            "then": {
+              "required": [
+                "resolutionAnalysis"
+              ]
+            },
+            "else": {
+              "not": {
+                "required": [
+                  "resolutionAnalysis"
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "BackendFindingReviewEvent": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "version": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1,
+            "maximum": 9223372036854775807
+          },
+          "basisHash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "open",
+              "accepted_risk",
+              "false_positive",
+              "resolved"
+            ]
+          },
+          "reason": {
+            "type": "string"
+          },
+          "author": {
+            "type": "string"
+          },
+          "at": {
+            "type": "string"
+          },
+          "resolutionAnalysis": {
+            "$ref": "#/components/schemas/BackendFindingAnalysisRef"
+          }
+        },
+        "required": [
+          "version",
+          "basisHash",
+          "status",
+          "reason",
+          "author",
+          "at"
+        ]
+      },
+      "BackendFindingReview": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "fingerprint": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "version": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1,
+            "maximum": 9223372036854775807
+          },
+          "basisHash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "open",
+              "accepted_risk",
+              "false_positive",
+              "resolved"
+            ]
+          },
+          "history": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendFindingReviewEvent"
+            },
+            "maxItems": 1000
+          }
+        },
+        "required": [
+          "fingerprint",
+          "version",
+          "basisHash",
+          "status",
+          "history"
+        ]
+      },
+      "BackendFindingItem": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "finding": {
+            "$ref": "#/components/schemas/BackendDiagnosticFinding"
+          },
+          "analysis": {
+            "$ref": "#/components/schemas/BackendFindingAnalysisRef"
+          },
+          "review": {
+            "$ref": "#/components/schemas/BackendFindingReview"
+          }
+        },
+        "required": [
+          "finding",
+          "analysis",
+          "review"
+        ]
+      },
+      "BackendFindingPage": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendFindingItem"
+            },
+            "maxItems": 100
+          },
+          "nextCursor": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "items",
+          "nextCursor"
+        ]
+      },
+      "BackendAnalysisStartDiagnostics": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "diagnostics"
+            ]
+          },
+          "fromRevisionId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            "not": {
+              "const": "00000000-0000-0000-0000-000000000000"
+            }
+          },
+          "target": {
+            "$ref": "#/components/schemas/BackendDiagramTarget"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/BackendAnalysisScope"
+          },
+          "limits": {
+            "$ref": "#/components/schemas/BackendAnalysisLimits"
+          },
+          "observationMode": {
+            "type": "string",
+            "const": "none"
+          },
+          "observationPins": {
+            "type": "array",
+            "items": {},
+            "maxItems": 0
+          },
+          "idempotencyKey": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "pattern": "^[!-~]+$"
+          },
+          "diagramScope": {
+            "$ref": "#/components/schemas/BackendDiagramScopeInput"
+          }
+        },
+        "required": [
+          "kind",
+          "target",
+          "scope",
+          "limits",
+          "observationMode",
+          "idempotencyKey"
+        ]
+      },
+      "BackendFindingWitness": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "records": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendChangeRecordRef"
+            }
+          },
+          "missingRef": {
+            "$ref": "#/components/schemas/BackendDiagramRef"
+          },
+          "originalDiagramPin": {
+            "$ref": "#/components/schemas/BackendDiagramPin"
+          },
+          "ruleId": {
+            "type": "string"
+          },
+          "transitionId": {
+            "type": "string"
+          },
+          "facetDifferences": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "leftFacetKey": {
+                  "type": "string"
+                },
+                "rightFacetKey": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string"
+                },
+                "changedPaths": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "definitionDifferent": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "leftFacetKey",
+                "rightFacetKey",
+                "status",
+                "changedPaths",
+                "definitionDifferent"
+              ]
+            }
+          }
+        },
+        "required": [
+          "records",
+          "facetDifferences"
         ]
       }
     }
@@ -102091,7 +102674,8 @@
                 "impact",
                 "change_package",
                 "conformance",
-                "endpoint_review"
+                "endpoint_review",
+                "diagnostics"
               ]
             }
           },
@@ -104852,6 +105436,279 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/BuildBackendLifecycleRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/backend-projects/{id}/findings": {
+      "get": {
+        "tags": [
+          "backend-projects"
+        ],
+        "operationId": "listBackendFindings",
+        "summary": "listBackendFindings",
+        "description": "Exact immutable diagnostic occurrences and separate human review history. Review is not runtime proof.",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "jobId",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "resultVersion",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1,
+              "maximum": 9223372036854775807
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendFindingPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        }
+      }
+    },
+    "/api/backend-projects/{id}/findings/{fingerprint}/review": {
+      "put": {
+        "tags": [
+          "backend-projects"
+        ],
+        "operationId": "reviewBackendFinding",
+        "summary": "reviewBackendFinding",
+        "description": "Exact immutable diagnostic occurrences and separate human review history. Review is not runtime proof.",
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "fingerprint",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendFindingReview"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReviewBackendFindingRequest"
               }
             }
           }

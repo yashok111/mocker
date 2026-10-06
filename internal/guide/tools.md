@@ -427,3 +427,7 @@ Select change4 and read `backend-analysis-jobs` / `backend-change-rebase` from t
 | apply_backend_change_proposal_lifecycle | proposalId, expectedVersion, proposalRevisionId, action ready, report, acknowledgedGapIds[], idempotencyKey | Exact completed saved-draft impact association; runtime unverified. |
 
 REST paths are `/api/backend-projects/{projectId}/analyses` (POST/GET), `/{jobId}` (GET), `/{jobId}/results` (GET), `/{jobId}/cancel` and `/{jobId}/retry` (POST). Proposal POST paths are `/api/backend-projects/{projectId}/change-proposals/{proposalId}/rebase-preview`, `/rebase`, `/lifecycle`. Browser REST mutations retain existing session/CSRF requirements; MCP uses its bearer-authenticated adapter to the same handlers. Preserve exact integer versions and original request bytes.
+
+## Static diagnostic findings (verify1)
+
+`start_backend_analysis` additionally accepts kind `diagnostics`, exact source/full proposal target and optional exact `diagramScope`. `list_backend_findings {projectId,jobId,resultVersion,limit?,cursor?}` reads immutable occurrences with separate live review history. `review_backend_finding {projectId,fingerprint,expectedVersion,basisHash,status,reason,idempotencyKey,resolutionAnalysis?}` mutates review only. Resolved requires exact completed scoped absence proof; unknown is insufficient. Replay identical review requests after lost replies.

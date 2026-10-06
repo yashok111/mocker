@@ -274,6 +274,8 @@ func (s *Server) routes() []route {
 		{"GET /api/backend-projects/{id}/revisions/{rid}/nodes/{nid}", s.handleGetBackendNode, mcpAllow, cpRead},
 		{"GET /api/backend-projects/{id}/revisions/{rid}/evidence", s.handleGetBackendEvidence, mcpAllow, cpRead},
 		{"GET /api/backend-projects/{id}/revisions/{rid}/coverage", s.handleGetBackendCoverage, mcpAllow, cpRead},
+		{"GET /api/backend-projects/{id}/findings", s.handleListBackendFindings, mcpAllow, cpRead},
+		{"PUT /api/backend-projects/{id}/findings/{fingerprint}/review", s.handleReviewBackendFinding, mcpAllow, cpAnotherLayer},
 		{"POST /api/backend-projects/{id}/analyses", s.handleStartBackendAnalysis, mcpAllow, cpAnotherLayer},
 		{"GET /api/backend-projects/{id}/analyses", s.handleListBackendAnalysis, mcpAllow, cpRead},
 		{"GET /api/backend-projects/{id}/analyses/{aid}", s.handleGetBackendAnalysis, mcpAllow, cpRead},

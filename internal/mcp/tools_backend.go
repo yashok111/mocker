@@ -41,6 +41,7 @@ func addBackendTools(s *sdk.Server, lb *loopback) {
 	addBackendAnalysisTools(s, lb)
 	addBackendSavedViewTools(s, lb)
 	addBackendDiagramTools(s, lb)
+	addBackendFindingTools(s, lb)
 	addBackendAPIArtifactTools(s, lb)
 	addBackendArtifactTools(s, lb)
 	const base = "/api/backend-projects"

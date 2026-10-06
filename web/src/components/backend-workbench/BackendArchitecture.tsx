@@ -1,3 +1,4 @@
+import { BackendAnalysisJobs } from "./BackendAnalysisJobs";
 import { useDiagramChangeHandoff } from "./BackendDiagramChangeContext";
 import { businessMapArchitectureSearch } from "./backendBusinessMapNavigation";
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useState, useRef } from "react";
@@ -1087,6 +1088,36 @@ function ArchitectureWorkspace({
             <Suspense fallback={<Loader aria-label="Загружаем C4 canvas" />}>
               <BackendArchitectureGraph elements={es} links={ls} state={state} onSelect={select} />
             </Suspense>
+          )}
+          {state.selection && (
+            <details
+              key={`${diagram.pin.id}:${diagram.pin.version}:${state.selection.id}:${state.level}:${state.rootId}`}
+            >
+              <summary>Диагностика выбранного элемента</summary>
+              <BackendAnalysisJobs
+                projectId={projectId}
+                sourceRevisionId={
+                  "revisionId" in diagram.document.target ? diagram.document.target.revisionId : ""
+                }
+                target={diagram.document.target}
+                diagramScope={{
+                  pin: diagram.pin,
+                  selectors: [
+                    architecture && state.selection.type === "link"
+                      ? {
+                          kind: "architecture_relation",
+                          id: state.selection.id,
+                          projection: {
+                            policy: "architecture-v1",
+                            level: state.level!,
+                            rootId: state.rootId!,
+                          },
+                        }
+                      : { kind: "semantic", id: state.selection.id },
+                  ],
+                }}
+              />
+            </details>
           )}
           {architecture && (
             <BackendArchitectureInspector

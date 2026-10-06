@@ -2147,7 +2147,7 @@ export const backendChangeSchemas: Record<string, ChangeSchema> = {
       },
       kind: {
         type: "string",
-        enum: ["diff", "impact"],
+        enum: ["diff", "impact", "diagnostics"],
       },
       fromRevisionId: {
         type: "string",
@@ -2187,6 +2187,9 @@ export const backendChangeSchemas: Record<string, ChangeSchema> = {
       observationMode: {
         type: "string",
         const: "none",
+      },
+      diagramScope: {
+        $ref: "#/components/schemas/BackendDiagramScope",
       },
     },
     required: [
@@ -2240,7 +2243,7 @@ export const backendChangeSchemas: Record<string, ChangeSchema> = {
       },
       kind: {
         type: "string",
-        enum: ["diff", "impact", "change_package", "conformance", "endpoint_review"],
+        enum: ["diff", "impact", "change_package", "conformance", "endpoint_review", "diagnostics"],
       },
       status: {
         type: "string",
@@ -2845,6 +2848,9 @@ export const backendChangeSchemas: Record<string, ChangeSchema> = {
         type: "boolean",
         const: false,
       },
+      diagramScope: {
+        $ref: "#/components/schemas/BackendDiagramScope",
+      },
     },
     required: [
       "jobId",
@@ -3238,6 +3244,52 @@ export const backendChangeSchemas: Record<string, ChangeSchema> = {
       "identityMap",
       "testAttachments",
     ],
+  },
+  BackendAnalysisStartDiagnostics: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      kind: {
+        type: "string",
+        enum: ["diagnostics"],
+      },
+      fromRevisionId: {
+        type: "string",
+        format: "uuid",
+        pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+        not: {
+          const: "00000000-0000-0000-0000-000000000000",
+        },
+      },
+      target: {
+        $ref: "#/components/schemas/BackendDiagramTarget",
+      },
+      scope: {
+        $ref: "#/components/schemas/BackendAnalysisScope",
+      },
+      limits: {
+        $ref: "#/components/schemas/BackendAnalysisLimits",
+      },
+      observationMode: {
+        type: "string",
+        const: "none",
+      },
+      observationPins: {
+        type: "array",
+        items: {},
+        maxItems: 0,
+      },
+      idempotencyKey: {
+        type: "string",
+        minLength: 1,
+        maxLength: 128,
+        pattern: "^[!-~]+$",
+      },
+      diagramScope: {
+        $ref: "#/components/schemas/BackendDiagramScopeInput",
+      },
+    },
+    required: ["kind", "target", "scope", "limits", "observationMode", "idempotencyKey"],
   },
   BackendAnalysisStartEndpointReview: {
     type: "object",
@@ -12595,6 +12647,341 @@ export const backendChangeSchemas: Record<string, ChangeSchema> = {
       "dependencyIds",
       "materialized",
       "dependenciesStatus",
+    ],
+  },
+  BackendDiagramEvidenceRef: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      revisionId: {
+        type: "string",
+        format: "uuid",
+      },
+      evidenceId: {
+        type: "string",
+        format: "uuid",
+      },
+      subjectId: {
+        type: "string",
+        format: "uuid",
+      },
+    },
+    required: ["revisionId", "evidenceId", "subjectId"],
+  },
+  BackendDiagramGap: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      id: {
+        type: "string",
+        format: "uuid",
+      },
+      subjectId: {
+        type: "string",
+        format: "uuid",
+      },
+      code: {
+        type: "string",
+      },
+      explanation: {
+        type: "string",
+        maxLength: 4096,
+      },
+    },
+    required: ["id", "subjectId", "code", "explanation"],
+  },
+  BackendDiagramMember: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      ref: {
+        $ref: "#/components/schemas/BackendDiagramRef",
+      },
+      origin: {
+        $ref: "#/components/schemas/BackendDiagramProjectedOrigin",
+      },
+      targetHash: {
+        type: "string",
+        pattern: "^[0-9a-f]{64}$",
+      },
+    },
+    required: ["ref", "origin", "targetHash"],
+  },
+  BackendDiagramPin: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      id: {
+        type: "string",
+        format: "uuid",
+      },
+      version: {
+        type: "integer",
+        format: "int64",
+        minimum: 1,
+        maximum: 9223372036854776000,
+      },
+      contentHash: {
+        type: "string",
+        pattern: "^[0-9a-f]{64}$",
+      },
+    },
+    required: ["id", "version", "contentHash"],
+  },
+  BackendDiagramProjectedOrigin: {
+    oneOf: [
+      {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          kind: {
+            type: "string",
+            enum: ["source_assertion"],
+          },
+          evidence: {
+            type: "array",
+            items: {
+              $ref: "#/components/schemas/BackendDiagramEvidenceRef",
+            },
+            minItems: 1,
+          },
+        },
+        required: ["kind", "evidence"],
+      },
+      {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          kind: {
+            type: "string",
+            enum: ["authored"],
+          },
+          reason: {
+            type: "string",
+            maxLength: 4096,
+            minLength: 1,
+          },
+        },
+        required: ["kind", "reason"],
+      },
+    ],
+    discriminator: {
+      propertyName: "kind",
+    },
+  },
+  BackendDiagramRef: {
+    oneOf: [
+      {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          kind: {
+            type: "string",
+            enum: ["record"],
+          },
+          recordType: {
+            type: "string",
+            enum: ["node", "edge"],
+          },
+          id: {
+            type: "string",
+            format: "uuid",
+          },
+        },
+        required: ["kind", "recordType", "id"],
+      },
+      {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          kind: {
+            type: "string",
+            enum: ["artifact"],
+          },
+          locator: {
+            $ref: "#/components/schemas/ArtifactProjectionLocator",
+          },
+          rowId: {
+            type: "string",
+            maxLength: 4096,
+            minLength: 1,
+          },
+        },
+        required: ["kind", "locator", "rowId"],
+      },
+    ],
+    discriminator: {
+      propertyName: "kind",
+    },
+  },
+  BackendDiagramScope: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      pin: {
+        $ref: "#/components/schemas/BackendDiagramPin",
+      },
+      selectors: {
+        type: "array",
+        items: {
+          $ref: "#/components/schemas/BackendDiagramScopeSelector",
+        },
+        maxItems: 1000,
+      },
+      target: {
+        $ref: "#/components/schemas/BackendDiagramTarget",
+      },
+      targetHash: {
+        type: "string",
+        pattern: "^[0-9a-f]{64}$",
+      },
+      scopeHash: {
+        type: "string",
+        pattern: "^[0-9a-f]{64}$",
+      },
+      sourceRefs: {
+        type: "array",
+        items: {
+          $ref: "#/components/schemas/BackendDiagramRef",
+        },
+        maxItems: 250000,
+      },
+      members: {
+        type: "array",
+        items: {
+          $ref: "#/components/schemas/BackendDiagramMember",
+        },
+        maxItems: 250000,
+      },
+      gaps: {
+        type: "array",
+        items: {
+          $ref: "#/components/schemas/BackendDiagramGap",
+        },
+        maxItems: 250000,
+      },
+      truncated: {
+        type: "boolean",
+      },
+    },
+    required: [
+      "pin",
+      "selectors",
+      "target",
+      "targetHash",
+      "scopeHash",
+      "sourceRefs",
+      "members",
+      "gaps",
+      "truncated",
+    ],
+  },
+  BackendDiagramScopeInput: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      pin: {
+        $ref: "#/components/schemas/BackendDiagramPin",
+      },
+      selectors: {
+        type: "array",
+        items: {
+          $ref: "#/components/schemas/BackendDiagramScopeSelector",
+        },
+        maxItems: 1000,
+        minItems: 1,
+      },
+    },
+    required: ["pin", "selectors"],
+  },
+  BackendDiagramScopeSelector: {
+    oneOf: [
+      {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          kind: {
+            const: "semantic",
+            type: "string",
+          },
+          id: {
+            type: "string",
+            format: "uuid",
+          },
+        },
+        required: ["kind", "id"],
+      },
+      {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          kind: {
+            const: "architecture_relation",
+            type: "string",
+          },
+          id: {
+            type: "string",
+            format: "uuid",
+          },
+          projection: {
+            type: "object",
+            additionalProperties: false,
+            properties: {
+              policy: {
+                const: "architecture-v1",
+                type: "string",
+              },
+              level: {
+                type: "string",
+                enum: ["context", "containers", "components"],
+              },
+              rootId: {
+                type: "string",
+                format: "uuid",
+              },
+            },
+            required: ["policy", "level", "rootId"],
+          },
+        },
+        required: ["kind", "id", "projection"],
+      },
+    ],
+  },
+  BackendDiagramTarget: {
+    oneOf: [
+      {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          revisionId: {
+            type: "string",
+            format: "uuid",
+          },
+        },
+        required: ["revisionId"],
+      },
+      {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          changeProposal: {
+            type: "object",
+            additionalProperties: false,
+            properties: {
+              proposalId: {
+                type: "string",
+                format: "uuid",
+              },
+              proposalRevisionId: {
+                type: "string",
+                format: "uuid",
+              },
+            },
+            required: ["proposalId", "proposalRevisionId"],
+          },
+        },
+        required: ["changeProposal"],
+      },
     ],
   },
   BackendEdgeAssertionPayload: {
@@ -22238,6 +22625,9 @@ export const backendChangeSchemas: Record<string, ChangeSchema> = {
       },
       {
         $ref: "#/components/schemas/BackendAnalysisStartEndpointReview",
+      },
+      {
+        $ref: "#/components/schemas/BackendAnalysisStartDiagnostics",
       },
     ],
     type: "object",

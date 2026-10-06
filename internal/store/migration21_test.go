@@ -17,7 +17,7 @@ func TestMigration21PreservesHistoryAndForeignKeys(t *testing.T) {
 	if err := db.Migrate(t.Context(), nil); err != nil {
 		t.Fatal(err)
 	}
-	migration21Version(t, db, 22)
+	migration21Version(t, db, 23)
 	if after := migration21History(t, db); !slices.Equal(before, after) {
 		t.Fatalf("history bytes changed\nbefore: %v\nafter: %v", before, after)
 	}
@@ -42,7 +42,7 @@ func TestMigration21PreservesHistoryAndForeignKeys(t *testing.T) {
 	if err := reopened.Migrate(t.Context(), nil); err != nil {
 		t.Fatal(err)
 	}
-	migration21Version(t, reopened, 22)
+	migration21Version(t, reopened, 23)
 	if after := migration21History(t, reopened); !slices.Equal(before, after) {
 		t.Fatal("reopen changed historical bytes")
 	}
@@ -101,7 +101,7 @@ func TestMigration21AnalysisStorageGuards(t *testing.T) {
 	if err := db.Migrate(t.Context(), nil); err != nil {
 		t.Fatal(err)
 	}
-	migration21Version(t, db, 22)
+	migration21Version(t, db, 23)
 	exec := func(q string) {
 		t.Helper()
 		if _, err := db.W.ExecContext(t.Context(), q); err != nil {
