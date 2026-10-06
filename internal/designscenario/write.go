@@ -14,6 +14,18 @@ import (
 )
 
 func (r *Repo) Create(ctx context.Context, input CreateInput) (*Detail, error) {
+	var result *Detail
+	err := r.db.Write(ctx, func(tx *sql.Tx) error {
+		var err error
+		result, err = r.CreateTx(ctx, tx, input)
+		return err
+	})
+	return result, err
+}
+
+// CreateTx validates and creates a draft in the caller's transaction. The caller
+// must roll back on any error; this method never commits or publishes a draft.
+func (r *Repo) CreateTx(ctx context.Context, tx *sql.Tx, input CreateInput) (*Detail, error) {
 	if err := checkSource(input.Source); err != nil {
 		return nil, err
 	}
@@ -21,36 +33,31 @@ func (r *Repo) Create(ctx context.Context, input CreateInput) (*Detail, error) {
 	if err != nil {
 		return nil, err
 	}
-	var result *Detail
-	err = r.db.Write(ctx, func(tx *sql.Tx) error {
-		if err := r.pinLinkedContracts(ctx, tx, &document); err != nil {
-			return err
-		}
-		prepared, _, err := r.prepare(document, input.FormDrafts)
-		if err != nil {
-			return err
-		}
-		now := time.Now().Unix()
-		row, err := tx.ExecContext(ctx, `INSERT INTO design_scenarios(name,created_at,updated_at) VALUES (?,?,?)`, document.Title, now, now)
-		if err != nil {
-			return err
-		}
-		scenarioID, err := row.LastInsertId()
-		if err != nil {
-			return err
-		}
-		summary := revisionDescription(nil, document, input.FormDrafts, input.Summary)
-		revisionID, err := insertRevision(ctx, tx, scenarioID, 1, nil, prepared, input.Source, summary, now)
-		if err != nil {
-			return err
-		}
-		if _, err = tx.ExecContext(ctx, "UPDATE design_scenarios SET draft_revision_id=? WHERE id=?", revisionID, scenarioID); err != nil {
-			return err
-		}
-		result, err = r.detailTx(ctx, tx, scenarioID)
-		return err
-	})
-	return result, err
+	if err := r.pinLinkedContracts(ctx, tx, &document); err != nil {
+		return nil, err
+	}
+	prepared, _, err := r.prepare(document, input.FormDrafts)
+	if err != nil {
+		return nil, err
+	}
+	now := time.Now().Unix()
+	row, err := tx.ExecContext(ctx, `INSERT INTO design_scenarios(name,created_at,updated_at) VALUES (?,?,?)`, document.Title, now, now)
+	if err != nil {
+		return nil, err
+	}
+	scenarioID, err := row.LastInsertId()
+	if err != nil {
+		return nil, err
+	}
+	summary := revisionDescription(nil, document, input.FormDrafts, input.Summary)
+	revisionID, err := insertRevision(ctx, tx, scenarioID, 1, nil, prepared, input.Source, summary, now)
+	if err != nil {
+		return nil, err
+	}
+	if _, err = tx.ExecContext(ctx, "UPDATE design_scenarios SET draft_revision_id=? WHERE id=?", revisionID, scenarioID); err != nil {
+		return nil, err
+	}
+	return r.detailTx(ctx, tx, scenarioID)
 }
 
 func insertRevision(ctx context.Context, tx *sql.Tx, scenarioID, version int64, parentID *int64, prepared preparedDocument, source, summary string, now int64) (int64, error) {
@@ -62,6 +69,19 @@ func insertRevision(ctx context.Context, tx *sql.Tx, scenarioID, version int64, 
 }
 
 func (r *Repo) Save(ctx context.Context, id int64, input SaveInput) (*Detail, error) {
+	var result *Detail
+	err := r.db.Write(ctx, func(tx *sql.Tx) error {
+		var err error
+		result, err = r.SaveTx(ctx, tx, id, input)
+		return err
+	})
+	return result, err
+}
+
+// SaveTx uses the same CAS, validation and linked API/mock effects as Save.
+// Callers planning multiple owners must enumerate every linked API effect and
+// pin its expected version before invoking this seam. Any error requires rollback.
+func (r *Repo) SaveTx(ctx context.Context, tx *sql.Tx, id int64, input SaveInput) (*Detail, error) {
 	if err := checkSource(input.Source); err != nil {
 		return nil, err
 	}
@@ -69,13 +89,7 @@ func (r *Repo) Save(ctx context.Context, id int64, input SaveInput) (*Detail, er
 	if err != nil {
 		return nil, err
 	}
-	var result *Detail
-	err = r.db.Write(ctx, func(tx *sql.Tx) error {
-		var err error
-		result, err = r.saveTx(ctx, tx, id, input.ExpectedVersion, document, input.FormDrafts, input.Summary, input.Source)
-		return err
-	})
-	return result, err
+	return r.saveTx(ctx, tx, id, input.ExpectedVersion, document, input.FormDrafts, input.Summary, input.Source)
 }
 
 func (r *Repo) saveTx(ctx context.Context, tx *sql.Tx, id, expectedVersion int64, document Document, formDrafts map[string]string, summary, source string) (*Detail, error) {

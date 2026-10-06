@@ -26,7 +26,7 @@ func TestBackendFindingsMigration22To23(t *testing.T) {
 	if err = db.Migrate(t.Context(), nil); err != nil {
 		t.Fatal(err)
 	}
-	migration21Version(t, db, 23)
+	migration21Version(t, db, 24)
 	migration21ForeignKeys(t, db)
 	for _, name := range []string{"backend_finding_checks", "backend_finding_occurrences", "backend_finding_reviews", "backend_finding_events", "backend_finding_receipts"} {
 		var n int
