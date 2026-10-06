@@ -189,7 +189,9 @@ export const customFetch = async <T>(url: string, init: RequestInit = {}): Promi
 
   const method = (init.method ?? "GET").toUpperCase();
   const headers = new Headers(init.headers);
-  headers.set("Accept", "application/json");
+  const svg =
+    /^\/api\/backend-projects\/[^/]+\/diagram-views\/[^/]+\/versions\/[1-9][0-9]*\/svg$/.test(url);
+  headers.set("Accept", svg ? "image/svg+xml" : "application/json");
 
   if (method !== "GET" && method !== "HEAD") {
     // Set unconditionally, including on a body-less DELETE: the admin plane
@@ -222,6 +224,14 @@ export const customFetch = async <T>(url: string, init: RequestInit = {}): Promi
 
   // 204 (DELETE, logout) has no body at all; checking the status directly
   // says what is actually true instead of inferring it from an empty string.
+  if (svg && res.ok) {
+    if (!res.headers.get("Content-Type")?.startsWith("image/svg+xml"))
+      throw new ApiFailure("Некорректный тип SVG-ответа", res.status, "client_svg_type");
+    const blob = await res.blob();
+    if (blob.size > 2 * 1024 * 1024)
+      throw new ApiFailure("SVG превышает 2 MiB", 413, "client_svg_limit");
+    return { status: res.status, data: blob, headers: res.headers } as T;
+  }
   const text = res.status === 204 ? "" : await res.text();
   const parsed = parseJSON(text, requiresExactNumbers(url));
   if (isBackendPath(url)) assertBackendSafeIntegers(parsed);

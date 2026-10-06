@@ -157,3 +157,26 @@ for silence. `functions.md` §7 has both.
 1. `upload_asset {name: "avatar.png", mediaType: "image/png", dataBase64}` (≤ ~7 MB; bigger via curl, `http.md`).
 2. Serve it: `bodyRef: "asset:avatar.png"` on a pinned variant (`GET /users/{id}/avatar`), or `{"kind": "asset_url", "value": ["a.png", "b.png"]}` on `items[*].avatarUrl` to get real URLs in generated bodies.
 3. `list_assets` — names, sizes, `url`, caps. `delete_asset` needs `confirmSlug`.
+
+### Explicit draft translation (backend-http-draft-v1)
+
+1. Read the exact full proposal and effective targetHash. Choose sourceScope IDs.
+   Read target API/scenario revisions and exact hashes; obtain the installation
+   UUID from get_backend_capabilities.installationId and use scope local. Never substitute a project UUID for installation.
+2. Prepare targets (`key`, `kind`, `name`, optional exact namespaced `pin`,
+   `expectedVersion`, `commands`) and translations (`sourceId`, `targetKey`, owner
+   JSON-pointer `selector`, authored `reason`). A new target has expectedVersion0.
+   API command example:
+   `{"type":"replace_api_document","apiDocument":"{\"openapi\":\"3.1.0\",\"info\":{\"title\":\"Draft\",\"version\":\"1\"},\"paths\":{}}"}`.
+3. Call `preview_backend_materialization`. Inspect EVERY linked API/mock effect,
+   normalized document and unsupported/excluded entry. Partial simulation requires
+   explicit consent, excludedIds and reason; it is not behavioral equivalence.
+4. Call `apply_backend_materialization` with the ORIGINAL input and candidateHash,
+   not normalized `preview.input` (copy commands retain original source pin intent).
+   Supply a new idempotencyKey. If the response is lost, repeat exactly that call.
+5. Review the returned owner revisions in existing API/scenario editors. Publication
+   and simulation are separate workflows; no runtime outcome follows from apply.
+
+For a visual artifact, call `export_backend_view_svg` with an exact saved
+`viewId`/`viewVersion`; save the returned text as an SVG file. Bundle roundtrip
+cannot be performed yet: portable project publication remains unimplemented.

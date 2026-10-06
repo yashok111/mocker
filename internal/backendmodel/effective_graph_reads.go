@@ -69,7 +69,7 @@ func loadSourceEffectiveGraph(ctx context.Context, q importReader, pid, rid stri
 		return nil, err
 	}
 	out := &EffectiveGraphSnapshot{Target: BackendReadTarget{RevisionID: rid}, State: state, Source: source, Origins: []EffectiveFieldOrigin{}, Criteria: []ChangeCriterion{}, BaselineEvidence: []EffectiveEvidenceBasis{}, EdgeNames: map[string]string{}, Identities: []EffectiveIdentity{}}
-	out.Pins = EffectiveGraphPins{BaseRevisionID: rid, BaseSemanticHash: state.Revision.SemanticHash, EffectiveSemanticHash: state.Revision.SemanticHash, StructuralSchemaVersion: state.Revision.SchemaVersion, ViewSchemaVersion: state.Revision.SchemaVersion, SourceSnapshotIDs: slices.Clone(state.Revision.SourceSnapshotIDs), ArtifactPins: slices.Clone(state.Revision.ArtifactPins), ArtifactContext: revisionArtifactContext(&state)}
+	out.Pins = EffectiveGraphPins{BaseRevisionID: rid, BaseSemanticHash: state.Revision.SemanticHash, EffectiveSemanticHash: state.Revision.SemanticHash, StructuralSchemaVersion: state.Revision.SchemaVersion, ViewSchemaVersion: state.Revision.SchemaVersion, SourceSnapshotIDs: slices.Clone(state.Revision.SourceSnapshotIDs), ArtifactPins: slices.Clone(state.Revision.ArtifactPins), ArtifactContext: revisionArtifactContext(&state), ArtifactContextV3: state.ArtifactContextV3}
 	if source.State.Revision.SchemaVersion == ComposedSchemaVersion {
 		out.Origins, err = effectiveSourceOrigins(source, state)
 		if err != nil {
@@ -137,6 +137,10 @@ func changeEffectiveSnapshot(ctx context.Context, q importReader, target Backend
 	}
 	out := &EffectiveGraphSnapshot{Target: target, State: state, Source: source, Criteria: desired.Criteria, Origins: []EffectiveFieldOrigin{}, BaselineEvidence: []EffectiveEvidenceBasis{}, Identities: []EffectiveIdentity{}, EdgeNames: map[string]string{}}
 	out.Pins = EffectiveGraphPins{BaseRevisionID: revision.BaseRevisionID, BaseSemanticHash: revision.BaseSemanticHash, EffectiveSemanticHash: revision.SemanticHash, StructuralSchemaVersion: ComposedSchemaVersion, ViewSchemaVersion: ChangeProposalDocumentVersion, SourceSnapshotIDs: slices.Clone(revision.SourceSnapshotIDs), ArtifactPins: slices.Clone(revision.ArtifactPins), ArtifactContext: new(revision.ArtifactContext)}
+	if revision.ArtifactContextV3 != nil {
+		out.Pins.ArtifactContext = nil
+		out.Pins.ArtifactContextV3 = revision.ArtifactContextV3
+	}
 	for _, name := range desired.EdgeNames {
 		out.EdgeNames[name.ID] = name.Name
 	}

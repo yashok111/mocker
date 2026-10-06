@@ -241,3 +241,13 @@ func (p NamespacedArtifactPin) LocalPin(installationID string) (ArtifactPin, err
 	}
 	return p.Pin, nil
 }
+
+// ArtifactContextV3SemanticHash binds the complete namespace/context identity in
+// a separate domain; legacy semantic hashes are never reused for a remapped row.
+func ArtifactContextV3SemanticHash(c ArtifactContextV3) (string, error) {
+	identity, err := ArtifactContextV3Hash(c)
+	if err != nil {
+		return "", err
+	}
+	return sourceDomainHash("backend-artifact-context-v3-semantic-v1", identity)
+}

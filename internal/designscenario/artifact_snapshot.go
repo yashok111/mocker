@@ -25,6 +25,9 @@ type ArtifactSnapshot struct {
 // aggregate exceeds the configured owner bound. All metadata, lengths and
 // guarded bodies come from the same row read, preventing a check/read race.
 func (r *Repo) readArtifactSnapshot(ctx context.Context, scenarioID, revisionID int64) (*ArtifactSnapshot, error) {
+	return r.readArtifactSnapshotFrom(ctx, r.db.R, scenarioID, revisionID)
+}
+func (r *Repo) readArtifactSnapshotFrom(ctx context.Context, q queryer, scenarioID, revisionID int64) (*ArtifactSnapshot, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -33,7 +36,7 @@ func (r *Repo) readArtifactSnapshot(ctx context.Context, scenarioID, revisionID 
 	}
 	out := &ArtifactSnapshot{}
 	var size int64
-	err := r.db.R.QueryRowContext(ctx, `SELECT r.scenario_id,r.id,r.version,
+	err := q.QueryRowContext(ctx, `SELECT r.scenario_id,r.id,r.version,
 		CASE WHEN length(CAST(r.hash AS BLOB))=64 THEN r.hash ELSE '' END,
 		length(CAST(r.document AS BLOB))+length(CAST(r.form_drafts AS BLOB)),
 		CASE WHEN ?<=0 OR length(CAST(r.document AS BLOB))+length(CAST(r.form_drafts AS BLOB))<=? THEN r.document ELSE '' END,

@@ -97,21 +97,22 @@ type ProposalOverlay struct {
 }
 
 type ProposalRevision struct {
-	ID                string              `json:"id"`
-	ProposalID        string              `json:"proposalId"`
-	ParentRevisionID  *string             `json:"parentRevisionId"`
-	DocumentVersion   string              `json:"documentVersion"`
-	SemanticHash      string              `json:"semanticHash"`
-	BaseRevisionID    string              `json:"baseRevisionId"`
-	BaseSemanticHash  string              `json:"baseSemanticHash"`
-	SourceSnapshotIDs []string            `json:"sourceSnapshotIds"`
-	ArtifactPins      []ArtifactPin       `json:"artifactPins"`
-	Commands          []ProposalCommand   `json:"commands"`
-	Overlays          []ProposalOverlay   `json:"overlays"`
-	Criteria          []ProposalCriterion `json:"criteria"`
-	Author            string              `json:"author"`
-	Summary           string              `json:"summary"`
-	CreatedAt         time.Time           `json:"createdAt"`
+	ImportOrigin      *PortableAttribution `json:"importOrigin,omitzero"`
+	ID                string               `json:"id"`
+	ProposalID        string               `json:"proposalId"`
+	ParentRevisionID  *string              `json:"parentRevisionId"`
+	DocumentVersion   string               `json:"documentVersion"`
+	SemanticHash      string               `json:"semanticHash"`
+	BaseRevisionID    string               `json:"baseRevisionId"`
+	BaseSemanticHash  string               `json:"baseSemanticHash"`
+	SourceSnapshotIDs []string             `json:"sourceSnapshotIds"`
+	ArtifactPins      []ArtifactPin        `json:"artifactPins"`
+	Commands          []ProposalCommand    `json:"commands"`
+	Overlays          []ProposalOverlay    `json:"overlays"`
+	Criteria          []ProposalCriterion  `json:"criteria"`
+	Author            string               `json:"author"`
+	Summary           string               `json:"summary"`
+	CreatedAt         time.Time            `json:"createdAt"`
 }
 
 type ProposalRevisionSummary struct {

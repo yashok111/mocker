@@ -880,7 +880,15 @@ func source6Artifacts(base *SourceGraphSnapshot, c *composedCandidate) error {
 	if err != nil {
 		return err
 	}
-	if context := base.State.ArtifactContext; context != nil {
+	if context := base.State.ArtifactContextV3; context != nil {
+		c := *context
+		c.SourceContentHash, c.SourceSemanticHash = graph.SourceContentHash, anchor
+		g.ArtifactContextV3 = &c
+		graph.State.ArtifactContextV3 = &c
+		if _, err := EncodeArtifactContextV3(c); err != nil {
+			return err
+		}
+	} else if context := base.State.ArtifactContext; context != nil {
 		artifactContext := *context
 		artifactContext.SourceContentHash, artifactContext.SourceSemanticHash = graph.SourceContentHash, anchor
 		g.ArtifactContext = &artifactContext

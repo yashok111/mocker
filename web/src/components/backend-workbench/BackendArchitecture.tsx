@@ -1,3 +1,6 @@
+import { BackendNamespacedArtifactInspector } from "./BackendNamespacedArtifactInspector";
+import { BackendViewSVGExport } from "./BackendViewSVGExport";
+import { downloadBackendSVG } from "./backendSVGDownload";
 import { BackendAnalysisJobs } from "./BackendAnalysisJobs";
 import { useDiagramChangeHandoff } from "./BackendDiagramChangeContext";
 import { businessMapArchitectureSearch } from "./backendBusinessMapNavigation";
@@ -551,7 +554,8 @@ function ArchitectureWorkspace({
       return undefined;
     }
   });
-  const [artifactRef, setArtifactRef] =
+  const [namespacedRef,setNamespacedRef]=useState<Extract<BackendDiagramRef,{kind:"namespaced_artifact"}>>();
+const [artifactRef, setArtifactRef] =
     useState<Extract<BackendDiagramRef, { kind: "artifact" }>>();
   const [layoutNode, setLayoutNode] = useState("");
   const [layoutX, setLayoutX] = useState("0");
@@ -749,6 +753,9 @@ function ArchitectureWorkspace({
   };
   const open = (ref: BackendDiagramRef) => {
     if (!diagram) return;
+    if (ref.kind === "namespaced_artifact") {
+      setNamespacedRef(ref); return;
+    }
     if (ref.kind === "artifact") {
       setArtifactRef(ref);
       return;
@@ -781,6 +788,15 @@ function ArchitectureWorkspace({
     [];
   return (
     <Stack>
+      {savedView && (
+        <BackendViewSVGExport
+          pin={{ projectId, viewId: savedView.id, viewVersion: savedView.version }}
+          name={savedView.name}
+          scope={`${diagram?.document.kind ?? "diagram"} · ${savedView.state.diagram.id} v${savedView.state.diagram.version}`}
+          dirty={!!draft || JSON.stringify(state) !== JSON.stringify(savedView.state)}
+          exportFile={downloadBackendSVG}
+        />
+      )}
       {message && (
         <Alert role="alert" color={pending ? "yellow" : "blue"}>
           {message}
@@ -1200,7 +1216,9 @@ function ArchitectureWorkspace({
               presentation={state}
             />
           )}
-          {artifactRef && (
+          {namespacedRef && <BackendNamespacedArtifactInspector projectId={projectId} target={diagram.document.target} targetHash={diagram.targetHash} reference={namespacedRef} onClose={() => setNamespacedRef(undefined)} />}
+{diagram.importOrigin && <Alert color="blue">Импортированное авторство: {diagram.author} · installation {diagram.importOrigin.installationId}. Это исходная атрибуция, а не локальное подтверждение.</Alert>}
+{artifactRef && (
             <Paper withBorder p="md">
               <Stack>
                 <Text>Точный artifact row: {artifactRef.rowId}</Text>

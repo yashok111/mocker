@@ -14,6 +14,9 @@ func (s *ArtifactService) queryEffectiveArtifact(ctx context.Context, pid string
 	if err != nil {
 		return nil, err
 	}
+	if graph.Pins.ArtifactContextV3 != nil {
+		return nil, invalid("context", "Use an explicit namespaced artifact resolver for v3")
+	}
 	if graph.Pins.ArtifactContext == nil {
 		return nil, notFound()
 	}
@@ -40,5 +43,8 @@ func (s *APIArtifactService) queryEffectiveAPIArtifacts(ctx context.Context, pid
 	in.RevisionID = graph.State.Revision.ID
 	in.Proposal = nil
 	in.ChangeProposal = nil
+	if graph.Pins.ArtifactContextV3 != nil {
+		return nil, invalid("context", "Use an explicit namespaced artifact resolver for v3")
+	}
 	return s.projectAPIArtifactBindings(ctx, pid, in, &graph.State, legacyArtifactContext(graph.Pins.ArtifactContext), graph)
 }

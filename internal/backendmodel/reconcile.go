@@ -37,12 +37,15 @@ func loadSourceState(ctx context.Context, q importReader, pid, rid string) (*Rev
 	if state.Revision.SchemaVersion != ComposedSchemaVersion && len(state.Sources) == 1 && state.Sources[0].Role == "" {
 		state.Sources[0].Role = "primary"
 	}
-	frozen, err := loadArtifactContext(ctx, q, rid, state.Revision.ArtifactPins)
+	frozen, err := loadVersionedArtifactContext(ctx, q, rid, state.Revision.ArtifactPins)
 	if err != nil {
 		return nil, err
 	}
-	state.ArtifactContext = frozen
-	state.APIArtifactContext = legacyArtifactContext(frozen)
+	if frozen != nil {
+		state.ArtifactContext = frozen.Legacy
+		state.ArtifactContextV3 = frozen.V3
+		state.APIArtifactContext = legacyArtifactContext(frozen.Legacy)
+	}
 	if frozen == nil && slices.ContainsFunc(state.Revision.ArtifactPins, func(pin ArtifactPin) bool { return pin.Kind == "api_design" || pin.Kind == "design_scenario" }) {
 		return nil, invalid("context", "API pins require their frozen association context")
 	}

@@ -144,6 +144,7 @@ func checkB41CapabilityReads(t *testing.T, rows []capabilityReadSupport) {
 		{read: "events", sources: []string{"5", "6"}},
 		{read: "api_artifacts", sources: []string{"1", "2", "3", "4", "5", "6"}},
 		{read: "editor_artifacts", sources: []string{"1", "2", "3", "4", "5", "6"}},
+		{read: "namespaced_artifacts", sources: []string{"5", "6"}, legacy: true},
 		{read: "saved_view_v2", sources: []string{"2", "3", "4", "5", "6"}, legacy: true},
 	} {
 		targets := []string{"revisionId", "changeProposal"}

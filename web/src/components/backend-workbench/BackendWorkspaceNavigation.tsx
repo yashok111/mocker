@@ -2,6 +2,8 @@ import { Button, Group } from "@mantine/core";
 export function focusWorkspaceRegion(selector: string) {
   requestAnimationFrame(() => {
     const target = document.querySelector<HTMLElement>(selector);
+    let parent: HTMLElement | null = target ?? null;
+    while (parent) { if (parent instanceof HTMLDetailsElement) parent.open = true; parent = parent.parentElement; }
     target?.scrollIntoView?.({ block: "start" });
     target?.focus();
   });
@@ -9,6 +11,13 @@ export function focusWorkspaceRegion(selector: string) {
 export function BackendWorkspaceNavigation() {
   return (
     <Group component="nav" aria-label="Разделы Backend Workbench" wrap="wrap">
+<Button variant="default" onClick={() => focusWorkspaceRegion('[data-testid="backend-portable"] h2')}>Перенос проекта</Button>
+      <Button
+        variant="default"
+        onClick={() => focusWorkspaceRegion('[data-testid="backend-materialization"] h2')}
+      >
+        Материализация
+      </Button>
       <Button
         variant="default"
         onClick={() => focusWorkspaceRegion('[data-testid="backend-architecture"] h2')}

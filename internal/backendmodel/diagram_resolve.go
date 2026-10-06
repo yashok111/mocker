@@ -204,7 +204,7 @@ func diagramReferenceGaps(resolver *diagramArtifactResolver, id string, refs, ol
 		switch ref.Kind {
 		case "record":
 			exists = ref.RecordType == "node" && nodes[ref.ID] || ref.RecordType == "edge" && edges[ref.ID]
-		case "artifact":
+		case "artifact", "namespaced_artifact":
 			var err error
 			exists, err = resolver.resolve(ref)
 			if err != nil {
@@ -212,6 +212,13 @@ func diagramReferenceGaps(resolver *diagramArtifactResolver, id string, refs, ol
 			}
 		}
 		if exists {
+			continue
+		}
+		if ref.NamespacedLocator != nil && ref.NamespacedLocator.Namespace.Scope == "foreign" {
+			if _, err := namespacedDiagramGroup(resolver.graph, ref); err != nil {
+				return nil, err
+			}
+			gaps = append(gaps, diagramGap(id, "foreign_artifact_unresolved", "Foreign artifact remains unresolved; explicit exact local mapping is required"))
 			continue
 		}
 		digest, _ := requestDigest(ref)
@@ -258,14 +265,16 @@ func diagramEvidenceGaps(id string, proofs, oldProofs []DiagramEvidenceRef, evid
 // One owner snapshot budget and exact-ref cache cover the entire diagram write,
 // including different rows and repeated refs across C4 elements.
 type diagramArtifactResolver struct {
-	graph   *EffectiveGraphSnapshot
-	request *EditorArtifactRequest
-	known   map[string]bool
+	installationID string
+	graph          *EffectiveGraphSnapshot
+	request        *EditorArtifactRequest
+	known          map[string]bool
 }
 
 func newDiagramArtifactResolver(ctx context.Context, g *EffectiveGraphSnapshot) *diagramArtifactResolver {
 	out := &diagramArtifactResolver{graph: g, known: map[string]bool{}}
 	if service, ok := ctx.Value(diagramArtifactsKey{}).(*ArtifactService); ok && service != nil {
+		out.installationID = service.diagramInstallationID(ctx)
 		out.request = NewEditorArtifactRequest(ctx, service.api, service.scenarios)
 		out.request.effective = g
 	}
@@ -279,7 +288,12 @@ func (r *diagramArtifactResolver) resolve(ref DiagramRef) (bool, error) {
 	if found, ok := r.known[key]; ok {
 		return found, nil
 	}
-	found, err := resolveDiagramArtifact(r.graph, r.request, ref)
+	var found bool
+	if ref.NamespacedLocator != nil {
+		found, err = r.resolveNamespaced(ref)
+	} else {
+		found, err = resolveDiagramArtifact(r.graph, r.request, ref)
+	}
 	if err == nil {
 		r.known[key] = found
 	}

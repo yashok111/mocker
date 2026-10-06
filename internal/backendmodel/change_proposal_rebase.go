@@ -221,6 +221,9 @@ func loadChangeRebaseSides(ctx context.Context, tx importReader, pid, id string,
 	if err != nil {
 		return nil, err
 	}
+	if draft.ArtifactContextV3 != nil || next.State.ArtifactContextV3 != nil {
+		return nil, invalid("context", "Rebase of namespaced artifacts requires an explicit namespace mapping")
+	}
 	nextDraft := *draft
 	nextDraft.BaseRevisionID = next.State.Revision.ID
 	nextDraft.BaseSemanticHash = next.State.Revision.SemanticHash

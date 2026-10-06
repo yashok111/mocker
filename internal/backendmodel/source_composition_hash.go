@@ -117,6 +117,12 @@ func source6SemanticHash(graph *SourceGraphSnapshot) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	if c := graph.State.ArtifactContextV3; c != nil {
+		if c.SourceContentHash != content || c.SourceSemanticHash != anchor {
+			return "", invalid("context", "V3 source anchors differ from source graph")
+		}
+		return ArtifactContextV3SemanticHash(*c)
+	}
 	if c := graph.State.ArtifactContext; c != nil {
 		return ArtifactSemanticHash(content, anchor, graph.State.Revision.ArtifactPins, c.APIBindings, c.EditorBindings)
 	}
@@ -167,7 +173,13 @@ func source6ArtifactBytes(g *graphCandidate) (int, error) {
 		}
 		total += len(raw)
 	}
-	if g.ArtifactContext != nil {
+	if g.ArtifactContextV3 != nil {
+		raw, err := EncodeArtifactContextV3(*g.ArtifactContextV3)
+		if err != nil {
+			return 0, err
+		}
+		total += len(raw)
+	} else if g.ArtifactContext != nil {
 		raw, err := EncodeArtifactContext(*g.ArtifactContext, g.ArtifactPins)
 		if err != nil {
 			return 0, err

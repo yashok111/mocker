@@ -213,3 +213,19 @@ func validEditorInspection(snapshot designscenario.ArtifactInspectionSnapshot) b
 	unsupported := snapshot.TypedStatus == "unsupported" && snapshot.EnvelopeVerification == "unavailable" && snapshot.ContentHash == ""
 	return validHash(snapshot.StoredContentHash) && validHash(snapshot.DocumentHash) && (supported || unsupported)
 }
+
+// ResolveNamespacedPin gates the lookup before touching either owner adapter.
+func (r *EditorArtifactRequest) ResolveNamespacedPin(installationID string, scoped NamespacedArtifactPin) (ArtifactPin, error) {
+	pin, err := scoped.LocalPin(installationID)
+	if err != nil {
+		return ArtifactPin{}, err
+	}
+	actual, err := r.SnapshotPin(ArtifactKey{Kind: pin.Kind, ID: pin.ID}, pin.RevisionID)
+	if err != nil {
+		return ArtifactPin{}, err
+	}
+	if actual != pin {
+		return ArtifactPin{}, invalid("contentHash", "Exact owner hash differs from namespaced pin")
+	}
+	return actual, nil
+}

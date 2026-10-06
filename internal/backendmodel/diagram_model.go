@@ -23,11 +23,12 @@ type DiagramOrigin struct {
 	Reason   string               `json:"reason,omitempty"`
 }
 type DiagramRef struct {
-	Kind       string                     `json:"kind"`
-	RecordType string                     `json:"recordType,omitempty"`
-	ID         string                     `json:"id,omitempty"`
-	Locator    *ArtifactProjectionLocator `json:"locator,omitzero"`
-	RowID      string                     `json:"rowId,omitempty"`
+	NamespacedLocator *NamespacedDiagramLocator  `json:"namespacedLocator,omitzero"`
+	Kind              string                     `json:"kind"`
+	RecordType        string                     `json:"recordType,omitempty"`
+	ID                string                     `json:"id,omitempty"`
+	Locator           *ArtifactProjectionLocator `json:"locator,omitzero"`
+	RowID             string                     `json:"rowId,omitempty"`
 }
 type DiagramGap struct {
 	ID          string `json:"id"`
@@ -73,6 +74,7 @@ type DiagramProvenance struct {
 	Elements []DiagramElementProvenance `json:"elements"`
 }
 type DiagramVersion struct {
+	ImportOrigin   *PortableAttribution `json:"importOrigin,omitzero"`
 	receiptJSON    string
 	Pin            DiagramPin        `json:"pin"`
 	ProjectID      string            `json:"projectId"`

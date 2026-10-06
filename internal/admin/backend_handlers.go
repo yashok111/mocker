@@ -171,7 +171,14 @@ func (s *Server) handleGetBackendCapabilities(w http.ResponseWriter, r *http.Req
 	if _, ok := s.requireUser(w, r); !ok {
 		return
 	}
+	installation, err := s.backendRepo.InstallationID(r.Context())
+	if err != nil {
+		s.backendError(w, err)
+		return
+	}
 	httpx.JSON(w, 200, map[string]any{
+		"installationId":           installation,
+		"portableSupport":          map[string]any{"format": "backend-portable-v1", "sourceSchemaVersions": []string{"5", "6"}, "artifactContextVersion": "artifact-context-v3", "maxChunkBytes": 1048576, "maxChunkRecords": 500, "maxBundleBytes": 268435456, "maxArtifactMappings": 20, "importMode": "new_project", "previewPublishes": false},
 		"modelSchemaVersions":      backendmodel.SupportedModelSchemaVersions(),
 		"workflowVersions":         guide.BackendWorkflows(),
 		"features":                 backendCapabilityFeatures(),
@@ -181,7 +188,7 @@ func (s *Server) handleGetBackendCapabilities(w http.ResponseWriter, r *http.Req
 		"supportedNodeKinds":       backendmodel.SupportedNodeKindsForProfile(backendmodel.ComposedProfile),
 		"supportedEdgeKinds":       backendmodel.SupportedEdgeKindsForProfile(backendmodel.ComposedProfile),
 		"guideSetId":               guide.CurrentGuideSetID(),
-		"viewSchemaVersions":       []string{backendmodel.ProposalDocumentVersion, backendmodel.SavedViewDocumentVersion, "api-artifact-pins-v1", backendmodel.EditorArtifactDocumentVersion, backendmodel.ChangeProposalDocumentVersion, "import-candidate-v1", backendmodel.SavedViewV2DocumentVersion, "backend-diagram-v1", "diagram-view-v1"},
+		"viewSchemaVersions":       []string{backendmodel.ProposalDocumentVersion, backendmodel.SavedViewDocumentVersion, "api-artifact-pins-v1", backendmodel.EditorArtifactDocumentVersion, backendmodel.ChangeProposalDocumentVersion, "import-candidate-v1", backendmodel.SavedViewV2DocumentVersion, "backend-diagram-v1", "diagram-view-v1", "artifact-context-v3", "backend-portable-v1"},
 		"proposalDocumentVersions": []string{backendmodel.ProposalDocumentVersion, backendmodel.ChangeProposalDocumentVersion},
 		"changeProposalCommands":   backendChangeProposalCommands(),
 		"sourceScopes":             []string{"add_repository", "reconcile", "add_provider", "migrate_provider"},
@@ -227,6 +234,7 @@ func (s *Server) handleGetBackendCapabilities(w http.ResponseWriter, r *http.Req
 			"maxChangeProposals":            backendmodel.MaxChangeProposals,
 			"maxChangeProposalRevisions":    backendmodel.MaxChangeProposalRevisions,
 			"maxChangeProposalBytes":        backendmodel.MaxChangeProposalBytes,
+			"maxMaterializationTargets":     5, "maxMaterializationCommands": 100, "maxMaterializationBytes": 1048576, "maxDiagramSVGBytes": 2097152,
 			"maxEditorArtifactContextBytes": backendmodel.MaxEditorArtifactContextBytes, "maxEditorEventConstructionBytes": backendmodel.MaxEditorEventConstructionBytes, "maxEventMapBytes": designscenario.MaxEventMapBytes,
 			"maxImportBatchCommands": backendmodel.MaxImportCommands, "maxImportBatchBytes": min(s.cfg.MaxBody, int64(backendmodel.MaxImportBatchBytes)),
 			"maxManifestFiles": backendmodel.MaxManifestFiles, "maxSnippetBytes": backendmodel.MaxEvidenceSnippetBytes,

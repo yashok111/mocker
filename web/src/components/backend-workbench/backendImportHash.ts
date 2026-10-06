@@ -90,7 +90,12 @@ export async function hashBackendImportCommands(
 
 /** Canonical JSON digest shared with the backend receipt and source-vector protocol. */
 export async function hashBackendJSON(value: unknown): Promise<string> {
-  const bytes = new TextEncoder().encode(canonical(value, new Set(), 0));
+  return hashBackendUTF8(canonical(value, new Set(), 0));
+}
+
+/** SHA-256 of exact UTF-8 bytes, without JSON re-encoding. */
+export async function hashBackendUTF8(text: string): Promise<string> {
+  const bytes = new TextEncoder().encode(text);
   const digest = globalThis.crypto?.subtle
     ? new Uint8Array(await crypto.subtle.digest("SHA-256", bytes))
     : (await import("@noble/hashes/sha2.js")).sha256(bytes);

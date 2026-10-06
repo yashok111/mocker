@@ -19,16 +19,17 @@ type EffectivePropertySelector struct {
 }
 
 type EffectiveGraphPins struct {
-	TargetHash              string           `json:"targetHash"`
-	ViewSchemaVersion       string           `json:"viewSchemaVersion"`
-	StructuralSchemaVersion string           `json:"structuralSchemaVersion"`
-	EffectiveSemanticHash   string           `json:"effectiveSemanticHash"`
-	BaseRevisionID          string           `json:"baseRevisionId"`
-	BaseSemanticHash        string           `json:"baseSemanticHash"`
-	SourceVectorHash        string           `json:"sourceVectorHash"`
-	SourceSnapshotIDs       []string         `json:"sourceSnapshotIds"`
-	ArtifactPins            []ArtifactPin    `json:"artifactPins"`
-	ArtifactContext         *ArtifactContext `json:"artifactContext"`
+	ArtifactContextV3       *ArtifactContextV3 `json:"-"`
+	TargetHash              string             `json:"targetHash"`
+	ViewSchemaVersion       string             `json:"viewSchemaVersion"`
+	StructuralSchemaVersion string             `json:"structuralSchemaVersion"`
+	EffectiveSemanticHash   string             `json:"effectiveSemanticHash"`
+	BaseRevisionID          string             `json:"baseRevisionId"`
+	BaseSemanticHash        string             `json:"baseSemanticHash"`
+	SourceVectorHash        string             `json:"sourceVectorHash"`
+	SourceSnapshotIDs       []string           `json:"sourceSnapshotIds"`
+	ArtifactPins            []ArtifactPin      `json:"artifactPins"`
+	ArtifactContext         *ArtifactContext   `json:"artifactContext"`
 }
 type EffectiveGraphSnapshot struct {
 	coverage         *RevisionCoverage
@@ -184,6 +185,7 @@ type ChangeEvaluationIdentity struct {
 	Origin      EffectiveOrigin      `json:"origin"`
 }
 type ChangeEvaluationSnapshot struct {
+	ArtifactContextV3     *ArtifactContextV3
 	BaselineSchemaVersion string
 	DocumentVersion       string
 	ProjectID             string

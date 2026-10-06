@@ -42,6 +42,7 @@ type RevisionState struct {
 	Inventory          []InventoryItem
 	APIArtifactContext *APIArtifactContext
 	ArtifactContext    *ArtifactContext
+	ArtifactContextV3  *ArtifactContextV3
 }
 type SourceChange struct {
 	RepositoryID      string             `json:"repositoryId,omitempty"`

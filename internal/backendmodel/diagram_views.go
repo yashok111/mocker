@@ -99,6 +99,9 @@ func normalizeDiagramViewState(s DiagramViewState) DiagramViewState {
 	return s
 }
 func (r *Repo) validateDiagramView(ctx context.Context, pid, name string, s DiagramViewState) error {
+	return validateDiagramViewRead(ctx, r.db.R, pid, name, s)
+}
+func validateDiagramViewRead(ctx context.Context, qry importReader, pid, name string, s DiagramViewState) error {
 	if !validAPIText(name, 1, 256) || s.Positions == nil || s.CollapsedIDs == nil {
 		return invalid("view", "Name and nonnull layout arrays required")
 	}
@@ -106,11 +109,14 @@ func (r *Repo) validateDiagramView(ctx context.Context, pid, name string, s Diag
 	if err := q.Validate(); err != nil {
 		return err
 	}
-	v, err := r.GetDiagram(ctx, pid, s.Diagram)
+	v, err := loadDiagram(ctx, qry, pid, s.Diagram.ID, s.Diagram.Version)
+	if err == nil && v.Pin != s.Diagram {
+		return diagramPinMismatch()
+	}
 	if err != nil {
 		return err
 	}
-	graph, err := r.ResolveEffectiveGraph(ctx, pid, v.Document.Target)
+	graph, err := resolveEffectiveGraph(ctx, qry, pid, v.Document.Target)
 	if err != nil {
 		return err
 	}

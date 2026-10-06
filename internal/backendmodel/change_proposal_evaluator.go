@@ -503,7 +503,7 @@ func (e *changeEvaluation) snapshot() (*ChangeEvaluationSnapshot, error) {
 		Source:                e.source,
 		Nodes:                 []Node{}, Edges: []Edge{}, EdgeNames: []ChangeEdgeName{}, Identities: []ChangeEvaluationIdentity{},
 		Criteria: rev.Criteria, SourceVector: rev.SourceVector, SourceSnapshotIDs: rev.SourceSnapshotIDs,
-		ArtifactPins: rev.ArtifactPins, ArtifactContext: rev.ArtifactContext,
+		ArtifactPins: rev.ArtifactPins, ArtifactContext: rev.ArtifactContext, ArtifactContextV3: rev.ArtifactContextV3,
 		Coverage: e.source.State.Revision.Coverage, Origins: []ChangeEvaluationFieldOrigin{}, BaselineEvidence: e.source.State.Evidence,
 	}
 	for _, id := range slices.Sorted(maps.Keys(e.records)) {

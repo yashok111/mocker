@@ -21,7 +21,9 @@ import (
 	"github.com/yashok111/mocker/internal/assets"
 	"github.com/yashok111/mocker/internal/auth"
 	"github.com/yashok111/mocker/internal/backendanalysis"
+	"github.com/yashok111/mocker/internal/backendmaterialize"
 	"github.com/yashok111/mocker/internal/backendmodel"
+	"github.com/yashok111/mocker/internal/backendportable"
 	"github.com/yashok111/mocker/internal/checkpoints"
 	"github.com/yashok111/mocker/internal/config"
 	"github.com/yashok111/mocker/internal/customep"
@@ -88,6 +90,8 @@ type Server struct {
 	specsRepo                 *specs.Repo
 	designsRepo               *apidesign.Repo
 	backendRepo               *backendmodel.Repo
+	backendMaterialization    *backendmaterialize.Service
+	backendPortable           *backendportable.Service
 	backendAPIArtifacts       *backendmodel.APIArtifactService
 	backendArtifacts          *backendmodel.ArtifactService
 	scenarioArtifactSnapshots backendmodel.ScenarioArtifactReader
@@ -260,6 +264,8 @@ func New(cfg *config.Config, sessions *auth.Manager, ws *workspaces.Repo, db *st
 		specsRepo:                 specsRepo,
 		designsRepo:               designsRepo,
 		backendRepo:               backendRepo,
+		backendPortable:           backendportable.NewService(db, backendRepo),
+		backendMaterialization:    backendmaterialize.NewService(db, backendRepo, designsRepo, designScenariosRepo),
 		backendAPIArtifacts:       backendmodel.NewAPIArtifactService(backendRepo, designsRepo),
 		designScenariosRepo:       designScenariosRepo,
 		backendArtifacts:          backendmodel.NewArtifactServiceWithBodyLimit(backendRepo, designsRepo, designScenariosRepo, cfg.MaxBody),

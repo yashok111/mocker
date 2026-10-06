@@ -9,22 +9,23 @@ import (
 )
 
 type ChangeCriterion struct {
-	Key          string               `json:"key"`
-	Kind         string               `json:"kind"`
-	Required     bool                 `json:"required"`
-	Description  string               `json:"description"`
-	RecordType   string               `json:"recordType,omitempty"`
-	ID           string               `json:"id,omitempty"`
-	ObjectKind   string               `json:"objectKind,omitempty"`
-	EdgeKind     string               `json:"edgeKind,omitempty"`
-	From         string               `json:"from,omitempty"`
-	To           string               `json:"to,omitempty"`
-	Selector     jsontext.Value       `json:"selector,omitzero"`
-	Expected     *SourcePropertyValue `json:"expected,omitzero"`
-	Artifact     *ArtifactPin         `json:"artifact,omitzero"`
-	ExpectedHash string               `json:"expectedHash,omitempty"`
-	TargetIDs    []string             `json:"targetIds,omitzero"`
-	Attachment   *TestAttachmentRef   `json:"attachment,omitzero"`
+	NamespacedArtifact *NamespacedArtifactPin `json:"namespacedArtifact,omitzero"`
+	Key                string                 `json:"key"`
+	Kind               string                 `json:"kind"`
+	Required           bool                   `json:"required"`
+	Description        string                 `json:"description"`
+	RecordType         string                 `json:"recordType,omitempty"`
+	ID                 string                 `json:"id,omitempty"`
+	ObjectKind         string                 `json:"objectKind,omitempty"`
+	EdgeKind           string                 `json:"edgeKind,omitempty"`
+	From               string                 `json:"from,omitempty"`
+	To                 string                 `json:"to,omitempty"`
+	Selector           jsontext.Value         `json:"selector,omitzero"`
+	Expected           *SourcePropertyValue   `json:"expected,omitzero"`
+	Artifact           *ArtifactPin           `json:"artifact,omitzero"`
+	ExpectedHash       string                 `json:"expectedHash,omitempty"`
+	TargetIDs          []string               `json:"targetIds,omitzero"`
+	Attachment         *TestAttachmentRef     `json:"attachment,omitzero"`
 }
 
 func changeCriterionFields(c ChangeCriterion) ([]string, error) {
@@ -40,6 +41,8 @@ func changeCriterionFields(c ChangeCriterion) ([]string, error) {
 		additional = "recordType id selector expected"
 	case "artifact_object_matches":
 		additional = "artifact selector expectedHash"
+	case "artifact_object_matches_v3":
+		additional = "namespacedArtifact selector expectedHash"
 	case "test_attachment":
 		additional = "targetIds attachment"
 	case "runtime_check":
@@ -112,6 +115,15 @@ func (c ChangeCriterion) Validate() error {
 			return invalid("criteria", "Invalid exact edge target")
 		}
 	case "artifact_object_matches":
+		return c.validateArtifactCriterion()
+	case "artifact_object_matches_v3":
+		if c.NamespacedArtifact == nil {
+			return invalid("criteria", "Namespaced artifact is required")
+		}
+		if err := c.NamespacedArtifact.Validate(); err != nil {
+			return err
+		}
+		c.Artifact = &c.NamespacedArtifact.Pin
 		return c.validateArtifactCriterion()
 	case "test_attachment", "runtime_check":
 		return c.validateCheckCriterion()
@@ -215,7 +227,7 @@ func validateChangeArtifactPin(pin ArtifactPin) error {
 func (r TestAttachmentRef) Validate() error {
 	switch r.Kind {
 	case "source":
-		if !ValidID(r.RevisionID) || !ValidID(r.RepositoryID) || !ValidID(r.SnapshotID) || !validHash(r.ContentHash) || r.Artifact != nil {
+		if !ValidID(r.RevisionID) || !ValidID(r.RepositoryID) || !ValidID(r.SnapshotID) || !validHash(r.ContentHash) || r.Artifact != nil || r.NamespacedArtifact != nil {
 			return invalid("attachment", "Expected an exact source locator")
 		}
 		if !validPath(r.File) || r.StartLine < 1 || r.EndLine < r.StartLine {
@@ -224,8 +236,13 @@ func (r TestAttachmentRef) Validate() error {
 		if r.Symbol != "" && !validAPIText(r.Symbol, 1, 4096) {
 			return invalid("symbol", "Symbol exceeds bounds")
 		}
+	case "artifact_v3":
+		if r.NamespacedArtifact == nil || r.NamespacedArtifact.Pin.Kind != "design_scenario" || r.Artifact != nil || r.JSONPointer != "" {
+			return invalid("attachment", "Exact namespaced scenario root required")
+		}
+		return r.NamespacedArtifact.Validate()
 	case "artifact":
-		if r.Artifact == nil || r.Artifact.Kind != "design_scenario" || r.JSONPointer != "" {
+		if r.NamespacedArtifact != nil || r.Artifact == nil || r.Artifact.Kind != "design_scenario" || r.JSONPointer != "" {
 			return invalid("attachment", "Only the exact design scenario root is supported")
 		}
 		return validateChangeArtifactPin(*r.Artifact)
@@ -235,6 +252,13 @@ func (r TestAttachmentRef) Validate() error {
 	return nil
 }
 func (r TestAttachmentRef) MarshalJSON() ([]byte, error) {
+	if r.Kind == "artifact_v3" {
+		return json.Marshal(struct {
+			Kind               string                 `json:"kind"`
+			NamespacedArtifact *NamespacedArtifactPin `json:"namespacedArtifact"`
+			JSONPointer        string                 `json:"jsonPointer"`
+		}{r.Kind, r.NamespacedArtifact, r.JSONPointer})
+	}
 	if r.Kind == "artifact" {
 		return json.Marshal(struct {
 			Kind        string       `json:"kind"`
@@ -252,6 +276,9 @@ func (r *TestAttachmentRef) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	fields, optional := []string{"kind", "artifact", "jsonPointer"}, []string{}
+	if v.Kind == "artifact_v3" {
+		fields = []string{"kind", "namespacedArtifact", "jsonPointer"}
+	}
 	if v.Kind == "source" {
 		fields = []string{"kind", "revisionId", "repositoryId", "snapshotId", "file", "contentHash", "startLine", "endLine"}
 		optional = []string{"symbol"}
@@ -277,15 +304,16 @@ func (r *TestAttachmentRef) UnmarshalJSON(b []byte) error {
 }
 
 type TestAttachmentRef struct {
-	Kind         string       `json:"kind"`
-	RevisionID   string       `json:"revisionId,omitempty"`
-	RepositoryID string       `json:"repositoryId,omitempty"`
-	SnapshotID   string       `json:"snapshotId,omitempty"`
-	File         string       `json:"file,omitempty"`
-	ContentHash  string       `json:"contentHash,omitempty"`
-	StartLine    int64        `json:"startLine,omitzero"`
-	EndLine      int64        `json:"endLine,omitzero"`
-	Symbol       string       `json:"symbol,omitempty"`
-	Artifact     *ArtifactPin `json:"artifact,omitzero"`
-	JSONPointer  string       `json:"jsonPointer,omitempty"`
+	NamespacedArtifact *NamespacedArtifactPin `json:"namespacedArtifact,omitzero"`
+	Kind               string                 `json:"kind"`
+	RevisionID         string                 `json:"revisionId,omitempty"`
+	RepositoryID       string                 `json:"repositoryId,omitempty"`
+	SnapshotID         string                 `json:"snapshotId,omitempty"`
+	File               string                 `json:"file,omitempty"`
+	ContentHash        string                 `json:"contentHash,omitempty"`
+	StartLine          int64                  `json:"startLine,omitzero"`
+	EndLine            int64                  `json:"endLine,omitzero"`
+	Symbol             string                 `json:"symbol,omitempty"`
+	Artifact           *ArtifactPin           `json:"artifact,omitzero"`
+	JSONPointer        string                 `json:"jsonPointer,omitempty"`
 }

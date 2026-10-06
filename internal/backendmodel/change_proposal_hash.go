@@ -124,7 +124,7 @@ func changeSemanticHash(s *ChangeEvaluationSnapshot) (string, error) {
 		y, _ := canonicalJSON(b)
 		return bytes.Compare(x, y)
 	})
-	return requestDigest(struct {
+	legacyHash, err := requestDigest(struct {
 		DocumentVersion  string
 		Schema           string
 		BaseRevisionID   string
@@ -138,6 +138,14 @@ func changeSemanticHash(s *ChangeEvaluationSnapshot) (string, error) {
 		ArtifactContext  ArtifactContext
 		Criteria         []ChangeCriterion
 	}{DocumentVersion: ChangeProposalDocumentVersion, Schema: s.SchemaVersion, BaseRevisionID: s.BaseRevisionID, BaseSemanticHash: s.BaseSemanticHash, SourceVector: s.SourceVector, Snapshots: s.SourceSnapshotIDs, Records: records, Identities: identities, EdgeNames: names, ArtifactPins: pins, ArtifactContext: artifact, Criteria: criteria})
+	if err != nil || s.ArtifactContextV3 == nil {
+		return legacyHash, err
+	}
+	contextHash, err := ArtifactContextV3Hash(*s.ArtifactContextV3)
+	if err != nil {
+		return "", err
+	}
+	return sourceDomainHash("backend-change-context-v3-semantic-v1", struct{ Graph, Context string }{legacyHash, contextHash})
 }
 func changeCandidateHash(p ChangeProposal, draft ChangeProposalRevision, in PreviewChangeProposalInput, semantic string) (string, error) {
 	return requestDigest(struct {

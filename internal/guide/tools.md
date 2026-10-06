@@ -431,3 +431,26 @@ REST paths are `/api/backend-projects/{projectId}/analyses` (POST/GET), `/{jobId
 ## Static diagnostic findings (verify1)
 
 `start_backend_analysis` additionally accepts kind `diagnostics`, exact source/full proposal target and optional exact `diagramScope`. `list_backend_findings {projectId,jobId,resultVersion,limit?,cursor?}` reads immutable occurrences with separate live review history. `review_backend_finding {projectId,fingerprint,expectedVersion,basisHash,status,reason,idempotencyKey,resolutionAnalysis?}` mutates review only. Resolved requires exact completed scoped absence proof; unknown is insufficient. Replay identical review requests after lost replies.
+
+### B5.2 draft materialization, portable transfer and exact SVG
+
+- `preview_backend_materialization`: projectId + profileVersion
+  `backend-http-draft-v1`, exact `target.changeProposal`, targetHash, sourceScope,
+  targets, translations, partialSimulation, excludedIds and reason; optional
+  DiagramScope. Pure, returns normalized plan/effects/coverage/candidateHash.
+- `apply_backend_materialization`: identical original preview input + candidateHash
+  and idempotencyKey. Replay identical bytes/key after uncertainty. One SQLite
+  transaction updates every API/scenario/draft mock and immutable receipt. Targets
+  include all linked APIs (max5); each target currently has one typed replacement
+  or exact authored copy command; total max100commands/1MiB. Exact owner pins use
+  local installation namespace and decimal-string owner/revision IDs. No publication.
+- `export_backend_view_svg`: projectId, viewId, viewVersion. Read-only exact saved
+  view, all four diagram kinds, returns inert SVG text (not StructuredContent).
+ 200nodes/600edges/2MiB; no transient canvas geometry or runtime behavior proof.
+
+Portable tools: `resolve_backend_portable_selection`, `export_backend_project`,
+`get_backend_export_chunk`, `begin_backend_portable_import`,
+`put_backend_portable_import_chunk`, `preview_backend_portable_import`,
+`commit_backend_portable_import`, `abort_backend_portable_import` and
+`query_backend_namespaced_artifact`. Read `backend-portable` for the complete
+exact-pin workflow, recovery, explicit artifact mapping and cleanup.
