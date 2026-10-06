@@ -16,7 +16,7 @@ import (
 
 func TestVersionedWorkflowContract(t *testing.T) {
 	workflows := BackendWorkflows()
-	if len(workflows) != 6 {
+	if len(workflows) != 8 {
 		t.Fatalf("workflows = %#v", workflows)
 	}
 	w := workflows[0]

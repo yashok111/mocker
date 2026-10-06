@@ -57,7 +57,7 @@ func TestRelationalGuideTopicsHaveServedOwnerAndBody(t *testing.T) {
 func TestRelationalGuideWorkflowRequirements(t *testing.T) {
 	t.Parallel()
 	workflows := BackendWorkflows()
-	if len(workflows) != 6 {
+	if len(workflows) != 8 {
 		t.Errorf("backend discovery offers %d workflows; project, import and database are required", len(workflows))
 	}
 	for _, item := range []struct {
@@ -127,6 +127,7 @@ func TestGlobalGuideSetHasOneOwnerForEveryServedTopic(t *testing.T) {
 		t.Fatalf("global guide set has %d owners; want routing/project/import/database/inspect/sync/change/verify/replay", len(manifest.Workflows))
 	}
 	want := map[string]string{
+		"backend-observations": "mocker-backend-verify", "backend-correlation": "mocker-backend-verify", "backend-measurements": "mocker-backend-verify", "backend-benchmarks": "mocker-backend-verify",
 		"backend-replay": "mocker-backend-replay", "backend-verify": "mocker-backend-verify", "backend-diagnostics": "mocker-backend-verify", "backend-portable": "mocker-backend-project", "backend-lifecycle": "mocker-backend-inspect", "backend-business-map": "mocker-backend-inspect",
 		"overview": "mocker-routing", "tools": "mocker-routing", "shapes": "mocker-routing",
 		"cookbook": "mocker-routing", "http": "mocker-routing", "design": "mocker-routing", "functions": "mocker-routing",

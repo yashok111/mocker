@@ -3,7 +3,7 @@
 
 This topic belongs to `mocker-backend-import` v8. Pin it to the selected global
 guideSetId and verify the import owner tuple/contentHash, including when database
-or inspect12 loads it as a shared reference. Schema1 remains the foundation format;
+or inspect13 loads it as a shared reference. Schema1 remains the foundation format;
 schema2 is relational and schema3 adds typed source flow/query/access records; source4 adds explicit field lineage; source5 adds event/job/service records and
 contextual message-field lineage.
 Old immutable schema1/2/3/4 bytes/UUIDs/hashes/receipts keep their interpretation.
@@ -22,7 +22,7 @@ Typed domain_entity/dto/api_schema owners and representation_field children have
 
 An original source5 legacy-proof-basis-v1 is a response-only, verified historical basis. historical_metadata is shown as metadata testimony with a legacy_metadata_only semantic-support gap. legacy_record has broad record scope; no typed semantic property is invented. Keep source revision/semantic/document/evidence hashes and exact original evidence navigation. Submitting a copied basis or a metadata pointer as fresh source6 proof is invalid.
 
-Source synchronization belongs to sync2. Full desired changes belong to change4. Their full projection retains baseline claims/evidence separately from intent origins; a new desired field has no fabricated provider evidence. The legacy source record rules below keep their original meanings.
+Source synchronization belongs to sync2. Full desired changes belong to change5. Their full projection retains baseline claims/evidence separately from intent origins; a new desired field has no fabricated provider evidence. The legacy source record rules below keep their original meanings.
 
 ## Kinds and attributes
 
@@ -261,7 +261,7 @@ selector and forbids mediaType; header names are lowercase HTTP tokens. Unknown
 status/media is a gap, never guessed identity. Operation+direction+location+
 selector+status+media is unique (≤500fields/operation), while stable UUID binding
 uses the provider external key. Shape membership does not establish mapping.
-Manual external API associations use inspect12 and api-artifact-pins-v1. They
+Manual external API associations use inspect13 and api-artifact-pins-v1. They
 freeze api_design artifact/revision decimal strings, raw contentHash and selected
 object refs separately from imported source API fields; see backend-flow-reference.
 
@@ -274,7 +274,7 @@ without claiming behavioral impact; old pinned revisions remain readable.
 
 ## Saved editor content alongside source4
 
-Inspect12 owns backend-editor-projections and the tagged context contract
+Inspect13 owns backend-editor-projections and the tagged context contract
 backend-editor-artifacts-v1. Source models span schema1–5/store19; authored
 sequence/state/rule/EventModel content does not introduce source event records.
 The editor topic defines exact owner/object/source identities, separate envelope/
@@ -308,6 +308,6 @@ deliveryEdgeKey (IDs persisted), exact matching message/channel tuple and
 routeIds. Matching field schemas create no transport. Nested node/edge reference
 resolution, deletion closure and retained staleness apply. Stale/unknown/unresolved
 route proof blocks traversal; source4 rejects these new refs/transport.
-For reads select inspect12/backend-events in the same guide set and verify all
+For reads select inspect13/backend-events in the same guide set and verify all
 owner requirements; source5 remains eligible for inherited Database/Flow/lineage/
 proposals/SavedView and pin operations without changing their document versions.

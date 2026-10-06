@@ -14837,7 +14837,9 @@
                     "change_package",
                     "conformance",
                     "endpoint_review",
-                    "diagnostics"
+                    "diagnostics",
+                    "scenario_measurement",
+                    "scenario_comparison"
                   ]
                 },
                 "uniqueItems": true
@@ -21821,6 +21823,32 @@
               "importCandidate": {
                 "type": "null",
                 "description": "Must be omitted; graph target tags are mutually exclusive."
+              },
+              "serviceId": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+                "not": {
+                  "const": "00000000-0000-0000-0000-000000000000"
+                }
+              },
+              "sourceSnapshotId": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+                "not": {
+                  "const": "00000000-0000-0000-0000-000000000000"
+                }
+              },
+              "certainty": {
+                "type": "string",
+                "enum": [
+                  "explicit",
+                  "inferred",
+                  "unresolved",
+                  "desired",
+                  "stale"
+                ]
               }
             },
             "allOf": [
@@ -21861,6 +21889,21 @@
                       {
                         "required": [
                           "cursor"
+                        ]
+                      },
+                      {
+                        "required": [
+                          "serviceId"
+                        ]
+                      },
+                      {
+                        "required": [
+                          "sourceSnapshotId"
+                        ]
+                      },
+                      {
+                        "required": [
+                          "certainty"
                         ]
                       }
                     ]
@@ -21937,6 +21980,32 @@
               "importCandidate": {
                 "type": "null",
                 "description": "Must be omitted; graph target tags are mutually exclusive."
+              },
+              "serviceId": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+                "not": {
+                  "const": "00000000-0000-0000-0000-000000000000"
+                }
+              },
+              "sourceSnapshotId": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+                "not": {
+                  "const": "00000000-0000-0000-0000-000000000000"
+                }
+              },
+              "certainty": {
+                "type": "string",
+                "enum": [
+                  "explicit",
+                  "inferred",
+                  "unresolved",
+                  "desired",
+                  "stale"
+                ]
               }
             },
             "allOf": [
@@ -21977,6 +22046,21 @@
                       {
                         "required": [
                           "cursor"
+                        ]
+                      },
+                      {
+                        "required": [
+                          "serviceId"
+                        ]
+                      },
+                      {
+                        "required": [
+                          "sourceSnapshotId"
+                        ]
+                      },
+                      {
+                        "required": [
+                          "certainty"
                         ]
                       }
                     ]
@@ -22053,6 +22137,32 @@
               "importCandidate": {
                 "type": "null",
                 "description": "Must be omitted; graph target tags are mutually exclusive."
+              },
+              "serviceId": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+                "not": {
+                  "const": "00000000-0000-0000-0000-000000000000"
+                }
+              },
+              "sourceSnapshotId": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+                "not": {
+                  "const": "00000000-0000-0000-0000-000000000000"
+                }
+              },
+              "certainty": {
+                "type": "string",
+                "enum": [
+                  "explicit",
+                  "inferred",
+                  "unresolved",
+                  "desired",
+                  "stale"
+                ]
               }
             },
             "allOf": [
@@ -22093,6 +22203,21 @@
                       {
                         "required": [
                           "cursor"
+                        ]
+                      },
+                      {
+                        "required": [
+                          "serviceId"
+                        ]
+                      },
+                      {
+                        "required": [
+                          "sourceSnapshotId"
+                        ]
+                      },
+                      {
+                        "required": [
+                          "certainty"
                         ]
                       }
                     ]
@@ -22169,6 +22294,32 @@
               "changeProposal": {
                 "type": "null",
                 "description": "Must be omitted; graph target tags are mutually exclusive."
+              },
+              "serviceId": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+                "not": {
+                  "const": "00000000-0000-0000-0000-000000000000"
+                }
+              },
+              "sourceSnapshotId": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+                "not": {
+                  "const": "00000000-0000-0000-0000-000000000000"
+                }
+              },
+              "certainty": {
+                "type": "string",
+                "enum": [
+                  "explicit",
+                  "inferred",
+                  "unresolved",
+                  "desired",
+                  "stale"
+                ]
               }
             },
             "allOf": [
@@ -22209,6 +22360,21 @@
                       {
                         "required": [
                           "cursor"
+                        ]
+                      },
+                      {
+                        "required": [
+                          "serviceId"
+                        ]
+                      },
+                      {
+                        "required": [
+                          "sourceSnapshotId"
+                        ]
+                      },
+                      {
+                        "required": [
+                          "certainty"
                         ]
                       }
                     ]
@@ -22291,6 +22457,32 @@
               "importCandidate": {
                 "type": "null",
                 "description": "Must be omitted; graph target tags are mutually exclusive."
+              },
+              "serviceId": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+                "not": {
+                  "const": "00000000-0000-0000-0000-000000000000"
+                }
+              },
+              "sourceSnapshotId": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+                "not": {
+                  "const": "00000000-0000-0000-0000-000000000000"
+                }
+              },
+              "certainty": {
+                "type": "string",
+                "enum": [
+                  "explicit",
+                  "inferred",
+                  "unresolved",
+                  "desired",
+                  "stale"
+                ]
               }
             },
             "allOf": [
@@ -22331,6 +22523,21 @@
                       {
                         "required": [
                           "cursor"
+                        ]
+                      },
+                      {
+                        "required": [
+                          "serviceId"
+                        ]
+                      },
+                      {
+                        "required": [
+                          "sourceSnapshotId"
+                        ]
+                      },
+                      {
+                        "required": [
+                          "certainty"
                         ]
                       }
                     ]
@@ -22408,6 +22615,32 @@
               "importCandidate": {
                 "type": "null",
                 "description": "Must be omitted; graph target tags are mutually exclusive."
+              },
+              "serviceId": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+                "not": {
+                  "const": "00000000-0000-0000-0000-000000000000"
+                }
+              },
+              "sourceSnapshotId": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+                "not": {
+                  "const": "00000000-0000-0000-0000-000000000000"
+                }
+              },
+              "certainty": {
+                "type": "string",
+                "enum": [
+                  "explicit",
+                  "inferred",
+                  "unresolved",
+                  "desired",
+                  "stale"
+                ]
               }
             },
             "allOf": [
@@ -22448,6 +22681,21 @@
                       {
                         "required": [
                           "cursor"
+                        ]
+                      },
+                      {
+                        "required": [
+                          "serviceId"
+                        ]
+                      },
+                      {
+                        "required": [
+                          "sourceSnapshotId"
+                        ]
+                      },
+                      {
+                        "required": [
+                          "certainty"
                         ]
                       }
                     ]
@@ -22525,6 +22773,32 @@
               "importCandidate": {
                 "type": "null",
                 "description": "Must be omitted; graph target tags are mutually exclusive."
+              },
+              "serviceId": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+                "not": {
+                  "const": "00000000-0000-0000-0000-000000000000"
+                }
+              },
+              "sourceSnapshotId": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+                "not": {
+                  "const": "00000000-0000-0000-0000-000000000000"
+                }
+              },
+              "certainty": {
+                "type": "string",
+                "enum": [
+                  "explicit",
+                  "inferred",
+                  "unresolved",
+                  "desired",
+                  "stale"
+                ]
               }
             },
             "allOf": [
@@ -22565,6 +22839,21 @@
                       {
                         "required": [
                           "cursor"
+                        ]
+                      },
+                      {
+                        "required": [
+                          "serviceId"
+                        ]
+                      },
+                      {
+                        "required": [
+                          "sourceSnapshotId"
+                        ]
+                      },
+                      {
+                        "required": [
+                          "certainty"
                         ]
                       }
                     ]
@@ -22642,6 +22931,32 @@
               "changeProposal": {
                 "type": "null",
                 "description": "Must be omitted; graph target tags are mutually exclusive."
+              },
+              "serviceId": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+                "not": {
+                  "const": "00000000-0000-0000-0000-000000000000"
+                }
+              },
+              "sourceSnapshotId": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+                "not": {
+                  "const": "00000000-0000-0000-0000-000000000000"
+                }
+              },
+              "certainty": {
+                "type": "string",
+                "enum": [
+                  "explicit",
+                  "inferred",
+                  "unresolved",
+                  "desired",
+                  "stale"
+                ]
               }
             },
             "allOf": [
@@ -22682,6 +22997,21 @@
                       {
                         "required": [
                           "cursor"
+                        ]
+                      },
+                      {
+                        "required": [
+                          "serviceId"
+                        ]
+                      },
+                      {
+                        "required": [
+                          "sourceSnapshotId"
+                        ]
+                      },
+                      {
+                        "required": [
+                          "certainty"
                         ]
                       }
                     ]
@@ -22745,6 +23075,11 @@
           },
           "proposalProjection": {
             "$ref": "#/components/schemas/BackendProposalGraphProjection"
+          },
+          "total": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Exact filtered model count, independent of page/canvas."
           }
         }
       },
@@ -63019,6 +63354,11 @@
             "items": {
               "$ref": "#/components/schemas/BackendEffectiveEdgeName"
             }
+          },
+          "total": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Exact filtered model count, independent of page/canvas."
           }
         }
       },
@@ -76455,6 +76795,12 @@
           },
           {
             "$ref": "#/components/schemas/BackendAnalysisStartDiagnostics"
+          },
+          {
+            "$ref": "#/components/schemas/BackendAnalysisStartMeasurement"
+          },
+          {
+            "$ref": "#/components/schemas/BackendAnalysisStartObservedImpact"
           }
         ],
         "type": "object"
@@ -76580,7 +76926,9 @@
               "change_package",
               "conformance",
               "endpoint_review",
-              "diagnostics"
+              "diagnostics",
+              "scenario_measurement",
+              "scenario_comparison"
             ]
           },
           "status": {
@@ -77809,7 +78157,9 @@
               "artifact",
               "desired",
               "artifact_object",
-              "diagnostic"
+              "diagnostic",
+              "diagram",
+              "observation"
             ]
           },
           "id": {
@@ -77914,6 +78264,18 @@
               },
               {
                 "$ref": "#/components/schemas/BackendAnalysisEndpointCheckDetail"
+              },
+              {
+                "$ref": "#/components/schemas/BackendScenarioMeasurements"
+              },
+              {
+                "$ref": "#/components/schemas/BackendMeasurementComparison"
+              },
+              {
+                "$ref": "#/components/schemas/BackendDiagramObserved"
+              },
+              {
+                "$ref": "#/components/schemas/BackendObservedImpact"
               }
             ]
           }
@@ -78809,7 +79171,6 @@
           "target",
           "scope",
           "limits",
-          "observationMode",
           "idempotencyKey"
         ]
       },
@@ -79246,7 +79607,9 @@
             "enum": [
               "diff",
               "impact",
-              "diagnostics"
+              "diagnostics",
+              "scenario_measurement",
+              "scenario_comparison"
             ]
           },
           "fromRevisionId": {
@@ -79286,10 +79649,27 @@
           },
           "observationMode": {
             "type": "string",
-            "const": "none"
+            "enum": [
+              "none",
+              "pinned"
+            ]
           },
           "diagramScope": {
             "$ref": "#/components/schemas/BackendDiagramScope"
+          },
+          "observationPins": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendObservationAnalysisPin"
+            },
+            "maxItems": 20
+          },
+          "measurements": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendMeasurementInput"
+            },
+            "maxItems": 2
           }
         },
         "required": [
@@ -87332,6 +87712,776 @@
           "end"
         ],
         "type": "object"
+      },
+      "BackendObservationAnalysisPin": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "observationSetId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            "not": {
+              "const": "00000000-0000-0000-0000-000000000000"
+            }
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "contentHash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "correlationVersion": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "correlationHash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "side": {
+            "type": "string",
+            "enum": [
+              "before",
+              "after"
+            ]
+          }
+        },
+        "required": [
+          "observationSetId",
+          "version",
+          "contentHash",
+          "correlationVersion",
+          "correlationHash",
+          "side"
+        ]
+      },
+      "BackendMetricBasis": {
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "spans",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "measurements",
+                "type": "string"
+              },
+              "basis": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "scope": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              }
+            },
+            "required": [
+              "kind",
+              "basis",
+              "scope"
+            ]
+          }
+        ]
+      },
+      "BackendMeasurementInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "side": {
+            "type": "string",
+            "enum": [
+              "before",
+              "after"
+            ]
+          },
+          "executionIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "minItems": 1,
+            "maxItems": 1000,
+            "uniqueItems": true
+          },
+          "rootSpanIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "maxItems": 1000,
+            "uniqueItems": true
+          },
+          "basis": {
+            "$ref": "#/components/schemas/BackendMetricBasis"
+          },
+          "policy": {
+            "type": "string",
+            "const": "backend-scenario-measures-v1"
+          }
+        },
+        "required": [
+          "side",
+          "executionIds",
+          "rootSpanIds",
+          "basis",
+          "policy"
+        ]
+      },
+      "BackendAnalysisStartMeasurement": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "scenario_measurement",
+              "scenario_comparison"
+            ]
+          },
+          "beforeRevisionId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            "not": {
+              "const": "00000000-0000-0000-0000-000000000000"
+            }
+          },
+          "afterRevisionId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            "not": {
+              "const": "00000000-0000-0000-0000-000000000000"
+            }
+          },
+          "observationPins": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendObservationAnalysisPin"
+            },
+            "minItems": 1,
+            "maxItems": 20,
+            "uniqueItems": true
+          },
+          "measurements": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendMeasurementInput"
+            },
+            "minItems": 1,
+            "maxItems": 2
+          },
+          "diagramScope": {
+            "$ref": "#/components/schemas/BackendDiagramScopeInput"
+          },
+          "limits": {
+            "$ref": "#/components/schemas/BackendAnalysisLimits"
+          },
+          "idempotencyKey": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "pattern": "^[!-~]+$"
+          }
+        },
+        "required": [
+          "kind",
+          "beforeRevisionId",
+          "observationPins",
+          "measurements",
+          "limits",
+          "idempotencyKey"
+        ],
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "kind": {
+                  "const": "scenario_measurement"
+                }
+              }
+            },
+            "then": {
+              "not": {
+                "required": [
+                  "afterRevisionId"
+                ]
+              },
+              "properties": {
+                "measurements": {
+                  "maxItems": 1
+                }
+              }
+            },
+            "else": {
+              "required": [
+                "afterRevisionId"
+              ],
+              "not": {
+                "required": [
+                  "diagramScope"
+                ]
+              },
+              "properties": {
+                "measurements": {
+                  "minItems": 2
+                }
+              }
+            }
+          }
+        ]
+      },
+      "BackendAnalysisStartObservedImpact": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "impact"
+            ]
+          },
+          "fromRevisionId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            "not": {
+              "const": "00000000-0000-0000-0000-000000000000"
+            }
+          },
+          "target": {
+            "$ref": "#/components/schemas/BackendAnalysisTarget"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/BackendAnalysisScope"
+          },
+          "limits": {
+            "$ref": "#/components/schemas/BackendAnalysisLimits"
+          },
+          "observationMode": {
+            "type": "string",
+            "const": "pinned"
+          },
+          "observationPins": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendObservationAnalysisPin"
+            },
+            "minItems": 1,
+            "maxItems": 20,
+            "uniqueItems": true
+          },
+          "idempotencyKey": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "pattern": "^[!-~]+$"
+          }
+        },
+        "required": [
+          "kind",
+          "fromRevisionId",
+          "target",
+          "scope",
+          "limits",
+          "observationMode",
+          "idempotencyKey",
+          "observationPins"
+        ]
+      },
+      "BackendMetricSample": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "executionId": {
+            "type": "string"
+          },
+          "value": {
+            "type": "string",
+            "pattern": "^[0-9]+$"
+          }
+        },
+        "required": [
+          "executionId",
+          "value"
+        ]
+      },
+      "BackendMeasuredMetric": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "unit": {
+            "type": "string",
+            "enum": [
+              "count",
+              "bytes",
+              "ns"
+            ]
+          },
+          "value": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "p50": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "p95": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "samples": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendMetricSample"
+            }
+          },
+          "sampleCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "missingSamples": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "basis": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "type": "string"
+              },
+              "basis": {
+                "type": "string"
+              },
+              "scope": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "limitations": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "unit",
+          "value",
+          "p50",
+          "p95",
+          "samples",
+          "sampleCount",
+          "missingSamples",
+          "basis",
+          "limitations"
+        ]
+      },
+      "BackendMeasurementCondition": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "pin": {
+            "$ref": "#/components/schemas/BackendObservationAnalysisPin"
+          },
+          "context": {
+            "$ref": "#/components/schemas/ObservationObservationContext"
+          },
+          "mockedDependencies": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "sourceCompatible": {
+            "type": "boolean"
+          },
+          "correlationGaps": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "pin",
+          "context",
+          "mockedDependencies",
+          "sourceCompatible",
+          "correlationGaps"
+        ]
+      },
+      "BackendScenarioMeasurements": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "policy": {
+            "type": "string",
+            "const": "backend-scenario-measures-v1"
+          },
+          "input": {
+            "$ref": "#/components/schemas/BackendMeasurementInput"
+          },
+          "conditions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendMeasurementCondition"
+            }
+          },
+          "metrics": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "sql_count": {
+                "$ref": "#/components/schemas/BackendMeasuredMetric"
+              },
+              "external_call_count": {
+                "$ref": "#/components/schemas/BackendMeasuredMetric"
+              },
+              "retry_count": {
+                "$ref": "#/components/schemas/BackendMeasuredMetric"
+              },
+              "request_bytes": {
+                "$ref": "#/components/schemas/BackendMeasuredMetric"
+              },
+              "response_bytes": {
+                "$ref": "#/components/schemas/BackendMeasuredMetric"
+              },
+              "latency_ns": {
+                "$ref": "#/components/schemas/BackendMeasuredMetric"
+              }
+            },
+            "required": [
+              "sql_count",
+              "external_call_count",
+              "retry_count",
+              "request_bytes",
+              "response_bytes",
+              "latency_ns"
+            ]
+          },
+          "sampledExecutions": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "failedExecutions": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "skippedExecutions": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "unknownExecutions": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "populationRate": {
+            "type": "null"
+          },
+          "gaps": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "policy",
+          "input",
+          "conditions",
+          "metrics",
+          "sampledExecutions",
+          "failedExecutions",
+          "skippedExecutions",
+          "unknownExecutions",
+          "populationRate",
+          "gaps"
+        ]
+      },
+      "BackendMeasurementComparison": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "before": {
+            "$ref": "#/components/schemas/BackendScenarioMeasurements"
+          },
+          "after": {
+            "$ref": "#/components/schemas/BackendScenarioMeasurements"
+          },
+          "deltas": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "sql_count": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "external_call_count": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "retry_count": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "request_bytes": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "response_bytes": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "latency_ns": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "sql_count",
+              "external_call_count",
+              "retry_count",
+              "request_bytes",
+              "response_bytes",
+              "latency_ns"
+            ]
+          },
+          "conditionDifferences": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "limitations": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "before",
+          "after",
+          "deltas",
+          "conditionDifferences",
+          "limitations"
+        ]
+      },
+      "BackendObservedElement": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "recordId": {
+            "type": "string"
+          },
+          "executionId": {
+            "type": "string"
+          },
+          "traceId": {
+            "type": "string"
+          },
+          "spanId": {
+            "type": "string"
+          },
+          "selectors": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendDiagramScopeSelector"
+            }
+          },
+          "basis": {
+            "type": "string",
+            "enum": [
+              "explicit",
+              "source_mapping",
+              "unresolved"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "recordId",
+          "executionId",
+          "traceId",
+          "spanId",
+          "selectors",
+          "basis"
+        ]
+      },
+      "BackendObservedRelation": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "to": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "containment",
+              "association",
+              "event_precedence"
+            ]
+          },
+          "proof": {
+            "$ref": "#/components/schemas/ObservationLinkProof"
+          },
+          "from": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "from",
+          "to",
+          "kind"
+        ]
+      },
+      "BackendDiagramObserved": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "policy": {
+            "type": "string",
+            "const": "backend-observed-sequence-v1"
+          },
+          "diagramScope": {
+            "$ref": "#/components/schemas/BackendDiagramScope"
+          },
+          "pins": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendObservationAnalysisPin"
+            }
+          },
+          "measurements": {
+            "$ref": "#/components/schemas/BackendScenarioMeasurements"
+          },
+          "elements": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendObservedElement"
+            }
+          },
+          "relations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendObservedRelation"
+            }
+          },
+          "gaps": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "limitations": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "policy",
+          "diagramScope",
+          "pins",
+          "measurements",
+          "elements",
+          "relations",
+          "gaps",
+          "limitations"
+        ]
+      },
+      "BackendObservedImpact": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "pin": {
+            "$ref": "#/components/schemas/BackendObservationAnalysisPin"
+          },
+          "recordId": {
+            "type": "string"
+          },
+          "executionId": {
+            "type": "string"
+          },
+          "ref": {
+            "$ref": "#/components/schemas/BackendDiagramRef"
+          },
+          "certainty": {
+            "type": "string",
+            "enum": [
+              "confirmed",
+              "possible"
+            ]
+          },
+          "method": {
+            "type": "string"
+          },
+          "limitations": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "pin",
+          "recordId",
+          "executionId",
+          "ref",
+          "certainty",
+          "method",
+          "limitations"
+        ]
       }
     }
   },
@@ -106921,7 +108071,9 @@
                 "change_package",
                 "conformance",
                 "endpoint_review",
-                "diagnostics"
+                "diagnostics",
+                "scenario_measurement",
+                "scenario_comparison"
               ]
             }
           },

@@ -26,6 +26,7 @@ type Engine interface {
 type ArtifactProjectionReader func(context.Context) *backendmodel.EditorArtifactRequest
 
 type Service struct {
+	observations               ObservationResolver
 	ready                      chan struct{}
 	finished                   bool
 	jobTimeout, persistTimeout time.Duration
@@ -124,6 +125,9 @@ func (s *Service) Start(ctx context.Context, pid string, in StartInput) (*Job, e
 	if s.graphs == nil {
 		return nil, errors.New("analysis graph reader missing")
 	}
+	if measurementKind(in.Kind) {
+		return s.startMeasurement(ctx, pid, in, hash)
+	}
 	if b43Kind(in.Kind) {
 		return s.startB43(ctx, pid, in, hash)
 	}
@@ -165,6 +169,9 @@ func (s *Service) Start(ctx context.Context, pid string, in StartInput) (*Job, e
 	}
 	input.AfterPins = after.Pins
 	input.AfterSource = sourcePins(after)
+	if err = s.resolveImpact(leased, pid, in, &input, before, after); err != nil {
+		return nil, err
+	}
 	raw, err = canonical(input)
 	if err != nil {
 		return nil, err

@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 )
@@ -34,6 +35,12 @@ func run() error {
 		return err
 	}
 	defer s.Close()
+	if len(os.Args) == 2 && strings.HasPrefix(os.Args[1], "--measure-read=") {
+		return measureRead(s, strings.TrimPrefix(os.Args[1], "--measure-read="))
+	}
+	if len(os.Args) > 1 {
+		return fmt.Errorf("unsupported argument")
+	}
 	server := &http.Server{Addr: c.Addr, Handler: s, ReadHeaderTimeout: 3 * time.Second, ReadTimeout: 3 * time.Second, WriteTimeout: 3 * time.Second, IdleTimeout: 10 * time.Second, MaxHeaderBytes: 8192}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()

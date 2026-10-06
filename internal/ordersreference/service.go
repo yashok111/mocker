@@ -16,6 +16,7 @@ import (
 	"sync"
 	"uuid"
 
+	o "github.com/yashok111/mocker/internal/backendobservations"
 	p "github.com/yashok111/mocker/internal/ordersprotocol"
 	_ "modernc.org/sqlite"
 )
@@ -56,12 +57,14 @@ func (c Config) validate() error {
 }
 
 type Service struct {
-	mu           sync.Mutex
-	db           *sql.DB
-	config       Config
-	identity     p.Identity
-	identityHash string
-	lock         *os.File
+	observations         map[string][]o.Record
+	observationTruncated map[string]bool
+	mu                   sync.Mutex
+	db                   *sql.DB
+	config               Config
+	identity             p.Identity
+	identityHash         string
+	lock                 *os.File
 }
 
 // Open uses a dedicated DB and a lifetime exclusive file lock. It never opens Mocker's store.
@@ -110,7 +113,7 @@ func Open(c Config, b Build) (*Service, error) {
 		return nil, err
 	}
 	db.SetMaxOpenConns(1)
-	s := &Service{db: db, config: c, identity: id, identityHash: hash, lock: lock}
+	s := &Service{observations: map[string][]o.Record{}, observationTruncated: map[string]bool{}, db: db, config: c, identity: id, identityHash: hash, lock: lock}
 	fail := func(e error) (*Service, error) { s.Close(); return nil, e }
 	// Reject foreign databases before installing the private schema.
 	var count int

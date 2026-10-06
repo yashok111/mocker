@@ -73,7 +73,7 @@ const (
 //go:embed backend-sync.md backend-change-proposals.md backend-annotations.md
 //go:embed backend-change-rebase.md backend-analysis-jobs.md backend-change-handoff.md backend-endpoint-review.md
 //go:embed backend-replay.md backend-lifecycle.md backend-business-map.md backend-verify.md backend-diagnostics.md backend-portable.md
-//go:embed backend-observations.md backend-correlation.md
+//go:embed backend-observations.md backend-correlation.md backend-measurements.md backend-benchmarks.md
 var files embed.FS
 
 // topicFiles maps a topic to its embedded file. overview.md is SKILL.md
@@ -81,6 +81,7 @@ var files embed.FS
 // tool result is not a skill file and the YAML block would be noise to the
 // model reading it.
 var topicFiles = map[string]string{
+	"backend-measurements": "backend-measurements.md", "backend-benchmarks": "backend-benchmarks.md",
 	TopicBackendObservations: "backend-observations.md", TopicBackendCorrelation: "backend-correlation.md",
 	TopicOverview:                 "overview.md",
 	TopicTools:                    "tools.md",
@@ -132,7 +133,7 @@ func Topics() []string {
 		TopicBackendEditorProjections, TopicBackendEvents,
 		TopicBackendSync, TopicBackendChangeProposals, TopicBackendAnnotations,
 		TopicBackendChangeRebase, TopicBackendAnalysisJobs, TopicBackendChangeHandoff, TopicBackendEndpointReview, TopicBackendArchitecture, TopicBackendInteractions,
-		TopicBackendLifecycle, TopicBackendBusinessMap, TopicBackendVerify, TopicBackendDiagnostics, TopicBackendPortable, TopicBackendReplay, TopicBackendObservations, TopicBackendCorrelation,
+		TopicBackendLifecycle, TopicBackendBusinessMap, TopicBackendVerify, TopicBackendDiagnostics, TopicBackendPortable, TopicBackendReplay, TopicBackendObservations, TopicBackendCorrelation, "backend-measurements", "backend-benchmarks",
 	}
 }
 

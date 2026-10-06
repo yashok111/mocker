@@ -7,8 +7,8 @@ metadata:
   requiredModelSchemaVersions: "[\"1\",\"5\",\"6\"]"
   requiredViewSchemaVersions: "[\"import-candidate-v1\"]"
   requiredCapabilities: "[\"backend-projects\",\"backend-revisions\",\"backend-graph-query\",\"backend-source-import\",\"backend-source-sync\",\"backend-source-incremental-sync\",\"backend-source-assertions\",\"backend-import-candidate\",\"backend-representations\",\"backend-analysis-jobs\",\"backend-analysis-diff\",\"backend-analysis-impact\"]"
-  guideSetId: "sha256:8743327387b8c094d8cc29199905b75fa917139d29eb7137d088c38d87e89ab5"
-  manifestHash: "sha256:8743327387b8c094d8cc29199905b75fa917139d29eb7137d088c38d87e89ab5"
+  guideSetId: "sha256:f25648e4c5cfffe7d621b112a8e26d47d58d3838385b18d201ca68507aac2981"
+  manifestHash: "sha256:f25648e4c5cfffe7d621b112a8e26d47d58d3838385b18d201ca68507aac2981"
 ---
 
 # Synchronize a composed source
@@ -19,7 +19,7 @@ Update one declared repository/provider scope while retaining the other source p
 
 Read `get_server_config` and `get_backend_capabilities`. Select advertised `mocker-backend-sync` version `2`, model schema `6`, profile `composed-source-v1`, staged view `import-candidate-v1` and every required capability above. Verify the exact workflowId/version/guideSetId/manifestHash and each needed topic contentHash. If installed text does not match, fetch the complete compatible server entrypoint with `get_guide {topic:"backend-sync",guideSetId:selected.guideSetId}`. Unknown sets fail; never replace one with current text.
 
-All topics use that same global set. Select their actual owner before reading shared material: project2 for `backend-overview`/`backend-annotations`, import8 for `backend-model`, `backend-import-protocol` and `backend-recovery`, inspect12 for source certainty and exact inspection. Selecting a reference owner starts no writes. Older source1–4 bases use import8's existing adjacent transitions before source5; sync does not silently upgrade them. An empty unsourced project can begin composed `add_repository` directly.
+All topics use that same global set. Select their actual owner before reading shared material: project2 for `backend-overview`/`backend-annotations`, import8 for `backend-model`, `backend-import-protocol` and `backend-recovery`, inspect13 for source certainty and exact inspection. Selecting a reference owner starts no writes. Older source1–4 bases use import8's existing adjacent transitions before source5; sync does not silently upgrade them. An empty unsourced project can begin composed `add_repository` directly.
 
 ## Capture the exact base and selected partition
 
@@ -117,6 +117,6 @@ Explicit `abort_backend_import` has its own expectedImportVersion and idempotenc
 
 ## Compare the saved source revisions
 
-After commit, retain both immutable revision IDs and select change4's `backend-analysis-jobs` in the same guide set for durable source-to-source diff/impact. Verify that topic's actual owner/hash and the advertised analysisSupport before start. Start takes `fromRevisionId` and `target:{revisionId}`; importCandidate is forbidden. The worker reads stored source evidence only, with observationMode none and runtimeVerified false. Poll the saved job; page one explicitly chosen resultVersion even while newer progress appears. Cancellation is a persisted action, and interrupted work needs an explicit new-key retry.
+After commit, retain both immutable revision IDs and select change5's `backend-analysis-jobs` in the same guide set for durable source-to-source diff/impact. Verify that topic's actual owner/hash and the advertised analysisSupport before start. Start takes `fromRevisionId` and `target:{revisionId}`; importCandidate is forbidden. The worker reads stored source evidence only, with observationMode none and runtimeVerified false. Poll the saved job; page one explicitly chosen resultVersion even while newer progress appears. Cancellation is a persisted action, and interrupted work needs an explicit new-key retry.
 
-Source synchronization never rebases a proposal automatically. Select change4's `backend-change-rebase` for explicit new-base selection, reasoned B/O/N resolutions and reviewed repairs. Shared recovery remains import8-owned.
+Source synchronization never rebases a proposal automatically. Select change5's `backend-change-rebase` for explicit new-base selection, reasoned B/O/N resolutions and reviewed repairs. Shared recovery remains import8-owned.

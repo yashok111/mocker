@@ -4,8 +4,11 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	o "github.com/yashok111/mocker/internal/backendobservations"
 	p "github.com/yashok111/mocker/internal/ordersprotocol"
 	"math"
+	"strconv"
+	"time"
 	"uuid"
 )
 
@@ -16,6 +19,8 @@ func (s *Service) mutate(ctx context.Context, ep p.Endpoint, f p.Fence, body any
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	clock := &observationClock{trace: randomHex(16), root: randomHex(8), execution: f.RunID, records: []o.Record{}}
+	started := time.Now()
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return 0, nil, err
@@ -108,7 +113,7 @@ func (s *Service) mutate(ctx context.Context, ep p.Endpoint, f p.Fence, body any
 			r.Outcome = "armed"
 			err = event(tx, &r, "armed", "", 0)
 		} else {
-			err = s.order(tx, body.(p.OrderRequest), j, &r)
+			err = s.order(tx, body.(p.OrderRequest), j, &r, clock)
 		}
 	}
 	if err != nil {
@@ -131,6 +136,22 @@ func (s *Service) mutate(ctx context.Context, ep p.Endpoint, f p.Fence, body any
 	if err = tx.Commit(); err != nil {
 		return 0, nil, err
 	}
+	if ep == p.OrderEndpoint {
+		ended := time.Now()
+		requestBytes, _ := encode(body)
+		status := "ok"
+		if r.HTTPStatus >= 400 {
+			status = "error"
+		}
+		clock.records = append(clock.records, o.Record{Type: "span", ID: clock.trace + "/" + clock.root, ExecutionID: f.RunID, TraceID: clock.trace, SpanID: clock.root, StartTimeUnixNano: strconv.FormatInt(started.UnixNano(), 10), EndTimeUnixNano: strconv.FormatInt(ended.UnixNano(), 10), Kind: "server", Category: "http", Status: status, Attrs: &o.Attributes{Operation: "orders/create", RequestBytes: new(int64(len(requestBytes))), ResponseBytes: new(int64(len(raw)))}})
+		if _, exists := s.observations[f.RunID]; exists || len(s.observations) < 1000 {
+			if len(s.observations[f.RunID])+len(clock.records) <= 800 {
+				s.observations[f.RunID] = append(s.observations[f.RunID], clock.records...)
+			} else {
+				s.observationTruncated[f.RunID] = true
+			}
+		}
+	}
 	return r.HTTPStatus, raw, nil
 }
 
@@ -147,9 +168,11 @@ func counters(tx *sql.Tx, run string) (p.Counters, error) {
 	return c, err
 }
 
-func (s *Service) order(tx *sql.Tx, req p.OrderRequest, j p.Journal, r *p.Receipt) error {
+func (s *Service) order(tx *sql.Tx, req p.OrderRequest, j p.Journal, r *p.Receipt, clock *observationClock) error {
 	var consumed int
-	err := tx.QueryRow("SELECT consumed FROM arms WHERE run_id=?", req.RunID).Scan(&consumed)
+	err := clock.span("sql", "client", "orders/read-failure-arm", func() error {
+		return tx.QueryRow("SELECT consumed FROM arms WHERE run_id=?", req.RunID).Scan(&consumed)
+	})
 	if errors.Is(err, sql.ErrNoRows) {
 		return conflict("run_conflict")
 	}
@@ -171,45 +194,26 @@ func (s *Service) order(tx *sql.Tx, req p.OrderRequest, j p.Journal, r *p.Receip
 			return conflict("run_conflict")
 		}
 	}
+	if req.Attempt > 1 {
+		if err = clock.span("retry", "internal", "orders/explicit-retry", func() error { return nil }); err != nil {
+			return err
+		}
+	}
 	r.BusinessKey = req.BusinessKey
 	r.Attempt = req.Attempt
 	if err = event(tx, r, "attempt", "", 0); err != nil {
 		return err
 	}
-	// The payment substitute is durable SQLite state in the outer transaction.
-	paymentKey := req.BusinessKey
-	if s.identity.Variant == "buggy" {
-		paymentKey = req.RequestKey
-	}
-	var raw []byte
-	var charge p.ChargeRecord
-	err = tx.QueryRow("SELECT document FROM charges WHERE run_id=? AND payment_key=?", req.RunID, paymentKey).Scan(&raw)
-	switch {
-	case err == nil:
-		if err = p.Decode(raw, &charge, p.BodyLimit); err != nil {
-			return err
-		}
-		r.ChargeID = charge.ID
-		if err = event(tx, r, "payment_reused", charge.ID, charge.AmountMinor); err != nil {
-			return err
-		}
-	case errors.Is(err, sql.ErrNoRows):
-		charge = p.ChargeRecord{ID: uuid.New().String(), BusinessKey: req.BusinessKey, AmountMinor: req.Order.AmountMinor, Currency: req.Order.Currency, Scope: "mocked"}
-		r.ChargeID = charge.ID
-		if err = insertDocument(tx, "INSERT INTO charges VALUES(?,?,?)", charge, req.RunID, paymentKey); err != nil {
-			return err
-		}
-		if err = event(tx, r, "payment_charged", charge.ID, charge.AmountMinor); err != nil {
-			return err
-		}
-	default:
+	if err = clock.span("http", "client", "mocked/payment", func() error { return s.measuredPayment(tx, req, r, clock) }); err != nil {
 		return err
 	}
 	if _, err = tx.Exec("SAVEPOINT order_persistence"); err != nil {
 		return err
 	}
 	order := p.OrderRecord{ID: uuid.New().String(), BusinessKey: req.BusinessKey, Order: req.Order}
-	if err = insertDocument(tx, "INSERT INTO orders VALUES(?,?,?)", order, req.RunID, req.BusinessKey); err != nil {
+	if err = clock.span("sql", "client", "orders/write-order", func() error {
+		return insertDocument(tx, "INSERT INTO orders VALUES(?,?,?)", order, req.RunID, req.BusinessKey)
+	}); err != nil {
 		return err
 	}
 	if consumed == 0 {
@@ -233,4 +237,42 @@ func (s *Service) order(tx *sql.Tx, req p.OrderRequest, j p.Journal, r *p.Receip
 	r.Outcome = "persisted"
 	r.OrderID = order.ID
 	return event(tx, r, "order_persisted", order.ID, 0)
+}
+
+func (s *Service) measuredPayment(tx *sql.Tx, req p.OrderRequest, r *p.Receipt, clock *observationClock) error {
+	// The payment substitute is durable SQLite state in the outer transaction.
+	paymentKey := req.BusinessKey
+	if s.identity.Variant == "buggy" {
+		paymentKey = req.RequestKey
+	}
+	var raw []byte
+	var charge p.ChargeRecord
+	err := clock.span("sql", "client", "orders/read-charge", func() error {
+		return tx.QueryRow("SELECT document FROM charges WHERE run_id=? AND payment_key=?", req.RunID, paymentKey).Scan(&raw)
+	})
+	switch {
+	case err == nil:
+		if err = p.Decode(raw, &charge, p.BodyLimit); err != nil {
+			return err
+		}
+		r.ChargeID = charge.ID
+		if err = event(tx, r, "payment_reused", charge.ID, charge.AmountMinor); err != nil {
+			return err
+		}
+	case errors.Is(err, sql.ErrNoRows):
+		charge = p.ChargeRecord{ID: uuid.New().String(), BusinessKey: req.BusinessKey, AmountMinor: req.Order.AmountMinor, Currency: req.Order.Currency, Scope: "mocked"}
+		r.ChargeID = charge.ID
+		if err = clock.span("sql", "client", "orders/write-charge", func() error {
+			return insertDocument(tx, "INSERT INTO charges VALUES(?,?,?)", charge, req.RunID, paymentKey)
+		}); err != nil {
+			return err
+		}
+		if err = event(tx, r, "payment_charged", charge.ID, charge.AmountMinor); err != nil {
+			return err
+		}
+	default:
+		return err
+	}
+
+	return nil
 }

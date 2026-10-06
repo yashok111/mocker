@@ -66,7 +66,7 @@ func backendAnalysisOptionalSelector(q url.Values, key string, values []string) 
 func backendAnalysisSelectionQuery(q url.Values, mode string) bool {
 	switch mode {
 	case "list":
-		return backendAnalysisOptionalSelector(q, "status", []string{"queued", "running", "completed", "failed", "cancelled", "interrupted"}) && backendAnalysisOptionalSelector(q, "kind", []string{"diff", "impact", "change_package", "conformance", "endpoint_review", "diagnostics"})
+		return backendAnalysisOptionalSelector(q, "status", []string{"queued", "running", "completed", "failed", "cancelled", "interrupted"}) && backendAnalysisOptionalSelector(q, "kind", []string{"diff", "impact", "change_package", "conformance", "endpoint_review", "diagnostics", "scenario_measurement", "scenario_comparison"})
 	case "results":
 		return q.Has("resultVersion") && slices.Contains([]string{"changes", "findings", "witnesses", "checks", "gaps"}, q.Get("section")) && backendAnalysisOptionalSelector(q, "certainty", []string{"confirmed", "possible", "unknown"}) && backendAnalysisOptionalSelector(q, "direction", []string{"upstream", "downstream", "both"})
 	default:

@@ -1,3 +1,4 @@
+import { useSavedObservedOverlay } from "./BackendObservationContext";
 import { Graph } from "@antv/x6";
 import { useEffect, useMemo, useRef } from "react";
 import { Stack, Text } from "@mantine/core";
@@ -32,6 +33,7 @@ export function BackendArchitectureGraph({
   state: BackendDiagramViewState;
   onSelect: (selection: NonNullable<BackendDiagramViewState["selection"]>) => void;
 }) {
+  const observed = useSavedObservedOverlay(state.diagram);
   const visible = useMemo(
     () => elements.filter((e) => !state.collapsedIds.includes(e.id)).slice(0, 200),
     [elements, state.collapsedIds],
@@ -76,7 +78,7 @@ export function BackendArchitectureGraph({
         ...node,
         ...(pos ? { x: pos.x, y: pos.y } : {}),
         shape: e.role === "person" ? "ellipse" : "rect",
-        label: `${e.label}\n${e.role}\n${e.origin.kind === "authored" ? "Авторское утверждение" : "Исходный код"}`,
+        label: `${e.label}\n${e.role}\n${e.origin.kind === "authored" ? "Авторское утверждение" : "Исходный код"}${observed ? `\nObserved: ${observed.report.elements.filter((row) => row.selectors.some((s) => s.kind === "semantic" && s.id === e.id)).length || "unknown"}` : ""}`,
         attrs: {
           body: diagramCardBody(),
           label: {
@@ -105,7 +107,7 @@ export function BackendArchitectureGraph({
       graph.dispose();
       graphRef.current = null;
     };
-  }, [geometry.layout, visible, state.positions]);
+  }, [observed, geometry.layout, visible, state.positions]);
   return (
     <Stack gap="xs" style={{ minWidth: 0 }}>
       <Text size="sm" component="output">

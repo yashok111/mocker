@@ -114,11 +114,14 @@ func (in *StartInput) UnmarshalJSON(raw []byte) error {
 	if err := json.Unmarshal(raw, &discriminator); err != nil {
 		return malformed(err.Error())
 	}
+	if measurementKind(discriminator.Kind) {
+		return in.unmarshalMeasurement(raw)
+	}
 	if b43Kind(discriminator.Kind) {
 		return in.unmarshalB43(raw, discriminator.Kind)
 	}
-	required := []string{"kind", "target", "scope", "limits", "observationMode", "idempotencyKey"}
-	optional := []string{"observationPins", "diagramScope"}
+	required := []string{"kind", "target", "scope", "limits", "idempotencyKey"}
+	optional := []string{"observationMode", "observationPins", "diagramScope"}
 	if discriminator.Kind == "diagnostics" {
 		optional = append(optional, "fromRevisionId")
 	} else {
@@ -141,13 +144,31 @@ func (in *StartInput) UnmarshalJSON(raw []byte) error {
 	if next.Kind == "diagnostics" && (next.Target.Proposal != nil || next.Target.CommandPreview != nil) {
 		return fault(422, "unsupported", "Diagnostics requires an exact source or full proposal target")
 	}
-	if next.ObservationMode != "none" || len(next.ObservationPins) > 0 {
-		return fault(422, "unsupported", "Observations are not supported")
+	if next.ObservationMode == "" {
+		next.ObservationMode = "none"
+	}
+	if next.ObservationMode == "pinned" && next.Kind == "impact" {
+		pins, err := impactPins(StartInput(next))
+		if err != nil {
+			return err
+		}
+		next.ObservationPins = nil
+		for _, pin := range pins {
+			raw, err := canonical(pin)
+			if err != nil {
+				return err
+			}
+			next.ObservationPins = append(next.ObservationPins, raw)
+		}
+	} else if next.ObservationMode != "none" || len(next.ObservationPins) > 0 {
+		return fault(422, "unsupported", "Select none without pins or pinned impact")
 	}
 	if (next.Kind != "diagnostics" || next.FromRevisionID != "") && !backendmodel.ValidID(next.FromRevisionID) || !validKey(next.IdempotencyKey) {
 		return malformed("Invalid source revision or key")
 	}
-	next.ObservationPins = []jsontext.Value{}
+	if next.ObservationMode == "none" {
+		next.ObservationPins = []jsontext.Value{}
+	}
 	*in = StartInput(next)
 	return nil
 }

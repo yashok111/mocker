@@ -3,12 +3,12 @@ name: mocker-backend-change
 description: Prepare typed backend graph proposals, resolve three-way rebase conflicts, run durable package/conformance/endpoint review jobs and bind exact saved-draft reports to ready/implemented lifecycle. Use for desired backend changes, source comparison or analysis recovery; inspection alone starts no job.
 metadata:
   workflowId: "mocker-backend-change"
-  workflowVersion: "4"
+  workflowVersion: "5"
   requiredModelSchemaVersions: "[\"5\",\"6\"]"
   requiredViewSchemaVersions: "[\"proposal-graph-v1\",\"backend-diagram-v1\",\"diagram-view-v1\"]"
-  requiredCapabilities: "[\"backend-projects\",\"backend-revisions\",\"backend-graph-query\",\"backend-change-proposals\",\"backend-change-typed-edits\",\"backend-source-assertions\",\"backend-representations\",\"backend-analysis-jobs\",\"backend-analysis-diff\",\"backend-analysis-impact\",\"backend-change-rebase\",\"backend-change-ready\",\"backend-change-package\",\"backend-conformance\",\"backend-endpoint-review\",\"backend-change-implemented\",\"backend-change-archive\",\"backend-change-unarchive\",\"backend-diagrams\",\"backend-architecture\",\"backend-diagram-views\"]"
-  guideSetId: "sha256:8743327387b8c094d8cc29199905b75fa917139d29eb7137d088c38d87e89ab5"
-  manifestHash: "sha256:8743327387b8c094d8cc29199905b75fa917139d29eb7137d088c38d87e89ab5"
+  requiredCapabilities: "[\"backend-projects\",\"backend-revisions\",\"backend-graph-query\",\"backend-change-proposals\",\"backend-change-typed-edits\",\"backend-source-assertions\",\"backend-representations\",\"backend-analysis-jobs\",\"backend-analysis-diff\",\"backend-analysis-impact\",\"backend-change-rebase\",\"backend-change-ready\",\"backend-change-package\",\"backend-conformance\",\"backend-endpoint-review\",\"backend-change-implemented\",\"backend-change-archive\",\"backend-change-unarchive\",\"backend-diagrams\",\"backend-architecture\",\"backend-diagram-views\",\"backend-scenario-measurements\",\"backend-observed-impact\",\"backend-observed-sequences\"]"
+  guideSetId: "sha256:f25648e4c5cfffe7d621b112a8e26d47d58d3838385b18d201ca68507aac2981"
+  manifestHash: "sha256:f25648e4c5cfffe7d621b112a8e26d47d58d3838385b18d201ca68507aac2981"
 ---
 
 # Prepare a full graph proposal
@@ -17,7 +17,7 @@ A full proposal keeps one immutable source baseline and an independent sequence 
 
 ## Pin the procedure and baseline
 
-Read `get_server_config`/`get_backend_capabilities`. Select advertised change4, proposal-graph-v1, all required capabilities and a compatible immutable guide set. Verify workflowId/version/guideSetId/manifestHash/contentHash; on mismatch use the complete pinned server `backend-change-proposals` entrypoint. Unknown sets fail. Shared source semantics use import8; exact read/lineage/proof procedures use inspect12; database facets use database7. Verify each actual owner in the same set.
+Read `get_server_config`/`get_backend_capabilities`. Select advertised change5, proposal-graph-v1, all required capabilities and a compatible immutable guide set. Verify workflowId/version/guideSetId/manifestHash/contentHash; on mismatch use the complete pinned server `backend-change-proposals` entrypoint. Unknown sets fail. Shared source semantics use import8; exact read/lineage/proof procedures use inspect13; database facets use database7. Verify each actual owner in the same set.
 
 Read the chosen source revision explicitly. Source5 is supported with source5 vocabulary; a full proposal's structural schema6 tag does not upgrade that baseline or grant representation commands. Source6 admits domain_entity, dto, api_schema and representation_field. Select source6 explicitly at creation when those kinds are needed.
 
@@ -100,7 +100,7 @@ Use `{changeProposal:{proposalId,proposalRevisionId}}` with graph/node/evidence/
 
 Full-target assertions/evidence describe the exact baseline. Edited properties carry intent command/reason origins and no invented supporting provider proof. A newly created desired field may have no provider evidence. Source6 losing claims remain inspectable. Assertions are unsupported for source5 and full proposals based on source5; use their exact baseline evidence instead. Historical metadata proof retains its original source5 basis and cannot confirm the intended semantic value.
 
-Presentation saving belongs to inspect12/database7. For a full target, explicitly create/save SavedView-v2 with the exact target and returned view pins. The presentation does not update this proposal. Candidate staging cannot be saved as a view.
+Presentation saving belongs to inspect13/database7. For a full target, explicitly create/save SavedView-v2 with the exact target and returned view pins. The presentation does not update this proposal. Candidate staging cannot be saved as a view.
 
 ## Recover without changing an unknown request
 
@@ -110,7 +110,7 @@ For an unknown outcome, repeat exactly the saved request/key. For definitive 409
 
 ## Rebase and static analysis
 
-Read `get_guide {topic:"backend-change-rebase",guideSetId:selected.guideSetId}` before moving a saved draft to an explicitly selected source base. B/O/N conflicts need exact selectors, choices and reasons; ordered repair commands remain real commands. Read `get_guide {topic:"backend-analysis-jobs",guideSetId:selected.guideSetId}` before starting durable diff/impact, cancelling/retrying a job or marking ready. Both topics belong to change4 in this exact set; verify their returned owner/contentHash.
+Read `get_guide {topic:"backend-change-rebase",guideSetId:selected.guideSetId}` before moving a saved draft to an explicitly selected source base. B/O/N conflicts need exact selectors, choices and reasons; ordered repair commands remain real commands. Read `get_guide {topic:"backend-analysis-jobs",guideSetId:selected.guideSetId}` before starting durable diff/impact, cancelling/retrying a job or marking ready. Both topics belong to change5 in this exact set; verify their returned owner/contentHash.
 
 Only in a standalone `mocker-backend-change` installation, the local files relative to that package's SKILL.md are `references/rebase.md` and `references/analysis-jobs.md`. Root-only compatibility and server-topic readers use the pinned get_guide calls above; those leaf-local paths are not relative to the generated compatibility document.
 
@@ -118,7 +118,7 @@ Ready is a static review association with an exact complete saved full-draft imp
 
 ## Structural handoff and endpoint review
 
-Read `get_guide {topic:"backend-change-handoff",guideSetId:selected.guideSetId}` for saved-only package, exact result-source conformance and implemented/archive/unarchive. Read `get_guide {topic:"backend-endpoint-review",guideSetId:selected.guideSetId}` for exact before/after endpoint IDs and explicit null removal. Both topics are change4-owned. Standalone local paths are `references/handoff.md` and `references/endpoint-review.md`; root-only installations use the pinned server topics. No step verifies runtime behavior.
+Read `get_guide {topic:"backend-change-handoff",guideSetId:selected.guideSetId}` for saved-only package, exact result-source conformance and implemented/archive/unarchive. Read `get_guide {topic:"backend-endpoint-review",guideSetId:selected.guideSetId}` for exact before/after endpoint IDs and explicit null removal. Both topics are change5-owned. Standalone local paths are `references/handoff.md` and `references/endpoint-review.md`; root-only installations use the pinned server topics. No step verifies runtime behavior.
 
 ## Architecture companion boundary
 
@@ -139,3 +139,10 @@ refs to explicit proposal commands, never an implicit graph/API/scenario write.
 No automatic process inference or policy execution; B5/B6 acceptance stays open.
 
 For static diagnostic jobs and separate finding review, negotiate **verify1** and read `backend-verify` / `backend-diagnostics` from the same immutable guide set. Inspection alone starts no job; review is not runtime proof.
+
+## Measured observations
+
+Read pinned `backend-measurements` and `backend-benchmarks` from the same guide set.
+Use exact saved source/observation/correlation/report pins; never enrich from latest.
+Observed impact explicitly selects none or pinned. Before source evidence cannot
+confirm desired after intent. Unknown builds and inferred paths remain qualified.

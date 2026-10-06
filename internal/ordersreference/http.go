@@ -22,6 +22,25 @@ func (s *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, &protocolError{400, "invalid_request"})
 		return
 	}
+	if r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/__mocker_test/runs/") && strings.HasSuffix(r.URL.Path, "/observations") {
+		parts := strings.Split(r.URL.Path, "/")
+		if len(parts) != 5 || !p.ValidID(parts[3]) || r.ContentLength != 0 || len(r.TransferEncoding) > 0 {
+			s.fail(w, &protocolError{400, "invalid_request"})
+			return
+		}
+		records, e := s.RecordedBusiness(parts[3])
+		if e != nil {
+			s.fail(w, e)
+			return
+		}
+		s.respond(w, 200, struct {
+			Identity    p.Identity `json:"identity"`
+			Records     any        `json:"records"`
+			Retention   string     `json:"retention"`
+			Limitations []string   `json:"limitations"`
+		}{s.identity, records, s.ObservationRetention(parts[3]), []string{"process-lifetime observations; unavailable after restart", "SQL is partial business scope; reset/control/journal/savepoints excluded", "mocked/payment is in-process, not real payment network traffic"}}, p.JournalLimit)
+		return
+	}
 	ep, run := route(r)
 	if ep == "" {
 		s.fail(w, &protocolError{404, "not_found"})

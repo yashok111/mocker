@@ -1,3 +1,6 @@
+import "./BackendWorkspace.css";
+import { BackendModelSearchPanel, type WorkspaceSelection } from "./BackendModelSearchPanel";
+import { BackendExactRecordInspector } from "./BackendExactGraph";
 import { BackendDiagramReplayPrepare } from "./BackendDiagramReplayContext";
 import { BackendNamespacedArtifactInspector } from "./BackendNamespacedArtifactInspector";
 import { BackendViewSVGExport } from "./BackendViewSVGExport";
@@ -16,7 +19,6 @@ import {
   Loader,
   NativeSelect,
   Paper,
-  SimpleGrid,
   Stack,
   Text,
   TextInput,
@@ -524,6 +526,10 @@ function ArchitectureWorkspace({
   const [draft, setDraft] = useState<BackendDiagramDocument | undefined>(initialDocument);
   const fallback = diagram ? initialState(diagram, search) : undefined;
   const semanticIdentity = JSON.stringify(diagram?.pin);
+  const [modelSelection, setModelSelection] = usePinnedValue<WorkspaceSelection | undefined>(
+    semanticIdentity,
+    undefined,
+  );
   const routeIdentity = JSON.stringify([
     semanticIdentity,
     savedView?.id,
@@ -555,8 +561,9 @@ function ArchitectureWorkspace({
       return undefined;
     }
   });
-  const [namespacedRef,setNamespacedRef]=useState<Extract<BackendDiagramRef,{kind:"namespaced_artifact"}>>();
-const [artifactRef, setArtifactRef] =
+  const [namespacedRef, setNamespacedRef] =
+    useState<Extract<BackendDiagramRef, { kind: "namespaced_artifact" }>>();
+  const [artifactRef, setArtifactRef] =
     useState<Extract<BackendDiagramRef, { kind: "artifact" }>>();
   const [layoutNode, setLayoutNode] = useState("");
   const [layoutX, setLayoutX] = useState("0");
@@ -755,7 +762,8 @@ const [artifactRef, setArtifactRef] =
   const open = (ref: BackendDiagramRef) => {
     if (!diagram) return;
     if (ref.kind === "namespaced_artifact") {
-      setNamespacedRef(ref); return;
+      setNamespacedRef(ref);
+      return;
     }
     if (ref.kind === "artifact") {
       setArtifactRef(ref);
@@ -952,85 +960,6 @@ const [artifactRef, setArtifactRef] =
               </Button>
             </Alert>
           )}
-          {architecture && (
-            <SimpleGrid cols={{ base: 1, lg: 2 }}>
-              <Stack>
-                <Title order={3}>Элементы · {elements.data?.total ?? 0}</Title>
-                {es.map((e) => (
-                  <Group key={e.id} wrap="wrap">
-                    <Button
-                      variant="default"
-                      h="auto"
-                      style={{ whiteSpace: "normal", overflowWrap: "anywhere" }}
-                      disabled={dirty}
-                      data-c4-selection={e.id}
-                      onClick={() => select({ type: "element", id: e.id })}
-                    >
-                      {e.label} · {e.role} · {e.origin.kind === "authored" ? "Замысел" : "Source"}
-                    </Button>
-                    {["software_system", "application"].includes(e.role) && (
-                      <Button
-                        variant="subtle"
-                        disabled={dirty}
-                        onClick={() =>
-                          changeState({
-                            ...state,
-                            level: e.role === "application" ? "components" : "containers",
-                            rootId: e.id,
-                            selection: null,
-                            positions: [],
-                            collapsedIds: [],
-                          })
-                        }
-                      >
-                        Что внутри {e.label}
-                      </Button>
-                    )}
-                  </Group>
-                ))}
-                <Group>
-                  <Button disabled={ec.length === 1} onClick={() => setEC((c) => c.slice(0, -1))}>
-                    Предыдущие элементы
-                  </Button>
-                  <Button
-                    disabled={!elements.data?.nextCursor}
-                    onClick={() => setEC((c) => [...c, elements.data!.nextCursor])}
-                  >
-                    Следующие элементы
-                  </Button>
-                </Group>
-              </Stack>
-              <Stack>
-                <Title order={3}>Зависимости · {links.data?.total ?? 0}</Title>
-                {ls.map((l) => (
-                  <Button
-                    key={l.id}
-                    variant="default"
-                    h="auto"
-                    style={{ whiteSpace: "normal", overflowWrap: "anywhere" }}
-                    disabled={dirty}
-                    data-c4-selection={l.id}
-                    onClick={() => select({ type: "link", id: l.id })}
-                  >
-                    {es.find((e) => e.id === l.from)?.label ?? l.from} →{" "}
-                    {es.find((e) => e.id === l.to)?.label ?? l.to} · {l.relation} ·{" "}
-                    {l.origin.kind === "authored" ? "Замысел" : "Source"}
-                  </Button>
-                ))}
-                <Group>
-                  <Button disabled={lc.length === 1} onClick={() => setLC((c) => c.slice(0, -1))}>
-                    Предыдущие связи
-                  </Button>
-                  <Button
-                    disabled={!links.data?.nextCursor}
-                    onClick={() => setLC((c) => [...c, links.data!.nextCursor])}
-                  >
-                    Следующие связи
-                  </Button>
-                </Group>
-              </Stack>
-            </SimpleGrid>
-          )}
           <Paper withBorder p="md">
             <Stack gap="xs">
               <Text fw={600}>Расположение и свёрнутые элементы</Text>
@@ -1102,11 +1031,166 @@ const [artifactRef, setArtifactRef] =
             </Stack>
           </Paper>
           {architecture && (
-            <Suspense fallback={<Loader aria-label="Загружаем C4 canvas" />}>
-              <BackendArchitectureGraph elements={es} links={ls} state={state} onSelect={select} />
-            </Suspense>
+            <div className="backend-workspace-columns" aria-label="Рабочая область архитектуры">
+              <aside aria-label="Дерево архитектуры и зависимости">
+                <BackendModelSearchPanel
+                  key={semanticIdentity}
+                  projectId={projectId}
+                  target={diagram.document.target}
+                  disabled={dirty}
+                  onSelect={setModelSelection}
+                />
+                {architecture && (
+                  <Stack>
+                    <Stack>
+                      <Title order={3}>Элементы · {elements.data?.total ?? 0}</Title>
+                      {es.map((e) => (
+                        <Group key={e.id} wrap="wrap">
+                          <Button
+                            variant="default"
+                            h="auto"
+                            style={{ whiteSpace: "normal", overflowWrap: "anywhere" }}
+                            disabled={dirty}
+                            data-c4-selection={e.id}
+                            onClick={() => select({ type: "element", id: e.id })}
+                          >
+                            {e.label} · {e.role} ·{" "}
+                            {e.origin.kind === "authored" ? "Замысел" : "Source"}
+                          </Button>
+                          {["software_system", "application"].includes(e.role) && (
+                            <Button
+                              variant="subtle"
+                              disabled={dirty}
+                              onClick={() =>
+                                changeState({
+                                  ...state,
+                                  level: e.role === "application" ? "components" : "containers",
+                                  rootId: e.id,
+                                  selection: null,
+                                  positions: [],
+                                  collapsedIds: [],
+                                })
+                              }
+                            >
+                              Что внутри {e.label}
+                            </Button>
+                          )}
+                        </Group>
+                      ))}
+                      <Group>
+                        <Button
+                          disabled={ec.length === 1}
+                          onClick={() => setEC((c) => c.slice(0, -1))}
+                        >
+                          Предыдущие элементы
+                        </Button>
+                        <Button
+                          disabled={!elements.data?.nextCursor}
+                          onClick={() => setEC((c) => [...c, elements.data!.nextCursor])}
+                        >
+                          Следующие элементы
+                        </Button>
+                      </Group>
+                    </Stack>
+                    <Stack>
+                      <Title order={3}>Зависимости · {links.data?.total ?? 0}</Title>
+                      {ls.map((l) => (
+                        <Button
+                          key={l.id}
+                          variant="default"
+                          h="auto"
+                          style={{ whiteSpace: "normal", overflowWrap: "anywhere" }}
+                          disabled={dirty}
+                          data-c4-selection={l.id}
+                          onClick={() => select({ type: "link", id: l.id })}
+                        >
+                          {es.find((e) => e.id === l.from)?.label ?? l.from} →{" "}
+                          {es.find((e) => e.id === l.to)?.label ?? l.to} · {l.relation} ·{" "}
+                          {l.origin.kind === "authored" ? "Замысел" : "Source"}
+                        </Button>
+                      ))}
+                      <Group>
+                        <Button
+                          disabled={lc.length === 1}
+                          onClick={() => setLC((c) => c.slice(0, -1))}
+                        >
+                          Предыдущие связи
+                        </Button>
+                        <Button
+                          disabled={!links.data?.nextCursor}
+                          onClick={() => setLC((c) => [...c, links.data!.nextCursor])}
+                        >
+                          Следующие связи
+                        </Button>
+                      </Group>
+                    </Stack>
+                  </Stack>
+                )}
+              </aside>
+              <section aria-label="Граф архитектуры">
+                <Suspense fallback={<Loader aria-label="Загружаем C4 canvas" />}>
+                  <BackendArchitectureGraph
+                    elements={es}
+                    links={ls}
+                    state={state}
+                    onSelect={select}
+                  />
+                </Suspense>
+              </section>
+              <aside aria-label="Инспектор архитектуры">
+                {modelSelection && (
+                  <section aria-label="Объект точной модели">
+                    <Button variant="subtle" onClick={() => setModelSelection(undefined)}>
+                      Закрыть объект модели
+                    </Button>
+                    <BackendExactRecordInspector
+                      projectId={projectId}
+                      target={diagram.document.target}
+                      claimsSupported={false}
+                      {...modelSelection}
+                    />
+                  </section>
+                )}
+                {architecture && (
+                  <BackendArchitectureInspector
+                    projectId={projectId}
+                    diagram={diagram}
+                    state={state}
+                    onOpen={open}
+                    onClose={() => {
+                      const id = state.selection?.id;
+                      changeState({ ...state, selection: null });
+                      if (id) focusWorkspaceRegion(`[data-c4-selection="${id}"]`);
+                    }}
+                  />
+                )}
+              </aside>
+            </div>
           )}
-          {state.selection && <BackendDiagramReplayPrepare key={`${diagram.pin.id}:${diagram.pin.version}:${state.selection.id}:${state.level}:${state.rootId}`} projectId={projectId} diagram={diagram} disabled={dirty} input={{pin:diagram.pin,selectors:[architecture && state.selection.type === "link" ? {kind:"architecture_relation",id:state.selection.id,projection:{policy:"architecture-v1",level:state.level!,rootId:state.rootId!}} : {kind:"semantic",id:state.selection.id}]}}/>}
+          {state.selection && (
+            <BackendDiagramReplayPrepare
+              key={`${diagram.pin.id}:${diagram.pin.version}:${state.selection.id}:${state.level}:${state.rootId}`}
+              projectId={projectId}
+              diagram={diagram}
+              disabled={dirty}
+              input={{
+                pin: diagram.pin,
+                selectors: [
+                  architecture && state.selection.type === "link"
+                    ? {
+                        kind: "architecture_relation",
+                        id: state.selection.id,
+                        projection: {
+                          policy: "architecture-v1",
+                          level: state.level!,
+                          rootId: state.rootId!,
+                        },
+                      }
+                    : { kind: "semantic", id: state.selection.id },
+                ],
+              }}
+            />
+          )}
           {state.selection && (
             <details
               key={`${diagram.pin.id}:${diagram.pin.version}:${state.selection.id}:${state.level}:${state.rootId}`}
@@ -1137,17 +1221,21 @@ const [artifactRef, setArtifactRef] =
               />
             </details>
           )}
-          {architecture && (
-            <BackendArchitectureInspector
+          {!architecture && (
+            <BackendModelSearchPanel
+              key={semanticIdentity}
               projectId={projectId}
-              diagram={diagram}
-              state={state}
-              onOpen={open}
-              onClose={() => {
-                const id = state.selection?.id;
-                changeState({ ...state, selection: null });
-                if (id) focusWorkspaceRegion(`[data-c4-selection="${id}"]`);
-              }}
+              target={diagram.document.target}
+              disabled={dirty}
+              onSelect={setModelSelection}
+            />
+          )}
+          {!architecture && modelSelection && (
+            <BackendExactRecordInspector
+              projectId={projectId}
+              target={diagram.document.target}
+              claimsSupported={false}
+              {...modelSelection}
             />
           )}
           {diagram.document.kind === "interactions" && (
@@ -1218,9 +1306,23 @@ const [artifactRef, setArtifactRef] =
               presentation={state}
             />
           )}
-          {namespacedRef && <BackendNamespacedArtifactInspector projectId={projectId} target={diagram.document.target} targetHash={diagram.targetHash} reference={namespacedRef} onClose={() => setNamespacedRef(undefined)} />}
-{diagram.importOrigin && <Alert color="blue">Импортированное авторство: {diagram.author} · installation {diagram.importOrigin.installationId}. Это исходная атрибуция, а не локальное подтверждение.</Alert>}
-{artifactRef && (
+          {namespacedRef && (
+            <BackendNamespacedArtifactInspector
+              projectId={projectId}
+              target={diagram.document.target}
+              targetHash={diagram.targetHash}
+              reference={namespacedRef}
+              onClose={() => setNamespacedRef(undefined)}
+            />
+          )}
+          {diagram.importOrigin && (
+            <Alert color="blue">
+              Импортированное авторство: {diagram.author} · installation{" "}
+              {diagram.importOrigin.installationId}. Это исходная атрибуция, а не локальное
+              подтверждение.
+            </Alert>
+          )}
+          {artifactRef && (
             <Paper withBorder p="md">
               <Stack>
                 <Text>Точный artifact row: {artifactRef.rowId}</Text>

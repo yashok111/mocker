@@ -3,12 +3,12 @@ name: mocker-backend-inspect
 description: Inspect a pinned source-backed HTTP/event/job flow, service calls, contextual message fields, branches, queries, transaction boundaries or imported table/column readers and writers in mocker. Use for backend flow and data-access questions or an explicitly requested blocking source gap investigation.
 metadata:
   workflowId: "mocker-backend-inspect"
-  workflowVersion: "12"
+  workflowVersion: "13"
   requiredModelSchemaVersions: "[\"3\",\"4\",\"5\",\"6\"]"
   requiredViewSchemaVersions: "[\"saved-view-v1\",\"api-artifact-pins-v1\",\"backend-editor-artifacts-v1\",\"proposal-graph-v1\",\"saved-view-v2\",\"import-candidate-v1\",\"backend-diagram-v1\",\"diagram-view-v1\"]"
-  requiredCapabilities: "[\"backend-projects\",\"backend-revisions\",\"backend-graph-query\",\"backend-flow-query\",\"backend-data-access-query\",\"backend-saved-views\",\"backend-field-lineage-query\",\"backend-api-artifact-pins\",\"backend-editor-projections\",\"backend-events-query\",\"backend-source-assertions\",\"backend-import-candidate\",\"backend-change-proposals\",\"backend-representations\",\"backend-saved-views-v2\",\"backend-diagrams\",\"backend-architecture\",\"backend-diagram-views\",\"backend-interactions\",\"backend-lifecycle\",\"backend-business-map\"]"
-  guideSetId: "sha256:8743327387b8c094d8cc29199905b75fa917139d29eb7137d088c38d87e89ab5"
-  manifestHash: "sha256:8743327387b8c094d8cc29199905b75fa917139d29eb7137d088c38d87e89ab5"
+  requiredCapabilities: "[\"backend-projects\",\"backend-revisions\",\"backend-graph-query\",\"backend-flow-query\",\"backend-data-access-query\",\"backend-saved-views\",\"backend-field-lineage-query\",\"backend-api-artifact-pins\",\"backend-editor-projections\",\"backend-events-query\",\"backend-source-assertions\",\"backend-import-candidate\",\"backend-change-proposals\",\"backend-representations\",\"backend-saved-views-v2\",\"backend-diagrams\",\"backend-architecture\",\"backend-diagram-views\",\"backend-interactions\",\"backend-lifecycle\",\"backend-business-map\",\"backend-scenario-measurements\",\"backend-observed-impact\",\"backend-observed-sequences\"]"
+  guideSetId: "sha256:f25648e4c5cfffe7d621b112a8e26d47d58d3838385b18d201ca68507aac2981"
+  manifestHash: "sha256:f25648e4c5cfffe7d621b112a8e26d47d58d3838385b18d201ca68507aac2981"
 ---
 # Pinned source flow and data-access inspection
 
@@ -17,7 +17,7 @@ Answer from imported source at one immutable revision. HTTP handles, reachable s
 ## Negotiate the complete procedure
 
 Call `get_server_config` and `get_backend_capabilities`. Select the advertised supported
-`mocker-backend-inspect` workflow12 with schemas3/4/5/6 and the selected exact source/full read contract; lineage uses source4/5
+`mocker-backend-inspect` workflow13 with schemas3/4/5/6 and the selected exact source/full read contract; lineage uses source4/5
 field-lineage-v1, events additionally source5/events-service-v1. Verify all listed capabilities and
 `query_backend_flow`. Decode installed metadata's schema and capability JSON-list strings. Matching
 tools or partial schemas cannot qualify a flow task.
@@ -39,10 +39,10 @@ immutable guideSetId:
 
 | Topic | Actual owner | Read when |
 |---|---|---|
-| `backend-flow-reference` | inspect12 | Before the first flow/access query; strict variants, typed records and pagination. |
-| `backend-events` | inspect12 | Before source5 routes/jobs/service_calls or contextual field navigation. |
-| `backend-analysis` | inspect12 | For witnesses, uncertainty, truncation or a blocking gap. |
-| `backend-editor-projections` | inspect12 | Before saved scenario/API editor projections or generic pin changes. |
+| `backend-flow-reference` | inspect13 | Before the first flow/access query; strict variants, typed records and pagination. |
+| `backend-events` | inspect13 | Before source5 routes/jobs/service_calls or contextual field navigation. |
+| `backend-analysis` | inspect13 | For witnesses, uncertainty, truncation or a blocking gap. |
+| `backend-editor-projections` | inspect13 | Before saved scenario/API editor projections or generic pin changes. |
 | `backend-model` | import8 | When identity, proof, freshness or coverage needs explanation. |
 | `backend-recovery` | import8 | On resume/read failure, or before authorized import publication. |
 | `backend-database-reference` | database7 | For selected SQL/ORM facets and relational bounds. |
@@ -57,8 +57,8 @@ original requests and receipts.
 
 ## Exact source6/full/staged extensions
 
-Use one explicit revisionId, legacy proposal, full changeProposal or READY importCandidate selector and preserve the complete returned target/pins. Native source6 wraps records with tag6 and all qualified claims; full proposal origins distinguish baseline proof from intent. Source5/legacy/full5 assertions are unsupported. Exact details and target exclusions are in backend-flow-reference/backend-database-reference under their actual inspect12/database7 owners.
-Staging permits graph/node/evidence/coverage/assertions only. It rejects specialized queries and SavedViews; a stale candidate409 never falls back to a source head. Select change4 before full proposal writes and sync2 before composed source updates. Existing legacy procedures below retain their old wire.
+Use one explicit revisionId, legacy proposal, full changeProposal or READY importCandidate selector and preserve the complete returned target/pins. Native source6 wraps records with tag6 and all qualified claims; full proposal origins distinguish baseline proof from intent. Source5/legacy/full5 assertions are unsupported. Exact details and target exclusions are in backend-flow-reference/backend-database-reference under their actual inspect13/database7 owners.
+Staging permits graph/node/evidence/coverage/assertions only. It rejects specialized queries and SavedViews; a stale candidate409 never falls back to a source head. Select change5 before full proposal writes and sync2 before composed source updates. Existing legacy procedures below retain their old wire.
 For source6/full Flow or Database presentations, explicitly select SavedView-v2 and read the complete create/save/reopen procedure in the matching reference before writing. Preserve full target, viewId/version and pins.effective; pins.revisionId alone is only a full draft's source baseline. Unknown writes keep exact bytes/key/CAS. Keep omitted-tag v1 requests and receipts unchanged.
 
 ## Ordered inspection
@@ -95,7 +95,7 @@ For source6/full Flow or Database presentations, explicitly select SavedView-v2 
    unresolved status, direct/possible relations, source coverage, local boundary
    completeness and query traversal limits. Readers/writers are imported claims;
    existing rows, all writers, NOT NULL enforcement, atomicity,
-   runtime impact, traces, latency and event delivery remain unverified or unavailable. Authorized analysis uses change4/backend-analysis-jobs, backend-change-handoff and backend-endpoint-review; inspection starts no job.
+   runtime impact, traces, latency and event delivery remain unverified or unavailable. Authorized analysis uses change5/backend-analysis-jobs, backend-change-handoff and backend-endpoint-review; inspection starts no job.
 
 A source6 gap correction uses separately negotiated sync2 and its exact selected-partition policy. Source1–5 gap corrections retain the legacy procedure below; a narrower analysis question alone does not change protocol scope.
 
@@ -122,9 +122,9 @@ selected import recovery, never guess publication success.
 
 ## Save and reopen a Flow presentation when requested
 
-Before saved-view writes require inspect12, `backend-saved-views` and `saved-view-v1` in the selected
+Before saved-view writes require inspect13, `backend-saved-views` and `saved-view-v1` in the selected
 global set. Ordinary inspection still writes nothing. Use the saved-view contract/example in
-`backend-flow-reference` under this inspect12 owner. List `list_backend_saved_views
+`backend-flow-reference` under this inspect13 owner. List `list_backend_saved_views
 {projectId,kind:"flow"}`, create from the exact source pin and complete submitted presentation, then
 retain returned viewId/version/pins. Reopen with `get_backend_saved_view {projectId,viewId,version}`
 before graph/flow/evidence reads; use only its target and state. Missing, foreign or failed saved
@@ -141,7 +141,7 @@ Ordinary-agent acceptance and live agent evaluation remain deferred.
 
 ## Ordered pinned field-lineage inspection
 
-1. Require inspect12, source4/5, field-lineage-v1 and backend-field-lineage-query.
+1. Require inspect13, source4/5, field-lineage-v1 and backend-field-lineage-query.
    Source1–3 and proposals refuse this query; their older reads remain supported.
    A proposal may navigate to its exact source base only if that base is source4/5.
 2. Select one complete value ref from pinned node reads: column nodeId+facetKey;
@@ -169,7 +169,7 @@ Ordinary-agent acceptance and live agent evaluation remain deferred.
    transient and do not extend saved-view-v1. Never fall back to latest on failure.
 
 API fields beneath their source HTTP operation retain direction/location/status/
-media/structural selector. Manual external API associations require inspect12,
+media/structural selector. Manual external API associations require inspect13,
 backend-api-artifact-pins and api-artifact-pins-v1 in viewSchemaVersions. Read the
 full contract/example in backend-flow-reference before an authorized change.
 Choose source node, immutable API revision and operation key/schema pointer
@@ -191,9 +191,9 @@ snapshots, retries/current-head409 recovery and independent admission budgets.
 | mocker-backend-project | 2 | 1 |  | backend-projects, backend-project-metadata, backend-revisions, backend-annotations |
 | mocker-backend-import | 8 | 1,2,3,4,5,6 |  | backend-projects, backend-revisions, backend-graph-query, backend-source-import, backend-source-reconcile, backend-revision-compare, backend-relational-import, backend-database-query, backend-database-er, backend-runtime-flow-import, backend-flow-query, backend-data-access-query, backend-field-lineage-import, backend-field-lineage-query, backend-events-import, backend-events-query, backend-source-sync, backend-representations |
 | mocker-backend-database | 7 | 2,3,4,5,6 | proposal-relational-v1,saved-view-v1,proposal-graph-v1,saved-view-v2 | backend-projects, backend-revisions, backend-graph-query, backend-database-query, backend-database-er, backend-db-proposals, backend-db-typed-edits, backend-flow-query, backend-data-access-query, backend-saved-views, backend-field-lineage-query, backend-events-query, backend-change-proposals, backend-source-assertions, backend-saved-views-v2 |
-| mocker-backend-inspect | 12 | 3,4,5,6 | saved-view-v1,api-artifact-pins-v1,backend-editor-artifacts-v1,proposal-graph-v1,saved-view-v2,import-candidate-v1,backend-diagram-v1,diagram-view-v1 | backend-projects, backend-revisions, backend-graph-query, backend-flow-query, backend-data-access-query, backend-saved-views, backend-field-lineage-query, backend-api-artifact-pins, backend-editor-projections, backend-events-query, backend-source-assertions, backend-import-candidate, backend-change-proposals, backend-representations, backend-saved-views-v2, backend-diagrams, backend-architecture, backend-diagram-views |
+| mocker-backend-inspect | 13 | 3,4,5,6 | saved-view-v1,api-artifact-pins-v1,backend-editor-artifacts-v1,proposal-graph-v1,saved-view-v2,import-candidate-v1,backend-diagram-v1,diagram-view-v1 | backend-projects, backend-revisions, backend-graph-query, backend-flow-query, backend-data-access-query, backend-saved-views, backend-field-lineage-query, backend-api-artifact-pins, backend-editor-projections, backend-events-query, backend-source-assertions, backend-import-candidate, backend-change-proposals, backend-representations, backend-saved-views-v2, backend-diagrams, backend-architecture, backend-diagram-views |
 | mocker-backend-sync | 2 | 1,5,6 | import-candidate-v1 | backend-projects, backend-revisions, backend-graph-query, backend-source-import, backend-source-sync, backend-source-incremental-sync, backend-source-assertions, backend-import-candidate, backend-representations, backend-analysis-jobs, backend-analysis-diff, backend-analysis-impact |
-| mocker-backend-change | 4 | 5,6 | proposal-graph-v1,backend-diagram-v1,diagram-view-v1 | backend-projects, backend-revisions, backend-graph-query, backend-change-proposals, backend-change-typed-edits, backend-source-assertions, backend-representations, backend-analysis-jobs, backend-analysis-diff, backend-analysis-impact, backend-change-rebase, backend-change-ready, backend-change-package, backend-conformance, backend-endpoint-review, backend-change-implemented, backend-change-archive, backend-change-unarchive, backend-diagrams, backend-architecture, backend-diagram-views |
+| mocker-backend-change | 5 | 5,6 | proposal-graph-v1,backend-diagram-v1,diagram-view-v1 | backend-projects, backend-revisions, backend-graph-query, backend-change-proposals, backend-change-typed-edits, backend-source-assertions, backend-representations, backend-analysis-jobs, backend-analysis-diff, backend-analysis-impact, backend-change-rebase, backend-change-ready, backend-change-package, backend-conformance, backend-endpoint-review, backend-change-implemented, backend-change-archive, backend-change-unarchive, backend-diagrams, backend-architecture, backend-diagram-views |
 
 Architecture companion boundary: For C4 Context/Containers/Components, fetch backend-architecture from this same guide set. Use exact diagram pin, projection policy/level/root and paginated members. Source assertions, authored intent and unknown membership stay distinct. Saved diagram-view-v1 is separate from legacy saved views; newer mapping saves never repin it.
 
@@ -216,3 +216,10 @@ For static diagnostic jobs and separate finding review, negotiate **verify1** an
 ## Exact uploaded evidence
 
 When backend-observations-v1 is advertised, select an exact observation version and correlation version. Use the pinned backend-observations and backend-correlation guide topics (verify3). Keep the original diagram scope, source target and correlation result pins while navigating. New imports, appended observations and mapping edits do not enrich historical snapshots. Unknown builds and ambiguous source membership remain gaps; static/intent/observed labels must stay distinct.
+
+## Measured observations
+
+Read pinned `backend-measurements` and `backend-benchmarks` from the same guide set.
+Use exact saved source/observation/correlation/report pins; never enrich from latest.
+Observed impact explicitly selects none or pinned. Before source evidence cannot
+confirm desired after intent. Unknown builds and inferred paths remain qualified.

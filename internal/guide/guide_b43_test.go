@@ -9,7 +9,7 @@ import (
 func TestB43GuideHandoffOwners(t *testing.T) {
 	for _, topic := range []string{"backend-change-handoff", "backend-endpoint-review"} {
 		owner, ok := WorkflowForTopic(topic)
-		if !ok || owner.WorkflowID != "mocker-backend-change" || owner.WorkflowVersion != "4" || !slices.Contains(Topics(), topic) {
+		if !ok || owner.WorkflowID != "mocker-backend-change" || owner.WorkflowVersion != "5" || !slices.Contains(Topics(), topic) {
 			t.Errorf("new topic %s owner: %+v", topic, owner)
 			continue
 		}
@@ -25,7 +25,7 @@ func TestB43GuideHandoffOwners(t *testing.T) {
 	}
 	inspect, _ := WorkflowForTopic("backend-inspect")
 	recovery, _ := WorkflowForTopic("backend-recovery")
-	if inspect.WorkflowVersion != "10" || recovery.WorkflowID != "mocker-backend-import" || recovery.WorkflowVersion != "8" {
+	if inspect.WorkflowVersion != "13" || recovery.WorkflowID != "mocker-backend-import" || recovery.WorkflowVersion != "8" {
 		t.Fatal("incorrect inspection/recovery owners", inspect, recovery)
 	}
 }

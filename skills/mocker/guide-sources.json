@@ -271,6 +271,20 @@
       "source": "references/backend/correlation.md",
       "embedded": "backend-correlation.md",
       "workflowId": "mocker-backend-verify"
+    },
+    {
+      "topic": "backend-measurements",
+      "package": "mocker-backend-verify",
+      "source": "references/backend/measurements.md",
+      "embedded": "backend-measurements.md",
+      "workflowId": "mocker-backend-verify"
+    },
+    {
+      "topic": "backend-benchmarks",
+      "package": "mocker-backend-verify",
+      "source": "references/backend/benchmarks.md",
+      "embedded": "backend-benchmarks.md",
+      "workflowId": "mocker-backend-verify"
     }
   ],
   "workflows": [
@@ -365,7 +379,7 @@
     },
     {
       "workflowId": "mocker-backend-inspect",
-      "workflowVersion": "12",
+      "workflowVersion": "13",
       "entrypoint": "backend-inspect",
       "requiredModelSchemaVersions": [
         "3",
@@ -394,7 +408,10 @@
         "backend-diagram-views",
         "backend-interactions",
         "backend-lifecycle",
-        "backend-business-map"
+        "backend-business-map",
+        "backend-scenario-measurements",
+        "backend-observed-impact",
+        "backend-observed-sequences"
       ],
       "requiredViewSchemaVersions": [
         "saved-view-v1",
@@ -436,7 +453,7 @@
     },
     {
       "workflowId": "mocker-backend-change",
-      "workflowVersion": "4",
+      "workflowVersion": "5",
       "entrypoint": "backend-change-proposals",
       "requiredModelSchemaVersions": [
         "5",
@@ -468,12 +485,15 @@
         "backend-change-unarchive",
         "backend-diagrams",
         "backend-architecture",
-        "backend-diagram-views"
+        "backend-diagram-views",
+        "backend-scenario-measurements",
+        "backend-observed-impact",
+        "backend-observed-sequences"
       ]
     },
     {
       "workflowId": "mocker-backend-verify",
-      "workflowVersion": "3",
+      "workflowVersion": "4",
       "entrypoint": "backend-verify",
       "requiredModelSchemaVersions": [
         "5",
@@ -489,7 +509,10 @@
         "backend-analysis-diagnostics",
         "backend-finding-review",
         "backend-observations",
-        "backend-observation-correlation"
+        "backend-observation-correlation",
+        "backend-scenario-measurements",
+        "backend-observed-impact",
+        "backend-observed-sequences"
       ]
     },
     {

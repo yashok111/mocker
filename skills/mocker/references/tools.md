@@ -328,7 +328,7 @@ See `design.md` for limits and the complete workflow.
 
 ## Backend saved views
 
-Select inspect12 for source Flow or database7 for source/proposal Database in one
+Select inspect13 for source Flow or database7 for source/proposal Database in one
 verified guideSetId/manifestHash. Require backend-saved-views and saved-view-v1;
 import8 remains the source import owner. Saving presentation requires an explicit
 request and does not import/apply/execute source, SQL or migrations.
@@ -343,12 +343,12 @@ request and does not import/apply/execute source, SQL or migrations.
 Reopen resolves saved target/state before model reads. Share viewId/viewVersion;
 failed saved pins never fall back to heads.409 preserves changes and needs
 explicit reload/reconcile or save-as-new. See backend-flow-reference under
-inspect12 and backend-database-reference under database7 for complete examples.
+inspect13 and backend-database-reference under database7 for complete examples.
 
 ## Backend source4/5 field lineage
 
-Import8 owns source4 field-lineage-v1 import; inspect12 owns pinned lineage reads;
-database7 routes column actions to inspect12. Select compatible complete owners
+Import8 owns source4 field-lineage-v1 import; inspect13 owns pinned lineage reads;
+database7 routes column actions to inspect13. Select compatible complete owners
 in one verified guideSetId/manifestHash. Existing source1–3 operations, DB
 proposals and saved-view-v1 retain their established contracts.
 
@@ -363,19 +363,19 @@ mapping cards preserve all ordered sources, destination, transform/redaction,
 evidence and explicit boundaries. Zero-input unknown is not constant. Empty
 results never prove no dependency. Pagination differs from global traversal
 truncation and source coverage. No source code/SQL execution, latest fallback or
-implicit external API association is provided; load inspect12 flow/analysis topics.
+implicit external API association is provided; load inspect13 flow/analysis topics.
 
-## Exact backend API artifact associations (inspect12)
+## Exact backend API artifact associations (inspect13)
 
 Require backend-api-artifact-pins and api-artifact-pins-v1 in viewSchemaVersions.
-Read backend-flow-reference under its complete inspect12 owner for all four tools:
+Read backend-flow-reference under its complete inspect13 owner for all four tools:
 query_backend_api_artifacts, preview_backend_api_pins, apply_backend_api_pins and
 get_api_artifact_snapshot. Associations are manual, use exact decimal string API
 IDs and immutable raw hashes, and never select latest implicitly.
 
 ## Saved editor projections and generic artifact pins
 
-Select inspect12 and verify backend-editor-projections/backend-editor-artifacts-v1;
+Select inspect13 and verify backend-editor-projections/backend-editor-artifacts-v1;
 load `backend-editor-projections` from its advertised immutable set.
 
 | Tool | Input and behavior |
@@ -390,9 +390,9 @@ set preserves editors when the last API link is removed; explicit remove clears
 both collections. Unsupported saved content remains readable without becoming
 bindable. No projection/snapshot read writes owners or executes authored rules.
 
-## Backend source5 events (inspect12)
+## Backend source5 events (inspect13)
 
-Select complete inspect12/source5/events-service-v1 with backend-events-query;
+Select complete inspect13/source5/events-service-v1 with backend-events-query;
 import8 owns initial/whole-scope source import and exact4→5 extension. Load
 backend-events before route/job/service-call or contextual field navigation.
 
@@ -408,11 +408,11 @@ transport mappings alone join producer/consumer fields. No job executes.
 
 ## Source synchronization, desired changes and annotations
 
-Select sync2 and load `backend-sync` for composed source6 scopes, exact provider claims, incremental affected writes and READY candidate reads. Select change4 and load `backend-change-proposals` for full desired graph commands, preview/apply, immutable history and restore. Project2 owns `backend-annotations`: annotations are project metadata with exact text, CAS, cursor conflicts and orphan tracking. Inspect12/database7 own supported source/full inspection and explicit SavedView-v2; importCandidate supports basic graph/node/evidence/coverage/assertions only and cannot be saved. Verify each owner's complete requirements and topic hashes in the same selected guide set before following its procedure.
+Select sync2 and load `backend-sync` for composed source6 scopes, exact provider claims, incremental affected writes and READY candidate reads. Select change5 and load `backend-change-proposals` for full desired graph commands, preview/apply, immutable history and restore. Project2 owns `backend-annotations`: annotations are project metadata with exact text, CAS, cursor conflicts and orphan tracking. Inspect13/database7 own supported source/full inspection and explicit SavedView-v2; importCandidate supports basic graph/node/evidence/coverage/assertions only and cannot be saved. Verify each owner's complete requirements and topic hashes in the same selected guide set before following its procedure.
 
 ### Backend static analysis, rebase and ready
 
-Select change4 and read `backend-analysis-jobs` / `backend-change-rebase` from the negotiated set. Source-to-source entry points also use sync2 for source preparation; `backend-analysis` stays inspect12-owned.
+Select change5 and read `backend-analysis-jobs` / `backend-change-rebase` from the negotiated set. Source-to-source entry points also use sync2 for source preparation; `backend-analysis` stays inspect13-owned.
 
 | Tool | Inputs beyond projectId | Result / constraint |
 | --- | --- | --- |
