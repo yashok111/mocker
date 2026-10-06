@@ -18,7 +18,7 @@ export async function readAnalysis(projectId: string, jobId: string, signal?: Ab
     response.data.job.projectId !== projectId ||
     response.data.input.kind !== response.data.job.kind ||
     (response.data.input.documentVersion === "backend-analysis-context-v1") !==
-      ["diff", "impact"].includes(response.data.job.kind)
+      ["diff", "impact", "diagnostics"].includes(response.data.job.kind)
   )
     throw new Error("Получено другое задание анализа.");
   return response.data;

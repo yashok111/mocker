@@ -117,7 +117,14 @@ func (in *StartInput) UnmarshalJSON(raw []byte) error {
 	if b43Kind(discriminator.Kind) {
 		return in.unmarshalB43(raw, discriminator.Kind)
 	}
-	if _, err := closed(raw, []string{"kind", "fromRevisionId", "target", "scope", "limits", "observationMode", "idempotencyKey"}, []string{"observationPins"}); err != nil {
+	required := []string{"kind", "target", "scope", "limits", "observationMode", "idempotencyKey"}
+	optional := []string{"observationPins", "diagramScope"}
+	if discriminator.Kind == "diagnostics" {
+		optional = append(optional, "fromRevisionId")
+	} else {
+		required = append(required, "fromRevisionId")
+	}
+	if _, err := closed(raw, required, optional); err != nil {
 		return err
 	}
 	type plain StartInput
@@ -125,13 +132,19 @@ func (in *StartInput) UnmarshalJSON(raw []byte) error {
 	if err := decode(raw, &next); err != nil {
 		return err
 	}
-	if next.Kind != "diff" && next.Kind != "impact" {
+	if next.Kind != "diff" && next.Kind != "impact" && next.Kind != "diagnostics" {
 		return fault(422, "unsupported", "Unsupported analysis kind")
+	}
+	if next.DiagramScope != nil && next.Kind != "diagnostics" {
+		return fault(422, "unsupported", "Diagram scope is supported only for diagnostics")
+	}
+	if next.Kind == "diagnostics" && (next.Target.Proposal != nil || next.Target.CommandPreview != nil) {
+		return fault(422, "unsupported", "Diagnostics requires an exact source or full proposal target")
 	}
 	if next.ObservationMode != "none" || len(next.ObservationPins) > 0 {
 		return fault(422, "unsupported", "Observations are not supported")
 	}
-	if !backendmodel.ValidID(next.FromRevisionID) || !validKey(next.IdempotencyKey) {
+	if (next.Kind != "diagnostics" || next.FromRevisionID != "") && !backendmodel.ValidID(next.FromRevisionID) || !validKey(next.IdempotencyKey) {
 		return malformed("Invalid source revision or key")
 	}
 	next.ObservationPins = []jsontext.Value{}

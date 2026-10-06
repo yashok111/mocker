@@ -563,7 +563,7 @@ func TestToolSurfaceStaysAt203(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &env); err != nil {
 		t.Fatalf("decode tools/list: %v; body=%s", err, rec.Body.String())
 	}
-	if len(env.Result.Tools) != 225 {
-		t.Errorf("tools/list returned %d tools, want 225 including database proposals, saved views, lineage, four exact API artifact tools and four generic editor artifact tools, five proxy tools, two scenario transfer tools and the source events query", len(env.Result.Tools))
+	if len(env.Result.Tools) != 227 {
+		t.Errorf("tools/list returned %d tools, want 227 including database proposals, saved views, lineage, four exact API artifact tools and four generic editor artifact tools, five proxy tools, two scenario transfer tools and the source events query", len(env.Result.Tools))
 	}
 }

@@ -1,6 +1,7 @@
 package admin
 
 import (
+	"context"
 	"net/http"
 	"net/url"
 	"slices"
@@ -65,7 +66,7 @@ func backendAnalysisOptionalSelector(q url.Values, key string, values []string) 
 func backendAnalysisSelectionQuery(q url.Values, mode string) bool {
 	switch mode {
 	case "list":
-		return backendAnalysisOptionalSelector(q, "status", []string{"queued", "running", "completed", "failed", "cancelled", "interrupted"}) && backendAnalysisOptionalSelector(q, "kind", []string{"diff", "impact", "change_package", "conformance", "endpoint_review"})
+		return backendAnalysisOptionalSelector(q, "status", []string{"queued", "running", "completed", "failed", "cancelled", "interrupted"}) && backendAnalysisOptionalSelector(q, "kind", []string{"diff", "impact", "change_package", "conformance", "endpoint_review", "diagnostics"})
 	case "results":
 		return q.Has("resultVersion") && slices.Contains([]string{"changes", "findings", "witnesses", "checks", "gaps"}, q.Get("section")) && backendAnalysisOptionalSelector(q, "certainty", []string{"confirmed", "possible", "unknown"}) && backendAnalysisOptionalSelector(q, "direction", []string{"upstream", "downstream", "both"})
 	default:
@@ -94,7 +95,12 @@ func (s *Server) handleStartBackendAnalysis(w http.ResponseWriter, r *http.Reque
 	if !s.backendAnalysisBody(w, r, &in) {
 		return
 	}
-	out, err := s.backendAnalysis.Start(r.Context(), r.PathValue("id"), in)
+	out, err := s.backendAnalysis.Start(func() context.Context {
+		if s.backendArtifacts != nil {
+			return s.backendArtifacts.DiagramContext(r.Context())
+		}
+		return r.Context()
+	}(), r.PathValue("id"), in)
 	if err != nil {
 		s.backendError(w, err)
 		return

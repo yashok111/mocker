@@ -1,3 +1,4 @@
+import { BackendFindings } from "./BackendFindings";
 import { BackendChangePackage } from "./BackendChangePackage";
 import { BackendConformance } from "./BackendConformance";
 import { BackendEndpointReview } from "./BackendEndpointReview";
@@ -21,6 +22,7 @@ import type {
   BackendAnalysisJob,
   BackendAnalysisTarget,
   BackendChangeProposalDetail,
+  BackendDiagramScopeInput,
 } from "@/api/generated/schemas";
 import { analysisTerminal, readAnalysis, readAnalysisList } from "./backendAnalysisReads";
 import { makeAnalysisAttempt, useBackendAnalysisRecovery } from "./backendAnalysisRecovery";
@@ -37,7 +39,9 @@ export function BackendAnalysisJobs({
   disabled = false,
   onSaved,
   selectedReport,
+  diagramScope,
 }: {
+  diagramScope?: BackendDiagramScopeInput;
   projectId: string;
   sourceRevisionId: string;
   target?: BackendAnalysisTarget;
@@ -51,7 +55,9 @@ export function BackendAnalysisJobs({
   const recovery = useBackendAnalysisRecovery(projectId);
   const [from, setFrom] = useState(sourceRevisionId),
     [to, setTo] = useState(sourceRevisionId);
-  const [kind, setKind] = useState<"diff" | "impact">("impact");
+  const [kind, setKind] = useState<"diff" | "impact" | "diagnostics">(
+    diagramScope ? "diagnostics" : "impact",
+  );
   const [cursors, setCursors] = useState([""]),
     [selected, setSelected] = useState(selectedReport?.jobId ?? "");
   const [version, setVersion] = useState<number | undefined>(selectedReport?.resultVersion);
@@ -96,21 +102,38 @@ export function BackendAnalysisJobs({
   async function start() {
     if (disabled || recovery.blocked) return;
     try {
-      const result = await recovery.execute(
-        makeAnalysisAttempt(
-          "start",
-          { projectId },
-          {
-            kind,
-            fromRevisionId: target ? sourceRevisionId : from,
-            target: target ?? { revisionId: to },
-            scope: {},
-            limits: {},
-            observationMode: "none",
-            idempotencyKey: crypto.randomUUID(),
-          },
-        ),
-      );
+      const selectedTarget = target ?? { revisionId: to };
+      if (
+        kind === "diagnostics" &&
+        !("revisionId" in selectedTarget || "changeProposal" in selectedTarget)
+      )
+        throw new Error("Диагностика требует сохранённый source или full proposal target.");
+      const common = {
+        scope: {},
+        limits: {},
+        observationMode: "none" as const,
+        idempotencyKey: crypto.randomUUID(),
+      };
+      const input: StartBackendAnalysisRequest =
+        kind === "diagnostics"
+          ? {
+              ...common,
+              kind,
+              target:
+                "revisionId" in selectedTarget
+                  ? { revisionId: selectedTarget.revisionId }
+                  : "changeProposal" in selectedTarget
+                    ? { changeProposal: selectedTarget.changeProposal }
+                    : { revisionId: sourceRevisionId },
+              ...(diagramScope ? { diagramScope } : {}),
+            }
+          : {
+              ...common,
+              kind,
+              fromRevisionId: target ? sourceRevisionId : from,
+              target: selectedTarget,
+            };
+      const result = await recovery.execute(makeAnalysisAttempt("start", { projectId }, input));
       if (result) {
         const id = (result as BackendAnalysisJob).id;
         setEpochs((old) => ({ ...old, [id]: inputEpoch }));
@@ -188,6 +211,7 @@ export function BackendAnalysisJobs({
               data={[
                 { value: "impact", label: "Влияние" },
                 { value: "diff", label: "Различия" },
+                { value: "diagnostics", label: "Диагностика" },
               ]}
               onChange={(e) => setKind(e.currentTarget.value as typeof kind)}
             />
@@ -339,6 +363,18 @@ export function BackendAnalysisJobs({
                     }}
                   />
                 )}
+                {version &&
+                  job.data.job.kind === "diagnostics" &&
+                  job.data.input.documentVersion === "backend-analysis-context-v1" &&
+                  !("commandPreview" in job.data.input.target) && (
+                    <BackendFindings
+                      key={`${selected}:${version}`}
+                      projectId={projectId}
+                      jobId={selected}
+                      resultVersion={version}
+                      target={job.data.input.target}
+                    />
+                  )}
                 {version && (
                   <BackendImpactReport
                     projectId={projectId}

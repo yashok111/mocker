@@ -27,6 +27,7 @@ type AnalysisContextTarget struct {
 	CommandPreview *AnalysisContextPreview          `json:"commandPreview,omitzero"`
 }
 type AnalysisInputContext struct {
+	DiagramScope     *backendmodel.DiagramScope      `json:"diagramScope,omitzero"`
 	V2               *InputContextV2                 `json:"-"`
 	DocumentVersion  string                          `json:"documentVersion"`
 	Kind             string                          `json:"kind"`
@@ -91,5 +92,5 @@ func (r *Repo) Detail(ctx context.Context, pid, id string) (*JobDetail, error) {
 	} else if saved.To != nil {
 		target.RevisionID, target.Proposal, target.ChangeProposal = saved.To.RevisionID, saved.To.Proposal, saved.To.ChangeProposal
 	}
-	return &JobDetail{Job: job, Input: AnalysisInputContext{DocumentVersion: "backend-analysis-context-v1", Kind: saved.Kind, FromRevisionID: saved.From.RevisionID, Target: target, BeforePins: saved.BeforePins, AfterPins: saved.AfterPins, BeforeSource: saved.BeforeSource, AfterSource: saved.AfterSource, Scope: saved.Scope, Limits: saved.Limits, RuleSetVersion: saved.RuleSetVersion, TraversalVersion: saved.TraversalVersion, ObservationMode: saved.ObservationMode}}, nil
+	return &JobDetail{Job: job, Input: AnalysisInputContext{DiagramScope: saved.DiagramScope, DocumentVersion: "backend-analysis-context-v1", Kind: saved.Kind, FromRevisionID: saved.From.RevisionID, Target: target, BeforePins: saved.BeforePins, AfterPins: saved.AfterPins, BeforeSource: saved.BeforeSource, AfterSource: saved.AfterSource, Scope: saved.Scope, Limits: saved.Limits, RuleSetVersion: saved.RuleSetVersion, TraversalVersion: saved.TraversalVersion, ObservationMode: saved.ObservationMode}}, nil
 }

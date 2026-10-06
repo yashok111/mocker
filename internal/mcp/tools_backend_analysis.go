@@ -43,7 +43,7 @@ func addBackendAnalysisTools(s *sdk.Server, lb *loopback) {
 				fields["cursor"] = map[string]any{"type": "string", "maxLength": 1024}
 			}
 			if spec.name == "list_backend_analysis" {
-				fields["kind"] = map[string]any{"type": "string", "enum": []string{"diff", "impact", "change_package", "conformance", "endpoint_review"}}
+				fields["kind"] = map[string]any{"type": "string", "enum": []string{"diff", "impact", "change_package", "conformance", "endpoint_review", "diagnostics"}}
 				fields["status"] = map[string]any{"type": "string", "enum": []string{"queued", "running", "completed", "failed", "cancelled", "interrupted"}}
 			}
 			if spec.name == "get_backend_analysis_results" {

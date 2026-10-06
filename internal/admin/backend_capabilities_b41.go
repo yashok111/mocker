@@ -20,7 +20,7 @@ func backendCapabilityFeatures() []string {
 		"backend-annotations", "backend-source-sync", "backend-source-incremental-sync",
 		"backend-source-assertions", "backend-import-candidate", "backend-change-proposals",
 		"backend-change-typed-edits", "backend-representations", "backend-saved-views-v2",
-		"backend-analysis-jobs", "backend-analysis-diff", "backend-analysis-impact", "backend-change-rebase", "backend-change-ready",
+		"backend-analysis-diagnostics", "backend-finding-review", "backend-analysis-jobs", "backend-analysis-diff", "backend-analysis-impact", "backend-change-rebase", "backend-change-ready",
 		"backend-change-package", "backend-conformance", "backend-endpoint-review", "backend-change-implemented", "backend-change-archive", "backend-change-unarchive",
 	)
 }

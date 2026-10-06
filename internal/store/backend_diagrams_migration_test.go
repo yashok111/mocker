@@ -20,7 +20,7 @@ func TestBackendDiagramsDeferredHead(t *testing.T) {
 		t.Fatal(err)
 	}
 	var version int
-	if err = db.R.QueryRow("PRAGMA user_version").Scan(&version); err != nil || version != 22 {
+	if err = db.R.QueryRow("PRAGMA user_version").Scan(&version); err != nil || version != 23 {
 		t.Fatalf("schema %d: %v", version, err)
 	}
 	if err = db.Write(ctx, func(tx *sql.Tx) error {

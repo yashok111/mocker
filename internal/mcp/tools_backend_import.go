@@ -118,9 +118,12 @@ func addBackendImportTool(s *sdk.Server, lb *loopback, tool *sdk.Tool, route str
 			return backendAdmissionFault(selectErr), nil
 		}
 		var params []any
-		for _, key := range []string{"projectId", "importId", "proposalId", "jobId", "viewId", "diagramId", "revisionId", "nodeId", "batchId"} {
+		for _, key := range []string{"projectId", "importId", "proposalId", "jobId", "viewId", "diagramId", "revisionId", "nodeId", "batchId", "fingerprint"} {
 			raw, ok := in[key]
 			if !ok {
+				continue
+			}
+			if key == "jobId" && tool.Name == "list_backend_findings" {
 				continue
 			}
 			// Source query revisionId pins the request body.
@@ -131,8 +134,11 @@ func addBackendImportTool(s *sdk.Server, lb *loopback, tool *sdk.Tool, route str
 			if err := json.Unmarshal(raw, &value); err != nil {
 				return designScenarioToolErrorResult(err), nil
 			}
-			if key != "batchId" && !backendmodel.ValidID(value) {
+			if key != "batchId" && key != "fingerprint" && !backendmodel.ValidID(value) {
 				return designScenarioToolErrorResult(fmt.Errorf("%s must be a canonical UUID", key)), nil
+			}
+			if key == "fingerprint" && (len(value) != 64 || strings.Trim(value, "0123456789abcdef") != "") {
+				return designScenarioToolErrorResult(fmt.Errorf("invalid fingerprint")), nil
 			}
 			if key == "batchId" {
 				value = url.PathEscape(value)
@@ -158,7 +164,7 @@ func addBackendImportTool(s *sdk.Server, lb *loopback, tool *sdk.Tool, route str
 		var err error
 		if method == "GET" {
 			q := url.Values{}
-			for _, key := range []string{"hash", "limit", "cursor", "subjectId", "evidenceId", "previewVersion", "recordType", "baseRevisionId", "status", "proposalRevisionId", "kind", "version", "importVersion", "candidateHash", "id", "repositoryId", "providerNamespace", "resultVersion", "section", "service", "certainty", "direction", "depth"} {
+			for _, key := range []string{"jobId", "hash", "limit", "cursor", "subjectId", "evidenceId", "previewVersion", "recordType", "baseRevisionId", "status", "proposalRevisionId", "kind", "version", "importVersion", "candidateHash", "id", "repositoryId", "providerNamespace", "resultVersion", "section", "service", "certainty", "direction", "depth"} {
 				if raw, ok := in[key]; ok {
 					if slices.Contains([]string{"limit", "previewVersion", "version", "importVersion", "resultVersion", "depth"}, key) {
 						var value int64

@@ -230,6 +230,20 @@
       "source": "references/backend/business-map.md",
       "embedded": "backend-business-map.md",
       "workflowId": "mocker-backend-inspect"
+    },
+    {
+      "topic": "backend-verify",
+      "package": "mocker-backend-verify",
+      "source": "SKILL.md",
+      "embedded": "backend-verify.md",
+      "workflowId": "mocker-backend-verify"
+    },
+    {
+      "topic": "backend-diagnostics",
+      "package": "mocker-backend-verify",
+      "source": "references/diagnostics.md",
+      "embedded": "backend-diagnostics.md",
+      "workflowId": "mocker-backend-verify"
     }
   ],
   "workflows": [
@@ -428,6 +442,24 @@
         "backend-diagrams",
         "backend-architecture",
         "backend-diagram-views"
+      ]
+    },
+    {
+      "workflowId": "mocker-backend-verify",
+      "workflowVersion": "1",
+      "entrypoint": "backend-verify",
+      "requiredModelSchemaVersions": [
+        "5",
+        "6"
+      ],
+      "requiredViewSchemaVersions": [
+        "backend-diagram-v1",
+        "diagram-view-v1"
+      ],
+      "requiredCapabilities": [
+        "backend-analysis-jobs",
+        "backend-analysis-diagnostics",
+        "backend-finding-review"
       ]
     }
   ]

@@ -127,6 +127,9 @@ func (s *Service) Start(ctx context.Context, pid string, in StartInput) (*Job, e
 	if b43Kind(in.Kind) {
 		return s.startB43(ctx, pid, in, hash)
 	}
+	if in.Kind == "diagnostics" {
+		return s.startDiagnostics(ctx, pid, in, hash)
+	}
 	target, preview := targetInput(in.Target)
 	footprint, err := s.graphs.AnalysisPairInputFootprint(ctx, pid, in.FromRevisionID, target, preview)
 	if err != nil {

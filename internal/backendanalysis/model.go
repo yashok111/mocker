@@ -41,17 +41,18 @@ type AnalysisTarget struct {
 	CommandPreview *CommandPreviewTarget            `json:"commandPreview,omitzero"`
 }
 type StartInput struct {
-	Package         *StartPackageInput        `json:"-"`
-	Conformance     *StartConformanceInput    `json:"-"`
-	EndpointReview  *StartEndpointReviewInput `json:"-"`
-	Kind            string                    `json:"kind"`
-	FromRevisionID  string                    `json:"fromRevisionId"`
-	Target          AnalysisTarget            `json:"target"`
-	Scope           Scope                     `json:"scope"`
-	Limits          Limits                    `json:"limits"`
-	ObservationMode string                    `json:"observationMode"`
-	ObservationPins []jsontext.Value          `json:"observationPins"`
-	IdempotencyKey  string                    `json:"idempotencyKey"`
+	DiagramScope    *backendmodel.DiagramScopeInput `json:"diagramScope,omitzero"`
+	Package         *StartPackageInput              `json:"-"`
+	Conformance     *StartConformanceInput          `json:"-"`
+	EndpointReview  *StartEndpointReviewInput       `json:"-"`
+	Kind            string                          `json:"kind"`
+	FromRevisionID  string                          `json:"fromRevisionId"`
+	Target          AnalysisTarget                  `json:"target"`
+	Scope           Scope                           `json:"scope"`
+	Limits          Limits                          `json:"limits"`
+	ObservationMode string                          `json:"observationMode"`
+	ObservationPins []jsontext.Value                `json:"observationPins"`
+	IdempotencyKey  string                          `json:"idempotencyKey"`
 }
 type CancelInput struct {
 	IdempotencyKey string `json:"idempotencyKey"`
@@ -60,22 +61,24 @@ type RetryInput struct {
 	IdempotencyKey string `json:"idempotencyKey"`
 }
 type ImmutableInput struct {
-	V2               *ImmutableInputV2                 `json:"-"`
-	DocumentVersion  string                            `json:"documentVersion"`
-	Kind             string                            `json:"kind"`
-	ProjectID        string                            `json:"projectId"`
-	From             backendmodel.BackendReadTarget    `json:"from"`
-	To               *backendmodel.BackendReadTarget   `json:"to,omitzero"`
-	CommandPreview   *backendmodel.FrozenChangePreview `json:"commandPreview,omitzero"`
-	BeforePins       backendmodel.EffectiveGraphPins   `json:"beforePins"`
-	AfterPins        backendmodel.EffectiveGraphPins   `json:"afterPins"`
-	BeforeSource     backendmodel.AnalysisSourcePins   `json:"beforeSource"`
-	AfterSource      backendmodel.AnalysisSourcePins   `json:"afterSource"`
-	Scope            Scope                             `json:"scope"`
-	Limits           Limits                            `json:"limits"`
-	RuleSetVersion   string                            `json:"ruleSetVersion"`
-	TraversalVersion string                            `json:"traversalVersion"`
-	ObservationMode  string                            `json:"observationMode"`
+	DiagramScope      *backendmodel.DiagramScope        `json:"diagramScope,omitzero"`
+	DiagnosticDiagram *backendmodel.DiagramVersion      `json:"diagnosticDiagram,omitzero"`
+	V2                *ImmutableInputV2                 `json:"-"`
+	DocumentVersion   string                            `json:"documentVersion"`
+	Kind              string                            `json:"kind"`
+	ProjectID         string                            `json:"projectId"`
+	From              backendmodel.BackendReadTarget    `json:"from"`
+	To                *backendmodel.BackendReadTarget   `json:"to,omitzero"`
+	CommandPreview    *backendmodel.FrozenChangePreview `json:"commandPreview,omitzero"`
+	BeforePins        backendmodel.EffectiveGraphPins   `json:"beforePins"`
+	AfterPins         backendmodel.EffectiveGraphPins   `json:"afterPins"`
+	BeforeSource      backendmodel.AnalysisSourcePins   `json:"beforeSource"`
+	AfterSource       backendmodel.AnalysisSourcePins   `json:"afterSource"`
+	Scope             Scope                             `json:"scope"`
+	Limits            Limits                            `json:"limits"`
+	RuleSetVersion    string                            `json:"ruleSetVersion"`
+	TraversalVersion  string                            `json:"traversalVersion"`
+	ObservationMode   string                            `json:"observationMode"`
 }
 type Progress struct {
 	States           int `json:"states"`
@@ -109,24 +112,25 @@ type SectionManifest struct {
 	Bytes   int64  `json:"bytes"`
 }
 type ResultManifest struct {
-	JobID                string                `json:"jobId"`
-	AnalysisInputHash    string                `json:"analysisInputHash"`
-	SemanticResultHash   string                `json:"semanticResultHash"`
-	ResultVersion        int64                 `json:"resultVersion"`
-	HighWaterSequence    int64                 `json:"highWaterSequence"`
-	Complete             bool                  `json:"complete"`
-	Sections             []SectionManifest     `json:"sections"`
-	ChangedIDs           []ObjectAddress       `json:"changedIds"`
-	CoveredChangedIDs    []ObjectAddress       `json:"coveredChangedIds"`
-	Gaps                 []Diagnostic          `json:"gaps"`
-	TruncationReasons    []Diagnostic          `json:"truncationReasons"`
-	SourceCoverageBefore backendmodel.Coverage `json:"sourceCoverageBefore"`
-	SourceCoverageAfter  backendmodel.Coverage `json:"sourceCoverageAfter"`
-	Scope                Scope                 `json:"scope"`
-	RuleSetVersion       string                `json:"ruleSetVersion"`
-	TraversalVersion     string                `json:"traversalVersion"`
-	Verdict              string                `json:"verdict"`
-	RuntimeVerified      bool                  `json:"runtimeVerified"`
+	DiagramScope         *backendmodel.DiagramScope `json:"diagramScope,omitzero"`
+	JobID                string                     `json:"jobId"`
+	AnalysisInputHash    string                     `json:"analysisInputHash"`
+	SemanticResultHash   string                     `json:"semanticResultHash"`
+	ResultVersion        int64                      `json:"resultVersion"`
+	HighWaterSequence    int64                      `json:"highWaterSequence"`
+	Complete             bool                       `json:"complete"`
+	Sections             []SectionManifest          `json:"sections"`
+	ChangedIDs           []ObjectAddress            `json:"changedIds"`
+	CoveredChangedIDs    []ObjectAddress            `json:"coveredChangedIds"`
+	Gaps                 []Diagnostic               `json:"gaps"`
+	TruncationReasons    []Diagnostic               `json:"truncationReasons"`
+	SourceCoverageBefore backendmodel.Coverage      `json:"sourceCoverageBefore"`
+	SourceCoverageAfter  backendmodel.Coverage      `json:"sourceCoverageAfter"`
+	Scope                Scope                      `json:"scope"`
+	RuleSetVersion       string                     `json:"ruleSetVersion"`
+	TraversalVersion     string                     `json:"traversalVersion"`
+	Verdict              string                     `json:"verdict"`
+	RuntimeVerified      bool                       `json:"runtimeVerified"`
 }
 type ResultChunk struct {
 	JobID       string `json:"jobId"`
