@@ -46,7 +46,7 @@ func TestBlobMigrationBytes(t *testing.T) {
 		t.Fatal(err)
 	}
 	var version int
-	if err := db.W.QueryRow("PRAGMA user_version").Scan(&version); err != nil || version != 27 {
+	if err := db.W.QueryRow("PRAGMA user_version").Scan(&version); err != nil || version != 28 {
 		t.Fatalf("version %d %v", version, err)
 	}
 	for _, q := range []struct{ sql, want string }{{`SELECT document FROM backend_graph_records_documents`, ` {"id":"n","n":9007199254740993} `}, {`SELECT response FROM backend_command_receipts`, ` { "receipt": 9007199254740993 } `}, {`SELECT document FROM backend_revisions_documents`, `{ "schemaVersion":"6", "semanticHash":"unchanged", "n":9007199254740993 }`}} {
@@ -377,7 +377,7 @@ func TestBlobMigrationDiskFullAndOriginalSettings(t *testing.T) {
 				if err == nil || !strings.Contains(strings.ToLower(err.Error()), "full") || version != 26 || foreign != 1 {
 					t.Fatalf("diskfull rollback: v%d fk%d %v", version, foreign, err)
 				}
-			} else if err != nil || version != 27 || foreign != 0 {
+			} else if err != nil || version != 28 || foreign != 0 {
 				t.Fatalf("original settings: v%d fk%d %v", version, foreign, err)
 			}
 		})

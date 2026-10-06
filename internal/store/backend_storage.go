@@ -53,8 +53,8 @@ func BackendStorage(ctx context.Context, path, project string, rebuild bool) (er
 	if err = tx.QueryRowContext(ctx, "PRAGMA user_version").Scan(&version); err != nil {
 		return err
 	}
-	if version != 27 {
-		return fmt.Errorf("backend storage requires Store27, got %d; maintenance never migrates", version)
+	if version != 27 && version != 28 {
+		return fmt.Errorf("backend storage requires Store27 or Store28, got %d; maintenance never migrates", version)
 	}
 	if rebuild {
 		err = backendblob.Rebuild(ctx, tx, project)
