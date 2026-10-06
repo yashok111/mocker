@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"github.com/yashok111/mocker/internal/backendblob"
 	p "github.com/yashok111/mocker/internal/ordersprotocol"
 	"sync"
 	"time"
@@ -190,14 +191,14 @@ func (r *Repo) finalize(ctx context.Context, run *Run, report Report) error {
 		}
 		if status != "running" {
 			// Cancellation won. Preserve its terminal report and append late evidence.
-			_, err := tx.ExecContext(ctx, `INSERT INTO backend_replay_evidence SELECT ?,COALESCE(max(sequence),0)+1,'late_terminal',?,? FROM backend_replay_evidence WHERE run_id=?`, run.ID, p.HashBytes(raw), raw, run.ID)
+			_, err := backendblob.Exec(ctx, tx, `INSERT INTO backend_replay_evidence(run_id,sequence,kind,content_hash,body) SELECT ?,COALESCE(max(sequence),0)+1,'late_terminal',?,? FROM backend_replay_evidence_documents WHERE run_id=?`, run.ID, p.HashBytes(raw), raw, run.ID)
 			return err
 		}
 		if _, err := tx.ExecContext(ctx, `UPDATE backend_replay_runs SET status=?,terminal_report_json=?,version=version+1,updated_at=? WHERE id=? AND status='running'`, report.Status, string(raw), nowReplay(), run.ID); err != nil {
 			return err
 		}
 		var steps int
-		if err := tx.QueryRowContext(ctx, `SELECT count(*) FROM backend_replay_steps WHERE run_id=?`, run.ID).Scan(&steps); err != nil {
+		if err := tx.QueryRowContext(ctx, `SELECT count(*) FROM backend_replay_steps_documents WHERE run_id=?`, run.ID).Scan(&steps); err != nil {
 			return err
 		}
 		if report.Status == "succeeded" || report.Status == "failed" || steps == 0 {

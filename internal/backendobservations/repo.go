@@ -7,6 +7,7 @@ import (
 	"encoding/json/v2"
 	"errors"
 	"fmt"
+	"github.com/yashok111/mocker/internal/backendblob"
 	p "github.com/yashok111/mocker/internal/ordersprotocol"
 	"github.com/yashok111/mocker/internal/store"
 	"strings"
@@ -172,10 +173,10 @@ func (r *Repo) Import(ctx context.Context, pid string, in ImportInput) (*Version
 			}
 		}
 		for _, a := range added {
-			if _, e = tx.ExecContext(ctx, `INSERT OR IGNORE INTO backend_observation_blobs VALUES(?,?)`, a.hash, a.raw); e != nil {
+			if _, e = backendblob.Exec(ctx, tx, `INSERT OR IGNORE INTO backend_observation_blobs(hash,document) VALUES(?,?)`, a.hash, a.raw); e != nil {
 				return e
 			}
-			if _, e = tx.ExecContext(ctx, `INSERT INTO backend_observation_members VALUES(?,?,?,?,?)`, pid, sid, a.id, a.hash, v); e != nil {
+			if _, e = backendblob.Exec(ctx, tx, `INSERT INTO backend_observation_members(project_id,set_id,record_id,hash,introduced_version) VALUES(?,?,?,?,?)`, pid, sid, a.id, a.hash, v); e != nil {
 				return e
 			}
 		}
@@ -211,7 +212,7 @@ func (r *Repo) Import(ctx context.Context, pid string, in ImportInput) (*Version
 		*out = VersionReceipt{sid, v, content, count}
 		doc := Version{*out, c, name, size}
 		raw, _ := canonical(doc)
-		if _, e = tx.ExecContext(ctx, `INSERT INTO backend_observation_versions VALUES(?,?,?,?,?)`, pid, sid, v, content, string(raw)); e != nil {
+		if _, e = backendblob.Exec(ctx, tx, `INSERT INTO backend_observation_versions(project_id,set_id,version,content_hash,document) VALUES(?,?,?,?,?)`, pid, sid, v, content, string(raw)); e != nil {
 			return e
 		}
 		if in.Mode == "append" {
@@ -231,7 +232,7 @@ func (r *Repo) Import(ctx context.Context, pid string, in ImportInput) (*Version
 }
 func projectQuota(ctx context.Context, q reader, pid string) error {
 	var size int64
-	e := q.QueryRowContext(ctx, `SELECT COALESCE((SELECT sum(logical_bytes) FROM backend_observation_sets WHERE project_id=?),0)+COALESCE((SELECT sum(length(CAST(document AS BLOB))) FROM backend_observation_correlations WHERE project_id=?),0)+COALESCE((SELECT sum(length(CAST(document AS BLOB))) FROM backend_observation_versions WHERE project_id=?),0)`, pid, pid, pid).Scan(&size)
+	e := q.QueryRowContext(ctx, `SELECT COALESCE((SELECT sum(logical_bytes) FROM backend_observation_sets WHERE project_id=?),0)+COALESCE((SELECT sum(length(CAST(document AS BLOB))) FROM backend_observation_correlations_documents WHERE project_id=?),0)+COALESCE((SELECT sum(length(CAST(document AS BLOB))) FROM backend_observation_versions_documents WHERE project_id=?),0)`, pid, pid, pid).Scan(&size)
 	if e != nil {
 		return e
 	}
@@ -245,7 +246,7 @@ func readVersion(ctx context.Context, q reader, pid, sid string, v int64) (*Vers
 		return nil, invalid()
 	}
 	var raw []byte
-	e := q.QueryRowContext(ctx, `SELECT document FROM backend_observation_versions WHERE project_id=? AND set_id=? AND version=?`, pid, sid, v).Scan(&raw)
+	e := q.QueryRowContext(ctx, `SELECT document FROM backend_observation_versions_documents WHERE project_id=? AND set_id=? AND version=?`, pid, sid, v).Scan(&raw)
 	if errors.Is(e, sql.ErrNoRows) {
 		return nil, fault(404, "not_found")
 	}
@@ -299,7 +300,7 @@ func (r *Repo) Records(ctx context.Context, pid, sid string, v int64, limit int,
 	if e != nil {
 		return nil, e
 	}
-	rows, e := r.db.R.QueryContext(ctx, `SELECT b.document FROM backend_observation_members m JOIN backend_observation_blobs b ON b.hash=m.hash WHERE m.project_id=? AND m.set_id=? AND m.introduced_version<=? AND m.record_id>? ORDER BY m.record_id LIMIT ?`, pid, sid, v, last, limit+1)
+	rows, e := r.db.R.QueryContext(ctx, `SELECT b.document FROM backend_observation_members m JOIN backend_observation_blobs_documents b ON b.hash=m.hash WHERE m.project_id=? AND m.set_id=? AND m.introduced_version<=? AND m.record_id>? ORDER BY m.record_id LIMIT ?`, pid, sid, v, last, limit+1)
 	if e != nil {
 		return nil, e
 	}
@@ -331,7 +332,7 @@ func (r *Repo) List(ctx context.Context, pid string, limit int, c string) (*SetP
 	if e != nil {
 		return nil, e
 	} // immutable version catalog: later versions do not alter prior rows
-	rows, e := r.db.R.QueryContext(ctx, `SELECT document FROM backend_observation_versions WHERE project_id=? AND (set_id||'/'||printf('%04d',version))>? ORDER BY set_id,version LIMIT ?`, pid, last, limit+1)
+	rows, e := r.db.R.QueryContext(ctx, `SELECT document FROM backend_observation_versions_documents WHERE project_id=? AND (set_id||'/'||printf('%04d',version))>? ORDER BY set_id,version LIMIT ?`, pid, last, limit+1)
 	if e != nil {
 		return nil, e
 	}

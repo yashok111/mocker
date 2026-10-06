@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json/v2"
 	"errors"
+	"github.com/yashok111/mocker/internal/backendblob"
 )
 
 func loadVersionedArtifactContext(ctx context.Context, q importReader, rid string, pins []ArtifactPin) (*VersionedArtifactContext, error) {
@@ -16,7 +17,7 @@ func loadVersionedArtifactContext(ctx context.Context, q importReader, rid strin
 		return nil, nil
 	}
 	var doc, content, semantic string
-	err := q.QueryRowContext(ctx, `SELECT source_content_hash,source_semantic_hash,document FROM backend_revision_api_artifacts WHERE revision_id=?`, rid).Scan(&content, &semantic, &doc)
+	err := q.QueryRowContext(ctx, `SELECT source_content_hash,source_semantic_hash,document FROM backend_revision_api_artifacts_documents WHERE revision_id=?`, rid).Scan(&content, &semantic, &doc)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
@@ -69,18 +70,18 @@ func saveArtifactContext(ctx context.Context, tx *sql.Tx, rid string, c Artifact
 	if err != nil {
 		return err
 	}
-	_, err = tx.ExecContext(ctx, `INSERT INTO backend_revision_api_artifacts(revision_id,source_content_hash,source_semantic_hash,document) VALUES(?,?,?,?)`, rid, c.SourceContentHash, c.SourceSemanticHash, string(raw))
+	_, err = backendblob.Exec(ctx, tx, `INSERT INTO backend_revision_api_artifacts(revision_id,source_content_hash,source_semantic_hash,document) VALUES(?,?,?,?)`, rid, c.SourceContentHash, c.SourceSemanticHash, string(raw))
 	return err
 }
 
 // CAS binds stored bytes, including the complete tagged roster and discriminator.
 func artifactBaselineDigest(ctx context.Context, q importReader, pid, rid string) (string, error) {
 	var revision, document string
-	if err := q.QueryRowContext(ctx, `SELECT document FROM backend_revisions WHERE project_id=? AND id=?`, pid, rid).Scan(&revision); err != nil {
+	if err := q.QueryRowContext(ctx, `SELECT document FROM backend_revisions_documents WHERE project_id=? AND id=?`, pid, rid).Scan(&revision); err != nil {
 		return "", err
 	}
 	var sourceContent, sourceSemantic string
-	err := q.QueryRowContext(ctx, `SELECT source_content_hash,source_semantic_hash,document FROM backend_revision_api_artifacts WHERE revision_id=?`, rid).Scan(&sourceContent, &sourceSemantic, &document)
+	err := q.QueryRowContext(ctx, `SELECT source_content_hash,source_semantic_hash,document FROM backend_revision_api_artifacts_documents WHERE revision_id=?`, rid).Scan(&sourceContent, &sourceSemantic, &document)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return "", err
 	}
@@ -104,7 +105,7 @@ func artifactBaselineDigest(ctx context.Context, q importReader, pid, rid string
 
 func loadLegacyArtifactContext(ctx context.Context, q importReader, rid string) (*APIArtifactContext, error) {
 	var doc string
-	err := q.QueryRowContext(ctx, `SELECT document FROM backend_revisions WHERE id=?`, rid).Scan(&doc)
+	err := q.QueryRowContext(ctx, `SELECT document FROM backend_revisions_documents WHERE id=?`, rid).Scan(&doc)
 	if err != nil {
 		return nil, err
 	}

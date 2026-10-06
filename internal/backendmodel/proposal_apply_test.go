@@ -47,7 +47,7 @@ func TestProposalPreviewNoWrites(t *testing.T) {
 	if err := r.db.W.QueryRowContext(t.Context(), `SELECT total_changes()`).Scan(&after); err != nil || after != changes {
 		t.Fatalf("preview wrote: %d -> %d %v", changes, after, err)
 	}
-	if err := r.db.R.QueryRowContext(t.Context(), `SELECT count(*) FROM backend_proposal_revisions`).Scan(&count); err != nil || count != 1 {
+	if err := r.db.R.QueryRowContext(t.Context(), `SELECT count(*) FROM backend_proposal_revisions_documents`).Scan(&count); err != nil || count != 1 {
 		t.Fatalf("preview created revision: %d %v", count, err)
 	}
 	assertProposalSourceBytes(t, r, before)
@@ -148,7 +148,7 @@ func TestProposalApplyPreparedRace(t *testing.T) {
 				assertFault(t, err, "backend_proposal_version_conflict")
 			}
 			var n int
-			if err := r.db.R.QueryRowContext(t.Context(), `SELECT count(*) FROM backend_proposal_revisions`).Scan(&n); err != nil || n != 2 {
+			if err := r.db.R.QueryRowContext(t.Context(), `SELECT count(*) FROM backend_proposal_revisions_documents`).Scan(&n); err != nil || n != 2 {
 				t.Fatalf("race revisions: %d %v", n, err)
 			}
 			if err := r.db.R.QueryRowContext(t.Context(), `SELECT count(*) FROM backend_command_receipts WHERE scope LIKE 'proposal-apply:%'`).Scan(&n); err != nil || n != 1 {

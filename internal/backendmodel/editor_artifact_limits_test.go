@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json/v2"
 	"errors"
+	"github.com/yashok111/mocker/internal/testkit"
 	"slices"
 	"strconv"
 	"strings"
@@ -27,7 +28,7 @@ func TestArtifactRequiredOwnerLimitIs413AndNoWrites(t *testing.T) {
 		t.Fatal("read limit wrote project")
 	}
 	var contexts int
-	s.repo.db.R.QueryRowContext(t.Context(), `SELECT count(*) FROM backend_revision_api_artifacts`).Scan(&contexts)
+	s.repo.db.R.QueryRowContext(t.Context(), `SELECT count(*) FROM backend_revision_api_artifacts_documents`).Scan(&contexts)
 	if contexts != 0 {
 		t.Fatal("read limit persisted context")
 	}
@@ -159,7 +160,7 @@ func TestArtifactFullContextLimitEscapeNoWrites(t *testing.T) {
 		if e != nil {
 			t.Fatal(e)
 		}
-		if _, e = s.repo.db.W.ExecContext(t.Context(), `INSERT INTO backend_graph_records(project_id,revision_id,record_type,id,kind,name,document) VALUES(?,?,'node',?,?,?,?)`, base.Project.ID, base.Revision.ID, n.ID, n.Kind, n.Name, raw); e != nil {
+		if _, e = testkit.ExecBackendOwner(t.Context(), s.repo.db.W, `INSERT INTO backend_graph_records(project_id,revision_id,record_type,id,kind,name,document) VALUES(?,?,'node',?,?,?,?)`, base.Project.ID, base.Revision.ID, n.ID, n.Kind, n.Name, raw); e != nil {
 			t.Fatal(e)
 		}
 		sourceIDs = append(sourceIDs, n.ID)
@@ -183,7 +184,7 @@ func TestArtifactFullContextLimitEscapeNoWrites(t *testing.T) {
 		t.Fatalf("apply oversized context: %v", err)
 	}
 	var contexts, receipts int
-	s.repo.db.R.QueryRowContext(t.Context(), `SELECT count(*) FROM backend_revision_api_artifacts`).Scan(&contexts)
+	s.repo.db.R.QueryRowContext(t.Context(), `SELECT count(*) FROM backend_revision_api_artifacts_documents`).Scan(&contexts)
 	s.repo.db.R.QueryRowContext(t.Context(), `SELECT count(*) FROM backend_command_receipts WHERE scope LIKE 'artifact-pins:%'`).Scan(&receipts)
 	if contexts != 0 || receipts != 0 {
 		t.Fatal("413 wrote artifact state")
@@ -308,7 +309,7 @@ changed:
 		t.Fatalf("persistence did not admit entire context: %v", err)
 	}
 	var rows int
-	s.repo.db.R.QueryRowContext(t.Context(), `SELECT count(*) FROM backend_revision_api_artifacts`).Scan(&rows)
+	s.repo.db.R.QueryRowContext(t.Context(), `SELECT count(*) FROM backend_revision_api_artifacts_documents`).Scan(&rows)
 	if rows != 0 {
 		t.Fatal("oversized context persisted")
 	}
@@ -341,7 +342,7 @@ func TestArtifactCancelledRequiredReadRollsBack(t *testing.T) {
 		t.Fatalf("cancellation lost: %v", err)
 	}
 	var rows int
-	s.repo.db.R.QueryRowContext(t.Context(), `SELECT count(*) FROM backend_revision_api_artifacts`).Scan(&rows)
+	s.repo.db.R.QueryRowContext(t.Context(), `SELECT count(*) FROM backend_revision_api_artifacts_documents`).Scan(&rows)
 	if rows != 0 {
 		t.Fatal("cancelled request wrote context")
 	}

@@ -3,6 +3,7 @@ package backendmodel
 import (
 	"encoding/json/v2"
 	"github.com/yashok111/mocker/internal/store"
+	"github.com/yashok111/mocker/internal/testkit"
 	"strings"
 	"testing"
 )
@@ -27,7 +28,7 @@ func TestV3PersistentForeignContext(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = db.W.ExecContext(t.Context(), `INSERT INTO backend_revision_api_artifacts VALUES(?,?,?,?)`,
+	_, err = testkit.ExecBackendOwner(t.Context(), db.W, `INSERT INTO backend_revision_api_artifacts VALUES(?,?,?,?)`,
 		p.CurrentRevisionID, c.SourceContentHash, c.SourceSemanticHash, string(raw))
 	if err != nil {
 		t.Fatal(err)

@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json/jsontext"
 	"encoding/json/v2"
+	"github.com/yashok111/mocker/internal/backendblob"
 	"time"
 )
 
@@ -212,7 +213,7 @@ func (r *Repo) importPortableLegacyProposalTx(ctx context.Context, tx *sql.Tx, p
 		if err != nil {
 			return err
 		}
-		if _, err := tx.ExecContext(ctx, `INSERT INTO backend_proposal_revisions(id,proposal_id,parent_revision_id,document) VALUES(?,?,?,?)`, v.ID, h.ID, v.ParentRevisionID, string(raw)); err != nil {
+		if _, err := backendblob.Exec(ctx, tx, `INSERT INTO backend_proposal_revisions(id,proposal_id,parent_revision_id,document) VALUES(?,?,?,?)`, v.ID, h.ID, v.ParentRevisionID, string(raw)); err != nil {
 			return err
 		}
 		effective, err := resolveEffectiveGraph(ctx, tx, pid, BackendReadTarget{Proposal: &ProposalReadTarget{ProposalID: h.ID, ProposalRevisionID: v.ID}})

@@ -6,6 +6,7 @@ import (
 	"encoding/json/v2"
 	"errors"
 	"fmt"
+	"github.com/yashok111/mocker/internal/backendblob"
 	p "github.com/yashok111/mocker/internal/ordersprotocol"
 	"strconv"
 )
@@ -17,7 +18,7 @@ func (r *Repo) saveCorrelation(ctx context.Context, pid, sid, hash string, out *
 			return e
 		}
 		var head int64
-		if e := tx.QueryRowContext(ctx, `SELECT COALESCE(max(version),0) FROM backend_observation_correlations WHERE project_id=? AND set_id=?`, pid, sid).Scan(&head); e != nil {
+		if e := tx.QueryRowContext(ctx, `SELECT COALESCE(max(version),0) FROM backend_observation_correlations_documents WHERE project_id=? AND set_id=?`, pid, sid).Scan(&head); e != nil {
 			return e
 		}
 		if head != in.ExpectedCorrelationVersion {
@@ -44,7 +45,7 @@ func (r *Repo) saveCorrelation(ctx context.Context, pid, sid, hash string, out *
 		if len(raw) > 64<<20 {
 			return fault(413, "correlation_quota")
 		}
-		if _, e = tx.ExecContext(ctx, `INSERT INTO backend_observation_correlations VALUES(?,?,?,?,?)`, pid, sid, out.Version, content, string(raw)); e != nil {
+		if _, e = backendblob.Exec(ctx, tx, `INSERT INTO backend_observation_correlations(project_id,set_id,version,content_hash,document) VALUES(?,?,?,?,?)`, pid, sid, out.Version, content, string(raw)); e != nil {
 			return e
 		}
 		if e = projectQuota(ctx, tx, pid); e != nil {
@@ -59,7 +60,7 @@ func (r *Repo) Correlation(ctx context.Context, pid, sid string, v int64) (*Corr
 		return nil, invalid()
 	}
 	var raw []byte
-	e := r.db.R.QueryRowContext(ctx, `SELECT document FROM backend_observation_correlations WHERE project_id=? AND set_id=? AND version=?`, pid, sid, v).Scan(&raw)
+	e := r.db.R.QueryRowContext(ctx, `SELECT document FROM backend_observation_correlations_documents WHERE project_id=? AND set_id=? AND version=?`, pid, sid, v).Scan(&raw)
 	if errors.Is(e, sql.ErrNoRows) {
 		return nil, fault(404, "not_found")
 	}

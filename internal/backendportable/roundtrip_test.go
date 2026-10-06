@@ -364,7 +364,7 @@ func TestDiagramPortableExplicitMappingAndStaleCandidate(t *testing.T) {
 		// Read through ordinary exact version APIs; the stored hash is recomputed
 		// from local document identities, not copied from the export.
 		var raw string
-		check(t, f.service.db.R.QueryRow(`SELECT document FROM backend_diagram_versions WHERE project_id=? AND diagram_id=? AND version=?`, committed.Project.ID, entry.Local.ID, version).Scan(&raw))
+		check(t, f.service.db.R.QueryRow(`SELECT document FROM backend_diagram_versions_documents WHERE project_id=? AND diagram_id=? AND version=?`, committed.Project.ID, entry.Local.ID, version).Scan(&raw))
 		var diagram bm.DiagramVersion
 		check(t, json.Unmarshal([]byte(raw), &diagram))
 		_, err = f.service.models.GetDiagram(t.Context(), committed.Project.ID, diagram.Pin)

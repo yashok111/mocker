@@ -136,7 +136,7 @@ func (r *Repo) ExportPortableProposalTx(ctx context.Context, tx *sql.Tx, pid str
 		}
 		for _, v := range out.FullRevisions {
 			var raw string
-			if err := tx.QueryRowContext(ctx, `SELECT document FROM backend_change_proposal_batches WHERE proposal_id=? AND revision_id=?`, pin.ProposalID, v.ID).Scan(&raw); err != nil {
+			if err := tx.QueryRowContext(ctx, `SELECT document FROM backend_change_proposal_batches_documents WHERE proposal_id=? AND revision_id=?`, pin.ProposalID, v.ID).Scan(&raw); err != nil {
 				return nil, err
 			}
 			var batch ChangeAppliedBatch
@@ -144,7 +144,7 @@ func (r *Repo) ExportPortableProposalTx(ctx context.Context, tx *sql.Tx, pid str
 				return nil, err
 			}
 			out.Batches = append(out.Batches, batch)
-			rows, err := tx.QueryContext(ctx, `SELECT document FROM backend_change_proposal_identities WHERE proposal_id=? AND first_revision_id=?`, pin.ProposalID, v.ID)
+			rows, err := tx.QueryContext(ctx, `SELECT document FROM backend_change_proposal_identities_documents WHERE proposal_id=? AND first_revision_id=?`, pin.ProposalID, v.ID)
 			if err != nil {
 				return nil, err
 			}

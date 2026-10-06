@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json/jsontext"
 	"encoding/json/v2"
+	"github.com/yashok111/mocker/internal/backendblob"
 	"slices"
 	"strings"
 )
@@ -17,7 +18,7 @@ func sourceEdgePayload(e Edge) SourceAssertionPayload {
 }
 
 func loadRawSourceEvidence(ctx context.Context, q importReader, pid, rid string) (map[string]jsontext.Value, error) {
-	rows, err := q.QueryContext(ctx, `SELECT id,document FROM backend_graph_records WHERE project_id=? AND revision_id=? AND record_type='evidence' ORDER BY id`, pid, rid)
+	rows, err := q.QueryContext(ctx, `SELECT id,document FROM backend_graph_records_documents WHERE project_id=? AND revision_id=? AND record_type='evidence' ORDER BY id`, pid, rid)
 	if err != nil {
 		return nil, err
 	}
@@ -126,7 +127,7 @@ func loadSourceGraph(ctx context.Context, q importReader, pid, rid string) (*Sou
 		return graph, nil
 	}
 	var doc string
-	if err := q.QueryRowContext(ctx, `SELECT document FROM backend_revision_sources WHERE revision_id=?`, rid).Scan(&doc); err != nil {
+	if err := q.QueryRowContext(ctx, `SELECT document FROM backend_revision_sources_documents WHERE revision_id=?`, rid).Scan(&doc); err != nil {
 		return nil, err
 	}
 	var coverage SourceRevisionContext
@@ -158,7 +159,7 @@ func loadSourceContextRows(ctx context.Context, q importReader, pid, rid string,
 		sql    string
 		decode func([]byte) error
 	}{
-		{`SELECT document FROM backend_revision_assertions WHERE project_id=? AND revision_id=? ORDER BY record_type,record_id,repository_id,provider_namespace`, func(raw []byte) error {
+		{`SELECT document FROM backend_revision_assertions_documents WHERE project_id=? AND revision_id=? ORDER BY record_type,record_id,repository_id,provider_namespace`, func(raw []byte) error {
 			var a ProviderAssertion
 			if err := json.Unmarshal(raw, &a, json.RejectUnknownMembers(true)); err != nil {
 				return err
@@ -167,7 +168,7 @@ func loadSourceContextRows(ctx context.Context, q importReader, pid, rid string,
 			graph.rawAssertions[sourceAssertionKey(a)] = append(jsontext.Value(nil), raw...)
 			return nil
 		}},
-		{`SELECT document FROM backend_revision_assertion_resolutions WHERE project_id=? AND revision_id=? ORDER BY record_type,record_id,property_key`, func(raw []byte) error {
+		{`SELECT document FROM backend_revision_assertion_resolutions_documents WHERE project_id=? AND revision_id=? ORDER BY record_type,record_id,property_key`, func(raw []byte) error {
 			var a SourceAssertionResolution
 			if err := json.Unmarshal(raw, &a, json.RejectUnknownMembers(true)); err != nil {
 				return err
@@ -175,7 +176,7 @@ func loadSourceContextRows(ctx context.Context, q importReader, pid, rid string,
 			graph.Selections = append(graph.Selections, a)
 			return nil
 		}},
-		{`SELECT document FROM backend_revision_legacy_proof_bases WHERE project_id=? AND revision_id=? ORDER BY evidence_id,basis_hash`, func(raw []byte) error {
+		{`SELECT document FROM backend_revision_legacy_proof_bases_documents WHERE project_id=? AND revision_id=? ORDER BY evidence_id,basis_hash`, func(raw []byte) error {
 			var b LegacyProofBasis
 			if err := json.Unmarshal(raw, &b, json.RejectUnknownMembers(true)); err != nil {
 				return err
@@ -254,7 +255,7 @@ func saveComposedContext(ctx context.Context, tx *sql.Tx, pid, rid string, c *co
 				return err
 			}
 		}
-		if _, err := tx.ExecContext(ctx, `INSERT INTO backend_revision_assertions(project_id,revision_id,record_type,record_id,repository_id,provider_namespace,external_key,assertion_hash,document) VALUES(?,?,?,?,?,?,?,?,?)`, pid, rid, a.RecordType, a.RecordID, a.Owner.RepositoryID, a.Owner.ProviderNamespace, a.ExternalKey, a.AssertionHash, string(doc)); err != nil {
+		if _, err := backendblob.Exec(ctx, tx, `INSERT INTO backend_revision_assertions(project_id,revision_id,record_type,record_id,repository_id,provider_namespace,external_key,assertion_hash,document) VALUES(?,?,?,?,?,?,?,?,?)`, pid, rid, a.RecordType, a.RecordID, a.Owner.RepositoryID, a.Owner.ProviderNamespace, a.ExternalKey, a.AssertionHash, string(doc)); err != nil {
 			return err
 		}
 	}
@@ -263,7 +264,7 @@ func saveComposedContext(ctx context.Context, tx *sql.Tx, pid, rid string, c *co
 		if err != nil {
 			return err
 		}
-		if _, err := tx.ExecContext(ctx, `INSERT INTO backend_revision_assertion_resolutions(project_id,revision_id,record_type,record_id,property_key,conflict_hash,document) VALUES(?,?,?,?,?,?,?)`, pid, rid, a.RecordType, a.ID, sourcePropertyKey(a.Property), a.ConflictHash, string(doc)); err != nil {
+		if _, err := backendblob.Exec(ctx, tx, `INSERT INTO backend_revision_assertion_resolutions(project_id,revision_id,record_type,record_id,property_key,conflict_hash,document) VALUES(?,?,?,?,?,?,?)`, pid, rid, a.RecordType, a.ID, sourcePropertyKey(a.Property), a.ConflictHash, string(doc)); err != nil {
 			return err
 		}
 	}
@@ -272,7 +273,7 @@ func saveComposedContext(ctx context.Context, tx *sql.Tx, pid, rid string, c *co
 		if err != nil {
 			return err
 		}
-		if _, err := tx.ExecContext(ctx, `INSERT INTO backend_revision_legacy_proof_bases(project_id,revision_id,evidence_id,source_revision_id,basis_hash,document) VALUES(?,?,?,?,?,?)`, pid, rid, b.EvidenceID, b.SourceRevisionID, b.BasisHash, string(doc)); err != nil {
+		if _, err := backendblob.Exec(ctx, tx, `INSERT INTO backend_revision_legacy_proof_bases(project_id,revision_id,evidence_id,source_revision_id,basis_hash,document) VALUES(?,?,?,?,?,?)`, pid, rid, b.EvidenceID, b.SourceRevisionID, b.BasisHash, string(doc)); err != nil {
 			return err
 		}
 	}

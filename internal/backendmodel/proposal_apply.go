@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"encoding/json/v2"
 	"errors"
+	"github.com/yashok111/mocker/internal/backendblob"
 	"math"
 	"time"
 	"uuid"
@@ -127,7 +128,7 @@ func proposalCommandHistory(ctx context.Context, q importReader, proposalID stri
 	for _, c := range commands {
 		requested[c.CommandID] = true
 	}
-	rows, err := q.QueryContext(ctx, `SELECT document FROM backend_proposal_revisions WHERE proposal_id=?`, proposalID)
+	rows, err := q.QueryContext(ctx, `SELECT document FROM backend_proposal_revisions_documents WHERE proposal_id=?`, proposalID)
 	if err != nil {
 		return err
 	}
@@ -196,9 +197,9 @@ func (r *Repo) prepareProposal(ctx context.Context, pid, proposalID string, in P
 	// with import staging mutations.
 	var inputBytes int64
 	if err := tx.QueryRowContext(ctx, `SELECT
-	 (SELECT COALESCE(SUM(length(CAST(document AS BLOB))),0) FROM backend_graph_records WHERE project_id=? AND revision_id=?) +
-	 (SELECT COALESCE(SUM(length(CAST(document AS BLOB))),0) FROM backend_revision_sources WHERE revision_id=?) +
-	 (SELECT length(CAST(document AS BLOB)) FROM backend_proposal_revisions WHERE id=?)`, pid, p.BaseRevisionID, p.BaseRevisionID, draft.ID).Scan(&inputBytes); err != nil {
+	 (SELECT COALESCE(SUM(length(CAST(document AS BLOB))),0) FROM backend_graph_records_documents WHERE project_id=? AND revision_id=?) +
+	 (SELECT COALESCE(SUM(length(CAST(document AS BLOB))),0) FROM backend_revision_sources_documents WHERE revision_id=?) +
+	 (SELECT length(CAST(document AS BLOB)) FROM backend_proposal_revisions_documents WHERE id=?)`, pid, p.BaseRevisionID, p.BaseRevisionID, draft.ID).Scan(&inputBytes); err != nil {
 		return nil, err
 	}
 	commandJSON, err := json.Marshal(in.Commands)
@@ -352,7 +353,7 @@ func (r *Repo) ApplyProposal(ctx context.Context, pid, proposalID string, in App
 		if len(document) > MaxRevisionBytes {
 			return proposalLimit("Proposal revision exceeds the semantic payload limit")
 		}
-		if _, err := tx.ExecContext(ctx, `INSERT INTO backend_proposal_revisions(id,proposal_id,parent_revision_id,document) VALUES(?,?,?,?)`, rev.ID, proposalID, draft.ID, string(document)); err != nil {
+		if _, err := backendblob.Exec(ctx, tx, `INSERT INTO backend_proposal_revisions(id,proposal_id,parent_revision_id,document) VALUES(?,?,?,?)`, rev.ID, proposalID, draft.ID, string(document)); err != nil {
 			return err
 		}
 		current.Version++

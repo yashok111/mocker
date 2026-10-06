@@ -51,10 +51,10 @@ func (cache *legacyProofCache) raw(ctx context.Context, q importReader, pid, rid
 		args   []any
 		target *jsontext.Value
 	}{
-		{pid + rid + "revision", `SELECT document FROM backend_revisions WHERE project_id=? AND id=?`, []any{pid, rid}, &result.RevisionDocument},
-		{pid + rid + "source", `SELECT s.document FROM backend_revision_sources s JOIN backend_revisions r ON r.id=s.revision_id WHERE r.project_id=? AND r.id=?`, []any{pid, rid}, &result.SourceDocument},
-		{pid + rid + typ + id, `SELECT document FROM backend_graph_records WHERE project_id=? AND revision_id=? AND record_type=? AND id=?`, []any{pid, rid, typ, id}, &result.SubjectDocument},
-		{pid + rid + "evidence" + eid, `SELECT document FROM backend_graph_records WHERE project_id=? AND revision_id=? AND record_type='evidence' AND id=? AND subject_id=?`, []any{pid, rid, eid, id}, &result.EvidenceDocument},
+		{pid + rid + "revision", `SELECT document FROM backend_revisions_documents WHERE project_id=? AND id=?`, []any{pid, rid}, &result.RevisionDocument},
+		{pid + rid + "source", `SELECT s.document FROM backend_revision_sources_documents s JOIN backend_revisions_documents r ON r.id=s.revision_id WHERE r.project_id=? AND r.id=?`, []any{pid, rid}, &result.SourceDocument},
+		{pid + rid + typ + id, `SELECT document FROM backend_graph_records_documents WHERE project_id=? AND revision_id=? AND record_type=? AND id=?`, []any{pid, rid, typ, id}, &result.SubjectDocument},
+		{pid + rid + "evidence" + eid, `SELECT document FROM backend_graph_records_documents WHERE project_id=? AND revision_id=? AND record_type='evidence' AND id=? AND subject_id=?`, []any{pid, rid, eid, id}, &result.EvidenceDocument},
 	} {
 		if raw, ok := cache.documents[row.key]; ok {
 			*row.target = raw

@@ -83,7 +83,7 @@ func TestIncrementalProjectionIncludesSharedConsumers(t *testing.T) {
 		t.Fatal("fixture did not change consumer effective dependency")
 	}
 	var raw string
-	if err = f.repo.db.R.QueryRowContext(t.Context(), `SELECT document FROM backend_revision_decisions WHERE revision_id=?`, out.Revision.ID).Scan(&raw); err != nil {
+	if err = f.repo.db.R.QueryRowContext(t.Context(), `SELECT document FROM backend_revision_decisions_documents WHERE revision_id=?`, out.Revision.ID).Scan(&raw); err != nil {
 		t.Fatal(err)
 	}
 	var decisions struct {

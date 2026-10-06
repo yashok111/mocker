@@ -2,6 +2,7 @@ package backendmodel
 
 import (
 	"fmt"
+	"github.com/yashok111/mocker/internal/testkit"
 	"math"
 	"reflect"
 	"slices"
@@ -277,7 +278,7 @@ func TestSavedViewWholeScopeAndUnknownTransaction(t *testing.T) {
 		})
 	}
 	// Unknown contexts must never create transaction groups.
-	if _, err := db.W.ExecContext(t.Context(), `UPDATE backend_graph_records SET document=json_set(document,'$.attributes.transactionContext',json(?)) WHERE revision_id=? AND id=?`, fmt.Sprintf(`{"status":"unknown","reason":"unresolved","transactionId":%q}`, runtimeQueryID(23)), s.Revision.ID, runtimeQueryID(4)); err != nil {
+	if _, err := testkit.EditLegacyBackendPayload(t.Context(), db, `UPDATE backend_graph_records SET document=json_set(document,'$.attributes.transactionContext',json(?)) WHERE revision_id=? AND id=?`, fmt.Sprintf(`{"status":"unknown","reason":"unresolved","transactionId":%q}`, runtimeQueryID(23)), s.Revision.ID, runtimeQueryID(4)); err != nil {
 		t.Fatal(err)
 	}
 	f := *base.State.Flow

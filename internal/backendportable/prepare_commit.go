@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json/v2"
+	"github.com/yashok111/mocker/internal/backendblob"
 	"slices"
 	"strconv"
 	"time"
@@ -218,12 +219,12 @@ func (s *Service) Commit(ctx context.Context, id string, in CommitInput) (*Commi
 			if err != nil {
 				return nil, "", err
 			}
-			if _, err := tx.ExecContext(ctx, `INSERT INTO backend_portable_id_maps(project_id,session_id,identity_kind,origin_key,local_key,document) VALUES(?,?,?,?,?,?)`, imported.Project.ID, id, entry.Origin.Kind, origin, local, string(document)); err != nil {
+			if _, err := backendblob.Exec(ctx, tx, `INSERT INTO backend_portable_id_maps(project_id,session_id,identity_kind,origin_key,local_key,document) VALUES(?,?,?,?,?,?)`, imported.Project.ID, id, entry.Origin.Kind, origin, local, string(document)); err != nil {
 				return nil, "", err
 			}
 			if i < len(records) {
 				record := records[i]
-				if _, err := tx.ExecContext(ctx, `INSERT INTO backend_portable_origins(project_id,record_kind,local_key,origin_pin,origin_hash,document) VALUES(?,?,?,?,?,?)`, imported.Project.ID, record.Kind, local, origin, record.ContentHash, string(record.Document)); err != nil {
+				if _, err := backendblob.Exec(ctx, tx, `INSERT INTO backend_portable_origins(project_id,record_kind,local_key,origin_pin,origin_hash,document) VALUES(?,?,?,?,?,?)`, imported.Project.ID, record.Kind, local, origin, record.ContentHash, string(record.Document)); err != nil {
 					return nil, "", err
 				}
 			}

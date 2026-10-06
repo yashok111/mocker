@@ -30,7 +30,7 @@ func (r *Repo) AnalysisProposalBaseRevision(ctx context.Context, pid string, p P
 		return "", invalid("changeProposal", "Exact saved proposal required")
 	}
 	var rid string
-	err := r.db.R.QueryRowContext(ctx, `SELECT base_revision_id FROM backend_change_proposal_revisions WHERE project_id=? AND proposal_id=? AND id=?`, pid, p.ProposalID, p.ProposalRevisionID).Scan(&rid)
+	err := r.db.R.QueryRowContext(ctx, `SELECT base_revision_id FROM backend_change_proposal_revisions_documents WHERE project_id=? AND proposal_id=? AND id=?`, pid, p.ProposalID, p.ProposalRevisionID).Scan(&rid)
 	if errors.Is(err, sql.ErrNoRows) {
 		return "", &FaultError{Status: 404, Code: "backend_change_not_found", Message: "Change proposal revision not found"}
 	}
@@ -38,9 +38,9 @@ func (r *Repo) AnalysisProposalBaseRevision(ctx context.Context, pid string, p P
 }
 func evidenceTable(kind string) string {
 	if kind == "revision_decisions" {
-		return "backend_revision_decisions"
+		return "backend_revision_decisions_documents"
 	}
-	return "backend_revision_sources"
+	return "backend_revision_sources_documents"
 }
 func evidenceRevisionIDs(req AnalysisEvidenceRequest) []string {
 	ids := []string{}
@@ -99,7 +99,7 @@ func (r *Repo) AnalysisEvidenceInputFootprint(ctx context.Context, pid string, r
 		}
 		for _, kind := range []string{"revision_decisions", "revision_coverage"} {
 			var size int64
-			err = tx.QueryRowContext(ctx, `SELECT length(CAST(d.document AS BLOB)) FROM `+evidenceTable(kind)+` d JOIN backend_revisions r ON r.id=d.revision_id WHERE r.project_id=? AND r.id=?`, pid, rid).Scan(&size)
+			err = tx.QueryRowContext(ctx, `SELECT length(CAST(d.document AS BLOB)) FROM `+evidenceTable(kind)+` d JOIN backend_revisions_documents r ON r.id=d.revision_id WHERE r.project_id=? AND r.id=?`, pid, rid).Scan(&size)
 			if errors.Is(err, sql.ErrNoRows) {
 				continue
 			}
@@ -131,7 +131,7 @@ func (r *Repo) readAnalysisEvidenceDocument(ctx context.Context, pid, rid, kind 
 	if err := lease.valid(r, pid); err != nil {
 		return nil, err
 	}
-	query := ` FROM ` + evidenceTable(kind) + ` d JOIN backend_revisions r ON r.id=d.revision_id WHERE r.project_id=? AND r.id=?`
+	query := ` FROM ` + evidenceTable(kind) + ` d JOIN backend_revisions_documents r ON r.id=d.revision_id WHERE r.project_id=? AND r.id=?`
 	var size int64
 	err := r.db.R.QueryRowContext(ctx, `SELECT length(CAST(d.document AS BLOB))`+query, pid, rid).Scan(&size)
 	if errors.Is(err, sql.ErrNoRows) {

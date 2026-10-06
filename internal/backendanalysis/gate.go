@@ -30,7 +30,7 @@ func (r *Repo) ReadAnalysisGate(ctx context.Context, pid string, ref backendmode
 		return nil, err
 	}
 	var raw []byte
-	if err = tx.QueryRowContext(ctx, `SELECT document FROM backend_analysis_manifests WHERE project_id=? AND job_id=? AND result_version=?`, pid, ref.JobID, ref.ResultVersion).Scan(&raw); err != nil {
+	if err = tx.QueryRowContext(ctx, `SELECT document FROM backend_analysis_manifests_documents WHERE project_id=? AND job_id=? AND result_version=?`, pid, ref.JobID, ref.ResultVersion).Scan(&raw); err != nil {
 		return nil, err
 	}
 	var m ResultManifest

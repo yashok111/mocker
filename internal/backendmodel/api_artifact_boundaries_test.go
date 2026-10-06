@@ -6,6 +6,7 @@ import (
 	"encoding/json/v2"
 	"errors"
 	"fmt"
+	"github.com/yashok111/mocker/internal/testkit"
 	"slices"
 	"strconv"
 	"strings"
@@ -410,10 +411,10 @@ func TestAPIArtifactSnapshotBudgetAndRetainedUnavailableGroup(t *testing.T) {
 	}
 	document, _ := json.Marshal(revision)
 	err = s.repo.db.Write(t.Context(), func(tx *sql.Tx) error {
-		if _, err := tx.ExecContext(t.Context(), `INSERT INTO backend_revisions(id,project_id,document) VALUES(?,?,?)`, revision.ID, base.Project.ID, string(document)); err != nil {
+		if _, err := testkit.ExecBackendOwner(t.Context(), tx, `INSERT INTO backend_revisions(id,project_id,document) VALUES(?,?,?)`, revision.ID, base.Project.ID, string(document)); err != nil {
 			return err
 		}
-		if _, err := tx.ExecContext(t.Context(), `INSERT INTO backend_revision_sources(revision_id,document) SELECT ?,document FROM backend_revision_sources WHERE revision_id=?`, revision.ID, base.Revision.ID); err != nil {
+		if _, err := testkit.ExecBackendOwner(t.Context(), tx, `INSERT INTO backend_revision_sources(revision_id,document) SELECT ?,document FROM backend_revision_sources WHERE revision_id=?`, revision.ID, base.Revision.ID); err != nil {
 			return err
 		}
 		if err := saveAPIArtifactContext(t.Context(), tx, revision.ID, context); err != nil {

@@ -197,7 +197,7 @@ func addChangeHistoricalMembership(b *analysisFootprintBuilder, id, rid string) 
 }
 
 func reserveChangeHistoricalIDs(ctx context.Context, q importReader, pid, id string, used map[string]ChangeObjectIdentity) error {
-	rows, err := q.QueryContext(ctx, `SELECT DISTINCT g.record_type,g.id,json_extract(g.document,'$.kind') FROM backend_graph_records g JOIN backend_change_proposal_revisions r ON r.base_revision_id=g.revision_id AND r.project_id=g.project_id WHERE r.project_id=? AND r.proposal_id=? AND g.record_type IN ('node','edge')`, pid, id)
+	rows, err := q.QueryContext(ctx, `SELECT DISTINCT g.record_type,g.id,json_extract(g.document,'$.kind') FROM backend_graph_records_documents g JOIN backend_change_proposal_revisions_documents r ON r.base_revision_id=g.revision_id AND r.project_id=g.project_id WHERE r.project_id=? AND r.proposal_id=? AND g.record_type IN ('node','edge')`, pid, id)
 	if err != nil {
 		return err
 	}
@@ -270,7 +270,7 @@ func changeCarriedRecord(rev ChangeProposalRevision, id string) bool {
 // Only older proposal bases need an additional immutable ID/kind projection.
 func changeHistoricalIdentityBytes(ctx context.Context, q importReader, pid, id, rid string) (int64, error) {
 	var size int64
-	err := q.QueryRowContext(ctx, analysisIdentityCTE+`SELECT COALESCE(sum(length(CAST(g.id AS BLOB))+length(CAST(g.record_type AS BLOB))+length(CAST(g.kind AS BLOB))+128),0) FROM backend_graph_records g WHERE g.project_id=? AND g.record_type IN ('node','edge') AND g.revision_id IN (SELECT DISTINCT r.base_revision_id FROM backend_change_proposal_revisions r JOIN ancestors a ON a.id=r.id) AND g.revision_id<>(SELECT base_revision_id FROM backend_change_proposal_revisions WHERE project_id=? AND proposal_id=? AND id=?)`, pid, id, rid, pid, id, pid, pid, id, rid).Scan(&size)
+	err := q.QueryRowContext(ctx, analysisIdentityCTE+`SELECT COALESCE(sum(length(CAST(g.id AS BLOB))+length(CAST(g.record_type AS BLOB))+length(CAST(g.kind AS BLOB))+128),0) FROM backend_graph_records_documents g WHERE g.project_id=? AND g.record_type IN ('node','edge') AND g.revision_id IN (SELECT DISTINCT r.base_revision_id FROM backend_change_proposal_revisions_documents r JOIN ancestors a ON a.id=r.id) AND g.revision_id<>(SELECT base_revision_id FROM backend_change_proposal_revisions_documents WHERE project_id=? AND proposal_id=? AND id=?)`, pid, id, rid, pid, id, pid, pid, id, rid).Scan(&size)
 	return size, err
 }
 

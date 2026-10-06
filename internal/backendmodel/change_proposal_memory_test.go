@@ -68,7 +68,7 @@ func TestChangeProposalRestoredLedgerCountsBeforeDecodeAndAfterResize(t *testing
 	restoreJSON, _ := json.Marshal(restored)
 	d = &ChangeProposalDetail{Proposal: restored.Proposal, Revision: restored.Revision}
 	var ledgerBytes int64
-	if err = r.db.R.QueryRowContext(t.Context(), `SELECT sum(length(CAST(document AS BLOB))) FROM backend_change_proposal_identities WHERE proposal_id=?`, d.Proposal.ID).Scan(&ledgerBytes); err != nil {
+	if err = r.db.R.QueryRowContext(t.Context(), `SELECT sum(length(CAST(document AS BLOB))) FROM backend_change_proposal_identities_documents WHERE proposal_id=?`, d.Proposal.ID).Scan(&ledgerBytes); err != nil {
 		t.Fatal(err)
 	}
 	const available int64 = 1500000

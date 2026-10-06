@@ -62,7 +62,7 @@ func requireCollectible(s *ImportSession) error {
 }
 func requireEmptyBase(ctx context.Context, q importReader, pid, rid string) error {
 	var doc string
-	err := q.QueryRowContext(ctx, `SELECT document FROM backend_revisions WHERE project_id=? AND id=?`, pid, rid).Scan(&doc)
+	err := q.QueryRowContext(ctx, `SELECT document FROM backend_revisions_documents WHERE project_id=? AND id=?`, pid, rid).Scan(&doc)
 	if errors.Is(err, sql.ErrNoRows) {
 		return notFound()
 	}

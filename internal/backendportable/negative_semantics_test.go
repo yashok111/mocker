@@ -98,7 +98,7 @@ func TestPortableRejectsForgedSemanticClosureAtomically(t *testing.T) {
 				t.Fatal("forged semantic bundle accepted")
 			}
 			check(t, f.service.db.Write(t.Context(), func(tx *sql.Tx) error {
-				for _, query := range []string{"SELECT count(*) FROM backend_projects", "SELECT count(*) FROM backend_portable_id_maps", "SELECT count(*) FROM backend_portable_origins", "SELECT count(*) FROM backend_portable_receipts WHERE operation='commit'"} {
+				for _, query := range []string{"SELECT count(*) FROM backend_projects", "SELECT count(*) FROM backend_portable_id_maps_documents", "SELECT count(*) FROM backend_portable_origins_documents", "SELECT count(*) FROM backend_portable_receipts WHERE operation='commit'"} {
 					var count int
 					if err := tx.QueryRowContext(t.Context(), query).Scan(&count); err != nil {
 						return err

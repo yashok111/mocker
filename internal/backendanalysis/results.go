@@ -9,6 +9,7 @@ import (
 	"encoding/json/v2"
 	"errors"
 	"fmt"
+	"github.com/yashok111/mocker/internal/backendblob"
 	"slices"
 	"time"
 
@@ -137,7 +138,7 @@ func publishTx(ctx context.Context, tx *sql.Tx, pid, id, token string, s Prepare
 		return fault(409, "input_conflict", "Report input differs")
 	}
 	var previous string
-	err = tx.QueryRowContext(ctx, `SELECT document FROM backend_analysis_manifests WHERE project_id=? AND job_id=? AND result_version=?`, pid, id, s.Manifest.ResultVersion).Scan(&previous)
+	err = tx.QueryRowContext(ctx, `SELECT document FROM backend_analysis_manifests_documents WHERE project_id=? AND job_id=? AND result_version=?`, pid, id, s.Manifest.ResultVersion).Scan(&previous)
 	if err == nil {
 		if previous != string(s.ManifestJSON) {
 			return fault(409, "snapshot_conflict", "Published manifest differs")
@@ -155,7 +156,7 @@ func publishTx(ctx context.Context, tx *sql.Tx, pid, id, token string, s Prepare
 		return fault(409, "snapshot_conflict", "Result version must advance by one")
 	}
 	var high int64
-	if err = tx.QueryRowContext(ctx, `SELECT COALESCE(max(sequence),0) FROM backend_analysis_chunks WHERE project_id=? AND job_id=?`, pid, id).Scan(&high); err != nil {
+	if err = tx.QueryRowContext(ctx, `SELECT COALESCE(max(sequence),0) FROM backend_analysis_chunks_documents WHERE project_id=? AND job_id=?`, pid, id).Scan(&high); err != nil {
 		return err
 	}
 	if s.Manifest.HighWaterSequence < high {
@@ -180,11 +181,11 @@ func publishTx(ctx context.Context, tx *sql.Tx, pid, id, token string, s Prepare
 func appendSnapshotTx(ctx context.Context, tx *sql.Tx, pid, id string, s PreparedSnapshot, high, cost, reserved, headroom int64, terminal bool) error {
 	var err error
 	for index, c := range s.Chunks[high:] {
-		if _, err = tx.ExecContext(ctx, `INSERT INTO backend_analysis_chunks VALUES(?,?,?,?,?,?,?,?)`, pid, id, c.Sequence, c.Section, c.ContentHash, string(c.ItemsJSON), s.chunkCounts[int(high)+index], len(c.ItemsJSON)); err != nil {
+		if _, err = backendblob.Exec(ctx, tx, `INSERT INTO backend_analysis_chunks(project_id,job_id,sequence,section,content_hash,items_json,record_count,chunk_bytes) VALUES(?,?,?,?,?,?,?,?)`, pid, id, c.Sequence, c.Section, c.ContentHash, string(c.ItemsJSON), s.chunkCounts[int(high)+index], len(c.ItemsJSON)); err != nil {
 			return err
 		}
 	}
-	if _, err = tx.ExecContext(ctx, `INSERT INTO backend_analysis_manifests VALUES(?,?,?,?,?,?,?)`, pid, id, s.Manifest.ResultVersion, s.Manifest.HighWaterSequence, s.Manifest.SemanticResultHash, string(s.ManifestJSON), len(s.ManifestJSON)); err != nil {
+	if _, err = backendblob.Exec(ctx, tx, `INSERT INTO backend_analysis_manifests(project_id,job_id,result_version,high_water_sequence,result_hash,document,manifest_bytes) VALUES(?,?,?,?,?,?,?)`, pid, id, s.Manifest.ResultVersion, s.Manifest.HighWaterSequence, s.Manifest.SemanticResultHash, string(s.ManifestJSON), len(s.ManifestJSON)); err != nil {
 		return err
 	}
 	nextReserve := reserved - cost
@@ -200,7 +201,7 @@ func verifyChunks(ctx context.Context, q reader, pid, id string, chunks []Result
 	for _, c := range chunks {
 		var section, hash, raw string
 		var count, size int64
-		err := q.QueryRowContext(ctx, `SELECT section,content_hash,items_json,record_count,chunk_bytes FROM backend_analysis_chunks WHERE project_id=? AND job_id=? AND sequence=?`, pid, id, c.Sequence).Scan(&section, &hash, &raw, &count, &size)
+		err := q.QueryRowContext(ctx, `SELECT section,content_hash,items_json,record_count,chunk_bytes FROM backend_analysis_chunks_documents WHERE project_id=? AND job_id=? AND sequence=?`, pid, id, c.Sequence).Scan(&section, &hash, &raw, &count, &size)
 		if err != nil {
 			return err
 		}
@@ -336,7 +337,7 @@ func (r *Repo) Results(ctx context.Context, pid, id string, in ResultQuery) (*Re
 		return nil, fault(409, "unpublished", "No published result")
 	}
 	var raw string
-	err = tx.QueryRowContext(ctx, `SELECT document FROM backend_analysis_manifests WHERE project_id=? AND job_id=? AND result_version=?`, pid, id, in.ResultVersion).Scan(&raw)
+	err = tx.QueryRowContext(ctx, `SELECT document FROM backend_analysis_manifests_documents WHERE project_id=? AND job_id=? AND result_version=?`, pid, id, in.ResultVersion).Scan(&raw)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, fault(404, "not_found", "Pinned result not found")
 	}
@@ -430,7 +431,7 @@ func (r *Repo) List(ctx context.Context, pid string, in ListQuery) (*JobPage, er
 }
 
 func readPageItems(ctx context.Context, tx *sql.Tx, pid, id string, in ResultQuery, high int64, offset int) ([]jsontext.Value, bool, error) {
-	rows, err := tx.QueryContext(ctx, `SELECT items_json FROM backend_analysis_chunks WHERE project_id=? AND job_id=? AND section=? AND sequence<=? ORDER BY sequence`, pid, id, in.Section, high)
+	rows, err := tx.QueryContext(ctx, `SELECT items_json FROM backend_analysis_chunks_documents WHERE project_id=? AND job_id=? AND section=? AND sequence<=? ORDER BY sequence`, pid, id, in.Section, high)
 	if err != nil {
 		return nil, false, err
 	}

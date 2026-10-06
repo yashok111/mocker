@@ -50,7 +50,7 @@ func TestFindingReviewReceiptRecurrenceAndResolution(t *testing.T) {
 	model := backendmodel.NewRepo(db)
 	j, f := findingReport(t, r, "first", strings.Repeat("b", 64), "present")
 	var original []byte
-	if e := db.R.QueryRow(`SELECT document FROM backend_analysis_manifests WHERE job_id=?`, j.ID).Scan(&original); e != nil {
+	if e := db.R.QueryRow(`SELECT document FROM backend_analysis_manifests_documents WHERE job_id=?`, j.ID).Scan(&original); e != nil {
 		t.Fatal(e)
 	}
 	in := backendmodel.FindingReviewInput{ExpectedVersion: 1, BasisHash: f.BasisHash, Status: "accepted_risk", Reason: "Reviewed static risk", IdempotencyKey: "review"}
@@ -83,7 +83,7 @@ func TestFindingReviewReceiptRecurrenceAndResolution(t *testing.T) {
 		t.Fatal(resolved, e)
 	}
 	var after []byte
-	_ = db.R.QueryRow(`SELECT document FROM backend_analysis_manifests WHERE job_id=?`, j.ID).Scan(&after)
+	_ = db.R.QueryRow(`SELECT document FROM backend_analysis_manifests_documents WHERE job_id=?`, j.ID).Scan(&after)
 	if !bytes.Equal(original, after) {
 		t.Fatal("immutable report changed")
 	}

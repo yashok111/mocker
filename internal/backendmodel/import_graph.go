@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json/jsontext"
 	"encoding/json/v2"
+	"github.com/yashok111/mocker/internal/backendblob"
 	"slices"
 	"strconv"
 	"strings"
@@ -640,7 +641,7 @@ func (r *Repo) CommitImport(ctx context.Context, pid, sid string, in CommitImpor
 		if err != nil {
 			return err
 		}
-		_, err = tx.ExecContext(ctx, `INSERT INTO backend_revisions(id,project_id,document) VALUES(?,?,?)`, rev.ID, pid, string(doc))
+		_, err = backendblob.Exec(ctx, tx, `INSERT INTO backend_revisions(id,project_id,document) VALUES(?,?,?)`, rev.ID, pid, string(doc))
 		if err != nil {
 			return err
 		}
@@ -653,7 +654,7 @@ func (r *Repo) CommitImport(ctx context.Context, pid, sid string, in CommitImpor
 			if n.ParentID != nil {
 				parent = *n.ParentID
 			}
-			if _, err := tx.ExecContext(ctx, `INSERT INTO backend_graph_records(project_id,revision_id,record_type,id,kind,name,parent_id,document) VALUES(?,?,'node',?,?,?,?,?)`, pid, rev.ID, n.ID, n.Kind, n.Name, parent, string(doc)); err != nil {
+			if _, err := backendblob.Exec(ctx, tx, `INSERT INTO backend_graph_records(project_id,revision_id,record_type,id,kind,name,parent_id,document) VALUES(?,?,'node',?,?,?,?,?)`, pid, rev.ID, n.ID, n.Kind, n.Name, parent, string(doc)); err != nil {
 				return err
 			}
 		}
@@ -662,7 +663,7 @@ func (r *Repo) CommitImport(ctx context.Context, pid, sid string, in CommitImpor
 			if err != nil {
 				return err
 			}
-			if _, err := tx.ExecContext(ctx, `INSERT INTO backend_graph_records(project_id,revision_id,record_type,id,kind,from_id,to_id,document) VALUES(?,?,'edge',?,?,?,?,?)`, pid, rev.ID, e.ID, e.Kind, e.From, e.To, string(doc)); err != nil {
+			if _, err := backendblob.Exec(ctx, tx, `INSERT INTO backend_graph_records(project_id,revision_id,record_type,id,kind,from_id,to_id,document) VALUES(?,?,'edge',?,?,?,?,?)`, pid, rev.ID, e.ID, e.Kind, e.From, e.To, string(doc)); err != nil {
 				return err
 			}
 		}
@@ -674,7 +675,7 @@ func (r *Repo) CommitImport(ctx context.Context, pid, sid string, in CommitImpor
 			if g.Composed != nil {
 				doc = g.Composed.Source.RawEvidence[e.ID]
 			}
-			if _, err := tx.ExecContext(ctx, `INSERT INTO backend_graph_records(project_id,revision_id,record_type,id,subject_id,document) VALUES(?,?,'evidence',?,?,?)`, pid, rev.ID, e.ID, e.SubjectID, string(doc)); err != nil {
+			if _, err := backendblob.Exec(ctx, tx, `INSERT INTO backend_graph_records(project_id,revision_id,record_type,id,subject_id,document) VALUES(?,?,'evidence',?,?,?)`, pid, rev.ID, e.ID, e.SubjectID, string(doc)); err != nil {
 				return err
 			}
 		}
@@ -700,7 +701,7 @@ func (r *Repo) CommitImport(ctx context.Context, pid, sid string, in CommitImpor
 		if err != nil {
 			return err
 		}
-		if _, err := tx.ExecContext(ctx, `INSERT INTO backend_revision_decisions(revision_id,document) VALUES(?,?)`, rev.ID, string(decisions)); err != nil {
+		if _, err := backendblob.Exec(ctx, tx, `INSERT INTO backend_revision_decisions(revision_id,document) VALUES(?,?)`, rev.ID, string(decisions)); err != nil {
 			return err
 		}
 		sourceDoc, err := json.Marshal(coverage)
@@ -710,7 +711,7 @@ func (r *Repo) CommitImport(ctx context.Context, pid, sid string, in CommitImpor
 		if err != nil {
 			return err
 		}
-		if _, err := tx.ExecContext(ctx, `INSERT INTO backend_revision_sources(revision_id,document) VALUES(?,?)`, rev.ID, string(sourceDoc)); err != nil {
+		if _, err := backendblob.Exec(ctx, tx, `INSERT INTO backend_revision_sources(revision_id,document) VALUES(?,?)`, rev.ID, string(sourceDoc)); err != nil {
 			return err
 		}
 		if err := saveImportedArtifactContext(ctx, tx, rev.ID, g); err != nil {
@@ -759,7 +760,7 @@ func saveImportedArtifactContext(ctx context.Context, tx *sql.Tx, revisionID str
 		if err != nil {
 			return err
 		}
-		_, err = tx.ExecContext(ctx, `INSERT INTO backend_revision_api_artifacts(revision_id,source_content_hash,source_semantic_hash,document) VALUES(?,?,?,?)`, revisionID, c.SourceContentHash, c.SourceSemanticHash, string(raw))
+		_, err = backendblob.Exec(ctx, tx, `INSERT INTO backend_revision_api_artifacts(revision_id,source_content_hash,source_semantic_hash,document) VALUES(?,?,?,?)`, revisionID, c.SourceContentHash, c.SourceSemanticHash, string(raw))
 		return err
 	}
 	if g.ArtifactContext != nil {

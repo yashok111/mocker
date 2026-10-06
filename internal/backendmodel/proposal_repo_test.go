@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json/v2"
 	"fmt"
+	"github.com/yashok111/mocker/internal/testkit"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -26,9 +27,9 @@ func proposalSourceBytes(t *testing.T, r *Repo) map[string][]string {
 	t.Helper()
 	queries := map[string]string{
 		"project":      `SELECT id,name,version,current_revision_id,created_at,updated_at FROM backend_projects ORDER BY id`,
-		"revisions":    `SELECT id,project_id,document FROM backend_revisions ORDER BY id`,
-		"graph":        `SELECT revision_id,record_type,id,document FROM backend_graph_records ORDER BY revision_id,record_type,id`,
-		"sources":      `SELECT revision_id,document FROM backend_revision_sources ORDER BY revision_id`,
+		"revisions":    `SELECT id,project_id,document FROM backend_revisions_documents ORDER BY id`,
+		"graph":        `SELECT revision_id,record_type,id,document FROM backend_graph_records_documents ORDER BY revision_id,record_type,id`,
+		"sources":      `SELECT revision_id,document FROM backend_revision_sources_documents ORDER BY revision_id`,
 		"identity":     `SELECT project_id,repository_id,provider_namespace,record_type,external_key,id,state,revision_id FROM backend_identity_bindings ORDER BY project_id,repository_id,provider_namespace,record_type,external_key`,
 		"reservations": `SELECT session_id,record_type,external_key,id FROM backend_import_identities ORDER BY session_id,record_type,external_key`,
 		"receipts":     `SELECT scope,key,request_hash,response FROM backend_command_receipts WHERE scope NOT LIKE 'proposal-%' ORDER BY scope,key`,
@@ -204,7 +205,7 @@ func TestProposalCreateRollback(t *testing.T) {
 			if err == nil {
 				t.Fatal("fault accepted")
 			}
-			for _, query := range []string{`SELECT count(*) FROM backend_proposals`, `SELECT count(*) FROM backend_proposal_revisions`, `SELECT count(*) FROM backend_command_receipts WHERE scope LIKE 'proposal-%'`} {
+			for _, query := range []string{`SELECT count(*) FROM backend_proposals`, `SELECT count(*) FROM backend_proposal_revisions_documents`, `SELECT count(*) FROM backend_command_receipts WHERE scope LIKE 'proposal-%'`} {
 				var n int
 				if err := db.R.QueryRowContext(t.Context(), query).Scan(&n); err != nil || n != 0 {
 					t.Fatalf("partial transaction: %d %v", n, err)
@@ -325,7 +326,7 @@ func TestProposalHistoryCursorPin(t *testing.T) {
 			t.Fatal(err)
 		}
 		err = r.db.Write(t.Context(), func(tx *sql.Tx) error {
-			if _, err := tx.ExecContext(t.Context(), `INSERT INTO backend_proposal_revisions(id,proposal_id,parent_revision_id,document) VALUES(?,?,?,?)`, rev.ID, rev.ProposalID, rev.ParentRevisionID, string(doc)); err != nil {
+			if _, err := testkit.ExecBackendOwner(t.Context(), tx, `INSERT INTO backend_proposal_revisions(id,proposal_id,parent_revision_id,document) VALUES(?,?,?,?)`, rev.ID, rev.ProposalID, rev.ParentRevisionID, string(doc)); err != nil {
 				return err
 			}
 			_, err := tx.ExecContext(t.Context(), `UPDATE backend_proposals SET version=version+1,draft_revision_id=?,draft_hash=? WHERE id=?`, rev.ID, rev.SemanticHash, rev.ProposalID)

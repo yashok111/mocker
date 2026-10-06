@@ -388,8 +388,8 @@ func TestRelationalProfileB04ReceiptsAfterExtensionRestart(t *testing.T) {
 	}{
 		{`SELECT response FROM backend_command_receipts WHERE scope=? AND key=?`, []any{"import:" + p.ID + ":begin", begin.IdempotencyKey}, &beginReceipt},
 		{`SELECT response FROM backend_command_receipts WHERE scope=? AND key=?`, []any{"import:" + p.ID + ":" + as.ID + ":abort", abort.IdempotencyKey}, &abortReceipt},
-		{`SELECT document FROM backend_revisions WHERE id=?`, []any{out.Revision.ID}, &oldRevision},
-		{`SELECT document FROM backend_revision_sources WHERE revision_id=?`, []any{out.Revision.ID}, &oldSource},
+		{`SELECT document FROM backend_revisions_documents WHERE id=?`, []any{out.Revision.ID}, &oldRevision},
+		{`SELECT document FROM backend_revision_sources_documents WHERE revision_id=?`, []any{out.Revision.ID}, &oldSource},
 	} {
 		if err := db.R.QueryRowContext(t.Context(), query.sql, query.args...).Scan(query.dest); err != nil {
 			t.Fatal(err)
@@ -443,10 +443,10 @@ func TestRelationalProfileB04ReceiptsAfterExtensionRestart(t *testing.T) {
 		}
 	}
 	var afterRevision, afterSource string
-	if err := reopened.R.QueryRowContext(t.Context(), `SELECT document FROM backend_revisions WHERE id=?`, out.Revision.ID).Scan(&afterRevision); err != nil {
+	if err := reopened.R.QueryRowContext(t.Context(), `SELECT document FROM backend_revisions_documents WHERE id=?`, out.Revision.ID).Scan(&afterRevision); err != nil {
 		t.Fatal(err)
 	}
-	if err := reopened.R.QueryRowContext(t.Context(), `SELECT document FROM backend_revision_sources WHERE revision_id=?`, out.Revision.ID).Scan(&afterSource); err != nil {
+	if err := reopened.R.QueryRowContext(t.Context(), `SELECT document FROM backend_revision_sources_documents WHERE revision_id=?`, out.Revision.ID).Scan(&afterSource); err != nil {
 		t.Fatal(err)
 	}
 	if afterRevision != oldRevision || afterSource != oldSource {

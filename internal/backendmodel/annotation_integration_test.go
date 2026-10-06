@@ -56,10 +56,10 @@ func TestAnnotationDoesNotCreateSemanticRevision(t *testing.T) {
 func annotationSemanticBytes(t *testing.T, r *Repo, pid string) string {
 	t.Helper()
 	queries := []string{
-		`SELECT document FROM backend_revisions WHERE project_id=? ORDER BY id`,
-		`SELECT document FROM backend_graph_records WHERE project_id=? ORDER BY revision_id,record_type,id`,
-		`SELECT document FROM backend_revision_sources WHERE revision_id IN (SELECT id FROM backend_revisions WHERE project_id=?) ORDER BY revision_id`,
-		`SELECT document FROM backend_revision_api_artifacts WHERE revision_id IN (SELECT id FROM backend_revisions WHERE project_id=?) ORDER BY revision_id`,
+		`SELECT document FROM backend_revisions_documents WHERE project_id=? ORDER BY id`,
+		`SELECT document FROM backend_graph_records_documents WHERE project_id=? ORDER BY revision_id,record_type,id`,
+		`SELECT document FROM backend_revision_sources_documents WHERE revision_id IN (SELECT id FROM backend_revisions_documents WHERE project_id=?) ORDER BY revision_id`,
+		`SELECT document FROM backend_revision_api_artifacts_documents WHERE revision_id IN (SELECT id FROM backend_revisions_documents WHERE project_id=?) ORDER BY revision_id`,
 	}
 	all := make([][]string, 0, len(queries))
 	for _, query := range queries {

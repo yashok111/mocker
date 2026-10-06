@@ -212,7 +212,7 @@ func assertB43PartialManifestPersists(t *testing.T, input *ImmutableInput, repor
 		t.Fatalf("job %+v %v", saved, err)
 	}
 	var rawManifest []byte
-	if err = db.R.QueryRowContext(t.Context(), `SELECT document FROM backend_analysis_manifests WHERE job_id=? AND result_version=1`, job.ID).Scan(&rawManifest); err != nil {
+	if err = db.R.QueryRowContext(t.Context(), `SELECT document FROM backend_analysis_manifests_documents WHERE job_id=? AND result_version=1`, job.ID).Scan(&rawManifest); err != nil {
 		t.Fatal(err)
 	}
 	var manifest ResultManifest

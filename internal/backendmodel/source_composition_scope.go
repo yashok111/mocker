@@ -11,7 +11,7 @@ import (
 func sourceVectorAt(ctx context.Context, q importReader, state *RevisionState) (*SourceVector, error) {
 	if state.Revision.SchemaVersion == ComposedSchemaVersion {
 		var doc string
-		if err := q.QueryRowContext(ctx, `SELECT document FROM backend_revision_sources WHERE revision_id=?`, state.Revision.ID).Scan(&doc); err != nil {
+		if err := q.QueryRowContext(ctx, `SELECT document FROM backend_revision_sources_documents WHERE revision_id=?`, state.Revision.ID).Scan(&doc); err != nil {
 			return nil, err
 		}
 		var coverage SourceRevisionContext

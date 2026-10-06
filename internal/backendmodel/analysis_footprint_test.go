@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"github.com/yashok111/mocker/internal/testkit"
 	"slices"
 	"strings"
 	"sync"
@@ -48,13 +49,13 @@ func TestAnalysisFootprintRejectsCombinedPairBeforeDecode(t *testing.T) {
 	r, base, _ := changeFixture(t)
 	second := uuid.NewV7().String()
 	err := r.db.Write(t.Context(), func(tx *sql.Tx) error {
-		if _, err := tx.ExecContext(t.Context(), `INSERT INTO backend_revisions(id,project_id,document) SELECT ?,project_id,json_set(document,'$.id',?) FROM backend_revisions WHERE id=?`, second, second, base.Revision.ID); err != nil {
+		if _, err := testkit.ExecBackendOwner(t.Context(), tx, `INSERT INTO backend_revisions(id,project_id,document) SELECT ?,project_id,json_set(document,'$.id',?) FROM backend_revisions WHERE id=?`, second, second, base.Revision.ID); err != nil {
 			return err
 		}
 		for _, rid := range []string{base.Revision.ID, second} {
 			// Invalid domain records are deliberately retained: a graph decoder would
 			// fail, while admission must reject the combined bytes before reaching it.
-			if _, err := tx.ExecContext(t.Context(), `INSERT INTO backend_graph_records(project_id,revision_id,record_type,id,document) VALUES(?,?,'node',?,json_object('padding',printf('%*s',?,'x')))`, base.Project.ID, rid, uuid.NewV7().String(), 130<<20); err != nil {
+			if _, err := testkit.ExecBackendOwner(t.Context(), tx, `INSERT INTO backend_graph_records(project_id,revision_id,record_type,id,document) VALUES(?,?,'node',?,json_object('padding',printf('%*s',?,'x')))`, base.Project.ID, rid, uuid.NewV7().String(), 130<<20); err != nil {
 				return err
 			}
 		}
@@ -315,7 +316,7 @@ func TestAnalysisFootprintCombinedClaimsBasisAndNewOwnerReachCap(t *testing.T) {
 		t.Fatal(err)
 	}
 	var claimBytes, basisBytes, ownerBytes int64
-	if err = r.db.R.QueryRowContext(t.Context(), `SELECT (SELECT sum(length(CAST(document AS BLOB))) FROM backend_revision_assertions WHERE revision_id=?),(SELECT sum(length(CAST(document AS BLOB))) FROM backend_revision_legacy_proof_bases WHERE revision_id=?)`, base.Revision.ID, base.Revision.ID).Scan(&claimBytes, &basisBytes); err != nil {
+	if err = r.db.R.QueryRowContext(t.Context(), `SELECT (SELECT sum(length(CAST(document AS BLOB))) FROM backend_revision_assertions_documents WHERE revision_id=?),(SELECT sum(length(CAST(document AS BLOB))) FROM backend_revision_legacy_proof_bases_documents WHERE revision_id=?)`, base.Revision.ID, base.Revision.ID).Scan(&claimBytes, &basisBytes); err != nil {
 		t.Fatal(err)
 	}
 	for _, doc := range initial.Documents {
@@ -335,7 +336,7 @@ func TestAnalysisFootprintCombinedClaimsBasisAndNewOwnerReachCap(t *testing.T) {
 			if i == 1 {
 				size = padding - size
 			}
-			if _, err := tx.ExecContext(t.Context(), `INSERT INTO backend_graph_records(project_id,revision_id,record_type,id,document) VALUES(?,?,'node',?,json_object('padding',printf('%*s',?,'x')))`, base.Project.ID, rid, uuid.NewV7().String(), size); err != nil {
+			if _, err := testkit.ExecBackendOwner(t.Context(), tx, `INSERT INTO backend_graph_records(project_id,revision_id,record_type,id,document) VALUES(?,?,'node',?,json_object('padding',printf('%*s',?,'x')))`, base.Project.ID, rid, uuid.NewV7().String(), size); err != nil {
 				return err
 			}
 		}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"github.com/yashok111/mocker/internal/backendblob"
 	"time"
 
 	p "github.com/yashok111/mocker/internal/ordersprotocol"
@@ -67,7 +68,7 @@ func (s *Service) Start(ctx context.Context, pid, actor string, in StartInput) (
 			if active {
 				return conflictReplay("Previous dispatch is still draining")
 			}
-			if _, err = tx.ExecContext(ctx, `INSERT INTO backend_replay_evidence SELECT ?,COALESCE(max(sequence),0)+1,'uncertainty_acknowledged',?,? FROM backend_replay_evidence WHERE run_id=?`, previous, p.HashBytes([]byte(in.IdempotencyKey)), []byte(in.IdempotencyKey), previous); err != nil {
+			if _, err = backendblob.Exec(ctx, tx, `INSERT INTO backend_replay_evidence(run_id,sequence,kind,content_hash,body) SELECT ?,COALESCE(max(sequence),0)+1,'uncertainty_acknowledged',?,? FROM backend_replay_evidence_documents WHERE run_id=?`, previous, p.HashBytes([]byte(in.IdempotencyKey)), []byte(in.IdempotencyKey), previous); err != nil {
 				return err
 			}
 			if _, err = tx.ExecContext(ctx, `DELETE FROM backend_replay_target_leases WHERE target_id=? AND run_id=?`, profile.TargetID, previous); err != nil {

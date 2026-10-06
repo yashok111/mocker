@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json/v2"
 	"errors"
+	"github.com/yashok111/mocker/internal/backendblob"
 	"time"
 	"uuid"
 
@@ -57,7 +58,7 @@ func receiptWrite(ctx context.Context, tx *sql.Tx, pid, action, key, hash string
 }
 func readProfile(ctx context.Context, q replayReader, pid, id string, version int64) (*Profile, error) {
 	var raw []byte
-	err := q.QueryRowContext(ctx, `SELECT document_json FROM backend_replay_profiles WHERE project_id=? AND id=? AND version=?`, pid, id, version).Scan(&raw)
+	err := q.QueryRowContext(ctx, `SELECT document_json FROM backend_replay_profiles_documents WHERE project_id=? AND id=? AND version=?`, pid, id, version).Scan(&raw)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, missingReplay()
 	}
@@ -70,7 +71,7 @@ func readProfile(ctx context.Context, q replayReader, pid, id string, version in
 }
 func readPackage(ctx context.Context, q replayReader, pid, id string, version int64) (*SavedPackage, error) {
 	var raw []byte
-	err := q.QueryRowContext(ctx, `SELECT document_json FROM backend_replay_packages WHERE project_id=? AND id=? AND version=?`, pid, id, version).Scan(&raw)
+	err := q.QueryRowContext(ctx, `SELECT document_json FROM backend_replay_packages_documents WHERE project_id=? AND id=? AND version=?`, pid, id, version).Scan(&raw)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, missingReplay()
 	}
@@ -193,7 +194,7 @@ func (r *Repo) registerConfigs(ctx context.Context, targets []Target) error {
 func authorizeProfile(ctx context.Context, q replayReader, pid, actor string, profile Profile) error {
 	var author string
 	var revoked int
-	err := q.QueryRowContext(ctx, `SELECT author,(SELECT count(*) FROM backend_replay_revocations WHERE project_id=p.project_id AND profile_id=p.id AND profile_version=p.version) FROM backend_replay_profiles p WHERE project_id=? AND id=? AND version=? AND content_hash=?`, pid, profile.Pin.ID, profile.Pin.Version, profile.Pin.ContentHash).Scan(&author, &revoked)
+	err := q.QueryRowContext(ctx, `SELECT author,(SELECT count(*) FROM backend_replay_revocations WHERE project_id=p.project_id AND profile_id=p.id AND profile_version=p.version) FROM backend_replay_profiles_documents p WHERE project_id=? AND id=? AND version=? AND content_hash=?`, pid, profile.Pin.ID, profile.Pin.Version, profile.Pin.ContentHash).Scan(&author, &revoked)
 	if errors.Is(err, sql.ErrNoRows) {
 		return missingReplay()
 	}
@@ -220,7 +221,7 @@ func (r *Repo) beforeMutation(ctx context.Context, pid, actor string, in RunInpu
 		if err := authorizeProfile(ctx, tx, pid, actor, in.Profile); err != nil {
 			return err
 		}
-		_, err := tx.ExecContext(ctx, `INSERT INTO backend_replay_steps VALUES(?,?,?,?,?,?)`, in.RunID, f.StepID, f.RequestKey, string(endpoint), hash, body)
+		_, err := backendblob.Exec(ctx, tx, `INSERT INTO backend_replay_steps(run_id,step_id,request_key,endpoint,request_hash,request_json) VALUES(?,?,?,?,?,?)`, in.RunID, f.StepID, f.RequestKey, string(endpoint), hash, body)
 		return err
 	})
 }
@@ -230,13 +231,13 @@ func (r *Repo) evidence(ctx context.Context, id, kind string, body []byte) error
 	}
 	return r.db.Write(ctx, func(tx *sql.Tx) error {
 		var n, size int64
-		if err := tx.QueryRowContext(ctx, `SELECT COALESCE(max(sequence),0),COALESCE(sum(length(body)),0) FROM backend_replay_evidence WHERE run_id=?`, id).Scan(&n, &size); err != nil {
+		if err := tx.QueryRowContext(ctx, `SELECT COALESCE(max(sequence),0),COALESCE(sum(length(body)),0) FROM backend_replay_evidence_documents WHERE run_id=?`, id).Scan(&n, &size); err != nil {
 			return err
 		}
 		if size+int64(len(body)) > 16*p.ReportLimit {
 			return conflictReplay("Replay evidence budget exceeded")
 		}
-		_, err := tx.ExecContext(ctx, `INSERT INTO backend_replay_evidence VALUES(?,?,?,?,?)`, id, n+1, kind, p.HashBytes(body), body)
+		_, err := backendblob.Exec(ctx, tx, `INSERT INTO backend_replay_evidence(run_id,sequence,kind,content_hash,body) VALUES(?,?,?,?,?)`, id, n+1, kind, p.HashBytes(body), body)
 		return err
 	})
 }

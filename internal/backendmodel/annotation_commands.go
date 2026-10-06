@@ -15,8 +15,8 @@ func resolveAnnotationTarget(ctx context.Context, tx *sql.Tx, p *Project, target
 	var found bool
 	err := tx.QueryRowContext(ctx, `
   SELECT EXISTS(
-   SELECT 1 FROM backend_graph_records g
-   JOIN backend_revisions r ON r.id=g.revision_id AND r.project_id=g.project_id
+   SELECT 1 FROM backend_graph_records_documents g
+   JOIN backend_revisions_documents r ON r.id=g.revision_id AND r.project_id=g.project_id
    WHERE g.project_id=? AND g.revision_id=? AND g.record_type=? AND g.id=?
   )`, p.ID, revisionID, target.RecordType, target.ID).Scan(&found)
 	if err != nil {

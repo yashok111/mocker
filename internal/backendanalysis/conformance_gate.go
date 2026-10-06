@@ -25,13 +25,13 @@ func (r *Repo) ReadConformanceEvidence(ctx context.Context, pid string, ref back
 	}
 	job, payload, manifest, manifestRaw := header.job, header.payload, header.manifest, header.raw
 	var bytesToRead int64
-	if err = tx.QueryRowContext(ctx, `SELECT COALESCE(sum(length(CAST(items_json AS BLOB))),0) FROM backend_analysis_chunks WHERE project_id=? AND job_id=? AND sequence<=?`, pid, ref.JobID, manifest.HighWaterSequence).Scan(&bytesToRead); err != nil {
+	if err = tx.QueryRowContext(ctx, `SELECT COALESCE(sum(length(CAST(items_json AS BLOB))),0) FROM backend_analysis_chunks_documents WHERE project_id=? AND job_id=? AND sequence<=?`, pid, ref.JobID, manifest.HighWaterSequence).Scan(&bytesToRead); err != nil {
 		return nil, err
 	}
 	if bytesToRead > maxResultBytes {
 		return nil, fault(413, "result_limit", "Conformance gate input exceeds result byte limit")
 	}
-	rows, err := tx.QueryContext(ctx, `SELECT sequence,section,content_hash,items_json,record_count,chunk_bytes FROM backend_analysis_chunks WHERE project_id=? AND job_id=? AND sequence<=? ORDER BY sequence`, pid, ref.JobID, manifest.HighWaterSequence)
+	rows, err := tx.QueryContext(ctx, `SELECT sequence,section,content_hash,items_json,record_count,chunk_bytes FROM backend_analysis_chunks_documents WHERE project_id=? AND job_id=? AND sequence<=? ORDER BY sequence`, pid, ref.JobID, manifest.HighWaterSequence)
 	if err != nil {
 		return nil, err
 	}
@@ -109,7 +109,7 @@ func readConformanceGateHeader(ctx context.Context, tx *sql.Tx, pid string, ref 
 		return nil, fault(409, "gate_conflict", "Invalid conformance payload")
 	}
 	var manifestRaw []byte
-	if err = tx.QueryRowContext(ctx, `SELECT document FROM backend_analysis_manifests WHERE project_id=? AND job_id=? AND result_version=?`, pid, ref.JobID, ref.ResultVersion).Scan(&manifestRaw); err != nil {
+	if err = tx.QueryRowContext(ctx, `SELECT document FROM backend_analysis_manifests_documents WHERE project_id=? AND job_id=? AND result_version=?`, pid, ref.JobID, ref.ResultVersion).Scan(&manifestRaw); err != nil {
 		return nil, err
 	}
 	var manifest ResultManifest

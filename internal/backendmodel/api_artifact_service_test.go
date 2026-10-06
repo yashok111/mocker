@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json/v2"
 	"errors"
+	"github.com/yashok111/mocker/internal/testkit"
 	"math"
 	"slices"
 	"strconv"
@@ -37,13 +38,18 @@ func TestAPIArtifactApplyCopiesAndReplaysBeforeDependencies(t *testing.T) {
 	t.Parallel()
 	s, base, ids, api := apiPinFixture(t)
 	in := pinTestInput(base, ids, api)
-	for _, table := range []string{"backend_graph_records", "backend_revision_sources"} {
-		if _, err := s.repo.db.W.ExecContext(t.Context(), `UPDATE `+table+` SET document=char(10)||'  '||document||char(10) WHERE revision_id=?`, base.Revision.ID); err != nil {
-			t.Fatal(err)
+	if err := testkit.EditLegacyBackendFixture(t.Context(), s.repo.db, func(tx *sql.Tx) error {
+		for _, table := range []string{"backend_graph_records", "backend_revision_sources"} {
+			if _, err := tx.ExecContext(t.Context(), `UPDATE `+table+` SET document=char(10)||'  '||document||char(10) WHERE revision_id=?`, base.Revision.ID); err != nil {
+				return err
+			}
 		}
-	}
-	// An absent decision row must remain absent rather than becoming an empty bundle.
-	if _, err := s.repo.db.W.ExecContext(t.Context(), `DELETE FROM backend_revision_decisions WHERE revision_id=?`, base.Revision.ID); err != nil {
+		// An absent decision row must remain absent rather than becoming an empty bundle.
+		if _, err := tx.ExecContext(t.Context(), `DELETE FROM backend_revision_decisions WHERE revision_id=?`, base.Revision.ID); err != nil {
+			return err
+		}
+		return nil
+	}); err != nil {
 		t.Fatal(err)
 	}
 	first, request := applyPinTest(t, s, base.Project.ID, in, "pin")
@@ -51,22 +57,22 @@ func TestAPIArtifactApplyCopiesAndReplaysBeforeDependencies(t *testing.T) {
 		t.Fatalf("append %+v", first)
 	}
 	var unequal, count int
-	err := s.repo.db.R.QueryRowContext(t.Context(), `SELECT count(*) FROM backend_graph_records a JOIN backend_graph_records b ON b.project_id=a.project_id AND b.record_type=a.record_type AND b.id=a.id WHERE a.revision_id=? AND b.revision_id=? AND (a.document IS NOT b.document OR a.kind IS NOT b.kind OR a.name IS NOT b.name OR a.parent_id IS NOT b.parent_id OR a.from_id IS NOT b.from_id OR a.to_id IS NOT b.to_id OR a.subject_id IS NOT b.subject_id)`, base.Revision.ID, first.Revision.ID).Scan(&unequal)
+	err := s.repo.db.R.QueryRowContext(t.Context(), `SELECT count(*) FROM backend_graph_records_documents a JOIN backend_graph_records_documents b ON b.project_id=a.project_id AND b.record_type=a.record_type AND b.id=a.id WHERE a.revision_id=? AND b.revision_id=? AND (a.document IS NOT b.document OR a.kind IS NOT b.kind OR a.name IS NOT b.name OR a.parent_id IS NOT b.parent_id OR a.from_id IS NOT b.from_id OR a.to_id IS NOT b.to_id OR a.subject_id IS NOT b.subject_id)`, base.Revision.ID, first.Revision.ID).Scan(&unequal)
 	if err != nil || unequal != 0 {
 		t.Fatalf("raw rows differed %d %v", unequal, err)
 	}
 	var countBefore, countAfter int
-	s.repo.db.R.QueryRowContext(t.Context(), `SELECT count(*) FROM backend_graph_records WHERE revision_id=?`, base.Revision.ID).Scan(&countBefore)
-	s.repo.db.R.QueryRowContext(t.Context(), `SELECT count(*) FROM backend_graph_records WHERE revision_id=?`, first.Revision.ID).Scan(&countAfter)
+	s.repo.db.R.QueryRowContext(t.Context(), `SELECT count(*) FROM backend_graph_records_documents WHERE revision_id=?`, base.Revision.ID).Scan(&countBefore)
+	s.repo.db.R.QueryRowContext(t.Context(), `SELECT count(*) FROM backend_graph_records_documents WHERE revision_id=?`, first.Revision.ID).Scan(&countAfter)
 	if countBefore == 0 || countBefore != countAfter {
 		t.Fatal("raw copy lost graph records")
 	}
-	if err = s.repo.db.R.QueryRowContext(t.Context(), `SELECT count(*) FROM backend_revision_decisions WHERE revision_id=?`, first.Revision.ID).Scan(&count); err != nil || count != 0 {
+	if err = s.repo.db.R.QueryRowContext(t.Context(), `SELECT count(*) FROM backend_revision_decisions_documents WHERE revision_id=?`, first.Revision.ID).Scan(&count); err != nil || count != 0 {
 		t.Fatalf("absent decisions materialized %d %v", count, err)
 	}
 	var sourceBefore, sourceAfter string
-	s.repo.db.R.QueryRowContext(t.Context(), `SELECT document FROM backend_revision_sources WHERE revision_id=?`, base.Revision.ID).Scan(&sourceBefore)
-	s.repo.db.R.QueryRowContext(t.Context(), `SELECT document FROM backend_revision_sources WHERE revision_id=?`, first.Revision.ID).Scan(&sourceAfter)
+	s.repo.db.R.QueryRowContext(t.Context(), `SELECT document FROM backend_revision_sources_documents WHERE revision_id=?`, base.Revision.ID).Scan(&sourceBefore)
+	s.repo.db.R.QueryRowContext(t.Context(), `SELECT document FROM backend_revision_sources_documents WHERE revision_id=?`, first.Revision.ID).Scan(&sourceAfter)
 	if sourceBefore != sourceAfter {
 		t.Fatal("source bytes changed")
 	}
@@ -158,8 +164,8 @@ func TestAPIArtifactApplyRollbackDigestOverflowAndConcurrency(t *testing.T) {
 			}
 			current, _ := s.repo.Get(t.Context(), base.Project.ID)
 			var contexts, revisions, receipts int
-			s.repo.db.R.QueryRowContext(t.Context(), `SELECT count(*) FROM backend_revision_api_artifacts`).Scan(&contexts)
-			s.repo.db.R.QueryRowContext(t.Context(), `SELECT count(*) FROM backend_revisions WHERE project_id=?`, base.Project.ID).Scan(&revisions)
+			s.repo.db.R.QueryRowContext(t.Context(), `SELECT count(*) FROM backend_revision_api_artifacts_documents`).Scan(&contexts)
+			s.repo.db.R.QueryRowContext(t.Context(), `SELECT count(*) FROM backend_revisions_documents WHERE project_id=?`, base.Project.ID).Scan(&revisions)
 			s.repo.db.R.QueryRowContext(t.Context(), `SELECT count(*) FROM backend_command_receipts WHERE scope LIKE 'api-pins:%'`).Scan(&receipts)
 			if current.CurrentRevisionID != base.Revision.ID || contexts != 0 || revisions != 2 || receipts != 0 {
 				t.Fatalf("rollback leaked %+v contexts%d revisions%d receipts%d", current, contexts, revisions, receipts)

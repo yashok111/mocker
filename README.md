@@ -927,3 +927,56 @@ in CI.
 ## License
 
 MIT — see [`LICENSE`](LICENSE).
+
+### Offline Backend Workbench storage recovery (Store27)
+
+Store27 deduplicates immutable raw payloads without changing historical JSON,
+semantic hashes, artifact CAS witnesses, receipts, or logical quotas. The physical
+owner tables remain foreign-key parents; `*_documents` views reconstruct exact
+TEXT/BLOB payloads. Immutable canonical manifests/memberships retain ownership,
+metadata and replay-step insertion order independently of query projections.
+
+Before upgrading, stop **all** processes using the database. Preserve a verified
+backup of the Store26 database and the previous binary. Use SQLite's backup API
+or copy the database only after a clean shutdown/checkpoint; a database file copied
+without its live WAL is not a consistent backup. Keep backup checksums, schema
+version and binary/source hashes together. Do not run the previous binary against
+Store27. Rollback means restoring the complete pre-upgrade backup with the matching
+old binary, losing any changes made after that backup unless separately retained.
+
+The normal startup migration is atomic, including payload extraction, canonical
+manifests, owner-table replacement, counts/byte witnesses, foreign-key checks and
+`user_version`. Failure rolls it back and restores the writer's original FK mode.
+Allow free disk space for both old and replacement tables plus new canonical data
+and WAL; no measured worst-case multiplier is claimed. Disk-full failure is safe,
+but free space before retrying. No automatic VACUUM, backup deletion, online GC or
+binary downgrade is performed.
+
+After stopping the application, use the matching new binary:
+
+```sh
+mocker backend-storage verify --db /absolute/path/mocker.db
+mocker backend-storage rebuild --db /absolute/path/mocker.db --project PROJECT_UUID
+mocker backend-storage verify --db /absolute/path/mocker.db
+```
+
+These commands require an existing Store27 file and SQLite exclusive maintenance
+ownership, including against readers. Busy ownership fails without changing rows;
+stop the other process and retry. They do not migrate or start a server and expose
+no REST/MCP arbitrary-path endpoint. `verify` checks the entire database and rolls
+back its read transaction. `rebuild` stages projections, compares canonical counts,
+hashes and metadata, and switches them in one transaction. It restores the selected
+project and shared content-addressed observation blobs; other projects' rows retain
+their values. Repeating rebuild creates no semantic revision or receipt. Cancellation,
+disk full or another write error rolls back to the previous indexes.
+
+A **derived storage** error permits rebuild after taking another backup. A
+**canonical storage corrupt** error means stop and restore a verified backup;
+do not delete the offending record, recalculate historical hashes, edit a receipt,
+or manufacture replacement membership. Verify also checks unreferenced blobs;
+valid orphan blobs are retained. Mutable heads/jobs/staging, durable receipts and
+other non-derived control records retain their existing storage lifecycle. Their
+loss requires backup recovery, not an attempt to infer history from an index.
+
+B6.3's local migration/recovery tests and build do not constitute production runtime,
+performance, upgrade-campaign or live-agent acceptance. Keep those deferred gates open.

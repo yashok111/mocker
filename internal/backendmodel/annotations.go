@@ -115,7 +115,7 @@ func (r *Repo) ListAnnotations(ctx context.Context, projectID string, in Annotat
    SELECT a.id,a.record_type,a.target_id,COALESCE(a.revision_id,'') AS revision_id,
     a.body,a.author,a.created_at,a.updated_at,
     CASE WHEN a.revision_id IS NULL THEN
-     CASE WHEN EXISTS(SELECT 1 FROM backend_graph_records g
+     CASE WHEN EXISTS(SELECT 1 FROM backend_graph_records_documents g
       WHERE g.project_id=a.project_id AND g.revision_id=? AND g.record_type=a.record_type AND g.id=a.target_id)
       THEN 'current' ELSE 'orphaned' END
      WHEN a.revision_id=? THEN 'current' ELSE 'historical' END AS target_status

@@ -3,6 +3,7 @@ package backendmodel
 import (
 	"encoding/json/v2"
 	"errors"
+	"github.com/yashok111/mocker/internal/testkit"
 	"strconv"
 	"strings"
 	"testing"
@@ -78,7 +79,7 @@ func TestArtifactDiscriminatorLoadAndQualifiedQuery(t *testing.T) {
 	if _, err = s.repo.db.W.ExecContext(t.Context(), `UPDATE backend_revisions SET document=? WHERE id=?`, string(raw), base.Revision.ID); err != nil {
 		t.Fatal(err)
 	}
-	if _, err = s.repo.db.W.ExecContext(t.Context(), `INSERT INTO backend_revision_api_artifacts(revision_id,source_content_hash,source_semantic_hash,document) VALUES(?,?,?,?)`, base.Revision.ID, c.SourceContentHash, c.SourceSemanticHash, string(doc)); err != nil {
+	if _, err = testkit.ExecBackendOwner(t.Context(), s.repo.db.W, `INSERT INTO backend_revision_api_artifacts(revision_id,source_content_hash,source_semantic_hash,document) VALUES(?,?,?,?)`, base.Revision.ID, c.SourceContentHash, c.SourceSemanticHash, string(doc)); err != nil {
 		t.Fatal(err)
 	}
 	state, err := loadRevisionState(t.Context(), s.repo.db.R, base.Project.ID, base.Revision.ID)
@@ -115,7 +116,7 @@ func TestArtifactPersistentMixedVersionRejected(t *testing.T) {
 	s, base, ids, api := apiPinFixture(t)
 	pinned, _ := applyPinTest(t, s, base.Project.ID, pinTestInput(base, ids, api), "v1")
 	var original string
-	if err := s.repo.db.R.QueryRowContext(t.Context(), `SELECT document FROM backend_revision_api_artifacts WHERE revision_id=?`, pinned.Revision.ID).Scan(&original); err != nil {
+	if err := s.repo.db.R.QueryRowContext(t.Context(), `SELECT document FROM backend_revision_api_artifacts_documents WHERE revision_id=?`, pinned.Revision.ID).Scan(&original); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := s.repo.db.W.ExecContext(t.Context(), `DROP TRIGGER backend_revision_api_artifacts_immutable_update`); err != nil {

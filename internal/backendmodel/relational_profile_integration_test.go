@@ -80,11 +80,11 @@ func TestRelationalProfileActualB04Store(t *testing.T) {
 			switch kind {
 			case "graph":
 				revision, id, _ := strings.Cut(key, ":")
-				query, args = `SELECT document FROM backend_graph_records WHERE revision_id=? AND id=?`, []any{revision, id}
+				query, args = `SELECT document FROM backend_graph_records_documents WHERE revision_id=? AND id=?`, []any{revision, id}
 			case "revision":
-				query, args = `SELECT document FROM backend_revisions WHERE id=?`, []any{key}
+				query, args = `SELECT document FROM backend_revisions_documents WHERE id=?`, []any{key}
 			case "source":
-				query, args = `SELECT document FROM backend_revision_sources WHERE revision_id=?`, []any{key}
+				query, args = `SELECT document FROM backend_revision_sources_documents WHERE revision_id=?`, []any{key}
 			case "receipt":
 				scope, id, _ := strings.CutLast(key, ":")
 				query, args = `SELECT response FROM backend_command_receipts WHERE scope=? AND key=?`, []any{scope, id}

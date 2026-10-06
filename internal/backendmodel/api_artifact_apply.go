@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json/v2"
 	"errors"
+	"github.com/yashok111/mocker/internal/backendblob"
 	"slices"
 	"strings"
 	"time"
@@ -84,7 +85,7 @@ func (s *APIArtifactService) Apply(ctx context.Context, pid string, in ApplyAPIP
 			return importConflict("backend_api_pins_base_conflict", "Current source baseline changed", p.Version)
 		}
 		var document string
-		if err := tx.QueryRowContext(ctx, `SELECT document FROM backend_revisions WHERE project_id=? AND id=?`, pid, in.BaseRevisionID).Scan(&document); err != nil {
+		if err := tx.QueryRowContext(ctx, `SELECT document FROM backend_revisions_documents WHERE project_id=? AND id=?`, pid, in.BaseRevisionID).Scan(&document); err != nil {
 			return err
 		}
 		var revision Revision
@@ -135,14 +136,14 @@ func (s *APIArtifactService) Apply(ctx context.Context, pid string, in ApplyAPIP
 		if err != nil {
 			return err
 		}
-		if _, err := tx.ExecContext(ctx, `INSERT INTO backend_revisions(id,project_id,document) VALUES(?,?,?)`, revision.ID, pid, string(encoded)); err != nil {
+		if _, err := backendblob.Exec(ctx, tx, `INSERT INTO backend_revisions(id,project_id,document) VALUES(?,?,?)`, revision.ID, pid, string(encoded)); err != nil {
 			return err
 		}
-		if _, err := tx.ExecContext(ctx, `INSERT INTO backend_graph_records(project_id,revision_id,record_type,id,kind,name,parent_id,from_id,to_id,subject_id,document) SELECT project_id,?,record_type,id,kind,name,parent_id,from_id,to_id,subject_id,document FROM backend_graph_records WHERE project_id=? AND revision_id=?`, revision.ID, pid, in.BaseRevisionID); err != nil {
+		if _, err := backendblob.Exec(ctx, tx, `INSERT INTO backend_graph_records(project_id,revision_id,record_type,id,kind,name,parent_id,from_id,to_id,subject_id,payload_key) SELECT project_id,?,record_type,id,kind,name,parent_id,from_id,to_id,subject_id,payload_key FROM backend_graph_records WHERE project_id=? AND revision_id=?`, revision.ID, pid, in.BaseRevisionID); err != nil {
 			return err
 		}
 		for _, table := range []string{"backend_revision_sources", "backend_revision_decisions"} {
-			if _, err := tx.ExecContext(ctx, `INSERT INTO `+table+`(revision_id,document) SELECT ?,document FROM `+table+` WHERE revision_id=?`, revision.ID, in.BaseRevisionID); err != nil {
+			if _, err := backendblob.Exec(ctx, tx, `INSERT INTO `+table+`(revision_id,payload_key) SELECT ?,payload_key FROM `+table+` WHERE revision_id=?`, revision.ID, in.BaseRevisionID); err != nil {
 				return err
 			}
 		}
@@ -182,7 +183,7 @@ func saveAPIArtifactContext(ctx context.Context, tx *sql.Tx, rid string, frozen 
 	if err != nil {
 		return err
 	}
-	_, err = tx.ExecContext(ctx, `INSERT INTO backend_revision_api_artifacts(revision_id,source_content_hash,source_semantic_hash,document) VALUES(?,?,?,?)`, rid, frozen.SourceContentHash, frozen.SourceSemanticHash, string(doc))
+	_, err = backendblob.Exec(ctx, tx, `INSERT INTO backend_revision_api_artifacts(revision_id,source_content_hash,source_semantic_hash,document) VALUES(?,?,?,?)`, rid, frozen.SourceContentHash, frozen.SourceSemanticHash, string(doc))
 	return err
 }
 

@@ -30,7 +30,7 @@ func testRepo(t *testing.T) (*Repo, *store.DB) {
 		if _, e := tx.ExecContext(t.Context(), `INSERT INTO backend_projects VALUES (?,?,1,?,?,?)`, projectID, "Analysis", revisionID, "now", "now"); e != nil {
 			return e
 		}
-		_, e := tx.ExecContext(t.Context(), `INSERT INTO backend_revisions VALUES (?,?,?)`, revisionID, projectID, `{}`)
+		_, e := testkit.ExecBackendOwner(t.Context(), tx, `INSERT INTO backend_revisions VALUES (?,?,?)`, revisionID, projectID, `{}`)
 		return e
 	})
 	if err != nil {

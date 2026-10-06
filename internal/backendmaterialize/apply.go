@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json/v2"
 	"errors"
+	"github.com/yashok111/mocker/internal/backendblob"
 	"strconv"
 	"strings"
 	"time"
@@ -159,7 +160,7 @@ func (s *Service) Apply(ctx context.Context, pid string, in ApplyInput) (*Receip
 		for _, t := range preview.Input.Targets {
 			count += len(t.Commands)
 		}
-		_, err = tx.ExecContext(ctx, `INSERT INTO backend_materializations(project_id,id,profile_version,request_hash,candidate_hash,target_count,command_count,byte_count,document,created_at) VALUES(?,?,?,?,?,?,?,?,?,?)`, pid, result.ID, ProfileVersion, hash, in.CandidateHash, len(preview.Input.Targets), count, len(normalized), string(document), time.Now().Unix())
+		_, err = backendblob.Exec(ctx, tx, `INSERT INTO backend_materializations(project_id,id,profile_version,request_hash,candidate_hash,target_count,command_count,byte_count,document,created_at) VALUES(?,?,?,?,?,?,?,?,?,?)`, pid, result.ID, ProfileVersion, hash, in.CandidateHash, len(preview.Input.Targets), count, len(normalized), string(document), time.Now().Unix())
 		if err != nil {
 			return err
 		}

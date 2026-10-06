@@ -63,7 +63,7 @@ func TestChangeProposalCommandLedgerRestoreReplay(t *testing.T) {
 	criteria := changeCommand(t, "set_criteria", `"criteria":[]`)
 	d, _ = saveChange(t, r, d, "second", noOp, overwritten, final, criteria)
 	var batchRaw string
-	if err = r.db.R.QueryRowContext(t.Context(), `SELECT commands FROM backend_change_proposal_batches WHERE revision_id=?`, d.Revision.ID).Scan(&batchRaw); err != nil {
+	if err = r.db.R.QueryRowContext(t.Context(), `SELECT commands FROM backend_change_proposal_batches_documents WHERE revision_id=?`, d.Revision.ID).Scan(&batchRaw); err != nil {
 		t.Fatal(err)
 	}
 	var accepted []ChangeProposalCommand

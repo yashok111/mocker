@@ -132,7 +132,7 @@ func (b *analysisFootprintBuilder) source(rid string) error {
 		return err
 	}
 	var metadata int64
-	if err = b.q.QueryRowContext(b.ctx, `SELECT length(CAST(document AS BLOB)) FROM backend_revisions WHERE project_id=? AND id=?`, b.pid, rid).Scan(&metadata); err != nil {
+	if err = b.q.QueryRowContext(b.ctx, `SELECT length(CAST(document AS BLOB)) FROM backend_revisions_documents WHERE project_id=? AND id=?`, b.pid, rid).Scan(&metadata); err != nil {
 		return err
 	}
 	if err = b.add(key, size); err != nil {
@@ -141,10 +141,10 @@ func (b *analysisFootprintBuilder) source(rid string) error {
 	if err = b.add("revision:"+rid, metadata); err != nil {
 		return err
 	}
-	if err = b.pins(`SELECT value FROM backend_revisions r,json_each(r.document,'$.artifactPins') WHERE r.project_id=? AND r.id=?`, b.pid, rid); err != nil {
+	if err = b.pins(`SELECT value FROM backend_revisions_documents r,json_each(r.document,'$.artifactPins') WHERE r.project_id=? AND r.id=?`, b.pid, rid); err != nil {
 		return err
 	}
-	rows, err := b.q.QueryContext(b.ctx, `SELECT DISTINCT value FROM backend_graph_records,json_tree(document) WHERE project_id=? AND revision_id=? AND key='historicalRevisionId' AND type='text' UNION SELECT source_revision_id FROM backend_revision_legacy_proof_bases WHERE project_id=? AND revision_id=?`, b.pid, rid, b.pid, rid)
+	rows, err := b.q.QueryContext(b.ctx, `SELECT DISTINCT value FROM backend_graph_records_documents,json_tree(document) WHERE project_id=? AND revision_id=? AND key='historicalRevisionId' AND type='text' UNION SELECT source_revision_id FROM backend_revision_legacy_proof_bases_documents WHERE project_id=? AND revision_id=?`, b.pid, rid, b.pid, rid)
 	if err != nil {
 		return err
 	}
@@ -259,7 +259,7 @@ func (b *analysisFootprintBuilder) target(target BackendReadTarget) error {
 	var size int64
 	var err error
 	if p := target.ChangeProposal; p != nil {
-		err = b.q.QueryRowContext(b.ctx, `SELECT base_revision_id,length(CAST(document AS BLOB)) FROM backend_change_proposal_revisions WHERE project_id=? AND proposal_id=? AND id=?`, b.pid, p.ProposalID, p.ProposalRevisionID).Scan(&base, &size)
+		err = b.q.QueryRowContext(b.ctx, `SELECT base_revision_id,length(CAST(document AS BLOB)) FROM backend_change_proposal_revisions_documents WHERE project_id=? AND proposal_id=? AND id=?`, b.pid, p.ProposalID, p.ProposalRevisionID).Scan(&base, &size)
 		if err != nil {
 			return err
 		}
@@ -283,17 +283,17 @@ func (b *analysisFootprintBuilder) target(target BackendReadTarget) error {
 		if err = b.add("identities:"+p.ProposalRevisionID, ledger); err != nil {
 			return err
 		}
-		err = b.q.QueryRowContext(b.ctx, `SELECT document FROM backend_change_proposal_revisions WHERE project_id=? AND proposal_id=? AND id=?`, b.pid, p.ProposalID, p.ProposalRevisionID).Scan(&raw)
+		err = b.q.QueryRowContext(b.ctx, `SELECT document FROM backend_change_proposal_revisions_documents WHERE project_id=? AND proposal_id=? AND id=?`, b.pid, p.ProposalID, p.ProposalRevisionID).Scan(&raw)
 	} else {
 		p := target.Proposal
-		err = b.q.QueryRowContext(b.ctx, `SELECT json_extract(r.document,'$.baseRevisionId'),length(CAST(r.document AS BLOB)) FROM backend_proposal_revisions r JOIN backend_proposals p ON p.id=r.proposal_id WHERE p.project_id=? AND r.proposal_id=? AND r.id=?`, b.pid, p.ProposalID, p.ProposalRevisionID).Scan(&base, &size)
+		err = b.q.QueryRowContext(b.ctx, `SELECT json_extract(r.document,'$.baseRevisionId'),length(CAST(r.document AS BLOB)) FROM backend_proposal_revisions_documents r JOIN backend_proposals p ON p.id=r.proposal_id WHERE p.project_id=? AND r.proposal_id=? AND r.id=?`, b.pid, p.ProposalID, p.ProposalRevisionID).Scan(&base, &size)
 		if err != nil {
 			return err
 		}
 		if err = b.add("legacy:"+p.ProposalRevisionID, size); err != nil {
 			return err
 		}
-		err = b.q.QueryRowContext(b.ctx, `SELECT document FROM backend_proposal_revisions WHERE proposal_id=? AND id=?`, p.ProposalID, p.ProposalRevisionID).Scan(&raw)
+		err = b.q.QueryRowContext(b.ctx, `SELECT document FROM backend_proposal_revisions_documents WHERE proposal_id=? AND id=?`, p.ProposalID, p.ProposalRevisionID).Scan(&raw)
 	}
 	if err != nil {
 		return err
@@ -304,8 +304,8 @@ func (b *analysisFootprintBuilder) target(target BackendReadTarget) error {
 	return b.references([]byte(raw))
 }
 
-const analysisIdentityCTE = `WITH RECURSIVE ancestors(id,parent_revision_id) AS (SELECT id,parent_revision_id FROM backend_change_proposal_revisions WHERE project_id=? AND proposal_id=? AND id=? UNION SELECT r.id,r.parent_revision_id FROM backend_change_proposal_revisions r JOIN ancestors a ON r.id=a.parent_revision_id WHERE r.project_id=? AND r.proposal_id=?) `
-const analysisIdentityBytesSQL = analysisIdentityCTE + `SELECT COALESCE(sum(length(CAST(i.document AS BLOB))),0) FROM backend_change_proposal_identities i JOIN ancestors a ON a.id=i.first_revision_id`
+const analysisIdentityCTE = `WITH RECURSIVE ancestors(id,parent_revision_id) AS (SELECT id,parent_revision_id FROM backend_change_proposal_revisions_documents WHERE project_id=? AND proposal_id=? AND id=? UNION SELECT r.id,r.parent_revision_id FROM backend_change_proposal_revisions_documents r JOIN ancestors a ON r.id=a.parent_revision_id WHERE r.project_id=? AND r.proposal_id=?) `
+const analysisIdentityBytesSQL = analysisIdentityCTE + `SELECT COALESCE(sum(length(CAST(i.document AS BLOB))),0) FROM backend_change_proposal_identities_documents i JOIN ancestors a ON a.id=i.first_revision_id`
 
 func (b *analysisFootprintBuilder) references(raw []byte) error {
 	var value any

@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json/v2"
 	"errors"
+	"github.com/yashok111/mocker/internal/backendblob"
 	"math"
 	"slices"
 	"strings"
@@ -50,7 +51,7 @@ func loadSavedView(ctx context.Context, q importReader, pid, vid string, version
 		return nil, invalid("version", "Use a positive version")
 	}
 	var raw string
-	err := q.QueryRowContext(ctx, `SELECT d.document FROM backend_saved_views v JOIN backend_saved_view_versions d ON d.view_id=v.id AND d.version=CASE WHEN ?=0 THEN v.version ELSE ? END WHERE v.project_id=? AND v.id=?`, version, version, pid, vid).Scan(&raw)
+	err := q.QueryRowContext(ctx, `SELECT d.document FROM backend_saved_views v JOIN backend_saved_view_versions_documents d ON d.view_id=v.id AND d.version=CASE WHEN ?=0 THEN v.version ELSE ? END WHERE v.project_id=? AND v.id=?`, version, version, pid, vid).Scan(&raw)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, notFound()
 	}
@@ -83,7 +84,7 @@ func savedViewQuota() error {
 func checkSavedViewQuota(ctx context.Context, tx *sql.Tx, pid, vid string, reserved int64) error {
 	var views, versions int
 	var total int64
-	err := tx.QueryRowContext(ctx, `SELECT (SELECT count(*) FROM backend_saved_views WHERE project_id=?),(SELECT count(*) FROM backend_saved_view_versions WHERE view_id=?),(SELECT coalesce(sum(length(CAST(d.document AS BLOB))),0) FROM backend_saved_view_versions d JOIN backend_saved_views v ON v.id=d.view_id WHERE v.project_id=?)+(SELECT coalesce(sum(length(CAST(response AS BLOB))),0) FROM backend_command_receipts WHERE scope=? OR scope LIKE ?)`, pid, vid, pid, "saved-view-create:"+pid, "saved-view-save:"+pid+":%").Scan(&views, &versions, &total)
+	err := tx.QueryRowContext(ctx, `SELECT (SELECT count(*) FROM backend_saved_views WHERE project_id=?),(SELECT count(*) FROM backend_saved_view_versions_documents WHERE view_id=?),(SELECT coalesce(sum(length(CAST(d.document AS BLOB))),0) FROM backend_saved_view_versions_documents d JOIN backend_saved_views v ON v.id=d.view_id WHERE v.project_id=?)+(SELECT coalesce(sum(length(CAST(response AS BLOB))),0) FROM backend_command_receipts WHERE scope=? OR scope LIKE ?)`, pid, vid, pid, "saved-view-create:"+pid, "saved-view-save:"+pid+":%").Scan(&views, &versions, &total)
 	if err != nil {
 		return err
 	}
@@ -97,7 +98,7 @@ func writeSavedDocument(ctx context.Context, tx *sql.Tx, out *SavedView, scope, 
 	if err != nil {
 		return err
 	}
-	if _, err := tx.ExecContext(ctx, `INSERT INTO backend_saved_view_versions(view_id,version,document) VALUES(?,?,?)`, out.ID, out.Version, string(raw)); err != nil {
+	if _, err := backendblob.Exec(ctx, tx, `INSERT INTO backend_saved_view_versions(view_id,version,document) VALUES(?,?,?)`, out.ID, out.Version, string(raw)); err != nil {
 		return err
 	}
 	if _, err := tx.ExecContext(ctx, `INSERT INTO backend_command_receipts(scope,key,request_hash,response) VALUES(?,?,?,?)`, scope, key, digest, string(raw)); err != nil {

@@ -6,6 +6,7 @@ import (
 	"encoding/json/v2"
 	"errors"
 	"fmt"
+	"github.com/yashok111/mocker/internal/testkit"
 	"slices"
 	"testing"
 	"uuid"
@@ -146,7 +147,7 @@ func TestFrozenPreviewAdmissionClosesIdentityRaceWithoutGraphDecode(t *testing.T
 		t.Fatal(err)
 	}
 	err = r.db.Write(t.Context(), func(tx *sql.Tx) error {
-		_, err := tx.ExecContext(t.Context(), `INSERT INTO backend_change_proposal_identities(project_id,proposal_id,id,record_type,kind,first_revision_id,document) VALUES(?,?,?,'node','service',?,?)`, base.Project.ID, d.Proposal.ID, id, d.Revision.ID, string(raw))
+		_, err := testkit.ExecBackendOwner(t.Context(), tx, `INSERT INTO backend_change_proposal_identities(project_id,proposal_id,id,record_type,kind,first_revision_id,document) VALUES(?,?,?,'node','service',?,?)`, base.Project.ID, d.Proposal.ID, id, d.Revision.ID, string(raw))
 		return err
 	})
 	if err != nil {
@@ -156,7 +157,7 @@ func TestFrozenPreviewAdmissionClosesIdentityRaceWithoutGraphDecode(t *testing.T
 		if err := r.ValidateFrozenChangePreviewAdmission(t.Context(), tx, base.Project.ID, frozen); err != nil {
 			return err
 		}
-		_, err := tx.ExecContext(t.Context(), `INSERT INTO backend_analysis_inputs(project_id,input_hash,document,input_bytes) VALUES(?,'must-not-save','{}',2)`, base.Project.ID)
+		_, err := testkit.ExecBackendOwner(t.Context(), tx, `INSERT INTO backend_analysis_inputs(project_id,input_hash,document,input_bytes) VALUES(?,'must-not-save','{}',2)`, base.Project.ID)
 		return err
 	})
 	assertFault(t, err, "backend_change_identity_conflict")
@@ -268,7 +269,7 @@ func TestAnalysisLeaseOrdinaryPreparationRejectsBeforeIdentityDecode(t *testing.
 	}
 	defer lease.Release()
 	err = r.db.Write(t.Context(), func(tx *sql.Tx) error {
-		_, err := tx.ExecContext(t.Context(), `INSERT INTO backend_change_proposal_identities(project_id,proposal_id,id,record_type,kind,first_revision_id,document) VALUES(?,?,?,'node','service',?,'{"origin":[]}')`, base.Project.ID, d.Proposal.ID, uuid.NewV7().String(), d.Revision.ID)
+		_, err := testkit.ExecBackendOwner(t.Context(), tx, `INSERT INTO backend_change_proposal_identities(project_id,proposal_id,id,record_type,kind,first_revision_id,document) VALUES(?,?,?,'node','service',?,'{"origin":[]}')`, base.Project.ID, d.Proposal.ID, uuid.NewV7().String(), d.Revision.ID)
 		return err
 	})
 	if err != nil {
@@ -300,7 +301,7 @@ func TestAnalysisLeaseOrdinaryPreparationRejectsBeforeOtherGraphDecode(t *testin
 	}
 	defer lease.Release()
 	err = r.db.Write(t.Context(), func(tx *sql.Tx) error {
-		_, err := tx.ExecContext(t.Context(), `INSERT INTO backend_graph_records(project_id,revision_id,record_type,id,document) VALUES(?,?,'node',?,'{"attributes":[]}')`, base.Project.ID, next.Revision.ID, uuid.NewV7().String())
+		_, err := testkit.ExecBackendOwner(t.Context(), tx, `INSERT INTO backend_graph_records(project_id,revision_id,record_type,id,document) VALUES(?,?,'node',?,'{"attributes":[]}')`, base.Project.ID, next.Revision.ID, uuid.NewV7().String())
 		return err
 	})
 	if err != nil {

@@ -70,7 +70,7 @@ func TestChangeProposalCreateReplayAndSemanticCandidate(t *testing.T) {
 		t.Fatal("semantic and candidate domains are conflated")
 	}
 	var count int
-	if err := r.db.R.QueryRowContext(t.Context(), `SELECT count(*) FROM backend_change_proposal_revisions`).Scan(&count); err != nil || count != 2 {
+	if err := r.db.R.QueryRowContext(t.Context(), `SELECT count(*) FROM backend_change_proposal_revisions_documents`).Scan(&count); err != nil || count != 2 {
 		t.Fatalf("preview persisted: %d %v", count, err)
 	}
 }

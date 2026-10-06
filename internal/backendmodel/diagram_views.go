@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"encoding/json/v2"
 	"errors"
+	"github.com/yashok111/mocker/internal/backendblob"
 	"math"
 	"slices"
 	"uuid"
@@ -178,7 +179,7 @@ func loadDiagramView(ctx context.Context, q importReader, pid, id string, versio
 		return nil, notFound()
 	}
 	var raw string
-	err := q.QueryRowContext(ctx, `SELECT document FROM backend_diagram_view_versions WHERE project_id=? AND view_id=? AND version=?`, pid, id, version).Scan(&raw)
+	err := q.QueryRowContext(ctx, `SELECT document FROM backend_diagram_view_versions_documents WHERE project_id=? AND view_id=? AND version=?`, pid, id, version).Scan(&raw)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, notFound()
 	}
@@ -335,7 +336,7 @@ func persistDiagramView(ctx context.Context, tx *sql.Tx, pid, id, op, key, hash 
 	}
 	var views, versions int
 	var total int64
-	if err = tx.QueryRowContext(ctx, `SELECT (SELECT count(*) FROM backend_diagram_views WHERE project_id=?),(SELECT count(*) FROM backend_diagram_view_versions WHERE project_id=? AND view_id=?),(SELECT coalesce(sum(length(CAST(document AS BLOB))),0) FROM backend_diagram_view_versions WHERE project_id=?)`, pid, pid, newID, pid).Scan(&views, &versions, &total); err != nil {
+	if err = tx.QueryRowContext(ctx, `SELECT (SELECT count(*) FROM backend_diagram_views WHERE project_id=?),(SELECT count(*) FROM backend_diagram_view_versions_documents WHERE project_id=? AND view_id=?),(SELECT coalesce(sum(length(CAST(document AS BLOB))),0) FROM backend_diagram_view_versions_documents WHERE project_id=?)`, pid, pid, newID, pid).Scan(&views, &versions, &total); err != nil {
 		return err
 	}
 	if id == "" && views >= 1000 || versions >= 1000 || total+int64(len(bytes)) > 64<<20 {
@@ -350,7 +351,7 @@ func persistDiagramView(ctx context.Context, tx *sql.Tx, pid, id, op, key, hash 
 			return err
 		}
 	}
-	if _, err = tx.ExecContext(ctx, `INSERT INTO backend_diagram_view_versions(project_id,view_id,version,document) VALUES(?,?,?,?)`, pid, newID, version, raw); err != nil {
+	if _, err = backendblob.Exec(ctx, tx, `INSERT INTO backend_diagram_view_versions(project_id,view_id,version,document) VALUES(?,?,?,?)`, pid, newID, version, raw); err != nil {
 		return err
 	}
 	if id != "" {
