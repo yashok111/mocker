@@ -54,17 +54,18 @@ type ArtifactPin struct {
 }
 
 type Revision struct {
-	ID                string        `json:"id"`
-	ProjectID         string        `json:"projectId"`
-	ParentRevisionID  *string       `json:"parentRevisionId"`
-	SchemaVersion     string        `json:"schemaVersion"`
-	SemanticHash      string        `json:"semanticHash"`
-	SourceSnapshotIDs []string      `json:"sourceSnapshotIds"`
-	ArtifactPins      []ArtifactPin `json:"artifactPins"`
-	Coverage          Coverage      `json:"coverage"`
-	Author            string        `json:"author"`
-	Summary           string        `json:"summary"`
-	CreatedAt         time.Time     `json:"createdAt"`
+	ImportOrigin      *PortableAttribution `json:"importOrigin,omitzero"`
+	ID                string               `json:"id"`
+	ProjectID         string               `json:"projectId"`
+	ParentRevisionID  *string              `json:"parentRevisionId"`
+	SchemaVersion     string               `json:"schemaVersion"`
+	SemanticHash      string               `json:"semanticHash"`
+	SourceSnapshotIDs []string             `json:"sourceSnapshotIds"`
+	ArtifactPins      []ArtifactPin        `json:"artifactPins"`
+	Coverage          Coverage             `json:"coverage"`
+	Author            string               `json:"author"`
+	Summary           string               `json:"summary"`
+	CreatedAt         time.Time            `json:"createdAt"`
 }
 
 type CreateInput struct {

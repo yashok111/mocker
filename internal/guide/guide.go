@@ -56,6 +56,11 @@ const (
 	TopicBackendAnnotations       = "backend-annotations"
 	TopicBackendArchitecture      = "backend-architecture"
 	TopicBackendInteractions      = "backend-interactions"
+	TopicBackendLifecycle         = "backend-lifecycle"
+	TopicBackendBusinessMap       = "backend-business-map"
+	TopicBackendVerify            = "backend-verify"
+	TopicBackendDiagnostics       = "backend-diagnostics"
+	TopicBackendPortable          = "backend-portable"
 )
 
 //go:embed instructions.md overview.md tools.md shapes.md cookbook.md http.md design.md functions.md backend-overview.md backend-import.md backend-model.md backend-import-protocol.md backend-recovery.md backend-examples.md manifest.json
@@ -64,6 +69,7 @@ const (
 //go:embed backend-editor-projections.md backend-events.md backend-architecture.md backend-interactions.md
 //go:embed backend-sync.md backend-change-proposals.md backend-annotations.md
 //go:embed backend-change-rebase.md backend-analysis-jobs.md backend-change-handoff.md backend-endpoint-review.md
+//go:embed backend-lifecycle.md backend-business-map.md backend-verify.md backend-diagnostics.md backend-portable.md
 var files embed.FS
 
 // topicFiles maps a topic to its embedded file. overview.md is SKILL.md
@@ -101,6 +107,11 @@ var topicFiles = map[string]string{
 	TopicBackendEndpointReview:    "backend-endpoint-review.md",
 	TopicBackendArchitecture:      "backend-architecture.md",
 	TopicBackendInteractions:      "backend-interactions.md",
+	TopicBackendLifecycle:         "backend-lifecycle.md",
+	TopicBackendBusinessMap:       "backend-business-map.md",
+	TopicBackendVerify:            "backend-verify.md",
+	TopicBackendDiagnostics:       "backend-diagnostics.md",
+	TopicBackendPortable:          "backend-portable.md",
 }
 
 // Topics is the ordered list of topic names get_guide accepts.
@@ -115,6 +126,7 @@ func Topics() []string {
 		TopicBackendEditorProjections, TopicBackendEvents,
 		TopicBackendSync, TopicBackendChangeProposals, TopicBackendAnnotations,
 		TopicBackendChangeRebase, TopicBackendAnalysisJobs, TopicBackendChangeHandoff, TopicBackendEndpointReview, TopicBackendArchitecture, TopicBackendInteractions,
+		TopicBackendLifecycle, TopicBackendBusinessMap, TopicBackendVerify, TopicBackendDiagnostics, TopicBackendPortable,
 	}
 }
 
@@ -135,7 +147,7 @@ func Topic(name string) (string, bool) {
 	}
 	text := mustRead(file)
 	switch name {
-	case TopicOverview, TopicBackendOverview, TopicBackendImport, TopicBackendDatabase, TopicBackendInspect, TopicBackendSync, TopicBackendChangeProposals:
+	case TopicOverview, TopicBackendOverview, TopicBackendImport, TopicBackendDatabase, TopicBackendInspect, TopicBackendSync, TopicBackendChangeProposals, TopicBackendVerify:
 		text = stripFrontmatter(text)
 	}
 	return text, true

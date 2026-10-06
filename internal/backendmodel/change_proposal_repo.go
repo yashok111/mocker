@@ -193,6 +193,10 @@ func (r *Repo) prepareChangeCreate(ctx context.Context, pid string, in CreateCha
 		context = &ArtifactContext{SourceContentHash: content, SourceSemanticHash: anchor, APIBindings: []APIArtifactBinding{}, EditorBindings: []EditorBinding{}}
 	}
 	rev := &ChangeProposalRevision{DocumentVersion: ChangeProposalDocumentVersion, BaseRevisionID: in.BaseRevisionID, BaseSemanticHash: source.State.Revision.SemanticHash, BaseSchemaVersion: schema, SourceSnapshotIDs: slices.Clone(source.State.Revision.SourceSnapshotIDs), SourceVector: *source.SourceVector, ArtifactPins: slices.Clone(source.State.Revision.ArtifactPins), ArtifactContext: *context, Delta: emptyChangeDelta(), Criteria: []ChangeCriterion{}, Author: "user", Summary: "Empty full graph proposal"}
+	if source.State.ArtifactContextV3 != nil {
+		rev.ArtifactContextV3 = source.State.ArtifactContextV3
+		rev.ArtifactContext = ArtifactContext{}
+	}
 	evaluation, err := newChangeEvaluation(source, *rev, map[string]ChangeObjectIdentity{})
 	if err != nil {
 		return nil, err

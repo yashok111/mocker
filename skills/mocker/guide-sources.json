@@ -244,6 +244,12 @@
       "source": "references/diagnostics.md",
       "embedded": "backend-diagnostics.md",
       "workflowId": "mocker-backend-verify"
+    },
+    {
+      "topic": "backend-portable",
+      "source": "references/backend/portable.md",
+      "embedded": "backend-portable.md",
+      "workflowId": "mocker-backend-project"
     }
   ],
   "workflows": [

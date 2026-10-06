@@ -62,6 +62,8 @@ func (v *DiagramRef) UnmarshalJSON(b []byte) error {
 		fields = []string{"kind", "recordType", "id"}
 	case "artifact":
 		fields = []string{"kind", "locator", "rowId"}
+	case "namespaced_artifact":
+		fields = []string{"kind", "namespacedLocator", "rowId"}
 	default:
 		return invalid("ref", "Unknown reference kind")
 	}

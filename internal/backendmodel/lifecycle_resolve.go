@@ -83,7 +83,18 @@ func resolveLifecycleGaps(ctx context.Context, resolver *diagramArtifactResolver
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		if ref.Kind == "artifact" {
+		if ref.Kind == "namespaced_artifact" && ref.NamespacedLocator != nil && ref.NamespacedLocator.Namespace.Scope == "foreign" {
+			if _, err := namespacedDiagramGroup(g, ref); err != nil {
+				return err
+			}
+			gaps = append(gaps, diagramGap(subject, "foreign_artifact_unresolved", "Foreign artifact role remains unverified"))
+			return nil
+		}
+		if ref.Kind == "artifact" || ref.Kind == "namespaced_artifact" {
+			locator := ref.Locator
+			if ref.NamespacedLocator != nil {
+				locator = &ref.NamespacedLocator.Locator
+			}
 			exists, err := resolver.resolve(ref)
 			if err != nil {
 				return err
@@ -96,13 +107,13 @@ func resolveLifecycleGaps(ctx context.Context, resolver *diagramArtifactResolver
 			if role == "entity" || role == "field" {
 				return lifecycleSemanticRefError(role)
 			}
-			if role == "trigger" && ref.Locator.View == "api_operations" && ref.Locator.Owner.OperationKey != "" {
+			if role == "trigger" && locator.View == "api_operations" && locator.Owner.OperationKey != "" {
 				return nil
 			}
-			if role == "trigger" && ref.Locator.View == "event_model" && ref.Locator.Owner.OperationID != "" {
+			if role == "trigger" && locator.View == "event_model" && locator.Owner.OperationID != "" {
 				return nil
 			}
-			if role == "event" && ref.Locator.View == "event_model" && ref.Locator.Owner.MessageID != "" {
+			if role == "event" && locator.View == "event_model" && locator.Owner.MessageID != "" {
 				return nil
 			}
 			return lifecycleSemanticRefError(role)

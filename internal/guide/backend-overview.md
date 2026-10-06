@@ -6,8 +6,8 @@ metadata:
   workflowVersion: "2"
   requiredModelSchemaVersions: "[\"1\"]"
   requiredCapabilities: "[\"backend-projects\",\"backend-project-metadata\",\"backend-revisions\",\"backend-annotations\"]"
-  guideSetId: "sha256:69eae1f24ccca6ea59a0cf125d65ec0dd48d2e6a62f0350cd6fee2d38f532d83"
-  manifestHash: "sha256:69eae1f24ccca6ea59a0cf125d65ec0dd48d2e6a62f0350cd6fee2d38f532d83"
+  guideSetId: "sha256:f959dc6364785f8b1b3fb3f0ff44a4e39e1bd0384c03331d41cc1f4e3d43cbb0"
+  manifestHash: "sha256:f959dc6364785f8b1b3fb3f0ff44a4e39e1bd0384c03331d41cc1f4e3d43cbb0"
 ---
 
 # Backend project preparation
@@ -116,3 +116,7 @@ Saved editor projections use inspect12 with backend-editor-projections and
 backend-editor-artifacts-v1. Load backend-editor-projections for exact historic
 sequence/state/rule/EventModel reads and generic pin changes. Manual associations
 and authored EventModel do not establish source event evidence or execution.
+
+Portable source5/6/proposal/diagram transfer uses `backend-portable` after checking
+backend-portable and artifact-context-v3 capabilities. Imported history retains
+exact provenance; it does not prove runtime behavior.

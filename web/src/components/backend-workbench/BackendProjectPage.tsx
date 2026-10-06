@@ -1,3 +1,5 @@
+import { BackendPortable } from "./BackendPortable";
+import { BackendMaterialization } from "./BackendMaterialization";
 import { BackendDiagramChangeProvider } from "./BackendDiagramChangeContext";
 import { BackendArchitecture } from "./BackendArchitecture";
 import { BackendWorkspaceNavigation } from "./BackendWorkspaceNavigation";
@@ -84,6 +86,8 @@ type ProjectPageProps = {
 
 export function BackendProjectPage(props: ProjectPageProps) {
   const [diagramDirty, setDiagramDirty] = useState(false);
+  const [materializationDirty, setMaterializationDirty] = useState(false);
+const [portableDirty,setPortableDirty]=useState(false);
   const [backPins, setBackPins] = useState<BackendWorkspaceSearch[]>([]);
   const navigateDiagram = (pin: BackendWorkspaceSearch, replace = false) => {
     if (!replace && props.sourcePin && JSON.stringify(props.sourcePin) !== JSON.stringify(pin))
@@ -130,11 +134,11 @@ export function BackendProjectPage(props: ProjectPageProps) {
       : props.sourcePin;
   useBlocker({
     shouldBlockFn: () =>
-      diagramDirtyRef.current &&
+      (diagramDirtyRef.current || materializationDirty || portableDirty) &&
       !window.confirm(
         "Есть несохранённый mapping или неизвестный результат запроса. Покинуть текущий выбор?",
       ),
-    enableBeforeUnload: diagramDirty,
+    enableBeforeUnload: diagramDirty || materializationDirty || portableDirty,
     withResolver: false,
   });
   return (
@@ -143,6 +147,12 @@ export function BackendProjectPage(props: ProjectPageProps) {
         <BackendAnalysisRecoveryNotice projectId={props.projectId} />
         <BackendLegacyRecoveryNotice projectId={props.projectId} />
         <BackendWorkspaceNavigation />
+<details><summary>Portable: экспорт и импорт проекта</summary><BackendPortable key={props.projectId+"portable"} projectId={props.projectId} onDirty={setPortableDirty} /></details>
+        <BackendMaterialization
+          key={props.projectId}
+          projectId={props.projectId}
+          onDirty={setMaterializationDirty}
+        />
         {backPins.length > 0 && (
           <Button
             variant="subtle"

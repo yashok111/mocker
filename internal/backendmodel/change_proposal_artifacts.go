@@ -34,6 +34,9 @@ func prepareChangeArtifactCommands(ctx context.Context, request *EditorArtifactR
 		if c.Type != "set_artifact_pin" && c.Type != "remove_artifact_pin" {
 			continue
 		}
+		if e.revision.ArtifactContextV3 != nil {
+			return invalid("context", "Legacy artifact commands cannot mutate a namespaced context")
+		}
 		key := *c.Artifact
 		pins := slices.DeleteFunc(slices.Clone(e.revision.ArtifactPins), func(p ArtifactPin) bool { return artifactKey(p) == key })
 		context := e.revision.ArtifactContext
@@ -132,6 +135,33 @@ func (r changeCriteriaReader) validate(ctx context.Context, c ChangeCriterion) e
 		return r.field(c)
 	case "artifact_object_matches":
 		return r.artifact(c)
+	case "artifact_object_matches_v3":
+		scoped := c.NamespacedArtifact
+		if scoped == nil || r.e.revision.ArtifactContextV3 == nil {
+			return invalid("criteria", "Exact namespaced artifact context required")
+		}
+		found := false
+		for _, g := range r.e.revision.ArtifactContextV3.Groups {
+			if g.Namespace == scoped.Namespace && slices.Contains(g.Pins, scoped.Pin) {
+				found = true
+			}
+		}
+		if !found {
+			return invalid("criteria", "Namespaced criterion is outside its target")
+		}
+		if scoped.Namespace.Scope == "foreign" {
+			return nil
+		}
+		installation, err := installationID(ctx, r.q)
+		if err != nil {
+			return err
+		}
+		pin, err := r.artifacts.ResolveNamespacedPin(installation, *scoped)
+		if err != nil {
+			return err
+		}
+		c.Artifact = &pin
+		return r.artifactObject(c)
 	case "test_attachment", "runtime_check":
 		return r.check(ctx, c)
 	}
@@ -155,6 +185,9 @@ func (r changeCriteriaReader) artifact(c ChangeCriterion) error {
 	if !slices.Contains(r.e.revision.ArtifactPins, *c.Artifact) {
 		return invalid("criteria/artifact", "Criterion artifact is outside the selected exact context")
 	}
+	return r.artifactObject(c)
+}
+func (r changeCriteriaReader) artifactObject(c ChangeCriterion) error {
 	if c.Artifact.Kind == "api_design" {
 		var selector APIArtifactSelector
 		if err := json.Unmarshal(c.Selector, &selector); err != nil {
@@ -180,6 +213,17 @@ func (r changeCriteriaReader) check(ctx context.Context, c ChangeCriterion) erro
 		return nil
 	}
 	attachment := c.Attachment
+	if attachment.Kind == "artifact_v3" {
+		if attachment.NamespacedArtifact.Namespace.Scope == "foreign" {
+			return nil
+		}
+		installation, err := installationID(ctx, r.q)
+		if err != nil {
+			return err
+		}
+		_, err = r.artifacts.ResolveNamespacedPin(installation, *attachment.NamespacedArtifact)
+		return err
+	}
 	if attachment.Kind == "artifact" {
 		actual, err := r.artifacts.SnapshotPin(artifactKey(*attachment.Artifact), attachment.Artifact.RevisionID)
 		if err != nil {

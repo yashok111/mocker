@@ -12,6 +12,9 @@ func carryAPIArtifactContext(ctx context.Context, s *ImportSession, base *Revisi
 	if err := ctx.Err(); err != nil {
 		return err
 	}
+	if base.ArtifactContextV3 != nil {
+		return invalid("context", "Legacy source import cannot drop a namespaced context; use composed source import")
+	}
 	if len(base.Revision.ArtifactPins) == 0 {
 		return nil
 	}

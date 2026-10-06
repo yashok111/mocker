@@ -43,11 +43,11 @@ func validateDiagramOrigin(o DiagramOrigin) error {
 func validateDiagramRef(r DiagramRef) error {
 	switch r.Kind {
 	case "record":
-		if !slices.Contains([]string{"node", "edge"}, r.RecordType) || !ValidID(r.ID) || r.Locator != nil || r.RowID != "" {
+		if !slices.Contains([]string{"node", "edge"}, r.RecordType) || !ValidID(r.ID) || r.Locator != nil || r.NamespacedLocator != nil || r.RowID != "" {
 			return invalid("ref", "Exact record required")
 		}
 	case "artifact":
-		if r.Locator == nil || r.RowID == "" || len(r.RowID) > 4096 || r.RecordType != "" || r.ID != "" {
+		if r.NamespacedLocator != nil || r.Locator == nil || r.RowID == "" || len(r.RowID) > 4096 || r.RecordType != "" || r.ID != "" {
 			return invalid("ref", "Exact artifact row required")
 		}
 		raw, err := json.Marshal(r.Locator)
@@ -56,6 +56,18 @@ func validateDiagramRef(r DiagramRef) error {
 		}
 		var locator ArtifactProjectionLocator
 		if err = json.Unmarshal(raw, &locator); err != nil {
+			return err
+		}
+	case "namespaced_artifact":
+		if r.NamespacedLocator == nil || r.Locator != nil || r.RecordType != "" || r.ID != "" || r.RowID == "" || len(r.RowID) > 4096 {
+			return invalid("ref", "Exact namespaced locator required")
+		}
+		raw, err := json.Marshal(r.NamespacedLocator)
+		if err != nil {
+			return err
+		}
+		var locator NamespacedDiagramLocator
+		if err := json.Unmarshal(raw, &locator); err != nil {
 			return err
 		}
 	default:

@@ -13,6 +13,7 @@ import (
 )
 
 type graphCandidate struct {
+	ArtifactContextV3  *ArtifactContextV3  `json:"artifactContextV3,omitzero"`
 	Composed           *composedCandidate  `json:"-"`
 	ArtifactPins       []ArtifactPin       `json:"artifactPins,omitempty"`
 	APIArtifactContext *APIArtifactContext `json:"apiArtifactContext,omitzero"`
@@ -741,6 +742,9 @@ func (r *Repo) CommitImport(ctx context.Context, pid, sid string, in CommitImpor
 }
 
 func importedArtifactSemanticHash(g *graphCandidate) (string, error) {
+	if g.ArtifactContextV3 != nil {
+		return ArtifactContextV3SemanticHash(*g.ArtifactContextV3)
+	}
 	if g.ArtifactContext != nil {
 		c := g.ArtifactContext
 		return ArtifactSemanticHash(c.SourceContentHash, c.SourceSemanticHash, g.ArtifactPins, c.APIBindings, c.EditorBindings)
@@ -750,6 +754,14 @@ func importedArtifactSemanticHash(g *graphCandidate) (string, error) {
 }
 
 func saveImportedArtifactContext(ctx context.Context, tx *sql.Tx, revisionID string, g *graphCandidate) error {
+	if c := g.ArtifactContextV3; c != nil {
+		raw, err := EncodeArtifactContextV3(*c)
+		if err != nil {
+			return err
+		}
+		_, err = tx.ExecContext(ctx, `INSERT INTO backend_revision_api_artifacts(revision_id,source_content_hash,source_semantic_hash,document) VALUES(?,?,?,?)`, revisionID, c.SourceContentHash, c.SourceSemanticHash, string(raw))
+		return err
+	}
 	if g.ArtifactContext != nil {
 		if err := saveArtifactContext(ctx, tx, revisionID, *g.ArtifactContext, g.ArtifactPins); err != nil {
 			return err

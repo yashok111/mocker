@@ -7,7 +7,7 @@ import (
 	"errors"
 )
 
-func loadArtifactContext(ctx context.Context, q importReader, rid string, pins []ArtifactPin) (*ArtifactContext, error) {
+func loadVersionedArtifactContext(ctx context.Context, q importReader, rid string, pins []ArtifactPin) (*VersionedArtifactContext, error) {
 	var available int
 	if err := q.QueryRowContext(ctx, `SELECT count(*) FROM sqlite_master WHERE type='table' AND name='backend_revision_api_artifacts'`).Scan(&available); err != nil {
 		return nil, err
@@ -30,11 +30,17 @@ func loadArtifactContext(ctx context.Context, q importReader, rid string, pins [
 	if fields["documentVersion"] == nil && (fields["apiBindings"] != nil || fields["editorBindings"] != nil) {
 		return nil, invalid("context", "Editor collections require a tagged artifact context")
 	}
-	c, err := DecodeArtifactContext([]byte(doc), pins)
+	c, err := DecodeVersionedArtifactContext([]byte(doc), pins)
 	if err != nil {
 		return nil, err
 	}
-	if c.SourceContentHash != content || c.SourceSemanticHash != semantic {
+	anchorsContent, anchorsSemantic := "", ""
+	if c.V3 != nil {
+		anchorsContent, anchorsSemantic = c.V3.SourceContentHash, c.V3.SourceSemanticHash
+	} else if c.Legacy != nil {
+		anchorsContent, anchorsSemantic = c.Legacy.SourceContentHash, c.Legacy.SourceSemanticHash
+	}
+	if anchorsContent != content || anchorsSemantic != semantic {
 		return nil, invalid("context", "Frozen source anchors differ from row columns")
 	}
 	return c, nil
@@ -108,4 +114,16 @@ func loadLegacyArtifactContext(ctx context.Context, q importReader, rid string) 
 	}
 	c, err := loadArtifactContext(ctx, q, rid, revision.ArtifactPins)
 	return legacyArtifactContext(c), err
+}
+
+// Legacy mutation paths fail closed instead of dropping a v3 namespace.
+func loadArtifactContext(ctx context.Context, q importReader, rid string, pins []ArtifactPin) (*ArtifactContext, error) {
+	c, err := loadVersionedArtifactContext(ctx, q, rid, pins)
+	if err != nil || c == nil {
+		return nil, err
+	}
+	if c.V3 != nil {
+		return nil, invalid("context", "This operation requires explicit namespaced artifact handling")
+	}
+	return c.Legacy, nil
 }

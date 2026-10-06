@@ -3,6 +3,7 @@ package designscenario
 import (
 	"context"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/json/jsontext"
 	"encoding/json/v2"
 	"fmt"
@@ -22,7 +23,13 @@ type ArtifactInspectionSnapshot struct {
 }
 
 func (r *Repo) ArtifactInspectionSnapshot(ctx context.Context, scenarioID, revisionID int64) (*ArtifactInspectionSnapshot, error) {
-	raw, err := r.readArtifactSnapshot(ctx, scenarioID, revisionID)
+	return r.artifactInspectionSnapshotFrom(ctx, r.db.R, scenarioID, revisionID)
+}
+func (r *Repo) ArtifactInspectionSnapshotTx(ctx context.Context, tx *sql.Tx, scenarioID, revisionID int64) (*ArtifactInspectionSnapshot, error) {
+	return r.artifactInspectionSnapshotFrom(ctx, tx, scenarioID, revisionID)
+}
+func (r *Repo) artifactInspectionSnapshotFrom(ctx context.Context, q queryer, scenarioID, revisionID int64) (*ArtifactInspectionSnapshot, error) {
+	raw, err := r.readArtifactSnapshotFrom(ctx, q, scenarioID, revisionID)
 	if err != nil {
 		return nil, err
 	}

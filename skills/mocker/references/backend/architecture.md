@@ -75,8 +75,9 @@ labels256UTF8 bytes, reason4096. Views128KiB,1000views/project,
 1000versions/view,64MiB logical/project. Query default100/max500; canvas200/600
 is separate from whole-projection search/paging and250000 traversal budget.
 
-Current delivery is A25 architecture foundation. Scoped B5 diagnostics/replay,
-portable/SVG and B6 observations are not available through these APIs. Do not
+B5.2 portable transfer and exact SVG are separately available: read
+`backend-portable` and the tool reference. B5.3 replay and B6 observations
+remain outside these diagram APIs. Do not
 execute inspected applications, SQL, jobs or brokers. Ordinary/live-agent
 acceptance beyond this static workflow remains deferred.
 

@@ -7,11 +7,17 @@ import (
 
 // Architecture ownership is resolved against the exact pinned version, never its head.
 func (r *Repo) resolveBusinessMapArchitecture(ctx context.Context, pid string, g *EffectiveGraphSnapshot, d DiagramDocument, previous *DiagramVersion) ([]DiagramGap, error) {
+	return resolveBusinessMapArchitectureRead(ctx, r.db.R, pid, g, d, previous)
+}
+func resolveBusinessMapArchitectureRead(ctx context.Context, q importReader, pid string, g *EffectiveGraphSnapshot, d DiagramDocument, previous *DiagramVersion) ([]DiagramGap, error) {
 	p := d.BusinessMap
 	if p == nil || p.Architecture == nil {
 		return nil, nil
 	}
-	architecture, err := r.GetDiagram(ctx, pid, *p.Architecture)
+	architecture, err := loadDiagram(ctx, q, pid, p.Architecture.ID, p.Architecture.Version)
+	if err == nil && architecture.Pin != *p.Architecture {
+		return nil, diagramPinMismatch()
+	}
 	if err != nil {
 		return nil, err
 	}

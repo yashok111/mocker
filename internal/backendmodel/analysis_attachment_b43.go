@@ -44,9 +44,24 @@ func (r *Repo) ReadAnalysisAttachmentEvidence(ctx context.Context, pid string, a
 		}
 		return out, nil
 	}
+	if attachment.Kind == "artifact_v3" && attachment.NamespacedArtifact.Namespace.Scope == "foreign" {
+		out.Reason = "Imported foreign attachment is unresolved; no local owner lookup"
+		return out, nil
+	}
 	request, err := r.AnalysisArtifactRequest(ctx, pid)
 	if err != nil {
 		return nil, err
+	}
+	if attachment.Kind == "artifact_v3" {
+		installation, err := r.InstallationID(ctx)
+		if err != nil {
+			return nil, err
+		}
+		pin, err := request.ResolveNamespacedPin(installation, *attachment.NamespacedArtifact)
+		if err != nil {
+			return out, err
+		}
+		attachment.Artifact = &pin
 	}
 	pin, err := request.SnapshotPin(artifactKey(*attachment.Artifact), attachment.Artifact.RevisionID)
 	if err != nil {

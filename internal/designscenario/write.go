@@ -275,3 +275,35 @@ func equalJSON(left, right []byte) (bool, error) {
 func invalidAt(pointer, message string) error {
 	return &InvalidError{Diagnostics: []Diagnostic{{Pointer: pointer, Message: message, Severity: "error"}}}
 }
+
+// PrepareMaterialization validates an authored document without writing linked
+// owners. The orchestrator must enumerate and validate those links separately.
+func (r *Repo) PrepareMaterialization(document Document) (Document, error) {
+	copy, err := cloneDocument(document)
+	if err != nil {
+		return Document{}, err
+	}
+	if _, _, err := r.prepare(copy, nil); err != nil {
+		return Document{}, err
+	}
+	return copy, nil
+}
+
+func (r *Repo) DraftTx(ctx context.Context, tx *sql.Tx, id int64) (Scenario, Revision, error) {
+	s, err := getScenario(ctx, tx, id)
+	if err != nil {
+		return s, Revision{}, err
+	}
+	v, err := getRevision(ctx, tx, id, s.DraftRevisionID)
+	if err != nil {
+		return s, v, err
+	}
+	_, hash, err := encodeScenarioEnvelope(v.Document, v.FormDrafts)
+	if err != nil {
+		return s, v, err
+	}
+	if hash != v.Hash {
+		return s, v, invalidAt("/contentHash", "Stored scenario differs from digest")
+	}
+	return s, v, nil
+}

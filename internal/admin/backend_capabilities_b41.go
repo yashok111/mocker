@@ -11,6 +11,7 @@ type backendReadSupport struct {
 
 func backendCapabilityFeatures() []string {
 	return append(backendmodel.Features(),
+		"backend-materialization", "backend-diagram-svg", "backend-portable", "backend-artifact-context-v3", "backend-namespaced-artifact-query",
 		"backend-architecture", "backend-interactions", "backend-lifecycle", "backend-business-map", "backend-diagrams", "backend-diagram-views",
 		"backend-relational-import", "backend-database-query", "backend-database-er",
 		"backend-db-proposals", "backend-db-typed-edits", "backend-runtime-flow-import",
@@ -40,6 +41,7 @@ func backendReadTargetSupport() []backendReadSupport {
 	sourceAndFull := []string{"revisionId", "changeProposal"}
 	sourceLegacyFull := []string{"revisionId", "proposal", "changeProposal"}
 	return []backendReadSupport{
+		{Read: "namespaced_artifacts", Targets: sourceLegacyFull, SourceSchemaVersions: []string{"5", "6"}, FullBaseSchemaVersions: fullBases},
 		{
 			Read: "graph", Targets: allTargets,
 			SourceSchemaVersions: allSources, FullBaseSchemaVersions: fullBases,

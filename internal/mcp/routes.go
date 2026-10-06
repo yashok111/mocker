@@ -81,6 +81,18 @@ var toolRoutes = map[string][]string{
 	"create_backend_diagram":                   {"POST /api/backend-projects/{id}/diagrams"},
 	"save_backend_diagram":                     {"POST /api/backend-projects/{id}/diagrams/{did}/save"},
 	"fork_backend_diagram":                     {"POST /api/backend-projects/{id}/diagrams/fork"},
+	"query_backend_namespaced_artifact":        {"POST /api/backend-projects/{id}/artifacts/namespaced/query"},
+	"resolve_backend_portable_selection":       {"POST /api/backend-projects/{id}/portable/selection"},
+	"export_backend_project":                   {"POST /api/backend-projects/{id}/portable/export"},
+	"get_backend_export_chunk":                 {"GET /api/backend-projects/portable/exports/{sid}/chunks/{index}"},
+	"begin_backend_portable_import":            {"POST /api/backend-projects/portable/imports"},
+	"put_backend_portable_import_chunk":        {"POST /api/backend-projects/portable/imports/{sid}/chunks"},
+	"preview_backend_portable_import":          {"POST /api/backend-projects/portable/imports/{sid}/preview"},
+	"commit_backend_portable_import":           {"POST /api/backend-projects/portable/imports/{sid}/commit"},
+	"abort_backend_portable_import":            {"POST /api/backend-projects/portable/imports/{sid}/abort"},
+	"export_backend_view_svg":                  {"GET /api/backend-projects/{id}/diagram-views/{vid}/versions/{v}/svg"},
+	"preview_backend_materialization":          {"POST /api/backend-projects/{id}/materializations/preview"},
+	"apply_backend_materialization":            {"POST /api/backend-projects/{id}/materializations/apply"},
 	"list_backend_findings":                    {"GET /api/backend-projects/{id}/findings"},
 	"review_backend_finding":                   {"PUT /api/backend-projects/{id}/findings/{fingerprint}/review"},
 	"list_backend_diagrams":                    {"GET /api/backend-projects/{id}/diagrams"},
@@ -377,7 +389,7 @@ var toolRoutes = map[string][]string{
 // production.
 // B1.2 adds five isolated database proposal operations. B24 adds four exact
 // API artifact snapshot/query/preview/apply operations.
-const toolCount = 227
+const toolCount = 239
 
 // toolPath resolves ONE call a tool makes into the (method, path) pair
 // loopback.do/call take.

@@ -1,4 +1,13 @@
 -- M_PORTABLE: shared B5.2 foundation. No route or worker is enabled here.
+CREATE TABLE backend_installation_identity (
+ singleton INTEGER PRIMARY KEY CHECK(singleton=1),
+ installation_id TEXT NOT NULL UNIQUE CHECK(length(installation_id)=36)
+);
+INSERT INTO backend_installation_identity(singleton,installation_id)
+ SELECT 1,lower(hex(randomblob(4)) || '-' || hex(randomblob(2)) || '-4' ||
+ substr(hex(randomblob(2)),2) || '-8' || substr(hex(randomblob(2)),2) || '-' || hex(randomblob(6)));
+CREATE TRIGGER backend_installation_identity_update BEFORE UPDATE ON backend_installation_identity BEGIN SELECT RAISE(ABORT, 'immutable installation identity'); END;
+CREATE TRIGGER backend_installation_identity_delete BEFORE DELETE ON backend_installation_identity BEGIN SELECT RAISE(ABORT, 'immutable installation identity'); END;
 CREATE TABLE backend_materializations (
  project_id TEXT NOT NULL REFERENCES backend_projects(id), id TEXT NOT NULL,
  profile_version TEXT NOT NULL CHECK(profile_version='backend-http-draft-v1'),

@@ -52,5 +52,6 @@ The quick action fills a node rename locally; other ref kinds remain visible for
 explicit typed commands. Preview/apply is separate. Saving a map never changes
 proposal, API or scenario data. Imported code, SQL, jobs and brokers are not run.
 
-B5 diagnostics, portable export/materialization/replay, B6 observations and
-ordinary/live-agent acceptance remain separate, uncompleted program gates.
+B5.1 diagnostics and B5.2 portable transfer/materialization/SVG use separate
+explicit workflows. Read `backend-portable` for semantic transfer. B5.3 replay,
+B6 observations and ordinary/live-agent acceptance remain separate gates.

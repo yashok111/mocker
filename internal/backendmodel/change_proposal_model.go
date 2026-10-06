@@ -81,25 +81,27 @@ type ChangeDelta struct {
 	EdgeNames         []ChangeEdgeName              `json:"edgeNames"`
 }
 type ChangeProposalRevision struct {
-	Rebase                  *ChangeRebaseAction `json:"rebase,omitzero"`
-	ID                      string              `json:"id"`
-	ProposalID              string              `json:"proposalId"`
-	ParentRevisionID        *string             `json:"parentRevisionId"`
-	DocumentVersion         string              `json:"documentVersion"`
-	BaseRevisionID          string              `json:"baseRevisionId"`
-	BaseSemanticHash        string              `json:"baseSemanticHash"`
-	BaseSchemaVersion       string              `json:"baseSchemaVersion"`
-	SourceSnapshotIDs       []string            `json:"sourceSnapshotIds"`
-	SourceVector            SourceVector        `json:"sourceVector"`
-	ArtifactPins            []ArtifactPin       `json:"artifactPins"`
-	ArtifactContext         ArtifactContext     `json:"artifactContext"`
-	Delta                   ChangeDelta         `json:"delta"`
-	Criteria                []ChangeCriterion   `json:"criteria"`
-	SemanticHash            string              `json:"semanticHash"`
-	AcceptedBatchRevisionID string              `json:"acceptedBatchRevisionId"`
-	Author                  string              `json:"author"`
-	Summary                 string              `json:"summary"`
-	CreatedAt               time.Time           `json:"createdAt"`
+	ImportOrigin            *PortableAttribution `json:"importOrigin,omitzero"`
+	ArtifactContextV3       *ArtifactContextV3   `json:"-"`
+	Rebase                  *ChangeRebaseAction  `json:"rebase,omitzero"`
+	ID                      string               `json:"id"`
+	ProposalID              string               `json:"proposalId"`
+	ParentRevisionID        *string              `json:"parentRevisionId"`
+	DocumentVersion         string               `json:"documentVersion"`
+	BaseRevisionID          string               `json:"baseRevisionId"`
+	BaseSemanticHash        string               `json:"baseSemanticHash"`
+	BaseSchemaVersion       string               `json:"baseSchemaVersion"`
+	SourceSnapshotIDs       []string             `json:"sourceSnapshotIds"`
+	SourceVector            SourceVector         `json:"sourceVector"`
+	ArtifactPins            []ArtifactPin        `json:"artifactPins"`
+	ArtifactContext         ArtifactContext      `json:"artifactContext"`
+	Delta                   ChangeDelta          `json:"delta"`
+	Criteria                []ChangeCriterion    `json:"criteria"`
+	SemanticHash            string               `json:"semanticHash"`
+	AcceptedBatchRevisionID string               `json:"acceptedBatchRevisionId"`
+	Author                  string               `json:"author"`
+	Summary                 string               `json:"summary"`
+	CreatedAt               time.Time            `json:"createdAt"`
 }
 
 // A draft preserves either legacy or tagged artifact context verbatim. The
@@ -114,7 +116,27 @@ func (r *ChangeProposalRevision) UnmarshalJSON(raw []byte) error {
 	if err := json.Unmarshal(raw, &decoded); err != nil {
 		return err
 	}
-	r.ArtifactContext = ArtifactContext(decoded.ArtifactContext)
+	var fields map[string]jsontext.Value
+	if err := json.Unmarshal(raw, &fields); err != nil {
+		return err
+	}
+	var tag struct {
+		DocumentVersion string `json:"documentVersion"`
+	}
+	if err := json.Unmarshal(fields["artifactContext"], &tag); err != nil {
+		return err
+	}
+	if tag.DocumentVersion == ArtifactContextV3Version {
+		c, err := DecodeVersionedArtifactContext(fields["artifactContext"], r.ArtifactPins)
+		if err != nil {
+			return err
+		}
+		r.ArtifactContextV3 = c.V3
+		r.ArtifactContext = ArtifactContext{}
+	} else {
+		r.ArtifactContextV3 = nil
+		r.ArtifactContext = ArtifactContext(decoded.ArtifactContext)
+	}
 	return nil
 }
 
@@ -314,4 +336,22 @@ type ChangeColumnGroup struct {
 	TypeFamily        jsontext.Value `json:"typeFamily,omitzero"`
 	Nullable          jsontext.Value `json:"nullable,omitzero"`
 	DefaultExpression jsontext.Value `json:"defaultExpression,omitzero"`
+}
+
+func (r ChangeProposalRevision) MarshalJSON() ([]byte, error) {
+	type plain ChangeProposalRevision
+	if r.ArtifactContextV3 == nil {
+		return json.Marshal(plain(r))
+	}
+	if len(r.ArtifactPins) != 0 {
+		return nil, invalid("pins", "V3 pins must remain namespaced")
+	}
+	raw, err := EncodeArtifactContextV3(*r.ArtifactContextV3)
+	if err != nil {
+		return nil, err
+	}
+	return json.Marshal(struct {
+		plain
+		ArtifactContext jsontext.Value `json:"artifactContext"`
+	}{plain(r), raw})
 }

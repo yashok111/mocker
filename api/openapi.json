@@ -13553,6 +13553,9 @@
           "createdAt": {
             "type": "string",
             "format": "date-time"
+          },
+          "importOrigin": {
+            "$ref": "#/components/schemas/BackendPortableAttribution"
           }
         }
       },
@@ -13764,7 +13767,9 @@
           "changeProposalCommands",
           "readTargetSupport",
           "analysisSupport",
-          "diagramSupport"
+          "diagramSupport",
+          "installationId",
+          "portableSupport"
         ],
         "properties": {
           "modelSchemaVersions": {
@@ -13914,7 +13919,11 @@
               "maxDiagramViewBytes",
               "maxDiagramViews",
               "maxDiagramViewVersions",
-              "maxDiagramViewProjectBytes"
+              "maxDiagramViewProjectBytes",
+              "maxMaterializationTargets",
+              "maxMaterializationCommands",
+              "maxMaterializationBytes",
+              "maxDiagramSVGBytes"
             ],
             "properties": {
               "maxNameLength": {
@@ -14490,6 +14499,26 @@
               "maxDiagramViewProjectBytes": {
                 "type": "integer",
                 "minimum": 1
+              },
+              "maxMaterializationTargets": {
+                "type": "integer",
+                "minimum": 5,
+                "maximum": 5
+              },
+              "maxMaterializationCommands": {
+                "type": "integer",
+                "minimum": 100,
+                "maximum": 100
+              },
+              "maxMaterializationBytes": {
+                "type": "integer",
+                "minimum": 1048576,
+                "maximum": 1048576
+              },
+              "maxDiagramSVGBytes": {
+                "type": "integer",
+                "minimum": 2097152,
+                "maximum": 2097152
               }
             }
           },
@@ -14592,7 +14621,9 @@
                 "import-candidate-v1",
                 "saved-view-v2",
                 "backend-diagram-v1",
-                "diagram-view-v1"
+                "diagram-view-v1",
+                "artifact-context-v3",
+                "backend-portable-v1"
               ]
             }
           },
@@ -14803,7 +14834,8 @@
                     "impact",
                     "change_package",
                     "conformance",
-                    "endpoint_review"
+                    "endpoint_review",
+                    "diagnostics"
                   ]
                 },
                 "uniqueItems": true
@@ -14859,7 +14891,8 @@
                   "type": "string",
                   "enum": [
                     "b42-rules/v1",
-                    "b43-rules/v1"
+                    "b43-rules/v1",
+                    "diagnostics-v1"
                   ]
                 },
                 "uniqueItems": true
@@ -14928,6 +14961,70 @@
                     "components"
                   ]
                 }
+              }
+            }
+          },
+          "installationId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Persisted local installation identity for namespaced owner pins; independent of project and numeric owner IDs."
+          },
+          "portableSupport": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "format",
+              "sourceSchemaVersions",
+              "artifactContextVersion",
+              "maxChunkBytes",
+              "maxChunkRecords",
+              "maxBundleBytes",
+              "maxArtifactMappings",
+              "importMode",
+              "previewPublishes"
+            ],
+            "properties": {
+              "format": {
+                "type": "string",
+                "const": "backend-portable-v1"
+              },
+              "sourceSchemaVersions": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "5",
+                    "6"
+                  ]
+                }
+              },
+              "artifactContextVersion": {
+                "type": "string",
+                "const": "artifact-context-v3"
+              },
+              "maxChunkBytes": {
+                "type": "integer",
+                "const": 1048576
+              },
+              "maxChunkRecords": {
+                "type": "integer",
+                "const": 500
+              },
+              "maxBundleBytes": {
+                "type": "integer",
+                "const": 268435456
+              },
+              "maxArtifactMappings": {
+                "type": "integer",
+                "const": 20
+              },
+              "importMode": {
+                "type": "string",
+                "const": "new_project"
+              },
+              "previewPublishes": {
+                "type": "boolean",
+                "const": false
               }
             }
           }
@@ -30429,6 +30526,9 @@
           "createdAt": {
             "type": "string",
             "format": "date-time"
+          },
+          "importOrigin": {
+            "$ref": "#/components/schemas/BackendPortableAttribution"
           }
         }
       },
@@ -62179,6 +62279,9 @@
                 }
               }
             }
+          },
+          {
+            "$ref": "#/components/schemas/BackendArtifactContextV3"
           }
         ]
       },
@@ -65930,6 +66033,32 @@
               "artifact",
               "jsonPointer"
             ]
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "artifact_v3"
+                ]
+              },
+              "namespacedArtifact": {
+                "$ref": "#/components/schemas/BackendNamespacedArtifactPin"
+              },
+              "jsonPointer": {
+                "type": "string",
+                "enum": [
+                  ""
+                ]
+              }
+            },
+            "required": [
+              "kind",
+              "namespacedArtifact",
+              "jsonPointer"
+            ]
           }
         ]
       },
@@ -66584,6 +66713,50 @@
               "description",
               "kind",
               "targetIds"
+            ]
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "key": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              "required": {
+                "type": "boolean"
+              },
+              "description": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 4096
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "artifact_object_matches_v3"
+                ]
+              },
+              "selector": {
+                "$ref": "#/components/schemas/BackendAPIArtifactSelector"
+              },
+              "expectedHash": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              },
+              "namespacedArtifact": {
+                "$ref": "#/components/schemas/BackendNamespacedArtifactPin"
+              }
+            },
+            "required": [
+              "key",
+              "required",
+              "description",
+              "kind",
+              "namespacedArtifact",
+              "selector",
+              "expectedHash"
             ]
           }
         ]
@@ -71939,6 +72112,9 @@
           },
           "rebase": {
             "$ref": "#/components/schemas/BackendChangeRebaseAction"
+          },
+          "importOrigin": {
+            "$ref": "#/components/schemas/BackendPortableAttribution"
           }
         },
         "required": [
@@ -75800,6 +75976,57 @@
               }
             },
             "description": "Union of supported presentations: source Flow requires schema3–6, Database schema2–6. Legacy proposal supports Database only; full baseline5–6 supports Flow and Database. Import candidates are unsupported."
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "read",
+              "targets",
+              "sourceSchemaVersions",
+              "fullBaseSchemaVersions"
+            ],
+            "properties": {
+              "read": {
+                "type": "string",
+                "const": "namespaced_artifacts"
+              },
+              "targets": {
+                "type": "array",
+                "uniqueItems": true,
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "revisionId",
+                    "proposal",
+                    "changeProposal"
+                  ]
+                }
+              },
+              "sourceSchemaVersions": {
+                "type": "array",
+                "uniqueItems": true,
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "5",
+                    "6"
+                  ]
+                }
+              },
+              "fullBaseSchemaVersions": {
+                "type": "array",
+                "uniqueItems": true,
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "5",
+                    "6"
+                  ]
+                }
+              }
+            },
+            "description": "Exact namespaced artifact reads for immutable source5/6 and proposal targets. Local pins verify installation UUID and immutable owner hash; foreign references return frozen bindings with foreign_unresolved status without numeric owner lookup."
           }
         ]
       },
@@ -80277,6 +80504,31 @@
               "locator",
               "rowId"
             ]
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "namespacedLocator",
+              "rowId"
+            ],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "namespaced_artifact"
+                ]
+              },
+              "namespacedLocator": {
+                "$ref": "#/components/schemas/BackendNamespacedDiagramLocator"
+              },
+              "rowId": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 4096
+              }
+            }
           }
         ],
         "discriminator": {
@@ -80616,6 +80868,9 @@
           "provenanceHash": {
             "type": "string",
             "pattern": "^[0-9a-f]{64}$"
+          },
+          "importOrigin": {
+            "$ref": "#/components/schemas/BackendPortableAttribution"
           }
         },
         "required": [
@@ -83086,6 +83341,1497 @@
           "records",
           "facetDifferences"
         ]
+      },
+      "BackendArtifactNamespace": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "scope": {
+            "type": "string",
+            "enum": [
+              "local",
+              "foreign"
+            ]
+          },
+          "installationId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "required": [
+          "scope",
+          "installationId"
+        ]
+      },
+      "BackendNamespacedArtifactPin": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "namespace": {
+            "$ref": "#/components/schemas/BackendArtifactNamespace"
+          },
+          "pin": {
+            "$ref": "#/components/schemas/BackendArtifactPin"
+          }
+        },
+        "required": [
+          "namespace",
+          "pin"
+        ]
+      },
+      "BackendMaterializationCommand": {
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "replace_api_document"
+                ]
+              },
+              "apiDocument": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 1048576
+              }
+            },
+            "required": [
+              "type",
+              "apiDocument"
+            ]
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "copy_api_document"
+                ]
+              },
+              "copyFrom": {
+                "$ref": "#/components/schemas/BackendNamespacedArtifactPin"
+              }
+            },
+            "required": [
+              "type",
+              "copyFrom"
+            ]
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "replace_scenario"
+                ]
+              },
+              "scenario": {
+                "$ref": "#/components/schemas/DesignScenarioDocument"
+              }
+            },
+            "required": [
+              "type",
+              "scenario"
+            ]
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "type",
+              "copyFrom",
+              "selector",
+              "destination",
+              "apiDocument"
+            ],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "copy_api_object"
+                ]
+              },
+              "copyFrom": {
+                "$ref": "#/components/schemas/BackendNamespacedArtifactPin"
+              },
+              "selector": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "objectKey": {
+                    "type": "string"
+                  },
+                  "jsonPointer": {
+                    "type": "string"
+                  }
+                },
+                "oneOf": [
+                  {
+                    "required": [
+                      "objectKey"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "jsonPointer"
+                    ]
+                  }
+                ]
+              },
+              "destination": {
+                "type": "string"
+              },
+              "apiDocument": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 1048576
+              }
+            }
+          }
+        ]
+      },
+      "BackendMaterializationTarget": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "key": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "api_design",
+              "design_scenario"
+            ]
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "pin": {
+            "$ref": "#/components/schemas/BackendNamespacedArtifactPin"
+          },
+          "expectedVersion": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "maximum": 9223372036854775807
+          },
+          "commands": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendMaterializationCommand"
+            },
+            "minItems": 1,
+            "maxItems": 1
+          }
+        },
+        "required": [
+          "key",
+          "kind",
+          "name",
+          "expectedVersion",
+          "commands"
+        ]
+      },
+      "BackendMaterializationTranslation": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "sourceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "targetKey": {
+            "type": "string"
+          },
+          "selector": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096
+          }
+        },
+        "required": [
+          "sourceId",
+          "targetKey",
+          "selector",
+          "reason"
+        ]
+      },
+      "PreviewBackendMaterializationRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "profileVersion": {
+            "type": "string",
+            "enum": [
+              "backend-http-draft-v1"
+            ]
+          },
+          "target": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "changeProposal": {
+                "$ref": "#/components/schemas/BackendProposalReadTarget"
+              }
+            },
+            "required": [
+              "changeProposal"
+            ]
+          },
+          "targetHash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "sourceScope": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "minItems": 1,
+            "maxItems": 1000,
+            "uniqueItems": true
+          },
+          "diagramScope": {
+            "$ref": "#/components/schemas/BackendDiagramScopeInput"
+          },
+          "targets": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendMaterializationTarget"
+            },
+            "minItems": 1,
+            "maxItems": 5
+          },
+          "translations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendMaterializationTranslation"
+            },
+            "maxItems": 1000
+          },
+          "partialSimulation": {
+            "type": "boolean"
+          },
+          "excludedIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "maxItems": 1000,
+            "uniqueItems": true
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 4096
+          },
+          "diagramView": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "version"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "version": {
+                "type": "integer",
+                "format": "int64",
+                "minimum": 1,
+                "maximum": 9223372036854775807
+              }
+            }
+          }
+        },
+        "required": [
+          "profileVersion",
+          "target",
+          "targetHash",
+          "sourceScope",
+          "targets",
+          "translations",
+          "partialSimulation",
+          "excludedIds",
+          "reason"
+        ]
+      },
+      "ApplyBackendMaterializationRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "profileVersion": {
+            "type": "string",
+            "enum": [
+              "backend-http-draft-v1"
+            ]
+          },
+          "target": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "changeProposal": {
+                "$ref": "#/components/schemas/BackendProposalReadTarget"
+              }
+            },
+            "required": [
+              "changeProposal"
+            ]
+          },
+          "targetHash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "sourceScope": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "minItems": 1,
+            "maxItems": 1000,
+            "uniqueItems": true
+          },
+          "diagramScope": {
+            "$ref": "#/components/schemas/BackendDiagramScopeInput"
+          },
+          "targets": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendMaterializationTarget"
+            },
+            "minItems": 1,
+            "maxItems": 5
+          },
+          "translations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendMaterializationTranslation"
+            },
+            "maxItems": 1000
+          },
+          "partialSimulation": {
+            "type": "boolean"
+          },
+          "excludedIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "maxItems": 1000,
+            "uniqueItems": true
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 4096
+          },
+          "candidateHash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "idempotencyKey": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "diagramView": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "version"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "version": {
+                "type": "integer",
+                "format": "int64",
+                "minimum": 1,
+                "maximum": 9223372036854775807
+              }
+            }
+          }
+        },
+        "required": [
+          "profileVersion",
+          "target",
+          "targetHash",
+          "sourceScope",
+          "targets",
+          "translations",
+          "partialSimulation",
+          "excludedIds",
+          "reason",
+          "candidateHash",
+          "idempotencyKey"
+        ]
+      },
+      "BackendMaterializationCoverage": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "sourceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "diagramPin": {
+            "$ref": "#/components/schemas/BackendDiagramPin"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "translated",
+              "excluded",
+              "unsupported"
+            ]
+          },
+          "targetKey": {
+            "type": "string"
+          },
+          "targetOwnerRef": {
+            "$ref": "#/components/schemas/BackendNamespacedArtifactPin"
+          },
+          "selector": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "sourceId",
+          "status",
+          "reason"
+        ]
+      },
+      "BackendMaterializationEffect": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "targetKey": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "api_design",
+              "design_scenario"
+            ]
+          },
+          "draftMock": {
+            "type": "boolean"
+          },
+          "linkedFrom": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "targetKey",
+          "kind",
+          "draftMock",
+          "linkedFrom"
+        ]
+      },
+      "BackendMaterializationPreview": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "input": {
+            "$ref": "#/components/schemas/PreviewBackendMaterializationRequest"
+          },
+          "effects": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendMaterializationEffect"
+            }
+          },
+          "coverage": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendMaterializationCoverage"
+            }
+          },
+          "diagramScope": {
+            "$ref": "#/components/schemas/BackendDiagramScope"
+          },
+          "diagnostics": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "equivalence": {
+            "type": "string",
+            "enum": [
+              "structural_projection",
+              "partial_simulation"
+            ]
+          },
+          "candidateHash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "canApply": {
+            "type": "boolean"
+          },
+          "diagramView": {
+            "$ref": "#/components/schemas/BackendDiagramView"
+          }
+        },
+        "required": [
+          "input",
+          "effects",
+          "coverage",
+          "diagnostics",
+          "equivalence",
+          "candidateHash",
+          "canApply"
+        ]
+      },
+      "BackendMaterializationOwner": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "targetKey": {
+            "type": "string"
+          },
+          "pin": {
+            "$ref": "#/components/schemas/BackendNamespacedArtifactPin"
+          },
+          "version": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1,
+            "maximum": 9223372036854775807
+          }
+        },
+        "required": [
+          "targetKey",
+          "pin",
+          "version"
+        ]
+      },
+      "BackendMaterializationReceipt": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "projectId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "candidateHash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "requestHash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "owners": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendMaterializationOwner"
+            }
+          },
+          "coverage": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendMaterializationCoverage"
+            }
+          },
+          "equivalence": {
+            "type": "string",
+            "enum": [
+              "structural_projection",
+              "partial_simulation"
+            ]
+          },
+          "author": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "projectId",
+          "candidateHash",
+          "requestHash",
+          "owners",
+          "coverage",
+          "equivalence",
+          "author"
+        ]
+      },
+      "BackendNamespacedDiagramLocator": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "namespace",
+          "locator"
+        ],
+        "properties": {
+          "namespace": {
+            "$ref": "#/components/schemas/BackendArtifactNamespace"
+          },
+          "locator": {
+            "$ref": "#/components/schemas/ArtifactProjectionLocator"
+          }
+        }
+      },
+      "BackendArtifactNamespaceGroup": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "namespace",
+          "pins",
+          "apiBindings",
+          "editorBindings"
+        ],
+        "properties": {
+          "namespace": {
+            "$ref": "#/components/schemas/BackendArtifactNamespace"
+          },
+          "pins": {
+            "type": "array",
+            "maxItems": 20,
+            "items": {
+              "$ref": "#/components/schemas/BackendArtifactPin"
+            }
+          },
+          "apiBindings": {
+            "type": "array",
+            "maxItems": 200,
+            "items": {
+              "$ref": "#/components/schemas/BackendAPIArtifactBinding"
+            }
+          },
+          "editorBindings": {
+            "type": "array",
+            "maxItems": 200,
+            "items": {
+              "$ref": "#/components/schemas/EditorBinding"
+            }
+          }
+        }
+      },
+      "BackendArtifactContextV3": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "documentVersion",
+          "sourceContentHash",
+          "sourceSemanticHash",
+          "groups"
+        ],
+        "properties": {
+          "documentVersion": {
+            "type": "string",
+            "enum": [
+              "artifact-context-v3"
+            ]
+          },
+          "sourceContentHash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "sourceSemanticHash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "groups": {
+            "type": "array",
+            "maxItems": 20,
+            "items": {
+              "$ref": "#/components/schemas/BackendArtifactNamespaceGroup"
+            }
+          }
+        }
+      },
+      "BackendPortableViewPin": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "viewId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "viewVersion": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1,
+            "maximum": 9223372036854775807
+          }
+        },
+        "required": [
+          "viewId",
+          "viewVersion"
+        ]
+      },
+      "BackendPortableSavedViewPin": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "version": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1,
+            "maximum": 9223372036854775807
+          }
+        },
+        "required": [
+          "id",
+          "version"
+        ]
+      },
+      "BackendPortableTarget": {
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "revisionId": {
+                "type": "string",
+                "format": "uuid"
+              }
+            },
+            "required": [
+              "revisionId"
+            ]
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "proposal": {
+                "$ref": "#/components/schemas/BackendProposalReadTarget"
+              }
+            },
+            "required": [
+              "proposal"
+            ]
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "changeProposal": {
+                "$ref": "#/components/schemas/BackendProposalReadTarget"
+              }
+            },
+            "required": [
+              "changeProposal"
+            ]
+          }
+        ]
+      },
+      "BackendPortableSelection": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "projectId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "target": {
+            "$ref": "#/components/schemas/BackendPortableTarget"
+          },
+          "targetHash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "diagramViews": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendPortableViewPin"
+            },
+            "maxItems": 1000
+          },
+          "savedViews": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendPortableSavedViewPin"
+            },
+            "maxItems": 1000
+          }
+        },
+        "required": [
+          "projectId",
+          "target",
+          "targetHash",
+          "diagramViews"
+        ]
+      },
+      "BackendPortableChunkDescriptor": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "index": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 262143
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "bytes": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1048576
+          },
+          "records": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 500
+          }
+        },
+        "required": [
+          "index",
+          "sha256",
+          "bytes",
+          "records"
+        ]
+      },
+      "BackendPortableManifest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "format": {
+            "type": "string",
+            "enum": [
+              "backend-portable-v1"
+            ]
+          },
+          "originInstallationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "schemas": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "1",
+                "2",
+                "3",
+                "4",
+                "5",
+                "6",
+                "artifact-context-v3",
+                "proposal-graph-v1",
+                "proposal-relational-v1",
+                "backend-diagram-v1",
+                "backend-diagram-provenance-v1",
+                "diagram-view-v1",
+                "saved-view-v1",
+                "saved-view-v2"
+              ]
+            },
+            "minItems": 2,
+            "uniqueItems": true
+          },
+          "selection": {
+            "$ref": "#/components/schemas/BackendPortableSelection"
+          },
+          "chunks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendPortableChunkDescriptor"
+            },
+            "minItems": 1,
+            "maxItems": 262144
+          }
+        },
+        "required": [
+          "format",
+          "originInstallationId",
+          "schemas",
+          "selection",
+          "chunks"
+        ]
+      },
+      "BackendPortableSession": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "direction": {
+            "type": "string",
+            "enum": [
+              "import",
+              "export"
+            ]
+          },
+          "version": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1,
+            "maximum": 9223372036854775807
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "staging",
+              "ready",
+              "committed",
+              "aborted"
+            ]
+          },
+          "manifestHash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          }
+        },
+        "required": [
+          "id",
+          "direction",
+          "version",
+          "state",
+          "manifestHash"
+        ]
+      },
+      "BackendPortableArtifactMapping": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "origin": {
+            "$ref": "#/components/schemas/BackendNamespacedArtifactPin"
+          },
+          "local": {
+            "$ref": "#/components/schemas/BackendNamespacedArtifactPin"
+          }
+        },
+        "required": [
+          "origin",
+          "local"
+        ]
+      },
+      "BackendPortableIdentity": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "installationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "projectId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string",
+            "pattern": "^(0|[1-9][0-9]*)$",
+            "maxLength": 19
+          }
+        },
+        "required": [
+          "installationId",
+          "projectId",
+          "kind",
+          "id",
+          "version"
+        ]
+      },
+      "BackendPortableIDMapEntry": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "origin": {
+            "$ref": "#/components/schemas/BackendPortableIdentity"
+          },
+          "local": {
+            "$ref": "#/components/schemas/BackendPortableIdentity"
+          },
+          "parent": {
+            "$ref": "#/components/schemas/BackendPortableIdentity"
+          },
+          "localParent": {
+            "$ref": "#/components/schemas/BackendPortableIdentity"
+          },
+          "originHash": {
+            "type": "string",
+            "pattern": "^([0-9a-f]{64})?$"
+          },
+          "localHash": {
+            "type": "string",
+            "pattern": "^([0-9a-f]{64})?$"
+          }
+        },
+        "required": [
+          "origin",
+          "local",
+          "originHash",
+          "localHash"
+        ]
+      },
+      "ExportBackendProjectRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "selection": {
+            "$ref": "#/components/schemas/BackendPortableSelection"
+          },
+          "idempotencyKey": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          }
+        },
+        "required": [
+          "selection",
+          "idempotencyKey"
+        ]
+      },
+      "BackendPortableExport": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "session": {
+            "$ref": "#/components/schemas/BackendPortableSession"
+          },
+          "manifest": {
+            "$ref": "#/components/schemas/BackendPortableManifest"
+          }
+        },
+        "required": [
+          "session",
+          "manifest"
+        ]
+      },
+      "BackendPortableExportChunk": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "index": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 262143
+          },
+          "manifestHash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "body": {
+            "type": "string",
+            "maxLength": 1048576
+          }
+        },
+        "required": [
+          "index",
+          "manifestHash",
+          "body"
+        ]
+      },
+      "BeginBackendPortableImportRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "manifest": {
+            "$ref": "#/components/schemas/BackendPortableManifest"
+          },
+          "idempotencyKey": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          }
+        },
+        "required": [
+          "manifest",
+          "idempotencyKey"
+        ]
+      },
+      "PutBackendPortableImportChunkRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "expectedVersion": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1,
+            "maximum": 9223372036854775807
+          },
+          "index": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 262143
+          },
+          "body": {
+            "type": "string",
+            "maxLength": 1048576
+          },
+          "idempotencyKey": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          }
+        },
+        "required": [
+          "expectedVersion",
+          "index",
+          "body",
+          "idempotencyKey"
+        ]
+      },
+      "PreviewBackendPortableImportRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "expectedVersion": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1,
+            "maximum": 9223372036854775807
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "artifactMappings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendPortableArtifactMapping"
+            },
+            "maxItems": 20
+          },
+          "idempotencyKey": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          }
+        },
+        "required": [
+          "expectedVersion",
+          "name",
+          "artifactMappings",
+          "idempotencyKey"
+        ]
+      },
+      "BackendPortablePreview": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "session": {
+            "$ref": "#/components/schemas/BackendPortableSession"
+          },
+          "candidateHash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "projectId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "target": {
+            "$ref": "#/components/schemas/BackendPortableTarget"
+          },
+          "targetHash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "idMap": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendPortableIDMapEntry"
+            }
+          },
+          "unresolved": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendNamespacedArtifactPin"
+            }
+          },
+          "recordCount": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "session",
+          "candidateHash",
+          "projectId",
+          "target",
+          "targetHash",
+          "idMap",
+          "unresolved",
+          "recordCount"
+        ]
+      },
+      "CommitBackendPortableImportRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "expectedVersion": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1,
+            "maximum": 9223372036854775807
+          },
+          "candidateHash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "idempotencyKey": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          }
+        },
+        "required": [
+          "expectedVersion",
+          "candidateHash",
+          "idempotencyKey"
+        ]
+      },
+      "AbortBackendPortableImportRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "expectedVersion": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1,
+            "maximum": 9223372036854775807
+          },
+          "idempotencyKey": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          }
+        },
+        "required": [
+          "expectedVersion",
+          "idempotencyKey"
+        ]
+      },
+      "BackendPortableCommit": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "session": {
+            "$ref": "#/components/schemas/BackendPortableSession"
+          },
+          "project": {
+            "$ref": "#/components/schemas/BackendProject"
+          },
+          "target": {
+            "$ref": "#/components/schemas/BackendPortableTarget"
+          },
+          "targetHash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "candidateHash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "idMap": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendPortableIDMapEntry"
+            }
+          }
+        },
+        "required": [
+          "session",
+          "project",
+          "target",
+          "targetHash",
+          "candidateHash",
+          "idMap"
+        ]
+      },
+      "BackendPortableAttribution": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "installationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "projectId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "version": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1,
+            "maximum": 9223372036854775807
+          },
+          "contentHash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          }
+        },
+        "required": [
+          "installationId",
+          "projectId",
+          "id",
+          "version",
+          "contentHash"
+        ]
+      },
+      "QueryBackendNamespacedArtifactRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "target",
+          "targetHash",
+          "namespace",
+          "artifact",
+          "view",
+          "limit"
+        ],
+        "properties": {
+          "target": {
+            "$ref": "#/components/schemas/BackendPortableTarget"
+          },
+          "targetHash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "namespace": {
+            "$ref": "#/components/schemas/BackendArtifactNamespace"
+          },
+          "artifact": {
+            "$ref": "#/components/schemas/ArtifactKey"
+          },
+          "view": {
+            "type": "string",
+            "enum": [
+              "sequence",
+              "event_model",
+              "states",
+              "response_rules"
+            ]
+          },
+          "embeddedContractId": {
+            "type": "string"
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          },
+          "cursor": {
+            "type": "string"
+          }
+        }
+      },
+      "BackendNamespacedArtifactProjection": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "targetHash",
+          "pin",
+          "status",
+          "reason",
+          "apiBindings",
+          "editorBindings"
+        ],
+        "properties": {
+          "targetHash": {
+            "type": "string"
+          },
+          "pin": {
+            "$ref": "#/components/schemas/BackendNamespacedArtifactPin"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "foreign_unresolved",
+              "local_resolved"
+            ]
+          },
+          "reason": {
+            "type": "string"
+          },
+          "apiBindings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendAPIArtifactBinding"
+            }
+          },
+          "editorBindings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EditorBinding"
+            }
+          },
+          "projection": {
+            "$ref": "#/components/schemas/ArtifactProjectionPage"
+          }
+        }
+      },
+      "ResolveBackendPortableSelectionRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "target",
+          "diagramViews"
+        ],
+        "properties": {
+          "target": {
+            "$ref": "#/components/schemas/BackendPortableTarget"
+          },
+          "diagramViews": {
+            "type": "array",
+            "maxItems": 1000,
+            "items": {
+              "$ref": "#/components/schemas/BackendPortableViewPin"
+            }
+          },
+          "savedViews": {
+            "type": "array",
+            "maxItems": 1000,
+            "items": {
+              "$ref": "#/components/schemas/BackendPortableSavedViewPin"
+            }
+          }
+        }
       }
     }
   },
@@ -105709,6 +107455,1425 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/ReviewBackendFindingRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/backend-projects/{id}/materializations/preview": {
+      "post": {
+        "tags": [
+          "backend-projects"
+        ],
+        "operationId": "previewBackendMaterialization",
+        "summary": "previewBackendMaterialization",
+        "description": "Explicit draft materialization. Preview is read-only; apply atomically changes the enumerated owners and draft mocks with receipt replay before CAS. No publication or execution.",
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendMaterializationPreview"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PreviewBackendMaterializationRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/backend-projects/{id}/materializations/apply": {
+      "post": {
+        "tags": [
+          "backend-projects"
+        ],
+        "operationId": "applyBackendMaterialization",
+        "summary": "applyBackendMaterialization",
+        "description": "Explicit draft materialization. Preview is read-only; apply atomically changes the enumerated owners and draft mocks with receipt replay before CAS. No publication or execution.",
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendMaterializationReceipt"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApplyBackendMaterializationRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/backend-projects/{id}/diagram-views/{vid}/versions/{v}/svg": {
+      "get": {
+        "tags": [
+          "backend-projects"
+        ],
+        "operationId": "exportBackendViewSVG",
+        "summary": "Export exact saved diagram view as SVG",
+        "description": "All four diagram kinds. Saved geometry or deterministic fallback. Authored intent and unknown guards remain explicit; no unsaved canvas state. Maximum 200 nodes/600 edges/2 MiB.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "vid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "v",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1,
+              "maximum": 9223372036854775807
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "SVG attachment",
+            "headers": {
+              "Content-Disposition": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "image/svg+xml": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary",
+                  "maxLength": 2097152
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ]
+      }
+    },
+    "/api/backend-projects/{id}/portable/export": {
+      "post": {
+        "tags": [
+          "backend-projects"
+        ],
+        "operationId": "exportBackendProject",
+        "summary": "exportBackendProject",
+        "description": "Exact backend-portable-v1 transfer. Staging preview does not publish a project. Commit atomically imports typed source/proposal/diagram/view history with an explicit ID map, imported origins and receipt-before-CAS replay. No execution or implicit owner lookup.",
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendPortableExport"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExportBackendProjectRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/backend-projects/portable/imports": {
+      "post": {
+        "tags": [
+          "backend-projects"
+        ],
+        "operationId": "beginBackendPortableImport",
+        "summary": "beginBackendPortableImport",
+        "description": "Exact backend-portable-v1 transfer. Staging preview does not publish a project. Commit atomically imports typed source/proposal/diagram/view history with an explicit ID map, imported origins and receipt-before-CAS replay. No execution or implicit owner lookup.",
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfToken": []
+          }
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendPortableSession"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BeginBackendPortableImportRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/backend-projects/portable/imports/{sid}/chunks": {
+      "post": {
+        "tags": [
+          "backend-projects"
+        ],
+        "operationId": "putBackendPortableImportChunk",
+        "summary": "putBackendPortableImportChunk",
+        "description": "Exact backend-portable-v1 transfer. Staging preview does not publish a project. Commit atomically imports typed source/proposal/diagram/view history with an explicit ID map, imported origins and receipt-before-CAS replay. No execution or implicit owner lookup.",
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "sid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendPortableSession"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PutBackendPortableImportChunkRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/backend-projects/portable/imports/{sid}/preview": {
+      "post": {
+        "tags": [
+          "backend-projects"
+        ],
+        "operationId": "previewBackendPortableImport",
+        "summary": "previewBackendPortableImport",
+        "description": "Exact backend-portable-v1 transfer. Staging preview does not publish a project. Commit atomically imports typed source/proposal/diagram/view history with an explicit ID map, imported origins and receipt-before-CAS replay. No execution or implicit owner lookup.",
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "sid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendPortablePreview"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PreviewBackendPortableImportRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/backend-projects/portable/imports/{sid}/commit": {
+      "post": {
+        "tags": [
+          "backend-projects"
+        ],
+        "operationId": "commitBackendPortableImport",
+        "summary": "commitBackendPortableImport",
+        "description": "Exact backend-portable-v1 transfer. Staging preview does not publish a project. Commit atomically imports typed source/proposal/diagram/view history with an explicit ID map, imported origins and receipt-before-CAS replay. No execution or implicit owner lookup.",
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "sid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendPortableCommit"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CommitBackendPortableImportRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/backend-projects/portable/imports/{sid}/abort": {
+      "post": {
+        "tags": [
+          "backend-projects"
+        ],
+        "operationId": "abortBackendPortableImport",
+        "summary": "abortBackendPortableImport",
+        "description": "Exact backend-portable-v1 transfer. Staging preview does not publish a project. Commit atomically imports typed source/proposal/diagram/view history with an explicit ID map, imported origins and receipt-before-CAS replay. No execution or implicit owner lookup.",
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "sid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendPortableSession"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AbortBackendPortableImportRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/backend-projects/portable/exports/{sid}/chunks/{index}": {
+      "get": {
+        "tags": [
+          "backend-projects"
+        ],
+        "operationId": "getBackendExportChunk",
+        "summary": "Read immutable portable chunk",
+        "description": "Exact UTF-8 body bound to export session and manifest hash; preserve the body string bytes.",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "sid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "index",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 262143
+            }
+          },
+          {
+            "name": "manifestHash",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendPortableExportChunk"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        }
+      }
+    },
+    "/api/backend-projects/{id}/artifacts/namespaced/query": {
+      "post": {
+        "tags": [
+          "backend-projects"
+        ],
+        "operationId": "queryBackendNamespacedArtifact",
+        "summary": "Read exact namespaced artifact projection",
+        "description": "Foreign namespace returns frozen bindings and unresolved status without owner lookup. Local namespace verifies current installation and exact immutable snapshot.",
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendNamespacedArtifactProjection"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/QueryBackendNamespacedArtifactRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/backend-projects/{id}/portable/selection": {
+      "post": {
+        "tags": [
+          "backend-projects"
+        ],
+        "operationId": "resolveBackendPortableSelection",
+        "summary": "Resolve exact portable selection",
+        "description": "Pure read: resolve targetHash and validate view compatibility for exact immutable target; never follows a mutable head.",
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendPortableSelection"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request refused with exact backend error details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResolveBackendPortableSelectionRequest"
               }
             }
           }

@@ -186,6 +186,9 @@ func evaluateConformanceCriterion(ctx context.Context, pid string, c backendmode
 		return evaluateAttachmentCriterion(ctx, pid, row, c, attachments, reader)
 	case "artifact_object_matches":
 		return evaluateArtifactCriterion(row, c, result, request), nil
+	case "artifact_object_matches_v3":
+		row.Reason = "Imported namespaced criterion retains exact artifact identity; no implicit local owner lookup"
+		return row, nil
 	}
 	if row.SourceObject == nil {
 		row.Reason = "Proposal-created object has no unambiguous source correspondence"

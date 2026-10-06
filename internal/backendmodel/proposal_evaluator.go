@@ -64,6 +64,14 @@ func evaluateProposal(base *graphCandidate, proposal Proposal, draft ProposalRev
 	if err := validateProposalCommands(commands); err != nil {
 		return nil, err
 	}
+	return evaluateProposalGraph(base, proposal, draft, commands)
+}
+
+// validateProposalSnapshot reuses owner graph/FK validation without inventing an edit command.
+func validateProposalSnapshot(base *graphCandidate, proposal Proposal, draft ProposalRevision) (*ProposalCandidate, error) {
+	return evaluateProposalGraph(base, proposal, draft, nil)
+}
+func evaluateProposalGraph(base *graphCandidate, proposal Proposal, draft ProposalRevision, commands []ProposalCommand) (*ProposalCandidate, error) {
 	p := &databaseProjection{in: DatabaseQueryInput{DatastoreID: proposal.DatastoreID, FacetKey: proposal.FacetKey}, nodes: map[string]Node{}, children: map[string][]Node{}, facets: map[string]map[string]*relationalFacet{}, evidence: map[string]Evidence{}, stores: map[string]string{}, page: &DatabasePage{Limitations: []string{}, FacetStatus: "current"}, observed: map[string]bool{}, limitations: map[string]bool{}, uniqueResults: map[string]databaseUniqueness{}}
 	for _, n := range base.Nodes {
 		p.nodes[n.ID] = n
