@@ -118,8 +118,11 @@ func addBackendImportTool(s *sdk.Server, lb *loopback, tool *sdk.Tool, route str
 			return backendAdmissionFault(selectErr), nil
 		}
 		var params []any
-		for _, key := range []string{"projectId", "replayRunId", "replayItemId", "importId", "proposalId", "jobId", "viewId", "diagramId", "revisionId", "nodeId", "batchId", "fingerprint"} {
+		for _, key := range []string{"projectId", "observationSetId", "replayRunId", "replayItemId", "importId", "proposalId", "jobId", "viewId", "diagramId", "revisionId", "nodeId", "batchId", "fingerprint"} {
 			raw, ok := in[key]
+			if (key == "batchId" && tool.Name == "import_backend_observations") || (key == "revisionId" && tool.Name == "correlate_backend_observations") {
+				continue
+			}
 			if !ok {
 				continue
 			}
@@ -140,7 +143,7 @@ func addBackendImportTool(s *sdk.Server, lb *loopback, tool *sdk.Tool, route str
 			if key == "fingerprint" && (len(value) != 64 || strings.Trim(value, "0123456789abcdef") != "") {
 				return designScenarioToolErrorResult(fmt.Errorf("invalid fingerprint")), nil
 			}
-			if key == "batchId" {
+			if key == "batchId" && tool.Name != "import_backend_observations" {
 				value = url.PathEscape(value)
 				if value == "." {
 					value = "%2E"

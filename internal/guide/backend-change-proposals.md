@@ -7,8 +7,8 @@ metadata:
   requiredModelSchemaVersions: "[\"5\",\"6\"]"
   requiredViewSchemaVersions: "[\"proposal-graph-v1\",\"backend-diagram-v1\",\"diagram-view-v1\"]"
   requiredCapabilities: "[\"backend-projects\",\"backend-revisions\",\"backend-graph-query\",\"backend-change-proposals\",\"backend-change-typed-edits\",\"backend-source-assertions\",\"backend-representations\",\"backend-analysis-jobs\",\"backend-analysis-diff\",\"backend-analysis-impact\",\"backend-change-rebase\",\"backend-change-ready\",\"backend-change-package\",\"backend-conformance\",\"backend-endpoint-review\",\"backend-change-implemented\",\"backend-change-archive\",\"backend-change-unarchive\",\"backend-diagrams\",\"backend-architecture\",\"backend-diagram-views\"]"
-  guideSetId: "sha256:6f7bd965821a068a6e44c418cd19823acfcb38ad7e5beb05c5127da80a6858db"
-  manifestHash: "sha256:6f7bd965821a068a6e44c418cd19823acfcb38ad7e5beb05c5127da80a6858db"
+  guideSetId: "sha256:8743327387b8c094d8cc29199905b75fa917139d29eb7137d088c38d87e89ab5"
+  manifestHash: "sha256:8743327387b8c094d8cc29199905b75fa917139d29eb7137d088c38d87e89ab5"
 ---
 
 # Prepare a full graph proposal

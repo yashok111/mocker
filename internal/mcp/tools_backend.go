@@ -40,6 +40,7 @@ func addBackendTools(s *sdk.Server, lb *loopback) {
 	addBackendChangeProposalTools(s, lb)
 	addBackendAnalysisTools(s, lb)
 	addBackendReplayTools(s, lb)
+	addBackendObservationTools(s, lb)
 	addBackendSavedViewTools(s, lb)
 	addBackendDiagramTools(s, lb)
 	addBackendPortableSVGTool(s, lb)

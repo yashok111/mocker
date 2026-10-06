@@ -7,8 +7,8 @@ metadata:
   requiredModelSchemaVersions: "[\"3\",\"4\",\"5\",\"6\"]"
   requiredViewSchemaVersions: "[\"saved-view-v1\",\"api-artifact-pins-v1\",\"backend-editor-artifacts-v1\",\"proposal-graph-v1\",\"saved-view-v2\",\"import-candidate-v1\",\"backend-diagram-v1\",\"diagram-view-v1\"]"
   requiredCapabilities: "[\"backend-projects\",\"backend-revisions\",\"backend-graph-query\",\"backend-flow-query\",\"backend-data-access-query\",\"backend-saved-views\",\"backend-field-lineage-query\",\"backend-api-artifact-pins\",\"backend-editor-projections\",\"backend-events-query\",\"backend-source-assertions\",\"backend-import-candidate\",\"backend-change-proposals\",\"backend-representations\",\"backend-saved-views-v2\",\"backend-diagrams\",\"backend-architecture\",\"backend-diagram-views\",\"backend-interactions\",\"backend-lifecycle\",\"backend-business-map\"]"
-  guideSetId: "sha256:6f7bd965821a068a6e44c418cd19823acfcb38ad7e5beb05c5127da80a6858db"
-  manifestHash: "sha256:6f7bd965821a068a6e44c418cd19823acfcb38ad7e5beb05c5127da80a6858db"
+  guideSetId: "sha256:8743327387b8c094d8cc29199905b75fa917139d29eb7137d088c38d87e89ab5"
+  manifestHash: "sha256:8743327387b8c094d8cc29199905b75fa917139d29eb7137d088c38d87e89ab5"
 ---
 # Pinned source flow and data-access inspection
 
@@ -212,3 +212,7 @@ refs to explicit proposal commands, never an implicit graph/API/scenario write.
 No automatic process inference or policy execution; B5/B6 acceptance stays open.
 
 For static diagnostic jobs and separate finding review, negotiate **verify1** and read `backend-verify` / `backend-diagnostics` from the same immutable guide set. Inspection alone starts no job; review is not runtime proof.
+
+## Exact uploaded evidence
+
+When backend-observations-v1 is advertised, select an exact observation version and correlation version. Use the pinned backend-observations and backend-correlation guide topics (verify3). Keep the original diagram scope, source target and correlation result pins while navigating. New imports, appended observations and mapping edits do not enrich historical snapshots. Unknown builds and ambiguous source membership remain gaps; static/intent/observed labels must stay distinct.

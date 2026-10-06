@@ -234,7 +234,7 @@ func TestOpenAPIContract_declaresResetDataSchemas(t *testing.T) {
 // `0016_backend_proposals.sql` adds isolated immutable database proposal drafts.
 // `0018_backend_api_artifacts.sql` adds frozen API associations to source revisions.
 // `0021_backend_analysis_jobs.sql` adds durable analysis and rebase storage.
-func TestMigrations_stillExactlyTwentyTwoFiles(t *testing.T) {
+func TestMigrations_stillExactlyTwentySixFiles(t *testing.T) {
 	entries, err := os.ReadDir(filepath.FromSlash("../../internal/store/migrations"))
 	if err != nil {
 		t.Fatalf("read migrations dir: %v", err)
@@ -245,8 +245,8 @@ func TestMigrations_stillExactlyTwentyTwoFiles(t *testing.T) {
 			sqlFiles = append(sqlFiles, e.Name())
 		}
 	}
-	if len(sqlFiles) != 22 {
-		t.Errorf("internal/store/migrations/ holds %d .sql files (%v), want exactly 22", len(sqlFiles), sqlFiles)
+	if len(sqlFiles) != 26 {
+		t.Errorf("internal/store/migrations/ holds %d .sql files (%v), want exactly 26", len(sqlFiles), sqlFiles)
 	}
 }
 

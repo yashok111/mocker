@@ -15082,6 +15082,44 @@
               "persistenceScope",
               "requiresExplicitConsent"
             ]
+          },
+          "observationSupport": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "documentVersion": {
+                "type": "string",
+                "enum": [
+                  "backend-observations-v1"
+                ]
+              },
+              "correlationPolicy": {
+                "type": "string",
+                "enum": [
+                  "backend-correlation-v1"
+                ]
+              },
+              "maxBatchRecords": {
+                "type": "integer"
+              },
+              "maxBatchBytes": {
+                "type": "integer"
+              },
+              "maxAdapterBytes": {
+                "type": "integer"
+              },
+              "maxSpanLinks": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "documentVersion",
+              "correlationPolicy",
+              "maxBatchRecords",
+              "maxBatchBytes",
+              "maxAdapterBytes",
+              "maxSpanLinks"
+            ]
           }
         }
       },
@@ -85951,6 +85989,1349 @@
           "sequence",
           "counters"
         ]
+      },
+      "ObservationAdaptBatch": {
+        "additionalProperties": false,
+        "properties": {
+          "context": {
+            "$ref": "#/components/schemas/ObservationObservationContext"
+          },
+          "records": {
+            "items": {
+              "$ref": "#/components/schemas/ObservationRecord"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "context",
+          "records"
+        ],
+        "type": "object"
+      },
+      "ObservationAdaptInput": {
+        "additionalProperties": false,
+        "properties": {
+          "adapter": {
+            "type": "string",
+            "enum": [
+              "otlp-traces-json-v1",
+              "junit-summary-v1",
+              "orders-replay-result-v1"
+            ]
+          },
+          "context": {
+            "$ref": "#/components/schemas/ObservationObservationContext"
+          },
+          "data": {
+            "type": "string"
+          },
+          "replay": {
+            "$ref": "#/components/schemas/ObservationReplayPin"
+          }
+        },
+        "required": [
+          "adapter",
+          "context"
+        ],
+        "type": "object"
+      },
+      "ObservationAdaptedBatch": {
+        "additionalProperties": false,
+        "properties": {
+          "adapter": {
+            "type": "string"
+          },
+          "batches": {
+            "items": {
+              "$ref": "#/components/schemas/ObservationAdaptBatch"
+            },
+            "type": "array"
+          },
+          "excluded": {
+            "additionalProperties": {
+              "format": "int64",
+              "type": "integer"
+            },
+            "type": "object"
+          },
+          "gaps": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "unsupported": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "adapter",
+          "batches",
+          "excluded",
+          "unsupported",
+          "gaps"
+        ],
+        "type": "object"
+      },
+      "ObservationAssertion": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "outcome": {
+            "type": "string"
+          },
+          "scope": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "outcome",
+          "scope"
+        ],
+        "type": "object"
+      },
+      "ObservationAttributes": {
+        "additionalProperties": false,
+        "properties": {
+          "fingerprint": {
+            "type": "string"
+          },
+          "messageIdHash": {
+            "type": "string"
+          },
+          "messageRole": {
+            "type": "string"
+          },
+          "operation": {
+            "type": "string"
+          },
+          "requestBytes": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "responseBytes": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "sourceLine": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "sourcePath": {
+            "type": "string"
+          }
+        },
+        "required": [],
+        "type": "object"
+      },
+      "ObservationCorrelateInput": {
+        "additionalProperties": false,
+        "properties": {
+          "diagramScope": {
+            "$ref": "#/components/schemas/BackendDiagramScopeInput"
+          },
+          "expectedCorrelationVersion": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "idempotencyKey": {
+            "type": "string"
+          },
+          "observation": {
+            "$ref": "#/components/schemas/ObservationVersionReceipt"
+          },
+          "overrides": {
+            "items": {
+              "$ref": "#/components/schemas/ObservationOverride"
+            },
+            "type": "array"
+          },
+          "policy": {
+            "type": "string",
+            "enum": [
+              "backend-correlation-v1"
+            ]
+          },
+          "revisionId": {
+            "type": "string"
+          },
+          "scopeHash": {
+            "type": "string"
+          },
+          "serviceId": {
+            "type": "string"
+          },
+          "settings": {
+            "$ref": "#/components/schemas/ObservationCorrelationSettings"
+          },
+          "sourceHash": {
+            "type": "string"
+          },
+          "targetGraphHash": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "observation",
+          "revisionId",
+          "sourceHash",
+          "targetGraphHash",
+          "serviceId",
+          "policy",
+          "settings",
+          "overrides",
+          "expectedCorrelationVersion",
+          "idempotencyKey"
+        ],
+        "type": "object"
+      },
+      "ObservationCorrelationRow": {
+        "additionalProperties": false,
+        "properties": {
+          "candidates": {
+            "items": {
+              "$ref": "#/components/schemas/BackendDiagramRef"
+            },
+            "type": "array"
+          },
+          "method": {
+            "type": "string"
+          },
+          "outcome": {
+            "type": "string"
+          },
+          "reasons": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "recordId": {
+            "type": "string"
+          },
+          "selected": {
+            "$ref": "#/components/schemas/BackendDiagramRef"
+          }
+        },
+        "required": [
+          "recordId",
+          "outcome",
+          "candidates",
+          "method",
+          "reasons"
+        ],
+        "type": "object"
+      },
+      "ObservationCorrelationSettings": {
+        "additionalProperties": false,
+        "properties": {
+          "inferFingerprint": {
+            "type": "boolean"
+          },
+          "inferSourceLocator": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "inferSourceLocator",
+          "inferFingerprint"
+        ],
+        "type": "object"
+      },
+      "ObservationCorrelationSnapshot": {
+        "additionalProperties": false,
+        "properties": {
+          "contentHash": {
+            "type": "string"
+          },
+          "diagramRows": {
+            "items": {
+              "$ref": "#/components/schemas/ObservationDiagramCorrelationRow"
+            },
+            "type": "array"
+          },
+          "diagramScope": {
+            "$ref": "#/components/schemas/BackendDiagramScope"
+          },
+          "gaps": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "input": {
+            "$ref": "#/components/schemas/ObservationCorrelateInput"
+          },
+          "nextCursor": {
+            "type": "string"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/ObservationCorrelationRow"
+            },
+            "type": "array"
+          },
+          "sourceCompatible": {
+            "type": "boolean"
+          },
+          "total": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "version": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total",
+          "nextCursor",
+          "version",
+          "contentHash",
+          "input",
+          "sourceCompatible",
+          "rows",
+          "diagramRows",
+          "gaps"
+        ],
+        "type": "object"
+      },
+      "ObservationDiagramCorrelationRow": {
+        "additionalProperties": false,
+        "properties": {
+          "basis": {
+            "type": "string"
+          },
+          "gaps": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "recordId": {
+            "type": "string"
+          },
+          "selectors": {
+            "items": {
+              "$ref": "#/components/schemas/BackendDiagramScopeSelector"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "recordId",
+          "selectors",
+          "basis",
+          "gaps"
+        ],
+        "type": "object"
+      },
+      "ObservationDiagramWitness": {
+        "additionalProperties": false,
+        "properties": {
+          "assertionId": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "pin": {
+            "$ref": "#/components/schemas/BackendDiagramPin"
+          },
+          "selector": {
+            "$ref": "#/components/schemas/BackendDiagramScopeSelector"
+          }
+        },
+        "required": [
+          "pin",
+          "selector",
+          "kind"
+        ],
+        "type": "object"
+      },
+      "ObservationEnvironment": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "test",
+              "staging",
+              "production",
+              "unknown"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "kind"
+        ],
+        "type": "object"
+      },
+      "ObservationIdentityRef": {
+        "additionalProperties": false,
+        "properties": {
+          "externalKey": {
+            "type": "string"
+          },
+          "providerNamespace": {
+            "type": "string"
+          },
+          "recordType": {
+            "type": "string"
+          },
+          "repositoryId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "repositoryId",
+          "providerNamespace",
+          "externalKey",
+          "recordType"
+        ],
+        "type": "object"
+      },
+      "ObservationImportInput": {
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "mode": {
+                "type": "string",
+                "enum": [
+                  "create"
+                ]
+              },
+              "context": {
+                "$ref": "#/components/schemas/ObservationObservationContext"
+              },
+              "name": {
+                "type": "string"
+              },
+              "batchId": {
+                "type": "string"
+              },
+              "idempotencyKey": {
+                "type": "string"
+              },
+              "records": {
+                "items": {
+                  "$ref": "#/components/schemas/ObservationRecord"
+                },
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 500
+              }
+            },
+            "required": [
+              "mode",
+              "context",
+              "name",
+              "batchId",
+              "idempotencyKey",
+              "records"
+            ]
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "mode": {
+                "type": "string",
+                "enum": [
+                  "append"
+                ]
+              },
+              "setId": {
+                "type": "string"
+              },
+              "expectedVersion": {
+                "format": "int64",
+                "type": "integer"
+              },
+              "batchId": {
+                "type": "string"
+              },
+              "idempotencyKey": {
+                "type": "string"
+              },
+              "records": {
+                "items": {
+                  "$ref": "#/components/schemas/ObservationRecord"
+                },
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 500
+              }
+            },
+            "required": [
+              "mode",
+              "setId",
+              "expectedVersion",
+              "batchId",
+              "idempotencyKey",
+              "records"
+            ]
+          }
+        ],
+        "discriminator": {
+          "propertyName": "mode"
+        }
+      },
+      "ObservationInputContext": {
+        "additionalProperties": false,
+        "properties": {
+          "description": {
+            "type": "string"
+          },
+          "size": {
+            "anyOf": [
+              {
+                "format": "int64",
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "unit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "description",
+          "size",
+          "unit"
+        ],
+        "type": "object"
+      },
+      "ObservationInstrumentation": {
+        "additionalProperties": false,
+        "properties": {
+          "bytes": {
+            "type": "string",
+            "enum": [
+              "complete",
+              "partial",
+              "unknown"
+            ]
+          },
+          "externalCalls": {
+            "type": "string",
+            "enum": [
+              "complete",
+              "partial",
+              "unknown"
+            ]
+          },
+          "latency": {
+            "type": "string",
+            "enum": [
+              "complete",
+              "partial",
+              "unknown"
+            ]
+          },
+          "limitations": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "retries": {
+            "type": "string",
+            "enum": [
+              "complete",
+              "partial",
+              "unknown"
+            ]
+          },
+          "sql": {
+            "type": "string",
+            "enum": [
+              "complete",
+              "partial",
+              "unknown"
+            ]
+          }
+        },
+        "required": [
+          "sql",
+          "externalCalls",
+          "retries",
+          "bytes",
+          "latency",
+          "limitations"
+        ],
+        "type": "object"
+      },
+      "ObservationLinkProof": {
+        "additionalProperties": false,
+        "properties": {
+          "messageIdHash": {
+            "type": "string"
+          },
+          "predecessorEvent": {
+            "type": "string",
+            "enum": [
+              "send"
+            ]
+          },
+          "profile": {
+            "type": "string",
+            "enum": [
+              "orders-message-causal-v1"
+            ]
+          },
+          "successorEvent": {
+            "type": "string",
+            "enum": [
+              "receive"
+            ]
+          }
+        },
+        "required": [
+          "profile",
+          "messageIdHash",
+          "predecessorEvent",
+          "successorEvent"
+        ],
+        "type": "object"
+      },
+      "ObservationObservationContext": {
+        "additionalProperties": false,
+        "properties": {
+          "configurationHash": {
+            "type": "string"
+          },
+          "environment": {
+            "$ref": "#/components/schemas/ObservationEnvironment"
+          },
+          "input": {
+            "$ref": "#/components/schemas/ObservationInputContext"
+          },
+          "instrumentation": {
+            "$ref": "#/components/schemas/ObservationInstrumentation"
+          },
+          "producer": {
+            "$ref": "#/components/schemas/ObservationProducer"
+          },
+          "sampling": {
+            "$ref": "#/components/schemas/ObservationSampling"
+          },
+          "scenario": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ObservationScenario"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "source": {
+            "$ref": "#/components/schemas/ObservationSource"
+          },
+          "window": {
+            "$ref": "#/components/schemas/ObservationWindow"
+          }
+        },
+        "required": [
+          "producer",
+          "source",
+          "environment",
+          "window",
+          "configurationHash",
+          "input",
+          "sampling",
+          "instrumentation",
+          "scenario"
+        ],
+        "type": "object"
+      },
+      "ObservationOverride": {
+        "additionalProperties": false,
+        "properties": {
+          "reason": {
+            "type": "string"
+          },
+          "recordId": {
+            "type": "string"
+          },
+          "ref": {
+            "$ref": "#/components/schemas/BackendDiagramRef"
+          }
+        },
+        "required": [
+          "recordId",
+          "ref",
+          "reason"
+        ],
+        "type": "object"
+      },
+      "ObservationProducer": {
+        "additionalProperties": false,
+        "properties": {
+          "adapterVersion": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "schemaVersion": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "schemaVersion",
+          "adapterVersion"
+        ],
+        "type": "object"
+      },
+      "ObservationRecord": {
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "span"
+                ]
+              },
+              "id": {
+                "type": "string"
+              },
+              "executionId": {
+                "type": "string"
+              },
+              "backendRef": {
+                "$ref": "#/components/schemas/BackendDiagramRef"
+              },
+              "identityRef": {
+                "$ref": "#/components/schemas/ObservationIdentityRef"
+              },
+              "diagramWitness": {
+                "$ref": "#/components/schemas/ObservationDiagramWitness"
+              },
+              "traceId": {
+                "type": "string"
+              },
+              "spanId": {
+                "type": "string"
+              },
+              "parentSpanId": {
+                "type": "string"
+              },
+              "startTimeUnixNano": {
+                "type": "string",
+                "pattern": "^(0|[1-9][0-9]{0,18})$",
+                "maxLength": 19
+              },
+              "endTimeUnixNano": {
+                "type": "string",
+                "pattern": "^(0|[1-9][0-9]{0,18})$",
+                "maxLength": 19
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "server",
+                  "client",
+                  "internal"
+                ]
+              },
+              "category": {
+                "type": "string",
+                "enum": [
+                  "sql",
+                  "http",
+                  "retry",
+                  "internal"
+                ]
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "unset",
+                  "ok",
+                  "error"
+                ]
+              },
+              "attrs": {
+                "$ref": "#/components/schemas/ObservationAttributes"
+              },
+              "links": {
+                "items": {
+                  "$ref": "#/components/schemas/ObservationSpanLink"
+                },
+                "type": "array",
+                "maxItems": 32
+              }
+            },
+            "required": [
+              "type",
+              "id",
+              "executionId",
+              "traceId",
+              "spanId",
+              "startTimeUnixNano",
+              "endTimeUnixNano",
+              "kind",
+              "category",
+              "status",
+              "attrs"
+            ]
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "test"
+                ]
+              },
+              "id": {
+                "type": "string"
+              },
+              "executionId": {
+                "type": "string"
+              },
+              "backendRef": {
+                "$ref": "#/components/schemas/BackendDiagramRef"
+              },
+              "identityRef": {
+                "$ref": "#/components/schemas/ObservationIdentityRef"
+              },
+              "diagramWitness": {
+                "$ref": "#/components/schemas/ObservationDiagramWitness"
+              },
+              "suiteId": {
+                "type": "string"
+              },
+              "caseId": {
+                "type": "string"
+              },
+              "outcome": {
+                "type": "string",
+                "enum": [
+                  "passed",
+                  "failed",
+                  "skipped",
+                  "unknown"
+                ]
+              },
+              "timestamp": {
+                "type": "string",
+                "pattern": "^(0|[1-9][0-9]{0,18})$",
+                "maxLength": 19
+              },
+              "durationNs": {
+                "type": "string",
+                "pattern": "^(0|[1-9][0-9]{0,18})$",
+                "maxLength": 19
+              },
+              "assertions": {
+                "items": {
+                  "$ref": "#/components/schemas/ObservationAssertion"
+                },
+                "type": "array"
+              },
+              "runPins": {
+                "$ref": "#/components/schemas/ObservationRunPins"
+              }
+            },
+            "required": [
+              "type",
+              "id",
+              "executionId",
+              "suiteId",
+              "caseId",
+              "outcome",
+              "timestamp",
+              "durationNs",
+              "assertions",
+              "runPins"
+            ]
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "measurement"
+                ]
+              },
+              "id": {
+                "type": "string"
+              },
+              "executionId": {
+                "type": "string"
+              },
+              "backendRef": {
+                "$ref": "#/components/schemas/BackendDiagramRef"
+              },
+              "identityRef": {
+                "$ref": "#/components/schemas/ObservationIdentityRef"
+              },
+              "diagramWitness": {
+                "$ref": "#/components/schemas/ObservationDiagramWitness"
+              },
+              "timestamp": {
+                "type": "string",
+                "pattern": "^(0|[1-9][0-9]{0,18})$",
+                "maxLength": 19
+              },
+              "metric": {
+                "type": "string",
+                "enum": [
+                  "sql_count",
+                  "external_call_count",
+                  "retry_count",
+                  "request_bytes",
+                  "response_bytes"
+                ]
+              },
+              "value": {
+                "type": "string",
+                "pattern": "^(0|[1-9][0-9]{0,18})$",
+                "maxLength": 19
+              },
+              "unit": {
+                "type": "string",
+                "enum": [
+                  "count",
+                  "bytes"
+                ]
+              },
+              "basis": {
+                "type": "string"
+              },
+              "scope": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "type",
+              "id",
+              "executionId",
+              "timestamp",
+              "metric",
+              "value",
+              "unit",
+              "basis",
+              "scope"
+            ]
+          }
+        ],
+        "discriminator": {
+          "propertyName": "type"
+        }
+      },
+      "ObservationRecordPage": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ObservationRecord"
+            },
+            "type": "array"
+          },
+          "nextCursor": {
+            "type": "string"
+          },
+          "pin": {
+            "$ref": "#/components/schemas/ObservationVersionReceipt"
+          }
+        },
+        "required": [
+          "pin",
+          "items",
+          "nextCursor"
+        ],
+        "type": "object"
+      },
+      "ObservationReplayPin": {
+        "additionalProperties": false,
+        "properties": {
+          "reportHash": {
+            "type": "string"
+          },
+          "runId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "runId",
+          "reportHash"
+        ],
+        "type": "object"
+      },
+      "ObservationRunPins": {
+        "additionalProperties": false,
+        "properties": {
+          "package": {
+            "$ref": "#/components/schemas/ObservationScenario"
+          },
+          "reportHash": {
+            "type": "string"
+          },
+          "runId": {
+            "type": "string"
+          },
+          "sourceHash": {
+            "type": "string"
+          },
+          "triggerVerdict": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "runId",
+          "reportHash",
+          "triggerVerdict",
+          "sourceHash"
+        ],
+        "type": "object"
+      },
+      "ObservationSampling": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "all",
+              "head",
+              "tail",
+              "unknown"
+            ]
+          },
+          "probability": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "probability",
+          "reason"
+        ],
+        "type": "object"
+      },
+      "ObservationScenario": {
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "design_scenario"
+                ]
+              },
+              "id": {
+                "type": "string"
+              },
+              "revisionId": {
+                "type": "string"
+              },
+              "contentHash": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "id",
+              "revisionId",
+              "contentHash"
+            ]
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "backend_replay"
+                ]
+              },
+              "packageId": {
+                "type": "string"
+              },
+              "version": {
+                "format": "int64",
+                "type": "integer"
+              },
+              "hash": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "packageId",
+              "version",
+              "hash"
+            ]
+          }
+        ],
+        "discriminator": {
+          "propertyName": "kind"
+        }
+      },
+      "ObservationSetPage": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ObservationVersion"
+            },
+            "type": "array"
+          },
+          "nextCursor": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "items",
+          "nextCursor"
+        ],
+        "type": "object"
+      },
+      "ObservationSource": {
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "status": {
+                "type": "string",
+                "enum": [
+                  "known"
+                ]
+              },
+              "serviceId": {
+                "type": "string"
+              },
+              "buildId": {
+                "type": "string"
+              },
+              "sourceFilesHash": {
+                "type": "string"
+              },
+              "repositoryId": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "status",
+              "serviceId",
+              "buildId",
+              "sourceFilesHash",
+              "repositoryId"
+            ]
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "status": {
+                "type": "string",
+                "enum": [
+                  "unknown"
+                ]
+              },
+              "serviceId": {
+                "type": "string"
+              },
+              "reason": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "status",
+              "serviceId",
+              "reason"
+            ]
+          }
+        ],
+        "discriminator": {
+          "propertyName": "status"
+        }
+      },
+      "ObservationSpanLink": {
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "traceId": {
+                "type": "string"
+              },
+              "spanId": {
+                "type": "string"
+              },
+              "relation": {
+                "type": "string",
+                "enum": [
+                  "association"
+                ]
+              }
+            },
+            "required": [
+              "traceId",
+              "spanId",
+              "relation"
+            ]
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "traceId": {
+                "type": "string"
+              },
+              "spanId": {
+                "type": "string"
+              },
+              "relation": {
+                "type": "string",
+                "enum": [
+                  "follows_from"
+                ]
+              },
+              "proof": {
+                "$ref": "#/components/schemas/ObservationLinkProof"
+              }
+            },
+            "required": [
+              "traceId",
+              "spanId",
+              "relation",
+              "proof"
+            ]
+          }
+        ],
+        "discriminator": {
+          "propertyName": "relation"
+        }
+      },
+      "ObservationVersion": {
+        "additionalProperties": false,
+        "properties": {
+          "contentHash": {
+            "type": "string"
+          },
+          "context": {
+            "$ref": "#/components/schemas/ObservationObservationContext"
+          },
+          "logicalBytes": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "recordCount": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "setId": {
+            "type": "string"
+          },
+          "version": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "setId",
+          "version",
+          "contentHash",
+          "recordCount",
+          "context",
+          "name",
+          "logicalBytes"
+        ],
+        "type": "object"
+      },
+      "ObservationVersionReceipt": {
+        "additionalProperties": false,
+        "properties": {
+          "contentHash": {
+            "type": "string"
+          },
+          "recordCount": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "setId": {
+            "type": "string"
+          },
+          "version": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "setId",
+          "version",
+          "contentHash",
+          "recordCount"
+        ],
+        "type": "object"
+      },
+      "ObservationWindow": {
+        "additionalProperties": false,
+        "properties": {
+          "end": {
+            "type": "string"
+          },
+          "start": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "start",
+          "end"
+        ],
+        "type": "object"
       }
     }
   },
@@ -112124,6 +113505,876 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/BackendDiagramScopeInput"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/backend-projects/{id}/observations": {
+      "post": {
+        "operationId": "importBackendObservations",
+        "tags": [
+          "backend-projects"
+        ],
+        "summary": "ImportBackendObservations",
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Exact immutable observation result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservationVersionReceipt"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ObservationImportInput"
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "operationId": "listBackendObservations",
+        "tags": [
+          "backend-projects"
+        ],
+        "summary": "ListBackendObservations",
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Exact immutable observation result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservationSetPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/backend-projects/{id}/observations/{sid}/versions/{v}": {
+      "get": {
+        "operationId": "getBackendObservationVersion",
+        "tags": [
+          "backend-projects"
+        ],
+        "summary": "GetBackendObservationVersion",
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "sid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "v",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Exact immutable observation result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservationVersion"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/backend-projects/{id}/observations/{sid}/versions/{v}/records": {
+      "get": {
+        "operationId": "getBackendObservationRecords",
+        "tags": [
+          "backend-projects"
+        ],
+        "summary": "GetBackendObservationRecords",
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "sid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "v",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Exact immutable observation result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservationRecordPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/backend-projects/{id}/observations/adapt": {
+      "post": {
+        "operationId": "adaptBackendObservations",
+        "tags": [
+          "backend-projects"
+        ],
+        "summary": "AdaptBackendObservations",
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Exact immutable observation result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservationAdaptedBatch"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ObservationAdaptInput"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/backend-projects/{id}/observations/{sid}/correlations": {
+      "post": {
+        "operationId": "correlateBackendObservations",
+        "tags": [
+          "backend-projects"
+        ],
+        "summary": "CorrelateBackendObservations",
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "sid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Exact immutable observation result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservationCorrelationSnapshot"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ObservationCorrelateInput"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/backend-projects/{id}/observations/{sid}/correlations/{v}": {
+      "get": {
+        "operationId": "getBackendObservationCorrelation",
+        "tags": [
+          "backend-projects"
+        ],
+        "summary": "GetBackendObservationCorrelation",
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "sid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "v",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Exact immutable observation result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservationCorrelationSnapshot"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
               }
             }
           }
