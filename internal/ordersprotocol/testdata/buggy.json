@@ -1,0 +1,73 @@
+{
+  "variant": "buggy",
+  "scope": {
+    "payment": "mocked",
+    "persistence": "actual_fixture"
+  },
+  "reset": {
+    "orders": 0,
+    "charges": 0,
+    "attempts": 0,
+    "triggers": 0
+  },
+  "attempts": [
+    {
+      "number": 1,
+      "status": 503,
+      "outcome": "persistence_failed",
+      "orders": 0,
+      "charges": 1,
+      "triggers": 1
+    },
+    {
+      "number": 2,
+      "status": 201,
+      "outcome": "persisted",
+      "orders": 1,
+      "charges": 2,
+      "triggers": 1
+    }
+  ],
+  "orders": [
+    {
+      "businessKey": "order-A",
+      "sku": "widget",
+      "quantity": 1,
+      "amountMinor": 1000,
+      "currency": "USD"
+    }
+  ],
+  "charges": [
+    {
+      "id": "charge-1",
+      "businessKey": "order-A",
+      "amountMinor": 1000,
+      "currency": "USD",
+      "scope": "mocked"
+    },
+    {
+      "id": "charge-2",
+      "businessKey": "order-A",
+      "amountMinor": 1000,
+      "currency": "USD",
+      "scope": "mocked"
+    }
+  ],
+  "events": [
+    "reset",
+    "armed",
+    "attempt",
+    "payment_charged",
+    "failure_triggered",
+    "attempt",
+    "payment_charged",
+    "order_persisted"
+  ],
+  "assertions": {
+    "orders": true,
+    "charges": false,
+    "attempts": true,
+    "triggers": true
+  },
+  "verdict": "failed"
+}
