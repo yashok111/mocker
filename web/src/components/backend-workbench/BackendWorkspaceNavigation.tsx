@@ -11,6 +11,7 @@ export function focusWorkspaceRegion(selector: string) {
 export function BackendWorkspaceNavigation() {
   return (
     <Group component="nav" aria-label="Разделы Backend Workbench" wrap="wrap">
+<Button variant="default" onClick={() => focusWorkspaceRegion('[data-testid="backend-observations"] h2')}>Наблюдения</Button>
 <Button variant="default" onClick={() => focusWorkspaceRegion('[data-testid="backend-replay"] h2')}>Orders replay</Button>
 <Button variant="default" onClick={() => focusWorkspaceRegion('[data-testid="backend-portable"] h2')}>Перенос проекта</Button>
       <Button

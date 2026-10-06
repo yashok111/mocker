@@ -10,15 +10,15 @@ import (
 	"github.com/yashok111/mocker/internal/testkit"
 )
 
-func TestMigrate_reachesSchemaVersion25(t *testing.T) {
+func TestMigrate_reachesSchemaVersion26(t *testing.T) {
 	db := testkit.NewDB(t)
 
 	v, err := db.SchemaVersion(t.Context())
 	if err != nil {
 		t.Fatalf("schema version: %v", err)
 	}
-	if v != 25 {
-		t.Fatalf("schema version = %d, want 25", v)
+	if v != 26 {
+		t.Fatalf("schema version = %d, want 26", v)
 	}
 }
 
@@ -146,8 +146,8 @@ func TestMigrate_backfillsEmptyBaseScopeAndServes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("schema version: %v", err)
 	}
-	if v != 25 {
-		t.Fatalf("schema version = %d, want 25", v)
+	if v != 26 {
+		t.Fatalf("schema version = %d, want 26", v)
 	}
 
 	for _, id := range entIDs {

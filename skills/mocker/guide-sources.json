@@ -257,6 +257,20 @@
       "source": "SKILL.md",
       "embedded": "backend-replay.md",
       "workflowId": "mocker-backend-replay"
+    },
+    {
+      "topic": "backend-observations",
+      "package": "mocker-backend-verify",
+      "source": "references/backend/observations.md",
+      "embedded": "backend-observations.md",
+      "workflowId": "mocker-backend-verify"
+    },
+    {
+      "topic": "backend-correlation",
+      "package": "mocker-backend-verify",
+      "source": "references/backend/correlation.md",
+      "embedded": "backend-correlation.md",
+      "workflowId": "mocker-backend-verify"
     }
   ],
   "workflows": [
@@ -459,7 +473,7 @@
     },
     {
       "workflowId": "mocker-backend-verify",
-      "workflowVersion": "1",
+      "workflowVersion": "3",
       "entrypoint": "backend-verify",
       "requiredModelSchemaVersions": [
         "5",
@@ -467,12 +481,15 @@
       ],
       "requiredViewSchemaVersions": [
         "backend-diagram-v1",
-        "diagram-view-v1"
+        "diagram-view-v1",
+        "backend-observations-v1"
       ],
       "requiredCapabilities": [
         "backend-analysis-jobs",
         "backend-analysis-diagnostics",
-        "backend-finding-review"
+        "backend-finding-review",
+        "backend-observations",
+        "backend-observation-correlation"
       ]
     },
     {

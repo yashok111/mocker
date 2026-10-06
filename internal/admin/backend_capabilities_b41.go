@@ -11,7 +11,7 @@ type backendReadSupport struct {
 
 func backendCapabilityFeatures() []string {
 	return append(backendmodel.Features(),
-		"backend-replay", "backend-test-profiles", "backend-replay-bindings",
+		"backend-observations", "backend-observation-correlation", "backend-replay", "backend-test-profiles", "backend-replay-bindings",
 		"backend-materialization", "backend-diagram-svg", "backend-portable", "backend-artifact-context-v3", "backend-namespaced-artifact-query",
 		"backend-architecture", "backend-interactions", "backend-lifecycle", "backend-business-map", "backend-diagrams", "backend-diagram-views",
 		"backend-relational-import", "backend-database-query", "backend-database-er",

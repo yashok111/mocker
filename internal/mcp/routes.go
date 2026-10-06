@@ -51,6 +51,14 @@ import (
 var noRoute = []string{}
 
 var toolRoutes = map[string][]string{
+	"import_backend_observations":         {"POST /api/backend-projects/{id}/observations"},
+	"list_backend_observations":           {"GET /api/backend-projects/{id}/observations"},
+	"get_backend_observation_version":     {"GET /api/backend-projects/{id}/observations/{sid}/versions/{v}"},
+	"get_backend_observation_records":     {"GET /api/backend-projects/{id}/observations/{sid}/versions/{v}/records"},
+	"adapt_backend_observations":          {"POST /api/backend-projects/{id}/observations/adapt"},
+	"correlate_backend_observations":      {"POST /api/backend-projects/{id}/observations/{sid}/correlations"},
+	"get_backend_observation_correlation": {"GET /api/backend-projects/{id}/observations/{sid}/correlations/{v}"},
+
 	"resolve_backend_diagram_scope":            {"POST /api/backend-projects/{id}/diagrams/resolve-scope"},
 	"list_backend_replay_targets":              {"GET /api/backend-projects/{id}/replay/targets"},
 	"get_backend_replay_template":              {"GET /api/backend-projects/{id}/replay/template"},
@@ -405,7 +413,7 @@ var toolRoutes = map[string][]string{
 // production.
 // B1.2 adds five isolated database proposal operations. B24 adds four exact
 // API artifact snapshot/query/preview/apply operations.
-const toolCount = 239
+const toolCount = 262
 
 // toolPath resolves ONE call a tool makes into the (method, path) pair
 // loopback.do/call take.

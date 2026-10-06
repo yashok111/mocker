@@ -27,6 +27,7 @@ import (
 	"github.com/yashok111/mocker/internal/auth"
 	"github.com/yashok111/mocker/internal/backendanalysis"
 	"github.com/yashok111/mocker/internal/backendmodel"
+	"github.com/yashok111/mocker/internal/backendobservations"
 	"github.com/yashok111/mocker/internal/backendreplay"
 	"github.com/yashok111/mocker/internal/config"
 	"github.com/yashok111/mocker/internal/customep"
@@ -331,6 +332,7 @@ func (a *app) buildReplay(ctx context.Context) error {
 		return fmt.Errorf("recover backend replays: %w", err)
 	}
 	a.adminSrv.SetBackendReplay(a.replayService)
+	a.adminSrv.SetBackendObservations(&backendobservations.Service{Repo: backendobservations.NewRepo(a.db), Graphs: graphs, Replay: a.replayService})
 	return nil
 }
 

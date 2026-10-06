@@ -23,6 +23,7 @@ import (
 	"github.com/yashok111/mocker/internal/backendanalysis"
 	"github.com/yashok111/mocker/internal/backendmaterialize"
 	"github.com/yashok111/mocker/internal/backendmodel"
+	"github.com/yashok111/mocker/internal/backendobservations"
 	"github.com/yashok111/mocker/internal/backendportable"
 	"github.com/yashok111/mocker/internal/backendreplay"
 	"github.com/yashok111/mocker/internal/checkpoints"
@@ -75,6 +76,7 @@ const readyzTimeout = 2 * time.Second
 
 // Server holds the admin plane's dependencies and builds its HTTP handler.
 type Server struct {
+	backendObservations *backendobservations.Service
 	backendReplay       *backendreplay.Service
 	backendAnalysis     *backendanalysis.Service
 	backendAnalysisRepo *backendanalysis.Repo
