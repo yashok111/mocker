@@ -73,7 +73,7 @@ func (r *Repo) ListDiagrams(ctx context.Context, pid string, in DiagramListInput
 	if err != nil {
 		return nil, err
 	}
-	rows, err := tx.QueryContext(ctx, `SELECT d.id,d.kind,v.version,v.content_hash,v.target_hash FROM backend_diagrams d JOIN backend_diagram_versions v ON v.project_id=d.project_id AND v.diagram_id=d.id AND v.version=d.version WHERE d.project_id=? AND (?='' OR d.kind=?) ORDER BY d.kind,d.id`, pid, in.Kind, in.Kind)
+	rows, err := tx.QueryContext(ctx, `SELECT d.id,d.kind,v.version,v.content_hash,v.target_hash FROM backend_diagrams d JOIN backend_diagram_versions_documents v ON v.project_id=d.project_id AND v.diagram_id=d.id AND v.version=d.version WHERE d.project_id=? AND (?='' OR d.kind=?) ORDER BY d.kind,d.id`, pid, in.Kind, in.Kind)
 	if err != nil {
 		return nil, err
 	}

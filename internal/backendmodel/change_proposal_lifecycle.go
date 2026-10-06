@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json/v2"
+	"github.com/yashok111/mocker/internal/backendblob"
 	"slices"
 	"time"
 )
@@ -81,7 +82,7 @@ func (r *Repo) applyChangeReady(ctx context.Context, pid, id string, in ApplyCha
 		if err != nil {
 			return err
 		}
-		if _, err = tx.ExecContext(ctx, `INSERT INTO backend_change_proposal_events(project_id,proposal_id,revision_id,version,document) VALUES(?,?,?,?,?)`, pid, id, rev.ID, p.Version, string(event)); err != nil {
+		if _, err = backendblob.Exec(ctx, tx, `INSERT INTO backend_change_proposal_events(project_id,proposal_id,revision_id,version,document) VALUES(?,?,?,?,?)`, pid, id, rev.ID, p.Version, string(event)); err != nil {
 			return err
 		}
 		*out = ChangeProposalApplyResult{Proposal: *p, Revision: *rev, Changes: []ChangeProposalChange{}, SemanticHash: rev.SemanticHash}

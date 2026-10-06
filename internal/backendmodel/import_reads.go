@@ -330,7 +330,7 @@ func (r *Repo) Node(ctx context.Context, pid, rid, nid string) (*Node, error) {
 		return nil, notFound()
 	}
 	var doc string
-	err := r.db.R.QueryRowContext(ctx, `SELECT document FROM backend_graph_records WHERE project_id=? AND revision_id=? AND record_type='node' AND id=?`, pid, rid, nid).Scan(&doc)
+	err := r.db.R.QueryRowContext(ctx, `SELECT document FROM backend_graph_records_documents WHERE project_id=? AND revision_id=? AND record_type='node' AND id=?`, pid, rid, nid).Scan(&doc)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, notFound()
 	}
@@ -387,7 +387,7 @@ func (r *Repo) evidence(ctx context.Context, pid, rid string, in EvidenceQueryIn
 	if err != nil {
 		return nil, err
 	}
-	query := `SELECT document,id FROM backend_graph_records WHERE project_id=? AND revision_id=? AND record_type='evidence' AND id>?`
+	query := `SELECT document,id FROM backend_graph_records_documents WHERE project_id=? AND revision_id=? AND record_type='evidence' AND id>?`
 	args := []any{pid, rid, after}
 	if in.EvidenceID != "" {
 		query += ` AND id=?`
@@ -452,7 +452,7 @@ func (r *Repo) RevisionCoverage(ctx context.Context, pid, rid string) (*Revision
 		return nil, err
 	}
 	var doc string
-	err = r.db.R.QueryRowContext(ctx, `SELECT document FROM backend_revision_sources WHERE revision_id=?`, rid).Scan(&doc)
+	err = r.db.R.QueryRowContext(ctx, `SELECT document FROM backend_revision_sources_documents WHERE revision_id=?`, rid).Scan(&doc)
 	if errors.Is(err, sql.ErrNoRows) {
 		return &RevisionCoverage{Coverage: rev.Coverage, Inventory: []InventoryItem{}, Snapshots: []SourceSnapshot{}, ReconciliationGaps: []string{}}, nil
 	}

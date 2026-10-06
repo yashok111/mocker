@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"github.com/yashok111/mocker/internal/backendblob"
 
 	p "github.com/yashok111/mocker/internal/ordersprotocol"
 )
@@ -40,7 +41,7 @@ func (s *Service) Reconcile(ctx context.Context, pid, actor, id string) (*Run, e
 	}
 	// Every mutation has a committed step row before dispatch. No step rows is
 	// positive local evidence that this process never authorized a mutation.
-	rows, err := s.repo.db.R.QueryContext(ctx, `SELECT endpoint,request_hash,request_json FROM backend_replay_steps WHERE run_id=? ORDER BY rowid`, id)
+	rows, err := s.repo.db.R.QueryContext(ctx, `SELECT endpoint,request_hash,request_json FROM backend_replay_steps_documents WHERE run_id=? ORDER BY rowid`, id)
 	if err != nil {
 		return nil, err
 	}
@@ -137,7 +138,7 @@ func (s *Service) Reconcile(ctx context.Context, pid, actor, id string) (*Run, e
 			return conflictReplay("Lease is not reconcilable")
 		}
 		raw := []byte(`{"positiveWitness":true}`)
-		if _, err = tx.ExecContext(ctx, `INSERT INTO backend_replay_evidence SELECT ?,COALESCE(max(sequence),0)+1,'reconciled',?,? FROM backend_replay_evidence WHERE run_id=?`, id, p.HashBytes(raw), raw, id); err != nil {
+		if _, err = backendblob.Exec(ctx, tx, `INSERT INTO backend_replay_evidence(run_id,sequence,kind,content_hash,body) SELECT ?,COALESCE(max(sequence),0)+1,'reconciled',?,? FROM backend_replay_evidence_documents WHERE run_id=?`, id, p.HashBytes(raw), raw, id); err != nil {
 			return err
 		}
 		_, err = tx.ExecContext(ctx, `DELETE FROM backend_replay_target_leases WHERE target_id=? AND run_id=? AND state='uncertain'`, run.Input.Profile.TargetID, id)

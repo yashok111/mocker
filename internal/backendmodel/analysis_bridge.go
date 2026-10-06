@@ -95,7 +95,7 @@ func (r *Repo) FreezeChangePreview(ctx context.Context, pid, id string, in Previ
 		return nil, err
 	}
 	var base string
-	if err = r.db.R.QueryRowContext(ctx, `SELECT base_revision_id FROM backend_change_proposal_revisions WHERE project_id=? AND proposal_id=? AND id=?`, pid, id, in.ProposalRevisionID).Scan(&base); err != nil {
+	if err = r.db.R.QueryRowContext(ctx, `SELECT base_revision_id FROM backend_change_proposal_revisions_documents WHERE project_id=? AND proposal_id=? AND id=?`, pid, id, in.ProposalRevisionID).Scan(&base); err != nil {
 		return nil, err
 	}
 	pin := ProposalReadTarget{ProposalID: id, ProposalRevisionID: in.ProposalRevisionID}
@@ -157,7 +157,7 @@ func (r *Repo) ValidateFrozenChangePreviewAdmission(ctx context.Context, tx *sql
 	}
 	for _, created := range f.Admission.CreatedIDs {
 		var count int
-		if err = tx.QueryRowContext(ctx, `SELECT count(*) FROM backend_change_proposal_identities WHERE project_id=? AND proposal_id=? AND id=?`, pid, p.ID, created.ID).Scan(&count); err != nil {
+		if err = tx.QueryRowContext(ctx, `SELECT count(*) FROM backend_change_proposal_identities_documents WHERE project_id=? AND proposal_id=? AND id=?`, pid, p.ID, created.ID).Scan(&count); err != nil {
 			return err
 		}
 		if count != 0 {
@@ -165,7 +165,7 @@ func (r *Repo) ValidateFrozenChangePreviewAdmission(ctx context.Context, tx *sql
 		}
 	}
 	var draftHash, baseID, baseHash string
-	if err = tx.QueryRowContext(ctx, `SELECT json_extract(document,'$.semanticHash'),base_revision_id,json_extract(document,'$.baseSemanticHash') FROM backend_change_proposal_revisions WHERE project_id=? AND proposal_id=? AND id=?`, pid, p.ID, f.ChangeProposal.ProposalRevisionID).Scan(&draftHash, &baseID, &baseHash); err != nil {
+	if err = tx.QueryRowContext(ctx, `SELECT json_extract(document,'$.semanticHash'),base_revision_id,json_extract(document,'$.baseSemanticHash') FROM backend_change_proposal_revisions_documents WHERE project_id=? AND proposal_id=? AND id=?`, pid, p.ID, f.ChangeProposal.ProposalRevisionID).Scan(&draftHash, &baseID, &baseHash); err != nil {
 		return err
 	}
 	if draftHash != f.DraftHash || baseID != f.BaseRevisionID || baseHash != f.BaseSemanticHash {
@@ -174,7 +174,7 @@ func (r *Repo) ValidateFrozenChangePreviewAdmission(ctx context.Context, tx *sql
 	return nil
 }
 func loadAnalysisIdentities(ctx context.Context, q importReader, pid string, pin ProposalReadTarget) (map[string]ChangeObjectIdentity, error) {
-	rows, err := q.QueryContext(ctx, analysisIdentityCTE+`SELECT i.document FROM backend_change_proposal_identities i JOIN ancestors a ON a.id=i.first_revision_id`, pid, pin.ProposalID, pin.ProposalRevisionID, pid, pin.ProposalID)
+	rows, err := q.QueryContext(ctx, analysisIdentityCTE+`SELECT i.document FROM backend_change_proposal_identities_documents i JOIN ancestors a ON a.id=i.first_revision_id`, pid, pin.ProposalID, pin.ProposalRevisionID, pid, pin.ProposalID)
 	if err != nil {
 		return nil, err
 	}

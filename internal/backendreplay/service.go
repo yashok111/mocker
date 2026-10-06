@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json/v2"
+	"github.com/yashok111/mocker/internal/backendblob"
 	"math"
 	"reflect"
 	"slices"
@@ -140,7 +141,7 @@ func (s *Service) Connect(ctx context.Context, pid, actor string, in ConnectInpu
 		if err != nil {
 			return err
 		}
-		if _, err = tx.ExecContext(ctx, `INSERT INTO backend_replay_profiles VALUES(?,?,?,?,?,?,?,?,?,?,?)`, pid, out.Pin.ID, out.Pin.Version, out.TargetID, out.ConfigVersion, out.IdentityHash, out.Pin.ContentHash, string(raw), string(auth), actor, nowReplay()); err != nil {
+		if _, err = backendblob.Exec(ctx, tx, `INSERT INTO backend_replay_profiles(project_id,id,version,target_id,config_version,identity_hash,content_hash,document_json,authorization_json,author,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)`, pid, out.Pin.ID, out.Pin.Version, out.TargetID, out.ConfigVersion, out.IdentityHash, out.Pin.ContentHash, string(raw), string(auth), actor, nowReplay()); err != nil {
 			return err
 		}
 		return receiptWrite(ctx, tx, pid, "connect", in.IdempotencyKey, hash, out)
@@ -158,7 +159,7 @@ func (s *Service) Profiles(ctx context.Context, pid string) ([]Profile, error) {
 	if err := s.project(ctx, pid); err != nil {
 		return nil, err
 	}
-	rows, err := s.repo.db.R.QueryContext(ctx, `SELECT document_json FROM backend_replay_profiles WHERE project_id=? ORDER BY created_at,id,version LIMIT 1001`, pid)
+	rows, err := s.repo.db.R.QueryContext(ctx, `SELECT document_json FROM backend_replay_profiles_documents WHERE project_id=? ORDER BY created_at,id,version LIMIT 1001`, pid)
 	if err != nil {
 		return nil, err
 	}
@@ -184,7 +185,7 @@ func (s *Service) Packages(ctx context.Context, pid string) ([]SavedPackage, err
 	if err := s.project(ctx, pid); err != nil {
 		return nil, err
 	}
-	rows, err := s.repo.db.R.QueryContext(ctx, `SELECT document_json FROM backend_replay_packages WHERE project_id=? ORDER BY created_at,id,version LIMIT 1001`, pid)
+	rows, err := s.repo.db.R.QueryContext(ctx, `SELECT document_json FROM backend_replay_packages_documents WHERE project_id=? ORDER BY created_at,id,version LIMIT 1001`, pid)
 	if err != nil {
 		return nil, err
 	}
@@ -234,7 +235,7 @@ func (s *Service) Revoke(ctx context.Context, pid, actor string, in RevokeInput)
 			return conflictReplay("Profile hash mismatch")
 		}
 		var owner string
-		if err = tx.QueryRowContext(ctx, `SELECT author FROM backend_replay_profiles WHERE project_id=? AND id=? AND version=?`, pid, in.Profile.ID, in.Profile.Version).Scan(&owner); err != nil {
+		if err = tx.QueryRowContext(ctx, `SELECT author FROM backend_replay_profiles_documents WHERE project_id=? AND id=? AND version=?`, pid, in.Profile.ID, in.Profile.Version).Scan(&owner); err != nil {
 			return err
 		}
 		if owner != actor {
@@ -321,7 +322,7 @@ func (s *Service) SavePackage(ctx context.Context, pid, actor string, in SavePac
 		}
 		if in.Package.FindingFingerprint != "" {
 			var n int
-			if err := tx.QueryRowContext(ctx, `SELECT count(*) FROM backend_finding_occurrences WHERE project_id=? AND fingerprint=? AND json_extract(document,'$.targetHash')=?`, pid, in.Package.FindingFingerprint, in.Package.TargetHash).Scan(&n); err != nil {
+			if err := tx.QueryRowContext(ctx, `SELECT count(*) FROM backend_finding_occurrences_documents WHERE project_id=? AND fingerprint=? AND json_extract(document,'$.targetHash')=?`, pid, in.Package.FindingFingerprint, in.Package.TargetHash).Scan(&n); err != nil {
 				return err
 			}
 			if n == 0 {
@@ -329,13 +330,13 @@ func (s *Service) SavePackage(ctx context.Context, pid, actor string, in SavePac
 			}
 		}
 		var version int64
-		if err := tx.QueryRowContext(ctx, `SELECT COALESCE(max(version),0) FROM backend_replay_packages WHERE project_id=? AND id=?`, pid, in.ID).Scan(&version); err != nil {
+		if err := tx.QueryRowContext(ctx, `SELECT COALESCE(max(version),0) FROM backend_replay_packages_documents WHERE project_id=? AND id=?`, pid, in.ID).Scan(&version); err != nil {
 			return err
 		}
 		if version != in.ExpectedVersion {
 			return conflictReplay("Package version changed")
 		}
-		if _, err = tx.ExecContext(ctx, `INSERT INTO backend_replay_packages VALUES(?,?,?,?,?,?,?,?,?,?)`, pid, in.ID, out.Pin.Version, contentHash, string(raw), in.Package.TargetHash, profile.Pin.ID, profile.Pin.Version, actor, nowReplay()); err != nil {
+		if _, err = backendblob.Exec(ctx, tx, `INSERT INTO backend_replay_packages(project_id,id,version,content_hash,document_json,target_hash,profile_id,profile_version,author,created_at) VALUES(?,?,?,?,?,?,?,?,?,?)`, pid, in.ID, out.Pin.Version, contentHash, string(raw), in.Package.TargetHash, profile.Pin.ID, profile.Pin.Version, actor, nowReplay()); err != nil {
 			return err
 		}
 		return receiptWrite(ctx, tx, pid, "save", in.IdempotencyKey, hash, out)

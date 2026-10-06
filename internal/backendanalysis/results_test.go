@@ -44,7 +44,7 @@ func TestAnalysisManifestImmutableAtomic(t *testing.T) {
 		t.Fatal("fault did not fail")
 	}
 	var n int
-	if err = db.R.QueryRowContext(t.Context(), `SELECT count(*) FROM backend_analysis_chunks WHERE job_id=?`, j.ID).Scan(&n); err != nil || n != 1 {
+	if err = db.R.QueryRowContext(t.Context(), `SELECT count(*) FROM backend_analysis_chunks_documents WHERE job_id=?`, j.ID).Scan(&n); err != nil || n != 1 {
 		t.Fatalf("orphan chunk %d %v", n, err)
 	}
 	if _, err = db.W.ExecContext(t.Context(), `DROP TRIGGER analysis_test_fail`); err != nil {

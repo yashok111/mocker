@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json/v2"
 	"errors"
+	"github.com/yashok111/mocker/internal/backendblob"
 	"time"
 )
 
@@ -17,7 +18,7 @@ func IndexFindingReportTx(ctx context.Context, tx *sql.Tx, pid string, ref Findi
 	positive := map[string]bool{}
 	for _, c := range checks {
 		positive[c.Fingerprint] = c.Status == "present"
-		if _, err := tx.ExecContext(ctx, `INSERT INTO backend_finding_checks VALUES(?,?,?,?,?,?)`, pid, ref.JobID, ref.ResultVersion, c.Fingerprint, c.ScopeKey, c.Status); err != nil {
+		if _, err := backendblob.Exec(ctx, tx, `INSERT INTO backend_finding_checks(project_id,job_id,result_version,fingerprint,scope_key,status) VALUES(?,?,?,?,?,?)`, pid, ref.JobID, ref.ResultVersion, c.Fingerprint, c.ScopeKey, c.Status); err != nil {
 			return err
 		}
 	}
@@ -26,7 +27,7 @@ func IndexFindingReportTx(ctx context.Context, tx *sql.Tx, pid string, ref Findi
 		if err != nil {
 			return err
 		}
-		if _, err = tx.ExecContext(ctx, `INSERT INTO backend_finding_occurrences VALUES(?,?,?,?,?,?)`, pid, ref.JobID, ref.ResultVersion, f.Fingerprint, f.BasisHash, string(raw)); err != nil {
+		if _, err = backendblob.Exec(ctx, tx, `INSERT INTO backend_finding_occurrences(project_id,job_id,result_version,fingerprint,basis_hash,document) VALUES(?,?,?,?,?,?)`, pid, ref.JobID, ref.ResultVersion, f.Fingerprint, f.BasisHash, string(raw)); err != nil {
 			return err
 		}
 		var version int64
@@ -40,7 +41,7 @@ func IndexFindingReportTx(ctx context.Context, tx *sql.Tx, pid string, ref Findi
 		}
 		// Replayed old evidence never reopens the current occurrence.
 		var seen int
-		if err = tx.QueryRowContext(ctx, `SELECT count(*) FROM backend_finding_occurrences WHERE project_id=? AND fingerprint=? AND basis_hash=?`, pid, f.Fingerprint, f.BasisHash).Scan(&seen); err != nil {
+		if err = tx.QueryRowContext(ctx, `SELECT count(*) FROM backend_finding_occurrences_documents WHERE project_id=? AND fingerprint=? AND basis_hash=?`, pid, f.Fingerprint, f.BasisHash).Scan(&seen); err != nil {
 			return err
 		}
 		if seen > 1 {
@@ -62,7 +63,7 @@ func writeFindingEvent(ctx context.Context, tx *sql.Tx, pid, fp string, event Fi
 	if err != nil {
 		return err
 	}
-	_, err = tx.ExecContext(ctx, `INSERT INTO backend_finding_events VALUES(?,?,?,?)`, pid, fp, event.Version, string(raw))
+	_, err = backendblob.Exec(ctx, tx, `INSERT INTO backend_finding_events(project_id,fingerprint,version,document) VALUES(?,?,?,?)`, pid, fp, event.Version, string(raw))
 	return err
 }
 func readFindingReview(ctx context.Context, tx *sql.Tx, pid, fp string) (*FindingReview, error) {
@@ -74,7 +75,7 @@ func readFindingReview(ctx context.Context, tx *sql.Tx, pid, fp string) (*Findin
 	if err != nil {
 		return nil, err
 	}
-	rows, err := tx.QueryContext(ctx, `SELECT document FROM backend_finding_events WHERE project_id=? AND fingerprint=? ORDER BY version`, pid, fp)
+	rows, err := tx.QueryContext(ctx, `SELECT document FROM backend_finding_events_documents WHERE project_id=? AND fingerprint=? ORDER BY version`, pid, fp)
 	if err != nil {
 		return nil, err
 	}
@@ -137,7 +138,7 @@ func (r *Repo) ReviewFinding(ctx context.Context, pid, fp string, in FindingRevi
 				return e
 			}
 			var matches int
-			e = tx.QueryRowContext(ctx, `SELECT count(*) FROM backend_finding_occurrences o JOIN backend_finding_checks c USING(project_id,job_id,result_version,fingerprint) JOIN backend_analysis_jobs old ON old.project_id=o.project_id AND old.id=o.job_id JOIN backend_analysis_jobs recheck ON recheck.project_id=o.project_id AND recheck.id=? WHERE o.project_id=? AND o.fingerprint=? AND o.basis_hash=? AND c.scope_key=? AND recheck.created_at>old.created_at`, in.ResolutionAnalysis.JobID, pid, fp, in.BasisHash, scope).Scan(&matches)
+			e = tx.QueryRowContext(ctx, `SELECT count(*) FROM backend_finding_occurrences_documents o JOIN backend_finding_checks c USING(project_id,job_id,result_version,fingerprint) JOIN backend_analysis_jobs old ON old.project_id=o.project_id AND old.id=o.job_id JOIN backend_analysis_jobs recheck ON recheck.project_id=o.project_id AND recheck.id=? WHERE o.project_id=? AND o.fingerprint=? AND o.basis_hash=? AND c.scope_key=? AND recheck.created_at>old.created_at`, in.ResolutionAnalysis.JobID, pid, fp, in.BasisHash, scope).Scan(&matches)
 			if e != nil {
 				return e
 			}
@@ -176,13 +177,13 @@ func (r *Repo) ListBackendFindings(ctx context.Context, pid string, ref FindingA
 	}
 	defer tx.Rollback()
 	var exists int
-	if err = tx.QueryRowContext(ctx, `SELECT count(*) FROM backend_analysis_manifests m JOIN backend_analysis_jobs j ON j.project_id=m.project_id AND j.id=m.job_id WHERE m.project_id=? AND m.job_id=? AND m.result_version=? AND j.kind='diagnostics'`, pid, ref.JobID, ref.ResultVersion).Scan(&exists); err != nil {
+	if err = tx.QueryRowContext(ctx, `SELECT count(*) FROM backend_analysis_manifests_documents m JOIN backend_analysis_jobs j ON j.project_id=m.project_id AND j.id=m.job_id WHERE m.project_id=? AND m.job_id=? AND m.result_version=? AND j.kind='diagnostics'`, pid, ref.JobID, ref.ResultVersion).Scan(&exists); err != nil {
 		return nil, err
 	}
 	if exists != 1 {
 		return nil, notFound()
 	}
-	rows, err := tx.QueryContext(ctx, `SELECT document FROM backend_finding_occurrences WHERE project_id=? AND job_id=? AND result_version=? AND fingerprint>? ORDER BY fingerprint LIMIT ?`, pid, ref.JobID, ref.ResultVersion, after, limit+1)
+	rows, err := tx.QueryContext(ctx, `SELECT document FROM backend_finding_occurrences_documents WHERE project_id=? AND job_id=? AND result_version=? AND fingerprint>? ORDER BY fingerprint LIMIT ?`, pid, ref.JobID, ref.ResultVersion, after, limit+1)
 	if err != nil {
 		return nil, err
 	}

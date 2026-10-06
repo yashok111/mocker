@@ -8,6 +8,7 @@ import (
 	"encoding/json/v2"
 	"errors"
 	"fmt"
+	"github.com/yashok111/mocker/internal/backendblob"
 	"math"
 	"time"
 	"uuid"
@@ -40,7 +41,7 @@ func (r *Repo) Create(ctx context.Context, in CreateInput) (*Project, error) {
 		if err != nil {
 			return nil, err
 		}
-		_, err = tx.ExecContext(ctx, `INSERT INTO backend_revisions (id,project_id,document) VALUES (?,?,?)`, rev.ID, p.ID, string(doc))
+		_, err = backendblob.Exec(ctx, tx, `INSERT INTO backend_revisions (id,project_id,document) VALUES (?,?,?)`, rev.ID, p.ID, string(doc))
 		return p, err
 	})
 }
@@ -197,7 +198,7 @@ func (r *Repo) Revision(ctx context.Context, projectID, revisionID string) (*Rev
 		return nil, notFound()
 	}
 	var doc string
-	err := r.db.R.QueryRowContext(ctx, `SELECT document FROM backend_revisions WHERE project_id=? AND id=?`, projectID, revisionID).Scan(&doc)
+	err := r.db.R.QueryRowContext(ctx, `SELECT document FROM backend_revisions_documents WHERE project_id=? AND id=?`, projectID, revisionID).Scan(&doc)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, notFound()
 	}

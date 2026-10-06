@@ -27,7 +27,7 @@ func TestChangeRebaseSameBaseReceiptAndHistory(t *testing.T) {
 		t.Fatalf("not a versioned rebase: %+v", out)
 	}
 	var action, commands string
-	if err = r.db.R.QueryRowContext(t.Context(), `SELECT action,commands FROM backend_change_proposal_batches WHERE revision_id=?`, out.Revision.ID).Scan(&action, &commands); err != nil {
+	if err = r.db.R.QueryRowContext(t.Context(), `SELECT action,commands FROM backend_change_proposal_batches_documents WHERE revision_id=?`, out.Revision.ID).Scan(&action, &commands); err != nil {
 		t.Fatal(err)
 	}
 	if action != "rebase" || commands != "[]" {

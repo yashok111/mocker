@@ -14,7 +14,7 @@ import (
 func relationalPublishedCounts(t *testing.T, r *Repo, pid string) string {
 	t.Helper()
 	out := []int64{}
-	for _, query := range []string{`SELECT count(*) FROM backend_revisions WHERE project_id=?`, `SELECT count(*) FROM backend_graph_records WHERE project_id=?`, `SELECT count(*) FROM backend_identity_bindings WHERE project_id=?`, `SELECT count(*) FROM backend_revision_sources s JOIN backend_revisions r ON r.id=s.revision_id WHERE r.project_id=?`, `SELECT count(*) FROM backend_command_receipts WHERE scope LIKE '%'||?||'%'`} {
+	for _, query := range []string{`SELECT count(*) FROM backend_revisions_documents WHERE project_id=?`, `SELECT count(*) FROM backend_graph_records_documents WHERE project_id=?`, `SELECT count(*) FROM backend_identity_bindings WHERE project_id=?`, `SELECT count(*) FROM backend_revision_sources_documents s JOIN backend_revisions_documents r ON r.id=s.revision_id WHERE r.project_id=?`, `SELECT count(*) FROM backend_command_receipts WHERE scope LIKE '%'||?||'%'`} {
 		var count int64
 		if err := r.db.R.QueryRowContext(t.Context(), query, pid).Scan(&count); err != nil {
 			t.Fatal(err)

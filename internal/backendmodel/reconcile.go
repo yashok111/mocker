@@ -14,7 +14,7 @@ func loadSourceState(ctx context.Context, q importReader, pid, rid string) (*Rev
 		return nil, notFound()
 	}
 	var doc string
-	if err := q.QueryRowContext(ctx, `SELECT document FROM backend_revisions WHERE project_id=? AND id=?`, pid, rid).Scan(&doc); err != nil {
+	if err := q.QueryRowContext(ctx, `SELECT document FROM backend_revisions_documents WHERE project_id=? AND id=?`, pid, rid).Scan(&doc); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, notFound()
 		}
@@ -24,7 +24,7 @@ func loadSourceState(ctx context.Context, q importReader, pid, rid string) (*Rev
 	if err := json.Unmarshal([]byte(doc), &state.Revision); err != nil {
 		return nil, err
 	}
-	if err := q.QueryRowContext(ctx, `SELECT document FROM backend_revision_sources WHERE revision_id=?`, rid).Scan(&doc); err == nil {
+	if err := q.QueryRowContext(ctx, `SELECT document FROM backend_revision_sources_documents WHERE revision_id=?`, rid).Scan(&doc); err == nil {
 		var c RevisionCoverage
 		if err := json.Unmarshal([]byte(doc), &c); err != nil {
 			return nil, err
@@ -57,7 +57,7 @@ func loadRevisionState(ctx context.Context, q importReader, pid, rid string) (*R
 		return nil, err
 	}
 	var doc string
-	rows, err := q.QueryContext(ctx, `SELECT record_type,document FROM backend_graph_records WHERE project_id=? AND revision_id=? ORDER BY record_type,id`, pid, rid)
+	rows, err := q.QueryContext(ctx, `SELECT record_type,document FROM backend_graph_records_documents WHERE project_id=? AND revision_id=? ORDER BY record_type,id`, pid, rid)
 	if err != nil {
 		return nil, err
 	}

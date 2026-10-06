@@ -75,7 +75,7 @@ func (r *Repo) Revisions(ctx context.Context, projectID string, in ListInput) (*
 	if err != nil {
 		return nil, err
 	}
-	rows, err := r.db.R.QueryContext(ctx, `SELECT document FROM backend_revisions WHERE project_id=? AND id>? ORDER BY id LIMIT ?`, projectID, after, limit+1)
+	rows, err := r.db.R.QueryContext(ctx, `SELECT document FROM backend_revisions_documents WHERE project_id=? AND id>? ORDER BY id LIMIT ?`, projectID, after, limit+1)
 	if err != nil {
 		return nil, err
 	}

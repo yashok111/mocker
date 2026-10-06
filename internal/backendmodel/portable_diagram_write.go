@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json/v2"
 	"fmt"
+	"github.com/yashok111/mocker/internal/backendblob"
 )
 
 func replacePortableDiagramPin(pin *DiagramPin, known map[DiagramPin]DiagramPin, selfOld, selfNew DiagramPin) error {
@@ -211,7 +212,7 @@ func insertPortableDiagramTx(ctx context.Context, tx *sql.Tx, v *DiagramVersion)
 	}
 	var count, versions int
 	var total int64
-	if err := tx.QueryRowContext(ctx, `SELECT (SELECT count(*) FROM backend_diagrams WHERE project_id=?),(SELECT count(*) FROM backend_diagram_versions WHERE project_id=? AND diagram_id=?),(SELECT coalesce(sum(length(CAST(document AS BLOB))),0) FROM backend_diagram_versions WHERE project_id=?)`, v.ProjectID, v.ProjectID, v.Pin.ID, v.ProjectID).Scan(&count, &versions, &total); err != nil {
+	if err := tx.QueryRowContext(ctx, `SELECT (SELECT count(*) FROM backend_diagrams WHERE project_id=?),(SELECT count(*) FROM backend_diagram_versions_documents WHERE project_id=? AND diagram_id=?),(SELECT coalesce(sum(length(CAST(document AS BLOB))),0) FROM backend_diagram_versions_documents WHERE project_id=?)`, v.ProjectID, v.ProjectID, v.Pin.ID, v.ProjectID).Scan(&count, &versions, &total); err != nil {
 		return err
 	}
 	if count >= 1000 && versions == 0 || versions >= 1000 || total+int64(len(raw)) > 256<<20 {
@@ -230,7 +231,7 @@ func insertPortableDiagramTx(ctx context.Context, tx *sql.Tx, v *DiagramVersion)
 	if err != nil {
 		return err
 	}
-	if _, err := tx.ExecContext(ctx, `INSERT INTO backend_diagram_versions(project_id,diagram_id,version,content_hash,target_hash,document,author,created_at,provenance,provenance_hash) VALUES(?,?,?,?,?,?,?,?,?,?)`, v.ProjectID, v.Pin.ID, v.Pin.Version, v.Pin.ContentHash, v.TargetHash, string(raw), v.Author, v.CreatedAt, string(provenance), v.ProvenanceHash); err != nil {
+	if _, err := backendblob.Exec(ctx, tx, `INSERT INTO backend_diagram_versions(project_id,diagram_id,version,content_hash,target_hash,document,author,created_at,provenance,provenance_hash) VALUES(?,?,?,?,?,?,?,?,?,?)`, v.ProjectID, v.Pin.ID, v.Pin.Version, v.Pin.ContentHash, v.TargetHash, string(raw), v.Author, v.CreatedAt, string(provenance), v.ProvenanceHash); err != nil {
 		return err
 	}
 	if versions > 0 {
@@ -267,7 +268,7 @@ func (r *Repo) ImportPortableDiagramViewTx(ctx context.Context, tx *sql.Tx, pid 
 	}
 	var views, versions int
 	var total int64
-	if err := tx.QueryRowContext(ctx, `SELECT (SELECT count(*) FROM backend_diagram_views WHERE project_id=?),(SELECT count(*) FROM backend_diagram_view_versions WHERE project_id=? AND view_id=?),(SELECT coalesce(sum(length(CAST(document AS BLOB))),0) FROM backend_diagram_view_versions WHERE project_id=?)`, pid, pid, v.ID, pid).Scan(&views, &versions, &total); err != nil {
+	if err := tx.QueryRowContext(ctx, `SELECT (SELECT count(*) FROM backend_diagram_views WHERE project_id=?),(SELECT count(*) FROM backend_diagram_view_versions_documents WHERE project_id=? AND view_id=?),(SELECT coalesce(sum(length(CAST(document AS BLOB))),0) FROM backend_diagram_view_versions_documents WHERE project_id=?)`, pid, pid, v.ID, pid).Scan(&views, &versions, &total); err != nil {
 		return err
 	}
 	if views >= 1000 && versions == 0 || versions >= 1000 || total+int64(len(raw)) > 64<<20 {
@@ -287,7 +288,7 @@ func (r *Repo) ImportPortableDiagramViewTx(ctx context.Context, tx *sql.Tx, pid 
 			return invalid("view", "Import exact view versions newest first with a fixed kind")
 		}
 	}
-	if _, err := tx.ExecContext(ctx, `INSERT INTO backend_diagram_view_versions(project_id,view_id,version,document) VALUES(?,?,?,?)`, pid, v.ID, v.Version, string(raw)); err != nil {
+	if _, err := backendblob.Exec(ctx, tx, `INSERT INTO backend_diagram_view_versions(project_id,view_id,version,document) VALUES(?,?,?,?)`, pid, v.ID, v.Version, string(raw)); err != nil {
 		return err
 	}
 	return advanceDiagramCatalog(ctx, tx, pid)
@@ -326,7 +327,7 @@ func (r *Repo) importPortableSavedViewTx(ctx context.Context, tx *sql.Tx, pid st
 	if _, err := tx.ExecContext(ctx, `INSERT INTO backend_saved_views(id,project_id,version,name,kind,target_json,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET version=max(version,excluded.version)`, v.ID, pid, v.Version, v.Name, v.State.kind(), string(target), v.CreatedAt.Format("2006-01-02T15:04:05.999999999Z07:00"), v.UpdatedAt.Format("2006-01-02T15:04:05.999999999Z07:00")); err != nil {
 		return err
 	}
-	_, err = tx.ExecContext(ctx, `INSERT INTO backend_saved_view_versions(view_id,version,document) VALUES(?,?,?)`, v.ID, v.Version, string(raw))
+	_, err = backendblob.Exec(ctx, tx, `INSERT INTO backend_saved_view_versions(view_id,version,document) VALUES(?,?,?)`, v.ID, v.Version, string(raw))
 	return err
 }
 func importPortableAnnotationsTx(ctx context.Context, tx *sql.Tx, pid string, annotations []Annotation) error {

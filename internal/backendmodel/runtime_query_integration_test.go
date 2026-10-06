@@ -3,6 +3,8 @@ package backendmodel
 import (
 	"database/sql"
 	"encoding/json/v2"
+	"github.com/yashok111/mocker/internal/backendblob"
+	"github.com/yashok111/mocker/internal/testkit"
 	"log/slog"
 	"path/filepath"
 	"reflect"
@@ -26,7 +28,7 @@ func runtimeQueryPersist(t *testing.T, r *Repo, s *RevisionState) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := tx.ExecContext(t.Context(), `INSERT INTO backend_revisions(id,project_id,document) VALUES(?,?,?)`, s.Revision.ID, s.Revision.ProjectID, string(b)); err != nil {
+	if _, err := testkit.ExecBackendOwner(t.Context(), tx, `INSERT INTO backend_revisions(id,project_id,document) VALUES(?,?,?)`, s.Revision.ID, s.Revision.ProjectID, string(b)); err != nil {
 		t.Fatal(err)
 	}
 	for _, n := range s.Nodes {
@@ -38,7 +40,7 @@ func runtimeQueryPersist(t *testing.T, r *Repo, s *RevisionState) {
 		if n.ParentID != nil {
 			parent = *n.ParentID
 		}
-		if _, err := tx.ExecContext(t.Context(), `INSERT INTO backend_graph_records(project_id,revision_id,record_type,id,kind,name,parent_id,document) VALUES(?,?,'node',?,?,?,?,?)`, s.Revision.ProjectID, s.Revision.ID, n.ID, n.Kind, n.Name, parent, string(b)); err != nil {
+		if _, err := testkit.ExecBackendOwner(t.Context(), tx, `INSERT INTO backend_graph_records(project_id,revision_id,record_type,id,kind,name,parent_id,document) VALUES(?,?,'node',?,?,?,?,?)`, s.Revision.ProjectID, s.Revision.ID, n.ID, n.Kind, n.Name, parent, string(b)); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -47,7 +49,7 @@ func runtimeQueryPersist(t *testing.T, r *Repo, s *RevisionState) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if _, err := tx.ExecContext(t.Context(), `INSERT INTO backend_graph_records(project_id,revision_id,record_type,id,kind,from_id,to_id,document) VALUES(?,?,'edge',?,?,?,?,?)`, s.Revision.ProjectID, s.Revision.ID, e.ID, e.Kind, e.From, e.To, string(b)); err != nil {
+		if _, err := testkit.ExecBackendOwner(t.Context(), tx, `INSERT INTO backend_graph_records(project_id,revision_id,record_type,id,kind,from_id,to_id,document) VALUES(?,?,'edge',?,?,?,?,?)`, s.Revision.ProjectID, s.Revision.ID, e.ID, e.Kind, e.From, e.To, string(b)); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -56,7 +58,7 @@ func runtimeQueryPersist(t *testing.T, r *Repo, s *RevisionState) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if _, err := tx.ExecContext(t.Context(), `INSERT INTO backend_graph_records(project_id,revision_id,record_type,id,subject_id,document) VALUES(?,?,'evidence',?,?,?)`, s.Revision.ProjectID, s.Revision.ID, e.ID, e.SubjectID, string(b)); err != nil {
+		if _, err := testkit.ExecBackendOwner(t.Context(), tx, `INSERT INTO backend_graph_records(project_id,revision_id,record_type,id,subject_id,document) VALUES(?,?,'evidence',?,?,?)`, s.Revision.ProjectID, s.Revision.ID, e.ID, e.SubjectID, string(b)); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -65,7 +67,10 @@ func runtimeQueryPersist(t *testing.T, r *Repo, s *RevisionState) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := tx.ExecContext(t.Context(), `INSERT INTO backend_revision_sources(revision_id,document) VALUES(?,?)`, s.Revision.ID, string(b)); err != nil {
+	if _, err := testkit.ExecBackendOwner(t.Context(), tx, `INSERT INTO backend_revision_sources(revision_id,document) VALUES(?,?)`, s.Revision.ID, string(b)); err != nil {
+		t.Fatal(err)
+	}
+	if err := backendblob.Seal(t.Context(), tx); err != nil {
 		t.Fatal(err)
 	}
 	if err := tx.Commit(); err != nil {

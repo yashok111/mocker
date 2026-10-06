@@ -20,7 +20,7 @@ type preparedChangeProposal struct {
 }
 
 func loadChangeIdentities(ctx context.Context, q importReader, id string) (map[string]ChangeObjectIdentity, error) {
-	rows, err := q.QueryContext(ctx, `SELECT document FROM backend_change_proposal_identities WHERE proposal_id=?`, id)
+	rows, err := q.QueryContext(ctx, `SELECT document FROM backend_change_proposal_identities_documents WHERE proposal_id=?`, id)
 	if err != nil {
 		return nil, err
 	}
@@ -42,7 +42,7 @@ func loadChangeIdentities(ctx context.Context, q importReader, id string) (map[s
 func checkChangeCommandHistory(ctx context.Context, q importReader, id string, commands []ChangeProposalCommand) error {
 	for _, c := range commands {
 		var count int
-		if err := q.QueryRowContext(ctx, `SELECT count(*) FROM backend_change_proposal_commands WHERE proposal_id=? AND command_id=?`, id, c.CommandID).Scan(&count); err != nil {
+		if err := q.QueryRowContext(ctx, `SELECT count(*) FROM backend_change_proposal_commands_documents WHERE proposal_id=? AND command_id=?`, id, c.CommandID).Scan(&count); err != nil {
 			return err
 		}
 		if count != 0 {
@@ -76,7 +76,7 @@ func (r *Repo) prepareChangeProposal(ctx context.Context, pid, id string, in Pre
 	}
 	var baseRevisionID string
 	var draftBytes int64
-	if err = tx.QueryRowContext(ctx, `SELECT base_revision_id,length(CAST(document AS BLOB)) FROM backend_change_proposal_revisions WHERE project_id=? AND proposal_id=? AND id=?`, pid, id, in.ProposalRevisionID).Scan(&baseRevisionID, &draftBytes); err != nil {
+	if err = tx.QueryRowContext(ctx, `SELECT base_revision_id,length(CAST(document AS BLOB)) FROM backend_change_proposal_revisions_documents WHERE project_id=? AND proposal_id=? AND id=?`, pid, id, in.ProposalRevisionID).Scan(&baseRevisionID, &draftBytes); err != nil {
 		return nil, err
 	}
 	if err = checkChangeCommandHistory(ctx, tx, id, in.Commands); err != nil {

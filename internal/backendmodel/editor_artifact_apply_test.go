@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"encoding/json/v2"
 	"errors"
+	"github.com/yashok111/mocker/internal/testkit"
 	"strings"
 	"sync"
 	"testing"
@@ -30,10 +31,15 @@ func applyArtifactTest(t *testing.T, s *ArtifactService, pid string, in PreviewA
 func TestArtifactApplyRawCopyReceiptAndClear(t *testing.T) {
 	t.Parallel()
 	s, base, ids, d := artifactServiceFixture(t)
-	for _, table := range []string{"backend_graph_records", "backend_revision_sources", "backend_revision_decisions"} {
-		if _, err := s.repo.db.W.ExecContext(t.Context(), `UPDATE `+table+` SET document=char(10)||'  '||document||char(10) WHERE revision_id=?`, base.Revision.ID); err != nil {
-			t.Fatal(err)
+	if err := testkit.EditLegacyBackendFixture(t.Context(), s.repo.db, func(tx *sql.Tx) error {
+		for _, table := range []string{"backend_graph_records", "backend_revision_sources", "backend_revision_decisions"} {
+			if _, err := tx.ExecContext(t.Context(), `UPDATE `+table+` SET document=char(10)||'  '||document||char(10) WHERE revision_id=?`, base.Revision.ID); err != nil {
+				return err
+			}
 		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
 	}
 	ownerRows := artifactOwnerRows(t, s.repo)
 	before, err := s.scenarios.ArtifactInspectionSnapshot(t.Context(), d.Scenario.ID, d.Draft.ID)
@@ -45,16 +51,16 @@ func TestArtifactApplyRawCopyReceiptAndClear(t *testing.T) {
 		t.Fatal(a)
 	}
 	var unequal int
-	err = s.repo.db.R.QueryRowContext(t.Context(), `SELECT count(*) FROM backend_graph_records a JOIN backend_graph_records b ON b.project_id=a.project_id AND b.record_type=a.record_type AND b.id=a.id WHERE a.revision_id=? AND b.revision_id=? AND (a.document IS NOT b.document OR a.kind IS NOT b.kind OR a.name IS NOT b.name OR a.parent_id IS NOT b.parent_id OR a.from_id IS NOT b.from_id OR a.to_id IS NOT b.to_id OR a.subject_id IS NOT b.subject_id)`, base.Revision.ID, a.Revision.ID).Scan(&unequal)
+	err = s.repo.db.R.QueryRowContext(t.Context(), `SELECT count(*) FROM backend_graph_records_documents a JOIN backend_graph_records_documents b ON b.project_id=a.project_id AND b.record_type=a.record_type AND b.id=a.id WHERE a.revision_id=? AND b.revision_id=? AND (a.document IS NOT b.document OR a.kind IS NOT b.kind OR a.name IS NOT b.name OR a.parent_id IS NOT b.parent_id OR a.from_id IS NOT b.from_id OR a.to_id IS NOT b.to_id OR a.subject_id IS NOT b.subject_id)`, base.Revision.ID, a.Revision.ID).Scan(&unequal)
 	if err != nil || unequal != 0 {
 		t.Fatalf("raw graph copies: %d %v", unequal, err)
 	}
 	for _, table := range []string{"backend_revision_sources", "backend_revision_decisions"} {
 		var left, right string
-		if err = s.repo.db.R.QueryRowContext(t.Context(), `SELECT document FROM `+table+` WHERE revision_id=?`, base.Revision.ID).Scan(&left); err != nil {
+		if err = s.repo.db.R.QueryRowContext(t.Context(), `SELECT document FROM `+table+`_documents WHERE revision_id=?`, base.Revision.ID).Scan(&left); err != nil {
 			t.Fatal(err)
 		}
-		if err = s.repo.db.R.QueryRowContext(t.Context(), `SELECT document FROM `+table+` WHERE revision_id=?`, a.Revision.ID).Scan(&right); err != nil {
+		if err = s.repo.db.R.QueryRowContext(t.Context(), `SELECT document FROM `+table+`_documents WHERE revision_id=?`, a.Revision.ID).Scan(&right); err != nil {
 			t.Fatal(err)
 		}
 		if left != right {
@@ -168,7 +174,7 @@ func TestArtifactApplyCASRollbackAndOneWinner(t *testing.T) {
 		t.Fatalf("winners: %d", count)
 	}
 	var contexts int
-	s.repo.db.R.QueryRowContext(t.Context(), `SELECT count(*) FROM backend_revision_api_artifacts`).Scan(&contexts)
+	s.repo.db.R.QueryRowContext(t.Context(), `SELECT count(*) FROM backend_revision_api_artifacts_documents`).Scan(&contexts)
 	if contexts != 1 {
 		t.Fatalf("partial loser context: %d", contexts)
 	}
@@ -187,7 +193,7 @@ func TestArtifactApplyCandidateReasonAndScope(t *testing.T) {
 	_, err = s.Apply(t.Context(), base.Project.ID, ApplyArtifactPinsInput{in.BaseRevisionID, in.ExpectedVersion, in.Commands, p.CandidateHash, "same-key"})
 	assertFault(t, err, "backend_artifact_pins_hash_conflict")
 	var raw string
-	s.repo.db.R.QueryRowContext(t.Context(), `SELECT document FROM backend_revisions WHERE id=?`, base.Revision.ID).Scan(&raw)
+	s.repo.db.R.QueryRowContext(t.Context(), `SELECT document FROM backend_revisions_documents WHERE id=?`, base.Revision.ID).Scan(&raw)
 	var rev Revision
 	if err = json.Unmarshal([]byte(raw), &rev); err != nil {
 		t.Fatal(err)
@@ -242,12 +248,12 @@ func artifactOwnerRows(t *testing.T, repo *Repo) []byte {
 func TestArtifactApplyKeepsAbsentDecisionRow(t *testing.T) {
 	t.Parallel()
 	s, base, ids, d := artifactServiceFixture(t)
-	if _, err := s.repo.db.W.ExecContext(t.Context(), `DELETE FROM backend_revision_decisions WHERE revision_id=?`, base.Revision.ID); err != nil {
+	if _, err := testkit.EditLegacyBackendPayload(t.Context(), s.repo.db, `DELETE FROM backend_revision_decisions WHERE revision_id=?`, base.Revision.ID); err != nil {
 		t.Fatal(err)
 	}
 	result, _ := applyArtifactTest(t, s, base.Project.ID, scenarioSet(base, ids, d), "absent-decision")
 	var count int
-	if err := s.repo.db.R.QueryRowContext(t.Context(), `SELECT count(*) FROM backend_revision_decisions WHERE revision_id=?`, result.Revision.ID).Scan(&count); err != nil || count != 0 {
+	if err := s.repo.db.R.QueryRowContext(t.Context(), `SELECT count(*) FROM backend_revision_decisions_documents WHERE revision_id=?`, result.Revision.ID).Scan(&count); err != nil || count != 0 {
 		t.Fatalf("raw copy materialized absent decision: %d %v", count, err)
 	}
 }

@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
+	"github.com/yashok111/mocker/internal/backendblob"
 	"hash"
 	"io"
 	"strconv"
@@ -76,19 +77,19 @@ func artifactSourceAnchors(ctx context.Context, q importReader, state *RevisionS
 func copySource6ArtifactContext(ctx context.Context, tx *sql.Tx, pid, from, to string) error {
 	for _, query := range []string{
 		`INSERT INTO backend_revision_assertions
-		(project_id,revision_id,record_type,record_id,repository_id,provider_namespace,external_key,assertion_hash,document)
-		SELECT project_id,?,record_type,record_id,repository_id,provider_namespace,external_key,assertion_hash,document
+		(project_id,revision_id,record_type,record_id,repository_id,provider_namespace,external_key,assertion_hash,payload_key)
+		SELECT project_id,?,record_type,record_id,repository_id,provider_namespace,external_key,assertion_hash,payload_key
 		FROM backend_revision_assertions WHERE project_id=? AND revision_id=?`,
 		`INSERT INTO backend_revision_assertion_resolutions
-		(project_id,revision_id,record_type,record_id,property_key,conflict_hash,document)
-		SELECT project_id,?,record_type,record_id,property_key,conflict_hash,document
+		(project_id,revision_id,record_type,record_id,property_key,conflict_hash,payload_key)
+		SELECT project_id,?,record_type,record_id,property_key,conflict_hash,payload_key
 		FROM backend_revision_assertion_resolutions WHERE project_id=? AND revision_id=?`,
 		`INSERT INTO backend_revision_legacy_proof_bases
-		(project_id,revision_id,evidence_id,source_revision_id,basis_hash,document)
-		SELECT project_id,?,evidence_id,source_revision_id,basis_hash,document
+		(project_id,revision_id,evidence_id,source_revision_id,basis_hash,payload_key)
+		SELECT project_id,?,evidence_id,source_revision_id,basis_hash,payload_key
 		FROM backend_revision_legacy_proof_bases WHERE project_id=? AND revision_id=?`,
 	} {
-		if _, err := tx.ExecContext(ctx, query, to, pid, from); err != nil {
+		if _, err := backendblob.Exec(ctx, tx, query, to, pid, from); err != nil {
 			return err
 		}
 	}
@@ -112,7 +113,7 @@ func source6ArtifactRowsDigest(ctx context.Context, q importReader, rid string) 
 
 func hashSourceArtifactTable(ctx context.Context, q importReader, digest hash.Hash, table, rid string) error {
 	_, _ = io.WriteString(digest, table+"\x00")
-	rows, err := q.QueryContext(ctx, "SELECT document FROM "+table+" WHERE revision_id=? ORDER BY document", rid)
+	rows, err := q.QueryContext(ctx, "SELECT document FROM "+table+"_documents WHERE revision_id=? ORDER BY document", rid)
 	if err != nil {
 		return err
 	}

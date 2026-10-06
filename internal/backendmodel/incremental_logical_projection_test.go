@@ -101,7 +101,7 @@ func TestIncrementalProjectionUpdatesLogicalCallerCurrentness(t *testing.T) {
 		t.Fatalf("fixture needs projection boundary on call edge; got %s", edgeState)
 	}
 	var raw string
-	if err = r.db.R.QueryRowContext(t.Context(), `SELECT document FROM backend_revision_decisions WHERE revision_id=?`, out.Revision.ID).Scan(&raw); err != nil {
+	if err = r.db.R.QueryRowContext(t.Context(), `SELECT document FROM backend_revision_decisions_documents WHERE revision_id=?`, out.Revision.ID).Scan(&raw); err != nil {
 		t.Fatal(err)
 	}
 	var decisions struct {

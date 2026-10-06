@@ -60,7 +60,7 @@ func TestChangeProposalDraftQuotaReplayAndInputBounds(t *testing.T) {
 		t.Fatal("quota prevented exact original replay")
 	}
 	var count int
-	if err = r.db.R.QueryRowContext(t.Context(), `SELECT count(*) FROM backend_change_proposal_revisions`).Scan(&count); err != nil || count != MaxChangeProposalRevisions {
+	if err = r.db.R.QueryRowContext(t.Context(), `SELECT count(*) FROM backend_change_proposal_revisions_documents`).Scan(&count); err != nil || count != MaxChangeProposalRevisions {
 		t.Fatalf("quota refusal persisted %d drafts: %v", count, err)
 	}
 	commands := make([]ChangeProposalCommand, MaxChangeProposalCommands+1)

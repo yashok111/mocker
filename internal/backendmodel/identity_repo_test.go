@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json/v2"
 	"log/slog"
+	"strings"
 	"testing"
 
 	"github.com/yashok111/mocker/internal/store"
@@ -13,6 +14,15 @@ func immutableBytes(t *testing.T, r *Repo) map[string]string {
 	t.Helper()
 	out := map[string]string{}
 	for _, query := range []string{`SELECT 'graph:'||revision_id||':'||id,document FROM backend_graph_records`, `SELECT 'revision:'||id,document FROM backend_revisions`, `SELECT 'source:'||revision_id,document FROM backend_revision_sources`, `SELECT 'receipt:'||scope||':'||key,response FROM backend_command_receipts`, `SELECT 'batch:'||session_id||':'||batch_id,receipt FROM backend_import_batches`} {
+		var version int
+		if err := r.db.R.QueryRowContext(t.Context(), "PRAGMA user_version").Scan(&version); err != nil {
+			t.Fatal(err)
+		}
+		if version >= 27 {
+			for _, table := range []string{"backend_graph_records", "backend_revisions", "backend_revision_sources"} {
+				query = strings.ReplaceAll(query, "FROM "+table, "FROM "+table+"_documents")
+			}
+		}
 		rows, err := r.db.R.QueryContext(t.Context(), query)
 		if err != nil {
 			t.Fatal(err)

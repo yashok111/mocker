@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json/jsontext"
 	"encoding/json/v2"
+	"github.com/yashok111/mocker/internal/backendblob"
 )
 
 // rehashPortableSource runs after typed ID remapping and before persistent insert.
@@ -140,7 +141,7 @@ func insertPortableSourceTx(ctx context.Context, tx *sql.Tx, s *PortableSource) 
 	if err != nil {
 		return err
 	}
-	if _, err := tx.ExecContext(ctx, `INSERT INTO backend_revisions(id,project_id,document) VALUES(?,?,?)`, rid, pid, string(raw)); err != nil {
+	if _, err := backendblob.Exec(ctx, tx, `INSERT INTO backend_revisions(id,project_id,document) VALUES(?,?,?)`, rid, pid, string(raw)); err != nil {
 		return err
 	}
 	for _, n := range s.Nodes {
@@ -152,7 +153,7 @@ func insertPortableSourceTx(ctx context.Context, tx *sql.Tx, s *PortableSource) 
 		if n.ParentID != nil {
 			parent = *n.ParentID
 		}
-		if _, err := tx.ExecContext(ctx, `INSERT INTO backend_graph_records(project_id,revision_id,record_type,id,kind,name,parent_id,document) VALUES(?,?,'node',?,?,?,?,?)`, pid, rid, n.ID, n.Kind, n.Name, parent, string(raw)); err != nil {
+		if _, err := backendblob.Exec(ctx, tx, `INSERT INTO backend_graph_records(project_id,revision_id,record_type,id,kind,name,parent_id,document) VALUES(?,?,'node',?,?,?,?,?)`, pid, rid, n.ID, n.Kind, n.Name, parent, string(raw)); err != nil {
 			return err
 		}
 	}
@@ -161,7 +162,7 @@ func insertPortableSourceTx(ctx context.Context, tx *sql.Tx, s *PortableSource) 
 		if err != nil {
 			return err
 		}
-		if _, err := tx.ExecContext(ctx, `INSERT INTO backend_graph_records(project_id,revision_id,record_type,id,kind,from_id,to_id,document) VALUES(?,?,'edge',?,?,?,?,?)`, pid, rid, e.ID, e.Kind, e.From, e.To, string(raw)); err != nil {
+		if _, err := backendblob.Exec(ctx, tx, `INSERT INTO backend_graph_records(project_id,revision_id,record_type,id,kind,from_id,to_id,document) VALUES(?,?,'edge',?,?,?,?,?)`, pid, rid, e.ID, e.Kind, e.From, e.To, string(raw)); err != nil {
 			return err
 		}
 	}
@@ -170,7 +171,7 @@ func insertPortableSourceTx(ctx context.Context, tx *sql.Tx, s *PortableSource) 
 		if len(raw) == 0 {
 			return invalid("evidence", "Mapped raw proof is missing")
 		}
-		if _, err := tx.ExecContext(ctx, `INSERT INTO backend_graph_records(project_id,revision_id,record_type,id,subject_id,document) VALUES(?,?,'evidence',?,?,?)`, pid, rid, e.ID, e.SubjectID, string(raw)); err != nil {
+		if _, err := backendblob.Exec(ctx, tx, `INSERT INTO backend_graph_records(project_id,revision_id,record_type,id,subject_id,document) VALUES(?,?,'evidence',?,?,?)`, pid, rid, e.ID, e.SubjectID, string(raw)); err != nil {
 			return err
 		}
 	}
@@ -189,14 +190,14 @@ func insertPortableSourceTx(ctx context.Context, tx *sql.Tx, s *PortableSource) 
 	if err != nil {
 		return err
 	}
-	if _, err := tx.ExecContext(ctx, `INSERT INTO backend_revision_sources(revision_id,document) VALUES(?,?)`, rid, string(raw)); err != nil {
+	if _, err := backendblob.Exec(ctx, tx, `INSERT INTO backend_revision_sources(revision_id,document) VALUES(?,?)`, rid, string(raw)); err != nil {
 		return err
 	}
 	c, err := DecodeVersionedArtifactContext(s.ArtifactContext, nil)
 	if err != nil {
 		return err
 	}
-	if _, err := tx.ExecContext(ctx, `INSERT INTO backend_revision_api_artifacts(revision_id,source_content_hash,source_semantic_hash,document) VALUES(?,?,?,?)`, rid, c.V3.SourceContentHash, c.V3.SourceSemanticHash, string(s.ArtifactContext)); err != nil {
+	if _, err := backendblob.Exec(ctx, tx, `INSERT INTO backend_revision_api_artifacts(revision_id,source_content_hash,source_semantic_hash,document) VALUES(?,?,?,?)`, rid, c.V3.SourceContentHash, c.V3.SourceSemanticHash, string(s.ArtifactContext)); err != nil {
 		return err
 	}
 	return nil

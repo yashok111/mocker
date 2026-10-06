@@ -5,8 +5,10 @@ import (
 	"encoding/json/v2"
 	"fmt"
 	"github.com/yashok111/mocker/internal/store"
+	"github.com/yashok111/mocker/internal/testkit"
 	"math"
 	"slices"
+	"strings"
 	"sync"
 	"testing"
 )
@@ -32,6 +34,11 @@ func savedHistoricalBytes(t *testing.T, r *Repo) map[string][]string {
 	result := map[string][]string{}
 	for _, name := range names {
 		query := `SELECT * FROM "` + name + `"`
+		if name == "backend_payload_blobs" {
+			query += ` WHERE owner NOT LIKE 'backend_saved_view_versions/%'`
+		} else if strings.HasPrefix(name, "backend_payload_") {
+			query += ` WHERE owner != 'backend_saved_view_versions'`
+		}
 		if name == "backend_command_receipts" {
 			query += ` WHERE scope NOT LIKE 'saved-view-%'`
 		}
@@ -95,7 +102,7 @@ func TestSavedViewQuotaBoundariesReceiptFirstAndOverflow(t *testing.T) {
 						if _, err := tx.ExecContext(t.Context(), `INSERT INTO backend_saved_views(id,project_id,version,name,kind,target_json,created_at,updated_at) SELECT ?,project_id,1,name,kind,target_json,created_at,updated_at FROM backend_saved_views WHERE id=?`, id, v.ID); err != nil {
 							return err
 						}
-						if _, err := tx.ExecContext(t.Context(), `INSERT INTO backend_saved_view_versions(view_id,version,document) VALUES(?,1,?)`, id, original); err != nil {
+						if _, err := testkit.ExecBackendOwner(t.Context(), tx, `INSERT INTO backend_saved_view_versions(view_id,version,document) VALUES(?,1,?)`, id, original); err != nil {
 							return err
 						}
 					}
@@ -121,7 +128,7 @@ func TestSavedViewQuotaBoundariesReceiptFirstAndOverflow(t *testing.T) {
 						if err != nil {
 							return err
 						}
-						if _, err := tx.ExecContext(t.Context(), `INSERT INTO backend_saved_view_versions(view_id,version,document) VALUES(?,?,?)`, v.ID, i, string(raw)); err != nil {
+						if _, err := testkit.ExecBackendOwner(t.Context(), tx, `INSERT INTO backend_saved_view_versions(view_id,version,document) VALUES(?,?,?)`, v.ID, i, string(raw)); err != nil {
 							return err
 						}
 					}
@@ -142,7 +149,7 @@ func TestSavedViewQuotaBoundariesReceiptFirstAndOverflow(t *testing.T) {
 				assertFault(t, err, "backend_saved_view_quota")
 			case "bytes":
 				var used int64
-				if err := db.R.QueryRowContext(t.Context(), `SELECT sum(length(CAST(document AS BLOB))) FROM backend_saved_view_versions`).Scan(&used); err != nil {
+				if err := db.R.QueryRowContext(t.Context(), `SELECT sum(length(CAST(document AS BLOB))) FROM backend_saved_view_versions_documents`).Scan(&used); err != nil {
 					t.Fatal(err)
 				}
 				used *= 2
@@ -163,7 +170,7 @@ func TestSavedViewQuotaBoundariesReceiptFirstAndOverflow(t *testing.T) {
 					t.Fatal(err)
 				}
 				err = db.Write(t.Context(), func(tx *sql.Tx) error {
-					if _, err := tx.ExecContext(t.Context(), `INSERT INTO backend_saved_view_versions(view_id,version,document) VALUES(?,?,?)`, v.ID, math.MaxInt64, string(raw)); err != nil {
+					if _, err := testkit.ExecBackendOwner(t.Context(), tx, `INSERT INTO backend_saved_view_versions(view_id,version,document) VALUES(?,?,?)`, v.ID, math.MaxInt64, string(raw)); err != nil {
 						return err
 					}
 					_, err := tx.ExecContext(t.Context(), `UPDATE backend_saved_views SET version=? WHERE id=?`, math.MaxInt64, v.ID)
@@ -368,7 +375,7 @@ func TestSavedViewHistoryCASReplayAndPurity(t *testing.T) {
 		t.Fatal(f)
 	}
 	assertSavedHistoricalBytes(t, r, before)
-	for _, q := range []string{`UPDATE backend_saved_view_versions SET document='{}' WHERE view_id=?`, `DELETE FROM backend_saved_view_versions WHERE view_id=?`, `UPDATE backend_saved_views SET kind='flow' WHERE id=?`, `UPDATE backend_saved_views SET target_json='{}' WHERE id=?`, `UPDATE backend_saved_views SET version=999 WHERE id=?`} {
+	for _, q := range []string{`UPDATE backend_saved_view_versions SET payload_key=payload_key WHERE view_id=?`, `DELETE FROM backend_saved_view_versions WHERE view_id=?`, `UPDATE backend_saved_views SET kind='flow' WHERE id=?`, `UPDATE backend_saved_views SET target_json='{}' WHERE id=?`, `UPDATE backend_saved_views SET version=999 WHERE id=?`} {
 		if _, err := db.W.ExecContext(t.Context(), q, first.ID); err == nil {
 			t.Fatal("accepted immutable/invalid write", q)
 		}

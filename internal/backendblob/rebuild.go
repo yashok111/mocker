@@ -1,0 +1,224 @@
+package backendblob
+
+import (
+	"context"
+	"database/sql"
+	"fmt"
+	"strings"
+)
+
+// Rebuild replaces only the selected project's projections, plus globally
+// content-addressed observation blobs. Canonical membership is never rewritten.
+// The caller owns the exclusive offline transaction with FKs disabled BEFORE
+// BEGIN. Any error (including cancellation or disk full) must roll it back.
+func Rebuild(ctx context.Context, tx *sql.Tx, project string) error {
+	if project == "" {
+		return fmt.Errorf("project is required")
+	}
+	var exists int
+	if err := tx.QueryRowContext(ctx, "SELECT count(*) FROM backend_projects WHERE id=?", project).Scan(&exists); err != nil {
+		return err
+	}
+	if exists != 1 {
+		return fmt.Errorf("unknown project")
+	}
+	// These are derived lookup indexes over immutable memberships, not canonical
+	// history. Recreate them transactionally, including when corruption forces
+	// the subsequent canonical verification to roll the transaction back.
+	for _, obj := range canonicalIndexes {
+		if _, err := tx.ExecContext(ctx, "DROP INDEX IF EXISTS "+obj.Name); err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx, obj.SQL); err != nil {
+			return err
+		}
+	}
+	if err := verify(ctx, tx, false); err != nil {
+		return err
+	}
+	for _, o := range owners {
+		ddl := strings.Replace(o.DDL, "CREATE TABLE "+o.Table+" (", "CREATE TABLE "+o.Table+"_blob_rebuild (", 1)
+		ddl = strings.Replace(ddl, `CREATE TABLE "`+o.Table+`" (`, "CREATE TABLE "+o.Table+"_blob_rebuild (", 1)
+		if _, err := tx.ExecContext(ctx, ddl); err != nil {
+			return err
+		}
+		insert := "INSERT INTO " + o.Table + "_blob_rebuild(" + strings.Join(o.projectionColumns(), ",") + ") VALUES(" + strings.TrimSuffix(strings.Repeat("?,", o.metadataCount()), ",") + ")"
+		rows, err := tx.QueryContext(ctx, "SELECT "+strings.Join(o.projectionColumns(), ",")+" FROM "+o.Table+" ORDER BY "+strings.Join(o.PK, ","))
+		if err != nil {
+			return err
+		}
+		for rows.Next() {
+			v := make([]any, o.metadataCount())
+			ptrs := make([]any, len(v))
+			for i := range v {
+				ptrs[i] = &v[i]
+			}
+			if err = rows.Scan(ptrs...); err != nil {
+				rows.Close()
+				return err
+			}
+			pid, _, mid, err := ownerIdentity(ctx, tx, o, v)
+			if err != nil {
+				rows.Close()
+				return err
+			}
+			var canonicalProject string
+			err = tx.QueryRowContext(ctx, "SELECT project_id FROM backend_payload_members WHERE owner=? AND member_id=? LIMIT 1", o.Table, mid).Scan(&canonicalProject)
+			if err != nil && err != sql.ErrNoRows {
+				rows.Close()
+				return err
+			}
+			if pid == project || pid == "" || err == nil && canonicalProject == project {
+				continue
+			}
+			if _, err = tx.ExecContext(ctx, insert, v...); err != nil {
+				rows.Close()
+				return err
+			}
+		}
+		err = rows.Err()
+		rows.Close()
+		if err != nil {
+			return err
+		}
+		last := ""
+		if err = walkMembers(ctx, tx, o, func(id, version, typ, mid, key, pid string, meta []byte, v []any) error {
+			if pid != project && pid != "" {
+				return nil
+			}
+			unique := id + "/" + version + "/" + mid
+			if unique == last {
+				return nil
+			}
+			last = unique
+			_, err := tx.ExecContext(ctx, insert, v...)
+			return err
+		}); err != nil {
+			return err
+		}
+		// Compare shadows with immutable canonical rows before touching old indexes.
+		if err = walkMembers(ctx, tx, o, func(id, version, typ, mid, key, pid string, meta []byte, v []any) error {
+			shadow := o
+			shadow.Table = o.Table + "_blob_rebuild"
+			got, err := physicalRow(ctx, tx, shadow, v)
+			if err != nil {
+				return err
+			}
+			encoded, err := encodeValues(got)
+			if err != nil {
+				return err
+			}
+			if string(encoded) != string(meta) {
+				return fmt.Errorf("%w: shadow mismatch %s", ErrDerived, o.Table)
+			}
+			return nil
+		}); err != nil {
+			return err
+		}
+		var actual, canonical int64
+		if err = tx.QueryRowContext(ctx, "SELECT count(*) FROM "+o.Table+"_blob_rebuild").Scan(&actual); err != nil {
+			return err
+		}
+		if err = tx.QueryRowContext(ctx, "SELECT count(DISTINCT member_id) FROM backend_payload_members WHERE owner=?", o.Table).Scan(&canonical); err != nil {
+			return err
+		}
+		if actual != canonical {
+			return fmt.Errorf("%w: shadow count %s", ErrDerived, o.Table)
+		}
+	}
+	if err := checkShadowForeignKeys(ctx, tx); err != nil {
+		return err
+	}
+	for _, o := range owners {
+		for _, obj := range o.Objects {
+			if obj.Kind == "trigger" {
+				if _, err := tx.ExecContext(ctx, "DROP TRIGGER IF EXISTS "+obj.Name); err != nil {
+					return err
+				}
+			}
+		}
+		if _, err := tx.ExecContext(ctx, "DROP VIEW IF EXISTS "+o.Table+"_documents"); err != nil {
+			return err
+		}
+	}
+	for _, o := range owners {
+		if _, err := tx.ExecContext(ctx, "DROP TABLE "+o.Table); err != nil {
+			return err
+		}
+	}
+	for _, o := range owners {
+		if _, err := tx.ExecContext(ctx, "ALTER TABLE "+o.Table+"_blob_rebuild RENAME TO "+o.Table); err != nil {
+			return err
+		}
+	}
+	for _, o := range owners {
+		if _, err := tx.ExecContext(ctx, o.ViewSQL()); err != nil {
+			return err
+		}
+	}
+	for _, o := range owners {
+		for _, obj := range o.Objects {
+			if _, err := tx.ExecContext(ctx, obj.SQL); err != nil {
+				return err
+			}
+		}
+	}
+	return Verify(ctx, tx)
+}
+
+// Check relationships against the complete shadow set, including when a damaged
+// original parent is precisely what rebuild is repairing. SQLite's ordinary FK
+// check runs again after switching the original physical names.
+func checkShadowForeignKeys(ctx context.Context, tx *sql.Tx) error {
+	type relation struct {
+		parent   string
+		from, to []string
+	}
+	for _, o := range owners {
+		rows, err := tx.QueryContext(ctx, "PRAGMA foreign_key_list("+o.Table+"_blob_rebuild)")
+		if err != nil {
+			return err
+		}
+		links := map[int]*relation{}
+		for rows.Next() {
+			var id, seq int
+			var parent, from, to, onUpdate, onDelete, match string
+			if err = rows.Scan(&id, &seq, &parent, &from, &to, &onUpdate, &onDelete, &match); err != nil {
+				rows.Close()
+				return err
+			}
+			r := links[id]
+			if r == nil {
+				r = &relation{parent: parent}
+				links[id] = r
+			}
+			r.from = append(r.from, from)
+			r.to = append(r.to, to)
+		}
+		err = rows.Err()
+		rows.Close()
+		if err != nil {
+			return err
+		}
+		for _, r := range links {
+			parent := r.parent
+			if _, e := Lookup(parent); e == nil {
+				parent += "_blob_rebuild"
+			}
+			var nonnull, equal []string
+			for i, col := range r.from {
+				nonnull = append(nonnull, `c."`+col+`" IS NOT NULL`)
+				equal = append(equal, `p."`+r.to[i]+`"=c."`+col+`"`)
+			}
+			var count int
+			query := "SELECT count(*) FROM " + o.Table + "_blob_rebuild c WHERE " + strings.Join(nonnull, " AND ") + " AND NOT EXISTS(SELECT 1 FROM " + parent + " p WHERE " + strings.Join(equal, " AND ") + ")"
+			if err = tx.QueryRowContext(ctx, query).Scan(&count); err != nil {
+				return err
+			}
+			if count != 0 {
+				return fmt.Errorf("%w: shadow foreign key %s to %s", ErrCanonical, o.Table, r.parent)
+			}
+		}
+	}
+	return nil
+}

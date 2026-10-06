@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json/v2"
 	"errors"
+	"github.com/yashok111/mocker/internal/backendblob"
 	"math"
 	"slices"
 	"time"
@@ -44,7 +45,7 @@ func loadChangeProposal(ctx context.Context, q importReader, pid, id string) (*C
 }
 func loadChangeProposalRevision(ctx context.Context, q importReader, pid, id, rid string) (*ChangeProposalRevision, error) {
 	var raw string
-	err := q.QueryRowContext(ctx, `SELECT document FROM backend_change_proposal_revisions WHERE project_id=? AND proposal_id=? AND id=?`, pid, id, rid).Scan(&raw)
+	err := q.QueryRowContext(ctx, `SELECT document FROM backend_change_proposal_revisions_documents WHERE project_id=? AND proposal_id=? AND id=?`, pid, id, rid).Scan(&raw)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, notFound()
 	}
@@ -224,7 +225,7 @@ func persistChangeRevision(ctx context.Context, tx *sql.Tx, p ChangeProposal, re
 	if err != nil {
 		return err
 	}
-	if _, err = tx.ExecContext(ctx, `INSERT INTO backend_change_proposal_revisions(id,project_id,proposal_id,parent_revision_id,base_revision_id,document) VALUES(?,?,?,?,?,?)`, rev.ID, p.ProjectID, p.ID, rev.ParentRevisionID, rev.BaseRevisionID, string(doc)); err != nil {
+	if _, err = backendblob.Exec(ctx, tx, `INSERT INTO backend_change_proposal_revisions(id,project_id,proposal_id,parent_revision_id,base_revision_id,document) VALUES(?,?,?,?,?,?)`, rev.ID, p.ProjectID, p.ID, rev.ParentRevisionID, rev.BaseRevisionID, string(doc)); err != nil {
 		return err
 	}
 	commandJSON, err := canonicalJSON(commands)
@@ -240,7 +241,7 @@ func persistChangeRevision(ctx context.Context, tx *sql.Tx, p ChangeProposal, re
 	if restore != "" {
 		restoreValue = new(restore)
 	}
-	if _, err = tx.ExecContext(ctx, `INSERT INTO backend_change_proposal_batches(project_id,proposal_id,revision_id,action,restore_revision_id,commands,commands_hash,document) VALUES(?,?,?,?,?,?,?,?)`, p.ProjectID, p.ID, rev.ID, action, restoreValue, string(commandJSON), batch.CommandsHash, string(batchJSON)); err != nil {
+	if _, err = backendblob.Exec(ctx, tx, `INSERT INTO backend_change_proposal_batches(project_id,proposal_id,revision_id,action,restore_revision_id,commands,commands_hash,document) VALUES(?,?,?,?,?,?,?,?)`, p.ProjectID, p.ID, rev.ID, action, restoreValue, string(commandJSON), batch.CommandsHash, string(batchJSON)); err != nil {
 		return err
 	}
 	for position, c := range commands {
@@ -248,7 +249,7 @@ func persistChangeRevision(ctx context.Context, tx *sql.Tx, p ChangeProposal, re
 		if err != nil {
 			return err
 		}
-		if _, err = tx.ExecContext(ctx, `INSERT INTO backend_change_proposal_commands(proposal_id,command_id,revision_id,position,document) VALUES(?,?,?,?,?)`, p.ID, c.CommandID, rev.ID, position, string(raw)); err != nil {
+		if _, err = backendblob.Exec(ctx, tx, `INSERT INTO backend_change_proposal_commands(proposal_id,command_id,revision_id,position,document) VALUES(?,?,?,?,?)`, p.ID, c.CommandID, rev.ID, position, string(raw)); err != nil {
 			return err
 		}
 	}
@@ -258,7 +259,7 @@ func persistChangeRevision(ctx context.Context, tx *sql.Tx, p ChangeProposal, re
 		if err != nil {
 			return err
 		}
-		if _, err = tx.ExecContext(ctx, `INSERT INTO backend_change_proposal_identities(project_id,proposal_id,id,record_type,kind,first_revision_id,document) VALUES(?,?,?,?,?,?,?)`, p.ProjectID, p.ID, identity.ID, identity.RecordType, identity.Kind, rev.ID, string(raw)); err != nil {
+		if _, err = backendblob.Exec(ctx, tx, `INSERT INTO backend_change_proposal_identities(project_id,proposal_id,id,record_type,kind,first_revision_id,document) VALUES(?,?,?,?,?,?,?)`, p.ProjectID, p.ID, identity.ID, identity.RecordType, identity.Kind, rev.ID, string(raw)); err != nil {
 			return err
 		}
 	}
@@ -271,18 +272,18 @@ func persistChangeRevision(ctx context.Context, tx *sql.Tx, p ChangeProposal, re
 	if err != nil {
 		return err
 	}
-	_, err = tx.ExecContext(ctx, `INSERT INTO backend_change_proposal_events(project_id,proposal_id,revision_id,version,document) VALUES(?,?,?,?,?)`, p.ProjectID, p.ID, rev.ID, p.Version, string(event))
+	_, err = backendblob.Exec(ctx, tx, `INSERT INTO backend_change_proposal_events(project_id,proposal_id,revision_id,version,document) VALUES(?,?,?,?,?)`, p.ProjectID, p.ID, rev.ID, p.Version, string(event))
 	return err
 }
 func checkChangeProposalQuota(ctx context.Context, q importReader, pid, id string) error {
 	var proposals, revisions int
 	var retained int64
-	err := q.QueryRowContext(ctx, `SELECT (SELECT count(*) FROM backend_change_proposals WHERE project_id=?),(SELECT count(*) FROM backend_change_proposal_revisions WHERE proposal_id=?),
- (SELECT COALESCE(sum(length(CAST(document AS BLOB))),0) FROM backend_change_proposal_revisions WHERE project_id=?)+
- (SELECT COALESCE(sum(length(CAST(document AS BLOB))),0) FROM backend_change_proposal_events WHERE project_id=?)+
- (SELECT COALESCE(sum(length(CAST(document AS BLOB))),0) FROM backend_change_proposal_identities WHERE project_id=?)+
- (SELECT COALESCE(sum(length(CAST(document AS BLOB))+length(CAST(commands AS BLOB))),0) FROM backend_change_proposal_batches WHERE project_id=?)+
- (SELECT COALESCE(sum(length(CAST(c.document AS BLOB))),0) FROM backend_change_proposal_commands c JOIN backend_change_proposals p ON p.id=c.proposal_id WHERE p.project_id=?)+
+	err := q.QueryRowContext(ctx, `SELECT (SELECT count(*) FROM backend_change_proposals WHERE project_id=?),(SELECT count(*) FROM backend_change_proposal_revisions_documents WHERE proposal_id=?),
+ (SELECT COALESCE(sum(length(CAST(document AS BLOB))),0) FROM backend_change_proposal_revisions_documents WHERE project_id=?)+
+ (SELECT COALESCE(sum(length(CAST(document AS BLOB))),0) FROM backend_change_proposal_events_documents WHERE project_id=?)+
+ (SELECT COALESCE(sum(length(CAST(document AS BLOB))),0) FROM backend_change_proposal_identities_documents WHERE project_id=?)+
+ (SELECT COALESCE(sum(length(CAST(document AS BLOB))+length(CAST(commands AS BLOB))),0) FROM backend_change_proposal_batches_documents WHERE project_id=?)+
+ (SELECT COALESCE(sum(length(CAST(c.document AS BLOB))),0) FROM backend_change_proposal_commands_documents c JOIN backend_change_proposals p ON p.id=c.proposal_id WHERE p.project_id=?)+
  (SELECT COALESCE(sum(length(CAST(ready_reference AS BLOB))),0) FROM backend_change_proposals WHERE project_id=? AND json_extract(ready_reference,'$.documentVersion')='backend-change-lifecycle/v1')+
  (SELECT COALESCE(sum(length(CAST(response AS BLOB))),0) FROM backend_command_receipts WHERE scope=? OR scope LIKE ?)`, pid, id, pid, pid, pid, pid, pid, pid, "change-proposal-create:"+pid, "change-proposal-%:"+pid+":%").Scan(&proposals, &revisions, &retained)
 	if err != nil {
@@ -329,12 +330,12 @@ func changeProposalDetail(ctx context.Context, q importReader, p ChangeProposal,
 		return nil, err
 	}
 	out := &ChangeProposalDetail{Proposal: p, Revision: rev, History: []ProposalRevisionSummary{}}
-	err = q.QueryRowContext(ctx, `SELECT p.current_revision_id,json_extract(r.document,'$.semanticHash') FROM backend_projects p JOIN backend_revisions r ON r.id=p.current_revision_id AND r.project_id=p.id WHERE p.id=?`, p.ProjectID).Scan(&out.CurrentSourceRevisionID, &out.CurrentSourceSemanticHash)
+	err = q.QueryRowContext(ctx, `SELECT p.current_revision_id,json_extract(r.document,'$.semanticHash') FROM backend_projects p JOIN backend_revisions_documents r ON r.id=p.current_revision_id AND r.project_id=p.id WHERE p.id=?`, p.ProjectID).Scan(&out.CurrentSourceRevisionID, &out.CurrentSourceSemanticHash)
 	if err != nil {
 		return nil, err
 	}
 	out.BaseOutdated = out.CurrentSourceRevisionID != rev.BaseRevisionID
-	rows, err := q.QueryContext(ctx, `SELECT document FROM backend_change_proposal_revisions WHERE proposal_id=? AND id>? ORDER BY id LIMIT ?`, p.ID, after, limit+1)
+	rows, err := q.QueryContext(ctx, `SELECT document FROM backend_change_proposal_revisions_documents WHERE proposal_id=? AND id>? ORDER BY id LIMIT ?`, p.ID, after, limit+1)
 	if err != nil {
 		return nil, err
 	}
@@ -387,7 +388,7 @@ func (r *Repo) ListChangeProposals(ctx context.Context, pid string, in ChangePro
 	if err != nil {
 		return nil, err
 	}
-	rows, err := tx.QueryContext(ctx, `SELECT `+changeProposalColumns+` FROM backend_change_proposals WHERE project_id=? AND id>? AND (?='' OR status=?) AND (?='' OR current_draft_revision_id IN (SELECT id FROM backend_change_proposal_revisions WHERE base_revision_id=?)) ORDER BY id LIMIT ?`, pid, after, in.Status, in.Status, in.BaseRevisionID, in.BaseRevisionID, limit+1)
+	rows, err := tx.QueryContext(ctx, `SELECT `+changeProposalColumns+` FROM backend_change_proposals WHERE project_id=? AND id>? AND (?='' OR status=?) AND (?='' OR current_draft_revision_id IN (SELECT id FROM backend_change_proposal_revisions_documents WHERE base_revision_id=?)) ORDER BY id LIMIT ?`, pid, after, in.Status, in.Status, in.BaseRevisionID, in.BaseRevisionID, limit+1)
 	if err != nil {
 		return nil, err
 	}

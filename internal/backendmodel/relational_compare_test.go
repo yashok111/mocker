@@ -209,7 +209,7 @@ func TestRelationalComputedReadMetadataIsNotStored(t *testing.T) {
 		t.Fatal("read metadata entered candidate hash input", err)
 	}
 	var count int
-	if err := r.db.R.QueryRowContext(t.Context(), `SELECT count(*) FROM backend_graph_records WHERE revision_id=? AND instr(document,'facetComparison')>0`, out.Revision.ID).Scan(&count); err != nil || count != 0 {
+	if err := r.db.R.QueryRowContext(t.Context(), `SELECT count(*) FROM backend_graph_records_documents WHERE revision_id=? AND instr(document,'facetComparison')>0`, out.Revision.ID).Scan(&count); err != nil || count != 0 {
 		t.Fatalf("stored computed metadata: %d %v", count, err)
 	}
 	for _, raw := range []string{`{"facetComparison":{"status":"different"}}`} {

@@ -2,6 +2,7 @@ package backendmodel
 
 import (
 	"encoding/json/v2"
+	"github.com/yashok111/mocker/internal/testkit"
 	"strings"
 	"testing"
 )
@@ -28,7 +29,7 @@ func TestV3ProposalAndCompositionPreserveForeignNamespace(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := db.W.ExecContext(t.Context(), `INSERT INTO backend_revision_api_artifacts VALUES(?,?,?,?)`, base.Revision.ID, c.SourceContentHash, c.SourceSemanticHash, string(raw)); err != nil {
+	if _, err := testkit.ExecBackendOwner(t.Context(), db.W, `INSERT INTO backend_revision_api_artifacts VALUES(?,?,?,?)`, base.Revision.ID, c.SourceContentHash, c.SourceSemanticHash, string(raw)); err != nil {
 		t.Fatal(err)
 	}
 	revision := base.Revision

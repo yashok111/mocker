@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json/v2"
 	"errors"
+	"github.com/yashok111/mocker/internal/backendblob"
 	"slices"
 	"time"
 	"uuid"
@@ -42,7 +43,7 @@ func loadProposalRevision(ctx context.Context, q importReader, proposalID, revis
 		return nil, notFound()
 	}
 	var doc string
-	err := q.QueryRowContext(ctx, `SELECT document FROM backend_proposal_revisions WHERE proposal_id=? AND id=?`, proposalID, revisionID).Scan(&doc)
+	err := q.QueryRowContext(ctx, `SELECT document FROM backend_proposal_revisions_documents WHERE proposal_id=? AND id=?`, proposalID, revisionID).Scan(&doc)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, notFound()
 	}
@@ -84,7 +85,7 @@ func proposalBase(ctx context.Context, q importReader, pid string, in CreateProp
 		return nil, notFound()
 	}
 	var raw string
-	err = q.QueryRowContext(ctx, `SELECT document FROM backend_graph_records WHERE project_id=? AND revision_id=? AND record_type='node' AND id=?`, pid, in.BaseRevisionID, in.DatastoreID).Scan(&raw)
+	err = q.QueryRowContext(ctx, `SELECT document FROM backend_graph_records_documents WHERE project_id=? AND revision_id=? AND record_type='node' AND id=?`, pid, in.BaseRevisionID, in.DatastoreID).Scan(&raw)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, notFound()
 	}
@@ -206,7 +207,7 @@ func (r *Repo) CreateProposal(ctx context.Context, pid string, in CreateProposal
 		if err != nil {
 			return err
 		}
-		_, err = tx.ExecContext(ctx, `INSERT INTO backend_proposal_revisions(id,proposal_id,parent_revision_id,document) VALUES(?,?,NULL,?)`, rev.ID, p.ID, string(doc))
+		_, err = backendblob.Exec(ctx, tx, `INSERT INTO backend_proposal_revisions(id,proposal_id,parent_revision_id,document) VALUES(?,?,NULL,?)`, rev.ID, p.ID, string(doc))
 		if err != nil {
 			return err
 		}
@@ -305,14 +306,14 @@ func proposalDetail(ctx context.Context, q importReader, pid string, p Proposal,
 	if err != nil {
 		return nil, err
 	}
-	err = q.QueryRowContext(ctx, `SELECT p.current_revision_id,json_extract(r.document,'$.semanticHash') FROM backend_projects p JOIN backend_revisions r ON r.id=p.current_revision_id AND r.project_id=p.id WHERE p.id=?`, pid).Scan(&out.CurrentSourceRevisionID, &out.CurrentSourceSemanticHash)
+	err = q.QueryRowContext(ctx, `SELECT p.current_revision_id,json_extract(r.document,'$.semanticHash') FROM backend_projects p JOIN backend_revisions_documents r ON r.id=p.current_revision_id AND r.project_id=p.id WHERE p.id=?`, pid).Scan(&out.CurrentSourceRevisionID, &out.CurrentSourceSemanticHash)
 	if err != nil {
 		return nil, err
 	}
 	out.BaseOutdated = out.CurrentSourceRevisionID != p.BaseRevisionID
 	// Bind pagination to current and selected draft pins within the same read
 	// snapshot, so a later save cannot silently splice two histories together.
-	rows, err := q.QueryContext(ctx, `SELECT document FROM backend_proposal_revisions WHERE proposal_id=? AND id>? ORDER BY id LIMIT ?`, p.ID, after, limit+1)
+	rows, err := q.QueryContext(ctx, `SELECT document FROM backend_proposal_revisions_documents WHERE proposal_id=? AND id>? ORDER BY id LIMIT ?`, p.ID, after, limit+1)
 	if err != nil {
 		return nil, err
 	}

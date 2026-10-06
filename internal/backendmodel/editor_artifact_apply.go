@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json/v2"
 	"errors"
+	"github.com/yashok111/mocker/internal/backendblob"
 	"slices"
 	"strings"
 	"time"
@@ -135,7 +136,7 @@ func (s *ArtifactService) applyArtifactPinsTx(ctx context.Context, tx *sql.Tx, p
 		return importConflict("backend_artifact_pins_base_conflict", "Frozen source baseline changed", p.Version)
 	}
 	var document string
-	if err = tx.QueryRowContext(ctx, `SELECT document FROM backend_revisions WHERE project_id=? AND id=?`, pid, in.BaseRevisionID).Scan(&document); err != nil {
+	if err = tx.QueryRowContext(ctx, `SELECT document FROM backend_revisions_documents WHERE project_id=? AND id=?`, pid, in.BaseRevisionID).Scan(&document); err != nil {
 		return err
 	}
 	var revision Revision
@@ -167,17 +168,17 @@ func persistArtifactPins(ctx context.Context, tx *sql.Tx, pid string, in ApplyAr
 	if err != nil {
 		return err
 	}
-	if _, err = tx.ExecContext(ctx, `INSERT INTO backend_revisions(id,project_id,document) VALUES(?,?,?)`, revision.ID, pid, string(encoded)); err != nil {
+	if _, err = backendblob.Exec(ctx, tx, `INSERT INTO backend_revisions(id,project_id,document) VALUES(?,?,?)`, revision.ID, pid, string(encoded)); err != nil {
 		return err
 	}
-	if _, err = tx.ExecContext(ctx, `INSERT INTO backend_graph_records(project_id,revision_id,record_type,id,kind,name,parent_id,from_id,to_id,subject_id,document) SELECT project_id,?,record_type,id,kind,name,parent_id,from_id,to_id,subject_id,document FROM backend_graph_records WHERE project_id=? AND revision_id=?`, revision.ID, pid, in.BaseRevisionID); err != nil {
+	if _, err = backendblob.Exec(ctx, tx, `INSERT INTO backend_graph_records(project_id,revision_id,record_type,id,kind,name,parent_id,from_id,to_id,subject_id,payload_key) SELECT project_id,?,record_type,id,kind,name,parent_id,from_id,to_id,subject_id,payload_key FROM backend_graph_records WHERE project_id=? AND revision_id=?`, revision.ID, pid, in.BaseRevisionID); err != nil {
 		return err
 	}
 	for _, query := range []string{
-		`INSERT INTO backend_revision_sources(revision_id,document) SELECT ?,document FROM backend_revision_sources WHERE revision_id=?`,
-		`INSERT INTO backend_revision_decisions(revision_id,document) SELECT ?,document FROM backend_revision_decisions WHERE revision_id=?`,
+		`INSERT INTO backend_revision_sources(revision_id,payload_key) SELECT ?,payload_key FROM backend_revision_sources WHERE revision_id=?`,
+		`INSERT INTO backend_revision_decisions(revision_id,payload_key) SELECT ?,payload_key FROM backend_revision_decisions WHERE revision_id=?`,
 	} {
-		if _, err = tx.ExecContext(ctx, query, revision.ID, in.BaseRevisionID); err != nil {
+		if _, err = backendblob.Exec(ctx, tx, query, revision.ID, in.BaseRevisionID); err != nil {
 			return err
 		}
 	}

@@ -43,11 +43,11 @@ func TestSource6WholeComposition(t *testing.T) {
 		t.Fatal("repository identity collapsed")
 	}
 	var count int
-	if err := r.db.R.QueryRowContext(t.Context(), `SELECT count(*) FROM backend_revision_assertions WHERE revision_id=?`, second.Revision.ID).Scan(&count); err != nil || count != 2 {
+	if err := r.db.R.QueryRowContext(t.Context(), `SELECT count(*) FROM backend_revision_assertions_documents WHERE revision_id=?`, second.Revision.ID).Scan(&count); err != nil || count != 2 {
 		t.Fatalf("claims=%d err=%v", count, err)
 	}
 	var raw string
-	if err := r.db.R.QueryRowContext(t.Context(), `SELECT document FROM backend_revision_sources WHERE revision_id=?`, second.Revision.ID).Scan(&raw); err != nil {
+	if err := r.db.R.QueryRowContext(t.Context(), `SELECT document FROM backend_revision_sources_documents WHERE revision_id=?`, second.Revision.ID).Scan(&raw); err != nil {
 		t.Fatal(err)
 	}
 	var coverage map[string]any

@@ -41,7 +41,7 @@ func loadAPIArtifactContext(ctx context.Context, q importReader, rid string) (*A
 
 func loadAPIArtifactCoverage(ctx context.Context, q importReader, state *RevisionState) (*RevisionCoverage, error) {
 	var doc string
-	err := q.QueryRowContext(ctx, `SELECT document FROM backend_revision_sources WHERE revision_id=?`, state.Revision.ID).Scan(&doc)
+	err := q.QueryRowContext(ctx, `SELECT document FROM backend_revision_sources_documents WHERE revision_id=?`, state.Revision.ID).Scan(&doc)
 	if errors.Is(err, sql.ErrNoRows) {
 		return &RevisionCoverage{Coverage: state.Revision.Coverage, Snapshots: []SourceSnapshot{}, Inventory: []InventoryItem{}, ReconciliationGaps: []string{}}, nil
 	}

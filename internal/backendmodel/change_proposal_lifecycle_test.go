@@ -33,7 +33,7 @@ func fixedReady(e AnalysisGateEvidence) readyReader {
 func readyState(t *testing.T, r *Repo, pid, id string) string {
 	t.Helper()
 	var value string
-	err := r.db.R.QueryRowContext(t.Context(), `SELECT json_array(status,version,current_draft_revision_id,current_draft_hash,ready_reference,(SELECT group_concat(document) FROM backend_change_proposal_events WHERE proposal_id=p.id),(SELECT group_concat(document) FROM backend_change_proposal_revisions WHERE proposal_id=p.id),(SELECT group_concat(response) FROM backend_command_receipts)) FROM backend_change_proposals p WHERE project_id=? AND id=?`, pid, id).Scan(&value)
+	err := r.db.R.QueryRowContext(t.Context(), `SELECT json_array(status,version,current_draft_revision_id,current_draft_hash,ready_reference,(SELECT group_concat(document) FROM backend_change_proposal_events_documents WHERE proposal_id=p.id),(SELECT group_concat(document) FROM backend_change_proposal_revisions_documents WHERE proposal_id=p.id),(SELECT group_concat(response) FROM backend_command_receipts)) FROM backend_change_proposals p WHERE project_id=? AND id=?`, pid, id).Scan(&value)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -151,7 +151,7 @@ func TestChangeReadyEditResetsAndReplay(t *testing.T) {
 			}
 			raw := ready.receiptJSON
 			var event string
-			if err = r.db.R.QueryRowContext(t.Context(), `SELECT document FROM backend_change_proposal_events WHERE proposal_id=? AND version=?`, id, ready.Proposal.Version).Scan(&event); err != nil {
+			if err = r.db.R.QueryRowContext(t.Context(), `SELECT document FROM backend_change_proposal_events_documents WHERE proposal_id=? AND version=?`, id, ready.Proposal.Version).Scan(&event); err != nil {
 				t.Fatal(err)
 			}
 			got, err := r.GetChangeProposal(t.Context(), pid, id, GetChangeProposalInput{})
@@ -201,7 +201,7 @@ func TestChangeReadyEditResetsAndReplay(t *testing.T) {
 				t.Fatalf("historical/current conflated: %+v %v", got, err)
 			}
 			var afterEvent string
-			if err = r.db.R.QueryRowContext(t.Context(), `SELECT document FROM backend_change_proposal_events WHERE proposal_id=? AND version=?`, id, ready.Proposal.Version).Scan(&afterEvent); err != nil || afterEvent != event {
+			if err = r.db.R.QueryRowContext(t.Context(), `SELECT document FROM backend_change_proposal_events_documents WHERE proposal_id=? AND version=?`, id, ready.Proposal.Version).Scan(&afterEvent); err != nil || afterEvent != event {
 				t.Fatal("historical event changed", err)
 			}
 		})

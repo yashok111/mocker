@@ -107,7 +107,7 @@ func (s *Service) ResolveAnalysisPins(ctx context.Context, pid string, in PinReq
 			return nil, fault(413, "analysis_input_limit")
 		}
 		var correlationBytes int
-		if e := s.Repo.db.R.QueryRowContext(ctx, `SELECT length(CAST(document AS BLOB)) FROM backend_observation_correlations WHERE project_id=? AND set_id=? AND version=?`, pid, pin.ObservationSetID, pin.CorrelationVersion).Scan(&correlationBytes); e != nil {
+		if e := s.Repo.db.R.QueryRowContext(ctx, `SELECT length(CAST(document AS BLOB)) FROM backend_observation_correlations_documents WHERE project_id=? AND set_id=? AND version=?`, pid, pin.ObservationSetID, pin.CorrelationVersion).Scan(&correlationBytes); e != nil {
 			if errors.Is(e, sql.ErrNoRows) {
 				return nil, fault(422, "analysis_pin_missing")
 			}

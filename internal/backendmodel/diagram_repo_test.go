@@ -56,7 +56,7 @@ func TestDiagramSaveReplayBeforeCAS(t *testing.T) {
 	_, err = r.SaveDiagram(t.Context(), p.ID, v1.Pin.ID, b)
 	assertFault(t, err, "backend_idempotency_conflict")
 	var count int
-	if err := db.R.QueryRow("SELECT count(*) FROM backend_diagram_versions").Scan(&count); err != nil || count != 3 {
+	if err := db.R.QueryRow("SELECT count(*) FROM backend_diagram_versions_documents").Scan(&count); err != nil || count != 3 {
 		t.Fatalf("versions=%d, %v", count, err)
 	}
 	b.ExpectedVersion, b.IdempotencyKey = 3, "noop"
@@ -96,7 +96,7 @@ func TestDiagramRaceAndImmutableRows(t *testing.T) {
 	if success != 1 {
 		t.Fatalf("successful writers: %d", success)
 	}
-	for _, sql := range []string{"UPDATE backend_diagram_versions SET author='forged'", "DELETE FROM backend_diagram_versions", "DELETE FROM backend_diagram_receipts"} {
+	for _, sql := range []string{"UPDATE backend_diagram_versions SET author='forged'", "DELETE FROM backend_diagram_versions_documents", "DELETE FROM backend_diagram_receipts"} {
 		if _, err := db.W.Exec(sql); err == nil {
 			t.Fatalf("immutable mutation accepted: %s", sql)
 		}

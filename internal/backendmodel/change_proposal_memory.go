@@ -133,12 +133,12 @@ func (e *changeEvaluation) referencedSource(ctx context.Context, q importReader,
 func changeSourceInputBytes(ctx context.Context, q importReader, pid, rid string) (int64, error) {
 	var bytes int64
 	err := q.QueryRowContext(ctx, `SELECT
- (SELECT COALESCE(sum(length(CAST(document AS BLOB))),0) FROM backend_graph_records WHERE project_id=? AND revision_id=?)+
- (SELECT COALESCE(sum(length(CAST(document AS BLOB))),0) FROM backend_revision_sources WHERE revision_id=?)+
- (SELECT COALESCE(sum(length(CAST(document AS BLOB))),0) FROM backend_revision_assertions WHERE project_id=? AND revision_id=?)+
- (SELECT COALESCE(sum(length(CAST(document AS BLOB))),0) FROM backend_revision_assertion_resolutions WHERE project_id=? AND revision_id=?)+
- (SELECT COALESCE(sum(length(CAST(document AS BLOB))),0) FROM backend_revision_legacy_proof_bases WHERE project_id=? AND revision_id=?)+
- (SELECT COALESCE(sum(length(CAST(document AS BLOB))),0) FROM backend_revision_api_artifacts WHERE revision_id=?)`, pid, rid, rid, pid, rid, pid, rid, pid, rid, rid).Scan(&bytes)
+ (SELECT COALESCE(sum(length(CAST(document AS BLOB))),0) FROM backend_graph_records_documents WHERE project_id=? AND revision_id=?)+
+ (SELECT COALESCE(sum(length(CAST(document AS BLOB))),0) FROM backend_revision_sources_documents WHERE revision_id=?)+
+ (SELECT COALESCE(sum(length(CAST(document AS BLOB))),0) FROM backend_revision_assertions_documents WHERE project_id=? AND revision_id=?)+
+ (SELECT COALESCE(sum(length(CAST(document AS BLOB))),0) FROM backend_revision_assertion_resolutions_documents WHERE project_id=? AND revision_id=?)+
+ (SELECT COALESCE(sum(length(CAST(document AS BLOB))),0) FROM backend_revision_legacy_proof_bases_documents WHERE project_id=? AND revision_id=?)+
+ (SELECT COALESCE(sum(length(CAST(document AS BLOB))),0) FROM backend_revision_api_artifacts_documents WHERE revision_id=?)`, pid, rid, rid, pid, rid, pid, rid, pid, rid, rid).Scan(&bytes)
 	return bytes, err
 }
 
@@ -146,7 +146,7 @@ func changeIdentityInputBytes(ctx context.Context, q importReader, pid, proposal
 	var bytes int64
 	err := q.QueryRowContext(
 		ctx,
-		`SELECT COALESCE(sum(length(CAST(document AS BLOB))),0) FROM backend_change_proposal_identities WHERE project_id=? AND proposal_id=?`,
+		`SELECT COALESCE(sum(length(CAST(document AS BLOB))),0) FROM backend_change_proposal_identities_documents WHERE project_id=? AND proposal_id=?`,
 		pid,
 		proposalID,
 	).Scan(&bytes)
@@ -186,7 +186,7 @@ func (r *Repo) reserveChangeInput(ctx context.Context, pid string, bytes int64) 
 }
 func (r *Repo) reserveChangeRestore(ctx context.Context, pid, id string, in RestoreChangeProposalInput) (*store.TransientReservation, error) {
 	var bytes int64
-	err := r.db.R.QueryRowContext(ctx, `SELECT COALESCE(sum(length(CAST(document AS BLOB))),0) FROM backend_change_proposal_revisions WHERE project_id=? AND proposal_id=? AND (id=? OR id=?)`, pid, id, in.ProposalRevisionID, in.RestoreRevisionID).Scan(&bytes)
+	err := r.db.R.QueryRowContext(ctx, `SELECT COALESCE(sum(length(CAST(document AS BLOB))),0) FROM backend_change_proposal_revisions_documents WHERE project_id=? AND proposal_id=? AND (id=? OR id=?)`, pid, id, in.ProposalRevisionID, in.RestoreRevisionID).Scan(&bytes)
 	if err != nil {
 		return nil, err
 	}

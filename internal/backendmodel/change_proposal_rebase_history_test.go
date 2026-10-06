@@ -14,11 +14,11 @@ func rebaseHistoryBytes(t *testing.T, r *Repo) map[string]string {
 	t.Helper()
 	out := immutableBytes(t, r)
 	for _, query := range []string{
-		`SELECT 'draft:'||id,document FROM backend_change_proposal_revisions`,
-		`SELECT 'batch:'||revision_id,document||char(10)||commands||char(10)||commands_hash FROM backend_change_proposal_batches`,
-		`SELECT 'event:'||proposal_id||':'||version,document FROM backend_change_proposal_events`,
-		`SELECT 'identity:'||proposal_id||':'||id,document FROM backend_change_proposal_identities`,
-		`SELECT 'command:'||proposal_id||':'||command_id,document FROM backend_change_proposal_commands`,
+		`SELECT 'draft:'||id,document FROM backend_change_proposal_revisions_documents`,
+		`SELECT 'batch:'||revision_id,document||char(10)||commands||char(10)||commands_hash FROM backend_change_proposal_batches_documents`,
+		`SELECT 'event:'||proposal_id||':'||version,document FROM backend_change_proposal_events_documents`,
+		`SELECT 'identity:'||proposal_id||':'||id,document FROM backend_change_proposal_identities_documents`,
+		`SELECT 'command:'||proposal_id||':'||command_id,document FROM backend_change_proposal_commands_documents`,
 		`SELECT 'receipt:'||scope||':'||key,response FROM backend_command_receipts WHERE scope LIKE 'change-proposal-%'`,
 	} {
 		rows, err := r.db.R.QueryContext(t.Context(), query)

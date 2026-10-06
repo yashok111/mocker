@@ -24,7 +24,7 @@ func TestSource6SelectedValueUpdatesDependencyCurrentness(t *testing.T) {
 				}
 			}
 			var rawBefore string
-			if err := f.repo.db.R.QueryRowContext(t.Context(), `SELECT document FROM backend_revision_assertions WHERE revision_id=? AND record_id=? AND provider_namespace='provider-c'`, consumer.Revision.ID, mapping.RecordID).Scan(&rawBefore); err != nil {
+			if err := f.repo.db.R.QueryRowContext(t.Context(), `SELECT document FROM backend_revision_assertions_documents WHERE revision_id=? AND record_id=? AND provider_namespace='provider-c'`, consumer.Revision.ID, mapping.RecordID).Scan(&rawBefore); err != nil {
 				t.Fatal(err)
 			}
 			in := source6Input(t, f.project)
@@ -76,7 +76,7 @@ func TestSource6SelectedValueUpdatesDependencyCurrentness(t *testing.T) {
 				t.Fatal("consumer currentness missing")
 			}
 			var rawAfter string
-			if err := f.repo.db.R.QueryRowContext(t.Context(), `SELECT document FROM backend_revision_assertions WHERE revision_id=? AND record_id=? AND provider_namespace='provider-c'`, out.Revision.ID, mapping.RecordID).Scan(&rawAfter); err != nil {
+			if err := f.repo.db.R.QueryRowContext(t.Context(), `SELECT document FROM backend_revision_assertions_documents WHERE revision_id=? AND record_id=? AND provider_namespace='provider-c'`, out.Revision.ID, mapping.RecordID).Scan(&rawAfter); err != nil {
 				t.Fatal(err)
 			}
 			if rawAfter != rawBefore {

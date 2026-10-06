@@ -28,6 +28,8 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/yashok111/mocker/internal/backendblob"
+
 	_ "modernc.org/sqlite" // database/sql driver "sqlite"
 )
 
@@ -142,6 +144,9 @@ func (db *DB) Write(ctx context.Context, fn func(tx *sql.Tx) error) error {
 	if err := fn(tx); err != nil {
 		return err
 	}
+	if err := backendblob.Seal(ctx, tx); err != nil {
+		return err
+	}
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("commit: %w", err)
 	}
@@ -220,6 +225,9 @@ type migration struct {
 }
 
 func (db *DB) applyMigration(ctx context.Context, m migration) error {
+	if m.version == 27 && m.name == "backend_payload_blobs" {
+		return db.applyBlobMigration(ctx, m)
+	}
 	if m.version == 21 {
 		return db.applyMigration21(ctx, m)
 	}

@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json/v2"
 	"errors"
+	"github.com/yashok111/mocker/internal/backendblob"
 	"time"
 	"uuid"
 
@@ -128,7 +129,7 @@ func admitTx(ctx context.Context, tx *sql.Tx, p PreparedStart, action string, ch
 	inputCost := int64(len(p.InputJSON))
 	var old string
 	var oldBytes int64
-	err = tx.QueryRowContext(ctx, `SELECT document,input_bytes FROM backend_analysis_inputs WHERE project_id=? AND input_hash=?`, p.ProjectID, p.InputHash).Scan(&old, &oldBytes)
+	err = tx.QueryRowContext(ctx, `SELECT document,input_bytes FROM backend_analysis_inputs_documents WHERE project_id=? AND input_hash=?`, p.ProjectID, p.InputHash).Scan(&old, &oldBytes)
 	if err == nil {
 		if old != string(p.InputJSON) || oldBytes != inputCost {
 			return nil, fault(409, "input_conflict", "Immutable input differs")
@@ -146,7 +147,7 @@ func admitTx(ctx context.Context, tx *sql.Tx, p PreparedStart, action string, ch
 		}
 	}
 	if inputCost > 0 {
-		if _, err = tx.ExecContext(ctx, `INSERT INTO backend_analysis_inputs VALUES(?,?,?,?)`, p.ProjectID, p.InputHash, string(p.InputJSON), len(p.InputJSON)); err != nil {
+		if _, err = backendblob.Exec(ctx, tx, `INSERT INTO backend_analysis_inputs(project_id,input_hash,document,input_bytes) VALUES(?,?,?,?)`, p.ProjectID, p.InputHash, string(p.InputJSON), len(p.InputJSON)); err != nil {
 			return nil, err
 		}
 	}
@@ -161,7 +162,7 @@ func admitTx(ctx context.Context, tx *sql.Tx, p PreparedStart, action string, ch
 }
 func checkBytes(ctx context.Context, q reader, pid string, additional int64) error {
 	var retained, reserved int64
-	err := q.QueryRowContext(ctx, `SELECT COALESCE((SELECT sum(input_bytes) FROM backend_analysis_inputs WHERE project_id=?),0)+COALESCE((SELECT sum(result_bytes) FROM backend_analysis_jobs WHERE project_id=?),0)+COALESCE((SELECT sum(response_bytes) FROM backend_analysis_receipts WHERE project_id=?),0),COALESCE((SELECT sum(reserved_output_bytes) FROM backend_analysis_jobs WHERE project_id=?),0)`, pid, pid, pid, pid).Scan(&retained, &reserved)
+	err := q.QueryRowContext(ctx, `SELECT COALESCE((SELECT sum(input_bytes) FROM backend_analysis_inputs_documents WHERE project_id=?),0)+COALESCE((SELECT sum(result_bytes) FROM backend_analysis_jobs WHERE project_id=?),0)+COALESCE((SELECT sum(response_bytes) FROM backend_analysis_receipts WHERE project_id=?),0),COALESCE((SELECT sum(reserved_output_bytes) FROM backend_analysis_jobs WHERE project_id=?),0)`, pid, pid, pid, pid).Scan(&retained, &reserved)
 	if err != nil {
 		return err
 	}
@@ -172,7 +173,7 @@ func checkBytes(ctx context.Context, q reader, pid string, additional int64) err
 }
 func inputBytes(ctx context.Context, q reader, pid, id string) ([]byte, error) {
 	var raw []byte
-	err := q.QueryRowContext(ctx, `SELECT i.document FROM backend_analysis_inputs i JOIN backend_analysis_jobs j ON j.project_id=i.project_id AND j.input_hash=i.input_hash WHERE j.project_id=? AND j.id=?`, pid, id).Scan(&raw)
+	err := q.QueryRowContext(ctx, `SELECT i.document FROM backend_analysis_inputs_documents i JOIN backend_analysis_jobs j ON j.project_id=i.project_id AND j.input_hash=i.input_hash WHERE j.project_id=? AND j.id=?`, pid, id).Scan(&raw)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, fault(404, "not_found", "Analysis not found")
 	}
@@ -298,7 +299,7 @@ func (r *Repo) acceptedPrefix(ctx context.Context, pid, id, code string) (*Job, 
 
 	if j.ResultVersion != nil {
 		var raw []byte
-		if err = tx.QueryRowContext(ctx, `SELECT document FROM backend_analysis_manifests WHERE project_id=? AND job_id=? AND result_version=?`, pid, id, *j.ResultVersion).Scan(&raw); err != nil {
+		if err = tx.QueryRowContext(ctx, `SELECT document FROM backend_analysis_manifests_documents WHERE project_id=? AND job_id=? AND result_version=?`, pid, id, *j.ResultVersion).Scan(&raw); err != nil {
 			return nil, s, err
 		}
 		if err = json.Unmarshal(raw, &s.Manifest); err != nil {
@@ -306,7 +307,7 @@ func (r *Repo) acceptedPrefix(ctx context.Context, pid, id, code string) (*Job, 
 		}
 		s.Manifest.ResultVersion++
 	}
-	rows, err := tx.QueryContext(ctx, `SELECT sequence,section,content_hash,items_json FROM backend_analysis_chunks WHERE project_id=? AND job_id=? ORDER BY sequence`, pid, id)
+	rows, err := tx.QueryContext(ctx, `SELECT sequence,section,content_hash,items_json FROM backend_analysis_chunks_documents WHERE project_id=? AND job_id=? ORDER BY sequence`, pid, id)
 	if err != nil {
 		return nil, s, err
 	}

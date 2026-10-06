@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json/v2"
+	"github.com/yashok111/mocker/internal/backendblob"
 	"slices"
 	"strings"
 	"time"
@@ -132,7 +133,7 @@ func (r *Repo) writeB43Lifecycle(leased context.Context, tx *sql.Tx, pid, id str
 	if err != nil {
 		return err
 	}
-	if _, err = tx.ExecContext(leased, `INSERT INTO backend_change_proposal_events(project_id,proposal_id,revision_id,version,document) VALUES(?,?,?,?,?)`, pid, id, rev.ID, current.Version, string(event)); err != nil {
+	if _, err = backendblob.Exec(leased, tx, `INSERT INTO backend_change_proposal_events(project_id,proposal_id,revision_id,version,document) VALUES(?,?,?,?,?)`, pid, id, rev.ID, current.Version, string(event)); err != nil {
 		return err
 	}
 	*out = ChangeProposalApplyResult{Proposal: *current, Revision: *rev, Changes: []ChangeProposalChange{}, SemanticHash: rev.SemanticHash}

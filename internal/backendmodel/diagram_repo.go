@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json/v2"
 	"errors"
+	"github.com/yashok111/mocker/internal/backendblob"
 	"time"
 	"uuid"
 )
@@ -59,7 +60,7 @@ func loadDiagram(ctx context.Context, q importReader, pid, id string, version in
 		return nil, notFound()
 	}
 	var raw string
-	err := q.QueryRowContext(ctx, `SELECT document FROM backend_diagram_versions WHERE project_id=? AND diagram_id=? AND version=?`, pid, id, version).Scan(&raw)
+	err := q.QueryRowContext(ctx, `SELECT document FROM backend_diagram_versions_documents WHERE project_id=? AND diagram_id=? AND version=?`, pid, id, version).Scan(&raw)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, notFound()
 	}
@@ -270,7 +271,7 @@ func validateDiagramSave(previous *DiagramVersion, d DiagramDocument) error {
 func rejectRetiredDiagramIDs(ctx context.Context, tx *sql.Tx, pid, id string, current *DiagramVersion, d DiagramDocument) error {
 	existing := diagramSemanticRows(current.Document)
 	requested := diagramSemanticRows(d)
-	rows, err := tx.QueryContext(ctx, `SELECT document FROM backend_diagram_versions WHERE project_id=? AND diagram_id=?`, pid, id)
+	rows, err := tx.QueryContext(ctx, `SELECT document FROM backend_diagram_versions_documents WHERE project_id=? AND diagram_id=?`, pid, id)
 	if err != nil {
 		return err
 	}
@@ -304,7 +305,7 @@ func persistDiagramVersion(ctx context.Context, tx *sql.Tx, m diagramMutation, o
 	raw := string(bytes)
 	var documents, versions int
 	var total int64
-	err = tx.QueryRowContext(ctx, `SELECT (SELECT count(*) FROM backend_diagrams WHERE project_id=?),(SELECT count(*) FROM backend_diagram_versions WHERE project_id=? AND diagram_id=?),(SELECT coalesce(sum(length(CAST(document AS BLOB))),0) FROM backend_diagram_versions WHERE project_id=?)`, m.pid, m.pid, id, m.pid).Scan(&documents, &versions, &total)
+	err = tx.QueryRowContext(ctx, `SELECT (SELECT count(*) FROM backend_diagrams WHERE project_id=?),(SELECT count(*) FROM backend_diagram_versions_documents WHERE project_id=? AND diagram_id=?),(SELECT coalesce(sum(length(CAST(document AS BLOB))),0) FROM backend_diagram_versions_documents WHERE project_id=?)`, m.pid, m.pid, id, m.pid).Scan(&documents, &versions, &total)
 	if err != nil {
 		return err
 	}
@@ -324,7 +325,7 @@ func persistDiagramVersion(ctx context.Context, tx *sql.Tx, m diagramMutation, o
 	if err != nil {
 		return err
 	}
-	_, err = tx.ExecContext(ctx, `INSERT INTO backend_diagram_versions(project_id,diagram_id,version,content_hash,target_hash,document,author,created_at,provenance,provenance_hash) VALUES(?,?,?,?,?,?,?,?,?,?)`, m.pid, id, version, hash, out.TargetHash, raw, out.Author, out.CreatedAt, string(provenance), out.ProvenanceHash)
+	_, err = backendblob.Exec(ctx, tx, `INSERT INTO backend_diagram_versions(project_id,diagram_id,version,content_hash,target_hash,document,author,created_at,provenance,provenance_hash) VALUES(?,?,?,?,?,?,?,?,?,?)`, m.pid, id, version, hash, out.TargetHash, raw, out.Author, out.CreatedAt, string(provenance), out.ProvenanceHash)
 	if err != nil {
 		return err
 	}

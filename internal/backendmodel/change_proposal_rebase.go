@@ -374,7 +374,7 @@ func (r *Repo) applyChangeRebaseTx(ctx context.Context, tx *sql.Tx, pid, id, sco
 		return &FaultError{Status: 409, Code: "backend_change_preview_conflict", Message: "Rebase candidate differs from exact preview"}
 	}
 	var hash string
-	if err = tx.QueryRowContext(ctx, `SELECT json_extract(document,'$.semanticHash') FROM backend_revisions WHERE project_id=? AND id=?`, pid, in.NewBaseRevisionID).Scan(&hash); err != nil {
+	if err = tx.QueryRowContext(ctx, `SELECT json_extract(document,'$.semanticHash') FROM backend_revisions_documents WHERE project_id=? AND id=?`, pid, in.NewBaseRevisionID).Scan(&hash); err != nil {
 		return err
 	}
 	if hash != prepared.candidate.NewBaseSemanticHash {

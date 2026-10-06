@@ -297,15 +297,15 @@ func (in *GraphQueryInput) UnmarshalJSON(b []byte) error {
 // projected separately after selection. One JSON parameter avoids bind limits.
 func (target *resolvedBackendTarget) graphRecords(pid, typ string) (string, []any, error) {
 	if target.proposal == nil {
-		return "backend_graph_records", []any{pid, target.revisionID, typ}, nil
+		return "backend_graph_records_documents", []any{pid, target.revisionID, typ}, nil
 	}
 	b, err := json.Marshal(target.draft.Overlays)
 	if err != nil {
 		return "", nil, err
 	}
 	cte := `WITH overlays AS (SELECT json_extract(value,'$.subjectId') AS id,json_extract(value,'$.recordType') AS record_type,json_extract(value,'$.kind') AS kind,json_extract(value,'$.name') AS name,json_extract(value,'$.parentId') AS parent_id,json_extract(value,'$.fromId') AS from_id,json_extract(value,'$.toId') AS to_id FROM json_each(?)), records AS (
-	SELECT b.document,b.id,b.kind,b.name,b.parent_id,coalesce(o.from_id,b.from_id) AS from_id,coalesce(o.to_id,b.to_id) AS to_id,b.project_id,b.revision_id,b.record_type FROM backend_graph_records b LEFT JOIN overlays o ON o.id=b.id AND o.record_type=b.record_type WHERE b.project_id=? AND b.revision_id=? AND b.record_type=?
-	UNION ALL SELECT '',o.id,o.kind,o.name,o.parent_id,o.from_id,o.to_id,?,?,o.record_type FROM overlays o WHERE o.record_type=? AND NOT EXISTS (SELECT 1 FROM backend_graph_records b WHERE b.project_id=? AND b.revision_id=? AND b.record_type=o.record_type AND b.id=o.id)) `
+	SELECT b.document,b.id,b.kind,b.name,b.parent_id,coalesce(o.from_id,b.from_id) AS from_id,coalesce(o.to_id,b.to_id) AS to_id,b.project_id,b.revision_id,b.record_type FROM backend_graph_records_documents b LEFT JOIN overlays o ON o.id=b.id AND o.record_type=b.record_type WHERE b.project_id=? AND b.revision_id=? AND b.record_type=?
+	UNION ALL SELECT '',o.id,o.kind,o.name,o.parent_id,o.from_id,o.to_id,?,?,o.record_type FROM overlays o WHERE o.record_type=? AND NOT EXISTS (SELECT 1 FROM backend_graph_records_documents b WHERE b.project_id=? AND b.revision_id=? AND b.record_type=o.record_type AND b.id=o.id)) `
 	return cte, []any{string(b), pid, target.revisionID, typ, pid, target.revisionID, typ, pid, target.revisionID}, nil
 }
 

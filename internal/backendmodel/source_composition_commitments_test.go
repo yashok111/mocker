@@ -48,7 +48,7 @@ func TestSource6RevisionPersistsBatchCommitments(t *testing.T) {
 	p := createProject(t, r, "commitments")
 	s, out := commitSource6Fixture(t, r, p, source6Input(t, p))
 	var raw string
-	if err := r.db.R.QueryRowContext(t.Context(), `SELECT document FROM backend_revision_decisions WHERE revision_id=?`, out.Revision.ID).Scan(&raw); err != nil {
+	if err := r.db.R.QueryRowContext(t.Context(), `SELECT document FROM backend_revision_decisions_documents WHERE revision_id=?`, out.Revision.ID).Scan(&raw); err != nil {
 		t.Fatal(err)
 	}
 	var document struct {
