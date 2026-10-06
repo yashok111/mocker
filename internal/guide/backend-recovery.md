@@ -19,7 +19,7 @@ get_backend_import_changes reads saved details by previewVersion even for NEEDS_
 
 Import Preview itself advances the session version and has no idempotency key/receipt. After a lost Preview response, read durable session status and its saved preview; do not invent a receipt or replay a changed current version automatically. Full-proposal Preview is read-only and reserves no command IDs.
 
-Full proposal accepted command IDs remain consumed after no-op, criteria-only or overwritten writes, restore and restart. A fresh request key with one of those IDs gets backend_change_command_conflict409 at valid current CAS. Exact old receipt replay still wins. Continue unchanged local IDs and explicitly copy as new edits are separate choices; no automatic regeneration. See change4 for the complete protocol and project2 for annotation cursor/CAS recovery.
+Full proposal accepted command IDs remain consumed after no-op, criteria-only or overwritten writes, restore and restart. A fresh request key with one of those IDs gets backend_change_command_conflict409 at valid current CAS. Exact old receipt replay still wins. Continue unchanged local IDs and explicitly copy as new edits are separate choices; no automatic regeneration. See change5 for the complete protocol and project2 for annotation cursor/CAS recovery.
 
 ## Save complete requests before sending
 
@@ -169,10 +169,10 @@ and explicitly reconcile commands, then preview and apply a new request/key.
 Do not patch only expectedVersion or use project CAS. A new source head leaves
 the proposal baseline intact and reports baseOutdated. Historical graph cursors
 remain pinned; history-list continuation after a save must restart. Wrong ownership
-or designed-object source evidence gives404. Legacy relational proposals do not support ready/rebase. For authorized static diff/impact select change4 and its `backend-analysis-jobs` topic in this same set, using the exact `proposal:{proposalId,proposalRevisionId}` target. Runtime behavior remains unverified. These rules do not alter import8 batch/commit recovery.
+or designed-object source evidence gives404. Legacy relational proposals do not support ready/rebase. For authorized static diff/impact select change5 and its `backend-analysis-jobs` topic in this same set, using the exact `proposal:{proposalId,proposalRevisionId}` target. Runtime behavior remains unverified. These rules do not alter import8 batch/commit recovery.
 
 ## Durable analysis, rebase and ready recovery
 
-Select change4's `backend-analysis-jobs` and `backend-change-rebase` in this same set for exact operation schemas. Keep action-tagged pending Start/Retry/Cancel/Rebase/Ready records at the project level, with original path owners, body bytes, draft/base/source pins, report hashes, choices/reasons/repairs and keys. Persist/read back before transport; storage unavailable/corrupt/conflicting data must stay visible. Reload never sends automatically.
+Select change5's `backend-analysis-jobs` and `backend-change-rebase` in this same set for exact operation schemas. Keep action-tagged pending Start/Retry/Cancel/Rebase/Ready records at the project level, with original path owners, body bytes, draft/base/source pins, report hashes, choices/reasons/repairs and keys. Persist/read back before transport; storage unavailable/corrupt/conflicting data must stay visible. Reload never sends automatically.
 
 Unknown outcomes replay unchanged. Definitive409 retains the refused attempt and requires owner reread, explicit reconciliation and fresh preview before a changed request. Accepted cleanup failure remains accepted and must not be mistaken for unknown transport. Verify rebase receipts against the selected new base and ready receipts against the exact report/draft. Old successful receipts replay after restart or later status changes. Interrupted jobs remain readable; a deliberate new-key Retry creates a distinct job from saved immutable input. An old-key Start/Retry is receipt recovery, not a new execution.

@@ -3,17 +3,17 @@ name: mocker-backend-verify
 description: Run bounded static backend diagnostics and review exact immutable findings with CAS/history. Use when checking imported structure or reviewing a diagnostic; this workflow never runs imported code or verifies runtime behavior.
 metadata:
   workflowId: "mocker-backend-verify"
-  workflowVersion: "3"
+  workflowVersion: "4"
   requiredModelSchemaVersions: "[\"5\",\"6\"]"
   requiredViewSchemaVersions: "[\"backend-diagram-v1\",\"diagram-view-v1\",\"backend-observations-v1\"]"
-  requiredCapabilities: "[\"backend-analysis-jobs\",\"backend-analysis-diagnostics\",\"backend-finding-review\",\"backend-observations\",\"backend-observation-correlation\"]"
-  guideSetId: "sha256:8743327387b8c094d8cc29199905b75fa917139d29eb7137d088c38d87e89ab5"
-  manifestHash: "sha256:8743327387b8c094d8cc29199905b75fa917139d29eb7137d088c38d87e89ab5"
+  requiredCapabilities: "[\"backend-analysis-jobs\",\"backend-analysis-diagnostics\",\"backend-finding-review\",\"backend-observations\",\"backend-observation-correlation\",\"backend-scenario-measurements\",\"backend-observed-impact\",\"backend-observed-sequences\"]"
+  guideSetId: "sha256:f25648e4c5cfffe7d621b112a8e26d47d58d3838385b18d201ca68507aac2981"
+  manifestHash: "sha256:f25648e4c5cfffe7d621b112a8e26d47d58d3838385b18d201ca68507aac2981"
 ---
 
 # Verify static backend structure
 
-Read get_backend_capabilities and negotiate verify3, exact guideSetId, manifestHash and contentHash. Read the complete pinned server backend-verify entrypoint when local identities differ. B6.1 accepts uploaded observations; no automatic collection, measurements or observed sequence execution.
+Read get_backend_capabilities and negotiate verify4, exact guideSetId, manifestHash and contentHash. Read the complete pinned server backend-verify entrypoint when local identities differ. B6.2 evaluates uploaded raw samples and observed event witnesses; collection remains external.
 
 1. Read the exact source revision or full changeProposal revision. Diagnosis starts only on explicit user intent, through start_backend_analysis with kind=diagnostics, target, scope={}, limits={}, observationMode=none and a saved idempotencyKey. No source execution occurs.
 2. Optionally include diagramScope with an exact pin and nonempty selectors. Use semantic IDs for payload elements; projected C4 relations require architecture_relation plus policy=architecture-v1, level and rootId. Never supply a canvas member subset. A target mismatch is a refusal, not a fallback.
@@ -23,4 +23,11 @@ Read get_backend_capabilities and negotiate verify3, exact guideSetId, manifestH
 6. Resolved additionally requires resolutionAnalysis {jobId,resultVersion}: a later completed scoped recheck with an explicit sufficiently covered absent check for this fingerprint. Unknown/incomplete checks refuse resolution. New positive evidence reopens the occurrence and preserves history.
 7. Lost review reply: replay the identical key and body. Conflict: read current review/history and inspect the changed basis before making a new decision. Never rebase expectedVersion silently. Keep old resultVersion and diagram pins when navigating historical reports.
 
-See [diagnostics](references/diagnostics.md) for prerequisites and limitations. For uploaded evidence use [observations](references/backend/observations.md) and [correlation](references/backend/correlation.md). Stop before B6.2 measurements and observed sequences.
+See [diagnostics](references/diagnostics.md) for prerequisites and limitations. For uploaded evidence use [observations](references/backend/observations.md) and [correlation](references/backend/correlation.md). Use [measurements](references/backend/measurements.md) for exact measured jobs and [benchmarks](references/backend/benchmarks.md) for opt-in tools. Stop before B6.3 storage rebuild.
+
+## Measured observations
+
+Read pinned `backend-measurements` and `backend-benchmarks` from the same guide set.
+Use exact saved source/observation/correlation/report pins; never enrich from latest.
+Observed impact explicitly selects none or pinned. Before source evidence cannot
+confirm desired after intent. Unknown builds and inferred paths remain qualified.

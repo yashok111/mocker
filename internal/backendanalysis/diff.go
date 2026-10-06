@@ -220,6 +220,9 @@ func NewEngine(graphs GraphReader, artifacts ArtifactProjectionReader) Engine {
 	return &analysisEngine{graphs: graphs, artifacts: artifacts}
 }
 func (e *analysisEngine) Analyze(ctx context.Context, in *ImmutableInput, emit func(PreparedSnapshot) error) (*TerminalSnapshot, error) {
+	if measurementKind(in.Kind) {
+		return analyzeMeasurements(ctx, in)
+	}
 	if in.V2 != nil {
 		return e.analyzeB43(ctx, in, emit)
 	}
@@ -454,6 +457,9 @@ func analyzeGraphs(ctx context.Context, in *ImmutableInput, before, after *backe
 		r.add("checks", check.Object, "criterion", check.Certainty, 0, check)
 	}
 	if err = r.artifactChanges(ctx, before, after, request); err != nil {
+		return nil, err
+	}
+	if err = r.addObservedImpact(ctx); err != nil {
 		return nil, err
 	}
 	return r.finish(before, after, emit)

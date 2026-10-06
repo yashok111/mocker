@@ -303,19 +303,22 @@ type Evidence struct {
 	Snippet      *string             `json:"snippet,omitzero"`
 }
 type GraphQueryInput struct {
-	ChangeProposal  *ProposalReadTarget        `json:"changeProposal,omitzero"`
-	ImportCandidate *ImportCandidateReadTarget `json:"importCandidate,omitzero"`
-	ID              string                     `json:"id,omitempty"`
-	RevisionID      string                     `json:"revisionId,omitempty"`
-	Proposal        *ProposalReadTarget        `json:"proposal,omitzero"`
-	RecordType      string                     `json:"recordType"`
-	Kind            string                     `json:"kind,omitempty"`
-	Search          string                     `json:"search,omitempty"`
-	ParentID        string                     `json:"parentId,omitempty"`
-	From            string                     `json:"from,omitempty"`
-	To              string                     `json:"to,omitempty"`
-	Limit           int                        `json:"limit,omitzero"`
-	Cursor          string                     `json:"cursor,omitempty"`
+	ServiceID        string                     `json:"serviceId,omitempty"`
+	SourceSnapshotID string                     `json:"sourceSnapshotId,omitempty"`
+	Certainty        string                     `json:"certainty,omitempty"`
+	ChangeProposal   *ProposalReadTarget        `json:"changeProposal,omitzero"`
+	ImportCandidate  *ImportCandidateReadTarget `json:"importCandidate,omitzero"`
+	ID               string                     `json:"id,omitempty"`
+	RevisionID       string                     `json:"revisionId,omitempty"`
+	Proposal         *ProposalReadTarget        `json:"proposal,omitzero"`
+	RecordType       string                     `json:"recordType"`
+	Kind             string                     `json:"kind,omitempty"`
+	Search           string                     `json:"search,omitempty"`
+	ParentID         string                     `json:"parentId,omitempty"`
+	From             string                     `json:"from,omitempty"`
+	To               string                     `json:"to,omitempty"`
+	Limit            int                        `json:"limit,omitzero"`
+	Cursor           string                     `json:"cursor,omitempty"`
 }
 type EffectiveEdgeName struct {
 	ID   string `json:"id"`
@@ -323,6 +326,7 @@ type EffectiveEdgeName struct {
 }
 
 type GraphPage struct {
+	Total              *int                     `json:"total,omitzero"`
 	EdgeNames          []EffectiveEdgeName      `json:"edgeNames,omitempty"`
 	Origins            []EffectiveFieldOrigin   `json:"origins,omitempty"`
 	Identities         []EffectiveIdentity      `json:"identities,omitempty"`

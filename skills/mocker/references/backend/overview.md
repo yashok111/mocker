@@ -6,8 +6,8 @@ metadata:
   workflowVersion: "2"
   requiredModelSchemaVersions: "[\"1\"]"
   requiredCapabilities: "[\"backend-projects\",\"backend-project-metadata\",\"backend-revisions\",\"backend-annotations\"]"
-  guideSetId: "sha256:8743327387b8c094d8cc29199905b75fa917139d29eb7137d088c38d87e89ab5"
-  manifestHash: "sha256:8743327387b8c094d8cc29199905b75fa917139d29eb7137d088c38d87e89ab5"
+  guideSetId: "sha256:f25648e4c5cfffe7d621b112a8e26d47d58d3838385b18d201ca68507aac2981"
+  manifestHash: "sha256:f25648e4c5cfffe7d621b112a8e26d47d58d3838385b18d201ca68507aac2981"
 ---
 
 # Backend project preparation
@@ -32,10 +32,10 @@ this backend-overview topic keeps the project-preparation identity. Project
 preparation still requires schema1, including its empty initial revision; it
 need not require schema2 to prepare a project. Database typed edits/proposals
 use the separately selected database7 workflow. Source flow/data-access questions
-select inspect12 at backend-inspect in this same set; ordinary inspection writes
-nothing. Source4 field lineage selects inspect12 with field-lineage-v1 and backend-field-lineage-query.
-Manual API links require inspect12, backend-api-artifact-pins and api-artifact-pins-v1;
-load its flow-reference contract before any authorized mutation. Static diff/impact and explicit rebase use change4 topics backend-analysis-jobs and backend-change-rebase. Measured writer checks and source job execution remain unavailable.
+select inspect13 at backend-inspect in this same set; ordinary inspection writes
+nothing. Source4 field lineage selects inspect13 with field-lineage-v1 and backend-field-lineage-query.
+Manual API links require inspect13, backend-api-artifact-pins and api-artifact-pins-v1;
+load its flow-reference contract before any authorized mutation. Static diff/impact and explicit rebase use change5 topics backend-analysis-jobs and backend-change-rebase. Measured writer checks and source job execution remain unavailable.
 
 ## Before the first write
 
@@ -77,7 +77,7 @@ strings before comparing them with the server manifest's typed arrays.
 
 Project metadata batches also create/update/remove source-object annotations. Select backend-annotations from this project2 owner before those writes; it defines exact plain-text replacement, current/historical/orphan targets, project CAS and cursor409 recovery. Metadata updates keep source revision bytes unchanged. Project2 still requires the empty schema1 creation branch; it does not implicitly import source6.
 
-Select sync2 for source6 scopes/provider migration/incremental reconciliation, change4 for full desired source5/source6 proposals, and inspect12/database7 for exact reads and SavedView-v2. Old relational proposal procedures remain under database7 with their legacy proposal tag; full proposals use changeProposal explicitly.
+Select sync2 for source6 scopes/provider migration/incremental reconciliation, change5 for full desired source5/source6 proposals, and inspect13/database7 for exact reads and SavedView-v2. Old relational proposal procedures remain under database7 with their legacy proposal tag; full proposals use changeProposal explicitly.
 
 ## Available tools and ordered procedure
 
@@ -112,7 +112,7 @@ known compare-and-swap conflict, re-read and reconcile, then issue the newly
 formed command with a new key. A receipt replay returns the original result,
 which may be older than current state; read the project again for its live state.
 
-Saved editor projections use inspect12 with backend-editor-projections and
+Saved editor projections use inspect13 with backend-editor-projections and
 backend-editor-artifacts-v1. Load backend-editor-projections for exact historic
 sequence/state/rule/EventModel reads and generic pin changes. Manual associations
 and authored EventModel do not establish source event evidence or execution.

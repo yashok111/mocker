@@ -133,6 +133,10 @@ function ExactGraph({ projectId, target, ...props }: Props) {
             projectId={projectId}
             target={target}
             pins={pins}
+            sourceOptions={coverage.snapshots.map((s) => ({
+              value: s.id,
+              label: `${s.provider.name} · ${s.capturedAt}`,
+            }))}
             claimsSupported={Boolean(source?.sourceVector) && !target.proposal}
           />
         </>
@@ -147,10 +151,15 @@ function ExactInventory({
   claimsSupported,
   focusTarget,
   onSelectionChange,
-}: Context & Omit<Props, "projectId" | "target">) {
+  sourceOptions,
+}: Context &
+  Omit<Props, "projectId" | "target"> & { sourceOptions: { value: string; label: string }[] }) {
   const depart = useBackendAPIDeparture();
   const [filter, setFilter] = useState({
     search: "",
+    serviceId: "",
+    sourceSnapshotId: "",
+    certainty: "" as "" | "explicit" | "inferred" | "unresolved" | "desired" | "stale",
     kind: "",
     recordType: "nodes" as "nodes" | "edges",
   });
@@ -165,7 +174,27 @@ function ExactInventory({
       setSelection(value);
       onSelectionChange?.(value);
     });
-  const paging = { kind: filter.kind, limit: 100, cursor: cursors.at(-1) ?? "" };
+  const services = useQuery({
+    queryKey: backendReadQueryKey("workspace-services", projectId, target),
+    queryFn: ({ signal }) =>
+      readBackendGraph(
+        projectId,
+        target,
+        { recordType: "nodes", kind: "service", limit: 500 },
+        signal,
+        pins,
+      ),
+    retry: false,
+    staleTime: Infinity,
+  });
+  const paging = {
+    ...(filter.serviceId ? { serviceId: filter.serviceId } : {}),
+    ...(filter.sourceSnapshotId ? { sourceSnapshotId: filter.sourceSnapshotId } : {}),
+    ...(filter.certainty ? { certainty: filter.certainty } : {}),
+    kind: filter.kind,
+    limit: 100,
+    cursor: cursors.at(-1) ?? "",
+  };
   const input: BackendGraphFilters =
     filter.recordType === "nodes"
       ? { ...paging, recordType: "nodes", search: filter.search }
@@ -226,12 +255,39 @@ function ExactInventory({
               ]}
             />
           )}
+          <NativeSelect
+            label="Сервис модели"
+            value={draft.serviceId}
+            data={[
+              { value: "", label: "Все сервисы" },
+              ...(services.data?.nodes ?? []).map((n) => ({ value: n.id, label: n.name })),
+            ]}
+            onChange={(e) => setDraft({ ...draft, serviceId: e.currentTarget.value })}
+          />
+          <NativeSelect
+            label="Источник модели"
+            value={draft.sourceSnapshotId}
+            data={[{ value: "", label: "Все источники" }, ...sourceOptions]}
+            onChange={(e) => setDraft({ ...draft, sourceSnapshotId: e.currentTarget.value })}
+          />
+          <NativeSelect
+            label="Достоверность source"
+            value={draft.certainty}
+            data={["", "explicit", "inferred", "unresolved", "desired", "stale"]}
+            onChange={(e) =>
+              setDraft({ ...draft, certainty: e.currentTarget.value as typeof draft.certainty })
+            }
+          />
           <Button type="submit">Найти объекты</Button>
         </Group>
       </form>
       <LoadState query={query} label="объектов" />
       {page && (
         <>
+          <Text>
+            В модели по фильтрам: {"total" in page ? page.total : "неизвестно"}; на странице:{" "}
+            {page.nodes.length + page.edges.length}.
+          </Text>
           {page.nodes.length === 0 && page.edges.length === 0 && (
             <Text c="dimmed">Объекты не найдены</Text>
           )}

@@ -28,6 +28,8 @@ import {
   compareBackendReplayRuns,
   connectBackendReplayProfile,
   getBackendReplayRun,
+  getBackendReplayProfile,
+  getBackendReplayPackage,
   getBackendReplayTemplate,
   listBackendReplayPackages,
   listBackendReplayProfiles,
@@ -140,8 +142,46 @@ export function BackendReplay({ projectId }: { projectId: string }) {
     refetchInterval: (q) =>
       q.state.data && ["queued", "running"].includes(q.state.data.status) ? 2000 : false,
   });
-  const profile = profiles.data?.find((x) => exactKey(x.pin) === profileID);
-  const saved = packages.data?.find((x) => exactKey(x.pin) === packageID);
+  const selectedProfile = profiles.data?.find((x) => exactKey(x.pin) === profileID)?.pin;
+  const selectedPackage = packages.data?.find((x) => exactKey(x.pin) === packageID)?.pin;
+  const exactProfile = useQuery({
+    queryKey: ["replay-profile-exact", projectId, selectedProfile],
+    enabled: !!selectedProfile,
+    queryFn: async ({ signal }) => {
+      if (!selectedProfile) throw new Error("Выберите профиль");
+      const r = await getBackendReplayProfile(
+        projectId,
+        selectedProfile.id,
+        selectedProfile.version,
+        { signal },
+      );
+      if (r.status !== 200) throw new Error(JSON.stringify(r.data));
+      if (r.data.pin.contentHash !== selectedProfile.contentHash)
+        throw new Error("Hash профиля не совпадает");
+      return r.data;
+    },
+    retry: false,
+  });
+  const exactPackage = useQuery({
+    queryKey: ["replay-package-exact", projectId, selectedPackage],
+    enabled: !!selectedPackage,
+    queryFn: async ({ signal }) => {
+      if (!selectedPackage) throw new Error("Выберите пакет");
+      const r = await getBackendReplayPackage(
+        projectId,
+        selectedPackage.id,
+        selectedPackage.version,
+        { signal },
+      );
+      if (r.status !== 200) throw new Error(JSON.stringify(r.data));
+      if (r.data.pin.contentHash !== selectedPackage.contentHash)
+        throw new Error("Hash пакета не совпадает");
+      return r.data;
+    },
+    retry: false,
+  });
+  const profile = selectedProfile ? exactProfile.data : undefined;
+  const saved = selectedPackage ? exactPackage.data : undefined;
   const blocked = busy || !!pending || !!recovery.error;
   async function refresh() {
     await Promise.all([profiles.refetch(), packages.refetch(), runs.refetch()]);
@@ -249,7 +289,9 @@ export function BackendReplay({ projectId }: { projectId: string }) {
           закреплённому пакету, выбранным шагам и привязкам диаграммы.
         </Text>
         {(error || recovery.error) && <Alert color="red">{error || recovery.error}</Alert>}
-        {[targets, profiles, packages, runs, run].some((q) => q.isError) && (
+        {[targets, profiles, packages, runs, run, exactProfile, exactPackage].some(
+          (q) => q.isError,
+        ) && (
           <Alert color="red">
             Не удалось прочитать replay. Обновите данные; отсутствие ответа не означает отсутствие
             эффектов.

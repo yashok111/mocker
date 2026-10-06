@@ -289,7 +289,7 @@ func decodeReadQuery(b []byte, required, optional []string, out any) error {
 
 func (in *GraphQueryInput) UnmarshalJSON(b []byte) error {
 	type query GraphQueryInput
-	return decodeReadQuery(b, []string{"recordType"}, []string{"id", "kind", "search", "parentId", "from", "to", "limit", "cursor"}, (*query)(in))
+	return decodeReadQuery(b, []string{"recordType"}, []string{"id", "kind", "search", "parentId", "from", "to", "limit", "cursor", "serviceId", "sourceSnapshotId", "certainty"}, (*query)(in))
 }
 
 // The shared SQL page engine sees virtual designed records and effective edge

@@ -395,10 +395,12 @@ function ReportRecord({
         ) : (
           <>
             <AnalysisValue label="Изменение артефакта с точными pins" value={value} />
-            {"before" in value && value.before && (
+            {"before" in value && value.before && "data" in value.before && (
               <ArtifactTypedContent data={value.before.data} />
             )}{" "}
-            {"after" in value && value.after && <ArtifactTypedContent data={value.after.data} />}
+            {"after" in value && value.after && "data" in value.after && (
+              <ArtifactTypedContent data={value.after.data} />
+            )}
           </>
         )}
         {selection && (

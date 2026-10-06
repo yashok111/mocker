@@ -34,6 +34,9 @@ export type { BackendReadTarget } from "@/api/generated/schemas";
 export { backendReadTargetKey } from "./backendReadTargets";
 
 export type BackendGraphFilters = {
+  serviceId?: string;
+  sourceSnapshotId?: string;
+  certainty?: "explicit" | "inferred" | "unresolved" | "desired" | "stale";
   id?: string;
   kind?: string;
   limit?: number;

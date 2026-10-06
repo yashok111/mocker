@@ -462,7 +462,7 @@ runtime, downgrade, automatic provider migration and proposal→source fail.
 Schema1/2 history and receipt bytes stay unchanged; omitted old records stay stale
 at original snapshots and proofs instead of gaining new UUIDs/current claims.
 
-Select inspect12 in this same global set and verify backend-flow-reference before
+Select inspect13 in this same global set and verify backend-flow-reference before
 staging schema3. Its typed flow/step/query/transaction and control/access/boundary
 shapes use external Keys on import and Ids after preview. Keep entry/exits in the
 owning flow; local transaction membership does not propagate to callees. Calls
@@ -486,7 +486,7 @@ call and access references plus the usual complete scope/inventory/proof gates.
 An authorized focused gap investigation changes source analysis focus, not the
 whole-scope import protocol. Unavailable/inconclusive source retains unknowns
 and produces a concrete limitation, never an empty progress commit. Requery the
-new acknowledged source revision through inspect12; imported witnesses still do
+new acknowledged source revision through inspect13; imported witnesses still do
 not establish execution, all writers, atomicity or impact.
 
 ## Reimport with frozen API associations
@@ -496,7 +496,7 @@ API artifact pins and bindings without re-resolving or revalidating the manual
 association. It updates the source hash anchor, while stale source status and
 last-known source/object labels remain visible. Explicit source deletion retains
 the binding as orphaned; query_backend_api_artifacts with that sourceNodeId
-returns200 at the new exact revision. Use inspect12's full API procedure for a
+returns200 at the new exact revision. Use inspect13's full API procedure for a
 separately authorized remap or removal. Never attach a current API draft during
 import or rewrite an old source revision/SavedView/proposal base.
 
@@ -507,7 +507,7 @@ Explicit source4→5 reconcile adds only events-service-v1 with
 profileExtension:{fromProfile:"field-lineage-v1",toProfile:"events-service-v1"},
 matching graphScope/profile and same sole repository/provider identity. No silent
 upgrade/source1–3 jump/downgrade; same5→5 omits extension. Preserve earlier
-profiles/UUIDs/bytes/hashes/receipts. Load backend-model and select inspect12/
+profiles/UUIDs/bytes/hashes/receipts. Load backend-model and select inspect13/
 backend-events for typed attrs, node+endpoint+edge route refs and transport pairs.
 Check every message/channel/handler/edge reference and analyzed member/hash/
 physical line claim in the accepted candidate; no runtime execution.

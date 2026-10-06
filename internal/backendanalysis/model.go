@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/yashok111/mocker/internal/backendmodel"
+	o "github.com/yashok111/mocker/internal/backendobservations"
 )
 
 type ObjectAddress struct {
@@ -41,6 +42,7 @@ type AnalysisTarget struct {
 	CommandPreview *CommandPreviewTarget            `json:"commandPreview,omitzero"`
 }
 type StartInput struct {
+	Measurement     *StartMeasurementInput          `json:"-"`
 	DiagramScope    *backendmodel.DiagramScopeInput `json:"diagramScope,omitzero"`
 	Package         *StartPackageInput              `json:"-"`
 	Conformance     *StartConformanceInput          `json:"-"`
@@ -61,24 +63,26 @@ type RetryInput struct {
 	IdempotencyKey string `json:"idempotencyKey"`
 }
 type ImmutableInput struct {
-	DiagramScope      *backendmodel.DiagramScope        `json:"diagramScope,omitzero"`
-	DiagnosticDiagram *backendmodel.DiagramVersion      `json:"diagnosticDiagram,omitzero"`
-	V2                *ImmutableInputV2                 `json:"-"`
-	DocumentVersion   string                            `json:"documentVersion"`
-	Kind              string                            `json:"kind"`
-	ProjectID         string                            `json:"projectId"`
-	From              backendmodel.BackendReadTarget    `json:"from"`
-	To                *backendmodel.BackendReadTarget   `json:"to,omitzero"`
-	CommandPreview    *backendmodel.FrozenChangePreview `json:"commandPreview,omitzero"`
-	BeforePins        backendmodel.EffectiveGraphPins   `json:"beforePins"`
-	AfterPins         backendmodel.EffectiveGraphPins   `json:"afterPins"`
-	BeforeSource      backendmodel.AnalysisSourcePins   `json:"beforeSource"`
-	AfterSource       backendmodel.AnalysisSourcePins   `json:"afterSource"`
-	Scope             Scope                             `json:"scope"`
-	Limits            Limits                            `json:"limits"`
-	RuleSetVersion    string                            `json:"ruleSetVersion"`
-	TraversalVersion  string                            `json:"traversalVersion"`
-	ObservationMode   string                            `json:"observationMode"`
+	ImpactObservations *o.PinnedObservations             `json:"impactObservations,omitzero"`
+	Observations       *FrozenObservationAnalysis        `json:"observations,omitzero"`
+	DiagramScope       *backendmodel.DiagramScope        `json:"diagramScope,omitzero"`
+	DiagnosticDiagram  *backendmodel.DiagramVersion      `json:"diagnosticDiagram,omitzero"`
+	V2                 *ImmutableInputV2                 `json:"-"`
+	DocumentVersion    string                            `json:"documentVersion"`
+	Kind               string                            `json:"kind"`
+	ProjectID          string                            `json:"projectId"`
+	From               backendmodel.BackendReadTarget    `json:"from"`
+	To                 *backendmodel.BackendReadTarget   `json:"to,omitzero"`
+	CommandPreview     *backendmodel.FrozenChangePreview `json:"commandPreview,omitzero"`
+	BeforePins         backendmodel.EffectiveGraphPins   `json:"beforePins"`
+	AfterPins          backendmodel.EffectiveGraphPins   `json:"afterPins"`
+	BeforeSource       backendmodel.AnalysisSourcePins   `json:"beforeSource"`
+	AfterSource        backendmodel.AnalysisSourcePins   `json:"afterSource"`
+	Scope              Scope                             `json:"scope"`
+	Limits             Limits                            `json:"limits"`
+	RuleSetVersion     string                            `json:"ruleSetVersion"`
+	TraversalVersion   string                            `json:"traversalVersion"`
+	ObservationMode    string                            `json:"observationMode"`
 }
 type Progress struct {
 	States           int `json:"states"`

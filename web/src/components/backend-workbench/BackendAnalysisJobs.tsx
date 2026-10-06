@@ -1,3 +1,6 @@
+import { BackendObservedImpact } from "./BackendObservedImpact";
+import { parseBrowserSafeJson } from "@/api/preciseJson";
+import type { BackendObservationAnalysisPin } from "@/api/generated/schemas";
 import { BackendFindings } from "./BackendFindings";
 import { BackendChangePackage } from "./BackendChangePackage";
 import { BackendConformance } from "./BackendConformance";
@@ -53,6 +56,8 @@ export function BackendAnalysisJobs({
   onSaved?: (value: BackendChangeProposalDetail) => void;
 }) {
   const recovery = useBackendAnalysisRecovery(projectId);
+  const [observationMode, setObservationMode] = useState<"none" | "pinned">("none");
+  const [observationPins, setObservationPins] = useState("[]");
   const [from, setFrom] = useState(sourceRevisionId),
     [to, setTo] = useState(sourceRevisionId);
   const [kind, setKind] = useState<"diff" | "impact" | "diagnostics">(
@@ -114,7 +119,7 @@ export function BackendAnalysisJobs({
         observationMode: "none" as const,
         idempotencyKey: crypto.randomUUID(),
       };
-      const input: StartBackendAnalysisRequest =
+      let input: StartBackendAnalysisRequest =
         kind === "diagnostics"
           ? {
               ...common,
@@ -133,6 +138,18 @@ export function BackendAnalysisJobs({
               fromRevisionId: target ? sourceRevisionId : from,
               target: selectedTarget,
             };
+      if (kind === "impact" && observationMode === "pinned") {
+        const pins = parseBrowserSafeJson(observationPins) as BackendObservationAnalysisPin[];
+        if (!Array.isArray(pins) || !pins.length) throw new Error("Нужны exact pins");
+        input = {
+          ...common,
+          kind: "impact",
+          fromRevisionId: target ? sourceRevisionId : from,
+          target: selectedTarget,
+          observationMode: "pinned",
+          observationPins: pins,
+        };
+      }
       const result = await recovery.execute(makeAnalysisAttempt("start", { projectId }, input));
       if (result) {
         const id = (result as BackendAnalysisJob).id;
@@ -183,6 +200,14 @@ export function BackendAnalysisJobs({
           Статический анализ не выполняет код и не подтверждает работу приложения.
         </Text>
         {error && <Alert color="red">{error}</Alert>}
+        {kind === "impact" && (
+          <BackendObservedImpact
+            mode={observationMode}
+            onMode={setObservationMode}
+            pins={observationPins}
+            onPins={setObservationPins}
+          />
+        )}
         <LoadState query={revisions} label="истории исходных ревизий" />
         <fieldset
           disabled={disabled || recovery.blocked}

@@ -1,3 +1,4 @@
+import { BackendScenarioMeasurements } from "./BackendScenarioMeasurements";
 import { useEffect, useRef, useState } from "react";
 import {
   Alert,
@@ -370,6 +371,13 @@ export function BackendObservations({ projectId }: { projectId: string }) {
           Следующая страница сопоставления
         </Button>
       )}
+      <BackendScenarioMeasurements
+        key={`${projectId}/${scopeKey}`}
+        projectId={projectId}
+        selected={selected}
+        correlation={correlation}
+        scope={scope}
+      />
       {correlation && (
         <BackendCorrelation
           snapshot={correlation}

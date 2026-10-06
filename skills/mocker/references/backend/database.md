@@ -271,14 +271,14 @@ never truncate. They are validation bounds, not measured performance claims.
 Canvas visibility is at most 200 tables/600 FKs with explicit scope counts; the
 paginated list, relationship table and inspector preserve full read access.
 
-Source schema3/4/5 supports imported scoped endpoint accesses through inspect12 and
+Source schema3/4/5 supports imported scoped endpoint accesses through inspect13 and
 query_backend_flow. Select that owner in this same set, then page accesses at
 the exact source revision with dataNodeId; table-level unknown-column access is
 possible, never a confirmed column reader/writer. Open query/edge/witness proof.
 Source2 flow inspection is unavailable. DB proposals keep their exact source base
 for flow navigation; no proposal selector is accepted by the flow query.
 Imported accesses do not verify all writers, data/backfill or proposed behavior.
-Legacy relational proposals do not support ready/rebase. Authorized static diff/impact uses change4/backend-analysis-jobs with the exact `proposal:{proposalId,proposalRevisionId}` target. Source provider migration uses separately negotiated sync2; neither action is implied by inspection. Live collection and measured data/writer checks remain unavailable; runtime behavior stays unverified. Saved views persist presentation and exact pins only.
+Legacy relational proposals do not support ready/rebase. Authorized static diff/impact uses change5/backend-analysis-jobs with the exact `proposal:{proposalId,proposalRevisionId}` target. Source provider migration uses separately negotiated sync2; neither action is implied by inspection. Live collection and measured data/writer checks remain unavailable; runtime behavior stays unverified. Saved views persist presentation and exact pins only.
 
 ## Proposal documents and property provenance
 
@@ -391,10 +391,10 @@ disabled during preview. Name/search limits200characters; finite x/y within
 search drafts, cursors, graph bodies, source text or credentials. Ordinary-agent
 acceptance and live agent evaluation remain deferred.
 
-## Source4 column lineage belongs to inspect12
+## Source4 column lineage belongs to inspect13
 
 Database7 reads source2/3/4/5 and existing proposal-relational-v1/saved-view-v1.
-For source4/5 lineage select inspect12 in the same guideSetId/manifestHash, verify
+For source4/5 lineage select inspect13 in the same guideSetId/manifestHash, verify
 its schema3/4/5 and field-lineage-v1 support, all required capabilities including
 backend-field-lineage-query, and actual flow-reference/analysis topic hashes.
 Use exact {kind:"column",nodeId,facetKey}, revisionId and reverse for origins or
@@ -402,11 +402,11 @@ forward for downstream. Preserve facet identity, ordered co-inputs, unknown
 boundary destination/actions, coverage and truncation. Do not issue lineage for
 source2/3 or proposals; an exact source-base navigation does not turn designed
 intent into source lineage. No SQL/application/migration execution or latest-pin
-fallback. Query procedure and evidence interpretation belong to inspect12.
+fallback. Query procedure and evidence interpretation belong to inspect13.
 
 ## Exact API links from a database value
 
-Select the complete inspect12 owner in this same guide set, including
+Select the complete inspect13 owner in this same guide set, including
 backend-api-artifact-pins and api-artifact-pins-v1 in viewSchemaVersions. Follow
 backend-flow-reference for a manually chosen API-field association reached through
 column lineage; column names/types create no automatic correspondence. Query a
@@ -415,6 +415,6 @@ source UUIDs remain queryable/removable with their frozen labels. New head or AP
 draft observations never replace these pins. Database7 and its proposal contract
 remain unchanged; source1–3 keep their supported reads.
 
-Source5 column→message fields delegates to inspect12/backend-events with full
+Source5 column→message fields delegates to inspect13/backend-events with full
 node+endpoint+edge route refs and explicit transport. Source2/3/proposals never
 acquire contextual event lineage through schema or name matching.

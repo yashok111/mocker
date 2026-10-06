@@ -31,7 +31,7 @@ func (r *Repo) queryEffectiveGraph(ctx context.Context, pid string, in GraphQuer
 	if err != nil {
 		return nil, err
 	}
-	out := &GraphPage{Target: new(graph.Target), Pins: new(graph.Pins), ViewSchemaVersion: graph.Pins.ViewSchemaVersion, Nodes: []Node{}, Edges: []Edge{}, Origins: []EffectiveFieldOrigin{}, Identities: []EffectiveIdentity{}, BaselineEvidence: []EffectiveEvidenceBasis{}}
+	out := &GraphPage{Total: new(0), Target: new(graph.Target), Pins: new(graph.Pins), ViewSchemaVersion: graph.Pins.ViewSchemaVersion, Nodes: []Node{}, Edges: []Edge{}, Origins: []EffectiveFieldOrigin{}, Identities: []EffectiveIdentity{}, BaselineEvidence: []EffectiveEvidenceBasis{}}
 	if graph.Source != nil {
 		out.Source = sourceVectorReadContext(graph.Source)
 	}
@@ -40,12 +40,23 @@ func (r *Repo) queryEffectiveGraph(ctx context.Context, pid string, in GraphQuer
 		nodes := slices.Clone(graph.State.Nodes)
 		slices.SortFunc(nodes, func(a, b Node) int { return strings.Compare(a.ID, b.ID) })
 		for _, n := range nodes {
-			if n.ID <= after || !effectiveNodeMatches(n, in) {
+			if !effectiveNodeMatches(n, in) {
+				continue
+			}
+			match, e := workspaceMatches(ctx, graph, in, "node", n.ID)
+			if e != nil {
+				return nil, e
+			}
+			if !match {
+				continue
+			}
+			*out.Total++
+			if n.ID <= after {
 				continue
 			}
 			if len(out.Nodes) == limit {
 				out.NextCursor = encodeGraphPage("effective-graph", pid, scope, out.Nodes[len(out.Nodes)-1].ID)
-				break
+				continue
 			}
 			n = effectiveNodeRecord(graph, n)
 			out.Nodes = append(out.Nodes, n)
@@ -55,12 +66,23 @@ func (r *Repo) queryEffectiveGraph(ctx context.Context, pid string, in GraphQuer
 		edges := slices.Clone(graph.State.Edges)
 		slices.SortFunc(edges, func(a, b Edge) int { return strings.Compare(a.ID, b.ID) })
 		for _, e := range edges {
-			if e.ID <= after || !effectiveEdgeMatches(e, in) {
+			if !effectiveEdgeMatches(e, in) {
+				continue
+			}
+			match, err := workspaceMatches(ctx, graph, in, "edge", e.ID)
+			if err != nil {
+				return nil, err
+			}
+			if !match {
+				continue
+			}
+			*out.Total++
+			if e.ID <= after {
 				continue
 			}
 			if len(out.Edges) == limit {
 				out.NextCursor = encodeGraphPage("effective-graph", pid, scope, out.Edges[len(out.Edges)-1].ID)
-				break
+				continue
 			}
 			e = effectiveEdgeRecord(graph, e)
 			out.Edges = append(out.Edges, e)
@@ -123,7 +145,10 @@ func validateEffectiveGraphQuery(in GraphQueryInput, schema string) error {
 	return nil
 }
 func validateEffectiveGraphSelectors(in GraphQueryInput) error {
-	if in.ID != "" && (!ValidID(in.ID) || in.Cursor != "" || in.Kind != "" || in.Search != "" || in.ParentID != "" || in.From != "" || in.To != "") {
+	if err := validateWorkspaceFilters(in); err != nil {
+		return err
+	}
+	if in.ID != "" && (workspaceFiltered(in) || !ValidID(in.ID) || in.Cursor != "" || in.Kind != "" || in.Search != "" || in.ParentID != "" || in.From != "" || in.To != "") {
 		return invalid("id", "ID selector cannot be combined with filters or cursor")
 	}
 	if in.RecordType == "nodes" && (in.From != "" || in.To != "") || in.RecordType == "edges" && (in.Search != "" || in.ParentID != "") {

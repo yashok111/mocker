@@ -52,6 +52,9 @@ func b43Kind(kind string) bool {
 	return slices.Contains([]string{"change_package", "conformance", "endpoint_review"}, kind)
 }
 func (in StartInput) MarshalJSON() ([]byte, error) {
+	if in.Measurement != nil {
+		return json.Marshal(in.Measurement)
+	}
 	switch in.Kind {
 	case "change_package":
 		if in.Package != nil {

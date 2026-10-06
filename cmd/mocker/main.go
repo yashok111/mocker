@@ -332,7 +332,9 @@ func (a *app) buildReplay(ctx context.Context) error {
 		return fmt.Errorf("recover backend replays: %w", err)
 	}
 	a.adminSrv.SetBackendReplay(a.replayService)
-	a.adminSrv.SetBackendObservations(&backendobservations.Service{Repo: backendobservations.NewRepo(a.db), Graphs: graphs, Replay: a.replayService})
+	observations := &backendobservations.Service{Repo: backendobservations.NewRepo(a.db), Graphs: graphs, Replay: a.replayService}
+	a.adminSrv.SetBackendObservations(observations)
+	a.analysisService.SetObservations(observations)
 	return nil
 }
 

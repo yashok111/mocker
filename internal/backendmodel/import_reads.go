@@ -116,7 +116,7 @@ func (r *Repo) Import(ctx context.Context, pid, sid string, in ListInput) (*Impo
 	return out, rows.Err()
 }
 func (r *Repo) QueryGraph(ctx context.Context, pid string, in GraphQueryInput) (*GraphPage, error) {
-	if in.ChangeProposal != nil || in.ImportCandidate != nil {
+	if in.ChangeProposal != nil || in.ImportCandidate != nil || workspaceFiltered(in) {
 		return r.queryEffectiveGraph(ctx, pid, in)
 	}
 	if in.Proposal == nil && in.RevisionID != "" {
@@ -204,6 +204,7 @@ func (r *Repo) QueryGraph(ctx context.Context, pid string, in GraphQueryInput) (
 		args = append(args, pid, target.revisionID, typ)
 	}
 	query := prefix + `SELECT document,id FROM ` + table + ` WHERE project_id=? AND revision_id=? AND record_type=? AND id>?`
+	afterArg := len(args)
 	args = append(args, after)
 	for _, f := range []struct{ column, value string }{{"id", in.ID}, {"kind", in.Kind}, {"parent_id", in.ParentID}, {"from_id", in.From}, {"to_id", in.To}} {
 		if f.value != "" {
@@ -215,6 +216,13 @@ func (r *Repo) QueryGraph(ctx context.Context, pid string, in GraphQueryInput) (
 		query += ` AND instr(lower(name),lower(?))>0`
 		args = append(args, in.Search)
 	}
+	countArgs := append([]any(nil), args...)
+	countArgs[afterArg] = ""
+	countQuery := strings.Replace(query, "SELECT document,id FROM ", "SELECT count(*) FROM ", 1)
+	var total int
+	if err := r.db.R.QueryRowContext(ctx, countQuery, countArgs...).Scan(&total); err != nil {
+		return nil, err
+	}
 	query += ` ORDER BY id LIMIT ?`
 	args = append(args, limit+1)
 	rows, err := r.db.R.QueryContext(ctx, query, args...)
@@ -222,7 +230,7 @@ func (r *Repo) QueryGraph(ctx context.Context, pid string, in GraphQueryInput) (
 		return nil, err
 	}
 	defer rows.Close()
-	out := &GraphPage{Nodes: []Node{}, Edges: []Edge{}}
+	out := &GraphPage{Total: &total, Nodes: []Node{}, Edges: []Edge{}}
 	var sourceGraph *SourceGraphSnapshot
 	if revision.SchemaVersion == ComposedSchemaVersion {
 		sourceGraph, err = r.ResolveSourceGraph(ctx, pid, target.revisionID)
