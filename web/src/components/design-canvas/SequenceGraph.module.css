@@ -104,11 +104,13 @@
 .hint {
   position: absolute;
   z-index: 20;
-  left: calc((100% - var(--canvas-inspector-width, 0px)) / 2);
-  bottom: 68px;
-  transform: translateX(-50%);
+  left: 68px;
+  right: calc(208px + var(--canvas-inspector-width, 0px));
+  bottom: 12px;
+  box-sizing: border-box;
+  margin-inline: auto;
   width: max-content;
-  max-width: calc(100% - var(--canvas-inspector-width, 0px) - 24px);
+  max-width: calc(100% - var(--canvas-inspector-width, 0px) - 276px);
   padding: 5px 8px;
   border: 1px solid rgb(224 229 225 / 80%);
   border-radius: 6px;
