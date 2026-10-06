@@ -27,6 +27,7 @@ import (
 	"github.com/yashok111/mocker/internal/auth"
 	"github.com/yashok111/mocker/internal/backendanalysis"
 	"github.com/yashok111/mocker/internal/backendmodel"
+	"github.com/yashok111/mocker/internal/backendreplay"
 	"github.com/yashok111/mocker/internal/config"
 	"github.com/yashok111/mocker/internal/customep"
 	"github.com/yashok111/mocker/internal/designscenario"
@@ -35,6 +36,7 @@ import (
 	"github.com/yashok111/mocker/internal/mcp"
 	"github.com/yashok111/mocker/internal/mockplane"
 	"github.com/yashok111/mocker/internal/overrides"
+	"github.com/yashok111/mocker/internal/probe"
 	"github.com/yashok111/mocker/internal/recordproxy"
 	"github.com/yashok111/mocker/internal/resources"
 	"github.com/yashok111/mocker/internal/scenarios"
@@ -161,6 +163,7 @@ func runHashPassword(args []string, stdin io.Reader, stdout, stderr io.Writer) e
 type app struct {
 	analysisRepo    *backendanalysis.Repo
 	analysisService *backendanalysis.Service
+	replayService   *backendreplay.Service
 	cfg             *config.Config
 	log             *slog.Logger
 
@@ -283,7 +286,10 @@ func (a *app) buildPlanes(ctx context.Context) error {
 	}
 
 	a.mockPlane = mockplane.New(a.cfg, ws, a.specRepo, a.log)
-	return a.buildAnalysis(ctx)
+	if err := a.buildAnalysis(ctx); err != nil {
+		return err
+	}
+	return a.buildReplay(ctx)
 }
 
 // Analysis recovery is a startup barrier: acknowledged work is never silently
@@ -301,6 +307,30 @@ func (a *app) buildAnalysis(ctx context.Context) error {
 		return fmt.Errorf("recover backend analyses: %w", err)
 	}
 	a.adminSrv.SetBackendAnalysis(a.analysisService, a.analysisRepo)
+	return nil
+}
+
+// Replay recovery completes before listener readiness; no old run is resumed.
+func (a *app) buildReplay(ctx context.Context) error {
+	targets := make([]backendreplay.Target, 0, len(a.cfg.TestTargets))
+	for _, cfg := range a.cfg.TestTargets {
+		transport, err := probe.NewTestProfileClient(ctx, cfg, os.Getenv)
+		if err != nil {
+			return fmt.Errorf("build configured replay target %s: %w", cfg.ID, err)
+		}
+		targets = append(targets, backendreplay.Target{TargetInfo: backendreplay.TargetInfo{ID: cfg.ID, Version: cfg.Version, IsolationID: cfg.IsolationID}, Transport: transport, ConfigFingerprint: transport.(interface{ ConfigHash() string }).ConfigHash()})
+	}
+	graphs := backendmodel.NewRepo(a.db)
+	designs := apidesign.NewRepo(a.db, a.cfg)
+	scenarios := designscenario.NewRepo(a.db, a.cfg, designs)
+	a.replayService = backendreplay.NewService(backendreplay.NewRepo(a.db), graphs, targets)
+	a.replayService.ArtifactReader = func(c context.Context) *backendmodel.EditorArtifactRequest {
+		return backendmodel.NewEditorArtifactRequest(c, designs, scenarios)
+	}
+	if err := a.replayService.RecoverInterrupted(ctx); err != nil {
+		return fmt.Errorf("recover backend replays: %w", err)
+	}
+	a.adminSrv.SetBackendReplay(a.replayService)
 	return nil
 }
 
@@ -574,6 +604,25 @@ func (a *app) startAndDrain(ctx context.Context, stop context.CancelFunc) (runEr
 		runErr = errors.Join(runErr, closeErr, workerErr)
 	}()
 	if err := a.analysisService.WaitRunning(ctx); err != nil {
+		return err
+	}
+
+	replayResult := make(chan error, 1)
+	go func() {
+		err := a.replayService.Run(ctx)
+		replayResult <- err
+		if err != nil {
+			stop()
+		}
+	}()
+	defer func() {
+		drain, cancel := context.WithTimeout(context.WithoutCancel(ctx), shutdownDrain)
+		defer cancel()
+		closeErr := a.replayService.Close(drain)
+		workerErr := <-replayResult
+		runErr = errors.Join(runErr, closeErr, workerErr)
+	}()
+	if err := a.replayService.WaitRunning(ctx); err != nil {
 		return err
 	}
 

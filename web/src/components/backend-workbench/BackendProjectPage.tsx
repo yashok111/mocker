@@ -1,3 +1,5 @@
+import { BackendDiagramReplayProvider } from "./BackendDiagramReplayContext";
+import { BackendReplay } from "./BackendReplay";
 import { BackendPortable } from "./BackendPortable";
 import { BackendMaterialization } from "./BackendMaterialization";
 import { BackendDiagramChangeProvider } from "./BackendDiagramChangeContext";
@@ -142,11 +144,12 @@ const [portableDirty,setPortableDirty]=useState(false);
     withResolver: false,
   });
   return (
-    <BackendDiagramChangeProvider key={props.projectId}>
+    <BackendDiagramReplayProvider key={props.projectId}><BackendDiagramChangeProvider key={props.projectId}>
       <BackendAnalysisRecoveryProvider key={props.projectId} projectId={props.projectId}>
         <BackendAnalysisRecoveryNotice projectId={props.projectId} />
         <BackendLegacyRecoveryNotice projectId={props.projectId} />
         <BackendWorkspaceNavigation />
+<details><summary>Orders replay и тестовые профили</summary><BackendReplay key={props.projectId+"replay"} projectId={props.projectId}/></details>
 <details><summary>Portable: экспорт и импорт проекта</summary><BackendPortable key={props.projectId+"portable"} projectId={props.projectId} onDirty={setPortableDirty} /></details>
         <BackendMaterialization
           key={props.projectId}
@@ -178,7 +181,7 @@ const [portableDirty,setPortableDirty]=useState(false);
           <BackendProjectGate {...props} sourcePin={legacyPin} />
         </div>
       </BackendAnalysisRecoveryProvider>
-    </BackendDiagramChangeProvider>
+    </BackendDiagramChangeProvider></BackendDiagramReplayProvider>
   );
 }
 function BackendProjectGate(props: ProjectPageProps) {

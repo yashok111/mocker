@@ -118,7 +118,7 @@ func addBackendImportTool(s *sdk.Server, lb *loopback, tool *sdk.Tool, route str
 			return backendAdmissionFault(selectErr), nil
 		}
 		var params []any
-		for _, key := range []string{"projectId", "importId", "proposalId", "jobId", "viewId", "diagramId", "revisionId", "nodeId", "batchId", "fingerprint"} {
+		for _, key := range []string{"projectId", "replayRunId", "replayItemId", "importId", "proposalId", "jobId", "viewId", "diagramId", "revisionId", "nodeId", "batchId", "fingerprint"} {
 			raw, ok := in[key]
 			if !ok {
 				continue

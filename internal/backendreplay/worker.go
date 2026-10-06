@@ -1,0 +1,210 @@
+package backendreplay
+
+import (
+	"context"
+	"database/sql"
+	"errors"
+	p "github.com/yashok111/mocker/internal/ordersprotocol"
+	"sync"
+	"time"
+)
+
+func (s *Service) RecoverInterrupted(ctx context.Context) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.started || s.closed {
+		return errors.New("replay recovery after start or close")
+	}
+	targets := make([]Target, 0, len(s.targets))
+	for _, t := range s.targets {
+		targets = append(targets, t)
+	}
+	if err := s.repo.registerConfigs(ctx, targets); err != nil {
+		return err
+	}
+	if err := s.repo.RecoverInterrupted(ctx); err != nil {
+		return err
+	}
+	s.recovered = true
+	return nil
+}
+func (s *Service) Run(ctx context.Context) error {
+	s.mu.Lock()
+	if !s.recovered || s.started || s.closed {
+		s.mu.Unlock()
+		return errors.New("replay service not ready")
+	}
+	app, cancel := context.WithCancel(ctx)
+	s.cancel = cancel
+	s.started = true
+	s.mu.Unlock()
+	defer cancel()
+	defer close(s.done)
+	defer func() { s.mu.Lock(); s.finished = true; s.mu.Unlock() }()
+	var wg sync.WaitGroup
+	for range Workers {
+		wg.Go(func() { s.worker(app) })
+	}
+	close(s.ready)
+	wg.Wait()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.runErr
+}
+func (s *Service) WaitRunning(ctx context.Context) error {
+	select {
+	case <-s.ready:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+func (s *Service) Running() bool { s.mu.Lock(); defer s.mu.Unlock(); return s.started && !s.finished }
+func (s *Service) Close(ctx context.Context) error {
+	s.mu.Lock()
+	s.closed = true
+	cancel, started := s.cancel, s.started
+	s.mu.Unlock()
+	if !started {
+		return nil
+	}
+	cancel()
+	select {
+	case <-s.done:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+func (s *Service) claim(ctx context.Context) (*Run, string, error) {
+	var out *Run
+	var author string
+	err := s.repo.db.Write(ctx, func(tx *sql.Tx) error {
+		var id, pid string
+		err := tx.QueryRowContext(ctx, `SELECT id,project_id,author FROM backend_replay_runs WHERE status='queued' ORDER BY created_at,id LIMIT 1`).Scan(&id, &pid, &author)
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		if _, err = tx.ExecContext(ctx, `UPDATE backend_replay_runs SET status='running',version=version+1,updated_at=? WHERE id=? AND status='queued'`, nowReplay(), id); err != nil {
+			return err
+		}
+		out, err = readRun(ctx, tx, pid, id)
+		return err
+	})
+	return out, author, err
+}
+func (s *Service) worker(ctx context.Context) {
+	ticker := time.NewTicker(100 * time.Millisecond)
+	defer ticker.Stop()
+	for ctx.Err() == nil {
+		run, actor, err := s.claim(ctx)
+		if err == nil && run != nil {
+			err = s.execute(ctx, actor, run)
+		}
+		if err != nil && ctx.Err() == nil {
+			s.mu.Lock()
+			if s.runErr == nil {
+				s.runErr = err
+			}
+			s.cancel()
+			s.mu.Unlock()
+			return
+		}
+		if run != nil && err == nil {
+			continue
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+		}
+	}
+}
+func (s *Service) execute(app context.Context, actor string, run *Run) error {
+	ctx, cancel := context.WithTimeout(app, time.Duration(ExecutionSeconds)*time.Second)
+	defer cancel()
+	s.mu.Lock()
+	s.active[run.ID] = cancel
+	s.mu.Unlock()
+	defer func() { s.mu.Lock(); delete(s.active, run.ID); s.mu.Unlock() }()
+	current, err := s.Get(ctx, run.ProjectID, run.ID)
+	if err != nil {
+		return err
+	}
+	if current.Status != "running" {
+		return nil
+	}
+	report := initialReport(run.Input, run.Provenance)
+	target, err := s.target(run.Input.Profile)
+	if err == nil {
+		err = s.actor(ctx, actor)
+	}
+	if err == nil {
+		err = authorizeProfile(ctx, s.repo.db.R, run.ProjectID, actor, run.Input.Profile)
+	}
+	if err == nil {
+		report, err = (Engine{Transport: target.Transport}).Execute(ctx, run.Input, run.Provenance, Hooks{
+			BeforeMutation: func(c context.Context, e p.Endpoint, f p.Fence, h string, b []byte) error {
+				if err := s.actor(c, actor); err != nil {
+					return err
+				}
+				if _, err := s.target(run.Input.Profile); err != nil {
+					return err
+				}
+				return s.repo.beforeMutation(c, run.ProjectID, actor, run.Input, e, f, h, b)
+			},
+			Evidence: func(c context.Context, k string, b []byte) error {
+				persist, release := context.WithTimeout(context.WithoutCancel(c), 5*time.Second)
+				defer release()
+				return s.repo.evidence(persist, run.ID, k, b)
+			},
+		})
+	}
+	if err != nil {
+		report.Status = "unverified"
+		report.Reason = "Replay evidence or authorization could not be verified"
+	}
+	if app.Err() != nil {
+		report.Status = "interrupted"
+		report.Reason = "Worker stopped; no automatic resume"
+	}
+	persist, release := context.WithTimeout(context.WithoutCancel(app), 5*time.Second)
+	defer release()
+	return s.repo.finalize(persist, run, report)
+}
+func (r *Repo) finalize(ctx context.Context, run *Run, report Report) error {
+	raw, err := marshalReplay(report)
+	if err != nil {
+		return err
+	}
+	if len(raw) > p.ReportLimit {
+		return conflictReplay("Report limit exceeded")
+	}
+	return r.db.Write(ctx, func(tx *sql.Tx) error {
+		var status string
+		if err := tx.QueryRowContext(ctx, `SELECT status FROM backend_replay_runs WHERE id=?`, run.ID).Scan(&status); err != nil {
+			return err
+		}
+		if status != "running" {
+			// Cancellation won. Preserve its terminal report and append late evidence.
+			_, err := tx.ExecContext(ctx, `INSERT INTO backend_replay_evidence SELECT ?,COALESCE(max(sequence),0)+1,'late_terminal',?,? FROM backend_replay_evidence WHERE run_id=?`, run.ID, p.HashBytes(raw), raw, run.ID)
+			return err
+		}
+		if _, err := tx.ExecContext(ctx, `UPDATE backend_replay_runs SET status=?,terminal_report_json=?,version=version+1,updated_at=? WHERE id=? AND status='running'`, report.Status, string(raw), nowReplay(), run.ID); err != nil {
+			return err
+		}
+		var steps int
+		if err := tx.QueryRowContext(ctx, `SELECT count(*) FROM backend_replay_steps WHERE run_id=?`, run.ID).Scan(&steps); err != nil {
+			return err
+		}
+		if report.Status == "succeeded" || report.Status == "failed" || steps == 0 {
+			_, err := tx.ExecContext(ctx, `DELETE FROM backend_replay_target_leases WHERE run_id=?`, run.ID)
+			return err
+		}
+		_, err := tx.ExecContext(ctx, `UPDATE backend_replay_target_leases SET state='uncertain' WHERE run_id=?`, run.ID)
+		return err
+	})
+}

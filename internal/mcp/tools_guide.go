@@ -58,7 +58,7 @@ func addGuideTools(s *sdk.Server) {
 // GetGuideInput is get_guide's input.
 type GetGuideInput struct {
 	GuideSetID string `json:"guideSetId,omitempty" jsonschema:"optional immutable guide set selector; unknown selectors fail explicitly"`
-	Topic      string `json:"topic,omitempty" jsonschema:"one of overview, tools, shapes, cookbook, http, design, functions, backend-overview, backend-import, backend-model, backend-import-protocol, backend-recovery, backend-examples, backend-database, backend-database-reference, backend-profile-go-sql, backend-inspect, backend-flow-reference, backend-analysis, backend-editor-projections, backend-events, backend-sync, backend-change-proposals, backend-annotations, backend-change-rebase, backend-analysis-jobs, backend-change-handoff, backend-endpoint-review, backend-architecture; omitted means overview"`
+	Topic      string `json:"topic,omitempty" jsonschema:"one of overview, tools, shapes, cookbook, http, design, functions, backend-overview, backend-import, backend-model, backend-import-protocol, backend-recovery, backend-examples, backend-database, backend-database-reference, backend-profile-go-sql, backend-inspect, backend-flow-reference, backend-analysis, backend-editor-projections, backend-events, backend-sync, backend-change-proposals, backend-annotations, backend-change-rebase, backend-analysis-jobs, backend-change-handoff, backend-endpoint-review, backend-architecture, backend-replay; omitted means overview"`
 }
 
 // GetGuideOutput is get_guide's declared output.

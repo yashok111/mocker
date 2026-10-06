@@ -1,3 +1,4 @@
+import { BackendDiagramReplayPrepare } from "./BackendDiagramReplayContext";
 import { BackendNamespacedArtifactInspector } from "./BackendNamespacedArtifactInspector";
 import { BackendViewSVGExport } from "./BackendViewSVGExport";
 import { downloadBackendSVG } from "./backendSVGDownload";
@@ -1105,6 +1106,7 @@ const [artifactRef, setArtifactRef] =
               <BackendArchitectureGraph elements={es} links={ls} state={state} onSelect={select} />
             </Suspense>
           )}
+          {state.selection && <BackendDiagramReplayPrepare key={`${diagram.pin.id}:${diagram.pin.version}:${state.selection.id}:${state.level}:${state.rootId}`} projectId={projectId} diagram={diagram} disabled={dirty} input={{pin:diagram.pin,selectors:[architecture && state.selection.type === "link" ? {kind:"architecture_relation",id:state.selection.id,projection:{policy:"architecture-v1",level:state.level!,rootId:state.rootId!}} : {kind:"semantic",id:state.selection.id}]}}/>}
           {state.selection && (
             <details
               key={`${diagram.pin.id}:${diagram.pin.version}:${state.selection.id}:${state.level}:${state.rootId}`}
