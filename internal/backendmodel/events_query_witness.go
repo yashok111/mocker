@@ -123,12 +123,31 @@ func (b *eventsWitnessBuilder) edge(id string) {
 		}
 	}
 }
-func (p *eventsProjection) combine(base EventsWitness, dispatch []EventsDispatch) EventsWitness {
-	w := base
-	for _, d := range dispatch {
-		w = p.combineWitness(w, d.Witness)
+
+// combine merges the dispatch witnesses of target id into base. The dispatch
+// side is folded ONCE per target and cached: route() runs this for every route
+// item, and folding the k dispatch entries into each route re-observed the
+// whole growing union k times per route — R × k × union witness observations,
+// tens of millions for one channel at the 5,000-item cap, none of it charged
+// to a budget (review 2026-10-06, F113). Now each route pays one merge. The
+// merged ID set, worst status and limitation union are the same; only which
+// IDs survive a witness_limit cut may differ, and that cut is reported.
+func (p *eventsProjection) combine(base EventsWitness, id string, dispatch []EventsDispatch) EventsWitness {
+	if len(dispatch) == 0 {
+		return base
 	}
-	return w
+	folded, ok := p.combinedCache[id]
+	if !ok {
+		folded = dispatch[0].Witness
+		for _, d := range dispatch[1:] {
+			folded = p.combineWitness(folded, d.Witness)
+		}
+		if p.combinedCache == nil {
+			p.combinedCache = map[string]EventsWitness{}
+		}
+		p.combinedCache[id] = folded
+	}
+	return p.combineWitness(base, folded)
 }
 func eventsWitnessReason(w *EventsWitness, reason, status string) {
 	w.Status = runtimeWorseStatus(w.Status, status)

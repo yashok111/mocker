@@ -8,7 +8,7 @@ func (r *Repo) queryEffectiveLineage(ctx context.Context, pid string, in Lineage
 		return nil, err
 	}
 	if target.Proposal != nil {
-		return nil, savedUnsupported()
+		return nil, legacyProposalAdvancedUnsupported("Lineage")
 	}
 	graph, err := r.ResolveEffectiveGraph(ctx, pid, target)
 	if err != nil {

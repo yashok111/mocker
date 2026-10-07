@@ -88,6 +88,8 @@ func (s *Service) Correlate(ctx context.Context, pid, sid string, in CorrelateIn
 	} else if in.ScopeHash != "" {
 		return nil, invalid()
 	}
+	refs := bm.NewObservationRefResolver(ctx, g)
+	index := &correlationIndex{graph: g, repository: ver.Context.Source.RepositoryID}
 	overrides := map[string]Override{}
 	for _, o := range in.Overrides {
 		if !bounded(o.RecordID, 256) || !bounded(o.Reason, 4096) {
@@ -96,7 +98,7 @@ func (s *Service) Correlate(ctx context.Context, pid, sid string, in CorrelateIn
 		if _, ok := overrides[o.RecordID]; ok {
 			return nil, invalid()
 		}
-		ok, e := bm.ResolveObservationRef(ctx, g, o.Ref)
+		ok, e := refs.Resolve(o.Ref)
 		if e != nil {
 			return nil, e
 		}
@@ -122,7 +124,7 @@ func (s *Service) Correlate(ctx context.Context, pid, sid string, in CorrelateIn
 			// identityRef said instrumentation_id and a fingerprint pass
 			// overwrote a real source_locator match (review 2026-10-06, F157).
 			if rec.BackendRef != nil {
-				ok, e := bm.ResolveObservationRef(ctx, g, *rec.BackendRef)
+				ok, e := refs.Resolve(*rec.BackendRef)
 				if e != nil {
 					return nil, e
 				}
@@ -145,10 +147,8 @@ func (s *Service) Correlate(ctx context.Context, pid, sid string, in CorrelateIn
 			}
 			if len(row.Candidates) == 0 && rec.IdentityRef != nil && g.Source != nil {
 				id := rec.IdentityRef
-				for _, candidate := range g.Source.Identities {
-					if candidate.RepositoryID == id.RepositoryID && candidate.ProviderNamespace == id.ProviderNamespace && candidate.ExternalKey == id.ExternalKey && candidate.RecordType == id.RecordType {
-						addCandidate(&row, bm.DiagramRef{Kind: "record", RecordType: id.RecordType, ID: candidate.ID})
-					}
+				for _, candidate := range index.identity(correlationIdentityKey{id.RepositoryID, id.ProviderNamespace, id.ExternalKey, id.RecordType}) {
+					addCandidate(&row, bm.DiagramRef{Kind: "record", RecordType: id.RecordType, ID: candidate})
 				}
 				if len(row.Candidates) > 0 {
 					row.Method = "instrumentation_id"
@@ -161,12 +161,8 @@ func (s *Service) Correlate(ctx context.Context, pid, sid string, in CorrelateIn
 			if len(row.Candidates) == 0 && rec.Attrs != nil {
 				a := rec.Attrs
 				if in.Settings.InferSourceLocator && a.SourcePath != "" {
-					for _, ev := range g.State.Evidence {
-						if ev.Source.RepositoryID == ver.Context.Source.RepositoryID && ev.Source.File == a.SourcePath && a.SourceLine > 0 && ev.Source.StartLine != nil && *ev.Source.StartLine == a.SourceLine {
-							ref := bm.DiagramRef{Kind: "record", RecordType: "node", ID: ev.SubjectID}
-							if slices.ContainsFunc(g.State.Edges, func(n bm.Edge) bool { return n.ID == ev.SubjectID }) {
-								ref.RecordType = "edge"
-							}
+					if a.SourceLine > 0 {
+						for _, ref := range index.locator(a.SourcePath, a.SourceLine) {
 							addCandidate(&row, ref)
 						}
 					}

@@ -5,6 +5,8 @@ import "encoding/json/jsontext"
 type SourceGraphSnapshot struct {
 	rawAssertions     map[string]jsontext.Value
 	proofIndex        *sourceProofIndex
+	claimIndex        *sourceClaimIndex
+	stateIndex        *sourceStateIndex
 	legacyBasisBytes  int
 	State             RevisionState
 	SourceVector      *SourceVector

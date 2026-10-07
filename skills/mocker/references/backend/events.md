@@ -93,7 +93,10 @@ An oversized event scan itself returns the pinned diagnostic page below.
 
 Check each response projectId/revisionId/semanticHash/policy/view and exact
 seedNodeId/serviceId against the request pin before presenting or caching it.
-Policy is source-events-projection-v1. Continue nextCursor with identical
+Policy depends on the target: source-events-projection-v1 for a source5
+revision, events-source6-query-v1 for a source6 revision, and
+effective-events-v1 for a full changeProposal (whatever its baseline). Expect
+the one the request's target implies. Continue nextCursor with identical
 project/revision/hash/policy/view/seed/service/effective limit. Reset cursors when
 any member changes. Cancel obsolete requests and discard mismatched late replies.
 UUID ordering is deterministic pagination order, not execution order.

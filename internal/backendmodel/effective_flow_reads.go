@@ -8,7 +8,7 @@ func (r *Repo) queryEffectiveFlow(ctx context.Context, pid string, in FlowQueryI
 		return nil, err
 	}
 	if target.Proposal != nil {
-		return nil, savedUnsupported()
+		return nil, legacyProposalAdvancedUnsupported("Flow")
 	}
 	graph, err := r.ResolveEffectiveGraph(ctx, pid, target)
 	if err != nil {

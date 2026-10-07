@@ -336,21 +336,29 @@ func projectRuntimeFlowWithEffective(ctx context.Context, state *RevisionState, 
 	}
 	switch in.View {
 	case "entrypoints":
-		page.EntryPointItems = []FlowEntrypointItem{}
+		// Cut the cursor window BEFORE building items: entrypoint() merges
+		// each item's limitations into the page-wide list, and building every
+		// match made page 1 report the gaps of operations shown only on later
+		// pages (review 2026-10-06, F116). The window is the same one the old
+		// build-then-trim produced, because Operation.ID is the node ID.
+		window := []Node{}
 		for _, id := range slices.Sorted(maps.Keys(p.nodes)) {
 			if err := ctx.Err(); err != nil {
 				return nil, err
 			}
 			n := p.nodes[id]
-			if !sourceRuntimeEntrypoint(p.schema, n.Kind) || !strings.Contains(strings.ToLower(n.Name+" "+runtimeAttributeString(n.Attributes, "method")+" "+runtimeAttributeString(n.Attributes, "path")), strings.ToLower(in.Search)) {
+			if id <= after || !sourceRuntimeEntrypoint(p.schema, n.Kind) || !strings.Contains(strings.ToLower(n.Name+" "+runtimeAttributeString(n.Attributes, "method")+" "+runtimeAttributeString(n.Attributes, "path")), strings.ToLower(in.Search)) {
 				continue
 			}
-			page.EntryPointItems = append(page.EntryPointItems, p.entrypoint(n))
+			window = append(window, n)
 		}
-		page.EntryPointItems = slices.DeleteFunc(page.EntryPointItems, func(i FlowEntrypointItem) bool { return i.Operation.ID <= after })
-		if len(page.EntryPointItems) > limit {
-			page.NextCursor = encodeGraphPage("flow", page.ProjectID, scope, page.EntryPointItems[limit-1].Operation.ID)
-			page.EntryPointItems = page.EntryPointItems[:limit]
+		if len(window) > limit {
+			page.NextCursor = encodeGraphPage("flow", page.ProjectID, scope, window[limit-1].ID)
+			window = window[:limit]
+		}
+		page.EntryPointItems = make([]FlowEntrypointItem, 0, len(window))
+		for _, n := range window {
+			page.EntryPointItems = append(page.EntryPointItems, p.entrypoint(n))
 		}
 	case "steps", "transitions":
 		flow, ok := p.nodes[in.FlowID]
@@ -365,7 +373,6 @@ func projectRuntimeFlowWithEffective(ctx context.Context, state *RevisionState, 
 			page.StepItems = []Node{}
 			for _, n := range p.children[flow.ID] {
 				if n.Kind == "flow_step" {
-					p.observeNode(n)
 					page.StepItems = append(page.StepItems, n)
 				}
 			}
@@ -374,18 +381,30 @@ func projectRuntimeFlowWithEffective(ctx context.Context, state *RevisionState, 
 				page.NextCursor = encodeGraphPage("flow", page.ProjectID, scope, page.StepItems[limit-1].ID)
 				page.StepItems = page.StepItems[:limit]
 			}
+			// Observe only the returned window (review 2026-10-06, F116).
+			for _, n := range page.StepItems {
+				p.observeNode(n)
+			}
 		} else {
 			page.TransitionItems = []Edge{}
+			silent := []Node{}
 			for _, n := range p.children[flow.ID] {
 				if n.Kind != "flow_step" {
 					continue
 				}
-				p.observeNode(n)
+				before := len(page.TransitionItems)
+				// Every effective read and every composed schema carries emits:
+				// a full change proposal over a source5 baseline reads with
+				// schema "6" and no native source graph, and the older gate
+				// dropped its emits edges (review 2026-10-06, F110).
+				emits := effective != nil || schema == EventsSchemaVersion || schema == ComposedSchemaVersion || sourceGraph != nil
 				for _, e := range p.out[n.ID] {
-					if slices.Contains([]string{"next", "branch", "error", "returns", "calls", "begins", "commits", "rolls_back"}, e.Kind) || (schema == EventsSchemaVersion || sourceGraph != nil) && e.Kind == "emits" {
-						p.observeEdge(e)
+					if slices.Contains([]string{"next", "branch", "error", "returns", "calls", "begins", "commits", "rolls_back"}, e.Kind) || emits && e.Kind == "emits" {
 						page.TransitionItems = append(page.TransitionItems, e)
 					}
+				}
+				if len(page.TransitionItems) == before {
+					silent = append(silent, n)
 				}
 			}
 			slices.SortFunc(page.TransitionItems, func(a, b Edge) int { return strings.Compare(a.ID, b.ID) })
@@ -393,6 +412,23 @@ func projectRuntimeFlowWithEffective(ctx context.Context, state *RevisionState, 
 			if len(page.TransitionItems) > limit {
 				page.NextCursor = encodeGraphPage("flow", page.ProjectID, scope, page.TransitionItems[limit-1].ID)
 				page.TransitionItems = page.TransitionItems[:limit]
+			}
+			// Observe the window's edges and the steps they leave, not every
+			// step of the flow (review 2026-10-06, F116). A step that leaves no
+			// transition is on no page, so its limitations ride on the last one
+			// instead of vanishing from the view.
+			observed := map[string]bool{}
+			for _, e := range page.TransitionItems {
+				if step, ok := p.nodes[e.From]; ok && !observed[step.ID] {
+					observed[step.ID] = true
+					p.observeNode(step)
+				}
+				p.observeEdge(e)
+			}
+			if page.NextCursor == "" {
+				for _, n := range silent {
+					p.observeNode(n)
+				}
 			}
 		}
 	case "accesses":

@@ -17,6 +17,11 @@ func (r *Repo) queryEffectiveGraph(ctx context.Context, pid string, in GraphQuer
 	if err := validateEffectiveGraphQuery(in, graph.Pins.StructuralSchemaVersion); err != nil {
 		return nil, err
 	}
+	if in.ServiceID != "" {
+		if err := validateWorkspaceService(graph, in.ServiceID); err != nil {
+			return nil, err
+		}
+	}
 	filter := in
 	filter.Cursor = ""
 	filter.Limit = 0
