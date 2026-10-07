@@ -14,6 +14,7 @@ import (
 
 	"github.com/yashok111/mocker/internal/apidesign"
 	"github.com/yashok111/mocker/internal/backendmodel"
+	"github.com/yashok111/mocker/internal/testkit"
 )
 
 func TestBackendAPIArtifactToolsRoutesAndPrecision(t *testing.T) {
@@ -269,7 +270,13 @@ func TestBackendAPIArtifactToolsPublicParity(t *testing.T) {
 	}
 	// Independently simulate a disappeared source in this disposable immutable
 	// fixture. E7 covers genuine explicit deletion through source reconciliation.
-	if _, err = db.W.ExecContext(t.Context(), `DELETE FROM backend_graph_records WHERE revision_id=? AND record_type='node' AND id=?`, result.Revision.ID, node); err != nil {
+	// Store27 (48dce80, B6.3) guards backend_graph_records with an
+	// immutable-owner trigger and a sealed payload manifest, so a direct DELETE
+	// is refused ("immutable owner"); the orphaning delete is made on the
+	// Store26 fixture shape and published by the production migration, the
+	// same recipe backendmodel's TestAPIArtifactQueryCursorOrphansAndOptionalHead
+	// uses for this exact shape.
+	if _, err = testkit.EditLegacyBackendPayload(t.Context(), db, `DELETE FROM backend_graph_records WHERE revision_id=? AND record_type='node' AND id=?`, result.Revision.ID, node); err != nil {
 		t.Fatal(err)
 	}
 	call("query_backend_api_artifacts", map[string]any{"projectId": project.ID, "revisionId": result.Revision.ID, "sourceNodeId": node}, &page)

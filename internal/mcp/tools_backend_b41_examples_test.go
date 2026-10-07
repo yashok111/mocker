@@ -23,6 +23,7 @@ import (
 	"github.com/yashok111/mocker/internal/config"
 	"github.com/yashok111/mocker/internal/guide"
 	"github.com/yashok111/mocker/internal/store"
+	"github.com/yashok111/mocker/internal/testkit"
 )
 
 // These protocol examples use the real SDK handler and admin/domain boundary.
@@ -72,10 +73,17 @@ func (h *b41SDKExamples) negotiate(t *testing.T) {
 			Workflows           []guide.Workflow `json:"workflowVersions"`
 		}
 		h.call(t, "get_backend_capabilities", nil, nil, &capabilities)
-		if !slices.Equal(capabilities.ModelSchemaVersions, []string{"1", "2", "3", "4", "5", "6"}) || !slices.Contains(capabilities.ProviderProfiles, "composed-source-v1") || len(capabilities.Workflows) != 6 {
+		// Eight owners since be06f56 (B5.3, mocker-backend-replay v1) and
+		// 41ca3c6 (B6.1, mocker-backend-verify; v4 since 6006fa8) joined
+		// guide.BackendWorkflows; the count stayed at six and every SDK example
+		// that negotiates through here failed. The versions map below still
+		// pins each owner exactly, and len(versions)==0 after the loop proves
+		// none is missing, so the count plus the map keep rejecting an extra,
+		// a missing or a re-versioned owner.
+		if !slices.Equal(capabilities.ModelSchemaVersions, []string{"1", "2", "3", "4", "5", "6"}) || !slices.Contains(capabilities.ProviderProfiles, "composed-source-v1") || len(capabilities.Workflows) != 8 {
 			t.Fatalf("incomplete source6 discovery: %+v", capabilities)
 		}
-		versions := map[string]string{"mocker-backend-project": "2", "mocker-backend-import": "8", "mocker-backend-database": "7", "mocker-backend-inspect": "13", "mocker-backend-sync": "2", "mocker-backend-change": "5"}
+		versions := map[string]string{"mocker-backend-project": "2", "mocker-backend-import": "8", "mocker-backend-database": "7", "mocker-backend-inspect": "13", "mocker-backend-sync": "2", "mocker-backend-change": "5", "mocker-backend-replay": "1", "mocker-backend-verify": "4"}
 		selectedSet := ""
 		for _, owner := range capabilities.Workflows {
 			if versions[owner.WorkflowID] != owner.WorkflowVersion || owner.GuideSetID == "" || owner.ManifestHash != owner.GuideSetID || selectedSet != "" && selectedSet != owner.GuideSetID {
@@ -926,7 +934,9 @@ func b41SDKLedgerHistory(t *testing.T, h *b41SDKExamples, draft *backendmodel.Ch
 			t.Fatal(err)
 		}
 		var raw string
-		if err := h.db.R.QueryRowContext(t.Context(), `SELECT commands FROM backend_change_proposal_batches WHERE proposal_id=? AND revision_id=?`, applied.Proposal.ID, applied.Revision.ID).Scan(&raw); err != nil {
+		// Store27 (48dce80, B6.3): the batch payload is read through the
+		// owner's _documents view; the table itself holds only the blob key.
+		if err := h.db.R.QueryRowContext(t.Context(), `SELECT commands FROM backend_change_proposal_batches_documents WHERE proposal_id=? AND revision_id=?`, applied.Proposal.ID, applied.Revision.ID).Scan(&raw); err != nil {
 			t.Fatal(err)
 		}
 		stored, expected := jsontext.Value(raw), b41JSON(t, accepted.commands)
@@ -1021,14 +1031,18 @@ func b41CheckPriorRaw(t *testing.T, h *b41SDKExamples, oracle b41PriorOracle) {
 			revision string
 			hashes   map[string]string
 		}{{proof.OriginalRevisionID, proof.OriginalHashes}, {oracle.BaseRevisionID, proof.BaseHashes}} {
+			// Since Store27 (48dce80, B6.3) the payload column of each immutable
+			// owner lives in backend_payload_blobs; the owner's _documents view
+			// reassembles the exact stored bytes, so the raw-hash pins still
+			// compare against what was written by the prior Store19 binary.
 			queries := []struct {
 				kind, query string
 				args        []any
 			}{
-				{"revision", `SELECT document FROM backend_revisions WHERE project_id=? AND id=?`, []any{oracle.ProjectID, pin.revision}},
-				{"source", `SELECT document FROM backend_revision_sources WHERE revision_id=?`, []any{pin.revision}},
-				{"subject", `SELECT document FROM backend_graph_records WHERE project_id=? AND revision_id=? AND record_type=? AND id=?`, []any{oracle.ProjectID, pin.revision, proof.RecordType, proof.RecordID}},
-				{"evidence", `SELECT document FROM backend_graph_records WHERE project_id=? AND revision_id=? AND record_type='evidence' AND id=?`, []any{oracle.ProjectID, pin.revision, proof.EvidenceID}},
+				{"revision", `SELECT document FROM backend_revisions_documents WHERE project_id=? AND id=?`, []any{oracle.ProjectID, pin.revision}},
+				{"source", `SELECT document FROM backend_revision_sources_documents WHERE revision_id=?`, []any{pin.revision}},
+				{"subject", `SELECT document FROM backend_graph_records_documents WHERE project_id=? AND revision_id=? AND record_type=? AND id=?`, []any{oracle.ProjectID, pin.revision, proof.RecordType, proof.RecordID}},
+				{"evidence", `SELECT document FROM backend_graph_records_documents WHERE project_id=? AND revision_id=? AND record_type='evidence' AND id=?`, []any{oracle.ProjectID, pin.revision, proof.EvidenceID}},
 			}
 			for _, query := range queries {
 				var raw string
@@ -1079,7 +1093,11 @@ func TestBackendB41SDKPriorBinaryMetadataExamples(t *testing.T) {
 	b41SDKFreshProofRefusal(t, h, proofs[metadataIndex])
 	// Deliberately corrupt only the temporary upgraded copy. JSON meaning stays
 	// equal, but a retained raw byte/hash can no longer verify successfully.
-	_, err := h.db.W.ExecContext(t.Context(), `UPDATE backend_graph_records SET document=document||' ' WHERE revision_id=? AND record_type='evidence' AND id=?`, oracle.BaseRevisionID, oracle.Proofs[0].EvidenceID)
+	// Store27 (48dce80, B6.3) moved the payload behind a sealed manifest with an
+	// immutable-owner trigger, so the edit runs on the Store26 fixture shape and
+	// the production migration republishes the bytes undecoded — the appended
+	// space survives, which is the whole point of the corruption.
+	_, err := testkit.EditLegacyBackendPayload(t.Context(), h.db, `UPDATE backend_graph_records SET document=document||' ' WHERE revision_id=? AND record_type='evidence' AND id=?`, oracle.BaseRevisionID, oracle.Proofs[0].EvidenceID)
 	if err != nil {
 		t.Fatal(err)
 	}
