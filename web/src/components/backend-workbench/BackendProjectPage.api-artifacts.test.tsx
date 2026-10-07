@@ -4,6 +4,7 @@ import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { renderInRouter } from "@/test/render";
 import { json } from "@/test/http";
+import { isReplayList } from "@/test/backendExact";
 import { BackendProjectPage } from "./BackendProjectPage";
 vi.mock("./BackendDatabaseGraph", () => ({ BackendDatabaseGraph: () => <div>ER canvas</div> }));
 vi.mock("./BackendFlowGraph", () => ({ BackendFlowGraph: () => <div>Flow canvas</div> }));
@@ -210,6 +211,7 @@ function server(
     if (path === "/api/designs") return json(200, { designs: [{ id: 12, name: "Flags" }] });
     if (path === "/api/designs/12")
       return json(200, { design: { id: 12 }, draft: { id: 24 }, revisions: [] });
+    if (isReplayList(path)) return json(200, []);
     return json(200, { items: [], nextCursor: "", coverage, snapshots: [], inventory: [] });
   });
   return queries;

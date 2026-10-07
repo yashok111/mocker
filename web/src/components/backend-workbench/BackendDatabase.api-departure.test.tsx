@@ -5,6 +5,7 @@ import userEvent from "@testing-library/user-event";
 import { fill } from "@/test/user";
 import { renderInRouter, renderWithProviders } from "@/test/render";
 import { json } from "@/test/http";
+import { isReplayList } from "@/test/backendExact";
 import { BackendDatabase } from "./BackendDatabase";
 import { BackendAPIArtifactsContext } from "./BackendAPIArtifacts";
 import { BackendSavedViewContext } from "./backendSavedViewState";
@@ -359,6 +360,7 @@ function server() {
         },
       });
     }
+    if (isReplayList(path)) return json(200, []);
     return json(200, { items: [], nextCursor: "" });
   });
   return writes;
