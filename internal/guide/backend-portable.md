@@ -99,10 +99,13 @@ and invalid provenance fail; no partially imported project is published.
 Use `abort_backend_portable_import {importId,expectedVersion,idempotencyKey}`
 for an abandoned import or downloaded export session (use export.session.id).
 Abort frees staged chunks/preparation; keep the exact receipt for retries.
+Commit frees them too. A staging/ready session untouched for 24 hours is
+aborted by the next begin or export, so lost session IDs cannot hold the
+quota; download an export and finish an import within that window.
 In the UI, open “Перенос Backend Workbench” on a project for export/import, or
 import from the global project catalog. It verifies file/chunk hashes, shows the
 ID map and unresolved refs, keeps pending requests across reload, and separates
-Preview from “Создать проект атомарно”. Export session cleanup is explicit.
+Preview from “Создать проект атомарно”. Export session cleanup is explicit (or the 24-hour idle expiry).
 
 REST uses the same handlers: project `/portable/selection` and `/portable/export`,
 `/api/backend-projects/portable/exports/{id}/chunks/{index}?manifestHash=...`, and
