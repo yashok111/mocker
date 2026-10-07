@@ -24,7 +24,9 @@ services:
       # Bind to loopback only: this is a dev/smoke stack, not a public
       # listener. Every verification curl in README.md/scripts/smoke.sh
       # targets 127.0.0.1:8080 with an explicit Host header — no DNS needed.
-      - "127.0.0.1:8080:8080"
+      # MOCKER_HOST_PORT moves the host side when 8080 is taken (on the VPS a
+      # monitoring container holds it); scripts/smoke.sh reads the same name.
+      - "127.0.0.1:${MOCKER_HOST_PORT:-8080}:8080"
     volumes:
       - mocker-data:/data
     restart: unless-stopped

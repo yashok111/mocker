@@ -23,6 +23,11 @@ COPY api/ /src/api/
 # import (A7, GuidePage.tsx) — one file, listed by name, because
 # .dockerignore keeps every other *.md out of the context on purpose.
 COPY docs/USER-GUIDE.md /src/docs/USER-GUIDE.md
+# The build's `tsc --noEmit` type-checks the tests too, and
+# backendImportHash.test.ts imports the Go side's shared hash vectors so both
+# implementations are pinned to one file. Without it the image build failed
+# from b67e411 (2026-10-04) on: TS2307, cannot find module.
+COPY internal/backendmodel/testdata/import_batch_hash_vectors.json /src/internal/backendmodel/testdata/import_batch_hash_vectors.json
 WORKDIR /src/web
 # This box has 7.8 GB of RAM with swap already half used, and its OOM killer
 # has already wiped the whole user slice twice in one day (see the Makefile's
