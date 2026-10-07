@@ -130,9 +130,14 @@ func reserveIdentity(ctx context.Context, tx *sql.Tx, s *ImportSession, c Import
 			if e != nil {
 				return "", e
 			}
-			if b != nil {
-				id = b.ID
+			if b == nil {
+				// Nothing to remove an identity from: allocating one here
+				// published a "reserved" binding for a key that never
+				// existed, which a later upsert silently inherited
+				// (review 2026-10-06, F87). remove changes staging only.
+				return "", nil
 			}
+			id = b.ID
 		}
 	} else if c.Identity != nil || c.Deletion != nil {
 		if s.Mode != "reconcile" {

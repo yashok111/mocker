@@ -5,7 +5,17 @@ import (
 	"encoding/json/v2"
 	"slices"
 	"strings"
+
+	"github.com/yashok111/mocker/internal/statediagram"
 )
+
+// MaxLifecycleGuardTextBytes bounds an opaque guard by what the builder can
+// derive from the largest guard the state-diagram owner admits: a 2048-byte
+// pointer and MaxJSON bytes of equalsJSON, each at most doubled by JSON
+// string escaping, plus the member names. The former 4096 cap rejected a
+// whole build_backend_lifecycle candidate for any guard above it with a
+// message that did not mention length (review 2026-10-06, F102).
+const MaxLifecycleGuardTextBytes = 2*(2048+statediagram.MaxJSON) + 64
 
 func validateLifecycle(d DiagramDocument) error {
 	p := d.Lifecycle
@@ -83,8 +93,10 @@ func validateLifecycle(d DiagramDocument) error {
 			if tr.Guard.Text != "" {
 				return invalid("guard", "None guard cannot carry text")
 			}
-		} else if tr.Guard.Kind != "opaque" || !validAPIText(tr.Guard.Text, 1, 4096) {
+		} else if tr.Guard.Kind != "opaque" {
 			return invalid("guard", "Only none or opaque guards supported")
+		} else if !validAPIText(tr.Guard.Text, 1, MaxLifecycleGuardTextBytes) {
+			return invalid("guard", "Opaque guard text is empty, invalid or exceeds the guard byte bound")
 		}
 	}
 	triples := map[string]bool{}

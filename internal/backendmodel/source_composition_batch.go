@@ -154,7 +154,7 @@ func loadSourceBatchCommitments(ctx context.Context, q importReader, sid string)
 	return out, rows.Err()
 }
 
-func reserveComposedIdentity(ctx context.Context, tx *sql.Tx, s *ImportSession, pins composedPins, typ, key string) (string, error) {
+func reserveComposedIdentity(ctx context.Context, tx *sql.Tx, s *ImportSession, pins composedPins, typ, key string, remove bool) (string, error) {
 	var id string
 	err := tx.QueryRowContext(ctx, `SELECT id FROM backend_import_identities WHERE session_id=? AND record_type=? AND external_key=?`, s.ID, typ, key).Scan(&id)
 	if err == nil {
@@ -169,12 +169,24 @@ func reserveComposedIdentity(ctx context.Context, tx *sql.Tx, s *ImportSession, 
 	if err != nil {
 		return "", err
 	}
+	if remove && id == "" && b == nil {
+		// A remove of a key nothing knows changes staging only: no
+		// identity is allocated and published as reserved (review
+		// 2026-10-06, F87).
+		return "", nil
+	}
 	if b != nil {
 		if id != "" && b.ID != id {
 			return "", identityConflict("Pinned key conflicts with durable binding")
 		}
 		if id == "" {
-			if b.State != "reserved" {
+			// A composed commit retires every evidence binding no claim
+			// lists any more, and map_identity accepts only node or edge,
+			// so a retired evidence key had no way back: the next upload of
+			// the same key failed the whole batch (review 2026-10-06,
+			// F196). Evidence carries no identity of its own beyond its
+			// key, so it rebinds to its old id.
+			if b.State != "reserved" && (typ != "evidence" || b.State != "retired") {
 				return "", identityConflict("Retired or deleted key cannot be silently reused")
 			}
 			id = b.ID
@@ -401,7 +413,9 @@ func (b *composedBatch) putRecord(ctx context.Context, c ImportCommand) error {
 	if err != nil {
 		return err
 	}
-	b.recordIdentity(RecordIdentity{RecordType: typ, ExternalKey: key, ID: id})
+	if id != "" { // "" = remove of an unknown key (F87)
+		b.recordIdentity(RecordIdentity{RecordType: typ, ExternalKey: key, ID: id})
+	}
 	if c.Op == "remove" {
 		return b.removeRecord(ctx, typ, key)
 	}
@@ -432,7 +446,7 @@ func (b *composedBatch) reserveIdentity(ctx context.Context, c ImportCommand, ty
 		if b.pins == nil {
 			b.pins = newComposedPins(b.base, b.session)
 		}
-		return reserveComposedIdentity(ctx, b.tx, b.session, b.pins, typ, key)
+		return reserveComposedIdentity(ctx, b.tx, b.session, b.pins, typ, key, c.Op == "remove")
 	}
 	// The selected partition and the staged decisions are built once per
 	// batch; every map_identity/delete_assertion command used to rebuild the

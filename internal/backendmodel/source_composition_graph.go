@@ -79,6 +79,7 @@ func prepareComposedGraph(ctx context.Context, q importReader, s *ImportSession)
 	}
 	retainSourceSnapshots(graph)
 	g.Sources = graph.SourceVector.Snapshots
+	p.reviewChanges()
 	structure, err := ValidateSourceStructure(ctx, SourceStructuralGraph{
 		SchemaVersion: ComposedSchemaVersion, Nodes: g.Nodes, Edges: g.Edges,
 	})
@@ -90,6 +91,37 @@ func prepareComposedGraph(ctx context.Context, q importReader, s *ImportSession)
 		return nil, nil, err
 	}
 	return p.candidate, diagnostics, nil
+}
+
+// reviewChanges fills the preview-only review lists: the changed files of
+// every active partition and the staged map_identity decisions. They were
+// left empty on the composed path, so sourceChangeCount and
+// identityDecisionCount read 0 and get_backend_import_changes
+// recordType=source/identity returned nothing while sync.md tells the
+// reviewer to page exactly those lists (review 2026-10-06, F57). Neither
+// list enters the source6 candidate hash (source6CandidateJSON) or the
+// revision decisions document (source6RevisionDecisions), so this changes
+// what the reviewer sees, not what is committed. A map_identity that fails
+// its checks is a fatal error earlier in preparation, so every listed
+// decision is resolved. staleCounts and comparisonSummary stay unset:
+// staleCounts is stored in the revision coverage, so filling it would
+// change committed bytes — deferred, see the fix report.
+func (p *composedGraphPreparation) reviewChanges() {
+	g := p.candidate.Graph
+	after := RevisionState{Revision: Revision{SchemaVersion: ComposedSchemaVersion}, Sources: g.Sources}
+	g.SourceChanges = composedSourceChanges(p.base.State, after)
+	g.IdentityDecisions = []IdentityDecision{}
+	for _, d := range p.legacyDecisions {
+		x := d.Identity
+		if x == nil {
+			continue
+		}
+		decision := IdentityDecision{Command: *x, Resolved: true, OldSubject: &HistoricalSubjectRef{RevisionID: p.session.BaseRevisionID, RecordType: x.RecordType, ID: x.ExpectedID}, OldEvidenceRefs: []HistoricalEvidenceRef{}, EvidenceRefs: []StagedEvidenceRef{}}
+		for _, key := range x.EvidenceKeys {
+			decision.EvidenceRefs = append(decision.EvidenceRefs, StagedEvidenceRef{SnapshotID: p.session.SnapshotID, EvidenceKey: key})
+		}
+		g.IdentityDecisions = append(g.IdentityDecisions, decision)
+	}
 }
 
 func newComposedGraphPreparation(s *ImportSession, base *SourceGraphSnapshot) *composedGraphPreparation {
@@ -505,8 +537,13 @@ func (p *composedGraphPreparation) hashAssertions() error {
 					return err
 				}
 			} else {
-				f.Own.Status = "stale"
-				f.Own.Reasons = append(slices.Clone(f.Own.Reasons), "not_reobserved")
+				// sourceStaleReason sorts and compacts: f was seeded from
+				// the base currentness, so a claim already stale there
+				// carries not_reobserved, and a bare append grew the list
+				// by one per import — a spurious freshness_changed in every
+				// diff and a contender digest that never matched again
+				// (review 2026-10-06, F50).
+				f.Own = sourceStaleReason(f.Own, "not_reobserved")
 			}
 			p.currentness[key] = f
 		}
@@ -647,8 +684,14 @@ func (p *composedGraphPreparation) validateLimits(contentBytes int) error {
 		}
 	}
 	graph, g := p.candidate.Source, p.candidate.Graph
-	tooManyNodes := claimNodes+len(g.Nodes) > MaxRevisionNodes
-	tooManyEdges := claimEdges+len(g.Edges) > MaxRevisionEdges
+	// Claims and effective records are each bounded by the advertised cap,
+	// not their sum: a single-provider import holds one claim per record,
+	// so the sum halved maxRevisionNodes/maxRevisionEdges as advertised by
+	// get_backend_capabilities, and staging (which counts records only)
+	// accepted batches preview then refused (review 2026-10-06, F58). The
+	// stored size of both stays bounded by MaxRevisionBytes below.
+	tooManyNodes := claimNodes > MaxRevisionNodes || len(g.Nodes) > MaxRevisionNodes
+	tooManyEdges := claimEdges > MaxRevisionEdges || len(g.Edges) > MaxRevisionEdges
 	tooMuchEvidence := len(g.Evidence) > MaxRevisionEvidence
 	artifactBytes, err := source6ArtifactBytes(g)
 	if err != nil {

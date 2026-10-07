@@ -435,6 +435,12 @@ func (e *changeEvaluation) applyForeignKey(c ChangeProposalCommand, id string, d
 		if old.RecordType != "edge" || old.Payload.Kind != "references" {
 			return invalid("reference/id", "FK identity cannot change kind")
 		}
+		// Only the altered constraint's own FK edge may be reused: another
+		// constraint's edge was silently re-pointed and that constraint
+		// lost its reference with no diagnostic (review 2026-10-06, F45).
+		if old.Payload.From != id {
+			return invalid("reference/id", "FK edge belongs to another constraint")
+		}
 		next, err := changeWithFacet(old.Payload, c.FacetKey, mustChangeJSON(facet))
 		if err != nil {
 			return err

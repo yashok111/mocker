@@ -7,6 +7,7 @@ import (
 	"encoding/json/v2"
 	"errors"
 	"slices"
+	"strconv"
 	"strings"
 )
 
@@ -97,7 +98,19 @@ func (r *Repo) Import(ctx context.Context, pid, sid string, in ListInput) (*Impo
 	if err := loadSavedStatus(ctx, tx, out); err != nil {
 		return nil, err
 	}
-	rows, err := tx.QueryContext(ctx, `SELECT batch_id,payload_hash,accepted_version FROM backend_import_batches WHERE session_id=? AND batch_id>? ORDER BY batch_id LIMIT ?`, sid, after, limit+1)
+	// Acceptance order, keyed by accepted_version (unique per session):
+	// recovery resumes from acceptedBatches in the order the server
+	// accepted them, and ordering by the caller-chosen batch_id text
+	// inverted it (review 2026-10-06, F89). The cursor is the last
+	// accepted_version; an older batch-id cursor is refused as invalid.
+	var afterVersion int64
+	if after != "" {
+		afterVersion, err = strconv.ParseInt(after, 10, 64)
+		if err != nil || afterVersion < 0 {
+			return nil, invalid("cursor", "Invalid batch cursor")
+		}
+	}
+	rows, err := tx.QueryContext(ctx, `SELECT batch_id,payload_hash,accepted_version FROM backend_import_batches WHERE session_id=? AND accepted_version>? ORDER BY accepted_version LIMIT ?`, sid, afterVersion, limit+1)
 	if err != nil {
 		return nil, err
 	}
@@ -108,7 +121,7 @@ func (r *Repo) Import(ctx context.Context, pid, sid string, in ListInput) (*Impo
 			return nil, err
 		}
 		if len(out.AcceptedBatches) == limit {
-			out.NextCursor = encodeGraphPage("batches", pid, sid, out.AcceptedBatches[limit-1].BatchID)
+			out.NextCursor = encodeGraphPage("batches", pid, sid, strconv.FormatInt(out.AcceptedBatches[limit-1].AcceptedVersion, 10))
 			break
 		}
 		out.AcceptedBatches = append(out.AcceptedBatches, b)

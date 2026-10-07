@@ -82647,7 +82647,9 @@
               },
               "text": {
                 "type": "string",
-                "maxLength": 4096
+                "minLength": 1,
+                "maxLength": 135232,
+                "description": "At most 135232 UTF-8 bytes: the largest serialized guard (2048-byte pointer, 64 KiB equalsJSON) of a state-diagram owner."
               }
             },
             "required": [

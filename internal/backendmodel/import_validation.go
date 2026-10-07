@@ -31,7 +31,16 @@ func externalKey(v string) bool {
 	return utf8.ValidString(v) && utf8.RuneCountInString(v) >= 1 && utf8.RuneCountInString(v) <= MaxExternalKeyLength && !strings.ContainsFunc(v, unicode.IsControl)
 }
 func validPath(v string) bool {
-	return nonblank(v) && !strings.Contains(v, "\\") && !strings.HasPrefix(v, "/") && path.Clean(v) == v && v != "." && !strings.ContainsFunc(v, unicode.IsControl) && !slices.Contains(strings.Split(v, "/"), "..") && !strings.Contains(v, ":")
+	return nonblank(v) && !strings.Contains(v, "\\") && !strings.HasPrefix(v, "/") && path.Clean(v) == v && v != "." && !strings.ContainsFunc(v, unicode.IsControl) && !slices.Contains(strings.Split(v, "/"), "..") && !driveName(v)
+}
+
+// driveName reports a Windows drive prefix (`C:`). Only that is refused: a
+// colon is legal in a POSIX file name, and refusing every colon made a
+// repository holding `docs/a:b.md` unreportable — the whole manifest failed
+// with 422 even when the file was listed as excluded (review 2026-10-06,
+// F88).
+func driveName(v string) bool {
+	return len(v) >= 2 && v[1] == ':' && (v[0] >= 'a' && v[0] <= 'z' || v[0] >= 'A' && v[0] <= 'Z')
 }
 func secretPath(v string) bool {
 	b := strings.ToLower(path.Base(v))

@@ -98,6 +98,16 @@ func validateImportProfile(in BeginImportInput) error {
 			return reconciliationFault("backend_unsupported_scope", "Profile extension requires the explicit adjacent source profile transition")
 		}
 	}
+	// A foundation initial import declares exactly the foundation profile.
+	// validateManifest checks only that it is present, so an extra profile
+	// was committed into an immutable revision and then refused the
+	// documented foundation-to-relational extension ("Profile extension
+	// requires a foundation-only base") with no legacy way to correct it
+	// (review 2026-10-06, F88). A reconcile already must match its prior
+	// declared profiles (requireProviderProfile).
+	if in.Mode != "reconcile" && profile == GraphProfile && !slices.Equal(profileSet(in.Manifest.Provider.Profiles), []string{GraphProfile}) {
+		return reconciliationFault("backend_incompatible_provider", "Foundation initial imports require exactly the foundation profile")
+	}
 	if in.Mode != "reconcile" && profile == RelationalProfile && (len(in.Manifest.Provider.Profiles) != 2 || !slices.Equal(profileSet(in.Manifest.Provider.Profiles), profileSet([]string{GraphProfile, RelationalProfile}))) {
 		return reconciliationFault("backend_incompatible_provider", "Relational initial imports require exactly the foundation and relational profiles")
 	}
