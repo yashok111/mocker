@@ -1,6 +1,7 @@
 package scenarioexport
 
 import (
+	"context"
 	"maps"
 	"slices"
 	"strconv"
@@ -9,7 +10,9 @@ import (
 	"github.com/yashok111/mocker/internal/designscenario"
 )
 
-func postmanBindingPreflight(document designscenario.Document) (map[string]map[string]string, []Diagnostic) {
+// postmanBindingPreflight's only error is ctx's: the data-flow analysis and
+// the schema walk stop for a cancelled request.
+func postmanBindingPreflight(ctx context.Context, document designscenario.Document) (map[string]map[string]string, []Diagnostic, error) {
 	// Keep original positions for diagnostics. Bindings on omitted recipients
 	// do not execute, but an active consumer still sees a disabled source.
 	document.Messages = slices.Clone(document.Messages)
@@ -27,10 +30,14 @@ func postmanBindingPreflight(document designscenario.Document) (map[string]map[s
 		hasBindings = true
 	}
 	if !hasBindings {
-		return nil, nil
+		return nil, nil, nil
+	}
+	analysis, err := designscenario.AnalyzeDataFlow(ctx, document)
+	if err != nil {
+		return nil, nil, err
 	}
 	diagnostics := []Diagnostic{}
-	for _, diagnostic := range designscenario.AnalyzeDataFlow(document).Diagnostics {
+	for _, diagnostic := range analysis.Diagnostics {
 		mapped := Diagnostic{Code: "data_binding_invalid", Severity: diagnostic.Severity, Message: diagnostic.Message, Pointer: diagnostic.Pointer}
 		if mapped.Severity != "error" {
 			mapped.Code = "data_binding_warning"
@@ -50,9 +57,13 @@ func postmanBindingPreflight(document designscenario.Document) (map[string]map[s
 	// In particular, honor analysis input limits before resolving schemas again.
 	// A blocked export has no executable request that needs target metadata.
 	if slices.ContainsFunc(diagnostics, func(diagnostic Diagnostic) bool { return diagnostic.Severity == "error" }) {
-		return nil, diagnostics
+		return nil, diagnostics, nil
 	}
-	return designscenario.BindingTargetTypes(document), diagnostics
+	types, err := designscenario.BindingTargetTypes(ctx, document)
+	if err != nil {
+		return nil, nil, err
+	}
+	return types, diagnostics, nil
 }
 
 func omitBoundHTTPInputs(config designscenario.StepExecution, add func(string, string, string)) designscenario.StepExecution {

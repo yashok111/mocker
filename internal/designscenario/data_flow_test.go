@@ -29,7 +29,7 @@ func TestDataFlowProjectsBindingTransformTypes(t *testing.T) {
 			r.Document.Messages[1].Execution.Bindings[0].Target = DataBindingTarget{Kind: "body", Pointer: "/id"}
 			r.Document.Messages[1].Execution.Bindings[0].Transforms = []DataBindingTransform{{Kind: tc.kind}}
 			r.Document.Contracts[0].Document = jsonx.RawMessage(fmt.Sprintf(`{"paths":{"/login":{"post":{"x-mocker-canvas-operation-id":"login","responses":{"200":{"content":{"application/json":{"schema":{"type":"object","properties":{"id":{"type":"%s"}}}}}}}}},"/profile":{"get":{"x-mocker-canvas-operation-id":"profile","requestBody":{"content":{"application/json":{"schema":{"type":"object","properties":{"id":{"type":"%s"}}}}}}}}}}`, tc.sourceType, tc.targetType))
-			analysis := AnalyzeDataFlow(r.Document)
+			analysis := analyzeForTest(t, r.Document)
 			invalid := false
 			for _, diagnostic := range analysis.Diagnostics {
 				invalid = invalid || diagnostic.Severity == "error"
@@ -37,7 +37,7 @@ func TestDataFlowProjectsBindingTransformTypes(t *testing.T) {
 			if invalid != tc.invalid {
 				t.Fatalf("diagnostics = %+v", analysis.Diagnostics)
 			}
-			if _, err := PrepareRun(r, "id", "", "mcp", nil); (err != nil) != tc.invalid {
+			if _, err := PrepareRun(t.Context(), r, "id", "", "mcp", nil); (err != nil) != tc.invalid {
 				t.Fatalf("prepare error = %v; diagnostics = %+v", err, analysis.Diagnostics)
 			}
 		})
@@ -48,7 +48,7 @@ func TestDataFlowUnknownTransformSourceRemainsWarning(t *testing.T) {
 	r := bindingRevision()
 	r.Document.Messages[1].Execution.Bindings[0].Transforms = []DataBindingTransform{{Kind: "to_integer"}}
 	r.Document.Contracts[0].Document = jsonx.RawMessage(`{"paths":{"/login":{"post":{"x-mocker-canvas-operation-id":"login","responses":{"200":{"content":{"application/json":{"schema":{"$ref":"https://invalid.example/schema"}}}}}}},"/profile":{"get":{"x-mocker-canvas-operation-id":"profile","parameters":[{"in":"path","name":"id","schema":{"type":"integer"}}]}}}}`)
-	analysis := AnalyzeDataFlow(r.Document)
+	analysis := analyzeForTest(t, r.Document)
 	warn, failed := false, false
 	for _, diagnostic := range analysis.Diagnostics {
 		warn = warn || diagnostic.Severity == "warning"
@@ -100,7 +100,7 @@ func TestDataFlowAvailability(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			r := bindingRevision()
 			test.change(&r)
-			analysis := AnalyzeDataFlow(r.Document)
+			analysis := analyzeForTest(t, r.Document)
 			failed := false
 			for _, d := range analysis.Diagnostics {
 				failed = failed || d.Severity == "error"
@@ -109,7 +109,7 @@ func TestDataFlowAvailability(t *testing.T) {
 				t.Fatalf("diagnostics: %#v", analysis.Diagnostics)
 			}
 			if test.invalid {
-				if _, err := PrepareRun(r, "id", "", "mcp", nil); err == nil {
+				if _, err := PrepareRun(t.Context(), r, "id", "", "mcp", nil); err == nil {
 					t.Fatal("invalid analysis passed preflight")
 				}
 			}
@@ -120,7 +120,7 @@ func TestDataFlowCatalogTypesRefsAndParameters(t *testing.T) {
 	t.Parallel()
 	r := bindingRevision()
 	r.Document.Contracts[0].Document = jsonx.RawMessage(`{"components":{"schemas":{"Order":{"type":"object","required":["id"],"properties":{"id":{"type":"integer"},"items":{"type":"array","items":{"type":"string"}},"a/b":{"type":"string"}}}},"parameters":{"ID":{"in":"path","name":"id","required":true,"schema":{"type":"number"}}}},"paths":{"/login":{"post":{"x-mocker-canvas-operation-id":"login","responses":{"200":{"content":{"application/json":{"schema":{"$ref":"#/components/schemas/Order"}}}}}}},"/profile":{"parameters":[{"$ref":"#/components/parameters/ID"},{"in":"query","name":"q","schema":{"type":"integer"}}],"get":{"x-mocker-canvas-operation-id":"profile","parameters":[{"in":"query","name":"q","schema":{"type":"string"}}],"requestBody":{"required":true,"content":{"application/json":{"schema":{"$ref":"#/components/schemas/Order"}}}}}}}}`)
-	analysis := AnalyzeDataFlow(r.Document)
+	analysis := analyzeForTest(t, r.Document)
 	if len(analysis.Diagnostics) != 0 {
 		t.Fatalf("diagnostics: %#v", analysis.Diagnostics)
 	}
@@ -132,12 +132,12 @@ func TestDataFlowCatalogTypesRefsAndParameters(t *testing.T) {
 	if fields[0].Kind != "path" || fields[0].Type != "number" || !fields[0].Required || fields[1].Type != "string" {
 		t.Fatalf("request fields: %#v", fields)
 	}
-	schemas := bindingSchemas(r.Document)
+	schemas := schemasForTest(t, r.Document)
 	if schemas[0].responseType("/items/0") != "string" || schemas[0].responseType("/items/01") != "unknown" {
 		t.Fatal("manual array index schema")
 	}
 	r.Document.Messages[1].Execution.Bindings[0].Target = DataBindingTarget{Kind: "body", Pointer: "/a~1b"}
-	analysis = AnalyzeDataFlow(r.Document)
+	analysis = analyzeForTest(t, r.Document)
 	found := false
 	for _, d := range analysis.Diagnostics {
 		found = found || d.Severity == "error" && strings.Contains(d.Message, "incompatible")
@@ -160,7 +160,7 @@ func TestDataFlowUnknownAndTruncatedSchemas(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			r := bindingRevision()
 			r.Document.Contracts[0].Document = jsonx.RawMessage(fmt.Sprintf(`{"components":{"schemas":%s},"paths":{"/login":{"post":{"x-mocker-canvas-operation-id":"login","responses":{"200":{"content":{"application/json":{"schema":%s}}}}}},"/profile":{"get":{"x-mocker-canvas-operation-id":"profile"}}}}`, test.defs, test.schema))
-			analysis := AnalyzeDataFlow(r.Document)
+			analysis := analyzeForTest(t, r.Document)
 			warn, truncated := false, false
 			for _, d := range analysis.Diagnostics {
 				if d.Severity == "error" {
@@ -181,7 +181,7 @@ func TestDataFlowUnknownAndTruncatedSchemas(t *testing.T) {
 	}
 	raw, _ := jsonx.Marshal(map[string]any{"type": "object", "properties": properties})
 	r.Document.Contracts[0].Document = jsonx.RawMessage(fmt.Sprintf(`{"paths":{"/login":{"post":{"x-mocker-canvas-operation-id":"login","responses":{"200":{"content":{"application/json":{"schema":%s}}}}}},"/profile":{"get":{"x-mocker-canvas-operation-id":"profile"}}}}`, raw))
-	analysis := AnalyzeDataFlow(r.Document)
+	analysis := analyzeForTest(t, r.Document)
 	if len(analysis.Messages[0].ResponseFields) != 2000 {
 		t.Fatalf("field limit: %d", len(analysis.Messages[0].ResponseFields))
 	}
@@ -197,7 +197,7 @@ func TestDataFlowSuccessResponseSelection(t *testing.T) {
 	t.Parallel()
 	r := bindingRevision()
 	r.Document.Contracts[0].Document = jsonx.RawMessage(`{"paths":{"/login":{"post":{"x-mocker-canvas-operation-id":"login","responses":{"200":{"content":{"application/json":{"schema":{"type":"object","required":["id"],"properties":{"id":{"type":"integer"}}}}}},"201":{"content":{"application/json":{"schema":{"type":"object","properties":{"other":{"type":"string"}}}}}},"400":{"content":{"application/json":{"schema":{"type":"string"}}}}}}},"/profile":{"get":{"x-mocker-canvas-operation-id":"profile"}}}}`)
-	analysis := AnalyzeDataFlow(r.Document)
+	analysis := analyzeForTest(t, r.Document)
 	for _, field := range analysis.Messages[0].ResponseFields {
 		if field.Pointer == "/id" && (field.Required || field.Type != "unknown") {
 			t.Fatalf("union field %#v", field)
@@ -205,7 +205,7 @@ func TestDataFlowSuccessResponseSelection(t *testing.T) {
 	}
 	status := 200
 	r.Document.Messages[0].Execution.ExpectedStatus = &status
-	analysis = AnalyzeDataFlow(r.Document)
+	analysis = analyzeForTest(t, r.Document)
 	for _, field := range analysis.Messages[0].ResponseFields {
 		if field.Pointer == "/id" && (!field.Required || field.Type != "integer") {
 			t.Fatalf("selected field %#v", field)
@@ -218,7 +218,7 @@ func TestDataFlowAnalysisBounds(t *testing.T) {
 	t.Run("too many messages", func(t *testing.T) {
 		r := runRevision()
 		r.Document.Messages = make([]Message, maxMessages+1)
-		analysis := AnalyzeDataFlow(r.Document)
+		analysis := analyzeForTest(t, r.Document)
 		if len(analysis.Messages) != 0 || len(analysis.Diagnostics) != 1 || analysis.Diagnostics[0].Severity != "error" {
 			t.Fatalf("unbounded input: %#v", analysis)
 		}
@@ -238,7 +238,7 @@ func TestDataFlowAnalysisBounds(t *testing.T) {
 			m.ID = fmt.Sprintf("m%d", i)
 			r.Document.Messages = append(r.Document.Messages, m)
 		}
-		analysis := AnalyzeDataFlow(r.Document)
+		analysis := analyzeForTest(t, r.Document)
 		count := 0
 		warn := false
 		for _, m := range analysis.Messages {
@@ -263,7 +263,7 @@ func TestDataFlowAnalysisBounds(t *testing.T) {
 			m.Execution = &execution
 			r.Document.Messages = append(r.Document.Messages, m)
 		}
-		analysis := AnalyzeDataFlow(r.Document)
+		analysis := analyzeForTest(t, r.Document)
 		if len(analysis.Diagnostics) > 2001 {
 			t.Fatalf("too many diagnostics %d", len(analysis.Diagnostics))
 		}
@@ -284,7 +284,7 @@ func TestDataFlowAnalysisBounds(t *testing.T) {
 		root := map[string]any{"paths": map[string]any{"/login": map[string]any{"post": map[string]any{"x-mocker-canvas-operation-id": "login", "parameters": parameters}}}}
 		raw, _ := jsonx.Marshal(root)
 		r.Document.Contracts[0].Document = raw
-		analysis := AnalyzeDataFlow(r.Document)
+		analysis := analyzeForTest(t, r.Document)
 		encoded, _ := jsonx.Marshal(analysis)
 		if len(encoded) > 4<<20 {
 			t.Fatalf("output too large %d", len(encoded))
@@ -303,7 +303,7 @@ func TestDataFlowAmbiguousJSONMediaSchema(t *testing.T) {
 	t.Parallel()
 	r := bindingRevision()
 	r.Document.Contracts[0].Document = jsonx.RawMessage(`{"paths":{"/login":{"post":{"x-mocker-canvas-operation-id":"login","responses":{"200":{"content":{"application/json":{"schema":{"type":"object","properties":{"id":{"type":"integer"}}}},"application/vendor+json":{"schema":{"type":"object","properties":{"id":{"type":"string"}}}}}}}}},"/profile":{"get":{"x-mocker-canvas-operation-id":"profile","parameters":[{"name":"id","in":"path","schema":{"type":"integer"}}]}}}}`)
-	analysis := AnalyzeDataFlow(r.Document)
+	analysis := analyzeForTest(t, r.Document)
 	unknown := false
 	for _, d := range analysis.Diagnostics {
 		if d.Severity == "error" {
@@ -311,7 +311,7 @@ func TestDataFlowAmbiguousJSONMediaSchema(t *testing.T) {
 		}
 		unknown = unknown || strings.Contains(d.Message, "тип не удалось определить")
 	}
-	if !unknown || bindingSchemas(r.Document)[0].responseType("/id") != "unknown" {
+	if !unknown || schemasForTest(t, r.Document)[0].responseType("/id") != "unknown" {
 		t.Fatal("ambiguous media types reported as compatible")
 	}
 }
@@ -326,11 +326,11 @@ func TestDataBindingLegacyRunIgnoresCatalogBudget(t *testing.T) {
 	root := map[string]any{"paths": map[string]any{"/login": map[string]any{"post": map[string]any{"x-mocker-canvas-operation-id": "login", "parameters": parameters}}, "/profile": map[string]any{"get": map[string]any{"x-mocker-canvas-operation-id": "profile"}}}}
 	raw, _ := jsonx.Marshal(root)
 	r.Document.Contracts[0].Document = raw
-	if _, err := PrepareRun(r, "legacy", "", "mcp", nil); err != nil {
+	if _, err := PrepareRun(t.Context(), r, "legacy", "", "mcp", nil); err != nil {
 		t.Fatalf("legacy run blocked by catalog: %v", err)
 	}
 	r.Document.Messages[1].Execution.Bindings = []DataBinding{{ID: "id", SourceMessageID: "login", SourcePointer: "/id", Target: DataBindingTarget{Kind: "path", Name: "id"}}}
-	if _, err := PrepareRun(r, "binding", "", "mcp", nil); err == nil || !strings.Contains(err.Error(), "limit") {
+	if _, err := PrepareRun(t.Context(), r, "binding", "", "mcp", nil); err == nil || !strings.Contains(err.Error(), "limit") {
 		t.Fatalf("binding run must report limit: %v", err)
 	}
 }

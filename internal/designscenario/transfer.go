@@ -314,7 +314,7 @@ func (r *Repo) importTransferScenario(ctx context.Context, tx *sql.Tx, item Tran
 		if err := r.pinLinkedContracts(ctx, tx, &document); err != nil {
 			return err
 		}
-		prepared, _, err := r.prepare(document, rev.FormDrafts)
+		prepared, _, err := r.prepare(ctx, document, rev.FormDrafts)
 		if err != nil {
 			return fmt.Errorf("import scenario %d revision %d: %w", len(result.Scenarios)+1, i+1, err)
 		}

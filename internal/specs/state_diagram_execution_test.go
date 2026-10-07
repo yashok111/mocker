@@ -13,11 +13,11 @@ func TestStateDiagramExecutionImportAdmission(t *testing.T) {
 	base := `{"openapi":"3.1.0","info":{"title":"Execution","version":"1"},"paths":{}`
 	incomplete := `{"formatVersion":1,"diagrams":[{"id":"draft","name":"Unfinished","initialStateId":"","states":[],"transitions":[]}]}`
 	for _, extension := range []string{`null`, `{"formatVersion":9,"diagrams":[]}`, incomplete} {
-		if _, err := r.PrepareImport(specs.ImportInput{Document: []byte(base + `,"x-mocker-state-diagrams-execution":` + extension + `}`)}); err == nil {
+		if _, err := r.PrepareImportContext(t.Context(), specs.ImportInput{Document: []byte(base + `,"x-mocker-state-diagrams-execution":` + extension + `}`)}); err == nil {
 			t.Fatalf("invalid applied diagram admitted: %s", extension)
 		}
 	}
-	if _, err := r.PrepareImport(specs.ImportInput{Document: []byte(base + `,"x-mocker-state-diagrams":` + incomplete + `}`)}); err != nil {
+	if _, err := r.PrepareImportContext(t.Context(), specs.ImportInput{Document: []byte(base + `,"x-mocker-state-diagrams":` + incomplete + `}`)}); err != nil {
 		t.Fatalf("incomplete authoring refused: %v", err)
 	}
 	diagram := `{"formatVersion":1,"diagrams":[{"id":"lifecycle","name":"Lifecycle","initialStateId":"created","entity":{"family":"/orders","keyParam":"id","stateField":"status"},"states":[{"id":"created","name":"Created","x":0,"y":0,"terminal":false},{"id":"paid","name":"Paid","x":1,"y":1,"terminal":true}],"transitions":[{"id":"pay","name":"Pay","from":"created","to":"paid","binding":{"method":"post","path":"/orders/{id}/pay"},"patchJSON":"{\"amount\":9007199254740993}","responseStatus":200}]}]}`

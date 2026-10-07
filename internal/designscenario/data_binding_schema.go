@@ -262,24 +262,13 @@ func indexBindingOperations(root map[string]any) map[string]bindingOperation {
 	return out
 }
 
-// bindingSchemas serves the synchronous validation and run paths, which carry
-// no context: the build is bounded by the document's size caps, so it runs
-// to completion rather than borrowing a context.Background it cannot cancel.
-func bindingSchemas(document Document) []bindingSchema {
-	out, _ := collectBindingSchemas(document, func() error { return nil })
-	return out
-}
-
-func bindingSchemasContext(ctx context.Context, document Document) ([]bindingSchema, error) {
-	return collectBindingSchemas(document, ctx.Err)
-}
-
-// collectBindingSchemas takes the cancellation probe as a function so the
-// context-free and context-bound callers share one walk.
-func collectBindingSchemas(document Document, cancelled func() error) ([]bindingSchema, error) {
+// bindingSchemas resolves each message's binding schema from its pinned
+// contract. Every caller holds a request's context, and ctx is checked per
+// contract and per message, so a cancelled request stops the walk.
+func bindingSchemas(ctx context.Context, document Document) ([]bindingSchema, error) {
 	roots := map[string]map[string]any{}
 	for _, contract := range document.Contracts {
-		if err := cancelled(); err != nil {
+		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
 		value, _ := decodeJSONValue(contract.Document)
@@ -289,7 +278,7 @@ func collectBindingSchemas(document Document, cancelled func() error) ([]binding
 	cache := map[bindingSchemaKey]bindingSchema{}
 	out := make([]bindingSchema, len(document.Messages))
 	for i, message := range document.Messages {
-		if err := cancelled(); err != nil {
+		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
 		if message.Kind != "request" || message.Operation == nil {

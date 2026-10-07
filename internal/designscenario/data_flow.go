@@ -1,6 +1,7 @@
 package designscenario
 
 import (
+	"context"
 	"fmt"
 	"slices"
 	"strings"
@@ -30,11 +31,15 @@ type DataFlowAnalysis struct {
 	Diagnostics []Diagnostic      `json:"diagnostics"`
 }
 
-// AnalyzeDataFlow inspects only the document's pinned contracts and never mutates it.
-func AnalyzeDataFlow(document Document) DataFlowAnalysis {
-	out := analyzeDataFlow(document)
+// AnalyzeDataFlow inspects only the document's pinned contracts and never
+// mutates it. Its only error is ctx's, once the request is cancelled.
+func AnalyzeDataFlow(ctx context.Context, document Document) (DataFlowAnalysis, error) {
+	out, err := analyzeDataFlow(ctx, document)
+	if err != nil {
+		return DataFlowAnalysis{}, err
+	}
 	if len(dataFlowInputDiagnostics(document)) > 0 {
-		return out
+		return out, nil
 	}
 	for i, m := range document.Messages {
 		if m.Execution != nil {
@@ -53,15 +58,19 @@ func AnalyzeDataFlow(document Document) DataFlowAnalysis {
 		out.Bindings = []DataFlowBinding{}
 		out.Diagnostics = append(out.Diagnostics, Diagnostic{Pointer: "/messages", Message: "data-flow analysis output limit exceeded", Severity: "error"})
 	}
-	return out
+	return out, nil
 }
-func analyzeDataFlow(document Document) DataFlowAnalysis {
+func analyzeDataFlow(ctx context.Context, document Document) (DataFlowAnalysis, error) {
 	out := DataFlowAnalysis{Messages: []DataFlowMessage{}, Bindings: []DataFlowBinding{}, Diagnostics: []Diagnostic{}}
 	if diagnostics := dataFlowInputDiagnostics(document); len(diagnostics) > 0 {
 		out.Diagnostics = diagnostics
-		return out
+		return out, nil
 	}
-	a := dataFlowAnalyzer{document: document, out: &out, schemas: bindingSchemas(document), positions: map[string]int{}}
+	schemas, err := bindingSchemas(ctx, document)
+	if err != nil {
+		return DataFlowAnalysis{}, err
+	}
+	a := dataFlowAnalyzer{document: document, out: &out, schemas: schemas, positions: map[string]int{}}
 	for i, m := range document.Messages {
 		a.positions[m.ID] = i
 	}
@@ -70,6 +79,11 @@ func analyzeDataFlow(document Document) DataFlowAnalysis {
 	for i, m := range document.Messages {
 		if a.limited {
 			break
+		}
+		// Up to maxMessages messages, each cataloguing its schemas: the
+		// walk a cancelled request must not finish.
+		if err := ctx.Err(); err != nil {
+			return DataFlowAnalysis{}, err
 		}
 		if m.Kind == "request" && m.Operation != nil {
 			a.catalog(i, m)
@@ -82,7 +96,7 @@ func analyzeDataFlow(document Document) DataFlowAnalysis {
 		}
 	}
 	sortDataFlowDiagnostics(out.Diagnostics)
-	return out
+	return out, nil
 }
 
 // dataFlowAnalyzer carries the output budget shared by every message: once

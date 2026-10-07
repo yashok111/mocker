@@ -1,6 +1,7 @@
 package admin
 
 import (
+	"context"
 	"errors"
 	"net/http"
 
@@ -11,14 +12,11 @@ import (
 )
 
 // scenarioExporter adapts the API-design validator to scenarioexport's
-// ValidateContract, which takes no context, so the validation it runs cannot
-// see the request's; threading one needs both callee signatures to change
-// (scenarioexport.ValidateContract and apidesign.Repo.Validate).
-//
-//nolint:contextcheck // the adapter's callee signatures carry no context; see above
+// ValidateContract; the export's context reaches the validation, so a
+// cancelled request stops it.
 func (s *Server) scenarioExporter() *scenarioexport.Service {
-	return scenarioexport.New(func(document string) ([]designscenario.Diagnostic, error) {
-		diagnostics, err := s.designsRepo.Validate(document)
+	return scenarioexport.New(func(ctx context.Context, document string) ([]designscenario.Diagnostic, error) {
+		diagnostics, err := s.designsRepo.Validate(ctx, document)
 		if errors.Is(err, specs.ErrTooLarge) {
 			return nil, scenarioexport.ErrTooLarge
 		}

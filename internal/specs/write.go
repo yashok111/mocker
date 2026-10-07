@@ -101,13 +101,6 @@ type PreparedImport struct {
 	hash, name, basePath string
 }
 
-// PrepareImport is [Repo.PrepareImportContext] for a caller that has no
-// context to hand over; it validates under context.Background, so nothing can
-// cancel the execution-graph compilation it runs.
-func (r *Repo) PrepareImport(in ImportInput) (*PreparedImport, error) {
-	return r.PrepareImportContext(context.Background(), in)
-}
-
 // PrepareImportContext parses, validates and indexes a document outside any
 // transaction. ctx bounds the response-rule and state-diagram compilation, the
 // only steps here that honour cancellation.

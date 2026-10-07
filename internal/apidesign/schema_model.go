@@ -77,7 +77,7 @@ func (r *Repo) PreviewSchemaModel(ctx context.Context, id int64, in SchemaModelP
 	if err != nil {
 		return SchemaModelPreview{}, err
 	}
-	diagnostics, err := r.validateContext(ctx, string(encoded))
+	diagnostics, err := r.Validate(ctx, string(encoded))
 	if err != nil {
 		return SchemaModelPreview{}, err
 	}

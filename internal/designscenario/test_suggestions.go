@@ -54,7 +54,7 @@ func SuggestTests(ctx context.Context, revision Revision, coverage Coverage) (Te
 	if coverage.RevisionID != revision.ID {
 		return out, fmt.Errorf("%w: покрытие относится к другой ревизии", ErrInvalid)
 	}
-	if _, err := PrepareRun(revision, "suggestions", "", "ui", nil); err != nil {
+	if _, err := PrepareRun(ctx, revision, "suggestions", "", "ui", nil); err != nil {
 		return out, err
 	}
 	pending, ordered := uncoveredTestTargets(coverage)

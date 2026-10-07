@@ -16,7 +16,7 @@ func TestResourceMapReferencedOccurrencesKeepDistinctIdentities(t *testing.T) {
 	r, _ := testRepo(t)
 	d, err := r.Create(t.Context(), CreateInput{Name: "Aliases", Document: aliasedPathItems, Source: "ui"})
 	if err != nil {
-		diagnostics, _ := r.Validate(aliasedPathItems)
+		diagnostics, _ := r.Validate(t.Context(), aliasedPathItems)
 		t.Fatalf("%v: %+v", err, diagnostics)
 	}
 	m, err := r.ResourceMap(t.Context(), d.Design.ID)
@@ -103,7 +103,7 @@ func TestReferencedPathItemSiblingsAreValidated(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			raw := fmt.Sprintf(`{"openapi":"3.1.0","info":{"title":"A","version":"1"},"paths":{"/orders/{id}":{"$ref":"#/components/pathItems/Orders",%s}},"components":{"pathItems":{"Orders":{}}}}`, test.sibling)
-			diagnostics, err := r.Validate(raw)
+			diagnostics, err := r.Validate(t.Context(), raw)
 			if err != nil || len(diagnostics) == 0 {
 				t.Fatalf("invalid sibling accepted: %v %v", diagnostics, err)
 			}
@@ -114,7 +114,7 @@ func TestReferencedPathItemSiblingsAreValidated(t *testing.T) {
 func TestReferencedPathItemInheritsParametersWithoutDroppingSiblings(t *testing.T) {
 	r, _ := testRepo(t)
 	raw := `{"openapi":"3.1.0","info":{"title":"A","version":"1"},"paths":{"/orders/{id}":{"$ref":"#/components/pathItems/Orders","get":{"responses":{"200":{"description":"OK"}}},"parameters":[{"name":"locale","in":"query","schema":{"type":"string"}}]}},"components":{"pathItems":{"Orders":{"parameters":[{"name":"id","in":"path","required":true,"schema":{"$ref":"#/components/schemas/ID"}}],"delete":{"responses":{"204":{"description":"Gone"}}}}},"schemas":{"ID":{"type":"string"}}}}`
-	diagnostics, err := r.Validate(raw)
+	diagnostics, err := r.Validate(t.Context(), raw)
 	if err != nil || len(diagnostics) != 0 {
 		t.Fatalf("valid inherited params rejected: %+v %v", diagnostics, err)
 	}
@@ -174,7 +174,7 @@ func TestOpenAPI30PathAliasGetsOwnIdentity(t *testing.T) {
 	raw := `{"openapi":"3.0.3","info":{"title":"Alias","version":"1"},"paths":{"/a":{"get":{"x-mocker-canvas-operation-id":"literal","responses":{"200":{"description":"OK"}}}},"/b":{"$ref":"#/paths/~1a"}}}`
 	d, err := r.Create(t.Context(), CreateInput{Name: "Alias", Document: raw, Source: "ui"})
 	if err != nil {
-		diagnostics, _ := r.Validate(raw)
+		diagnostics, _ := r.Validate(t.Context(), raw)
 		t.Fatalf("%v: %+v", err, diagnostics)
 	}
 	m, err := r.ResourceMap(t.Context(), d.Design.ID)
@@ -186,7 +186,7 @@ func TestOpenAPI30PathAliasGetsOwnIdentity(t *testing.T) {
 func TestRepeatedOperationIDThroughAliasesRemainsInvalid(t *testing.T) {
 	r, _ := testRepo(t)
 	raw := strings.Replace(aliasedPathItems, `"get":{`, `"get":{"operationId":"listOrders",`, 1)
-	diagnostics, err := r.Validate(raw)
+	diagnostics, err := r.Validate(t.Context(), raw)
 	if err != nil || len(diagnostics) == 0 {
 		t.Fatalf("duplicate operationId became valid: %+v %v", diagnostics, err)
 	}
@@ -199,7 +199,7 @@ func TestPathItemReferencesToOtherObjectKindsAreInvalid(t *testing.T) {
 	r, _ := testRepo(t)
 	for _, ref := range []string{"#/components/schemas/Order", "#"} {
 		raw := `{"openapi":"3.1.0","info":{"title":"A","version":"1"},"paths":{"/orders":{"$ref":"` + ref + `"}},"components":{"schemas":{"Order":{"type":"object"}}}}`
-		diagnostics, err := r.Validate(raw)
+		diagnostics, err := r.Validate(t.Context(), raw)
 		if err != nil || len(diagnostics) == 0 || diagnostics[0].Pointer != "/paths/~1orders/$ref" {
 			t.Errorf("invalid target %s not rejected at reference site: %+v %v", ref, diagnostics, err)
 		}

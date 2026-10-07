@@ -19,7 +19,7 @@ func TestEventMetadataValidRoutesAndLinks(t *testing.T) {
 	op.FailureRoutes = &EventFailureRoutes{RetryChannelID: "retry", DeadLetterChannelID: "dlq"}
 	op.APILinks = []EventAPILink{{ContractID: "missing-http", OperationKey: "opaque-key"}}
 	op.StateLinks = []EventStateLink{{ContractID: "missing-http", DiagramID: "order", TransitionID: "created"}}
-	if diagnostics := validateDocument(doc); slices.ContainsFunc(diagnostics, func(d Diagnostic) bool { return d.Severity == "error" }) {
+	if diagnostics := validateForTest(t, doc); slices.ContainsFunc(diagnostics, func(d Diagnostic) bool { return d.Severity == "error" }) {
 		t.Fatalf("metadata rejected: %+v", diagnostics)
 	}
 	raw, err := jsonx.Marshal(doc)
@@ -75,8 +75,8 @@ func TestEventMetadataStructuralErrors(t *testing.T) {
 				t.Fatal(err)
 			}
 			tc.change(&doc)
-			if !hasEventError(doc, tc.pointer) {
-				t.Fatalf("missing %s: %+v", tc.pointer, validateDocument(doc))
+			if !hasEventError(t, doc, tc.pointer) {
+				t.Fatalf("missing %s: %+v", tc.pointer, validateForTest(t, doc))
 			}
 		})
 	}

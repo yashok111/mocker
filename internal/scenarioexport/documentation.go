@@ -20,7 +20,7 @@ func (s *Service) documentationDiagnosticsWithCache(rev designscenario.Revision,
 		if err := s.CheckResponse(result); err != nil {
 			return nil, err
 		}
-		ds, err := s.contractDiagnostics(rev, contract)
+		ds, err := s.contractDiagnostics(cache.ctx, rev, contract)
 		if err != nil {
 			return nil, err
 		}

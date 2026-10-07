@@ -1,6 +1,7 @@
 package scenarioexport
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"html"
@@ -109,7 +110,7 @@ func TestDocumentationWarningsAndFailures(t *testing.T) {
 		}
 	}
 	rev.Document.Contracts = []designscenario.Contract{{ID: "api", Document: jsonx.RawMessage(apiDocument)}}
-	svc := New(func(string) ([]designscenario.Diagnostic, error) {
+	svc := New(func(context.Context, string) ([]designscenario.Diagnostic, error) {
 		return []designscenario.Diagnostic{{Severity: "error", Message: "invalid saved API"}}, nil
 	}, 1<<20)
 	options, err := svc.Options(rev)
@@ -149,7 +150,7 @@ func TestDocumentationContractValidatorFailure(t *testing.T) {
 	rev.Document.Contracts = []designscenario.Contract{{ID: "api", Document: jsonx.RawMessage(apiDocument)}}
 	cause := errors.New("validator infrastructure")
 	for _, f := range []Format{"markdown", "html"} {
-		_, err := New(func(string) ([]designscenario.Diagnostic, error) { return nil, cause }, 1<<20).Export(rev, Request{Format: f})
+		_, err := New(func(context.Context, string) ([]designscenario.Diagnostic, error) { return nil, cause }, 1<<20).Export(rev, Request{Format: f})
 		if !errors.Is(err, cause) {
 			t.Fatal(err)
 		}

@@ -97,8 +97,8 @@ type preparedDocument struct {
 	hash       string
 }
 
-func (r *Repo) prepare(document Document, formDrafts map[string]string) (preparedDocument, []Diagnostic, error) {
-	diagnostics, err := r.validate(document, formDrafts)
+func (r *Repo) prepare(ctx context.Context, document Document, formDrafts map[string]string) (preparedDocument, []Diagnostic, error) {
+	diagnostics, err := r.validate(ctx, document, formDrafts)
 	if err != nil {
 		return preparedDocument{}, diagnostics, err
 	}

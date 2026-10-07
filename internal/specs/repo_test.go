@@ -244,7 +244,7 @@ func TestRepo_ReportDetectsAliasRefreshCommittedByCallerOwnedTransaction(t *test
 	if err != nil || oldReport.Operations != 1 {
 		t.Fatalf("report before refresh = %+v, %v", oldReport, err)
 	}
-	prepared, err := repo.PrepareImport(in)
+	prepared, err := repo.PrepareImportContext(t.Context(), in)
 	if err != nil {
 		t.Fatal(err)
 	}

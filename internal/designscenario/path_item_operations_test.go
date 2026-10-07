@@ -34,7 +34,7 @@ func TestScenarioPathItemAliasKeysAndSchemas(t *testing.T) {
 		{ID: "archived", Kind: "request", Operation: &OperationBinding{ContractID: "api", OperationKey: "archived"}},
 		{ID: "local", Kind: "request", Operation: &OperationBinding{ContractID: "api", OperationKey: "local"}},
 	}
-	schemas := bindingSchemas(revision.Document)
+	schemas := schemasForTest(t, revision.Document)
 	if got := schemas[0].responseType("/id"); got != "integer" {
 		t.Fatalf("inherited response id type %q", got)
 	}
@@ -101,7 +101,7 @@ func TestScenarioPathItemSiblingOverrideKeepsKnownSchema(t *testing.T) {
 	revision := runRevision()
 	revision.Document.Contracts[0].Document = jsonx.RawMessage(`{"paths":{"/local":{"$ref":"#/components/pathItems/Shared","get":{"x-mocker-canvas-operation-id":"local","responses":{"200":{"content":{"application/json":{"schema":{"type":"integer"}}}}}}}},"components":{"pathItems":{"Shared":{"get":{"responses":{"200":{"content":{"application/json":{"schema":{"type":"boolean"}}}}}}}}}}`)
 	revision.Document.Messages = []Message{{ID: "local", Kind: "request", Operation: &OperationBinding{ContractID: "api", OperationKey: "local"}}}
-	analysis := AnalyzeDataFlow(revision.Document)
+	analysis := analyzeForTest(t, revision.Document)
 	if len(analysis.Diagnostics) != 0 || len(analysis.Messages) != 1 || analysis.Messages[0].ResponseFields[0].Type != "integer" {
 		t.Fatalf("known local schema reported as unknown: %+v", analysis)
 	}
@@ -118,7 +118,7 @@ func TestScenarioPathItemBrokenReferenceWarnsWithoutBlockingValidSibling(t *test
 	revision.Document.Contracts[0].Document = jsonx.RawMessage(raw)
 	revision.Document.Messages = revision.Document.Messages[:1]
 	revision.Document.Messages[0].Operation.OperationKey = "local"
-	if _, err := PrepareRun(revision, "local", "", "ui", nil); err != nil {
+	if _, err := PrepareRun(t.Context(), revision, "local", "", "ui", nil); err != nil {
 		t.Fatalf("valid sibling blocked by reference warning: %v", err)
 	}
 }

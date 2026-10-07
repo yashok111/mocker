@@ -154,7 +154,7 @@ func TestDocumentationCancellationStopsContractValidation(t *testing.T) {
 			ctx, cancel := context.WithCancel(t.Context())
 			defer cancel()
 			calls := 0
-			svc := New(func(string) ([]designscenario.Diagnostic, error) {
+			svc := New(func(context.Context, string) ([]designscenario.Diagnostic, error) {
 				calls++
 				cancel()
 				return nil, nil

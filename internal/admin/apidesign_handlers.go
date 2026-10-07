@@ -232,7 +232,7 @@ func (s *Server) handleValidateAPIDesign(w http.ResponseWriter, r *http.Request)
 	if !s.designBody(w, r, &body) {
 		return
 	}
-	diagnostics, err := s.designsRepo.Validate(body.Document) //nolint:contextcheck // apidesign.Repo.Validate takes no context; threading one changes its signature
+	diagnostics, err := s.designsRepo.Validate(r.Context(), body.Document)
 	if err != nil {
 		s.designError(w, err)
 		return

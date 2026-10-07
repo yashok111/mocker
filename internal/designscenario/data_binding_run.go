@@ -1,6 +1,7 @@
 package designscenario
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"maps"
@@ -11,7 +12,7 @@ import (
 	"github.com/yashok111/mocker/internal/jsonx"
 )
 
-func (e *runEngine) resolveBindingRequest(index int, message Message, config *StepExecution) (StepRequest, []BindingResult, error) {
+func (e *runEngine) resolveBindingRequest(ctx context.Context, index int, message Message, config *StepExecution) (StepRequest, []BindingResult, error) {
 	clean := withoutBindingTargets(config)
 	request, err := resolveRunRequest(e.report.RevisionID, message.ID, &clean, e.report.Variables)
 	if err != nil {
@@ -20,7 +21,10 @@ func (e *runEngine) resolveBindingRequest(index int, message Message, config *St
 	if len(config.Bindings) == 0 {
 		return request, nil, nil
 	}
-	targetSchema := e.bindingTargetSchema(message.ID)
+	targetSchema, err := e.bindingTargetSchema(ctx, message.ID)
+	if err != nil {
+		return StepRequest{}, nil, err
+	}
 	results := make([]BindingResult, 0, len(config.Bindings))
 	body := bindingBody{}
 	for _, binding := range config.Bindings {
@@ -68,16 +72,20 @@ func withoutBindingTargets(config *StepExecution) StepExecution {
 	return clean
 }
 
-func (e *runEngine) bindingTargetSchema(messageID string) bindingSchema {
+func (e *runEngine) bindingTargetSchema(ctx context.Context, messageID string) (bindingSchema, error) {
 	if e.bindingSchemas == nil {
-		e.bindingSchemas = bindingSchemas(e.report.Document)
+		schemas, err := bindingSchemas(ctx, e.report.Document)
+		if err != nil {
+			return bindingSchema{}, err
+		}
+		e.bindingSchemas = schemas
 	}
 	for i, m := range e.report.Document.Messages {
 		if m.ID == messageID {
-			return e.bindingSchemas[i]
+			return e.bindingSchemas[i], nil
 		}
 	}
-	return bindingSchema{}
+	return bindingSchema{}, nil
 }
 
 // resolvedBinding is one binding's source value, read and transformed.
