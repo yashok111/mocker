@@ -120,79 +120,10 @@ func validateLineageGraph(ctx context.Context, s *ImportSession, g *graphCandida
 }
 
 func validateLineageGraphRules(ctx context.Context, profile string, s *ImportSession, g *graphCandidate, diagnostics *[]ImportDiagnostic) error {
-	events := profile == EventsProfile || profile == ComposedProfile
-	validator := validateLineageAttributes
-	schema := LineageSchemaVersion
-	if events {
-		validator = validateEventsLineageAttributes
-		schema = EventsSchemaVersion
+	c, err := newLineageGraphCheck(ctx, profile, s, g, diagnostics)
+	if err != nil {
+		return err
 	}
-	if profile == ComposedProfile {
-		validator = validateRepresentationAttributes
-		schema = ComposedSchemaVersion
-	}
-	edges := map[string]Edge{}
-	handles := map[string][]Edge{}
-	for _, e := range g.Edges {
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		if e.Kind == "handles" {
-			handles[e.From] = append(handles[e.From], e)
-		}
-		edges[e.ID] = e
-	}
-	add := func(path, message string) {
-		*diagnostics = append(*diagnostics, ImportDiagnostic{Code: "backend_graph_invalid", Path: path, Message: message})
-	}
-	nodes := map[string]Node{}
-	proofs := map[string]Evidence{}
-	contains := map[string][]Edge{}
-	for _, n := range g.Nodes {
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		nodes[n.ID] = n
-	}
-	for _, p := range g.Evidence {
-		proofs[p.ID] = p
-	}
-	for _, e := range g.Edges {
-		if e.Kind == "contains" {
-			contains[e.To] = append(contains[e.To], e)
-		}
-	}
-	// Index analyzed manifest members once; every lineage assertion needs member
-	// evidence with physical line bounds, including retained historical evidence.
-	files := map[string]bool{}
-	for _, src := range g.Sources {
-		for _, f := range src.Files {
-			if f.AnalysisStatus == "analyzed" {
-				files[src.RepositoryID+"\x00"+src.ID+"\x00"+f.Path+"\x00"+f.ContentHash] = true
-			}
-		}
-	}
-	proof := func(id string, ids []string, fresh *AssertionFreshness) {
-		if s == nil {
-			return
-		}
-		for _, eid := range ids {
-			e, ok := proofs[eid]
-			if !ok || e.SubjectID != id || e.Source.RepositoryID != s.RepositoryID || e.Source.StartLine == nil || e.Source.EndLine == nil || *e.Source.StartLine < 1 || *e.Source.EndLine < *e.Source.StartLine {
-				continue
-			}
-			if fresh != nil && fresh.Status == "current" && e.Source.SnapshotID != s.SnapshotID {
-				continue
-			}
-			if files[e.Source.RepositoryID+"\x00"+e.Source.SnapshotID+"\x00"+e.Source.File+"\x00"+e.Source.ContentHash] {
-				return
-			}
-		}
-		add("subjects/"+id+"/evidenceIds", "Lineage assertions require member evidence in an analyzed manifest file with physical line bounds")
-	}
-	fields := map[string]int{}
-	selectors := map[string]bool{}
-	count := 0
 	for _, n := range g.Nodes {
 		if err := ctx.Err(); err != nil {
 			return err
@@ -200,89 +131,223 @@ func validateLineageGraphRules(ctx context.Context, profile string, s *ImportSes
 		if !lineageSubject(n.Kind, false) {
 			continue
 		}
-		path := "nodes/" + n.ID
-		if err := validator(n.Kind, n.Attributes, false, true); err != nil {
-			add(path, err.Error())
-			continue
-		}
-		proof(n.ID, n.EvidenceIDs, n.Freshness)
-		parent := Node{}
-		if n.ParentID != nil {
-			parent = nodes[*n.ParentID]
-		}
-		valid, _ := lineageContains(parent, n)
-		if events {
-			if v, ok := eventsContains(parent, n); ok {
-				valid = v
-			}
-		}
-		if profile == ComposedProfile {
-			if v, ok := representationContains(parent, n); ok {
-				valid = v
-			}
-		}
-		if !valid || len(contains[n.ID]) != 1 || contains[n.ID][0].From != parent.ID || s != nil && (parent.Ownership == nil || parent.Ownership.RepositoryID != s.RepositoryID) {
-			add(path+"/parentId", "Lineage nodes require one agreeing contains edge and a valid parent in the same repository")
-		}
-		if n.Kind == "api_field" {
-			fields[parent.ID]++
-			if fields[parent.ID] > MaxAPIFieldsPerOperation {
-				return limitFault("API field limit per operation exceeded")
-			}
-			identity := maps.Clone(n.Attributes)
-			for _, k := range []string{"nativeType", "analysisStatus", "gaps", "description"} {
-				delete(identity, k)
-			}
-			raw, err := canonicalJSON(identity)
-			if err != nil {
-				return err
-			}
-			key := parent.ID + "\x00" + string(raw)
-			if selectors[key] {
-				add(path+"/attributes/selector", "Duplicate API selector identity within operation")
-			}
-			selectors[key] = true
-			continue
-		}
-		a, err := decodeLineageMappingForSchema(n.Attributes, schema)
-		if err != nil {
-			add(path, err.Error())
-			continue
-		}
-		if events {
-			mappingValidator := validateEventsLineageMapping
-			if profile == ComposedProfile {
-				mappingValidator = validateRepresentationLineageMapping
-			}
-			if err := mappingValidator(n, a, nodes, edges, handles); err != nil {
-				add(path+"/attributes", err.Error())
-			}
-		}
-		count += len(a.Sources) + 1
-		if count > MaxLineageReferences {
-			return limitFault("Lineage reference limit exceeded")
-		}
-		for i, ref := range append(slices.Clone(a.Sources), a.Destination) {
-			refPath := path + "/attributes/destination"
-			if i < len(a.Sources) {
-				refPath = fmt.Sprintf("%s/attributes/sources/%d", path, i)
-			}
-			if err := validateLineageValueTargetForSchema(ref, nodes, edges, schema); err != nil {
-				add(refPath, "Every lineage value must survive with its exact kind, facet and local port")
-				continue
-			}
-			target := nodes[ref.NodeID]
-			if s != nil && (target.Ownership == nil || target.Ownership.RepositoryID != s.RepositoryID) {
-				add(refPath, "Lineage endpoints must belong to the same repository")
-			}
+		if err := c.node(n); err != nil {
+			return err
 		}
 	}
 	for _, e := range g.Edges {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		if lineageSubject(nodes[e.From].Kind, false) || lineageSubject(nodes[e.To].Kind, false) {
-			proof(e.ID, e.EvidenceIDs, e.Freshness)
+		if lineageSubject(c.nodes[e.From].Kind, false) || lineageSubject(c.nodes[e.To].Kind, false) {
+			c.proof(e.ID, e.EvidenceIDs, e.Freshness)
+		}
+	}
+	return nil
+}
+
+// lineageGraphCheck holds the indexes and the running limits one pass of
+// the lineage rules shares across nodes; the profile picks which attribute
+// validator and mapping schema apply (lineage, events or composed).
+type lineageGraphCheck struct {
+	profile     string
+	s           *ImportSession
+	events      bool
+	validator   func(kind string, a map[string]jsontext.Value, edge, persisted bool) error
+	schema      string
+	diagnostics *[]ImportDiagnostic
+
+	edges    map[string]Edge
+	handles  map[string][]Edge
+	nodes    map[string]Node
+	proofs   map[string]Evidence
+	contains map[string][]Edge
+	files    map[string]bool
+
+	fields    map[string]int
+	selectors map[string]bool
+	count     int
+}
+
+func newLineageGraphCheck(ctx context.Context, profile string, s *ImportSession, g *graphCandidate, diagnostics *[]ImportDiagnostic) (*lineageGraphCheck, error) {
+	c := &lineageGraphCheck{profile: profile, s: s, diagnostics: diagnostics, validator: validateLineageAttributes, schema: LineageSchemaVersion}
+	c.events = profile == EventsProfile || profile == ComposedProfile
+	if c.events {
+		c.validator = validateEventsLineageAttributes
+		c.schema = EventsSchemaVersion
+	}
+	if profile == ComposedProfile {
+		c.validator = validateRepresentationAttributes
+		c.schema = ComposedSchemaVersion
+	}
+	c.edges = map[string]Edge{}
+	c.handles = map[string][]Edge{}
+	for _, e := range g.Edges {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		if e.Kind == "handles" {
+			c.handles[e.From] = append(c.handles[e.From], e)
+		}
+		c.edges[e.ID] = e
+	}
+	c.nodes = map[string]Node{}
+	c.proofs = map[string]Evidence{}
+	c.contains = map[string][]Edge{}
+	for _, n := range g.Nodes {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		c.nodes[n.ID] = n
+	}
+	for _, p := range g.Evidence {
+		c.proofs[p.ID] = p
+	}
+	for _, e := range g.Edges {
+		if e.Kind == "contains" {
+			c.contains[e.To] = append(c.contains[e.To], e)
+		}
+	}
+	// Index analyzed manifest members once; every lineage assertion needs member
+	// evidence with physical line bounds, including retained historical evidence.
+	c.files = map[string]bool{}
+	for _, src := range g.Sources {
+		for _, f := range src.Files {
+			if f.AnalysisStatus == "analyzed" {
+				c.files[src.RepositoryID+"\x00"+src.ID+"\x00"+f.Path+"\x00"+f.ContentHash] = true
+			}
+		}
+	}
+	c.fields = map[string]int{}
+	c.selectors = map[string]bool{}
+	return c, nil
+}
+
+func (c *lineageGraphCheck) add(path, message string) {
+	*c.diagnostics = append(*c.diagnostics, ImportDiagnostic{Code: "backend_graph_invalid", Path: path, Message: message})
+}
+
+// proof requires one member evidence record with physical line bounds in an
+// analyzed manifest file; a current assertion must cite this snapshot.
+func (c *lineageGraphCheck) proof(id string, ids []string, fresh *AssertionFreshness) {
+	if c.s == nil {
+		return
+	}
+	for _, eid := range ids {
+		e, ok := c.proofs[eid]
+		if !ok || !c.memberEvidence(id, e) {
+			continue
+		}
+		if fresh != nil && fresh.Status == "current" && e.Source.SnapshotID != c.s.SnapshotID {
+			continue
+		}
+		if c.files[e.Source.RepositoryID+"\x00"+e.Source.SnapshotID+"\x00"+e.Source.File+"\x00"+e.Source.ContentHash] {
+			return
+		}
+	}
+	c.add("subjects/"+id+"/evidenceIds", "Lineage assertions require member evidence in an analyzed manifest file with physical line bounds")
+}
+
+// memberEvidence reports whether e is the subject's own evidence from this
+// repository with a well-formed line range.
+func (c *lineageGraphCheck) memberEvidence(id string, e Evidence) bool {
+	return e.SubjectID == id && e.Source.RepositoryID == c.s.RepositoryID && e.Source.StartLine != nil && e.Source.EndLine != nil && *e.Source.StartLine >= 1 && *e.Source.EndLine >= *e.Source.StartLine
+}
+
+func (c *lineageGraphCheck) node(n Node) error {
+	path := "nodes/" + n.ID
+	if err := c.validator(n.Kind, n.Attributes, false, true); err != nil {
+		c.add(path, err.Error())
+		return nil
+	}
+	c.proof(n.ID, n.EvidenceIDs, n.Freshness)
+	parent := Node{}
+	if n.ParentID != nil {
+		parent = c.nodes[*n.ParentID]
+	}
+	if !c.parentValid(n, parent) {
+		c.add(path+"/parentId", "Lineage nodes require one agreeing contains edge and a valid parent in the same repository")
+	}
+	if n.Kind == "api_field" {
+		return c.apiField(n, parent, path)
+	}
+	return c.mapping(n, path)
+}
+
+// parentValid applies the profile's containment rule and requires exactly
+// one agreeing contains edge from a parent in the session's repository.
+func (c *lineageGraphCheck) parentValid(n, parent Node) bool {
+	valid, _ := lineageContains(parent, n)
+	if c.events {
+		if v, ok := eventsContains(parent, n); ok {
+			valid = v
+		}
+	}
+	if c.profile == ComposedProfile {
+		if v, ok := representationContains(parent, n); ok {
+			valid = v
+		}
+	}
+	if !valid || len(c.contains[n.ID]) != 1 || c.contains[n.ID][0].From != parent.ID {
+		return false
+	}
+	return c.s == nil || parent.Ownership != nil && parent.Ownership.RepositoryID == c.s.RepositoryID
+}
+
+// apiField counts fields per operation and rejects two fields with the
+// same selector identity (the attributes minus their descriptive members).
+func (c *lineageGraphCheck) apiField(n, parent Node, path string) error {
+	c.fields[parent.ID]++
+	if c.fields[parent.ID] > MaxAPIFieldsPerOperation {
+		return limitFault("API field limit per operation exceeded")
+	}
+	identity := maps.Clone(n.Attributes)
+	for _, k := range []string{"nativeType", "analysisStatus", "gaps", "description"} {
+		delete(identity, k)
+	}
+	raw, err := canonicalJSON(identity)
+	if err != nil {
+		return err
+	}
+	key := parent.ID + "\x00" + string(raw)
+	if c.selectors[key] {
+		c.add(path+"/attributes/selector", "Duplicate API selector identity within operation")
+	}
+	c.selectors[key] = true
+	return nil
+}
+
+func (c *lineageGraphCheck) mapping(n Node, path string) error {
+	a, err := decodeLineageMappingForSchema(n.Attributes, c.schema)
+	if err != nil {
+		c.add(path, err.Error())
+		return nil
+	}
+	if c.events {
+		mappingValidator := validateEventsLineageMapping
+		if c.profile == ComposedProfile {
+			mappingValidator = validateRepresentationLineageMapping
+		}
+		if err := mappingValidator(n, a, c.nodes, c.edges, c.handles); err != nil {
+			c.add(path+"/attributes", err.Error())
+		}
+	}
+	c.count += len(a.Sources) + 1
+	if c.count > MaxLineageReferences {
+		return limitFault("Lineage reference limit exceeded")
+	}
+	for i, ref := range append(slices.Clone(a.Sources), a.Destination) {
+		refPath := path + "/attributes/destination"
+		if i < len(a.Sources) {
+			refPath = fmt.Sprintf("%s/attributes/sources/%d", path, i)
+		}
+		if err := validateLineageValueTargetForSchema(ref, c.nodes, c.edges, c.schema); err != nil {
+			c.add(refPath, "Every lineage value must survive with its exact kind, facet and local port")
+			continue
+		}
+		target := c.nodes[ref.NodeID]
+		if c.s != nil && (target.Ownership == nil || target.Ownership.RepositoryID != c.s.RepositoryID) {
+			c.add(refPath, "Lineage endpoints must belong to the same repository")
 		}
 	}
 	return nil

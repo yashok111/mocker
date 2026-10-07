@@ -233,23 +233,13 @@ func (r *Repo) ForkDiagram(ctx context.Context, pid string, in DiagramForkInput)
 		return nil, invalid("architecture", "Architecture document has no dependency")
 	}
 	if doc.Interactions != nil {
-		a, _ := requestDigest(doc.Target)
-		b, _ := requestDigest(in.Target)
-		if a != b && doc.Interactions.Architecture != nil && in.Architecture == nil {
-			return nil, invalid("architecture", "New-target fork requires an explicit architecture pin")
-		}
-		if in.Architecture != nil {
-			doc.Interactions.Architecture = in.Architecture
+		if err := repinForkArchitecture(&doc.Interactions.Architecture, doc.Target, in); err != nil {
+			return nil, err
 		}
 	}
 	if doc.BusinessMap != nil {
-		a, _ := requestDigest(doc.Target)
-		b, _ := requestDigest(in.Target)
-		if a != b && doc.BusinessMap.Architecture != nil && in.Architecture == nil {
-			return nil, invalid("architecture", "New-target fork requires an explicit architecture pin")
-		}
-		if in.Architecture != nil {
-			doc.BusinessMap.Architecture = in.Architecture
+		if err := repinForkArchitecture(&doc.BusinessMap.Architecture, doc.Target, in); err != nil {
+			return nil, err
 		}
 	}
 	doc.Target = in.Target
@@ -478,4 +468,19 @@ func (r *Repo) writeDiagramMutation(ctx context.Context, tx *sql.Tx, m diagramMu
 	out = &DiagramVersion{Pin: DiagramPin{ID: id, Version: version, ContentHash: hash}, ProjectID: m.pid, Document: m.document, TargetHash: graph.Pins.TargetHash, Author: diagramActor(ctx), CreatedAt: time.Now().UTC().Format(time.RFC3339Nano), Gaps: m.gaps}
 	diagramProvenance(out, m.previous, m.op, m.reason)
 	return out, persistDiagramVersion(ctx, tx, m, out)
+}
+
+// repinForkArchitecture carries a dependent diagram's architecture pin into
+// a fork: a fork onto another target must name the architecture it now
+// depends on, since the old pin describes the old target.
+func repinForkArchitecture(architecture **DiagramPin, sourceTarget BackendReadTarget, in DiagramForkInput) error {
+	a, _ := requestDigest(sourceTarget)
+	b, _ := requestDigest(in.Target)
+	if a != b && *architecture != nil && in.Architecture == nil {
+		return invalid("architecture", "New-target fork requires an explicit architecture pin")
+	}
+	if in.Architecture != nil {
+		*architecture = in.Architecture
+	}
+	return nil
 }

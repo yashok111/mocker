@@ -48,38 +48,7 @@ func compareRelationalFacetsMode(kind string, attrs map[string]jsontext.Value, e
 	out := &FacetComparison{Status: "unknown", Pairs: []FacetPairDifference{}}
 	for i, left := range keys {
 		for _, right := range keys[i+1:] {
-			a, b := objects[left], objects[right]
-			p := FacetPairDifference{LeftFacetKey: left, RightFacetKey: right, Status: "consistent", ChangedPaths: []string{}}
-			uncertain := facetUncertain(a) || facetUncertain(b)
-			for _, property := range slices.Sorted(maps.Keys(a)) {
-				if slices.Contains([]string{"sourceKind", "dialect", "analysisStatus", "gaps", "evidenceIds", "freshness", "sourceSnapshotId", "columnsStatus", "constraintsStatus", "dependenciesStatus", "bodyStatus", "derivationStatus", "targetReason"}, property) {
-					continue
-				}
-				if property == "nativeDefinition" || property == "definition" {
-					different, _ := compareRelationalValue(a[property], b[property])
-					p.DefinitionDifferent = p.DefinitionDifferent || different
-					continue
-				}
-				if property == "dependencyIds" && (!rawStringEquals(a["dependenciesStatus"], "complete") && !rawStringEquals(a["bodyStatus"], "complete") || !rawStringEquals(b["dependenciesStatus"], "complete") && !rawStringEquals(b["bodyStatus"], "complete")) {
-					uncertain = true
-					continue
-				}
-				if property == "changes" && (!rawStringEquals(a["derivationStatus"], "complete") || !rawStringEquals(b["derivationStatus"], "complete")) {
-					uncertain = true
-					continue
-				}
-				different, unknown := compareRelationalValue(a[property], b[property])
-				uncertain = uncertain || unknown
-				if different {
-					p.ChangedPaths = append(p.ChangedPaths, "/"+escapeRelationalPointer(property))
-				}
-			}
-			if len(p.ChangedPaths) > 0 {
-				p.Status = "different"
-			} else if uncertain {
-				p.Status = "unknown"
-			}
-			out.Pairs = append(out.Pairs, p)
+			out.Pairs = append(out.Pairs, compareRelationalFacetPair(left, right, objects[left], objects[right]))
 		}
 	}
 	if len(out.Pairs) > 0 {
@@ -95,6 +64,56 @@ func compareRelationalFacetsMode(kind string, attrs map[string]jsontext.Value, e
 		}
 	}
 	return out, nil
+}
+
+// relationalComparisonMetadata are facet members that describe the claim
+// rather than the object, so they never make two facets differ.
+var relationalComparisonMetadata = []string{"sourceKind", "dialect", "analysisStatus", "gaps", "evidenceIds", "freshness", "sourceSnapshotId", "columnsStatus", "constraintsStatus", "dependenciesStatus", "bodyStatus", "derivationStatus", "targetReason"}
+
+func compareRelationalFacetPair(left, right string, a, b map[string]jsontext.Value) FacetPairDifference {
+	p := FacetPairDifference{LeftFacetKey: left, RightFacetKey: right, Status: "consistent", ChangedPaths: []string{}}
+	uncertain := facetUncertain(a) || facetUncertain(b)
+	for _, property := range slices.Sorted(maps.Keys(a)) {
+		if slices.Contains(relationalComparisonMetadata, property) {
+			continue
+		}
+		if property == "nativeDefinition" || property == "definition" {
+			different, _ := compareRelationalValue(a[property], b[property])
+			p.DefinitionDifferent = p.DefinitionDifferent || different
+			continue
+		}
+		if !relationalPropertyComparable(property, a, b) {
+			uncertain = true
+			continue
+		}
+		different, unknown := compareRelationalValue(a[property], b[property])
+		uncertain = uncertain || unknown
+		if different {
+			p.ChangedPaths = append(p.ChangedPaths, "/"+escapeRelationalPointer(property))
+		}
+	}
+	if len(p.ChangedPaths) > 0 {
+		p.Status = "different"
+	} else if uncertain {
+		p.Status = "unknown"
+	}
+	return p
+}
+
+// relationalPropertyComparable reports whether both facets analyzed a
+// derived property completely enough to compare it: dependencies need a
+// complete dependency or body analysis, changes a complete derivation.
+func relationalPropertyComparable(property string, a, b map[string]jsontext.Value) bool {
+	dependenciesKnown := func(m map[string]jsontext.Value) bool {
+		return rawStringEquals(m["dependenciesStatus"], "complete") || rawStringEquals(m["bodyStatus"], "complete")
+	}
+	switch property {
+	case "dependencyIds":
+		return dependenciesKnown(a) && dependenciesKnown(b)
+	case "changes":
+		return rawStringEquals(a["derivationStatus"], "complete") && rawStringEquals(b["derivationStatus"], "complete")
+	}
+	return true
 }
 func facetUncertain(m map[string]jsontext.Value) bool {
 	for _, key := range []string{"analysisStatus", "columnsStatus", "constraintsStatus", "dependenciesStatus", "bodyStatus", "derivationStatus"} {
@@ -118,35 +137,7 @@ func compareRelationalValue(a, b jsontext.Value) (different, unknown bool) {
 		return false, true
 	}
 	if a[0] == '{' && b[0] == '{' {
-		am, _ := relationalObject(a)
-		bm, _ := relationalObject(b)
-		if am["status"] != nil || bm["status"] != nil {
-			if !rawStringEquals(am["status"], "known") || !rawStringEquals(bm["status"], "known") {
-				return false, true
-			}
-			return compareRelationalValue(am["value"], bm["value"])
-		}
-		keys := map[string]bool{}
-		for key := range am {
-			keys[key] = true
-		}
-		for key := range bm {
-			keys[key] = true
-		}
-		for key := range keys {
-			av, bv := am[key], bm[key]
-			if slices.Contains([]string{"direction", "nulls", "operation"}, key) && (rawStringEquals(av, "unknown") || rawStringEquals(bv, "unknown")) {
-				unknown = true
-				continue
-			}
-			if av == nil || bv == nil {
-				different = true
-				continue
-			}
-			d, u := compareRelationalValue(av, bv)
-			different, unknown = different || d, unknown || u
-		}
-		return
+		return compareRelationalObjects(a, b)
 	}
 	if a[0] == '[' && b[0] == '[' {
 		var aa, ba []jsontext.Value
@@ -172,4 +163,38 @@ func compareRelationalValue(a, b jsontext.Value) (different, unknown bool) {
 		return ai != bi, false
 	}
 	return !bytes.Equal(a, b), false
+}
+
+// compareRelationalObjects compares two objects member by member; a
+// {status, value} wrapper compares its value only when both are known.
+func compareRelationalObjects(a, b jsontext.Value) (different, unknown bool) {
+	am, _ := relationalObject(a)
+	bm, _ := relationalObject(b)
+	if am["status"] != nil || bm["status"] != nil {
+		if !rawStringEquals(am["status"], "known") || !rawStringEquals(bm["status"], "known") {
+			return false, true
+		}
+		return compareRelationalValue(am["value"], bm["value"])
+	}
+	keys := map[string]bool{}
+	for key := range am {
+		keys[key] = true
+	}
+	for key := range bm {
+		keys[key] = true
+	}
+	for key := range keys {
+		av, bv := am[key], bm[key]
+		if slices.Contains([]string{"direction", "nulls", "operation"}, key) && (rawStringEquals(av, "unknown") || rawStringEquals(bv, "unknown")) {
+			unknown = true
+			continue
+		}
+		if av == nil || bv == nil {
+			different = true
+			continue
+		}
+		d, u := compareRelationalValue(av, bv)
+		different, unknown = different || d, unknown || u
+	}
+	return
 }

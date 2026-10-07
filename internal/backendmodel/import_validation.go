@@ -131,44 +131,13 @@ func validateAttributes(kind string, a map[string]jsontext.Value, edge bool) err
 	if a == nil {
 		return semantic("attributes", "Attributes must be an object")
 	}
-	allowed := []string{"description"}
-	required := []string{}
-	if !edge {
-		switch kind {
-		case "symbol", "handler":
-			allowed = append(allowed, "language", "qualifiedName")
-		case "http_operation":
-			allowed = append(allowed, "method", "path")
-			required = []string{"method", "path"}
-		case "datastore":
-			allowed = append(allowed, "technology")
-		case "unresolved_target":
-			allowed = append(allowed, "expectedKind", "reason", "searchScope")
-			required = []string{"expectedKind", "reason", "searchScope"}
-		}
-	}
+	allowed, required := foundationAttributeSchema(kind, edge)
 	for k, raw := range a {
 		if !slices.Contains(allowed, k) {
 			return semantic("attributes/"+k, "Unknown attribute for this kind")
 		}
-		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-			if slices.Contains(required, k) {
-				return semantic("attributes/"+k, "Required attribute cannot be null")
-			}
-			continue
-		}
-		var s string
-		if err := json.Unmarshal(raw, &s); err != nil {
-			return semantic("attributes/"+k, "Attribute must be a string or null")
-		}
-		if slices.Contains(required, k) && strings.TrimSpace(s) == "" {
-			return semantic("attributes/"+k, "Required attribute cannot be blank")
-		}
-		if kind == "http_operation" && k == "method" && (s != strings.ToUpper(s) || strings.ContainsFunc(s, func(r rune) bool { return r < 'A' || r > 'Z' })) {
-			return semantic("attributes/method", "HTTP method must be uppercase ASCII letters")
-		}
-		if kind == "http_operation" && k == "path" && !strings.HasPrefix(s, "/") {
-			return semantic("attributes/path", "HTTP path must start with /")
+		if err := validateFoundationAttribute(kind, k, raw, slices.Contains(required, k)); err != nil {
+			return err
 		}
 	}
 	for _, k := range required {
@@ -178,6 +147,56 @@ func validateAttributes(kind string, a map[string]jsontext.Value, edge bool) err
 	}
 	return nil
 }
+
+// foundationAttributeSchema lists the attributes a foundation node kind
+// allows and requires; edges carry only a description.
+func foundationAttributeSchema(kind string, edge bool) (allowed, required []string) {
+	allowed = []string{"description"}
+	required = []string{}
+	if edge {
+		return allowed, required
+	}
+	switch kind {
+	case "symbol", "handler":
+		allowed = append(allowed, "language", "qualifiedName")
+	case "http_operation":
+		allowed = append(allowed, "method", "path")
+		required = []string{"method", "path"}
+	case "datastore":
+		allowed = append(allowed, "technology")
+	case "unresolved_target":
+		allowed = append(allowed, "expectedKind", "reason", "searchScope")
+		required = []string{"expectedKind", "reason", "searchScope"}
+	}
+	return allowed, required
+}
+
+// validateFoundationAttribute checks one attribute value: a string or null,
+// never blank or null when required, and an HTTP operation's method and
+// path in their canonical shape.
+func validateFoundationAttribute(kind, k string, raw jsontext.Value, required bool) error {
+	if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+		if required {
+			return semantic("attributes/"+k, "Required attribute cannot be null")
+		}
+		return nil
+	}
+	var s string
+	if err := json.Unmarshal(raw, &s); err != nil {
+		return semantic("attributes/"+k, "Attribute must be a string or null")
+	}
+	if required && strings.TrimSpace(s) == "" {
+		return semantic("attributes/"+k, "Required attribute cannot be blank")
+	}
+	if kind == "http_operation" && k == "method" && (s != strings.ToUpper(s) || strings.ContainsFunc(s, func(r rune) bool { return r < 'A' || r > 'Z' })) {
+		return semantic("attributes/method", "HTTP method must be uppercase ASCII letters")
+	}
+	if kind == "http_operation" && k == "path" && !strings.HasPrefix(s, "/") {
+		return semantic("attributes/path", "HTTP path must start with /")
+	}
+	return nil
+}
+
 func validateEvidence(e ImportEvidence, s *ImportSession) error {
 	if !slices.Contains([]string{"node", "edge"}, e.SubjectType) || !externalKey(e.SubjectKey) {
 		return semantic("evidence/subjectKey", "Evidence needs a node or edge subject key")
@@ -192,23 +211,33 @@ func validateEvidence(e ImportEvidence, s *ImportSession) error {
 	if src.RepositoryID != s.RepositoryID || src.SnapshotID != s.SnapshotID || !validPath(src.File) || !validHash(src.ContentHash) {
 		return semantic("evidence/source", "Source must match the session repository and snapshot")
 	}
-	found := false
-	for _, f := range s.Manifest.Snapshot.Files {
-		if f.Path == src.File && f.AnalysisStatus == "analyzed" && f.ContentHash == src.ContentHash {
-			found = true
-			break
-		}
-	}
-	if !found {
+	if !analyzedManifestFile(s, src) {
 		return semantic("evidence/source", "Source must match an analyzed manifest file and hash")
 	}
-	if (src.StartLine == nil) != (src.EndLine == nil) || src.StartLine != nil && (*src.StartLine <= 0 || *src.EndLine < *src.StartLine) {
+	if !lineBoundsValid(src) {
 		return semantic("evidence/source", "Both line bounds must be positive and ordered")
 	}
 	if e.Snippet != nil && (!utf8.ValidString(*e.Snippet) || len(*e.Snippet) > MaxEvidenceSnippetBytes) {
 		return limitFault("Evidence snippet exceeds UTF-8 byte limit")
 	}
 	return nil
+}
+
+func analyzedManifestFile(s *ImportSession, src EvidenceSource) bool {
+	for _, f := range s.Manifest.Snapshot.Files {
+		if f.Path == src.File && f.AnalysisStatus == "analyzed" && f.ContentHash == src.ContentHash {
+			return true
+		}
+	}
+	return false
+}
+
+// lineBoundsValid accepts no bounds, or both bounds positive and ordered.
+func lineBoundsValid(src EvidenceSource) bool {
+	if (src.StartLine == nil) != (src.EndLine == nil) {
+		return false
+	}
+	return src.StartLine == nil || *src.StartLine > 0 && *src.EndLine >= *src.StartLine
 }
 func commandAddress(c ImportCommand) (string, string, error) {
 	count := 0
@@ -252,7 +281,7 @@ func validateCommand(c ImportCommand, s *ImportSession) error {
 	if s.Mode == "composed" {
 		return validateComposedCommand(c, s)
 	}
-	if c.ClaimIdentity != nil || c.Resolution != nil || c.Node != nil && c.Node.ParentRef != nil || c.Edge != nil && (c.Edge.FromRef != nil || c.Edge.ToRef != nil) {
+	if usesSource6Members(c) {
 		return semantic("commands", "Source6 members require composed mode")
 	}
 	typ, key, err := commandAddress(c)
@@ -266,11 +295,7 @@ func validateCommand(c ImportCommand, s *ImportSession) error {
 		return nil
 	}
 	if c.Identity != nil {
-		x := c.Identity
-		if !externalKey(x.FromExternalKey) || x.FromExternalKey == x.ToExternalKey || !ValidID(x.ExpectedID) || !nonblank(x.Reason) || len(x.EvidenceKeys) == 0 {
-			return semantic("identity", "Mapping requires distinct valid keys, expectedId, reason and evidence")
-		}
-		return validateEvidenceKeys(x.EvidenceKeys)
+		return validateIdentityMap(c.Identity)
 	}
 	if c.Deletion != nil {
 		if !ValidID(c.Deletion.ExpectedID) || !nonblank(c.Deletion.Reason) {
@@ -280,70 +305,79 @@ func validateCommand(c ImportCommand, s *ImportSession) error {
 	}
 	switch typ {
 	case "node":
-		n := c.Node
-		if !slices.Contains(SupportedNodeKindsForProfile(s.Profile), n.Kind) {
-			return semantic("node/kind", "Unsupported node kind")
-		}
-		if !nonblank(n.Name) {
-			return semantic("node/name", "Node name is required")
-		}
-		if n.ParentKey != nil && !externalKey(*n.ParentKey) {
-			return semantic("node/parentKey", "Invalid parent key")
-		}
-		validator := validateAttributes
-		if hasRuntimeProfile(selectedProfile(s.Profile)) {
-			validator = func(kind string, attrs map[string]jsontext.Value, edge bool) error {
-				if selectedProfile(s.Profile) == EventsProfile {
-					return validateEventsAttributes(kind, attrs, edge, false)
-				}
-				if selectedProfile(s.Profile) == LineageProfile {
-					return validateLineageAttributes(kind, attrs, edge, false)
-				}
-				return validateRuntimeAttributes(kind, attrs, edge, false)
-			}
-		}
-		if selectedProfile(s.Profile) == RelationalProfile {
-			validator = func(kind string, attrs map[string]jsontext.Value, edge bool) error {
-				return validateRelationalAttributes(kind, attrs, edge, false)
-			}
-		}
-		if err := validator(n.Kind, n.Attributes, false); err != nil {
-			return err
-		}
-		return validateEvidenceKeys(n.EvidenceKeys)
+		return validateNodeCommand(c.Node, s)
 	case "edge":
-		e := c.Edge
-		if !slices.Contains(SupportedEdgeKindsForProfile(s.Profile), e.Kind) {
-			return semantic("edge/kind", "Unsupported edge kind")
-		}
-		if !externalKey(e.FromKey) || !externalKey(e.ToKey) {
-			return semantic("edge", "Valid endpoint keys are required")
-		}
-		validator := validateAttributes
-		if hasRuntimeProfile(selectedProfile(s.Profile)) {
-			validator = func(kind string, attrs map[string]jsontext.Value, edge bool) error {
-				if selectedProfile(s.Profile) == EventsProfile {
-					return validateEventsAttributes(kind, attrs, edge, false)
-				}
-				if selectedProfile(s.Profile) == LineageProfile {
-					return validateLineageAttributes(kind, attrs, edge, false)
-				}
-				return validateRuntimeAttributes(kind, attrs, edge, false)
-			}
-		}
-		if selectedProfile(s.Profile) == RelationalProfile {
-			validator = func(kind string, attrs map[string]jsontext.Value, edge bool) error {
-				return validateRelationalAttributes(kind, attrs, edge, false)
-			}
-		}
-		if err := validator(e.Kind, e.Attributes, true); err != nil {
-			return err
-		}
-		return validateEvidenceKeys(e.EvidenceKeys)
+		return validateEdgeCommand(c.Edge, s)
 	case "evidence":
 		return validateEvidence(*c.Evidence, s)
 	}
 	return nil
+}
+
+// usesSource6Members reports a command carrying members only the composed
+// (Source6) mode understands.
+func usesSource6Members(c ImportCommand) bool {
+	return c.ClaimIdentity != nil || c.Resolution != nil || c.Node != nil && c.Node.ParentRef != nil || c.Edge != nil && (c.Edge.FromRef != nil || c.Edge.ToRef != nil)
+}
+
+func validateIdentityMap(x *ImportIdentityMap) error {
+	if !externalKey(x.FromExternalKey) || x.FromExternalKey == x.ToExternalKey || !ValidID(x.ExpectedID) || !nonblank(x.Reason) || len(x.EvidenceKeys) == 0 {
+		return semantic("identity", "Mapping requires distinct valid keys, expectedId, reason and evidence")
+	}
+	return validateEvidenceKeys(x.EvidenceKeys)
+}
+
+func validateNodeCommand(n *ImportNode, s *ImportSession) error {
+	if !slices.Contains(SupportedNodeKindsForProfile(s.Profile), n.Kind) {
+		return semantic("node/kind", "Unsupported node kind")
+	}
+	if !nonblank(n.Name) {
+		return semantic("node/name", "Node name is required")
+	}
+	if n.ParentKey != nil && !externalKey(*n.ParentKey) {
+		return semantic("node/parentKey", "Invalid parent key")
+	}
+	if err := importAttributeValidator(s)(n.Kind, n.Attributes, false); err != nil {
+		return err
+	}
+	return validateEvidenceKeys(n.EvidenceKeys)
+}
+
+func validateEdgeCommand(e *ImportEdge, s *ImportSession) error {
+	if !slices.Contains(SupportedEdgeKindsForProfile(s.Profile), e.Kind) {
+		return semantic("edge/kind", "Unsupported edge kind")
+	}
+	if !externalKey(e.FromKey) || !externalKey(e.ToKey) {
+		return semantic("edge", "Valid endpoint keys are required")
+	}
+	if err := importAttributeValidator(s)(e.Kind, e.Attributes, true); err != nil {
+		return err
+	}
+	return validateEvidenceKeys(e.EvidenceKeys)
+}
+
+// importAttributeValidator picks the attribute rules of the session's
+// profile: foundation by default, the runtime family (events, lineage,
+// runtime) when selected, and relational when that profile is selected.
+func importAttributeValidator(s *ImportSession) func(kind string, attrs map[string]jsontext.Value, edge bool) error {
+	validator := validateAttributes
+	if hasRuntimeProfile(selectedProfile(s.Profile)) {
+		validator = func(kind string, attrs map[string]jsontext.Value, edge bool) error {
+			if selectedProfile(s.Profile) == EventsProfile {
+				return validateEventsAttributes(kind, attrs, edge, false)
+			}
+			if selectedProfile(s.Profile) == LineageProfile {
+				return validateLineageAttributes(kind, attrs, edge, false)
+			}
+			return validateRuntimeAttributes(kind, attrs, edge, false)
+		}
+	}
+	if selectedProfile(s.Profile) == RelationalProfile {
+		validator = func(kind string, attrs map[string]jsontext.Value, edge bool) error {
+			return validateRelationalAttributes(kind, attrs, edge, false)
+		}
+	}
+	return validator
 }
 func validateEvidenceKeys(keys []string) error {
 	seen := map[string]bool{}

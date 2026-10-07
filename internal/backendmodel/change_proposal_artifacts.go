@@ -143,36 +143,43 @@ func (r changeCriteriaReader) validate(ctx context.Context, c ChangeCriterion) e
 	case "artifact_object_matches":
 		return r.artifact(c)
 	case "artifact_object_matches_v3":
-		scoped := c.NamespacedArtifact
-		if scoped == nil || r.e.revision.ArtifactContextV3 == nil {
-			return invalid("criteria", "Exact namespaced artifact context required")
-		}
-		found := false
-		for _, g := range r.e.revision.ArtifactContextV3.Groups {
-			if g.Namespace == scoped.Namespace && slices.Contains(g.Pins, scoped.Pin) {
-				found = true
-			}
-		}
-		if !found {
-			return invalid("criteria", "Namespaced criterion is outside its target")
-		}
-		if scoped.Namespace.Scope == "foreign" {
-			return nil
-		}
-		installation, err := installationID(ctx, r.q)
-		if err != nil {
-			return err
-		}
-		pin, err := r.artifacts.ResolveNamespacedPin(installation, *scoped)
-		if err != nil {
-			return err
-		}
-		c.Artifact = &pin
-		return r.artifactObject(c)
+		return r.namespacedArtifact(ctx, c)
 	case "test_attachment", "runtime_check":
 		return r.check(ctx, c)
 	}
 	return nil
+}
+
+// namespacedArtifact requires a context-v3 criterion to name a pin of its
+// target; a local pin is then resolved and checked like a legacy one, a
+// foreign pin cannot be resolved here and is accepted as named.
+func (r changeCriteriaReader) namespacedArtifact(ctx context.Context, c ChangeCriterion) error {
+	scoped := c.NamespacedArtifact
+	if scoped == nil || r.e.revision.ArtifactContextV3 == nil {
+		return invalid("criteria", "Exact namespaced artifact context required")
+	}
+	found := false
+	for _, g := range r.e.revision.ArtifactContextV3.Groups {
+		if g.Namespace == scoped.Namespace && slices.Contains(g.Pins, scoped.Pin) {
+			found = true
+		}
+	}
+	if !found {
+		return invalid("criteria", "Namespaced criterion is outside its target")
+	}
+	if scoped.Namespace.Scope == "foreign" {
+		return nil
+	}
+	installation, err := installationID(ctx, r.q)
+	if err != nil {
+		return err
+	}
+	pin, err := r.artifacts.ResolveNamespacedPin(installation, *scoped)
+	if err != nil {
+		return err
+	}
+	c.Artifact = &pin
+	return r.artifactObject(c)
 }
 func (r changeCriteriaReader) field(c ChangeCriterion) error {
 	record, err := r.e.live(c.RecordType, c.ID, "")
