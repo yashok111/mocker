@@ -82,8 +82,13 @@ func TestAPIArtifactGoCallBodyLimitBeforeDependencies(t *testing.T) {
 	assertFault(t, err, "backend_api_pins_limit")
 }
 
+// The optional head is "unavailable" the way the real owner reports it: the
+// design row is gone (apidesign.Repo.ArtifactHead maps sql.ErrNoRows to
+// ErrNotFound). Since F94 (review 2026-10-06, c4375a5) any OTHER owner read
+// error is a storage fault the query must surface, so a bare errors.New here
+// would now pin the opposite of the business state this test is about.
 func (r noArtifactHead) ArtifactHead(context.Context, int64) (int64, error) {
-	return 0, errors.New("unavailable optional head")
+	return 0, fmt.Errorf("unavailable optional head: %w", apidesign.ErrNotFound)
 }
 
 func TestAPIArtifactQueryCursorOrphansAndOptionalHead(t *testing.T) {
