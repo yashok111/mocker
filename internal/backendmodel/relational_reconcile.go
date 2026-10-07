@@ -292,7 +292,7 @@ func resolveRelationalKeys(v jsontext.Value, typ, path string, resolve func(stri
 	if v[0] == '[' {
 		var keys []string
 		_ = json.Unmarshal(v, &keys)
-		ids := []string{}
+		ids := make([]string, 0, len(keys))
 		for i, key := range keys {
 			ids = append(ids, resolve(typ, key, fmt.Sprintf("%s/%d", path, i)))
 		}

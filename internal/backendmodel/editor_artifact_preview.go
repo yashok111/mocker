@@ -470,6 +470,18 @@ func (b *artifactPreviewBuilder) compareEditorBindings(ctx context.Context, grou
 	return nil
 }
 
+// selectArtifactSnapshotPin reads the pin a bind command selects. A target
+// that cannot be read is available=false, not an error: the preview records
+// it as a blocking diagnostic, and only what requiredArtifactError calls
+// fatal aborts the preview.
+func selectArtifactSnapshotPin(ctx context.Context, request *EditorArtifactRequest, key ArtifactKey, revisionID string) (ArtifactPin, bool, error) {
+	pin, err := request.SnapshotPin(key, revisionID)
+	if e := requiredArtifactError(ctx, err); e != nil {
+		return pin, false, e
+	}
+	return pin, err == nil, nil
+}
+
 // keepUnavailableGroup reports a pin whose target cannot be read and keeps
 // the group's old bindings, except a source another command of this request
 // rebinds: keeping both made the vector admission fail with 400 "Duplicate
@@ -515,11 +527,12 @@ func (b *artifactPreviewBuilder) applyCommand(ctx context.Context, c ArtifactPin
 		return nil
 	}
 	if !remove {
-		nextPin, err = request.SnapshotPin(key, c.RevisionID)
-		if e := requiredArtifactError(ctx, err); e != nil {
-			return e
-		}
+		var available bool
+		nextPin, available, err = selectArtifactSnapshotPin(ctx, request, key, c.RevisionID)
 		if err != nil {
+			return err
+		}
+		if !available {
 			b.keepUnavailableGroup(key, oldPin, hadOld, previousAPI, previousEditor)
 			return nil
 		}
