@@ -10,8 +10,12 @@ points to.
 All seven run on every push and pull request as `.github/workflows/ci.yml`
 (`A17`, "Architecture"): six jobs (lint and the race suite are two — the
 suite is the critical path), the non-docker ones inside a memory- and
-CPU-capped systemd scope through `scripts/ci-cap.sh` — pass `CAP=` to make
-there so the Makefile's own cap does not nest. A release of the plugin is a
+CPU-capped systemd scope through `scripts/ci-cap.sh` — pass `CAP=` (and
+`TEST_CAP=` for `make test`) to make there so the Makefile's own caps do not
+nest. `make test` has its own cap (`TEST_CAP_MEM`, 8G) since 2026-10-07: under
+-race internal/mcp alone peaks at 3.6 GB and internal/backendmodel at 2.5 GB,
+and the shared 3G cap OOM-killed the suite every run (the Makefile comment
+holds the numbers). A release of the plugin is a
 tag `plugin-v<version>` (`.github/workflows/release-plugin.yml`).
 
 **`make test` is CPU-bound under `-race`, and three things keep it at ~1
