@@ -87,8 +87,7 @@ func TestScenarioArchiveToolRejectsInvalidItemsBeforeRequest(t *testing.T) {
 
 func TestScenarioArchiveToolReadOnlyAnnotations(t *testing.T) {
 	t.Parallel()
-	handler := New(&recordingCaller{}, testKey, testConfig(), nil).Handler()
-	response := doMCP(t, handler, `{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}`, map[string]string{"Authorization": "Bearer " + testKey})
+	response := describedToolsList(t)
 	var body struct {
 		Result struct {
 			Tools []struct {

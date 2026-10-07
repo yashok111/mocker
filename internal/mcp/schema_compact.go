@@ -1,7 +1,6 @@
 package mcp
 
 import (
-	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
@@ -9,51 +8,9 @@ import (
 	"slices"
 	"strconv"
 	"strings"
-	"sync"
-
-	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/yashok111/mocker/internal/jsonx"
 )
-
-// compactToolsList shares repeated input-schema subtrees through $defs in
-// the tools/list answer only.
-//
-// Review 2026-10-06, F23: api.BackendSchema inlines every $ref of the
-// OpenAPI contract, and the backend tools published those expanded schemas
-// (start_backend_analysis alone about 905 KB), so one tools/list was about
-// 4.7 MB — more than a client that puts tool schemas in the model context
-// can hold. The expanded schema stays what each handler COMPILES and
-// validates against (one validation path, unchanged); only the published copy
-// is rewritten, once per registered tool, and the rewrite is lossless: a
-// subtree in a schema position that occurs twice or more is moved to
-// $defs/<digest> and replaced by a bare $ref, which JSON Schema 2020-12 (the
-// MCP default dialect) reads as the same constraint.
-func compactToolsList() sdk.Middleware {
-	var cache sync.Map // *sdk.Tool -> *sdk.Tool
-	return func(next sdk.MethodHandler) sdk.MethodHandler {
-		return func(ctx context.Context, method string, req sdk.Request) (sdk.Result, error) {
-			res, err := next(ctx, method, req)
-			list, ok := res.(*sdk.ListToolsResult)
-			if err != nil || method != "tools/list" || !ok {
-				return res, err
-			}
-			out := *list
-			out.Tools = make([]*sdk.Tool, len(list.Tools))
-			for i, tool := range list.Tools {
-				if published, ok := cache.Load(tool); ok {
-					out.Tools[i] = published.(*sdk.Tool)
-					continue
-				}
-				published := *tool
-				published.InputSchema = compactSchema(tool.InputSchema)
-				actual, _ := cache.LoadOrStore(tool, &published)
-				out.Tools[i] = actual.(*sdk.Tool)
-			}
-			return &out, nil
-		}
-	}
-}
 
 // compactMinBytes keeps small subtrees inline: a $ref to a one-line schema
 // would cost the reader more than it saves.
@@ -69,6 +26,20 @@ var (
 	schemaListKeywords = []string{"allOf", "anyOf", "oneOf", "prefixItems"}
 )
 
+// compactSchema shares repeated schema subtrees through $defs in the copy
+// describe_tool returns (tools_describe.go); tools/list itself publishes
+// only a one-level summary since the catalog split (tool_catalog.go).
+//
+// Review 2026-10-06, F23: api.BackendSchema inlines every $ref of the
+// OpenAPI contract, and the backend tools published those expanded schemas
+// (start_backend_analysis alone about 905 KB), so one tools/list was about
+// 4.7 MB — more than a client that puts tool schemas in the model context
+// can hold. The expanded schema stays what each handler COMPILES and
+// validates against (one validation path, unchanged); only the published copy
+// is rewritten, once per registered tool, and the rewrite is lossless: a
+// subtree in a schema position that occurs twice or more is moved to
+// $defs/<digest> and replaced by a bare $ref, which JSON Schema 2020-12 (the
+// MCP default dialect) reads as the same constraint.
 func compactSchema(schema any) any {
 	root, ok := schema.(map[string]any)
 	if !ok || root["$defs"] != nil {

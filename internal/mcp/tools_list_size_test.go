@@ -14,12 +14,13 @@ import (
 // maxToolsListBytes bounds the whole tools/list answer. Review 2026-10-06,
 // F23: api.BackendSchema inlines every $ref, and the backend tools published
 // those expanded schemas, so one tools/list measured 4,723,098 bytes (the
-// start_backend_analysis input schema alone 906,620). The published form
-// shares repeated subtrees through $defs (1,551,340 bytes on the day, the
-// largest schema 153,714); validation still compiles the expanded schema.
-// What remains is distinct per-tool content: MCP has no schema shared across
-// tools, so each tool carries the definitions it reaches.
-const maxToolsListBytes = 2 << 20
+// start_backend_analysis input schema alone 906,620). Sharing repeated
+// subtrees through $defs brought it to 1,551,340; the owner then split the
+// surface (tool_catalog.go): tools/list is a one-sentence summary with a
+// one-level argument schema per tool, 111,246 bytes for 263 tools on the
+// day, and describe_tool returns one tool's full form. Validation still
+// compiles the expanded registered schema.
+const maxToolsListBytes = 256 << 10
 
 func TestToolsListStaysBounded(t *testing.T) {
 	response := doMCP(t, newTestEndpoint(t).Handler(), `{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}`, map[string]string{"Authorization": "Bearer " + testKey})

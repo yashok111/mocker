@@ -101,7 +101,7 @@ func TestBackendAPIArtifactToolsStrictAdmissionAndRawCarrier(t *testing.T) {
 }
 
 func TestBackendAPIArtifactToolsPublishSchemasAndHints(t *testing.T) {
-	response := doMCP(t, newTestEndpoint(t).Handler(), `{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}`, map[string]string{"Authorization": "Bearer " + testKey})
+	response := describedToolsList(t)
 	var env struct {
 		Result struct {
 			Tools []struct {
@@ -118,7 +118,7 @@ func TestBackendAPIArtifactToolsPublishSchemasAndHints(t *testing.T) {
 		t.Fatal(err)
 	}
 	expected := map[string]bool{"query_backend_api_artifacts": true, "preview_backend_api_pins": true, "apply_backend_api_pins": false, "get_api_artifact_snapshot": true}
-	if len(env.Result.Tools) != 225 {
+	if len(env.Result.Tools) != toolCount {
 		t.Fatal("surface count", len(env.Result.Tools))
 	}
 	for _, tool := range env.Result.Tools {

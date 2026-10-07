@@ -149,9 +149,7 @@ var driftDescriptionVerbCosts = []struct {
 // not merely somewhere in the whole description.
 func TestGetWorkspaceDriftTool_descriptionNamesVerbsPairedWithCosts(t *testing.T) {
 	t.Parallel()
-	h := newTestEndpoint(t).Handler()
-	rec := doMCP(t, h, `{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}`,
-		map[string]string{"Authorization": "Bearer " + testKey})
+	rec := describedToolsList(t)
 	var env struct {
 		Result struct {
 			Tools []struct {

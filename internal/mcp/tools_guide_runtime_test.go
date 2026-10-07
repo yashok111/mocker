@@ -33,7 +33,7 @@ func TestRuntimeGuideSDKOwnersAndDiscovery(t *testing.T) {
 			t.Fatalf("SDK topic %s is missing or carries loader frontmatter", topic)
 		}
 	}
-	response := doMCP(t, newTestEndpoint(t).Handler(), `{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}`, map[string]string{"Authorization": "Bearer " + testKey})
+	response := describedToolsList(t)
 	for _, topic := range []string{"backend-inspect", "backend-flow-reference", "backend-analysis", "backend-editor-projections", "backend-events"} {
 		if !strings.Contains(response.Body.String(), topic) {
 			t.Fatalf("tool discovery cannot locate %s", topic)

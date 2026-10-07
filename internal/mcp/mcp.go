@@ -113,13 +113,19 @@ func New(calls Caller, key string, cfg *config.Config, log *slog.Logger) *Endpoi
 	// otherwise built to avoid is still reachable unless it is refused
 	// outright.
 	srv.AddReceivingMiddleware(refuseSubscriptionsListen)
-	// Publish backend input schemas with shared $defs (review 2026-10-06,
-	// F23); see compactToolsList.
-	srv.AddReceivingMiddleware(compactToolsList())
+	// tools/list publishes a light summary of every tool and describe_tool
+	// returns one tool whole (review 2026-10-06, F23); see toolCatalog.
+	// Installed before any tool is registered and before any request is
+	// served, so the method handler it captures is set once, up front.
+	catalog := &toolCatalog{}
+	srv.AddReceivingMiddleware(catalog.middleware)
 
 	registerTools(srv, newLoopback(calls))
 	// A9: the config tool reads cfg itself — no loopback, no route.
 	addConfigTools(srv, cfg)
+	// F23: describe_tool reads the registry through the catalog — no
+	// loopback, no route.
+	addDescribeTools(srv, catalog)
 
 	getServer := func(*http.Request) *sdk.Server { return srv }
 

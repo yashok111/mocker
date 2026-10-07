@@ -13,9 +13,7 @@ import (
 
 func TestRelationalGuideTopicDiscovery(t *testing.T) {
 	t.Parallel()
-	response := doMCP(t, newTestEndpoint(t).Handler(),
-		`{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}`,
-		map[string]string{"Authorization": "Bearer " + testKey})
+	response := describedToolsList(t)
 	var envelope struct {
 		Result struct {
 			Tools []struct {

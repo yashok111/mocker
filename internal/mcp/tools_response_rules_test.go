@@ -70,7 +70,7 @@ func TestResponseRuleToolsRejectMalformedInput(t *testing.T) {
 
 func TestResponseRuleToolsAdvertiseTypedSchemas(t *testing.T) {
 	t.Parallel()
-	rec := doMCP(t, newTestEndpoint(t).Handler(), `{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}`, map[string]string{"Authorization": "Bearer " + testKey})
+	rec := describedToolsList(t)
 	var env struct {
 		Result struct {
 			Tools []struct {
