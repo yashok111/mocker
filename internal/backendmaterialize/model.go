@@ -164,7 +164,12 @@ func equalJSON(a, b string) bool {
 	if json.Unmarshal([]byte(a), &x) != nil || json.Unmarshal([]byte(b), &y) != nil {
 		return false
 	}
-	if x.Canonicalize() != nil || y.Canonicalize() != nil {
+	// Member order and whitespace are not semantic; number lexemes are. RFC 8785
+	// number canonicalisation made 9007199254740993 equal 9007199254740992, so a
+	// scenario contract that disagreed with the planned API document passed and
+	// was overwritten at Apply (review 2026-10-06, F36).
+	exact := []jsontext.Options{jsontext.CanonicalizeRawInts(false), jsontext.CanonicalizeRawFloats(false)}
+	if x.Canonicalize(exact...) != nil || y.Canonicalize(exact...) != nil {
 		return false
 	}
 	return string(x) == string(y)
