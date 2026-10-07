@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json/v2"
 	"slices"
+	"strings"
 
 	"github.com/yashok111/mocker/internal/backendmodel"
 )
@@ -63,50 +64,11 @@ func EvaluateDiagnostics(ctx context.Context, g *backendmodel.EffectiveGraphSnap
 		d.out[e.From] = append(d.out[e.From], e)
 	}
 	for id := range d.out {
-		slices.SortFunc(d.out[id], func(a, b backendmodel.Edge) int {
-			if a.ID < b.ID {
-				return -1
-			}
-			if a.ID > b.ID {
-				return 1
-			}
-			return 0
-		})
+		slices.SortFunc(d.out[id], func(a, b backendmodel.Edge) int { return strings.Compare(a.ID, b.ID) })
 	}
-	scope := in.Scope
-	scope.Certainty = ""
-	identity := struct {
-		Scope     Scope
-		DiagramID string
-		Selectors []backendmodel.DiagramScopeSelector
-	}{Scope: scope}
-	if in.DiagramScope != nil {
-		identity.DiagramID = in.DiagramScope.Pin.ID
-		identity.Selectors = in.DiagramScope.Selectors
-		d.selected = map[ObjectAddress]bool{}
-		for _, ref := range in.DiagramScope.SourceRefs {
-			if ref.Kind == "record" {
-				d.selected[ObjectAddress{RecordType: ref.RecordType, ID: ref.ID}] = true
-			}
-		}
-		for _, gap := range in.DiagramScope.Gaps {
-			d.report.Gaps = append(d.report.Gaps, gap.Code)
-		}
-		if in.DiagramScope.Truncated {
-			d.report.Complete = false
-		}
-	}
-	d.scopeKey, _ = requestHash(identity)
+	d.scopeKey, _ = requestHash(d.scopeIdentity())
 	nodes := slices.Clone(g.State.Nodes)
-	slices.SortFunc(nodes, func(a, b backendmodel.Node) int {
-		if a.ID < b.ID {
-			return -1
-		}
-		if a.ID > b.ID {
-			return 1
-		}
-		return 0
-	})
+	slices.SortFunc(nodes, func(a, b backendmodel.Node) int { return strings.Compare(a.ID, b.ID) })
 	for _, n := range nodes {
 		if err := ctx.Err(); err != nil {
 			return nil, err
@@ -120,15 +82,7 @@ func EvaluateDiagnostics(ctx context.Context, g *backendmodel.EffectiveGraphSnap
 		d.nodeRules(n)
 	}
 	edges := slices.Clone(g.State.Edges)
-	slices.SortFunc(edges, func(a, b backendmodel.Edge) int {
-		if a.ID < b.ID {
-			return -1
-		}
-		if a.ID > b.ID {
-			return 1
-		}
-		return 0
-	})
+	slices.SortFunc(edges, func(a, b backendmodel.Edge) int { return strings.Compare(a.ID, b.ID) })
 	for _, edge := range edges {
 		// Scope first, as the node loop does: ticking an edge the rules then
 		// skip let out-of-scope edges exhaust the visit budget of a narrow
@@ -146,18 +100,43 @@ func EvaluateDiagnostics(ctx context.Context, g *backendmodel.EffectiveGraphSnap
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	slices.SortFunc(d.report.Findings, func(a, b backendmodel.Finding) int {
-		if a.Fingerprint < b.Fingerprint {
-			return -1
-		}
-		if a.Fingerprint > b.Fingerprint {
-			return 1
-		}
-		return 0
-	})
+	slices.SortFunc(d.report.Findings, func(a, b backendmodel.Finding) int { return strings.Compare(a.Fingerprint, b.Fingerprint) })
 	slices.Sort(d.report.Gaps)
 	d.report.Gaps = slices.Compact(d.report.Gaps)
 	return &d.report, nil
+}
+
+// scopeIdentity is what a finding's scope key hashes: the analysis scope
+// without its certainty, plus the diagram selection when there is one. With
+// a diagram scope it also records the selected source records and the
+// scope's own gaps and truncation on the evaluator.
+func (d *diagnosticEvaluator) scopeIdentity() any {
+	in := d.input
+	scope := in.Scope
+	scope.Certainty = ""
+	identity := struct {
+		Scope     Scope
+		DiagramID string
+		Selectors []backendmodel.DiagramScopeSelector
+	}{Scope: scope}
+	if in.DiagramScope == nil {
+		return identity
+	}
+	identity.DiagramID = in.DiagramScope.Pin.ID
+	identity.Selectors = in.DiagramScope.Selectors
+	d.selected = map[ObjectAddress]bool{}
+	for _, ref := range in.DiagramScope.SourceRefs {
+		if ref.Kind == "record" {
+			d.selected[ObjectAddress{RecordType: ref.RecordType, ID: ref.ID}] = true
+		}
+	}
+	for _, gap := range in.DiagramScope.Gaps {
+		d.report.Gaps = append(d.report.Gaps, gap.Code)
+	}
+	if in.DiagramScope.Truncated {
+		d.report.Complete = false
+	}
+	return identity
 }
 func (d *diagnosticEvaluator) includes(typ, id, kind string) bool {
 	a := ObjectAddress{RecordType: typ, ID: id}

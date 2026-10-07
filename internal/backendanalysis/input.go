@@ -134,11 +134,32 @@ func (in *StartInput) UnmarshalJSON(raw []byte) error {
 	if _, err := closed(raw, required, optional); err != nil {
 		return err
 	}
-	type plain StartInput
-	var next plain
+	var next startInputWire
 	if err := decode(raw, &next); err != nil {
 		return err
 	}
+	if err := next.checkKind(); err != nil {
+		return err
+	}
+	if err := next.normalizeObservation(); err != nil {
+		return err
+	}
+	if (next.Kind != "diagnostics" || next.FromRevisionID != "") && !backendmodel.ValidID(next.FromRevisionID) || !validKey(next.IdempotencyKey) {
+		return malformed("Invalid source revision or key")
+	}
+	if next.ObservationMode == "none" {
+		next.ObservationPins = []jsontext.Value{}
+	}
+	*in = StartInput(next)
+	return nil
+}
+
+// startInputWire is StartInput without its UnmarshalJSON.
+type startInputWire StartInput
+
+// checkKind admits the three analysis kinds; only diagnostics takes a
+// diagram scope, and it needs an exact source or full proposal target.
+func (next *startInputWire) checkKind() error {
 	if next.Kind != "diff" && next.Kind != "impact" && next.Kind != "diagnostics" {
 		return fault(422, "unsupported", "Unsupported analysis kind")
 	}
@@ -148,32 +169,33 @@ func (in *StartInput) UnmarshalJSON(raw []byte) error {
 	if next.Kind == "diagnostics" && (next.Target.Proposal != nil || next.Target.CommandPreview != nil) {
 		return fault(422, "unsupported", "Diagnostics requires an exact source or full proposal target")
 	}
+	return nil
+}
+
+// normalizeObservation defaults the mode to none and rewrites pinned impact
+// pins in canonical form; any other pins are refused.
+func (next *startInputWire) normalizeObservation() error {
 	if next.ObservationMode == "" {
 		next.ObservationMode = "none"
 	}
-	if next.ObservationMode == "pinned" && next.Kind == "impact" {
-		pins, err := impactPins(StartInput(next))
+	if next.ObservationMode != "pinned" || next.Kind != "impact" {
+		if next.ObservationMode != "none" || len(next.ObservationPins) > 0 {
+			return fault(422, "unsupported", "Select none without pins or pinned impact")
+		}
+		return nil
+	}
+	pins, err := impactPins(StartInput(*next))
+	if err != nil {
+		return err
+	}
+	next.ObservationPins = nil
+	for _, pin := range pins {
+		raw, err := canonical(pin)
 		if err != nil {
 			return err
 		}
-		next.ObservationPins = nil
-		for _, pin := range pins {
-			raw, err := canonical(pin)
-			if err != nil {
-				return err
-			}
-			next.ObservationPins = append(next.ObservationPins, raw)
-		}
-	} else if next.ObservationMode != "none" || len(next.ObservationPins) > 0 {
-		return fault(422, "unsupported", "Select none without pins or pinned impact")
+		next.ObservationPins = append(next.ObservationPins, raw)
 	}
-	if (next.Kind != "diagnostics" || next.FromRevisionID != "") && !backendmodel.ValidID(next.FromRevisionID) || !validKey(next.IdempotencyKey) {
-		return malformed("Invalid source revision or key")
-	}
-	if next.ObservationMode == "none" {
-		next.ObservationPins = []jsontext.Value{}
-	}
-	*in = StartInput(next)
 	return nil
 }
 func (t *AnalysisTarget) UnmarshalJSON(raw []byte) error {

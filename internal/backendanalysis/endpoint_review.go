@@ -162,43 +162,7 @@ func analyzeEndpointReview(ctx context.Context, in *ImmutableInput, p *EndpointR
 		if !r.trackChange(change.Object) {
 			continue
 		}
-		r.covered[change.Object] = true
-		r.add("changes", change.Object, change.Kind, "confirmed", 0, EndpointChangeDetail{b43ResultVersion, "endpoint_change", change})
-		// One rule per changed path, deduplicated by rule, exactly like
-		// diff/impact's addChangeRule: a single ruleFor over the joined paths
-		// took the first match, so a nativeType+nullable change hid the
-		// not-null data check (review 2026-10-06, F140).
-		paths := change.Paths
-		if len(paths) == 0 {
-			paths = []string{""}
-		}
-		seen := map[string]bool{}
-		for _, path := range paths {
-			part := change
-			part.Paths = []string{path}
-			check := ruleFor(part)
-			if seen[check.RuleID] {
-				continue
-			}
-			seen[check.RuleID] = true
-			for _, side := range []string{"before", "after"} {
-				g := before
-				if side == "after" {
-					g = after
-				}
-				if side == "before" && change.Operation == "added" || side == "after" && change.Operation == "removed" {
-					continue
-				}
-				check.Evidence = append(check.Evidence, proofReference(side, g, recordProof(g, change.Object)))
-			}
-			// An unknown rule (e.g. native-type-change) makes the verdict
-			// unknown, as recordRule does; it was left "potential"
-			// (review 2026-10-06, F146).
-			if check.Status == "unknown" {
-				r.unknown = true
-			}
-			r.add("checks", change.Object, change.Kind, check.Certainty, 0, EndpointCheckDetail{b43ResultVersion, "endpoint_check", check, false, "analysis_rule", nil})
-		}
+		r.addEndpointChange(change, before, after)
 	}
 	if intent != nil && intentBase != nil {
 		if err = r.addEndpointIntent(ctx, intentBase, intent, after); err != nil {
@@ -207,6 +171,48 @@ func analyzeEndpointReview(ctx context.Context, in *ImmutableInput, p *EndpointR
 	}
 	r.potential = true
 	return r.finish(before, after, nil)
+}
+
+// addEndpointChange records one structural change on the endpoint's objects
+// and the analysis rule each of its paths triggers.
+func (r *reportBuilder) addEndpointChange(change DiffChange, before, after *backendmodel.EffectiveGraphSnapshot) {
+	r.covered[change.Object] = true
+	r.add("changes", change.Object, change.Kind, "confirmed", 0, EndpointChangeDetail{b43ResultVersion, "endpoint_change", change})
+	// One rule per changed path, deduplicated by rule, exactly like
+	// diff/impact's addChangeRule: a single ruleFor over the joined paths
+	// took the first match, so a nativeType+nullable change hid the
+	// not-null data check (review 2026-10-06, F140).
+	paths := change.Paths
+	if len(paths) == 0 {
+		paths = []string{""}
+	}
+	seen := map[string]bool{}
+	for _, path := range paths {
+		part := change
+		part.Paths = []string{path}
+		check := ruleFor(part)
+		if seen[check.RuleID] {
+			continue
+		}
+		seen[check.RuleID] = true
+		for _, side := range []string{"before", "after"} {
+			g := before
+			if side == "after" {
+				g = after
+			}
+			if side == "before" && change.Operation == "added" || side == "after" && change.Operation == "removed" {
+				continue
+			}
+			check.Evidence = append(check.Evidence, proofReference(side, g, recordProof(g, change.Object)))
+		}
+		// An unknown rule (e.g. native-type-change) makes the verdict
+		// unknown, as recordRule does; it was left "potential"
+		// (review 2026-10-06, F146).
+		if check.Status == "unknown" {
+			r.unknown = true
+		}
+		r.add("checks", change.Object, change.Kind, check.Certainty, 0, EndpointCheckDetail{b43ResultVersion, "endpoint_check", check, false, "analysis_rule", nil})
+	}
 }
 
 func (r *reportBuilder) addEndpointIntent(ctx context.Context, intentBase, intent, after *backendmodel.EffectiveGraphSnapshot) error {
