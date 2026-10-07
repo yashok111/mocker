@@ -35,7 +35,7 @@ func (s *Service) Correlate(ctx context.Context, pid, sid string, in CorrelateIn
 	}
 	hash, _ := p.Hash(CorrelationPolicy+"/request", in)
 	cached := new(CorrelationSnapshot)
-	if ok, e := receipt(ctx, s.Repo.db.R, pid, "correlate/"+sid, in.IdempotencyKey, hash, cached); e != nil || ok {
+	if ok, e := readCorrelationReceipt(ctx, s.Repo.db.R, pid, sid, in.IdempotencyKey, hash, cached); e != nil || ok {
 		return cached, e
 	}
 	ver, e := s.Repo.Version(ctx, pid, sid, in.Observation.Version)

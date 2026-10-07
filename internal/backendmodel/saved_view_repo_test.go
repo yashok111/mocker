@@ -143,7 +143,10 @@ func TestSavedViewQuotaBoundariesReceiptFirstAndOverflow(t *testing.T) {
 				if err != nil || v1000.Version != 1000 {
 					t.Fatal("1000th version refused", err)
 				}
+				// A real change: an identical save answers v1000 without a new
+				// version since review 2026-10-06, F185.
 				save.ExpectedVersion = 1000
+				save.Name = "1001"
 				save.IdempotencyKey = "over-versions"
 				_, err = r.SaveSavedView(t.Context(), source.Project.ID, v.ID, save)
 				assertFault(t, err, "backend_saved_view_quota")

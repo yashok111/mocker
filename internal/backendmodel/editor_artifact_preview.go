@@ -483,6 +483,13 @@ func (b *artifactPreviewBuilder) applyCommand(ctx context.Context, c ArtifactPin
 	nextAPI := []APIArtifactBinding{}
 	nextEditor := []EditorBinding{}
 	remove := c.Type == "remove_artifact_pin"
+	// A removal of a group that has no pin changed nothing, yet previewed as
+	// applicable with an empty diff and Apply wrote a new revision (review
+	// 2026-10-06, F61).
+	if remove && !hadOld {
+		b.diagnostic("backend_artifact_pin_absent", key, nil, nil, "Artifact group is not pinned in this revision; nothing to remove", true)
+		return nil
+	}
 	if !remove {
 		nextPin, err = request.SnapshotPin(key, c.RevisionID)
 		if e := requiredArtifactError(ctx, err); e != nil {
