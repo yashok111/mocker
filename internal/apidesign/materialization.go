@@ -69,19 +69,3 @@ func (r *Repo) VerifiedRevisionTx(ctx context.Context, tx *sql.Tx, id, revisionI
 	}
 	return getRevision(ctx, tx, id, revisionID)
 }
-
-func (r *Repo) ArtifactSnapshotTx(ctx context.Context, tx *sql.Tx, id, revisionID int64) (*ArtifactSnapshot, error) {
-	v, err := r.VerifiedRevisionTx(ctx, tx, id, revisionID)
-	if err != nil {
-		return nil, err
-	}
-	var raw string
-	if err := tx.QueryRowContext(ctx, `SELECT document FROM api_design_revisions WHERE design_id=? AND id=?`, id, revisionID).Scan(&raw); err != nil {
-		return nil, notFound(err)
-	}
-	d, err := getDesign(ctx, tx, id)
-	if err != nil {
-		return nil, err
-	}
-	return &ArtifactSnapshot{DesignID: id, RevisionID: revisionID, Version: v.Version, DesignName: d.Name, ContentHash: v.Hash, Document: raw, IdentityDocument: v.Document}, nil
-}

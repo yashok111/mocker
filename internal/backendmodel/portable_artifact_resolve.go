@@ -10,28 +10,48 @@ import (
 	"github.com/yashok111/mocker/internal/designscenario"
 )
 
-type portableAPIReader struct {
+// txAPIReader and txScenarioReader read every owner snapshot the editor
+// request asks for on one caller-held transaction. A caller holding the
+// single writer (portable import) or a read snapshot (frozen preview replay)
+// that read owners through the reader pool instead took a second connection
+// per owner: pool-width callers each waited for one, and a writer holder
+// waited on readers whose holders waited for the writer (review 2026-10-06,
+// F3/F183).
+type txAPIReader struct {
 	*apidesign.Repo
 	tx *sql.Tx
 }
 
-func (r portableAPIReader) ArtifactSnapshot(ctx context.Context, id, revision int64) (*apidesign.ArtifactSnapshot, error) {
+func (r txAPIReader) ArtifactSnapshot(ctx context.Context, id, revision int64) (*apidesign.ArtifactSnapshot, error) {
 	return r.Repo.ArtifactSnapshotTx(ctx, r.tx, id, revision)
 }
 
-type portableScenarioReader struct {
+type txScenarioReader struct {
 	*designscenario.Repo
 	tx *sql.Tx
 }
 
-func (r portableScenarioReader) ArtifactInspectionSnapshot(ctx context.Context, id, revision int64) (*designscenario.ArtifactInspectionSnapshot, error) {
+func (r txScenarioReader) ArtifactSnapshot(ctx context.Context, id, revision int64) (*designscenario.ArtifactSnapshot, error) {
+	return r.ArtifactSnapshotTx(ctx, r.tx, id, revision)
+}
+func (r txScenarioReader) ArtifactInspectionSnapshot(ctx context.Context, id, revision int64) (*designscenario.ArtifactInspectionSnapshot, error) {
 	return r.Repo.ArtifactInspectionSnapshotTx(ctx, r.tx, id, revision)
 }
-func (r *Repo) portableArtifactRequest(ctx context.Context, tx *sql.Tx) *EditorArtifactRequest {
+
+// ownerReaders builds the owner adapters with the materialization input cap.
+// With a nil tx they read the pool; otherwise every snapshot reads tx.
+func (r *Repo) ownerReaders(tx *sql.Tx) (APIArtifactReader, ScenarioArtifactReader) {
 	cfg := &config.Config{MaxBody: MaxRevisionBytes}
 	api := apidesign.NewRepo(r.db, cfg)
 	scenario := designscenario.NewRepo(r.db, cfg, api)
-	return NewEditorArtifactRequest(ctx, portableAPIReader{api, tx}, portableScenarioReader{scenario, tx})
+	if tx == nil {
+		return api, scenario
+	}
+	return txAPIReader{api, tx}, txScenarioReader{scenario, tx}
+}
+func (r *Repo) portableArtifactRequest(ctx context.Context, tx *sql.Tx) *EditorArtifactRequest {
+	api, scenario := r.ownerReaders(tx)
+	return NewEditorArtifactRequest(ctx, api, scenario)
 }
 func (r *Repo) validatePortableMappingsTx(ctx context.Context, tx *sql.Tx, in PortableRemap) error {
 	request := r.portableArtifactRequest(ctx, tx)

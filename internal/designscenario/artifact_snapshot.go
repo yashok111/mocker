@@ -20,13 +20,10 @@ type ArtifactSnapshot struct {
 	Document                        Document
 }
 
-// readArtifactSnapshot reads one exact immutable revision. SQL measures both UTF-8
-// bodies as blobs and suppresses both before driver/Go allocation if their
+// readArtifactSnapshotFrom reads one exact immutable revision. SQL measures both
+// UTF-8 bodies as blobs and suppresses both before driver/Go allocation if their
 // aggregate exceeds the configured owner bound. All metadata, lengths and
 // guarded bodies come from the same row read, preventing a check/read race.
-func (r *Repo) readArtifactSnapshot(ctx context.Context, scenarioID, revisionID int64) (*ArtifactSnapshot, error) {
-	return r.readArtifactSnapshotFrom(ctx, r.db.R, scenarioID, revisionID)
-}
 func (r *Repo) readArtifactSnapshotFrom(ctx context.Context, q queryer, scenarioID, revisionID int64) (*ArtifactSnapshot, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
@@ -61,7 +58,19 @@ func (r *Repo) readArtifactSnapshotFrom(ctx context.Context, q queryer, scenario
 
 // ArtifactSnapshot keeps the strict typed decode and verified envelope contract.
 func (r *Repo) ArtifactSnapshot(ctx context.Context, scenarioID, revisionID int64) (*ArtifactSnapshot, error) {
-	out, err := r.readArtifactSnapshot(ctx, scenarioID, revisionID)
+	return r.artifactSnapshotFrom(ctx, r.db.R, scenarioID, revisionID)
+}
+
+// ArtifactSnapshotTx is ArtifactSnapshot on the caller's transaction. A
+// caller that already holds a reader or the single writer must use it (or
+// ArtifactInspectionSnapshotTx): the pool read takes a second connection, and
+// pool-width callers each waited for one (review 2026-10-06, F3/F183).
+func (r *Repo) ArtifactSnapshotTx(ctx context.Context, tx *sql.Tx, scenarioID, revisionID int64) (*ArtifactSnapshot, error) {
+	return r.artifactSnapshotFrom(ctx, tx, scenarioID, revisionID)
+}
+
+func (r *Repo) artifactSnapshotFrom(ctx context.Context, q queryer, scenarioID, revisionID int64) (*ArtifactSnapshot, error) {
+	out, err := r.readArtifactSnapshotFrom(ctx, q, scenarioID, revisionID)
 	if err != nil {
 		return nil, err
 	}

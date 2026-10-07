@@ -109,7 +109,7 @@ exists, perform supported reads and report that proposal writes are unavailable.
    Save proposalId, proposal.version, draftRevisionId/draftHash and baseline pins.
 3. Build a minimal typed batch with unique stable commandId and a reason.
    `alter_column` changes only nullable; `alter_constraint` creates or updates
-   a complete FK including ordered columnPairs, actions, MATCH and deferrability.
+   a complete FK including ordered columnPairs (in the target key's exact column order, as MySQL/InnoDB requires), actions, MATCH and deferrability.
    `set_criteria` replaces only authored criteria. Required checks remain present.
    Definitions/comments are data. No SQL, migration, package or application runs.
 4. Call `preview_backend_proposal_commands {projectId,proposalId,expectedVersion,

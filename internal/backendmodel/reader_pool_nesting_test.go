@@ -49,6 +49,38 @@ func TestChangePreviewArtifactPinNeedsOneReader(t *testing.T) {
 	}
 }
 
+// Review 2026-10-06, F3 (the analysis half): ResolveFrozenChangePreview
+// replays the frozen evaluation on one read transaction, and set_artifact_pin
+// read the owner snapshot and its budget size through fresh reader-pool
+// connections while that transaction stayed open. Pool-width concurrent
+// analysis jobs each held one reader and waited for a second.
+func TestFrozenPreviewArtifactPinNeedsOneReader(t *testing.T) {
+	service, old, ids, scenario := artifactServiceFixture(t)
+	base, _ := upgradeEventsArtifactFixture(t, service, old)
+	r := service.repo
+	d, err := r.CreateChangeProposal(t.Context(), base.Project.ID, CreateChangeProposalInput{Name: "Frozen pool", BaseRevisionID: base.Revision.ID, IdempotencyKey: "frozen-pool"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	command := scenarioSet(base, ids, scenario).Commands[0]
+	set := changeMapCommand(t, "set_artifact_pin", map[string]any{"artifact": command.Artifact, "revisionId": command.RevisionID, "editorBindings": command.EditorBindings})
+	in := PreviewChangeProposalInput{ExpectedVersion: d.Proposal.Version, ProposalRevisionID: d.Revision.ID, Commands: []ChangeProposalCommand{set}}
+	preview, err := r.PreviewChangeProposal(t.Context(), base.Project.ID, d.Proposal.ID, in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	frozen, err := r.FreezeChangePreview(t.Context(), base.Project.ID, d.Proposal.ID, in, *preview.CandidateHash)
+	if err != nil {
+		t.Fatal(err)
+	}
+	holdReaders(t, r.db, 1)
+	ctx, cancel := context.WithTimeout(t.Context(), time.Second)
+	defer cancel()
+	if _, err = r.ResolveFrozenChangePreview(ctx, base.Project.ID, frozen); err != nil {
+		t.Fatalf("frozen replay needed a second reader: %v", err)
+	}
+}
+
 // The other half of the cycle: a reader held while waiting for the single
 // writer. A writer holder that needs a reader (a diagram save resolving owner
 // artifacts) then waits on a pool full of such readers.

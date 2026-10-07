@@ -219,21 +219,41 @@ func changeCheckDiagnostic(diagnostics []ImportDiagnostic, path string, err erro
 	return append(diagnostics, ImportDiagnostic{Code: "backend_change_invalid", Path: path, Message: err.Error()}), nil
 }
 
-// validateChangeArtifactBindingSources requires every legacy API and editor
-// binding of the final draft to name a live node. Only a batch carrying an
+// validateChangeArtifactBindingSources requires every API and editor binding
+// of the final draft to name a live node. Only a batch carrying an
 // artifact command re-resolved bindings, so remove_node alone left a binding
 // on a missing node that Apply accepted and the next Rebase refused (review
 // 2026-10-06, F44). Owner resolution stays where it was (artifact commands
 // and Rebase); this is the record-liveness half of
 // validateChangeRebaseArtifacts, which now calls it too.
+//
+// A namespaced (v3) draft keeps its bindings per group in ArtifactContextV3,
+// and the legacy context is empty there, so the groups are walked too: the
+// first version of this check read the legacy context only and admitted
+// remove_node of a node a v3 binding names (review 2026-10-06, F44, the v3
+// half). Bindings of a foreign group name local graph nodes as well.
 func validateChangeArtifactBindingSources(e *changeEvaluation) error {
-	for _, binding := range e.revision.ArtifactContext.APIBindings {
+	if err := changeBindingSourcesLive(e, e.revision.ArtifactContext.APIBindings, e.revision.ArtifactContext.EditorBindings); err != nil {
+		return err
+	}
+	if c := e.revision.ArtifactContextV3; c != nil {
+		for _, group := range c.Groups {
+			if err := changeBindingSourcesLive(e, group.APIBindings, group.EditorBindings); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func changeBindingSourcesLive(e *changeEvaluation, api []APIArtifactBinding, editor []EditorBinding) error {
+	for _, binding := range api {
 		record, ok := e.records[binding.SourceNodeID]
 		if !ok || record.RecordType != "node" || record.Payload.Kind != binding.SourceKind {
 			return invalid("artifacts", "Final API binding source is missing or changed kind")
 		}
 	}
-	for _, binding := range e.revision.ArtifactContext.EditorBindings {
+	for _, binding := range editor {
 		for _, id := range binding.SourceNodeIDs {
 			if record, ok := e.records[id]; !ok || record.RecordType != "node" {
 				return invalid("artifacts", "Final editor binding source is missing")

@@ -239,7 +239,10 @@ func (r *Repo) ResolveFrozenChangePreview(ctx context.Context, pid string, f *Fr
 		return nil, err
 	}
 	lease := analysisLease(ctx)
-	evaluation.readBudget = &changeReadBudget{repo: r, pid: pid, reservation: lease.reservation, lease: lease, seen: map[string]bool{}, bytes: 0}
+	// The replay keeps tx open across evaluation, so owner reads go through it
+	// (review 2026-10-06, F3): a fresh reader per owner made pool-width
+	// concurrent analysis jobs each wait for a second connection.
+	evaluation.readBudget = &changeReadBudget{repo: r, pid: pid, reservation: lease.reservation, lease: lease, seen: map[string]bool{}, bytes: 0, tx: tx}
 	prepared := &preparedChangeProposal{input: in, proposal: ChangeProposal{ID: f.ChangeProposal.ProposalID, Version: f.ExpectedVersion}, draft: *draft, evaluation: evaluation, reservation: lease.reservation}
 	if err = r.evaluateChangeDraft(ctx, tx, pid, prepared); err != nil {
 		return nil, err

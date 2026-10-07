@@ -10,6 +10,72 @@ approach that was tried and reverted, with the measurement.
 
 Not "forgotten" but deferred — so that a hole does not read as an oversight:
 
+## Backend Workbench review (2026-10-06)
+
+The review of 2026-10-06 (`docs/backend-workbench-review-2026-10-06.*`, kept
+out of git) was fixed cluster by cluster. What follows was left as it is on
+purpose. The open questions were decided by the owner in his own words
+(«открытые вопросы делай по своей рекомендации», a Russian string quoted as
+data: do them as recommended); each decision that keeps behaviour is
+documented in the canonical skill text named below.
+
+Deferred, with the cost that kept them out:
+
+- **F33: portable Preview and Commit hold the whole decoded bundle.** The
+  quadratic half (each Put re-decoding every earlier chunk under the writer,
+  ~32 GiB of JSON for a 256 MiB bundle) is gone (a7c91ce). Preview and Commit
+  still append every record of the bundle into one slice and decode the model
+  and its remap copies inside the write transaction: a peak of several times
+  the bundle on a 7.8 GB box. The bound is the 256 MiB bundle and the
+  five-session / 512 MiB staging quota. Streaming needs a record-at-a-time
+  remap, and closure validation checks references across the whole bundle,
+  so it is a redesign of the import, not a patch.
+- **F194: the composed base is loaded once per put batch.** Per-command work
+  (the selected partition, the base pin index) is built once per batch now
+  (9ce5c69), but `loadComposedBase` still decodes the full base revision under
+  the writer on every `put_backend_import_batch` (source6 caps: 50k nodes,
+  200k edges, 250k evidence). Keyed SQL lookups would replace it for source6
+  bases, but a source5 bootstrap base has no claim rows to key into and needs
+  a separate path; a per-session cache would have to be invalidated by every
+  writer. Deferred until a measured import shows it.
+- **F57: composed preview leaves `staleCounts` and `comparisonSummary` empty.**
+  Changed files and staged `map_identity` decisions are listed (a86a49a).
+  `staleCounts` is stored in the revision's coverage, so filling it changes
+  the bytes and hashes of every committed composed revision from then on; it
+  needs a coverage version, not a preview change.
+- **F91: `list_backend_imports` returns whole session documents.** Each item
+  embeds the manifest (up to 100,000 files, ~20 MB at the limit) and the
+  inventory, up to 100 per page. A summary projection (id, state, version,
+  base, profile, repositoryId) changes the response shape of the route, its
+  contract, the MCP tool and every caller.
+
+Decided, behaviour kept (one line each):
+
+- **F35:** no route lists or reads portable sessions; Begin is idempotent by
+  idempotencyKey (a replay recovers a lost session id), and a staging/ready
+  session idle 24 h is aborted by the next begin or export (`portable.md`).
+- **F36:** `canonicalAPIJSON` keeps RFC 8785 number canonicalisation as the
+  hash input of the API-artifact domain; every stored context and portable
+  export depends on it, and stored bytes keep exact number lexemes since F125
+  (`flow.md`).
+- **F46:** `alter_constraint`/`alter_index` update writes the definition under
+  `facetKey` and adds that facet when absent;
+  `TestChangeProposalForeignKeyExplicitIdentityAndFacetRemoval` relies on it
+  (`change-proposals.md`, `mocker-backend-change`).
+- **F73:** hashes claimed by schema 1-5 sources and by proposals are recomputed
+  on import, not verified (older exports used older algorithms); source6 and
+  the manifest/chunk/record hashes are verified strictly (`portable.md`).
+- **F78:** the designer's FK admission requires the target columns in the
+  target key's exact order (MySQL/InnoDB; `TestProposalFKOrderedPairs`), while
+  cardinality inference accepts a covering key in any order (`database.md`).
+- **F99:** on source5 and composed revisions lineage stops indexing at 5,000
+  mappings / 20,000 incidences before traversal
+  (`TestEventsLineageIndexBudgetBeforeTraversal`) and answers `truncated` with
+  `mapping_limit`/`reference_limit` (`flow.md`, `events.md`).
+- **F157:** `inferFingerprint` stays accepted for backward compatibility and is
+  marked deprecated; no node carries a query fingerprint, so it never matches
+  (`api/openapi.json`, `correlation.md`).
+
 ## HTTP record proxy (2026-10-02)
 
 The owner resumed proxy work with “делай все”. The old v1 proxy exclusion in

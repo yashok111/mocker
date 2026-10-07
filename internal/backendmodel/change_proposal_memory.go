@@ -22,6 +22,10 @@ type changeReadBudget struct {
 	bytes       int64
 	seen        map[string]bool
 	lease       *AnalysisInputReservation
+	// tx, when set, is the read snapshot the caller holds across evaluation:
+	// owner sizes and snapshots are read on it, never on a second reader-pool
+	// connection (review 2026-10-06, F3, the frozen-preview replay).
+	tx *sql.Tx
 }
 
 func (b *changeReadBudget) admit(ctx context.Context, key string, size int64) error {
@@ -64,11 +68,15 @@ func (b *changeReadBudget) artifact(ctx context.Context, kind string, id, rid in
 	key := kind + ":" + strconv.FormatInt(id, 10) + ":" + strconv.FormatInt(rid, 10)
 	var size int64
 	var err error
+	var q importReader = b.repo.db.R
+	if b.tx != nil {
+		q = b.tx
+	}
 	switch kind {
 	case "api_design":
-		err = b.repo.db.R.QueryRowContext(ctx, `SELECT length(CAST(document AS BLOB)) FROM api_design_revisions WHERE design_id=? AND id=?`, id, rid).Scan(&size)
+		err = q.QueryRowContext(ctx, `SELECT length(CAST(document AS BLOB)) FROM api_design_revisions WHERE design_id=? AND id=?`, id, rid).Scan(&size)
 	case "design_scenario":
-		err = b.repo.db.R.QueryRowContext(ctx, `SELECT length(CAST(document AS BLOB))+length(CAST(form_drafts AS BLOB)) FROM design_scenario_revisions WHERE scenario_id=? AND id=?`, id, rid).Scan(&size)
+		err = q.QueryRowContext(ctx, `SELECT length(CAST(document AS BLOB))+length(CAST(form_drafts AS BLOB)) FROM design_scenario_revisions WHERE scenario_id=? AND id=?`, id, rid).Scan(&size)
 	}
 	if err != nil {
 		return err

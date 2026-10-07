@@ -86717,6 +86717,7 @@
         "additionalProperties": false,
         "properties": {
           "inferFingerprint": {
+            "description": "Deprecated; accepted for backward compatibility and never matches. No source node carries a query fingerprint, so a row it would decide stays unresolved with reason query_fingerprint_unsupported. Send false.",
             "type": "boolean"
           },
           "inferSourceLocator": {

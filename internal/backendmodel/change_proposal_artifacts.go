@@ -5,18 +5,17 @@ import (
 	"database/sql"
 	"encoding/json/v2"
 	"slices"
-
-	"github.com/yashok111/mocker/internal/apidesign"
-	"github.com/yashok111/mocker/internal/config"
-	"github.com/yashok111/mocker/internal/designscenario"
 )
 
 func (r *Repo) changeArtifactRequest(ctx context.Context, readBudget *changeReadBudget) *EditorArtifactRequest {
 	// Owner snapshot adapters require a read budget. The same immutable input
 	// cap applies to all proposal materialization; this opens no new connection.
-	budget := &config.Config{MaxBody: MaxRevisionBytes}
-	api := apidesign.NewRepo(r.db, budget)
-	scenarios := designscenario.NewRepo(r.db, budget, api)
+	// A budget bound to the caller's transaction reads owners on it as well.
+	var tx *sql.Tx
+	if readBudget != nil {
+		tx = readBudget.tx
+	}
+	api, scenarios := r.ownerReaders(tx)
 	return NewEditorArtifactRequest(ctx, changeAPIArtifactReader{APIArtifactReader: api, budget: readBudget}, changeScenarioArtifactReader{ScenarioArtifactReader: scenarios, budget: readBudget})
 }
 func (r *Repo) prepareChangeArtifacts(ctx context.Context, e *changeEvaluation, commands []ChangeProposalCommand) error {
