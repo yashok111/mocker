@@ -92,6 +92,12 @@ export function BackendProjectPage(props: ProjectPageProps) {
   const [diagramDirty, setDiagramDirty] = useState(false);
   const [materializationDirty, setMaterializationDirty] = useState(false);
   const [portableDirty, setPortableDirty] = useState(false);
+  // Whether the replay <details> is open: BackendReplay polls its runs list
+  // only then. Controlled, so a project switch (the providers below are
+  // keyed by projectId and remount the <details>) cannot leave this state
+  // saying "open" over a freshly closed element. focusWorkspaceRegion opens
+  // it by setting `.open`, which fires the same toggle event.
+  const [replayOpen, setReplayOpen] = useState(false);
   const [backPins, setBackPins] = useState<BackendWorkspaceSearch[]>([]);
   const navigateDiagram = (pin: BackendWorkspaceSearch, replace = false) => {
     if (!replace && props.sourcePin && JSON.stringify(props.sourcePin) !== JSON.stringify(pin))
@@ -160,9 +166,16 @@ export function BackendProjectPage(props: ProjectPageProps) {
                 projectId={props.projectId}
               />
             </details>
-            <details>
+            <details
+              open={replayOpen}
+              onToggle={(event) => setReplayOpen(event.currentTarget.open)}
+            >
               <summary>Orders replay и тестовые профили</summary>
-              <BackendReplay key={props.projectId + "replay"} projectId={props.projectId} />
+              <BackendReplay
+                key={props.projectId + "replay"}
+                projectId={props.projectId}
+                open={replayOpen}
+              />
             </details>
             <details>
               <summary>Portable: экспорт и импорт проекта</summary>

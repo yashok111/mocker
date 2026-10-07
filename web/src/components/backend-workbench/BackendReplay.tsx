@@ -53,7 +53,12 @@ function result(response: { status: number; data: unknown }): unknown {
   if (response.status >= 300) throw new Error(JSON.stringify(response.data));
   return response.data;
 }
-export function BackendReplay({ projectId }: { projectId: string }) {
+// `open` says whether the operator can see the panel. BackendProjectPage
+// mounts it inside a closed <details> on EVERY project page, eagerly on
+// purpose: the mount restores a pending attempt from localStorage and the
+// diagram's prepare button moves focus into the panel. Only the runs list's
+// 2 s poll waits on `open`; a standalone mount is visible, hence the default.
+export function BackendReplay({ projectId, open = true }: { projectId: string; open?: boolean }) {
   const diagramReplay = useDiagramReplayPreparation();
   const [refused, setRefused] = useState(false);
   const [error, setError] = useState("");
@@ -120,16 +125,6 @@ export function BackendReplay({ projectId }: { projectId: string }) {
     },
     retry: false,
   });
-  const runs = useQuery({
-    queryKey: ["replay-runs", projectId],
-    queryFn: async () => {
-      const r = await listBackendReplayRuns(projectId);
-      if (r.status !== 200) throw new Error(JSON.stringify(r.data));
-      return r.data;
-    },
-    retry: false,
-    refetchInterval: 2000,
-  });
   const run = useQuery({
     queryKey: ["replay-run", projectId, runID],
     enabled: !!runID,
@@ -141,6 +136,23 @@ export function BackendReplay({ projectId }: { projectId: string }) {
     retry: false,
     refetchInterval: (q) =>
       q.state.data && ["queued", "running"].includes(q.state.data.status) ? 2000 : false,
+  });
+  const runActive = !!run.data && ["queued", "running"].includes(run.data.status);
+  const runs = useQuery({
+    queryKey: ["replay-runs", projectId],
+    queryFn: async () => {
+      const r = await listBackendReplayRuns(projectId);
+      if (r.status !== 200) throw new Error(JSON.stringify(r.data));
+      return r.data;
+    },
+    retry: false,
+    // The list re-read every 2 s on every project page, the panel closed or
+    // not. It polls while the panel is open, or while the run selected here
+    // (Start selects the run it created) is still queued or running, so the
+    // run picker's status labels follow a run the operator awaits. The
+    // verdict itself never depended on this list: `run` above polls the
+    // selected run on its own until it leaves queued/running.
+    refetchInterval: open || runActive ? 2000 : false,
   });
   const selectedProfile = profiles.data?.find((x) => exactKey(x.pin) === profileID)?.pin;
   const selectedPackage = packages.data?.find((x) => exactKey(x.pin) === packageID)?.pin;
