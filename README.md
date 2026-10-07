@@ -615,7 +615,14 @@ returned without following them, and forwarding headers are stripped.
 
 Recordings contain status, redacted JSON body and Content-Type. The live client
 receives the original upstream body. Authentication paths and non-JSON or
-compressed responses are not recorded. Empty responses can be recorded.
+compressed responses are not recorded; a body is JSON when the parsed media
+type's subtype names JSON (`text/plain; x=json` is not). Empty responses can be
+recorded. Passthrough, record and replay never serve a type the browser
+executes (HTML, SVG, XML, an unparseable Content-Type, or an untyped body that
+sniffs as HTML): such a response is refused with `502 proxy_upstream_unsafe_type`
+and not recorded. Every proxied response carries `X-Content-Type-Options:
+nosniff`. A request path with a `.` or `..` segment (also percent-encoded) is
+refused with `400 proxy_path_invalid` before anything is sent upstream.
 The panel displays exact JSON text (including large numeric IDs), lets you
 inspect/delete responses and clear the collection; choose
 whether repeated requests keep their first response or replace it. The limits
@@ -627,10 +634,13 @@ already confirmed resource families, using their wrapper, ID and base/nested
 scope rules. A collection does not delete rows absent from the response.
 Existing entity limits still apply; a batch can stop after some successful
 upserts. `X-Mocker-Entities-Imported` reports the count, and
-`X-Mocker-Entities-Result` reports `saved` or `partial-or-refused`. These headers
+`X-Mocker-Entities-Result` reports `saved`, `partial-or-refused`, or
+`skipped-redacted` (the recorded body had secret-named fields redacted, and
+redacted values are never turned into entity rows). These headers
 are visible in the traffic detail. Clearing recordings does not delete entities.
 `X-Mocker-Recording` distinguishes saved/redacted responses, replay, a kept first
-response, and recording skipped for auth, format, quota or concurrent edits.
+response, and recording skipped for auth, format, an executable type
+(`skipped-unsafe-type`), quota or concurrent edits.
 
 Proxy configuration and recordings are installation-local live controls. They
 are excluded from workspace export/fork, scenario checkpoints and immutable
