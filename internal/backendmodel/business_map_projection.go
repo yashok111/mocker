@@ -81,7 +81,11 @@ func businessMapImplementationGaps(g *EffectiveGraphSnapshot, p *BusinessMapPayl
 		}
 		mapped := false
 		for _, ref := range e.Refs {
-			message := ref.Kind == "record" && ref.RecordType == "node" && messages[ref.ID] || ref.Kind == "artifact" && ref.Locator != nil && ref.Locator.View == "event_model" && ref.Locator.Owner.MessageID != ""
+			// On a v3 target a plain artifact ref cannot resolve, so the
+			// namespaced locator is the only exact message mapping there; leaving
+			// it out reported every such event as unmapped (review 2026-10-06, F103).
+			namespaced := ref.Kind == "namespaced_artifact" && ref.NamespacedLocator != nil && ref.NamespacedLocator.Locator.View == "event_model" && ref.NamespacedLocator.Locator.Owner.MessageID != ""
+			message := ref.Kind == "record" && ref.RecordType == "node" && messages[ref.ID] || ref.Kind == "artifact" && ref.Locator != nil && ref.Locator.View == "event_model" && ref.Locator.Owner.MessageID != "" || namespaced
 			if message {
 				mapped = true
 				key, _ := requestDigest(ref)

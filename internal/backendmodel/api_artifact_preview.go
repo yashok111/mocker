@@ -80,6 +80,9 @@ func (s *APIArtifactService) prepare(ctx context.Context, pid string, in Preview
 	if !isArtifactSourceSchema(state.Revision.SchemaVersion) || len(state.Sources) == 0 || len(state.Revision.SourceSnapshotIDs) == 0 || len(p.Repositories) == 0 {
 		return nil, &FaultError{Status: 422, Code: "backend_api_pins_unsupported", Message: "API pins require an imported source4, source5 or source6 baseline"}
 	}
+	if state.ArtifactContextV3 != nil {
+		return nil, legacyPinsOnV3("backend_api_pins_unsupported")
+	}
 	frozen := state.APIArtifactContext
 	if state.ArtifactContext != nil && state.ArtifactContext.DocumentVersion == EditorArtifactDocumentVersion {
 		if err := tx.Rollback(); err != nil {

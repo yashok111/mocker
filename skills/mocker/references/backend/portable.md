@@ -88,6 +88,9 @@ snapshot; diagrams resolve row compatibility against the destination snapshot.
 Namespaced reads use `query_backend_namespaced_artifact` with projectId, exact
 target/targetHash, namespace, artifact `{kind,id}`, view and limit. Foreign reads
 return frozen bindings without consulting a local owner by numeric ID.
+The legacy pin mutations (`preview_backend_api_pins`, `preview_backend_artifact_pins`
+and their applies) refuse a v3 baseline with 422 `backend_api_pins_unsupported` /
+`backend_artifact_pins_unsupported`; they cannot carry namespaced groups.
 
 ## Bounds, UI and cleanup
 

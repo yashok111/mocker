@@ -62,6 +62,11 @@ func (s *ArtifactService) Query(ctx context.Context, pid string, in ArtifactQuer
 	if err != nil {
 		return nil, err
 	}
+	// The same refusal the composed path gives: a v3 head is not "no pins"
+	// (review 2026-10-06, F60).
+	if state.ArtifactContextV3 != nil {
+		return nil, invalid("context", "Use an explicit namespaced artifact resolver for v3")
+	}
 	if state.ArtifactContext == nil {
 		return nil, notFound()
 	}

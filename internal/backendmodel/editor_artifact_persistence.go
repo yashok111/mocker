@@ -117,6 +117,17 @@ func loadLegacyArtifactContext(ctx context.Context, q importReader, rid string) 
 	return legacyArtifactContext(c), err
 }
 
+// legacyPinsOnV3 is the up-front refusal of a V1/V2 pin preview or apply on a
+// baseline that froze an artifact-context-v3 (every portable import does). The
+// legacy builders read ArtifactContext/APIArtifactContext only, both nil for
+// v3, so they used to preview an empty context with canApply:true and drop the
+// namespaced groups, while Apply then always failed in loadArtifactContext
+// (review 2026-10-06, F60, F92). 422 and the mode's "unsupported" code: the
+// request is well formed, this mutation path cannot carry the baseline.
+func legacyPinsOnV3(code string) error {
+	return &FaultError{Status: 422, Code: code, Message: "Baseline carries namespaced artifact-context-v3 pins; this operation requires explicit namespaced artifact handling"}
+}
+
 // Legacy mutation paths fail closed instead of dropping a v3 namespace.
 func loadArtifactContext(ctx context.Context, q importReader, rid string, pins []ArtifactPin) (*ArtifactContext, error) {
 	c, err := loadVersionedArtifactContext(ctx, q, rid, pins)

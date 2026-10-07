@@ -380,7 +380,7 @@ vector limits. Narrow the request on 413.
 |---|---|
 |400 backend_invalid | Fix strict input, IDs, selector variant or source kind; no write. |
 |404 backend_not_found | Missing/foreign backend baseline; retain historical intent. Snapshot uses404 not_found for missing/foreign owner revision; its owner validation is400 design_invalid. |
-|422 backend_api_pins_unsupported | Mutations require imported source4/5; supported historical reads remain available. |
+|422 backend_api_pins_unsupported | Mutations require imported source4/5, and refuse a baseline carrying artifact-context-v3 (portable import); supported historical reads remain available. |
 |422 backend_api_pins_blocked | Read diagnostics; explicit repair/removal, then new preview. Truncation diagnostic is backend_api_diff_truncated. |
 |409 backend_version_conflict / backend_api_pins_base_conflict | Preserve intent; explicitly reread project/base and repreview before a new attempt. |
 |409 backend_api_pins_hash_conflict | Candidate/raw artifact changed; explicitly repreview. |

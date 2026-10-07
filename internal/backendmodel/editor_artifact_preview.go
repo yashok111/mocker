@@ -134,6 +134,9 @@ func (s *ArtifactService) loadArtifactPinsBaseline(ctx context.Context, pid stri
 	if !isArtifactSourceSchema(state.Revision.SchemaVersion) || len(state.Sources) == 0 || len(state.Revision.SourceSnapshotIDs) == 0 || len(p.Repositories) == 0 {
 		return nil, nil, "", &FaultError{Status: 422, Code: "backend_artifact_pins_unsupported", Message: "Artifact pins require an imported source4, source5 or source6 baseline"}
 	}
+	if state.ArtifactContextV3 != nil {
+		return nil, nil, "", legacyPinsOnV3("backend_artifact_pins_unsupported")
+	}
 	baselineHash, err := artifactBaselineDigest(ctx, tx, pid, in.BaseRevisionID)
 	if err != nil {
 		return nil, nil, "", err

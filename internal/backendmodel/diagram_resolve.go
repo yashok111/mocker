@@ -201,10 +201,22 @@ func diagramReferenceGaps(resolver *diagramArtifactResolver, id string, refs, ol
 	gaps := []DiagramGap{}
 	for _, ref := range refs {
 		exists := false
+		// A namespaced ref whose namespace/pin is not in this target is, like a
+		// plain artifact ref whose pin left it, "not here": the inherited rule
+		// below decides between a historical gap and a refusal. Raising the
+		// outside-target error first made a fork or save that retains such a
+		// ref fail instead of keeping it as history (review 2026-10-06, F108).
+		var outside error
+		if ref.NamespacedLocator != nil {
+			_, outside = namespacedDiagramGroup(resolver.graph, ref)
+		}
 		switch ref.Kind {
 		case "record":
 			exists = ref.RecordType == "node" && nodes[ref.ID] || ref.RecordType == "edge" && edges[ref.ID]
 		case "artifact", "namespaced_artifact":
+			if outside != nil {
+				break
+			}
 			var err error
 			exists, err = resolver.resolve(ref)
 			if err != nil {
@@ -214,10 +226,7 @@ func diagramReferenceGaps(resolver *diagramArtifactResolver, id string, refs, ol
 		if exists {
 			continue
 		}
-		if ref.NamespacedLocator != nil && ref.NamespacedLocator.Namespace.Scope == "foreign" {
-			if _, err := namespacedDiagramGroup(resolver.graph, ref); err != nil {
-				return nil, err
-			}
+		if outside == nil && ref.NamespacedLocator != nil && ref.NamespacedLocator.Namespace.Scope == "foreign" {
 			gaps = append(gaps, diagramGap(id, "foreign_artifact_unresolved", "Foreign artifact remains unresolved; explicit exact local mapping is required"))
 			continue
 		}
@@ -228,6 +237,9 @@ func diagramReferenceGaps(resolver *diagramArtifactResolver, id string, refs, ol
 			if hash == digest {
 				inherited = true
 			}
+		}
+		if !inherited && outside != nil {
+			return nil, outside
 		}
 		if !inherited {
 			return nil, invalid("refs", "Reference is not owned by the exact target")

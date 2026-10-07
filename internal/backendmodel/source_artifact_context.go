@@ -32,6 +32,12 @@ func artifactSourceAnchors(ctx context.Context, q importReader, state *RevisionS
 		if frozen := revisionArtifactContext(state); frozen != nil {
 			return frozen.SourceContentHash, frozen.SourceSemanticHash, nil
 		}
+		// A portable import freezes a v3 context on source4/5 revisions too, and
+		// their Revision.SemanticHash is then the v3 artifact-bound hash, not the
+		// source anchor (review 2026-10-06, F55).
+		if c := state.ArtifactContextV3; c != nil {
+			return c.SourceContentHash, c.SourceSemanticHash, nil
+		}
 		coverage, err := loadAPIArtifactCoverage(ctx, q, state)
 		if err != nil {
 			return "", "", err
@@ -58,8 +64,13 @@ func artifactSourceAnchors(ctx context.Context, q importReader, state *RevisionS
 	if semanticHash != state.Revision.SemanticHash {
 		return "", "", semantic("semanticHash", "Stored source6 revision differs from its source and artifact context")
 	}
+	// Every artifact context is cleared, v3 included: source6SemanticHash checks
+	// the v3 branch first, so a surviving v3 context made the "anchor" the full
+	// artifact-bound hash and skipped the frozen-anchor check below, because
+	// revisionArtifactContext never sees v3 (review 2026-10-06, F55).
 	graph.State.ArtifactContext = nil
 	graph.State.APIArtifactContext = nil
+	graph.State.ArtifactContextV3 = nil
 	graph.State.Revision.ArtifactPins = nil
 	anchor, err := source6SemanticHash(graph)
 	if err != nil {
@@ -67,6 +78,9 @@ func artifactSourceAnchors(ctx context.Context, q importReader, state *RevisionS
 	}
 	if frozen := revisionArtifactContext(state); frozen != nil &&
 		(frozen.SourceContentHash != content || frozen.SourceSemanticHash != anchor) {
+		return "", "", semantic("sourceHash", "Artifact context differs from the frozen source6 anchors")
+	}
+	if c := state.ArtifactContextV3; c != nil && (c.SourceContentHash != content || c.SourceSemanticHash != anchor) {
 		return "", "", semantic("sourceHash", "Artifact context differs from the frozen source6 anchors")
 	}
 	return content, anchor, nil
