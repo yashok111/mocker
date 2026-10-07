@@ -32,25 +32,16 @@ func measureRead(s *ref.Service, variant string) error {
 	if err = o.ValidateContext(context); err != nil {
 		return err
 	}
-	batches := []o.ImportInput{}
-	traces := map[string][]o.Record{}
 	rootIDs := []string{}
 	for _, rec := range result.Records {
 		if err = o.ValidateRecord(context, rec); err != nil {
 			return err
 		}
-		trace := rec.TraceID
-		if trace == "" {
-			trace = "measurements"
-		}
-		traces[trace] = append(traces[trace], rec)
 		if rec.Type == "span" && rec.ParentSpanID == "" && rec.Kind == "server" {
 			rootIDs = append(rootIDs, rec.SpanID)
 		}
 	}
-	for trace, records := range traces {
-		batches = append(batches, o.ImportInput{Mode: "create", Context: &context, Name: variant + "/" + trace, BatchID: execution + "/" + trace, IdempotencyKey: execution + "/" + trace, Records: records})
-	}
+	batches := traceBatches(result.Records, &context, variant, execution)
 	out := struct {
 		ExecutionID string              `json:"executionId"`
 		RootSpanIDs []string            `json:"rootSpanIds"`
@@ -64,4 +55,30 @@ func measureRead(s *ref.Service, variant string) error {
 	}
 	_, err = os.Stdout.Write(append(raw, '\n'))
 	return err
+}
+
+// traceBatches groups records into one import batch per trace (records with
+// no trace go to "measurements"), in the order each trace FIRST appears in
+// records. It used to range over the grouping map, so the printed imports
+// array came out in a different order on every run and could be neither
+// diffed nor golden-tested (review 2026-10-06, F166). First-seen order rather
+// than sorted names, because records already arrive in a deterministic order
+// and a consumer importing in array order then follows the measurement.
+func traceBatches(records []o.Record, context *o.ObservationContext, variant, execution string) []o.ImportInput {
+	batches := []o.ImportInput{}
+	index := map[string]int{}
+	for _, rec := range records {
+		trace := rec.TraceID
+		if trace == "" {
+			trace = "measurements"
+		}
+		i, ok := index[trace]
+		if !ok {
+			i = len(batches)
+			index[trace] = i
+			batches = append(batches, o.ImportInput{Mode: "create", Context: context, Name: variant + "/" + trace, BatchID: execution + "/" + trace, IdempotencyKey: execution + "/" + trace})
+		}
+		batches[i].Records = append(batches[i].Records, rec)
+	}
+	return batches
 }

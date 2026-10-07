@@ -7,6 +7,12 @@ import (
 	"github.com/yashok111/mocker/api"
 )
 
+var replayListPages = map[string]string{
+	"list_backend_replay_runs":     "Runs list newest first, 100 per page; pass the last run id as cursor for the next page, and a shorter page is the last.",
+	"list_backend_replay_profiles": "Profiles list oldest first, 100 per page; pass the last item's \"id:version\" as cursor, and a shorter page is the last.",
+	"list_backend_replay_packages": "Packages list oldest first, 25 per page; pass the last item's \"id:version\" as cursor, and a shorter page is the last.",
+}
+
 func addBackendReplayTools(s *sdk.Server, lb *loopback) {
 	for _, spec := range []struct {
 		name, route, contract string
@@ -58,6 +64,12 @@ func addBackendReplayTools(s *sdk.Server, lb *loopback) {
 			// too, so an agent could skip it or ask for a consent it does not
 			// need; it is also the step before a correlation diagramScope.
 			description = "Pure read: resolves a diagram pin and semantic selectors to the exact target, targetHash, scopeHash, members, gaps and truncation. Never connects to a fixture or starts work. Resolve before save_backend_replay_package or correlate_backend_observations with a diagramScope; save_backend_replay_package refuses a truncated scope or one with gaps, so narrow the selectors first."
+		}
+		// The three lists page (review 2026-10-06, F123/F124); the loopback
+		// already forwards `cursor` as a query parameter on GET routes.
+		if page, paged := replayListPages[spec.name]; paged {
+			schema["properties"].(map[string]any)["cursor"] = map[string]any{"type": "string", "minLength": 1, "maxLength": 64}
+			description += " " + page
 		}
 		addBackendImportTool(s, lb, &sdk.Tool{Name: spec.name, Description: description, InputSchema: schema, Annotations: &sdk.ToolAnnotations{ReadOnlyHint: spec.read, IdempotentHint: true}}, spec.route)
 	}

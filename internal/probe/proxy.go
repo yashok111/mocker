@@ -114,6 +114,31 @@ func stripProxyHeaders(h http.Header) {
 	}
 }
 
+// ErrProxyPathDotSegment refuses an incoming path with a "." or ".." segment
+// before anything is sent; the caller answers it as a client error.
+var ErrProxyPathDotSegment = errors.New("proxy path contains a dot segment")
+
+// hasDotSegment reports a "." or ".." segment in an escaped path, judged
+// after percent-decoding each segment (%2e%2e is ".." to every server that
+// normalises) and after splitting on a backslash too, which some upstream
+// servers treat as a separator (..%5Cadmin). Dots inside a name (a..b,
+// .hidden) are ordinary characters and pass. An undecodable segment is
+// refused as well: what the upstream would make of it cannot be predicted.
+func hasDotSegment(escapedPath string) bool {
+	for segment := range strings.SplitSeq(escapedPath, "/") {
+		decoded, err := url.PathUnescape(segment)
+		if err != nil {
+			return true
+		}
+		for part := range strings.SplitSeq(decoded, `\`) {
+			if part == "." || part == ".." {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // ProxyExchange reads a bounded complete response before returning. Redirects
 // and automatic retries are disabled, including retries of GET requests.
 func ProxyExchange(ctx context.Context, target string, incoming *http.Request, body []byte, opts ProxyOptions) (ProxyResponse, error) {
@@ -131,6 +156,12 @@ func ProxyExchange(ctx context.Context, target string, incoming *http.Request, b
 	defer cancel()
 	// Concatenation preserves encoded slashes; ResolveReference would allow an
 	// incoming authority or absolute path to replace the configured destination.
+	// The same intent needs the dot-segment refusal (review 2026-10-06, F179):
+	// Go's client sends /v1/team-a/../../admin as is, and the upstream
+	// normalises it to /admin, outside the configured prefix.
+	if hasDotSegment(incoming.URL.EscapedPath()) {
+		return ProxyResponse{}, ErrProxyPathDotSegment
+	}
 	escaped := strings.TrimRight(u.EscapedPath(), "/") + "/" + strings.TrimPrefix(incoming.URL.EscapedPath(), "/")
 	u.Path, err = url.PathUnescape(escaped)
 	if err != nil {

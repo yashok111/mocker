@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"mime"
 	"net"
 	"net/http"
 	"net/url"
@@ -91,6 +92,10 @@ func (s *Service) ServeProxy(w http.ResponseWriter, r *http.Request, ws *workspa
 		cookiePath = "/w/" + ws.Slug + "/"
 	}
 	response, err := probe.ProxyExchange(r.Context(), c.Upstream, r, body, probe.ProxyOptions{Allowlist: s.policy.ProxyAllowlist, CAPEM: s.policy.ProxyCAPEM, Timeout: timeout, MaxResponse: s.policy.MaxResponse, ForwardAuth: c.ForwardAuth, ForwardCookies: c.ForwardCookies, CookiePath: cookiePath})
+	if errors.Is(err, probe.ErrProxyPathDotSegment) {
+		httpx.Err(w, http.StatusBadRequest, "proxy_path_invalid", "Путь запроса содержит сегменты . или ..")
+		return true
+	}
 	if err != nil {
 		code := 502
 		var nerr net.Error
@@ -100,12 +105,24 @@ func (s *Service) ServeProxy(w http.ResponseWriter, r *http.Request, ws *workspa
 		httpx.Err(w, code, "proxy_upstream_failed", "Не удалось получить ответ upstream: проверьте адрес, доступ, сертификат и лимиты")
 		return true
 	}
+	servedType, ok := servableType(response.Header.Get("Content-Type"), response.Header.Get("Content-Encoding"), response.Body)
+	if !ok {
+		if mode == "record" {
+			w.Header().Set("X-Mocker-Recording", "skipped-unsafe-type")
+		}
+		refuseUnsafeType(w)
+		return true
+	}
 	if mode == "record" {
 		s.record(w, r, ws, c, key, response, auth, capture)
 	}
 	for name, values := range response.Header {
 		w.Header()[name] = values
 	}
+	if servedType != "" {
+		w.Header().Set("Content-Type", servedType)
+	}
+	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.WriteHeader(response.Status)
 	_, _ = w.Write(response.Body)
 	return true
@@ -118,7 +135,13 @@ func (s *Service) record(w http.ResponseWriter, r *http.Request, ws *workspaces.
 		return
 	}
 	ct := response.Header.Get("Content-Type")
-	if response.Header.Get("Content-Encoding") != "" || (len(response.Body) > 0 && (!strings.Contains(strings.ToLower(ct), "json") || !jsonx.Valid(response.Body))) {
+	// A JSON ESSENCE, parsed, not a substring of the header: review
+	// 2026-10-06, F178 found text/plain; x=json recorded, and
+	// traffic.RedactBody then sent that JSON body to the text redactor, so a
+	// "password" field was stored in clear. An empty body is still recorded
+	// under whatever type it carried: the serve gate above already refused an
+	// executable one, and replay gates the stored type again.
+	if response.Header.Get("Content-Encoding") != "" || (len(response.Body) > 0 && (!jsonEssence(ct) || !jsonx.Valid(response.Body))) {
 		status = "skipped-non-json"
 		return
 	}
@@ -144,6 +167,18 @@ func (s *Service) record(w http.ResponseWriter, r *http.Request, ws *workspaces.
 		status = "saved-redacted"
 	}
 	if c.CaptureEntities && r.Method == http.MethodGet && response.Status >= 200 && response.Status < 300 && capture != nil {
+		// Redacted bytes are not data (review 2026-10-06, F180): capturing
+		// them upserted every secret-named field — sort_key, api_key — as the
+		// literal "[redacted]" and still said `saved`, and an id field ending
+		// in _key refused the whole batch. The same rule refuses turning
+		// redacted traffic into overrides (traffic.Row.Redacted). Capturing
+		// the unredacted body instead was rejected: it would write the very
+		// secrets redaction exists to keep out of the store.
+		if changed {
+			w.Header().Set("X-Mocker-Entities-Imported", "0")
+			w.Header().Set("X-Mocker-Entities-Result", "skipped-redacted")
+			return
+		}
 		n, err := capture(redacted)
 		w.Header().Set("X-Mocker-Entities-Imported", strconv.Itoa(n))
 		if err != nil {
@@ -172,10 +207,75 @@ func (s *Service) replay(w http.ResponseWriter, r *http.Request, workspaceID int
 		httpx.Err(w, http.StatusBadGateway, "proxy_response_too_large", "Записанный ответ превышает текущий лимит")
 		return
 	}
+	// The stored type is gated again at serve time (review 2026-10-06, F178):
+	// a recording made before the record-time gate existed carried whatever
+	// the upstream sent, and replay is the path that serves it long after.
+	// rec.Body is JSON or empty by the record gate, so a missing type is
+	// never sniffed into HTML — but nosniff still makes that the browser's
+	// rule too.
+	if httpx.BrowserExecutableMediaType(rec.ContentType) {
+		refuseUnsafeType(w)
+		return
+	}
 	if rec.ContentType != "" {
 		w.Header().Set("Content-Type", rec.ContentType)
 	}
+	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.Header().Set("X-Mocker-Recording", "replayed")
 	w.WriteHeader(rec.Status)
 	_, _ = w.Write(rec.Body)
+}
+
+// servableType decides the Content-Type a proxied upstream response goes out
+// under, and whether it may go out at all (review 2026-10-06, F178). The
+// passthrough loop used to copy the upstream type verbatim, so text/html,
+// image/svg+xml or the comma-smuggled application/json,text/html reached a
+// browser from the mock plane — same origin as the admin session under
+// MOCKER_ROUTING=path. The RULE is httpx.BrowserExecutableMediaType, the one
+// every other mock-plane serving path applies; this only resolves which type
+// it must judge.
+//
+// An untyped body is the subtle case: net/http's server fills a missing
+// Content-Type from DetectContentType before the first write, and nosniff
+// does not stop it, so an untyped HTML body would still go out as text/html.
+// The sniffed type is therefore judged here and set explicitly, which keeps
+// ordinary untyped bodies on exactly the type they were served under before.
+// An encoded untyped body is never sniffed by net/http, and the browser would
+// sniff the decoded bytes, so it is pinned to application/octet-stream.
+func servableType(contentType, contentEncoding string, body []byte) (string, bool) {
+	switch {
+	case contentType != "":
+	case len(body) == 0:
+		return "", true
+	case contentEncoding != "":
+		contentType = "application/octet-stream"
+	default:
+		contentType = http.DetectContentType(body)
+	}
+	if httpx.BrowserExecutableMediaType(contentType) {
+		return "", false
+	}
+	return contentType, true
+}
+
+// refuseUnsafeType answers 502: the upstream (or a stored recording of it)
+// produced a response the mock plane must not serve. httpx.Err sets its own
+// JSON type and nosniff.
+func refuseUnsafeType(w http.ResponseWriter) {
+	httpx.Err(w, http.StatusBadGateway, "proxy_upstream_unsafe_type", "Upstream вернул тип содержимого, который браузер исполняет (HTML, SVG, XML); такой ответ не отдаётся")
+}
+
+// jsonEssence reports a parsed media type whose SUBTYPE names JSON
+// (application/json, application/problem+json, text/json). Judging the
+// subtype rather than the whole header is what keeps a parameter such as
+// x=json from passing, and every type it accepts lands in traffic.RedactBody's
+// JSON branch. It parses: a type the stdlib parser rejects is not one
+// recording can reason about.
+func jsonEssence(contentType string) bool {
+	essence, _, err := mime.ParseMediaType(contentType)
+	if err != nil {
+		return false
+	}
+	_, sub, _ := strings.Cut(essence, "/")
+	return strings.Contains(sub, "json")
 }

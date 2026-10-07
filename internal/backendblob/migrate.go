@@ -112,7 +112,7 @@ func Migrate(ctx context.Context, tx *sql.Tx) error {
 	if err := Seal(ctx, tx); err != nil {
 		return err
 	}
-	if err := verify(ctx, tx, false); err != nil {
+	if err := verify(ctx, tx, false, ""); err != nil {
 		return err
 	}
 	// Remove guards before dropping referenced tables. Recreate their compiled

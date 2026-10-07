@@ -79,9 +79,13 @@ own session and CSRF credentials are always stripped. Only exact origins in
 `MOCKER_PROXY_ALLOWLIST` can receive network traffic. Saved responses match the
 request path, query, body and end-to-end headers, including application credentials.
 Authentication and non-JSON responses are not recorded. Replay includes status,
-Content-Type and the redacted body. Entity capture upserts successful GETs into
+Content-Type and the redacted body. A browser-executable upstream type (HTML,
+SVG, XML, unparseable) is never served or recorded: `502
+proxy_upstream_unsafe_type`. A path with a `.`/`..` segment is `400
+proxy_path_invalid`. Entity capture upserts successful GETs into
 confirmed families and can stop at existing storage limits; check the mock
-response's `X-Mocker-Entities-Imported` and `X-Mocker-Entities-Result` headers.
+response's `X-Mocker-Entities-Imported` and `X-Mocker-Entities-Result` headers
+(`skipped-redacted`: the body had redacted secret fields, nothing was captured).
 These live controls and recordings do not travel in workspace exports/forks or
 scenario snapshots and are not used by immutable scenario execution.
 

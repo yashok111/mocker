@@ -65,7 +65,11 @@ func TestProxyRealRecordEntityCaptureAndReplayThroughPlane(t *testing.T) {
 				t.Errorf("forwarded %d bytes", len(body))
 			}
 		}
-		_, _ = w.Write([]byte(`[{"id":42,"name":"upstream","password":"secret"}]`))
+		// No secret-named field: a redacted body is no longer captured at
+		// all (review 2026-10-06, F180; recordproxy's
+		// TestProxyEntityCaptureSkipsRedactedBody), so the capture this test
+		// walks through the plane needs a body redaction leaves alone.
+		_, _ = w.Write([]byte(`[{"id":42,"name":"upstream"}]`))
 	}))
 	defer upstream.Close()
 	cfg.ProxyAllowlist = []string{upstream.URL}

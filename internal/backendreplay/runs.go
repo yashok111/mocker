@@ -124,12 +124,36 @@ func (s *Service) Start(ctx context.Context, pid, actor string, in StartInput) (
 func (s *Service) Get(ctx context.Context, pid, id string) (*Run, error) {
 	return readRun(ctx, s.repo.db.R, pid, id)
 }
-func (s *Service) Runs(ctx context.Context, pid string) ([]Run, error) {
+
+// runPageSize bounds one page of Runs (a var only so tests can page small).
+var runPageSize = 100
+
+// Runs lists a project's runs newest first, one page at a time. Replay runs
+// are never deleted, and the list used to answer 409 for good once a project
+// passed 100 of them (review 2026-10-06, F123/F9), which broke list-based
+// polling and the only way to rediscover a run after a lost Start receipt.
+// cursor is the id of the last run of the previous page ("" for the first);
+// a page shorter than runPageSize (100) is the last. The response stays a plain
+// array, so a request without a cursor is valid exactly as before.
+func (s *Service) Runs(ctx context.Context, pid, cursor string) ([]Run, error) {
 	if err := s.project(ctx, pid); err != nil {
 		return nil, err
 	}
+	var afterCreated, afterID string
+	if cursor != "" {
+		if !p.ValidID(cursor) {
+			return nil, invalidReplay()
+		}
+		err := s.repo.db.R.QueryRowContext(ctx, `SELECT created_at,id FROM backend_replay_runs WHERE project_id=? AND id=?`, pid, cursor).Scan(&afterCreated, &afterID)
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, invalidReplay()
+		}
+		if err != nil {
+			return nil, err
+		}
+	}
 	out := []Run{}
-	rows, err := s.repo.db.R.QueryContext(ctx, `SELECT id FROM backend_replay_runs WHERE project_id=? ORDER BY created_at DESC,id LIMIT 101`, pid)
+	rows, err := s.repo.db.R.QueryContext(ctx, `SELECT id FROM backend_replay_runs WHERE project_id=? AND (?='' OR created_at<? OR (created_at=? AND id>?)) ORDER BY created_at DESC,id LIMIT ?`, pid, afterID, afterCreated, afterCreated, afterID, runPageSize)
 	if err != nil {
 		return nil, err
 	}
@@ -146,9 +170,6 @@ func (s *Service) Runs(ctx context.Context, pid string) ([]Run, error) {
 	rows.Close()
 	if err != nil {
 		return nil, err
-	}
-	if len(ids) > 100 {
-		return nil, conflictReplay("Run list exceeds limit; use exact run reads")
 	}
 	for _, id := range ids {
 		v, err := s.Get(ctx, pid, id)
@@ -180,12 +201,8 @@ func (s *Service) Cancel(ctx context.Context, pid, actor, id string) (*Run, erro
 		if out.Status != "queued" && out.Status != "running" {
 			return nil
 		}
-		if out.Status == "queued" {
-			_, err = tx.ExecContext(ctx, `DELETE FROM backend_replay_target_leases WHERE run_id=?`, id)
-		} else {
-			_, err = tx.ExecContext(ctx, `UPDATE backend_replay_target_leases SET state='uncertain' WHERE run_id=?`, id)
-		}
-		if err != nil {
+		// A queued run has no step row either, so one rule covers both.
+		if err = fenceIfDispatched(ctx, tx, id); err != nil {
 			return err
 		}
 		report := initialReport(out.Input, out.Provenance)
