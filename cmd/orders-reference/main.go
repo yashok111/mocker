@@ -26,7 +26,7 @@ func main() {
 		os.Exit(1)
 	}
 }
-func run() error {
+func run() (err error) {
 	c, err := ref.ConfigFromEnv()
 	if err != nil {
 		return err
@@ -35,7 +35,9 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	defer s.Close()
+	// Close closes the fixture's SQLite database; a failure there is the
+	// last chance to hear about an unflushed write, so it joins the result.
+	defer func() { err = errors.Join(err, s.Close()) }()
 	if len(os.Args) == 2 && strings.HasPrefix(os.Args[1], "--measure-read=") {
 		return measureRead(s, strings.TrimPrefix(os.Args[1], "--measure-read="))
 	}
