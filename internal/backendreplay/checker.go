@@ -2,9 +2,10 @@ package backendreplay
 
 import (
 	"fmt"
-	p "github.com/yashok111/mocker/internal/ordersprotocol"
 	"reflect"
 	"slices"
+
+	p "github.com/yashok111/mocker/internal/ordersprotocol"
 )
 
 // Check derives assertions from linked journal records; remote counters alone

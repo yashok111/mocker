@@ -3,11 +3,12 @@ package backendobservations
 import (
 	"context"
 	"fmt"
-	bm "github.com/yashok111/mocker/internal/backendmodel"
-	"github.com/yashok111/mocker/internal/testkit"
 	"reflect"
 	"strings"
 	"testing"
+
+	bm "github.com/yashok111/mocker/internal/backendmodel"
+	"github.com/yashok111/mocker/internal/testkit"
 )
 
 func TestDiagramCorrelationUnknownAndAmbiguity(t *testing.T) {

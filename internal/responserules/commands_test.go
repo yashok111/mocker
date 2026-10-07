@@ -2,8 +2,9 @@ package responserules
 
 import (
 	"encoding/json"
-	"github.com/yashok111/mocker/internal/overrides"
 	"testing"
+
+	"github.com/yashok111/mocker/internal/overrides"
 )
 
 func TestCommandsAtomic(t *testing.T) {

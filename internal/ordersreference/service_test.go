@@ -3,7 +3,6 @@ package ordersreference
 import (
 	"bytes"
 	"encoding/json/v2"
-	p "github.com/yashok111/mocker/internal/ordersprotocol"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
@@ -11,6 +10,8 @@ import (
 	"strings"
 	"testing"
 	"uuid"
+
+	p "github.com/yashok111/mocker/internal/ordersprotocol"
 )
 
 func TestIndependentFixtures(t *testing.T) {

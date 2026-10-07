@@ -4,9 +4,10 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json/v2"
-	"github.com/yashok111/mocker/internal/backendblob"
 	"slices"
 	"time"
+
+	"github.com/yashok111/mocker/internal/backendblob"
 )
 
 func readyConflict(message string) error {

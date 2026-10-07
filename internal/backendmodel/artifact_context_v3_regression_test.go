@@ -3,9 +3,10 @@ package backendmodel
 import (
 	"database/sql"
 	"encoding/json/v2"
-	"github.com/yashok111/mocker/internal/testkit"
 	"strings"
 	"testing"
+
+	"github.com/yashok111/mocker/internal/testkit"
 )
 
 func TestV3ProposalAndCompositionPreserveForeignNamespace(t *testing.T) {

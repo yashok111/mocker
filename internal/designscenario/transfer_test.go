@@ -2,10 +2,11 @@ package designscenario
 
 import (
 	"database/sql"
-	"github.com/yashok111/mocker/internal/apidesign"
-	"github.com/yashok111/mocker/internal/jsonx"
 	"strings"
 	"testing"
+
+	"github.com/yashok111/mocker/internal/apidesign"
+	"github.com/yashok111/mocker/internal/jsonx"
 )
 
 func TestTransferHistoryRoundTrip(t *testing.T) {

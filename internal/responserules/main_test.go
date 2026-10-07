@@ -1,8 +1,9 @@
 package responserules
 
 import (
-	"github.com/yashok111/mocker/internal/testleak"
 	"testing"
+
+	"github.com/yashok111/mocker/internal/testleak"
 )
 
 func TestMain(m *testing.M) { testleak.VerifyTestMain(m) }

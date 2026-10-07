@@ -5,12 +5,13 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json/v2"
-	"github.com/yashok111/mocker/internal/backendmodel"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/yashok111/mocker/internal/backendmodel"
 )
 
 func TestBackendSavedViewToolRoutesAndPrecision(t *testing.T) {

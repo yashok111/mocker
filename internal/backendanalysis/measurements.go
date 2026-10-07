@@ -3,11 +3,12 @@ package backendanalysis
 import (
 	"context"
 	"fmt"
-	o "github.com/yashok111/mocker/internal/backendobservations"
 	"math"
 	"slices"
 	"strconv"
 	"strings"
+
+	o "github.com/yashok111/mocker/internal/backendobservations"
 )
 
 const MeasurementPolicy = "backend-scenario-measures-v1"

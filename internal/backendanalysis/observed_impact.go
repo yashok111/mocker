@@ -3,9 +3,10 @@ package backendanalysis
 import (
 	"context"
 	"encoding/json/v2"
+	"reflect"
+
 	bm "github.com/yashok111/mocker/internal/backendmodel"
 	o "github.com/yashok111/mocker/internal/backendobservations"
-	"reflect"
 )
 
 type ObservedImpact struct {

@@ -3,11 +3,12 @@ package backendobservations
 import (
 	"context"
 	"encoding/json/v2"
-	bm "github.com/yashok111/mocker/internal/backendmodel"
-	p "github.com/yashok111/mocker/internal/ordersprotocol"
 	"reflect"
 	"slices"
 	"strings"
+
+	bm "github.com/yashok111/mocker/internal/backendmodel"
+	p "github.com/yashok111/mocker/internal/ordersprotocol"
 )
 
 type GraphReader interface {

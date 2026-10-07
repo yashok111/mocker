@@ -6,10 +6,11 @@ import (
 	"encoding/json/v2"
 	"errors"
 	"fmt"
-	"github.com/yashok111/mocker/internal/testkit"
 	"slices"
 	"testing"
 	"uuid"
+
+	"github.com/yashok111/mocker/internal/testkit"
 
 	"github.com/yashok111/mocker/internal/designscenario"
 )

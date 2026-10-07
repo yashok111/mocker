@@ -2,14 +2,15 @@ package backendobservations
 
 import (
 	"encoding/hex"
-	bm "github.com/yashok111/mocker/internal/backendmodel"
-	p "github.com/yashok111/mocker/internal/ordersprotocol"
 	"math/big"
 	"slices"
 	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
+
+	bm "github.com/yashok111/mocker/internal/backendmodel"
+	p "github.com/yashok111/mocker/internal/ordersprotocol"
 )
 
 func bounded(s string, n int) bool {

@@ -4,11 +4,12 @@ import (
 	"context"
 	"encoding/xml"
 	"fmt"
-	bm "github.com/yashok111/mocker/internal/backendmodel"
 	"io"
 	"math"
 	"strings"
 	"testing"
+
+	bm "github.com/yashok111/mocker/internal/backendmodel"
 )
 
 const pid = "10000000-0000-4000-8000-000000000001"

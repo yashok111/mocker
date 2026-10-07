@@ -4,11 +4,12 @@ import (
 	"encoding/json/jsontext"
 	"encoding/json/v2"
 	"errors"
-	"github.com/yashok111/mocker/internal/backendmodel"
-	"github.com/yashok111/mocker/internal/httpx"
 	"net/http"
 	"net/url"
 	"strconv"
+
+	"github.com/yashok111/mocker/internal/backendmodel"
+	"github.com/yashok111/mocker/internal/httpx"
 )
 
 func (s *Server) backendSavedViewBody(w http.ResponseWriter, r *http.Request, out any) bool {

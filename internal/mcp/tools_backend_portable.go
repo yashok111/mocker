@@ -4,11 +4,13 @@ import (
 	"context"
 	"encoding/json/v2"
 	"fmt"
-	"github.com/yashok111/mocker/api"
-	"github.com/yashok111/mocker/internal/jsonx"
 	"strings"
 
+	"github.com/yashok111/mocker/api"
+	"github.com/yashok111/mocker/internal/jsonx"
+
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
+
 	"github.com/yashok111/mocker/internal/backendmodel"
 	"github.com/yashok111/mocker/internal/backendportable"
 )

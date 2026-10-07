@@ -1,9 +1,10 @@
 package admin
 
 import (
+	"net/http"
+
 	"github.com/yashok111/mocker/internal/designscenario"
 	"github.com/yashok111/mocker/internal/httpx"
-	"net/http"
 )
 
 func (s *Server) handleExportScenarioTransfer(w http.ResponseWriter, r *http.Request) {

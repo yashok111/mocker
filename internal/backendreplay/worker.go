@@ -4,10 +4,11 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"github.com/yashok111/mocker/internal/backendblob"
-	p "github.com/yashok111/mocker/internal/ordersprotocol"
 	"sync"
 	"time"
+
+	"github.com/yashok111/mocker/internal/backendblob"
+	p "github.com/yashok111/mocker/internal/ordersprotocol"
 )
 
 func (s *Service) RecoverInterrupted(ctx context.Context) error {

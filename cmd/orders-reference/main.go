@@ -5,13 +5,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	ref "github.com/yashok111/mocker/internal/ordersreference"
 	"net/http"
 	"os"
 	"os/signal"
 	"strings"
 	"syscall"
 	"time"
+
+	ref "github.com/yashok111/mocker/internal/ordersreference"
 )
 
 // Populated by the manifest builder. An unmanifested binary refuses startup.

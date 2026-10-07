@@ -2,9 +2,10 @@ package backendanalysis
 
 import (
 	"context"
+	"slices"
+
 	bm "github.com/yashok111/mocker/internal/backendmodel"
 	o "github.com/yashok111/mocker/internal/backendobservations"
-	"slices"
 )
 
 type StartMeasurementInput struct {

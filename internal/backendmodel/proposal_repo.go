@@ -5,10 +5,11 @@ import (
 	"database/sql"
 	"encoding/json/v2"
 	"errors"
-	"github.com/yashok111/mocker/internal/backendblob"
 	"slices"
 	"time"
 	"uuid"
+
+	"github.com/yashok111/mocker/internal/backendblob"
 )
 
 const proposalColumns = `id,project_id,version,name,status,base_revision_id,base_semantic_hash,repository_id,datastore_id,facet_key,draft_revision_id,draft_hash,created_at,updated_at`

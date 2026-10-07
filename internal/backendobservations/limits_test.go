@@ -3,11 +3,12 @@ package backendobservations
 import (
 	"encoding/json/v2"
 	"fmt"
+	"strings"
+	"testing"
+
 	bm "github.com/yashok111/mocker/internal/backendmodel"
 	"github.com/yashok111/mocker/internal/store"
 	"github.com/yashok111/mocker/internal/testkit"
-	"strings"
-	"testing"
 )
 
 func TestObservationSpanLinksRoundTrip(t *testing.T) {

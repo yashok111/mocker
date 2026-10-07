@@ -6,10 +6,11 @@ import (
 	"encoding/json/v2"
 	"encoding/xml"
 	"fmt"
-	bm "github.com/yashok111/mocker/internal/backendmodel"
 	"math"
 	"slices"
 	"strings"
+
+	bm "github.com/yashok111/mocker/internal/backendmodel"
 )
 
 const MaxSVGBytes = 2 << 20

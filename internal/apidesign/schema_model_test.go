@@ -2,10 +2,11 @@ package apidesign
 
 import (
 	"fmt"
-	"github.com/yashok111/mocker/internal/jsonx"
-	"github.com/yashok111/mocker/internal/schemamodel"
 	"strings"
 	"testing"
+
+	"github.com/yashok111/mocker/internal/jsonx"
+	"github.com/yashok111/mocker/internal/schemamodel"
 )
 
 func TestSchemaModelPreviewAndVersionedCommands(t *testing.T) {

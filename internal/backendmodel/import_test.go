@@ -2,12 +2,13 @@ package backendmodel
 
 import (
 	"encoding/json/jsontext"
-	"github.com/yashok111/mocker/internal/store"
 	"log/slog"
 	"strings"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/yashok111/mocker/internal/store"
 )
 
 func firstImportFixture(p *Project) BeginImportInput {

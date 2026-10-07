@@ -2,11 +2,12 @@ package backendanalysis
 
 import (
 	"context"
-	bm "github.com/yashok111/mocker/internal/backendmodel"
-	o "github.com/yashok111/mocker/internal/backendobservations"
 	"reflect"
 	"slices"
 	"strings"
+
+	bm "github.com/yashok111/mocker/internal/backendmodel"
+	o "github.com/yashok111/mocker/internal/backendobservations"
 )
 
 type ObservedElement struct {

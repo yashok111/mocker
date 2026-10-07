@@ -2,10 +2,11 @@ package admin
 
 import (
 	"encoding/json/v2"
-	"github.com/yashok111/mocker/internal/backendmodel"
-	"github.com/yashok111/mocker/internal/backendreplay"
 	"strings"
 	"testing"
+
+	"github.com/yashok111/mocker/internal/backendmodel"
+	"github.com/yashok111/mocker/internal/backendreplay"
 )
 
 func TestBackendReplayReadAdmission(t *testing.T) {

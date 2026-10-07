@@ -1,8 +1,9 @@
 package backendmaterialize
 
 import (
-	bm "github.com/yashok111/mocker/internal/backendmodel"
 	"testing"
+
+	bm "github.com/yashok111/mocker/internal/backendmodel"
 )
 
 func TestDiagramTranslationExactScopeAndExplicitCoverage(t *testing.T) {

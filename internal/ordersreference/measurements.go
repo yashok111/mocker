@@ -7,10 +7,11 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"fmt"
-	o "github.com/yashok111/mocker/internal/backendobservations"
-	p "github.com/yashok111/mocker/internal/ordersprotocol"
 	"strconv"
 	"time"
+
+	o "github.com/yashok111/mocker/internal/backendobservations"
+	p "github.com/yashok111/mocker/internal/ordersprotocol"
 )
 
 type ReadItem struct {

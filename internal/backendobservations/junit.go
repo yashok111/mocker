@@ -2,11 +2,12 @@ package backendobservations
 
 import (
 	"encoding/xml"
-	p "github.com/yashok111/mocker/internal/ordersprotocol"
 	"io"
 	"math/big"
 	"strconv"
 	"strings"
+
+	p "github.com/yashok111/mocker/internal/ordersprotocol"
 )
 
 func adaptJUnit(in AdaptInput, out *AdaptedBatch) ([]AdaptBatch, error) {

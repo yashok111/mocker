@@ -6,13 +6,14 @@ import (
 	"encoding/json/jsontext"
 	"encoding/json/v2"
 	"fmt"
-	p "github.com/yashok111/mocker/internal/ordersprotocol"
 	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
+
+	p "github.com/yashok111/mocker/internal/ordersprotocol"
 )
 
 type manifest struct {

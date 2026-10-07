@@ -2,13 +2,14 @@ package admin
 
 import (
 	"context"
-	"github.com/yashok111/mocker/internal/auth"
-	"github.com/yashok111/mocker/internal/config"
-	"github.com/yashok111/mocker/internal/designscenario"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/yashok111/mocker/internal/auth"
+	"github.com/yashok111/mocker/internal/config"
+	"github.com/yashok111/mocker/internal/designscenario"
 )
 
 type transferStub struct {

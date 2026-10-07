@@ -5,11 +5,12 @@ import (
 	"database/sql"
 	"encoding/json/v2"
 	"errors"
-	"github.com/yashok111/mocker/internal/testkit"
 	"slices"
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/yashok111/mocker/internal/testkit"
 
 	"github.com/yashok111/mocker/internal/config"
 	"github.com/yashok111/mocker/internal/designscenario"

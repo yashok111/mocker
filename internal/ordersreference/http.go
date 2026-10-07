@@ -4,11 +4,12 @@ import (
 	"crypto/sha256"
 	"crypto/subtle"
 	"errors"
-	p "github.com/yashok111/mocker/internal/ordersprotocol"
 	"io"
 	"mime"
 	"net/http"
 	"strings"
+
+	p "github.com/yashok111/mocker/internal/ordersprotocol"
 )
 
 func (s *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {

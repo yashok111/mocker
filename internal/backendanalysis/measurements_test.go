@@ -1,10 +1,11 @@
 package backendanalysis
 
 import (
-	o "github.com/yashok111/mocker/internal/backendobservations"
 	"slices"
 	"strconv"
 	"testing"
+
+	o "github.com/yashok111/mocker/internal/backendobservations"
 )
 
 func metricData() o.PinnedObservations {

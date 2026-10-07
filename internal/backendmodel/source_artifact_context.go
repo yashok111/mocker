@@ -5,10 +5,11 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
-	"github.com/yashok111/mocker/internal/backendblob"
 	"hash"
 	"io"
 	"strconv"
+
+	"github.com/yashok111/mocker/internal/backendblob"
 )
 
 func isArtifactSourceSchema(schema string) bool {

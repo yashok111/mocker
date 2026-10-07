@@ -5,9 +5,10 @@ import (
 	"context"
 	"encoding/json/jsontext"
 	"encoding/json/v2"
+	"testing"
+
 	bm "github.com/yashok111/mocker/internal/backendmodel"
 	o "github.com/yashok111/mocker/internal/backendobservations"
-	"testing"
 )
 
 type frozenResolver struct {

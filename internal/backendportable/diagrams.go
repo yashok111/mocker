@@ -4,8 +4,9 @@ import (
 	"context"
 	"encoding/json/jsontext"
 	"encoding/json/v2"
-	bm "github.com/yashok111/mocker/internal/backendmodel"
 	"slices"
+
+	bm "github.com/yashok111/mocker/internal/backendmodel"
 )
 
 type DiagramVersionReader interface {

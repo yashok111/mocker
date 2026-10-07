@@ -10,6 +10,7 @@ import (
 	"sync"
 
 	"github.com/santhosh-tekuri/jsonschema/v6"
+
 	"github.com/yashok111/mocker/internal/jsonx"
 	"github.com/yashok111/mocker/internal/yamlx"
 )

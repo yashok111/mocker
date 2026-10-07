@@ -16,9 +16,10 @@ import (
 	"sync"
 	"uuid"
 
+	_ "modernc.org/sqlite"
+
 	o "github.com/yashok111/mocker/internal/backendobservations"
 	p "github.com/yashok111/mocker/internal/ordersprotocol"
-	_ "modernc.org/sqlite"
 )
 
 //go:embed schema.sql

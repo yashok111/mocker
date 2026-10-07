@@ -4,12 +4,13 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	o "github.com/yashok111/mocker/internal/backendobservations"
-	p "github.com/yashok111/mocker/internal/ordersprotocol"
 	"math"
 	"strconv"
 	"time"
 	"uuid"
+
+	o "github.com/yashok111/mocker/internal/backendobservations"
+	p "github.com/yashok111/mocker/internal/ordersprotocol"
 )
 
 func (s *Service) mutate(ctx context.Context, ep p.Endpoint, f p.Fence, body any) (int, []byte, error) {

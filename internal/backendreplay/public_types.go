@@ -2,8 +2,9 @@ package backendreplay
 
 import (
 	"context"
-	p "github.com/yashok111/mocker/internal/ordersprotocol"
 	"time"
+
+	p "github.com/yashok111/mocker/internal/ordersprotocol"
 )
 
 type TargetInfo struct {

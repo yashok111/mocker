@@ -4,12 +4,13 @@ import (
 	"context"
 	"encoding/json/v2"
 	"fmt"
-	a "github.com/yashok111/mocker/internal/backendanalysis"
-	bm "github.com/yashok111/mocker/internal/backendmodel"
-	o "github.com/yashok111/mocker/internal/backendobservations"
 	"strings"
 	"testing"
 	"time"
+
+	a "github.com/yashok111/mocker/internal/backendanalysis"
+	bm "github.com/yashok111/mocker/internal/backendmodel"
+	o "github.com/yashok111/mocker/internal/backendobservations"
 )
 
 func TestBackendMeasurementPublicJobAndFrozenResult(t *testing.T) {

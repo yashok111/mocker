@@ -3,10 +3,11 @@ package backendanalysis
 import (
 	"encoding/json/jsontext"
 	"encoding/json/v2"
-	"github.com/yashok111/mocker/internal/backendmodel"
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/yashok111/mocker/internal/backendmodel"
 )
 
 func diagnosticAttrs(raw string) map[string]jsontext.Value {

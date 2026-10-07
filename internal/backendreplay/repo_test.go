@@ -2,8 +2,9 @@ package backendreplay
 
 import (
 	"database/sql"
-	"github.com/yashok111/mocker/internal/testkit"
 	"testing"
+
+	"github.com/yashok111/mocker/internal/testkit"
 )
 
 func TestReplayMigrationTablesAndRecovery(t *testing.T) {

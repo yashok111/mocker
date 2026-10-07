@@ -14,6 +14,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/santhosh-tekuri/jsonschema/v6"
+
 	"github.com/yashok111/mocker/internal/designscenario"
 	"github.com/yashok111/mocker/internal/jsonx"
 )

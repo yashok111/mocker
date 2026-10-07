@@ -4,11 +4,12 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	bm "github.com/yashok111/mocker/internal/backendmodel"
-	p "github.com/yashok111/mocker/internal/ordersprotocol"
 	"reflect"
 	"slices"
 	"strings"
+
+	bm "github.com/yashok111/mocker/internal/backendmodel"
+	p "github.com/yashok111/mocker/internal/ordersprotocol"
 )
 
 // AnalysisPin addresses immutable evidence; Side belongs to the analysis, not the set.

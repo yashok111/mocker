@@ -4,12 +4,13 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"github.com/yashok111/mocker/internal/testkit"
 	"slices"
 	"strings"
 	"sync"
 	"testing"
 	"uuid"
+
+	"github.com/yashok111/mocker/internal/testkit"
 )
 
 func TestAnalysisFootprintSharedDocumentsAndLease(t *testing.T) {

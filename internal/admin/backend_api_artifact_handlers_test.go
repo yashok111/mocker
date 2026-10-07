@@ -5,8 +5,6 @@ import (
 	"crypto/sha256"
 	"encoding/json/v2"
 	"fmt"
-	"github.com/yashok111/mocker/internal/apidesign"
-	"github.com/yashok111/mocker/internal/testauth"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -15,6 +13,9 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/yashok111/mocker/internal/apidesign"
+	"github.com/yashok111/mocker/internal/testauth"
 
 	"github.com/yashok111/mocker/internal/backendmodel"
 )

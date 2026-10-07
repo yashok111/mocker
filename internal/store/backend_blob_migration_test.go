@@ -3,10 +3,11 @@ package store
 import (
 	"database/sql"
 	"fmt"
-	"github.com/yashok111/mocker/internal/backendblob"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/yashok111/mocker/internal/backendblob"
 )
 
 func blobBaseline(t *testing.T) *DB {

@@ -1,9 +1,11 @@
 package mcp
 
 import (
-	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
-	"github.com/yashok111/mocker/api"
 	"strings"
+
+	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
+
+	"github.com/yashok111/mocker/api"
 )
 
 // backendObservationFamily follows each observation tool's own summary

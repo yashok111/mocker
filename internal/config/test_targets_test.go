@@ -1,9 +1,10 @@
 package config_test
 
 import (
-	"github.com/yashok111/mocker/internal/config"
 	"strings"
 	"testing"
+
+	"github.com/yashok111/mocker/internal/config"
 )
 
 func TestLoadTestTargets(t *testing.T) {

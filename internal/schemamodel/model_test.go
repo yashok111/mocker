@@ -1,9 +1,10 @@
 package schemamodel
 
 import (
-	"github.com/yashok111/mocker/internal/jsonx"
 	"strings"
 	"testing"
+
+	"github.com/yashok111/mocker/internal/jsonx"
 )
 
 func document(t *testing.T, raw string) map[string]any {

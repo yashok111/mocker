@@ -2,13 +2,14 @@ package ordersreference
 
 import (
 	"bytes"
-	p "github.com/yashok111/mocker/internal/ordersprotocol"
 	"path/filepath"
 	"reflect"
 	"strconv"
 	"strings"
 	"testing"
 	"uuid"
+
+	p "github.com/yashok111/mocker/internal/ordersprotocol"
 )
 
 func TestMeasuredReadOrdersIndependentSQLOracle(t *testing.T) {

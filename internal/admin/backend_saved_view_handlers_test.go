@@ -3,15 +3,17 @@ package admin
 import (
 	"bytes"
 	"encoding/json/v2"
-	"github.com/santhosh-tekuri/jsonschema/v6"
-	"github.com/yashok111/mocker/api"
-	"github.com/yashok111/mocker/internal/backendmodel"
-	"github.com/yashok111/mocker/internal/jsonx"
-	"github.com/yashok111/mocker/internal/testauth"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/santhosh-tekuri/jsonschema/v6"
+
+	"github.com/yashok111/mocker/api"
+	"github.com/yashok111/mocker/internal/backendmodel"
+	"github.com/yashok111/mocker/internal/jsonx"
+	"github.com/yashok111/mocker/internal/testauth"
 )
 
 func TestBackendSavedViewPublicAuthenticationAndCSRF(t *testing.T) {

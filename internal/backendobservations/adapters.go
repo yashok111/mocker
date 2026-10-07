@@ -4,9 +4,10 @@ import (
 	"context"
 	"encoding/json/v2"
 	"fmt"
+	"reflect"
+
 	br "github.com/yashok111/mocker/internal/backendreplay"
 	p "github.com/yashok111/mocker/internal/ordersprotocol"
-	"reflect"
 )
 
 type ReplayReader interface {

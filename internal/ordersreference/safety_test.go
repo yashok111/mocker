@@ -3,13 +3,14 @@ package ordersreference
 import (
 	"bytes"
 	"fmt"
-	p "github.com/yashok111/mocker/internal/ordersprotocol"
 	"net/http/httptest"
 	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
 	"uuid"
+
+	p "github.com/yashok111/mocker/internal/ordersprotocol"
 )
 
 type harness struct {

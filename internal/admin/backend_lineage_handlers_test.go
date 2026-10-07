@@ -4,11 +4,12 @@ import (
 	"context"
 	"encoding/json/v2"
 	"fmt"
-	"github.com/yashok111/mocker/internal/backendmodel"
 	"net/http/httptest"
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/yashok111/mocker/internal/backendmodel"
 )
 
 func TestBackendLineageRouteStrictPins(t *testing.T) {

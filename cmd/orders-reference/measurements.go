@@ -3,13 +3,14 @@ package main
 import (
 	"context"
 	"fmt"
-	o "github.com/yashok111/mocker/internal/backendobservations"
-	p "github.com/yashok111/mocker/internal/ordersprotocol"
-	ref "github.com/yashok111/mocker/internal/ordersreference"
 	"os"
 	"strconv"
 	"time"
 	"uuid"
+
+	o "github.com/yashok111/mocker/internal/backendobservations"
+	p "github.com/yashok111/mocker/internal/ordersprotocol"
+	ref "github.com/yashok111/mocker/internal/ordersreference"
 )
 
 func measureRead(s *ref.Service, variant string) error {

@@ -2,8 +2,9 @@ package ordersreference
 
 import (
 	"fmt"
-	"golang.org/x/sys/unix"
 	"os"
+
+	"golang.org/x/sys/unix"
 )
 
 // The lock file is retained: unlinking it would let another process lock a new inode.

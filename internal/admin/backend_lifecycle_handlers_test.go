@@ -2,8 +2,9 @@ package admin
 
 import (
 	"encoding/json/v2"
-	"github.com/yashok111/mocker/internal/backendmodel"
 	"testing"
+
+	"github.com/yashok111/mocker/internal/backendmodel"
 )
 
 func TestBackendLifecycleRESTAdmission(t *testing.T) {

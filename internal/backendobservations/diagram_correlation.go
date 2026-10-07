@@ -1,8 +1,9 @@
 package backendobservations
 
 import (
-	bm "github.com/yashok111/mocker/internal/backendmodel"
 	"reflect"
+
+	bm "github.com/yashok111/mocker/internal/backendmodel"
 )
 
 func selectorKey(s bm.DiagramScopeSelector) string { b, _ := canonical(s); return string(b) }
