@@ -137,13 +137,15 @@ func (r *Repo) ReviewFinding(ctx context.Context, pid, fp string, in FindingRevi
 			if e != nil {
 				return e
 			}
-			var matches int
-			e = tx.QueryRowContext(ctx, `SELECT count(*) FROM backend_finding_occurrences_documents o JOIN backend_finding_checks c USING(project_id,job_id,result_version,fingerprint) JOIN backend_analysis_jobs old ON old.project_id=o.project_id AND old.id=o.job_id JOIN backend_analysis_jobs recheck ON recheck.project_id=o.project_id AND recheck.id=? WHERE o.project_id=? AND o.fingerprint=? AND o.basis_hash=? AND c.scope_key=? AND recheck.created_at>old.created_at`, in.ResolutionAnalysis.JobID, pid, fp, in.BasisHash, scope).Scan(&matches)
+			occurrences, e := recheckedOccurrenceJobs(ctx, tx, pid, fp, in.BasisHash, scope, in.ResolutionAnalysis.JobID)
 			if e != nil {
 				return e
 			}
-			if matches == 0 {
+			if len(occurrences) == 0 {
 				return findingConflict("Recheck scope differs or predates this occurrence")
+			}
+			if e = requireRecheckRevision(ctx, tx, pid, in.ResolutionAnalysis.JobID, occurrences); e != nil {
+				return e
 			}
 		}
 		if out.Version >= 1000 {
@@ -164,6 +166,82 @@ func (r *Repo) ReviewFinding(ctx context.Context, pid, fp string, in FindingRevi
 		return e
 	})
 	return out, err
+}
+
+// recheckedOccurrenceJobs lists the jobs of the occurrences of fp with this
+// basis whose check scope matches and that the recheck job postdates.
+func recheckedOccurrenceJobs(ctx context.Context, q importReader, pid, fp, basis, scope, recheckJob string) ([]string, error) {
+	rows, err := q.QueryContext(ctx, `SELECT DISTINCT old.id FROM backend_finding_occurrences_documents o JOIN backend_finding_checks c USING(project_id,job_id,result_version,fingerprint) JOIN backend_analysis_jobs old ON old.project_id=o.project_id AND old.id=o.job_id JOIN backend_analysis_jobs recheck ON recheck.project_id=o.project_id AND recheck.id=? WHERE o.project_id=? AND o.fingerprint=? AND o.basis_hash=? AND c.scope_key=? AND recheck.created_at>old.created_at ORDER BY old.id`, recheckJob, pid, fp, basis, scope)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	var out []string
+	for rows.Next() {
+		var id string
+		if err = rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		out = append(out, id)
+	}
+	return out, rows.Err()
+}
+
+// requireRecheckRevision admits a resolving recheck only over a revision of
+// this project that is not older than the revision of some occurrence it
+// answers. Status, scope and creation order alone let a later diagnostics job
+// over an OLDER revision, where the issue did not exist yet, resolve a finding
+// the head still has (review 2026-10-06, F186; the rule is the owner's
+// decision). Equality is not required: fix-then-recheck runs on the new
+// revision the fix created. Revisions are ordered by id, as the revision list
+// pages them: ids are UUIDv7, so id order is creation order. A draft target
+// is located by its base revision.
+func requireRecheckRevision(ctx context.Context, q importReader, pid, recheckJob string, occurrenceJobs []string) error {
+	recheck, err := findingJobRevision(ctx, q, pid, recheckJob)
+	if err != nil {
+		return err
+	}
+	var owned int
+	if err = q.QueryRowContext(ctx, `SELECT count(*) FROM backend_revisions WHERE project_id=? AND id=?`, pid, recheck).Scan(&owned); err != nil {
+		return err
+	}
+	if owned == 0 {
+		return recheckTargetFault("Recheck must analyse a revision of this project")
+	}
+	for _, job := range occurrenceJobs {
+		occurred, err := findingJobRevision(ctx, q, pid, job)
+		if err != nil {
+			return err
+		}
+		if occurred <= recheck {
+			return nil
+		}
+	}
+	return recheckTargetFault("Recheck must analyse the occurrence's revision or a newer one, never an older revision")
+}
+
+func recheckTargetFault(message string) error {
+	return &FaultError{Status: 422, Code: "backend_finding_recheck_target", Message: message}
+}
+
+// findingJobRevision is the revision a diagnostics job analysed: its target
+// revision, or the base revision when the target is a change-proposal draft.
+func findingJobRevision(ctx context.Context, q importReader, pid, job string) (string, error) {
+	var raw []byte
+	if err := q.QueryRowContext(ctx, `SELECT i.document FROM backend_analysis_inputs_documents i JOIN backend_analysis_jobs j ON j.project_id=i.project_id AND j.input_hash=i.input_hash WHERE j.project_id=? AND j.id=?`, pid, job).Scan(&raw); err != nil {
+		return "", err
+	}
+	var input struct {
+		From BackendReadTarget  `json:"from"`
+		To   *BackendReadTarget `json:"to"`
+	}
+	if err := json.Unmarshal(raw, &input); err != nil {
+		return "", err
+	}
+	if input.To != nil && input.To.RevisionID != "" {
+		return input.To.RevisionID, nil
+	}
+	return input.From.RevisionID, nil
 }
 
 // ListBackendFindings reads an immutable result's occurrences and current reviews in one snapshot.
