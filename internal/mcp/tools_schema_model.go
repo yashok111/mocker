@@ -82,7 +82,7 @@ func addSchemaModelTool(s *sdk.Server, lb *loopback, name, route, description st
 			}{in.Document, in.Commands}
 		} else {
 			if kind != "" {
-				in.schemaModelCommand.Kind = kind
+				in.Kind = kind
 				in.Commands = []schemaModelCommand{in.schemaModelCommand}
 			}
 			out.body = struct {

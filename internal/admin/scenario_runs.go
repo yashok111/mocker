@@ -124,7 +124,7 @@ func (r *scenarioRunService) start(ctx context.Context, scenarioID int64, input 
 	if err != nil {
 		return designscenario.RunReport{}, err
 	}
-	initial, err := designscenario.PrepareRun(revision, input.RunID, input.Name, source, input.Variables)
+	initial, err := designscenario.PrepareRun(revision, input.RunID, input.Name, source, input.Variables) //nolint:contextcheck // designscenario.PrepareRun takes no context; threading one changes its signature
 	if err != nil {
 		return designscenario.RunReport{}, err
 	}

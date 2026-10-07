@@ -68,7 +68,7 @@ func TestIndexInheritedPathItemOperations(t *testing.T) {
 	}
 	for i, op := range ops {
 		expect, ok := want[op.Path]
-		if !ok || op.Method != "GET" || op.Pointer != expect.pointer {
+		if !ok || op.Method != http.MethodGet || op.Pointer != expect.pointer {
 			t.Errorf("operation %d = %+v, expected path entry %+v", i, op, expect)
 			continue
 		}

@@ -19,7 +19,7 @@ func (s *Server) replayRequest(w http.ResponseWriter, r *http.Request) (string, 
 		s.backendError(w, backendQueryError())
 		return "", false
 	}
-	if r.Method == "GET" && (r.ContentLength != 0 || r.TransferEncoding != nil) {
+	if r.Method == http.MethodGet && (r.ContentLength != 0 || r.TransferEncoding != nil) {
 		s.backendError(w, backendQueryError())
 		return "", false
 	}

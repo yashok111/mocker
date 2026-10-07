@@ -56,46 +56,14 @@ func addBackendAPIArtifactTool(s *sdk.Server, lb *loopback, tool *sdk.Tool, rout
 		if err := json.Unmarshal(req.Params.Arguments, &in); err != nil {
 			return fail(err)
 		}
-		var params []any
-		if snapshot {
-			for _, key := range []string{"artifactId", "revisionId"} {
-				var id string
-				if err := json.Unmarshal(in[key], &id); err != nil || !backendmodel.ValidAPIArtifactID(id) {
-					return fail(fmt.Errorf("%s must be a canonical positive decimal int64 string", key))
-				}
-				params = append(params, id)
-			}
-		} else {
-			var id string
-			if err := json.Unmarshal(in["projectId"], &id); err != nil || !backendmodel.ValidID(id) {
-				return fail(fmt.Errorf("projectId must be a canonical UUID"))
-			}
-			params = append(params, id)
-			delete(in, "projectId")
+		params, err := backendAPIArtifactParams(in, snapshot)
+		if err != nil {
+			return fail(err)
 		}
 		method, path := toolPath(tool.Name, route, params...)
 		var body []byte
-		var err error
 		if !snapshot {
-			body, err = json.Marshal(in)
-			if err != nil {
-				return fail(err)
-			}
-			if len(body) > backendmodel.MaxAPIPinBodyBytes {
-				return fail(fmt.Errorf("API artifact request exceeds 128 KiB body limit"))
-			}
-			switch tool.Name {
-			case "query_backend_api_artifacts":
-				var dto backendmodel.APIArtifactQueryInput
-				err = json.Unmarshal(body, &dto)
-			case "preview_backend_api_pins":
-				var dto backendmodel.PreviewAPIPinsInput
-				err = json.Unmarshal(body, &dto)
-			case "apply_backend_api_pins":
-				var dto backendmodel.ApplyAPIPinsInput
-				err = json.Unmarshal(body, &dto)
-			}
-			if err != nil {
+			if body, err = backendAPIArtifactBody(tool.Name, in); err != nil {
 				return fail(err)
 			}
 		}
@@ -108,4 +76,54 @@ func addBackendAPIArtifactTool(s *sdk.Server, lb *loopback, tool *sdk.Tool, rout
 		}
 		return backendToolResult(response), nil
 	})
+}
+
+// backendAPIArtifactParams takes the path identifiers out of in: the two
+// decimal int64 strings of a snapshot, or the project UUID otherwise (which
+// then leaves the body).
+func backendAPIArtifactParams(in map[string]jsonx.RawMessage, snapshot bool) ([]any, error) {
+	if snapshot {
+		params := make([]any, 0, 2)
+		for _, key := range []string{"artifactId", "revisionId"} {
+			var id string
+			if err := json.Unmarshal(in[key], &id); err != nil || !backendmodel.ValidAPIArtifactID(id) {
+				return nil, fmt.Errorf("%s must be a canonical positive decimal int64 string", key)
+			}
+			params = append(params, id)
+		}
+		return params, nil
+	}
+	var id string
+	if err := json.Unmarshal(in["projectId"], &id); err != nil || !backendmodel.ValidID(id) {
+		return nil, fmt.Errorf("projectId must be a canonical UUID")
+	}
+	delete(in, "projectId")
+	return []any{id}, nil
+}
+
+// backendAPIArtifactBody re-encodes the remaining arguments and admits them
+// against the REST body limit and the route's own DTO before any call is made.
+func backendAPIArtifactBody(name string, in map[string]jsonx.RawMessage) ([]byte, error) {
+	body, err := json.Marshal(in)
+	if err != nil {
+		return nil, err
+	}
+	if len(body) > backendmodel.MaxAPIPinBodyBytes {
+		return nil, fmt.Errorf("API artifact request exceeds 128 KiB body limit")
+	}
+	switch name {
+	case "query_backend_api_artifacts":
+		var dto backendmodel.APIArtifactQueryInput
+		err = json.Unmarshal(body, &dto)
+	case "preview_backend_api_pins":
+		var dto backendmodel.PreviewAPIPinsInput
+		err = json.Unmarshal(body, &dto)
+	case "apply_backend_api_pins":
+		var dto backendmodel.ApplyAPIPinsInput
+		err = json.Unmarshal(body, &dto)
+	}
+	if err != nil {
+		return nil, err
+	}
+	return body, nil
 }

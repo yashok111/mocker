@@ -68,8 +68,9 @@ func responseRuleExampleSchema() map[string]any {
 }
 
 func responseRuleNodeSchema() map[string]any {
-	variants := []any{}
-	for _, kind := range []string{"start", "condition", "delay", "response", "fallback", "entity_read", "entity_create", "entity_update"} {
+	kinds := []string{"start", "condition", "delay", "response", "fallback", "entity_read", "entity_create", "entity_update"}
+	variants := make([]any, 0, len(kinds))
+	for _, kind := range kinds {
 		p := map[string]any{"id": responseRuleIDSchema(), "name": responseRuleTextSchema(200),
 			"type": map[string]any{"type": "string", "const": kind}, "x": responseRuleCoordinateSchema(), "y": responseRuleCoordinateSchema()}
 		required := []string{"id", "type", "name", "x", "y"}
@@ -173,8 +174,9 @@ func responseRuleCommandSchema() map[string]any {
 }
 
 func responseRuleCommandVariants() map[string]any {
-	variants := []any{}
-	for _, kind := range []string{"set_rule", "add_node", "update_node", "remove_node", "add_edge", "update_edge", "remove_edge", "move_nodes", "add_example", "update_example", "remove_example"} {
+	kinds := []string{"set_rule", "add_node", "update_node", "remove_node", "add_edge", "update_edge", "remove_edge", "move_nodes", "add_example", "update_example", "remove_example"}
+	variants := make([]any, 0, len(kinds))
+	for _, kind := range kinds {
 		p := map[string]any{"type": map[string]any{"type": "string", "const": kind}}
 		required := []string{"type"}
 		switch kind {
@@ -239,8 +241,9 @@ func responseRuleArraySchema(items any, maxItems int) map[string]any {
 }
 
 func responseRuleValueRefSchema() map[string]any {
-	variants := []any{}
-	for _, source := range []string{"literal", "path", "query", "header", "body", "result"} {
+	sources := []string{"literal", "path", "query", "header", "body", "result"}
+	variants := make([]any, 0, len(sources))
+	for _, source := range sources {
 		p := map[string]any{"source": map[string]any{"type": "string", "const": source}}
 		required := []string{"source"}
 		switch source {

@@ -79,7 +79,7 @@ func TestPostmanBindingsPersistedRESTAndMCP(t *testing.T) {
 	revision := created.Draft
 	path := fmt.Sprintf("/api/design-scenarios/%d/revisions/%d", revision.ScenarioID, revision.ID)
 	handler := srv.Handler()
-	login := httptest.NewRequest("POST", "http://mocker.local/api/auth/login", strings.NewReader(fmt.Sprintf(`{"name":"Analyst","password":%q}`, testauth.Password)))
+	login := httptest.NewRequest(http.MethodPost, "http://mocker.local/api/auth/login", strings.NewReader(fmt.Sprintf(`{"name":"Analyst","password":%q}`, testauth.Password)))
 	login.Header.Set("Content-Type", "application/json")
 	login.Header.Set("Origin", "http://mocker.local")
 	auth := httptest.NewRecorder()
@@ -215,14 +215,14 @@ func TestScenarioExportsPersistedRESTAndMCP(t *testing.T) {
 		t.Fatalf("%#v", err)
 	}
 	doc := designscenario.Document{FormatVersion: 1, Title: "Two APIs", Participants: []designscenario.Participant{{ID: "client", Name: "Client", Kind: "client"}, {ID: "a", Name: "A", Kind: "service"}, {ID: "b", Name: "B", Kind: "service"}}, Messages: []designscenario.Message{{ID: "a-call", FromID: "client", ToID: "a", Kind: "request", Label: "GET /status", Operation: &designscenario.OperationBinding{ContractID: "a", OperationKey: "status"}}, {ID: "b-call", FromID: "client", ToID: "b", Kind: "request", Label: "GET /status", Operation: &designscenario.OperationBinding{ContractID: "b", OperationKey: "status"}}}, Contracts: []designscenario.Contract{}, Fragments: []designscenario.Fragment{}}
-	created, err := repo.Create(t.Context(), designscenario.CreateInput{Document: doc, Source: "ui"})
+	_, err = repo.Create(t.Context(), designscenario.CreateInput{Document: doc, Source: "ui"})
 	// Bindings require contracts, so create the complete snapshot below.
 	if err == nil {
 		t.Fatal("invalid document unexpectedly accepted")
 	}
 	doc.Messages[0].Operation = nil
 	doc.Messages[1].Operation = nil
-	created, err = repo.Create(t.Context(), designscenario.CreateInput{Document: doc, Source: "ui"})
+	created, err := repo.Create(t.Context(), designscenario.CreateInput{Document: doc, Source: "ui"})
 	if err != nil {
 		t.Fatalf("%#v", err)
 	}
@@ -231,7 +231,7 @@ func TestScenarioExportsPersistedRESTAndMCP(t *testing.T) {
 		t.Fatalf("%#v", err)
 	}
 	handler := srv.Handler()
-	login := httptest.NewRequest("POST", "http://mocker.local/api/auth/login", strings.NewReader(fmt.Sprintf(`{"name":"Analyst","password":%q}`, testauth.Password)))
+	login := httptest.NewRequest(http.MethodPost, "http://mocker.local/api/auth/login", strings.NewReader(fmt.Sprintf(`{"name":"Analyst","password":%q}`, testauth.Password)))
 	login.Header.Set("Content-Type", "application/json")
 	login.Header.Set("Origin", "http://mocker.local")
 	auth := httptest.NewRecorder()
@@ -249,7 +249,7 @@ func TestScenarioExportsPersistedRESTAndMCP(t *testing.T) {
 	archiveRequest := func(rev designscenario.Revision, csrf string) *httptest.ResponseRecorder {
 		t.Helper()
 		path := fmt.Sprintf("/api/design-scenarios/%d/revisions/%d/archive", rev.ScenarioID, rev.ID)
-		r := httptest.NewRequest("POST", "http://mocker.local"+path, strings.NewReader(`{"items":[{"format":"mermaid"},{"format":"openapi-json","contractId":"a"},{"format":"markdown"}]}`))
+		r := httptest.NewRequest(http.MethodPost, "http://mocker.local"+path, strings.NewReader(`{"items":[{"format":"mermaid"},{"format":"openapi-json","contractId":"a"},{"format":"markdown"}]}`))
 		r.AddCookie(cookie)
 		r.Header.Set("Content-Type", "application/json")
 		r.Header.Set("Origin", "http://mocker.local")
@@ -283,7 +283,7 @@ func TestScenarioExportsPersistedRESTAndMCP(t *testing.T) {
 
 	read := func(path string) *httptest.ResponseRecorder {
 		t.Helper()
-		r := httptest.NewRequest("GET", "http://mocker.local"+path, nil)
+		r := httptest.NewRequest(http.MethodGet, "http://mocker.local"+path, nil)
 		r.AddCookie(cookie)
 		w := httptest.NewRecorder()
 		handler.ServeHTTP(w, r)

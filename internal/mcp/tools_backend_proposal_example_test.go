@@ -29,7 +29,7 @@ func proposalSDKFixtureExample(t *testing.T, dialect string, project backendmode
 	if err != nil {
 		t.Fatal(err)
 	}
-	replacements := []string{}
+	replacements := make([]string, 0, 2*len(ids))
 	for key, id := range ids {
 		replacements = append(replacements, "@"+key+"@", id)
 	}
