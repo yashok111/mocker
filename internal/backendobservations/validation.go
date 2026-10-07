@@ -23,6 +23,26 @@ func decimal(s string) (int64, error) {
 	}
 	return n, nil
 }
+
+// plainDecimal admits only digits with at most one '.', and at least one digit.
+// big.Rat.SetString, which follows, scans with base 0 and so also accepts
+// 0x/0b/0o prefixes, '_' separators and 'p' exponents: "0x.8p0" passed as a
+// probability and JUnit time="0x10" imported as 16 seconds
+// (review 2026-10-06, F159).
+func plainDecimal(s string) bool {
+	digits, dots := 0, 0
+	for _, c := range s {
+		switch {
+		case c >= '0' && c <= '9':
+			digits++
+		case c == '.':
+			dots++
+		default:
+			return false
+		}
+	}
+	return digits > 0 && dots <= 1 && len(s) <= 64
+}
 func hexID(s string, n int) bool {
 	b, e := hex.DecodeString(s)
 	return e == nil && len(b) == n && s == strings.ToLower(s) && strings.Trim(s, "0") != ""
@@ -67,7 +87,7 @@ func ValidateContext(c ObservationContext) error {
 	}
 	if sm.Probability != nil {
 		v := *sm.Probability
-		if len(v) > 64 || strings.ContainsAny(v, "/eE+-") {
+		if !plainDecimal(v) {
 			return invalid()
 		}
 		n, ok := new(big.Rat).SetString(v)
@@ -215,6 +235,16 @@ func ValidateRecord(c ObservationContext, r Record) error {
 		}
 	case "measurement":
 		if !checkTime(r.Timestamp) || !one(r.Metric, "sql_count", "external_call_count", "retry_count", "request_bytes", "response_bytes") || !bounded(r.Basis, 256) || !bounded(r.Scope, 256) || !one(r.Unit, "count", "bytes") {
+			return invalid()
+		}
+		// The unit is fixed by the metric. Analysis sums by metric name and
+		// takes the unit from it, so {request_bytes, count} was frozen as
+		// contradictory evidence and summed as bytes (review 2026-10-06, F161).
+		unit := "count"
+		if strings.HasSuffix(r.Metric, "_bytes") {
+			unit = "bytes"
+		}
+		if r.Unit != unit {
 			return invalid()
 		}
 		if _, e := decimal(r.Value); e != nil {

@@ -99,9 +99,22 @@ func adaptOTel(in AdaptInput, out *AdaptedBatch) ([]AdaptBatch, error) {
 					r.ParentSpanID = ""
 				}
 				if s.Links != nil {
+					// Links differing only in the attributes/tracestate dropped
+					// here, and a link to the span itself, are not associations:
+					// ValidateRecord rejects them, and one such link failed the
+					// whole upload with a bare 422. Drop and count them instead
+					// (review 2026-10-06, F160).
 					links := []SpanLink{}
+					seen := map[[2]string]bool{}
 					for _, l := range *s.Links {
-						links = append(links, SpanLink{TraceID: strings.ToLower(l.TraceID), SpanID: strings.ToLower(l.SpanID), Relation: "association"})
+						link := SpanLink{TraceID: strings.ToLower(l.TraceID), SpanID: strings.ToLower(l.SpanID), Relation: "association"}
+						key := [2]string{link.TraceID, link.SpanID}
+						if seen[key] || link.TraceID == r.TraceID && link.SpanID == r.SpanID {
+							out.Excluded["links.duplicate/self"]++
+							continue
+						}
+						seen[key] = true
+						links = append(links, link)
 					}
 					r.Links = &links
 					out.Excluded["links.attributes/tracestate"] += len(links)

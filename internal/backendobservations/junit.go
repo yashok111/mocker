@@ -72,7 +72,8 @@ func adaptJUnit(in AdaptInput, out *AdaptedBatch) ([]AdaptBatch, error) {
 				if current == nil {
 					return nil, invalid()
 				}
-				if len(duration) > 64 || strings.ContainsAny(duration, "/eE+-") {
+				// Plain decimal seconds only (review 2026-10-06, F159).
+				if !plainDecimal(duration) {
 					return nil, invalid()
 				}
 				n, ok := new(big.Rat).SetString(duration)
