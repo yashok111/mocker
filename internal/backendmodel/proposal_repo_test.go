@@ -523,8 +523,10 @@ func TestProposalCreateReceiptPrecedesCompatibilityAndLimits(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Simulate a later compatibility refusal. A saved response must win even
-	// if its source can no longer pass the current creation validation.
-	if _, err := db.W.ExecContext(t.Context(), `UPDATE backend_revisions SET document=json_set(document,'$.schemaVersion','1') WHERE id=?`, out.Revision.ID); err != nil {
+	// if its source can no longer pass the current creation validation. Store27
+	// (48dce80, B6.3) seals revision payloads, so the old-shape source is
+	// seeded through the Store26 fixture rebuild + production migration.
+	if _, err := testkit.EditLegacyBackendPayload(t.Context(), db, `UPDATE backend_revisions SET document=json_set(document,'$.schemaVersion','1') WHERE id=?`, out.Revision.ID); err != nil {
 		t.Fatal(err)
 	}
 	replay, err := r.CreateProposal(t.Context(), out.Project.ID, in)

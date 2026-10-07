@@ -48,14 +48,21 @@ func TestAnalysisFootprintSharedDocumentsAndLease(t *testing.T) {
 func TestAnalysisFootprintRejectsCombinedPairBeforeDecode(t *testing.T) {
 	r, base, _ := changeFixture(t)
 	second := uuid.NewV7().String()
-	err := r.db.Write(t.Context(), func(tx *sql.Tx) error {
-		if _, err := testkit.ExecBackendOwner(t.Context(), tx, `INSERT INTO backend_revisions(id,project_id,document) SELECT ?,project_id,json_set(document,'$.id',?) FROM backend_revisions WHERE id=?`, second, second, base.Revision.ID); err != nil {
+	// The base revision's graph manifest is sealed under Store27 (48dce80,
+	// B6.3), so both revisions are seeded in the Store26 fixture shape and
+	// published by the production migration. That migration checks the query
+	// projection against the payload's id/kind/name, so the padding records
+	// carry exactly those identity fields (kind and name empty, matching the
+	// column defaults) and nothing else a node needs.
+	err := testkit.EditLegacyBackendFixture(t.Context(), r.db, func(tx *sql.Tx) error {
+		if _, err := tx.ExecContext(t.Context(), `INSERT INTO backend_revisions(id,project_id,document) SELECT ?,project_id,json_set(document,'$.id',?) FROM backend_revisions WHERE id=?`, second, second, base.Revision.ID); err != nil {
 			return err
 		}
 		for _, rid := range []string{base.Revision.ID, second} {
 			// Invalid domain records are deliberately retained: a graph decoder would
 			// fail, while admission must reject the combined bytes before reaching it.
-			if _, err := testkit.ExecBackendOwner(t.Context(), tx, `INSERT INTO backend_graph_records(project_id,revision_id,record_type,id,document) VALUES(?,?,'node',?,json_object('padding',printf('%*s',?,'x')))`, base.Project.ID, rid, uuid.NewV7().String(), 130<<20); err != nil {
+			id := uuid.NewV7().String()
+			if _, err := tx.ExecContext(t.Context(), `INSERT INTO backend_graph_records(project_id,revision_id,record_type,id,document) VALUES(?,?,'node',?,json_object('id',?,'kind','','name','','padding',printf('%*s',?,'x')))`, base.Project.ID, rid, id, id, 130<<20); err != nil {
 				return err
 			}
 		}
@@ -327,16 +334,27 @@ func TestAnalysisFootprintCombinedClaimsBasisAndNewOwnerReachCap(t *testing.T) {
 	if claimBytes <= 32 || basisBytes <= 32 || ownerBytes <= 32 {
 		t.Fatalf("fixture must contribute all inventories: %d %d %d", claimBytes, basisBytes, ownerBytes)
 	}
-	// Each JSON padding wrapper contributes14 bytes. The full exact inventory
-	// crosses the cap by one byte; omitting claims, bases or owner masks rejection.
-	padding := int64(MaxRevisionBytes) + 1 - initial.TotalBytes - 28
-	err = r.db.Write(t.Context(), func(tx *sql.Tx) error {
+	// The full exact inventory crosses the cap by one byte; omitting claims,
+	// bases or owner masks rejection. Store27 (48dce80, B6.3) checks the graph
+	// projection against the payload's id/kind/name, so each padding record
+	// carries exactly those identity fields (kind/name empty = the column
+	// defaults); the wrapper's own bytes are measured, not hard-coded (it was
+	// 14 bytes per record while the wrapper held only the padding key).
+	padIDs := []string{uuid.NewV7().String(), uuid.NewV7().String()}
+	var wrappers int64
+	for _, id := range padIDs {
+		wrappers += int64(len(`{"id":"` + id + `","kind":"","name":"","padding":""}`))
+	}
+	padding := int64(MaxRevisionBytes) + 1 - initial.TotalBytes - wrappers
+	// Both revisions' graph manifests are sealed, so the records are seeded in
+	// the Store26 fixture shape and published by the production migration.
+	err = testkit.EditLegacyBackendFixture(t.Context(), r.db, func(tx *sql.Tx) error {
 		for i, rid := range []string{old.Revision.ID, base.Revision.ID} {
 			size := padding / 2
 			if i == 1 {
 				size = padding - size
 			}
-			if _, err := testkit.ExecBackendOwner(t.Context(), tx, `INSERT INTO backend_graph_records(project_id,revision_id,record_type,id,document) VALUES(?,?,'node',?,json_object('padding',printf('%*s',?,'x')))`, base.Project.ID, rid, uuid.NewV7().String(), size); err != nil {
+			if _, err := tx.ExecContext(t.Context(), `INSERT INTO backend_graph_records(project_id,revision_id,record_type,id,document) VALUES(?,?,'node',?,json_object('id',?,'kind','','name','','padding',printf('%*s',?,'x')))`, base.Project.ID, rid, padIDs[i], padIDs[i], size); err != nil {
 				return err
 			}
 		}

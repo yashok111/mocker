@@ -2,12 +2,14 @@ package backendmodel
 
 import (
 	"bytes"
+	"database/sql"
 	"reflect"
 	"strconv"
 	"testing"
 	"uuid"
 
 	"github.com/yashok111/mocker/internal/store"
+	"github.com/yashok111/mocker/internal/testkit"
 )
 
 func source6ArtifactBaseline(t *testing.T, r *Repo, source *ImportCommitResult) *ImportCommitResult {
@@ -115,7 +117,9 @@ func source6ArtifactDocuments(t *testing.T, r *Repo, rid string) map[string][]st
 
 func source6ArtifactTableDocuments(t *testing.T, r *Repo, table, rid string) []string {
 	t.Helper()
-	rows, err := r.db.R.QueryContext(t.Context(), "SELECT document FROM "+table+" WHERE revision_id=? ORDER BY document", rid)
+	// Store27 (48dce80, B6.3): the raw bytes live behind the owner's _documents
+	// view; ORDER BY still sorts the exact stored bytes, never a re-encoding.
+	rows, err := r.db.R.QueryContext(t.Context(), "SELECT document FROM "+table+"_documents WHERE revision_id=? ORDER BY document", rid)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -252,11 +256,17 @@ func TestSource6ArtifactRawBaselineCAS(t *testing.T) {
 	}
 	s.scenarios = artifactMutatingScenarioReader{s.scenarios, func() {
 		// Simulate a storage fault while the owner is read, after the source RO
-		// snapshot closes but before the pin transaction starts.
-		if _, err := s.repo.db.W.ExecContext(t.Context(), "DROP TRIGGER backend_assertions_update"); err != nil {
-			t.Fatal(err)
-		}
-		if _, err := s.repo.db.W.ExecContext(t.Context(), "UPDATE backend_revision_assertions SET document=char(10)||document WHERE revision_id=?", base.Revision.ID); err != nil {
+		// snapshot closes but before the pin transaction starts. Store27
+		// (48dce80, B6.3) seals the payload in an immutable blob, so the raw
+		// bytes change only through the Store26 fixture rebuild + production
+		// migration; the CAS still sees different raw bytes for the base.
+		if err := testkit.EditLegacyBackendFixture(t.Context(), s.repo.db, func(tx *sql.Tx) error {
+			if _, err := tx.ExecContext(t.Context(), "DROP TRIGGER backend_assertions_update"); err != nil {
+				return err
+			}
+			_, err := tx.ExecContext(t.Context(), "UPDATE backend_revision_assertions SET document=char(10)||document WHERE revision_id=?", base.Revision.ID)
+			return err
+		}); err != nil {
 			t.Fatal(err)
 		}
 	}}

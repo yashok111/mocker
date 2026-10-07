@@ -1,6 +1,7 @@
 package backendmodel
 
 import (
+	"database/sql"
 	"encoding/json/v2"
 	"github.com/yashok111/mocker/internal/testkit"
 	"strings"
@@ -29,19 +30,25 @@ func TestV3ProposalAndCompositionPreserveForeignNamespace(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := testkit.ExecBackendOwner(t.Context(), db.W, `INSERT INTO backend_revision_api_artifacts VALUES(?,?,?,?)`, base.Revision.ID, c.SourceContentHash, c.SourceSemanticHash, string(raw)); err != nil {
-		t.Fatal(err)
-	}
 	revision := base.Revision
 	revision.SemanticHash, err = ArtifactContextV3SemanticHash(c)
 	if err != nil {
 		t.Fatal(err)
 	}
-	raw, err = json.Marshal(revision)
+	revisionRaw, err := json.Marshal(revision)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := db.W.ExecContext(t.Context(), `UPDATE backend_revisions SET document=? WHERE id=?`, string(raw), revision.ID); err != nil {
+	// Store27 (48dce80, B6.3) seals the committed revision's payload, so the
+	// v3 context and the re-anchored revision document are seeded together in
+	// the Store26 fixture shape and published by the production migration.
+	if err := testkit.EditLegacyBackendFixture(t.Context(), db, func(tx *sql.Tx) error {
+		if _, err := tx.ExecContext(t.Context(), `INSERT INTO backend_revision_api_artifacts VALUES(?,?,?,?)`, base.Revision.ID, c.SourceContentHash, c.SourceSemanticHash, string(raw)); err != nil {
+			return err
+		}
+		_, err := tx.ExecContext(t.Context(), `UPDATE backend_revisions SET document=? WHERE id=?`, string(revisionRaw), revision.ID)
+		return err
+	}); err != nil {
 		t.Fatal(err)
 	}
 	proposal, err := r.CreateChangeProposal(t.Context(), p.ID, CreateChangeProposalInput{Name: "Keep foreign", BaseRevisionID: revision.ID, IdempotencyKey: "v3-proposal"})

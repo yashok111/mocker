@@ -104,7 +104,9 @@ func TestAPIArtifactQueryCursorOrphansAndOptionalHead(t *testing.T) {
 		_, err = s.Query(t.Context(), base.Project.ID, q)
 		assertFault(t, err, "backend_invalid")
 	}
-	if _, err = s.repo.db.W.ExecContext(t.Context(), `DELETE FROM backend_graph_records WHERE revision_id=? AND record_type='node' AND id=?`, pinned.Revision.ID, ids["request"]); err != nil {
+	// Store27 (48dce80, B6.3) seals graph payload membership; the orphaning
+	// delete goes through the Store26 fixture rebuild + production migration.
+	if _, err = testkit.EditLegacyBackendPayload(t.Context(), s.repo.db, `DELETE FROM backend_graph_records WHERE revision_id=? AND record_type='node' AND id=?`, pinned.Revision.ID, ids["request"]); err != nil {
 		t.Fatal(err)
 	}
 	orphan, err := s.Query(t.Context(), base.Project.ID, APIArtifactQueryInput{RevisionID: pinned.Revision.ID, SourceNodeID: ids["request"]})
@@ -117,8 +119,16 @@ func TestAPIArtifactMissingContextMustNotHidePins(t *testing.T) {
 	s, base, ids, api := apiPinFixture(t)
 	pinned, _ := applyPinTest(t, s, base.Project.ID, pinTestInput(base, ids, api), "pin")
 	// A historical corrupt fixture must not silently become an empty pin page.
-	s.repo.db.W.ExecContext(t.Context(), `DROP TRIGGER backend_revision_api_artifacts_immutable_delete`)
-	if _, err := s.repo.db.W.ExecContext(t.Context(), `DELETE FROM backend_revision_api_artifacts WHERE revision_id=?`, pinned.Revision.ID); err != nil {
+	// Store27 (48dce80, B6.3) guards the row with an immutable-owner trigger and
+	// a sealed manifest, so the corrupt shape is built as a Store26 fixture and
+	// published by the production migration.
+	if err := testkit.EditLegacyBackendFixture(t.Context(), s.repo.db, func(tx *sql.Tx) error {
+		if _, err := tx.ExecContext(t.Context(), `DROP TRIGGER backend_revision_api_artifacts_immutable_delete`); err != nil {
+			return err
+		}
+		_, err := tx.ExecContext(t.Context(), `DELETE FROM backend_revision_api_artifacts WHERE revision_id=?`, pinned.Revision.ID)
+		return err
+	}); err != nil {
 		t.Fatal(err)
 	}
 	_, err := s.Query(t.Context(), base.Project.ID, APIArtifactQueryInput{RevisionID: pinned.Revision.ID})

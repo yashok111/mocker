@@ -11,6 +11,8 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/yashok111/mocker/internal/testkit"
 )
 
 func TestDatabaseIndependentFixtureProjection(t *testing.T) {
@@ -595,7 +597,9 @@ func TestDatabaseDefensiveStoredConstraintProofMissing(t *testing.T) {
 		fs, _, _ := relationalFacetObject(n.Kind, n.Attributes)
 		delete(fs, "sql")
 		n.Attributes = replaceRelationalFacets(n.Kind, n.Attributes, fs)
-		if _, err := r.db.W.ExecContext(t.Context(), `UPDATE backend_graph_records SET document=? WHERE revision_id=? AND record_type='node' AND id=?`, string(relationalRaw(t, n)), out.Revision.ID, n.ID); err != nil {
+		// Store27 (48dce80, B6.3) seals graph payloads; the damaged record is
+		// seeded through the Store26 fixture rebuild + production migration.
+		if _, err := testkit.EditLegacyBackendPayload(t.Context(), r.db, `UPDATE backend_graph_records SET document=? WHERE revision_id=? AND record_type='node' AND id=?`, string(relationalRaw(t, n)), out.Revision.ID, n.ID); err != nil {
 			t.Fatal(err)
 		}
 	}

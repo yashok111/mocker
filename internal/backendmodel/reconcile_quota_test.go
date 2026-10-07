@@ -7,25 +7,32 @@ import (
 	"fmt"
 	"testing"
 	"uuid"
+
+	"github.com/yashok111/mocker/internal/testkit"
 )
 
 func TestReconcileQuotaIncludesRetainedBaseRecords(t *testing.T) {
 	r, p, old, _ := committedBase(t)
 	// The base already contains one node. Fill the remainder directly to keep
 	// this limit regression independent of batch count and upload throughput.
-	err := r.db.Write(t.Context(), func(tx *sql.Tx) error {
-		insert, err := tx.PrepareContext(t.Context(), `INSERT INTO backend_graph_records(project_id,revision_id,record_type,id,document) VALUES(?,?,'node',?,?)`)
+	// The base's graph manifest is sealed under Store27 (48dce80, B6.3), so the
+	// retained records are seeded into the Store26 fixture shape and published
+	// by the production migration, exactly as an upgraded store would hold them.
+	err := testkit.EditLegacyBackendFixture(t.Context(), r.db, func(tx *sql.Tx) error {
+		insert, err := tx.PrepareContext(t.Context(), `INSERT INTO backend_graph_records(project_id,revision_id,record_type,id,kind,name,document) VALUES(?,?,'node',?,?,?,?)`)
 		if err != nil {
 			return err
 		}
 		defer insert.Close()
+		// kind/name are the query projection of the payload; Store27's migration
+		// verifies them against the raw record, as every production writer sets them.
 		for i := 1; i < MaxRevisionNodes; i++ {
 			node := Node{ID: uuid.NewV7().String(), ExternalKey: fmt.Sprintf("retained-%d", i), Kind: "unresolved_target", Name: "Retained fixture", Attributes: map[string]jsontext.Value{"expectedKind": jsontext.Value(`"handler"`), "reason": jsontext.Value(`"unavailable"`), "searchScope": jsontext.Value(`"fixture"`)}, EvidenceIDs: []string{}}
 			doc, err := json.Marshal(node)
 			if err != nil {
 				return err
 			}
-			if _, err := insert.ExecContext(t.Context(), p.ID, p.CurrentRevisionID, node.ID, string(doc)); err != nil {
+			if _, err := insert.ExecContext(t.Context(), p.ID, p.CurrentRevisionID, node.ID, node.Kind, node.Name, string(doc)); err != nil {
 				return err
 			}
 		}
