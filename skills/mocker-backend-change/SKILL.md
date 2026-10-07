@@ -35,7 +35,7 @@ Every command includes a new canonical commandId and a nonblank reason. Keep com
 | remove_node / remove_edge | id |
 | upsert_edge | id, kind, from, to, complete attributes |
 | alter_column | columnId, facetKey, change: native_type / nullable / default typed complete group |
-| alter_constraint / alter_index | action and exact object/facet; create additionally name/tableId/definition, update definition, remove omits those groups |
+| alter_constraint / alter_index | action and exact object/facet; create additionally name/tableId/definition, update definition, remove omits those groups. update writes the definition under facetKey and ADDS that facet when the object does not carry it yet (remove and alter_column refuse an absent facet), so read the object's facetKeys first |
 | edit_flow_step | stepId, complete attributes |
 | edit_branch | edgeId, kind next/branch/error/returns, from, to, complete attributes |
 | set_field_mapping | mappingId, parentId, ordered sources, destination, transform, analysisStatus, gaps; optional typed transport/description |
