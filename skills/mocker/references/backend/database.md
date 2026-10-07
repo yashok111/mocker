@@ -241,15 +241,15 @@ sanitized definition snippets. Fresh source-only does not mean runtime truth.
 sourceCardinality is source rows per target row; targetCardinality is target rows
 per source row. Bounds have min 0/1/null, max "1"/"many"/null and textual basis.
 Each min/max is proved independently using current explicit selected-facet proof.
-Target max is one when ordered target columns match a complete explicit PK/UNIQUE
-or an unconditional unique column-only index. Expression/conditional indices
+Target max is one when the target columns, in any order, contain a complete
+explicit PK/UNIQUE or an unconditional unique column-only index. Expression/conditional indices
 cannot prove that global key; an unknown predicate leaves it uncertain. Unknown
 MATCH/enforcement/deferrability may prevent target min1 without erasing a proved
 max1. Target min1 needs known NOT NULL source columns and the established declared
 enforcement/MATCH basis. Under MATCH SIMPLE one known nullable source can prove
 min0 even if another nullability is unknown. Source max is one when the source
-columns are globally unique, otherwise many when complete explicit selected
-constraints establish no matching global key. Declared source min stays zero.
+columns are globally unique (they contain such a key), otherwise many when
+complete explicit selected constraints establish no contained global key. Declared source min stays zero.
 Missing/stale/inferred/incomplete proof leaves the affected bound unknown with a
 concrete basis reason. None of these bounds checks live data or enforcement.
 

@@ -169,6 +169,13 @@ func (p *databaseProjection) observe(id string) *relationalFacet {
 	if p.source != nil || p.effective != nil {
 		return p.observeSourceFacet(id, f)
 	}
+	if p.designedSubject(id) {
+		// A designed record has no analysis or proof to be incomplete;
+		// the page already carries the desired-structure limitation, and
+		// flagging it here made every proposal page "Incomplete selected
+		// analysis" with facetStatus unknown (F81).
+		return f
+	}
 	if f.Freshness != nil && f.Freshness.Status == "stale" {
 		p.stale("Stale selected facet for " + id)
 	}
@@ -185,6 +192,18 @@ func (p *databaseProjection) observe(id string) *relationalFacet {
 	}
 	return f
 }
+
+// designedSubject reports a record the proposal creates: it has an overlay
+// and no base, so its facet is synthetic — desired values, no freshness, no
+// evidence, no analysis status (review 2026-10-06, F81).
+func (p *databaseProjection) designedSubject(id string) bool {
+	if p.proposal == nil {
+		return false
+	}
+	o := p.proposal.overlay(id)
+	return o != nil && o.Base == nil
+}
+
 func (p *databaseProjection) proofCurrent(f *relationalFacet) bool {
 	if p.source != nil || p.effective != nil {
 		proof, ok := p.sourceProof[f]
@@ -643,7 +662,11 @@ func (p *databaseProjection) relationship(e Edge, f, cf *relationalFacet) Relati
 	}
 	item.SourceCardinality.Min = new(int64(0))
 	item.SourceCardinality.Basis = append(item.SourceCardinality.Basis, "Declared relationship "+e.ID+" does not require a source row for every target")
-	targetUnique, _, targetBasis := p.unique(*item.TargetTableID, toColumns, true)
+	// Covering, not ordered: the referenced columns are unique as a set
+	// whenever they contain a complete key, in any declared order (review
+	// 2026-10-06, F78, projection half). The designer's FK admission in
+	// proposal_evaluator.go keeps the exact ordered match.
+	targetUnique, _, targetBasis := p.unique(*item.TargetTableID, toColumns, false)
 	item.TargetCardinality.Basis = append(item.TargetCardinality.Basis, targetBasis...)
 	if targetUnique {
 		item.TargetCardinality.Max = new("1")
@@ -655,7 +678,8 @@ func (p *databaseProjection) relationship(e Edge, f, cf *relationalFacet) Relati
 	} else if complete {
 		item.SourceCardinality.Max = new("many")
 	}
-	enforced := scalarBool(cf.Deferrable, false) && scalarBool(cf.InitiallyDeferred, false) && rawStringEquals(f.MatchType.Value, "simple") && f.MatchType.Status == "known"
+	matchSimple := rawStringEquals(f.MatchType.Value, "simple") && f.MatchType.Status == "known"
+	enforced := scalarBool(cf.Deferrable, false) && scalarBool(cf.InitiallyDeferred, false) && matchSimple
 	allNotNull, nullable, unknown := true, false, false
 	for _, id := range fromColumns {
 		n := p.selected(id).Nullable
@@ -690,6 +714,14 @@ func (p *databaseProjection) relationship(e Edge, f, cf *relationalFacet) Relati
 			basis = "Designed nondeferrable MATCH SIMPLE " + e.From + " with desired nullability; runtime enforcement is unverified"
 		}
 		item.TargetCardinality.Basis = append(item.TargetCardinality.Basis, basis)
+	} else if matchSimple && nullable {
+		// A NULL source row references no target row whatever the
+		// enforcement, deferrability or target key, so one known nullable
+		// source column proves min0 under known MATCH SIMPLE, as
+		// database.md promises; only min1 needs the enforcement and
+		// target-key gates (review 2026-10-06, F82).
+		item.TargetCardinality.Min = new(int64(0))
+		item.TargetCardinality.Basis = append(item.TargetCardinality.Basis, "Known nullable source column under MATCH SIMPLE "+e.From+" leaves a source row without a target")
 	} else {
 		item.TargetCardinality.Basis = append(item.TargetCardinality.Basis, "Minimum unknown: selected nullability, nondeferrable MATCH SIMPLE enforcement or target key is not established for "+e.ID)
 	}
@@ -711,14 +743,21 @@ func (p *databaseProjection) unique(table string, columns []string, ordered bool
 	tf := p.selected(table)
 	complete = p.proofCurrent(tf) && tf.ConstraintsStatus == "complete"
 	basis = []string{}
+	// ordered is the exact ordered match a designed FK reference must
+	// make. Otherwise the question is whether the columns are globally
+	// unique, and a complete key on any subset of them answers it: set
+	// equality answered "many" for an FK over {id, tenant_id} although the
+	// PK on {id} makes it unique (review 2026-10-06, F77).
 	match := func(candidate []string) bool {
 		if ordered {
 			return slices.Equal(candidate, columns)
 		}
-		a, b := slices.Clone(candidate), slices.Clone(columns)
-		slices.Sort(a)
-		slices.Sort(b)
-		return slices.Equal(a, b)
+		for _, id := range candidate {
+			if !slices.Contains(columns, id) {
+				return false
+			}
+		}
+		return len(candidate) > 0
 	}
 	for _, n := range p.children[table] {
 		if n.Kind != "constraint" && n.Kind != "index" {
@@ -728,6 +767,15 @@ func (p *databaseProjection) unique(table string, columns []string, ordered bool
 		if f == nil {
 			complete = false
 			basis = append(basis, "Missing selected key proof "+n.ID)
+			continue
+		}
+		// A designed constraint of a non-key kind (a designed FK) can
+		// never be a unique key, so it is skipped before the proof check
+		// its synthetic facet always fails: it made the source table's
+		// complete inventory incomplete, and every FK from that table lost
+		// its proved source max "many" (review 2026-10-06, F81). A
+		// designed key still fails the check: intent proves no uniqueness.
+		if n.Kind == "constraint" && p.designedSubject(n.ID) && f.ConstraintKind != "primary_key" && f.ConstraintKind != "unique" {
 			continue
 		}
 		if !p.proofCurrent(f) {
