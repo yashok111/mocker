@@ -189,13 +189,60 @@ func (s *ArtifactService) applyArtifactPinsTx(ctx context.Context, tx *sql.Tx, p
 	if !isArtifactSourceSchema(revision.SchemaVersion) {
 		return importConflict("backend_artifact_pins_base_conflict", "Source baseline schema changed", p.Version)
 	}
-	if _, err = loadArtifactContext(ctx, tx, in.BaseRevisionID, revision.ArtifactPins); err != nil {
+	stored, err := loadArtifactContext(ctx, tx, in.BaseRevisionID, revision.ArtifactPins)
+	if err != nil {
 		return err
 	}
 	if err = s.checkArtifactDigests(ctx, tx, prepared.digests, p.Version); err != nil {
 		return err
 	}
+	if artifactPinsUnchanged(stored, revision.ArtifactPins, prepared) {
+		return answerUnchangedArtifactPins(ctx, tx, in, scope, digest, out, p, revision)
+	}
 	return persistArtifactPins(ctx, tx, pid, in, prepared, scope, digest, out, p, revision)
+}
+
+// artifactPinsUnchanged reports whether the candidate would store exactly the
+// pins and context bytes the base revision already has. A set that restated
+// the current pin and bindings previewed with only "unchanged" rows, and Apply
+// wrote a revision identical to its base and bumped the project version
+// (review 2026-10-06, F61; the owner decided such a set is an idempotent
+// no-op). The comparison is on the bytes persistArtifactPins would write, so
+// a changed reason or label is still a real change.
+func artifactPinsUnchanged(stored *ArtifactContext, pins []ArtifactPin, prepared *preparedArtifactPins) bool {
+	if stored == nil {
+		return false
+	}
+	before, err := requestDigest(canonicalAPIPins(pins))
+	if err != nil {
+		return false
+	}
+	after, err := requestDigest(prepared.preview.Pins)
+	if err != nil || before != after {
+		return false
+	}
+	old, err := EncodeArtifactContext(*stored, pins)
+	if err != nil {
+		return false
+	}
+	next, err := EncodeArtifactContext(prepared.frozen, prepared.preview.Pins)
+	return err == nil && string(old) == string(next)
+}
+
+// answerUnchangedArtifactPins answers a no-op apply with the current head and
+// project version and records the receipt, so a replay of the key returns the
+// same bytes and a different body under it is still a conflict.
+func answerUnchangedArtifactPins(ctx context.Context, tx *sql.Tx, in ApplyArtifactPinsInput, scope, digest string, out *ArtifactPinsResult, p *Project, revision Revision) error {
+	*out = ArtifactPinsResult{Project: *p, Revision: revision}
+	response, err := json.Marshal(out)
+	if err != nil {
+		return err
+	}
+	if _, err = tx.ExecContext(ctx, `INSERT INTO backend_command_receipts(scope,key,request_hash,response) VALUES(?,?,?,?)`, scope, in.IdempotencyKey, digest, string(response)); err != nil {
+		return err
+	}
+	out.receiptJSON = string(response)
+	return nil
 }
 
 func persistArtifactPins(ctx context.Context, tx *sql.Tx, pid string, in ApplyArtifactPinsInput, prepared *preparedArtifactPins, scope, digest string, out *ArtifactPinsResult, p *Project, revision Revision) error {
