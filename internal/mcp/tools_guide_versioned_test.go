@@ -163,6 +163,22 @@ func TestGuideRequiredCapabilitiesHaveMCPTools(t *testing.T) {
 		"backend-architecture":            {"query_backend_diagram", "compare_backend_diagrams"},
 		"backend-diagram-views":           {"create_backend_diagram_view", "save_backend_diagram_view", "list_backend_diagram_views", "get_backend_diagram_view"},
 		"backend-change-unarchive":        {"apply_backend_change_proposal_lifecycle"},
+		// The rows below were never added when their workflows shipped:
+		// diagnostics/finding review with a6f1139 (B5.1), replay with be06f56
+		// (B5.3), observations with 41ca3c6 (B6.1), measurements and observed
+		// overlays with 6006fa8 (B6.2). Each names the tools its pinned guide
+		// (skills/mocker-backend-verify, skills/mocker-backend-replay) tells
+		// the agent to call for that capability.
+		"backend-analysis-diagnostics":    {"start_backend_analysis", "get_backend_analysis", "get_backend_analysis_results", "list_backend_findings"},
+		"backend-finding-review":          {"list_backend_findings", "review_backend_finding"},
+		"backend-observations":            {"import_backend_observations", "list_backend_observations", "get_backend_observation_version", "get_backend_observation_records", "adapt_backend_observations"},
+		"backend-observation-correlation": {"correlate_backend_observations", "get_backend_observation_correlation", "resolve_backend_diagram_scope"},
+		"backend-scenario-measurements":   {"start_backend_analysis", "get_backend_analysis", "get_backend_analysis_results"},
+		"backend-observed-impact":         {"start_backend_analysis", "get_backend_analysis_results"},
+		"backend-observed-sequences":      {"start_backend_analysis", "get_backend_analysis_results"},
+		"backend-replay":                  {"list_backend_replay_targets", "get_backend_replay_template", "save_backend_replay_package", "list_backend_replay_packages", "get_backend_replay_package", "start_backend_replay", "list_backend_replay_runs", "get_backend_replay_run", "cancel_backend_replay_run", "reconcile_backend_replay_run", "compare_backend_replay_runs"},
+		"backend-test-profiles":           {"connect_backend_replay_profile", "list_backend_replay_profiles", "get_backend_replay_profile", "revoke_backend_replay_authorization"},
+		"backend-replay-bindings":         {"save_backend_replay_package", "resolve_backend_diagram_scope"},
 	}
 	if !inventory["get_backend_capabilities"] {
 		t.Error("workflow discovery tool is missing")
