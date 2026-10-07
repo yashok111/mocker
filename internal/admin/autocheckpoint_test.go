@@ -424,12 +424,28 @@ func TestAutoCheckpointPolicy_pinsEveryMutatingRoute(t *testing.T) {
 		// (D7.3), P6b's endpoint preview (D13), P6c's close and push
 		// (D9), A6's two asset writes (D3), A11's two entity writes,
 		// P4b's import and fork, then design-scenario validation, execution and archive, plus state-diagram validation and simulation — twenty-six.
-		cpGroupNeverTouchesLayer: 53, // Includes full proposal preview alongside POST reads, artifact previews and non-model writes.
+		//
+		// 53 → 65 after 13ab8d5, every one a NEW row (a route-table diff
+		// against 13ab8d5 shows only additions, no row changing group):
+		// f30edb2 lifecycle build; 5579099 (B5.2) materialization preview,
+		// portable export/selection, four portable import steps and the
+		// namespaced artifact query; 41ca3c6 (B6.1) observation adapt;
+		// be06f56 (B5.3) replay compare; and diagrams/resolve-scope, a POST
+		// read moved here from cpRead by review 2026-10-06, F30.
+		cpGroupNeverTouchesLayer: 65, // Includes full proposal preview alongside POST reads, artifact previews and non-model writes.
 		// Rows in another aggregate: runtime scenarios, checkpoints, API
 		// designs, four persisted design-scenario writes, run start/cancel, and four state-diagram writes.
-		cpGroupAnotherLayer: 58, // Includes full proposal create/apply/restore alongside existing model and artifact writes.
+		//
+		// 58 → 69, all new rows: B5.2 materialization apply and portable
+		// import commit, B6.1 observation create and correlation, B5.3's
+		// six replay writes, and a6f1139's finding review PUT.
+		cpGroupAnotherLayer: 69, // Includes full proposal create/apply/restore alongside existing model and artifact writes.
 		// Every GET in the table.
-		cpGroupRead: 94, // Includes annotations, full proposal history and exact source/full/candidate reads.
+		//
+		// 94 → 109, all new GETs: findings, the SVG view export, four
+		// observation reads, eight replay reads and the portable export
+		// chunk read.
+		cpGroupRead: 109, // Includes annotations, full proposal history and exact source/full/candidate reads.
 	}
 
 	byPattern := checkpointPolicyByPattern(t)
@@ -453,8 +469,10 @@ func TestAutoCheckpointPolicy_pinsEveryMutatingRoute(t *testing.T) {
 		t.Errorf("the %d counted groups cover %d of %d rows — a group is missing from want", total, sum(got), table)
 	}
 
-	if len(byPattern) != 222 {
-		t.Fatalf("routes() registers %d patterns, want 222", len(byPattern))
+	// 222 at 13ab8d5; 260 since 41ca3c6 — the same count api/openapi.json
+	// and web/src/api/coverage.test.ts's ROUTE_COUNT pin.
+	if len(byPattern) != 260 {
+		t.Fatalf("routes() registers %d patterns, want 260", len(byPattern))
 	}
 
 	// A label is the ONE thing [Server.routeMux] reads off the policy, so a
@@ -509,8 +527,11 @@ func TestAutoCheckpointPolicy_pinsEveryMutatingRoute(t *testing.T) {
 	// Generic artifacts add three POSTs: two reads/previews and one pin apply.
 	// B4.1 adds four full-proposal POSTs: 114 write-shaped
 	// routes and 87 GETs cover the full 201-row table.
-	if len(mutating) != 128 {
-		t.Fatalf("routes() registers %d mutating patterns, want 128", len(mutating))
+	// 128 at 13ab8d5 (222 rows, 94 GETs); the 38 rows added since are 15
+	// GETs and 23 write-shaped routes (the group comments above list them),
+	// so 151 of today's 260 rows, 109 being GETs.
+	if len(mutating) != 151 {
+		t.Fatalf("routes() registers %d mutating patterns, want 151", len(mutating))
 	}
 
 	// The two halves the group counts alone cannot state: a mutating route

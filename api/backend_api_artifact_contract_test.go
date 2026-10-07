@@ -25,8 +25,13 @@ func TestBackendAPIArtifactContractExactIDsAndOperations(t *testing.T) {
 			}
 		}
 	}
-	if count != 222 {
-		t.Fatalf("operation count=%d want221", count)
+	// 222 was the count at 13ab8d5 (B4.4 interactions). Later slices added
+	// routes without moving this pin: f30edb2 (lifecycle) 223, a6f1139
+	// (findings) 225, 5579099 (B5.2 materialization/portable) 237, 41ca3c6
+	// (B6.1 observations/correlations) 260 — the same number
+	// web/src/api/coverage.test.ts's ROUTE_COUNT pins for the same file.
+	if count != 260 {
+		t.Fatalf("operation count=%d want 260", count)
 	}
 	schema, err := BackendSchema("APIArtifactID")
 	if err != nil {
