@@ -26,10 +26,10 @@ var (
 
 // PrepareRun validates all executable bindings before any request is dispatched.
 // The report owns its document and variables; overrides never modify the revision.
-func PrepareRun(revision Revision, runID, name, source string, variables ExecutionValues) (RunReport, error) {
+func PrepareRun(ctx context.Context, revision Revision, runID, name, source string, variables ExecutionValues) (RunReport, error) {
 	invalid := func(message string) (RunReport, error) { return RunReport{}, fmt.Errorf("%w: %s", ErrInvalid, message) }
-	if err := validateRunRevision(revision, runID, name, source); err != nil {
-		return invalid(err.Error())
+	if err := validateRunRevision(ctx, revision, runID, name, source); err != nil {
+		return RunReport{}, runRevisionError(ctx, err)
 	}
 	document, err := cloneDocument(revision.Document)
 	if err != nil {
@@ -87,40 +87,37 @@ func PrepareRun(revision Revision, runID, name, source string, variables Executi
 	return report, nil
 }
 
-func validateRunRevision(revision Revision, runID, name, source string) error {
+// runRevisionError wraps a revision's rejection as ErrInvalid, except a
+// cancelled request's own error: that is not an invalid revision.
+func runRevisionError(ctx context.Context, err error) error {
+	if ctxErr := ctx.Err(); ctxErr != nil && errors.Is(err, ctxErr) {
+		return err
+	}
+	return fmt.Errorf("%w: %s", ErrInvalid, err.Error())
+}
+
+func validateRunRevision(ctx context.Context, revision Revision, runID, name, source string) error {
 	if !runIDPattern.MatchString(runID) || utf8.RuneCountInString(name) > 200 || (source != "ui" && source != "mcp") || revision.ID <= 0 || revision.ScenarioID <= 0 {
 		return errors.New("укажите допустимые ID, название и источник запуска")
 	}
 	if diagnostics := ValidateFragments(revision.Document); len(diagnostics) > 0 {
 		return fmt.Errorf("%s: %s", diagnostics[0].Pointer, diagnostics[0].Message)
 	}
-	if revision.Document.FormatVersion == 1 {
-		positions := map[string]int{}
-		for i, m := range revision.Document.Messages {
-			positions[m.ID] = i
-		}
-		for i, a := range revision.Document.Fragments {
-			ar, _ := messageRange(a.FromMessageID, a.ToMessageID, positions)
-			for _, b := range revision.Document.Fragments[i+1:] {
-				br, _ := messageRange(b.FromMessageID, b.ToMessageID, positions)
-				if ar.start <= br.end && br.start <= ar.end {
-					return errors.New("неоднозначные фрагменты formatVersion 1: обновите формат сценария")
-				}
-			}
-		}
+	if revision.Document.FormatVersion == 1 && overlappingRunFragments(revision.Document) {
+		return errors.New("неоднозначные фрагменты formatVersion 1: обновите формат сценария")
 	}
 	if diagnostics := validateControlFlow(revision.Document, true); len(diagnostics) > 0 {
 		return fmt.Errorf("%s: %s", diagnostics[0].Pointer, diagnostics[0].Message)
 	}
-	for key, value := range revision.FormDrafts {
-		var fields map[string]jsonx.RawMessage
-		if key == "all" && jsonx.Unmarshal([]byte(value), &fields) == nil && fields != nil && len(fields) == 0 {
-			continue
-		}
+	if runFormDraftsPending(revision.FormDrafts) {
 		return errors.New("сначала завершите редактирование форм сценария")
 	}
 	if hasDataBindings(revision.Document) {
-		for _, diagnostic := range AnalyzeDataFlow(revision.Document).Diagnostics {
+		analysis, err := AnalyzeDataFlow(ctx, revision.Document)
+		if err != nil {
+			return err
+		}
+		for _, diagnostic := range analysis.Diagnostics {
 			if diagnostic.Severity == "error" {
 				return fmt.Errorf("%s: %s", diagnostic.Pointer, diagnostic.Message)
 			}
@@ -130,6 +127,37 @@ func validateRunRevision(revision Revision, runID, name, source string) error {
 		return fmt.Errorf("%s: %s", diagnostics[0].Pointer, diagnostics[0].Message)
 	}
 	return nil
+}
+
+// overlappingRunFragments reports formatVersion 1 fragments whose message
+// ranges overlap, which a run cannot nest unambiguously.
+func overlappingRunFragments(document Document) bool {
+	positions := map[string]int{}
+	for i, m := range document.Messages {
+		positions[m.ID] = i
+	}
+	for i, a := range document.Fragments {
+		ar, _ := messageRange(a.FromMessageID, a.ToMessageID, positions)
+		for _, b := range document.Fragments[i+1:] {
+			br, _ := messageRange(b.FromMessageID, b.ToMessageID, positions)
+			if ar.start <= br.end && br.start <= ar.end {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// runFormDraftsPending is true unless the only draft is the empty "all" form.
+func runFormDraftsPending(drafts map[string]string) bool {
+	for key, value := range drafts {
+		var fields map[string]jsonx.RawMessage
+		if key == "all" && jsonx.Unmarshal([]byte(value), &fields) == nil && fields != nil && len(fields) == 0 {
+			continue
+		}
+		return true
+	}
+	return false
 }
 
 func validateRunVariables(variables ExecutionValues) error {
@@ -241,7 +269,7 @@ func (e *runEngine) executeStep(ctx context.Context, index int, message Message,
 	if config == nil {
 		config = &StepExecution{Enabled: true, PathParams: ExecutionValues{}, Query: ExecutionValues{}, Headers: ExecutionValues{}}
 	}
-	request, results, err := e.resolveBindingRequest(index, message, config)
+	request, results, err := e.resolveBindingRequest(ctx, index, message, config)
 	if err != nil {
 		return err
 	}
@@ -688,30 +716,7 @@ func cloneRunReport(report RunReport) RunReport {
 
 func cloneRunDocument(document Document) Document {
 	document.Participants = slices.Clone(document.Participants)
-	document.Fragments = slices.Clone(document.Fragments)
-	for i := range document.Fragments {
-		document.Fragments[i].Branches = slices.Clone(document.Fragments[i].Branches)
-		if document.Fragments[i].Execution != nil {
-			document.Fragments[i].Execution = new(*document.Fragments[i].Execution)
-			if c := document.Fragments[i].Execution.Condition; c != nil {
-				document.Fragments[i].Execution.Condition = new(*c)
-				if c.Value != nil {
-					document.Fragments[i].Execution.Condition.Value = new(*c.Value)
-				}
-			}
-		}
-		for j := range document.Fragments[i].Branches {
-			if b := document.Fragments[i].Branches[j].Execution; b != nil {
-				document.Fragments[i].Branches[j].Execution = new(*b)
-				if c := b.Condition; c != nil {
-					document.Fragments[i].Branches[j].Execution.Condition = new(*c)
-					if c.Value != nil {
-						document.Fragments[i].Branches[j].Execution.Condition.Value = new(*c.Value)
-					}
-				}
-			}
-		}
-	}
+	document.Fragments = cloneRunFragments(document.Fragments)
 	document.Contracts = slices.Clone(document.Contracts)
 	for i := range document.Contracts {
 		contract := &document.Contracts[i]
@@ -730,64 +735,98 @@ func cloneRunDocument(document Document) Document {
 		if message.Operation != nil {
 			message.Operation = new(*message.Operation)
 		}
-		if message.Execution == nil {
-			continue
-		}
-		message.Execution = new(*message.Execution)
-		config := message.Execution
-		config.PathParams, config.Query, config.Headers = maps.Clone(config.PathParams), maps.Clone(config.Query), maps.Clone(config.Headers)
-		if config.ExpectedStatus != nil {
-			config.ExpectedStatus = new(*config.ExpectedStatus)
-		}
-		config.Assertions = slices.Clone(config.Assertions)
-		for j := range config.Assertions {
-			config.Assertions[j].Equals = slices.Clone(config.Assertions[j].Equals)
-		}
-		config.Extract = slices.Clone(config.Extract)
-		config.Bindings = slices.Clone(config.Bindings)
-		for j := range config.Bindings {
-			config.Bindings[j].Transforms = slices.Clone(config.Bindings[j].Transforms)
+		if message.Execution != nil {
+			message.Execution = cloneRunStepExecution(*message.Execution)
 		}
 	}
 	if document.EventModel != nil {
-		model := *document.EventModel
-		model.Servers = slices.Clone(model.Servers)
-		model.Channels = slices.Clone(model.Channels)
-		for i := range model.Channels {
-			model.Channels[i].ServerIDs = slices.Clone(model.Channels[i].ServerIDs)
-			model.Channels[i].MessageIDs = slices.Clone(model.Channels[i].MessageIDs)
-			if model.Channels[i].Kafka != nil {
-				kafka := *model.Channels[i].Kafka
-				if kafka.Partitions != nil {
-					kafka.Partitions = new(*kafka.Partitions)
-				}
-				if kafka.Replicas != nil {
-					kafka.Replicas = new(*kafka.Replicas)
-				}
-				model.Channels[i].Kafka = &kafka
-			}
-		}
-		model.Messages = slices.Clone(model.Messages)
-		for i := range model.Messages {
-			model.Messages[i].Examples = slices.Clone(model.Messages[i].Examples)
-		}
-		model.Schemas = slices.Clone(model.Schemas)
-		model.Contracts = slices.Clone(model.Contracts)
-		for i := range model.Contracts {
-			model.Contracts[i].Operations = slices.Clone(model.Contracts[i].Operations)
-			for j := range model.Contracts[i].Operations {
-				operation := &model.Contracts[i].Operations[j]
-				if operation.Kafka != nil {
-					operation.Kafka = new(*operation.Kafka)
-				}
-				if operation.FailureRoutes != nil {
-					operation.FailureRoutes = new(*operation.FailureRoutes)
-				}
-				operation.APILinks = slices.Clone(operation.APILinks)
-				operation.StateLinks = slices.Clone(operation.StateLinks)
-			}
-		}
-		document.EventModel = &model
+		document.EventModel = cloneRunEventModel(*document.EventModel)
 	}
 	return document
+}
+
+func cloneRunFragments(fragments []Fragment) []Fragment {
+	fragments = slices.Clone(fragments)
+	for i := range fragments {
+		fragments[i].Branches = slices.Clone(fragments[i].Branches)
+		if fragments[i].Execution != nil {
+			fragments[i].Execution = new(*fragments[i].Execution)
+			fragments[i].Execution.Condition = cloneRunCondition(fragments[i].Execution.Condition)
+		}
+		for j := range fragments[i].Branches {
+			if b := fragments[i].Branches[j].Execution; b != nil {
+				fragments[i].Branches[j].Execution = new(*b)
+				fragments[i].Branches[j].Execution.Condition = cloneRunCondition(b.Condition)
+			}
+		}
+	}
+	return fragments
+}
+
+func cloneRunCondition(c *ExecutionCondition) *ExecutionCondition {
+	if c == nil {
+		return nil
+	}
+	out := new(*c)
+	if c.Value != nil {
+		out.Value = new(*c.Value)
+	}
+	return out
+}
+
+func cloneRunStepExecution(config StepExecution) *StepExecution {
+	config.PathParams, config.Query, config.Headers = maps.Clone(config.PathParams), maps.Clone(config.Query), maps.Clone(config.Headers)
+	if config.ExpectedStatus != nil {
+		config.ExpectedStatus = new(*config.ExpectedStatus)
+	}
+	config.Assertions = slices.Clone(config.Assertions)
+	for j := range config.Assertions {
+		config.Assertions[j].Equals = slices.Clone(config.Assertions[j].Equals)
+	}
+	config.Extract = slices.Clone(config.Extract)
+	config.Bindings = slices.Clone(config.Bindings)
+	for j := range config.Bindings {
+		config.Bindings[j].Transforms = slices.Clone(config.Bindings[j].Transforms)
+	}
+	return &config
+}
+
+func cloneRunEventModel(model EventModel) *EventModel {
+	model.Servers = slices.Clone(model.Servers)
+	model.Channels = slices.Clone(model.Channels)
+	for i := range model.Channels {
+		model.Channels[i].ServerIDs = slices.Clone(model.Channels[i].ServerIDs)
+		model.Channels[i].MessageIDs = slices.Clone(model.Channels[i].MessageIDs)
+		if model.Channels[i].Kafka != nil {
+			kafka := *model.Channels[i].Kafka
+			if kafka.Partitions != nil {
+				kafka.Partitions = new(*kafka.Partitions)
+			}
+			if kafka.Replicas != nil {
+				kafka.Replicas = new(*kafka.Replicas)
+			}
+			model.Channels[i].Kafka = &kafka
+		}
+	}
+	model.Messages = slices.Clone(model.Messages)
+	for i := range model.Messages {
+		model.Messages[i].Examples = slices.Clone(model.Messages[i].Examples)
+	}
+	model.Schemas = slices.Clone(model.Schemas)
+	model.Contracts = slices.Clone(model.Contracts)
+	for i := range model.Contracts {
+		model.Contracts[i].Operations = slices.Clone(model.Contracts[i].Operations)
+		for j := range model.Contracts[i].Operations {
+			operation := &model.Contracts[i].Operations[j]
+			if operation.Kafka != nil {
+				operation.Kafka = new(*operation.Kafka)
+			}
+			if operation.FailureRoutes != nil {
+				operation.FailureRoutes = new(*operation.FailureRoutes)
+			}
+			operation.APILinks = slices.Clone(operation.APILinks)
+			operation.StateLinks = slices.Clone(operation.StateLinks)
+		}
+	}
+	return &model
 }

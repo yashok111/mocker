@@ -62,8 +62,9 @@ func TestBackendImportToolsRejectUnknownAndWrongSelectors(t *testing.T) {
 
 func TestBeginBackendImportToolExactInventory(t *testing.T) {
 	const manifest = `"manifest":{"repositoryName":"orders","provider":{"name":"collector","version":"1","namespace":"test","method":"ast","profiles":["foundation-graph-v1"],"limitations":[]},"snapshot":{"dirty":false,"consistency":"verified","capturedAt":"2026-09-30T10:00:00Z","files":[]}}`
-	items := []string{}
-	for _, category := range strings.Fields("files endpoints datastores migrations producers consumers jobs contracts tests") {
+	categories := strings.Fields("files endpoints datastores migrations producers consumers jobs contracts tests")
+	items := make([]string, 0, len(categories))
+	for _, category := range categories {
 		items = append(items, `{"category":"`+category+`","status":"unsupported","knownCount":9007199254740993,"denominator":9007199254740994,"discoverySource":"collector","gaps":[],"reason":"unsupported"}`)
 	}
 	args := `{"projectId":"` + backendTestID + `","baseRevisionId":"` + backendTestID + `","expectedVersion":9007199254740993,"idempotencyKey":"begin",` + manifest + `,"inventory":[` + strings.Join(items, ",") + `]}`
@@ -108,7 +109,7 @@ func TestBackendImportSDKInt64BoundsAndDuplicateMembers(t *testing.T) {
 }
 
 func TestBackendImportToolsPublishExactSchemasAndHints(t *testing.T) {
-	response := doMCP(t, newTestEndpoint(t).Handler(), `{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}`, map[string]string{"Authorization": "Bearer " + testKey})
+	response := describedToolsList(t)
 	var envelope struct {
 		Result struct {
 			Tools []struct {
@@ -158,7 +159,7 @@ func TestBackendImportSDKRejectsNullableOptionalKeys(t *testing.T) {
 }
 
 func TestBackendImportMCPBodySchemasMatchOpenAPI(t *testing.T) {
-	response := doMCP(t, newTestEndpoint(t).Handler(), `{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}`, map[string]string{"Authorization": "Bearer " + testKey})
+	response := describedToolsList(t)
 	var envelope struct {
 		Result struct {
 			Tools []struct {
@@ -214,7 +215,9 @@ func TestBackendImportMCPBodySchemasMatchOpenAPI(t *testing.T) {
 		if !ok {
 			continue
 		}
-		got := decode(tool.InputSchema)
+		// describe_tool publishes repeated subtrees through $defs (review
+		// 2026-10-06, F23); the contract comparison reads the expanded form.
+		got := inlineLocalDefs(decode(tool.InputSchema))
 		stripPaths := func(branch map[string]any) {
 			props := branch["properties"].(map[string]any)
 			for _, key := range []string{"projectId", "importId", "batchId"} {

@@ -17,6 +17,10 @@ const maxInputBytes = 2 << 20
 const maxResultBytes = 32 << 20
 const terminalHeadroom = 128 << 10
 const maxManifestBytes = 64 << 10
+
+// A quarter of the manifest: diff manifests reserve half for changedIds and
+// coveredChangedIds (diff.go), which leaves the scope and fixed fields the rest.
+const maxScopeBytes = 16 << 10
 const maxProjectBytes = 256 << 20
 
 func fault(status int, code, message string) error {
@@ -130,11 +134,32 @@ func (in *StartInput) UnmarshalJSON(raw []byte) error {
 	if _, err := closed(raw, required, optional); err != nil {
 		return err
 	}
-	type plain StartInput
-	var next plain
+	var next startInputWire
 	if err := decode(raw, &next); err != nil {
 		return err
 	}
+	if err := next.checkKind(); err != nil {
+		return err
+	}
+	if err := next.normalizeObservation(); err != nil {
+		return err
+	}
+	if (next.Kind != "diagnostics" || next.FromRevisionID != "") && !backendmodel.ValidID(next.FromRevisionID) || !validKey(next.IdempotencyKey) {
+		return malformed("Invalid source revision or key")
+	}
+	if next.ObservationMode == "none" {
+		next.ObservationPins = []jsontext.Value{}
+	}
+	*in = StartInput(next)
+	return nil
+}
+
+// startInputWire is StartInput without its UnmarshalJSON.
+type startInputWire StartInput
+
+// checkKind admits the three analysis kinds; only diagnostics takes a
+// diagram scope, and it needs an exact source or full proposal target.
+func (next *startInputWire) checkKind() error {
 	if next.Kind != "diff" && next.Kind != "impact" && next.Kind != "diagnostics" {
 		return fault(422, "unsupported", "Unsupported analysis kind")
 	}
@@ -144,32 +169,33 @@ func (in *StartInput) UnmarshalJSON(raw []byte) error {
 	if next.Kind == "diagnostics" && (next.Target.Proposal != nil || next.Target.CommandPreview != nil) {
 		return fault(422, "unsupported", "Diagnostics requires an exact source or full proposal target")
 	}
+	return nil
+}
+
+// normalizeObservation defaults the mode to none and rewrites pinned impact
+// pins in canonical form; any other pins are refused.
+func (next *startInputWire) normalizeObservation() error {
 	if next.ObservationMode == "" {
 		next.ObservationMode = "none"
 	}
-	if next.ObservationMode == "pinned" && next.Kind == "impact" {
-		pins, err := impactPins(StartInput(next))
+	if next.ObservationMode != "pinned" || next.Kind != "impact" {
+		if next.ObservationMode != "none" || len(next.ObservationPins) > 0 {
+			return fault(422, "unsupported", "Select none without pins or pinned impact")
+		}
+		return nil
+	}
+	pins, err := impactPins(StartInput(*next))
+	if err != nil {
+		return err
+	}
+	next.ObservationPins = nil
+	for _, pin := range pins {
+		raw, err := canonical(pin)
 		if err != nil {
 			return err
 		}
-		next.ObservationPins = nil
-		for _, pin := range pins {
-			raw, err := canonical(pin)
-			if err != nil {
-				return err
-			}
-			next.ObservationPins = append(next.ObservationPins, raw)
-		}
-	} else if next.ObservationMode != "none" || len(next.ObservationPins) > 0 {
-		return fault(422, "unsupported", "Select none without pins or pinned impact")
+		next.ObservationPins = append(next.ObservationPins, raw)
 	}
-	if (next.Kind != "diagnostics" || next.FromRevisionID != "") && !backendmodel.ValidID(next.FromRevisionID) || !validKey(next.IdempotencyKey) {
-		return malformed("Invalid source revision or key")
-	}
-	if next.ObservationMode == "none" {
-		next.ObservationPins = []jsontext.Value{}
-	}
-	*in = StartInput(next)
 	return nil
 }
 func (t *AnalysisTarget) UnmarshalJSON(raw []byte) error {
@@ -236,6 +262,21 @@ func (s *Scope) UnmarshalJSON(raw []byte) error {
 	*s = normalizedScope(Scope(next))
 	return nil
 }
+
+// checkScopeSize runs at admission only, never on decode: a stored input
+// admitted before the bound must still decode so its job can be closed. The
+// scope is copied into every result manifest, including the prefix manifest an
+// interrupted or cancelled job is closed with, and a manifest is capped at
+// maxManifestBytes. Each id was bounded but their number and service/kind were
+// not, so ~1000 short changedIds passed the 2 MiB input cap and made every
+// terminal write of the job answer manifest_limit (review 2026-10-06, F149).
+func checkScopeSize(s Scope) error {
+	type plain Scope
+	if raw, err := json.Marshal(plain(normalizedScope(s))); err != nil || len(raw) > maxScopeBytes {
+		return fault(413, "scope_limit", "Scope exceeds 16 KiB")
+	}
+	return nil
+}
 func normalizedScope(s Scope) Scope {
 	if s.Depth == 0 {
 		s.Depth = 32
@@ -264,12 +305,17 @@ func (l *Limits) UnmarshalJSON(raw []byte) error {
 	}
 	d := defaultLimits()
 	checks := []struct {
-		k      string
-		n, max int64
-	}{{"states", int64(next.States), int64(d.States)}, {"dependencyVisits", int64(next.DependencyVisits), int64(d.DependencyVisits)}, {"depth", int64(next.Depth), 32}, {"findings", int64(next.Findings), 10000}, {"records", int64(next.Records), 20000}, {"witnessesPerObject", int64(next.WitnessesPerObject), 8}, {"resultBytes", next.ResultBytes, maxResultBytes}}
+		k           string
+		n, min, max int64
+	}{{"states", int64(next.States), 1, int64(d.States)}, {"dependencyVisits", int64(next.DependencyVisits), 1, int64(d.DependencyVisits)}, {"depth", int64(next.Depth), 1, 32}, {"findings", int64(next.Findings), 1, 10000}, {"records", int64(next.Records), 1, 20000}, {"witnessesPerObject", int64(next.WitnessesPerObject), 1, 8},
+		// Admission reserves terminalHeadroom out of resultBytes, so a smaller
+		// value decoded fine and failed only after the graphs were resolved,
+		// with an "Invalid output reservation" that named no field (review
+		// 2026-10-06, F155). A stored input never holds one: admission refused it.
+		{"resultBytes", next.ResultBytes, terminalHeadroom, maxResultBytes}}
 	for _, c := range checks {
-		if _, ok := m[c.k]; ok && (c.n < 1 || c.n > c.max) {
-			return malformed("Invalid limit: " + c.k)
+		if _, ok := m[c.k]; ok && (c.n < c.min || c.n > c.max) {
+			return malformed(fmt.Sprintf("Invalid limit: %s must be %d..%d", c.k, c.min, c.max))
 		}
 	}
 	*l = Limits(next)

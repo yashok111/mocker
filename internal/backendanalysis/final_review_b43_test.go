@@ -94,9 +94,18 @@ func TestB43ReviewEndpointIntentCreatedEdgeCorrespondence(t *testing.T) {
 				}
 			}
 			if tc.edges == 2 {
+				// Ambiguous parallel edges stay unmatched. Either may be the
+				// intended creation, so each is an unverified correspondence
+				// gap, not an outside-intent change (review 2026-10-06, F145).
+				var unverified []ObjectAddress
+				for _, g := range report.Snapshot.Manifest.Gaps {
+					if g.Code == "unverified_created_correspondence" {
+						unverified = g.Objects
+					}
+				}
 				for id := range actualEdges {
-					if !slices.Contains(outside[id], "/from") || !slices.Contains(outside[id], "/to") {
-						t.Fatalf("ambiguous relationship was matched: %+v", outside)
+					if len(outside[id]) != 0 || !slices.Contains(unverified, ObjectAddress{RecordType: "edge", ID: id}) {
+						t.Fatalf("ambiguous relationship was matched or called outside intent: outside=%+v unverified=%+v", outside, unverified)
 					}
 				}
 				return

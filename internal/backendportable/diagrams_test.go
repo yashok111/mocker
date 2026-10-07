@@ -3,8 +3,9 @@ package backendportable
 import (
 	"context"
 	"fmt"
-	bm "github.com/yashok111/mocker/internal/backendmodel"
 	"testing"
+
+	bm "github.com/yashok111/mocker/internal/backendmodel"
 )
 
 type closureReader map[bm.DiagramPin]*bm.DiagramVersion

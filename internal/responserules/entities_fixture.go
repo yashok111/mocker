@@ -75,7 +75,7 @@ func validateFixtureKey(key, idType string) error {
 		return invalid("", "недопустимый ключ сущности")
 	}
 	for _, c := range key {
-		if !(c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || strings.ContainsRune("._~-", c)) {
+		if !asciiAlnum(c) && !strings.ContainsRune("._~-", c) {
 			return invalid("", "недопустимый ключ сущности")
 		}
 	}

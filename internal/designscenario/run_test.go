@@ -33,7 +33,7 @@ func runRevision() Revision {
 
 func prepareTestRun(t *testing.T, revision Revision) RunReport {
 	t.Helper()
-	report, err := PrepareRun(revision, "run-1", "test", "mcp", nil)
+	report, err := PrepareRun(t.Context(), revision, "run-1", "test", "mcp", nil)
 	if err := err; err != nil {
 		t.Fatal(err)
 	}
@@ -53,7 +53,7 @@ func TestRunSequenceUsesOverridesAndAtomicExtractions(t *testing.T) {
 	revision.Document.Messages[1].Execution.Query["user"] = "{{user}}"
 	revision.Document.Messages[1].Execution.Assertions = []ExecutionAssertion{{Pointer: "/name", Equals: jsonx.RawMessage(`"Ada"`)}}
 	overrides := ExecutionValues{"user": "Ada"}
-	initial, err := PrepareRun(revision, "seq", "variant", "mcp", overrides)
+	initial, err := PrepareRun(t.Context(), revision, "seq", "variant", "mcp", overrides)
 	if err := err; err != nil {
 		t.Fatal(err)
 	}
@@ -147,7 +147,7 @@ func TestPrepareRunRejectsInvalidExecutionBeforeDispatch(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			r := runRevision()
 			test.change(&r)
-			_, err := PrepareRun(r, "run", "", "ui", nil)
+			_, err := PrepareRun(t.Context(), r, "run", "", "ui", nil)
 			if !errors.Is(err, ErrInvalid) {
 				t.Fatalf("error = %v; want %v", err, ErrInvalid)
 			}
@@ -375,7 +375,7 @@ func TestRunProgressFailurePreventsFurtherDispatch(t *testing.T) {
 
 func TestPrepareAndRunVariableAndBodyBounds(t *testing.T) {
 	r := runRevision()
-	_, err := PrepareRun(r, "run", "", "ui", ExecutionValues{"user": strings.Repeat("a", 50001)})
+	_, err := PrepareRun(t.Context(), r, "run", "", "ui", ExecutionValues{"user": strings.Repeat("a", 50001)})
 	if err == nil {
 		t.Fatal("expected error")
 	}
@@ -383,12 +383,12 @@ func TestPrepareAndRunVariableAndBodyBounds(t *testing.T) {
 	for i := range 100 {
 		tooMany[fmt.Sprintf("v%d", i)] = "x"
 	}
-	_, err = PrepareRun(r, "run", "", "ui", tooMany)
+	_, err = PrepareRun(t.Context(), r, "run", "", "ui", tooMany)
 	if err == nil {
 		t.Fatal("expected error")
 	}
 	r.Document.Messages[0].Execution.Body = strings.Repeat("{{user}}", 30)
-	initial, err := PrepareRun(r, "run", "", "ui", ExecutionValues{"user": strings.Repeat("a", 50000)})
+	initial, err := PrepareRun(t.Context(), r, "run", "", "ui", ExecutionValues{"user": strings.Repeat("a", 50000)})
 	if err := err; err != nil {
 		t.Fatal(err)
 	}
@@ -453,7 +453,7 @@ func TestRunAggregateLimitCountsRequestsResponsesAndAssertions(t *testing.T) {
 func TestPrepareRunExplicitEnabledRequestRequiresOperation(t *testing.T) {
 	r := runRevision()
 	r.Document.Messages[0].Operation = nil
-	if _, err := PrepareRun(r, "run", "", "ui", nil); !errors.Is(err, ErrInvalid) {
+	if _, err := PrepareRun(t.Context(), r, "run", "", "ui", nil); !errors.Is(err, ErrInvalid) {
 		t.Fatalf("explicit enabled request without operation: %v", err)
 	}
 	r.Document.Messages[0].Execution = nil
@@ -470,7 +470,7 @@ func TestPrepareRunBoundsSerializedVariableSnapshots(t *testing.T) {
 	}
 	r := runRevision()
 	r.Document.Execution.Variables = ExecutionValues{}
-	if _, err := PrepareRun(r, "run", "", "mcp", variables); err == nil {
+	if _, err := PrepareRun(t.Context(), r, "run", "", "mcp", variables); err == nil {
 		t.Fatal("accepted variable snapshots whose escaped JSON exceeds 20 MiB")
 	}
 }

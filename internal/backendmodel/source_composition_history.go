@@ -2,33 +2,49 @@ package backendmodel
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json/v2"
+	"errors"
 )
 
+// sourceAncestors returns rid and every revision on its parent chain.
+//
+// Review 2026-10-06, F56/F79/F80: each link used to go through loadSourceState
+// (the revision document, the coverage document with every snapshot's file
+// list, the frozen artifact context) only to read one parent pointer, so every
+// preview and commit paid O(history x manifest) reads inside the writer. One
+// keyed row and one JSON path per link is all the walk needs.
 func sourceAncestors(ctx context.Context, q importReader, pid, rid string) (map[string]bool, error) {
 	ancestors := map[string]bool{}
 	for rid != "" && !ancestors[rid] {
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		state, err := loadSourceState(ctx, q, pid, rid)
+		if !ValidID(pid) || !ValidID(rid) {
+			return nil, notFound()
+		}
+		var parent sql.NullString
+		err := q.QueryRowContext(ctx, `SELECT json_extract(document,'$.parentRevisionId') FROM backend_revisions_documents WHERE project_id=? AND id=?`, pid, rid).Scan(&parent)
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, notFound()
+		}
 		if err != nil {
 			return nil, err
 		}
 		ancestors[rid] = true
-		if state.Revision.ParentRevisionID == nil {
+		if !parent.Valid {
 			break
 		}
-		rid = *state.Revision.ParentRevisionID
+		rid = parent.String
 	}
 	return ancestors, nil
 }
 
 func validateComposedHistory(ctx context.Context, q importReader, s *ImportSession, graph *SourceGraphSnapshot) error {
-	ancestors, err := sourceAncestors(ctx, q, s.ProjectID, s.BaseRevisionID)
-	if err != nil {
-		return err
-	}
+	// The ancestor set is built on the first historical reference only: most
+	// candidates carry none, and the walk used to run on every preview and
+	// commit regardless (review 2026-10-06, F56).
+	var ancestors map[string]bool
 	history := map[string]*SourceGraphSnapshot{}
 	for _, a := range graph.Assertions {
 		if !relationalSubject(a.Payload.Kind, a.Payload.Attributes, a.RecordType == "edge") {
@@ -41,6 +57,12 @@ func validateComposedHistory(ctx context.Context, q importReader, s *ImportSessi
 		for _, ref := range refs {
 			if ref.HistoricalRevisionID == "" {
 				continue
+			}
+			if ancestors == nil {
+				ancestors, err = sourceAncestors(ctx, q, s.ProjectID, s.BaseRevisionID)
+				if err != nil {
+					return err
+				}
 			}
 			if !ancestors[ref.HistoricalRevisionID] {
 				return semantic(ref.Path, "Historical source reference must pin the base or an ancestor in this project")

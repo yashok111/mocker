@@ -51,8 +51,9 @@ func TestBackendLineageRealSDKGuideFixtureExample(t *testing.T) {
 		t.Fatal(err)
 	}
 	sourceHash := fmt.Sprintf("%x", sha256.Sum256(source))
-	inventory := []map[string]any{}
-	for _, category := range strings.Fields("files endpoints datastores migrations producers consumers jobs contracts tests") {
+	categories := strings.Fields("files endpoints datastores migrations producers consumers jobs contracts tests")
+	inventory := make([]map[string]any, 0, len(categories))
+	for _, category := range categories {
 		item := map[string]any{"category": category, "status": "unsupported", "knownCount": 0, "denominator": nil, "discoverySource": "source fixture", "gaps": []string{}, "reason": "Outside captured fixture"}
 		if slices.Contains([]string{"files", "endpoints", "datastores"}, category) {
 			item["status"] = "complete"

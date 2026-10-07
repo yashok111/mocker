@@ -2,13 +2,14 @@ package admin
 
 import (
 	"context"
-	"github.com/yashok111/mocker/internal/auth"
-	"github.com/yashok111/mocker/internal/config"
-	"github.com/yashok111/mocker/internal/designscenario"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/yashok111/mocker/internal/auth"
+	"github.com/yashok111/mocker/internal/config"
+	"github.com/yashok111/mocker/internal/designscenario"
 )
 
 type transferStub struct {
@@ -34,13 +35,13 @@ func TestScenarioTransferHTTPGuards(t *testing.T) {
 		{"/api/design-scenarios/transfer-export", `{"scenarioIds":[1],"includeHistory":true}`, s.handleExportScenarioTransfer},
 		{"/api/design-scenarios/transfer-import", `{"bundle":{"kind":"mocker.scenarios","formatVersion":1,"scenarios":[]},"relink":true}`, s.handleImportScenarioTransfer},
 	} {
-		req := httptest.NewRequest("POST", tc.path, strings.NewReader(tc.body))
+		req := httptest.NewRequest(http.MethodPost, tc.path, strings.NewReader(tc.body))
 		rec := httptest.NewRecorder()
 		tc.handler(rec, req)
 		if rec.Code != 401 {
 			t.Fatalf("unauthenticated = %d", rec.Code)
 		}
-		req = httptest.NewRequest("POST", tc.path, strings.NewReader(tc.body))
+		req = httptest.NewRequest(http.MethodPost, tc.path, strings.NewReader(tc.body))
 		req = req.WithContext(withAuthContext(req.Context(), &auth.Session{}, &auth.User{ID: 1}))
 		rec = httptest.NewRecorder()
 		tc.handler(rec, req)
@@ -48,7 +49,7 @@ func TestScenarioTransferHTTPGuards(t *testing.T) {
 			t.Fatalf("authorized = %d: %s", rec.Code, rec.Body.String())
 		}
 		before := stub.calls
-		req = httptest.NewRequest("POST", tc.path, strings.NewReader(`{"unknown":true}`))
+		req = httptest.NewRequest(http.MethodPost, tc.path, strings.NewReader(`{"unknown":true}`))
 		req = req.WithContext(withAuthContext(req.Context(), &auth.Session{}, &auth.User{ID: 1}))
 		rec = httptest.NewRecorder()
 		tc.handler(rec, req)

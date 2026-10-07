@@ -1,10 +1,12 @@
 package backendanalysis
 
 import (
+	"database/sql"
 	"encoding/json/v2"
 	"testing"
 
 	model "github.com/yashok111/mocker/internal/backendmodel"
+	"github.com/yashok111/mocker/internal/testkit"
 )
 
 func TestB43ConformanceImplementedArchiveUnarchive(t *testing.T) {
@@ -98,10 +100,16 @@ func TestB43ConformanceGateChecksSavedChunks(t *testing.T) {
 		t.Fatalf("runtime evidence %+v %v", evidence, err)
 	}
 	// Simulate corrupted storage beyond the immutable SQL trigger; production keeps it.
-	if _, err = f.db.W.ExecContext(t.Context(), `DROP TRIGGER backend_analysis_chunk_no_update`); err != nil {
-		t.Fatal(err)
-	}
-	if _, err = f.db.W.ExecContext(t.Context(), `UPDATE backend_analysis_chunks SET items_json=replace(items_json,'unverified','satisfied') WHERE job_id=? AND section='checks'`, job.ID); err != nil {
+	// Store27 (48dce80, B6.3) moved items_json into an immutable blob under a
+	// sealed manifest, so the corruption is applied to the Store26 fixture shape
+	// and published by the production migration, which copies bytes undecoded.
+	if err = testkit.EditLegacyBackendFixture(t.Context(), f.db, func(tx *sql.Tx) error {
+		if _, err := tx.ExecContext(t.Context(), `DROP TRIGGER backend_analysis_chunk_no_update`); err != nil {
+			return err
+		}
+		_, err := tx.ExecContext(t.Context(), `UPDATE backend_analysis_chunks SET items_json=replace(items_json,'unverified','satisfied') WHERE job_id=? AND section='checks'`, job.ID)
+		return err
+	}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err = f.jobs.ReadConformanceEvidence(t.Context(), f.project.ID, ref); err == nil {

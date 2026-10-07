@@ -2,6 +2,7 @@ package backendmodel
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 
 	"github.com/yashok111/mocker/internal/designscenario"
@@ -25,6 +26,11 @@ type ArtifactService struct {
 	scenarios          ScenarioArtifactReader
 	maxApplyBodyBytes  int64
 	globalMaxBodyBytes *int64
+	// diagramTx is set only on the service a portable diagram import builds
+	// inside the single writer: the diagram resolver then reads the
+	// installation id on it instead of the reader pool (review 2026-10-06,
+	// F3/F183). Its api/scenarios already read on the same transaction.
+	diagramTx *sql.Tx
 }
 
 func NewArtifactService(repo *Repo, api APIArtifactReader, scenarios ScenarioArtifactReader) *ArtifactService {
@@ -61,6 +67,11 @@ func (s *ArtifactService) Query(ctx context.Context, pid string, in ArtifactQuer
 	state, err := loadRevisionState(ctx, s.repo.db.R, pid, in.RevisionID)
 	if err != nil {
 		return nil, err
+	}
+	// The same refusal the composed path gives: a v3 head is not "no pins"
+	// (review 2026-10-06, F60).
+	if state.ArtifactContextV3 != nil {
+		return nil, invalid("context", "Use an explicit namespaced artifact resolver for v3")
 	}
 	if state.ArtifactContext == nil {
 		return nil, notFound()

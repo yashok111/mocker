@@ -5,9 +5,10 @@ import (
 	"database/sql"
 	"encoding/json/v2"
 	"errors"
-	"github.com/yashok111/mocker/internal/backendblob"
 	"time"
 	"uuid"
+
+	"github.com/yashok111/mocker/internal/backendblob"
 
 	"github.com/yashok111/mocker/internal/backendmodel"
 	p "github.com/yashok111/mocker/internal/ordersprotocol"
@@ -113,23 +114,28 @@ func readRun(ctx context.Context, q replayReader, pid, id string) (*Run, error) 
 	v.UpdatedAt, err = time.Parse(time.RFC3339Nano, updated)
 	return &v, err
 }
+
+// interruptedRuns lists the (project, run) pairs left queued or running; its
+// rows are closed before the transaction's next statement.
+func interruptedRuns(ctx context.Context, tx *sql.Tx) ([][2]string, error) {
+	rows, err := tx.QueryContext(ctx, `SELECT project_id,id FROM backend_replay_runs WHERE status IN ('queued','running')`)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	ids := [][2]string{}
+	for rows.Next() {
+		var pair [2]string
+		if err = rows.Scan(&pair[0], &pair[1]); err != nil {
+			return nil, err
+		}
+		ids = append(ids, pair)
+	}
+	return ids, rows.Err()
+}
 func (r *Repo) RecoverInterrupted(ctx context.Context) error {
 	return r.db.Write(ctx, func(tx *sql.Tx) error {
-		rows, err := tx.QueryContext(ctx, `SELECT project_id,id FROM backend_replay_runs WHERE status IN ('queued','running')`)
-		if err != nil {
-			return err
-		}
-		ids := [][2]string{}
-		for rows.Next() {
-			var pair [2]string
-			if err = rows.Scan(&pair[0], &pair[1]); err != nil {
-				rows.Close()
-				return err
-			}
-			ids = append(ids, pair)
-		}
-		err = rows.Err()
-		rows.Close()
+		ids, err := interruptedRuns(ctx, tx)
 		if err != nil {
 			return err
 		}
@@ -145,7 +151,7 @@ func (r *Repo) RecoverInterrupted(ctx context.Context) error {
 			if err != nil {
 				return err
 			}
-			if _, err = tx.ExecContext(ctx, `UPDATE backend_replay_target_leases SET state='uncertain' WHERE run_id=?`, run.ID); err != nil {
+			if err = fenceIfDispatched(ctx, tx, run.ID); err != nil {
 				return err
 			}
 			if _, err = tx.ExecContext(ctx, `UPDATE backend_replay_runs SET status='interrupted',version=version+1,updated_at=?,terminal_report_json=? WHERE id=? AND status IN ('queued','running')`, nowReplay(), string(raw), run.ID); err != nil {
@@ -155,6 +161,27 @@ func (r *Repo) RecoverInterrupted(ctx context.Context) error {
 		return nil
 	})
 }
+
+// fenceIfDispatched settles the lease of a run stopped without a verdict
+// (restart recovery, cancellation of a running run). A step row is written
+// in the same write that re-checks status='running' BEFORE any mutation is
+// sent, so a run with no step row has sent nothing and never will: its lease
+// is released, the rule finalize and Reconcile already apply. Marking every
+// such lease uncertain (review 2026-10-06, F6/F128) fenced targets that no
+// mutation had touched until the author acknowledged the run.
+func fenceIfDispatched(ctx context.Context, tx *sql.Tx, runID string) error {
+	var steps int
+	if err := tx.QueryRowContext(ctx, `SELECT count(*) FROM backend_replay_steps_documents WHERE run_id=?`, runID).Scan(&steps); err != nil {
+		return err
+	}
+	if steps == 0 {
+		_, err := tx.ExecContext(ctx, `DELETE FROM backend_replay_target_leases WHERE run_id=?`, runID)
+		return err
+	}
+	_, err := tx.ExecContext(ctx, `UPDATE backend_replay_target_leases SET state='uncertain' WHERE run_id=?`, runID)
+	return err
+}
+
 func (r *Repo) registerConfigs(ctx context.Context, targets []Target) error {
 	return r.db.Write(ctx, func(tx *sql.Tx) error {
 		for _, t := range targets {

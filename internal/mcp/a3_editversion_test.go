@@ -365,9 +365,7 @@ var a3WriteTools = []string{
 // one.
 func TestSixWriteTools_staleDescriptionsGoneAndReplaced(t *testing.T) {
 	t.Parallel()
-	h := newTestEndpoint(t).Handler()
-	rec := doMCP(t, h, `{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}`,
-		map[string]string{"Authorization": "Bearer " + testKey})
+	rec := describedToolsList(t)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200; body=%s", rec.Code, rec.Body.String())
 	}
@@ -414,9 +412,7 @@ func TestSixWriteTools_staleDescriptionsGoneAndReplaced(t *testing.T) {
 // every time.
 func TestOperationTools_describeZeroForFreshRow(t *testing.T) {
 	t.Parallel()
-	h := newTestEndpoint(t).Handler()
-	rec := doMCP(t, h, `{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}`,
-		map[string]string{"Authorization": "Bearer " + testKey})
+	rec := describedToolsList(t)
 	var env struct {
 		Result struct {
 			Tools []struct {
@@ -460,9 +456,7 @@ func TestOperationTools_describeZeroForFreshRow(t *testing.T) {
 // permissive schema).
 func TestSixWriteTools_editVersionIsRequiredAndNonNullable(t *testing.T) {
 	t.Parallel()
-	h := newTestEndpoint(t).Handler()
-	rec := doMCP(t, h, `{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}`,
-		map[string]string{"Authorization": "Bearer " + testKey})
+	rec := describedToolsList(t)
 	var env struct {
 		Result struct {
 			Tools []struct {
@@ -550,6 +544,9 @@ func containsStr(list []string, want string) bool {
 // own text). Later groups grew the surface to 74; the persisted sequence
 // designer adds ten, persisted runs four and scenario exports three state diagrams eight and schema model twelve, plus control-flow/coverage three, data bindings four, test suggestions and ten resource-map tools reached 174 tools. Saved views,
 // lineage, four exact API artifact tools and four generic editor artifact tools, five proxy tools, two scenario transfer tools and the source events query bring the surface to 225.
+// The literal had drifted to 227 while the surface reached 262; describe_tool
+// (review 2026-10-06, F23) made it 263, and the pin now reads toolCount,
+// the one number TestToolRoutesPopulation already holds against toolRoutes.
 func TestToolSurfaceStaysAt203(t *testing.T) {
 	t.Parallel()
 	h := newTestEndpoint(t).Handler()
@@ -563,7 +560,7 @@ func TestToolSurfaceStaysAt203(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &env); err != nil {
 		t.Fatalf("decode tools/list: %v; body=%s", err, rec.Body.String())
 	}
-	if len(env.Result.Tools) != 227 {
-		t.Errorf("tools/list returned %d tools, want 227 including database proposals, saved views, lineage, four exact API artifact tools and four generic editor artifact tools, five proxy tools, two scenario transfer tools and the source events query", len(env.Result.Tools))
+	if len(env.Result.Tools) != toolCount {
+		t.Errorf("tools/list returned %d tools, want toolCount (%d, describe_tool included)", len(env.Result.Tools), toolCount)
 	}
 }

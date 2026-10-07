@@ -50,8 +50,8 @@ use importId, while commit's returned sessionId is a receipt field.
 
 `list_backend_imports {projectId,limit?,cursor?}` locates durable sessions.
 `get_backend_import {projectId,importId,limit?,cursor?}` returns session,
-acceptedBatches, saved preview and committedRevisionId. Paginate acceptedBatches
-using returned cursor. Batch summaries identify accepted batchId/payloadHash/
+acceptedBatches, saved preview and committedRevisionId. acceptedBatches come in
+acceptance order (ascending acceptedVersion); paginate using returned cursor. Batch summaries identify accepted batchId/payloadHash/
 acceptedVersion; replay original batch inputs to recover missing identity mappings.
 Continue from the current session version, not a stale receipt version.
 

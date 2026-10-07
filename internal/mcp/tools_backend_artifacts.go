@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
+
 	"github.com/yashok111/mocker/api"
 	"github.com/yashok111/mocker/internal/backendmodel"
 	"github.com/yashok111/mocker/internal/jsonx"
@@ -93,9 +94,9 @@ func addBackendArtifactTool(s *sdk.Server, lb *loopback, tool *sdk.Tool, route s
 			return fail(err)
 		}
 		if status < 200 || status >= 300 {
-			return fail(fmt.Errorf("HTTP %d: %s", status, response))
+			return fail(backendStatusError(status, response))
 		}
-		return &sdk.CallToolResult{StructuredContent: jsonx.RawMessage(response), Content: []sdk.Content{&sdk.TextContent{Text: string(response)}}}, nil
+		return backendToolResult(response), nil
 	})
 }
 

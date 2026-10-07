@@ -2,9 +2,10 @@ package ordersprotocol_test
 
 import (
 	"encoding/json"
-	p "github.com/yashok111/mocker/internal/ordersprotocol"
 	"os"
 	"testing"
+
+	p "github.com/yashok111/mocker/internal/ordersprotocol"
 )
 
 const run = "01900000-0000-7000-8000-000000000001"

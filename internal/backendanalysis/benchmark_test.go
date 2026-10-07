@@ -2,8 +2,9 @@ package backendanalysis
 
 import (
 	"fmt"
-	bm "github.com/yashok111/mocker/internal/backendmodel"
 	"testing"
+
+	bm "github.com/yashok111/mocker/internal/backendmodel"
 )
 
 func BenchmarkScenarioMeasurement1000(b *testing.B) {

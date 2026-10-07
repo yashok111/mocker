@@ -139,7 +139,7 @@ func (m *changeRebaseMerge) correspondenceMap(base, ours, result *changeEvaluati
 	for _, c := range m.input.IdentityResolutions {
 		old, ok := base.records[c.OldSourceID]
 		next, exists := result.records[c.NewSourceID]
-		if !ok || !exists || c.OldSourceID == c.NewSourceID || mapping[c.OldSourceID] != "" || targets[c.NewSourceID] || !validAPIText(c.Reason, 1, 4096) || old.RecordType != next.RecordType || old.Payload.Kind != next.Payload.Kind {
+		if !ok || !exists || c.OldSourceID == c.NewSourceID || mapping[c.OldSourceID] != "" || targets[c.NewSourceID] || !validChangeReason(c.Reason) || old.RecordType != next.RecordType || old.Payload.Kind != next.Payload.Kind {
 			return nil, invalid("identityResolutions", "Expected one-to-one same-kind source correspondence with reason")
 		}
 		if _, collision := base.records[c.NewSourceID]; collision {

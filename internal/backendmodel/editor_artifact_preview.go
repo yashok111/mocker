@@ -65,7 +65,12 @@ func (s *ArtifactService) prepareArtifacts(ctx context.Context, pid string, in P
 		return nil, err
 	}
 	request := NewEditorArtifactRequest(ctx, s.api, s.scenarios)
-	builder := artifactPreviewBuilder{out: out, request: request, nodes: nodes}
+	builder := artifactPreviewBuilder{out: out, request: request, nodes: nodes, inputAPI: map[string]ArtifactKey{}}
+	for _, c := range in.Commands {
+		for _, b := range c.APIBindings {
+			builder.inputAPI[b.SourceNodeID] = c.Artifact
+		}
+	}
 	keys := slices.Collect(maps.Keys(commands))
 	slices.SortFunc(keys, func(a, b ArtifactKey) int {
 		if n := strings.Compare(a.Kind, b.Kind); n != 0 {
@@ -133,6 +138,9 @@ func (s *ArtifactService) loadArtifactPinsBaseline(ctx context.Context, pid stri
 	}
 	if !isArtifactSourceSchema(state.Revision.SchemaVersion) || len(state.Sources) == 0 || len(state.Revision.SourceSnapshotIDs) == 0 || len(p.Repositories) == 0 {
 		return nil, nil, "", &FaultError{Status: 422, Code: "backend_artifact_pins_unsupported", Message: "Artifact pins require an imported source4, source5 or source6 baseline"}
+	}
+	if state.ArtifactContextV3 != nil {
+		return nil, nil, "", legacyPinsOnV3("backend_artifact_pins_unsupported")
 	}
 	baselineHash, err := artifactBaselineDigest(ctx, tx, pid, in.BaseRevisionID)
 	if err != nil {
@@ -216,6 +224,8 @@ type artifactPreviewBuilder struct {
 	request *EditorArtifactRequest
 	nodes   map[string]Node
 	changes int
+	// inputAPI maps each source this request binds to the command binding it.
+	inputAPI map[string]ArtifactKey
 }
 
 func (b *artifactPreviewBuilder) diagnostic(code string, key ArtifactKey, selector *EditorSelector, ids []string, message string, block bool) {
@@ -263,6 +273,11 @@ type artifactPreviewGroup struct {
 	remove          bool
 }
 
+// Frozen labels go through boundedArtifactLabel, as on the legacy API path:
+// owners allow names far above the 4096-byte cap Validate enforces, and one
+// long participant or source-node name failed the whole preview with a bare
+// "Invalid frozen editor binding" (review 2026-10-06, F59). A label is a
+// last-known hint, never an identity, so a truncated one loses nothing.
 func (b *artifactPreviewBuilder) resolveAPIBindings(ctx context.Context, c ArtifactPinCommand, nextPin ArtifactPin) ([]APIArtifactBinding, error) {
 	key, nodes, request := c.Artifact, b.nodes, b.request
 	nextAPI := []APIArtifactBinding{}
@@ -280,7 +295,7 @@ func (b *artifactPreviewBuilder) resolveAPIBindings(ctx context.Context, c Artif
 			b.diagnostic("backend_artifact_object_missing", key, nil, []string{n.ID}, "Selected API object is unavailable or unsupported", true)
 			continue
 		}
-		nextAPI = append(nextAPI, APIArtifactBinding{SourceNodeID: n.ID, SourceKind: n.Kind, SourceLastKnownLabel: n.Name, Ref: ArtifactRef{Kind: key.Kind, ArtifactID: key.ID, RevisionID: nextPin.RevisionID, ContentHash: nextPin.ContentHash, Selector: input.Selector, ObjectHash: object.ObjectHash, LastKnownLabel: object.Label, ResolvedPointer: object.Pointer}, Origin: "manual", Reason: c.Reason})
+		nextAPI = append(nextAPI, APIArtifactBinding{SourceNodeID: n.ID, SourceKind: n.Kind, SourceLastKnownLabel: boundedArtifactLabel(n.Name), Ref: ArtifactRef{Kind: key.Kind, ArtifactID: key.ID, RevisionID: nextPin.RevisionID, ContentHash: nextPin.ContentHash, Selector: input.Selector, ObjectHash: object.ObjectHash, LastKnownLabel: boundedArtifactLabel(object.Label), ResolvedPointer: object.Pointer}, Origin: "manual", Reason: c.Reason})
 	}
 	return nextAPI, nil
 }
@@ -300,7 +315,7 @@ func (b *artifactPreviewBuilder) resolveEditorBindings(ctx context.Context, c Ar
 				missing = true
 				b.diagnostic("backend_artifact_source_missing", key, new(input.Selector), []string{id}, "Selected source node is absent", true)
 			} else {
-				labels = append(labels, n.Name)
+				labels = append(labels, boundedArtifactLabel(n.Name))
 			}
 		}
 		if missing {
@@ -315,7 +330,7 @@ func (b *artifactPreviewBuilder) resolveEditorBindings(ctx context.Context, c Ar
 			continue
 		}
 		out.Diagnostics = append(out.Diagnostics, object.Diagnostics...)
-		nextEditor = append(nextEditor, EditorBinding{ArtifactKind: key.Kind, ArtifactID: key.ID, Selector: input.Selector, SourceNodeIDs: sourceIDs, SourceLabels: labels, ObjectHash: object.ObjectHash, LastKnownLabel: object.Label, Origin: "manual", Reason: c.Reason})
+		nextEditor = append(nextEditor, EditorBinding{ArtifactKind: key.Kind, ArtifactID: key.ID, Selector: input.Selector, SourceNodeIDs: sourceIDs, SourceLabels: labels, ObjectHash: object.ObjectHash, LastKnownLabel: boundedArtifactLabel(object.Label), Origin: "manual", Reason: c.Reason})
 	}
 	return nextEditor, nil
 }
@@ -455,6 +470,42 @@ func (b *artifactPreviewBuilder) compareEditorBindings(ctx context.Context, grou
 	return nil
 }
 
+// selectArtifactSnapshotPin reads the pin a bind command selects. A target
+// that cannot be read is available=false, not an error: the preview records
+// it as a blocking diagnostic, and only what requiredArtifactError calls
+// fatal aborts the preview.
+func selectArtifactSnapshotPin(ctx context.Context, request *EditorArtifactRequest, key ArtifactKey, revisionID string) (ArtifactPin, bool, error) {
+	pin, err := request.SnapshotPin(key, revisionID)
+	if e := requiredArtifactError(ctx, err); e != nil {
+		return pin, false, e
+	}
+	return pin, err == nil, nil
+}
+
+// keepUnavailableGroup reports a pin whose target cannot be read and keeps
+// the group's old bindings, except a source another command of this request
+// rebinds: keeping both made the vector admission fail with 400 "Duplicate
+// API source binding" instead of this blocking diagnostic, which now names
+// those sources (review 2026-10-06, F62).
+func (b *artifactPreviewBuilder) keepUnavailableGroup(key ArtifactKey, oldPin ArtifactPin, hadOld bool, previousAPI []APIArtifactBinding, previousEditor []EditorBinding) {
+	out := b.out
+	var claimed []string
+	kept := []APIArtifactBinding{}
+	for _, binding := range previousAPI {
+		if owner, ok := b.inputAPI[binding.SourceNodeID]; ok && owner != key {
+			claimed = append(claimed, binding.SourceNodeID)
+			continue
+		}
+		kept = append(kept, binding)
+	}
+	b.diagnostic("backend_artifact_target_unavailable", key, nil, claimed, "Selected immutable artifact is unavailable or unverified", true)
+	if hadOld {
+		out.Pins = append(out.Pins, oldPin)
+		out.APIBindings = append(out.APIBindings, kept...)
+		out.EditorBindings = append(out.EditorBindings, previousEditor...)
+	}
+}
+
 func (b *artifactPreviewBuilder) applyCommand(ctx context.Context, c ArtifactPinCommand, pins map[ArtifactKey]ArtifactPin, frozen *ArtifactContext) error {
 	key := c.Artifact
 	out, request := b.out, b.request
@@ -468,18 +519,21 @@ func (b *artifactPreviewBuilder) applyCommand(ctx context.Context, c ArtifactPin
 	nextAPI := []APIArtifactBinding{}
 	nextEditor := []EditorBinding{}
 	remove := c.Type == "remove_artifact_pin"
+	// A removal of a group that has no pin changed nothing, yet previewed as
+	// applicable with an empty diff and Apply wrote a new revision (review
+	// 2026-10-06, F61).
+	if remove && !hadOld {
+		b.diagnostic("backend_artifact_pin_absent", key, nil, nil, "Artifact group is not pinned in this revision; nothing to remove", true)
+		return nil
+	}
 	if !remove {
-		nextPin, err = request.SnapshotPin(key, c.RevisionID)
-		if e := requiredArtifactError(ctx, err); e != nil {
-			return e
-		}
+		var available bool
+		nextPin, available, err = selectArtifactSnapshotPin(ctx, request, key, c.RevisionID)
 		if err != nil {
-			b.diagnostic("backend_artifact_target_unavailable", key, nil, nil, "Selected immutable artifact is unavailable or unverified", true)
-			if hadOld {
-				out.Pins = append(out.Pins, oldPin)
-				out.APIBindings = append(out.APIBindings, previousAPI...)
-				out.EditorBindings = append(out.EditorBindings, previousEditor...)
-			}
+			return err
+		}
+		if !available {
+			b.keepUnavailableGroup(key, oldPin, hadOld, previousAPI, previousEditor)
 			return nil
 		}
 		nextAPI, err = b.resolveAPIBindings(ctx, c, nextPin)

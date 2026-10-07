@@ -6,10 +6,11 @@ import (
 	"encoding/hex"
 	"encoding/json/jsontext"
 	"encoding/json/v2"
-	bm "github.com/yashok111/mocker/internal/backendmodel"
 	"slices"
 	"strconv"
 	"strings"
+
+	bm "github.com/yashok111/mocker/internal/backendmodel"
 )
 
 const (
@@ -64,7 +65,7 @@ func validHash(s string) bool {
 		return false
 	}
 	for _, c := range s {
-		if !(c >= '0' && c <= '9' || c >= 'a' && c <= 'f') {
+		if (c < '0' || c > '9') && (c < 'a' || c > 'f') {
 			return false
 		}
 	}
@@ -87,8 +88,17 @@ func (i Identity) Validate() error {
 	if err != nil || n < 0 || strconv.FormatInt(n, 10) != i.Version {
 		return fault(422, "Canonical lossless version required")
 	}
-	if n == 0 && !slices.Contains([]string{"project", "repository", "source_snapshot", "node", "edge", "evidence", "annotation", "diagram", "diagram_element", "diagram_link", "saved_view", "diagram_view", "artifact_owner"}, i.Kind) {
+	// The partition is two-sided (review 2026-10-06, F70): an unversioned kind
+	// carries exactly "0", the version every exporter writes for it. Accepting
+	// any version there let two records with one annotation ID and versions
+	// "0" and "1" pass as distinct keys, remap to one local UUID and fail
+	// Preview with a raw SQLite PRIMARY KEY error (500) instead of a 422.
+	unversioned := slices.Contains([]string{"project", "repository", "source_snapshot", "node", "edge", "evidence", "annotation", "diagram", "diagram_element", "diagram_link", "saved_view", "diagram_view", "artifact_owner"}, i.Kind)
+	if n == 0 && !unversioned {
 		return fault(422, "Exact version required")
+	}
+	if n != 0 && unversioned {
+		return fault(422, "Unversioned record kind requires version 0")
 	}
 	return nil
 }
@@ -283,6 +293,18 @@ func (m Manifest) Validate() error {
 	if len(m.Schemas) == 0 || m.Selection.DiagramViews == nil {
 		return fault(422, "Schema and exact view lists required")
 	}
+	if err := m.validateSchemas(); err != nil {
+		return err
+	}
+	if err := m.Selection.validatePins(); err != nil {
+		return err
+	}
+	return m.validateChunks()
+}
+
+// validateSchemas admits each known schema once and requires a source
+// schema 5 or 6 and the v3 artifact context.
+func (m Manifest) validateSchemas() error {
 	seen := map[string]bool{}
 	for _, v := range m.Schemas {
 		if seen[v] || !slices.Contains([]string{"1", "2", "3", "4", "5", "6", "proposal-graph-v1", "proposal-relational-v1", "artifact-context-v3", "backend-diagram-v1", "backend-diagram-provenance-v1", "diagram-view-v1", "saved-view-v1", "saved-view-v2"}, v) {
@@ -293,20 +315,31 @@ func (m Manifest) Validate() error {
 	if (!seen["5"] && !seen["6"]) || !seen["artifact-context-v3"] {
 		return fault(422, "Source5 and context-v3 required")
 	}
+	return nil
+}
+
+// validatePins requires every selected saved view and diagram view to be an
+// exact, distinct pin.
+func (m Selection) validatePins() error {
 	saved := map[SavedViewPin]bool{}
-	for _, v := range m.Selection.SavedViews {
+	for _, v := range m.SavedViews {
 		if !bm.ValidID(v.ID) || v.Version <= 0 || saved[v] {
 			return fault(422, "Invalid or duplicate saved view pin")
 		}
 		saved[v] = true
 	}
 	views := map[SVGInput]bool{}
-	for _, v := range m.Selection.DiagramViews {
+	for _, v := range m.DiagramViews {
 		if !bm.ValidID(v.ViewID) || v.ViewVersion <= 0 || views[v] {
 			return fault(422, "Duplicate or invalid exact view")
 		}
 		views[v] = true
 	}
+	return nil
+}
+
+// validateChunks bounds the chunk count, each chunk and the bundle total.
+func (m Manifest) validateChunks() error {
 	total := int64(0)
 	if len(m.Chunks) == 0 || len(m.Chunks) > 262144 {
 		return fault(413, "Chunk count quota")

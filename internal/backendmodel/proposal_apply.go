@@ -6,10 +6,11 @@ import (
 	"database/sql"
 	"encoding/json/v2"
 	"errors"
-	"github.com/yashok111/mocker/internal/backendblob"
 	"math"
 	"time"
 	"uuid"
+
+	"github.com/yashok111/mocker/internal/backendblob"
 
 	"github.com/yashok111/mocker/internal/store"
 )
@@ -132,7 +133,7 @@ func proposalCommandHistory(ctx context.Context, q importReader, proposalID stri
 	if err != nil {
 		return err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	for rows.Next() {
 		var raw string
 		if err := rows.Scan(&raw); err != nil {
@@ -169,44 +170,16 @@ func (r *Repo) prepareProposal(ctx context.Context, pid, proposalID string, in P
 	if err := validateProposalCommands(in.Commands); err != nil {
 		return nil, err
 	}
-	tx, err := r.db.R.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
+	// Release the reader before queueing on the single writer. Holding it there
+	// closed a cycle with any writer holder that needs a reader, once the pool
+	// was full of such waiters (review 2026-10-06, F3). Everything still to read
+	// is the immutable base revision, re-read below on a fresh snapshot and
+	// pinned by its semantic hash. readProposalDraft returns with its reader
+	// already rolled back.
+	p, draft, estimate, err := r.readProposalDraft(ctx, pid, proposalID, in)
 	if err != nil {
 		return nil, err
 	}
-	defer tx.Rollback()
-	p, err := loadProposal(ctx, tx, pid, proposalID)
-	if err != nil {
-		return nil, err
-	}
-	if err := requireProposalDraft(p, in.ExpectedVersion, in.DraftRevisionID); err != nil {
-		return nil, err
-	}
-	draft, err := loadProposalRevision(ctx, tx, p.ID, in.DraftRevisionID)
-	if err != nil {
-		return nil, err
-	}
-	if err := proposalCommandHistory(ctx, tx, p.ID, in.Commands); err != nil {
-		return nil, err
-	}
-	if _, err := proposalBase(ctx, tx, pid, CreateProposalInput{BaseRevisionID: p.BaseRevisionID, RepositoryID: p.RepositoryID, DatastoreID: p.DatastoreID, FacetKey: p.FacetKey}); err != nil {
-		return nil, err
-	}
-	// Account for in-flight work before materializing the graph. The estimate
-	// uses pinned serialized inputs; reconcile it with the measured payload
-	// before publishing a prepared result. Both admissions share the writer
-	// with import staging mutations.
-	var inputBytes int64
-	if err := tx.QueryRowContext(ctx, `SELECT
-	 (SELECT COALESCE(SUM(length(CAST(document AS BLOB))),0) FROM backend_graph_records_documents WHERE project_id=? AND revision_id=?) +
-	 (SELECT COALESCE(SUM(length(CAST(document AS BLOB))),0) FROM backend_revision_sources_documents WHERE revision_id=?) +
-	 (SELECT length(CAST(document AS BLOB)) FROM backend_proposal_revisions_documents WHERE id=?)`, pid, p.BaseRevisionID, p.BaseRevisionID, draft.ID).Scan(&inputBytes); err != nil {
-		return nil, err
-	}
-	commandJSON, err := json.Marshal(in.Commands)
-	if err != nil {
-		return nil, err
-	}
-	estimate := min(int64(MaxRevisionBytes), 4*inputBytes+8*int64(len(commandJSON))+65536)
 	var reservation *store.TransientReservation
 	retained := false
 	defer func() {
@@ -228,7 +201,7 @@ func (r *Repo) prepareProposal(ctx context.Context, pid, proposalID string, in P
 	}); err != nil {
 		return nil, err
 	}
-	state, err := loadRevisionState(ctx, tx, pid, p.BaseRevisionID)
+	state, err := r.readRevisionState(ctx, pid, p.BaseRevisionID)
 	if err != nil {
 		return nil, err
 	}
@@ -266,6 +239,59 @@ func (r *Repo) prepareProposal(ctx context.Context, pid, proposalID string, in P
 	}
 	retained = true
 	return &preparedProposal{proposal: p, draft: draft, candidate: candidate, reservedBytes: reserved, reservation: reservation}, nil
+}
+
+// readProposalDraft checks the draft on one read snapshot and estimates the
+// transient bytes preparing it will take.
+func (r *Repo) readProposalDraft(ctx context.Context, pid, proposalID string, in PreviewProposalInput) (*Proposal, *ProposalRevision, int64, error) {
+	tx, err := r.db.R.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
+	if err != nil {
+		return nil, nil, 0, err
+	}
+	defer func() { _ = tx.Rollback() }()
+	p, err := loadProposal(ctx, tx, pid, proposalID)
+	if err != nil {
+		return nil, nil, 0, err
+	}
+	if err := requireProposalDraft(p, in.ExpectedVersion, in.DraftRevisionID); err != nil {
+		return nil, nil, 0, err
+	}
+	draft, err := loadProposalRevision(ctx, tx, p.ID, in.DraftRevisionID)
+	if err != nil {
+		return nil, nil, 0, err
+	}
+	if err := proposalCommandHistory(ctx, tx, p.ID, in.Commands); err != nil {
+		return nil, nil, 0, err
+	}
+	if _, err := proposalBase(ctx, tx, pid, CreateProposalInput{BaseRevisionID: p.BaseRevisionID, RepositoryID: p.RepositoryID, DatastoreID: p.DatastoreID, FacetKey: p.FacetKey}); err != nil {
+		return nil, nil, 0, err
+	}
+	// Account for in-flight work before materializing the graph. The estimate
+	// uses pinned serialized inputs; reconcile it with the measured payload
+	// before publishing a prepared result. Both admissions share the writer
+	// with import staging mutations.
+	var inputBytes int64
+	if err := tx.QueryRowContext(ctx, `SELECT
+	 (SELECT COALESCE(SUM(length(CAST(document AS BLOB))),0) FROM backend_graph_records_documents WHERE project_id=? AND revision_id=?) +
+	 (SELECT COALESCE(SUM(length(CAST(document AS BLOB))),0) FROM backend_revision_sources_documents WHERE revision_id=?) +
+	 (SELECT length(CAST(document AS BLOB)) FROM backend_proposal_revisions_documents WHERE id=?)`, pid, p.BaseRevisionID, p.BaseRevisionID, draft.ID).Scan(&inputBytes); err != nil {
+		return nil, nil, 0, err
+	}
+	commandJSON, err := json.Marshal(in.Commands)
+	if err != nil {
+		return nil, nil, 0, err
+	}
+	return p, draft, min(int64(MaxRevisionBytes), 4*inputBytes+8*int64(len(commandJSON))+65536), nil
+}
+
+// readRevisionState reads one immutable revision on its own short snapshot.
+func (r *Repo) readRevisionState(ctx context.Context, pid, revisionID string) (*RevisionState, error) {
+	tx, err := r.db.R.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = tx.Rollback() }()
+	return loadRevisionState(ctx, tx, pid, revisionID)
 }
 
 func (r *Repo) checkProposalStaging(ctx context.Context, tx *sql.Tx, pid string, bytes int64) error {
@@ -331,49 +357,65 @@ func (r *Repo) ApplyProposal(ctx context.Context, pid, proposalID string, in App
 		if preparationErr != nil {
 			return preparationErr
 		}
-		p, draft, candidate := prepared.proposal, prepared.draft, prepared.candidate
-		if current.BaseRevisionID != p.BaseRevisionID || current.BaseSemanticHash != p.BaseSemanticHash || current.RepositoryID != p.RepositoryID || current.DatastoreID != p.DatastoreID || current.FacetKey != p.FacetKey || current.DraftHash != draft.SemanticHash {
-			return proposalConflict(current, "backend_proposal_preview_conflict", "Prepared proposal pins changed")
-		}
-		if candidate.CandidateHash == nil {
-			return &FaultError{Status: 422, Code: "backend_proposal_invalid", Message: "Invalid final proposal graph", Details: map[string]any{"diagnostics": candidate.Diagnostics}}
-		}
-		if *candidate.CandidateHash != in.CandidateHash {
-			return proposalConflict(current, "backend_proposal_preview_conflict", "Candidate hash differs from the exact preview")
+		if err := requirePreparedProposal(current, prepared, in.CandidateHash); err != nil {
+			return err
 		}
 		if err := r.checkProposalStaging(ctx, tx, pid, 0); err != nil {
 			return err
 		}
-		now := time.Now().UTC()
-		rev := ProposalRevision{ID: uuid.NewV7().String(), ProposalID: proposalID, ParentRevisionID: new(draft.ID), DocumentVersion: ProposalDocumentVersion, SemanticHash: *candidate.CandidateHash, BaseRevisionID: p.BaseRevisionID, BaseSemanticHash: p.BaseSemanticHash, SourceSnapshotIDs: draft.SourceSnapshotIDs, ArtifactPins: draft.ArtifactPins, Commands: in.Commands, Overlays: candidate.Overlays, Criteria: candidate.Criteria, Author: "user", Summary: proposalChangeSummary(candidate.Changes), CreatedAt: now}
-		document, err := json.Marshal(rev)
-		if err != nil {
-			return err
-		}
-		if len(document) > MaxRevisionBytes {
-			return proposalLimit("Proposal revision exceeds the semantic payload limit")
-		}
-		if _, err := backendblob.Exec(ctx, tx, `INSERT INTO backend_proposal_revisions(id,proposal_id,parent_revision_id,document) VALUES(?,?,?,?)`, rev.ID, proposalID, draft.ID, string(document)); err != nil {
-			return err
-		}
-		current.Version++
-		current.DraftRevisionID, current.DraftHash, current.UpdatedAt = rev.ID, rev.SemanticHash, now
-		if _, err := tx.ExecContext(ctx, `UPDATE backend_proposals SET version=?,draft_revision_id=?,draft_hash=?,updated_at=? WHERE id=?`, current.Version, rev.ID, rev.SemanticHash, now.Format(time.RFC3339Nano), proposalID); err != nil {
-			return err
-		}
-		*out = ProposalApplyResult{Proposal: *current, Revision: rev, Changes: candidate.Changes, Criteria: candidate.Criteria, CandidateGraphHash: *candidate.GraphHash}
-		response, err := json.Marshal(out)
-		if err != nil {
-			return err
-		}
-		_, err = tx.ExecContext(ctx, `INSERT INTO backend_command_receipts(scope,key,request_hash,response) VALUES(?,?,?,?)`, scope, in.IdempotencyKey, digest, string(response))
-		if err == nil {
-			out.receiptJSON = string(response)
-		}
-		return err
+		return publishProposalRevision(ctx, tx, current, prepared, in, proposalID, scope, digest, out)
 	})
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
+}
+
+// requirePreparedProposal refuses an apply whose prepared preview no longer
+// matches the current proposal pins or the candidate the client previewed.
+func requirePreparedProposal(current *Proposal, prepared *preparedProposal, candidateHash string) error {
+	p, draft, candidate := prepared.proposal, prepared.draft, prepared.candidate
+	if current.BaseRevisionID != p.BaseRevisionID || current.BaseSemanticHash != p.BaseSemanticHash || current.RepositoryID != p.RepositoryID || current.DatastoreID != p.DatastoreID || current.FacetKey != p.FacetKey || current.DraftHash != draft.SemanticHash {
+		return proposalConflict(current, "backend_proposal_preview_conflict", "Prepared proposal pins changed")
+	}
+	if candidate.CandidateHash == nil {
+		return &FaultError{Status: 422, Code: "backend_proposal_invalid", Message: "Invalid final proposal graph", Details: map[string]any{"diagnostics": candidate.Diagnostics}}
+	}
+	if *candidate.CandidateHash != candidateHash {
+		return proposalConflict(current, "backend_proposal_preview_conflict", "Candidate hash differs from the exact preview")
+	}
+	return nil
+}
+
+// publishProposalRevision writes the applied revision, advances the draft
+// pointer and stores the receipt a retried apply returns.
+func publishProposalRevision(ctx context.Context, tx *sql.Tx, current *Proposal, prepared *preparedProposal, in ApplyProposalInput, proposalID, scope, digest string, out *ProposalApplyResult) error {
+	p, draft, candidate := prepared.proposal, prepared.draft, prepared.candidate
+	now := time.Now().UTC()
+	rev := ProposalRevision{ID: uuid.NewV7().String(), ProposalID: proposalID, ParentRevisionID: new(draft.ID), DocumentVersion: ProposalDocumentVersion, SemanticHash: *candidate.CandidateHash, BaseRevisionID: p.BaseRevisionID, BaseSemanticHash: p.BaseSemanticHash, SourceSnapshotIDs: draft.SourceSnapshotIDs, ArtifactPins: draft.ArtifactPins, Commands: in.Commands, Overlays: candidate.Overlays, Criteria: candidate.Criteria, Author: "user", Summary: proposalChangeSummary(candidate.Changes), CreatedAt: now}
+	document, err := json.Marshal(rev)
+	if err != nil {
+		return err
+	}
+	if len(document) > MaxRevisionBytes {
+		return proposalLimit("Proposal revision exceeds the semantic payload limit")
+	}
+	if _, err := backendblob.Exec(ctx, tx, `INSERT INTO backend_proposal_revisions(id,proposal_id,parent_revision_id,document) VALUES(?,?,?,?)`, rev.ID, proposalID, draft.ID, string(document)); err != nil {
+		return err
+	}
+	current.Version++
+	current.DraftRevisionID, current.DraftHash, current.UpdatedAt = rev.ID, rev.SemanticHash, now
+	if _, err := tx.ExecContext(ctx, `UPDATE backend_proposals SET version=?,draft_revision_id=?,draft_hash=?,updated_at=? WHERE id=?`, current.Version, rev.ID, rev.SemanticHash, now.Format(time.RFC3339Nano), proposalID); err != nil {
+		return err
+	}
+	*out = ProposalApplyResult{Proposal: *current, Revision: rev, Changes: candidate.Changes, Criteria: candidate.Criteria, CandidateGraphHash: *candidate.GraphHash}
+	response, err := json.Marshal(out)
+	if err != nil {
+		return err
+	}
+	_, err = tx.ExecContext(ctx, `INSERT INTO backend_command_receipts(scope,key,request_hash,response) VALUES(?,?,?,?)`, scope, in.IdempotencyKey, digest, string(response))
+	if err == nil {
+		out.receiptJSON = string(response)
+	}
+	return err
 }

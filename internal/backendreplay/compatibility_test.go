@@ -145,20 +145,20 @@ func runOrdersCompatibility(t *testing.T, variant, drop string) *replay.Run {
 		raw, err := io.ReadAll(r.Body)
 		if err != nil {
 			t.Error(err)
-			http.Error(w, "read", 500)
+			http.Error(w, "read", http.StatusInternalServerError)
 			return
 		}
 		r.Body = io.NopCloser(bytes.NewReader(raw))
 		var fence p.Fence
 		if err = json.Unmarshal(raw, &fence); err != nil {
 			t.Error(err)
-			http.Error(w, "decode", 500)
+			http.Error(w, "decode", http.StatusInternalServerError)
 			return
 		}
 		var persisted []byte
 		if err := db.R.QueryRowContext(r.Context(), `SELECT request_json FROM backend_replay_steps_documents WHERE run_id=? AND request_key=?`, fence.RunID, fence.RequestKey).Scan(&persisted); err != nil || !bytes.Equal(raw, persisted) {
 			t.Errorf("mutation arrived without durable exact request: %v", err)
-			http.Error(w, "not durable", 500)
+			http.Error(w, "not durable", http.StatusInternalServerError)
 			return
 		}
 		if endpoint == drop && dropped.CompareAndSwap(false, true) {
@@ -192,7 +192,7 @@ func runOrdersCompatibility(t *testing.T, variant, drop string) *replay.Run {
 		t.Fatal(err)
 	}
 	s := replay.NewService(replay.NewRepo(db), graphs, []replay.Target{{TargetInfo: replay.TargetInfo{ID: "compatibility", Version: 1, IsolationID: isolation}, Transport: transport, ConfigFingerprint: transport.(interface{ ConfigHash() string }).ConfigHash()}})
-	s.ActorAllowed = func(_ context.Context, actor string) bool { return actor == "compatibility-actor" }
+	s.ActorAllowed = func(_ context.Context, actor string) (bool, error) { return actor == "compatibility-actor", nil }
 	if err = s.RecoverInterrupted(t.Context()); err != nil {
 		t.Fatal(err)
 	}

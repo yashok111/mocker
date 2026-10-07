@@ -7,8 +7,8 @@ metadata:
   requiredModelSchemaVersions: "[\"3\",\"4\",\"5\",\"6\"]"
   requiredViewSchemaVersions: "[\"saved-view-v1\",\"api-artifact-pins-v1\",\"backend-editor-artifacts-v1\",\"proposal-graph-v1\",\"saved-view-v2\",\"import-candidate-v1\",\"backend-diagram-v1\",\"diagram-view-v1\"]"
   requiredCapabilities: "[\"backend-projects\",\"backend-revisions\",\"backend-graph-query\",\"backend-flow-query\",\"backend-data-access-query\",\"backend-saved-views\",\"backend-field-lineage-query\",\"backend-api-artifact-pins\",\"backend-editor-projections\",\"backend-events-query\",\"backend-source-assertions\",\"backend-import-candidate\",\"backend-change-proposals\",\"backend-representations\",\"backend-saved-views-v2\",\"backend-diagrams\",\"backend-architecture\",\"backend-diagram-views\",\"backend-interactions\",\"backend-lifecycle\",\"backend-business-map\",\"backend-scenario-measurements\",\"backend-observed-impact\",\"backend-observed-sequences\"]"
-  guideSetId: "sha256:f25648e4c5cfffe7d621b112a8e26d47d58d3838385b18d201ca68507aac2981"
-  manifestHash: "sha256:f25648e4c5cfffe7d621b112a8e26d47d58d3838385b18d201ca68507aac2981"
+  guideSetId: "sha256:4c7d20df64ed90dd74d794334df66b29bd2fc23e14f3e0c4e3b7fb42a36c6a0c"
+  manifestHash: "sha256:4c7d20df64ed90dd74d794334df66b29bd2fc23e14f3e0c4e3b7fb42a36c6a0c"
 ---
 # Pinned source flow and data-access inspection
 
@@ -39,7 +39,7 @@ immutable guideSetId:
 
 | Topic | Actual owner | Read when |
 |---|---|---|
-| `backend-flow-reference` | inspect13 | Before the first flow/access query; strict variants, typed records and pagination. |
+| `backend-flow-reference` | inspect13 | Before the first flow/access/lineage query or API association; strict variants, typed records, pagination and the ordered lineage/association steps. |
 | `backend-events` | inspect13 | Before source5 routes/jobs/service_calls or contextual field navigation. |
 | `backend-analysis` | inspect13 | For witnesses, uncertainty, truncation or a blocking gap. |
 | `backend-editor-projections` | inspect13 | Before saved scenario/API editor projections or generic pin changes. |
@@ -141,44 +141,15 @@ Ordinary-agent acceptance and live agent evaluation remain deferred.
 
 ## Ordered pinned field-lineage inspection
 
-1. Require inspect13, source4/5, field-lineage-v1 and backend-field-lineage-query.
-   Source1–3 and proposals refuse this query; their older reads remain supported.
-   A proposal may navigate to its exact source base only if that base is source4/5.
-2. Select one complete value ref from pinned node reads: column nodeId+facetKey;
-   port nodeId+collection (inputs/outputs/parameters/results)+opaque portKey;
-   api_field nodeId. Never replace collection/key with a name, index or UUID.
-3. Call query_backend_lineage with projectId, revisionId, seed, direction
-   forward/reverse, optional maxDepth1–32 (default8), limit1–100 (default50).
-   For origins choose reverse; for downstream dependencies choose forward.
-4. Show the whole mapping, every ordered source, destination, transform, evidence,
-   status, requiresReview, expansion/reasons and witnessMappingIds. Forward expands
-   only the destination; reverse expands all co-inputs. A witness is one shortest
-   static dependency explanation, not execution or simultaneous branch behavior.
-5. Unknown_transform, unsupported analysis, stale/unresolved proof and bounded
-   depth stop expansion. The destination and all inputs remain inspectable;
-   starting a separate query beyond a boundary does not prove a through path.
-   Zero-input unknown means unresolved inputs; only constant declares a constant.
-6. Continue nextCursor with identical complete request/pins; reset after any
-   change. Show pagination separately from truncated/truncationReasons, revision
-   coverage and global examined/visited counts. Empty means no imported mapping
-   in this scope; it never proves no dependency exists.
-7. Read mapping/value/owner/evidence at that same revision. Preserve full facet
-   and port navigation addresses. Redacted known transforms may expand while
-   keeping secret details hidden; do not reconstruct sensitive constants/samples.
-   Save only existing Flow presentation when requested: lineage controls remain
-   transient and do not extend saved-view-v1. Never fall back to latest on failure.
+Require inspect13, source4/5, field-lineage-v1 and backend-field-lineage-query, then follow the
+ordered procedure under `query_backend_lineage` in `backend-flow-reference` from this same set.
 
 API fields beneath their source HTTP operation retain direction/location/status/
 media/structural selector. Manual external API associations require inspect13,
 backend-api-artifact-pins and api-artifact-pins-v1 in viewSchemaVersions. Read the
-full contract/example in backend-flow-reference before an authorized change.
-Choose source node, immutable API revision and operation key/schema pointer
-explicitly; query all pages, preserve the entire edited artifact binding set,
-preview the full vector, then apply the exact candidate with CAS and a saved key.
-Lost replies retain the exact body/key for replay; CAS requires explicit repreview.
-Historical SavedView/proposal reads keep their exact source/base revisions.
-The separate raw pinned editor panel preserves the dirty current draft. Manual
-associations do not establish compatibility, conformance or executed behavior.
+full contract, example and ordered steps in backend-flow-reference before an
+authorized change. Manual associations do not establish compatibility, conformance
+or executed behavior.
 For saved editors require backend-editor-projections/backend-editor-artifacts-v1;
 load backend-editor-projections for full rosters, linked/copy provenance, qualified
 snapshots, retries/current-head409 recovery and independent admission budgets.

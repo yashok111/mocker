@@ -140,15 +140,7 @@ func (p *Plane) serveGenerated(w http.ResponseWriter, r *http.Request, ws *works
 	overrideActive := hasRow && row.OverrideOn
 
 	if overrideActive && row.RouteOff {
-		if program := rt.responseRules[overrides.OpKey(route.Method, route.Path)]; program != nil {
-			markResponseRule(r, program.ID(), "response_rule_shadowed_route_off", false)
-		}
-		// The exact shape serveRoute already answers when nothing in the
-		// table matches at all (routes.go's serveNoRoute) — never a new,
-		// distinguishable "this route was disabled" body: a client that
-		// could tell the two apart could enumerate which routes an operator
-		// has turned off.
-		p.serveNoRoute(w, r, ws, NormalizeSegments(r.URL.EscapedPath()))
+		p.serveRouteOff(w, r, ws, rt, route)
 		return
 	}
 
@@ -179,14 +171,7 @@ func (p *Plane) serveGenerated(w http.ResponseWriter, r *http.Request, ws *works
 	}
 	ruleResult, err := p.evaluateResponseRule(r, rt, route, m, base, overrideActive, liveEffect, baseDelay)
 	if err != nil {
-		if errors.Is(err, errResponseRuleNotAcceptable) {
-			httpx.Err(w, http.StatusNotAcceptable, "not_acceptable", "response rule media type is excluded by Accept")
-			return
-		}
-		if r.Context().Err() == nil {
-			p.log.Error("evaluate response rule", "workspace", ws.Slug, "method", route.Method, "path", route.Path)
-			httpx.Err(w, http.StatusInternalServerError, "response_rule_failed", "response rule evaluation failed")
-		}
+		p.writeResponseRuleEvalError(w, r, ws, route, err)
 		return
 	}
 
@@ -265,6 +250,35 @@ func (p *Plane) serveGenerated(w http.ResponseWriter, r *http.Request, ws *works
 	asm := p.assembleResponse(ws, rt, route, row, rv, m.Params, r.URL.Query(), delayMs, ref,
 		p.newAssetLookup(r.Context(), r, ws), p.assetBase(r, ws))
 	p.writeAssembled(w, ws, rv.NoBody, asm)
+}
+
+// serveRouteOff answers an operation the operator turned off. A response rule
+// bound to it is recorded as shadowed so the traffic row says why it did not
+// run.
+func (p *Plane) serveRouteOff(w http.ResponseWriter, r *http.Request, ws *workspaces.Workspace, rt *runtime, route *router.Route) {
+	if program := rt.responseRules[overrides.OpKey(route.Method, route.Path)]; program != nil {
+		markResponseRule(r, program.ID(), "response_rule_shadowed_route_off", false)
+	}
+	// The exact shape serveRoute already answers when nothing in the
+	// table matches at all (routes.go's serveNoRoute) — never a new,
+	// distinguishable "this route was disabled" body: a client that
+	// could tell the two apart could enumerate which routes an operator
+	// has turned off.
+	p.serveNoRoute(w, r, ws, NormalizeSegments(r.URL.EscapedPath()))
+}
+
+// writeResponseRuleEvalError answers a failed rule evaluation: 406 when the
+// rule's media type is excluded by Accept, nothing when the client already
+// went away, and a logged 500 otherwise.
+func (p *Plane) writeResponseRuleEvalError(w http.ResponseWriter, r *http.Request, ws *workspaces.Workspace, route *router.Route, err error) {
+	if errors.Is(err, errResponseRuleNotAcceptable) {
+		httpx.Err(w, http.StatusNotAcceptable, "not_acceptable", "response rule media type is excluded by Accept")
+		return
+	}
+	if r.Context().Err() == nil {
+		p.log.Error("evaluate response rule", "workspace", ws.Slug, "method", route.Method, "path", route.Path)
+		httpx.Err(w, http.StatusInternalServerError, "response_rule_failed", "response rule evaluation failed")
+	}
 }
 
 // writeAssembled is serveGenerated's write tail, shared with

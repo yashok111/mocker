@@ -81,8 +81,7 @@ func businessMapImplementationGaps(g *EffectiveGraphSnapshot, p *BusinessMapPayl
 		}
 		mapped := false
 		for _, ref := range e.Refs {
-			message := ref.Kind == "record" && ref.RecordType == "node" && messages[ref.ID] || ref.Kind == "artifact" && ref.Locator != nil && ref.Locator.View == "event_model" && ref.Locator.Owner.MessageID != ""
-			if message {
+			if businessMessageRef(ref, messages) {
 				mapped = true
 				key, _ := requestDigest(ref)
 				owners[key] = append(owners[key], e.ID)
@@ -100,6 +99,16 @@ func businessMapImplementationGaps(g *EffectiveGraphSnapshot, p *BusinessMapPayl
 		}
 	}
 	return gaps
+}
+
+// businessMessageRef reports whether a ref names a message exactly: a message
+// node, or an event-model artifact row owned by a message.
+func businessMessageRef(ref DiagramRef, messages map[string]bool) bool {
+	// On a v3 target a plain artifact ref cannot resolve, so the
+	// namespaced locator is the only exact message mapping there; leaving
+	// it out reported every such event as unmapped (review 2026-10-06, F103).
+	namespaced := ref.Kind == "namespaced_artifact" && ref.NamespacedLocator != nil && ref.NamespacedLocator.Locator.View == "event_model" && ref.NamespacedLocator.Locator.Owner.MessageID != ""
+	return ref.Kind == "record" && ref.RecordType == "node" && messages[ref.ID] || ref.Kind == "artifact" && ref.Locator != nil && ref.Locator.View == "event_model" && ref.Locator.Owner.MessageID != "" || namespaced
 }
 
 func businessMapItems(v *DiagramVersion, in DiagramQueryInput) ([]DiagramRow, error) {
@@ -134,7 +143,7 @@ func businessMapItems(v *DiagramVersion, in DiagramQueryInput) ([]DiagramRow, er
 		}
 	}
 	if in.Section == "gaps" {
-		for _, gap := range v.Gaps {
+		for _, gap := range uniqueDiagramGaps(v.Gaps) { // F104: stored duplicates
 			if in.Search == "" || strings.Contains(strings.ToLower(gap.Explanation), strings.ToLower(in.Search)) {
 				items = append(items, DiagramRow{Gap: &gap})
 			}

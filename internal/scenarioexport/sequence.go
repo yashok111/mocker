@@ -16,8 +16,9 @@ type interval struct {
 
 func sequenceIntervals(doc designscenario.Document) ([]interval, []Diagnostic) {
 	if doc.FormatVersion >= 2 {
-		issues := []Diagnostic{}
-		for _, d := range designscenario.ValidateFragments(doc) {
+		fragmentDiagnostics := designscenario.ValidateFragments(doc)
+		issues := make([]Diagnostic, 0, len(fragmentDiagnostics))
+		for _, d := range fragmentDiagnostics {
 			id := ""
 			var index int
 			if _, err := fmt.Sscanf(d.Pointer, "/fragments/%d", &index); err == nil && index >= 0 && index < len(doc.Fragments) {
@@ -112,31 +113,7 @@ func renderSequence(doc designscenario.Document, format Format, limit int64) ([]
 			next++
 		}
 		from, to := aliases[m.FromID], aliases[m.ToID]
-		if m.Kind == "note" {
-			pair := from
-			if from != to {
-				pair += "," + to
-			}
-			line("note over " + pair + ": " + label(m.Label))
-		} else {
-			arrow := " -> "
-			if format == Mermaid {
-				arrow = " ->> "
-			}
-			if m.Kind == "response" {
-				arrow = " --> "
-				if format == Mermaid {
-					arrow = " -->> "
-				}
-			}
-			if m.Kind == "event" {
-				arrow = " ->> "
-				if format == Mermaid {
-					arrow = " -) "
-				}
-			}
-			line(from + arrow + to + ": " + label(m.Label))
-		}
+		line(sequenceMessageLine(m, from, to, format, label))
 		if m.Description != "" {
 			line("note over " + from + ": " + label(m.Description))
 		}
@@ -155,6 +132,35 @@ func renderSequence(doc designscenario.Document, format Format, limit int64) ([]
 		return nil, writeErr
 	}
 	return out.Bytes(), nil
+}
+
+// sequenceMessageLine renders a note over its participants or an arrow whose
+// shape encodes the message kind in the target dialect.
+func sequenceMessageLine(m designscenario.Message, from, to string, format Format, label func(string) string) string {
+	if m.Kind == "note" {
+		pair := from
+		if from != to {
+			pair += "," + to
+		}
+		return "note over " + pair + ": " + label(m.Label)
+	}
+	arrow := " -> "
+	if format == Mermaid {
+		arrow = " ->> "
+	}
+	if m.Kind == "response" {
+		arrow = " --> "
+		if format == Mermaid {
+			arrow = " -->> "
+		}
+	}
+	if m.Kind == "event" {
+		arrow = " ->> "
+		if format == Mermaid {
+			arrow = " -) "
+		}
+	}
+	return from + arrow + to + ": " + label(m.Label)
 }
 
 func cleanNewlines(value string) string {

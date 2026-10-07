@@ -1,5 +1,5 @@
-import {BackendObservations} from "./BackendObservations";
-import {BackendObservationProvider} from "./BackendObservationContext";
+import { BackendObservations } from "./BackendObservations";
+import { BackendObservationProvider } from "./BackendObservationContext";
 import { BackendDiagramReplayProvider } from "./BackendDiagramReplayContext";
 import { BackendReplay } from "./BackendReplay";
 import { BackendPortable } from "./BackendPortable";
@@ -91,7 +91,13 @@ type ProjectPageProps = {
 export function BackendProjectPage(props: ProjectPageProps) {
   const [diagramDirty, setDiagramDirty] = useState(false);
   const [materializationDirty, setMaterializationDirty] = useState(false);
-const [portableDirty,setPortableDirty]=useState(false);
+  const [portableDirty, setPortableDirty] = useState(false);
+  // Whether the replay <details> is open: BackendReplay polls its runs list
+  // only then. Controlled, so a project switch (the providers below are
+  // keyed by projectId and remount the <details>) cannot leave this state
+  // saying "open" over a freshly closed element. focusWorkspaceRegion opens
+  // it by setting `.open`, which fires the same toggle event.
+  const [replayOpen, setReplayOpen] = useState(false);
   const [backPins, setBackPins] = useState<BackendWorkspaceSearch[]>([]);
   const navigateDiagram = (pin: BackendWorkspaceSearch, replace = false) => {
     if (!replace && props.sourcePin && JSON.stringify(props.sourcePin) !== JSON.stringify(pin))
@@ -146,45 +152,72 @@ const [portableDirty,setPortableDirty]=useState(false);
     withResolver: false,
   });
   return (
-    <BackendObservationProvider key={props.projectId}><BackendDiagramReplayProvider key={props.projectId}><BackendDiagramChangeProvider key={props.projectId}>
-      <BackendAnalysisRecoveryProvider key={props.projectId} projectId={props.projectId}>
-        <BackendAnalysisRecoveryNotice projectId={props.projectId} />
-        <BackendLegacyRecoveryNotice projectId={props.projectId} />
-        <BackendWorkspaceNavigation />
-<details><summary>Наблюдения и correlation</summary><BackendObservations key={props.projectId+"observations"} projectId={props.projectId}/></details>
-<details><summary>Orders replay и тестовые профили</summary><BackendReplay key={props.projectId+"replay"} projectId={props.projectId}/></details>
-<details><summary>Portable: экспорт и импорт проекта</summary><BackendPortable key={props.projectId+"portable"} projectId={props.projectId} onDirty={setPortableDirty} /></details>
-        <BackendMaterialization
-          key={props.projectId}
-          projectId={props.projectId}
-          onDirty={setMaterializationDirty}
-        />
-        {backPins.length > 0 && (
-          <Button
-            variant="subtle"
-            disabled={diagramDirty}
-            onClick={() => {
-              const pin = backPins.at(-1)!;
-              setBackPins((previous) => previous.slice(0, -1));
-              props.onSourceNavigate?.(pin);
-            }}
-          >
-            Назад к точному виду
-          </Button>
-        )}
-        <BackendArchitecture
-          projectId={props.projectId}
-          search={props.sourcePin ?? {}}
-          onNavigate={navigateDiagram}
-          onDetailedNavigate={navigateDiagram}
-          onDirty={onDiagramDirty}
-          onTargetResolved={onTargetResolved}
-        />
-        <div hidden={diagramSelected && !target}>
-          <BackendProjectGate {...props} sourcePin={legacyPin} />
-        </div>
-      </BackendAnalysisRecoveryProvider>
-    </BackendDiagramChangeProvider></BackendDiagramReplayProvider></BackendObservationProvider>
+    <BackendObservationProvider key={props.projectId}>
+      <BackendDiagramReplayProvider key={props.projectId}>
+        <BackendDiagramChangeProvider key={props.projectId}>
+          <BackendAnalysisRecoveryProvider key={props.projectId} projectId={props.projectId}>
+            <BackendAnalysisRecoveryNotice projectId={props.projectId} />
+            <BackendLegacyRecoveryNotice projectId={props.projectId} />
+            <BackendWorkspaceNavigation />
+            <details>
+              <summary>Наблюдения и correlation</summary>
+              <BackendObservations
+                key={props.projectId + "observations"}
+                projectId={props.projectId}
+              />
+            </details>
+            <details
+              open={replayOpen}
+              onToggle={(event) => setReplayOpen(event.currentTarget.open)}
+            >
+              <summary>Orders replay и тестовые профили</summary>
+              <BackendReplay
+                key={props.projectId + "replay"}
+                projectId={props.projectId}
+                open={replayOpen}
+              />
+            </details>
+            <details>
+              <summary>Portable: экспорт и импорт проекта</summary>
+              <BackendPortable
+                key={props.projectId + "portable"}
+                projectId={props.projectId}
+                onDirty={setPortableDirty}
+              />
+            </details>
+            <BackendMaterialization
+              key={props.projectId}
+              projectId={props.projectId}
+              onDirty={setMaterializationDirty}
+            />
+            {backPins.length > 0 && (
+              <Button
+                variant="subtle"
+                disabled={diagramDirty}
+                onClick={() => {
+                  const pin = backPins.at(-1)!;
+                  setBackPins((previous) => previous.slice(0, -1));
+                  props.onSourceNavigate?.(pin);
+                }}
+              >
+                Назад к точному виду
+              </Button>
+            )}
+            <BackendArchitecture
+              projectId={props.projectId}
+              search={props.sourcePin ?? {}}
+              onNavigate={navigateDiagram}
+              onDetailedNavigate={navigateDiagram}
+              onDirty={onDiagramDirty}
+              onTargetResolved={onTargetResolved}
+            />
+            <div hidden={diagramSelected && !target}>
+              <BackendProjectGate {...props} sourcePin={legacyPin} />
+            </div>
+          </BackendAnalysisRecoveryProvider>
+        </BackendDiagramChangeProvider>
+      </BackendDiagramReplayProvider>
+    </BackendObservationProvider>
   );
 }
 function BackendProjectGate(props: ProjectPageProps) {

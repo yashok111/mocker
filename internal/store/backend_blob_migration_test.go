@@ -3,10 +3,11 @@ package store
 import (
 	"database/sql"
 	"fmt"
-	"github.com/yashok111/mocker/internal/backendblob"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/yashok111/mocker/internal/backendblob"
 )
 
 func blobBaseline(t *testing.T) *DB {
@@ -214,29 +215,36 @@ func TestBlobRegistryCoversStore26JSONOwners(t *testing.T) {
 		if err = rows.Scan(&table, &ddl); err != nil {
 			t.Fatal(err)
 		}
-		cols, err := db.R.Query("PRAGMA table_info(" + table + ")")
-		if err != nil {
-			t.Fatal(err)
-		}
-		for cols.Next() {
-			var cid, nn, pk int
-			var name, typ string
-			var def sql.NullString
-			if err = cols.Scan(&cid, &name, &typ, &nn, &def, &pk); err != nil {
-				t.Fatal(err)
-			}
-			for _, f := range fields {
-				if f == name && !known[table][name] {
-					t.Fatalf("unregistered %s.%s", table, name)
-				}
-			}
-		}
-		if err = cols.Err(); err != nil {
-			t.Fatal(err)
-		}
-		cols.Close()
+		checkRegisteredColumns(t, db, table, fields, known)
 	}
 	if err = rows.Err(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// checkRegisteredColumns fails on a payload-named column of table that the
+// registry does not know; a function of its own so the rows close on t.Fatal.
+func checkRegisteredColumns(t *testing.T, db *DB, table string, fields []string, known map[string]map[string]bool) {
+	t.Helper()
+	cols, err := db.R.Query("PRAGMA table_info(" + table + ")")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = cols.Close() }() // read-only
+	for cols.Next() {
+		var cid, nn, pk int
+		var name, typ string
+		var def sql.NullString
+		if err = cols.Scan(&cid, &name, &typ, &nn, &def, &pk); err != nil {
+			t.Fatal(err)
+		}
+		for _, f := range fields {
+			if f == name && !known[table][name] {
+				t.Fatalf("unregistered %s.%s", table, name)
+			}
+		}
+	}
+	if err = cols.Err(); err != nil {
 		t.Fatal(err)
 	}
 }

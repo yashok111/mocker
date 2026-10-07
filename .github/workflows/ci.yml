@@ -113,7 +113,7 @@ jobs:
             [ "$GITHUB_ACTIONS" = true ] || { echo "::error::ci-cap: the job environment did not reach the scope" >&2; exit 1; }
           '
       - name: make test
-        run: scripts/ci-cap.sh make test CAP= TEST_P=4
+        run: scripts/ci-cap.sh make test CAP= TEST_CAP= TEST_P=4
 
   web:
     name: web — generated client, typecheck, vitest, oxlint

@@ -21,7 +21,7 @@ func relationalCommand(cs []ImportCommand, key string) *ImportCommand {
 func mutateRelationalFacet(t *testing.T, cs []ImportCommand, key, fk string, fn func(map[string]jsontext.Value)) {
 	t.Helper()
 	c := relationalCommand(cs, key)
-	kind := ""
+	var kind string
 	var attrs map[string]jsontext.Value
 	if c.Node != nil {
 		kind, attrs = c.Node.Kind, c.Node.Attributes
@@ -113,7 +113,7 @@ func TestRelationalStrictFacetsAtomic(t *testing.T) {
 	}
 }
 func TestRelationalNestedGraphReferences(t *testing.T) {
-	for _, name := range []string{"missing column", "wrong kind", "wrong parent", "fk ordering", "pair wrong parent", "dialect disagreement", "duplicate column name", "duplicate ordinal", "duplicate index name", "migration cycle", "historical foreign", "hierarchy bypass", "persisted property path"} {
+	for _, name := range []string{"missing column", "wrong kind", "wrong parent", "fk ordering", "pair wrong parent", "dialect disagreement", "duplicate column name", "duplicate ordinal", "duplicate index name", "migration cycle", "migration non-migration parent", "historical foreign", "hierarchy bypass", "persisted property path"} {
 		t.Run(name, func(t *testing.T) {
 			r, p, s, cs := relationalTestSession(t)
 			switch name {
@@ -147,6 +147,14 @@ func TestRelationalNestedGraphReferences(t *testing.T) {
 				relationalCommand(cs, "index:orders:legacy_note_idx").Node.Name = relationalCommand(cs, "index:orders:state_idx").Node.Name
 			case "migration cycle":
 				mutateRelationalFacet(t, cs, "migration:001_initial", "migration", func(m map[string]jsontext.Value) { m["parentKeys"] = jsontext.Value(`["migration:002_unsupported"]`) })
+			case "migration non-migration parent":
+				// A complete derivation whose parent is a table that carries a
+				// same-key facet: the wrong kind is a diagnostic, never a nil
+				// Order dereference (review 2026-10-06, F76).
+				mutateRelationalFacet(t, cs, "migration:001_initial", "migration", func(m map[string]jsontext.Value) {
+					m["derivationStatus"] = jsontext.Value(`"complete"`)
+					m["parentKeys"] = jsontext.Value(`["table:orders"]`)
+				})
 			case "historical foreign":
 				other := createProject(t, r, "other")
 				mutateRelationalFacet(t, cs, "migration:001_initial", "migration", func(m map[string]jsontext.Value) {
@@ -473,8 +481,7 @@ func TestRelationalMappedRenameNestedDeletionHistory(t *testing.T) {
 			mutateRelationalFacet(t, commands, "view:order_summaries", "sql", func(m map[string]jsontext.Value) {
 				var deps []string
 				_ = json.Unmarshal(m["dependencyKeys"], &deps)
-				deps = append(deps, "column:orders:legacy_note")
-				m["dependencyKeys"] = relationalRaw(t, deps)
+				m["dependencyKeys"] = relationalRaw(t, slices.Concat(deps, []string{"column:orders:legacy_note"}))
 			})
 			bad, ack := stageRelational(t, r, p, next, commands, "v2-dangling")
 			if ack["column:orders:state"] != ids["column:orders:status"] || bad.CandidateHash != nil || !slices.ContainsFunc(bad.Diagnostics, func(d ImportDiagnostic) bool { return d.Code == "backend_unsafe_deletion" }) {
@@ -628,25 +635,25 @@ func TestRelationalReferenceAndNativeBounds(t *testing.T) {
 			limit := true
 			switch name {
 			case "constraint65":
-				keys := []string{}
+				keys := make([]string, 0, 65)
 				for i := range 65 {
 					keys = append(keys, fmt.Sprintf("column:extra%d", i))
 				}
 				mutateRelationalFacet(t, cs, "constraint:orders:user_fk", "sql", func(m map[string]jsontext.Value) { m["columnKeys"] = relationalRaw(t, keys) })
 			case "index65":
-				terms := []any{}
+				terms := make([]any, 0, 65)
 				for i := range 65 {
 					terms = append(terms, map[string]any{"columnKey": fmt.Sprintf("column:extra%d", i), "direction": "asc", "nulls": "unknown"})
 				}
 				mutateRelationalFacet(t, cs, "index:orders:state_idx", "sql", func(m map[string]jsontext.Value) { m["terms"] = relationalRaw(t, terms) })
 			case "view501":
-				keys := []string{}
+				keys := make([]string, 0, 501)
 				for i := range 501 {
 					keys = append(keys, fmt.Sprintf("table:extra%d", i))
 				}
 				mutateRelationalFacet(t, cs, "view:order_summaries", "sql", func(m map[string]jsontext.Value) { m["dependencyKeys"] = relationalRaw(t, keys) })
 			case "migration501":
-				changes := []any{}
+				changes := make([]any, 0, 501)
 				for range 501 {
 					changes = append(changes, map[string]any{"target": map[string]any{"kind": "candidate", "objectKey": "table:orders"}, "operation": "alter", "description": "change"})
 				}
@@ -799,6 +806,41 @@ func TestRelationalMigrationCompletenessAndSourceOnly(t *testing.T) {
 		})
 	}
 }
+
+// Review 2026-10-06, F79/F80: the source_only history check now matches
+// external keys in SQL per ancestor instead of materialising every ancestor's
+// full graph. It must still find a key the repository owned in the base and
+// must not invent one it never owned.
+func TestRelationalSourceOnlyHistoryMatchedByKey(t *testing.T) {
+	const history = "Available model history requires an exact historical target instead of source-only"
+	for _, tc := range []struct {
+		key  string
+		want bool
+	}{{"column:orders:status", true}, {"column:orders:never_existed", false}} {
+		t.Run(tc.key, func(t *testing.T) {
+			r, _ := testRepo(t)
+			first, _ := commitRelationalFixture(t, r, "postgresql", "v1")
+			p := &first.Project
+			state, err := loadSourceState(t.Context(), r.db.R, p.ID, p.CurrentRevisionID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			s, err := r.BeginImport(t.Context(), p.ID, relationalReconcileInput(t, p, primarySource(*state).RepositoryID, "postgresql", "v1", "source-only"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			cs := relationalFixture(t, p, s, "postgresql", "v1")
+			mutateRelationalFacet(t, cs, "migration:001_initial", "migration", func(m map[string]jsontext.Value) {
+				m["changes"] = jsontext.Value(`[{"operation":"create","description":"claim transient","target":{"kind":"source_only","externalKey":"` + tc.key + `","expectedKind":"column","qualifiedName":"public.orders.transient","reason":"created and dropped before import"}}]`)
+			})
+			v, _ := stageRelational(t, r, p, s, cs, "source-only")
+			got := slices.ContainsFunc(v.Diagnostics, func(d ImportDiagnostic) bool { return d.Message == history })
+			if got != tc.want {
+				t.Fatalf("history diagnostic = %v, want %v: %+v", got, tc.want, v.Diagnostics)
+			}
+		})
+	}
+}
 func TestRelationalDeletionScopeGuards(t *testing.T) {
 	for _, mode := range []string{"partial", "unverified", "provider mismatch"} {
 		t.Run(mode, func(t *testing.T) {
@@ -881,7 +923,7 @@ func TestRelationalRevisionCompareExactIntegerTokens(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	hashes := []string{}
+	hashes := make([]string, 0, 2)
 	for _, state := range []*RevisionState{before, &after} {
 		for _, n := range state.Nodes {
 			if n.ID == ids["column:orders:total"] {

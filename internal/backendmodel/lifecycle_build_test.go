@@ -1,8 +1,9 @@
 package backendmodel
 
 import (
-	"github.com/yashok111/mocker/internal/statediagram"
 	"testing"
+
+	"github.com/yashok111/mocker/internal/statediagram"
 )
 
 func TestLifecyclePinnedArtifactIntent(t *testing.T) {

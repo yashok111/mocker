@@ -21,13 +21,8 @@ func ResolveAuthoredPointer(root map[string]any, pointer string) (any, bool, err
 		return nil, false, fail(pointer, "Слишком много сегментов JSON Pointer")
 	}
 	for _, token := range tokens {
-		for i := 0; i < len(token); i++ {
-			if token[i] == '~' {
-				if i+1 >= len(token) || (token[i+1] != '0' && token[i+1] != '1') {
-					return nil, false, fail(pointer, "Недопустимая escape-последовательность JSON Pointer")
-				}
-				i++
-			}
+		if !validPointerEscapes(token) {
+			return nil, false, fail(pointer, "Недопустимая escape-последовательность JSON Pointer")
 		}
 	}
 	var value any = root
@@ -54,6 +49,19 @@ func ResolveAuthoredPointer(root map[string]any, pointer string) (any, bool, err
 		}
 	}
 	return value, true, nil
+}
+
+// validPointerEscapes admits "~" only as the RFC6901 escapes "~0" and "~1".
+func validPointerEscapes(token string) bool {
+	for i := 0; i < len(token); i++ {
+		if token[i] == '~' {
+			if i+1 >= len(token) || (token[i+1] != '0' && token[i+1] != '1') {
+				return false
+			}
+			i++
+		}
+	}
+	return true
 }
 
 // IsSchemaPosition admits authored objects and boolean schemas using the same

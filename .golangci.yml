@@ -87,4 +87,4 @@ formatters:
   settings:
     goimports:
       local-prefixes:
-        - git.sumka.site/yakov/mocker
+        - github.com/yashok111/mocker

@@ -34,7 +34,34 @@ type preparedDocument struct {
 	runtime        *specs.PreparedImport
 }
 
-func (r *Repo) prepare(raw string) (*preparedDocument, error) {
+// validateMockerExtensions admits the x-mocker-* authoring and execution
+// copies, each mapped to the field error its editor expects, in a fixed order.
+func validateMockerExtensions(ctx context.Context, root map[string]any) error {
+	if _, err := statediagram.Decode(root); err != nil {
+		return invalidField("/"+statediagram.Extension, err.Error())
+	}
+	if err := schemamodel.ValidateLayout(root); err != nil {
+		return schemaModelError(err)
+	}
+	if err := resourcemap.ValidateStored(root); err != nil {
+		return resourceMapError(err)
+	}
+	if _, err := responserules.Decode(root); err != nil {
+		return responseRuleError(err)
+	}
+	if _, err := responserules.CompileExecution(ctx, root); err != nil {
+		return responseRuleError(err)
+	}
+	if _, err := statediagram.CompileExecution(ctx, root); err != nil {
+		if field, ok := errors.AsType[*statediagram.FieldError](err); ok {
+			return invalidField(field.Pointer, field.Message)
+		}
+		return invalidField("/"+statediagram.ExecutionExtension, err.Error())
+	}
+	return nil
+}
+
+func (r *Repo) prepare(ctx context.Context, raw string) (*preparedDocument, error) {
 	if int64(len(raw)) > r.cfg.MaxBody {
 		return nil, specs.ErrTooLarge
 	}
@@ -45,26 +72,8 @@ func (r *Repo) prepare(raw string) (*preparedDocument, error) {
 		}
 		return nil, &InvalidError{Diagnostics: []Diagnostic{{Pointer: "", Message: err.Error(), Severity: "error"}}}
 	}
-	if _, err := statediagram.Decode(root); err != nil {
-		return nil, invalidField("/"+statediagram.Extension, err.Error())
-	}
-	if err := schemamodel.ValidateLayout(root); err != nil {
-		return nil, schemaModelError(err)
-	}
-	if err := resourcemap.ValidateStored(root); err != nil {
-		return nil, resourceMapError(err)
-	}
-	if _, err := responserules.Decode(root); err != nil {
-		return nil, responseRuleError(err)
-	}
-	if _, err := responserules.CompileExecution(context.Background(), root); err != nil {
-		return nil, responseRuleError(err)
-	}
-	if _, err := statediagram.CompileExecution(context.Background(), root); err != nil {
-		if field, ok := errors.AsType[*statediagram.FieldError](err); ok {
-			return nil, invalidField(field.Pointer, field.Message)
-		}
-		return nil, invalidField("/"+statediagram.ExecutionExtension, err.Error())
+	if err := validateMockerExtensions(ctx, root); err != nil {
+		return nil, err
 	}
 	diagnostics := validateRoot(root)
 	if len(diagnostics) > 0 {
@@ -88,7 +97,7 @@ func (r *Repo) prepare(raw string) (*preparedDocument, error) {
 	if err != nil {
 		return nil, err
 	}
-	runtime, err := r.specs.PrepareImport(specs.ImportInput{Document: canonical, Source: "upload"})
+	runtime, err := r.specs.PrepareImportContext(ctx, specs.ImportInput{Document: canonical, Source: "upload"})
 	if err != nil {
 		if errors.Is(err, specs.ErrTooLarge) {
 			return nil, err
@@ -457,8 +466,10 @@ func escape(value string) string {
 	return strings.ReplaceAll(strings.ReplaceAll(value, "~", "~0"), "/", "~1")
 }
 
-func (r *Repo) Validate(document string) ([]Diagnostic, error) {
-	_, err := r.prepare(document)
+// Validate reports a document's diagnostics without saving it. ctx bounds the
+// execution-graph compilation inside, so a cancelled request stops it.
+func (r *Repo) Validate(ctx context.Context, document string) ([]Diagnostic, error) {
+	_, err := r.prepare(ctx, document)
 	if invalid, ok := errors.AsType[*InvalidError](err); ok {
 		return invalid.Diagnostics, nil
 	}

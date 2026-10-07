@@ -188,7 +188,7 @@ func PortableProposalSourceDependencies(p PortableProposal) []string {
 			}
 		}
 	}
-	out := []string{}
+	out := make([]string, 0, len(seen))
 	for id := range seen {
 		out = append(out, id)
 	}

@@ -140,9 +140,14 @@ func relationalScalarValue(raw jsontext.Value, typ string, nullable bool, choice
 		}
 		return semantic("scalar/value", "Known value cannot be null")
 	}
+	return relationalKnownScalar(value, typ, choices)
+}
+
+// relationalKnownScalar checks a known, non-null scalar value against its type.
+func relationalKnownScalar(value []byte, typ string, choices []string) error {
 	switch typ {
 	case "string":
-		if err = relationalText(value, false, true); err != nil {
+		if err := relationalText(value, false, true); err != nil {
 			return err
 		}
 		if len(choices) > 0 {
@@ -220,14 +225,59 @@ func decodeRelationalFacetMode(kind string, raw jsontext.Value, persisted, sourc
 	if err != nil {
 		return nil, err
 	}
-	refs := func(key string) string {
-		if !persisted {
-			return key + "Keys"
-		}
-		return key + "Ids"
+	required, optional, err := relationalFacetFieldSet(kind, persisted, sourceAdmission)
+	if err != nil {
+		return nil, err
 	}
-	required := []string{"dialect", "analysisStatus", "gaps"}
-	optional := []string{}
+	if err = relationalFields(m, required, optional); err != nil {
+		return nil, err
+	}
+	f := new(relationalFacet)
+	if err = json.Unmarshal(raw, f, json.RejectUnknownMembers(true)); err != nil {
+		return nil, semantic("facets", err.Error())
+	}
+	if err = relationalFacetEnums(m); err != nil {
+		return nil, err
+	}
+	gaps, err := relationalFacetGaps(m)
+	if err != nil {
+		return nil, err
+	}
+	if sourceAdmission {
+		if err = relationalFacetProof(m, f, persisted); err != nil {
+			return nil, err
+		}
+	}
+	if err = relationalFacetTexts(m); err != nil {
+		return nil, err
+	}
+	if err = relationalFacetScalars(m); err != nil {
+		return nil, err
+	}
+	if err = relationalFacetReferenceLists(m, f, persisted); err != nil {
+		return nil, err
+	}
+	if err = relationalFacetKindRules(kind, m, f, gaps, persisted); err != nil {
+		return nil, err
+	}
+	return f, nil
+}
+
+// relationalFacetRefKey names a reference list: an import carries external
+// keys, a persisted facet carries the IDs they were resolved to.
+func relationalFacetRefKey(key string, persisted bool) string {
+	if !persisted {
+		return key + "Keys"
+	}
+	return key + "Ids"
+}
+
+// relationalFacetFieldSet is the exact member set a facet of this kind may
+// carry; provenance is required on source admission and optional otherwise.
+func relationalFacetFieldSet(kind string, persisted, sourceAdmission bool) (required, optional []string, err error) {
+	refs := func(key string) string { return relationalFacetRefKey(key, persisted) }
+	required = []string{"dialect", "analysisStatus", "gaps"}
+	optional = []string{}
 	provenance := []string{"sourceKind", refs("evidence")}
 	if persisted {
 		provenance = append(provenance, "freshness", "sourceSnapshotId")
@@ -260,25 +310,28 @@ func decodeRelationalFacetMode(kind string, raw jsontext.Value, persisted, sourc
 		required = append(required, "columnPairs", "updateAction", "deleteAction", "matchType")
 		optional = append(optional, "targetReason")
 	default:
-		return nil, semantic("kind", "Unsupported relational facet kind")
+		return nil, nil, semantic("kind", "Unsupported relational facet kind")
 	}
-	if err = relationalFields(m, required, optional); err != nil {
-		return nil, err
-	}
-	f := new(relationalFacet)
-	if err = json.Unmarshal(raw, f, json.RejectUnknownMembers(true)); err != nil {
-		return nil, semantic("facets", err.Error())
-	}
+	return required, optional, nil
+}
+
+func relationalFacetEnums(m map[string]jsontext.Value) error {
 	for _, x := range []struct {
 		key     string
 		choices []string
 	}{{"sourceKind", []string{"sql", "orm", "migration"}}, {"dialect", []string{"postgresql", "sqlite"}}, {"analysisStatus", []string{"complete", "partial", "unsupported"}}, {"constraintKind", []string{"primary_key", "unique", "check", "foreign_key"}}, {"routineKind", []string{"procedure", "function", "trigger"}}} {
 		if v, ok := m[x.key]; ok {
-			if err = relationalEnum(v, x.choices...); err != nil {
-				return nil, err
+			if err := relationalEnum(v, x.choices...); err != nil {
+				return err
 			}
 		}
 	}
+	return nil
+}
+
+// relationalFacetGaps validates the gap list and every status that depends
+// on it: anything short of "complete" must name at least one gap.
+func relationalFacetGaps(m map[string]jsontext.Value) ([]jsontext.Value, error) {
 	gaps, err := relationalArray(m["gaps"], MaxRevisionEvidence)
 	if err != nil {
 		return nil, err
@@ -300,203 +353,262 @@ func decodeRelationalFacetMode(kind string, raw jsontext.Value, persisted, sourc
 			}
 		}
 	}
-	if sourceAdmission {
-		evidence, err := relationalStrings(m[refs("evidence")], MaxRevisionEvidence, persisted)
-		if err != nil {
-			return nil, err
-		}
-		if len(evidence) == 0 {
-			return nil, semantic("facets", "Facet proof is required")
-		}
-		if persisted {
-			if !ValidID(f.SourceSnapshotID) || f.Freshness == nil || !slices.Contains([]string{"current", "stale"}, f.Freshness.Status) || f.Freshness.ConfirmedSnapshotID != f.SourceSnapshotID || f.Freshness.Reasons == nil {
-				return nil, semantic("facets", "Invalid persisted facet provenance")
-			}
+	return gaps, nil
+}
+
+// relationalFacetProof requires the source proof an admitted facet carries:
+// evidence always, and a consistent snapshot/freshness pair once persisted.
+func relationalFacetProof(m map[string]jsontext.Value, f *relationalFacet, persisted bool) error {
+	evidence, err := relationalStrings(m[relationalFacetRefKey("evidence", persisted)], MaxRevisionEvidence, persisted)
+	if err != nil {
+		return err
+	}
+	if len(evidence) == 0 {
+		return semantic("facets", "Facet proof is required")
+	}
+	if persisted {
+		if !ValidID(f.SourceSnapshotID) || f.Freshness == nil || !slices.Contains([]string{"current", "stale"}, f.Freshness.Status) || f.Freshness.ConfirmedSnapshotID != f.SourceSnapshotID || f.Freshness.Reasons == nil {
+			return semantic("facets", "Invalid persisted facet provenance")
 		}
 	}
+	return nil
+}
+
+func relationalFacetTexts(m map[string]jsontext.Value) error {
 	for _, key := range []string{"qualifiedName", "databaseName", "targetReason"} {
 		if v, ok := m[key]; ok {
-			if err = relationalText(v, false, false); err != nil {
-				return nil, err
+			if err := relationalText(v, false, false); err != nil {
+				return err
 			}
 		}
 	}
 	for _, key := range []string{"nativeDefinition", "definition"} {
 		if v, ok := m[key]; ok {
-			if err = relationalText(v, key == "nativeDefinition", true); err != nil {
-				return nil, err
+			if err := relationalText(v, key == "nativeDefinition", true); err != nil {
+				return err
 			}
 		}
 	}
+	return nil
+}
+
+func relationalFacetScalars(m map[string]jsontext.Value) error {
 	for _, x := range []struct {
 		key, typ string
 		nullable bool
 		choices  []string
 	}{{"nativeType", "string", false, nil}, {"typeFamily", "string", false, []string{"boolean", "integer", "decimal", "float", "string", "binary", "date", "time", "timestamp", "json", "uuid", "array", "other"}}, {"nullable", "bool", false, nil}, {"defaultExpression", "string", true, nil}, {"generatedExpression", "string", true, nil}, {"identity", "string", true, nil}, {"ordinal", "positive", false, nil}, {"expression", "string", true, nil}, {"deferrable", "bool", true, nil}, {"initiallyDeferred", "bool", true, nil}, {"unique", "bool", false, nil}, {"predicate", "string", true, nil}, {"method", "string", true, nil}, {"order", "nonnegative", true, nil}, {"updateAction", "string", false, []string{"no_action", "restrict", "cascade", "set_null", "set_default"}}, {"deleteAction", "string", false, []string{"no_action", "restrict", "cascade", "set_null", "set_default"}}, {"matchType", "string", false, []string{"simple", "full", "partial"}}} {
 		if v, ok := m[x.key]; ok {
-			if err = relationalScalarValue(v, x.typ, x.nullable, x.choices...); err != nil {
-				return nil, err
+			if err := relationalScalarValue(v, x.typ, x.nullable, x.choices...); err != nil {
+				return err
 			}
 		}
 	}
+	return nil
+}
+
+func relationalFacetReferenceLists(m map[string]jsontext.Value, f *relationalFacet, persisted bool) error {
 	for _, key := range []string{"column", "dependency", "parent"} {
-		if v, ok := m[refs(key)]; ok {
+		if v, ok := m[relationalFacetRefKey(key, persisted)]; ok {
 			maxCount := MaxRelationalReferences
 			if key == "column" {
 				maxCount = MaxRelationalOrderedColumns
 			}
 			values, err := relationalStrings(v, maxCount, persisted)
 			if err != nil {
-				return nil, err
+				return err
 			}
 			if key == "column" && len(values) == 0 && f.ConstraintKind != "check" {
-				return nil, semantic("columnKeys", "Non-CHECK constraints require columns")
+				return semantic("columnKeys", "Non-CHECK constraints require columns")
 			}
 		}
 	}
-	if kind == "constraint" && f.ConstraintKind == "check" {
-		if bytes.Equal(bytes.TrimSpace(f.Expression.Value), []byte("null")) || f.Expression.Status == "unknown" && (f.NativeDefinition == nil || len(gaps) == 0) {
-			return nil, semantic("expression", "CHECK requires expression or native definition with a gap")
+	return nil
+}
+
+// relationalFacetKindRules holds the rules only one facet kind has.
+func relationalFacetKindRules(kind string, m map[string]jsontext.Value, f *relationalFacet, gaps []jsontext.Value, persisted bool) error {
+	switch kind {
+	case "constraint":
+		if f.ConstraintKind == "check" {
+			if bytes.Equal(bytes.TrimSpace(f.Expression.Value), []byte("null")) || f.Expression.Status == "unknown" && (f.NativeDefinition == nil || len(gaps) == 0) {
+				return semantic("expression", "CHECK requires expression or native definition with a gap")
+			}
 		}
-	}
-	if kind == "view" {
+	case "view":
 		v := bytes.TrimSpace(m["materialized"])
 		if !bytes.Equal(v, []byte("true")) && !bytes.Equal(v, []byte("false")) {
-			return nil, semantic("materialized", "Expected boolean")
+			return semantic("materialized", "Expected boolean")
+		}
+	case "index":
+		return relationalIndexTerms(m, persisted)
+	case "references":
+		return relationalColumnPairs(m, f, persisted)
+	case "migration":
+		return relationalMigrationChanges(m, f, persisted)
+	}
+	return nil
+}
+
+func relationalIndexTerms(m map[string]jsontext.Value, persisted bool) error {
+	terms, err := relationalArray(m["terms"], MaxRelationalIndexTerms)
+	if err != nil {
+		return err
+	}
+	if len(terms) == 0 {
+		return semantic("terms", "Index requires terms")
+	}
+	seen := map[string]bool{}
+	for _, v := range terms {
+		if err = validateRelationalIndexTerm(v, persisted, seen); err != nil {
+			return err
 		}
 	}
-	if kind == "index" {
-		terms, err := relationalArray(m["terms"], MaxRelationalIndexTerms)
+	return nil
+}
+
+// validateRelationalIndexTerm checks one term: exactly a column or an expression, a
+// column at most once per index (seen), and the two ordering enums.
+func validateRelationalIndexTerm(v jsontext.Value, persisted bool, seen map[string]bool) error {
+	term, err := relationalObject(v)
+	if err != nil {
+		return err
+	}
+	column := "columnKey"
+	if persisted {
+		column = "columnId"
+	}
+	if err = relationalFields(term, []string{"direction", "nulls"}, []string{column, "expression"}); err != nil {
+		return err
+	}
+	if (term[column] == nil) == (term["expression"] == nil) {
+		return semantic("terms", "Term requires exactly column or expression")
+	}
+	if term[column] != nil {
+		var s string
+		_ = json.Unmarshal(term[column], &s)
+		if !externalKey(s) || persisted && !ValidID(s) || seen[s] {
+			return semantic("terms", "Invalid or duplicate index column")
+		}
+		seen[s] = true
+	} else if err = relationalText(term["expression"], false, true); err != nil {
+		return err
+	}
+	if err = relationalEnum(term["direction"], "asc", "desc", "unknown"); err != nil {
+		return err
+	}
+	return relationalEnum(term["nulls"], "first", "last", "unknown")
+}
+
+func relationalColumnPairs(m map[string]jsontext.Value, f *relationalFacet, persisted bool) error {
+	pairs, err := relationalArray(m["columnPairs"], MaxRelationalOrderedColumns)
+	if err != nil {
+		return err
+	}
+	if len(pairs) == 0 && !nonblank(f.TargetReason) {
+		return semantic("columnPairs", "Empty pairs require targetReason")
+	}
+	fromSeen, toSeen := map[string]bool{}, map[string]bool{}
+	for _, v := range pairs {
+		pair, err := relationalObject(v)
 		if err != nil {
-			return nil, err
+			return err
 		}
-		if len(terms) == 0 {
-			return nil, semantic("terms", "Index requires terms")
+		from, to := "fromColumnKey", "toColumnKey"
+		if persisted {
+			from, to = "fromColumnId", "toColumnId"
 		}
-		seen := map[string]bool{}
-		for _, v := range terms {
-			term, err := relationalObject(v)
-			if err != nil {
-				return nil, err
-			}
-			column := "columnKey"
-			if persisted {
-				column = "columnId"
-			}
-			if err = relationalFields(term, []string{"direction", "nulls"}, []string{column, "expression"}); err != nil {
-				return nil, err
-			}
-			if (term[column] == nil) == (term["expression"] == nil) {
-				return nil, semantic("terms", "Term requires exactly column or expression")
-			}
-			if term[column] != nil {
-				var s string
-				_ = json.Unmarshal(term[column], &s)
-				if !externalKey(s) || persisted && !ValidID(s) || seen[s] {
-					return nil, semantic("terms", "Invalid or duplicate index column")
-				}
-				seen[s] = true
-			} else if err = relationalText(term["expression"], false, true); err != nil {
-				return nil, err
-			}
-			if err = relationalEnum(term["direction"], "asc", "desc", "unknown"); err != nil {
-				return nil, err
-			}
-			if err = relationalEnum(term["nulls"], "first", "last", "unknown"); err != nil {
-				return nil, err
-			}
+		if err = relationalFields(pair, []string{from, to}, nil); err != nil {
+			return err
+		}
+		var a, b string
+		_ = json.Unmarshal(pair[from], &a)
+		_ = json.Unmarshal(pair[to], &b)
+		if !externalKey(a) || !externalKey(b) || persisted && (!ValidID(a) || !ValidID(b)) || fromSeen[a] || toSeen[b] {
+			return semantic("columnPairs", "Pairs require valid unique columns on both sides")
+		}
+		fromSeen[a], toSeen[b] = true, true
+	}
+	return nil
+}
+
+func relationalMigrationChanges(m map[string]jsontext.Value, f *relationalFacet, persisted bool) error {
+	changes, err := relationalArray(m["changes"], MaxRelationalReferences)
+	if err != nil {
+		return err
+	}
+	for i, v := range changes {
+		if err = relationalMigrationChangeAt(v, f, i, persisted); err != nil {
+			return err
 		}
 	}
-	if kind == "references" {
-		pairs, err := relationalArray(m["columnPairs"], MaxRelationalOrderedColumns)
-		if err != nil {
-			return nil, err
-		}
-		if len(pairs) == 0 && !nonblank(f.TargetReason) {
-			return nil, semantic("columnPairs", "Empty pairs require targetReason")
-		}
-		fromSeen, toSeen := map[string]bool{}, map[string]bool{}
-		for _, v := range pairs {
-			pair, err := relationalObject(v)
-			if err != nil {
-				return nil, err
-			}
-			from, to := "fromColumnKey", "toColumnKey"
-			if persisted {
-				from, to = "fromColumnId", "toColumnId"
-			}
-			if err = relationalFields(pair, []string{from, to}, nil); err != nil {
-				return nil, err
-			}
-			var a, b string
-			_ = json.Unmarshal(pair[from], &a)
-			_ = json.Unmarshal(pair[to], &b)
-			if !externalKey(a) || !externalKey(b) || persisted && (!ValidID(a) || !ValidID(b)) || fromSeen[a] || toSeen[b] {
-				return nil, semantic("columnPairs", "Pairs require valid unique columns on both sides")
-			}
-			fromSeen[a], toSeen[b] = true, true
-		}
+	if f.DerivationStatus == "complete" && (f.Order.Status != "known" || bytes.Equal(f.Order.Value, []byte("null"))) {
+		return semantic("order", "Complete derivation requires known order")
 	}
-	if kind == "migration" {
-		changes, err := relationalArray(m["changes"], MaxRelationalReferences)
-		if err != nil {
-			return nil, err
-		}
-		for i, v := range changes {
-			c, err := relationalObject(v)
-			if err != nil {
-				return nil, err
-			}
-			if err = relationalFields(c, []string{"target", "operation", "description"}, nil); err != nil {
-				return nil, err
-			}
-			if err = relationalEnum(c["operation"], "create", "alter", "drop", "unknown"); err != nil {
-				return nil, err
-			}
-			if err = relationalText(c["description"], false, false); err != nil {
-				return nil, err
-			}
-			target, err := relationalObject(c["target"])
-			if err != nil {
-				return nil, err
-			}
-			t := f.Changes[i].Target
-			req := []string{"kind"}
-			switch t.Kind {
-			case "candidate":
-				k := "objectKey"
-				if persisted {
-					k = "objectId"
-				}
-				req = append(req, k)
-				if !externalKey(t.ObjectKey) && !persisted || persisted && !ValidID(t.ObjectID) {
-					return nil, semantic("target", "Invalid candidate target")
-				}
-			case "historical":
-				req = append(req, "revisionId", "objectId")
-				if !ValidID(t.RevisionID) || !ValidID(t.ObjectID) {
-					return nil, semantic("target", "Invalid historical pin")
-				}
-			case "source_only":
-				req = append(req, "externalKey", "expectedKind", "qualifiedName", "reason")
-				if !externalKey(t.ExternalKey) || !slices.Contains([]string{"datastore", "db_schema", "table", "column", "constraint", "index", "view", "migration", "symbol"}, t.ExpectedKind) || !nonblank(t.QualifiedName) || !nonblank(t.Reason) {
-					return nil, semantic("target", "Source-only requires a relational kind, name and reason")
-				}
-			default:
-				return nil, semantic("target", "Unsupported migration target variant")
-			}
-			if err = relationalFields(target, req, nil); err != nil {
-				return nil, err
-			}
-			if f.DerivationStatus == "complete" && (f.Order.Status != "known" || bytes.Equal(f.Order.Value, []byte("null")) || f.Changes[i].Operation == "unknown") {
-				return nil, semantic("derivationStatus", "Complete derivation requires known order and handled changes")
-			}
-		}
-		if f.DerivationStatus == "complete" && (f.Order.Status != "known" || bytes.Equal(f.Order.Value, []byte("null"))) {
-			return nil, semantic("order", "Complete derivation requires known order")
-		}
+	return nil
+}
+
+// relationalMigrationChangeAt validates change i against both its raw shape
+// and its decoded form in f.Changes[i].
+func relationalMigrationChangeAt(v jsontext.Value, f *relationalFacet, i int, persisted bool) error {
+	c, err := relationalObject(v)
+	if err != nil {
+		return err
 	}
-	return f, nil
+	if err = relationalFields(c, []string{"target", "operation", "description"}, nil); err != nil {
+		return err
+	}
+	if err = relationalEnum(c["operation"], "create", "alter", "drop", "unknown"); err != nil {
+		return err
+	}
+	if err = relationalText(c["description"], false, false); err != nil {
+		return err
+	}
+	target, err := relationalObject(c["target"])
+	if err != nil {
+		return err
+	}
+	req, err := relationalMigrationTargetFields(f.Changes[i].Target, persisted)
+	if err != nil {
+		return err
+	}
+	if err = relationalFields(target, req, nil); err != nil {
+		return err
+	}
+	if f.DerivationStatus == "complete" && (f.Order.Status != "known" || bytes.Equal(f.Order.Value, []byte("null")) || f.Changes[i].Operation == "unknown") {
+		return semantic("derivationStatus", "Complete derivation requires known order and handled changes")
+	}
+	return nil
+}
+
+// relationalMigrationTargetFields validates one target variant and returns
+// the exact member set that variant may carry.
+func relationalMigrationTargetFields(t relationalMigrationTarget, persisted bool) ([]string, error) {
+	req := []string{"kind"}
+	switch t.Kind {
+	case "candidate":
+		k := "objectKey"
+		if persisted {
+			k = "objectId"
+		}
+		req = append(req, k)
+		if !externalKey(t.ObjectKey) && !persisted || persisted && !ValidID(t.ObjectID) {
+			return nil, semantic("target", "Invalid candidate target")
+		}
+	case "historical":
+		req = append(req, "revisionId", "objectId")
+		if !ValidID(t.RevisionID) || !ValidID(t.ObjectID) {
+			return nil, semantic("target", "Invalid historical pin")
+		}
+	case "source_only":
+		req = append(req, "externalKey", "expectedKind", "qualifiedName", "reason")
+		if !externalKey(t.ExternalKey) || !slices.Contains([]string{"datastore", "db_schema", "table", "column", "constraint", "index", "view", "migration", "symbol"}, t.ExpectedKind) || !nonblank(t.QualifiedName) || !nonblank(t.Reason) {
+			return nil, semantic("target", "Source-only requires a relational kind, name and reason")
+		}
+	default:
+		return nil, semantic("target", "Unsupported migration target variant")
+	}
+	return req, nil
 }
 func escapeRelationalPointer(s string) string {
 	return strings.ReplaceAll(strings.ReplaceAll(s, "~", "~0"), "/", "~1")
@@ -519,56 +631,62 @@ func relationalReferencesMode(kind string, attrs map[string]jsontext.Value, edge
 		if err != nil {
 			return nil, err
 		}
-		base := path + "/" + escapeRelationalPointer(fk)
-		add := func(path, kind, key, id, historical string) {
-			out = append(out, relationalReference{Path: base + path, Kind: kind, Key: key, ID: id, HistoricalRevisionID: historical})
-		}
-		column, evidence, dependency, parent := f.ColumnKeys, f.EvidenceKeys, f.DependencyKeys, f.ParentKeys
+		out = appendRelationalFacetReferences(out, path+"/"+escapeRelationalPointer(fk), f, persisted)
+	}
+	return out, nil
+}
+
+// appendRelationalFacetReferences lists every reference one decoded facet
+// makes, each addressed by its JSON pointer under base.
+func appendRelationalFacetReferences(out []relationalReference, base string, f *relationalFacet, persisted bool) []relationalReference {
+	add := func(path, kind, key, id, historical string) {
+		out = append(out, relationalReference{Path: base + path, Kind: kind, Key: key, ID: id, HistoricalRevisionID: historical})
+	}
+	column, evidence, dependency, parent := f.ColumnKeys, f.EvidenceKeys, f.DependencyKeys, f.ParentKeys
+	if persisted {
+		column, evidence, dependency, parent = f.ColumnIDs, f.EvidenceIDs, f.DependencyIDs, f.ParentIDs
+	}
+	for _, x := range []struct {
+		values     []string
+		kind, path string
+	}{{column, "column", "/column"}, {evidence, "evidence", "/evidence"}, {dependency, "dependency", "/dependency"}, {parent, "migration", "/parent"}} {
+		suffix := "Keys"
 		if persisted {
-			column, evidence, dependency, parent = f.ColumnIDs, f.EvidenceIDs, f.DependencyIDs, f.ParentIDs
+			suffix = "Ids"
 		}
-		for _, x := range []struct {
-			values     []string
-			kind, path string
-		}{{column, "column", "/column"}, {evidence, "evidence", "/evidence"}, {dependency, "dependency", "/dependency"}, {parent, "migration", "/parent"}} {
-			suffix := "Keys"
+		for i, v := range x.values {
+			key, id := v, ""
 			if persisted {
-				suffix = "Ids"
+				key, id = "", v
 			}
-			for i, v := range x.values {
-				key, id := v, ""
-				if persisted {
-					key, id = "", v
-				}
-				add(fmt.Sprintf("%s%s/%d", x.path, suffix, i), x.kind, key, id, "")
-			}
+			add(fmt.Sprintf("%s%s/%d", x.path, suffix, i), x.kind, key, id, "")
 		}
-		for i, term := range f.Terms {
-			if term.ColumnKey != "" || term.ColumnID != "" {
-				suffix := "Key"
-				if persisted {
-					suffix = "Id"
-				}
-				add(fmt.Sprintf("/terms/%d/column%s", i, suffix), "column", term.ColumnKey, term.ColumnID, "")
-			}
-		}
-		for i, pair := range f.ColumnPairs {
+	}
+	for i, term := range f.Terms {
+		if term.ColumnKey != "" || term.ColumnID != "" {
 			suffix := "Key"
 			if persisted {
 				suffix = "Id"
 			}
-			add(fmt.Sprintf("/columnPairs/%d/fromColumn%s", i, suffix), "column", pair.FromColumnKey, pair.FromColumnID, "")
-			add(fmt.Sprintf("/columnPairs/%d/toColumn%s", i, suffix), "column", pair.ToColumnKey, pair.ToColumnID, "")
-		}
-		for i, c := range f.Changes {
-			if c.Target.Kind == "candidate" || c.Target.Kind == "historical" {
-				suffix := "Key"
-				if persisted || c.Target.Kind == "historical" {
-					suffix = "Id"
-				}
-				add(fmt.Sprintf("/changes/%d/target/object%s", i, suffix), "relational", c.Target.ObjectKey, c.Target.ObjectID, c.Target.RevisionID)
-			}
+			add(fmt.Sprintf("/terms/%d/column%s", i, suffix), "column", term.ColumnKey, term.ColumnID, "")
 		}
 	}
-	return out, nil
+	for i, pair := range f.ColumnPairs {
+		suffix := "Key"
+		if persisted {
+			suffix = "Id"
+		}
+		add(fmt.Sprintf("/columnPairs/%d/fromColumn%s", i, suffix), "column", pair.FromColumnKey, pair.FromColumnID, "")
+		add(fmt.Sprintf("/columnPairs/%d/toColumn%s", i, suffix), "column", pair.ToColumnKey, pair.ToColumnID, "")
+	}
+	for i, c := range f.Changes {
+		if c.Target.Kind == "candidate" || c.Target.Kind == "historical" {
+			suffix := "Key"
+			if persisted || c.Target.Kind == "historical" {
+				suffix = "Id"
+			}
+			add(fmt.Sprintf("/changes/%d/target/object%s", i, suffix), "relational", c.Target.ObjectKey, c.Target.ObjectID, c.Target.RevisionID)
+		}
+	}
+	return out
 }

@@ -102,7 +102,7 @@ func (s *Server) evaluateStateDiagram(w http.ResponseWriter, r *http.Request, si
 	if body.DataJSON == "" {
 		body.DataJSON = "{}"
 	}
-	result, err := statediagram.Simulate(diagram, root, body.DataJSON, body.TransitionIDs)
+	result, err := statediagram.Simulate(r.Context(), diagram, root, body.DataJSON, body.TransitionIDs)
 	if err != nil {
 		httpx.Err(w, 400, "simulation_invalid", err.Error())
 		return

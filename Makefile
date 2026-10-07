@@ -53,6 +53,17 @@ CAP_SWAP ?= 1G
 CAP := $(shell command -v systemd-run >/dev/null 2>&1 && \
 	grep -qw memory /sys/fs/cgroup/user.slice/user-$$(id -u).slice/cgroup.controllers 2>/dev/null && \
 	echo systemd-run --user --scope --quiet -p MemoryMax=$(CAP_MEM) -p MemorySwapMax=$(CAP_SWAP) --)
+# `make test` gets its own, wider cap. The Backend Workbench grew two packages
+# far past the ~650 MB above: alone under -race, internal/mcp peaks at 3.6 GB
+# and internal/backendmodel at 2.5 GB (cgroup memory.peak, 2026-10-07), and
+# TEST_SUITE starts both first at -p 2, so the suite was OOM-killed inside 3G
+# every run. Measured with an 7G cap: the whole suite reached 7G with 123 MB of
+# swap and passed in 18 min; 8G leaves room on the 15 GB box. Lint and ui keep
+# CAP_MEM.
+TEST_CAP_MEM ?= 8G
+TEST_CAP := $(shell command -v systemd-run >/dev/null 2>&1 && \
+	grep -qw memory /sys/fs/cgroup/user.slice/user-$$(id -u).slice/cgroup.controllers 2>/dev/null && \
+	echo systemd-run --user --scope --quiet -p MemoryMax=$(TEST_CAP_MEM) -p MemorySwapMax=$(CAP_SWAP) --)
 
 .PHONY: build run release dist ui ui-dev ui-gen ui-lint ui-test plugin-test plugin-build plugin-pack guide-sync test test-fast ui-test-fast lint fmt docker init up down up-tls down-tls tls-init tls-root smoke smoke-tls hash-password clean
 
@@ -168,8 +179,8 @@ TEST_PARALLEL ?= 4
 # kept advancing through SDK schema registration. Allow 45m for the aggregate;
 # individual operation deadlines stay enforced. Override for slower hosts.
 TEST_TIMEOUT ?= 45m
-test: ## Test suite scoped to ./cmd ./internal, race detector, memory-capped (see CAP above and the comment above)
-	$(CAP) go test $(TEST_SUITE) -race -count=1 -p $(TEST_P) -parallel $(TEST_PARALLEL) -timeout $(TEST_TIMEOUT) -gcflags='modernc.org/...=-race=false'
+test: ## Test suite scoped to ./cmd ./internal, race detector, memory-capped (see TEST_CAP above and the comment above)
+	$(TEST_CAP) go test $(TEST_SUITE) -race -count=1 -p $(TEST_P) -parallel $(TEST_PARALLEL) -timeout $(TEST_TIMEOUT) -gcflags='modernc.org/...=-race=false'
 
 # Keep the uncached race gate above unchanged. Local edits can select packages
 # and tests, and unchanged packages may use Go's normal test-result cache.

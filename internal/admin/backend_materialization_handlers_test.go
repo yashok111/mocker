@@ -3,10 +3,11 @@ package admin
 import (
 	"encoding/json/v2"
 	"fmt"
-	"github.com/yashok111/mocker/internal/backendmaterialize"
-	"github.com/yashok111/mocker/internal/backendmodel"
 	"strings"
 	"testing"
+
+	"github.com/yashok111/mocker/internal/backendmaterialize"
+	"github.com/yashok111/mocker/internal/backendmodel"
 )
 
 func TestMaterializationRESTRejectsOpenScope(t *testing.T) {

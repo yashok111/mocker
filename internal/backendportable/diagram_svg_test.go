@@ -3,12 +3,14 @@ package backendportable
 import (
 	"context"
 	"encoding/xml"
+	"errors"
 	"fmt"
-	bm "github.com/yashok111/mocker/internal/backendmodel"
 	"io"
 	"math"
 	"strings"
 	"testing"
+
+	bm "github.com/yashok111/mocker/internal/backendmodel"
 )
 
 const pid = "10000000-0000-4000-8000-000000000001"
@@ -86,7 +88,7 @@ func TestDiagramSVGExactSafeFourKinds(t *testing.T) {
 			dec := xml.NewDecoder(strings.NewReader(string(a.Body)))
 			for {
 				tok, err := dec.Token()
-				if err == io.EOF {
+				if errors.Is(err, io.EOF) {
 					break
 				}
 				if err != nil {

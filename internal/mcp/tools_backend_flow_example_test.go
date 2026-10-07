@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/santhosh-tekuri/jsonschema/v6"
+
 	"github.com/yashok111/mocker/api"
 	"github.com/yashok111/mocker/internal/backendmodel"
 	"github.com/yashok111/mocker/internal/jsonx"
@@ -281,8 +282,10 @@ func TestBackendFlowRealSDKSourceFixture(t *testing.T) {
 					if !slices.Equal(item.PathEdgeIDs, want) || item.Relation != "direct" {
 						t.Fatalf("source witness %+v want %v", item, want)
 					}
-					proofs := []string{ids["proof:v1:column:orders:status:sql"]}
-					for _, key := range []string{"operation:cancel", "handler:cancel", "flow:cancel", "step:begin", "step:query", "query:cancel", "handles:cancel", "contains:flow", "contains:step:begin", "next:begin-query", "call:query", "access:write-status"} {
+					runtimeKeys := []string{"operation:cancel", "handler:cancel", "flow:cancel", "step:begin", "step:query", "query:cancel", "handles:cancel", "contains:flow", "contains:step:begin", "next:begin-query", "call:query", "access:write-status"}
+					proofs := make([]string, 0, 1+len(runtimeKeys))
+					proofs = append(proofs, ids["proof:v1:column:orders:status:sql"])
+					for _, key := range runtimeKeys {
 						proofs = append(proofs, ids["runtime-proof:"+key])
 					}
 					slices.Sort(proofs)

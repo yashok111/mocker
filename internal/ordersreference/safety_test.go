@@ -2,14 +2,16 @@ package ordersreference
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
-	p "github.com/yashok111/mocker/internal/ordersprotocol"
 	"net/http/httptest"
 	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
 	"uuid"
+
+	p "github.com/yashok111/mocker/internal/ordersprotocol"
 )
 
 type harness struct {
@@ -257,7 +259,7 @@ func TestConsentAndEpochCAS(t *testing.T) {
 		wg.Go(func() {
 			status, _, e := h.s.mutate(t.Context(), p.ResetEndpoint, r.Fence, r)
 			if e != nil {
-				if pe, ok := e.(*protocolError); ok {
+				if pe, ok := errors.AsType[*protocolError](e); ok {
 					status = pe.status
 				}
 			}

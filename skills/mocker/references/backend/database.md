@@ -29,7 +29,7 @@ For source6 or full-proposal presentations select saved-view-v2 support in this 
 
 State is a closed flow/database variant with scope, filters, selection (explicit object or null), positions and collapsedGroupIds. For example, a Flow catalog state is {kind:"flow",scope:{},filters:{search:"",accessKind:"",reverseAccessKind:""},selection:null,positions:[],collapsedGroupIds:[]}. Database state uses an explicit datastoreId/facetKey scope and its own filters. Layout is presentation, not source evidence or a proposal command.
 
-Read get_backend_saved_view at the returned viewId/version before model queries. Reopen that immutable target and its complete effective pins; discard old cursors and start at page one. save_backend_saved_view includes documentVersion:"saved-view-v2", exact old view expectedVersion, complete name/state and stable idempotencyKey. Target and kind are immutable: changing either creates a new view. No save follows a newer source or proposal head. An unknown response repeats its original body/key; a definite409 requires explicit reread/reconciliation or a deliberate new view. A replay may be historical.
+Read get_backend_saved_view at the returned viewId/version before model queries. Reopen that immutable target and its complete effective pins; discard old cursors and start at page one. save_backend_saved_view includes documentVersion:"saved-view-v2", exact old view expectedVersion, complete name/state and stable idempotencyKey. Target and kind are immutable: changing either creates a new view. A save whose name, state and resolved pins equal the current version returns that version unchanged. No save follows a newer source or proposal head. An unknown response repeats its original body/key; a definite409 requires explicit reread/reconciliation or a deliberate new view. A replay may be historical.
 
 For a full target, pins.revisionId names its source baseline; it is not the selected proposal draft. Continue model reads through the saved target.changeProposal and pins.effective, without replacing it with a source-only request.
 
@@ -241,15 +241,15 @@ sanitized definition snippets. Fresh source-only does not mean runtime truth.
 sourceCardinality is source rows per target row; targetCardinality is target rows
 per source row. Bounds have min 0/1/null, max "1"/"many"/null and textual basis.
 Each min/max is proved independently using current explicit selected-facet proof.
-Target max is one when ordered target columns match a complete explicit PK/UNIQUE
-or an unconditional unique column-only index. Expression/conditional indices
+Target max is one when the target columns, in any order, contain a complete
+explicit PK/UNIQUE or an unconditional unique column-only index. Expression/conditional indices
 cannot prove that global key; an unknown predicate leaves it uncertain. Unknown
 MATCH/enforcement/deferrability may prevent target min1 without erasing a proved
 max1. Target min1 needs known NOT NULL source columns and the established declared
 enforcement/MATCH basis. Under MATCH SIMPLE one known nullable source can prove
 min0 even if another nullability is unknown. Source max is one when the source
-columns are globally unique, otherwise many when complete explicit selected
-constraints establish no matching global key. Declared source min stays zero.
+columns are globally unique (they contain such a key), otherwise many when
+complete explicit selected constraints establish no contained global key. Declared source min stays zero.
 Missing/stale/inferred/incomplete proof leaves the affected bound unknown with a
 concrete basis reason. None of these bounds checks live data or enforcement.
 
@@ -311,7 +311,13 @@ Strict commands (every command requires commandId and nonblank reason):
   columnPairs:[{fromColumnId,toColumnId}],updateAction,deleteAction,matchType,
   deferrable,initiallyDeferred}`; update replaces name/tableId with constraintId.
   Source and target tables/columns must belong to the pinned selection. Pair order
-  is meaningful. Restrict dialect features to actual declared PostgreSQL/SQLite
+  is meaningful: admission requires the target columns, in pair order, to be a
+  complete PK/UNIQUE key of the target table in that key's exact column order
+  (MySQL/InnoDB requires it; PostgreSQL/SQLite do not). With a complete key
+  inventory a reordered pair list is the diagnostic "Ordered target columns do
+  not match a selected complete global unique key" and no candidateHash, so
+  order the pairs by the target key. Cardinality inference above is looser on
+  purpose: a covering key in any order proves target max one. Restrict dialect features to actual declared PostgreSQL/SQLite
   support; preview validates the final batch, including SET NULL/nullability.
 - `{type:"set_criteria",criteria:[{key,kind,targetIds,description}]}` replaces
   authored criteria only. Allowed authored kinds are existing_data, writers,

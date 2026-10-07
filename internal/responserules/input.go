@@ -3,6 +3,7 @@ package responserules
 import (
 	"context"
 	"crypto/sha256"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -90,7 +91,7 @@ func decodeJSONValue(ctx context.Context, text string, limit int) (any, error) {
 		return nil, err
 	}
 	var extra any
-	if err := decoder.Decode(&extra); err != io.EOF {
+	if err := decoder.Decode(&extra); !errors.Is(err, io.EOF) {
 		return nil, invalid("", "ожидается одно значение JSON")
 	}
 	if err := ctx.Err(); err != nil {
@@ -133,6 +134,73 @@ func (s *bodyScanner) quoted() (string, error) {
 	}
 	return "", invalid("", "незавершённая строка JSON")
 }
+
+// container scans an object or array whose opening bracket is at s.pos.
+func (s *bodyScanner) container(depth int) error {
+	if depth >= MaxBodyDepth {
+		return invalid("", "глубина JSON превышает 64")
+	}
+	object := s.text[s.pos] == '{'
+	end := byte(']')
+	if object {
+		end = '}'
+	}
+	s.pos++
+	s.space()
+	if s.pos < len(s.text) && s.text[s.pos] == end {
+		s.pos++
+		return nil
+	}
+	keys := map[string]bool{}
+	for {
+		if err := s.ctx.Err(); err != nil {
+			return err
+		}
+		if object {
+			if err := s.memberKey(keys); err != nil {
+				return err
+			}
+		}
+		if err := s.value(depth + 1); err != nil {
+			return err
+		}
+		s.space()
+		if s.pos >= len(s.text) {
+			return invalid("", "незавершённый JSON")
+		}
+		c := s.text[s.pos]
+		s.pos++
+		if c == end {
+			return nil
+		}
+		if c != ',' {
+			return invalid("", "ожидается запятая")
+		}
+	}
+}
+
+// memberKey scans `"key":`, refusing a key the object already has.
+func (s *bodyScanner) memberKey(keys map[string]bool) error {
+	s.space()
+	if s.pos >= len(s.text) || s.text[s.pos] != '"' {
+		return invalid("", "ожидается ключ JSON")
+	}
+	key, err := s.quoted()
+	if err != nil {
+		return err
+	}
+	if keys[key] {
+		return invalid("", "повторяющийся ключ JSON")
+	}
+	keys[key] = true
+	s.space()
+	if s.pos >= len(s.text) || s.text[s.pos] != ':' {
+		return invalid("", "ожидается двоеточие")
+	}
+	s.pos++
+	return nil
+}
+
 func (s *bodyScanner) value(depth int) error {
 	if err := s.ctx.Err(); err != nil {
 		return err
@@ -143,60 +211,7 @@ func (s *bodyScanner) value(depth int) error {
 	}
 	switch s.text[s.pos] {
 	case '{', '[':
-		if depth >= MaxBodyDepth {
-			return invalid("", "глубина JSON превышает 64")
-		}
-		object := s.text[s.pos] == '{'
-		end := byte(']')
-		if object {
-			end = '}'
-		}
-		s.pos++
-		s.space()
-		if s.pos < len(s.text) && s.text[s.pos] == end {
-			s.pos++
-			return nil
-		}
-		keys := map[string]bool{}
-		for {
-			if err := s.ctx.Err(); err != nil {
-				return err
-			}
-			if object {
-				s.space()
-				if s.pos >= len(s.text) || s.text[s.pos] != '"' {
-					return invalid("", "ожидается ключ JSON")
-				}
-				key, err := s.quoted()
-				if err != nil {
-					return err
-				}
-				if keys[key] {
-					return invalid("", "повторяющийся ключ JSON")
-				}
-				keys[key] = true
-				s.space()
-				if s.pos >= len(s.text) || s.text[s.pos] != ':' {
-					return invalid("", "ожидается двоеточие")
-				}
-				s.pos++
-			}
-			if err := s.value(depth + 1); err != nil {
-				return err
-			}
-			s.space()
-			if s.pos >= len(s.text) {
-				return invalid("", "незавершённый JSON")
-			}
-			c := s.text[s.pos]
-			s.pos++
-			if c == end {
-				return nil
-			}
-			if c != ',' {
-				return invalid("", "ожидается запятая")
-			}
-		}
+		return s.container(depth)
 	case '"':
 		_, err := s.quoted()
 		return err

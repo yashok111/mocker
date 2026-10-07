@@ -225,56 +225,73 @@ func validateAPIField(a map[string]jsontext.Value) error {
 		return err
 	}
 	if location == "body" {
-		if err = relationalFields(sel, []string{"kind", "path"}, nil); err != nil {
-			return err
-		}
-		if runtimeString(sel["kind"]) != "body" {
-			return semantic("selector", "Body selector required")
-		}
-		media := runtimeString(a["mediaType"])
-		first, second, ok := strings.Cut(media, "/")
-		if !ok || !lineageHTTPToken.MatchString(first) || !lineageHTTPToken.MatchString(second) {
-			return semantic("mediaType", "Explicit lowercase token/token media type required")
-		}
-		path, err := relationalArray(sel["path"], 32)
-		if err != nil {
-			return err
-		}
-		for _, segment := range path {
-			m, err := relationalObject(segment)
-			if err != nil {
-				return err
-			}
-			if len(m) != 1 {
-				return semantic("selector/path", "Expected one property or items segment")
-			}
-			if prop, ok := m["property"]; ok {
-				if err := lineageFieldName(prop); err != nil {
-					return err
-				}
-			} else if string(m["items"]) != "true" {
-				return semantic("selector/path", "Array shape segment requires items:true")
-			}
-		}
+		err = validateAPIBodySelector(a, sel)
 	} else {
-		if a["mediaType"] != nil {
-			return semantic("mediaType", "Non-body fields forbid media type")
-		}
-		if err = relationalFields(sel, []string{"kind", "name"}, nil); err != nil {
-			return err
-		}
-		if runtimeString(sel["kind"]) != "name" {
-			return semantic("selector", "Name selector required")
-		}
-		if err = lineageFieldName(sel["name"]); err != nil {
-			return err
-		}
-		if location == "header" && !lineageHTTPToken.MatchString(runtimeString(sel["name"])) {
-			return semantic("selector/name", "Header names must be lowercase HTTP tokens")
-		}
+		err = validateAPINameSelector(a, sel, location)
+	}
+	if err != nil {
+		return err
 	}
 	if err := runtimeScalar(a["nativeType"], false); err != nil {
 		return err
+	}
+	return nil
+}
+
+// validateAPIBodySelector checks a body field: an explicit media type and a
+// property/items path into the body shape.
+func validateAPIBodySelector(a, sel map[string]jsontext.Value) error {
+	if err := relationalFields(sel, []string{"kind", "path"}, nil); err != nil {
+		return err
+	}
+	if runtimeString(sel["kind"]) != "body" {
+		return semantic("selector", "Body selector required")
+	}
+	media := runtimeString(a["mediaType"])
+	first, second, ok := strings.Cut(media, "/")
+	if !ok || !lineageHTTPToken.MatchString(first) || !lineageHTTPToken.MatchString(second) {
+		return semantic("mediaType", "Explicit lowercase token/token media type required")
+	}
+	path, err := relationalArray(sel["path"], 32)
+	if err != nil {
+		return err
+	}
+	for _, segment := range path {
+		m, err := relationalObject(segment)
+		if err != nil {
+			return err
+		}
+		if len(m) != 1 {
+			return semantic("selector/path", "Expected one property or items segment")
+		}
+		if prop, ok := m["property"]; ok {
+			if err := lineageFieldName(prop); err != nil {
+				return err
+			}
+		} else if string(m["items"]) != "true" {
+			return semantic("selector/path", "Array shape segment requires items:true")
+		}
+	}
+	return nil
+}
+
+// validateAPINameSelector checks a path, query, header or cookie field,
+// which is addressed by name and carries no media type.
+func validateAPINameSelector(a, sel map[string]jsontext.Value, location string) error {
+	if a["mediaType"] != nil {
+		return semantic("mediaType", "Non-body fields forbid media type")
+	}
+	if err := relationalFields(sel, []string{"kind", "name"}, nil); err != nil {
+		return err
+	}
+	if runtimeString(sel["kind"]) != "name" {
+		return semantic("selector", "Name selector required")
+	}
+	if err := lineageFieldName(sel["name"]); err != nil {
+		return err
+	}
+	if location == "header" && !lineageHTTPToken.MatchString(runtimeString(sel["name"])) {
+		return semantic("selector/name", "Header names must be lowercase HTTP tokens")
 	}
 	return nil
 }

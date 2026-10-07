@@ -29,11 +29,18 @@ func eventMapCommandSchemas() []any {
 		fields["type"] = map[string]any{"type": "string", "const": kind}
 		return designScenarioSchemaObject(append([]string{"type"}, required...), fields)
 	}
-	result := []any{}
-	for _, item := range []struct{ name, collection, payload string }{
+	entities := []struct{ name, collection, payload string }{
 		{"server", "servers", "eventServer"}, {"channel", "channels", "eventChannel"},
 		{"message", "messages", "eventMessage"}, {"schema", "schemas", "eventSchema"}, {"contract", "contracts", "eventContract"},
-	} {
+	}
+	links := []struct {
+		name, payload string
+		schema        any
+	}{{"api", "apiLink", eventAPILinkSchema()}, {"state", "stateLink", eventStateLinkSchema()}}
+	// An upsert and a remove per entity, three operation commands, and an
+	// upsert and a remove per link.
+	result := make([]any, 0, 2*len(entities)+3+2*len(links))
+	for _, item := range entities {
 		result = append(result, command("upsert_event_"+item.name, []string{item.payload}, map[string]any{item.payload: entity(item.collection)}),
 			command("remove_event_"+item.name, []string{"id"}, map[string]any{"id": designScenarioRunIDSchema()}))
 	}
@@ -43,10 +50,7 @@ func eventMapCommandSchemas() []any {
 		command("remove_event_operation", []string{"contractId", "id"}, map[string]any{"contractId": designScenarioRunIDSchema(), "id": designScenarioRunIDSchema()}),
 		command("set_event_failure_routes", []string{"contractId", "id"}, map[string]any{"contractId": designScenarioRunIDSchema(), "id": designScenarioRunIDSchema(), "failureRoutes": eventFailureRoutesSchema()}),
 	)
-	for _, item := range []struct {
-		name, payload string
-		schema        any
-	}{{"api", "apiLink", eventAPILinkSchema()}, {"state", "stateLink", eventStateLinkSchema()}} {
+	for _, item := range links {
 		for _, verb := range []string{"upsert", "remove"} {
 			result = append(result, command(verb+"_event_"+item.name+"_link", []string{"contractId", "id", item.payload}, map[string]any{"contractId": designScenarioRunIDSchema(), "id": designScenarioRunIDSchema(), item.payload: item.schema}))
 		}

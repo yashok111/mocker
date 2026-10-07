@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json/v2"
 	"slices"
+	"strings"
 
 	"github.com/yashok111/mocker/internal/backendmodel"
 )
@@ -19,6 +20,11 @@ type DiagnosticReport struct {
 	Checks   []backendmodel.FindingCheck `json:"checks"`
 	Gaps     []string                    `json:"gaps"`
 	Complete bool                        `json:"complete"`
+	// certainties keeps each check's own certainty by fingerprint. FindingCheck
+	// has no certainty field, and a hard-coded "unknown" made every
+	// scope.certainty filter drop all checks and then all findings
+	// (review 2026-10-06, F137).
+	certainties map[string]string
 }
 type diagnosticEvaluator struct {
 	proofCache map[ObjectAddress]bool
@@ -33,6 +39,7 @@ type diagnosticEvaluator struct {
 	out        map[string][]backendmodel.Edge
 	selected   map[ObjectAddress]bool
 	scopeKey   string
+	index      diagnosticIndex
 }
 
 func EvaluateDiagnostics(ctx context.Context, g *backendmodel.EffectiveGraphSnapshot, in DiagnosticInput) (*DiagnosticReport, error) {
@@ -42,7 +49,7 @@ func EvaluateDiagnostics(ctx context.Context, g *backendmodel.EffectiveGraphSnap
 	if in.DiagramScope != nil && (in.Diagram == nil || in.DiagramScope.TargetHash != g.Pins.TargetHash || in.Diagram.Pin != in.DiagramScope.Pin) {
 		return nil, fault(422, "scope_mismatch", "Diagram scope differs from analysis target")
 	}
-	d := &diagnosticEvaluator{ctx: ctx, graph: g, input: in, proofCache: map[ObjectAddress]bool{}, nodes: map[string]backendmodel.Node{}, out: map[string][]backendmodel.Edge{}, report: DiagnosticReport{Findings: []backendmodel.Finding{}, Checks: []backendmodel.FindingCheck{}, Gaps: []string{}, Complete: true}}
+	d := &diagnosticEvaluator{ctx: ctx, graph: g, input: in, proofCache: map[ObjectAddress]bool{}, nodes: map[string]backendmodel.Node{}, out: map[string][]backendmodel.Edge{}, report: DiagnosticReport{Findings: []backendmodel.Finding{}, Checks: []backendmodel.FindingCheck{}, Gaps: []string{}, Complete: true, certainties: map[string]string{}}}
 	limitsRaw, _ := json.Marshal(in.Limits)
 	_ = json.Unmarshal(limitsRaw, &d.input.Limits)
 	if len(g.State.Nodes)+len(g.State.Edges) > 250000 {
@@ -57,50 +64,11 @@ func EvaluateDiagnostics(ctx context.Context, g *backendmodel.EffectiveGraphSnap
 		d.out[e.From] = append(d.out[e.From], e)
 	}
 	for id := range d.out {
-		slices.SortFunc(d.out[id], func(a, b backendmodel.Edge) int {
-			if a.ID < b.ID {
-				return -1
-			}
-			if a.ID > b.ID {
-				return 1
-			}
-			return 0
-		})
+		slices.SortFunc(d.out[id], func(a, b backendmodel.Edge) int { return strings.Compare(a.ID, b.ID) })
 	}
-	scope := in.Scope
-	scope.Certainty = ""
-	identity := struct {
-		Scope     Scope
-		DiagramID string
-		Selectors []backendmodel.DiagramScopeSelector
-	}{Scope: scope}
-	if in.DiagramScope != nil {
-		identity.DiagramID = in.DiagramScope.Pin.ID
-		identity.Selectors = in.DiagramScope.Selectors
-		d.selected = map[ObjectAddress]bool{}
-		for _, ref := range in.DiagramScope.SourceRefs {
-			if ref.Kind == "record" {
-				d.selected[ObjectAddress{RecordType: ref.RecordType, ID: ref.ID}] = true
-			}
-		}
-		for _, gap := range in.DiagramScope.Gaps {
-			d.report.Gaps = append(d.report.Gaps, gap.Code)
-		}
-		if in.DiagramScope.Truncated {
-			d.report.Complete = false
-		}
-	}
-	d.scopeKey, _ = requestHash(identity)
+	d.scopeKey, _ = requestHash(d.scopeIdentity())
 	nodes := slices.Clone(g.State.Nodes)
-	slices.SortFunc(nodes, func(a, b backendmodel.Node) int {
-		if a.ID < b.ID {
-			return -1
-		}
-		if a.ID > b.ID {
-			return 1
-		}
-		return 0
-	})
+	slices.SortFunc(nodes, func(a, b backendmodel.Node) int { return strings.Compare(a.ID, b.ID) })
 	for _, n := range nodes {
 		if err := ctx.Err(); err != nil {
 			return nil, err
@@ -114,16 +82,14 @@ func EvaluateDiagnostics(ctx context.Context, g *backendmodel.EffectiveGraphSnap
 		d.nodeRules(n)
 	}
 	edges := slices.Clone(g.State.Edges)
-	slices.SortFunc(edges, func(a, b backendmodel.Edge) int {
-		if a.ID < b.ID {
-			return -1
-		}
-		if a.ID > b.ID {
-			return 1
-		}
-		return 0
-	})
+	slices.SortFunc(edges, func(a, b backendmodel.Edge) int { return strings.Compare(a.ID, b.ID) })
 	for _, edge := range edges {
+		// Scope first, as the node loop does: ticking an edge the rules then
+		// skip let out-of-scope edges exhaust the visit budget of a narrow
+		// service scope and mark it incomplete (review 2026-10-06, F147).
+		if !d.includes("edge", edge.ID, edge.Kind) {
+			continue
+		}
 		if !d.tick() {
 			break
 		}
@@ -134,22 +100,47 @@ func EvaluateDiagnostics(ctx context.Context, g *backendmodel.EffectiveGraphSnap
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	slices.SortFunc(d.report.Findings, func(a, b backendmodel.Finding) int {
-		if a.Fingerprint < b.Fingerprint {
-			return -1
-		}
-		if a.Fingerprint > b.Fingerprint {
-			return 1
-		}
-		return 0
-	})
+	slices.SortFunc(d.report.Findings, func(a, b backendmodel.Finding) int { return strings.Compare(a.Fingerprint, b.Fingerprint) })
 	slices.Sort(d.report.Gaps)
 	d.report.Gaps = slices.Compact(d.report.Gaps)
 	return &d.report, nil
 }
+
+// scopeIdentity is what a finding's scope key hashes: the analysis scope
+// without its certainty, plus the diagram selection when there is one. With
+// a diagram scope it also records the selected source records and the
+// scope's own gaps and truncation on the evaluator.
+func (d *diagnosticEvaluator) scopeIdentity() any {
+	in := d.input
+	scope := in.Scope
+	scope.Certainty = ""
+	identity := struct {
+		Scope     Scope
+		DiagramID string
+		Selectors []backendmodel.DiagramScopeSelector
+	}{Scope: scope}
+	if in.DiagramScope == nil {
+		return identity
+	}
+	identity.DiagramID = in.DiagramScope.Pin.ID
+	identity.Selectors = in.DiagramScope.Selectors
+	d.selected = map[ObjectAddress]bool{}
+	for _, ref := range in.DiagramScope.SourceRefs {
+		if ref.Kind == "record" {
+			d.selected[ObjectAddress{RecordType: ref.RecordType, ID: ref.ID}] = true
+		}
+	}
+	for _, gap := range in.DiagramScope.Gaps {
+		d.report.Gaps = append(d.report.Gaps, gap.Code)
+	}
+	if in.DiagramScope.Truncated {
+		d.report.Complete = false
+	}
+	return identity
+}
 func (d *diagnosticEvaluator) includes(typ, id, kind string) bool {
 	a := ObjectAddress{RecordType: typ, ID: id}
-	return (d.selected == nil || d.selected[a]) && scopeObjectSelected(d.input.Scope, a, kind) && (d.input.Scope.Service == "" || objectInService(d.graph, a, d.input.Scope.Service))
+	return (d.selected == nil || d.selected[a]) && scopeObjectSelected(d.input.Scope, a, kind) && (d.input.Scope.Service == "" || d.objectInScopeService(a, d.input.Scope.Service))
 }
 func (d *diagnosticEvaluator) tick() bool {
 	d.visits++
@@ -177,6 +168,7 @@ func (d *diagnosticEvaluator) check(rule, identity, status, certainty, message s
 		return
 	}
 	d.report.Checks = append(d.report.Checks, backendmodel.FindingCheck{Fingerprint: fp, Status: status, ScopeKey: d.scopeKey})
+	d.report.certainties[fp] = certainty
 	if status == "absent" {
 		return
 	}
@@ -234,7 +226,13 @@ func diagnosticSnapshot(ctx context.Context, in *ImmutableInput, g *backendmodel
 	r.services = objectServices(g, g)
 	accepted := map[string]bool{}
 	for _, c := range report.Checks {
-		if r.add("checks", ObjectAddress{RecordType: "diagnostic", ID: c.Fingerprint}, "diagnostic_check", "unknown", 0, c) {
+		// The check carries the same certainty as its finding, so one filter
+		// accepts or omits both together (review 2026-10-06, F137).
+		certainty := report.certainties[c.Fingerprint]
+		if certainty == "" {
+			certainty = "unknown"
+		}
+		if r.add("checks", ObjectAddress{RecordType: "diagnostic", ID: c.Fingerprint}, "diagnostic_check", certainty, 0, c) {
 			accepted[c.Fingerprint] = true
 		}
 	}

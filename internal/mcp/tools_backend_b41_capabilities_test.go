@@ -7,11 +7,8 @@ import (
 )
 
 func TestBackendB41CapabilityToolDescriptions(t *testing.T) {
-	handler := newTestEndpoint(t).Handler()
-	response := doMCP(t, handler,
-		`{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}`,
-		map[string]string{"Authorization": "Bearer " + testKey},
-	)
+	// The full descriptions: tools/list carries one sentence since F23.
+	response := describedToolsList(t)
 	var envelope struct {
 		Result struct {
 			Tools []struct {

@@ -45,12 +45,15 @@ Retry requires explicit instrumentation; names alone prove nothing.
 Latency uses the selected complete root sample. With no selected roots, a single
 terminal passed/failed test duration may supply a sample; skipped/unknown tests
 are not successes. Percentiles use nearest rank on original duration samples,
-never averages of p95s. Samples remain in the result for independent recomputation.
+never averages of p95s. Samples remain in the result for independent recomputation;
+samples[].executionId is the selected execution ID. Value is the total over the
+sampled executions, so a comparison delta is null when before and after differ in
+sampleCount or missingSamples, and a limitation names the metric.
 Sampled failures, particularly tail/unknown sampling, are not population rates.
 
 3. Poll `get_backend_analysis` at the recommended interval; retain jobId,
 analysisInputHash and a terminal resultVersion. Read exact result pages using
-`get_backend_analysis_results {projectId,analysisId,resultVersion,section}`:
+`get_backend_analysis_results {projectId,jobId,resultVersion,section}`:
 checks with kind=scenario_measurement or scenario_comparison; witnesses with
 kind=observed_sequence. Existing Store26 section names are preserved. Retain returned cursors within
 that resultVersion. Later imports, correlation edits and diagram saves do not
@@ -72,6 +75,9 @@ nonempty before/after pins, exact source-compatible correlation and matching
 side target. After-side desired proposals are unsupported; before-side source
 observations may coexist with desired after intent. Read witnesses with kind=observed_evidence separately
 from structural witnesses: an observed object does not promote inferred paths.
+scope.kind and scope.service (id or name) filter observed evidence too; a
+filtered row leaves gap scope_omitted_observation. An artifact ref is addressed
+as recordType=artifact_object with the digest of the exact ref; read its ref.
 
 Benchmark tools: `scripts/backend-workbench-benchmark.py` defaults to NOT RUN;
 only `--run` performs long measurements. See the product benchmark guide. Local

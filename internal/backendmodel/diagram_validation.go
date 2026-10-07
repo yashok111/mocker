@@ -50,30 +50,31 @@ func validateDiagramRef(r DiagramRef) error {
 		if r.NamespacedLocator != nil || r.Locator == nil || r.RowID == "" || len(r.RowID) > 4096 || r.RecordType != "" || r.ID != "" {
 			return invalid("ref", "Exact artifact row required")
 		}
-		raw, err := json.Marshal(r.Locator)
-		if err != nil {
-			return err
-		}
-		var locator ArtifactProjectionLocator
-		if err = json.Unmarshal(raw, &locator); err != nil {
-			return err
-		}
+		return decodesAsDiagramLocator[ArtifactProjectionLocator](r.Locator)
 	case "namespaced_artifact":
-		if r.NamespacedLocator == nil || r.Locator != nil || r.RecordType != "" || r.ID != "" || r.RowID == "" || len(r.RowID) > 4096 {
+		if !exactNamespacedDiagramRef(r) {
 			return invalid("ref", "Exact namespaced locator required")
 		}
-		raw, err := json.Marshal(r.NamespacedLocator)
-		if err != nil {
-			return err
-		}
-		var locator NamespacedDiagramLocator
-		if err := json.Unmarshal(raw, &locator); err != nil {
-			return err
-		}
+		return decodesAsDiagramLocator[NamespacedDiagramLocator](r.NamespacedLocator)
 	default:
 		return invalid("ref", "Unknown reference kind")
 	}
 	return nil
+}
+
+func exactNamespacedDiagramRef(r DiagramRef) bool {
+	return r.NamespacedLocator != nil && r.Locator == nil && r.RecordType == "" && r.ID == "" && r.RowID != "" && len(r.RowID) <= 4096
+}
+
+// decodesAsDiagramLocator round-trips a stored locator through its typed
+// shape, so a locator its reader would reject is refused on write.
+func decodesAsDiagramLocator[T any](v any) error {
+	raw, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	var locator T
+	return json.Unmarshal(raw, &locator)
 }
 func validateDiagramBase(id, label string, origin DiagramOrigin, refs []DiagramRef) error {
 	if !ValidID(id) || !validAPIText(label, 1, 256) || refs == nil || len(refs) > 100 {

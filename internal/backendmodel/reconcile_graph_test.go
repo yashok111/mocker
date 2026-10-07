@@ -5,6 +5,8 @@ import (
 	"encoding/json/v2"
 	"slices"
 	"testing"
+
+	"github.com/yashok111/mocker/internal/testkit"
 )
 
 func TestReconcileIdentityMappedCommitAndRemoval(t *testing.T) {
@@ -354,7 +356,9 @@ func TestReconcileDeleteEvidenceKeysStayDeleted(t *testing.T) {
 
 func TestReconcileDeleteRejectsForeignOwnership(t *testing.T) {
 	r, p, old, first := committedBase(t)
-	if _, err := r.db.W.ExecContext(t.Context(), `UPDATE backend_graph_records SET document=json_set(document,'$.ownership.providerNamespace','other-owner') WHERE revision_id=? AND record_type='node'`, p.CurrentRevisionID); err != nil {
+	// Store27 (48dce80, B6.3) seals graph payloads; the foreign owner is seeded
+	// through the Store26 fixture rebuild + production migration.
+	if _, err := testkit.EditLegacyBackendPayload(t.Context(), r.db, `UPDATE backend_graph_records SET document=json_set(document,'$.ownership.providerNamespace','other-owner') WHERE revision_id=? AND record_type='node'`, p.CurrentRevisionID); err != nil {
 		t.Fatal(err)
 	}
 	s := beginRepeat(t, r, p, old)

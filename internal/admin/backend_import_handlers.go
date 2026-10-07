@@ -25,7 +25,7 @@ func backendImportQuery(r *http.Request, maxLimit int, subject bool) (backendmod
 		return in, "", backendQueryError()
 	}
 	for key, values := range q {
-		if len(values) != 1 || (key != "limit" && key != "cursor" && !(subject && (key == "subjectId" || key == "evidenceId"))) {
+		if len(values) != 1 || (key != "limit" && key != "cursor" && (!subject || (key != "subjectId" && key != "evidenceId"))) {
 			return in, "", backendQueryError()
 		}
 	}
@@ -179,48 +179,55 @@ func (s *Server) handleQueryBackendGraph(w http.ResponseWriter, r *http.Request)
 		s.backendError(w, &backendmodel.FaultError{Status: 400, Code: "backend_invalid", Message: "Explicit graph limit must be between 1 and 500", Details: map[string]any{"path": "/limit"}})
 		return
 	}
-	forbidden := []string{}
-	if in.RecordType == "nodes" {
-		forbidden = []string{"from", "to"}
+	if err := backendGraphSelectorError(raw, in.RecordType); err != nil {
+		s.backendError(w, err)
+		return
 	}
-	if in.RecordType == "edges" {
-		forbidden = []string{"search", "parentId"}
-	}
-	for _, key := range []string{"id", "parentId", "from", "to"} {
-		if value, ok := raw[key]; ok {
-			var id string
-			if err := json.Unmarshal(value, &id); err != nil || !backendmodel.ValidID(id) {
-				status, code := 422, "backend_import_invalid"
-				if key == "id" {
-					status, code = 400, "backend_invalid"
-				}
-				s.backendError(w, &backendmodel.FaultError{Status: status, Code: code, Message: "Selector must be a canonical UUID", Details: map[string]any{"path": "/" + key}})
-				return
-			}
-		}
-	}
-	for _, key := range forbidden {
-		if _, ok := raw[key]; ok {
-			s.backendError(w, &backendmodel.FaultError{Status: 422, Code: "backend_import_invalid", Message: "Selector is unavailable for this recordType", Details: map[string]any{"path": "/" + key}})
-			return
-		}
-	}
-
-	if _, selected := raw["id"]; selected {
-		for _, key := range []string{"kind", "search", "parentId", "from", "to", "cursor"} {
-			if _, supplied := raw[key]; supplied {
-				s.backendError(w, backendQueryError())
-				return
-			}
-		}
-	}
-
 	out, err := s.backendRepo.QueryGraph(r.Context(), r.PathValue("id"), in)
 	if err != nil {
 		s.backendError(w, err)
 		return
 	}
 	httpx.JSON(w, 200, out)
+}
+
+// backendGraphSelectorError checks which selectors a graph query may combine,
+// in the order the route has always refused them: a selector the recordType
+// forbids, then a malformed UUID selector, then anything beside an exact id.
+func backendGraphSelectorError(raw map[string]jsontext.Value, recordType string) error {
+	forbidden := []string{}
+	if recordType == "nodes" {
+		forbidden = []string{"from", "to"}
+	}
+	if recordType == "edges" {
+		forbidden = []string{"search", "parentId"}
+	}
+	// Presence first: a selector the recordType forbids is refused whatever
+	// its value (backend_graph_selector_contract_test pins 422 for "").
+	for _, key := range forbidden {
+		if _, ok := raw[key]; ok {
+			return &backendmodel.FaultError{Status: 422, Code: "backend_import_invalid", Message: "Selector is unavailable for this recordType", Details: map[string]any{"path": "/" + key}}
+		}
+	}
+	// Review 2026-10-06, F17: a malformed parentId/from/to answered 422
+	// backend_import_invalid (an import code on a read) while the same mistake
+	// in id, serviceId or sourceSnapshotId is 400 backend_invalid. One class.
+	for _, key := range []string{"id", "parentId", "from", "to"} {
+		if value, ok := raw[key]; ok {
+			var id string
+			if err := json.Unmarshal(value, &id); err != nil || !backendmodel.ValidID(id) {
+				return &backendmodel.FaultError{Status: 400, Code: "backend_invalid", Message: "Selector must be a canonical UUID", Details: map[string]any{"path": "/" + key}}
+			}
+		}
+	}
+	if _, selected := raw["id"]; selected {
+		for _, key := range []string{"kind", "search", "parentId", "from", "to", "cursor"} {
+			if _, supplied := raw[key]; supplied {
+				return backendQueryError()
+			}
+		}
+	}
+	return nil
 }
 
 func (s *Server) handleListBackendImports(w http.ResponseWriter, r *http.Request) {
@@ -316,7 +323,7 @@ func (s *Server) backendImportBody(w http.ResponseWriter, r *http.Request, out a
 
 func (s *Server) backendImportDecodedBody(w http.ResponseWriter, raw jsontext.Value, out any) bool {
 	if err := json.Unmarshal(raw, out, json.RejectUnknownMembers(true)); err != nil {
-		s.backendError(w, &backendmodel.FaultError{Status: 400, Code: "backend_invalid", Message: "Request must match the import schema"})
+		s.backendError(w, backendBodyFault(err, "Request must match the import schema"))
 		return false
 	}
 	if err := backendImportShape(raw, reflect.TypeOf(out).Elem(), ""); err != nil {
@@ -326,6 +333,10 @@ func (s *Server) backendImportDecodedBody(w http.ResponseWriter, raw jsontext.Va
 	return true
 }
 
+// backendImportShape checks raw against the wire shape of typ: required
+// members present, no null where Go would silently zero, and each value's JSON
+// kind matching the field's. Decoding alone loses presence, so this runs on
+// the raw bytes after a successful decode.
 func backendImportShape(raw jsontext.Value, typ reflect.Type, path string) error {
 	raw = bytes.TrimSpace(raw)
 	if typ == reflect.TypeFor[jsontext.Value]() {
@@ -341,110 +352,139 @@ func backendImportShape(raw jsontext.Value, typ reflect.Type, path string) error
 		return backendImportShape(raw, typ.Elem(), path)
 	}
 	if typ == reflect.TypeFor[backendmodel.BeginImportInput]() {
-		var fields map[string]jsontext.Value
-		if err := json.Unmarshal(raw, &fields); err != nil {
+		if err := beginImportSelectorShape(raw, path); err != nil {
 			return err
-		}
-		if value, supplied := fields["profile"]; supplied {
-			var profile string
-			if err := json.Unmarshal(value, &profile); err != nil || !slices.Contains([]string{backendmodel.GraphProfile, backendmodel.RelationalProfile, backendmodel.RuntimeProfile, backendmodel.LineageProfile, backendmodel.EventsProfile, backendmodel.ComposedProfile}, profile) {
-				return fmt.Errorf("%s/profile must select a supported import profile", path)
-			}
-		}
-		if value, supplied := fields["mode"]; supplied {
-			var mode string
-			if err := json.Unmarshal(value, &mode); err != nil || !slices.Contains([]string{"initial", "reconcile", "composed"}, mode) {
-				return fmt.Errorf("%s/mode must select a supported import mode", path)
-			}
 		}
 	}
 	if typ == reflect.TypeFor[backendmodel.ImportCommand]() {
-		var fields map[string]jsontext.Value
-		if err := json.Unmarshal(raw, &fields); err != nil {
+		if err := importCommandShape(raw, path); err != nil {
 			return err
-		}
-		var op string
-		if err := json.Unmarshal(fields["op"], &op); err != nil {
-			return err
-		}
-		member := map[string]string{"upsert_node": "node", "upsert_edge": "edge", "upsert_evidence": "evidence", "remove": "remove", "map_identity": "identity", "delete_assertion": "deletion", "claim_identity": "claimIdentity", "resolve_assertion": "resolution"}[op]
-		if member == "" || len(fields) != 2 || fields[member] == nil {
-			return fmt.Errorf("%s must contain only op and its command member", path)
 		}
 	}
-	bad := func() error { return fmt.Errorf("%s must match the import schema", path) }
-	if len(raw) == 0 {
-		return bad()
+	if len(raw) == 0 || !backendImportJSONKindMatches(typ, raw[0]) {
+		return fmt.Errorf("%s must match the import schema", path)
 	}
 	if typ == reflect.TypeFor[time.Time]() {
-		if raw[0] != '"' {
-			return bad()
-		}
 		return nil
 	}
 	switch typ.Kind() {
 	case reflect.Struct:
-		if raw[0] != '{' {
-			return bad()
+		return backendImportStructShape(raw, typ, path)
+	case reflect.Slice:
+		return backendImportSliceShape(raw, typ, path)
+	case reflect.Map:
+		return backendImportMapShape(raw, typ, path)
+	}
+	return nil
+}
+
+// backendImportJSONKindMatches compares a JSON value's first byte with the Go
+// kind it decodes into; a time.Time is a struct in Go but a string on the wire.
+func backendImportJSONKindMatches(typ reflect.Type, first byte) bool {
+	if typ == reflect.TypeFor[time.Time]() {
+		return first == '"'
+	}
+	switch typ.Kind() {
+	case reflect.Struct, reflect.Map:
+		return first == '{'
+	case reflect.Slice:
+		return first == '['
+	case reflect.String:
+		return first == '"'
+	case reflect.Bool:
+		return first == 't' || first == 'f'
+	case reflect.Int, reflect.Int64:
+		return first != 'n'
+	}
+	return true
+}
+
+// beginImportSelectorShape refuses an unknown profile or mode by name, so the
+// error names the member instead of the generic schema mismatch.
+func beginImportSelectorShape(raw jsontext.Value, path string) error {
+	var fields map[string]jsontext.Value
+	if err := json.Unmarshal(raw, &fields); err != nil {
+		return err
+	}
+	if value, supplied := fields["profile"]; supplied {
+		var profile string
+		if err := json.Unmarshal(value, &profile); err != nil || !slices.Contains([]string{backendmodel.GraphProfile, backendmodel.RelationalProfile, backendmodel.RuntimeProfile, backendmodel.LineageProfile, backendmodel.EventsProfile, backendmodel.ComposedProfile}, profile) {
+			return fmt.Errorf("%s/profile must select a supported import profile", path)
 		}
-		var fields map[string]jsontext.Value
-		if err := json.Unmarshal(raw, &fields); err != nil {
-			return err
+	}
+	if value, supplied := fields["mode"]; supplied {
+		var mode string
+		if err := json.Unmarshal(value, &mode); err != nil || !slices.Contains([]string{"initial", "reconcile", "composed"}, mode) {
+			return fmt.Errorf("%s/mode must select a supported import mode", path)
 		}
-		for field := range typ.Fields() {
-			tag := field.Tag.Get("json")
-			name, options, _ := strings.Cut(tag, ",")
-			if name == "-" || !field.IsExported() {
+	}
+	return nil
+}
+
+// importCommandShape admits a command as exactly op plus the one member that
+// op names; the struct carries every member, so decoding cannot tell.
+func importCommandShape(raw jsontext.Value, path string) error {
+	var fields map[string]jsontext.Value
+	if err := json.Unmarshal(raw, &fields); err != nil {
+		return err
+	}
+	var op string
+	if err := json.Unmarshal(fields["op"], &op); err != nil {
+		return err
+	}
+	member := map[string]string{"upsert_node": "node", "upsert_edge": "edge", "upsert_evidence": "evidence", "remove": "remove", "map_identity": "identity", "delete_assertion": "deletion", "claim_identity": "claimIdentity", "resolve_assertion": "resolution"}[op]
+	if member == "" || len(fields) != 2 || fields[member] == nil {
+		return fmt.Errorf("%s must contain only op and its command member", path)
+	}
+	return nil
+}
+
+func backendImportStructShape(raw jsontext.Value, typ reflect.Type, path string) error {
+	var fields map[string]jsontext.Value
+	if err := json.Unmarshal(raw, &fields); err != nil {
+		return err
+	}
+	for field := range typ.Fields() {
+		tag := field.Tag.Get("json")
+		name, options, _ := strings.Cut(tag, ",")
+		if name == "-" || !field.IsExported() {
+			continue
+		}
+		value, ok := fields[name]
+		if !ok {
+			if strings.Contains(options, "omitempty") || strings.Contains(options, "omitzero") {
 				continue
 			}
-			value, ok := fields[name]
-			if !ok {
-				if strings.Contains(options, "omitempty") || strings.Contains(options, "omitzero") {
-					continue
-				}
-				return fmt.Errorf("%s/%s is required", path, name)
-			}
-			if err := backendImportShape(value, field.Type, path+"/"+name); err != nil {
-				return err
-			}
+			return fmt.Errorf("%s/%s is required", path, name)
 		}
-	case reflect.Slice:
-		if raw[0] != '[' {
-			return bad()
-		}
-		var values []jsontext.Value
-		if err := json.Unmarshal(raw, &values); err != nil {
+		if err := backendImportShape(value, field.Type, path+"/"+name); err != nil {
 			return err
 		}
-		for i, value := range values {
-			if err := backendImportShape(value, typ.Elem(), fmt.Sprintf("%s/%d", path, i)); err != nil {
-				return err
-			}
-		}
-	case reflect.Map:
-		if raw[0] != '{' {
-			return bad()
-		}
-		var fields map[string]jsontext.Value
-		if err := json.Unmarshal(raw, &fields); err != nil {
+	}
+	return nil
+}
+
+func backendImportSliceShape(raw jsontext.Value, typ reflect.Type, path string) error {
+	var values []jsontext.Value
+	if err := json.Unmarshal(raw, &values); err != nil {
+		return err
+	}
+	for i, value := range values {
+		if err := backendImportShape(value, typ.Elem(), fmt.Sprintf("%s/%d", path, i)); err != nil {
 			return err
 		}
-		for key, value := range fields {
-			if err := backendImportShape(value, typ.Elem(), path+"/"+key); err != nil {
-				return err
-			}
-		}
-	case reflect.String:
-		if raw[0] != '"' {
-			return bad()
-		}
-	case reflect.Bool:
-		if raw[0] != 't' && raw[0] != 'f' {
-			return bad()
-		}
-	case reflect.Int, reflect.Int64:
-		if raw[0] == 'n' {
-			return bad()
+	}
+	return nil
+}
+
+func backendImportMapShape(raw jsontext.Value, typ reflect.Type, path string) error {
+	var fields map[string]jsontext.Value
+	if err := json.Unmarshal(raw, &fields); err != nil {
+		return err
+	}
+	for key, value := range fields {
+		if err := backendImportShape(value, typ.Elem(), path+"/"+key); err != nil {
+			return err
 		}
 	}
 	return nil

@@ -572,9 +572,31 @@ func (p *Plane) captureTraffic(w http.ResponseWriter, r *http.Request, ws *works
 	if !isHead {
 		ev.RespBody = tw.captured
 	}
-	// P3c: notes JOIN rather than one overwriting the other — a request can
-	// be both paused-refused and ref-unresolved, and traffic.Row.HasNote's
-	// whole-comma-entry match needs each as its own complete token.
+	notes := matchNotes(tm)
+	if tm.stream != "" {
+		notes = p.streamTrafficNotes(r, tm, &ev, notes)
+	}
+	if len(notes) > 0 {
+		ev.Notes = strings.Join(notes, ",")
+	}
+
+	peer := httpx.ResolvePeer(r, p.cfg.TrustProxy)
+	ev.PeerIP = peer.String()
+	if peer.Trusted {
+		// ResolvePeer only ever sets Trusted alongside a successfully parsed
+		// Forwarded address (httpx/peer.go), so this is always valid here —
+		// no separate IsValid guard needed.
+		ev.FwdIP = peer.Forwarded.String()
+	}
+
+	p.traffic.Record(ev)
+}
+
+// matchNotes lists what the serve path recorded about the match, in a fixed
+// order. P3c: notes JOIN rather than one overwriting the other — a request
+// can be both paused-refused and ref-unresolved, and traffic.Row.HasNote's
+// whole-comma-entry match needs each as its own complete token.
+func matchNotes(tm *trafficMatch) []string {
 	var notes []string
 	if tm.pauseRefused {
 		notes = append(notes, notePauseRefused)
@@ -597,55 +619,46 @@ func (p *Plane) captureTraffic(w http.ResponseWriter, r *http.Request, ws *works
 	if tm.responseRuleBodyRejected {
 		notes = append(notes, "response_rule_body_rejected")
 	}
-	if tm.stream != "" {
-		// P6b (D11): one row per connection. The writer's own capture is
-		// the first MOCKER_TRAFFIC_MAX_BODY bytes of whatever the loop
-		// wrote — pings included — and is NOT what the record carries:
-		// "off" stores no body at all, "first" stores exactly the first
-		// frame. Truncated is cleared for the same reason: a stream longer
-		// than the capture is the ordinary case, not a cut body.
-		notes = append(notes, "stream:"+tm.stream, "frames:"+strconv.Itoa(tm.streamFrames))
-		if tm.streamSkipped > 0 {
-			notes = append(notes, "frames_skipped:"+strconv.Itoa(tm.streamSkipped))
-		}
-		// P6c (D7): both conditional, like frames_skipped — a row for a
-		// connection nobody pushed into or closed carries neither token.
-		if tm.streamPushed > 0 {
-			notes = append(notes, "pushed:"+strconv.Itoa(tm.streamPushed))
-		}
-		if tm.streamClosedByAdmin {
-			notes = append(notes, "closed:admin")
-		}
-		// P6d (D10): the inbound half, on a WebSocket connection only.
-		if tm.stream == customep.KindWS {
-			notes = p.wsTrafficNotes(tm, &ev, notes)
-		}
-		ev.RespBody = tm.streamOut.bytes()
-		// A14: truncated means a frame log hit its budget (never under
-		// "first", whose one cut frame is the whole promise) — or, as
-		// before, a captured request body that was cut.
-		ev.Truncated = tm.streamOut.isTruncated() || tm.streamIn.isTruncated()
-		if cb := capturedBodyFromContext(r); cb != nil && cb.truncated {
-			ev.Truncated = true
-		}
-		if p.streamOpts.TrafficFrames == TrafficFramesAll {
-			notes = append(notes, "frames_recorded:"+strconv.Itoa(tm.streamOut.kept()))
-		}
-	}
-	if len(notes) > 0 {
-		ev.Notes = strings.Join(notes, ",")
-	}
+	return notes
+}
 
-	peer := httpx.ResolvePeer(r, p.cfg.TrustProxy)
-	ev.PeerIP = peer.String()
-	if peer.Trusted {
-		// ResolvePeer only ever sets Trusted alongside a successfully parsed
-		// Forwarded address (httpx/peer.go), so this is always valid here —
-		// no separate IsValid guard needed.
-		ev.FwdIP = peer.Forwarded.String()
+// streamTrafficNotes adds a streaming connection's notes and replaces the
+// writer's capture in ev with the stream's own frame log.
+func (p *Plane) streamTrafficNotes(r *http.Request, tm *trafficMatch, ev *traffic.Event, notes []string) []string {
+	// P6b (D11): one row per connection. The writer's own capture is
+	// the first MOCKER_TRAFFIC_MAX_BODY bytes of whatever the loop
+	// wrote — pings included — and is NOT what the record carries:
+	// "off" stores no body at all, "first" stores exactly the first
+	// frame. Truncated is cleared for the same reason: a stream longer
+	// than the capture is the ordinary case, not a cut body.
+	notes = append(notes, "stream:"+tm.stream, "frames:"+strconv.Itoa(tm.streamFrames))
+	if tm.streamSkipped > 0 {
+		notes = append(notes, "frames_skipped:"+strconv.Itoa(tm.streamSkipped))
 	}
-
-	p.traffic.Record(ev)
+	// P6c (D7): both conditional, like frames_skipped — a row for a
+	// connection nobody pushed into or closed carries neither token.
+	if tm.streamPushed > 0 {
+		notes = append(notes, "pushed:"+strconv.Itoa(tm.streamPushed))
+	}
+	if tm.streamClosedByAdmin {
+		notes = append(notes, "closed:admin")
+	}
+	// P6d (D10): the inbound half, on a WebSocket connection only.
+	if tm.stream == customep.KindWS {
+		notes = p.wsTrafficNotes(tm, ev, notes)
+	}
+	ev.RespBody = tm.streamOut.bytes()
+	// A14: truncated means a frame log hit its budget (never under
+	// "first", whose one cut frame is the whole promise) — or, as
+	// before, a captured request body that was cut.
+	ev.Truncated = tm.streamOut.isTruncated() || tm.streamIn.isTruncated()
+	if cb := capturedBodyFromContext(r); cb != nil && cb.truncated {
+		ev.Truncated = true
+	}
+	if p.streamOpts.TrafficFrames == TrafficFramesAll {
+		notes = append(notes, "frames_recorded:"+strconv.Itoa(tm.streamOut.kept()))
+	}
+	return notes
 }
 
 // authCheckPath renders the request's path RELATIVE to ws's own base path —

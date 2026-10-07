@@ -1,9 +1,10 @@
 package backendobservations
 
 import (
+	"testing"
+
 	bm "github.com/yashok111/mocker/internal/backendmodel"
 	"github.com/yashok111/mocker/internal/testkit"
-	"testing"
 )
 
 func TestObservationImmutableReceiptAndConflict(t *testing.T) {

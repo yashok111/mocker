@@ -264,8 +264,7 @@ func TestBackendAnalysisRealSDKFrozenTargetsAndReady(t *testing.T) {
 }
 
 func TestBackendAnalysisToolAnnotations(t *testing.T) {
-	endpoint := newTestEndpoint(t)
-	response := doMCP(t, endpoint.Handler(), `{"jsonrpc":"2.0","id":1,"method":"tools/list"}`, map[string]string{"Authorization": "Bearer " + testKey})
+	response := describedToolsList(t)
 	var env struct {
 		Result struct {
 			Tools []struct {

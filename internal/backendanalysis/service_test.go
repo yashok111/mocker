@@ -130,6 +130,12 @@ type completeEngine struct{}
 func (completeEngine) Analyze(context.Context, *ImmutableInput, func(PreparedSnapshot) error) (*TerminalSnapshot, error) {
 	return &TerminalSnapshot{Status: "completed", Snapshot: PreparedSnapshot{Manifest: ResultManifest{Complete: true, Verdict: "compatible_within_scope"}}}, nil
 }
+
+// A store that refuses every terminal write for a whole persistTimeout window
+// is a storage failure and still stops the service. A window that ends only
+// because the writer stayed busy is retried instead (review 2026-10-06, F4,
+// TestAnalysisBusyWriterAtTerminalWriteDoesNotStopService): the line between
+// them is whether the last attempt failed on its own error or on the deadline.
 func TestAnalysisWorkerPersistenceFailureRefusesContinuedRun(t *testing.T) {
 	r, db := testRepo(t)
 	s := NewService(r, nil, completeEngine{})

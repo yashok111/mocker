@@ -4,11 +4,12 @@ import (
 	"encoding/json/jsontext"
 	"encoding/json/v2"
 	"errors"
-	"github.com/yashok111/mocker/internal/backendmodel"
-	"github.com/yashok111/mocker/internal/httpx"
 	"net/http"
 	"net/url"
 	"strconv"
+
+	"github.com/yashok111/mocker/internal/backendmodel"
+	"github.com/yashok111/mocker/internal/httpx"
 )
 
 func (s *Server) backendSavedViewBody(w http.ResponseWriter, r *http.Request, out any) bool {
@@ -41,41 +42,45 @@ func backendSavedViewQuery(r *http.Request, detail bool) (backendmodel.SavedView
 		return list, get, backendQueryError()
 	}
 	for key, values := range q {
-		if len(values) != 1 {
-			return list, get, backendQueryError()
-		}
-		switch key {
-		case "version":
-			if !detail {
-				return list, get, backendQueryError()
-			}
-			get.Version, err = strconv.ParseInt(values[0], 10, 64)
-			if err != nil || get.Version <= 0 {
-				return list, get, backendQueryError()
-			}
-		case "kind":
-			if detail || values[0] != "flow" && values[0] != "database" {
-				return list, get, backendQueryError()
-			}
-			list.Kind = values[0]
-		case "limit":
-			if detail {
-				return list, get, backendQueryError()
-			}
-			list.Limit, err = strconv.Atoi(values[0])
-			if err != nil || list.Limit < 1 || list.Limit > 100 {
-				return list, get, backendQueryError()
-			}
-		case "cursor":
-			if detail {
-				return list, get, backendQueryError()
-			}
-			list.Cursor = values[0]
-		default:
+		if len(values) != 1 || !savedViewQueryParam(key, values[0], detail, &list, &get) {
 			return list, get, backendQueryError()
 		}
 	}
 	return list, get, nil
+}
+
+// savedViewQueryParam applies one query member to the list or detail input
+// and reports whether it is admitted: version belongs to a detail read only,
+// kind/limit/cursor to a list only, and every value is checked here.
+func savedViewQueryParam(key, value string, detail bool, list *backendmodel.SavedViewListInput, get *backendmodel.GetSavedViewInput) bool {
+	var err error
+	switch key {
+	case "version":
+		if !detail {
+			return false
+		}
+		get.Version, err = strconv.ParseInt(value, 10, 64)
+		return err == nil && get.Version > 0
+	case "kind":
+		if detail || value != "flow" && value != "database" {
+			return false
+		}
+		list.Kind = value
+		return true
+	case "limit":
+		if detail {
+			return false
+		}
+		list.Limit, err = strconv.Atoi(value)
+		return err == nil && list.Limit >= 1 && list.Limit <= 100
+	case "cursor":
+		if detail {
+			return false
+		}
+		list.Cursor = value
+		return true
+	}
+	return false
 }
 func (s *Server) handleListBackendSavedViews(w http.ResponseWriter, r *http.Request) {
 	if _, ok := s.requireUser(w, r); !ok {

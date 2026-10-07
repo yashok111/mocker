@@ -30,8 +30,7 @@ func TestImpactToolStrictSchemaAndAnnotations(t *testing.T) {
 			t.Fatalf("invalid input reached route: %s %s", args, msg)
 		}
 	}
-	ep := newTestEndpoint(t)
-	w := doMCP(t, ep.Handler(), `{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}`, map[string]string{"Authorization": "Bearer " + testKey})
+	w := describedToolsList(t)
 	var env struct {
 		Result struct {
 			Tools []struct {

@@ -3,6 +3,7 @@ package backendmodel
 import (
 	"context"
 	"database/sql"
+	"encoding/json/jsontext"
 	"encoding/json/v2"
 	"errors"
 	"slices"
@@ -61,7 +62,7 @@ func loadRevisionState(ctx context.Context, q importReader, pid, rid string) (*R
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	for rows.Next() {
 		if err := ctx.Err(); err != nil {
 			return nil, err
@@ -113,9 +114,71 @@ func deriveMetadata(state RevisionState, owner **AssertionOwnership, fresh **Ass
 }
 
 func overlayGraph(ctx context.Context, q importReader, s *ImportSession, base *RevisionState, g *graphCandidate, commands []ImportCommand, ids map[string]string, diagnostics *[]ImportDiagnostic) error {
-	add := func(code, path, message string) {
-		*diagnostics = append(*diagnostics, ImportDiagnostic{Code: code, Path: path, Message: message})
+	o := &graphOverlay{ctx: ctx, q: q, s: s, base: base, g: g, commands: commands, diagnostics: diagnostics}
+	o.stampSubmitted(ids)
+	if s.Mode != "reconcile" {
+		return nil
 	}
+	decisions, err := loadDecisions(ctx, q, s.ID)
+	if err != nil {
+		return err
+	}
+	o.decisions = decisions
+	o.mappedTargets = map[string]bool{}
+	for _, c := range decisions {
+		if c.Identity != nil {
+			o.mappedTargets[c.Identity.RecordType+"\x00"+c.Identity.ToExternalKey] = true
+		}
+	}
+	o.checkBaseOwnership()
+	// Revalidate every acknowledged allocation against this exact base and the registry.
+	if err := o.revalidateAllocations(ids); err != nil {
+		return err
+	}
+	o.retainUnsubmitted()
+	if hasRelationalProfile(selectedProfile(s.Profile)) {
+		overlayRelationalFacets(base, g, o.submitted, diagnostics)
+	}
+	if err := o.applyDecisions(); err != nil {
+		return err
+	}
+	// Reject dangling deletions before removing anything, retaining their original bundles.
+	o.rejectDanglingDeletions()
+	o.removeDeleted()
+	return o.finish()
+}
+
+// graphOverlay is one reconcile overlay of a session onto its base revision.
+// overlayGraph runs its phases in a fixed order; the indexes live here so
+// each phase reads what the earlier ones built instead of a dozen closures
+// over one long function's locals.
+type graphOverlay struct {
+	ctx         context.Context
+	q           importReader
+	s           *ImportSession
+	base        *RevisionState
+	g           *graphCandidate
+	commands    []ImportCommand
+	diagnostics *[]ImportDiagnostic
+
+	submitted         map[string]bool // "<type>\x00<id>" upserted by this session
+	submittedKeys     map[string]bool // "<type>\x00<external key>" upserted by this session
+	decisions         []ImportCommand
+	mappedTargets     map[string]bool
+	owned             map[string]bool
+	evidenceBySubject map[string][]Evidence
+	files             map[string]ManifestFile
+	deleted           map[string]bool
+}
+
+func (o *graphOverlay) add(code, path, message string) {
+	*o.diagnostics = append(*o.diagnostics, ImportDiagnostic{Code: code, Path: path, Message: message})
+}
+
+// stampSubmitted indexes what the session submitted and stamps every
+// submitted record as current and owned by this session's partition.
+func (o *graphOverlay) stampSubmitted(ids map[string]string) {
+	s, g := o.s, o.g
 	owner := &AssertionOwnership{RepositoryID: s.RepositoryID, ProviderNamespace: s.Manifest.Provider.Namespace, Profile: GraphProfile}
 	current := func() *AssertionFreshness {
 		return &AssertionFreshness{Status: "current", ConfirmedSnapshotID: s.SnapshotID, Reasons: []string{}}
@@ -125,16 +188,16 @@ func overlayGraph(ctx context.Context, q importReader, s *ImportSession, base *R
 	g.IdentityDecisions = []IdentityDecision{}
 	g.DeletionDecisions = []DeletionDecision{}
 	g.ReconciliationGaps = []string{}
-	submitted := map[string]bool{}
-	submittedKeys := map[string]bool{}
+	o.submitted = map[string]bool{}
+	o.submittedKeys = map[string]bool{}
 	usedIDs := map[string]bool{}
-	for _, c := range commands {
+	for _, c := range o.commands {
 		typ, key, _ := commandAddress(c)
 		id := ids[typ+"\x00"+key]
-		submitted[typ+"\x00"+id] = true
-		submittedKeys[typ+"\x00"+key] = true
+		o.submitted[typ+"\x00"+id] = true
+		o.submittedKeys[typ+"\x00"+key] = true
 		if usedIDs[typ+"\x00"+id] {
-			add("backend_identity_conflict", typ+"/"+key, "Multiple active keys for one UUID")
+			o.add("backend_identity_conflict", typ+"/"+key, "Multiple active keys for one UUID")
 		}
 		usedIDs[typ+"\x00"+id] = true
 	}
@@ -151,305 +214,335 @@ func overlayGraph(ctx context.Context, q importReader, s *ImportSession, base *R
 		g.Evidence[i].Freshness = current()
 	}
 	if hasRelationalProfile(selectedProfile(s.Profile)) {
-		assignRelationalOwnership(base, g, s)
+		assignRelationalOwnership(o.base, g, s)
 	}
-	if s.Mode != "reconcile" {
-		return nil
+}
+
+// sessionOwns reports whether a base assertion sits in the ownership
+// partition this session may rewrite: its repository, its provider
+// namespace, and a profile the session selected.
+func sessionOwns(s *ImportSession, o *AssertionOwnership) bool {
+	if o == nil || o.RepositoryID != s.RepositoryID || o.ProviderNamespace != s.Manifest.Provider.Namespace {
+		return false
 	}
-	decisions, err := loadDecisions(ctx, q, s.ID)
-	if err != nil {
-		return err
+	profile := selectedProfile(s.Profile)
+	switch o.Profile {
+	case GraphProfile:
+		return true
+	case RelationalProfile:
+		return hasRelationalProfile(profile)
+	case RuntimeProfile:
+		return hasRuntimeProfile(profile)
+	case LineageProfile:
+		return hasLineageProfile(profile)
+	case EventsProfile:
+		return profile == EventsProfile
 	}
-	mappedTargets := map[string]bool{}
-	for _, c := range decisions {
-		if c.Identity != nil {
-			mappedTargets[c.Identity.RecordType+"\x00"+c.Identity.ToExternalKey] = true
+	return false
+}
+
+func (o *graphOverlay) checkBaseOwnership() {
+	o.owned = map[string]bool{}
+	checkOwner := func(typ, id string, owner *AssertionOwnership) {
+		valid := sessionOwns(o.s, owner)
+		o.owned[typ+"\x00"+id] = valid
+		if !valid {
+			o.add("backend_unsupported_scope", typ+"/"+id, "Base assertion belongs to another ownership partition")
 		}
 	}
+	for _, n := range o.base.Nodes {
+		checkOwner("node", n.ID, n.Ownership)
+	}
+	for _, e := range o.base.Edges {
+		checkOwner("edge", e.ID, e.Ownership)
+	}
+	for _, e := range o.base.Evidence {
+		checkOwner("evidence", e.ID, e.Ownership)
+	}
+}
+
+func (o *graphOverlay) revalidateAllocations(ids map[string]string) error {
 	baseNodes := map[string]Node{}
-	for _, n := range base.Nodes {
+	for _, n := range o.base.Nodes {
 		baseNodes[n.ID] = n
 	}
 	baseEdges := map[string]Edge{}
-	for _, e := range base.Edges {
+	for _, e := range o.base.Edges {
 		baseEdges[e.ID] = e
 	}
-	owned := map[string]bool{}
-	checkOwner := func(typ, id string, o *AssertionOwnership) {
-		valid := o != nil && o.RepositoryID == s.RepositoryID && o.ProviderNamespace == s.Manifest.Provider.Namespace && (o.Profile == GraphProfile || hasRelationalProfile(selectedProfile(s.Profile)) && o.Profile == RelationalProfile || hasRuntimeProfile(selectedProfile(s.Profile)) && o.Profile == RuntimeProfile || hasLineageProfile(selectedProfile(s.Profile)) && o.Profile == LineageProfile || selectedProfile(s.Profile) == EventsProfile && o.Profile == EventsProfile)
-		owned[typ+"\x00"+id] = valid
-		if !valid {
-			add("backend_unsupported_scope", typ+"/"+id, "Base assertion belongs to another ownership partition")
-		}
-	}
-	for _, n := range base.Nodes {
-		checkOwner("node", n.ID, n.Ownership)
-	}
-	for _, e := range base.Edges {
-		checkOwner("edge", e.ID, e.Ownership)
-	}
-	for _, e := range base.Evidence {
-		checkOwner("evidence", e.ID, e.Ownership)
-	}
-	// Revalidate every acknowledged allocation against this exact base and the registry.
-	for _, c := range commands {
+	for _, c := range o.commands {
 		typ, key, _ := commandAddress(c)
 		id := ids[typ+"\x00"+key]
-		b, err := binding(ctx, q, s, typ, key)
+		b, err := binding(o.ctx, o.q, o.s, typ, key)
 		if err != nil {
 			return err
 		}
-		if b != nil && (b.ID != id || b.State != "active" && b.State != "reserved" && !mappedTargets[typ+"\x00"+key]) {
-			add("backend_identity_conflict", typ+"/"+key, "Acknowledged UUID conflicts with the current key binding")
+		if b != nil && (b.ID != id || b.State != "active" && b.State != "reserved" && !o.mappedTargets[typ+"\x00"+key]) {
+			o.add("backend_identity_conflict", typ+"/"+key, "Acknowledged UUID conflicts with the current key binding")
 		}
-		if n, ok := baseNodes[id]; ok {
-			if typ == "node" && n.ID == id && n.ExternalKey != key && !mappedTargets[typ+"\x00"+key] {
-				add("backend_identity_conflict", typ+"/"+key, "Changing an active key requires a mapping decision")
-			}
-			if typ == "node" && n.ID == id && c.Node.Kind != n.Kind {
-				add("backend_identity_conflict", typ+"/"+key, "Identity kind cannot change")
-			}
+		o.checkKeyStability(c, typ, key, id, baseNodes, baseEdges)
+	}
+	return nil
+}
+
+// checkKeyStability rejects a submitted record that silently re-keys or
+// re-kinds an identity the base already holds; a re-key needs a mapping.
+func (o *graphOverlay) checkKeyStability(c ImportCommand, typ, key, id string, baseNodes map[string]Node, baseEdges map[string]Edge) {
+	mapped := o.mappedTargets[typ+"\x00"+key]
+	if n, ok := baseNodes[id]; ok {
+		if typ == "node" && n.ID == id && n.ExternalKey != key && !mapped {
+			o.add("backend_identity_conflict", typ+"/"+key, "Changing an active key requires a mapping decision")
 		}
-		if e, ok := baseEdges[id]; ok {
-			if typ == "edge" && e.ID == id && e.ExternalKey != key && !mappedTargets[typ+"\x00"+key] {
-				add("backend_identity_conflict", typ+"/"+key, "Changing an active key requires a mapping decision")
-			}
-			if typ == "edge" && e.ID == id && c.Edge.Kind != e.Kind {
-				add("backend_identity_conflict", typ+"/"+key, "Identity kind cannot change")
-			}
+		if typ == "node" && n.ID == id && c.Node.Kind != n.Kind {
+			o.add("backend_identity_conflict", typ+"/"+key, "Identity kind cannot change")
 		}
 	}
-	evidenceBySubject := map[string][]Evidence{}
-	for _, e := range base.Evidence {
-		evidenceBySubject[e.SubjectID] = append(evidenceBySubject[e.SubjectID], e)
-	}
-	files := map[string]ManifestFile{}
-	for _, file := range s.Manifest.Snapshot.Files {
-		files[file.Path] = file
-	}
-	stale := func(previous *AssertionFreshness, evidence []Evidence) *AssertionFreshness {
-		f := &AssertionFreshness{Status: "stale", Reasons: []string{"not_reobserved"}}
-		if previous != nil {
-			f.ConfirmedSnapshotID = previous.ConfirmedSnapshotID
+	if e, ok := baseEdges[id]; ok {
+		if typ == "edge" && e.ID == id && e.ExternalKey != key && !mapped {
+			o.add("backend_identity_conflict", typ+"/"+key, "Changing an active key requires a mapping decision")
 		}
-		for _, e := range evidence {
-			file, ok := files[e.Source.File]
-			switch {
-			case !ok:
-				f.Reasons = append(f.Reasons, "source_absent")
-			case file.AnalysisStatus != "analyzed":
-				f.Reasons = append(f.Reasons, "source_unavailable")
-			case file.ContentHash != e.Source.ContentHash:
-				f.Reasons = append(f.Reasons, "source_changed")
-			}
+		if typ == "edge" && e.ID == id && c.Edge.Kind != e.Kind {
+			o.add("backend_identity_conflict", typ+"/"+key, "Identity kind cannot change")
 		}
-		slices.Sort(f.Reasons)
-		f.Reasons = slices.Compact(f.Reasons)
-		return f
 	}
+}
+
+// staleFreshness marks a record the session did not re-observe as stale,
+// with a reason for each evidence locator the new manifest no longer backs.
+func (o *graphOverlay) staleFreshness(previous *AssertionFreshness, evidence []Evidence) *AssertionFreshness {
+	f := &AssertionFreshness{Status: "stale", Reasons: []string{"not_reobserved"}}
+	if previous != nil {
+		f.ConfirmedSnapshotID = previous.ConfirmedSnapshotID
+	}
+	for _, e := range evidence {
+		file, ok := o.files[e.Source.File]
+		switch {
+		case !ok:
+			f.Reasons = append(f.Reasons, "source_absent")
+		case file.AnalysisStatus != "analyzed":
+			f.Reasons = append(f.Reasons, "source_unavailable")
+		case file.ContentHash != e.Source.ContentHash:
+			f.Reasons = append(f.Reasons, "source_changed")
+		}
+	}
+	slices.Sort(f.Reasons)
+	f.Reasons = slices.Compact(f.Reasons)
+	return f
+}
+
+// retainUnsubmitted carries every base record the session did not
+// resubmit into the candidate as stale, together with its evidence.
+func (o *graphOverlay) retainUnsubmitted() {
+	o.evidenceBySubject = map[string][]Evidence{}
+	for _, e := range o.base.Evidence {
+		o.evidenceBySubject[e.SubjectID] = append(o.evidenceBySubject[e.SubjectID], e)
+	}
+	o.files = map[string]ManifestFile{}
+	for _, file := range o.s.Manifest.Snapshot.Files {
+		o.files[file.Path] = file
+	}
+	g := o.g
 	retainedSubjects := map[string]*AssertionFreshness{}
-	for _, n := range base.Nodes {
-		if !submitted["node\x00"+n.ID] {
-			n.Freshness = stale(n.Freshness, evidenceBySubject[n.ID])
+	for _, n := range o.base.Nodes {
+		if !o.submitted["node\x00"+n.ID] {
+			n.Freshness = o.staleFreshness(n.Freshness, o.evidenceBySubject[n.ID])
 			g.Nodes = append(g.Nodes, n)
 			retainedSubjects[n.ID] = n.Freshness
 		}
 	}
-	for _, e := range base.Edges {
-		if !submitted["edge\x00"+e.ID] {
-			e.Freshness = stale(e.Freshness, evidenceBySubject[e.ID])
+	for _, e := range o.base.Edges {
+		if !o.submitted["edge\x00"+e.ID] {
+			e.Freshness = o.staleFreshness(e.Freshness, o.evidenceBySubject[e.ID])
 			g.Edges = append(g.Edges, e)
 			retainedSubjects[e.ID] = e.Freshness
 		}
 	}
 	for _, e := range g.Evidence {
 		if _, retained := retainedSubjects[e.SubjectID]; retained {
-			add("backend_graph_invalid", "evidence/"+e.ID, "Evidence requires an explicitly upserted subject")
+			o.add("backend_graph_invalid", "evidence/"+e.ID, "Evidence requires an explicitly upserted subject")
 		}
 	}
-	for _, e := range base.Evidence {
-		if f, ok := retainedSubjects[e.SubjectID]; ok && !submitted["evidence\x00"+e.ID] {
+	for _, e := range o.base.Evidence {
+		if f, ok := retainedSubjects[e.SubjectID]; ok && !o.submitted["evidence\x00"+e.ID] {
 			e.Freshness = f
 			g.Evidence = append(g.Evidence, e)
 		}
 	}
-	if hasRelationalProfile(selectedProfile(s.Profile)) {
-		overlayRelationalFacets(base, g, submitted, diagnostics)
-	}
-	refs := func(id string) []HistoricalEvidenceRef {
-		out := []HistoricalEvidenceRef{}
-		for _, e := range base.Evidence {
-			if e.SubjectID == id || e.ID == id {
-				out = append(out, HistoricalEvidenceRef{RevisionID: base.Revision.ID, EvidenceID: e.ID})
-			}
+}
+
+func (o *graphOverlay) historicalRefs(id string) []HistoricalEvidenceRef {
+	out := []HistoricalEvidenceRef{}
+	for _, e := range o.base.Evidence {
+		if e.SubjectID == id || e.ID == id {
+			out = append(out, HistoricalEvidenceRef{RevisionID: o.base.Revision.ID, EvidenceID: e.ID})
 		}
-		return out
 	}
-	deleted := map[string]bool{}
-	for _, c := range decisions {
-		if err := ctx.Err(); err != nil {
+	return out
+}
+
+func (o *graphOverlay) applyDecisions() error {
+	o.deleted = map[string]bool{}
+	for _, c := range o.decisions {
+		if err := o.ctx.Err(); err != nil {
 			return err
 		}
 		if c.Identity != nil {
-			x := c.Identity
-			d := IdentityDecision{Command: *x, OldEvidenceRefs: []HistoricalEvidenceRef{}, EvidenceRefs: []StagedEvidenceRef{}}
-			id, _ := stateIdentity(*base, x.RecordType, x.FromExternalKey)
-			valid := id != "" && id == x.ExpectedID && owned[x.RecordType+"\x00"+id]
-			if id != "" {
-				d.OldSubject = &HistoricalSubjectRef{RevisionID: base.Revision.ID, RecordType: x.RecordType, ID: id}
-				d.OldEvidenceRefs = refs(id)
-			}
-			target, err := binding(ctx, q, s, x.RecordType, x.ToExternalKey)
-			if err != nil {
+			if err := o.identityDecision(c.Identity); err != nil {
 				return err
 			}
-			if target != nil && (target.ID != x.ExpectedID || target.State != "retired") {
-				valid = false
-			}
-			if !submittedKeys[x.RecordType+"\x00"+x.ToExternalKey] || submittedKeys[x.RecordType+"\x00"+x.FromExternalKey] {
-				valid = false
-			}
-			for _, key := range x.EvidenceKeys {
-				found := false
-				for _, e := range g.Evidence {
-					if e.ExternalKey == key && e.SubjectID == id && e.Source.SnapshotID == s.SnapshotID && submitted["evidence\x00"+e.ID] {
-						found = true
-						d.EvidenceRefs = append(d.EvidenceRefs, StagedEvidenceRef{SnapshotID: s.SnapshotID, EvidenceKey: key})
-					}
-				}
-				if !found {
-					valid = false
-				}
-			}
-			d.Resolved = valid
-			g.IdentityDecisions = append(g.IdentityDecisions, d)
-			if !valid {
-				add("backend_identity_conflict", "identity/"+x.ToExternalKey, "Mapping requires the same base identity, an available target and current evidence on its submitted target")
-			}
 		} else if c.Deletion != nil {
-			x := c.Deletion
-			d := DeletionDecision{Command: *x, OldEvidenceRefs: []HistoricalEvidenceRef{}}
-			id, _ := stateIdentity(*base, x.RecordType, x.ExternalKey)
-			valid := id != "" && id == x.ExpectedID && owned[x.RecordType+"\x00"+id]
-			if id != "" {
-				d.OldSubject = &HistoricalSubjectRef{RevisionID: base.Revision.ID, RecordType: x.RecordType, ID: id}
-				d.OldEvidenceRefs = refs(id)
+			o.deletionDecision(c.Deletion)
+		}
+	}
+	return nil
+}
+
+func (o *graphOverlay) identityDecision(x *ImportIdentityMap) error {
+	d := IdentityDecision{Command: *x, OldEvidenceRefs: []HistoricalEvidenceRef{}, EvidenceRefs: []StagedEvidenceRef{}}
+	id, _ := stateIdentity(*o.base, x.RecordType, x.FromExternalKey)
+	valid := id != "" && id == x.ExpectedID && o.owned[x.RecordType+"\x00"+id]
+	if id != "" {
+		d.OldSubject = &HistoricalSubjectRef{RevisionID: o.base.Revision.ID, RecordType: x.RecordType, ID: id}
+		d.OldEvidenceRefs = o.historicalRefs(id)
+	}
+	target, err := binding(o.ctx, o.q, o.s, x.RecordType, x.ToExternalKey)
+	if err != nil {
+		return err
+	}
+	if target != nil && (target.ID != x.ExpectedID || target.State != "retired") {
+		valid = false
+	}
+	if !o.submittedKeys[x.RecordType+"\x00"+x.ToExternalKey] || o.submittedKeys[x.RecordType+"\x00"+x.FromExternalKey] {
+		valid = false
+	}
+	refs, allFound := o.stagedEvidenceRefs(x.EvidenceKeys, id)
+	d.EvidenceRefs = append(d.EvidenceRefs, refs...)
+	if !allFound {
+		valid = false
+	}
+	d.Resolved = valid
+	o.g.IdentityDecisions = append(o.g.IdentityDecisions, d)
+	if !valid {
+		o.add("backend_identity_conflict", "identity/"+x.ToExternalKey, "Mapping requires the same base identity, an available target and current evidence on its submitted target")
+	}
+	return nil
+}
+
+// stagedEvidenceRefs finds the current evidence a mapping cites on its
+// submitted target, and reports whether every cited key was found.
+func (o *graphOverlay) stagedEvidenceRefs(keys []string, id string) ([]StagedEvidenceRef, bool) {
+	var refs []StagedEvidenceRef
+	allFound := true
+	for _, key := range keys {
+		found := false
+		for _, e := range o.g.Evidence {
+			if e.ExternalKey == key && e.SubjectID == id && e.Source.SnapshotID == o.s.SnapshotID && o.submitted["evidence\x00"+e.ID] {
+				found = true
+				refs = append(refs, StagedEvidenceRef{SnapshotID: o.s.SnapshotID, EvidenceKey: key})
 			}
-			if submitted[x.RecordType+"\x00"+id] {
-				valid = false
-			}
-			if !deletionScopeValid(s, commands) {
-				valid = false
-			}
-			previous := evidenceBySubject[id]
-			if x.RecordType == "evidence" {
-				previous = nil
-				for _, e := range base.Evidence {
-					if e.ID == id {
-						previous = []Evidence{e}
-						if !submitted["node\x00"+e.SubjectID] && !submitted["edge\x00"+e.SubjectID] {
-							subjectDeleted := false
-							for _, other := range decisions {
-								if other.Deletion != nil && other.Deletion.ExpectedID == e.SubjectID {
-									subjectDeleted = true
-								}
-							}
-							if !subjectDeleted {
-								valid = false
-							}
-						}
-					}
-				}
-			}
-			for _, e := range previous {
-				for _, file := range s.Manifest.Snapshot.Files {
-					if file.Path == e.Source.File && file.AnalysisStatus != "analyzed" {
-						valid = false
-					}
-				}
-			}
-			d.Resolved = valid
-			g.DeletionDecisions = append(g.DeletionDecisions, d)
-			if !valid {
-				add("backend_unsafe_deletion", "deletion/"+x.ExternalKey, "Deletion requires compatible complete scope, verified inventory and available previous evidence locators")
-			} else {
-				deleted[x.RecordType+"\x00"+id] = true
+		}
+		if !found {
+			allFound = false
+		}
+	}
+	return refs, allFound
+}
+
+func (o *graphOverlay) deletionDecision(x *ImportDeletion) {
+	d := DeletionDecision{Command: *x, OldEvidenceRefs: []HistoricalEvidenceRef{}}
+	id, _ := stateIdentity(*o.base, x.RecordType, x.ExternalKey)
+	valid := id != "" && id == x.ExpectedID && o.owned[x.RecordType+"\x00"+id]
+	if id != "" {
+		d.OldSubject = &HistoricalSubjectRef{RevisionID: o.base.Revision.ID, RecordType: x.RecordType, ID: id}
+		d.OldEvidenceRefs = o.historicalRefs(id)
+	}
+	if o.submitted[x.RecordType+"\x00"+id] {
+		valid = false
+	}
+	if !deletionScopeValid(o.s, o.commands) {
+		valid = false
+	}
+	previous := o.evidenceBySubject[id]
+	if x.RecordType == "evidence" {
+		var subjectKept bool
+		previous, subjectKept = o.deletedEvidence(id)
+		if !subjectKept {
+			valid = false
+		}
+	}
+	if !o.locatorsAvailable(previous) {
+		valid = false
+	}
+	d.Resolved = valid
+	o.g.DeletionDecisions = append(o.g.DeletionDecisions, d)
+	if !valid {
+		o.add("backend_unsafe_deletion", "deletion/"+x.ExternalKey, "Deletion requires compatible complete scope, verified inventory and available previous evidence locators")
+	} else {
+		o.deleted[x.RecordType+"\x00"+id] = true
+	}
+}
+
+// deletedEvidence returns the base evidence record a deletion names, and
+// false when its subject is neither resubmitted nor deleted too: evidence
+// may only leave with, or be replaced on, its subject.
+func (o *graphOverlay) deletedEvidence(id string) ([]Evidence, bool) {
+	var previous []Evidence
+	ok := true
+	for _, e := range o.base.Evidence {
+		if e.ID != id {
+			continue
+		}
+		previous = []Evidence{e}
+		if !o.submitted["node\x00"+e.SubjectID] && !o.submitted["edge\x00"+e.SubjectID] && !o.subjectDeleted(e.SubjectID) {
+			ok = false
+		}
+	}
+	return previous, ok
+}
+
+func (o *graphOverlay) subjectDeleted(subjectID string) bool {
+	deleted := false
+	for _, other := range o.decisions {
+		if other.Deletion != nil && other.Deletion.ExpectedID == subjectID {
+			deleted = true
+		}
+	}
+	return deleted
+}
+
+// locatorsAvailable reports whether every previous evidence file was
+// analyzed in this snapshot; a deletion is only proved where we looked.
+func (o *graphOverlay) locatorsAvailable(previous []Evidence) bool {
+	ok := true
+	for _, e := range previous {
+		for _, file := range o.s.Manifest.Snapshot.Files {
+			if file.Path == e.Source.File && file.AnalysisStatus != "analyzed" {
+				ok = false
 			}
 		}
 	}
-	// Reject dangling deletions before removing anything, retaining their original bundles.
+	return ok
+}
+
+func (o *graphOverlay) rejectDanglingDeletions() {
 	for {
 		changed := false
-		for _, n := range g.Nodes {
+		for _, n := range o.g.Nodes {
 			address := "node\x00" + n.ID
-			if !deleted[address] {
-				continue
-			}
-			dangling := false
-			for _, e := range g.Edges {
-				if !deleted["edge\x00"+e.ID] && (e.From == n.ID || e.To == n.ID) {
-					dangling = true
-					break
-				}
-			}
-			for _, child := range g.Nodes {
-				if !deleted["node\x00"+child.ID] && child.ParentID != nil && *child.ParentID == n.ID {
-					dangling = true
-					break
-				}
-			}
-			if hasRelationalProfile(selectedProfile(s.Profile)) {
-				for _, subject := range g.Nodes {
-					if !deleted["node\x00"+subject.ID] && sourceActiveReferenceTo(subject.Kind, subject.Attributes, false, n.ID) {
-						dangling = true
-					}
-				}
-				for _, subject := range g.Edges {
-					if !deleted["edge\x00"+subject.ID] && sourceActiveReferenceTo(subject.Kind, subject.Attributes, true, n.ID) {
-						dangling = true
-					}
-				}
-			}
-			if dangling {
-				delete(deleted, address)
+			if o.deleted[address] && o.nodeDeletionDangles(n) {
+				o.keepDeleted(address, n.ID, "deletion/"+n.ExternalKey, "Surviving edges or parent links prevent deletion")
 				changed = true
-				for i := range g.DeletionDecisions {
-					if g.DeletionDecisions[i].Command.ExpectedID == n.ID {
-						g.DeletionDecisions[i].Resolved = false
-					}
-				}
-				add("backend_unsafe_deletion", "deletion/"+n.ExternalKey, "Surviving edges or parent links prevent deletion")
 			}
 		}
 
 		// Edge assertions can be active nested dependencies (event route proof).
 		// Reject their removal through the same closure as node dependencies.
-		if selectedProfile(s.Profile) == EventsProfile {
-			for _, e := range g.Edges {
+		if selectedProfile(o.s.Profile) == EventsProfile {
+			for _, e := range o.g.Edges {
 				address := "edge\x00" + e.ID
-				if !deleted[address] {
-					continue
-				}
-				dangling := false
-				for _, n := range g.Nodes {
-					if !deleted["node\x00"+n.ID] && sourceActiveRecordReferenceTo(n.Kind, n.Attributes, false, "edge", e.ID) {
-						dangling = true
-					}
-				}
-				for _, subject := range g.Edges {
-					if !deleted["edge\x00"+subject.ID] && sourceActiveRecordReferenceTo(subject.Kind, subject.Attributes, true, "edge", e.ID) {
-						dangling = true
-					}
-				}
-				if dangling {
-					delete(deleted, address)
+				if o.deleted[address] && o.edgeDeletionDangles(e) {
+					o.keepDeleted(address, e.ID, "deletion/"+e.ExternalKey, "Surviving nested edge references prevent deletion")
 					changed = true
-					for i := range g.DeletionDecisions {
-						if g.DeletionDecisions[i].Command.ExpectedID == e.ID {
-							g.DeletionDecisions[i].Resolved = false
-						}
-					}
-					add("backend_unsafe_deletion", "deletion/"+e.ExternalKey, "Surviving nested edge references prevent deletion")
 				}
 			}
 		}
@@ -457,6 +550,67 @@ func overlayGraph(ctx context.Context, q importReader, s *ImportSession, base *R
 			break
 		}
 	}
+}
+
+// keepDeleted withdraws one deletion that would leave a dangling reference
+// and unresolves the decision that asked for it.
+func (o *graphOverlay) keepDeleted(address, id, path, message string) {
+	delete(o.deleted, address)
+	for i := range o.g.DeletionDecisions {
+		if o.g.DeletionDecisions[i].Command.ExpectedID == id {
+			o.g.DeletionDecisions[i].Resolved = false
+		}
+	}
+	o.add("backend_unsafe_deletion", path, message)
+}
+
+func (o *graphOverlay) nodeDeletionDangles(n Node) bool {
+	g := o.g
+	dangling := false
+	for _, e := range g.Edges {
+		if !o.deleted["edge\x00"+e.ID] && (e.From == n.ID || e.To == n.ID) {
+			dangling = true
+			break
+		}
+	}
+	for _, child := range g.Nodes {
+		if !o.deleted["node\x00"+child.ID] && child.ParentID != nil && *child.ParentID == n.ID {
+			dangling = true
+			break
+		}
+	}
+	if hasRelationalProfile(selectedProfile(o.s.Profile)) {
+		for _, subject := range g.Nodes {
+			if !o.deleted["node\x00"+subject.ID] && sourceActiveReferenceTo(subject.Kind, subject.Attributes, false, n.ID) {
+				dangling = true
+			}
+		}
+		for _, subject := range g.Edges {
+			if !o.deleted["edge\x00"+subject.ID] && sourceActiveReferenceTo(subject.Kind, subject.Attributes, true, n.ID) {
+				dangling = true
+			}
+		}
+	}
+	return dangling
+}
+
+func (o *graphOverlay) edgeDeletionDangles(e Edge) bool {
+	dangling := false
+	for _, n := range o.g.Nodes {
+		if !o.deleted["node\x00"+n.ID] && sourceActiveRecordReferenceTo(n.Kind, n.Attributes, false, "edge", e.ID) {
+			dangling = true
+		}
+	}
+	for _, subject := range o.g.Edges {
+		if !o.deleted["edge\x00"+subject.ID] && sourceActiveRecordReferenceTo(subject.Kind, subject.Attributes, true, "edge", e.ID) {
+			dangling = true
+		}
+	}
+	return dangling
+}
+
+func (o *graphOverlay) removeDeleted() {
+	g, deleted := o.g, o.deleted
 	g.Nodes = slices.DeleteFunc(g.Nodes, func(n Node) bool { return deleted["node\x00"+n.ID] })
 	g.Edges = slices.DeleteFunc(g.Edges, func(e Edge) bool { return deleted["edge\x00"+e.ID] })
 	g.Evidence = slices.DeleteFunc(g.Evidence, func(e Evidence) bool {
@@ -465,16 +619,20 @@ func overlayGraph(ctx context.Context, q importReader, s *ImportSession, base *R
 	// Deletion never cascades to edges or parent/contains references.
 	for _, e := range g.Edges {
 		if deleted["node\x00"+e.From] || deleted["node\x00"+e.To] {
-			add("backend_unsafe_deletion", "edges/"+e.ID, "Explicitly remove or rebind every edge to the deleted subject")
+			o.add("backend_unsafe_deletion", "edges/"+e.ID, "Explicitly remove or rebind every edge to the deleted subject")
 		}
 	}
 	for _, n := range g.Nodes {
 		if n.ParentID != nil && deleted["node\x00"+*n.ParentID] {
-			add("backend_unsafe_deletion", "nodes/"+n.ID, "Parent reference prevents deletion")
+			o.add("backend_unsafe_deletion", "nodes/"+n.ID, "Parent reference prevents deletion")
 		}
 	}
-	if !inventoryCountsValid(s, commands) {
-		add("backend_unsafe_deletion", "inventory", "Complete inventory counts must match the manifest and submitted endpoint/datastore contributions")
+}
+
+func (o *graphOverlay) finish() error {
+	s, g, base := o.s, o.g, o.base
+	if !inventoryCountsValid(s, o.commands) {
+		o.add("backend_unsafe_deletion", "inventory", "Complete inventory counts must match the manifest and submitted endpoint/datastore contributions")
 	}
 	if hasLineageProfile(selectedProfile(s.Profile)) {
 		markLineageEndpointStaleness(g)
@@ -487,6 +645,23 @@ func overlayGraph(ctx context.Context, q importReader, s *ImportSession, base *R
 			}
 		}
 	}
+	retainProvenanceSources(base, g, s.SnapshotID)
+	slices.SortFunc(g.Nodes, func(a, b Node) int { return strings.Compare(a.ID, b.ID) })
+	slices.SortFunc(g.Edges, func(a, b Edge) int { return strings.Compare(a.ID, b.ID) })
+	slices.SortFunc(g.Evidence, func(a, b Evidence) int { return strings.Compare(a.ID, b.ID) })
+	after := RevisionState{Revision: Revision{ArtifactPins: base.Revision.ArtifactPins}, APIArtifactContext: base.APIArtifactContext, ArtifactContext: base.ArtifactContext, Nodes: g.Nodes, Edges: g.Edges, Evidence: g.Evidence, Sources: g.Sources, Inventory: s.Inventory}
+	g.SourceChanges = sourceChanges(*base, after)
+	delta, err := CompareRevisionStates(o.ctx, *base, after)
+	if err != nil {
+		return err
+	}
+	g.ComparisonSummary = &delta.Summary
+	return nil
+}
+
+// retainProvenanceSources keeps every base snapshot some surviving record
+// still confirms, so its provenance stays resolvable in the new revision.
+func retainProvenanceSources(base *RevisionState, g *graphCandidate, snapshotID string) {
 	usedSnapshots := map[string]bool{}
 	for _, e := range g.Evidence {
 		usedSnapshots[e.Source.SnapshotID] = true
@@ -502,22 +677,11 @@ func overlayGraph(ctx context.Context, q importReader, s *ImportSession, base *R
 		}
 	}
 	for _, src := range base.Sources {
-		if usedSnapshots[src.ID] && src.ID != s.SnapshotID {
+		if usedSnapshots[src.ID] && src.ID != snapshotID {
 			src.Role = "retained_provenance"
 			g.Sources = append(g.Sources, src)
 		}
 	}
-	slices.SortFunc(g.Nodes, func(a, b Node) int { return strings.Compare(a.ID, b.ID) })
-	slices.SortFunc(g.Edges, func(a, b Edge) int { return strings.Compare(a.ID, b.ID) })
-	slices.SortFunc(g.Evidence, func(a, b Evidence) int { return strings.Compare(a.ID, b.ID) })
-	after := RevisionState{Revision: Revision{ArtifactPins: base.Revision.ArtifactPins}, APIArtifactContext: base.APIArtifactContext, ArtifactContext: base.ArtifactContext, Nodes: g.Nodes, Edges: g.Edges, Evidence: g.Evidence, Sources: g.Sources, Inventory: s.Inventory}
-	g.SourceChanges = sourceChanges(*base, after)
-	delta, err := CompareRevisionStates(ctx, *base, after)
-	if err != nil {
-		return err
-	}
-	g.ComparisonSummary = &delta.Summary
-	return nil
 }
 
 func inventoryCountsValid(s *ImportSession, commands []ImportCommand) bool {
@@ -558,37 +722,7 @@ func deletionScopeValid(s *ImportSession, commands []ImportCommand) bool {
 	return true
 }
 func propagateStaleness(g *graphCandidate) {
-	fresh := map[string]*AssertionFreshness{}
-	dependents := map[string][]string{}
-	for _, n := range g.Nodes {
-		fresh[n.ID] = n.Freshness
-		if refs, err := sourceAttributeReferences(n.Kind, n.Attributes, false, true); err == nil {
-			for _, ref := range refs {
-				if ref.Kind != "evidence" && ref.HistoricalRevisionID == "" {
-					dependents[ref.ID] = append(dependents[ref.ID], n.ID)
-				}
-			}
-		}
-		if n.ParentID != nil {
-			dependents[*n.ParentID] = append(dependents[*n.ParentID], n.ID)
-		}
-	}
-	for _, e := range g.Edges {
-		fresh[e.ID] = e.Freshness
-		if refs, err := sourceAttributeReferences(e.Kind, e.Attributes, true, true); err == nil {
-			for _, ref := range refs {
-				if ref.Kind != "evidence" && ref.HistoricalRevisionID == "" {
-					dependents[ref.ID] = append(dependents[ref.ID], e.ID)
-				}
-			}
-		}
-		dependents[e.From] = append(dependents[e.From], e.ID)
-		dependents[e.To] = append(dependents[e.To], e.ID)
-		if e.Kind == "contains" {
-			dependents[e.ID] = append(dependents[e.ID], e.To)
-			dependents[e.From] = append(dependents[e.From], e.To)
-		}
-	}
+	fresh, dependents := freshnessDependents(g)
 	queue := []string{}
 	for id, f := range fresh {
 		if f != nil && f.Status == "stale" {
@@ -612,6 +746,47 @@ func propagateStaleness(g *graphCandidate) {
 			}
 			copyFresh := *f
 			g.Evidence[i].Freshness = &copyFresh
+		}
+	}
+}
+
+// freshnessDependents indexes each record's freshness and, for every
+// record, the records whose currentness depends on it: active attribute
+// references, parent links, edge endpoints and containment.
+func freshnessDependents(g *graphCandidate) (map[string]*AssertionFreshness, map[string][]string) {
+	fresh := map[string]*AssertionFreshness{}
+	dependents := map[string][]string{}
+	for _, n := range g.Nodes {
+		fresh[n.ID] = n.Freshness
+		addReferenceDependents(dependents, n.Kind, n.Attributes, false, n.ID)
+		if n.ParentID != nil {
+			dependents[*n.ParentID] = append(dependents[*n.ParentID], n.ID)
+		}
+	}
+	for _, e := range g.Edges {
+		fresh[e.ID] = e.Freshness
+		addReferenceDependents(dependents, e.Kind, e.Attributes, true, e.ID)
+		dependents[e.From] = append(dependents[e.From], e.ID)
+		dependents[e.To] = append(dependents[e.To], e.ID)
+		if e.Kind == "contains" {
+			dependents[e.ID] = append(dependents[e.ID], e.To)
+			dependents[e.From] = append(dependents[e.From], e.To)
+		}
+	}
+	return fresh, dependents
+}
+
+// addReferenceDependents records id as a dependent of every current,
+// non-evidence record its attributes reference. Unreadable attributes add
+// nothing: validation reports them, staleness does not guess.
+func addReferenceDependents(dependents map[string][]string, kind string, attrs map[string]jsontext.Value, edge bool, id string) {
+	refs, err := sourceAttributeReferences(kind, attrs, edge, true)
+	if err != nil {
+		return
+	}
+	for _, ref := range refs {
+		if ref.Kind != "evidence" && ref.HistoricalRevisionID == "" {
+			dependents[ref.ID] = append(dependents[ref.ID], id)
 		}
 	}
 }
@@ -645,7 +820,7 @@ func finishReconciliation(s *ImportSession, g *graphCandidate) {
 	}
 }
 func sourceIDs(sources []SourceSnapshot) []string {
-	out := []string{}
+	out := make([]string, 0, len(sources))
 	for _, s := range sources {
 		out = append(out, s.ID)
 	}

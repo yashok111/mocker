@@ -16,9 +16,10 @@ import (
 	"sync"
 	"uuid"
 
+	_ "modernc.org/sqlite"
+
 	o "github.com/yashok111/mocker/internal/backendobservations"
 	p "github.com/yashok111/mocker/internal/ordersprotocol"
-	_ "modernc.org/sqlite"
 )
 
 //go:embed schema.sql
@@ -114,29 +115,31 @@ func Open(c Config, b Build) (*Service, error) {
 	}
 	db.SetMaxOpenConns(1)
 	s := &Service{observations: map[string][]o.Record{}, observationTruncated: map[string]bool{}, db: db, config: c, identity: id, identityHash: hash, lock: lock}
-	fail := func(e error) (*Service, error) { s.Close(); return nil, e }
+	// Open runs before any request exists; its setup has no caller context.
+	ctx := context.Background()
+	fail := func(e error) (*Service, error) { _ = s.Close(); return nil, e }
 	// Reject foreign databases before installing the private schema.
 	var count int
-	if err = db.QueryRow("SELECT count(*) FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'").Scan(&count); err != nil {
+	if err = db.QueryRowContext(ctx, "SELECT count(*) FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'").Scan(&count); err != nil {
 		return fail(err)
 	}
 	if count > 0 {
 		var isolation string
-		if err = db.QueryRow("SELECT isolation FROM metadata WHERE singleton=1").Scan(&isolation); err != nil || isolation != c.IsolationID {
+		if err = db.QueryRowContext(ctx, "SELECT isolation FROM metadata WHERE singleton=1").Scan(&isolation); err != nil || isolation != c.IsolationID {
 			return fail(fmt.Errorf("database isolation mismatch"))
 		}
 	}
-	tx, err := db.Begin()
+	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
 		return fail(err)
 	}
-	defer tx.Rollback()
-	if _, err = tx.Exec(schema); err != nil {
-		tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
+	if _, err = tx.ExecContext(ctx, schema); err != nil {
+		_ = tx.Rollback()
 		return fail(err)
 	}
-	if _, err = tx.Exec("INSERT OR IGNORE INTO metadata VALUES(1,?,0)", c.IsolationID); err != nil {
-		tx.Rollback()
+	if _, err = tx.ExecContext(ctx, "INSERT OR IGNORE INTO metadata VALUES(1,?,0)", c.IsolationID); err != nil {
+		_ = tx.Rollback()
 		return fail(err)
 	}
 	if err = tx.Commit(); err != nil {
@@ -155,18 +158,18 @@ func (e *protocolError) Error() string { return e.code }
 func conflict(code string) error       { return &protocolError{409, code} }
 
 func encode(v any) ([]byte, error) { return p.Encode(v) }
-func insertDocument(tx *sql.Tx, query string, v any, args ...any) error {
+func insertDocument(ctx context.Context, tx *sql.Tx, query string, v any, args ...any) error {
 	b, err := encode(v)
 	if err != nil {
 		return err
 	}
 	args = append(args, b)
-	_, err = tx.Exec(query, args...)
+	_, err = tx.ExecContext(ctx, query, args...)
 	return err
 }
-func epoch(tx *sql.Tx) (int64, error) {
+func epoch(ctx context.Context, tx *sql.Tx) (int64, error) {
 	var n int64
-	err := tx.QueryRow("SELECT epoch FROM metadata WHERE singleton=1").Scan(&n)
+	err := tx.QueryRowContext(ctx, "SELECT epoch FROM metadata WHERE singleton=1").Scan(&n)
 	return n, err
 }
 
@@ -177,17 +180,17 @@ func (s *Service) journal(ctx context.Context, run string) (p.Journal, error) {
 	if err != nil {
 		return p.Journal{}, err
 	}
-	defer tx.Rollback()
-	j, err := readJournal(tx, run)
+	defer func() { _ = tx.Rollback() }()
+	j, err := readJournal(ctx, tx, run)
 	if err != nil {
 		return j, err
 	}
 	return j, tx.Commit()
 }
-func readJournal(tx *sql.Tx, run string) (p.Journal, error) {
+func readJournal(ctx context.Context, tx *sql.Tx, run string) (p.Journal, error) {
 	j := p.Journal{RunID: run, FixtureHash: p.FixtureHash(), Complete: true, PendingKeys: []string{}, Receipts: []p.Receipt{}, Events: []p.Event{}, Orders: []p.OrderRecord{}, Charges: []p.ChargeRecord{}}
 	var raw []byte
-	err := tx.QueryRow("SELECT epoch,identity FROM runs WHERE id=?", run).Scan(&j.Epoch, &raw)
+	err := tx.QueryRowContext(ctx, "SELECT epoch,identity FROM runs WHERE id=?", run).Scan(&j.Epoch, &raw)
 	if errors.Is(err, sql.ErrNoRows) {
 		return j, &protocolError{404, "not_found"}
 	}
@@ -201,20 +204,20 @@ func readJournal(tx *sql.Tx, run string) (p.Journal, error) {
 	if err != nil {
 		return j, err
 	}
-	j.CurrentEpoch, err = epoch(tx)
+	j.CurrentEpoch, err = epoch(ctx, tx)
 	if err != nil {
 		return j, err
 	}
-	if err = readDocuments(tx, "SELECT receipt FROM requests WHERE run_id=? ORDER BY rowid", run, &j.Receipts); err != nil {
+	if err = readDocuments(ctx, tx, "SELECT receipt FROM requests WHERE run_id=? ORDER BY rowid", run, &j.Receipts); err != nil {
 		return j, err
 	}
-	if err = readDocuments(tx, "SELECT document FROM events WHERE run_id=? ORDER BY sequence", run, &j.Events); err != nil {
+	if err = readDocuments(ctx, tx, "SELECT document FROM events WHERE run_id=? ORDER BY sequence", run, &j.Events); err != nil {
 		return j, err
 	}
-	if err = readDocuments(tx, "SELECT document FROM orders WHERE run_id=? ORDER BY rowid", run, &j.Orders); err != nil {
+	if err = readDocuments(ctx, tx, "SELECT document FROM orders WHERE run_id=? ORDER BY rowid", run, &j.Orders); err != nil {
 		return j, err
 	}
-	if err = readDocuments(tx, "SELECT document FROM charges WHERE run_id=? ORDER BY rowid", run, &j.Charges); err != nil {
+	if err = readDocuments(ctx, tx, "SELECT document FROM charges WHERE run_id=? ORDER BY rowid", run, &j.Charges); err != nil {
 		return j, err
 	}
 	if len(j.Events) > 0 {
@@ -222,12 +225,12 @@ func readJournal(tx *sql.Tx, run string) (p.Journal, error) {
 	}
 	return j, j.Validate()
 }
-func readDocuments[T any](tx *sql.Tx, query, run string, out *[]T) error {
-	rows, err := tx.Query(query, run)
+func readDocuments[T any](ctx context.Context, tx *sql.Tx, query, run string, out *[]T) error {
+	rows, err := tx.QueryContext(ctx, query, run)
 	if err != nil {
 		return err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	for rows.Next() {
 		var raw []byte
 		if err = rows.Scan(&raw); err != nil {

@@ -159,7 +159,7 @@ func (s *Service) ExportArchiveContext(ctx context.Context, rev designscenario.R
 func writeArchiveFile(writer *zip.Writer, name, content string) error {
 	// Names only come from Export's numeric IDs and fixed suffixes, never titles
 	// or contract IDs. DOS metadata avoids an extra wall-clock timestamp field.
-	header := &zip.FileHeader{Name: name, Method: zip.Store, ModifiedDate: 33}
+	header := &zip.FileHeader{Name: name, Method: zip.Store, ModifiedDate: 33} //nolint:staticcheck // SA1019: Modified would add an extended-timestamp field; the fixed DOS date keeps archives byte-stable
 	header.SetMode(0644)
 	file, err := writer.CreateHeader(header)
 	if err != nil {

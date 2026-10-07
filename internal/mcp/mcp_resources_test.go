@@ -305,18 +305,16 @@ func TestResourceTools_wholeLifecycleThroughRealStore(t *testing.T) {
 }
 
 // TestToolsList_hasCurrentSurfaceAndIrreversibilityWarning is the other
-// half of clause 34: tools/list returns the current 227-tool surface, and
-// reset_resource_data's PUBLISHED
-// description carries the irreversibility warning D7 requires. This does
-// not need the real-store fixture above — a description is static
-// regardless of what Caller registerTools was handed — so it drives
-// newTestEndpoint's fakeCaller, the same as every other tools/list test in
-// this package.
+// half of clause 34: the published surface holds toolCount tools, and
+// reset_resource_data's PUBLISHED full description — what describe_tool
+// serves since review 2026-10-06, F23 split tools/list into a one-sentence
+// summary — carries the irreversibility warning D7 requires (the light
+// listing still carries destructiveHint). This does not need the
+// real-store fixture above — a description is static regardless of what
+// Caller registerTools was handed.
 func TestToolsList_hasCurrentSurfaceAndIrreversibilityWarning(t *testing.T) {
 	t.Parallel()
-	h := newTestEndpoint(t).Handler()
-	rec := doMCP(t, h, `{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}`,
-		map[string]string{"Authorization": "Bearer " + testKey})
+	rec := describedToolsList(t)
 	var env struct {
 		Result struct {
 			Tools []struct {
@@ -328,8 +326,8 @@ func TestToolsList_hasCurrentSurfaceAndIrreversibilityWarning(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &env); err != nil {
 		t.Fatalf("decode tools/list: %v; body=%s", err, rec.Body.String())
 	}
-	if len(env.Result.Tools) != 227 {
-		t.Errorf("tools/list returned %d tools, want 227", len(env.Result.Tools))
+	if len(env.Result.Tools) != toolCount {
+		t.Errorf("tools/list returned %d tools, want %d", len(env.Result.Tools), toolCount)
 	}
 	var found bool
 	for _, tool := range env.Result.Tools {
@@ -369,9 +367,7 @@ var mcpForbiddenPhrasesHard = []string{
 // to every MCP client's tools/list response.
 func TestToolsList_hardForbiddenPhrasesDoNotSurvive(t *testing.T) {
 	t.Parallel()
-	h := newTestEndpoint(t).Handler()
-	rec := doMCP(t, h, `{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}`,
-		map[string]string{"Authorization": "Bearer " + testKey})
+	rec := describedToolsList(t)
 	var env struct {
 		Result struct {
 			Tools []struct {

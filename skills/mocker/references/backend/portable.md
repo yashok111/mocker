@@ -66,7 +66,12 @@ const receipt = await call("commit_backend_portable_import", {
 ```
 
 A real caller must retain the request object/key at each step for recovery rather
-than restarting this example after uncertainty. Preview validates owner data in a
+than restarting this example after uncertainty. Branch on the error code:
+`backend_portable_conflict` (409: stale `expectedVersion`, a key reused with
+different input, an immutable chunk, a state that does not allow the step) means
+read the session and repeat the original request; `backend_portable_not_found`
+(404) means the session is gone; `backend_portable_limit` (413) is a quota;
+`backend_portable_invalid` (422) is a bundle or request to fix. Preview validates owner data in a
 rolled-back savepoint; the proposed project is not readable until Commit. Commit
 revalidates and writes owners, histories, maps, origins and receipt in one transaction.
 The receipt contains the new project and exact local target. Original immutable
@@ -88,21 +93,42 @@ snapshot; diagrams resolve row compatibility against the destination snapshot.
 Namespaced reads use `query_backend_namespaced_artifact` with projectId, exact
 target/targetHash, namespace, artifact `{kind,id}`, view and limit. Foreign reads
 return frozen bindings without consulting a local owner by numeric ID.
+The legacy pin mutations (`preview_backend_api_pins`, `preview_backend_artifact_pins`
+and their applies) refuse a v3 baseline with 422 `backend_api_pins_unsupported` /
+`backend_artifact_pins_unsupported`; they cannot carry namespaced groups.
 
 ## Bounds, UI and cleanup
 
 Chunks: 500 records / 1 MiB each; bundle: 256 MiB; mappings: 20. At most five
 staging/ready sessions reserve a combined 512 MiB. Owner retention limits still
-apply. Unknown schemas, unsafe evidence paths, missing closure, hash mismatches
-and invalid provenance fail; no partially imported project is published.
+apply. Unknown schemas, unsafe evidence paths, missing closure, invalid
+provenance and hash mismatches fail; no partially imported project is published.
+Verified hashes are the manifest, chunk and record hashes and, for the current
+source schema (6), the claimed source content/semantic hashes. Hashes claimed by
+schema 1-5 sources and by change proposals are recomputed from the imported
+content, not compared: older exports hashed them with older algorithms, so a
+strict check would refuse valid historical bundles. Such a claimed hash (kept as
+origin attribution) is therefore not proof the content is unchanged since export;
+the record/chunk/manifest hashes are the integrity check for those records.
 
 Use `abort_backend_portable_import {importId,expectedVersion,idempotencyKey}`
 for an abandoned import or downloaded export session (use export.session.id).
 Abort frees staged chunks/preparation; keep the exact receipt for retries.
+Commit frees them too. A staging/ready session untouched for 24 hours is
+aborted by the next begin or export, so lost session IDs cannot hold the
+quota; download an export and finish an import within that window.
+There is no route that lists or reads portable sessions. Begin is idempotent by
+idempotencyKey: repeating `begin_backend_portable_import` with the same key and
+manifest replays its receipt, so a lost session id is recovered with version 1
+(the version Begin returned); the same key with another manifest is 409. Every
+later step is idempotent the same way: replay each put/preview with its original
+key to recover the version it returned, then continue or abort from the last
+one. A session whose versions cannot be recovered is released by the 24-hour
+idle expiry.
 In the UI, open “Перенос Backend Workbench” on a project for export/import, or
 import from the global project catalog. It verifies file/chunk hashes, shows the
 ID map and unresolved refs, keeps pending requests across reload, and separates
-Preview from “Создать проект атомарно”. Export session cleanup is explicit.
+Preview from “Создать проект атомарно”. Export session cleanup is explicit (or the 24-hour idle expiry).
 
 REST uses the same handlers: project `/portable/selection` and `/portable/export`,
 `/api/backend-projects/portable/exports/{id}/chunks/{index}?manifestHash=...`, and

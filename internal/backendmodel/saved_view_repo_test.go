@@ -4,13 +4,14 @@ import (
 	"database/sql"
 	"encoding/json/v2"
 	"fmt"
-	"github.com/yashok111/mocker/internal/store"
-	"github.com/yashok111/mocker/internal/testkit"
 	"math"
 	"slices"
 	"strings"
 	"sync"
 	"testing"
+
+	"github.com/yashok111/mocker/internal/store"
+	"github.com/yashok111/mocker/internal/testkit"
 )
 
 func savedHistoricalBytes(t *testing.T, r *Repo) map[string][]string {
@@ -19,6 +20,7 @@ func savedHistoricalBytes(t *testing.T, r *Repo) map[string][]string {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer func() { _ = rows.Close() }()
 	var names []string
 	for rows.Next() {
 		var name string
@@ -30,7 +32,7 @@ func savedHistoricalBytes(t *testing.T, r *Repo) map[string][]string {
 	if err := rows.Err(); err != nil {
 		t.Fatal(err)
 	}
-	rows.Close()
+	_ = rows.Close()
 	result := map[string][]string{}
 	for _, name := range names {
 		query := `SELECT * FROM "` + name + `"`
@@ -43,35 +45,44 @@ func savedHistoricalBytes(t *testing.T, r *Repo) map[string][]string {
 			query += ` WHERE scope NOT LIKE 'saved-view-%'`
 		}
 		query += ` ORDER BY rowid`
-		rows, err := r.db.R.QueryContext(t.Context(), query)
-		if err != nil {
-			t.Fatal(err)
-		}
-		cols, err := rows.Columns()
-		if err != nil {
-			t.Fatal(err)
-		}
-		for rows.Next() {
-			values := make([]any, len(cols))
-			pointers := make([]any, len(cols))
-			for i := range values {
-				pointers[i] = &values[i]
-			}
-			if err := rows.Scan(pointers...); err != nil {
-				t.Fatal(err)
-			}
-			raw, err := json.Marshal(values)
-			if err != nil {
-				t.Fatal(err)
-			}
-			result[name] = append(result[name], string(raw))
-		}
-		if err := rows.Err(); err != nil {
-			t.Fatal(err)
-		}
-		rows.Close()
+		result[name] = append(result[name], savedHistoricalRows(t, r, query)...)
 	}
 	return result
+}
+
+// savedHistoricalRows renders one query's rows as JSON arrays; it is its own
+// function so the cursor closes by defer on every path.
+func savedHistoricalRows(t *testing.T, r *Repo, query string) []string {
+	t.Helper()
+	rows, err := r.db.R.QueryContext(t.Context(), query)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = rows.Close() }()
+	cols, err := rows.Columns()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out []string
+	for rows.Next() {
+		values := make([]any, len(cols))
+		pointers := make([]any, len(cols))
+		for i := range values {
+			pointers[i] = &values[i]
+		}
+		if err := rows.Scan(pointers...); err != nil {
+			t.Fatal(err)
+		}
+		raw, err := json.Marshal(values)
+		if err != nil {
+			t.Fatal(err)
+		}
+		out = append(out, string(raw))
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
+	}
+	return out
 }
 func assertSavedHistoricalBytes(t *testing.T, r *Repo, before map[string][]string) {
 	t.Helper()
@@ -143,7 +154,10 @@ func TestSavedViewQuotaBoundariesReceiptFirstAndOverflow(t *testing.T) {
 				if err != nil || v1000.Version != 1000 {
 					t.Fatal("1000th version refused", err)
 				}
+				// A real change: an identical save answers v1000 without a new
+				// version since review 2026-10-06, F185.
 				save.ExpectedVersion = 1000
+				save.Name = "1001"
 				save.IdempotencyKey = "over-versions"
 				_, err = r.SaveSavedView(t.Context(), source.Project.ID, v.ID, save)
 				assertFault(t, err, "backend_saved_view_quota")

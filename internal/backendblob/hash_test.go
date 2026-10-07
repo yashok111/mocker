@@ -4,8 +4,9 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
-	_ "modernc.org/sqlite"
 	"testing"
+
+	_ "modernc.org/sqlite"
 )
 
 func fixture(t *testing.T) *sql.DB {

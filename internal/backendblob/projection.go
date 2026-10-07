@@ -22,7 +22,7 @@ func validateProjection(o Owner, values []any, raw []byte) error {
 		SubjectID string  `json:"subjectId"`
 	}
 	if err := json.Unmarshal(raw, &record); err != nil {
-		return fmt.Errorf("%w: graph payload: %v", ErrCanonical, err)
+		return fmt.Errorf("%w: graph payload: %w", ErrCanonical, err)
 	}
 	m := rowMap(o, values)
 	matches := m["id"] == record.ID

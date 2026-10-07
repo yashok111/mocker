@@ -3,8 +3,10 @@ package probe
 import (
 	"context"
 	"encoding/pem"
+	"errors"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -179,5 +181,38 @@ func TestProxyRejectsUnsolicitedUpstreamUpgrade(t *testing.T) {
 	_, err := ProxyExchange(t.Context(), upstream.URL, httptest.NewRequest(http.MethodGet, "/", nil), nil, ProxyOptions{Allowlist: []string{upstream.URL}, MaxResponse: 100, Timeout: time.Second})
 	if err == nil {
 		t.Fatal("accepted unsolicited protocol upgrade")
+	}
+}
+
+// review 2026-10-06, F179: the incoming path was appended to the configured
+// upstream path with no dot-segment check, so /../../admin (sent with
+// --path-as-is, or %2e%2e decoded by path routing) reached
+// /v1/team-a/../../admin, which the upstream normalises to /admin — outside
+// the prefix the workspace was configured to reach. Nothing may be sent.
+func TestProxyRefusesDotSegmentsEscapingUpstreamPrefix(t *testing.T) {
+	calls := 0
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+	}))
+	defer upstream.Close()
+	for _, path := range []string{"/../../admin", "/%2e%2e/%2E%2E/admin", "/a/./b", "/users/..", "/x/.%2e/admin", `/a/..%5Cadmin`} {
+		parsed, err := url.Parse("http://mocker" + path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		r := httptest.NewRequest(http.MethodGet, "http://mocker/", nil)
+		r.URL = parsed
+		_, err = ProxyExchange(t.Context(), upstream.URL+"/v1/team-a", r, nil, ProxyOptions{Allowlist: []string{upstream.URL}, MaxResponse: 1024, Timeout: time.Second})
+		if !errors.Is(err, ErrProxyPathDotSegment) {
+			t.Errorf("%s: err = %v, want ErrProxyPathDotSegment", path, err)
+		}
+	}
+	if calls != 0 {
+		t.Fatalf("upstream reached %d times", calls)
+	}
+	// Dots INSIDE a segment are ordinary names, not navigation.
+	r := httptest.NewRequest(http.MethodGet, "http://mocker/files/a..b/.hidden", nil)
+	if _, err := ProxyExchange(t.Context(), upstream.URL+"/v1", r, nil, ProxyOptions{Allowlist: []string{upstream.URL}, MaxResponse: 1024, Timeout: time.Second}); err != nil || calls != 1 {
+		t.Fatalf("ordinary dotted names refused: %v calls=%d", err, calls)
 	}
 }

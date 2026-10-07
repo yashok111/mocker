@@ -41,7 +41,7 @@ func TestResponseRulePredicateDocumentAdmissionRejectsDuplicates(t *testing.T) {
 			if _, err := repo.ResolveResponseRule(t.Context(), baseline.Design.ID, "r", ResponseRuleProposal{Document: new(document)}); !errors.Is(err, ErrInvalid) {
 				t.Errorf("proposal accepted duplicate predicate: %v", err)
 			}
-			if diagnostics, err := repo.Validate(document); err != nil || len(diagnostics) == 0 {
+			if diagnostics, err := repo.Validate(t.Context(), document); err != nil || len(diagnostics) == 0 {
 				t.Errorf("validate accepted duplicate predicate: diagnostics=%+v err=%v", diagnostics, err)
 			}
 			after, err := repo.Detail(t.Context(), baseline.Design.ID)

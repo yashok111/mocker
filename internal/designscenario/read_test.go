@@ -16,7 +16,7 @@ func TestRepo_DetailDoesNotAllocateHistoricalPayloadsWithStoredSummaries(t *test
 	}
 	// Large pending buffers belong only to old snapshots. Listing their already
 	// stored descriptions must not allocate a copy of every historical payload.
-	prepared, _, err := repo.prepare(created.Draft.Document, map[string]string{"all": strings.Repeat("x", 256*1024)})
+	prepared, _, err := repo.prepare(t.Context(), created.Draft.Document, map[string]string{"all": strings.Repeat("x", 256*1024)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -29,7 +29,7 @@ func TestRepo_DetailDoesNotAllocateHistoricalPayloadsWithStoredSummaries(t *test
 			}
 			parentID = id
 		}
-		current, _, err := repo.prepare(validDocument("Current"), nil)
+		current, _, err := repo.prepare(t.Context(), validDocument("Current"), nil)
 		if err != nil {
 			return err
 		}
@@ -112,7 +112,7 @@ func TestRepo_LegacyBlankSummariesAreDerivedWithoutChangingStoredRevisions(t *te
 			case 8:
 				document.Messages[0].ArrowColor = "#999999"
 			}
-			prepared, _, err := repo.prepare(document, nil)
+			prepared, _, err := repo.prepare(t.Context(), document, nil)
 			if err != nil {
 				return err
 			}

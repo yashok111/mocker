@@ -4,11 +4,13 @@ import (
 	"context"
 	"encoding/json/v2"
 	"fmt"
-	"github.com/yashok111/mocker/internal/backendmodel"
+	"net/http"
 	"net/http/httptest"
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/yashok111/mocker/internal/backendmodel"
 )
 
 func TestBackendLineageRouteStrictPins(t *testing.T) {
@@ -152,7 +154,7 @@ func TestBackendLineagePersistedResponseCursorAndForeignPins(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	req := httptest.NewRequest("POST", route, strings.NewReader(string(wire))).WithContext(withAuthContext(t.Context(), nil, user))
+	req := httptest.NewRequest(http.MethodPost, route, strings.NewReader(string(wire))).WithContext(withAuthContext(t.Context(), nil, user))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	s.routeMux().ServeHTTP(rec, req)
@@ -210,7 +212,7 @@ func TestBackendLineagePersistedResponseCursorAndForeignPins(t *testing.T) {
 func TestBackendLineageRequiresAuthentication(t *testing.T) {
 	s := loopbackTestServer(t, nil)
 	rec := httptest.NewRecorder()
-	s.handleQueryBackendLineage(rec, httptest.NewRequest("POST", "/api/backend-projects/x/lineage/query", strings.NewReader(`{}`)))
+	s.handleQueryBackendLineage(rec, httptest.NewRequest(http.MethodPost, "/api/backend-projects/x/lineage/query", strings.NewReader(`{}`)))
 	if rec.Code != 401 {
 		t.Fatal(rec.Code)
 	}

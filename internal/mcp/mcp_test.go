@@ -391,10 +391,8 @@ func TestToolErr_4xxCarriesAdminMessage(t *testing.T) {
 // fails this test.
 func TestTools_noBooleanTrueSchemas(t *testing.T) {
 	t.Parallel()
-	h := newTestEndpoint(t).Handler()
 
-	rec := doMCP(t, h, `{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}`,
-		map[string]string{"Authorization": "Bearer " + testKey})
+	rec := describedToolsList(t)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200; body=%s", rec.Code, rec.Body.String())
 	}

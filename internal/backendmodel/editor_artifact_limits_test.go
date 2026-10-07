@@ -5,11 +5,12 @@ import (
 	"database/sql"
 	"encoding/json/v2"
 	"errors"
-	"github.com/yashok111/mocker/internal/testkit"
 	"slices"
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/yashok111/mocker/internal/testkit"
 
 	"github.com/yashok111/mocker/internal/config"
 	"github.com/yashok111/mocker/internal/designscenario"
@@ -121,7 +122,9 @@ func TestArtifactFrozenBaseCASUnderWriterLock(t *testing.T) {
 		t.Fatal(err)
 	}
 	s.scenarios = artifactMutatingScenarioReader{s.scenarios, func() {
-		if _, err := s.repo.db.W.ExecContext(t.Context(), `UPDATE backend_revisions SET document=char(10)||document WHERE id=?`, base.Revision.ID); err != nil {
+		// Store27 (48dce80, B6.3) seals revision payloads; the raw base bytes
+		// change only through the Store26 fixture rebuild + production migration.
+		if _, err := testkit.EditLegacyBackendPayload(t.Context(), s.repo.db, `UPDATE backend_revisions SET document=char(10)||document WHERE id=?`, base.Revision.ID); err != nil {
 			t.Fatal(err)
 		}
 	}}
@@ -152,18 +155,28 @@ func TestArtifactFullContextLimitEscapeNoWrites(t *testing.T) {
 	}
 	label := strings.Repeat("\"", 4096)
 	sourceIDs := make([]string, 0, 100)
-	for i := range 100 {
-		n := *node
-		n.ID = "30000000-0000-4000-8000-" + fmtArtifactDigits(i)
-		n.Name = label
-		raw, e := jsonArtifactNode(n)
-		if e != nil {
-			t.Fatal(e)
+	// The base revision's graph manifest is sealed under Store27 (48dce80,
+	// B6.3): a later INSERT into it fails "sealed payload manifest". The extra
+	// source records are seeded into the Store26 fixture shape and published by
+	// the production migration instead, in one rebuild for all 100 rows.
+	err = testkit.EditLegacyBackendFixture(t.Context(), s.repo.db, func(tx *sql.Tx) error {
+		for i := range 100 {
+			n := *node
+			n.ID = "30000000-0000-4000-8000-" + fmtArtifactDigits(i)
+			n.Name = label
+			raw, e := jsonArtifactNode(n)
+			if e != nil {
+				return e
+			}
+			if _, e = tx.ExecContext(t.Context(), `INSERT INTO backend_graph_records(project_id,revision_id,record_type,id,kind,name,document) VALUES(?,?,'node',?,?,?,?)`, base.Project.ID, base.Revision.ID, n.ID, n.Kind, n.Name, raw); e != nil {
+				return e
+			}
+			sourceIDs = append(sourceIDs, n.ID)
 		}
-		if _, e = testkit.ExecBackendOwner(t.Context(), s.repo.db.W, `INSERT INTO backend_graph_records(project_id,revision_id,record_type,id,kind,name,document) VALUES(?,?,'node',?,?,?,?)`, base.Project.ID, base.Revision.ID, n.ID, n.Kind, n.Name, raw); e != nil {
-			t.Fatal(e)
-		}
-		sourceIDs = append(sourceIDs, n.ID)
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
 	}
 	in := scenarioSet(base, ids, d)
 	in.Commands[0].EditorBindings = []EditorBindingInput{}

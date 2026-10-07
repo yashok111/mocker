@@ -4,6 +4,7 @@ import (
 	"encoding/json/jsontext"
 	"encoding/json/v2"
 	"maps"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -50,7 +51,7 @@ func TestLineageStrictValueRefs(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	bad := []string{`null`, `{}`, `{"kind":"api_field","kind":"api_field","nodeId":"11111111-1111-4111-8111-111111111111"}`, `{"kind":"api_field","nodeKey":"f"}`, `{"kind":"api_field","nodeId":null}`, `{"kind":"column","nodeId":"11111111-1111-4111-8111-111111111111","facetKey":null}`}
+	bad := slices.Grow([]string{`null`, `{}`, `{"kind":"api_field","kind":"api_field","nodeId":"11111111-1111-4111-8111-111111111111"}`, `{"kind":"api_field","nodeKey":"f"}`, `{"kind":"api_field","nodeId":null}`, `{"kind":"column","nodeId":"11111111-1111-4111-8111-111111111111","facetKey":null}`}, 2*len(valid))
 	for _, s := range valid {
 		bad = append(bad, strings.TrimSuffix(s, "}")+`,"nodeKey":"x"}`, strings.TrimSuffix(s, "}")+`,"extra":false}`)
 	}

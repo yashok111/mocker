@@ -2,9 +2,10 @@ package backendanalysis
 
 import (
 	"encoding/json/v2"
-	"github.com/yashok111/mocker/internal/backendmodel"
 	"strings"
 	"testing"
+
+	"github.com/yashok111/mocker/internal/backendmodel"
 )
 
 func TestLifecycleDiagnosticExactMappingGuardAndAmbiguity(t *testing.T) {

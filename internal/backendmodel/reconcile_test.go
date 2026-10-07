@@ -153,6 +153,29 @@ func TestIdentityMappingReservations(t *testing.T) {
 		t.Fatal("pending alias published", err)
 	}
 }
+
+// Review 2026-10-06, F84: a batch reads the staged decisions once and keeps
+// that list in step with its own writes, so a decision staged earlier in the
+// same batch must still block an upsert of the mapped source, and a decision
+// removed earlier in the same batch must no longer block it.
+func TestIdentityDecisionsTrackedWithinBatch(t *testing.T) {
+	r, p, old, first := committedBase(t)
+	s := beginRepeat(t, r, p, old)
+	id := first.Identities[0].ID
+	mapping := ImportCommand{Op: "map_identity", Identity: &ImportIdentityMap{RecordType: "node", FromExternalKey: "handler", ToExternalKey: "renamed", ExpectedID: id, Reason: "renamed handler", EvidenceKeys: []string{"proof"}}}
+	commands := []ImportCommand{mapping, fixtureCommands(s)[0]}
+	hash, err := ImportBatchHash(commands)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = r.PutImportBatch(t.Context(), p.ID, s.ID, "same-batch", ImportBatchInput{ExpectedImportVersion: s.Version, PayloadHash: hash, Commands: commands})
+	assertFault(t, err, "backend_identity_conflict")
+	b := sendCommands(t, r, p, s, s.Version, "mapping", mapping)
+	b = sendCommands(t, r, p, s, b.AcceptedVersion, "unmap-and-upsert", ImportCommand{Op: "remove", Remove: &ImportRemove{RecordType: "node", ExternalKey: "renamed"}}, fixtureCommands(s)[0])
+	if b.Identities[1].ID != id {
+		t.Fatalf("upsert after removed mapping changed ID: %+v", b.Identities)
+	}
+}
 func TestReconcileStaleRetainsBundle(t *testing.T) {
 	r, p, old, first := committedBase(t)
 	s := beginRepeat(t, r, p, old)

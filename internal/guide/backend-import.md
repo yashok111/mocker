@@ -6,8 +6,8 @@ metadata:
   workflowVersion: "8"
   requiredModelSchemaVersions: "[\"1\",\"2\",\"3\",\"4\",\"5\",\"6\"]"
   requiredCapabilities: "[\"backend-projects\",\"backend-revisions\",\"backend-graph-query\",\"backend-source-import\",\"backend-source-reconcile\",\"backend-revision-compare\",\"backend-relational-import\",\"backend-database-query\",\"backend-database-er\",\"backend-runtime-flow-import\",\"backend-flow-query\",\"backend-data-access-query\",\"backend-field-lineage-import\",\"backend-field-lineage-query\",\"backend-events-import\",\"backend-events-query\",\"backend-source-sync\",\"backend-representations\"]"
-  guideSetId: "sha256:f25648e4c5cfffe7d621b112a8e26d47d58d3838385b18d201ca68507aac2981"
-  manifestHash: "sha256:f25648e4c5cfffe7d621b112a8e26d47d58d3838385b18d201ca68507aac2981"
+  guideSetId: "sha256:4c7d20df64ed90dd74d794334df66b29bd2fc23e14f3e0c4e3b7fb42a36c6a0c"
+  manifestHash: "sha256:4c7d20df64ed90dd74d794334df66b29bd2fc23e14f3e0c4e3b7fb42a36c6a0c"
 ---
 
 # Source graph import and reconciliation
@@ -173,11 +173,9 @@ Replay lost writes with the exact original complete input/key/version/hash;
 receipts resolve before CAS. Staging survives restart. Compare both exact pins,
 then inspect before/after evidence; structural change proves no impact or execution.
 ## Source4 field-lineage import
-Require schema4/field-lineage-v1 and both lineage capabilities under import8;
-load backend-model's full source4 shapes/upgrade/redaction/proof before staging.
-Preserve ordered inputs/exact nodeKey addresses; zero-input unknown is not constant.
-After commit select inspect13 at the exact source4 pin. Reimport carries frozen API
-pins/bindings and stale/orphan labels; no new pin input.
+Require schema4/field-lineage-v1 and both lineage capabilities under import8; load backend-model's
+full source4 shapes/upgrade/redaction/proof/reimport rules before staging. After commit select
+inspect13 at the exact source4 pin.
 
 ## Owner dependency requirements in the proposed guide set
 
@@ -197,14 +195,6 @@ Interaction companion documents do not change source schemas1–6 or import rece
 
 Entity lifecycle uses the shared diagram APIs and the `backend-lifecycle` inspect guide. Preserve exact source/artifact pins, distinguish authored rules from source claims, and retain partial coverage and opaque guards. Semantic saves/forks and layout-only views are separate; no simulation, B5 diagnostics or B6 runtime proof.
 
-## Business event map
-
-Read `backend-business-map` from the negotiated guide set. Explicitly author
-actor/command/business_event/policy/read_model/question and closed role-pair
-links. Keep event identities separate from transport messages and unresolved
-implementation as gaps. Exact C4/implementation refs and historical pins survive
-save/fork; layout-only views do not change semantics. Design change passes exact
-refs to explicit proposal commands, never an implicit graph/API/scenario write.
-No automatic process inference or policy execution; B5/B6 acceptance stays open.
+Business event maps are authored companion documents, never import output: read `backend-business-map` from the negotiated guide set before authoring one. Its exact C4/implementation refs and historical pins survive save/fork; no automatic process inference or policy execution.
 
 For static diagnostic jobs and separate finding review, negotiate **verify1** and read `backend-verify` / `backend-diagnostics` from the same immutable guide set. Inspection alone starts no job; review is not runtime proof.

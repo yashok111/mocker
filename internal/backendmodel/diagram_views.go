@@ -6,10 +6,11 @@ import (
 	"database/sql"
 	"encoding/json/v2"
 	"errors"
-	"github.com/yashok111/mocker/internal/backendblob"
 	"math"
 	"slices"
 	"uuid"
+
+	"github.com/yashok111/mocker/internal/backendblob"
 )
 
 type DiagramSelection struct {
@@ -121,44 +122,7 @@ func validateDiagramViewRead(ctx context.Context, qry importReader, pid, name st
 	if err != nil {
 		return err
 	}
-	var p *architectureProjection
-	if v.Document.BusinessMap != nil {
-		if q.Level != "" || q.RootID != "" {
-			return invalid("projection", "Architecture selectors forbidden for business map")
-		}
-		p = &architectureProjection{elements: map[string]ArchitectureElement{}, links: map[string]ArchitectureLink{}}
-		for _, e := range v.Document.BusinessMap.Elements {
-			p.elements[e.ID] = ArchitectureElement{ID: e.ID}
-		}
-		for _, e := range v.Document.BusinessMap.Links {
-			p.links[e.ID] = ArchitectureLink{ID: e.ID}
-		}
-	} else if v.Document.Lifecycle != nil {
-		if q.Level != "" || q.RootID != "" {
-			return invalid("projection", "Architecture selectors forbidden for lifecycle")
-		}
-		p = &architectureProjection{elements: map[string]ArchitectureElement{}, links: map[string]ArchitectureLink{}}
-		for id, value := range lifecycleRows(v.Document.Lifecycle) {
-			p.elements[id] = ArchitectureElement{ID: id}
-			if _, ok := value.(LifecycleTransition); ok {
-				p.links[id] = ArchitectureLink{ID: id}
-			}
-		}
-	} else if v.Document.Interactions != nil {
-		if q.Level != "" || q.RootID != "" {
-			return invalid("projection", "Architecture projection forbidden for interactions")
-		}
-		p = &architectureProjection{elements: map[string]ArchitectureElement{}, links: map[string]ArchitectureLink{}}
-		for id, value := range interactionRows(v.Document.Interactions) {
-			if _, ok := value.(InteractionOrder); ok {
-				p.links[id] = ArchitectureLink{ID: id}
-			} else {
-				p.elements[id] = ArchitectureElement{ID: id}
-			}
-		}
-	} else {
-		p, err = projectArchitecture(ctx, v, graph, q)
-	}
+	p, err := diagramViewProjection(ctx, v, graph, q)
 	if err != nil {
 		return err
 	}
@@ -275,7 +239,7 @@ func (r *Repo) mutateDiagramView(ctx context.Context, pid, id string, expected i
 			b, _ := requestDigest(state)
 			if current.Name == name && a == b {
 				out = current
-				return writeDiagramReceipt(ctx, tx, pid, op, key, hash, current.receiptJSON)
+				return writeDiagramReceipt(ctx, tx, pid, op, key, hash, "view", current.ID, current.Version)
 			}
 			version = head + 1
 		} else {
@@ -362,10 +326,54 @@ func persistDiagramView(ctx context.Context, tx *sql.Tx, pid, id, op, key, hash 
 	if err = advanceDiagramCatalog(ctx, tx, pid); err != nil {
 		return err
 	}
-	if err = writeDiagramReceipt(ctx, tx, pid, op, key, hash, raw); err != nil {
+	if err = writeDiagramReceipt(ctx, tx, pid, op, key, hash, "view", newID, version); err != nil {
 		return err
 	}
 
 	out.receiptJSON = raw
 	return nil
+}
+
+// diagramViewProjection is the set of elements and links a saved layout
+// may position: a business map, lifecycle or interaction diagram lists its
+// own rows, an architecture diagram is projected from the graph.
+func diagramViewProjection(ctx context.Context, v *DiagramVersion, graph *EffectiveGraphSnapshot, q DiagramQueryInput) (*architectureProjection, error) {
+	if v.Document.BusinessMap == nil && v.Document.Lifecycle == nil && v.Document.Interactions == nil {
+		return projectArchitecture(ctx, v, graph, q)
+	}
+	p := &architectureProjection{elements: map[string]ArchitectureElement{}, links: map[string]ArchitectureLink{}}
+	switch {
+	case v.Document.BusinessMap != nil:
+		if q.Level != "" || q.RootID != "" {
+			return nil, invalid("projection", "Architecture selectors forbidden for business map")
+		}
+		for _, e := range v.Document.BusinessMap.Elements {
+			p.elements[e.ID] = ArchitectureElement{ID: e.ID}
+		}
+		for _, e := range v.Document.BusinessMap.Links {
+			p.links[e.ID] = ArchitectureLink{ID: e.ID}
+		}
+	case v.Document.Lifecycle != nil:
+		if q.Level != "" || q.RootID != "" {
+			return nil, invalid("projection", "Architecture selectors forbidden for lifecycle")
+		}
+		for id, value := range lifecycleRows(v.Document.Lifecycle) {
+			p.elements[id] = ArchitectureElement{ID: id}
+			if _, ok := value.(LifecycleTransition); ok {
+				p.links[id] = ArchitectureLink{ID: id}
+			}
+		}
+	default:
+		if q.Level != "" || q.RootID != "" {
+			return nil, invalid("projection", "Architecture projection forbidden for interactions")
+		}
+		for id, value := range interactionRows(v.Document.Interactions) {
+			if _, ok := value.(InteractionOrder); ok {
+				p.links[id] = ArchitectureLink{ID: id}
+			} else {
+				p.elements[id] = ArchitectureElement{ID: id}
+			}
+		}
+	}
+	return p, nil
 }

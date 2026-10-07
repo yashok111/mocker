@@ -278,7 +278,7 @@ func TestRuntimeDeletionNestedReferenceAndFullClosure(t *testing.T) {
 			deletions := []ImportCommand{}
 			for _, c := range cs {
 				typ, k, _ := commandAddress(c)
-				remove := false
+				var remove bool
 				if key == "all" {
 					remove = typ != "evidence" && k != "http" && k != "handler" && k != "handles"
 				} else {

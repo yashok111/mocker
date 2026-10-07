@@ -2,23 +2,24 @@ package responserules
 
 import (
 	"encoding/json"
-	"github.com/yashok111/mocker/internal/overrides"
 	"testing"
+
+	"github.com/yashok111/mocker/internal/overrides"
 )
 
 func TestCommandsAtomic(t *testing.T) {
 	r := baseRule()
 	before, _ := json.Marshal(r)
-	_, err := ApplyCommands(r, []Command{{Type: "remove_node", NodeID: "s"}, {Type: "remove_edge", EdgeID: "missing"}})
+	_, err := ApplyCommands(t.Context(), r, []Command{{Type: "remove_node", NodeID: "s"}, {Type: "remove_edge", EdgeID: "missing"}})
 	after, _ := json.Marshal(r)
 	if err == nil || string(before) != string(after) {
 		t.Fatalf("rollback: %v %s", err, after)
 	}
-	result, err := ApplyCommands(r, []Command{{Type: "remove_node", NodeID: "s"}})
+	result, err := ApplyCommands(t.Context(), r, []Command{{Type: "remove_node", NodeID: "s"}})
 	if err != nil || len(result.Nodes) != 1 || len(result.Edges) != 0 {
 		t.Fatalf("cascade: %+v %v", result, err)
 	}
-	_, err = ApplyCommands(r, []Command{{Type: "move_nodes", Positions: []Position{{NodeID: "s", X: 12}, {NodeID: "missing", Y: 9}}}})
+	_, err = ApplyCommands(t.Context(), r, []Command{{Type: "move_nodes", Positions: []Position{{NodeID: "s", X: 12}, {NodeID: "missing", Y: 9}}}})
 	after, _ = json.Marshal(r)
 	if err == nil || string(before) != string(after) {
 		t.Fatalf("move rollback: %v", err)
@@ -36,12 +37,12 @@ func TestCommandUnionStrict(t *testing.T) {
 
 func TestCommandsEmptyMoveAndOwnership(t *testing.T) {
 	r := baseRule()
-	result, err := ApplyCommands(r, []Command{{Type: "move_nodes", Positions: []Position{}}})
+	result, err := ApplyCommands(t.Context(), r, []Command{{Type: "move_nodes", Positions: []Position{}}})
 	if err != nil || len(result.Nodes) != 2 {
 		t.Fatalf("empty move: %+v %v", result, err)
 	}
 	node := Node{ID: "c", Type: "condition", Name: "Condition", Condition: &overrides.Condition{In: "query", Name: "x", Op: "equals", Value: "before"}}
-	result, err = ApplyCommands(r, []Command{{Type: "add_node", Node: &node}})
+	result, err = ApplyCommands(t.Context(), r, []Command{{Type: "add_node", Node: &node}})
 	if err != nil {
 		t.Fatal(err)
 	}

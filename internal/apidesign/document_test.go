@@ -43,14 +43,14 @@ x-retained:
 	}
 	for name, document := range cases {
 		t.Run(name, func(t *testing.T) {
-			_, err := r.prepare(document)
+			_, err := r.prepare(t.Context(), document)
 			if !errors.Is(err, ErrInvalid) {
 				t.Fatalf("expected invalid: %v", err)
 			}
 		})
 	}
 	valid := `{"openapi":"3.1.0","info":{"title":"A","version":"1"},"paths":{"/a/{id}":{"parameters":[{"$ref":"#/components/parameters/Id"}],"get":{"responses":{"200":{"description":"ok"}}}}},"components":{"parameters":{"Id":{"in":"path","name":"id","required":true,"schema":{"type":"string"}}}}}`
-	if _, err = r.prepare(valid); err != nil {
+	if _, err = r.prepare(t.Context(), valid); err != nil {
 		t.Fatalf("inherited referenced parameter: %v", err)
 	}
 }
@@ -74,17 +74,17 @@ func TestReferencesRespectNamedSchemasAndExampleData(t *testing.T) {
 		`{"type":"object","properties":{"properties":{"$ref":"#/missing"}}}`,
 		`{"type":"object","properties":{"x-field":{"$ref":"#/missing"}}}`,
 	} {
-		_, err := r.prepare(`{"openapi":"3.1.0","info":{"title":"API","version":"1"},"paths":{},"components":{"schemas":{"A":` + schema + `}}}`)
+		_, err := r.prepare(t.Context(), `{"openapi":"3.1.0","info":{"title":"API","version":"1"},"paths":{},"components":{"schemas":{"A":`+schema+`}}}`)
 		if !errors.Is(err, ErrInvalid) {
 			t.Fatalf("unresolved property ref accepted: %v", err)
 		}
 	}
 	raw := `{"openapi":"3.1.0","info":{"title":"API","version":"1"},"paths":{},"components":{"schemas":{"A":{"type":"object","example":{"$ref":"user data"},"default":{"$ref":"user data"},"enum":[{"$ref":"user data"}]}}}}`
-	if _, err := r.prepare(raw); err != nil {
+	if _, err := r.prepare(t.Context(), raw); err != nil {
 		t.Fatalf("example data interpreted as a reference: %v", err)
 	}
 	raw = `{"openapi":"3.1.0","info":{"title":"API","version":"1"},"paths":{},"components":{"examples":{"Missing":{"$ref":"#/missing"}}}}`
-	if _, err := r.prepare(raw); !errors.Is(err, ErrInvalid) {
+	if _, err := r.prepare(t.Context(), raw); !errors.Is(err, ErrInvalid) {
 		t.Fatalf("Example Object reference accepted: %v", err)
 	}
 }

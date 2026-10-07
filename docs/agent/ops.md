@@ -10,8 +10,12 @@ points to.
 All seven run on every push and pull request as `.github/workflows/ci.yml`
 (`A17`, "Architecture"): six jobs (lint and the race suite are two — the
 suite is the critical path), the non-docker ones inside a memory- and
-CPU-capped systemd scope through `scripts/ci-cap.sh` — pass `CAP=` to make
-there so the Makefile's own cap does not nest. A release of the plugin is a
+CPU-capped systemd scope through `scripts/ci-cap.sh` — pass `CAP=` (and
+`TEST_CAP=` for `make test`) to make there so the Makefile's own caps do not
+nest. `make test` has its own cap (`TEST_CAP_MEM`, 8G) since 2026-10-07: under
+-race internal/mcp alone peaks at 3.6 GB and internal/backendmodel at 2.5 GB,
+and the shared 3G cap OOM-killed the suite every run (the Makefile comment
+holds the numbers). A release of the plugin is a
 tag `plugin-v<version>` (`.github/workflows/release-plugin.yml`).
 
 **`make test` is CPU-bound under `-race`, and three things keep it at ~1
@@ -187,7 +191,11 @@ registry's login and publish endpoints.
 **The linter is golangci-lint v2**, `.golangci.yml` carried over from another backend of the owner's,
 so that the set is one across two repositories. Keep it at zero. Exceptions are only
 pinpoint `//nolint:<linter> // reason` at the site of the trigger, not widening the
-config. There are **39** of them now (`rg -c '//nolint:' cmd internal`, summed — the colon matters: a comment that merely mentions the directive is not one), and each
+config. There are **76** of them now (2026-10-07: the Backend Workbench
+review's lint pass took the tree from 774 findings to zero and from 42
+directives to 76; every gocyclo finding (218 functions) was refactored
+rather than excepted, and each new directive states its reason at the site)
+(`rg -c '//nolint:' cmd internal`, summed — the colon matters: a comment that merely mentions the directive is not one), and each
 carries the reason right in the line. **The breakdown below is a list of REASONS,
 not a census: the one command that counts them accurately is
 `grep -rho '//nolint:[a-z,]*' cmd internal | sed 's|//nolint:||' | tr ',' '\n' | sort | uniq -c`,

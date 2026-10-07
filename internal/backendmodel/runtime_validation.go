@@ -60,73 +60,11 @@ func validateRuntimeAttributes(kind string, a map[string]jsontext.Value, edge, p
 	if a == nil {
 		return semantic("attributes", "Runtime attributes must be an object")
 	}
-	required, optional := []string{}, []string{"description"}
-	if !edge {
-		required = append(required, "analysisStatus", "gaps")
+	fs, err := runtimeAttributeFields(kind, a, edge, persisted)
+	if err != nil {
+		return err
 	}
-	scalar := []string{}
-	text := []string{}
-	native, nativeReason := "", ""
-	ref := runtimeReferenceName("datastoreKey", persisted)
-	switch kind {
-	case "flow":
-		required = append(required, runtimeReferenceName("entryStepKey", persisted), map[bool]string{false: "exitStepKeys", true: "exitStepIds"}[persisted], "exitStatus")
-	case "flow_step":
-		required = append(required, "stepKind", "inputs", "outputs", "transactionContext", "nativeText")
-		native, nativeReason = "nativeText", "nativeReason"
-		var step string
-		if err := json.Unmarshal(a["stepKind"], &step); err != nil {
-			return semantic("stepKind", "Step kind is required")
-		}
-		if err := relationalEnum(a["stepKind"], "input", "authorization", "validation", "condition", "call", "query", "transform", "transaction_begin", "transaction_commit", "transaction_rollback", "return", "raise", "loop", "parallel", "join", "opaque"); err != nil {
-			return err
-		}
-		switch step {
-		case "condition", "loop":
-			required = append(required, "expression")
-			scalar = append(scalar, "expression")
-		case "opaque":
-			required = append(required, "reason")
-			text = append(text, "reason")
-		case "call":
-			required = append(required, "dispatchStatus")
-			if err := relationalEnum(a["dispatchStatus"], "complete", "partial", "unknown"); err != nil {
-				return err
-			}
-			if runtimeString(a["dispatchStatus"]) != "complete" {
-				required = append(required, "dispatchReason")
-				text = append(text, "dispatchReason")
-			}
-		}
-	case "query":
-		required = append(required, "dialect", "nativeDefinition", "parameters", "results", "columnScope")
-		native, nativeReason = "nativeDefinition", "definitionReason"
-	case "transaction":
-		required = append(required, ref, "connectionScope", "isolationLevel", "boundaryStatus")
-		scalar = append(scalar, "connectionScope", "isolationLevel")
-	case "branch":
-		required = append(required, "label", "condition")
-		text = append(text, "label")
-		scalar = append(scalar, "condition")
-	case "error":
-		required = append(required, "label", "outcome")
-		text = append(text, "label")
-	case "returns":
-		required = append(required, "label")
-		text = append(text, "label")
-	case "reads", "writes", "deletes":
-		required = append(required, "accessMode", ref, "facetKey", "columnScope")
-		text = append(text, "facetKey")
-		if runtimeString(a["columnScope"]) == "unknown" {
-			required = append(required, "scopeReason")
-			text = append(text, "scopeReason")
-		}
-	}
-	if native != "" && bytes.Equal(bytes.TrimSpace(a[native]), []byte("null")) {
-		required = append(required, nativeReason)
-		text = append(text, nativeReason)
-	}
-	if err := relationalFields(a, required, optional); err != nil {
+	if err := relationalFields(a, fs.required, fs.optional); err != nil {
 		return err
 	}
 	if d, ok := a["description"]; ok {
@@ -135,90 +73,164 @@ func validateRuntimeAttributes(kind string, a map[string]jsontext.Value, edge, p
 		}
 	}
 	if !edge {
-		if err := relationalEnum(a["analysisStatus"], "complete", "partial", "unsupported"); err != nil {
+		if err := validateRuntimeAnalysis(a); err != nil {
 			return err
-		}
-		gaps, err := relationalArray(a["gaps"], MaxRevisionEvidence)
-		if err != nil {
-			return err
-		}
-		for _, gap := range gaps {
-			if err := runtimeText(gap); err != nil {
-				return err
-			}
-		}
-		var status string
-		_ = json.Unmarshal(a["analysisStatus"], &status)
-		if status == "complete" && len(gaps) != 0 || status != "complete" && len(gaps) == 0 {
-			return semantic("gaps", "Complete analysis has no gaps; partial and unsupported analysis require gaps")
 		}
 	}
-	for _, key := range scalar {
+	if err := fs.validateValues(a); err != nil {
+		return err
+	}
+	return validateRuntimeKindRules(kind, a, persisted)
+}
+
+// runtimeFieldSet is the member plan of one runtime record: which members
+// must exist, and which of them are scalars, plain text or native text.
+type runtimeFieldSet struct {
+	required, optional   []string
+	scalar, text         []string
+	native, nativeReason string
+}
+
+func runtimeAttributeFields(kind string, a map[string]jsontext.Value, edge, persisted bool) (*runtimeFieldSet, error) {
+	fs := &runtimeFieldSet{required: []string{}, optional: []string{"description"}, scalar: []string{}, text: []string{}}
+	if !edge {
+		fs.required = append(fs.required, "analysisStatus", "gaps")
+	}
+	ref := runtimeReferenceName("datastoreKey", persisted)
+	switch kind {
+	case "flow":
+		fs.required = append(fs.required, runtimeReferenceName("entryStepKey", persisted), runtimeExitStepsKey(persisted), "exitStatus")
+	case "flow_step":
+		if err := fs.addStepFields(a); err != nil {
+			return nil, err
+		}
+	case "query":
+		fs.required = append(fs.required, "dialect", "nativeDefinition", "parameters", "results", "columnScope")
+		fs.native, fs.nativeReason = "nativeDefinition", "definitionReason"
+	case "transaction":
+		fs.required = append(fs.required, ref, "connectionScope", "isolationLevel", "boundaryStatus")
+		fs.scalar = append(fs.scalar, "connectionScope", "isolationLevel")
+	case "branch":
+		fs.required = append(fs.required, "label", "condition")
+		fs.text = append(fs.text, "label")
+		fs.scalar = append(fs.scalar, "condition")
+	case "error":
+		fs.required = append(fs.required, "label", "outcome")
+		fs.text = append(fs.text, "label")
+	case "returns":
+		fs.required = append(fs.required, "label")
+		fs.text = append(fs.text, "label")
+	case "reads", "writes", "deletes":
+		fs.required = append(fs.required, "accessMode", ref, "facetKey", "columnScope")
+		fs.text = append(fs.text, "facetKey")
+		if runtimeString(a["columnScope"]) == "unknown" {
+			fs.required = append(fs.required, "scopeReason")
+			fs.text = append(fs.text, "scopeReason")
+		}
+	}
+	if fs.native != "" && bytes.Equal(bytes.TrimSpace(a[fs.native]), []byte("null")) {
+		fs.required = append(fs.required, fs.nativeReason)
+		fs.text = append(fs.text, fs.nativeReason)
+	}
+	return fs, nil
+}
+
+func runtimeExitStepsKey(persisted bool) string {
+	return map[bool]string{false: "exitStepKeys", true: "exitStepIds"}[persisted]
+}
+
+// addStepFields adds what a flow step's own kind requires on top of the
+// members every step carries.
+func (fs *runtimeFieldSet) addStepFields(a map[string]jsontext.Value) error {
+	fs.required = append(fs.required, "stepKind", "inputs", "outputs", "transactionContext", "nativeText")
+	fs.native, fs.nativeReason = "nativeText", "nativeReason"
+	var step string
+	if err := json.Unmarshal(a["stepKind"], &step); err != nil {
+		return semantic("stepKind", "Step kind is required")
+	}
+	if err := relationalEnum(a["stepKind"], "input", "authorization", "validation", "condition", "call", "query", "transform", "transaction_begin", "transaction_commit", "transaction_rollback", "return", "raise", "loop", "parallel", "join", "opaque"); err != nil {
+		return err
+	}
+	switch step {
+	case "condition", "loop":
+		fs.required = append(fs.required, "expression")
+		fs.scalar = append(fs.scalar, "expression")
+	case "opaque":
+		fs.required = append(fs.required, "reason")
+		fs.text = append(fs.text, "reason")
+	case "call":
+		fs.required = append(fs.required, "dispatchStatus")
+		if err := relationalEnum(a["dispatchStatus"], "complete", "partial", "unknown"); err != nil {
+			return err
+		}
+		if runtimeString(a["dispatchStatus"]) != "complete" {
+			fs.required = append(fs.required, "dispatchReason")
+			fs.text = append(fs.text, "dispatchReason")
+		}
+	}
+	return nil
+}
+
+// validateRuntimeAnalysis requires gaps exactly when analysis is incomplete.
+func validateRuntimeAnalysis(a map[string]jsontext.Value) error {
+	if err := relationalEnum(a["analysisStatus"], "complete", "partial", "unsupported"); err != nil {
+		return err
+	}
+	gaps, err := relationalArray(a["gaps"], MaxRevisionEvidence)
+	if err != nil {
+		return err
+	}
+	for _, gap := range gaps {
+		if err := runtimeText(gap); err != nil {
+			return err
+		}
+	}
+	var status string
+	_ = json.Unmarshal(a["analysisStatus"], &status)
+	if status == "complete" && len(gaps) != 0 || status != "complete" && len(gaps) == 0 {
+		return semantic("gaps", "Complete analysis has no gaps; partial and unsupported analysis require gaps")
+	}
+	return nil
+}
+
+func (fs *runtimeFieldSet) validateValues(a map[string]jsontext.Value) error {
+	for _, key := range fs.scalar {
 		if err := runtimeScalar(a[key], key == "expression" || key == "condition"); err != nil {
 			return err
 		}
 	}
-	for _, key := range text {
+	for _, key := range fs.text {
 		if err := runtimeText(a[key]); err != nil {
 			return err
 		}
 	}
-	if native != "" {
-		if err := relationalText(a[native], true, true); err != nil {
+	if fs.native != "" {
+		if err := relationalText(a[fs.native], true, true); err != nil {
 			return err
 		}
 	}
-	checkRef := func(key string) error {
-		var value string
-		if json.Unmarshal(a[key], &value) != nil || !externalKey(value) || persisted && !ValidID(value) {
-			return semantic(key, "Reference must use the selected external-key or UUID mode")
-		}
-		return nil
+	return nil
+}
+
+func runtimeCheckRef(a map[string]jsontext.Value, key string, persisted bool) error {
+	var value string
+	if json.Unmarshal(a[key], &value) != nil || !externalKey(value) || persisted && !ValidID(value) {
+		return semantic(key, "Reference must use the selected external-key or UUID mode")
 	}
+	return nil
+}
+
+// validateRuntimeKindRules holds the value rules only one record kind has.
+func validateRuntimeKindRules(kind string, a map[string]jsontext.Value, persisted bool) error {
+	ref := runtimeReferenceName("datastoreKey", persisted)
 	switch kind {
 	case "flow":
-		if err := checkRef(runtimeReferenceName("entryStepKey", persisted)); err != nil {
-			return err
-		}
-		if _, err := relationalStrings(a[map[bool]string{false: "exitStepKeys", true: "exitStepIds"}[persisted]], MaxRuntimeExitReferences, persisted); err != nil {
-			return err
-		}
-		if err := relationalEnum(a["exitStatus"], "complete", "partial", "unknown"); err != nil {
-			return err
-		}
-		if runtimeString(a["exitStatus"]) != "complete" && runtimeString(a["analysisStatus"]) == "complete" {
-			return semantic("exitStatus", "Incomplete exit inventory requires analysis gaps")
-		}
+		return validateRuntimeFlowExits(a, persisted)
 	case "flow_step":
 		if err := validateRuntimePorts(a, "inputs", "outputs"); err != nil {
 			return err
 		}
-		m, err := relationalObject(a["transactionContext"])
-		if err != nil {
-			return err
-		}
-		var status string
-		_ = json.Unmarshal(m["status"], &status)
-		if status == "known" {
-			key := runtimeReferenceName("transactionKey", persisted)
-			if err := relationalFields(m, []string{"status", key}, nil); err != nil {
-				return err
-			}
-			var v string
-			if json.Unmarshal(m[key], &v) != nil || !externalKey(v) || persisted && !ValidID(v) {
-				return semantic("transactionContext", "Invalid local transaction reference")
-			}
-		} else {
-			if status != "none" && status != "unknown" {
-				return semantic("transactionContext/status", "Invalid transaction context status")
-			}
-			if err := relationalFields(m, []string{"status", "reason"}, nil); err != nil {
-				return err
-			}
-			if err := runtimeText(m["reason"]); err != nil {
-				return err
-			}
-		}
+		return validateRuntimeTransactionContext(a["transactionContext"], persisted)
 	case "query":
 		if err := relationalEnum(a["dialect"], "postgresql", "sqlite", "unknown"); err != nil {
 			return err
@@ -230,7 +242,7 @@ func validateRuntimeAttributes(kind string, a map[string]jsontext.Value, edge, p
 			return err
 		}
 	case "transaction":
-		if err := checkRef(ref); err != nil {
+		if err := runtimeCheckRef(a, ref, persisted); err != nil {
 			return err
 		}
 		if err := relationalEnum(a["boundaryStatus"], "complete", "partial", "unknown"); err != nil {
@@ -239,7 +251,7 @@ func validateRuntimeAttributes(kind string, a map[string]jsontext.Value, edge, p
 	case "error":
 		return relationalEnum(a["outcome"], "error", "timeout", "retry")
 	case "reads", "writes", "deletes":
-		if err := checkRef(ref); err != nil {
+		if err := runtimeCheckRef(a, ref, persisted); err != nil {
 			return err
 		}
 		if err := relationalEnum(a["columnScope"], "listed", "unknown"); err != nil {
@@ -249,6 +261,51 @@ func validateRuntimeAttributes(kind string, a map[string]jsontext.Value, edge, p
 		return relationalEnum(a["accessMode"], modes[kind]...)
 	}
 	return nil
+}
+
+func validateRuntimeFlowExits(a map[string]jsontext.Value, persisted bool) error {
+	if err := runtimeCheckRef(a, runtimeReferenceName("entryStepKey", persisted), persisted); err != nil {
+		return err
+	}
+	if _, err := relationalStrings(a[runtimeExitStepsKey(persisted)], MaxRuntimeExitReferences, persisted); err != nil {
+		return err
+	}
+	if err := relationalEnum(a["exitStatus"], "complete", "partial", "unknown"); err != nil {
+		return err
+	}
+	if runtimeString(a["exitStatus"]) != "complete" && runtimeString(a["analysisStatus"]) == "complete" {
+		return semantic("exitStatus", "Incomplete exit inventory requires analysis gaps")
+	}
+	return nil
+}
+
+// validateRuntimeTransactionContext checks a step's transaction context: a
+// known one names a local transaction, none/unknown carries a reason.
+func validateRuntimeTransactionContext(raw jsontext.Value, persisted bool) error {
+	m, err := relationalObject(raw)
+	if err != nil {
+		return err
+	}
+	var status string
+	_ = json.Unmarshal(m["status"], &status)
+	if status == "known" {
+		key := runtimeReferenceName("transactionKey", persisted)
+		if err := relationalFields(m, []string{"status", key}, nil); err != nil {
+			return err
+		}
+		var v string
+		if json.Unmarshal(m[key], &v) != nil || !externalKey(v) || persisted && !ValidID(v) {
+			return semantic("transactionContext", "Invalid local transaction reference")
+		}
+		return nil
+	}
+	if status != "none" && status != "unknown" {
+		return semantic("transactionContext/status", "Invalid transaction context status")
+	}
+	if err := relationalFields(m, []string{"status", "reason"}, nil); err != nil {
+		return err
+	}
+	return runtimeText(m["reason"])
 }
 
 func validateRuntimePorts(a map[string]jsontext.Value, first, second string) error {

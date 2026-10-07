@@ -3,7 +3,6 @@ package store
 import (
 	"context"
 	"database/sql"
-	"log/slog"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -16,7 +15,11 @@ func TestBackendDiagramsDeferredHead(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = db.Close() })
-	if err = db.Migrate(ctx, slog.Default()); err != nil {
+	// Pinned to 25, the head this test was written against: the raw
+	// backend_revisions(document) and backend_diagram_versions(document)
+	// inserts below are Store25 DDL that 0027 (B6.3) replaced with payload_key
+	// projections, so Migrate-to-head made them fail (see MigrateThrough).
+	if err = db.MigrateThrough(ctx, 25); err != nil {
 		t.Fatal(err)
 	}
 	var version int

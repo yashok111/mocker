@@ -5,18 +5,17 @@ import (
 	"database/sql"
 	"encoding/json/v2"
 	"slices"
-
-	"github.com/yashok111/mocker/internal/apidesign"
-	"github.com/yashok111/mocker/internal/config"
-	"github.com/yashok111/mocker/internal/designscenario"
 )
 
 func (r *Repo) changeArtifactRequest(ctx context.Context, readBudget *changeReadBudget) *EditorArtifactRequest {
 	// Owner snapshot adapters require a read budget. The same immutable input
 	// cap applies to all proposal materialization; this opens no new connection.
-	budget := &config.Config{MaxBody: MaxRevisionBytes}
-	api := apidesign.NewRepo(r.db, budget)
-	scenarios := designscenario.NewRepo(r.db, budget, api)
+	// A budget bound to the caller's transaction reads owners on it as well.
+	var tx *sql.Tx
+	if readBudget != nil {
+		tx = readBudget.tx
+	}
+	api, scenarios := r.ownerReaders(tx)
 	return NewEditorArtifactRequest(ctx, changeAPIArtifactReader{APIArtifactReader: api, budget: readBudget}, changeScenarioArtifactReader{ScenarioArtifactReader: scenarios, budget: readBudget})
 }
 func (r *Repo) prepareChangeArtifacts(ctx context.Context, e *changeEvaluation, commands []ChangeProposalCommand) error {
@@ -44,11 +43,19 @@ func prepareChangeArtifactCommands(ctx context.Context, request *EditorArtifactR
 		context.EditorBindings = slices.DeleteFunc(slices.Clone(context.EditorBindings), func(b EditorBinding) bool { return b.ArtifactKind == key.Kind && b.ArtifactID == key.ID })
 		if c.Type == "set_artifact_pin" {
 			pin, err := request.SnapshotPin(key, c.RevisionID)
-			if err != nil {
-				return err
+			if e := requiredArtifactError(ctx, err); e != nil {
+				return e
 			}
 			out := &ArtifactPinsPreview{CanApply: true, Diagnostics: []ArtifactDiagnostic{}}
 			builder := artifactPreviewBuilder{out: out, request: request, nodes: nodes}
+			if err != nil {
+				// Review 2026-10-06, F174: a missing artifact revision came back
+				// as the read budget's raw sql.ErrNoRows, a logged 500. Classify
+				// it as the legacy artifact-pins preview does: cancellation and
+				// 413 stay as they are, anything else blocks the pin.
+				builder.diagnostic("backend_artifact_target_unavailable", key, nil, nil, "Selected immutable artifact is unavailable or unverified", true)
+				return artifactPinsBlocked(out.Diagnostics)
+			}
 			api, err := builder.resolveAPIBindings(ctx, c.artifactCommand(), pin)
 			if err != nil {
 				return err
@@ -136,36 +143,43 @@ func (r changeCriteriaReader) validate(ctx context.Context, c ChangeCriterion) e
 	case "artifact_object_matches":
 		return r.artifact(c)
 	case "artifact_object_matches_v3":
-		scoped := c.NamespacedArtifact
-		if scoped == nil || r.e.revision.ArtifactContextV3 == nil {
-			return invalid("criteria", "Exact namespaced artifact context required")
-		}
-		found := false
-		for _, g := range r.e.revision.ArtifactContextV3.Groups {
-			if g.Namespace == scoped.Namespace && slices.Contains(g.Pins, scoped.Pin) {
-				found = true
-			}
-		}
-		if !found {
-			return invalid("criteria", "Namespaced criterion is outside its target")
-		}
-		if scoped.Namespace.Scope == "foreign" {
-			return nil
-		}
-		installation, err := installationID(ctx, r.q)
-		if err != nil {
-			return err
-		}
-		pin, err := r.artifacts.ResolveNamespacedPin(installation, *scoped)
-		if err != nil {
-			return err
-		}
-		c.Artifact = &pin
-		return r.artifactObject(c)
+		return r.namespacedArtifact(ctx, c)
 	case "test_attachment", "runtime_check":
 		return r.check(ctx, c)
 	}
 	return nil
+}
+
+// namespacedArtifact requires a context-v3 criterion to name a pin of its
+// target; a local pin is then resolved and checked like a legacy one, a
+// foreign pin cannot be resolved here and is accepted as named.
+func (r changeCriteriaReader) namespacedArtifact(ctx context.Context, c ChangeCriterion) error {
+	scoped := c.NamespacedArtifact
+	if scoped == nil || r.e.revision.ArtifactContextV3 == nil {
+		return invalid("criteria", "Exact namespaced artifact context required")
+	}
+	found := false
+	for _, g := range r.e.revision.ArtifactContextV3.Groups {
+		if g.Namespace == scoped.Namespace && slices.Contains(g.Pins, scoped.Pin) {
+			found = true
+		}
+	}
+	if !found {
+		return invalid("criteria", "Namespaced criterion is outside its target")
+	}
+	if scoped.Namespace.Scope == "foreign" {
+		return nil
+	}
+	installation, err := installationID(ctx, r.q)
+	if err != nil {
+		return err
+	}
+	pin, err := r.artifacts.ResolveNamespacedPin(installation, *scoped)
+	if err != nil {
+		return err
+	}
+	c.Artifact = &pin
+	return r.artifactObject(c)
 }
 func (r changeCriteriaReader) field(c ChangeCriterion) error {
 	record, err := r.e.live(c.RecordType, c.ID, "")

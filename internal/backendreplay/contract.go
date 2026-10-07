@@ -119,15 +119,8 @@ func (v Package) Validate() error {
 	if v.Format != PackageFormat || v.FixtureHash != p.FixtureHash() || v.FailurePoint != p.FailurePoint || !p.ValidHash(v.TargetHash) {
 		return fmt.Errorf("invalid package")
 	}
-	t := v.Target
-	if t.Proposal != nil || t.ImportCandidate != nil || (t.RevisionID == "") == (t.ChangeProposal == nil) {
-		return fmt.Errorf("unsupported target")
-	}
-	if t.RevisionID != "" && !p.ValidID(t.RevisionID) {
-		return fmt.Errorf("invalid revision")
-	}
-	if t.ChangeProposal != nil && (!p.ValidID(t.ChangeProposal.ProposalID) || !p.ValidID(t.ChangeProposal.ProposalRevisionID)) {
-		return fmt.Errorf("invalid proposal")
+	if e := v.validateTarget(); e != nil {
+		return e
 	}
 	if e := v.Profile.Validate(); e != nil {
 		return e
@@ -147,6 +140,27 @@ func (v Package) Validate() error {
 			return e
 		}
 	}
+	return v.validateBindings()
+}
+
+// validateTarget admits exactly one of a revision or a change proposal.
+func (v Package) validateTarget() error {
+	t := v.Target
+	if t.Proposal != nil || t.ImportCandidate != nil || (t.RevisionID == "") == (t.ChangeProposal == nil) {
+		return fmt.Errorf("unsupported target")
+	}
+	if t.RevisionID != "" && !p.ValidID(t.RevisionID) {
+		return fmt.Errorf("invalid revision")
+	}
+	if t.ChangeProposal != nil && (!p.ValidID(t.ChangeProposal.ProposalID) || !p.ValidID(t.ChangeProposal.ProposalRevisionID)) {
+		return fmt.Errorf("invalid proposal")
+	}
+	return nil
+}
+
+// validateBindings requires each diagram binding to name a step and
+// assertions of this package, once each.
+func (v Package) validateBindings() error {
 	seen := map[string]bool{}
 	for _, b := range v.DiagramBindings {
 		if e := b.Diagram.Validate(); e != nil {
@@ -186,7 +200,10 @@ func ValidateDiagramBindings(ctx context.Context, r DiagramReader, pid string, v
 			return e
 		}
 		if s == nil || s.Pin != in.Pin || s.TargetHash != v.TargetHash || !reflect.DeepEqual(s.Target, v.Target) || s.Truncated || len(s.Gaps) > 0 || (expectedScopeHash != "" && s.ScopeHash != expectedScopeHash) {
-			return fmt.Errorf("incompatible or incomplete diagram scope")
+			// Review 2026-10-06, F1: a plain error here was answered as a
+			// logged 500 backend_internal although narrowing the scope is the
+			// caller's fix; it is the same class as "Target pin mismatch".
+			return conflictReplay("Incompatible or incomplete diagram scope")
 		}
 		return nil
 	}

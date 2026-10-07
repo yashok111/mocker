@@ -5,7 +5,7 @@ import (
 	"database/sql"
 	"encoding/json/v2"
 	"errors"
-	"strings"
+	"unicode/utf8"
 
 	bm "github.com/yashok111/mocker/internal/backendmodel"
 	"github.com/yashok111/mocker/internal/store"
@@ -86,8 +86,20 @@ type preparedImport struct {
 	Result     PreviewResult    `json:"result"`
 }
 
+// validIdempotencyKey is exactly what api/openapi.json states for every
+// portable idempotencyKey: a string of 1–200 characters (review 2026-10-06,
+// F15). Both the staging and the service mutations call it. It used to count
+// bytes and refuse surrounding whitespace, rules the contract never stated,
+// so a contract-valid key got a 422 that named neither. A key is an opaque
+// receipt address compared byte for byte; whitespace cannot make two keys
+// collide.
+func validIdempotencyKey(key string) bool {
+	n := utf8.RuneCountInString(key)
+	return n >= 1 && n <= 200
+}
+
 func portableMutation[T any](ctx context.Context, s *Service, scope, operation, key string, input any, run func(*sql.Tx) (*T, string, error)) (*T, error) {
-	if strings.TrimSpace(key) != key || key == "" || len(key) > 200 {
+	if !validIdempotencyKey(key) {
 		return nil, fault(422, "Invalid idempotency key")
 	}
 	hash, err := DocumentHash(struct {
@@ -136,7 +148,7 @@ func loadRecords(ctx context.Context, tx *sql.Tx, session string, m *Manifest) (
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	out := []Record{}
 	index := 0
 	total := 0
@@ -212,6 +224,16 @@ func (s *Service) ResolveSelection(ctx context.Context, pid string, in Selection
 		if a != b {
 			return nil, fault(422, "Selected saved view targets another exact graph")
 		}
+	}
+	// The guide promises that the returned selection exports unchanged, so the
+	// resolver runs export's own model validation on this read transaction
+	// (review 2026-10-06, F74): duplicate view or saved-view pins, a selected
+	// base below source schema 5 and every other closure rule used to pass
+	// here with 200 and fail only after export had done its work under the
+	// writer. One validator, not a copy of its rules; the cost is a read on a
+	// reader connection, bounded by the same closure quotas as export.
+	if _, err := s.exportModelTx(ctx, tx, *out); err != nil {
+		return nil, err
 	}
 	return out, nil
 }

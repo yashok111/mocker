@@ -2,6 +2,7 @@ package scenarioexport
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"reflect"
 	"strings"
@@ -46,7 +47,7 @@ func diagramDiagnostics(doc designscenario.Document) []Diagnostic {
 	return result
 }
 
-func (s *Service) contractDiagnostics(rev designscenario.Revision, contract designscenario.Contract) ([]Diagnostic, error) {
+func (s *Service) contractDiagnostics(ctx context.Context, rev designscenario.Revision, contract designscenario.Contract) ([]Diagnostic, error) {
 	result := []Diagnostic{}
 	budget := jsonBudget{remaining: s.maxBytes}
 	add := func(d Diagnostic) error {
@@ -59,7 +60,7 @@ func (s *Service) contractDiagnostics(rev designscenario.Revision, contract desi
 	if s.validate == nil {
 		return nil, unavailableValidator()
 	}
-	diagnostics, err := s.validate(string(contract.Document))
+	diagnostics, err := s.validate(ctx, string(contract.Document))
 	if err != nil {
 		return nil, err
 	}

@@ -118,3 +118,15 @@ export function exactNode() {
     source: exactSource(),
   };
 }
+
+/**
+ * isReplayList names the four replay lists the project page reads on mount:
+ * BackendReplay (be06f56) sits in a <details> on BackendProjectPage and its
+ * targets, profiles, packages and runs are bare arrays in api/openapi.json,
+ * not the `{ items, nextCursor }` page every other backend list returns. A
+ * page-shaped catch-all answer makes `profiles.data.find` throw and React
+ * unmounts the whole project page, so a fixture routes these first.
+ */
+export function isReplayList(path: string): boolean {
+  return /\/api\/backend-projects\/[^/]+\/replay\/(targets|profiles|packages|runs)$/.test(path);
+}

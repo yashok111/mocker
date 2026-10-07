@@ -112,8 +112,8 @@ export function BackendConformance({
                       {c.attachment.kind === "source"
                         ? `Источник: ${c.attachment.file}, строки ${c.attachment.startLine}–${c.attachment.endLine} · ${c.attachment.revisionId}`
                         : c.attachment.kind === "artifact_v3"
-? `Артефакт ${c.attachment.namespacedArtifact.namespace.scope} · ${c.attachment.namespacedArtifact.namespace.installationId} · ${c.attachment.namespacedArtifact.pin.kind}:${c.attachment.namespacedArtifact.pin.id}`
-: `Артефакт: ${c.attachment.artifact.kind} · ${c.attachment.artifact.id} · ревизия ${c.attachment.artifact.revisionId}`}
+                          ? `Артефакт ${c.attachment.namespacedArtifact.namespace.scope} · ${c.attachment.namespacedArtifact.namespace.installationId} · ${c.attachment.namespacedArtifact.pin.kind}:${c.attachment.namespacedArtifact.pin.id}`
+                          : `Артефакт: ${c.attachment.artifact.kind} · ${c.attachment.artifact.id} · ревизия ${c.attachment.artifact.revisionId}`}
                     </Text>
                     <AnalysisValue label={`Точное вложение ${c.key}`} value={c.attachment} />
                   </Stack>

@@ -2,12 +2,13 @@ package backendmodel
 
 import (
 	"fmt"
-	"github.com/yashok111/mocker/internal/testkit"
 	"math"
 	"reflect"
 	"slices"
 	"testing"
 	"uuid"
+
+	"github.com/yashok111/mocker/internal/testkit"
 )
 
 func TestSavedViewDirectValidationBoundaries(t *testing.T) {

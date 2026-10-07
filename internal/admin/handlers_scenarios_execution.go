@@ -209,35 +209,50 @@ func executableContract(revision designscenario.Revision, messageID string, from
 	if !fromRun && len(revision.Document.Fragments) != 0 {
 		return nil, errors.New("исполнение opt/loop пока не поддерживается; удалите фрагменты")
 	}
-	for key, value := range revision.FormDrafts {
-		// The UI persists its complete form-store envelope even when clean.
+	if !formDraftsClean(revision.FormDrafts) {
+		return nil, errors.New("сначала завершите редактирование форм сценария")
+	}
+	for _, message := range revision.Document.Messages {
+		if message.ID == messageID {
+			return executableMessageContract(revision.Document, message, fromRun)
+		}
+	}
+	return nil, errors.New("сообщение отсутствует в сохранённой версии сценария")
+}
+
+// formDraftsClean reports whether no scenario form has unsaved edits. The UI
+// persists its complete form-store envelope even when clean, so an empty "all"
+// object is the one draft that does not count.
+func formDraftsClean(drafts map[string]string) bool {
+	for key, value := range drafts {
 		var fields map[string]jsonx.RawMessage
 		if key == "all" && jsonx.Unmarshal([]byte(value), &fields) == nil && fields != nil && len(fields) == 0 {
 			continue
 		}
-		return nil, errors.New("сначала завершите редактирование форм сценария")
+		return false
 	}
-	for _, message := range revision.Document.Messages {
-		if message.ID != messageID {
-			continue
-		}
-		if message.Kind != "request" || message.Operation == nil {
-			return nil, errors.New("сообщение не является HTTP-запросом с API-операцией")
-		}
-		if !fromRun && message.Execution != nil && len(message.Execution.Bindings) > 0 {
-			return nil, errors.New("шаг с передачей данных требует запуска сценария с историей источников")
-		}
-		if message.Execution != nil && !message.Execution.Enabled {
-			return nil, errors.New("шаг выключен")
-		}
-		for _, contract := range revision.Document.Contracts {
-			if contract.ID == message.Operation.ContractID && contract.Mode == "linked" && contract.Source != nil {
-				return &contract, nil
-			}
-		}
-		return nil, errors.New("свяжите контракт шага с API через панель контрактов")
+	return true
+}
+
+// executableMessageContract returns the linked contract a request step runs
+// against, refusing a step that is not an enabled API request or whose data
+// bindings need a run's source history.
+func executableMessageContract(document designscenario.Document, message designscenario.Message, fromRun bool) (*designscenario.Contract, error) {
+	if message.Kind != "request" || message.Operation == nil {
+		return nil, errors.New("сообщение не является HTTP-запросом с API-операцией")
 	}
-	return nil, errors.New("сообщение отсутствует в сохранённой версии сценария")
+	if !fromRun && message.Execution != nil && len(message.Execution.Bindings) > 0 {
+		return nil, errors.New("шаг с передачей данных требует запуска сценария с историей источников")
+	}
+	if message.Execution != nil && !message.Execution.Enabled {
+		return nil, errors.New("шаг выключен")
+	}
+	for _, contract := range document.Contracts {
+		if contract.ID == message.Operation.ContractID && contract.Mode == "linked" && contract.Source != nil {
+			return &contract, nil
+		}
+	}
+	return nil, errors.New("свяжите контракт шага с API через панель контрактов")
 }
 
 func savedStepOperation(document designscenario.Document, messageID, raw string) (string, string, error) {

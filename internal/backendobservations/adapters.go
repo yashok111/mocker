@@ -4,9 +4,10 @@ import (
 	"context"
 	"encoding/json/v2"
 	"fmt"
+	"reflect"
+
 	br "github.com/yashok111/mocker/internal/backendreplay"
 	p "github.com/yashok111/mocker/internal/ordersprotocol"
-	"reflect"
 )
 
 type ReplayReader interface {
@@ -112,6 +113,24 @@ func Adapt(ctx context.Context, pid string, in AdaptInput, replay ReplayReader) 
 	}
 	return out, nil
 }
+
+// replayAssertions carries a report's assertion verdicts over, and verifies
+// the trigger only when a passed triggers assertion witnessed it.
+func replayAssertions(report *br.Report) ([]Assertion, string) {
+	assertions := make([]Assertion, 0, len(report.Assertions))
+	trigger := "unverified"
+	for _, a := range report.Assertions {
+		outcome := "failed"
+		if a.Passed {
+			outcome = "passed"
+		}
+		assertions = append(assertions, Assertion{a.ID, outcome, a.Scope})
+		if a.Kind == "triggers" && a.Passed {
+			trigger = "verified"
+		}
+	}
+	return assertions, trigger
+}
 func adaptReplay(ctx context.Context, pid string, in AdaptInput, reader ReplayReader, out *AdaptedBatch) ([]AdaptBatch, error) {
 	if !p.ValidID(in.Replay.RunID) || !p.ValidHash(in.Replay.ReportHash) {
 		return nil, invalid()
@@ -137,22 +156,12 @@ func adaptReplay(ctx context.Context, pid string, in AdaptInput, reader ReplayRe
 	}
 	c.Scenario = &Scenario{Kind: "backend_replay", PackageID: report.Package.ID, Version: report.Package.Version, Hash: report.Package.ContentHash}
 	c.Producer = Producer{"orders-replay", report.CheckerVersion, in.Adapter}
-	assertions := []Assertion{}
-	trigger := "unverified"
-	for _, a := range report.Assertions {
-		outcome := "failed"
-		if a.Passed {
-			outcome = "passed"
-		}
-		assertions = append(assertions, Assertion{a.ID, outcome, a.Scope})
-		if a.Kind == "triggers" && a.Passed {
-			trigger = "verified"
-		}
-	}
+	assertions, trigger := replayAssertions(report)
 	outcome := "unknown"
-	if report.Status == "succeeded" {
+	switch report.Status {
+	case "succeeded":
 		outcome = "passed"
-	} else if report.Status == "failed" {
+	case "failed":
 		outcome = "failed"
 	}
 	start := run.CreatedAt.UnixNano()

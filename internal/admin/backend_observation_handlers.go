@@ -2,15 +2,20 @@ package admin
 
 import (
 	"context"
+	"net/http"
+	"strconv"
+
 	bm "github.com/yashok111/mocker/internal/backendmodel"
 	ob "github.com/yashok111/mocker/internal/backendobservations"
 	"github.com/yashok111/mocker/internal/httpx"
-	"net/http"
-	"strconv"
 )
 
 func (s *Server) SetBackendObservations(service *ob.Service) { s.backendObservations = service }
-func (s *Server) observationRequest(w http.ResponseWriter, r *http.Request) (context.Context, bool) {
+
+// observationRequest admits the request and derives its context from ctx (the
+// request's own): taking it as a parameter keeps the derivation visible to
+// contextcheck, which reads a context minted without one as non-inherited.
+func (s *Server) observationRequest(ctx context.Context, w http.ResponseWriter, r *http.Request) (context.Context, bool) {
 	if _, ok := s.requireUser(w, r); !ok {
 		return nil, false
 	}
@@ -28,16 +33,15 @@ func (s *Server) observationRequest(w http.ResponseWriter, r *http.Request) (con
 	}
 	q := r.URL.Query()
 	for key, values := range q {
-		if len(values) != 1 || r.Method != "GET" || (key != "limit" && key != "cursor") {
+		if len(values) != 1 || r.Method != http.MethodGet || (key != "limit" && key != "cursor") {
 			s.backendError(w, backendQueryError())
 			return nil, false
 		}
 	}
-	if r.Method == "GET" && (r.ContentLength != 0 || r.TransferEncoding != nil) {
+	if r.Method == http.MethodGet && (r.ContentLength != 0 || r.TransferEncoding != nil) {
 		s.backendError(w, backendQueryError())
 		return nil, false
 	}
-	ctx := r.Context()
 	if s.backendArtifacts != nil {
 		ctx = s.backendArtifacts.DiagramContext(ctx)
 	}
@@ -55,7 +59,7 @@ func observationPage(r *http.Request) (int, string, error) {
 	return limit, r.URL.Query().Get("cursor"), nil
 }
 func (s *Server) handleImportBackendObservations(w http.ResponseWriter, r *http.Request) {
-	ctx, ok := s.observationRequest(w, r)
+	ctx, ok := s.observationRequest(r.Context(), w, r)
 	if !ok {
 		return
 	}
@@ -71,7 +75,7 @@ func (s *Server) handleImportBackendObservations(w http.ResponseWriter, r *http.
 	httpx.JSON(w, 200, out)
 }
 func (s *Server) handleListBackendObservations(w http.ResponseWriter, r *http.Request) {
-	ctx, ok := s.observationRequest(w, r)
+	ctx, ok := s.observationRequest(r.Context(), w, r)
 	if !ok {
 		return
 	}
@@ -88,7 +92,7 @@ func (s *Server) handleListBackendObservations(w http.ResponseWriter, r *http.Re
 	httpx.JSON(w, 200, out)
 }
 func (s *Server) handleGetBackendObservationVersion(w http.ResponseWriter, r *http.Request) {
-	ctx, ok := s.observationRequest(w, r)
+	ctx, ok := s.observationRequest(r.Context(), w, r)
 	if !ok {
 		return
 	}
@@ -109,7 +113,7 @@ func (s *Server) handleGetBackendObservationVersion(w http.ResponseWriter, r *ht
 	httpx.JSON(w, 200, out)
 }
 func (s *Server) handleGetBackendObservationRecords(w http.ResponseWriter, r *http.Request) {
-	ctx, ok := s.observationRequest(w, r)
+	ctx, ok := s.observationRequest(r.Context(), w, r)
 	if !ok {
 		return
 	}
@@ -131,7 +135,7 @@ func (s *Server) handleGetBackendObservationRecords(w http.ResponseWriter, r *ht
 	httpx.JSON(w, 200, out)
 }
 func (s *Server) handleAdaptBackendObservations(w http.ResponseWriter, r *http.Request) {
-	ctx, ok := s.observationRequest(w, r)
+	ctx, ok := s.observationRequest(r.Context(), w, r)
 	if !ok {
 		return
 	}
@@ -147,7 +151,7 @@ func (s *Server) handleAdaptBackendObservations(w http.ResponseWriter, r *http.R
 	httpx.JSON(w, 200, out)
 }
 func (s *Server) handleCorrelateBackendObservations(w http.ResponseWriter, r *http.Request) {
-	ctx, ok := s.observationRequest(w, r)
+	ctx, ok := s.observationRequest(r.Context(), w, r)
 	if !ok {
 		return
 	}
@@ -166,7 +170,7 @@ func (s *Server) handleCorrelateBackendObservations(w http.ResponseWriter, r *ht
 	httpx.JSON(w, 200, out)
 }
 func (s *Server) handleGetBackendObservationCorrelation(w http.ResponseWriter, r *http.Request) {
-	ctx, ok := s.observationRequest(w, r)
+	ctx, ok := s.observationRequest(r.Context(), w, r)
 	if !ok {
 		return
 	}

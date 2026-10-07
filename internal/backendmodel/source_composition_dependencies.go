@@ -3,6 +3,7 @@ package backendmodel
 import (
 	"encoding/json/jsontext"
 	"encoding/json/v2"
+	"maps"
 	"slices"
 	"strconv"
 	"strings"
@@ -150,8 +151,7 @@ func populateSourceFields(a ProviderAssertion, f SourceClaimCurrentness, selecte
 					field = old
 					retained = true
 					if selected {
-						field.Own.Status = "stale"
-						field.Own.Reasons = append(slices.Clone(field.Own.Reasons), "not_reobserved")
+						field.Own = sourceStaleReason(field.Own, "not_reobserved") // F50: compacted, see hashAssertions
 					}
 					break
 				}
@@ -168,8 +168,7 @@ func populateSourceFields(a ProviderAssertion, f SourceClaimCurrentness, selecte
 				if json.Unmarshal(facets[property.FacetKey], &facet) == nil && facet.Freshness != nil {
 					field.Own = *facet.Freshness
 					if selected && (!fresh || facet.SourceSnapshotID != snapshotID) {
-						field.Own.Status = "stale"
-						field.Own.Reasons = append(slices.Clone(field.Own.Reasons), "not_reobserved")
+						field.Own = sourceStaleReason(field.Own, "not_reobserved") // F50: compacted, see hashAssertions
 					}
 				}
 			}
@@ -191,7 +190,13 @@ func retainSourceFacets(a, old ProviderAssertion, retained map[string]bool) Prov
 		}
 		current = map[string]jsontext.Value{}
 	}
-	for key, raw := range prior {
+	// Sorted keys, not map order: the retained bindings are appended to
+	// DependencyClaims, which is stored in the canonical assertion document
+	// and diffed order-sensitively between revisions, so two dropped facets
+	// produced a random tail and a spurious "modified" claim (review
+	// 2026-10-06, F54).
+	for _, key := range slices.Sorted(maps.Keys(prior)) {
+		raw := prior[key]
 		if _, ok := current[key]; ok {
 			continue
 		}

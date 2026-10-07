@@ -8,6 +8,7 @@ import (
 	"uuid"
 
 	model "github.com/yashok111/mocker/internal/backendmodel"
+	"github.com/yashok111/mocker/internal/testkit"
 )
 
 func TestB43PositiveDeletionSourceFiveAndSix(t *testing.T) {
@@ -233,7 +234,9 @@ func TestB43DeletionMissingDecision(t *testing.T) {
 			baseline := f.project.CurrentRevisionID
 			f.importSource("remove", "", true, nil)
 			result := f.project.CurrentRevisionID
-			if _, err := f.db.W.ExecContext(t.Context(), `DELETE FROM backend_revision_decisions WHERE revision_id=?`, result); err != nil {
+			// Store27 (48dce80, B6.3) seals the decision payload membership; the
+			// missing decision is shaped as a Store26 fixture and migrated.
+			if _, err := testkit.EditLegacyBackendPayload(t.Context(), f.db, `DELETE FROM backend_revision_decisions WHERE revision_id=?`, result); err != nil {
 				t.Fatal(err)
 			}
 			req := model.AnalysisEvidenceRequest{Targets: []model.BackendReadTarget{{RevisionID: baseline}, {RevisionID: result}}, BaselineRevisionID: baseline, ResultRevisionID: result}
@@ -276,7 +279,9 @@ func TestB43DeletionNegativeDecisionsAndScopes(t *testing.T) {
 			base := f.project.CurrentRevisionID
 			f.importSource("removed", "", true, nil)
 			result := f.project.CurrentRevisionID
-			if _, err := f.db.W.ExecContext(t.Context(), `UPDATE `+tc.table+` SET document=json_set(document,?,json(?)) WHERE revision_id=?`, tc.path, tc.value, result); err != nil {
+			// Store27 (48dce80, B6.3) seals the payload; the negative decision is
+			// shaped as a Store26 fixture and published by the production migration.
+			if _, err := testkit.EditLegacyBackendPayload(t.Context(), f.db, `UPDATE `+tc.table+` SET document=json_set(document,?,json(?)) WHERE revision_id=?`, tc.path, tc.value, result); err != nil {
 				t.Fatal(err)
 			}
 			req := model.AnalysisEvidenceRequest{Targets: []model.BackendReadTarget{{RevisionID: base}, {RevisionID: result}}, BaselineRevisionID: base, ResultRevisionID: result}

@@ -7,6 +7,7 @@ import (
 	"uuid"
 
 	"github.com/yashok111/mocker/internal/store"
+	"github.com/yashok111/mocker/internal/testkit"
 )
 
 func TestChangeRebaseRetainedArtifactBindingRequiresLiveTarget(t *testing.T) {
@@ -46,7 +47,10 @@ func TestChangeRebaseRejectsBeforeUnreservedDraftDecode(t *testing.T) {
 	r, base, d := changeFixture(t)
 	// A valid JSON number outside float64 exposes generic decoding before the
 	// memory gate. This corrupt sentinel lives only in this isolated test DB.
-	if err := r.db.Write(t.Context(), func(tx *sql.Tx) error {
+	// Store27 (48dce80, B6.3) seals proposal revision payloads; the sentinel is
+	// seeded through the Store26 fixture rebuild + production migration, which
+	// copies the raw bytes without decoding them.
+	if err := testkit.EditLegacyBackendFixture(t.Context(), r.db, func(tx *sql.Tx) error {
 		if _, err := tx.ExecContext(t.Context(), `DROP TRIGGER backend_change_revision_no_update`); err != nil {
 			return err
 		}

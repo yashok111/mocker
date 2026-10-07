@@ -2,9 +2,10 @@ package backendreplay
 
 import (
 	"context"
+	"testing"
+
 	"github.com/yashok111/mocker/internal/backendmodel"
 	p "github.com/yashok111/mocker/internal/ordersprotocol"
-	"testing"
 )
 
 const id = "01900000-0000-7000-8000-000000000001"

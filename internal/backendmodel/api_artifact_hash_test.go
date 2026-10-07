@@ -100,8 +100,8 @@ func TestAPIArtifactSemanticAndCandidateHashes(t *testing.T) {
 	if err != nil || back != a {
 		t.Fatal("A B A failed", err)
 	}
-	clear, err := APIArtifactSemanticHash(source, anchor, nil, nil)
-	if err != nil || clear != anchor {
+	cleared, err := APIArtifactSemanticHash(source, anchor, nil, nil)
+	if err != nil || cleared != anchor {
 		t.Fatal("clear did not restore source anchor", err)
 	}
 	in := PreviewAPIPinsInput{BaseRevisionID: apiTestID, ExpectedVersion: 1, Commands: []APIPinCommand{{Type: "remove_api_pin", ArtifactID: "1", Reason: "review"}}}

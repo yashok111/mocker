@@ -1,10 +1,11 @@
 package backendanalysis
 
 import (
-	bm "github.com/yashok111/mocker/internal/backendmodel"
-	o "github.com/yashok111/mocker/internal/backendobservations"
 	"strings"
 	"testing"
+
+	bm "github.com/yashok111/mocker/internal/backendmodel"
+	o "github.com/yashok111/mocker/internal/backendobservations"
 )
 
 func TestDiagramObservedEventProofAndUnknownOrder(t *testing.T) {

@@ -69,6 +69,29 @@ func (r *Repo) BuildLifecycle(ctx context.Context, pid string, in DiagramLifecyc
 	if loc.Embedded != nil {
 		q.EmbeddedContractID = loc.Embedded.ContractID
 	}
+	rows, err := readLifecycleStateRows(resolver, g, q)
+	if err != nil {
+		return nil, err
+	}
+	d, err := buildLifecycleRows(ctx, in, rows)
+	if err != nil {
+		return nil, err
+	}
+	bindLifecycleTriggers(g, d, rows)
+	d, err = normalizeDiagram(d)
+	if err != nil {
+		return nil, err
+	}
+	gaps, err := resolveDiagramEvidence(ctx, g, d, nil)
+	if err != nil {
+		return nil, err
+	}
+	return &DiagramLifecycleCandidate{Document: d, TargetHash: g.Pins.TargetHash, Gaps: gaps}, nil
+}
+
+// readLifecycleStateRows pages through the pinned state view; an incomplete
+// last page refuses, since a lifecycle built from it would miss states.
+func readLifecycleStateRows(resolver *diagramArtifactResolver, g *EffectiveGraphSnapshot, q ArtifactQueryInput) ([]ArtifactProjectionItem, error) {
 	rows := []ArtifactProjectionItem{}
 	for {
 		page, err := resolver.request.Project(&g.State, *g.Pins.ArtifactContext, q)
@@ -83,15 +106,15 @@ func (r *Repo) BuildLifecycle(ctx context.Context, pid string, in DiagramLifecyc
 			if !page.Complete {
 				return nil, lifecycleSemanticRefError("incomplete pinned states")
 			}
-			break
+			return rows, nil
 		}
 		q.Cursor = page.NextCursor
 	}
-	d, err := buildLifecycleRows(ctx, in, rows)
-	if err != nil {
-		return nil, err
-	}
-	// Explicit editor bindings are the only source-operation mappings we carry.
+}
+
+// bindLifecycleTriggers attaches each transition's operation triggers.
+// Explicit editor bindings are the only source-operation mappings we carry.
+func bindLifecycleTriggers(g *EffectiveGraphSnapshot, d DiagramDocument, rows []ArtifactProjectionItem) {
 	nodes := map[string]Node{}
 	for _, n := range g.State.Nodes {
 		nodes[n.ID] = n
@@ -110,31 +133,28 @@ func (r *Repo) BuildLifecycle(ctx context.Context, pid string, in DiagramLifecyc
 			}
 		}
 	}
-	d, err = normalizeDiagram(d)
-	if err != nil {
-		return nil, err
-	}
-	gaps, err := resolveDiagramEvidence(ctx, g, d, nil)
-	if err != nil {
-		return nil, err
-	}
-	return &DiagramLifecycleCandidate{Document: d, TargetHash: g.Pins.TargetHash, Gaps: gaps}, nil
 }
+
+// selectLifecycleDiagramRow finds the exact pinned state-diagram row the
+// build was asked for, matching row ID and full locator.
+func selectLifecycleDiagramRow(rows []ArtifactProjectionItem, in DiagramLifecycleBuildInput) *ArtifactProjectionItem {
+	wanted, _ := requestDigest(in.StateDiagram.Locator)
+	for i := range rows {
+		row := &rows[i]
+		hash, _ := requestDigest(row.Locator)
+		if row.ID == in.StateDiagram.RowID && hash == wanted && row.Kind == "state_diagram" && row.Data.StateDiagram != nil {
+			return row
+		}
+	}
+	return nil
+}
+
 func buildLifecycleRows(ctx context.Context, in DiagramLifecycleBuildInput, rows []ArtifactProjectionItem) (DiagramDocument, error) {
 	origin := DiagramOrigin{Kind: "authored", Reason: "pinned state diagram"}
 	p := &LifecyclePayload{Entity: in.Entity, StateFields: slices.Clone(in.StateFields), CompoundMappingReason: in.CompoundMappingReason, States: []LifecycleState{}, Transitions: []LifecycleTransition{}, Rules: []LifecycleRule{}, Coverage: "partial", CoverageOrigin: origin}
 	d := DiagramDocument{Format: DiagramDocumentVersion, Kind: "lifecycle", Target: in.Target, Lifecycle: p}
 	loc := in.StateDiagram.Locator
-	var selected *ArtifactProjectionItem
-	wanted, _ := requestDigest(loc)
-	for i := range rows {
-		row := &rows[i]
-		hash, _ := requestDigest(row.Locator)
-		if row.ID == in.StateDiagram.RowID && hash == wanted && row.Kind == "state_diagram" && row.Data.StateDiagram != nil {
-			selected = row
-			break
-		}
-	}
+	selected := selectLifecycleDiagramRow(rows, in)
 	if selected == nil {
 		return d, invalid("stateDiagram", "Exact pinned diagram row not found")
 	}

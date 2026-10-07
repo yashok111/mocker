@@ -3,9 +3,10 @@ package designscenario
 import (
 	"context"
 	"errors"
-	"github.com/yashok111/mocker/internal/jsonx"
 	"strings"
 	"testing"
+
+	"github.com/yashok111/mocker/internal/jsonx"
 )
 
 func TestDataBindingUsesSourceOccurrence(t *testing.T) {

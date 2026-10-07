@@ -38,7 +38,12 @@ func (s *Server) handleGetDesignScenarioDataFlow(w http.ResponseWriter, r *http.
 		s.designScenarioError(w, err)
 		return
 	}
-	httpx.JSON(w, http.StatusOK, designscenario.AnalyzeDataFlow(revision.Document))
+	analysis, err := designscenario.AnalyzeDataFlow(r.Context(), revision.Document)
+	if err != nil {
+		s.designScenarioError(w, err)
+		return
+	}
+	httpx.JSON(w, http.StatusOK, analysis)
 }
 
 func (s *Server) handleAnalyzeDesignScenarioDataFlow(w http.ResponseWriter, r *http.Request) {
@@ -60,5 +65,10 @@ func (s *Server) handleAnalyzeDesignScenarioDataFlow(w http.ResponseWriter, r *h
 		httpx.Err(w, 400, httpx.CodeBadRequest, "Укажите document")
 		return
 	}
-	httpx.JSON(w, http.StatusOK, designscenario.AnalyzeDataFlow(*body.Document))
+	analysis, err := designscenario.AnalyzeDataFlow(r.Context(), *body.Document)
+	if err != nil {
+		s.designScenarioError(w, err)
+		return
+	}
+	httpx.JSON(w, http.StatusOK, analysis)
 }

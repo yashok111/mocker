@@ -2,6 +2,7 @@ package admin
 
 import (
 	"bytes"
+	"context"
 	"encoding/json/v2"
 	"errors"
 	"io"
@@ -9,6 +10,7 @@ import (
 	"net/url"
 	"strconv"
 
+	"github.com/yashok111/mocker/internal/backendanalysis"
 	"github.com/yashok111/mocker/internal/backendmodel"
 	"github.com/yashok111/mocker/internal/designscenario"
 	"github.com/yashok111/mocker/internal/guide"
@@ -17,12 +19,26 @@ import (
 
 func (s *Server) backendError(w http.ResponseWriter, err error) {
 	if fault, ok := errors.AsType[*backendmodel.FaultError](err); ok {
-		if fault.Code == "backend_analysis_queue_full" && fault.Status == 429 {
+		// Every retryable 429 is a full job queue (analysis, and replay since
+		// review 2026-10-06, F29), and both wait the same two seconds.
+		if fault.Status == 429 && fault.Retryable {
 			w.Header().Set("Retry-After", "2")
 		}
 		httpx.JSON(w, fault.Status, struct {
 			Error *backendmodel.FaultError `json:"error"`
 		}{fault})
+		return
+	}
+	// Review 2026-10-06, F176: a request that was cancelled or ran out of
+	// time (often while queued behind the single writer, where store.Write
+	// wraps it as "begin: context canceled") is not a server fault. It was
+	// logged at ERROR and answered as a non-retryable 500, which polluted the
+	// log and told a client that only timed out not to try again. A client
+	// that disconnected never reads this answer; one that hit a deadline does.
+	// The precedent is stepRepositoryError's execution_cancelled.
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		s.log.Info("backend project request ended early", "err", err)
+		httpx.JSON(w, 503, map[string]any{"error": backendmodel.FaultError{Code: "backend_request_cancelled", Message: "Request was cancelled or timed out before the operation finished", Retryable: true}})
 		return
 	}
 	s.log.Error("backend project", "err", err)
@@ -34,10 +50,20 @@ func (s *Server) backendBody(w http.ResponseWriter, r *http.Request, out any) bo
 }
 
 func (s *Server) backendBodyLimit(w http.ResponseWriter, r *http.Request, out any, maxBytes int64) bool {
+	if err := backendReadBody(w, r, out, maxBytes); err != nil {
+		s.backendError(w, err)
+		return false
+	}
+	return true
+}
+
+// backendReadBody reads one JSON object of at most maxBytes into out and
+// returns the refusal instead of writing it, so a route family with its own
+// status mapping (diagramBody) can apply it to this stage too.
+func backendReadBody(w http.ResponseWriter, r *http.Request, out any, maxBytes int64) error {
 	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxBytes))
 	if _, ok := errors.AsType[*http.MaxBytesError](err); ok {
-		s.backendError(w, &backendmodel.FaultError{Status: 413, Code: "backend_too_large", Message: "Request exceeds maxBodyBytes", Details: map[string]any{"maxBodyBytes": maxBytes}})
-		return false
+		return &backendmodel.FaultError{Status: 413, Code: "backend_too_large", Message: "Request exceeds maxBodyBytes", Details: map[string]any{"maxBodyBytes": maxBytes}}
 	}
 	if err == nil {
 		if trimmed := bytes.TrimSpace(body); len(trimmed) == 0 || trimmed[0] != '{' {
@@ -48,10 +74,24 @@ func (s *Server) backendBodyLimit(w http.ResponseWriter, r *http.Request, out an
 		err = json.Unmarshal(body, out, json.RejectUnknownMembers(true))
 	}
 	if err != nil {
-		s.backendError(w, &backendmodel.FaultError{Status: 400, Code: "backend_invalid", Message: "Request must be one JSON object matching the request schema"})
-		return false
+		return backendBodyFault(err, "Request must be one JSON object matching the request schema")
 	}
-	return true
+	return nil
+}
+
+// backendBodyFault is the one answer to a request body that failed to decode.
+// Review 2026-10-06, F173: a custom UnmarshalJSON returns a FaultError on
+// purpose (AdaptInput's 413 adapter_limit, BeginImportInput's and
+// SourceScope's 422 with details.path), and the body helpers replaced it with
+// a fixed 400, so the documented 4 MiB adapter limit was unreachable as 413.
+// Otherwise the answer is a 400 that names the body: F170/F21 found body
+// failures reported with the query-parameter message on routes that refuse
+// any query.
+func backendBodyFault(err error, message string) error {
+	if fault, ok := errors.AsType[*backendmodel.FaultError](err); ok {
+		return fault
+	}
+	return &backendmodel.FaultError{Status: 400, Code: "backend_invalid", Message: message}
 }
 
 func backendListInput(r *http.Request) (backendmodel.ListInput, error) {
@@ -185,7 +225,7 @@ func (s *Server) handleGetBackendCapabilities(w http.ResponseWriter, r *http.Req
 		"workflowVersions":         guide.BackendWorkflows(),
 		"features":                 backendCapabilityFeatures(),
 		"diagramSupport":           map[string]any{"documentVersion": "backend-diagram-v1", "viewDocumentVersion": "diagram-view-v1", "kinds": []string{"architecture", "interactions", "lifecycle", "business_map"}, "targets": []string{"revisionId", "changeProposal"}, "projectionPolicy": "architecture-v1", "levels": []string{"context", "containers", "components"}},
-		"analysisSupport":          map[string]any{"documentVersion": "backend-analysis-context-v1", "documentVersions": []string{"backend-analysis-context-v1", "backend-analysis-context-v2"}, "inputDocumentVersions": []string{"backend-analysis-input/v1", "backend-analysis-input/v2"}, "ruleSetVersions": []string{"b42-rules/v1", "b43-rules/v1", "diagnostics-v1"}, "kinds": []string{"diff", "impact", "change_package", "conformance", "endpoint_review", "diagnostics"}, "targets": []string{"revisionId", "proposal", "changeProposal", "commandPreview"}, "observationModes": []string{"none"}, "ruleSetVersion": "b42-rules/v1", "traversalVersion": "b42-traversal/v1"},
+		"analysisSupport":          map[string]any{"documentVersion": "backend-analysis-context-v1", "documentVersions": []string{"backend-analysis-context-v1", "backend-analysis-context-v2"}, "inputDocumentVersions": []string{"backend-analysis-input/v1", "backend-analysis-input/v2"}, "ruleSetVersions": []string{"b42-rules/v1", "b43-rules/v1", "diagnostics-v1"}, "kinds": backendanalysis.Kinds(), "targets": []string{"revisionId", "proposal", "changeProposal", "commandPreview"}, "observationModes": backendanalysis.ObservationModes(), "ruleSetVersion": "b42-rules/v1", "traversalVersion": "b42-traversal/v1"},
 		"providerProfiles":         []string{backendmodel.GraphProfile, backendmodel.RelationalProfile, backendmodel.RuntimeProfile, backendmodel.LineageProfile, backendmodel.EventsProfile, backendmodel.ComposedProfile},
 		"supportedNodeKinds":       backendmodel.SupportedNodeKindsForProfile(backendmodel.ComposedProfile),
 		"supportedEdgeKinds":       backendmodel.SupportedEdgeKindsForProfile(backendmodel.ComposedProfile),

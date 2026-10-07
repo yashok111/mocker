@@ -146,7 +146,7 @@ func (p *eventsProjection) route(key string, r EventsReferences, delivery *Edge,
 	if r.ConsumerID != "" {
 		dispatch = p.dispatch(r.ConsumerID)
 		related = p.related(r.ConsumerID)
-		w = p.combine(w, dispatch)
+		w = p.combine(w, r.ConsumerID, dispatch)
 	}
 	condition, group := EventsScalar{Status: "unknown", Reason: "Configured route unavailable"}, EventsScalar{Status: "unknown", Reason: "Configured route unavailable"}
 	if delivery != nil {
@@ -188,7 +188,7 @@ func (p *eventsProjection) jobs() error {
 			trigger = EventsTrigger{Kind: "unknown", Reason: "Configured trigger unavailable"}
 		}
 		dispatch := p.dispatch(id)
-		w := p.combine(p.witness([]string{id}, nil), dispatch)
+		w := p.combine(p.witness([]string{id}, nil), id, dispatch)
 		for _, value := range []EventsScalar{trigger.Expression, trigger.Timezone, trigger.Duration} {
 			if value.Status != "known" && value.Reason != "" {
 				w.Limitations = append(w.Limitations, value.Reason)
@@ -260,7 +260,7 @@ func (p *eventsProjection) serviceCall(id string, e Edge, target Node, exists bo
 		// Keep the exact call boundary without gaining a downstream flow witness.
 		if w.Status == "explicit" {
 			dispatch = p.dispatch(e.To)
-			w = p.combine(w, dispatch)
+			w = p.combine(w, e.To, dispatch)
 		}
 		if r.TargetServiceID == "" {
 			eventsWitnessReason(&w, "Target operation owning service unavailable", "unresolved")

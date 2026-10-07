@@ -66,9 +66,13 @@ func (p *Plane) serveStateDiagram(w http.ResponseWriter, r *http.Request, ws *wo
 		return true
 	}
 	var selected statediagram.Selection
-	row, found, err := store.PatchComputed(r.Context(), res.ID, base, scope, key, res.IDField, res.Wrapper.IDType, func(data map[string]any) (map[string]any, error) {
+	// One ctx for the write and the selection inside it; the callback captures
+	// it rather than calling r.Context() itself, which contextcheck cannot
+	// trace back to the request.
+	ctx := r.Context()
+	row, found, err := store.PatchComputed(ctx, res.ID, base, scope, key, res.IDField, res.Wrapper.IDType, func(data map[string]any) (map[string]any, error) {
 		var selectionErr error
-		selected, selectionErr = program.Select(r.Context(), data)
+		selected, selectionErr = program.Select(ctx, data)
 		return selected.Patch, selectionErr
 	})
 	if err != nil {

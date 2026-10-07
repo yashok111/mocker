@@ -3,6 +3,7 @@ package backendmodel
 import (
 	"bytes"
 	"encoding/json/v2"
+	"errors"
 	"slices"
 	"unicode/utf8"
 )
@@ -12,6 +13,13 @@ import (
 func validateChangeSourceExpected(schema string, payload SourceAssertionPayload, selector TypedSourcePropertySelector, expected SourcePropertyValue) error {
 	next, err := ApplySourceProperty(payload, selector, expected)
 	if err != nil {
+		// ApplySourceProperty decodes the client's expected value and returns
+		// the raw JSON error for a wrongly typed one. That is a statement about
+		// the request, so it is a 400 here: only content faults become
+		// diagnostics since review 2026-10-06, F40.
+		if _, ok := errors.AsType[*FaultError](err); !ok {
+			return invalid("expected", "Expected value does not fit the selected property")
+		}
 		return err
 	}
 	switch selector.Kind {

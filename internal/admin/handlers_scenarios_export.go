@@ -1,6 +1,7 @@
 package admin
 
 import (
+	"context"
 	"errors"
 	"net/http"
 
@@ -10,9 +11,12 @@ import (
 	"github.com/yashok111/mocker/internal/specs"
 )
 
+// scenarioExporter adapts the API-design validator to scenarioexport's
+// ValidateContract; the export's context reaches the validation, so a
+// cancelled request stops it.
 func (s *Server) scenarioExporter() *scenarioexport.Service {
-	return scenarioexport.New(func(document string) ([]designscenario.Diagnostic, error) {
-		diagnostics, err := s.designsRepo.Validate(document)
+	return scenarioexport.New(func(ctx context.Context, document string) ([]designscenario.Diagnostic, error) {
+		diagnostics, err := s.designsRepo.Validate(ctx, document)
 		if errors.Is(err, specs.ErrTooLarge) {
 			return nil, scenarioexport.ErrTooLarge
 		}

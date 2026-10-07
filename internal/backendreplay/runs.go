@@ -4,9 +4,11 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"github.com/yashok111/mocker/internal/backendblob"
 	"time"
 
+	"github.com/yashok111/mocker/internal/backendblob"
+
+	"github.com/yashok111/mocker/internal/backendmodel"
 	p "github.com/yashok111/mocker/internal/ordersprotocol"
 )
 
@@ -48,103 +50,135 @@ func (s *Service) Start(ctx context.Context, pid, actor string, in StartInput) (
 		if err = authorizeProfile(ctx, tx, pid, actor, *profile); err != nil {
 			return err
 		}
-		var previous, state string
-		err = tx.QueryRowContext(ctx, `SELECT run_id,state FROM backend_replay_target_leases WHERE target_id=?`, profile.TargetID).Scan(&previous, &state)
-		if err == nil {
-			if previous != in.AcknowledgedPreviousRunID || state != "uncertain" {
-				return conflictReplay("Target is leased; uncertain previous run needs explicit acknowledgment")
-			}
-			var oldStatus, oldActor, oldPID string
-			if err = tx.QueryRowContext(ctx, `SELECT status,author,project_id FROM backend_replay_runs WHERE id=?`, previous).Scan(&oldStatus, &oldActor, &oldPID); err != nil {
-				return err
-			}
-			if oldStatus == "queued" || oldStatus == "running" || oldActor != actor || oldPID != pid {
-				return conflictReplay("Cannot acknowledge active or foreign run")
-			}
-			// Local worker must finish draining before the old lease can be acknowledged.
-			s.mu.Lock()
-			_, active := s.active[previous]
-			s.mu.Unlock()
-			if active {
-				return conflictReplay("Previous dispatch is still draining")
-			}
-			if _, err = backendblob.Exec(ctx, tx, `INSERT INTO backend_replay_evidence(run_id,sequence,kind,content_hash,body) SELECT ?,COALESCE(max(sequence),0)+1,'uncertainty_acknowledged',?,? FROM backend_replay_evidence_documents WHERE run_id=?`, previous, p.HashBytes([]byte(in.IdempotencyKey)), []byte(in.IdempotencyKey), previous); err != nil {
-				return err
-			}
-			if _, err = tx.ExecContext(ctx, `DELETE FROM backend_replay_target_leases WHERE target_id=? AND run_id=?`, profile.TargetID, previous); err != nil {
-				return err
-			}
-		} else if !errors.Is(err, sql.ErrNoRows) {
+		if err = s.acquireTarget(ctx, tx, pid, actor, in, profile.TargetID); err != nil {
 			return err
-		} else if in.AcknowledgedPreviousRunID != "" {
-			return conflictReplay("Acknowledged run does not hold this target")
 		}
 		var queued int
 		if err = tx.QueryRowContext(ctx, `SELECT count(*) FROM backend_replay_runs WHERE status='queued'`).Scan(&queued); err != nil {
 			return err
 		}
 		if queued >= QueueLimit {
-			return replayFault(409, "queue_full", "Replay queue is full")
+			// Review 2026-10-06, F29/F12: a full queue is transient, as on the
+			// analysis queue: 429, retryable, Retry-After (set by backendError).
+			// It was a non-retryable 409, read as a permanent conflict.
+			return &backendmodel.FaultError{Status: 429, Code: "backend_replay_queue_full", Message: "Replay queue is full", Retryable: true, Details: map[string]any{"retryAfterSeconds": 2}}
 		}
-		runID := newReplayID()
-		input := RunInput{RunID: runID, Start: in, Package: pkg.Package, Profile: *profile, BusinessKey: newReplayID(), Requests: []p.Fence{}}
-		for i := range 4 {
-			input.Requests = append(input.Requests, p.Fence{RunID: runID, StepID: input.Package.Steps[i].ID, RequestKey: newReplayID(), IdentityHash: profile.IdentityHash})
-		}
-		if err = validateRun(input, pkg.Provenance); err != nil {
-			return err
-		}
-		frozen := struct {
-			Input      RunInput   `json:"input"`
-			Provenance Provenance `json:"provenance"`
-		}{input, pkg.Provenance}
-		raw, err := marshalReplay(frozen)
+		run, err := queueRun(ctx, tx, pid, actor, in, pkg, profile)
 		if err != nil {
 			return err
 		}
-		if len(raw) > p.ReportLimit {
-			return invalidReplay()
-		}
-		now := time.Now().UTC()
-		out = &Run{ID: runID, ProjectID: pid, Status: "queued", Input: input, Provenance: pkg.Provenance, CreatedAt: now, UpdatedAt: now}
-		if _, err = tx.ExecContext(ctx, `INSERT INTO backend_replay_runs(id,project_id,target_id,status,input_hash,input_json,version,author,created_at,updated_at) VALUES(?,?,?,'queued',?,?,1,?,?,?)`, runID, pid, profile.TargetID, p.HashBytes(raw), string(raw), actor, now.Format(time.RFC3339Nano), now.Format(time.RFC3339Nano)); err != nil {
-			return err
-		}
-		if _, err = tx.ExecContext(ctx, `INSERT INTO backend_replay_target_leases VALUES(?,?,'active')`, profile.TargetID, runID); err != nil {
-			return err
-		}
+		out = run
 		return receiptWrite(ctx, tx, pid, "start", in.IdempotencyKey, hash, out)
 	})
 	return out, err
 }
+
+// acquireTarget clears the way for a new lease on the target: none may be
+// held, unless it is the uncertain lease of the actor's own finished, drained
+// run, which the start explicitly acknowledges.
+func (s *Service) acquireTarget(ctx context.Context, tx *sql.Tx, pid, actor string, in StartInput, targetID string) error {
+	var previous, state string
+	err := tx.QueryRowContext(ctx, `SELECT run_id,state FROM backend_replay_target_leases WHERE target_id=?`, targetID).Scan(&previous, &state)
+	if errors.Is(err, sql.ErrNoRows) {
+		if in.AcknowledgedPreviousRunID != "" {
+			return conflictReplay("Acknowledged run does not hold this target")
+		}
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if previous != in.AcknowledgedPreviousRunID || state != "uncertain" {
+		return conflictReplay("Target is leased; uncertain previous run needs explicit acknowledgment")
+	}
+	var oldStatus, oldActor, oldPID string
+	if err = tx.QueryRowContext(ctx, `SELECT status,author,project_id FROM backend_replay_runs WHERE id=?`, previous).Scan(&oldStatus, &oldActor, &oldPID); err != nil {
+		return err
+	}
+	if oldStatus == "queued" || oldStatus == "running" || oldActor != actor || oldPID != pid {
+		return conflictReplay("Cannot acknowledge active or foreign run")
+	}
+	// Local worker must finish draining before the old lease can be acknowledged.
+	s.mu.Lock()
+	_, active := s.active[previous]
+	s.mu.Unlock()
+	if active {
+		return conflictReplay("Previous dispatch is still draining")
+	}
+	if _, err = backendblob.Exec(ctx, tx, `INSERT INTO backend_replay_evidence(run_id,sequence,kind,content_hash,body) SELECT ?,COALESCE(max(sequence),0)+1,'uncertainty_acknowledged',?,? FROM backend_replay_evidence_documents WHERE run_id=?`, previous, p.HashBytes([]byte(in.IdempotencyKey)), []byte(in.IdempotencyKey), previous); err != nil {
+		return err
+	}
+	_, err = tx.ExecContext(ctx, `DELETE FROM backend_replay_target_leases WHERE target_id=? AND run_id=?`, targetID, previous)
+	return err
+}
+
+// queueRun freezes the run's input with fresh request identities and
+// inserts it queued, holding the target's lease.
+func queueRun(ctx context.Context, tx *sql.Tx, pid, actor string, in StartInput, pkg *SavedPackage, profile *Profile) (*Run, error) {
+	runID := newReplayID()
+	input := RunInput{RunID: runID, Start: in, Package: pkg.Package, Profile: *profile, BusinessKey: newReplayID(), Requests: []p.Fence{}}
+	for i := range 4 {
+		input.Requests = append(input.Requests, p.Fence{RunID: runID, StepID: input.Package.Steps[i].ID, RequestKey: newReplayID(), IdentityHash: profile.IdentityHash})
+	}
+	if err := validateRun(input, pkg.Provenance); err != nil {
+		return nil, err
+	}
+	frozen := struct {
+		Input      RunInput   `json:"input"`
+		Provenance Provenance `json:"provenance"`
+	}{input, pkg.Provenance}
+	raw, err := marshalReplay(frozen)
+	if err != nil {
+		return nil, err
+	}
+	if len(raw) > p.ReportLimit {
+		return nil, invalidReplay()
+	}
+	now := time.Now().UTC()
+	out := &Run{ID: runID, ProjectID: pid, Status: "queued", Input: input, Provenance: pkg.Provenance, CreatedAt: now, UpdatedAt: now}
+	if _, err = tx.ExecContext(ctx, `INSERT INTO backend_replay_runs(id,project_id,target_id,status,input_hash,input_json,version,author,created_at,updated_at) VALUES(?,?,?,'queued',?,?,1,?,?,?)`, runID, pid, profile.TargetID, p.HashBytes(raw), string(raw), actor, now.Format(time.RFC3339Nano), now.Format(time.RFC3339Nano)); err != nil {
+		return nil, err
+	}
+	if _, err = tx.ExecContext(ctx, `INSERT INTO backend_replay_target_leases VALUES(?,?,'active')`, profile.TargetID, runID); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
 func (s *Service) Get(ctx context.Context, pid, id string) (*Run, error) {
 	return readRun(ctx, s.repo.db.R, pid, id)
 }
-func (s *Service) Runs(ctx context.Context, pid string) ([]Run, error) {
+
+// runPageSize bounds one page of Runs (a var only so tests can page small).
+var runPageSize = 100
+
+// Runs lists a project's runs newest first, one page at a time. Replay runs
+// are never deleted, and the list used to answer 409 for good once a project
+// passed 100 of them (review 2026-10-06, F123/F9), which broke list-based
+// polling and the only way to rediscover a run after a lost Start receipt.
+// cursor is the id of the last run of the previous page ("" for the first);
+// a page shorter than runPageSize (100) is the last. The response stays a plain
+// array, so a request without a cursor is valid exactly as before.
+func (s *Service) Runs(ctx context.Context, pid, cursor string) ([]Run, error) {
 	if err := s.project(ctx, pid); err != nil {
 		return nil, err
 	}
-	out := []Run{}
-	rows, err := s.repo.db.R.QueryContext(ctx, `SELECT id FROM backend_replay_runs WHERE project_id=? ORDER BY created_at DESC,id LIMIT 101`, pid)
-	if err != nil {
-		return nil, err
-	}
-	ids := []string{}
-	for rows.Next() {
-		var id string
-		if err = rows.Scan(&id); err != nil {
-			rows.Close()
+	var afterCreated, afterID string
+	if cursor != "" {
+		if !p.ValidID(cursor) {
+			return nil, invalidReplay()
+		}
+		err := s.repo.db.R.QueryRowContext(ctx, `SELECT created_at,id FROM backend_replay_runs WHERE project_id=? AND id=?`, pid, cursor).Scan(&afterCreated, &afterID)
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, invalidReplay()
+		}
+		if err != nil {
 			return nil, err
 		}
-		ids = append(ids, id)
 	}
-	err = rows.Err()
-	rows.Close()
+	out := []Run{}
+	ids, err := s.runPageIDs(ctx, pid, afterCreated, afterID)
 	if err != nil {
 		return nil, err
-	}
-	if len(ids) > 100 {
-		return nil, conflictReplay("Run list exceeds limit; use exact run reads")
 	}
 	for _, id := range ids {
 		v, err := s.Get(ctx, pid, id)
@@ -154,6 +188,25 @@ func (s *Service) Runs(ctx context.Context, pid string) ([]Run, error) {
 		out = append(out, *v)
 	}
 	return out, nil
+}
+
+// runPageIDs reads one page of run ids and closes its rows before the runs
+// themselves are read.
+func (s *Service) runPageIDs(ctx context.Context, pid, afterCreated, afterID string) ([]string, error) {
+	rows, err := s.repo.db.R.QueryContext(ctx, `SELECT id FROM backend_replay_runs WHERE project_id=? AND (?='' OR created_at<? OR (created_at=? AND id>?)) ORDER BY created_at DESC,id LIMIT ?`, pid, afterID, afterCreated, afterCreated, afterID, runPageSize)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	ids := []string{}
+	for rows.Next() {
+		var id string
+		if err = rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
 }
 func (s *Service) Cancel(ctx context.Context, pid, actor, id string) (*Run, error) {
 	if err := s.actor(ctx, actor); err != nil {
@@ -176,12 +229,8 @@ func (s *Service) Cancel(ctx context.Context, pid, actor, id string) (*Run, erro
 		if out.Status != "queued" && out.Status != "running" {
 			return nil
 		}
-		if out.Status == "queued" {
-			_, err = tx.ExecContext(ctx, `DELETE FROM backend_replay_target_leases WHERE run_id=?`, id)
-		} else {
-			_, err = tx.ExecContext(ctx, `UPDATE backend_replay_target_leases SET state='uncertain' WHERE run_id=?`, id)
-		}
-		if err != nil {
+		// A queued run has no step row either, so one rule covers both.
+		if err = fenceIfDispatched(ctx, tx, id); err != nil {
 			return err
 		}
 		report := initialReport(out.Input, out.Provenance)

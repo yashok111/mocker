@@ -80,7 +80,26 @@ func (v *documentValidator) eventJSON(pointer, source string, schema bool) {
 	}
 }
 
+// validateEventModel checks the model section by section in the order the
+// diagnostics have always been emitted: each section only reads the id sets
+// the earlier ones built.
 func (v *documentValidator) validateEventModel(document Document, participants map[string]int) {
+	if !v.eventModelAdmitted(document) {
+		return
+	}
+	m := document.EventModel
+	v.eventCollectionBounds(m)
+	servers := v.eventServers(m.Servers)
+	schemas := v.eventSchemas(m.Schemas)
+	messages := v.eventMessages(m.Messages, schemas)
+	channels := v.eventChannels(m.Channels, servers, messages)
+	contracts := v.eventContracts(document, participants, channels, messages)
+	v.eventMessageBindings(document, contracts)
+}
+
+// eventModelAdmitted reports whether the model is present on a format that
+// allows it; otherwise it flags every eventBindings that has nothing to bind to.
+func (v *documentValidator) eventModelAdmitted(document Document) bool {
 	if document.FormatVersion < 3 {
 		if document.EventModel != nil {
 			v.errorAt("/eventModel", "eventModel requires formatVersion 3")
@@ -90,7 +109,7 @@ func (v *documentValidator) validateEventModel(document Document, participants m
 				v.errorAt(fmt.Sprintf("/messages/%d/eventBindings", i), "eventBindings require formatVersion 3")
 			}
 		}
-		return
+		return false
 	}
 	if document.EventModel == nil {
 		for i, message := range document.Messages {
@@ -98,9 +117,12 @@ func (v *documentValidator) validateEventModel(document Document, participants m
 				v.errorAt(fmt.Sprintf("/messages/%d/eventBindings", i), "eventBindings require eventModel")
 			}
 		}
-		return
+		return false
 	}
-	m := document.EventModel
+	return true
+}
+
+func (v *documentValidator) eventCollectionBounds(m *EventModel) {
 	for _, field := range []struct {
 		name          string
 		missing       bool
@@ -119,8 +141,11 @@ func (v *documentValidator) validateEventModel(document Document, participants m
 			v.errorAt("/eventModel/"+field.name, "contains too many entries")
 		}
 	}
+}
+
+func (v *documentValidator) eventServers(list []EventServer) map[string]bool {
 	servers := map[string]bool{}
-	for i, server := range m.Servers {
+	for i, server := range list {
 		p := fmt.Sprintf("/eventModel/servers/%d", i)
 		v.eventUniqueID(p+"/id", server.ID, servers)
 		v.eventText(p+"/name", server.Name)
@@ -133,16 +158,24 @@ func (v *documentValidator) validateEventModel(document Document, participants m
 			v.errorAt(p+"/auth", "unknown Kafka auth")
 		}
 	}
+	return servers
+}
+
+func (v *documentValidator) eventSchemas(list []EventSchema) map[string]bool {
 	schemas := map[string]bool{}
-	for i, schema := range m.Schemas {
+	for i, schema := range list {
 		p := fmt.Sprintf("/eventModel/schemas/%d", i)
 		v.eventUniqueID(p+"/id", schema.ID, schemas)
 		v.eventText(p+"/name", schema.Name)
 		v.eventText(p+"/description", schema.Description)
 		v.eventJSON(p+"/schemaJSON", schema.SchemaJSON, true)
 	}
+	return schemas
+}
+
+func (v *documentValidator) eventMessages(list []EventMessage, schemas map[string]bool) map[string]bool {
 	messages := map[string]bool{}
-	for i, message := range m.Messages {
+	for i, message := range list {
 		p := fmt.Sprintf("/eventModel/messages/%d", i)
 		v.eventUniqueID(p+"/id", message.ID, messages)
 		v.eventText(p+"/name", message.Name)
@@ -152,23 +185,31 @@ func (v *documentValidator) validateEventModel(document Document, participants m
 				v.errorAt(p+"/"+ref.name, "schema does not exist")
 			}
 		}
-		if message.Examples == nil {
-			v.errorAt(p+"/examples", "must be an array")
-		}
-		if len(message.Examples) > 20 {
-			v.errorAt(p+"/examples", "contains too many examples")
-		}
-		for j, example := range message.Examples {
-			ep := fmt.Sprintf("%s/examples/%d", p, j)
-			v.eventText(ep+"/name", example.Name)
-			v.eventJSON(ep+"/payloadJSON", example.PayloadJSON, false)
-			if example.HeadersJSON != "" {
-				v.eventJSON(ep+"/headersJSON", example.HeadersJSON, false)
-			}
+		v.eventMessageExamples(p, message.Examples)
+	}
+	return messages
+}
+
+func (v *documentValidator) eventMessageExamples(p string, examples []EventExample) {
+	if examples == nil {
+		v.errorAt(p+"/examples", "must be an array")
+	}
+	if len(examples) > 20 {
+		v.errorAt(p+"/examples", "contains too many examples")
+	}
+	for j, example := range examples {
+		ep := fmt.Sprintf("%s/examples/%d", p, j)
+		v.eventText(ep+"/name", example.Name)
+		v.eventJSON(ep+"/payloadJSON", example.PayloadJSON, false)
+		if example.HeadersJSON != "" {
+			v.eventJSON(ep+"/headersJSON", example.HeadersJSON, false)
 		}
 	}
+}
+
+func (v *documentValidator) eventChannels(list []EventChannel, servers, messages map[string]bool) map[string]EventChannel {
 	channels := map[string]EventChannel{}
-	for i, channel := range m.Channels {
+	for i, channel := range list {
 		p := fmt.Sprintf("/eventModel/channels/%d", i)
 		v.eventID(p+"/id", channel.ID)
 		if _, exists := channels[channel.ID]; exists {
@@ -188,26 +229,8 @@ func (v *documentValidator) validateEventModel(document Document, participants m
 		if len(channel.MessageIDs) > 100 {
 			v.errorAt(p+"/messageIds", "contains too many messages")
 		}
-		seen := map[string]bool{}
-		for j, id := range channel.ServerIDs {
-			if seen[id] {
-				v.errorAt(fmt.Sprintf("%s/serverIds/%d", p, j), "duplicate server id")
-			}
-			seen[id] = true
-			if !servers[id] {
-				v.errorAt(fmt.Sprintf("%s/serverIds/%d", p, j), "server does not exist")
-			}
-		}
-		seen = map[string]bool{}
-		for j, id := range channel.MessageIDs {
-			if seen[id] {
-				v.errorAt(fmt.Sprintf("%s/messageIds/%d", p, j), "duplicate message id")
-			}
-			seen[id] = true
-			if !messages[id] {
-				v.errorAt(fmt.Sprintf("%s/messageIds/%d", p, j), "event message does not exist")
-			}
-		}
+		v.eventChannelRefs(p+"/serverIds", channel.ServerIDs, servers, "duplicate server id", "server does not exist")
+		v.eventChannelRefs(p+"/messageIds", channel.MessageIDs, messages, "duplicate message id", "event message does not exist")
 		if channel.Kafka != nil {
 			if channel.Kafka.Partitions != nil && *channel.Kafka.Partitions <= 0 {
 				v.errorAt(p+"/kafka/partitions", "must be positive")
@@ -216,21 +239,46 @@ func (v *documentValidator) validateEventModel(document Document, participants m
 				v.errorAt(p+"/kafka/replicas", "must be positive")
 			}
 		}
-		if channel.Address != "" {
-			for j, previous := range m.Channels[:i] {
-				if previous.Address != channel.Address {
-					continue
-				}
-				if len(previous.ServerIDs) == 0 && len(channel.ServerIDs) == 0 || intersects(previous.ServerIDs, channel.ServerIDs) {
-					v.errorAt(p+"/address", fmt.Sprintf("ambiguous with channel %d", j))
-				}
-			}
+		v.eventChannelAddress(p, channel, list[:i])
+	}
+	return channels
+}
+
+// eventChannelRefs flags repeated and dangling ids in one of a channel's id lists.
+func (v *documentValidator) eventChannelRefs(p string, ids []string, known map[string]bool, duplicate, missing string) {
+	seen := map[string]bool{}
+	for j, id := range ids {
+		if seen[id] {
+			v.errorAt(fmt.Sprintf("%s/%d", p, j), duplicate)
+		}
+		seen[id] = true
+		if !known[id] {
+			v.errorAt(fmt.Sprintf("%s/%d", p, j), missing)
 		}
 	}
+}
+
+// eventChannelAddress flags an earlier channel that a broker could not tell
+// apart: the same address on overlapping (or both unspecified) servers.
+func (v *documentValidator) eventChannelAddress(p string, channel EventChannel, earlier []EventChannel) {
+	if channel.Address == "" {
+		return
+	}
+	for j, previous := range earlier {
+		if previous.Address != channel.Address {
+			continue
+		}
+		if len(previous.ServerIDs) == 0 && len(channel.ServerIDs) == 0 || intersects(previous.ServerIDs, channel.ServerIDs) {
+			v.errorAt(p+"/address", fmt.Sprintf("ambiguous with channel %d", j))
+		}
+	}
+}
+
+func (v *documentValidator) eventContracts(document Document, participants map[string]int, channels map[string]EventChannel, messages map[string]bool) map[string]EventContract {
 	contracts := map[string]EventContract{}
 	owners := map[string]bool{}
 	operations := 0
-	for i, contract := range m.Contracts {
+	for i, contract := range document.EventModel.Contracts {
 		p := fmt.Sprintf("/eventModel/contracts/%d", i)
 		v.eventID(p+"/id", contract.ID)
 		if _, exists := contracts[contract.ID]; exists {
@@ -245,59 +293,71 @@ func (v *documentValidator) validateEventModel(document Document, participants m
 		v.eventText(p+"/name", contract.Name)
 		v.eventText(p+"/description", contract.Description)
 		v.eventText(p+"/version", contract.Version)
-		ownerIndex, exists := participants[contract.ParticipantID]
-		if !exists {
-			v.errorAt(p+"/participantId", "participant does not exist")
-		} else if !slices.Contains([]string{"client", "service", "external", "other"}, document.Participants[ownerIndex].Kind) {
-			v.errorAt(p+"/participantId", "participant cannot own an event contract")
-		}
-		if owners[contract.ParticipantID] {
-			v.errorAt(p+"/participantId", "participant already owns an event contract")
-		}
-		owners[contract.ParticipantID] = true
+		v.eventContractOwner(p, document, participants, contract.ParticipantID, owners)
 		if contract.Operations == nil {
 			v.errorAt(p+"/operations", "must be an array")
 		}
 		operations += len(contract.Operations)
 		ids, triplets := map[string]bool{}, map[string]bool{}
 		for j, operation := range contract.Operations {
-			op := fmt.Sprintf("%s/operations/%d", p, j)
-			v.eventUniqueID(op+"/id", operation.ID, ids)
-			v.eventText(op+"/name", operation.Name)
-			v.eventText(op+"/description", operation.Description)
-			if operation.Action != "send" && operation.Action != "receive" {
-				v.errorAt(op+"/action", "action must be send or receive")
-			}
-			channel, ok := channels[operation.ChannelID]
-			if !ok {
-				v.errorAt(op+"/channelId", "channel does not exist")
-			} else if !slices.Contains(channel.MessageIDs, operation.MessageID) {
-				v.errorAt(op+"/messageId", "message is not in channel")
-			}
-			if !messages[operation.MessageID] {
-				v.errorAt(op+"/messageId", "event message does not exist")
-			}
-			key := operation.Action + "\x00" + operation.ChannelID + "\x00" + operation.MessageID
-			if triplets[key] {
-				v.errorAt(op, "duplicate action/channel/message operation")
-			}
-			triplets[key] = true
-			if operation.Kafka != nil {
-				for _, field := range []struct{ name, value string }{{"groupId", operation.Kafka.GroupID}, {"clientId", operation.Kafka.ClientID}} {
-					if field.value != "" && operation.Action != "receive" {
-						v.errorAt(op+"/kafka/"+field.name, "only receive supports this Kafka field")
-					}
-					if utf8.RuneCountInString(field.value) > 256 || strings.ContainsAny(field.value, "\r\n\x00") || strings.Contains(field.value, "{{") {
-						v.errorAt(op+"/kafka/"+field.name, "invalid Kafka identifier")
-					}
-				}
-			}
-			v.validateEventOperationMetadata(op, operation, channels)
+			v.eventOperation(fmt.Sprintf("%s/operations/%d", p, j), operation, channels, messages, ids, triplets)
 		}
 	}
 	if operations > 2000 {
 		v.errorAt("/eventModel/contracts", "contains too many operations")
 	}
+	return contracts
+}
+
+// eventContractOwner admits one contract per participant of an owning kind.
+func (v *documentValidator) eventContractOwner(p string, document Document, participants map[string]int, participantID string, owners map[string]bool) {
+	ownerIndex, exists := participants[participantID]
+	if !exists {
+		v.errorAt(p+"/participantId", "participant does not exist")
+	} else if !slices.Contains([]string{"client", "service", "external", "other"}, document.Participants[ownerIndex].Kind) {
+		v.errorAt(p+"/participantId", "participant cannot own an event contract")
+	}
+	if owners[participantID] {
+		v.errorAt(p+"/participantId", "participant already owns an event contract")
+	}
+	owners[participantID] = true
+}
+
+func (v *documentValidator) eventOperation(op string, operation EventOperation, channels map[string]EventChannel, messages, ids, triplets map[string]bool) {
+	v.eventUniqueID(op+"/id", operation.ID, ids)
+	v.eventText(op+"/name", operation.Name)
+	v.eventText(op+"/description", operation.Description)
+	if operation.Action != "send" && operation.Action != "receive" {
+		v.errorAt(op+"/action", "action must be send or receive")
+	}
+	channel, ok := channels[operation.ChannelID]
+	if !ok {
+		v.errorAt(op+"/channelId", "channel does not exist")
+	} else if !slices.Contains(channel.MessageIDs, operation.MessageID) {
+		v.errorAt(op+"/messageId", "message is not in channel")
+	}
+	if !messages[operation.MessageID] {
+		v.errorAt(op+"/messageId", "event message does not exist")
+	}
+	key := operation.Action + "\x00" + operation.ChannelID + "\x00" + operation.MessageID
+	if triplets[key] {
+		v.errorAt(op, "duplicate action/channel/message operation")
+	}
+	triplets[key] = true
+	if operation.Kafka != nil {
+		for _, field := range []struct{ name, value string }{{"groupId", operation.Kafka.GroupID}, {"clientId", operation.Kafka.ClientID}} {
+			if field.value != "" && operation.Action != "receive" {
+				v.errorAt(op+"/kafka/"+field.name, "only receive supports this Kafka field")
+			}
+			if utf8.RuneCountInString(field.value) > 256 || strings.ContainsAny(field.value, "\r\n\x00") || strings.Contains(field.value, "{{") {
+				v.errorAt(op+"/kafka/"+field.name, "invalid Kafka identifier")
+			}
+		}
+	}
+	v.validateEventOperationMetadata(op, operation, channels)
+}
+
+func (v *documentValidator) eventMessageBindings(document Document, contracts map[string]EventContract) {
 	for i, message := range document.Messages {
 		if message.EventBindings == nil {
 			continue
@@ -320,26 +380,34 @@ func (v *documentValidator) validateEventModel(document Document, participants m
 				v.errorAt(bp, "duplicate event binding")
 			}
 			seen[binding.ContractID+"\x00"+binding.OperationID] = true
-			contract, ok := contracts[binding.ContractID]
-			if !ok {
-				v.errorAt(bp+"/contractId", "event contract does not exist")
-				continue
+			if op, ok := v.eventBindingOperation(bp, message, binding, contracts); ok {
+				if first != nil && (first.ChannelID != op.ChannelID || first.MessageID != op.MessageID || first.Action == op.Action) {
+					v.errorAt(bp, "bindings must share channel and message with opposite actions")
+				}
+				first = &op
 			}
-			k := slices.IndexFunc(contract.Operations, func(op EventOperation) bool { return op.ID == binding.OperationID })
-			if k < 0 {
-				v.errorAt(bp+"/operationId", "event operation does not exist")
-				continue
-			}
-			op := contract.Operations[k]
-			if op.Action == "send" && contract.ParticipantID != message.FromID || op.Action == "receive" && contract.ParticipantID != message.ToID {
-				v.errorAt(bp, "event binding direction does not match owner")
-			}
-			if first != nil && (first.ChannelID != op.ChannelID || first.MessageID != op.MessageID || first.Action == op.Action) {
-				v.errorAt(bp, "bindings must share channel and message with opposite actions")
-			}
-			first = &op
 		}
 	}
+}
+
+// eventBindingOperation resolves a binding to its operation and checks the
+// direction against the owner; false means the binding names nothing.
+func (v *documentValidator) eventBindingOperation(bp string, message Message, binding EventBinding, contracts map[string]EventContract) (EventOperation, bool) {
+	contract, ok := contracts[binding.ContractID]
+	if !ok {
+		v.errorAt(bp+"/contractId", "event contract does not exist")
+		return EventOperation{}, false
+	}
+	k := slices.IndexFunc(contract.Operations, func(op EventOperation) bool { return op.ID == binding.OperationID })
+	if k < 0 {
+		v.errorAt(bp+"/operationId", "event operation does not exist")
+		return EventOperation{}, false
+	}
+	op := contract.Operations[k]
+	if op.Action == "send" && contract.ParticipantID != message.FromID || op.Action == "receive" && contract.ParticipantID != message.ToID {
+		v.errorAt(bp, "event binding direction does not match owner")
+	}
+	return op, true
 }
 
 func (v *documentValidator) eventUniqueID(pointer, id string, seen map[string]bool) {

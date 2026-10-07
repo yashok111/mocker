@@ -127,52 +127,8 @@ func (e Engine) Execute(ctx context.Context, in RunInput, provenance Provenance,
 		}
 	}
 	for i := range 4 {
-		endpoint, request := mutation(in, i)
-		hash, hashErr := p.RequestHash(endpoint, request)
-		if hashErr != nil {
-			return report, hashErr
-		}
-		raw, encodeErr := p.Encode(request)
-		if encodeErr != nil {
-			return report, encodeErr
-		}
-		if err = ctx.Err(); err != nil {
-			return
-		}
-		if err = hooks.BeforeMutation(ctx, endpoint, in.Requests[i], hash, raw); err != nil {
-			return
-		}
-		if err = ctx.Err(); err != nil {
-			return
-		}
-		var response p.Response[p.Receipt]
-		switch request := request.(type) {
-		case p.ResetRequest:
-			response, err = e.Transport.Reset(ctx, request)
-		case p.FailureRequest:
-			response, err = e.Transport.Arm(ctx, request)
-		case p.OrderRequest:
-			response, err = e.Transport.Order(ctx, request)
-		}
-		if evidenceErr := hooks.recordResponse(ctx, string(endpoint), response); evidenceErr != nil {
-			return report, evidenceErr
-		}
 		var receipt p.Receipt
-		if response.ProtocolError != nil {
-			return report, fmt.Errorf("mutation rejected: %s", response.ProtocolError.Code)
-		}
-		if err != nil || !response.Complete || response.Payload == nil {
-			receipt, err = e.recover(ctx, in, hooks, i, endpoint, hash)
-			if err != nil {
-				return report, err
-			}
-		} else {
-			receipt = *response.Payload
-			if response.HTTPStatus != receipt.HTTPStatus {
-				return report, fmt.Errorf("receipt HTTP status mismatch")
-			}
-		}
-		if err = validateReceipt(in, i, receipt, hash); err != nil {
+		if receipt, err = e.dispatch(ctx, in, hooks, i); err != nil {
 			return
 		}
 		report.Receipts = append(report.Receipts, receipt)
@@ -199,6 +155,61 @@ func (e Engine) Execute(ctx context.Context, in RunInput, provenance Provenance,
 	}
 	return checked, checkErr
 }
+
+// dispatch sends mutation i once, after its durable BeforeMutation hook, and
+// returns its verified receipt. A lost or incomplete answer is recovered from
+// the journal, never by sending the mutation again.
+func (e Engine) dispatch(ctx context.Context, in RunInput, hooks Hooks, i int) (p.Receipt, error) {
+	endpoint, request := mutation(in, i)
+	hash, err := p.RequestHash(endpoint, request)
+	if err != nil {
+		return p.Receipt{}, err
+	}
+	raw, err := p.Encode(request)
+	if err != nil {
+		return p.Receipt{}, err
+	}
+	if err = ctx.Err(); err != nil {
+		return p.Receipt{}, err
+	}
+	if err = hooks.BeforeMutation(ctx, endpoint, in.Requests[i], hash, raw); err != nil {
+		return p.Receipt{}, err
+	}
+	if err = ctx.Err(); err != nil {
+		return p.Receipt{}, err
+	}
+	var response p.Response[p.Receipt]
+	switch request := request.(type) {
+	case p.ResetRequest:
+		response, err = e.Transport.Reset(ctx, request)
+	case p.FailureRequest:
+		response, err = e.Transport.Arm(ctx, request)
+	case p.OrderRequest:
+		response, err = e.Transport.Order(ctx, request)
+	}
+	if evidenceErr := hooks.recordResponse(ctx, string(endpoint), response); evidenceErr != nil {
+		return p.Receipt{}, evidenceErr
+	}
+	if response.ProtocolError != nil {
+		return p.Receipt{}, fmt.Errorf("mutation rejected: %s", response.ProtocolError.Code)
+	}
+	var receipt p.Receipt
+	if err != nil || !response.Complete || response.Payload == nil {
+		receipt, err = e.recover(ctx, in, hooks, i, endpoint, hash)
+		if err != nil {
+			return p.Receipt{}, err
+		}
+	} else {
+		receipt = *response.Payload
+		if response.HTTPStatus != receipt.HTTPStatus {
+			return p.Receipt{}, fmt.Errorf("receipt HTTP status mismatch")
+		}
+	}
+	if err = validateReceipt(in, i, receipt, hash); err != nil {
+		return p.Receipt{}, err
+	}
+	return receipt, nil
+}
 func mutation(in RunInput, i int) (p.Endpoint, any) {
 	f := in.Requests[i]
 	switch i {
@@ -218,6 +229,12 @@ func validateReceipt(in RunInput, i int, r p.Receipt, hash string) error {
 	if r.Fence != in.Requests[i] || r.Endpoint != endpoint || r.RequestHash != hash {
 		return fmt.Errorf("receipt does not witness dispatched request")
 	}
+	return checkStepOutcome(in, i, r)
+}
+
+// checkStepOutcome holds each step of the closed program to the outcome and
+// counters it must report.
+func checkStepOutcome(in RunInput, i int, r p.Receipt) error {
 	switch i {
 	case 0:
 		if r.Counters != (p.Counters{}) {

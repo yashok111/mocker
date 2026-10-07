@@ -95,7 +95,9 @@ func toolErr(status int, respBody []byte) error {
 	// could act on; every OTHER 5xx envelope does — 503 write_busy ("try
 	// again"), the stream cap, live state not wired — and the model needs
 	// those words to tell a retry from a crash.
-	if status >= 500 && env.Error.Code == httpx.CodeInternal {
+	// backend_internal is the Backend Workbench's spelling of the same generic
+	// failure (review 2026-10-06, F133).
+	if status >= 500 && (env.Error.Code == httpx.CodeInternal || env.Error.Code == "backend_internal") {
 		return fmt.Errorf("admin API returned %d", status)
 	}
 	return fmt.Errorf("admin API returned %d: %s", status, env.Error.Message)

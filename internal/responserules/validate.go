@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"slices"
 	"strconv"
 	"strings"
@@ -116,7 +117,7 @@ func (v *validator) binding(root map[string]any) map[string]any {
 		return nil
 	}
 	switch b.Method {
-	case "GET", "PUT", "POST", "DELETE", "OPTIONS", "HEAD", "PATCH", "TRACE":
+	case http.MethodGet, http.MethodPut, http.MethodPost, http.MethodDelete, http.MethodOptions, http.MethodHead, http.MethodPatch, http.MethodTrace:
 	default:
 		bad()
 		return nil
@@ -177,6 +178,34 @@ func ports(kind string) []string {
 		return nil
 	}
 }
+
+// graphEdge reports one edge's endpoint and port problems and, when both
+// endpoints exist, adds it to the adjacency lists the later passes walk.
+func (v *validator) graphEdge(i int, e Edge, portCounts []map[string]int, out [][]int, indegree []int) {
+	r := v.rule
+	from, fromOK := v.nodeOrder[e.From]
+	to, toOK := v.nodeOrder[e.To]
+	if !fromOK || !toOK {
+		v.edge(i, "dangling_edge", "Ребро ссылается на отсутствующий узел.", "")
+	}
+	if fromOK {
+		portCounts[from][e.Port]++
+		if !slices.Contains(nodePorts(r.Nodes[from]), e.Port) {
+			v.edge(i, "invalid_port", "Порт не разрешён для этого типа узла.", "/port")
+		}
+		if portCounts[from][e.Port] > 1 {
+			v.edge(i, "duplicate_exit", "У порта уже есть выходящее ребро.", "/port")
+		}
+	}
+	if toOK && r.Nodes[to].Type == "start" {
+		v.edge(i, "invalid_port", "В начальный узел нельзя направлять рёбра.", "/to")
+	}
+	if fromOK && toOK {
+		out[from] = append(out[from], to)
+		indegree[to]++
+	}
+}
+
 func (v *validator) graph() error {
 	r := v.rule
 	starts := []int{}
@@ -200,27 +229,7 @@ func (v *validator) graph() error {
 		if err := v.ctx.Err(); err != nil {
 			return err
 		}
-		from, fromOK := v.nodeOrder[e.From]
-		to, toOK := v.nodeOrder[e.To]
-		if !fromOK || !toOK {
-			v.edge(i, "dangling_edge", "Ребро ссылается на отсутствующий узел.", "")
-		}
-		if fromOK {
-			portCounts[from][e.Port]++
-			if !slices.Contains(nodePorts(r.Nodes[from]), e.Port) {
-				v.edge(i, "invalid_port", "Порт не разрешён для этого типа узла.", "/port")
-			}
-			if portCounts[from][e.Port] > 1 {
-				v.edge(i, "duplicate_exit", "У порта уже есть выходящее ребро.", "/port")
-			}
-		}
-		if toOK && r.Nodes[to].Type == "start" {
-			v.edge(i, "invalid_port", "В начальный узел нельзя направлять рёбра.", "/to")
-		}
-		if fromOK && toOK {
-			out[from] = append(out[from], to)
-			indegree[to]++
-		}
+		v.graphEdge(i, e, portCounts, out, indegree)
 	}
 	for i, n := range r.Nodes {
 		for _, port := range nodePorts(n) {
@@ -256,7 +265,7 @@ func admitEnvelope(ctx context.Context, env Envelope, ruleID string) (int, error
 			return -1, invalid(fmt.Sprintf("/%s/rules/%d/id", Extension, i), "повторяющийся ID")
 		}
 		ids[r.ID] = true
-		if err := CheckStructure(r); err != nil {
+		if err := checkStructure(ctx, r); err != nil {
 			return -1, at(fmt.Sprintf("/%s/rules/%d", Extension, i), err)
 		}
 		if r.ID == ruleID {
@@ -400,7 +409,7 @@ func (v *validator) response(i int, n Node, operation map[string]any) error {
 		v.node(i, "invalid_response", "Статус должен быть от 200 до 599.", "/response/status")
 	}
 	if response.BodyJSON != nil || response.BodyFrom != nil {
-		if response.Status == 204 || response.Status == 205 || response.Status == 304 || v.rule.Binding != nil && v.rule.Binding.Method == "HEAD" {
+		if response.Status == 204 || response.Status == 205 || response.Status == 304 || v.rule.Binding != nil && v.rule.Binding.Method == http.MethodHead {
 			v.node(i, "body_not_allowed", "Для этого статуса или HEAD тело должно отсутствовать.", "/response/bodyJSON")
 		}
 		if response.BodyJSON != nil {

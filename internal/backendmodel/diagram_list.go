@@ -52,12 +52,29 @@ func diagramListScope(ctx context.Context, q importReader, pid, kind string, in 
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return "", 0, err
 	}
+	// The cursor binds the state of ITS catalog only. backend_diagram_catalog
+	// is one counter that diagram and view writes both advance, so binding it
+	// made a view write reject an in-flight diagram listing and the reverse,
+	// although the two catalog cursors are documented as separate (review
+	// 2026-10-06, F107). Neither table ever loses a row and every write bumps
+	// a row's version (a view rename included), so (rows, sum of versions)
+	// changes on every write to that catalog and on no other. catalogVersion
+	// in the response stays the shared counter.
+	table := "backend_diagrams"
+	if kind == "diagram-views" {
+		table = "backend_diagram_views"
+	}
+	var rows, versions int64
+	if err = q.QueryRowContext(ctx, `SELECT count(*),coalesce(sum(version),0) FROM `+table+` WHERE project_id=?`, pid).Scan(&rows, &versions); err != nil {
+		return "", 0, err
+	}
 	in.Cursor = ""
 	hash, err := requestDigest(struct {
 		Project, Kind string
 		Page          DiagramListInput
-		Catalog       int64
-	}{pid, kind, in, catalog})
+		Rows          int64
+		Versions      int64
+	}{pid, kind, in, rows, versions})
 	return hash, catalog, err
 }
 func (r *Repo) ListDiagrams(ctx context.Context, pid string, in DiagramListInput) (*DiagramListPage, error) {

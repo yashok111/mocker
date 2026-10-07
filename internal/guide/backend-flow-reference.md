@@ -26,7 +26,7 @@ For source6 or full-proposal presentations select saved-view-v2 support in this 
 
 State is a closed flow/database variant with scope, filters, selection (explicit object or null), positions and collapsedGroupIds. For example, a Flow catalog state is {kind:"flow",scope:{},filters:{search:"",accessKind:"",reverseAccessKind:""},selection:null,positions:[],collapsedGroupIds:[]}. Database state uses an explicit datastoreId/facetKey scope and its own filters. Layout is presentation, not source evidence or a proposal command.
 
-Read get_backend_saved_view at the returned viewId/version before model queries. Reopen that immutable target and its complete effective pins; discard old cursors and start at page one. save_backend_saved_view includes documentVersion:"saved-view-v2", exact old view expectedVersion, complete name/state and stable idempotencyKey. Target and kind are immutable: changing either creates a new view. No save follows a newer source or proposal head. An unknown response repeats its original body/key; a definite409 requires explicit reread/reconciliation or a deliberate new view. A replay may be historical.
+Read get_backend_saved_view at the returned viewId/version before model queries. Reopen that immutable target and its complete effective pins; discard old cursors and start at page one. save_backend_saved_view includes documentVersion:"saved-view-v2", exact old view expectedVersion, complete name/state and stable idempotencyKey. Target and kind are immutable: changing either creates a new view. A save whose name, state and resolved pins equal the current version returns that version unchanged. No save follows a newer source or proposal head. An unknown response repeats its original body/key; a definite409 requires explicit reread/reconciliation or a deliberate new view. A replay may be historical.
 
 For a full target, pins.revisionId names its source baseline; it is not the selected proposal draft. Continue model reads through the saved target.changeProposal and pins.effective, without replacing it with a source-only request.
 
@@ -235,8 +235,16 @@ the full mapping and destination for pinned inspector navigation; starting an
 independent query there does not prove a through path. Known partial/inferred
 claims and redacted known transforms may expand with propagated review/status.
 
-Traversal bounds:5000visited full values,5000examined mappings,20000incidences;
-maxDepth counts mappings. Response truncation reasons value_limit,mapping_limit,
+Bounds:5000visited full values,5000mappings,20000incidences; maxDepth counts
+mappings. On source4 the mapping and incidence bounds count traversal work. On
+source5 and composed revisions they are index-construction limits: the query
+first indexes the revision's field_mapping nodes in node order and stops at
+5000 mappings or 20000 incidences (each mapping counts its sources plus one),
+whether or not the seed reaches them. A revision past either limit answers
+truncated:true with truncationReasons mapping_limit or reference_limit even
+when the traversal examined no mapping (examinedMappingCount may be 0), and a
+mapping beyond the cut is never returned; the result is not evidence of
+absence. Response truncation reasons value_limit,mapping_limit,
 reference_limit,depth_limit are separate from pagination. At depth limit only
 values with further mappings cause a boundary/truncation; terminal values and
 constants remain terminal. Cycle-safe traversal does not unroll execution.
@@ -250,6 +258,35 @@ revision/seed changes and discard mismatched late responses. Pin evidence,
 owner, column facet and exact port navigation to the same revision. Lineage
 panel state is transient; existing saved-view-v1 remains unchanged.
 
+### Ordered pinned field-lineage inspection
+
+1. Require inspect13, source4/5, field-lineage-v1 and backend-field-lineage-query.
+   Source1–3 and proposals refuse this query; their older reads remain supported.
+   A proposal may navigate to its exact source base only if that base is source4/5.
+2. Select one complete value ref from pinned node reads: column nodeId+facetKey;
+   port nodeId+collection (inputs/outputs/parameters/results)+opaque portKey;
+   api_field nodeId. Never replace collection/key with a name, index or UUID.
+3. Call query_backend_lineage with projectId, revisionId, seed, direction
+   forward/reverse, optional maxDepth1–32 (default8), limit1–100 (default50).
+   For origins choose reverse; for downstream dependencies choose forward.
+4. Show the whole mapping, every ordered source, destination, transform, evidence,
+   status, requiresReview, expansion/reasons and witnessMappingIds. Forward expands
+   only the destination; reverse expands all co-inputs. A witness is one shortest
+   static dependency explanation, not execution or simultaneous branch behavior.
+5. Unknown_transform, unsupported analysis, stale/unresolved proof and bounded
+   depth stop expansion. The destination and all inputs remain inspectable;
+   starting a separate query beyond a boundary does not prove a through path.
+   Zero-input unknown means unresolved inputs; only constant declares a constant.
+6. Continue nextCursor with identical complete request/pins; reset after any
+   change. Show pagination separately from truncated/truncationReasons, revision
+   coverage and global examined/visited counts. Empty means no imported mapping
+   in this scope; it never proves no dependency exists.
+7. Read mapping/value/owner/evidence at that same revision. Preserve full facet
+   and port navigation addresses. Redacted known transforms may expand while
+   keeping secret details hidden; do not reconstruct sensitive constants/samples.
+   Save only existing Flow presentation when requested: lineage controls remain
+   transient and do not extend saved-view-v1. Never fall back to latest on failure.
+
 ## Manual exact API artifact associations (inspect13)
 
 Require the complete inspect13 workflow, feature `backend-api-artifact-pins` and
@@ -262,6 +299,13 @@ never establish correspondence automatically. One source UUID belongs to at most
 one binding across the full vector; `origin:"manual"` and the authored reason
 record the association, without proving compatibility or conformance.
 
+Choose source node, immutable API revision and operation key/schema pointer
+explicitly; query all pages, preserve the entire edited artifact binding set,
+preview the full vector, then apply the exact candidate with CAS and a saved key.
+Lost replies retain the exact body/key for replay; CAS requires explicit repreview.
+Historical SavedView/proposal reads keep their exact source/base revisions.
+The separate raw pinned editor panel preserves the dirty current draft.
+
 API `artifactId`/`revisionId` are canonical positive decimal int64 **strings**
 (1 through9223372036854775807, no sign/leading zero). Backend project/revision/
 sourceNodeId remain canonical UUIDs. `contentHash` is lowercase64hex SHA-256 of
@@ -269,6 +313,15 @@ exact UTF-8 raw immutable `document` bytes returned by the snapshot API. The
 legacy hydrated revision/editor may insert identity extensions; its JSON is not
 the raw hash input. `objectHash` hashes the selected authored value canonically,
 retaining extensions and authored `$ref`. Never substitute the latest snapshot.
+The API-artifact hash domain (source content/semantic anchors, API object hashes,
+binding identities, API/editor semantic and candidate hashes) hashes RFC 8785 canonical
+JSON, which writes every number as an IEEE-754 double: 1, 1.0 and 1e0 hash alike,
+and so do integers past 2^53 that round to one double (9007199254740993 and
+9007199254740992). This is deliberate and stays: every stored artifact context
+and portable export depends on that hash input. Stored bytes keep exact number
+lexemes; only the hash input is canonical, so equal hashes do not prove two large
+integers equal. Compare the stored values. Raw `contentHash` and the editor
+backend-editor-object-v1 hash keep exact numeric spellings.
 
 For a source HTTP operation use exactly `{objectKey}`: the opaque operation key
 from the owner's identity projection, not operationId, method/path or workspace
@@ -380,7 +433,7 @@ vector limits. Narrow the request on 413.
 |---|---|
 |400 backend_invalid | Fix strict input, IDs, selector variant or source kind; no write. |
 |404 backend_not_found | Missing/foreign backend baseline; retain historical intent. Snapshot uses404 not_found for missing/foreign owner revision; its owner validation is400 design_invalid. |
-|422 backend_api_pins_unsupported | Mutations require imported source4/5; supported historical reads remain available. |
+|422 backend_api_pins_unsupported | Mutations require imported source4/5, and refuse a baseline carrying artifact-context-v3 (portable import); supported historical reads remain available. |
 |422 backend_api_pins_blocked | Read diagnostics; explicit repair/removal, then new preview. Truncation diagnostic is backend_api_diff_truncated. |
 |409 backend_version_conflict / backend_api_pins_base_conflict | Preserve intent; explicitly reread project/base and repreview before a new attempt. |
 |409 backend_api_pins_hash_conflict | Candidate/raw artifact changed; explicitly repreview. |

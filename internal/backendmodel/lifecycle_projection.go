@@ -70,19 +70,7 @@ func ProjectLifecycle(ctx context.Context, v *DiagramVersion, in DiagramQueryInp
 			}
 			continue
 		}
-		var row DiagramRow
-		label := id
-		switch value := rows[id].(type) {
-		case LifecycleState:
-			row.State = &value
-			label += " " + value.Label
-		case LifecycleTransition:
-			row.Transition = &value
-			label += " " + value.Label
-		case LifecycleRule:
-			row.Rule = &value
-			label += " " + value.Verdict
-		}
+		row, label := lifecycleDiagramRow(id, rows[id])
 		if in.Search != "" && !strings.Contains(strings.ToLower(label), strings.ToLower(in.Search)) {
 			continue
 		}
@@ -91,11 +79,7 @@ func ProjectLifecycle(ctx context.Context, v *DiagramVersion, in DiagramQueryInp
 		}
 	}
 	if in.Section == "gaps" {
-		for _, gap := range v.Gaps {
-			if in.Search == "" || strings.Contains(strings.ToLower(gap.Explanation), strings.ToLower(in.Search)) {
-				items = append(items, DiagramRow{Gap: &gap})
-			}
-		}
+		items = appendLifecycleGapRows(items, v.Gaps, in.Search)
 	}
 	scopeInput := in
 	scopeInput.Cursor = ""
@@ -109,4 +93,32 @@ func ProjectLifecycle(ctx context.Context, v *DiagramVersion, in DiagramQueryInp
 	}
 	end := min(start+in.Limit, len(items))
 	return &DiagramPage{Pin: v.Pin, TargetHash: v.TargetHash, Total: len(items), Items: items[start:end], Gaps: slices.Clone(v.Gaps), NextCursor: diagramNext(scope, end, len(items))}, nil
+}
+
+// lifecycleDiagramRow wraps one lifecycle row and returns the label search
+// matches against: the ID plus the row's human label or verdict.
+func lifecycleDiagramRow(id string, value any) (DiagramRow, string) {
+	var row DiagramRow
+	label := id
+	switch value := value.(type) {
+	case LifecycleState:
+		row.State = &value
+		label += " " + value.Label
+	case LifecycleTransition:
+		row.Transition = &value
+		label += " " + value.Label
+	case LifecycleRule:
+		row.Rule = &value
+		label += " " + value.Verdict
+	}
+	return row, label
+}
+
+func appendLifecycleGapRows(items []DiagramRow, gaps []DiagramGap, search string) []DiagramRow {
+	for _, gap := range uniqueDiagramGaps(gaps) { // F104: stored duplicates
+		if search == "" || strings.Contains(strings.ToLower(gap.Explanation), strings.ToLower(search)) {
+			items = append(items, DiagramRow{Gap: &gap})
+		}
+	}
+	return items
 }

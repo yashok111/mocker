@@ -2,6 +2,7 @@ package admin
 
 import (
 	"net/http"
+	"net/url"
 	"strconv"
 
 	"github.com/yashok111/mocker/internal/backendmodel"
@@ -18,7 +19,7 @@ func (s *Server) replayRequest(w http.ResponseWriter, r *http.Request) (string, 
 		s.backendError(w, backendQueryError())
 		return "", false
 	}
-	if r.Method == "GET" && (r.ContentLength != 0 || r.TransferEncoding != nil) {
+	if r.Method == http.MethodGet && (r.ContentLength != 0 || r.TransferEncoding != nil) {
 		s.backendError(w, backendQueryError())
 		return "", false
 	}
@@ -32,6 +33,26 @@ func (s *Server) replayRequest(w http.ResponseWriter, r *http.Request) (string, 
 		return "", false
 	}
 	return strconv.FormatInt(user.ID, 10), true
+}
+
+// replayListRequest is replayRequest for the three paged lists, which accept
+// exactly one optional query parameter, `cursor` (review 2026-10-06,
+// F123/F124). Everything else still answers backend_query, and the cursor is
+// judged only after authentication, as every other replay check is.
+func (s *Server) replayListRequest(w http.ResponseWriter, r *http.Request) (string, bool) {
+	query, err := url.ParseQuery(r.URL.RawQuery)
+	bare := *r
+	bareURL := *r.URL
+	bareURL.RawQuery = ""
+	bare.URL = &bareURL
+	if _, ok := s.replayRequest(w, &bare); !ok {
+		return "", false
+	}
+	if err != nil || len(query) > 1 || (len(query) == 1 && len(query["cursor"]) != 1) || (len(query) == 1 && query.Get("cursor") == "") {
+		s.backendError(w, backendQueryError())
+		return "", false
+	}
+	return query.Get("cursor"), true
 }
 func (s *Server) handleListBackendReplayTargets(w http.ResponseWriter, r *http.Request) {
 	_, ok := s.replayRequest(w, r)
@@ -66,12 +87,12 @@ func (s *Server) handleConnectBackendReplayProfile(w http.ResponseWriter, r *htt
 	httpx.JSON(w, 200, out)
 }
 func (s *Server) handleListBackendReplayProfiles(w http.ResponseWriter, r *http.Request) {
-	_, ok := s.replayRequest(w, r)
+	cursor, ok := s.replayListRequest(w, r)
 	if !ok {
 		return
 	}
 
-	out, err := s.backendReplay.Profiles(r.Context(), r.PathValue("id"))
+	out, err := s.backendReplay.Profiles(r.Context(), r.PathValue("id"), cursor)
 	if err != nil {
 		s.backendError(w, err)
 		return
@@ -114,12 +135,12 @@ func (s *Server) handleSaveBackendReplayPackage(w http.ResponseWriter, r *http.R
 	httpx.JSON(w, 200, out)
 }
 func (s *Server) handleListBackendReplayPackages(w http.ResponseWriter, r *http.Request) {
-	_, ok := s.replayRequest(w, r)
+	cursor, ok := s.replayListRequest(w, r)
 	if !ok {
 		return
 	}
 
-	out, err := s.backendReplay.Packages(r.Context(), r.PathValue("id"))
+	out, err := s.backendReplay.Packages(r.Context(), r.PathValue("id"), cursor)
 	if err != nil {
 		s.backendError(w, err)
 		return
@@ -178,12 +199,12 @@ func (s *Server) handleStartBackendReplay(w http.ResponseWriter, r *http.Request
 	httpx.JSON(w, 202, out)
 }
 func (s *Server) handleListBackendReplayRuns(w http.ResponseWriter, r *http.Request) {
-	_, ok := s.replayRequest(w, r)
+	cursor, ok := s.replayListRequest(w, r)
 	if !ok {
 		return
 	}
 
-	out, err := s.backendReplay.Runs(r.Context(), r.PathValue("id"))
+	out, err := s.backendReplay.Runs(r.Context(), r.PathValue("id"), cursor)
 	if err != nil {
 		s.backendError(w, err)
 		return

@@ -36,8 +36,8 @@ func TestDocumentDecoderRejectsUnknownRootFields(t *testing.T) {
 	}
 }
 
-func hasEventError(doc Document, pointer string) bool {
-	for _, d := range validateDocument(doc) {
+func hasEventError(t testing.TB, doc Document, pointer string) bool {
+	for _, d := range validateForTest(t, doc) {
 		if d.Pointer == pointer && d.Severity == "error" {
 			return true
 		}
@@ -81,8 +81,8 @@ func TestEventModelStructuralValidation(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			doc := eventFixture(t)
 			tc.change(&doc)
-			if !hasEventError(doc, tc.pointer) {
-				t.Fatalf("missing error at %s: %+v", tc.pointer, validateDocument(doc))
+			if !hasEventError(t, doc, tc.pointer) {
+				t.Fatalf("missing error at %s: %+v", tc.pointer, validateForTest(t, doc))
 			}
 		})
 	}
@@ -104,7 +104,7 @@ func TestEventContractAcceptsLegacyParticipantID(t *testing.T) {
 		}
 	}
 	doc.EventModel.Contracts[0].ParticipantID = "orders:legacy"
-	if ds := validateDocument(doc); len(ds) != 0 {
+	if ds := validateForTest(t, doc); len(ds) != 0 {
 		t.Fatalf("legacy participant ID rejected: %+v", ds)
 	}
 }
@@ -131,7 +131,7 @@ func TestEventServerRequiresProtocolAndAuth(t *testing.T) {
 				t.Fatal(err)
 			}
 			doc.EventModel.Servers[0] = server
-			if !hasEventError(doc, "/eventModel/servers/0/"+field) {
+			if !hasEventError(t, doc, "/eventModel/servers/0/"+field) {
 				t.Fatalf("missing %s was accepted", field)
 			}
 		})
@@ -144,12 +144,12 @@ func TestEventIncompleteBusinessFieldsAreSaveable(t *testing.T) {
 	doc.EventModel.Schemas[0].SchemaJSON = ""
 	doc.EventModel.Channels[0].Address = ""
 	doc.EventModel.Servers[0].Host = ""
-	if ds := validateDocument(doc); len(ds) != 0 {
+	if ds := validateForTest(t, doc); len(ds) != 0 {
 		t.Fatalf("incomplete model rejected: %+v", ds)
 	}
 	// Unknown schema keywords are diagnosed by export readiness, not save.
 	doc.EventModel.Schemas[0].SchemaJSON = `{"futureKeyword":true}`
-	if ds := validateDocument(doc); len(ds) != 0 {
+	if ds := validateForTest(t, doc); len(ds) != 0 {
 		t.Fatalf("unknown schema keyword blocked save: %+v", ds)
 	}
 }
@@ -199,7 +199,7 @@ func TestEventRunMarksKafkaStepsSkipped(t *testing.T) {
 	revision.Document.FormatVersion = 3
 	event := eventFixture(t).Messages[0]
 	revision.Document.Messages = append(revision.Document.Messages, event)
-	initial, err := PrepareRun(revision, "run-event", "mixed", "ui", nil)
+	initial, err := PrepareRun(t.Context(), revision, "run-event", "mixed", "ui", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -208,7 +208,7 @@ func TestEventRunMarksKafkaStepsSkipped(t *testing.T) {
 		t.Fatalf("event step: %+v", step)
 	}
 	revision.Document.Messages = []Message{event}
-	if _, err := PrepareRun(revision, "run-only-event", "event", "ui", nil); err == nil || !strings.Contains(err.Error(), "Kafka runtime") {
+	if _, err := PrepareRun(t.Context(), revision, "run-only-event", "event", "ui", nil); err == nil || !strings.Contains(err.Error(), "Kafka runtime") {
 		t.Fatalf("pure event run: %v", err)
 	}
 }
@@ -217,7 +217,7 @@ func TestEventJSONLimitsAndExactNumbers(t *testing.T) {
 	doc := eventFixture(t)
 	doc.EventModel.Schemas[0].SchemaJSON = `{"const":900719925474099312345678901234567890}`
 	doc.EventModel.Messages[0].Examples[0].PayloadJSON = `{"id":900719925474099312345678901234567890}`
-	if ds := validateDocument(doc); len(ds) != 0 {
+	if ds := validateForTest(t, doc); len(ds) != 0 {
 		t.Fatalf("precise numbers rejected: %+v", ds)
 	}
 	repo := newTestRepo(t)
@@ -234,9 +234,9 @@ func TestEventJSONLimitsAndExactNumbers(t *testing.T) {
 		{"bytes", `{"x":"` + strings.Repeat("a", maxEventJSONBytes) + `"}`, "/eventModel/schemas/0/schemaJSON"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			copy := eventFixture(t)
-			copy.EventModel.Schemas[0].SchemaJSON = tc.source
-			if !hasEventError(copy, tc.pointer) {
+			fixture := eventFixture(t)
+			fixture.EventModel.Schemas[0].SchemaJSON = tc.source
+			if !hasEventError(t, fixture, tc.pointer) {
 				t.Fatalf("accepted %s", tc.name)
 			}
 		})
@@ -334,7 +334,7 @@ func TestEventV3KeepsFragmentTreeRules(t *testing.T) {
 		t.Fatalf("valid v3 fragment tree: %+v", ds)
 	}
 	doc.Fragments[1].ParentBranchID = "gone"
-	if !hasEventError(doc, "/fragments/1/parentBranchId") {
+	if !hasEventError(t, doc, "/fragments/1/parentBranchId") {
 		t.Fatal("v3 skipped fragment tree validation")
 	}
 	if ds := ValidateFragments(doc); len(ds) == 0 {
@@ -351,15 +351,15 @@ func TestEventDirectAndRepeatedBindings(t *testing.T) {
 			{ContractID: "notificationsContract", OperationID: "consumeOrder"},
 		},
 	}}
-	if ds := validateDocument(doc); len(ds) != 0 {
+	if ds := validateForTest(t, doc); len(ds) != 0 {
 		t.Fatalf("direct event rejected: %+v", ds)
 	}
 	doc.Messages = append(doc.Messages, Message{ID: "repeat", FromID: "orders", ToID: "notifications", Kind: "event", EventBindings: slices.Clone(doc.Messages[0].EventBindings)})
-	if ds := validateDocument(doc); len(ds) != 0 {
+	if ds := validateForTest(t, doc); len(ds) != 0 {
 		t.Fatalf("repeat rejected: %+v", ds)
 	}
 	doc.Messages[0].EventBindings[1].OperationID = "publishOrder"
-	if !hasEventError(doc, "/messages/0/eventBindings/1/operationId") {
+	if !hasEventError(t, doc, "/messages/0/eventBindings/1/operationId") {
 		t.Fatal("cross-contract operation accepted")
 	}
 }
@@ -368,8 +368,8 @@ func TestEventRemovalRequiresReferenceCleanup(t *testing.T) {
 	doc := eventFixture(t)
 	check := func(pointer string) {
 		t.Helper()
-		if !hasEventError(doc, pointer) {
-			t.Fatalf("missing error at %s: %+v", pointer, validateDocument(doc))
+		if !hasEventError(t, doc, pointer) {
+			t.Fatalf("missing error at %s: %+v", pointer, validateForTest(t, doc))
 		}
 	}
 	doc.EventModel.Servers = nil
@@ -421,7 +421,7 @@ func TestEventDraftsCASAndRestore(t *testing.T) {
 
 func TestEventDocumentRoundTrip(t *testing.T) {
 	doc := eventFixture(t)
-	if ds := validateDocument(doc); len(ds) != 0 {
+	if ds := validateForTest(t, doc); len(ds) != 0 {
 		t.Fatalf("v3 rejected: %+v", ds)
 	}
 	repo := newTestRepo(t)

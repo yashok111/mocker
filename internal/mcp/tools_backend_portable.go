@@ -4,11 +4,13 @@ import (
 	"context"
 	"encoding/json/v2"
 	"fmt"
-	"github.com/yashok111/mocker/api"
-	"github.com/yashok111/mocker/internal/jsonx"
 	"strings"
 
+	"github.com/yashok111/mocker/api"
+	"github.com/yashok111/mocker/internal/jsonx"
+
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
+
 	"github.com/yashok111/mocker/internal/backendmodel"
 	"github.com/yashok111/mocker/internal/backendportable"
 )
@@ -52,17 +54,21 @@ func backendSVGPath(raw []byte) (string, error) {
 	return fmt.Sprintf("/api/backend-projects/%s/diagram-views/%s/versions/%d/svg", in.ProjectID, in.ViewID, in.ViewVersion), nil
 }
 
+// backendPortableFamily follows each portable transfer tool's own summary
+// sentence; see backendAnalysisFamily for why the two are separate.
+const backendPortableFamily = "Bounded backend-portable-v1 exact source/proposal and saved diagram closure. Explicit namespaced artifact mappings only; foreign refs never resolve by numeric ID. Preview stages a validated ID map without publishing. Commit creates one atomic project with origins and receipt. Retry identical input/key after uncertainty. No source execution, publication of API drafts or runtime validation."
+
 func addBackendPortableTools(s *sdk.Server, lb *loopback) {
 	for _, entry := range []struct {
-		name, schema, route string
-		ids                 []string
+		name, schema, route, summary string
+		ids                          []string
 	}{
-		{"export_backend_project", "ExportBackendProjectRequest", "POST /api/backend-projects/{id}/portable/export", []string{"projectId"}},
-		{"begin_backend_portable_import", "BeginBackendPortableImportRequest", "POST /api/backend-projects/portable/imports", nil},
-		{"put_backend_portable_import_chunk", "PutBackendPortableImportChunkRequest", "POST /api/backend-projects/portable/imports/{sid}/chunks", []string{"importId"}},
-		{"preview_backend_portable_import", "PreviewBackendPortableImportRequest", "POST /api/backend-projects/portable/imports/{sid}/preview", []string{"importId"}},
-		{"commit_backend_portable_import", "CommitBackendPortableImportRequest", "POST /api/backend-projects/portable/imports/{sid}/commit", []string{"importId"}},
-		{"abort_backend_portable_import", "AbortBackendPortableImportRequest", "POST /api/backend-projects/portable/imports/{sid}/abort", []string{"importId"}},
+		{"export_backend_project", "ExportBackendProjectRequest", "POST /api/backend-projects/{id}/portable/export", "Exports a resolved portable selection into an export session whose manifest lists the hash-verified chunks to download.", []string{"projectId"}},
+		{"begin_backend_portable_import", "BeginBackendPortableImportRequest", "POST /api/backend-projects/portable/imports", "Begins a portable import session from an exported manifest, before any chunk is uploaded.", nil},
+		{"put_backend_portable_import_chunk", "PutBackendPortableImportChunkRequest", "POST /api/backend-projects/portable/imports/{sid}/chunks", "Uploads one exported chunk, by its manifest index, into a portable import session.", []string{"importId"}},
+		{"preview_backend_portable_import", "PreviewBackendPortableImportRequest", "POST /api/backend-projects/portable/imports/{sid}/preview", "Validates a fully uploaded portable import and stages its ID map and unresolved references without creating the project.", []string{"importId"}},
+		{"commit_backend_portable_import", "CommitBackendPortableImportRequest", "POST /api/backend-projects/portable/imports/{sid}/commit", "Commits a previewed portable import, creating the new project atomically with its origins and receipt.", []string{"importId"}},
+		{"abort_backend_portable_import", "AbortBackendPortableImportRequest", "POST /api/backend-projects/portable/imports/{sid}/abort", "Aborts a portable import or export session and frees its staged chunks.", []string{"importId"}},
 	} {
 		schema, err := api.BackendSchema(entry.schema)
 		if err != nil {
@@ -71,7 +77,7 @@ func addBackendPortableTools(s *sdk.Server, lb *loopback) {
 		if len(entry.ids) > 0 {
 			backendToolPathSchema(schema, entry.ids)
 		}
-		addBackendImportTool(s, lb, &sdk.Tool{Name: entry.name, Description: "Bounded backend-portable-v1 exact source/proposal and saved diagram closure. Explicit namespaced artifact mappings only; foreign refs never resolve by numeric ID. Preview stages a validated ID map without publishing. Commit creates one atomic project with origins and receipt. Retry identical input/key after uncertainty. No source execution, publication of API drafts or runtime validation.", InputSchema: schema, Annotations: &sdk.ToolAnnotations{ReadOnlyHint: false, IdempotentHint: true}}, entry.route)
+		addBackendImportTool(s, lb, &sdk.Tool{Name: entry.name, Description: entry.summary + " " + backendPortableFamily, InputSchema: schema, Annotations: &sdk.ToolAnnotations{ReadOnlyHint: false, IdempotentHint: true}}, entry.route)
 	}
 	selectionSchema, err := api.BackendSchema("ResolveBackendPortableSelectionRequest")
 	if err != nil {

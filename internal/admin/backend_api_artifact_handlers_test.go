@@ -5,8 +5,6 @@ import (
 	"crypto/sha256"
 	"encoding/json/v2"
 	"fmt"
-	"github.com/yashok111/mocker/internal/apidesign"
-	"github.com/yashok111/mocker/internal/testauth"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -15,6 +13,9 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/yashok111/mocker/internal/apidesign"
+	"github.com/yashok111/mocker/internal/testauth"
 
 	"github.com/yashok111/mocker/internal/backendmodel"
 )
@@ -297,7 +298,7 @@ func TestBackendAPIArtifactAuthenticationAndCSRF(t *testing.T) {
 			t.Fatalf("unauth %s %d %s", path, w.Code, w.Body)
 		}
 	}
-	login := httptest.NewRequest("POST", "http://mocker.local/api/auth/login", strings.NewReader(`{"name":"API pins","password":"`+testauth.Password+`"}`))
+	login := httptest.NewRequest(http.MethodPost, "http://mocker.local/api/auth/login", strings.NewReader(`{"name":"API pins","password":"`+testauth.Password+`"}`))
 	login.Header.Set("Origin", "http://mocker.local")
 	login.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
@@ -307,7 +308,7 @@ func TestBackendAPIArtifactAuthenticationAndCSRF(t *testing.T) {
 	}
 	cookie := w.Result().Cookies()[0]
 	for _, suffix := range []string{"query", "preview", "commands"} {
-		r := httptest.NewRequest("POST", "http://mocker.local/api/backend-projects/00000000-0000-4000-8000-000000000001/api-artifacts/"+suffix, strings.NewReader(`{}`))
+		r := httptest.NewRequest(http.MethodPost, "http://mocker.local/api/backend-projects/00000000-0000-4000-8000-000000000001/api-artifacts/"+suffix, strings.NewReader(`{}`))
 		r.AddCookie(cookie)
 		r.Header.Set("Origin", "http://mocker.local")
 		r.Header.Set("Content-Type", "application/json")
@@ -377,7 +378,7 @@ func (p *backendAPIArtifactReadProbe) Close() error             { return nil }
 func TestBackendAPIArtifactBodyAdmissionBeforeRead(t *testing.T) {
 	s := loopbackTestServer(t, nil)
 	probe := new(backendAPIArtifactReadProbe)
-	r := httptest.NewRequest("POST", "http://mocker.local/api/backend-projects/00000000-0000-4000-8000-000000000001/api-artifacts/preview", nil)
+	r := httptest.NewRequest(http.MethodPost, "http://mocker.local/api/backend-projects/00000000-0000-4000-8000-000000000001/api-artifacts/preview", nil)
 	r.Body = probe
 	r.ContentLength = backendmodel.MaxAPIPinBodyBytes + 1
 	w := httptest.NewRecorder()
@@ -386,7 +387,7 @@ func TestBackendAPIArtifactBodyAdmissionBeforeRead(t *testing.T) {
 		t.Fatalf("oversized allocation admission: %d reads=%d", w.Code, probe.reads)
 	}
 	// Unknown/chunked length still uses the same bounded reader.
-	r = httptest.NewRequest("POST", "http://mocker.local/api/backend-projects/00000000-0000-4000-8000-000000000001/api-artifacts/preview", strings.NewReader(strings.Repeat(" ", backendmodel.MaxAPIPinBodyBytes+1)))
+	r = httptest.NewRequest(http.MethodPost, "http://mocker.local/api/backend-projects/00000000-0000-4000-8000-000000000001/api-artifacts/preview", strings.NewReader(strings.Repeat(" ", backendmodel.MaxAPIPinBodyBytes+1)))
 	r.ContentLength = -1
 	w = httptest.NewRecorder()
 	if s.backendAPIArtifactBody(w, r, &in) || w.Code != 413 {

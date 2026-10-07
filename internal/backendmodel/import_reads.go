@@ -7,6 +7,7 @@ import (
 	"encoding/json/v2"
 	"errors"
 	"slices"
+	"strconv"
 	"strings"
 )
 
@@ -56,7 +57,7 @@ func (r *Repo) Imports(ctx context.Context, pid string, in ListInput) (*ImportPa
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	out := &ImportPage{Items: []ImportSession{}}
 	for rows.Next() {
 		var doc string
@@ -84,7 +85,7 @@ func (r *Repo) Import(ctx context.Context, pid, sid string, in ListInput) (*Impo
 	if err != nil {
 		return nil, err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	s, err := loadSession(ctx, tx, pid, sid)
 	if err != nil {
 		return nil, err
@@ -97,18 +98,30 @@ func (r *Repo) Import(ctx context.Context, pid, sid string, in ListInput) (*Impo
 	if err := loadSavedStatus(ctx, tx, out); err != nil {
 		return nil, err
 	}
-	rows, err := tx.QueryContext(ctx, `SELECT batch_id,payload_hash,accepted_version FROM backend_import_batches WHERE session_id=? AND batch_id>? ORDER BY batch_id LIMIT ?`, sid, after, limit+1)
+	// Acceptance order, keyed by accepted_version (unique per session):
+	// recovery resumes from acceptedBatches in the order the server
+	// accepted them, and ordering by the caller-chosen batch_id text
+	// inverted it (review 2026-10-06, F89). The cursor is the last
+	// accepted_version; an older batch-id cursor is refused as invalid.
+	var afterVersion int64
+	if after != "" {
+		afterVersion, err = strconv.ParseInt(after, 10, 64)
+		if err != nil || afterVersion < 0 {
+			return nil, invalid("cursor", "Invalid batch cursor")
+		}
+	}
+	rows, err := tx.QueryContext(ctx, `SELECT batch_id,payload_hash,accepted_version FROM backend_import_batches WHERE session_id=? AND accepted_version>? ORDER BY accepted_version LIMIT ?`, sid, afterVersion, limit+1)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	for rows.Next() {
 		var b BatchSummary
 		if err := rows.Scan(&b.BatchID, &b.PayloadHash, &b.AcceptedVersion); err != nil {
 			return nil, err
 		}
 		if len(out.AcceptedBatches) == limit {
-			out.NextCursor = encodeGraphPage("batches", pid, sid, out.AcceptedBatches[limit-1].BatchID)
+			out.NextCursor = encodeGraphPage("batches", pid, sid, strconv.FormatInt(out.AcceptedBatches[limit-1].AcceptedVersion, 10))
 			break
 		}
 		out.AcceptedBatches = append(out.AcceptedBatches, b)
@@ -116,17 +129,12 @@ func (r *Repo) Import(ctx context.Context, pid, sid string, in ListInput) (*Impo
 	return out, rows.Err()
 }
 func (r *Repo) QueryGraph(ctx context.Context, pid string, in GraphQueryInput) (*GraphPage, error) {
-	if in.ChangeProposal != nil || in.ImportCandidate != nil || workspaceFiltered(in) {
-		return r.queryEffectiveGraph(ctx, pid, in)
+	effective, err := r.graphReadIsEffective(ctx, pid, in)
+	if err != nil {
+		return nil, err
 	}
-	if in.Proposal == nil && in.RevisionID != "" {
-		revision, err := r.Revision(ctx, pid, in.RevisionID)
-		if err != nil {
-			return nil, err
-		}
-		if revision.SchemaVersion == ComposedSchemaVersion {
-			return r.queryEffectiveGraph(ctx, pid, in)
-		}
+	if effective {
+		return r.queryEffectiveGraph(ctx, pid, in)
 	}
 	target, err := r.resolveBackendTarget(ctx, pid, BackendReadTarget{RevisionID: in.RevisionID, Proposal: in.Proposal})
 	if err != nil {
@@ -136,57 +144,19 @@ func (r *Repo) QueryGraph(ctx context.Context, pid string, in GraphQueryInput) (
 	if err != nil {
 		return nil, err
 	}
-	if in.ID != "" && (!ValidID(in.ID) || in.Cursor != "" || in.Kind != "" || in.Search != "" || in.ParentID != "" || in.From != "" || in.To != "") {
-		return nil, invalid("id", "ID selector cannot be combined with filters or cursor")
+	if err := validateGraphIDSelector(in); err != nil {
+		return nil, err
 	}
 	coverage, err := r.RevisionCoverage(ctx, pid, target.revisionID)
 	if err != nil {
 		return nil, err
 	}
 	metadata := RevisionState{Revision: *revision, Sources: coverage.Snapshots}
-	if !slices.Contains([]string{"nodes", "edges"}, in.RecordType) {
-		return nil, semantic("recordType", "Query must select nodes or edges")
+	typ, err := validateGraphQuery(in, revision.SchemaVersion)
+	if err != nil {
+		return nil, err
 	}
-	if in.RecordType == "nodes" && (in.From != "" || in.To != "") || in.RecordType == "edges" && (in.Search != "" || in.ParentID != "") {
-		return nil, semantic("selectors", "Selectors are not valid for this record type")
-	}
-	kinds := SupportedNodeKinds()
-	typ := "node"
-	if in.RecordType == "edges" {
-		kinds = SupportedEdgeKinds()
-		typ = "edge"
-	}
-	if isRelationalSchema(revision.SchemaVersion) || revision.SchemaVersion == ComposedSchemaVersion {
-		profile := profileForSchema(revision.SchemaVersion)
-		if revision.SchemaVersion == ComposedSchemaVersion {
-			profile = ComposedProfile
-		}
-		kinds = SupportedNodeKindsForProfile(profile)
-		if typ == "edge" {
-			kinds = SupportedEdgeKindsForProfile(profile)
-		}
-	}
-	if in.Kind != "" && !slices.Contains(kinds, in.Kind) {
-		return nil, semantic("kind", "Unsupported kind filter")
-	}
-	for _, id := range []string{in.ParentID, in.From, in.To} {
-		if id != "" && !ValidID(id) {
-			return nil, semantic("selectors", "ID selectors must be UUIDs")
-		}
-	}
-	if len(in.Search) > 1024 || strings.ContainsRune(in.Search, 0) {
-		return nil, semantic("search", "Invalid search string")
-	}
-	scopeInput := in
-	scopeInput.Cursor = ""
-	scopeInput.Limit = 0
-	scope, err := requestDigest(scopeInput)
-	if target.pins != nil {
-		scope, err = requestDigest(struct {
-			Query GraphQueryInput
-			Pins  *ProposalReadPins
-		}{scopeInput, target.pins})
-	}
+	scope, err := graphCursorScope(in, target)
 	if err != nil {
 		return nil, err
 	}
@@ -194,27 +164,9 @@ func (r *Repo) QueryGraph(ctx context.Context, pid string, in GraphQueryInput) (
 	if err != nil {
 		return nil, err
 	}
-	records, args, err := target.graphRecords(pid, typ)
+	query, args, afterArg, err := graphRecordQuery(pid, in, target, typ, after)
 	if err != nil {
 		return nil, err
-	}
-	prefix, table := "", records
-	if target.proposal != nil {
-		prefix, table = records, "records"
-		args = append(args, pid, target.revisionID, typ)
-	}
-	query := prefix + `SELECT document,id FROM ` + table + ` WHERE project_id=? AND revision_id=? AND record_type=? AND id>?`
-	afterArg := len(args)
-	args = append(args, after)
-	for _, f := range []struct{ column, value string }{{"id", in.ID}, {"kind", in.Kind}, {"parent_id", in.ParentID}, {"from_id", in.From}, {"to_id", in.To}} {
-		if f.value != "" {
-			query += " AND " + f.column + "=?"
-			args = append(args, f.value)
-		}
-	}
-	if in.Search != "" {
-		query += ` AND instr(lower(name),lower(?))>0`
-		args = append(args, in.Search)
 	}
 	countArgs := append([]any(nil), args...)
 	countArgs[afterArg] = ""
@@ -229,20 +181,10 @@ func (r *Repo) QueryGraph(ctx context.Context, pid string, in GraphQueryInput) (
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-	out := &GraphPage{Total: &total, Nodes: []Node{}, Edges: []Edge{}}
-	var sourceGraph *SourceGraphSnapshot
-	if revision.SchemaVersion == ComposedSchemaVersion {
-		sourceGraph, err = r.ResolveSourceGraph(ctx, pid, target.revisionID)
-		if err != nil {
-			return nil, err
-		}
-		out.ViewSchemaVersion = ComposedSchemaVersion
-		out.Source = sourceVectorReadContext(sourceGraph)
-	}
-	if target.proposal != nil {
-		out.ViewSchemaVersion, out.ProposalPins = ProposalDocumentVersion, target.pins
-		out.ProposalProjection = &ProposalGraphProjection{Nodes: []ProposalProjectedNode{}, Edges: []ProposalProjectedEdge{}}
+	defer func() { _ = rows.Close() }()
+	page := graphPageReader{target: target, typ: typ, metadata: metadata, schemaVersion: revision.SchemaVersion, out: &GraphPage{Total: &total, Nodes: []Node{}, Edges: []Edge{}}}
+	if err := page.open(ctx, r, pid); err != nil {
+		return nil, err
 	}
 	count := 0
 	last := ""
@@ -255,75 +197,244 @@ func (r *Repo) QueryGraph(ctx context.Context, pid string, in GraphQueryInput) (
 			return nil, err
 		}
 		if count == limit {
-			out.NextCursor = encodeGraphPage("graph", pid, scope, last)
+			page.out.NextCursor = encodeGraphPage("graph", pid, scope, last)
 			break
 		}
-		if doc == "" {
-			overlay := target.overlay(id)
-			if typ == "node" {
-				projected, err := projectProposalNode(*target.proposal, new(target.draft.ID), nil, overlay)
-				if err != nil {
-					return nil, err
-				}
-				out.ProposalProjection.Nodes = append(out.ProposalProjection.Nodes, *projected)
-			} else {
-				projected, err := projectProposalEdge(*target.proposal, new(target.draft.ID), nil, overlay)
-				if err != nil {
-					return nil, err
-				}
-				out.ProposalProjection.Edges = append(out.ProposalProjection.Edges, *projected)
-			}
-		} else if typ == "node" {
-			var n Node
-			if err := json.Unmarshal([]byte(doc), &n); err != nil {
-				return nil, err
-			}
-			deriveMetadata(metadata, &n.Ownership, &n.Freshness)
-			if isRelationalSchema(revision.SchemaVersion) {
-				n.FacetComparison, err = CompareRelationalFacets(n.Kind, n.Attributes, false)
-				if err != nil {
-					return nil, err
-				}
-			}
-			if sourceGraph != nil {
-				n.Source = sourceRecordReadContext(sourceGraph, "node", n.ID)
-			}
-			out.Nodes = append(out.Nodes, n)
-			if target.proposal != nil {
-				projected, err := projectProposalNode(*target.proposal, new(target.draft.ID), &n, target.overlay(n.ID))
-				if err != nil {
-					return nil, err
-				}
-				out.ProposalProjection.Nodes = append(out.ProposalProjection.Nodes, *projected)
-			}
-		} else {
-			var e Edge
-			if err := json.Unmarshal([]byte(doc), &e); err != nil {
-				return nil, err
-			}
-			deriveMetadata(metadata, &e.Ownership, &e.Freshness)
-			if isRelationalSchema(revision.SchemaVersion) {
-				e.FacetComparison, err = CompareRelationalFacets(e.Kind, e.Attributes, true)
-				if err != nil {
-					return nil, err
-				}
-			}
-			if sourceGraph != nil {
-				e.Source = sourceRecordReadContext(sourceGraph, "edge", e.ID)
-			}
-			out.Edges = append(out.Edges, e)
-			if target.proposal != nil {
-				projected, err := projectProposalEdge(*target.proposal, new(target.draft.ID), &e, target.overlay(e.ID))
-				if err != nil {
-					return nil, err
-				}
-				out.ProposalProjection.Edges = append(out.ProposalProjection.Edges, *projected)
-			}
+		if err := page.add(doc, id); err != nil {
+			return nil, err
 		}
 		last = id
 		count++
 	}
-	return out, rows.Err()
+	return page.out, rows.Err()
+}
+
+// graphReadIsEffective reports a read the effective graph must answer: any
+// staged or workspace-filtered target, and a plain read of a composed revision.
+func (r *Repo) graphReadIsEffective(ctx context.Context, pid string, in GraphQueryInput) (bool, error) {
+	if in.ChangeProposal != nil || in.ImportCandidate != nil || workspaceFiltered(in) {
+		return true, nil
+	}
+	if in.Proposal == nil && in.RevisionID != "" {
+		revision, err := r.Revision(ctx, pid, in.RevisionID)
+		if err != nil {
+			return false, err
+		}
+		if revision.SchemaVersion == ComposedSchemaVersion {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// validateGraphIDSelector: an exact ID read is a lookup, not a page, so it
+// takes no filter and no cursor.
+func validateGraphIDSelector(in GraphQueryInput) error {
+	if in.ID != "" && (!ValidID(in.ID) || in.Cursor != "" || in.Kind != "" || in.Search != "" || in.ParentID != "" || in.From != "" || in.To != "") {
+		return invalid("id", "ID selector cannot be combined with filters or cursor")
+	}
+	return nil
+}
+
+// validateGraphQuery checks the record type, its selectors and the kind
+// filter against the kinds the revision's profile supports, and returns the
+// record type as stored ("node" or "edge").
+func validateGraphQuery(in GraphQueryInput, schemaVersion string) (string, error) {
+	if !slices.Contains([]string{"nodes", "edges"}, in.RecordType) {
+		return "", semantic("recordType", "Query must select nodes or edges")
+	}
+	if in.RecordType == "nodes" && (in.From != "" || in.To != "") || in.RecordType == "edges" && (in.Search != "" || in.ParentID != "") {
+		return "", semantic("selectors", "Selectors are not valid for this record type")
+	}
+	typ := "node"
+	if in.RecordType == "edges" {
+		typ = "edge"
+	}
+	if in.Kind != "" && !slices.Contains(graphQueryKinds(schemaVersion, typ), in.Kind) {
+		return "", semantic("kind", "Unsupported kind filter")
+	}
+	for _, id := range []string{in.ParentID, in.From, in.To} {
+		if id != "" && !ValidID(id) {
+			return "", semantic("selectors", "ID selectors must be UUIDs")
+		}
+	}
+	if len(in.Search) > 1024 || strings.ContainsRune(in.Search, 0) {
+		return "", semantic("search", "Invalid search string")
+	}
+	return typ, nil
+}
+
+func graphQueryKinds(schemaVersion, typ string) []string {
+	if isRelationalSchema(schemaVersion) || schemaVersion == ComposedSchemaVersion {
+		profile := profileForSchema(schemaVersion)
+		if schemaVersion == ComposedSchemaVersion {
+			profile = ComposedProfile
+		}
+		if typ == "edge" {
+			return SupportedEdgeKindsForProfile(profile)
+		}
+		return SupportedNodeKindsForProfile(profile)
+	}
+	if typ == "edge" {
+		return SupportedEdgeKinds()
+	}
+	return SupportedNodeKinds()
+}
+
+// graphCursorScope binds a cursor to the query without its paging fields and,
+// on a proposal read, to the proposal pins.
+func graphCursorScope(in GraphQueryInput, target *resolvedBackendTarget) (string, error) {
+	scopeInput := in
+	scopeInput.Cursor = ""
+	scopeInput.Limit = 0
+	if target.pins != nil {
+		return requestDigest(struct {
+			Query GraphQueryInput
+			Pins  *ProposalReadPins
+		}{scopeInput, target.pins})
+	}
+	return requestDigest(scopeInput)
+}
+
+// graphRecordQuery builds the filtered page query (without ORDER/LIMIT) and
+// reports which argument carries the cursor, so the count query can blank it.
+func graphRecordQuery(pid string, in GraphQueryInput, target *resolvedBackendTarget, typ, after string) (string, []any, int, error) {
+	records, args, err := target.graphRecords(pid, typ)
+	if err != nil {
+		return "", nil, 0, err
+	}
+	prefix, table := "", records
+	if target.proposal != nil {
+		prefix, table = records, "records"
+		args = append(args, pid, target.revisionID, typ)
+	}
+	query := prefix + `SELECT document,id FROM ` + table + ` WHERE project_id=? AND revision_id=? AND record_type=? AND id>?` //nolint:gosec // prefix and table come from graphRecords, never from the request; every value binds as ?
+	afterArg := len(args)
+	args = append(args, after)
+	for _, f := range []struct{ column, value string }{{"id", in.ID}, {"kind", in.Kind}, {"parent_id", in.ParentID}, {"from_id", in.From}, {"to_id", in.To}} {
+		if f.value != "" {
+			query += " AND " + f.column + "=?"
+			args = append(args, f.value)
+		}
+	}
+	if in.Search != "" {
+		query += ` AND instr(lower(name),lower(?))>0`
+		args = append(args, in.Search)
+	}
+	return query, args, afterArg, nil
+}
+
+// graphPageReader decodes the page's rows into nodes or edges, with the
+// source context of a composed revision and the projection of a proposal.
+type graphPageReader struct {
+	target        *resolvedBackendTarget
+	typ           string
+	metadata      RevisionState
+	schemaVersion string
+	sourceGraph   *SourceGraphSnapshot
+	out           *GraphPage
+}
+
+func (g *graphPageReader) open(ctx context.Context, r *Repo, pid string) error {
+	if g.schemaVersion == ComposedSchemaVersion {
+		var err error
+		g.sourceGraph, err = r.ResolveSourceGraph(ctx, pid, g.target.revisionID)
+		if err != nil {
+			return err
+		}
+		g.out.ViewSchemaVersion = ComposedSchemaVersion
+		g.out.Source = sourceVectorReadContext(g.sourceGraph)
+	}
+	if g.target.proposal != nil {
+		g.out.ViewSchemaVersion, g.out.ProposalPins = ProposalDocumentVersion, g.target.pins
+		g.out.ProposalProjection = &ProposalGraphProjection{Nodes: []ProposalProjectedNode{}, Edges: []ProposalProjectedEdge{}}
+	}
+	return nil
+}
+
+// add decodes one row. An empty document is a record the proposal designs:
+// it exists only as its projection.
+func (g *graphPageReader) add(doc, id string) error {
+	switch {
+	case doc == "":
+		return g.addDesigned(id)
+	case g.typ == "node":
+		return g.addNode(doc)
+	default:
+		return g.addEdge(doc)
+	}
+}
+
+func (g *graphPageReader) addDesigned(id string) error {
+	overlay := g.target.overlay(id)
+	if g.typ == "node" {
+		projected, err := projectProposalNode(*g.target.proposal, new(g.target.draft.ID), nil, overlay)
+		if err != nil {
+			return err
+		}
+		g.out.ProposalProjection.Nodes = append(g.out.ProposalProjection.Nodes, *projected)
+		return nil
+	}
+	projected, err := projectProposalEdge(*g.target.proposal, new(g.target.draft.ID), nil, overlay)
+	if err != nil {
+		return err
+	}
+	g.out.ProposalProjection.Edges = append(g.out.ProposalProjection.Edges, *projected)
+	return nil
+}
+
+func (g *graphPageReader) addNode(doc string) error {
+	var n Node
+	if err := json.Unmarshal([]byte(doc), &n); err != nil {
+		return err
+	}
+	deriveMetadata(g.metadata, &n.Ownership, &n.Freshness)
+	if isRelationalSchema(g.schemaVersion) {
+		var err error
+		n.FacetComparison, err = CompareRelationalFacets(n.Kind, n.Attributes, false)
+		if err != nil {
+			return err
+		}
+	}
+	if g.sourceGraph != nil {
+		n.Source = sourceRecordReadContext(g.sourceGraph, "node", n.ID)
+	}
+	g.out.Nodes = append(g.out.Nodes, n)
+	if g.target.proposal != nil {
+		projected, err := projectProposalNode(*g.target.proposal, new(g.target.draft.ID), &n, g.target.overlay(n.ID))
+		if err != nil {
+			return err
+		}
+		g.out.ProposalProjection.Nodes = append(g.out.ProposalProjection.Nodes, *projected)
+	}
+	return nil
+}
+
+func (g *graphPageReader) addEdge(doc string) error {
+	var e Edge
+	if err := json.Unmarshal([]byte(doc), &e); err != nil {
+		return err
+	}
+	deriveMetadata(g.metadata, &e.Ownership, &e.Freshness)
+	if isRelationalSchema(g.schemaVersion) {
+		var err error
+		e.FacetComparison, err = CompareRelationalFacets(e.Kind, e.Attributes, true)
+		if err != nil {
+			return err
+		}
+	}
+	if g.sourceGraph != nil {
+		e.Source = sourceRecordReadContext(g.sourceGraph, "edge", e.ID)
+	}
+	g.out.Edges = append(g.out.Edges, e)
+	if g.target.proposal != nil {
+		projected, err := projectProposalEdge(*g.target.proposal, new(g.target.draft.ID), &e, g.target.overlay(e.ID))
+		if err != nil {
+			return err
+		}
+		g.out.ProposalProjection.Edges = append(g.out.ProposalProjection.Edges, *projected)
+	}
+	return nil
 }
 func (r *Repo) Node(ctx context.Context, pid, rid, nid string) (*Node, error) {
 	if !ValidID(pid) || !ValidID(rid) || !ValidID(nid) {
@@ -403,7 +514,7 @@ func (r *Repo) evidence(ctx context.Context, pid, rid string, in EvidenceQueryIn
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	out := &EvidencePage{Items: []Evidence{}}
 	var sourceGraph *SourceGraphSnapshot
 	if revision.SchemaVersion == ComposedSchemaVersion {

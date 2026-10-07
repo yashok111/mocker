@@ -2,6 +2,7 @@ package scenarioexport
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"maps"
 	"net/url"
@@ -35,138 +36,193 @@ type savedOperation struct {
 	Root, Item, Operation map[string]any
 }
 
-func (s *Service) prepareHTTP(rev designscenario.Revision, format Format) (httpExport, []Diagnostic, error) {
-	out := httpExport{Requests: []httpRequest{}, Bases: []httpBase{}, Variables: designscenario.ExecutionValues{}}
-	if rev.Document.Execution != nil {
-		maps.Copy(out.Variables, rev.Document.Execution.Variables)
+// httpPlanner carries the state one HTTP export accumulates across steps:
+// variable availability, which variables come from responses, and the base
+// URL variable allocated per (target participant, contract, server).
+type httpPlanner struct {
+	s            *Service
+	rev          designscenario.Revision
+	format       Format
+	out          httpExport
+	ds           []Diagnostic
+	bindingTypes map[string]map[string]string
+	available    map[string]bool
+	reserved     map[string]bool
+	dynamic      map[string]bool
+	bases        map[string]string
+}
+
+func (p *httpPlanner) add(code, severity, message string) {
+	p.ds = append(p.ds, Diagnostic{Code: code, Severity: severity, Message: message})
+}
+
+func (s *Service) prepareHTTP(ctx context.Context, rev designscenario.Revision, format Format) (httpExport, []Diagnostic, error) {
+	p, err := newHTTPPlanner(ctx, s, rev, format)
+	if err != nil {
+		return httpExport{}, nil, err
 	}
-	ds := []Diagnostic{}
-	add := func(code, severity, message string) {
-		ds = append(ds, Diagnostic{Code: code, Severity: severity, Message: message})
+	for i, m := range rev.Document.Messages {
+		if err := s.CheckResponse(p.ds); err != nil {
+			return p.out, nil, err
+		}
+		first := len(p.ds)
+		p.planMessage(m)
+		for j := first; j < len(p.ds); j++ {
+			p.ds[j].Target = &Target{Kind: "message", ID: m.ID}
+			p.ds[j].Pointer = fmt.Sprintf("/messages/%d", i)
+		}
+	}
+	if len(p.out.Requests) == 0 {
+		p.add("http_requests_empty", "error", "В сценарии нет включённых HTTP-запросов с операцией API")
+	}
+	if err := s.CheckResponse(p.ds); err != nil {
+		return p.out, nil, err
+	}
+	return p.out, p.ds, nil
+}
+
+func newHTTPPlanner(ctx context.Context, s *Service, rev designscenario.Revision, format Format) (*httpPlanner, error) {
+	p := &httpPlanner{
+		s: s, rev: rev, format: format, ds: []Diagnostic{},
+		out:     httpExport{Requests: []httpRequest{}, Bases: []httpBase{}, Variables: designscenario.ExecutionValues{}},
+		dynamic: map[string]bool{}, bases: map[string]string{},
+	}
+	if rev.Document.Execution != nil {
+		maps.Copy(p.out.Variables, rev.Document.Execution.Variables)
 	}
 	if len(rev.Document.Fragments) > 0 {
-		add("execution_fragments_unsupported", "error", "Экспорт исполнения alt/opt/loop не поддерживается")
+		p.add("execution_fragments_unsupported", "error", "Экспорт исполнения alt/opt/loop не поддерживается")
 	}
-	var bindingTypes map[string]map[string]string
 	if format == Postman {
 		var bindingDiagnostics []Diagnostic
-		bindingTypes, bindingDiagnostics = postmanBindingPreflight(rev.Document)
-		ds = append(ds, bindingDiagnostics...)
+		var err error
+		p.bindingTypes, bindingDiagnostics, err = postmanBindingPreflight(ctx, rev.Document)
+		if err != nil {
+			return nil, err
+		}
+		p.ds = append(p.ds, bindingDiagnostics...)
 	}
-	available := map[string]bool{}
-	for name := range out.Variables {
-		available[name] = true
+	p.available = map[string]bool{}
+	for name := range p.out.Variables {
+		p.available[name] = true
 	}
-	reserved := map[string]bool{}
-	for name := range available {
-		reserved[name] = true
+	// Base URL variables must not collide with a declared or extracted name.
+	p.reserved = map[string]bool{}
+	for name := range p.available {
+		p.reserved[name] = true
 	}
 	for _, message := range rev.Document.Messages {
 		if message.Execution != nil {
 			for _, extraction := range message.Execution.Extract {
-				reserved[extraction.Name] = true
+				p.reserved[extraction.Name] = true
 			}
 		}
 	}
-	dynamic := map[string]bool{}
-	bases := map[string]string{}
-	for i, m := range rev.Document.Messages {
-		if err := s.CheckResponse(ds); err != nil {
-			return out, nil, err
+	return p, nil
+}
+
+// planMessage decides whether a step becomes a request, and diagnoses why not.
+func (p *httpPlanner) planMessage(m designscenario.Message) {
+	if p.format == CURL && m.Kind == "request" && m.Execution != nil && m.Execution.Enabled && len(m.Execution.Bindings) > 0 {
+		p.add("data_bindings_unsupported", "error",
+			"cURL не поддерживает передачу данных между шагами; используйте Postman или выполните сценарий в Mocker")
+	}
+	switch {
+	case m.Execution != nil && !m.Execution.Enabled:
+		p.add("disabled_messages_omitted", "info", "Выключенный шаг пропущен")
+	case m.Kind == "event":
+		p.add("event_execution_unsupported", "info", "Kafka event пропущен: Postman и cURL экспортируют только HTTP-запросы")
+	case m.Kind != "request" || m.Operation == nil:
+		p.add("descriptive_messages_omitted", "info", "Описательное сообщение пропущено")
+		if m.Kind == "request" && m.Execution != nil {
+			p.add("binding_missing", "error", "Для включённого HTTP-шагa укажите операцию API")
 		}
-		first := len(ds)
-		stepAdd := func(code, severity, message string) { add(code, severity, message) }
-		if format == CURL && m.Kind == "request" && m.Execution != nil && m.Execution.Enabled && len(m.Execution.Bindings) > 0 {
-			stepAdd("data_bindings_unsupported", "error",
-				"cURL не поддерживает передачу данных между шагами; используйте Postman или выполните сценарий в Mocker")
+	default:
+		p.planOperationStep(m)
+	}
+}
+
+func (p *httpPlanner) planOperationStep(m designscenario.Message) {
+	index := slices.IndexFunc(p.rev.Document.Contracts, func(c designscenario.Contract) bool { return c.ID == m.Operation.ContractID })
+	if index < 0 {
+		p.add("binding_missing", "error", "Контракт сообщения отсутствует")
+		return
+	}
+	contract := p.rev.Document.Contracts[index]
+	op, ok := findSavedOperation(contract.Document, m.Operation.OperationKey)
+	if !ok {
+		p.add("binding_missing", "error", "Операция сообщения отсутствует или неоднозначна")
+		return
+	}
+	if hasPendingForms(p.rev.FormDrafts, contract.ID) {
+		p.add("api_forms_pending", "error", "Завершите редактирование API")
+	}
+	p.planRequest(m, contract, op)
+}
+
+func (p *httpPlanner) planRequest(m designscenario.Message, contract designscenario.Contract, op savedOperation) {
+	config := designscenario.StepExecution{Enabled: true, PathParams: designscenario.ExecutionValues{}, Query: designscenario.ExecutionValues{}, Headers: designscenario.ExecutionValues{}, Assertions: []designscenario.ExecutionAssertion{}, Extract: []designscenario.ExecutionExtraction{}}
+	if m.Execution != nil {
+		config = *m.Execution
+	}
+	if p.format == Postman && len(config.Bindings) > 0 {
+		config = omitBoundHTTPInputs(config, p.add)
+	}
+	resolved := resolveHTTPExecution(config, p.out.Variables, p.available, p.dynamic, p.format, p.s.maxBytes, p.add)
+	validateHTTPInputs(op, p.validationView(config, resolved), p.add)
+	baseName := p.baseName(m, contract, savedBaseURL(op))
+	if p.format == CURL {
+		if len(config.Extract) > 0 {
+			p.add("response_extraction_omitted", "warning", "cURL не извлекает переменные из ответов")
 		}
-		if m.Execution != nil && !m.Execution.Enabled {
-			stepAdd("disabled_messages_omitted", "info", "Выключенный шаг пропущен")
-		} else if m.Kind == "event" {
-			stepAdd("event_execution_unsupported", "info", "Kafka event пропущен: Postman и cURL экспортируют только HTTP-запросы")
-		} else if m.Kind != "request" || m.Operation == nil {
-			stepAdd("descriptive_messages_omitted", "info", "Описательное сообщение пропущено")
-			if m.Kind == "request" && m.Execution != nil {
-				stepAdd("binding_missing", "error", "Для включённого HTTP-шагa укажите операцию API")
+		if len(config.Assertions) > 0 {
+			p.add("json_assertions_omitted", "warning", "cURL не проверяет JSON-ответы")
+		}
+	}
+	p.out.Requests = append(p.out.Requests, httpRequest{Name: m.Label, Method: op.Method, Path: op.Path, Base: baseName, MessageID: m.ID, BindingTypes: p.bindingTypes[m.ID], Execution: resolved})
+	for _, e := range config.Extract {
+		p.available[e.Name] = true
+		p.dynamic[e.Name] = true
+	}
+}
+
+// validationView is what the operation's inputs are checked against: Postman
+// keeps response-derived templates in the body, so only static variables are
+// substituted, and bound inputs count as present.
+func (p *httpPlanner) validationView(config, resolved designscenario.StepExecution) designscenario.StepExecution {
+	validation := resolved
+	if p.format == Postman {
+		validation.Body = httpTemplate.ReplaceAllStringFunc(resolved.Body, func(token string) string {
+			name := token[2 : len(token)-2]
+			if p.dynamic[name] {
+				return token
 			}
-		} else {
-			index := slices.IndexFunc(rev.Document.Contracts, func(c designscenario.Contract) bool { return c.ID == m.Operation.ContractID })
-			if index < 0 {
-				stepAdd("binding_missing", "error", "Контракт сообщения отсутствует")
-			} else {
-				contract := rev.Document.Contracts[index]
-				op, ok := findSavedOperation(contract.Document, m.Operation.OperationKey)
-				if !ok {
-					stepAdd("binding_missing", "error", "Операция сообщения отсутствует или неоднозначна")
-				} else {
-					if hasPendingForms(rev.FormDrafts, contract.ID) {
-						stepAdd("api_forms_pending", "error", "Завершите редактирование API")
-					}
-					config := designscenario.StepExecution{Enabled: true, PathParams: designscenario.ExecutionValues{}, Query: designscenario.ExecutionValues{}, Headers: designscenario.ExecutionValues{}, Assertions: []designscenario.ExecutionAssertion{}, Extract: []designscenario.ExecutionExtraction{}}
-					if m.Execution != nil {
-						config = *m.Execution
-					}
-					if format == Postman && len(config.Bindings) > 0 {
-						config = omitBoundHTTPInputs(config, stepAdd)
-					}
-					resolved := resolveHTTPExecution(config, out.Variables, available, dynamic, format, s.maxBytes, stepAdd)
-					validation := resolved
-					if format == Postman {
-						validation.Body = httpTemplate.ReplaceAllStringFunc(resolved.Body, func(token string) string {
-							name := token[2 : len(token)-2]
-							if dynamic[name] {
-								return token
-							}
-							return out.Variables[name]
-						})
-						if len(config.Bindings) > 0 {
-							validation = bindingHTTPValidation(validation)
-						}
-					}
-					validateHTTPInputs(op, validation, stepAdd)
-					server := savedBaseURL(op)
-					baseKey := m.ToID + "\x00" + contract.ID + "\x00" + server
-					baseName, exists := bases[baseKey]
-					if !exists {
-						baseName = fmt.Sprintf("MOCKER_BASE_URL_%d", len(out.Bases)+1)
-						for reserved[baseName] {
-							baseName += "_"
-						}
-						reserved[baseName] = true
-						bases[baseKey] = baseName
-						out.Bases = append(out.Bases, httpBase{Name: baseName, URL: server})
-						if server == "" {
-							stepAdd("base_url_missing", "warning", "Заполните переменную "+baseName+" перед запуском: в сохранённом API нет абсолютного HTTP(S) server URL")
-						}
-					}
-					if format == CURL {
-						if len(config.Extract) > 0 {
-							stepAdd("response_extraction_omitted", "warning", "cURL не извлекает переменные из ответов")
-						}
-						if len(config.Assertions) > 0 {
-							stepAdd("json_assertions_omitted", "warning", "cURL не проверяет JSON-ответы")
-						}
-					}
-					out.Requests = append(out.Requests, httpRequest{Name: m.Label, Method: op.Method, Path: op.Path, Base: baseName, MessageID: m.ID, BindingTypes: bindingTypes[m.ID], Execution: resolved})
-					for _, e := range config.Extract {
-						available[e.Name] = true
-						dynamic[e.Name] = true
-					}
-				}
-			}
-		}
-		for j := first; j < len(ds); j++ {
-			ds[j].Target = &Target{Kind: "message", ID: m.ID}
-			ds[j].Pointer = fmt.Sprintf("/messages/%d", i)
+			return p.out.Variables[name]
+		})
+		if len(config.Bindings) > 0 {
+			validation = bindingHTTPValidation(validation)
 		}
 	}
-	if len(out.Requests) == 0 {
-		add("http_requests_empty", "error", "В сценарии нет включённых HTTP-запросов с операцией API")
+	return validation
+}
+
+// baseName reuses or allocates the base URL variable for this target.
+func (p *httpPlanner) baseName(m designscenario.Message, contract designscenario.Contract, server string) string {
+	baseKey := m.ToID + "\x00" + contract.ID + "\x00" + server
+	if baseName, exists := p.bases[baseKey]; exists {
+		return baseName
 	}
-	if err := s.CheckResponse(ds); err != nil {
-		return out, nil, err
+	baseName := fmt.Sprintf("MOCKER_BASE_URL_%d", len(p.out.Bases)+1)
+	for p.reserved[baseName] {
+		baseName += "_"
 	}
-	return out, ds, nil
+	p.reserved[baseName] = true
+	p.bases[baseKey] = baseName
+	p.out.Bases = append(p.out.Bases, httpBase{Name: baseName, URL: server})
+	if server == "" {
+		p.add("base_url_missing", "warning", "Заполните переменную "+baseName+" перед запуском: в сохранённом API нет абсолютного HTTP(S) server URL")
+	}
+	return baseName
 }
 
 func findSavedOperation(raw []byte, key string) (savedOperation, bool) {
@@ -187,53 +243,69 @@ func findSavedOperation(raw []byte, key string) (savedOperation, bool) {
 	return found, count == 1
 }
 
-func resolveHTTPExecution(config designscenario.StepExecution, variables designscenario.ExecutionValues, available, dynamic map[string]bool, format Format, limit int64, add func(string, string, string)) designscenario.StepExecution {
-	resolve := func(source string) string {
-		var out strings.Builder
-		remaining := source
-		for remaining != "" {
-			loc := httpTemplate.FindStringSubmatchIndex(remaining)
-			if loc == nil {
-				if int64(out.Len()+len(remaining)) > limit {
-					add("input_too_large", "error", "Значение после подстановки превышает лимит экспорта")
-					return ""
-				}
-				out.WriteString(remaining)
-				break
-			}
-			name := remaining[loc[2]:loc[3]]
-			if !available[name] {
-				add("variable_missing", "error", "Укажите значение переменной "+name)
-			}
-			if format == CURL && dynamic[name] {
-				add("dynamic_variable_unsupported", "error", "Переменная "+name+" зависит от ответа; используйте Postman")
-			}
-			value := remaining[loc[0]:loc[1]]
-			if format == CURL {
-				value = variables[name]
-			}
-			if strings.ContainsRune(variables[name], 0) {
-				add("input_invalid", "error", "NUL в значении переменной не поддерживается")
-			}
-			if format == Postman && strings.Contains(variables[name], "{{") {
-				add("template_value_unsupported", "error", "Postman не поддерживает вложенные шаблоны в значениях переменных")
-			}
-			if format == Postman && !httpVariableName.MatchString(name) {
-				add("variable_invalid", "error", "Недопустимое имя переменной "+name)
-			}
-			if int64(out.Len()+loc[0]+len(value)) > limit {
-				add("input_too_large", "error", "Значение после подстановки превышает лимит экспорта")
+// httpTemplateResolver substitutes {{name}} templates for one step: cURL gets
+// the concrete value, Postman keeps the template for its own variables.
+type httpTemplateResolver struct {
+	variables          designscenario.ExecutionValues
+	available, dynamic map[string]bool
+	format             Format
+	limit              int64
+	add                func(string, string, string)
+}
+
+func (r httpTemplateResolver) resolve(source string) string {
+	var out strings.Builder
+	remaining := source
+	for remaining != "" {
+		loc := httpTemplate.FindStringSubmatchIndex(remaining)
+		if loc == nil {
+			if int64(out.Len()+len(remaining)) > r.limit {
+				r.add("input_too_large", "error", "Значение после подстановки превышает лимит экспорта")
 				return ""
 			}
-			out.WriteString(remaining[:loc[0]])
-			out.WriteString(value)
-			remaining = remaining[loc[1]:]
+			out.WriteString(remaining)
+			break
 		}
-		if strings.ContainsRune(out.String(), 0) {
-			add("input_invalid", "error", "NUL в HTTP-данных не поддерживается")
+		name := remaining[loc[2]:loc[3]]
+		r.checkVariable(name)
+		value := remaining[loc[0]:loc[1]]
+		if r.format == CURL {
+			value = r.variables[name]
 		}
-		return out.String()
+		if int64(out.Len()+loc[0]+len(value)) > r.limit {
+			r.add("input_too_large", "error", "Значение после подстановки превышает лимит экспорта")
+			return ""
+		}
+		out.WriteString(remaining[:loc[0]])
+		out.WriteString(value)
+		remaining = remaining[loc[1]:]
 	}
+	if strings.ContainsRune(out.String(), 0) {
+		r.add("input_invalid", "error", "NUL в HTTP-данных не поддерживается")
+	}
+	return out.String()
+}
+
+func (r httpTemplateResolver) checkVariable(name string) {
+	if !r.available[name] {
+		r.add("variable_missing", "error", "Укажите значение переменной "+name)
+	}
+	if r.format == CURL && r.dynamic[name] {
+		r.add("dynamic_variable_unsupported", "error", "Переменная "+name+" зависит от ответа; используйте Postman")
+	}
+	if strings.ContainsRune(r.variables[name], 0) {
+		r.add("input_invalid", "error", "NUL в значении переменной не поддерживается")
+	}
+	if r.format == Postman && strings.Contains(r.variables[name], "{{") {
+		r.add("template_value_unsupported", "error", "Postman не поддерживает вложенные шаблоны в значениях переменных")
+	}
+	if r.format == Postman && !httpVariableName.MatchString(name) {
+		r.add("variable_invalid", "error", "Недопустимое имя переменной "+name)
+	}
+}
+
+func resolveHTTPExecution(config designscenario.StepExecution, variables designscenario.ExecutionValues, available, dynamic map[string]bool, format Format, limit int64, add func(string, string, string)) designscenario.StepExecution {
+	r := httpTemplateResolver{variables: variables, available: available, dynamic: dynamic, format: format, limit: limit, add: add}
 	for _, pair := range []struct {
 		source designscenario.ExecutionValues
 		target *designscenario.ExecutionValues
@@ -243,10 +315,10 @@ func resolveHTTPExecution(config designscenario.StepExecution, variables designs
 			if strings.ContainsRune(key, 0) {
 				add("input_invalid", "error", "NUL в имени параметра не поддерживается")
 			}
-			(*pair.target)[key] = resolve(pair.source[key])
+			(*pair.target)[key] = r.resolve(pair.source[key])
 		}
 	}
-	config.Body = resolve(config.Body)
+	config.Body = r.resolve(config.Body)
 	for key, value := range config.Headers {
 		concrete := value
 		if format == Postman {
@@ -268,6 +340,23 @@ func validateHTTPInputs(op savedOperation, config designscenario.StepExecution, 
 			add("path_parameter_missing", "error", "Укажите path-параметр "+match[1])
 		}
 	}
+	parameters := operationParameters(op, add)
+	for _, key := range slices.Sorted(maps.Keys(parameters)) {
+		checkParameterInput(parameters[key], config, add)
+	}
+	checkRequestBodyInput(op, config, add)
+	security, exists := op.Operation["security"]
+	if !exists {
+		security = op.Root["security"]
+	}
+	if requirements, ok := security.([]any); ok && len(requirements) > 0 {
+		add("auth_manual", "warning", "Авторизация OpenAPI автоматически не создаётся; задайте необходимые заголовки и параметры шага")
+	}
+}
+
+// operationParameters merges path-item and operation parameters keyed by
+// location and name, the operation's entry overriding the path item's.
+func operationParameters(op savedOperation, add func(string, string, string)) map[string]map[string]any {
 	parameters := map[string]map[string]any{}
 	for _, container := range []map[string]any{op.Item, op.Operation} {
 		if container["$ref"] != nil {
@@ -285,38 +374,42 @@ func validateHTTPInputs(op savedOperation, config designscenario.StepExecution, 
 			parameters[in+"\x00"+name] = parameter
 		}
 	}
-	for _, key := range slices.Sorted(maps.Keys(parameters)) {
-		p := parameters[key]
-		name, _ := p["name"].(string)
-		in, _ := p["in"].(string)
-		var values designscenario.ExecutionValues
-		switch in {
-		case "path":
-			values = config.PathParams
-		case "query":
-			values = config.Query
-		case "header":
-			values = config.Headers
-		}
-		_, exists := values[name]
-		if in == "header" {
-			for k := range values {
-				exists = exists || strings.EqualFold(k, name)
-			}
-		}
-		required, _ := p["required"].(bool)
-		if required && !exists {
-			add("required_input_missing", "error", "Укажите обязательный параметр "+in+": "+name)
-		}
-		if exists {
-			schema, _ := p["schema"].(map[string]any)
-			style, _ := p["style"].(string)
-			unsupportedStyle := style != "" && ((in == "query" && style != "form") || (in != "query" && style != "simple"))
-			if unsupportedParameterSchema(schema) || p["content"] != nil || unsupportedStyle || p["allowReserved"] == true {
-				add("parameter_serialization_unsupported", "error", "Сложная сериализация параметра "+name+" не поддерживается")
-			}
+	return parameters
+}
+
+func checkParameterInput(p map[string]any, config designscenario.StepExecution, add func(string, string, string)) {
+	name, _ := p["name"].(string)
+	in, _ := p["in"].(string)
+	var values designscenario.ExecutionValues
+	switch in {
+	case "path":
+		values = config.PathParams
+	case "query":
+		values = config.Query
+	case "header":
+		values = config.Headers
+	}
+	_, exists := values[name]
+	if in == "header" {
+		for k := range values {
+			exists = exists || strings.EqualFold(k, name)
 		}
 	}
+	required, _ := p["required"].(bool)
+	if required && !exists {
+		add("required_input_missing", "error", "Укажите обязательный параметр "+in+": "+name)
+	}
+	if exists {
+		schema, _ := p["schema"].(map[string]any)
+		style, _ := p["style"].(string)
+		unsupportedStyle := style != "" && ((in == "query" && style != "form") || (in != "query" && style != "simple"))
+		if unsupportedParameterSchema(schema) || p["content"] != nil || unsupportedStyle || p["allowReserved"] == true {
+			add("parameter_serialization_unsupported", "error", "Сложная сериализация параметра "+name+" не поддерживается")
+		}
+	}
+}
+
+func checkRequestBodyInput(op savedOperation, config designscenario.StepExecution, add func(string, string, string)) {
 	hasContentType := false
 	for key := range config.Headers {
 		hasContentType = hasContentType || strings.EqualFold(key, "Content-Type")
@@ -330,13 +423,6 @@ func validateHTTPInputs(op savedOperation, config designscenario.StepExecution, 
 	}
 	if body["required"] == true && config.Body == "" {
 		add("required_body_missing", "error", "Укажите обязательное тело запроса")
-	}
-	security, exists := op.Operation["security"]
-	if !exists {
-		security = op.Root["security"]
-	}
-	if requirements, ok := security.([]any); ok && len(requirements) > 0 {
-		add("auth_manual", "warning", "Авторизация OpenAPI автоматически не создаётся; задайте необходимые заголовки и параметры шага")
 	}
 }
 

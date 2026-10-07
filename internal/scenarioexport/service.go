@@ -32,14 +32,14 @@ func (s *Service) OptionsContext(ctx context.Context, rev designscenario.Revisio
 		if err := s.CheckResponse(options); err != nil {
 			return nil, err
 		}
-		ds, err := s.contractDiagnostics(rev, contract)
+		ds, err := s.contractDiagnostics(ctx, rev, contract)
 		if err != nil {
 			return nil, err
 		}
 		options = append(options, makeOption(OpenAPIJSON, contract.ID, ds), makeOption(OpenAPIYAML, contract.ID, ds))
 	}
 	for _, format := range []Format{Postman, CURL} {
-		_, ds, err := s.prepareHTTP(rev, format)
+		_, ds, err := s.prepareHTTP(ctx, rev, format)
 		if err != nil {
 			return nil, err
 		}
@@ -87,130 +87,168 @@ func (s *Service) ExportContext(ctx context.Context, rev designscenario.Revision
 	if err := ctx.Err(); err != nil {
 		return Artifact{}, err
 	}
-	artifact := Artifact{ScenarioID: rev.ScenarioID, RevisionID: rev.ID, SourceHash: rev.Hash, Format: req.Format}
-	var diagnostics []Diagnostic
-	var content []byte
-	var err error
-	ext := ""
-	switch req.Format {
-	case AsyncAPIJSON, AsyncAPIYAML:
-		if req.ContractID == "" {
-			return Artifact{}, ErrInvalidRequest
-		}
-		if slices.ContainsFunc(rev.Document.Contracts, func(c designscenario.Contract) bool { return c.ID == req.ContractID }) {
-			return Artifact{}, ErrInvalidRequest
-		}
-		if rev.Document.EventModel == nil {
-			return Artifact{}, ErrContractNotFound
-		}
-		index := slices.IndexFunc(rev.Document.EventModel.Contracts, func(c designscenario.EventContract) bool { return c.ID == req.ContractID })
-		if index < 0 {
-			return Artifact{}, ErrContractNotFound
-		}
-		diagnostics, content, err = s.prepareAsyncAPI(newEventValidationCache(ctx, rev), rev.Document.EventModel.Contracts[index])
-		if err != nil {
-			return Artifact{}, err
-		}
-		if !makeOption(req.Format, req.ContractID, diagnostics).Ready {
-			return Artifact{}, &BlockedError{Diagnostics: diagnostics}
-		}
-		if req.Format == AsyncAPIYAML {
-			content, err = convertAsyncAPIYAML(content, s.maxBytes)
-		}
-		ext = fmt.Sprintf("asyncapi-%d.json", index+1)
-		artifact.MediaType = "application/json;charset=utf-8"
-		if req.Format == AsyncAPIYAML {
-			ext = fmt.Sprintf("asyncapi-%d.yaml", index+1)
-			artifact.MediaType = "application/yaml;charset=utf-8"
-		}
-	case Markdown, HTML:
-		if req.ContractID != "" {
-			return Artifact{}, ErrInvalidRequest
-		}
-		diagnostics, err = s.documentationDiagnosticsWithCache(rev, newEventValidationCache(ctx, rev))
-		if err != nil {
-			return Artifact{}, err
-		}
-		if !makeOption(req.Format, "", diagnostics).Ready {
-			return Artifact{}, &BlockedError{Diagnostics: diagnostics}
-		}
-		content, err = s.renderDocumentation(rev, req.Format, diagnostics)
-		ext, artifact.MediaType = "md", "text/markdown;charset=utf-8"
-		if req.Format == HTML {
-			ext, artifact.MediaType = "html", "text/html;charset=utf-8"
-		}
-	case Postman, CURL:
-		if req.ContractID != "" {
-			return Artifact{}, ErrInvalidRequest
-		}
-		var prepared httpExport
-		prepared, diagnostics, err = s.prepareHTTP(rev, req.Format)
-		if err != nil {
-			return Artifact{}, err
-		}
-		if !makeOption(req.Format, "", diagnostics).Ready {
-			return Artifact{}, &BlockedError{Diagnostics: diagnostics}
-		}
-		if req.Format == Postman {
-			content, err = s.renderPostman(rev.Document.Title, prepared)
-			ext, artifact.MediaType = "postman_collection.json", "application/json;charset=utf-8"
-		} else {
-			content, err = s.renderCURL(prepared)
-			ext, artifact.MediaType = "sh", "application/x-sh;charset=utf-8"
-		}
-	case PlantUML, Mermaid:
-		if req.ContractID != "" {
-			return Artifact{}, ErrInvalidRequest
-		}
-		diagnostics = diagramDiagnostics(rev.Document)
-		if !makeOption(req.Format, "", diagnostics).Ready {
-			return Artifact{}, &BlockedError{Diagnostics: diagnostics}
-		}
-		content, err = renderSequence(rev.Document, req.Format, s.maxBytes)
-		ext = "puml"
-		if req.Format == Mermaid {
-			ext = "mmd"
-		}
-		artifact.MediaType = "text/plain;charset=utf-8"
-	case OpenAPIJSON, OpenAPIYAML:
-		if rev.Document.EventModel != nil && slices.ContainsFunc(rev.Document.EventModel.Contracts, func(c designscenario.EventContract) bool { return c.ID == req.ContractID }) {
-			return Artifact{}, ErrInvalidRequest
-		}
-		index := slices.IndexFunc(rev.Document.Contracts, func(c designscenario.Contract) bool { return c.ID == req.ContractID })
-		if index < 0 {
-			return Artifact{}, ErrContractNotFound
-		}
-		contract := rev.Document.Contracts[index]
-		diagnostics, err = s.contractDiagnostics(rev, contract)
-		if err != nil {
-			return Artifact{}, err
-		}
-		if !makeOption(req.Format, req.ContractID, diagnostics).Ready {
-			return Artifact{}, &BlockedError{Diagnostics: diagnostics}
-		}
-		content, err = s.renderOpenAPI(contract, req.Format)
-		ext = fmt.Sprintf("api-%d.json", index+1)
-		artifact.MediaType = "application/json;charset=utf-8"
-		if req.Format == OpenAPIYAML {
-			ext = fmt.Sprintf("api-%d.yaml", index+1)
-			artifact.MediaType = "application/yaml;charset=utf-8"
-		}
-	default:
-		return Artifact{}, ErrUnsupportedFormat
-	}
+	body, err := s.exportBody(ctx, rev, req)
 	if err != nil {
 		return Artifact{}, err
 	}
 	if err := ctx.Err(); err != nil {
 		return Artifact{}, err
 	}
-	artifact.Content = string(content)
-	artifact.Diagnostics = diagnostics
-	artifact.Filename = fmt.Sprintf("scenario-%d-r%d.%s", rev.ScenarioID, rev.ID, ext)
+	artifact := Artifact{ScenarioID: rev.ScenarioID, RevisionID: rev.ID, SourceHash: rev.Hash, Format: req.Format, MediaType: body.mediaType}
+	artifact.Content = string(body.content)
+	artifact.Diagnostics = body.diagnostics
+	artifact.Filename = fmt.Sprintf("scenario-%d-r%d.%s", rev.ScenarioID, rev.ID, body.ext)
 	if err = s.CheckResponse(artifact); err != nil {
 		return Artifact{}, err
 	}
 	return artifact, nil
+}
+
+// exportBody is one format's rendered artifact before the shared envelope.
+type exportBody struct {
+	diagnostics    []Diagnostic
+	content        []byte
+	ext, mediaType string
+}
+
+func (s *Service) exportBody(ctx context.Context, rev designscenario.Revision, req Request) (exportBody, error) {
+	switch req.Format {
+	case AsyncAPIJSON, AsyncAPIYAML:
+		return s.exportAsyncAPI(ctx, rev, req)
+	case Markdown, HTML:
+		return s.exportDocumentation(ctx, rev, req)
+	case Postman, CURL:
+		return s.exportHTTP(ctx, rev, req)
+	case PlantUML, Mermaid:
+		return s.exportSequence(rev, req)
+	case OpenAPIJSON, OpenAPIYAML:
+		return s.exportOpenAPI(ctx, rev, req)
+	default:
+		return exportBody{}, ErrUnsupportedFormat
+	}
+}
+
+func (s *Service) exportAsyncAPI(ctx context.Context, rev designscenario.Revision, req Request) (exportBody, error) {
+	if req.ContractID == "" {
+		return exportBody{}, ErrInvalidRequest
+	}
+	if slices.ContainsFunc(rev.Document.Contracts, func(c designscenario.Contract) bool { return c.ID == req.ContractID }) {
+		return exportBody{}, ErrInvalidRequest
+	}
+	if rev.Document.EventModel == nil {
+		return exportBody{}, ErrContractNotFound
+	}
+	index := slices.IndexFunc(rev.Document.EventModel.Contracts, func(c designscenario.EventContract) bool { return c.ID == req.ContractID })
+	if index < 0 {
+		return exportBody{}, ErrContractNotFound
+	}
+	diagnostics, content, err := s.prepareAsyncAPI(newEventValidationCache(ctx, rev), rev.Document.EventModel.Contracts[index])
+	if err != nil {
+		return exportBody{}, err
+	}
+	if !makeOption(req.Format, req.ContractID, diagnostics).Ready {
+		return exportBody{}, &BlockedError{Diagnostics: diagnostics}
+	}
+	body := exportBody{diagnostics: diagnostics, content: content, ext: fmt.Sprintf("asyncapi-%d.json", index+1), mediaType: "application/json;charset=utf-8"}
+	if req.Format == AsyncAPIYAML {
+		if body.content, err = convertAsyncAPIYAML(content, s.maxBytes); err != nil {
+			return exportBody{}, err
+		}
+		body.ext, body.mediaType = fmt.Sprintf("asyncapi-%d.yaml", index+1), "application/yaml;charset=utf-8"
+	}
+	return body, nil
+}
+
+func (s *Service) exportDocumentation(ctx context.Context, rev designscenario.Revision, req Request) (exportBody, error) {
+	if req.ContractID != "" {
+		return exportBody{}, ErrInvalidRequest
+	}
+	diagnostics, err := s.documentationDiagnosticsWithCache(rev, newEventValidationCache(ctx, rev))
+	if err != nil {
+		return exportBody{}, err
+	}
+	if !makeOption(req.Format, "", diagnostics).Ready {
+		return exportBody{}, &BlockedError{Diagnostics: diagnostics}
+	}
+	content, err := s.renderDocumentation(rev, req.Format, diagnostics)
+	if err != nil {
+		return exportBody{}, err
+	}
+	body := exportBody{diagnostics: diagnostics, content: content, ext: "md", mediaType: "text/markdown;charset=utf-8"}
+	if req.Format == HTML {
+		body.ext, body.mediaType = "html", "text/html;charset=utf-8"
+	}
+	return body, nil
+}
+
+func (s *Service) exportHTTP(ctx context.Context, rev designscenario.Revision, req Request) (exportBody, error) {
+	if req.ContractID != "" {
+		return exportBody{}, ErrInvalidRequest
+	}
+	prepared, diagnostics, err := s.prepareHTTP(ctx, rev, req.Format)
+	if err != nil {
+		return exportBody{}, err
+	}
+	if !makeOption(req.Format, "", diagnostics).Ready {
+		return exportBody{}, &BlockedError{Diagnostics: diagnostics}
+	}
+	body := exportBody{diagnostics: diagnostics, ext: "sh", mediaType: "application/x-sh;charset=utf-8"}
+	if req.Format == Postman {
+		body.content, err = s.renderPostman(rev.Document.Title, prepared)
+		body.ext, body.mediaType = "postman_collection.json", "application/json;charset=utf-8"
+	} else {
+		body.content, err = s.renderCURL(prepared)
+	}
+	if err != nil {
+		return exportBody{}, err
+	}
+	return body, nil
+}
+
+func (s *Service) exportSequence(rev designscenario.Revision, req Request) (exportBody, error) {
+	if req.ContractID != "" {
+		return exportBody{}, ErrInvalidRequest
+	}
+	diagnostics := diagramDiagnostics(rev.Document)
+	if !makeOption(req.Format, "", diagnostics).Ready {
+		return exportBody{}, &BlockedError{Diagnostics: diagnostics}
+	}
+	content, err := renderSequence(rev.Document, req.Format, s.maxBytes)
+	if err != nil {
+		return exportBody{}, err
+	}
+	body := exportBody{diagnostics: diagnostics, content: content, ext: "puml", mediaType: "text/plain;charset=utf-8"}
+	if req.Format == Mermaid {
+		body.ext = "mmd"
+	}
+	return body, nil
+}
+
+func (s *Service) exportOpenAPI(ctx context.Context, rev designscenario.Revision, req Request) (exportBody, error) {
+	if rev.Document.EventModel != nil && slices.ContainsFunc(rev.Document.EventModel.Contracts, func(c designscenario.EventContract) bool { return c.ID == req.ContractID }) {
+		return exportBody{}, ErrInvalidRequest
+	}
+	index := slices.IndexFunc(rev.Document.Contracts, func(c designscenario.Contract) bool { return c.ID == req.ContractID })
+	if index < 0 {
+		return exportBody{}, ErrContractNotFound
+	}
+	contract := rev.Document.Contracts[index]
+	diagnostics, err := s.contractDiagnostics(ctx, rev, contract)
+	if err != nil {
+		return exportBody{}, err
+	}
+	if !makeOption(req.Format, req.ContractID, diagnostics).Ready {
+		return exportBody{}, &BlockedError{Diagnostics: diagnostics}
+	}
+	content, err := s.renderOpenAPI(contract, req.Format)
+	if err != nil {
+		return exportBody{}, err
+	}
+	body := exportBody{diagnostics: diagnostics, content: content, ext: fmt.Sprintf("api-%d.json", index+1), mediaType: "application/json;charset=utf-8"}
+	if req.Format == OpenAPIYAML {
+		body.ext, body.mediaType = fmt.Sprintf("api-%d.yaml", index+1), "application/yaml;charset=utf-8"
+	}
+	return body, nil
 }
 
 // CheckResponse enforces the wire-size limit, including JSON escaping and metadata.

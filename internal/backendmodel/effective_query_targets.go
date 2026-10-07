@@ -15,6 +15,14 @@ func rejectStagedView(target BackendReadTarget) error {
 	return nil
 }
 
+// legacyProposalAdvancedUnsupported refuses a legacy proposal target on a live
+// Flow, Events or Lineage query. These readers used savedUnsupported(), whose
+// text talks about a saved view, so a caller with no saved view went looking
+// for one (review 2026-10-06, F115, F20). Status and code are unchanged.
+func legacyProposalAdvancedUnsupported(view string) error {
+	return &FaultError{Status: 422, Code: "backend_unsupported_scope", Message: view + " reads support a revision or a full changeProposal target; a legacy proposal target is unsupported"}
+}
+
 func advancedReadQuery(raw []byte) bool {
 	fields, err := relationalObject(raw)
 	if err != nil {

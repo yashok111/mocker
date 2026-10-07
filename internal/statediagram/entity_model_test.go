@@ -45,20 +45,20 @@ func TestEntityCodecRoundtripAndStrictFields(t *testing.T) {
 func TestConfiguredSimulationReadsAndWritesEffectiveValue(t *testing.T) {
 	t.Parallel()
 	d := decodeConfigured(t)
-	initial, err := Simulate(d, nil, `{}`, nil)
+	initial, err := Simulate(t.Context(), d, nil, `{}`, nil)
 	if err != nil || initial.StateID != "start" || initial.DataJSON != "{}" {
 		t.Fatalf("initial %+v %v", initial, err)
 	}
-	got, err := Simulate(d, nil, `{"status":"created","amount":9007199254740993}`, []string{"pay"})
+	got, err := Simulate(t.Context(), d, nil, `{"status":"created","amount":9007199254740993}`, []string{"pay"})
 	if err != nil || got.StateID != "end" || !strings.Contains(got.DataJSON, `"status":"paid"`) || !strings.Contains(got.DataJSON, `"amount":9007199254740993`) {
 		t.Fatalf("transition %+v %v", got, err)
 	}
-	terminal, err := Simulate(d, nil, `{"status":"paid"}`, []string{"pay"})
+	terminal, err := Simulate(t.Context(), d, nil, `{"status":"paid"}`, []string{"pay"})
 	if err != nil || terminal.StateID != "end" || len(terminal.Steps) != 1 || terminal.Steps[0].Accepted {
 		t.Fatalf("terminal %+v %v", terminal, err)
 	}
 	for _, raw := range []string{`{"status":null}`, `{"status":17}`, `{"status":"unknown"}`} {
-		invalid, err := Simulate(d, nil, raw, []string{"pay"})
+		invalid, err := Simulate(t.Context(), d, nil, raw, []string{"pay"})
 		if err != nil || !HasErrors(invalid.Diagnostics) || len(invalid.Steps) != 0 || invalid.DataJSON != raw {
 			t.Fatalf("invalid %+v %v", invalid, err)
 		}

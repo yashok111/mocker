@@ -1,6 +1,7 @@
 package scenarioexport
 
 import (
+	"context"
 	"errors"
 	"os"
 	"strings"
@@ -24,12 +25,12 @@ func revisionFixture() designscenario.Revision {
 	}
 }
 
-func validContract(string) ([]designscenario.Diagnostic, error) { return nil, nil }
+func validContract(context.Context, string) ([]designscenario.Diagnostic, error) { return nil, nil }
 
 func TestDiagramDoesNotRequireAPIOrCompletedForms(t *testing.T) {
 	rev := revisionFixture()
 	rev.FormDrafts["all"] = `{"/canvas-contract/api/x":{"source":"{","propertySource":"","error":"invalid"}}`
-	svc := New(func(string) ([]designscenario.Diagnostic, error) {
+	svc := New(func(context.Context, string) ([]designscenario.Diagnostic, error) {
 		t.Fatal("unexpected API validation")
 		return nil, nil
 	}, 1<<20)
@@ -155,7 +156,7 @@ func TestContractValidatorErrorsAreNotHidden(t *testing.T) {
 	rev := revisionFixture()
 	rev.Document.Contracts = []designscenario.Contract{{ID: "api", Document: jsonx.RawMessage(apiDocument)}}
 	cause := errors.New("validator infrastructure")
-	svc := New(func(string) ([]designscenario.Diagnostic, error) { return nil, cause }, 1<<20)
+	svc := New(func(context.Context, string) ([]designscenario.Diagnostic, error) { return nil, cause }, 1<<20)
 	if _, err := svc.Options(rev); !errors.Is(err, cause) {
 		t.Fatalf("hidden error: %v", err)
 	}
@@ -185,7 +186,7 @@ func TestOptionsStopsBeforeValidatingEveryContractWhenBudgetExhausted(t *testing
 		rev.Document.Contracts = append(rev.Document.Contracts, designscenario.Contract{ID: "api", Document: []byte(apiDocument)})
 	}
 	calls := 0
-	_, err := New(func(string) ([]designscenario.Diagnostic, error) { calls++; return nil, nil }, 1000).Options(rev)
+	_, err := New(func(context.Context, string) ([]designscenario.Diagnostic, error) { calls++; return nil, nil }, 1000).Options(rev)
 	if !errors.Is(err, ErrTooLarge) || calls >= 200 {
 		t.Fatalf("err=%v validations=%d", err, calls)
 	}

@@ -2,16 +2,17 @@ package backendmodel
 
 import (
 	"encoding/json/jsontext"
-	"github.com/yashok111/mocker/internal/store"
 	"log/slog"
 	"strings"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/yashok111/mocker/internal/store"
 )
 
 func firstImportFixture(p *Project) BeginImportInput {
-	items := []InventoryItem{}
+	items := make([]InventoryItem, 0, 9)
 	for _, category := range []string{"files", "endpoints", "datastores", "migrations", "producers", "consumers", "jobs", "contracts", "tests"} {
 		items = append(items, InventoryItem{Category: category, Status: "complete", Denominator: new(int64(0)), DiscoverySource: "fixture", Gaps: []string{}})
 	}
@@ -609,11 +610,11 @@ func TestImportStatusAndEvidencePages(t *testing.T) {
 		version = b.AcceptedVersion
 	}
 	status, err := r.Import(t.Context(), p.ID, s.ID, ListInput{Limit: 2})
-	if err != nil || len(status.AcceptedBatches) != 2 || status.NextCursor == "" || status.AcceptedBatches[0].BatchID != "a" {
+	if err != nil || len(status.AcceptedBatches) != 2 || status.NextCursor == "" || status.AcceptedBatches[0].BatchID != "c" || status.AcceptedBatches[1].BatchID != "a" { // acceptance order (F89)
 		t.Fatalf("status %+v %v", status, err)
 	}
 	next, err := r.Import(t.Context(), p.ID, s.ID, ListInput{Limit: 2, Cursor: status.NextCursor})
-	if err != nil || len(next.AcceptedBatches) != 1 || next.AcceptedBatches[0].BatchID != "c" {
+	if err != nil || len(next.AcceptedBatches) != 1 || next.AcceptedBatches[0].BatchID != "b" {
 		t.Fatalf("batch next %+v %v", next, err)
 	}
 	_, err = r.Import(t.Context(), p.ID, other.ID, ListInput{Cursor: status.NextCursor})

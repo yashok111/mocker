@@ -4,11 +4,12 @@ import (
 	"crypto/sha256"
 	"crypto/subtle"
 	"errors"
-	p "github.com/yashok111/mocker/internal/ordersprotocol"
 	"io"
 	"mime"
 	"net/http"
 	"strings"
+
+	p "github.com/yashok111/mocker/internal/ordersprotocol"
 )
 
 func (s *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -23,22 +24,7 @@ func (s *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/__mocker_test/runs/") && strings.HasSuffix(r.URL.Path, "/observations") {
-		parts := strings.Split(r.URL.Path, "/")
-		if len(parts) != 5 || !p.ValidID(parts[3]) || r.ContentLength != 0 || len(r.TransferEncoding) > 0 {
-			s.fail(w, &protocolError{400, "invalid_request"})
-			return
-		}
-		records, e := s.RecordedBusiness(parts[3])
-		if e != nil {
-			s.fail(w, e)
-			return
-		}
-		s.respond(w, 200, struct {
-			Identity    p.Identity `json:"identity"`
-			Records     any        `json:"records"`
-			Retention   string     `json:"retention"`
-			Limitations []string   `json:"limitations"`
-		}{s.identity, records, s.ObservationRetention(parts[3]), []string{"process-lifetime observations; unavailable after restart", "SQL is partial business scope; reset/control/journal/savepoints excluded", "mocked/payment is in-process, not real payment network traffic"}}, p.JournalLimit)
+		s.serveObservations(w, r)
 		return
 	}
 	ep, run := route(r)
@@ -52,28 +38,7 @@ func (s *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if r.Method == http.MethodGet {
-		if len(raw) != 0 {
-			s.fail(w, &protocolError{400, "invalid_request"})
-			return
-		}
-		if ep == p.IdentityEndpoint {
-			s.mu.Lock()
-			var n int64
-			err = s.db.QueryRowContext(r.Context(), "SELECT epoch FROM metadata WHERE singleton=1").Scan(&n)
-			s.mu.Unlock()
-			if err != nil {
-				s.fail(w, err)
-				return
-			}
-			s.respond(w, 200, p.IdentityResponse{Identity: s.identity, IdentityHash: s.identityHash, Epoch: n}, p.BodyLimit)
-			return
-		}
-		j, e := s.journal(r.Context(), run)
-		if e != nil {
-			s.fail(w, e)
-			return
-		}
-		s.respond(w, 200, j, p.JournalLimit)
+		s.serveRead(w, r, ep, run, raw)
 		return
 	}
 	media, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
@@ -81,25 +46,7 @@ func (s *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, &protocolError{400, "invalid_request"})
 		return
 	}
-	var body any
-	var fence p.Fence
-	switch ep {
-	case p.ResetEndpoint:
-		var v p.ResetRequest
-		err = p.Decode(raw, &v, p.BodyLimit)
-		body = v
-		fence = v.Fence
-	case p.FailureEndpoint:
-		var v p.FailureRequest
-		err = p.Decode(raw, &v, p.BodyLimit)
-		body = v
-		fence = v.Fence
-	case p.OrderEndpoint:
-		var v p.OrderRequest
-		err = p.Decode(raw, &v, p.BodyLimit)
-		body = v
-		fence = v.Fence
-	}
+	body, fence, err := decodeMutation(ep, raw)
 	if err != nil || (ep != p.OrderEndpoint && run != fence.RunID) {
 		s.fail(w, &protocolError{400, "invalid_request"})
 		return
@@ -110,6 +57,72 @@ func (s *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	write(w, status, data)
+}
+
+func (s *Service) serveObservations(w http.ResponseWriter, r *http.Request) {
+	parts := strings.Split(r.URL.Path, "/")
+	if len(parts) != 5 || !p.ValidID(parts[3]) || r.ContentLength != 0 || len(r.TransferEncoding) > 0 {
+		s.fail(w, &protocolError{400, "invalid_request"})
+		return
+	}
+	records, e := s.RecordedBusiness(parts[3])
+	if e != nil {
+		s.fail(w, e)
+		return
+	}
+	s.respond(w, 200, struct {
+		Identity    p.Identity `json:"identity"`
+		Records     any        `json:"records"`
+		Retention   string     `json:"retention"`
+		Limitations []string   `json:"limitations"`
+	}{s.identity, records, s.ObservationRetention(parts[3]), []string{"process-lifetime observations; unavailable after restart", "SQL is partial business scope; reset/control/journal/savepoints excluded", "mocked/payment is in-process, not real payment network traffic"}}, p.JournalLimit)
+}
+
+// serveRead answers the two GET endpoints, identity and journal; a GET body
+// is refused rather than ignored.
+func (s *Service) serveRead(w http.ResponseWriter, r *http.Request, ep p.Endpoint, run string, raw []byte) {
+	if len(raw) != 0 {
+		s.fail(w, &protocolError{400, "invalid_request"})
+		return
+	}
+	if ep == p.IdentityEndpoint {
+		s.mu.Lock()
+		var n int64
+		err := s.db.QueryRowContext(r.Context(), "SELECT epoch FROM metadata WHERE singleton=1").Scan(&n)
+		s.mu.Unlock()
+		if err != nil {
+			s.fail(w, err)
+			return
+		}
+		s.respond(w, 200, p.IdentityResponse{Identity: s.identity, IdentityHash: s.identityHash, Epoch: n}, p.BodyLimit)
+		return
+	}
+	j, e := s.journal(r.Context(), run)
+	if e != nil {
+		s.fail(w, e)
+		return
+	}
+	s.respond(w, 200, j, p.JournalLimit)
+}
+
+// decodeMutation decodes a mutating endpoint's body into its typed request
+// and returns the fence it carries.
+func decodeMutation(ep p.Endpoint, raw []byte) (any, p.Fence, error) {
+	switch ep {
+	case p.ResetEndpoint:
+		var v p.ResetRequest
+		err := p.Decode(raw, &v, p.BodyLimit)
+		return v, v.Fence, err
+	case p.FailureEndpoint:
+		var v p.FailureRequest
+		err := p.Decode(raw, &v, p.BodyLimit)
+		return v, v.Fence, err
+	case p.OrderEndpoint:
+		var v p.OrderRequest
+		err := p.Decode(raw, &v, p.BodyLimit)
+		return v, v.Fence, err
+	}
+	return nil, p.Fence{}, nil
 }
 func route(r *http.Request) (p.Endpoint, string) {
 	run := ""

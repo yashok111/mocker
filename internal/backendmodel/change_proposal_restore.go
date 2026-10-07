@@ -86,6 +86,10 @@ func (r *Repo) restoreChangeTx(ctx context.Context, tx *sql.Tx, w changeRestoreW
 	rev.CreatedAt = now
 	rev.Author = "user"
 	rev.Summary = "Restore historical desired graph"
+	// A restore copies the old revision's content, not its authorship: the
+	// copied rebase action or import origin would mark this local restore as
+	// a rebase output or an import (review 2026-10-06, F38).
+	rev.Rebase, rev.ImportOrigin = nil, nil
 	p.Version++
 	p.Status = "draft"
 	p.ReadyReference = nil

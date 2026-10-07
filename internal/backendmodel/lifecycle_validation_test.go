@@ -36,7 +36,9 @@ func TestLifecycleFixtureAdmission(t *testing.T) {
 		t.Fatal(err)
 	}
 	ids := func() ([]string, []string, []string) {
-		a, b, c := []string{}, []string{}, []string{}
+		a := make([]string, 0, len(d.Lifecycle.States))
+		b := make([]string, 0, len(d.Lifecycle.Transitions))
+		c := make([]string, 0, len(d.Lifecycle.Rules))
 		for _, v := range d.Lifecycle.States {
 			a = append(a, v.ID)
 		}

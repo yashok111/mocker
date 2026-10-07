@@ -69,12 +69,23 @@ func (r *Repo) BuildInteractions(ctx context.Context, pid string, in DiagramInte
 	if interactionInputObjects(g) > 250000 {
 		return candidate, nil
 	}
-	gaps, err := resolveDiagramEvidence(ctx, g, candidate.Document, nil)
-	if err != nil {
+	if err = resolveInteractionCandidateGaps(ctx, g, candidate); err != nil {
 		return nil, err
 	}
-	candidate.Gaps = append(candidate.Gaps, gaps...)
 	return candidate, nil
+}
+
+// resolveInteractionCandidateGaps adds the evidence gaps of the candidate
+// document. Both the builder and evidence resolution report an
+// unresolved_receiver for the same step, so the merged list is sorted and
+// de-duplicated by gap ID (review 2026-10-06, F104).
+func resolveInteractionCandidateGaps(ctx context.Context, g *EffectiveGraphSnapshot, candidate *DiagramInteractionCandidate) error {
+	gaps, err := resolveDiagramEvidence(ctx, g, candidate.Document, nil)
+	if err != nil {
+		return err
+	}
+	candidate.Gaps = sortDiagramGaps(append(candidate.Gaps, gaps...))
+	return nil
 }
 
 type interactionFrontier struct {

@@ -93,7 +93,10 @@ An oversized event scan itself returns the pinned diagnostic page below.
 
 Check each response projectId/revisionId/semanticHash/policy/view and exact
 seedNodeId/serviceId against the request pin before presenting or caching it.
-Policy is source-events-projection-v1. Continue nextCursor with identical
+Policy depends on the target: source-events-projection-v1 for a source5
+revision, events-source6-query-v1 for a source6 revision, and
+effective-events-v1 for a full changeProposal (whatever its baseline). Expect
+the one the request's target implies. Continue nextCursor with identical
 project/revision/hash/policy/view/seed/service/effective limit. Reset cursors when
 any member changes. Cancel obsolete requests and discard mismatched late replies.
 UUID ordering is deterministic pagination order, not execution order.
@@ -147,7 +150,10 @@ Call query_backend_lineage with exact revisionId, full seed, direction
 forward/reverse, maxDepth1–32(default8), limit1–100(default50), cursor. Source5 uses
 field-lineage-traversal-v2; source4 retains field-lineage-traversal-v1. Inherited
 column/port/api_field addresses remain strict. Budgets retain64 sources/mapping,
-5000 visited full values,5000 mappings,20000 incidences and depth32. Unknown
+5000 visited full values,5000 mappings,20000 incidences and depth32; on source5
+the mapping/incidence limits apply while the index is built, before traversal,
+so a larger revision answers truncated:true (mapping_limit/reference_limit)
+whatever the seed (flow.md). Unknown
 transform, unknown delivery, stale/unresolved tuple or proof stops expansion;
 retain mapping/ref/evidence and requiresReview. An independent query beyond a
 boundary cannot be stitched into a proven path. Preserve full pin/policy/seed/

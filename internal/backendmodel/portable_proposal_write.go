@@ -5,8 +5,9 @@ import (
 	"database/sql"
 	"encoding/json/jsontext"
 	"encoding/json/v2"
-	"github.com/yashok111/mocker/internal/backendblob"
 	"time"
+
+	"github.com/yashok111/mocker/internal/backendblob"
 )
 
 func portableOriginHashes(o *EffectiveOrigin, hashes map[string]string) {
@@ -34,113 +35,9 @@ func (r *Repo) importPortableProposalTx(ctx context.Context, tx *sql.Tx, pid str
 	}
 	imported := map[string]bool{}
 	for i := range p.FullRevisions {
-		v := &p.FullRevisions[i]
-		if v.ProposalID != head.ID || imported[v.ID] || v.ParentRevisionID != nil && !imported[*v.ParentRevisionID] {
-			return invalid("proposal", "Proposal history is not a closed acyclic chain")
-		}
-		source, err := loadComposedBase(ctx, tx, pid, v.BaseRevisionID)
-		if err != nil {
+		if err := r.importPortableFullRevisionTx(ctx, tx, pid, p, i, imported, hashes, options); err != nil {
 			return err
 		}
-		originalHash := v.SemanticHash
-		v.BaseSemanticHash = source.State.Revision.SemanticHash
-		v.SourceSnapshotIDs = source.State.Revision.SourceSnapshotIDs
-		v.SourceVector = *source.SourceVector
-		for j := range v.Delta.Properties {
-			portableOriginHashes(&v.Delta.Properties[j].Origin, hashes)
-		}
-		for j := range v.Delta.Created {
-			portableOriginHashes(&v.Delta.Created[j].Origin, hashes)
-		}
-		for j := range v.Delta.Removed {
-			portableOriginHashes(&v.Delta.Removed[j].Origin, hashes)
-		}
-		for j := range v.Delta.EdgeNames {
-			portableOriginHashes(&v.Delta.EdgeNames[j].Origin, hashes)
-		}
-		for j := range v.Delta.IdentityIntents {
-			value := &v.Delta.IdentityIntents[j]
-			portableOriginHashes(&value.Origin, hashes)
-			if value.Target.Source != nil {
-				portableReplaceHash(&value.Target.Source.AssertionHash, hashes)
-			}
-			if value.Target.Basis != nil {
-				portableReplaceHash(&value.Target.Basis.SemanticHash, hashes)
-			}
-		}
-		for j := range v.Delta.CarriedIdentities {
-			portableReplaceHash(&v.Delta.CarriedIdentities[j].Source.AssertionHash, hashes)
-			portableReplaceHash(&v.Delta.CarriedIdentities[j].Basis.SemanticHash, hashes)
-		}
-		if v.ArtifactContextV3 == nil {
-			return invalid("context", "Imported full proposal requires context-v3")
-		}
-		if c := source.State.ArtifactContextV3; c != nil {
-			v.ArtifactContextV3.SourceContentHash, v.ArtifactContextV3.SourceSemanticHash = c.SourceContentHash, c.SourceSemanticHash
-		}
-		installation, err := installationID(ctx, tx)
-		if err != nil {
-			return err
-		}
-		request := r.portableArtifactRequest(ctx, tx)
-		if err := resolvePortableContext(v.ArtifactContextV3, installation, request); err != nil {
-			return err
-		}
-		e, err := newChangeEvaluation(source, *v, map[string]ChangeObjectIdentity{})
-		if err != nil {
-			return err
-		}
-		e.artifactRequest = request
-		evaluated, diagnostics, err := e.validate(ctx)
-		if err != nil {
-			return err
-		}
-		if len(diagnostics) > 0 {
-			return changeInvalid(diagnostics)
-		}
-		if err := r.validateChangeCriteriaReferences(ctx, tx, pid, e); err != nil {
-			return err
-		}
-		v.SemanticHash, err = changeSemanticHash(evaluated)
-		if err != nil {
-			return err
-		}
-		hashes[originalHash] = v.SemanticHash
-		attribution := portableAttribution(options, "change_proposal_revision", v.ID, int64(i+1), originalHash)
-		v.ImportOrigin = &attribution
-		var batch *ChangeAppliedBatch
-		for j := range p.Batches {
-			if p.Batches[j].RevisionID == v.ID {
-				if batch != nil {
-					return invalid("batch", "Duplicate batch")
-				}
-				batch = &p.Batches[j]
-			}
-		}
-		if batch == nil || batch.ProposalID != head.ID {
-			return invalid("batch", "Missing exact immutable proposal batch")
-		}
-		if batch.Action == "restore" && !imported[batch.RestoreRevisionID] {
-			return invalid("batch", "Missing restore dependency")
-		}
-		identities := []ChangeObjectIdentity{}
-		for j := range p.Identities {
-			identity := &p.Identities[j]
-			if identity.FirstRevisionID == v.ID {
-				portableOriginHashes(&identity.Origin, hashes)
-				identities = append(identities, *identity)
-			}
-		}
-		batch.CommandsHash, err = requestDigest(batch.Commands)
-		if err != nil {
-			return err
-		}
-		eventHead := *head
-		eventHead.Version = int64(i + 1)
-		if err := persistChangeRevision(ctx, tx, eventHead, *v, batch.Action, batch.RestoreRevisionID, batch.Commands, identities); err != nil {
-			return err
-		}
-		imported[v.ID] = true
 	}
 	if !imported[head.CurrentDraftRevisionID] {
 		return invalid("proposal", "Selected proposal revision missing")
@@ -156,6 +53,153 @@ func (r *Repo) importPortableProposalTx(ctx context.Context, tx *sql.Tx, pid str
 	}
 	return checkChangeProposalQuota(ctx, tx, pid, head.ID)
 }
+
+// importPortableFullRevisionTx rebases revision i onto the local source,
+// re-evaluates it to its local semantic hash and persists it with its batch.
+// imported holds every earlier revision of the chain.
+func (r *Repo) importPortableFullRevisionTx(ctx context.Context, tx *sql.Tx, pid string, p *PortableProposal, i int, imported map[string]bool, hashes map[string]string, options PortableImportOptions) error {
+	head := p.Full
+	v := &p.FullRevisions[i]
+	if v.ProposalID != head.ID || imported[v.ID] || v.ParentRevisionID != nil && !imported[*v.ParentRevisionID] {
+		return invalid("proposal", "Proposal history is not a closed acyclic chain")
+	}
+	source, err := loadComposedBase(ctx, tx, pid, v.BaseRevisionID)
+	if err != nil {
+		return err
+	}
+	originalHash := v.SemanticHash
+	v.BaseSemanticHash = source.State.Revision.SemanticHash
+	v.SourceSnapshotIDs = source.State.Revision.SourceSnapshotIDs
+	v.SourceVector = *source.SourceVector
+	rehashPortableChangeDelta(&v.Delta, hashes)
+	if v.ArtifactContextV3 == nil {
+		return invalid("context", "Imported full proposal requires context-v3")
+	}
+	if c := source.State.ArtifactContextV3; c != nil {
+		v.ArtifactContextV3.SourceContentHash, v.ArtifactContextV3.SourceSemanticHash = c.SourceContentHash, c.SourceSemanticHash
+	}
+	v.SemanticHash, err = r.reevaluatePortableRevisionTx(ctx, tx, pid, source, v)
+	if err != nil {
+		return err
+	}
+	hashes[originalHash] = v.SemanticHash
+	attribution := portableAttribution(options, "change_proposal_revision", v.ID, int64(i+1), originalHash)
+	v.ImportOrigin = &attribution
+	batch, err := portableRevisionBatch(p, v.ID, imported)
+	if err != nil {
+		return err
+	}
+	identities := portableRevisionIdentities(p, v.ID, hashes)
+	batch.CommandsHash, err = requestDigest(batch.Commands)
+	if err != nil {
+		return err
+	}
+	eventHead := *head
+	eventHead.Version = int64(i + 1)
+	if err := persistChangeRevision(ctx, tx, eventHead, *v, batch.Action, batch.RestoreRevisionID, batch.Commands, identities); err != nil {
+		return err
+	}
+	imported[v.ID] = true
+	return nil
+}
+
+// rehashPortableChangeDelta rewrites every origin and basis hash a delta
+// cites from its exported value to the locally recomputed one.
+func rehashPortableChangeDelta(d *ChangeDelta, hashes map[string]string) {
+	for j := range d.Properties {
+		portableOriginHashes(&d.Properties[j].Origin, hashes)
+	}
+	for j := range d.Created {
+		portableOriginHashes(&d.Created[j].Origin, hashes)
+	}
+	for j := range d.Removed {
+		portableOriginHashes(&d.Removed[j].Origin, hashes)
+	}
+	for j := range d.EdgeNames {
+		portableOriginHashes(&d.EdgeNames[j].Origin, hashes)
+	}
+	for j := range d.IdentityIntents {
+		value := &d.IdentityIntents[j]
+		portableOriginHashes(&value.Origin, hashes)
+		if value.Target.Source != nil {
+			portableReplaceHash(&value.Target.Source.AssertionHash, hashes)
+		}
+		if value.Target.Basis != nil {
+			portableReplaceHash(&value.Target.Basis.SemanticHash, hashes)
+		}
+	}
+	for j := range d.CarriedIdentities {
+		portableReplaceHash(&d.CarriedIdentities[j].Source.AssertionHash, hashes)
+		portableReplaceHash(&d.CarriedIdentities[j].Basis.SemanticHash, hashes)
+	}
+}
+
+// reevaluatePortableRevisionTx resolves the revision's artifact context here
+// and validates it against the local source; an imported revision is trusted
+// only after the same evaluation a local save runs. It returns the revision's
+// local semantic hash.
+func (r *Repo) reevaluatePortableRevisionTx(ctx context.Context, tx *sql.Tx, pid string, source *SourceGraphSnapshot, v *ChangeProposalRevision) (string, error) {
+	installation, err := installationID(ctx, tx)
+	if err != nil {
+		return "", err
+	}
+	request := r.portableArtifactRequest(ctx, tx)
+	if err := resolvePortableContext(v.ArtifactContextV3, installation, request); err != nil {
+		return "", err
+	}
+	e, err := newChangeEvaluation(source, *v, map[string]ChangeObjectIdentity{})
+	if err != nil {
+		return "", err
+	}
+	e.artifactRequest = request
+	evaluated, diagnostics, err := e.validate(ctx)
+	if err != nil {
+		return "", err
+	}
+	if len(diagnostics) > 0 {
+		return "", changeInvalid(diagnostics)
+	}
+	if err := r.validateChangeCriteriaReferences(ctx, tx, pid, e); err != nil {
+		return "", err
+	}
+	return changeSemanticHash(evaluated)
+}
+
+// portableRevisionBatch finds the one immutable batch that produced revision
+// id; a restore batch may only name an already imported revision.
+func portableRevisionBatch(p *PortableProposal, id string, imported map[string]bool) (*ChangeAppliedBatch, error) {
+	var batch *ChangeAppliedBatch
+	for j := range p.Batches {
+		if p.Batches[j].RevisionID == id {
+			if batch != nil {
+				return nil, invalid("batch", "Duplicate batch")
+			}
+			batch = &p.Batches[j]
+		}
+	}
+	if batch == nil || batch.ProposalID != p.Full.ID {
+		return nil, invalid("batch", "Missing exact immutable proposal batch")
+	}
+	if batch.Action == "restore" && !imported[batch.RestoreRevisionID] {
+		return nil, invalid("batch", "Missing restore dependency")
+	}
+	return batch, nil
+}
+
+// portableRevisionIdentities returns the identities revision id introduced,
+// with their origin hashes rewritten to local ones.
+func portableRevisionIdentities(p *PortableProposal, id string, hashes map[string]string) []ChangeObjectIdentity {
+	identities := []ChangeObjectIdentity{}
+	for j := range p.Identities {
+		identity := &p.Identities[j]
+		if identity.FirstRevisionID == id {
+			portableOriginHashes(&identity.Origin, hashes)
+			identities = append(identities, *identity)
+		}
+	}
+	return identities
+}
+
 func (r *Repo) importPortableLegacyProposalTx(ctx context.Context, tx *sql.Tx, pid string, p *PortableProposal, hashes map[string]string, options PortableImportOptions) error {
 	h := p.Legacy
 	if h.ProjectID != pid || len(p.LegacyRevisions) == 0 || len(p.LegacyRevisions) > 1000 || len(p.FullRevisions) != 0 {
@@ -173,61 +217,9 @@ func (r *Repo) importPortableLegacyProposalTx(ctx context.Context, tx *sql.Tx, p
 	}
 	imported := map[string]bool{}
 	for i := range p.LegacyRevisions {
-		v := &p.LegacyRevisions[i]
-		if v.ProposalID != h.ID || v.BaseRevisionID != h.BaseRevisionID || imported[v.ID] || v.ParentRevisionID != nil && !imported[*v.ParentRevisionID] {
-			return invalid("proposal", "Invalid legacy history")
-		}
-		originalHash := v.SemanticHash
-		v.BaseSemanticHash = h.BaseSemanticHash
-		v.SourceSnapshotIDs = source.Revision.SourceSnapshotIDs
-		// Legacy proposal effective reads inherit the source's separate v3 context.
-		v.ArtifactPins = []ArtifactPin{}
-		for j := range v.Overlays {
-			o := &v.Overlays[j]
-			if o.Base != nil {
-				portableReplaceHash(&o.Base.SemanticHash, hashes)
-			}
-			for key, origin := range o.PropertyOrigins {
-				if origin.Base != nil {
-					portableReplaceHash(&origin.Base.SemanticHash, hashes)
-				}
-				o.PropertyOrigins[key] = origin
-			}
-		}
-		base := &graphCandidate{Nodes: source.Nodes, Edges: source.Edges, Evidence: source.Evidence}
-		checked, err := validateProposalSnapshot(base, *h, *v)
-		if err != nil {
+		if err := importPortableLegacyRevisionTx(ctx, tx, pid, h, source, &p.LegacyRevisions[i], i, imported, hashes, options); err != nil {
 			return err
 		}
-		if len(checked.Diagnostics) > 0 {
-			return invalid("proposal", "Legacy owner validation failed")
-		}
-		v.SemanticHash, err = proposalEffectiveGraphHash(*h, v.Overlays)
-		if err != nil {
-			return err
-		}
-		hashes[originalHash] = v.SemanticHash
-		origin := portableAttribution(options, "proposal_revision", v.ID, int64(i+1), originalHash)
-		v.ImportOrigin = &origin
-		raw, err := json.Marshal(v)
-		if err != nil {
-			return err
-		}
-		if _, err := backendblob.Exec(ctx, tx, `INSERT INTO backend_proposal_revisions(id,proposal_id,parent_revision_id,document) VALUES(?,?,?,?)`, v.ID, h.ID, v.ParentRevisionID, string(raw)); err != nil {
-			return err
-		}
-		effective, err := resolveEffectiveGraph(ctx, tx, pid, BackendReadTarget{Proposal: &ProposalReadTarget{ProposalID: h.ID, ProposalRevisionID: v.ID}})
-		if err != nil {
-			return err
-		}
-		diagnostics, err := validatePortableLegacyStructure(ctx, source, *h, *v, effective.State)
-		if err != nil {
-			return err
-		}
-		if len(diagnostics) > 0 {
-			return changeInvalid(diagnostics)
-		}
-		imported[v.ID] = true
 	}
 	if !imported[h.DraftRevisionID] {
 		return invalid("proposal", "Selected legacy revision missing")
@@ -242,6 +234,73 @@ func (r *Repo) importPortableLegacyProposalTx(ctx context.Context, tx *sql.Tx, p
 		return err
 	}
 	return r.checkProposalStaging(ctx, tx, pid, 0)
+}
+
+// importPortableLegacyRevisionTx validates and persists legacy revision i
+// against the proposal's one source revision, then checks the effective
+// graph it produces. imported holds every earlier revision of the chain.
+func importPortableLegacyRevisionTx(ctx context.Context, tx *sql.Tx, pid string, h *Proposal, source *RevisionState, v *ProposalRevision, i int, imported map[string]bool, hashes map[string]string, options PortableImportOptions) error {
+	if v.ProposalID != h.ID || v.BaseRevisionID != h.BaseRevisionID || imported[v.ID] || v.ParentRevisionID != nil && !imported[*v.ParentRevisionID] {
+		return invalid("proposal", "Invalid legacy history")
+	}
+	originalHash := v.SemanticHash
+	v.BaseSemanticHash = h.BaseSemanticHash
+	v.SourceSnapshotIDs = source.Revision.SourceSnapshotIDs
+	// Legacy proposal effective reads inherit the source's separate v3 context.
+	v.ArtifactPins = []ArtifactPin{}
+	rehashPortableLegacyOverlays(v.Overlays, hashes)
+	base := &graphCandidate{Nodes: source.Nodes, Edges: source.Edges, Evidence: source.Evidence}
+	checked, err := validateProposalSnapshot(base, *h, *v)
+	if err != nil {
+		return err
+	}
+	if len(checked.Diagnostics) > 0 {
+		return invalid("proposal", "Legacy owner validation failed")
+	}
+	v.SemanticHash, err = proposalEffectiveGraphHash(*h, v.Overlays)
+	if err != nil {
+		return err
+	}
+	hashes[originalHash] = v.SemanticHash
+	origin := portableAttribution(options, "proposal_revision", v.ID, int64(i+1), originalHash)
+	v.ImportOrigin = &origin
+	raw, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	if _, err := backendblob.Exec(ctx, tx, `INSERT INTO backend_proposal_revisions(id,proposal_id,parent_revision_id,document) VALUES(?,?,?,?)`, v.ID, h.ID, v.ParentRevisionID, string(raw)); err != nil {
+		return err
+	}
+	effective, err := resolveEffectiveGraph(ctx, tx, pid, BackendReadTarget{Proposal: &ProposalReadTarget{ProposalID: h.ID, ProposalRevisionID: v.ID}})
+	if err != nil {
+		return err
+	}
+	diagnostics, err := validatePortableLegacyStructure(ctx, source, *h, *v, effective.State)
+	if err != nil {
+		return err
+	}
+	if len(diagnostics) > 0 {
+		return changeInvalid(diagnostics)
+	}
+	imported[v.ID] = true
+	return nil
+}
+
+// rehashPortableLegacyOverlays rewrites the base hashes legacy overlays and
+// their property origins cite to the locally recomputed ones.
+func rehashPortableLegacyOverlays(overlays []ProposalOverlay, hashes map[string]string) {
+	for j := range overlays {
+		o := &overlays[j]
+		if o.Base != nil {
+			portableReplaceHash(&o.Base.SemanticHash, hashes)
+		}
+		for key, origin := range o.PropertyOrigins {
+			if origin.Base != nil {
+				portableReplaceHash(&origin.Base.SemanticHash, hashes)
+			}
+			o.PropertyOrigins[key] = origin
+		}
+	}
 }
 
 // Legacy overlays deliberately omit source metadata. Adapt only a detached
@@ -265,7 +324,7 @@ func validatePortableLegacyStructure(ctx context.Context, base *RevisionState, p
 	if len(dialect) == 0 {
 		return nil, invalid("facet", "Pinned legacy dialect is missing")
 	}
-	copy, err := detachedEffectiveState(state)
+	detached, err := detachedEffectiveState(state)
 	if err != nil {
 		return nil, err
 	}
@@ -289,8 +348,8 @@ func validatePortableLegacyStructure(ctx context.Context, base *RevisionState, p
 	}
 	for _, o := range v.Overlays {
 		if o.RecordType == "node" {
-			for i := range copy.Nodes {
-				n := &copy.Nodes[i]
+			for i := range detached.Nodes {
+				n := &detached.Nodes[i]
 				if n.ID == o.SubjectID {
 					n.Attributes, err = enrich(n.Kind, n.Attributes, o.FacetKey)
 					if err != nil {
@@ -299,8 +358,8 @@ func validatePortableLegacyStructure(ctx context.Context, base *RevisionState, p
 				}
 			}
 		} else {
-			for i := range copy.Edges {
-				e := &copy.Edges[i]
+			for i := range detached.Edges {
+				e := &detached.Edges[i]
 				if e.ID == o.SubjectID {
 					e.Attributes, err = enrich(e.Kind, e.Attributes, o.FacetKey)
 					if err != nil {
@@ -310,5 +369,5 @@ func validatePortableLegacyStructure(ctx context.Context, base *RevisionState, p
 			}
 		}
 	}
-	return ValidateSourceStructure(ctx, SourceStructuralGraph{SchemaVersion: ComposedSchemaVersion, Nodes: copy.Nodes, Edges: copy.Edges})
+	return ValidateSourceStructure(ctx, SourceStructuralGraph{SchemaVersion: ComposedSchemaVersion, Nodes: detached.Nodes, Edges: detached.Edges})
 }

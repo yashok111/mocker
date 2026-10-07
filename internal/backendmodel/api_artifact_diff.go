@@ -176,111 +176,140 @@ func apiArtifactObjectDiff(ctx context.Context, before, after string, remaining 
 	if err != nil {
 		return nil, false, err
 	}
-	out := []APIArtifactObjectChange{}
-	truncated := false
-	var walk func(any, bool, any, bool, string) error
-	var child func(any, bool, any, bool, string, string) error
-	child = func(a any, aPresent bool, b any, bPresent bool, p, segment string) error {
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		path, ok := appendAPIArtifactDiffPath(p, segment)
-		if !ok {
-			equal := false
-			if aPresent && bPresent {
-				var err error
-				equal, err = equalAPIArtifactDiffValues(ctx, a, b)
-				if err != nil {
-					return err
-				}
-			}
-			if !equal {
-				truncated = true
-			}
-			return nil
-		}
-		return walk(a, aPresent, b, bPresent, path)
+	d := &apiArtifactDiffer{ctx: ctx, remaining: remaining, out: []APIArtifactObjectChange{}}
+	err = d.walk(left, before != "", right, after != "", "")
+	return d.out, d.truncated, err
+}
+
+// apiArtifactDiffer is one bounded structural diff: it stops descending once
+// remaining changes are emitted or a pointer would exceed its bound, and
+// reports that as truncated.
+type apiArtifactDiffer struct {
+	ctx       context.Context
+	remaining int
+	out       []APIArtifactObjectChange
+	truncated bool
+}
+
+func (d *apiArtifactDiffer) child(a any, aPresent bool, b any, bPresent bool, p, segment string) error {
+	if err := d.ctx.Err(); err != nil {
+		return err
 	}
-	walk = func(a any, aPresent bool, b any, bPresent bool, p string) error {
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		if truncated {
-			return nil
-		}
+	path, ok := appendAPIArtifactDiffPath(p, segment)
+	if !ok {
+		equal := false
 		if aPresent && bPresent {
-			switch a := a.(type) {
-			case map[string]any:
-				if right, ok := b.(map[string]any); ok {
-					keys := make([]string, 0, len(a)+len(right))
-					for k := range a {
-						keys = append(keys, k)
-					}
-					for k := range right {
-						if _, exists := a[k]; !exists {
-							keys = append(keys, k)
-						}
-					}
-					slices.Sort(keys)
-					for _, k := range keys {
-						av, aOK := a[k]
-						bv, bOK := right[k]
-						if err := child(av, aOK, bv, bOK, p, k); err != nil {
-							return err
-						}
-						if truncated {
-							return nil
-						}
-					}
-					return nil
-				}
-			case []any:
-				if right, ok := b.([]any); ok {
-					for i := range max(len(a), len(right)) {
-						var av, bv any
-						aOK, bOK := i < len(a), i < len(right)
-						if aOK {
-							av = a[i]
-						}
-						if bOK {
-							bv = right[i]
-						}
-						if err := child(av, aOK, bv, bOK, p, strconv.Itoa(i)); err != nil {
-							return err
-						}
-						if truncated {
-							return nil
-						}
-					}
-					return nil
-				}
-			default:
-				if jsonx.EqualValue(a, b) {
-					return nil
-				}
+			var err error
+			equal, err = equalAPIArtifactDiffValues(d.ctx, a, b)
+			if err != nil {
+				return err
 			}
 		}
-		if len(out) >= remaining {
-			truncated = true
-			return nil
+		if !equal {
+			d.truncated = true
 		}
-		ah, err := hashAPIArtifactDiffValue(a, aPresent)
-		if err != nil {
-			return err
-		}
-		bh, err := hashAPIArtifactDiffValue(b, bPresent)
-		if err != nil {
-			return err
-		}
-		kind := "changed"
-		if !aPresent {
-			kind = "added"
-		} else if !bPresent {
-			kind = "removed"
-		}
-		out = append(out, APIArtifactObjectChange{Pointer: p, Kind: kind, BeforeHash: ah, AfterHash: bh})
 		return nil
 	}
-	err = walk(left, before != "", right, after != "", "")
-	return out, truncated, err
+	return d.walk(a, aPresent, b, bPresent, path)
+}
+
+func (d *apiArtifactDiffer) walk(a any, aPresent bool, b any, bPresent bool, p string) error {
+	if err := d.ctx.Err(); err != nil {
+		return err
+	}
+	if d.truncated {
+		return nil
+	}
+	if aPresent && bPresent {
+		handled, err := d.descend(a, b, p)
+		if handled || err != nil {
+			return err
+		}
+	}
+	return d.emit(a, aPresent, b, bPresent, p)
+}
+
+// descend walks into two containers of the same kind, and reports two equal
+// scalars as handled too; anything else is a change at p itself.
+func (d *apiArtifactDiffer) descend(a, b any, p string) (bool, error) {
+	switch a := a.(type) {
+	case map[string]any:
+		if right, ok := b.(map[string]any); ok {
+			return true, d.walkObject(a, right, p)
+		}
+	case []any:
+		if right, ok := b.([]any); ok {
+			return true, d.walkArray(a, right, p)
+		}
+	default:
+		return jsonx.EqualValue(a, b), nil
+	}
+	return false, nil
+}
+
+func (d *apiArtifactDiffer) walkObject(a, right map[string]any, p string) error {
+	keys := make([]string, 0, len(a)+len(right))
+	for k := range a {
+		keys = append(keys, k)
+	}
+	for k := range right {
+		if _, exists := a[k]; !exists {
+			keys = append(keys, k)
+		}
+	}
+	slices.Sort(keys)
+	for _, k := range keys {
+		av, aOK := a[k]
+		bv, bOK := right[k]
+		if err := d.child(av, aOK, bv, bOK, p, k); err != nil {
+			return err
+		}
+		if d.truncated {
+			return nil
+		}
+	}
+	return nil
+}
+
+func (d *apiArtifactDiffer) walkArray(a, right []any, p string) error {
+	for i := range max(len(a), len(right)) {
+		var av, bv any
+		aOK, bOK := i < len(a), i < len(right)
+		if aOK {
+			av = a[i]
+		}
+		if bOK {
+			bv = right[i]
+		}
+		if err := d.child(av, aOK, bv, bOK, p, strconv.Itoa(i)); err != nil {
+			return err
+		}
+		if d.truncated {
+			return nil
+		}
+	}
+	return nil
+}
+
+func (d *apiArtifactDiffer) emit(a any, aPresent bool, b any, bPresent bool, p string) error {
+	if len(d.out) >= d.remaining {
+		d.truncated = true
+		return nil
+	}
+	ah, err := hashAPIArtifactDiffValue(a, aPresent)
+	if err != nil {
+		return err
+	}
+	bh, err := hashAPIArtifactDiffValue(b, bPresent)
+	if err != nil {
+		return err
+	}
+	kind := "changed"
+	if !aPresent {
+		kind = "added"
+	} else if !bPresent {
+		kind = "removed"
+	}
+	d.out = append(d.out, APIArtifactObjectChange{Pointer: p, Kind: kind, BeforeHash: ah, AfterHash: bh})
+	return nil
 }

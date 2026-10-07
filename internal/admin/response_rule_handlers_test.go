@@ -166,38 +166,44 @@ func responseRuleRows(t *testing.T, s *Server) map[string][]byte {
 	t.Helper()
 	result := map[string][]byte{}
 	for _, table := range []string{"api_designs", "api_design_revisions", "workspaces", "scenarios", "checkpoints", "entities", "traffic", "design_scenarios", "design_scenario_revisions", "op_overrides", "custom_endpoints", "resources"} {
-		rows, err := s.db.R.QueryContext(t.Context(), "SELECT * FROM "+table+" ORDER BY rowid")
-		if err != nil {
-			t.Fatal(err)
-		}
-		columns, err := rows.Columns()
-		if err != nil {
-			t.Fatal(err)
-		}
-		values := [][]any{}
-		for rows.Next() {
-			row := make([]any, len(columns))
-			targets := make([]any, len(columns))
-			for i := range row {
-				targets[i] = &row[i]
-			}
-			if err := rows.Scan(targets...); err != nil {
-				t.Fatal(err)
-			}
-			values = append(values, row)
-		}
-		if err := rows.Err(); err != nil {
-			t.Fatal(err)
-		}
-		if err := rows.Close(); err != nil {
-			t.Fatal(err)
-		}
-		result[table], err = json.Marshal(values)
-		if err != nil {
-			t.Fatal(err)
-		}
+		result[table] = responseRuleTableRows(t, s, table)
 	}
 	return result
+}
+
+// responseRuleTableRows is one table of the snapshot; a function of its own so
+// the rows close on every exit, including t.Fatal.
+func responseRuleTableRows(t *testing.T, s *Server, table string) []byte {
+	t.Helper()
+	rows, err := s.db.R.QueryContext(t.Context(), "SELECT * FROM "+table+" ORDER BY rowid")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = rows.Close() }() // read-only
+	columns, err := rows.Columns()
+	if err != nil {
+		t.Fatal(err)
+	}
+	values := [][]any{}
+	for rows.Next() {
+		row := make([]any, len(columns))
+		targets := make([]any, len(columns))
+		for i := range row {
+			targets[i] = &row[i]
+		}
+		if err := rows.Scan(targets...); err != nil {
+			t.Fatal(err)
+		}
+		values = append(values, row)
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
+	}
+	raw, err := json.Marshal(values)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return raw
 }
 
 func TestResponseRuleEvaluationCannotTouchRuntimeState(t *testing.T) {
@@ -273,7 +279,7 @@ func TestResponseRuleEvaluationCannotTouchRuntimeState(t *testing.T) {
 	}
 	plane := mockplane.New(s.cfg, s.ws, s.specsRepo, s.log)
 	recorder := httptest.NewRecorder()
-	plane.ServeWorkspace(recorder, httptest.NewRequest("GET", "http://mock.local/orders", nil), ws)
+	plane.ServeWorkspace(recorder, httptest.NewRequest(http.MethodGet, "http://mock.local/orders", nil), ws)
 	if recorder.Code != 200 || strings.Contains(recorder.Body.String(), `"created":true`) {
 		t.Fatalf("authored rule changed live behavior: %d %s", recorder.Code, recorder.Body.String())
 	}
@@ -289,7 +295,7 @@ func TestResponseRuleEvaluationCannotTouchRuntimeState(t *testing.T) {
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		livePlane.ServeWorkspace(liveRecorder, httptest.NewRequest("GET", "http://mock.local/orders", nil).WithContext(ctx), ws)
+		livePlane.ServeWorkspace(liveRecorder, httptest.NewRequest(http.MethodGet, "http://mock.local/orders", nil).WithContext(ctx), ws)
 	}()
 	defer func() { cancel(); <-done }()
 	select {
@@ -338,7 +344,7 @@ func TestResponseRuleEvaluationCannotTouchRuntimeState(t *testing.T) {
 		t.Fatal(err)
 	}
 	publishedRecorder := httptest.NewRecorder()
-	plane.ServeWorkspace(publishedRecorder, httptest.NewRequest("GET", "http://mock.local/orders", nil), published)
+	plane.ServeWorkspace(publishedRecorder, httptest.NewRequest(http.MethodGet, "http://mock.local/orders", nil), published)
 	if publishedRecorder.Code != 200 || strings.Contains(publishedRecorder.Body.String(), `"created":true`) {
 		t.Fatalf("publishing enabled live response rules: %d %s", publishedRecorder.Code, publishedRecorder.Body.String())
 	}

@@ -5,11 +5,14 @@ import (
 	"database/sql"
 	"encoding/json/v2"
 	"errors"
-	"github.com/yashok111/mocker/internal/backendblob"
 	"slices"
 	"strings"
 	"time"
 	"uuid"
+
+	"github.com/yashok111/mocker/internal/apidesign"
+	"github.com/yashok111/mocker/internal/backendblob"
+	"github.com/yashok111/mocker/internal/designscenario"
 )
 
 func (out ArtifactPinsResult) ReceiptBytes() []byte { return []byte(out.receiptJSON) }
@@ -55,6 +58,32 @@ func (s *ArtifactService) Apply(ctx context.Context, pid string, in ApplyArtifac
 	if found || err != nil {
 		return out, err
 	}
+	return s.applyAfterReceiptMiss(ctx, pid, in, scope, digest)
+}
+
+// applyAfterReceiptMiss runs after the pre-check found no receipt. An identical
+// retry overlapping the first apply passes that pre-check, then fails the
+// re-prepare with a version/base/hash 409 caused by the first apply's own
+// commit, never reaching the in-transaction receipt read; the client was told
+// its intent conflicted although it landed. A 409 re-reads the receipt and
+// replays it (review 2026-10-06, F66).
+func (s *ArtifactService) applyAfterReceiptMiss(ctx context.Context, pid string, in ApplyArtifactPinsInput, scope, digest string) (*ArtifactPinsResult, error) {
+	out, err := s.applyArtifactPins(ctx, pid, in, scope, digest)
+	if f, ok := errors.AsType[*FaultError](err); ok && f.Status == 409 && f.Code != "backend_idempotency_conflict" {
+		replay := new(ArtifactPinsResult)
+		found, rerr := readArtifactPinsReceipt(ctx, s.repo.db.R, scope, in.IdempotencyKey, digest, replay)
+		if rerr != nil {
+			return nil, rerr
+		}
+		if found {
+			return replay, nil
+		}
+	}
+	return out, err
+}
+
+func (s *ArtifactService) applyArtifactPins(ctx context.Context, pid string, in ApplyArtifactPinsInput, scope, digest string) (*ArtifactPinsResult, error) {
+	out := new(ArtifactPinsResult)
 	if err := s.admitApplyBody(pid, PreviewArtifactPinsInput{in.BaseRevisionID, in.ExpectedVersion, in.Commands}); err != nil {
 		return nil, err
 	}
@@ -76,6 +105,17 @@ func (s *ArtifactService) Apply(ctx context.Context, pid string, in ApplyArtifac
 	}
 	return out, nil
 }
+
+// ownerDigestGone reports whether an owner digest read failed because the
+// exact owner revision is absent (or no reader serves its kind): that is the
+// candidate conflict the client resolves by re-previewing. Any other error
+// (SQLite busy, I/O, a corrupt stored digest) is a server fault and is returned
+// unchanged; it used to become 409 "digest changed", telling the client to
+// abandon a valid apply instead of retrying it (review 2026-10-06, F65, F94).
+func ownerDigestGone(err error) bool {
+	return errors.Is(err, sql.ErrNoRows) || errors.Is(err, apidesign.ErrNotFound) || errors.Is(err, designscenario.ErrNotFound)
+}
+
 func (s *ArtifactService) checkArtifactDigests(ctx context.Context, tx *sql.Tx, digests map[editorSnapshotKey]string, version int64) error {
 	keys := make([]editorSnapshotKey, 0, len(digests))
 	for key := range digests {
@@ -105,6 +145,9 @@ func (s *ArtifactService) checkArtifactDigests(ctx context.Context, tx *sql.Tx, 
 		}
 		if ctx.Err() != nil {
 			return ctx.Err()
+		}
+		if err != nil && !ownerDigestGone(err) {
+			return err
 		}
 		if err != nil || current != digests[key] {
 			return importConflict("backend_artifact_pins_hash_conflict", "Exact immutable artifact digest changed", version)
@@ -146,13 +189,60 @@ func (s *ArtifactService) applyArtifactPinsTx(ctx context.Context, tx *sql.Tx, p
 	if !isArtifactSourceSchema(revision.SchemaVersion) {
 		return importConflict("backend_artifact_pins_base_conflict", "Source baseline schema changed", p.Version)
 	}
-	if _, err = loadArtifactContext(ctx, tx, in.BaseRevisionID, revision.ArtifactPins); err != nil {
+	stored, err := loadArtifactContext(ctx, tx, in.BaseRevisionID, revision.ArtifactPins)
+	if err != nil {
 		return err
 	}
 	if err = s.checkArtifactDigests(ctx, tx, prepared.digests, p.Version); err != nil {
 		return err
 	}
+	if artifactPinsUnchanged(stored, revision.ArtifactPins, prepared) {
+		return answerUnchangedArtifactPins(ctx, tx, in, scope, digest, out, p, revision)
+	}
 	return persistArtifactPins(ctx, tx, pid, in, prepared, scope, digest, out, p, revision)
+}
+
+// artifactPinsUnchanged reports whether the candidate would store exactly the
+// pins and context bytes the base revision already has. A set that restated
+// the current pin and bindings previewed with only "unchanged" rows, and Apply
+// wrote a revision identical to its base and bumped the project version
+// (review 2026-10-06, F61; the owner decided such a set is an idempotent
+// no-op). The comparison is on the bytes persistArtifactPins would write, so
+// a changed reason or label is still a real change.
+func artifactPinsUnchanged(stored *ArtifactContext, pins []ArtifactPin, prepared *preparedArtifactPins) bool {
+	if stored == nil {
+		return false
+	}
+	before, err := requestDigest(canonicalAPIPins(pins))
+	if err != nil {
+		return false
+	}
+	after, err := requestDigest(prepared.preview.Pins)
+	if err != nil || before != after {
+		return false
+	}
+	old, err := EncodeArtifactContext(*stored, pins)
+	if err != nil {
+		return false
+	}
+	next, err := EncodeArtifactContext(prepared.frozen, prepared.preview.Pins)
+	return err == nil && string(old) == string(next)
+}
+
+// answerUnchangedArtifactPins answers a no-op apply with the current head and
+// project version and records the receipt, so a replay of the key returns the
+// same bytes and a different body under it is still a conflict.
+func answerUnchangedArtifactPins(ctx context.Context, tx *sql.Tx, in ApplyArtifactPinsInput, scope, digest string, out *ArtifactPinsResult, p *Project, revision Revision) error {
+	*out = ArtifactPinsResult{Project: *p, Revision: revision}
+	response, err := json.Marshal(out)
+	if err != nil {
+		return err
+	}
+	if _, err = tx.ExecContext(ctx, `INSERT INTO backend_command_receipts(scope,key,request_hash,response) VALUES(?,?,?,?)`, scope, in.IdempotencyKey, digest, string(response)); err != nil {
+		return err
+	}
+	out.receiptJSON = string(response)
+	return nil
 }
 
 func persistArtifactPins(ctx context.Context, tx *sql.Tx, pid string, in ApplyArtifactPinsInput, prepared *preparedArtifactPins, scope, digest string, out *ArtifactPinsResult, p *Project, revision Revision) error {

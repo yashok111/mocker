@@ -8,7 +8,7 @@ func (r *Repo) queryEffectiveEvents(ctx context.Context, pid string, in EventsQu
 		return nil, err
 	}
 	if target.Proposal != nil {
-		return nil, savedUnsupported()
+		return nil, legacyProposalAdvancedUnsupported("Events")
 	}
 	graph, err := r.ResolveEffectiveGraph(ctx, pid, target)
 	if err != nil {

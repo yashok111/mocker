@@ -228,8 +228,19 @@ func changeCommandObject(c ChangeProposalCommand) ChangeRecordRef {
 	}
 	return ChangeRecordRef{}
 }
+
+// changeName is the stored form of a command's validated name. Validation
+// trimmed it and the raw value was stored, so "  Foo  " became a different
+// desired name than "Foo", a padded rename produced a spurious property change
+// and the 200-rune bound counted only the trimmed text (review 2026-10-06,
+// F39). apply runs Validate first, so the name always normalizes here.
+func changeName(name string) string {
+	normalized, _ := normalizeName(name)
+	return normalized
+}
+
 func (e *changeEvaluation) createNode(c ChangeProposalCommand) error {
-	return e.create(c, ChangeRecordRef{RecordType: "node", ID: c.ID}, SourceAssertionPayload{RecordType: "node", Kind: c.Kind, Name: c.Name, ParentID: c.ParentID, Attributes: c.Attributes})
+	return e.create(c, ChangeRecordRef{RecordType: "node", ID: c.ID}, SourceAssertionPayload{RecordType: "node", Kind: c.Kind, Name: changeName(c.Name), ParentID: c.ParentID, Attributes: c.Attributes})
 }
 func (e *changeEvaluation) updateNode(c ChangeProposalCommand) error {
 	r, err := e.live("node", c.ID, c.Update.Kind)
@@ -251,10 +262,10 @@ func (e *changeEvaluation) renameRecord(c ChangeProposalCommand) error {
 	}
 	if c.RecordType == "node" {
 		next := r.Payload
-		next.Name = c.Name
+		next.Name = changeName(c.Name)
 		return e.replace(c, r, next)
 	}
-	value := ChangeEdgeName{ID: c.ID, Name: c.Name, Origin: e.origin(c, r.ChangeRecordRef)}
+	value := ChangeEdgeName{ID: c.ID, Name: changeName(c.Name), Origin: e.origin(c, r.ChangeRecordRef)}
 	i := slices.IndexFunc(e.revision.Delta.EdgeNames, func(n ChangeEdgeName) bool { return n.ID == c.ID })
 	if i < 0 {
 		e.revision.Delta.EdgeNames = append(e.revision.Delta.EdgeNames, value)
@@ -369,7 +380,7 @@ func (e *changeEvaluation) alterRelational(c ChangeProposalCommand) error {
 	delete(definition, "reference")
 	attrs := map[string]jsontext.Value{"facets": mustChangeJSON(map[string]jsontext.Value{c.FacetKey: mustChangeJSON(definition)})}
 	if c.Action == "create" {
-		err = e.create(c, ChangeRecordRef{RecordType: "node", ID: id}, SourceAssertionPayload{RecordType: "node", Kind: kind, Name: c.Name, ParentID: new(c.TableID), Attributes: attrs})
+		err = e.create(c, ChangeRecordRef{RecordType: "node", ID: id}, SourceAssertionPayload{RecordType: "node", Kind: kind, Name: changeName(c.Name), ParentID: new(c.TableID), Attributes: attrs})
 	} else {
 		r, loadErr := e.live("node", id, kind)
 		if loadErr != nil {
@@ -434,6 +445,12 @@ func (e *changeEvaluation) applyForeignKey(c ChangeProposalCommand, id string, d
 	if old, ok := e.records[edgeID]; ok {
 		if old.RecordType != "edge" || old.Payload.Kind != "references" {
 			return invalid("reference/id", "FK identity cannot change kind")
+		}
+		// Only the altered constraint's own FK edge may be reused: another
+		// constraint's edge was silently re-pointed and that constraint
+		// lost its reference with no diagnostic (review 2026-10-06, F45).
+		if old.Payload.From != id {
+			return invalid("reference/id", "FK edge belongs to another constraint")
 		}
 		next, err := changeWithFacet(old.Payload, c.FacetKey, mustChangeJSON(facet))
 		if err != nil {

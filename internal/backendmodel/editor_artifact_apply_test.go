@@ -6,10 +6,11 @@ import (
 	"database/sql"
 	"encoding/json/v2"
 	"errors"
-	"github.com/yashok111/mocker/internal/testkit"
 	"strings"
 	"sync"
 	"testing"
+
+	"github.com/yashok111/mocker/internal/testkit"
 )
 
 func applyArtifactTest(t *testing.T, s *ArtifactService, pid string, in PreviewArtifactPinsInput, key string) (*ArtifactPinsResult, ApplyArtifactPinsInput) {

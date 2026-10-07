@@ -17,6 +17,11 @@ func (r *Repo) queryEffectiveGraph(ctx context.Context, pid string, in GraphQuer
 	if err := validateEffectiveGraphQuery(in, graph.Pins.StructuralSchemaVersion); err != nil {
 		return nil, err
 	}
+	if in.ServiceID != "" {
+		if err := validateWorkspaceService(graph, in.ServiceID); err != nil {
+			return nil, err
+		}
+	}
 	filter := in
 	filter.Cursor = ""
 	filter.Limit = 0
@@ -35,63 +40,92 @@ func (r *Repo) queryEffectiveGraph(ctx context.Context, pid string, in GraphQuer
 	if graph.Source != nil {
 		out.Source = sourceVectorReadContext(graph.Source)
 	}
-	ids := []string{}
+	page := effectiveGraphPage{graph: graph, in: in, out: out, pid: pid, scope: scope, after: after, limit: limit}
+	var ids []string
 	if in.RecordType == "nodes" {
-		nodes := slices.Clone(graph.State.Nodes)
-		slices.SortFunc(nodes, func(a, b Node) int { return strings.Compare(a.ID, b.ID) })
-		for _, n := range nodes {
-			if !effectiveNodeMatches(n, in) {
-				continue
-			}
-			match, e := workspaceMatches(ctx, graph, in, "node", n.ID)
-			if e != nil {
-				return nil, e
-			}
-			if !match {
-				continue
-			}
-			*out.Total++
-			if n.ID <= after {
-				continue
-			}
-			if len(out.Nodes) == limit {
-				out.NextCursor = encodeGraphPage("effective-graph", pid, scope, out.Nodes[len(out.Nodes)-1].ID)
-				continue
-			}
-			n = effectiveNodeRecord(graph, n)
-			out.Nodes = append(out.Nodes, n)
-			ids = append(ids, n.ID)
-		}
+		ids, err = page.nodes(ctx)
 	} else {
-		edges := slices.Clone(graph.State.Edges)
-		slices.SortFunc(edges, func(a, b Edge) int { return strings.Compare(a.ID, b.ID) })
-		for _, e := range edges {
-			if !effectiveEdgeMatches(e, in) {
-				continue
-			}
-			match, err := workspaceMatches(ctx, graph, in, "edge", e.ID)
-			if err != nil {
-				return nil, err
-			}
-			if !match {
-				continue
-			}
-			*out.Total++
-			if e.ID <= after {
-				continue
-			}
-			if len(out.Edges) == limit {
-				out.NextCursor = encodeGraphPage("effective-graph", pid, scope, out.Edges[len(out.Edges)-1].ID)
-				continue
-			}
-			e = effectiveEdgeRecord(graph, e)
-			out.Edges = append(out.Edges, e)
-			ids = append(ids, e.ID)
-		}
+		ids, err = page.edges(ctx)
+	}
+	if err != nil {
+		return nil, err
 	}
 	appendEffectiveGraphSidecars(out, graph, ids)
 	return out, nil
 }
+
+// effectiveGraphPage fills one cursor page of nodes or edges: every match
+// counts toward Total, only those past the cursor and within the limit
+// are returned, and the first one beyond the limit sets NextCursor.
+type effectiveGraphPage struct {
+	graph      *EffectiveGraphSnapshot
+	in         GraphQueryInput
+	out        *GraphPage
+	pid, scope string
+	after      string
+	limit      int
+}
+
+func (p effectiveGraphPage) nodes(ctx context.Context) ([]string, error) {
+	ids := []string{}
+	nodes := slices.Clone(p.graph.State.Nodes)
+	slices.SortFunc(nodes, func(a, b Node) int { return strings.Compare(a.ID, b.ID) })
+	for _, n := range nodes {
+		if !effectiveNodeMatches(n, p.in) {
+			continue
+		}
+		match, e := workspaceMatches(ctx, p.graph, p.in, "node", n.ID)
+		if e != nil {
+			return nil, e
+		}
+		if !match {
+			continue
+		}
+		*p.out.Total++
+		if n.ID <= p.after {
+			continue
+		}
+		if len(p.out.Nodes) == p.limit {
+			p.out.NextCursor = encodeGraphPage("effective-graph", p.pid, p.scope, p.out.Nodes[len(p.out.Nodes)-1].ID)
+			continue
+		}
+		n = effectiveNodeRecord(p.graph, n)
+		p.out.Nodes = append(p.out.Nodes, n)
+		ids = append(ids, n.ID)
+	}
+	return ids, nil
+}
+
+func (p effectiveGraphPage) edges(ctx context.Context) ([]string, error) {
+	ids := []string{}
+	edges := slices.Clone(p.graph.State.Edges)
+	slices.SortFunc(edges, func(a, b Edge) int { return strings.Compare(a.ID, b.ID) })
+	for _, e := range edges {
+		if !effectiveEdgeMatches(e, p.in) {
+			continue
+		}
+		match, err := workspaceMatches(ctx, p.graph, p.in, "edge", e.ID)
+		if err != nil {
+			return nil, err
+		}
+		if !match {
+			continue
+		}
+		*p.out.Total++
+		if e.ID <= p.after {
+			continue
+		}
+		if len(p.out.Edges) == p.limit {
+			p.out.NextCursor = encodeGraphPage("effective-graph", p.pid, p.scope, p.out.Edges[len(p.out.Edges)-1].ID)
+			continue
+		}
+		e = effectiveEdgeRecord(p.graph, e)
+		p.out.Edges = append(p.out.Edges, e)
+		ids = append(ids, e.ID)
+	}
+	return ids, nil
+}
+
 func appendEffectiveGraphSidecars(out *GraphPage, graph *EffectiveGraphSnapshot, ids []string) {
 	for _, edge := range out.Edges {
 		if name, ok := graph.EdgeNames[edge.ID]; ok {

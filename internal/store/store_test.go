@@ -22,6 +22,20 @@ func TestMigrate_reachesSchemaVersion28(t *testing.T) {
 	}
 }
 
+// review 2026-10-06, F167: a file whose user_version is past every embedded
+// migration was written by a newer binary; Migrate skipped "applied"
+// versions and let this binary serve a schema it does not understand.
+func TestMigrate_refusesDatabaseFromNewerBinary(t *testing.T) {
+	db := testkit.NewDB(t)
+	if _, err := db.W.ExecContext(t.Context(), "PRAGMA user_version=28"); err != nil {
+		t.Fatal(err)
+	}
+	err := db.Migrate(t.Context(), nil)
+	if err == nil || !strings.Contains(err.Error(), "newer than this binary") {
+		t.Fatalf("Migrate on a newer schema = %v", err)
+	}
+}
+
 // TestMigrate_trafficIdsAreNeverReissued is 0004's own observation (P6a
 // D20): with a bare INTEGER PRIMARY KEY, deleting the HIGHEST traffic rows
 // let SQLite hand their ids out again on the next INSERT, and a stream or

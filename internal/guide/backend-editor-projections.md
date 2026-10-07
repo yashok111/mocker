@@ -160,7 +160,13 @@ never silently convert an update to removal. A late receipt does not replace a
 newer selected/current host context; its exact revision is available in history.
 
 remove_artifact_pin requires artifact+reason and forbids revision/binding fields;
-it explicitly removes the whole group and both collections. Review both rosters
+it explicitly removes the whole group and both collections; removing a group that
+is not pinned is the blocking diagnostic backend_artifact_pin_absent
+(backend_api_pin_absent for remove_api_pin), never an empty applicable change.
+A set_artifact_pin that restates exactly the current pin and bindings (same
+revision, selectors, sources and reason) is an idempotent no-op: preview stays
+applicable, and apply answers with the current head revision and project
+version, writes no revision and records the receipt. Review both rosters
 first. Old preview/apply_backend_api_pins remain API-specific wrappers: in a v2
 context an API set preserves editor bindings and shared revision consistency;
 removal is blocked if editors exist. To unlink the last API association while

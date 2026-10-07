@@ -52,7 +52,7 @@ func TestTestProfileMethods(t *testing.T) {
 		if r.Header.Get("Authorization") != "Bearer "+replayToken || r.URL.RawQuery != "" {
 			t.Error("invalid headers/query")
 		}
-		if r.Method == "GET" {
+		if r.Method == http.MethodGet {
 			if r.ContentLength != 0 || r.Header.Get("Content-Type") != "" {
 				t.Error("GET body/headers")
 			}
@@ -66,7 +66,7 @@ func TestTestProfileMethods(t *testing.T) {
 			}
 			return
 		}
-		if r.Method != "POST" || r.Header.Get("Content-Type") != "application/json" {
+		if r.Method != http.MethodPost || r.Header.Get("Content-Type") != "application/json" {
 			t.Error("invalid mutation headers")
 		}
 		receipt := p.Receipt{Fence: fence, HTTPStatus: 200, ResultEpoch: 1, Sequence: 1}
@@ -152,8 +152,8 @@ func TestTestProfileRedirectAndIncomplete(t *testing.T) {
 	var redirected atomic.Bool
 	other := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { redirected.Store(true) }))
 	defer other.Close()
-	c := replayClient(t, func(w http.ResponseWriter, r *http.Request) { http.Redirect(w, r, other.URL, 302) })
-	if r, e := c.Identity(t.Context()); e == nil || r.HTTPStatus != 302 || redirected.Load() {
+	c := replayClient(t, func(w http.ResponseWriter, r *http.Request) { http.Redirect(w, r, other.URL, http.StatusFound) })
+	if r, e := c.Identity(t.Context()); e == nil || r.HTTPStatus != http.StatusFound || redirected.Load() {
 		t.Fatalf("redirect followed: %v", e)
 	}
 	c = replayClient(t, func(w http.ResponseWriter, r *http.Request) {

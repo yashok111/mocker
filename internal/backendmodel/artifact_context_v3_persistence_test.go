@@ -2,10 +2,11 @@ package backendmodel
 
 import (
 	"encoding/json/v2"
-	"github.com/yashok111/mocker/internal/store"
-	"github.com/yashok111/mocker/internal/testkit"
 	"strings"
 	"testing"
+
+	"github.com/yashok111/mocker/internal/store"
+	"github.com/yashok111/mocker/internal/testkit"
 )
 
 func TestV3PersistentForeignContext(t *testing.T) {

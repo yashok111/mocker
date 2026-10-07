@@ -38,7 +38,7 @@ func TestValidateDocumentPreservesDiagnosticOrderAndDuplicateReferences(t *testi
 		{Pointer: "/fragments/0/kind", Message: "unknown fragment kind", Severity: "error"},
 		{Pointer: "/fragments/0/toMessageId", Message: "message does not exist", Severity: "error"},
 	}
-	if got := validateDocument(document); !slices.Equal(got, want) {
+	if got := validateForTest(t, document); !slices.Equal(got, want) {
 		t.Fatalf("diagnostics = %+v, want %+v", got, want)
 	}
 }
@@ -72,7 +72,7 @@ func TestValidateDocument_RejectsInvalidProgrammaticColors(t *testing.T) {
 			document := validDocument("Colors")
 			document.Participants = []Participant{{ID: "api", Kind: "service", Color: value}}
 			document.Messages = []Message{{ID: "call", FromID: "api", ToID: "api", Kind: "request", Color: value, ArrowColor: value}}
-			diagnostics := validateDocument(document)
+			diagnostics := validateForTest(t, document)
 			want := []string{"/participants/0/color", "/messages/0/color", "/messages/0/arrowColor"}
 			if len(diagnostics) != len(want) {
 				t.Fatalf("diagnostics = %+v", diagnostics)
@@ -92,7 +92,7 @@ func TestValidateDocument_RejectsParticipantSpacingOutsideRange(t *testing.T) {
 		t.Run(fmt.Sprint(value), func(t *testing.T) {
 			document := validDocument("Spacing")
 			document.Participants = []Participant{{ID: "api", Kind: "service", OffsetX: value}}
-			diagnostics := validateDocument(document)
+			diagnostics := validateForTest(t, document)
 			if len(diagnostics) != 1 || diagnostics[0].Pointer != "/participants/0/offsetX" || diagnostics[0].Severity != "error" {
 				t.Fatalf("diagnostics = %+v", diagnostics)
 			}
@@ -106,7 +106,7 @@ func TestValidateDocument_AcceptsParticipantSpacingBoundaries(t *testing.T) {
 		t.Run(fmt.Sprint(value), func(t *testing.T) {
 			document := validDocument("Spacing")
 			document.Participants = []Participant{{ID: "api", Kind: "service", OffsetX: value}}
-			if diagnostics := validateDocument(document); len(diagnostics) != 0 {
+			if diagnostics := validateForTest(t, document); len(diagnostics) != 0 {
 				t.Fatalf("diagnostics = %+v", diagnostics)
 			}
 		})
@@ -139,4 +139,33 @@ func TestRepo_InvalidAndOversizedSaveLeaveHistoryUnchanged(t *testing.T) {
 	if after.Scenario.Version != 1 || after.Scenario.DraftRevisionID != created.Draft.ID || len(after.Revisions) != 1 {
 		t.Fatalf("failed writes changed history: %+v", after)
 	}
+}
+
+// The helpers below run the context-bound analyses under the test's context;
+// their only error is ctx's, so any error fails the test.
+func validateForTest(t testing.TB, document Document) []Diagnostic {
+	t.Helper()
+	diagnostics, err := validateDocument(t.Context(), document)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return diagnostics
+}
+
+func analyzeForTest(t testing.TB, document Document) DataFlowAnalysis {
+	t.Helper()
+	analysis, err := AnalyzeDataFlow(t.Context(), document)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return analysis
+}
+
+func schemasForTest(t testing.TB, document Document) []bindingSchema {
+	t.Helper()
+	schemas, err := bindingSchemas(t.Context(), document)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return schemas
 }

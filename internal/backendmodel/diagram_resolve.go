@@ -1,10 +1,12 @@
 package backendmodel
 
 import (
+	"cmp"
 	"context"
 	"crypto/sha256"
 	"encoding/binary"
 	"fmt"
+	"maps"
 	"slices"
 )
 
@@ -29,6 +31,34 @@ func diagramIdentity(parts ...string) string {
 }
 func diagramGap(id, code, message string) DiagramGap {
 	return DiagramGap{ID: diagramIdentity("diagram-gap-v1", id, code), SubjectID: id, Code: code, Explanation: message}
+}
+
+// uniqueDiagramGaps keeps the first gap of each ID, in order. A gap ID is
+// derived from (subject, code), so a repeat is the same gap reported twice:
+// the interaction builder and evidence resolution both added each
+// unresolved_receiver, and two foreign refs of one element added two equal
+// gaps, inflating every gaps query and its total (review 2026-10-06, F104).
+// Reads use it too, because versions stored before the fix keep duplicates.
+func uniqueDiagramGaps(gaps []DiagramGap) []DiagramGap {
+	seen := make(map[string]bool, len(gaps))
+	out := make([]DiagramGap, 0, len(gaps))
+	for _, gap := range gaps {
+		if !seen[gap.ID] {
+			seen[gap.ID] = true
+			out = append(out, gap)
+		}
+	}
+	return out
+}
+
+// sortDiagramGaps orders gaps by ID and drops repeats (F104). Ties are broken
+// on the remaining fields so the kept copy does not depend on map order
+// upstream.
+func sortDiagramGaps(gaps []DiagramGap) []DiagramGap {
+	slices.SortFunc(gaps, func(a, b DiagramGap) int {
+		return cmp.Or(cmp.Compare(a.ID, b.ID), cmp.Compare(a.SubjectID, b.SubjectID), cmp.Compare(a.Code, b.Code), cmp.Compare(a.Explanation, b.Explanation))
+	})
+	return slices.CompactFunc(gaps, func(a, b DiagramGap) bool { return a.ID == b.ID })
 }
 func diagramBases(d DiagramDocument) map[string]struct {
 	origin DiagramOrigin
@@ -120,7 +150,12 @@ func resolveDiagramEvidence(ctx context.Context, g *EffectiveGraphSnapshot, d Di
 		b, _ := requestDigest(d.Target)
 		targetMoved = a != b
 	}
-	for id, b := range diagramBases(d) {
+	// Rows are checked in ID order: the first refusal is the call's error,
+	// and ranging over the map made identical requests fail with different
+	// messages (review 2026-10-06, F105).
+	bases := diagramBases(d)
+	for _, id := range slices.Sorted(maps.Keys(bases)) {
+		b := bases[id]
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
@@ -150,16 +185,7 @@ func resolveDiagramEvidence(ctx context.Context, g *EffectiveGraphSnapshot, d Di
 	}
 	gaps = append(gaps, lifecycleGaps...)
 	gaps = append(gaps, businessMapImplementationGaps(g, d.BusinessMap)...)
-	slices.SortFunc(gaps, func(a, b DiagramGap) int {
-		if a.ID < b.ID {
-			return -1
-		}
-		if a.ID > b.ID {
-			return 1
-		}
-		return 0
-	})
-	return gaps, nil
+	return sortDiagramGaps(gaps), nil
 }
 func resolveDiagramArtifact(g *EffectiveGraphSnapshot, request *EditorArtifactRequest, ref DiagramRef) (bool, error) {
 	if ref.Locator == nil {
@@ -201,10 +227,22 @@ func diagramReferenceGaps(resolver *diagramArtifactResolver, id string, refs, ol
 	gaps := []DiagramGap{}
 	for _, ref := range refs {
 		exists := false
+		// A namespaced ref whose namespace/pin is not in this target is, like a
+		// plain artifact ref whose pin left it, "not here": the inherited rule
+		// below decides between a historical gap and a refusal. Raising the
+		// outside-target error first made a fork or save that retains such a
+		// ref fail instead of keeping it as history (review 2026-10-06, F108).
+		var outside error
+		if ref.NamespacedLocator != nil {
+			_, outside = namespacedDiagramGroup(resolver.graph, ref)
+		}
 		switch ref.Kind {
 		case "record":
 			exists = ref.RecordType == "node" && nodes[ref.ID] || ref.RecordType == "edge" && edges[ref.ID]
 		case "artifact", "namespaced_artifact":
+			if outside != nil {
+				break
+			}
 			var err error
 			exists, err = resolver.resolve(ref)
 			if err != nil {
@@ -214,10 +252,7 @@ func diagramReferenceGaps(resolver *diagramArtifactResolver, id string, refs, ol
 		if exists {
 			continue
 		}
-		if ref.NamespacedLocator != nil && ref.NamespacedLocator.Namespace.Scope == "foreign" {
-			if _, err := namespacedDiagramGroup(resolver.graph, ref); err != nil {
-				return nil, err
-			}
+		if outside == nil && ref.NamespacedLocator != nil && ref.NamespacedLocator.Namespace.Scope == "foreign" {
 			gaps = append(gaps, diagramGap(id, "foreign_artifact_unresolved", "Foreign artifact remains unresolved; explicit exact local mapping is required"))
 			continue
 		}
@@ -228,6 +263,9 @@ func diagramReferenceGaps(resolver *diagramArtifactResolver, id string, refs, ol
 			if hash == digest {
 				inherited = true
 			}
+		}
+		if !inherited && outside != nil {
+			return nil, outside
 		}
 		if !inherited {
 			return nil, invalid("refs", "Reference is not owned by the exact target")

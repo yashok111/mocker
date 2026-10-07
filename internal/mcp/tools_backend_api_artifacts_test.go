@@ -6,6 +6,7 @@ import (
 	"encoding/json/jsontext"
 	"encoding/json/v2"
 	"fmt"
+	"net/http"
 	"net/http/httptest"
 	"os"
 	"slices"
@@ -14,6 +15,7 @@ import (
 
 	"github.com/yashok111/mocker/internal/apidesign"
 	"github.com/yashok111/mocker/internal/backendmodel"
+	"github.com/yashok111/mocker/internal/testkit"
 )
 
 func TestBackendAPIArtifactToolsRoutesAndPrecision(t *testing.T) {
@@ -101,7 +103,7 @@ func TestBackendAPIArtifactToolsStrictAdmissionAndRawCarrier(t *testing.T) {
 }
 
 func TestBackendAPIArtifactToolsPublishSchemasAndHints(t *testing.T) {
-	response := doMCP(t, newTestEndpoint(t).Handler(), `{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}`, map[string]string{"Authorization": "Bearer " + testKey})
+	response := describedToolsList(t)
 	var env struct {
 		Result struct {
 			Tools []struct {
@@ -118,7 +120,7 @@ func TestBackendAPIArtifactToolsPublishSchemasAndHints(t *testing.T) {
 		t.Fatal(err)
 	}
 	expected := map[string]bool{"query_backend_api_artifacts": true, "preview_backend_api_pins": true, "apply_backend_api_pins": false, "get_api_artifact_snapshot": true}
-	if len(env.Result.Tools) != 225 {
+	if len(env.Result.Tools) != toolCount {
 		t.Fatal("surface count", len(env.Result.Tools))
 	}
 	for _, tool := range env.Result.Tools {
@@ -242,7 +244,7 @@ func TestBackendAPIArtifactToolsPublicParity(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	status, rest, err := server.CallAsMCP(t.Context(), httptest.NewRequest("POST", "http://mocker.local/mcp", nil), "POST", "/api/backend-projects/"+project.ID+"/api-artifacts/preview", body)
+	status, rest, err := server.CallAsMCP(t.Context(), httptest.NewRequest(http.MethodPost, "http://mocker.local/mcp", nil), "POST", "/api/backend-projects/"+project.ID+"/api-artifacts/preview", body)
 	if err != nil || status != 200 {
 		t.Fatal(status, string(rest), err)
 	}
@@ -269,7 +271,13 @@ func TestBackendAPIArtifactToolsPublicParity(t *testing.T) {
 	}
 	// Independently simulate a disappeared source in this disposable immutable
 	// fixture. E7 covers genuine explicit deletion through source reconciliation.
-	if _, err = db.W.ExecContext(t.Context(), `DELETE FROM backend_graph_records WHERE revision_id=? AND record_type='node' AND id=?`, result.Revision.ID, node); err != nil {
+	// Store27 (48dce80, B6.3) guards backend_graph_records with an
+	// immutable-owner trigger and a sealed payload manifest, so a direct DELETE
+	// is refused ("immutable owner"); the orphaning delete is made on the
+	// Store26 fixture shape and published by the production migration, the
+	// same recipe backendmodel's TestAPIArtifactQueryCursorOrphansAndOptionalHead
+	// uses for this exact shape.
+	if _, err = testkit.EditLegacyBackendPayload(t.Context(), db, `DELETE FROM backend_graph_records WHERE revision_id=? AND record_type='node' AND id=?`, result.Revision.ID, node); err != nil {
 		t.Fatal(err)
 	}
 	call("query_backend_api_artifacts", map[string]any{"projectId": project.ID, "revisionId": result.Revision.ID, "sourceNodeId": node}, &page)

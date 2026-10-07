@@ -74,7 +74,7 @@ func compareAPIArtifacts(ctx context.Context, before, after RevisionState, out *
 	for id := range right {
 		ids[id] = true
 	}
-	ordered := []string{}
+	ordered := make([]string, 0, len(ids))
 	for id := range ids {
 		ordered = append(ordered, id)
 	}
@@ -110,49 +110,9 @@ func compareAPIArtifacts(ctx context.Context, before, after RevisionState, out *
 			if ah == bh {
 				continue
 			}
-			if a.Ref.ContentHash != b.Ref.ContentHash {
-				change.ContextChanged = true
-				change.ChangedPaths = append(change.ChangedPaths, "/ref/contentHash")
-			}
-			if a.Ref.ObjectHash != b.Ref.ObjectHash {
-				change.ChangedPaths = append(change.ChangedPaths, "/ref/objectHash")
-			}
-			if a.Ref.RevisionID != b.Ref.RevisionID {
-				change.ChangedPaths = append(change.ChangedPaths, "/ref/revisionId")
-			}
-			if a.Ref.ArtifactID != b.Ref.ArtifactID {
-				change.ChangedPaths = append(change.ChangedPaths, "/ref/artifactId")
-			}
-			if a.Ref.ResolvedPointer != b.Ref.ResolvedPointer {
-				change.ChangedPaths = append(change.ChangedPaths, "/ref/resolvedPointer")
-			}
-			if a.Ref.Selector != b.Ref.Selector {
-				change.ChangedPaths = append(change.ChangedPaths, "/ref/selector")
-			}
-			if a.Reason != b.Reason {
-				change.ChangedPaths = append(change.ChangedPaths, "/reason")
-			}
-			if a.Ref.LastKnownLabel != b.Ref.LastKnownLabel {
-				change.ChangedPaths = append(change.ChangedPaths, "/ref/lastKnownLabel")
-			}
-			if a.SourceLastKnownLabel != b.SourceLastKnownLabel {
-				change.ChangedPaths = append(change.ChangedPaths, "/sourceLastKnownLabel")
-			}
-			if a.SourceKind != b.SourceKind {
-				change.ChangedPaths = append(change.ChangedPaths, "/sourceKind")
-			}
+			apiArtifactBindingChanges(a, b, &change)
 		}
-		if out.Summary.Artifacts == nil {
-			out.Summary.Artifacts = new(ComparisonCounts)
-		}
-		switch kind {
-		case "added":
-			out.Summary.Artifacts.Added++
-		case "removed":
-			out.Summary.Artifacts.Removed++
-		default:
-			out.Summary.Artifacts.Modified++
-		}
+		countArtifactChange(&out.Summary, kind)
 		change.ChangeKinds = append(change.ChangeKinds, kind)
 		slices.Sort(change.ChangedPaths)
 		out.Changes = append(out.Changes, change)
@@ -164,4 +124,45 @@ func compareAPIArtifacts(ctx context.Context, before, after RevisionState, out *
 		return strings.Compare(a.ID, b.ID)
 	})
 	return nil
+}
+
+// apiArtifactBindingChanges records which fields of a binding differ; only a
+// changed artifact content hash marks the change as a context change.
+func apiArtifactBindingChanges(a, b APIArtifactBinding, change *RecordDelta) {
+	if a.Ref.ContentHash != b.Ref.ContentHash {
+		change.ContextChanged = true
+		change.ChangedPaths = append(change.ChangedPaths, "/ref/contentHash")
+	}
+	for _, f := range []struct {
+		differ bool
+		path   string
+	}{
+		{a.Ref.ObjectHash != b.Ref.ObjectHash, "/ref/objectHash"},
+		{a.Ref.RevisionID != b.Ref.RevisionID, "/ref/revisionId"},
+		{a.Ref.ArtifactID != b.Ref.ArtifactID, "/ref/artifactId"},
+		{a.Ref.ResolvedPointer != b.Ref.ResolvedPointer, "/ref/resolvedPointer"},
+		{a.Ref.Selector != b.Ref.Selector, "/ref/selector"},
+		{a.Reason != b.Reason, "/reason"},
+		{a.Ref.LastKnownLabel != b.Ref.LastKnownLabel, "/ref/lastKnownLabel"},
+		{a.SourceLastKnownLabel != b.SourceLastKnownLabel, "/sourceLastKnownLabel"},
+		{a.SourceKind != b.SourceKind, "/sourceKind"},
+	} {
+		if f.differ {
+			change.ChangedPaths = append(change.ChangedPaths, f.path)
+		}
+	}
+}
+
+func countArtifactChange(summary *ComparisonSummary, kind string) {
+	if summary.Artifacts == nil {
+		summary.Artifacts = new(ComparisonCounts)
+	}
+	switch kind {
+	case "added":
+		summary.Artifacts.Added++
+	case "removed":
+		summary.Artifacts.Removed++
+	default:
+		summary.Artifacts.Modified++
+	}
 }

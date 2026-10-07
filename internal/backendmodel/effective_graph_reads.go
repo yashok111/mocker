@@ -154,12 +154,12 @@ func changeEffectiveSnapshot(ctx context.Context, q importReader, target Backend
 		out.Identities = append(out.Identities, EffectiveIdentity{Target: identity.Target, ExternalKey: identity.ExternalKey, Origin: origin})
 	}
 	for _, e := range source.State.Evidence {
+		// An indexed membership test; the edge scan per evidence row made
+		// every full-proposal resolve O(evidence × edges) (review 2026-10-06,
+		// F118).
 		typ := "node"
-		for _, edge := range source.State.Edges {
-			if edge.ID == e.SubjectID {
-				typ = "edge"
-				break
-			}
+		if _, ok := source.stateEdge(e.SubjectID); ok {
+			typ = "edge"
 		}
 		out.BaselineEvidence = append(out.BaselineEvidence, EffectiveEvidenceBasis{RevisionID: revision.BaseRevisionID, SemanticHash: revision.BaseSemanticHash, RecordType: typ, SubjectID: e.SubjectID, EvidenceID: e.ID})
 	}

@@ -19,6 +19,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/jsonrpc"
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
+
 	"github.com/yashok111/mocker/internal/admin"
 	"github.com/yashok111/mocker/internal/apidesign"
 	"github.com/yashok111/mocker/internal/auth"
@@ -113,7 +114,7 @@ func TestBackendArtifactToolsStrictAdmissionAndRawCarrier(t *testing.T) {
 }
 
 func TestBackendArtifactToolsPublishSchemasAndHints(t *testing.T) {
-	response := doMCP(t, newTestEndpoint(t).Handler(), `{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}`, map[string]string{"Authorization": "Bearer " + testKey})
+	response := describedToolsList(t)
 	var env struct {
 		Result struct {
 			Tools []struct {
@@ -130,7 +131,7 @@ func TestBackendArtifactToolsPublishSchemasAndHints(t *testing.T) {
 		t.Fatal(err)
 	}
 	expected := map[string]bool{"query_backend_artifacts": true, "preview_backend_artifact_pins": true, "apply_backend_artifact_pins": false, "get_design_scenario_artifact_snapshot": true}
-	if len(env.Result.Tools) != 227 {
+	if len(env.Result.Tools) != toolCount {
 		t.Fatal("surface count", len(env.Result.Tools))
 	}
 	for _, tool := range env.Result.Tools {

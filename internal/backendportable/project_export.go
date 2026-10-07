@@ -24,7 +24,7 @@ func (s *Service) Export(ctx context.Context, in ExportInput) (*ExportResult, er
 		if err != nil {
 			return nil, "", err
 		}
-		installation, err := s.models.InstallationID(ctx)
+		installation, err := s.models.InstallationIDTx(ctx, tx)
 		if err != nil {
 			return nil, "", err
 		}
@@ -32,7 +32,10 @@ func (s *Service) Export(ctx context.Context, in ExportInput) (*ExportResult, er
 		if err != nil {
 			return nil, "", err
 		}
-		chunks, descriptors, err := splitRecords(records)
+		if err := uniqueRecords(ctx, records); err != nil {
+			return nil, "", err
+		}
+		chunks, descriptors, err := splitRecords(ctx, records)
 		if err != nil {
 			return nil, "", err
 		}
@@ -97,134 +100,177 @@ func (s *Service) exportModelTx(ctx context.Context, tx *sql.Tx, selection Selec
 	}
 	project.CurrentRevisionID = graph.Pins.BaseRevisionID
 	model := &bm.PortableModel{Project: *project, Target: selection.Target, Sources: []bm.PortableSource{}, Proposals: []bm.PortableProposal{}, Diagrams: []bm.DiagramVersion{}, DiagramViews: []bm.DiagramView{}, SavedViews: []bm.SavedView{}, Annotations: []bm.Annotation{}}
+	w := &exportWalker{s: s, ctx: ctx, tx: tx, project: project.ID, model: model, sourceStates: map[string]uint8{}, proposals: map[string]bool{}}
+	if err = w.views(selection); err != nil {
+		return nil, err
+	}
+	if err = w.savedViews(selection); err != nil {
+		return nil, err
+	}
+	if err := w.target(selection.Target); err != nil {
+		return nil, err
+	}
+	for _, d := range model.Diagrams {
+		if err := w.target(d.Document.Target); err != nil {
+			return nil, err
+		}
+	}
+	if err = w.annotations(); err != nil {
+		return nil, err
+	}
+	if err := normalizePortableClosure(ctx, model, selection); err != nil {
+		return nil, err
+	}
+	return model, nil
+}
+
+// exportWalker gathers, inside the export transaction, everything the
+// selection reaches into the model.
+type exportWalker struct {
+	s            *Service
+	ctx          context.Context
+	tx           *sql.Tx
+	project      string
+	model        *bm.PortableModel
+	sourceStates map[string]uint8
+	proposals    map[string]bool
+}
+
+// views exports each selected view once, with the diagram history it shows;
+// every view must target the selected graph.
+func (w *exportWalker) views(selection Selection) error {
 	roots := []bm.DiagramPin{}
 	views := map[SVGInput]bool{}
 	for _, pin := range selection.DiagramViews {
 		if views[pin] {
-			return nil, fault(422, "Duplicate exact selected view")
+			return fault(422, "Duplicate exact selected view")
 		}
 		views[pin] = true
-		view, err := s.models.GetDiagramViewTx(ctx, tx, project.ID, pin.ViewID, pin.ViewVersion)
+		view, err := w.s.models.GetDiagramViewTx(w.ctx, w.tx, w.project, pin.ViewID, pin.ViewVersion)
 		if err != nil {
-			return nil, err
+			return err
 		}
-		diagram, err := s.models.GetDiagramTx(ctx, tx, project.ID, view.State.Diagram)
+		diagram, err := w.s.models.GetDiagramTx(w.ctx, w.tx, w.project, view.State.Diagram)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		if diagram.TargetHash != selection.TargetHash {
-			return nil, fault(422, "Selected view is incompatible with export target")
+			return fault(422, "Selected view is incompatible with export target")
 		}
-		model.DiagramViews = append(model.DiagramViews, *view)
+		w.model.DiagramViews = append(w.model.DiagramViews, *view)
 		roots = append(roots, view.State.Diagram)
 	}
-	if len(roots) > 0 {
-		model.Diagrams, err = DiagramClosure(ctx, transactionDiagrams{s.models, tx}, project.ID, roots)
-		if err != nil {
-			return nil, err
-		}
+	if len(roots) == 0 {
+		return nil
 	}
+	var err error
+	w.model.Diagrams, err = DiagramClosure(w.ctx, transactionDiagrams{w.s.models, w.tx}, w.project, roots)
+	return err
+}
+
+func (w *exportWalker) savedViews(selection Selection) error {
 	saved := map[SavedViewPin]bool{}
 	for _, pin := range selection.SavedViews {
 		if saved[pin] {
-			return nil, fault(422, "Duplicate saved view")
+			return fault(422, "Duplicate saved view")
 		}
 		saved[pin] = true
-		v, err := s.models.GetSavedViewTx(ctx, tx, project.ID, pin.ID, pin.Version)
+		v, err := w.s.models.GetSavedViewTx(w.ctx, w.tx, w.project, pin.ID, pin.Version)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		a, _ := DocumentHash(v.Target)
 		b, _ := DocumentHash(selection.Target)
 		if a != b {
-			return nil, fault(422, "Saved view targets another exact snapshot")
+			return fault(422, "Saved view targets another exact snapshot")
 		}
-		model.SavedViews = append(model.SavedViews, *v)
+		w.model.SavedViews = append(w.model.SavedViews, *v)
 	}
-	sourceStates := map[string]uint8{}
-	proposals := map[string]bool{}
-	var source func(string, int) error
-	source = func(id string, depth int) error {
-		if sourceStates[id] == 2 {
-			return nil
-		}
-		if sourceStates[id] == 1 {
-			return fault(422, "Source history cycle")
-		}
-		if depth > 1000 || len(sourceStates) >= 1000 {
-			return fault(413, "Source closure quota")
-		}
-		sourceStates[id] = 1
-		value, err := s.models.ExportPortableSourceTx(ctx, tx, project.ID, id)
-		if err != nil {
-			return err
-		}
-		if err := bm.ValidatePortableSource(ctx, value); err != nil {
-			return err
-		}
-		deps, err := bm.PortableRevisionDependencies(*value)
-		if err != nil {
-			return err
-		}
-		slices.Sort(deps)
-		for _, dep := range deps {
-			if err := source(dep, depth+1); err != nil {
-				return err
-			}
-		}
-		model.Sources = append(model.Sources, *value)
-		sourceStates[id] = 2
+	return nil
+}
+
+// source exports a revision after its dependencies (depth-first, sorted),
+// refusing a cycle and bounding the closure.
+func (w *exportWalker) source(id string, depth int) error {
+	if w.sourceStates[id] == 2 {
 		return nil
 	}
-	target := func(target bm.BackendReadTarget) error {
-		if target.RevisionID != "" {
-			return source(target.RevisionID, 0)
-		}
-		pin := target.ChangeProposal
-		kind := "full"
-		if pin == nil {
-			pin = target.Proposal
-			kind = "legacy"
-		}
-		if pin == nil {
-			return fault(422, "Unsupported portable target")
-		}
-		key := kind + ":" + pin.ProposalID + ":" + pin.ProposalRevisionID
-		if proposals[key] {
-			return nil
-		}
-		proposals[key] = true
-		p, err := s.models.ExportPortableProposalTx(ctx, tx, project.ID, target)
-		if err != nil {
+	if w.sourceStates[id] == 1 {
+		return fault(422, "Source history cycle")
+	}
+	if depth > 1000 || len(w.sourceStates) >= 1000 {
+		return fault(413, "Source closure quota")
+	}
+	w.sourceStates[id] = 1
+	value, err := w.s.models.ExportPortableSourceTx(w.ctx, w.tx, w.project, id)
+	if err != nil {
+		return err
+	}
+	if err := bm.ValidatePortableSource(w.ctx, value); err != nil {
+		return err
+	}
+	deps, err := bm.PortableRevisionDependencies(*value)
+	if err != nil {
+		return err
+	}
+	slices.Sort(deps)
+	for _, dep := range deps {
+		if err := w.source(dep, depth+1); err != nil {
 			return err
 		}
-		for _, rid := range bm.PortableProposalSourceDependencies(*p) {
-			if err := source(rid, 0); err != nil {
-				return err
-			}
-		}
-		// Merge shared histories once when multiple diagram ancestors select the same owner.
-		for i := range model.Proposals {
-			old := &model.Proposals[i]
-			same := old.Full != nil && p.Full != nil && old.Full.ID == p.Full.ID || old.Legacy != nil && p.Legacy != nil && old.Legacy.ID == p.Legacy.ID
-			if same {
-				mergePortableProposals(old, p)
-				return nil
-			}
-		}
-		model.Proposals = append(model.Proposals, *p)
+	}
+	w.model.Sources = append(w.model.Sources, *value)
+	w.sourceStates[id] = 2
+	return nil
+}
+
+// target exports a revision target's source history, or a proposal target's
+// owner (once per exact revision) and the sources it depends on.
+func (w *exportWalker) target(target bm.BackendReadTarget) error {
+	if target.RevisionID != "" {
+		return w.source(target.RevisionID, 0)
+	}
+	pin := target.ChangeProposal
+	kind := "full"
+	if pin == nil {
+		pin = target.Proposal
+		kind = "legacy"
+	}
+	if pin == nil {
+		return fault(422, "Unsupported portable target")
+	}
+	key := kind + ":" + pin.ProposalID + ":" + pin.ProposalRevisionID
+	if w.proposals[key] {
 		return nil
 	}
-	if err := target(selection.Target); err != nil {
-		return nil, err
+	w.proposals[key] = true
+	p, err := w.s.models.ExportPortableProposalTx(w.ctx, w.tx, w.project, target)
+	if err != nil {
+		return err
 	}
-	for _, d := range model.Diagrams {
-		if err := target(d.Document.Target); err != nil {
-			return nil, err
+	for _, rid := range bm.PortableProposalSourceDependencies(*p) {
+		if err := w.source(rid, 0); err != nil {
+			return err
 		}
 	}
+	// Merge shared histories once when multiple diagram ancestors select the same owner.
+	for i := range w.model.Proposals {
+		old := &w.model.Proposals[i]
+		same := old.Full != nil && p.Full != nil && old.Full.ID == p.Full.ID || old.Legacy != nil && p.Legacy != nil && old.Legacy.ID == p.Legacy.ID
+		if same {
+			mergePortableProposals(old, p)
+			return nil
+		}
+	}
+	w.model.Proposals = append(w.model.Proposals, *p)
+	return nil
+}
+
+// annotations exports the project's annotations on exported nodes and edges
+// whose revision, when they pin one, was exported too.
+func (w *exportWalker) annotations() error {
 	members := map[string]bool{}
-	for _, source := range model.Sources {
+	for _, source := range w.model.Sources {
 		for _, n := range source.Nodes {
 			members["node:"+n.ID] = true
 		}
@@ -232,19 +278,16 @@ func (s *Service) exportModelTx(ctx context.Context, tx *sql.Tx, selection Selec
 			members["edge:"+e.ID] = true
 		}
 	}
-	annotations, err := s.models.PortableAnnotationsTx(ctx, tx, project.ID)
+	annotations, err := w.s.models.PortableAnnotationsTx(w.ctx, w.tx, w.project)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	for _, a := range annotations {
-		if members[a.Target.RecordType+":"+a.Target.ID] && (a.Target.RevisionID == "" || sourceStates[a.Target.RevisionID] == 2) {
-			model.Annotations = append(model.Annotations, a)
+		if members[a.Target.RecordType+":"+a.Target.ID] && (a.Target.RevisionID == "" || w.sourceStates[a.Target.RevisionID] == 2) {
+			w.model.Annotations = append(w.model.Annotations, a)
 		}
 	}
-	if err := normalizePortableClosure(ctx, model, selection); err != nil {
-		return nil, err
-	}
-	return model, nil
+	return nil
 }
 func mergePortableProposals(dst, src *bm.PortableProposal) {
 	for _, v := range src.FullRevisions {

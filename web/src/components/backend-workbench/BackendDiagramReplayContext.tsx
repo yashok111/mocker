@@ -1,4 +1,4 @@
-import {BackendObservationSelect} from "./BackendObservationContext";
+import { BackendObservationSelect } from "./BackendObservationContext";
 import { createContext, useContext, useState, type ReactNode } from "react";
 import { Alert, Button, Stack, Text } from "@mantine/core";
 import type { BackendDiagramScopeInput, BackendDiagramVersion } from "@/api/generated/schemas";
@@ -31,7 +31,12 @@ export function BackendDiagramReplayPrepare({
   const [error, setError] = useState("");
   return (
     <Stack>
-<BackendObservationSelect projectId={projectId} diagram={diagram} input={input} disabled={disabled}/>
+      <BackendObservationSelect
+        projectId={projectId}
+        diagram={diagram}
+        input={input}
+        disabled={disabled}
+      />
       <Button
         disabled={disabled || busy || !context}
         onClick={async () => {

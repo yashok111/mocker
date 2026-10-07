@@ -195,6 +195,21 @@ func (db *DB) Migrate(ctx context.Context, log *slog.Logger) error {
 	if err := db.W.QueryRowContext(ctx, "PRAGMA user_version").Scan(&current); err != nil {
 		return fmt.Errorf("read user_version: %w", err)
 	}
+	// A file migrated past every migration this binary embeds was written by
+	// a NEWER binary: its schema (Store27 rebuilt owner tables into blob
+	// projections, and 0027 itself says never to run an old binary on it) is
+	// one this code does not understand. Skipping "already applied" versions
+	// used to start the server anyway, with backend writes failing or
+	// half-applying behind a healthy-looking mock plane (review 2026-10-06,
+	// F167). Refusing to start is the only safe answer; it guards every
+	// binary from this one on, not the ones already released.
+	latest := 0
+	if len(migrations) > 0 {
+		latest = migrations[len(migrations)-1].version
+	}
+	if current > latest {
+		return fmt.Errorf("database schema version %d is newer than this binary supports (%d): run the binary that wrote it or restore a backup", current, latest)
+	}
 
 	for _, m := range migrations {
 		if m.version <= current {

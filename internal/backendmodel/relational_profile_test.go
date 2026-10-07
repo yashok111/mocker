@@ -43,8 +43,10 @@ func TestRelationalProfileEmptyStoreReopen(t *testing.T) {
 		t.Fatalf("empty revision changed on reopen: %s, %v", after, err)
 	}
 	var schema int
-	if err := reopened.R.QueryRowContext(t.Context(), `PRAGMA user_version`).Scan(&schema); err != nil || schema != 22 {
-		t.Fatalf("schema22 compatibility: %d, %v", schema, err)
+	// Reopening must not migrate past the head (the literal 22 here was written
+	// at 0022 and went stale with 0023..0027; see storeSchemaHead).
+	if err := reopened.R.QueryRowContext(t.Context(), `PRAGMA user_version`).Scan(&schema); err != nil || schema != storeSchemaHead {
+		t.Fatalf("schema head compatibility: %d, %v", schema, err)
 	}
 	in := relationalInput(firstImportFixture(p), false)
 	s, err := r.BeginImport(t.Context(), p.ID, in)
@@ -269,7 +271,8 @@ func TestRelationalProfileExtensionPublishesOnlyOnCommit(t *testing.T) {
 				t.Fatal(err)
 			}
 			v := previewFixture(t, r, p, s)
-			if action == "CAS conflict" {
+			switch action {
+			case "CAS conflict":
 				competing := repeatInput(p, old.RepositoryID)
 				competing.IdempotencyKey = "competing"
 				other, err := r.BeginImport(t.Context(), p.ID, competing)
@@ -280,12 +283,12 @@ func TestRelationalProfileExtensionPublishesOnlyOnCommit(t *testing.T) {
 				_, err = commitFixture(t, r, p, s, v, "extension-commit")
 				assertFault(t, err, "backend_version_conflict")
 				p = &out.Project
-			} else if action == "abort" {
+			case "abort":
 				_, err = r.AbortImport(t.Context(), p.ID, s.ID, AbortImportInput{ExpectedImportVersion: v.Version, IdempotencyKey: "abort"})
 				if err != nil {
 					t.Fatal(err)
 				}
-			} else if action == "invalid batch" {
+			case "invalid batch":
 				cs := fixtureCommands(s)
 				cs[1].Evidence.Source.SnapshotID = old.SnapshotID
 				h, err := ImportBatchHash(cs)
@@ -294,7 +297,7 @@ func TestRelationalProfileExtensionPublishesOnlyOnCommit(t *testing.T) {
 				}
 				_, err = r.PutImportBatch(t.Context(), p.ID, s.ID, "bad", ImportBatchInput{ExpectedImportVersion: v.Version, PayloadHash: h, Commands: cs})
 				assertFault(t, err, "backend_import_invalid")
-			} else {
+			default:
 				if _, err := r.db.W.ExecContext(t.Context(), `CREATE TRIGGER fail_profile_publish BEFORE UPDATE ON backend_projects BEGIN SELECT RAISE(ABORT,'forced late publication failure'); END`); err != nil {
 					t.Fatal(err)
 				}

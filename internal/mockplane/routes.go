@@ -14,13 +14,14 @@ import (
 	"net/http"
 	"sync"
 
+	"golang.org/x/sync/singleflight"
+
 	"github.com/yashok111/mocker/internal/gen"
 	"github.com/yashok111/mocker/internal/httpx"
 	"github.com/yashok111/mocker/internal/overrides"
 	"github.com/yashok111/mocker/internal/resources"
 	"github.com/yashok111/mocker/internal/router"
 	"github.com/yashok111/mocker/internal/workspaces"
-	"golang.org/x/sync/singleflight"
 )
 
 // SpecSource reads everything a workspace's runtime is built from: the route

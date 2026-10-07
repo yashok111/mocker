@@ -5,6 +5,7 @@ import (
 	"encoding/json/v2"
 	"errors"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -49,7 +50,7 @@ func makeRoundtripFixture(t *testing.T) *roundtripFixture {
 	s := NewService(db, models)
 	p, err := models.Create(t.Context(), bm.CreateInput{Name: "Roundtrip", IdempotencyKey: "project"})
 	check(t, err)
-	inventory := []bm.InventoryItem{}
+	inventory := make([]bm.InventoryItem, 0, 9)
 	for _, category := range []string{"files", "endpoints", "datastores", "migrations", "producers", "consumers", "jobs", "contracts", "tests"} {
 		n := int64(0)
 		if category == "files" {
@@ -435,5 +436,70 @@ func TestPortableReexportMatchesCommittedLocalHashes(t *testing.T) {
 		if c.Key == "source" && c.Attachment.RevisionID == f.selection.Target.RevisionID {
 			t.Fatal("source attachment was not remapped")
 		}
+	}
+}
+
+// review 2026-10-06, F75: the imported project is created at Commit, not at
+// Preview. Preview used to stamp createdAt/updatedAt into the prepared input
+// and Commit inserted them verbatim, so a project reviewed for a day was
+// dated before its own receipt, id maps and origins.
+func TestPortableCommitStampsProjectAtCommitTime(t *testing.T) {
+	t.Parallel()
+	f := makeRoundtripFixture(t)
+	_, session := stageRoundtrip(t, f)
+	preview, err := f.service.Preview(t.Context(), session.ID, PreviewInput{ExpectedVersion: session.Version, ArtifactMappings: []bm.PortableArtifactMapping{}, IdempotencyKey: "preview"})
+	check(t, err)
+	afterPreview := time.Now().UTC()
+	committed, err := f.service.Commit(t.Context(), session.ID, CommitInput{ExpectedVersion: preview.Session.Version, CandidateHash: preview.CandidateHash, IdempotencyKey: "commit"})
+	check(t, err)
+	if committed.Project.CreatedAt.Before(afterPreview) || !committed.Project.UpdatedAt.Equal(committed.Project.CreatedAt) {
+		t.Fatal("project stamped at Preview time", committed.Project.CreatedAt, afterPreview)
+	}
+	stored, err := f.service.models.Get(t.Context(), committed.Project.ID)
+	check(t, err)
+	if !stored.CreatedAt.Equal(committed.Project.CreatedAt) {
+		t.Fatal("stored project time differs from the receipt", stored.CreatedAt, committed.Project.CreatedAt)
+	}
+}
+
+// review 2026-10-06, F71/F8: a committed import keeps nothing staged. The
+// chunk bodies (up to 256 MiB) and the prepared preview used to stay forever:
+// Abort refuses a committed session and nothing else reclaimed them, while
+// origins and id maps already hold the immutable copies.
+func TestPortableCommitReclaimsStagedChunksAndPreview(t *testing.T) {
+	t.Parallel()
+	f := makeRoundtripFixture(t)
+	_, session := stageRoundtrip(t, f)
+	preview, err := f.service.Preview(t.Context(), session.ID, PreviewInput{ExpectedVersion: session.Version, ArtifactMappings: []bm.PortableArtifactMapping{}, IdempotencyKey: "preview"})
+	check(t, err)
+	in := CommitInput{ExpectedVersion: preview.Session.Version, CandidateHash: preview.CandidateHash, IdempotencyKey: "commit"}
+	committed, err := f.service.Commit(t.Context(), session.ID, in)
+	check(t, err)
+	var chunks, previews int
+	check(t, f.service.db.R.QueryRow(`SELECT count(*) FROM backend_portable_chunks WHERE session_id=?`, session.ID).Scan(&chunks))
+	check(t, f.service.db.R.QueryRow(`SELECT count(*) FROM backend_portable_sessions WHERE id=? AND (preview IS NOT NULL OR candidate_hash IS NOT NULL)`, session.ID).Scan(&previews))
+	if chunks != 0 || previews != 0 {
+		t.Fatal("committed import kept staged data", chunks, previews)
+	}
+	replay, err := f.service.Commit(t.Context(), session.ID, in)
+	check(t, err)
+	if replay.Project.ID != committed.Project.ID {
+		t.Fatal("receipt replay after reclaim changed the result")
+	}
+}
+
+// review 2026-10-06, F74: the guide says to export with the resolved
+// selection unchanged, so the resolver must refuse what export refuses. A
+// duplicated view pin used to resolve with 200 and fail only at export.
+func TestPortableResolveSelectionRejectsWhatExportRejects(t *testing.T) {
+	t.Parallel()
+	f := makeRoundtripFixture(t)
+	in := SelectionInput{Target: f.selection.Target, DiagramViews: f.selection.DiagramViews}
+	if _, err := f.service.ResolveSelection(t.Context(), f.selection.ProjectID, in); err != nil {
+		t.Fatal(err)
+	}
+	in.DiagramViews = append(slices.Clone(in.DiagramViews), in.DiagramViews[0])
+	if _, err := f.service.ResolveSelection(t.Context(), f.selection.ProjectID, in); err == nil {
+		t.Fatal("duplicate view pin resolved")
 	}
 }

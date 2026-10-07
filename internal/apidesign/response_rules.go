@@ -126,7 +126,7 @@ func (r *Repo) EditResponseRule(ctx context.Context, id, version int64, actor, r
 	case "delete":
 		env.Rules = slices.Delete(env.Rules, index, index+1)
 	case "commands":
-		env.Rules[index], err = responserules.ApplyCommands(env.Rules[index], commands)
+		env.Rules[index], err = responserules.ApplyCommands(ctx, env.Rules[index], commands)
 		if err != nil {
 			return nil, responseRuleError(err)
 		}

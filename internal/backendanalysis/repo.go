@@ -5,9 +5,10 @@ import (
 	"database/sql"
 	"encoding/json/v2"
 	"errors"
-	"github.com/yashok111/mocker/internal/backendblob"
 	"time"
 	"uuid"
+
+	"github.com/yashok111/mocker/internal/backendblob"
 
 	"github.com/yashok111/mocker/internal/backendmodel"
 	"github.com/yashok111/mocker/internal/store"
@@ -325,8 +326,40 @@ func (r *Repo) acceptedPrefix(ctx context.Context, pid, id, code string) (*Job, 
 	s.Manifest.Complete = false
 	s.Manifest.Verdict = "unknown"
 	s.Manifest.Gaps = append(s.Manifest.Gaps, Diagnostic{ID: code, Code: code, Message: "Analysis ended before completion"})
-	s, err = prepareSnapshot(s)
-	return j, s, err
+	prepared, err := prepareSnapshot(s)
+	if isFault(err, "backend_analysis_manifest_limit") {
+		// This prefix is how a job that cannot finish is CLOSED -- by the
+		// worker, by Cancel and by startup recovery -- so it must always fit.
+		// An oversized scope admitted before the admission bound, or a last
+		// published manifest that left no room for one more gap, made it answer
+		// 413 forever: recovery returned the error and the server could not
+		// start (review 2026-10-06, F149). The immutable input and the chunks
+		// keep everything dropped here; the gap says it was dropped.
+		prepared, err = prepareSnapshot(compactPrefix(s, code))
+	}
+	return j, prepared, err
+}
+
+// compactPrefix keeps the identity, versions and verdict of a prefix manifest
+// and drops every caller- or graph-sized field. Sections are recomputed from
+// the chunks by prepareSnapshot.
+func compactPrefix(s PreparedSnapshot, code string) PreparedSnapshot {
+	m := s.Manifest
+	s.Manifest = ResultManifest{
+		JobID: m.JobID, AnalysisInputHash: m.AnalysisInputHash, ResultVersion: m.ResultVersion,
+		RuleSetVersion: m.RuleSetVersion, TraversalVersion: m.TraversalVersion, Verdict: "unknown",
+		ChangedIDs: []ObjectAddress{}, CoveredChangedIDs: []ObjectAddress{}, TruncationReasons: []Diagnostic{},
+		Gaps: []Diagnostic{
+			{ID: code, Code: code, Message: "Analysis ended before completion"},
+			{ID: "manifest_compacted", Code: "manifest_compacted", Message: "Scope, diagram scope, changed ids, coverage and earlier gaps were omitted to fit the manifest bound; the immutable input keeps them"},
+		},
+	}
+	return s
+}
+
+func isFault(err error, code string) bool {
+	f, ok := errors.AsType[*backendmodel.FaultError](err)
+	return ok && f.Code == code
 }
 
 var errTransitionMoved = errors.New("analysis transition moved")

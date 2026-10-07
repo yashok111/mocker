@@ -74,19 +74,24 @@ func TestArtifactSnapshotRawLegacyAndDigest(t *testing.T) {
 	hash := fmt.Sprintf("%x", sha256.Sum256([]byte(raw)))
 	// Test fixture models a pre-identity immutable revision; remove its write fence.
 	err = db.Write(t.Context(), func(tx *sql.Tx) error {
-		rows, err := tx.QueryContext(t.Context(), `SELECT name FROM sqlite_master WHERE type='trigger' AND tbl_name='api_design_revisions'`)
-		if err != nil {
-			return err
-		}
-		names := []string{}
-		for rows.Next() {
-			var name string
-			if err := rows.Scan(&name); err != nil {
-				return err
+		// The cursor is closed before the DROPs run, as before, but on every path.
+		names, err := func() ([]string, error) {
+			rows, err := tx.QueryContext(t.Context(), `SELECT name FROM sqlite_master WHERE type='trigger' AND tbl_name='api_design_revisions'`)
+			if err != nil {
+				return nil, err
 			}
-			names = append(names, name)
-		}
-		if err := rows.Close(); err != nil {
+			defer func() { _ = rows.Close() }()
+			names := []string{}
+			for rows.Next() {
+				var name string
+				if err := rows.Scan(&name); err != nil {
+					return nil, err
+				}
+				names = append(names, name)
+			}
+			return names, rows.Err()
+		}()
+		if err != nil {
 			return err
 		}
 		for _, name := range names {

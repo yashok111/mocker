@@ -1,6 +1,7 @@
 package admin
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http/httptest"
@@ -53,9 +54,9 @@ func resultConditionWorkspaceRequest(t *testing.T, s *Server, plane *mockplane.P
 	return reply
 }
 
-func resultConditionWorkspaceResource(t *testing.T, s *Server, workspaceID int64) *resources.Resource {
+func resultConditionWorkspaceResource(ctx context.Context, t *testing.T, s *Server, workspaceID int64) *resources.Resource {
 	t.Helper()
-	rows, err := s.resourcesRepo.ForWorkspace(t.Context(), workspaceID)
+	rows, err := s.resourcesRepo.ForWorkspace(ctx, workspaceID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -95,7 +96,7 @@ func TestResultConditionsManagedLifecycle(t *testing.T) {
 	}
 	seed := func(workspaceID int64, status string) {
 		t.Helper()
-		resource := resultConditionWorkspaceResource(t, s, workspaceID)
+		resource := resultConditionWorkspaceResource(ctx, t, s, workspaceID)
 		_, _, err := s.resourcesRepo.Set(ctx, resource.ID, "", "", "1", resource.IDField, resource.Wrapper.IDType, map[string]any{"status": status})
 		if err != nil {
 			t.Fatal(err)

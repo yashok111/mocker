@@ -2,10 +2,11 @@ package admin
 
 import (
 	"encoding/json/v2"
-	bm "github.com/yashok111/mocker/internal/backendmodel"
-	ob "github.com/yashok111/mocker/internal/backendobservations"
 	"strings"
 	"testing"
+
+	bm "github.com/yashok111/mocker/internal/backendmodel"
+	ob "github.com/yashok111/mocker/internal/backendobservations"
 )
 
 func TestBackendObservationReadAdmission(t *testing.T) {

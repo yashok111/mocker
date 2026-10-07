@@ -14625,7 +14625,8 @@
                 "diagram-view-v1",
                 "artifact-context-v3",
                 "backend-portable-v1",
-                "backend-replay-v1"
+                "backend-replay-v1",
+                "backend-observations-v1"
               ]
             }
           },
@@ -14862,7 +14863,8 @@
                 "items": {
                   "type": "string",
                   "enum": [
-                    "none"
+                    "none",
+                    "pinned"
                   ]
                 },
                 "uniqueItems": true
@@ -24055,6 +24057,12 @@
           },
           "artifactGroupAfter": {
             "$ref": "#/components/schemas/ArtifactGroupSide"
+          },
+          "sourceClaimBefore": {
+            "$ref": "#/components/schemas/BackendSourceClaimComparisonSide"
+          },
+          "sourceClaimAfter": {
+            "$ref": "#/components/schemas/BackendSourceClaimComparisonSide"
           }
         }
       },
@@ -24113,6 +24121,14 @@
           },
           "nextCursor": {
             "type": "string"
+          },
+          "sourceBefore": {
+            "$ref": "#/components/schemas/BackendSourceReadContext",
+            "description": "Present when the from revision is composed (schema 6)."
+          },
+          "sourceAfter": {
+            "$ref": "#/components/schemas/BackendSourceReadContext",
+            "description": "Present when the to revision is composed (schema 6)."
           }
         }
       },
@@ -28503,7 +28519,8 @@
                   ]
                 }
               ]
-            }
+            },
+            "description": "Unsupported target: the server answers 422 backend_unsupported_scope; staged targets support graph/node/evidence/coverage/assertions only."
           },
           {
             "type": "object",
@@ -28804,7 +28821,8 @@
                   ]
                 }
               ]
-            }
+            },
+            "description": "Unsupported target: the server answers 422 backend_unsupported_scope; staged targets support graph/node/evidence/coverage/assertions only."
           }
         ]
       },
@@ -36759,10 +36777,14 @@
                 "default": 100
               },
               "cursor": {
-                "type": "string"
+                "type": "string",
+                "maxLength": 1024,
+                "description": "Opaque nextCursor of the previous page, at most 1024 bytes. It binds the view and selectors, not the limit."
               },
               "search": {
-                "type": "string"
+                "type": "string",
+                "maxLength": 1024,
+                "description": "At most 1024 UTF-8 bytes, no NUL."
               },
               "revisionId": {
                 "type": "string",
@@ -36824,10 +36846,14 @@
                 "default": 100
               },
               "cursor": {
-                "type": "string"
+                "type": "string",
+                "maxLength": 1024,
+                "description": "Opaque nextCursor of the previous page, at most 1024 bytes. It binds the view and selectors, not the limit."
               },
               "search": {
-                "type": "string"
+                "type": "string",
+                "maxLength": 1024,
+                "description": "At most 1024 UTF-8 bytes, no NUL."
               },
               "proposal": {
                 "$ref": "#/components/schemas/BackendProposalReadTarget"
@@ -36863,7 +36889,8 @@
                   ]
                 }
               ]
-            }
+            },
+            "description": "Unsupported target: the server answers 422 backend_unsupported_scope; Flow reads support a revision or a full changeProposal only."
           },
           {
             "type": "object",
@@ -36884,10 +36911,14 @@
                 "default": 100
               },
               "cursor": {
-                "type": "string"
+                "type": "string",
+                "maxLength": 1024,
+                "description": "Opaque nextCursor of the previous page, at most 1024 bytes. It binds the view and selectors, not the limit."
               },
               "search": {
-                "type": "string"
+                "type": "string",
+                "maxLength": 1024,
+                "description": "At most 1024 UTF-8 bytes, no NUL."
               },
               "changeProposal": {
                 "$ref": "#/components/schemas/BackendProposalReadTarget"
@@ -36944,10 +36975,14 @@
                 "default": 100
               },
               "cursor": {
-                "type": "string"
+                "type": "string",
+                "maxLength": 1024,
+                "description": "Opaque nextCursor of the previous page, at most 1024 bytes. It binds the view and selectors, not the limit."
               },
               "search": {
-                "type": "string"
+                "type": "string",
+                "maxLength": 1024,
+                "description": "At most 1024 UTF-8 bytes, no NUL."
               },
               "importCandidate": {
                 "$ref": "#/components/schemas/BackendImportCandidateReadTarget"
@@ -36983,7 +37018,8 @@
                   ]
                 }
               ]
-            }
+            },
+            "description": "Unsupported target: the server answers 422 backend_unsupported_scope; staged targets support graph/node/evidence/coverage/assertions only."
           },
           {
             "type": "object",
@@ -37005,7 +37041,9 @@
                 "default": 100
               },
               "cursor": {
-                "type": "string"
+                "type": "string",
+                "maxLength": 1024,
+                "description": "Opaque nextCursor of the previous page, at most 1024 bytes. It binds the view and selectors, not the limit."
               },
               "flowId": {
                 "type": "string",
@@ -37072,7 +37110,9 @@
                 "default": 100
               },
               "cursor": {
-                "type": "string"
+                "type": "string",
+                "maxLength": 1024,
+                "description": "Opaque nextCursor of the previous page, at most 1024 bytes. It binds the view and selectors, not the limit."
               },
               "flowId": {
                 "type": "string",
@@ -37112,7 +37152,8 @@
                   ]
                 }
               ]
-            }
+            },
+            "description": "Unsupported target: the server answers 422 backend_unsupported_scope; Flow reads support a revision or a full changeProposal only."
           },
           {
             "type": "object",
@@ -37134,7 +37175,9 @@
                 "default": 100
               },
               "cursor": {
-                "type": "string"
+                "type": "string",
+                "maxLength": 1024,
+                "description": "Opaque nextCursor of the previous page, at most 1024 bytes. It binds the view and selectors, not the limit."
               },
               "flowId": {
                 "type": "string",
@@ -37196,7 +37239,9 @@
                 "default": 100
               },
               "cursor": {
-                "type": "string"
+                "type": "string",
+                "maxLength": 1024,
+                "description": "Opaque nextCursor of the previous page, at most 1024 bytes. It binds the view and selectors, not the limit."
               },
               "flowId": {
                 "type": "string",
@@ -37236,7 +37281,8 @@
                   ]
                 }
               ]
-            }
+            },
+            "description": "Unsupported target: the server answers 422 backend_unsupported_scope; staged targets support graph/node/evidence/coverage/assertions only."
           },
           {
             "type": "object",
@@ -37258,7 +37304,9 @@
                 "default": 100
               },
               "cursor": {
-                "type": "string"
+                "type": "string",
+                "maxLength": 1024,
+                "description": "Opaque nextCursor of the previous page, at most 1024 bytes. It binds the view and selectors, not the limit."
               },
               "flowId": {
                 "type": "string",
@@ -37325,7 +37373,9 @@
                 "default": 100
               },
               "cursor": {
-                "type": "string"
+                "type": "string",
+                "maxLength": 1024,
+                "description": "Opaque nextCursor of the previous page, at most 1024 bytes. It binds the view and selectors, not the limit."
               },
               "flowId": {
                 "type": "string",
@@ -37365,7 +37415,8 @@
                   ]
                 }
               ]
-            }
+            },
+            "description": "Unsupported target: the server answers 422 backend_unsupported_scope; Flow reads support a revision or a full changeProposal only."
           },
           {
             "type": "object",
@@ -37387,7 +37438,9 @@
                 "default": 100
               },
               "cursor": {
-                "type": "string"
+                "type": "string",
+                "maxLength": 1024,
+                "description": "Opaque nextCursor of the previous page, at most 1024 bytes. It binds the view and selectors, not the limit."
               },
               "flowId": {
                 "type": "string",
@@ -37449,7 +37502,9 @@
                 "default": 100
               },
               "cursor": {
-                "type": "string"
+                "type": "string",
+                "maxLength": 1024,
+                "description": "Opaque nextCursor of the previous page, at most 1024 bytes. It binds the view and selectors, not the limit."
               },
               "flowId": {
                 "type": "string",
@@ -37489,7 +37544,8 @@
                   ]
                 }
               ]
-            }
+            },
+            "description": "Unsupported target: the server answers 422 backend_unsupported_scope; staged targets support graph/node/evidence/coverage/assertions only."
           },
           {
             "type": "object",
@@ -37511,7 +37567,9 @@
                 "default": 100
               },
               "cursor": {
-                "type": "string"
+                "type": "string",
+                "maxLength": 1024,
+                "description": "Opaque nextCursor of the previous page, at most 1024 bytes. It binds the view and selectors, not the limit."
               },
               "entrypointId": {
                 "type": "string",
@@ -37586,7 +37644,9 @@
                 "default": 100
               },
               "cursor": {
-                "type": "string"
+                "type": "string",
+                "maxLength": 1024,
+                "description": "Opaque nextCursor of the previous page, at most 1024 bytes. It binds the view and selectors, not the limit."
               },
               "entrypointId": {
                 "type": "string",
@@ -37634,7 +37694,8 @@
                   ]
                 }
               ]
-            }
+            },
+            "description": "Unsupported target: the server answers 422 backend_unsupported_scope; Flow reads support a revision or a full changeProposal only."
           },
           {
             "type": "object",
@@ -37656,7 +37717,9 @@
                 "default": 100
               },
               "cursor": {
-                "type": "string"
+                "type": "string",
+                "maxLength": 1024,
+                "description": "Opaque nextCursor of the previous page, at most 1024 bytes. It binds the view and selectors, not the limit."
               },
               "entrypointId": {
                 "type": "string",
@@ -37726,7 +37789,9 @@
                 "default": 100
               },
               "cursor": {
-                "type": "string"
+                "type": "string",
+                "maxLength": 1024,
+                "description": "Opaque nextCursor of the previous page, at most 1024 bytes. It binds the view and selectors, not the limit."
               },
               "entrypointId": {
                 "type": "string",
@@ -37774,7 +37839,8 @@
                   ]
                 }
               ]
-            }
+            },
+            "description": "Unsupported target: the server answers 422 backend_unsupported_scope; staged targets support graph/node/evidence/coverage/assertions only."
           },
           {
             "type": "object",
@@ -37796,7 +37862,9 @@
                 "default": 100
               },
               "cursor": {
-                "type": "string"
+                "type": "string",
+                "maxLength": 1024,
+                "description": "Opaque nextCursor of the previous page, at most 1024 bytes. It binds the view and selectors, not the limit."
               },
               "dataNodeId": {
                 "type": "string",
@@ -37871,7 +37939,9 @@
                 "default": 100
               },
               "cursor": {
-                "type": "string"
+                "type": "string",
+                "maxLength": 1024,
+                "description": "Opaque nextCursor of the previous page, at most 1024 bytes. It binds the view and selectors, not the limit."
               },
               "dataNodeId": {
                 "type": "string",
@@ -37919,7 +37989,8 @@
                   ]
                 }
               ]
-            }
+            },
+            "description": "Unsupported target: the server answers 422 backend_unsupported_scope; Flow reads support a revision or a full changeProposal only."
           },
           {
             "type": "object",
@@ -37941,7 +38012,9 @@
                 "default": 100
               },
               "cursor": {
-                "type": "string"
+                "type": "string",
+                "maxLength": 1024,
+                "description": "Opaque nextCursor of the previous page, at most 1024 bytes. It binds the view and selectors, not the limit."
               },
               "dataNodeId": {
                 "type": "string",
@@ -38011,7 +38084,9 @@
                 "default": 100
               },
               "cursor": {
-                "type": "string"
+                "type": "string",
+                "maxLength": 1024,
+                "description": "Opaque nextCursor of the previous page, at most 1024 bytes. It binds the view and selectors, not the limit."
               },
               "dataNodeId": {
                 "type": "string",
@@ -38059,7 +38134,8 @@
                   ]
                 }
               ]
-            }
+            },
+            "description": "Unsupported target: the server answers 422 backend_unsupported_scope; staged targets support graph/node/evidence/coverage/assertions only."
           }
         ]
       },
@@ -40431,7 +40507,8 @@
                   ]
                 }
               ]
-            }
+            },
+            "description": "Unsupported target: the server answers 422 backend_unsupported_scope; Lineage reads support a revision or a full changeProposal only."
           },
           {
             "type": "object",
@@ -40571,7 +40648,8 @@
                   ]
                 }
               ]
-            }
+            },
+            "description": "Unsupported target: the server answers 422 backend_unsupported_scope; staged targets support graph/node/evidence/coverage/assertions only."
           }
         ]
       },
@@ -46566,7 +46644,8 @@
               },
               "cursor": {
                 "type": "string",
-                "maxLength": 4096
+                "maxLength": 1024,
+                "description": "Opaque nextCursor of the previous page, at most 1024 bytes. It binds the view, selectors and the effective limit: request the next page with the same limit, or the cursor is refused."
               },
               "revisionId": {
                 "type": "string",
@@ -46637,7 +46716,8 @@
               },
               "cursor": {
                 "type": "string",
-                "maxLength": 4096
+                "maxLength": 1024,
+                "description": "Opaque nextCursor of the previous page, at most 1024 bytes. It binds the view, selectors and the effective limit: request the next page with the same limit, or the cursor is refused."
               },
               "proposal": {
                 "$ref": "#/components/schemas/BackendProposalReadTarget"
@@ -46673,7 +46753,8 @@
                   ]
                 }
               ]
-            }
+            },
+            "description": "Unsupported target: the server answers 422 backend_unsupported_scope; Events reads support a revision or a full changeProposal only."
           },
           {
             "type": "object",
@@ -46703,7 +46784,8 @@
               },
               "cursor": {
                 "type": "string",
-                "maxLength": 4096
+                "maxLength": 1024,
+                "description": "Opaque nextCursor of the previous page, at most 1024 bytes. It binds the view, selectors and the effective limit: request the next page with the same limit, or the cursor is refused."
               },
               "changeProposal": {
                 "$ref": "#/components/schemas/BackendProposalReadTarget"
@@ -46769,7 +46851,8 @@
               },
               "cursor": {
                 "type": "string",
-                "maxLength": 4096
+                "maxLength": 1024,
+                "description": "Opaque nextCursor of the previous page, at most 1024 bytes. It binds the view, selectors and the effective limit: request the next page with the same limit, or the cursor is refused."
               },
               "importCandidate": {
                 "$ref": "#/components/schemas/BackendImportCandidateReadTarget"
@@ -46805,7 +46888,8 @@
                   ]
                 }
               ]
-            }
+            },
+            "description": "Unsupported target: the server answers 422 backend_unsupported_scope; staged targets support graph/node/evidence/coverage/assertions only."
           },
           {
             "type": "object",
@@ -46835,7 +46919,8 @@
               },
               "cursor": {
                 "type": "string",
-                "maxLength": 4096
+                "maxLength": 1024,
+                "description": "Opaque nextCursor of the previous page, at most 1024 bytes. It binds the view, selectors and the effective limit: request the next page with the same limit, or the cursor is refused."
               },
               "revisionId": {
                 "type": "string",
@@ -46906,7 +46991,8 @@
               },
               "cursor": {
                 "type": "string",
-                "maxLength": 4096
+                "maxLength": 1024,
+                "description": "Opaque nextCursor of the previous page, at most 1024 bytes. It binds the view, selectors and the effective limit: request the next page with the same limit, or the cursor is refused."
               },
               "proposal": {
                 "$ref": "#/components/schemas/BackendProposalReadTarget"
@@ -46942,7 +47028,8 @@
                   ]
                 }
               ]
-            }
+            },
+            "description": "Unsupported target: the server answers 422 backend_unsupported_scope; Events reads support a revision or a full changeProposal only."
           },
           {
             "type": "object",
@@ -46972,7 +47059,8 @@
               },
               "cursor": {
                 "type": "string",
-                "maxLength": 4096
+                "maxLength": 1024,
+                "description": "Opaque nextCursor of the previous page, at most 1024 bytes. It binds the view, selectors and the effective limit: request the next page with the same limit, or the cursor is refused."
               },
               "changeProposal": {
                 "$ref": "#/components/schemas/BackendProposalReadTarget"
@@ -47038,7 +47126,8 @@
               },
               "cursor": {
                 "type": "string",
-                "maxLength": 4096
+                "maxLength": 1024,
+                "description": "Opaque nextCursor of the previous page, at most 1024 bytes. It binds the view, selectors and the effective limit: request the next page with the same limit, or the cursor is refused."
               },
               "importCandidate": {
                 "$ref": "#/components/schemas/BackendImportCandidateReadTarget"
@@ -47074,7 +47163,8 @@
                   ]
                 }
               ]
-            }
+            },
+            "description": "Unsupported target: the server answers 422 backend_unsupported_scope; staged targets support graph/node/evidence/coverage/assertions only."
           },
           {
             "type": "object",
@@ -47104,7 +47194,8 @@
               },
               "cursor": {
                 "type": "string",
-                "maxLength": 4096
+                "maxLength": 1024,
+                "description": "Opaque nextCursor of the previous page, at most 1024 bytes. It binds the view, selectors and the effective limit: request the next page with the same limit, or the cursor is refused."
               },
               "revisionId": {
                 "type": "string",
@@ -47175,7 +47266,8 @@
               },
               "cursor": {
                 "type": "string",
-                "maxLength": 4096
+                "maxLength": 1024,
+                "description": "Opaque nextCursor of the previous page, at most 1024 bytes. It binds the view, selectors and the effective limit: request the next page with the same limit, or the cursor is refused."
               },
               "proposal": {
                 "$ref": "#/components/schemas/BackendProposalReadTarget"
@@ -47211,7 +47303,8 @@
                   ]
                 }
               ]
-            }
+            },
+            "description": "Unsupported target: the server answers 422 backend_unsupported_scope; Events reads support a revision or a full changeProposal only."
           },
           {
             "type": "object",
@@ -47241,7 +47334,8 @@
               },
               "cursor": {
                 "type": "string",
-                "maxLength": 4096
+                "maxLength": 1024,
+                "description": "Opaque nextCursor of the previous page, at most 1024 bytes. It binds the view, selectors and the effective limit: request the next page with the same limit, or the cursor is refused."
               },
               "changeProposal": {
                 "$ref": "#/components/schemas/BackendProposalReadTarget"
@@ -47307,7 +47401,8 @@
               },
               "cursor": {
                 "type": "string",
-                "maxLength": 4096
+                "maxLength": 1024,
+                "description": "Opaque nextCursor of the previous page, at most 1024 bytes. It binds the view, selectors and the effective limit: request the next page with the same limit, or the cursor is refused."
               },
               "importCandidate": {
                 "$ref": "#/components/schemas/BackendImportCandidateReadTarget"
@@ -47343,7 +47438,8 @@
                   ]
                 }
               ]
-            }
+            },
+            "description": "Unsupported target: the server answers 422 backend_unsupported_scope; staged targets support graph/node/evidence/coverage/assertions only."
           }
         ]
       },
@@ -76530,6 +76626,7 @@
       },
       "BackendAnalysisScope": {
         "type": "object",
+        "description": "Copied into every result manifest. On start the normalized scope must serialize to at most 16 KiB, otherwise 413 backend_analysis_scope_limit.",
         "additionalProperties": false,
         "properties": {
           "changedIds": {
@@ -76614,7 +76711,7 @@
           "resultBytes": {
             "type": "integer",
             "format": "int64",
-            "minimum": 1,
+            "minimum": 131072,
             "maximum": 33554432
           }
         },
@@ -81368,7 +81465,8 @@
           "idempotencyKey": {
             "type": "string",
             "minLength": 1,
-            "maxLength": 128
+            "maxLength": 128,
+            "pattern": "^[!-~]+$"
           }
         },
         "required": [
@@ -81392,7 +81490,8 @@
           "idempotencyKey": {
             "type": "string",
             "minLength": 1,
-            "maxLength": 128
+            "maxLength": 128,
+            "pattern": "^[!-~]+$"
           }
         },
         "required": [
@@ -81419,7 +81518,8 @@
           "idempotencyKey": {
             "type": "string",
             "minLength": 1,
-            "maxLength": 128
+            "maxLength": 128,
+            "pattern": "^[!-~]+$"
           },
           "architecture": {
             "$ref": "#/components/schemas/BackendDiagramPin"
@@ -81909,7 +82009,8 @@
           "idempotencyKey": {
             "type": "string",
             "minLength": 1,
-            "maxLength": 128
+            "maxLength": 128,
+            "pattern": "^[!-~]+$"
           }
         },
         "required": [
@@ -81933,7 +82034,8 @@
           "idempotencyKey": {
             "type": "string",
             "minLength": 1,
-            "maxLength": 128
+            "maxLength": 128,
+            "pattern": "^[!-~]+$"
           },
           "expectedVersion": {
             "type": "integer",
@@ -82646,7 +82748,9 @@
               },
               "text": {
                 "type": "string",
-                "maxLength": 4096
+                "minLength": 1,
+                "maxLength": 135232,
+                "description": "At most 135232 UTF-8 bytes: the largest serialized guard (2048-byte pointer, 64 KiB equalsJSON) of a state-diagram owner."
               }
             },
             "required": [
@@ -83533,7 +83637,8 @@
           "idempotencyKey": {
             "type": "string",
             "minLength": 1,
-            "maxLength": 256
+            "maxLength": 128,
+            "description": "At most 128 UTF-8 bytes; the server counts bytes, so a non-ASCII key reaches the limit sooner."
           },
           "resolutionAnalysis": {
             "$ref": "#/components/schemas/BackendFindingAnalysisRef"
@@ -86613,6 +86718,7 @@
         "additionalProperties": false,
         "properties": {
           "inferFingerprint": {
+            "description": "Deprecated; accepted for backward compatibility and never matches. No source node carries a query fingerprint, so a row it would decide stays unresolved with reason query_fingerprint_unsupported. Send false.",
             "type": "boolean"
           },
           "inferSourceLocator": {
@@ -88482,6 +88588,43 @@
           "method",
           "limitations"
         ]
+      },
+      "BackendSourceClaimComparisonSide": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "One side of a composed (schema 6) source claim delta: the claimed assertion, its addressed property and value when the claim is a property, its currentness, selections and dependency claims.",
+        "required": [
+          "assertion",
+          "currentness",
+          "selections",
+          "dependencyClaims"
+        ],
+        "properties": {
+          "assertion": {
+            "$ref": "#/components/schemas/BackendBaseAssertionRef"
+          },
+          "property": {
+            "$ref": "#/components/schemas/BackendSourcePropertySelector"
+          },
+          "value": {
+            "$ref": "#/components/schemas/BackendSourcePropertyValue"
+          },
+          "currentness": {
+            "$ref": "#/components/schemas/BackendSourceClaimCurrentness"
+          },
+          "selections": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendSourceAssertionResolution"
+            }
+          },
+          "dependencyClaims": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendSourceDependencyBinding"
+            }
+          }
+        }
       }
     }
   },
@@ -99718,6 +99861,16 @@
                 }
               }
             }
+          },
+          "503": {
+            "description": "The request was cancelled or timed out before the operation finished (code backend_request_cancelled, retryable).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
           }
         },
         "parameters": [
@@ -99831,6 +99984,16 @@
           },
           "415": {
             "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "503": {
+            "description": "The request was cancelled or timed out before the operation finished (code backend_request_cancelled, retryable).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
           }
         },
         "requestBody": {
@@ -99901,6 +100064,16 @@
                 }
               }
             }
+          },
+          "503": {
+            "description": "The request was cancelled or timed out before the operation finished (code backend_request_cancelled, retryable).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
           }
         }
       }
@@ -99953,6 +100126,16 @@
           },
           "500": {
             "description": "Internal failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The request was cancelled or timed out before the operation finished (code backend_request_cancelled, retryable).",
             "content": {
               "application/json": {
                 "schema": {
@@ -100057,6 +100240,16 @@
           },
           "415": {
             "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "503": {
+            "description": "The request was cancelled or timed out before the operation finished (code backend_request_cancelled, retryable).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
           }
         },
         "parameters": [
@@ -100130,6 +100323,16 @@
           },
           "500": {
             "description": "Internal failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The request was cancelled or timed out before the operation finished (code backend_request_cancelled, retryable).",
             "content": {
               "application/json": {
                 "schema": {
@@ -100219,6 +100422,16 @@
           },
           "500": {
             "description": "Internal failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The request was cancelled or timed out before the operation finished (code backend_request_cancelled, retryable).",
             "content": {
               "application/json": {
                 "schema": {
@@ -100353,6 +100566,16 @@
           },
           "415": {
             "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "503": {
+            "description": "The request was cancelled or timed out before the operation finished (code backend_request_cancelled, retryable).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
           }
         },
         "requestBody": {
@@ -100478,6 +100701,16 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "503": {
+            "description": "The request was cancelled or timed out before the operation finished (code backend_request_cancelled, retryable).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
           }
         }
       }
@@ -100604,6 +100837,16 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "503": {
+            "description": "The request was cancelled or timed out before the operation finished (code backend_request_cancelled, retryable).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
           }
         }
       }
@@ -100731,6 +100974,16 @@
           },
           "415": {
             "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "503": {
+            "description": "The request was cancelled or timed out before the operation finished (code backend_request_cancelled, retryable).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
           }
         },
         "requestBody": {
@@ -100857,6 +101110,16 @@
           },
           "415": {
             "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "503": {
+            "description": "The request was cancelled or timed out before the operation finished (code backend_request_cancelled, retryable).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
           }
         },
         "requestBody": {
@@ -100983,6 +101246,16 @@
           },
           "415": {
             "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "503": {
+            "description": "The request was cancelled or timed out before the operation finished (code backend_request_cancelled, retryable).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
           }
         },
         "requestBody": {
@@ -101109,6 +101382,16 @@
           },
           "415": {
             "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "503": {
+            "description": "The request was cancelled or timed out before the operation finished (code backend_request_cancelled, retryable).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
           }
         },
         "requestBody": {
@@ -101159,7 +101442,7 @@
             }
           },
           "400": {
-            "description": "Malformed JSON, unknown or repeated selector, or malformed cursor.",
+            "description": "Malformed JSON, a selector UUID (id, parentId, from, to) that is not canonical (backend_invalid, details.path), unknown or repeated selector, or malformed cursor.",
             "content": {
               "application/json": {
                 "schema": {
@@ -101199,7 +101482,7 @@
             }
           },
           "422": {
-            "description": "Invalid semantic input; details include paths.",
+            "description": "Invalid semantic input; details include paths. A selector the recordType does not allow (parentId or search on edges, from or to on nodes) is refused by presence as backend_import_invalid.",
             "content": {
               "application/json": {
                 "schema": {
@@ -101226,6 +101509,16 @@
           },
           "415": {
             "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "503": {
+            "description": "The request was cancelled or timed out before the operation finished (code backend_request_cancelled, retryable).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
           }
         },
         "requestBody": {
@@ -101354,6 +101647,16 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "503": {
+            "description": "The request was cancelled or timed out before the operation finished (code backend_request_cancelled, retryable).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
           }
         }
       }
@@ -101497,6 +101800,16 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "503": {
+            "description": "The request was cancelled or timed out before the operation finished (code backend_request_cancelled, retryable).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
           }
         },
         "description": "Pinned evidenceId selector cannot combine with subjectId or cursor."
@@ -101607,6 +101920,16 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "503": {
+            "description": "The request was cancelled or timed out before the operation finished (code backend_request_cancelled, retryable).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
           }
         }
       }
@@ -101708,6 +102031,16 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "503": {
+            "description": "The request was cancelled or timed out before the operation finished (code backend_request_cancelled, retryable).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
           }
         },
         "requestBody": {
@@ -101873,6 +102206,16 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "503": {
+            "description": "The request was cancelled or timed out before the operation finished (code backend_request_cancelled, retryable).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
           }
         }
       }
@@ -101980,6 +102323,16 @@
           },
           "415": {
             "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "503": {
+            "description": "The request was cancelled or timed out before the operation finished (code backend_request_cancelled, retryable).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
           }
         },
         "requestBody": {
@@ -102136,6 +102489,16 @@
           },
           "415": {
             "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "503": {
+            "description": "The request was cancelled or timed out before the operation finished (code backend_request_cancelled, retryable).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
           }
         },
         "description": "Pinned isolated draft proposal; source records and runtime verification remain unchanged."
@@ -102242,6 +102605,16 @@
           },
           "415": {
             "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "503": {
+            "description": "The request was cancelled or timed out before the operation finished (code backend_request_cancelled, retryable).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
           }
         },
         "requestBody": {
@@ -102398,6 +102771,16 @@
           },
           "415": {
             "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "503": {
+            "description": "The request was cancelled or timed out before the operation finished (code backend_request_cancelled, retryable).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
           }
         },
         "description": "Pinned isolated draft proposal; source records and runtime verification remain unchanged."
@@ -102515,6 +102898,16 @@
           },
           "415": {
             "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "503": {
+            "description": "The request was cancelled or timed out before the operation finished (code backend_request_cancelled, retryable).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
           }
         },
         "requestBody": {
@@ -102642,6 +103035,16 @@
           },
           "415": {
             "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "503": {
+            "description": "The request was cancelled or timed out before the operation finished (code backend_request_cancelled, retryable).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
           }
         },
         "requestBody": {
@@ -102787,6 +103190,16 @@
           },
           "415": {
             "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "503": {
+            "description": "The request was cancelled or timed out before the operation finished (code backend_request_cancelled, retryable).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
           }
         },
         "description": "Pinned isolated draft proposal; source records and runtime verification remain unchanged."
@@ -102951,6 +103364,16 @@
           },
           "415": {
             "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "503": {
+            "description": "The request was cancelled or timed out before the operation finished (code backend_request_cancelled, retryable).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
           }
         },
         "description": "Pinned isolated draft proposal; source records and runtime verification remain unchanged."
@@ -103077,6 +103500,16 @@
           },
           "415": {
             "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "503": {
+            "description": "The request was cancelled or timed out before the operation finished (code backend_request_cancelled, retryable).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
           }
         },
         "description": "Pinned isolated draft proposal; source records and runtime verification remain unchanged."
@@ -103185,6 +103618,16 @@
           },
           "415": {
             "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "503": {
+            "description": "The request was cancelled or timed out before the operation finished (code backend_request_cancelled, retryable).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
           }
         },
         "requestBody": {
@@ -103335,6 +103778,16 @@
           },
           "415": {
             "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "503": {
+            "description": "The request was cancelled or timed out before the operation finished (code backend_request_cancelled, retryable).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
           }
         },
         "description": "Pinned saved presentation. Source and proposal semantics remain immutable; reopen starts at the first page."
@@ -103441,6 +103894,16 @@
           },
           "415": {
             "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "503": {
+            "description": "The request was cancelled or timed out before the operation finished (code backend_request_cancelled, retryable).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
           }
         },
         "requestBody": {
@@ -103579,6 +104042,16 @@
           },
           "415": {
             "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "503": {
+            "description": "The request was cancelled or timed out before the operation finished (code backend_request_cancelled, retryable).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
           }
         },
         "description": "Pinned saved presentation. Source and proposal semantics remain immutable; reopen starts at the first page."
@@ -103696,6 +104169,16 @@
           },
           "415": {
             "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "503": {
+            "description": "The request was cancelled or timed out before the operation finished (code backend_request_cancelled, retryable).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
           }
         },
         "requestBody": {
@@ -103814,6 +104297,16 @@
           },
           "415": {
             "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "503": {
+            "description": "The request was cancelled or timed out before the operation finished (code backend_request_cancelled, retryable).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
           }
         },
         "requestBody": {
@@ -103932,6 +104425,16 @@
           },
           "415": {
             "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "503": {
+            "description": "The request was cancelled or timed out before the operation finished (code backend_request_cancelled, retryable).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
           }
         },
         "requestBody": {
@@ -104050,6 +104553,16 @@
           },
           "415": {
             "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "503": {
+            "description": "The request was cancelled or timed out before the operation finished (code backend_request_cancelled, retryable).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
           }
         },
         "requestBody": {
@@ -104168,6 +104681,16 @@
           },
           "415": {
             "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "503": {
+            "description": "The request was cancelled or timed out before the operation finished (code backend_request_cancelled, retryable).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
           }
         },
         "requestBody": {
@@ -104939,6 +105462,16 @@
           },
           "415": {
             "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "503": {
+            "description": "The request was cancelled or timed out before the operation finished (code backend_request_cancelled, retryable).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
           }
         },
         "requestBody": {
@@ -105057,6 +105590,16 @@
           },
           "415": {
             "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "503": {
+            "description": "The request was cancelled or timed out before the operation finished (code backend_request_cancelled, retryable).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
           }
         },
         "requestBody": {
@@ -105175,6 +105718,16 @@
           },
           "415": {
             "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "503": {
+            "description": "The request was cancelled or timed out before the operation finished (code backend_request_cancelled, retryable).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
           }
         },
         "requestBody": {
@@ -105373,6 +105926,16 @@
           },
           "415": {
             "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "503": {
+            "description": "The request was cancelled or timed out before the operation finished (code backend_request_cancelled, retryable).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
           }
         },
         "requestBody": {
@@ -105569,6 +106132,16 @@
           },
           "415": {
             "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "503": {
+            "description": "The request was cancelled or timed out before the operation finished (code backend_request_cancelled, retryable).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
           }
         },
         "description": "Consistent metadata/source snapshot. Filters intersect; targetId requires recordType. revisionId filters explicit bindings. Cursor pins project version/source head/filters; on 409 restart pagination."
@@ -105754,6 +106327,16 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "503": {
+            "description": "The request was cancelled or timed out before the operation finished (code backend_request_cancelled, retryable).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
           }
         },
         "description": "Read an exact immutable backend graph target."
@@ -105952,6 +106535,16 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "503": {
+            "description": "The request was cancelled or timed out before the operation finished (code backend_request_cancelled, retryable).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
           }
         },
         "description": "Read an exact immutable backend graph target."
@@ -106096,6 +106689,16 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "503": {
+            "description": "The request was cancelled or timed out before the operation finished (code backend_request_cancelled, retryable).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
           }
         },
         "description": "Read an exact immutable backend graph target."
@@ -106272,6 +106875,16 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "503": {
+            "description": "The request was cancelled or timed out before the operation finished (code backend_request_cancelled, retryable).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
           }
         },
         "description": "Read an exact immutable backend graph target."
@@ -106403,6 +107016,16 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "503": {
+            "description": "The request was cancelled or timed out before the operation finished (code backend_request_cancelled, retryable).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
           }
         },
         "description": "Read an exact immutable backend graph target."
@@ -106608,6 +107231,16 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "503": {
+            "description": "The request was cancelled or timed out before the operation finished (code backend_request_cancelled, retryable).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
           }
         },
         "description": "Read an exact immutable backend graph target."
@@ -106759,6 +107392,16 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "503": {
+            "description": "The request was cancelled or timed out before the operation finished (code backend_request_cancelled, retryable).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
           }
         },
         "description": "Read an exact immutable backend graph target."
@@ -106942,6 +107585,16 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "503": {
+            "description": "The request was cancelled or timed out before the operation finished (code backend_request_cancelled, retryable).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
           }
         },
         "description": "Read an exact immutable backend graph target."
@@ -107080,6 +107733,16 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "503": {
+            "description": "The request was cancelled or timed out before the operation finished (code backend_request_cancelled, retryable).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
           }
         },
         "description": "Read an exact immutable backend graph target."
@@ -107231,6 +107894,16 @@
           },
           "415": {
             "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "503": {
+            "description": "The request was cancelled or timed out before the operation finished (code backend_request_cancelled, retryable).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
           }
         },
         "description": "Work with one isolated full graph proposal and its exact immutable draft baseline."
@@ -107337,6 +108010,16 @@
           },
           "415": {
             "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "503": {
+            "description": "The request was cancelled or timed out before the operation finished (code backend_request_cancelled, retryable).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
           }
         },
         "requestBody": {
@@ -107493,6 +108176,16 @@
           },
           "415": {
             "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "503": {
+            "description": "The request was cancelled or timed out before the operation finished (code backend_request_cancelled, retryable).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
           }
         },
         "description": "Work with one isolated full graph proposal and its exact immutable draft baseline."
@@ -107610,6 +108303,16 @@
           },
           "415": {
             "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "503": {
+            "description": "The request was cancelled or timed out before the operation finished (code backend_request_cancelled, retryable).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
           }
         },
         "requestBody": {
@@ -107737,6 +108440,16 @@
           },
           "415": {
             "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "503": {
+            "description": "The request was cancelled or timed out before the operation finished (code backend_request_cancelled, retryable).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
           }
         },
         "requestBody": {
@@ -107864,6 +108577,16 @@
           },
           "415": {
             "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "503": {
+            "description": "The request was cancelled or timed out before the operation finished (code backend_request_cancelled, retryable).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
           }
         },
         "requestBody": {
@@ -108004,6 +108727,16 @@
                 }
               }
             }
+          },
+          "503": {
+            "description": "The request was cancelled or timed out before the operation finished (code backend_request_cancelled, retryable).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
           }
         },
         "requestBody": {
@@ -108085,7 +108818,8 @@
               "type": "string",
               "minLength": 0,
               "maxLength": 1024
-            }
+            },
+            "description": "Opaque nextCursor of the previous page. It binds every selector and the limit: request the next page with the same limit, or the cursor is refused (400 backend_analysis_invalid)."
           },
           {
             "name": "limit",
@@ -108172,6 +108906,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/BackendAnalysisJobPage"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The request was cancelled or timed out before the operation finished (code backend_request_cancelled, retryable).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
                 }
               }
             }
@@ -108293,6 +109037,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/BackendAnalysisJobDetail"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The request was cancelled or timed out before the operation finished (code backend_request_cancelled, retryable).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
                 }
               }
             }
@@ -108418,6 +109172,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/BackendAnalysisJob"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The request was cancelled or timed out before the operation finished (code backend_request_cancelled, retryable).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
                 }
               }
             }
@@ -108574,6 +109338,16 @@
                 }
               }
             }
+          },
+          "503": {
+            "description": "The request was cancelled or timed out before the operation finished (code backend_request_cancelled, retryable).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
           }
         },
         "requestBody": {
@@ -108662,7 +109436,8 @@
               "type": "string",
               "minLength": 0,
               "maxLength": 1024
-            }
+            },
+            "description": "Opaque nextCursor of the previous page. It binds every selector and the limit: request the next page with the same limit, or the cursor is refused (400 backend_analysis_invalid)."
           },
           {
             "name": "service",
@@ -108805,6 +109580,16 @@
                 }
               }
             }
+          },
+          "503": {
+            "description": "The request was cancelled or timed out before the operation finished (code backend_request_cancelled, retryable).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
           }
         },
         "description": "Uses exact immutable pins and project ownership. Analysis is static and never executes source, SQL, jobs or brokers."
@@ -108927,6 +109712,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/BackendChangeProposalRebaseCandidate"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The request was cancelled or timed out before the operation finished (code backend_request_cancelled, retryable).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
                 }
               }
             }
@@ -109065,6 +109860,16 @@
                 }
               }
             }
+          },
+          "503": {
+            "description": "The request was cancelled or timed out before the operation finished (code backend_request_cancelled, retryable).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
           }
         },
         "requestBody": {
@@ -109200,6 +110005,16 @@
                 }
               }
             }
+          },
+          "503": {
+            "description": "The request was cancelled or timed out before the operation finished (code backend_request_cancelled, retryable).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
           }
         },
         "requestBody": {
@@ -109319,6 +110134,16 @@
           },
           "415": {
             "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "503": {
+            "description": "The request was cancelled or timed out before the operation finished (code backend_request_cancelled, retryable).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
           }
         },
         "requestBody": {
@@ -109387,7 +110212,8 @@
             "schema": {
               "type": "string",
               "maxLength": 4096
-            }
+            },
+            "description": "Opaque nextCursor of the previous page. It binds the filters and the limit: changing the limit between pages answers 409 backend_diagram_cursor_mismatch."
           }
         ],
         "responses": {
@@ -109469,6 +110295,16 @@
           },
           "415": {
             "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "503": {
+            "description": "The request was cancelled or timed out before the operation finished (code backend_request_cancelled, retryable).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
           }
         }
       }
@@ -109586,6 +110422,16 @@
           },
           "415": {
             "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "503": {
+            "description": "The request was cancelled or timed out before the operation finished (code backend_request_cancelled, retryable).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
           }
         },
         "requestBody": {
@@ -109704,6 +110550,16 @@
           },
           "415": {
             "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "503": {
+            "description": "The request was cancelled or timed out before the operation finished (code backend_request_cancelled, retryable).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
           }
         },
         "requestBody": {
@@ -109851,6 +110707,16 @@
           },
           "415": {
             "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "503": {
+            "description": "The request was cancelled or timed out before the operation finished (code backend_request_cancelled, retryable).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
           }
         }
       }
@@ -109959,6 +110825,16 @@
           },
           "415": {
             "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "503": {
+            "description": "The request was cancelled or timed out before the operation finished (code backend_request_cancelled, retryable).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
           }
         },
         "requestBody": {
@@ -110077,6 +110953,16 @@
           },
           "415": {
             "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "503": {
+            "description": "The request was cancelled or timed out before the operation finished (code backend_request_cancelled, retryable).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
           }
         },
         "requestBody": {
@@ -110195,6 +111081,16 @@
           },
           "415": {
             "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "503": {
+            "description": "The request was cancelled or timed out before the operation finished (code backend_request_cancelled, retryable).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
           }
         },
         "requestBody": {
@@ -110263,7 +111159,8 @@
             "schema": {
               "type": "string",
               "maxLength": 4096
-            }
+            },
+            "description": "Opaque nextCursor of the previous page. It binds the filters and the limit: changing the limit between pages answers 409 backend_diagram_cursor_mismatch."
           }
         ],
         "responses": {
@@ -110345,6 +111242,16 @@
           },
           "415": {
             "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "503": {
+            "description": "The request was cancelled or timed out before the operation finished (code backend_request_cancelled, retryable).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
           }
         }
       }
@@ -110462,6 +111369,16 @@
           },
           "415": {
             "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "503": {
+            "description": "The request was cancelled or timed out before the operation finished (code backend_request_cancelled, retryable).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
           }
         },
         "requestBody": {
@@ -110600,6 +111517,16 @@
           },
           "415": {
             "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "503": {
+            "description": "The request was cancelled or timed out before the operation finished (code backend_request_cancelled, retryable).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
           }
         }
       }
@@ -110708,6 +111635,16 @@
           },
           "415": {
             "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "503": {
+            "description": "The request was cancelled or timed out before the operation finished (code backend_request_cancelled, retryable).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
           }
         },
         "requestBody": {
@@ -110826,6 +111763,16 @@
           },
           "415": {
             "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "503": {
+            "description": "The request was cancelled or timed out before the operation finished (code backend_request_cancelled, retryable).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
           }
         },
         "requestBody": {
@@ -110982,6 +111929,16 @@
           },
           "415": {
             "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "503": {
+            "description": "The request was cancelled or timed out before the operation finished (code backend_request_cancelled, retryable).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
           }
         }
       }
@@ -111099,6 +112056,16 @@
           },
           "415": {
             "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "503": {
+            "description": "The request was cancelled or timed out before the operation finished (code backend_request_cancelled, retryable).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
           }
         },
         "requestBody": {
@@ -111217,6 +112184,16 @@
           },
           "415": {
             "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "503": {
+            "description": "The request was cancelled or timed out before the operation finished (code backend_request_cancelled, retryable).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
           }
         },
         "requestBody": {
@@ -111335,6 +112312,16 @@
           },
           "415": {
             "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "503": {
+            "description": "The request was cancelled or timed out before the operation finished (code backend_request_cancelled, retryable).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
           }
         },
         "requestBody": {
@@ -111463,6 +112450,16 @@
                 }
               }
             }
+          },
+          "503": {
+            "description": "The request was cancelled or timed out before the operation finished (code backend_request_cancelled, retryable).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
           }
         },
         "security": [
@@ -111576,6 +112573,16 @@
           },
           "415": {
             "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "503": {
+            "description": "The request was cancelled or timed out before the operation finished (code backend_request_cancelled, retryable).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
           }
         },
         "requestBody": {
@@ -111684,6 +112691,16 @@
           },
           "415": {
             "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "503": {
+            "description": "The request was cancelled or timed out before the operation finished (code backend_request_cancelled, retryable).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
           }
         },
         "requestBody": {
@@ -111802,6 +112819,16 @@
           },
           "415": {
             "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "503": {
+            "description": "The request was cancelled or timed out before the operation finished (code backend_request_cancelled, retryable).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
           }
         },
         "requestBody": {
@@ -111920,6 +112947,16 @@
           },
           "415": {
             "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "503": {
+            "description": "The request was cancelled or timed out before the operation finished (code backend_request_cancelled, retryable).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
           }
         },
         "requestBody": {
@@ -112038,6 +113075,16 @@
           },
           "415": {
             "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "503": {
+            "description": "The request was cancelled or timed out before the operation finished (code backend_request_cancelled, retryable).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
           }
         },
         "requestBody": {
@@ -112156,6 +113203,16 @@
           },
           "415": {
             "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "503": {
+            "description": "The request was cancelled or timed out before the operation finished (code backend_request_cancelled, retryable).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
           }
         },
         "requestBody": {
@@ -112292,6 +113349,16 @@
           },
           "415": {
             "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "503": {
+            "description": "The request was cancelled or timed out before the operation finished (code backend_request_cancelled, retryable).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
           }
         }
       }
@@ -112400,6 +113467,16 @@
           },
           "415": {
             "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "503": {
+            "description": "The request was cancelled or timed out before the operation finished (code backend_request_cancelled, retryable).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
           }
         },
         "requestBody": {
@@ -112518,6 +113595,16 @@
           },
           "415": {
             "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "503": {
+            "description": "The request was cancelled or timed out before the operation finished (code backend_request_cancelled, retryable).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
           }
         },
         "requestBody": {
@@ -112608,16 +113695,6 @@
             }
           },
           "422": {
-            "description": "Request refused",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/BackendError"
-                }
-              }
-            }
-          },
-          "429": {
             "description": "Request refused",
             "content": {
               "application/json": {
@@ -112732,16 +113809,6 @@
             }
           },
           "422": {
-            "description": "Request refused",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/BackendError"
-                }
-              }
-            }
-          },
-          "429": {
             "description": "Request refused",
             "content": {
               "application/json": {
@@ -112866,16 +113933,6 @@
               }
             }
           },
-          "429": {
-            "description": "Request refused",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/BackendError"
-                }
-              }
-            }
-          },
           "500": {
             "description": "Request refused",
             "content": {
@@ -112900,7 +113957,21 @@
             "$ref": "#/components/responses/Unauthorized"
           },
           "403": {
-            "$ref": "#/components/responses/Forbidden"
+            "description": "CSRF refusal (Error envelope), or backend_replay_forbidden (BackendError): the actor is no longer authorized, or only the consent author may revoke.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/Error"
+                    },
+                    {
+                      "$ref": "#/components/schemas/BackendError"
+                    }
+                  ]
+                }
+              }
+            }
           }
         },
         "requestBody": {
@@ -112920,7 +113991,7 @@
         ],
         "operationId": "listBackendReplayProfiles",
         "summary": "ListBackendReplayProfiles",
-        "description": "Project-owned immutable replay pins. Only explicit connect grants reset consent; only explicit start queues trusted Orders execution. Selecting or saving never executes imported source.",
+        "description": "Project-owned immutable replay pins. Only explicit connect grants reset consent; only explicit start queues trusted Orders execution. Selecting or saving never executes imported source. One page of profile versions, oldest first, at most 100. Pass \"id:version\" of the last item of a page as cursor to read the next one; a shorter page is the last. Without cursor the first page is returned (this list used to answer 409 past 1000 versions).",
         "security": [
           {
             "sessionCookie": []
@@ -112934,6 +114005,17 @@
             "schema": {
               "type": "string",
               "format": "uuid"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "description": "\"id:version\" of the last item of the previous page.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
             }
           }
         ],
@@ -112989,16 +114071,6 @@
             }
           },
           "422": {
-            "description": "Request refused",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/BackendError"
-                }
-              }
-            }
-          },
-          "429": {
             "description": "Request refused",
             "content": {
               "application/json": {
@@ -113123,16 +114195,6 @@
               }
             }
           },
-          "429": {
-            "description": "Request refused",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/BackendError"
-                }
-              }
-            }
-          },
           "500": {
             "description": "Request refused",
             "content": {
@@ -113157,7 +114219,21 @@
             "$ref": "#/components/responses/Unauthorized"
           },
           "403": {
-            "$ref": "#/components/responses/Forbidden"
+            "description": "CSRF refusal (Error envelope), or backend_replay_forbidden (BackendError): the actor is no longer authorized, or only the consent author may revoke.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/Error"
+                    },
+                    {
+                      "$ref": "#/components/schemas/BackendError"
+                    }
+                  ]
+                }
+              }
+            }
           }
         },
         "requestBody": {
@@ -113258,16 +114334,6 @@
               }
             }
           },
-          "429": {
-            "description": "Request refused",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/BackendError"
-                }
-              }
-            }
-          },
           "500": {
             "description": "Request refused",
             "content": {
@@ -113292,7 +114358,21 @@
             "$ref": "#/components/responses/Unauthorized"
           },
           "403": {
-            "$ref": "#/components/responses/Forbidden"
+            "description": "CSRF refusal (Error envelope), or backend_replay_forbidden (BackendError): the actor is no longer authorized, or only the consent author may revoke.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/Error"
+                    },
+                    {
+                      "$ref": "#/components/schemas/BackendError"
+                    }
+                  ]
+                }
+              }
+            }
           }
         },
         "requestBody": {
@@ -113312,7 +114392,7 @@
         ],
         "operationId": "listBackendReplayPackages",
         "summary": "ListBackendReplayPackages",
-        "description": "Project-owned immutable replay pins. Only explicit connect grants reset consent; only explicit start queues trusted Orders execution. Selecting or saving never executes imported source.",
+        "description": "Project-owned immutable replay pins. Only explicit connect grants reset consent; only explicit start queues trusted Orders execution. Selecting or saving never executes imported source. One page of saved package versions, oldest first, at most 25 (documents may be up to 4 MiB). Pass \"id:version\" of the last item of a page as cursor to read the next one; a shorter page is the last. Without cursor the first page is returned (this list used to answer 409 past 1000 versions).",
         "security": [
           {
             "sessionCookie": []
@@ -113326,6 +114406,17 @@
             "schema": {
               "type": "string",
               "format": "uuid"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "description": "\"id:version\" of the last item of the previous page.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
             }
           }
         ],
@@ -113381,16 +114472,6 @@
             }
           },
           "422": {
-            "description": "Request refused",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/BackendError"
-                }
-              }
-            }
-          },
-          "429": {
             "description": "Request refused",
             "content": {
               "application/json": {
@@ -113533,16 +114614,6 @@
               }
             }
           },
-          "429": {
-            "description": "Request refused",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/BackendError"
-                }
-              }
-            }
-          },
           "500": {
             "description": "Request refused",
             "content": {
@@ -113676,16 +114747,6 @@
               }
             }
           },
-          "429": {
-            "description": "Request refused",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/BackendError"
-                }
-              }
-            }
-          },
           "500": {
             "description": "Request refused",
             "content": {
@@ -113802,7 +114863,15 @@
             }
           },
           "429": {
-            "description": "Request refused",
+            "description": "Replay queue full (backend_replay_queue_full, retryable); retry after two seconds",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "string",
+                  "const": "2"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -113835,7 +114904,21 @@
             "$ref": "#/components/responses/Unauthorized"
           },
           "403": {
-            "$ref": "#/components/responses/Forbidden"
+            "description": "CSRF refusal (Error envelope), or backend_replay_forbidden (BackendError): the actor is no longer authorized, or only the consent author may revoke.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/Error"
+                    },
+                    {
+                      "$ref": "#/components/schemas/BackendError"
+                    }
+                  ]
+                }
+              }
+            }
           }
         },
         "requestBody": {
@@ -113855,7 +114938,7 @@
         ],
         "operationId": "listBackendReplayRuns",
         "summary": "ListBackendReplayRuns",
-        "description": "Project-owned immutable replay pins. Only explicit connect grants reset consent; only explicit start queues trusted Orders execution. Selecting or saving never executes imported source.",
+        "description": "Project-owned immutable replay pins. Only explicit connect grants reset consent; only explicit start queues trusted Orders execution. Selecting or saving never executes imported source. One page of runs, newest first, at most 100. Pass the id of the last run of a page as cursor to read the next one; a shorter page is the last. Without cursor the first page is returned (this list used to answer 409 past 100 runs).",
         "security": [
           {
             "sessionCookie": []
@@ -113869,6 +114952,17 @@
             "schema": {
               "type": "string",
               "format": "uuid"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "description": "Id of the last run of the previous page.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
             }
           }
         ],
@@ -113924,16 +115018,6 @@
             }
           },
           "422": {
-            "description": "Request refused",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/BackendError"
-                }
-              }
-            }
-          },
-          "429": {
             "description": "Request refused",
             "content": {
               "application/json": {
@@ -114057,16 +115141,6 @@
             }
           },
           "422": {
-            "description": "Request refused",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/BackendError"
-                }
-              }
-            }
-          },
-          "429": {
             "description": "Request refused",
             "content": {
               "application/json": {
@@ -114200,16 +115274,6 @@
               }
             }
           },
-          "429": {
-            "description": "Request refused",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/BackendError"
-                }
-              }
-            }
-          },
           "500": {
             "description": "Request refused",
             "content": {
@@ -114234,7 +115298,21 @@
             "$ref": "#/components/responses/Unauthorized"
           },
           "403": {
-            "$ref": "#/components/responses/Forbidden"
+            "description": "CSRF refusal (Error envelope), or backend_replay_forbidden (BackendError): the actor is no longer authorized, or only the consent author may revoke.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/Error"
+                    },
+                    {
+                      "$ref": "#/components/schemas/BackendError"
+                    }
+                  ]
+                }
+              }
+            }
           }
         },
         "requestBody": {
@@ -114326,16 +115404,6 @@
             }
           },
           "422": {
-            "description": "Request refused",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/BackendError"
-                }
-              }
-            }
-          },
-          "429": {
             "description": "Request refused",
             "content": {
               "application/json": {
@@ -114479,16 +115547,6 @@
               }
             }
           },
-          "429": {
-            "description": "Request refused",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/BackendError"
-                }
-              }
-            }
-          },
           "500": {
             "description": "Request refused",
             "content": {
@@ -114513,7 +115571,21 @@
             "$ref": "#/components/responses/Unauthorized"
           },
           "403": {
-            "$ref": "#/components/responses/Forbidden"
+            "description": "CSRF refusal (Error envelope), or backend_replay_forbidden (BackendError): the actor is no longer authorized, or only the consent author may revoke.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/Error"
+                    },
+                    {
+                      "$ref": "#/components/schemas/BackendError"
+                    }
+                  ]
+                }
+              }
+            }
           }
         },
         "requestBody": {
@@ -114763,6 +115835,16 @@
                 }
               }
             }
+          },
+          "503": {
+            "description": "The request was cancelled or timed out before the operation finished (code backend_request_cancelled, retryable).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
           }
         },
         "requestBody": {
@@ -114891,6 +115973,16 @@
                 }
               }
             }
+          },
+          "503": {
+            "description": "The request was cancelled or timed out before the operation finished (code backend_request_cancelled, retryable).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
           }
         }
       }
@@ -115007,6 +116099,16 @@
           },
           "500": {
             "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The request was cancelled or timed out before the operation finished (code backend_request_cancelled, retryable).",
             "content": {
               "application/json": {
                 "schema": {
@@ -115153,6 +116255,16 @@
                 }
               }
             }
+          },
+          "503": {
+            "description": "The request was cancelled or timed out before the operation finished (code backend_request_cancelled, retryable).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
           }
         }
       }
@@ -115250,6 +116362,16 @@
           },
           "500": {
             "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The request was cancelled or timed out before the operation finished (code backend_request_cancelled, retryable).",
             "content": {
               "application/json": {
                 "schema": {
@@ -115373,6 +116495,16 @@
           },
           "500": {
             "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The request was cancelled or timed out before the operation finished (code backend_request_cancelled, retryable).",
             "content": {
               "application/json": {
                 "schema": {
@@ -115522,6 +116654,16 @@
           },
           "500": {
             "description": "Request refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The request was cancelled or timed out before the operation finished (code backend_request_cancelled, retryable).",
             "content": {
               "application/json": {
                 "schema": {

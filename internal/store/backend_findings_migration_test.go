@@ -26,7 +26,10 @@ func TestBackendFindingsMigration22To23(t *testing.T) {
 	if err = db.Migrate(t.Context(), nil); err != nil {
 		t.Fatal(err)
 	}
-	migration21Version(t, db, 24)
+	// Was a literal 24, the head when B5.1 landed; every later migration
+	// (25, 26, 27) turned it red without touching 22→23. Migrate goes to the
+	// head, so the assertion is the head.
+	migration21Version(t, db, latestMigration(t))
 	migration21ForeignKeys(t, db)
 	for _, name := range []string{"backend_finding_checks", "backend_finding_occurrences", "backend_finding_reviews", "backend_finding_events", "backend_finding_receipts"} {
 		var n int

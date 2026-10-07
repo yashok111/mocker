@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json/v2"
 	"fmt"
+	"net/http"
 	"net/url"
 	"slices"
 	"strconv"
@@ -12,6 +13,7 @@ import (
 
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/santhosh-tekuri/jsonschema/v6"
+
 	"github.com/yashok111/mocker/api"
 	"github.com/yashok111/mocker/internal/backendmodel"
 	"github.com/yashok111/mocker/internal/jsonx"
@@ -82,110 +84,27 @@ func addBackendImportTool(s *sdk.Server, lb *loopback, tool *sdk.Tool, route str
 		if err := json.Unmarshal(req.Params.Arguments, &in); err != nil {
 			return designScenarioToolErrorResult(err), nil
 		}
-		for _, key := range []string{"fromRevisionId", "toRevisionId", "id", "repositoryId"} {
-			if raw, supplied := in[key]; supplied {
-				var value string
-				if err := json.Unmarshal(raw, &value); err != nil || !backendmodel.ValidID(value) {
-					return designScenarioToolErrorResult(fmt.Errorf("%s must be a canonical UUID", key)), nil
-				}
-			}
+		if err := backendImportArgumentsError(tool.Name, in); err != nil {
+			return designScenarioToolErrorResult(err), nil
 		}
-		if tool.Name == "put_backend_import_batch" {
-			var commands []backendmodel.ImportCommand
-			if err := json.Unmarshal(in["commands"], &commands); err != nil {
-				return designScenarioToolErrorResult(err), nil
-			}
-			for _, command := range commands {
-				if command.Identity != nil && !backendmodel.ValidID(command.Identity.ExpectedID) {
-					return designScenarioToolErrorResult(fmt.Errorf("identity expectedId must be a canonical UUID")), nil
-				}
-				if command.Deletion != nil && !backendmodel.ValidID(command.Deletion.ExpectedID) {
-					return designScenarioToolErrorResult(fmt.Errorf("deletion expectedId must be a canonical UUID")), nil
-				}
-			}
-		}
-		if _, selected := in["evidenceId"]; selected && tool.Name == "get_backend_evidence" {
-			if _, ok := in["subjectId"]; ok {
-				return designScenarioToolErrorResult(fmt.Errorf("evidenceId cannot combine with subjectId")), nil
-			}
-			if _, ok := in["cursor"]; ok {
-				return designScenarioToolErrorResult(fmt.Errorf("evidenceId cannot combine with cursor")), nil
-			}
-		}
-
 		selectedRoute, selectedProposal, selectErr := backendPinnedToolRoute(tool.Name, route, in)
 		if selectErr != nil {
 			return backendAdmissionFault(selectErr), nil
 		}
-		var params []any
-		for _, key := range []string{"projectId", "observationSetId", "replayRunId", "replayItemId", "importId", "proposalId", "jobId", "viewId", "diagramId", "revisionId", "nodeId", "batchId", "fingerprint"} {
-			raw, ok := in[key]
-			if (key == "batchId" && tool.Name == "import_backend_observations") || (key == "revisionId" && tool.Name == "correlate_backend_observations") {
-				continue
-			}
-			if !ok {
-				continue
-			}
-			if key == "jobId" && tool.Name == "list_backend_findings" {
-				continue
-			}
-			// Source query revisionId pins the request body.
-			if key == "revisionId" && slices.Contains([]string{"query_backend_graph", "query_backend_database", "query_backend_flow", "query_backend_lineage", "query_backend_events"}, tool.Name) {
-				continue
-			}
-			var value string
-			if err := json.Unmarshal(raw, &value); err != nil {
-				return designScenarioToolErrorResult(err), nil
-			}
-			if key != "batchId" && key != "fingerprint" && !backendmodel.ValidID(value) {
-				return designScenarioToolErrorResult(fmt.Errorf("%s must be a canonical UUID", key)), nil
-			}
-			if key == "fingerprint" && (len(value) != 64 || strings.Trim(value, "0123456789abcdef") != "") {
-				return designScenarioToolErrorResult(fmt.Errorf("invalid fingerprint")), nil
-			}
-			if key == "batchId" && tool.Name != "import_backend_observations" {
-				value = url.PathEscape(value)
-				if value == "." {
-					value = "%2E"
-				} else if value == ".." {
-					value = "%2E%2E"
-				}
-			}
-			params = append(params, value)
-			if key == "projectId" && selectedProposal != nil && selectedRoute != route {
-				params = append(params, selectedProposal.ProposalID, selectedProposal.ProposalRevisionID)
-			}
-			delete(in, key)
+		params, err := backendImportPathParams(tool.Name, route, selectedRoute, selectedProposal, in)
+		if err != nil {
+			return designScenarioToolErrorResult(err), nil
 		}
-		var pathErr error
-		params, pathErr = backendDiagramVersionParam(selectedRoute, in, params)
-		if pathErr != nil {
-			return designScenarioToolErrorResult(pathErr), nil
+		params, err = backendDiagramVersionParam(selectedRoute, in, params)
+		if err != nil {
+			return designScenarioToolErrorResult(err), nil
 		}
 		method, path := toolPath(tool.Name, selectedRoute, params...)
 		var body []byte
-		var err error
-		if method == "GET" {
-			q := url.Values{}
-			for _, key := range []string{"jobId", "hash", "limit", "cursor", "subjectId", "evidenceId", "previewVersion", "recordType", "baseRevisionId", "status", "proposalRevisionId", "kind", "version", "importVersion", "candidateHash", "id", "repositoryId", "providerNamespace", "resultVersion", "section", "service", "certainty", "direction", "depth"} {
-				if raw, ok := in[key]; ok {
-					if slices.Contains([]string{"limit", "previewVersion", "version", "importVersion", "resultVersion", "depth"}, key) {
-						var value int64
-						if err := json.Unmarshal(raw, &value); err != nil {
-							return designScenarioToolErrorResult(err), nil
-						}
-						q.Set(key, strconv.FormatInt(value, 10))
-					} else {
-						var value string
-						if err := json.Unmarshal(raw, &value); err != nil {
-							return designScenarioToolErrorResult(err), nil
-						}
-						if (key == "subjectId" || key == "evidenceId") && !backendmodel.ValidID(value) {
-							return designScenarioToolErrorResult(fmt.Errorf("subjectId must be a canonical UUID")), nil
-						}
-						q.Set(key, value)
-					}
-				}
+		if method == http.MethodGet {
+			q, err := backendImportQuery(in)
+			if err != nil {
+				return designScenarioToolErrorResult(err), nil
 			}
 			if len(q) > 0 {
 				path += "?" + q.Encode()
@@ -204,10 +123,145 @@ func addBackendImportTool(s *sdk.Server, lb *loopback, tool *sdk.Tool, route str
 			return designScenarioToolErrorResult(err), nil
 		}
 		if status < 200 || status >= 300 {
-			return designScenarioToolErrorResult(fmt.Errorf("HTTP %d: %s", status, response)), nil
+			return designScenarioToolErrorResult(backendStatusError(status, response)), nil
 		}
-		return &sdk.CallToolResult{StructuredContent: jsonx.RawMessage(response), Content: []sdk.Content{&sdk.TextContent{Text: string(response)}}}, nil
+		return backendToolResult(response), nil
 	})
+}
+
+// validIDArgument reports whether raw is a JSON string holding a canonical
+// UUID; a value that does not decode is simply not one.
+func validIDArgument(raw jsonx.RawMessage) bool {
+	var value string
+	return json.Unmarshal(raw, &value) == nil && backendmodel.ValidID(value)
+}
+
+// backendImportArgumentsError runs the argument checks the JSON schema cannot
+// express — canonical UUID bodies, batch command pins and the evidence
+// selector's exclusions — in the order the tool has always applied them.
+func backendImportArgumentsError(name string, in map[string]jsonx.RawMessage) error {
+	for _, key := range []string{"fromRevisionId", "toRevisionId", "id", "repositoryId"} {
+		if raw, supplied := in[key]; supplied && !validIDArgument(raw) {
+			return fmt.Errorf("%s must be a canonical UUID", key)
+		}
+	}
+	if name == "put_backend_import_batch" {
+		var commands []backendmodel.ImportCommand
+		if err := json.Unmarshal(in["commands"], &commands); err != nil {
+			return err
+		}
+		for _, command := range commands {
+			if command.Identity != nil && !backendmodel.ValidID(command.Identity.ExpectedID) {
+				return fmt.Errorf("identity expectedId must be a canonical UUID")
+			}
+			if command.Deletion != nil && !backendmodel.ValidID(command.Deletion.ExpectedID) {
+				return fmt.Errorf("deletion expectedId must be a canonical UUID")
+			}
+		}
+	}
+	if _, selected := in["evidenceId"]; selected && name == "get_backend_evidence" {
+		if _, ok := in["subjectId"]; ok {
+			return fmt.Errorf("evidenceId cannot combine with subjectId")
+		}
+		if _, ok := in["cursor"]; ok {
+			return fmt.Errorf("evidenceId cannot combine with cursor")
+		}
+	}
+	return nil
+}
+
+// backendImportPathParams moves the path identifiers out of in, in the order
+// the route template names them, validating each; what stays in in becomes
+// the query or the body. A proposal-pinned route takes the proposal pins
+// right after the project.
+func backendImportPathParams(name, route, selectedRoute string, selectedProposal *backendmodel.ProposalReadTarget, in map[string]jsonx.RawMessage) ([]any, error) {
+	var params []any
+	for _, key := range []string{"projectId", "observationSetId", "replayRunId", "replayItemId", "importId", "proposalId", "jobId", "viewId", "diagramId", "revisionId", "nodeId", "batchId", "fingerprint"} {
+		raw, ok := in[key]
+		if !ok || backendImportKeyStaysInBody(name, key) {
+			continue
+		}
+		value, err := backendImportPathValue(name, key, raw)
+		if err != nil {
+			return nil, err
+		}
+		params = append(params, value)
+		if key == "projectId" && selectedProposal != nil && selectedRoute != route {
+			params = append(params, selectedProposal.ProposalID, selectedProposal.ProposalRevisionID)
+		}
+		delete(in, key)
+	}
+	return params, nil
+}
+
+// backendImportKeyStaysInBody names the identifiers that some tools carry in
+// the request (query or body) rather than in the path.
+func backendImportKeyStaysInBody(name, key string) bool {
+	switch key {
+	case "batchId":
+		return name == "import_backend_observations"
+	case "jobId":
+		return name == "list_backend_findings"
+	case "revisionId":
+		// Source query revisionId pins the request body.
+		return name == "correlate_backend_observations" || slices.Contains([]string{"query_backend_graph", "query_backend_database", "query_backend_flow", "query_backend_lineage", "query_backend_events"}, name)
+	}
+	return false
+}
+
+// backendImportPathValue decodes and validates one path identifier; a batch
+// id is the one free-form segment, so it is escaped and a dot segment is
+// spelled out to keep the path from collapsing.
+func backendImportPathValue(name, key string, raw jsonx.RawMessage) (string, error) {
+	var value string
+	if err := json.Unmarshal(raw, &value); err != nil {
+		return "", err
+	}
+	if key != "batchId" && key != "fingerprint" && !backendmodel.ValidID(value) {
+		return "", fmt.Errorf("%s must be a canonical UUID", key)
+	}
+	if key == "fingerprint" && (len(value) != 64 || strings.Trim(value, "0123456789abcdef") != "") {
+		return "", fmt.Errorf("invalid fingerprint")
+	}
+	if key == "batchId" && name != "import_backend_observations" {
+		value = url.PathEscape(value)
+		switch value {
+		case ".":
+			value = "%2E"
+		case "..":
+			value = "%2E%2E"
+		}
+	}
+	return value, nil
+}
+
+// backendImportQuery builds a GET tool's query from the arguments left after
+// the path identifiers, integers re-encoded from their exact JSON digits.
+func backendImportQuery(in map[string]jsonx.RawMessage) (url.Values, error) {
+	q := url.Values{}
+	for _, key := range []string{"jobId", "hash", "limit", "cursor", "subjectId", "evidenceId", "previewVersion", "recordType", "baseRevisionId", "status", "proposalRevisionId", "kind", "version", "importVersion", "candidateHash", "id", "repositoryId", "providerNamespace", "resultVersion", "section", "service", "certainty", "direction", "depth"} {
+		raw, ok := in[key]
+		if !ok {
+			continue
+		}
+		if slices.Contains([]string{"limit", "previewVersion", "version", "importVersion", "resultVersion", "depth"}, key) {
+			var value int64
+			if err := json.Unmarshal(raw, &value); err != nil {
+				return nil, err
+			}
+			q.Set(key, strconv.FormatInt(value, 10))
+			continue
+		}
+		var value string
+		if err := json.Unmarshal(raw, &value); err != nil {
+			return nil, err
+		}
+		if (key == "subjectId" || key == "evidenceId") && !backendmodel.ValidID(value) {
+			return nil, fmt.Errorf("subjectId must be a canonical UUID")
+		}
+		q.Set(key, value)
+	}
+	return q, nil
 }
 
 // Compile the schema from an exact-number view as well as decoding arguments

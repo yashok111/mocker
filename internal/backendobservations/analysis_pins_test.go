@@ -1,10 +1,11 @@
 package backendobservations
 
 import (
-	bm "github.com/yashok111/mocker/internal/backendmodel"
-	"github.com/yashok111/mocker/internal/testkit"
 	"strings"
 	"testing"
+
+	bm "github.com/yashok111/mocker/internal/backendmodel"
+	"github.com/yashok111/mocker/internal/testkit"
 )
 
 func TestResolveAnalysisPinsExactAndStable(t *testing.T) {

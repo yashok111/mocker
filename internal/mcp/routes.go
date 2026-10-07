@@ -33,8 +33,9 @@ import (
 // live workspace, so eight tools require confirmSlug in total, six of them
 // through this shared client-side read.
 // noRoute is the value of a toolRoutes row for a tool that calls NO admin
-// route at all — get_guide (A7, tools_guide.go) and get_server_config (A9,
-// tools_config.go), and nothing else today.
+// route at all — get_guide (A7, tools_guide.go), get_server_config (A9,
+// tools_config.go) and describe_tool (review 2026-10-06, F23,
+// tools_describe.go), and nothing else today.
 //
 // It is one named sentinel because the fact it states was previously
 // documented in three places and written in none: two bare `{}` literals in
@@ -375,6 +376,9 @@ var toolRoutes = map[string][]string{
 	"import_spec": {"POST /api/specs"},
 	// A9: the process's own limits, read from *config.Config — [noRoute].
 	"get_server_config": noRoute,
+	// F23: one tool's full description and schemas, read from the server's
+	// own registry (tools_describe.go) — [noRoute].
+	"describe_tool": noRoute,
 	// A11: the entity read's two write siblings.
 	"set_resource_entity":    {"PUT /api/workspaces/{id}/resources/{family}/entities/{key}"},
 	"delete_resource_entity": {"DELETE /api/workspaces/{id}/resources/{family}/entities/{key}"},
@@ -412,8 +416,9 @@ var toolRoutes = map[string][]string{
 // added without an entry here is caught by a test rather than by a 404 in
 // production.
 // B1.2 adds five isolated database proposal operations. B24 adds four exact
-// API artifact snapshot/query/preview/apply operations.
-const toolCount = 262
+// API artifact snapshot/query/preview/apply operations. describe_tool
+// (review 2026-10-06, F23) adds one with no route.
+const toolCount = 263
 
 // toolPath resolves ONE call a tool makes into the (method, path) pair
 // loopback.do/call take.

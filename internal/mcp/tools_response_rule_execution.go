@@ -4,6 +4,7 @@ import (
 	"errors"
 
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
+
 	"github.com/yashok111/mocker/internal/responserules"
 )
 

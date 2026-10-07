@@ -2,8 +2,9 @@ package backendreplay
 
 import (
 	"context"
-	p "github.com/yashok111/mocker/internal/ordersprotocol"
 	"time"
+
+	p "github.com/yashok111/mocker/internal/ordersprotocol"
 )
 
 type TargetInfo struct {
@@ -50,5 +51,7 @@ type Run struct {
 }
 
 // ActorAllowed is evaluated at admission and before every dispatch. Startup
-// supplies the same account policy as the existing admin and MCP planes.
-type ActorAllowed func(context.Context, string) bool
+// supplies the same account policy as the existing admin and MCP planes. An
+// error means the verdict could not be reached and is returned as it is,
+// never read as a refusal (review 2026-10-06, F177).
+type ActorAllowed func(context.Context, string) (bool, error)

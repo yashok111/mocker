@@ -2,9 +2,10 @@ package backendobservations
 
 import (
 	"fmt"
+	"testing"
+
 	bm "github.com/yashok111/mocker/internal/backendmodel"
 	"github.com/yashok111/mocker/internal/testkit"
-	"testing"
 )
 
 // A 500-record batch is the public admission unit. The external harness declares

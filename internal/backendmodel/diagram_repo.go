@@ -5,9 +5,11 @@ import (
 	"database/sql"
 	"encoding/json/v2"
 	"errors"
-	"github.com/yashok111/mocker/internal/backendblob"
+	"strings"
 	"time"
 	"uuid"
+
+	"github.com/yashok111/mocker/internal/backendblob"
 )
 
 func diagramConflict() error {
@@ -19,6 +21,35 @@ func diagramPinMismatch() error {
 func diagramQuota() error {
 	return &FaultError{Status: 409, Code: "backend_diagram_quota", Message: "Immutable diagram storage quota exceeded"}
 }
+
+// diagramReceiptRef is what a diagram or view receipt stores: the immutable
+// version the mutation answered, not a copy of it.
+//
+// Review 2026-10-06, F100: every receipt held the full version JSON (up to
+// ~1 MiB for a diagram, 128 KiB for a view). A save equal to the head returns
+// before the quota query, yet wrote that copy under each fresh idempotency
+// key, and receipts are never counted, never pruned and cannot be deleted; a
+// create or fork stored its document twice with one copy counted. A version
+// row is immutable and the response of every diagram mutation is exactly the
+// stored bytes of one version (persistDiagramVersion and persistDiagramView
+// write the same raw to both; a no-op answers the head's stored raw), so
+// replay reloads those bytes and stays byte-identical. Receipts written
+// before this change still hold the full JSON and replay as they did.
+type diagramReceiptRef struct {
+	Kind    string `json:"kind"`
+	ID      string `json:"id"`
+	Version int64  `json:"version"`
+}
+
+const diagramReceiptPrefix = `{"receiptRef":`
+
+func diagramReceiptJSON(kind, id string, version int64) (string, error) {
+	raw, err := json.Marshal(struct {
+		Ref diagramReceiptRef `json:"receiptRef"`
+	}{diagramReceiptRef{Kind: kind, ID: id, Version: version}})
+	return string(raw), err
+}
+
 func readDiagramReceipt(ctx context.Context, q importReader, pid, op, key, digest string) (string, error) {
 	var previous, raw string
 	err := q.QueryRowContext(ctx, `SELECT request_hash,receipt FROM backend_diagram_receipts WHERE project_id=? AND operation=? AND idempotency_key=?`, pid, op, key).Scan(&previous, &raw)
@@ -30,6 +61,27 @@ func readDiagramReceipt(ctx context.Context, q importReader, pid, op, key, diges
 	}
 	if previous != digest {
 		return "", &FaultError{Status: 409, Code: "backend_idempotency_conflict", Message: "Key already used for a different request"}
+	}
+	if !strings.HasPrefix(raw, diagramReceiptPrefix) {
+		return raw, nil
+	}
+	var envelope struct {
+		Ref diagramReceiptRef `json:"receiptRef"`
+	}
+	if err = json.Unmarshal([]byte(raw), &envelope, json.RejectUnknownMembers(true)); err != nil {
+		return "", err
+	}
+	ref := envelope.Ref
+	switch ref.Kind {
+	case "diagram":
+		err = q.QueryRowContext(ctx, `SELECT document FROM backend_diagram_versions_documents WHERE project_id=? AND diagram_id=? AND version=?`, pid, ref.ID, ref.Version).Scan(&raw)
+	case "view":
+		err = q.QueryRowContext(ctx, `SELECT document FROM backend_diagram_view_versions_documents WHERE project_id=? AND view_id=? AND version=?`, pid, ref.ID, ref.Version).Scan(&raw)
+	default:
+		return "", errors.New("diagram receipt names an unknown version kind")
+	}
+	if err != nil {
+		return "", err
 	}
 	return raw, nil
 }
@@ -97,8 +149,15 @@ func advanceDiagramCatalog(ctx context.Context, tx *sql.Tx, pid string) error {
 	_, err := tx.ExecContext(ctx, `INSERT INTO backend_diagram_catalog(project_id,version) VALUES(?,1) ON CONFLICT(project_id) DO UPDATE SET version=version+1`, pid)
 	return err
 }
-func writeDiagramReceipt(ctx context.Context, tx *sql.Tx, pid, op, key, digest, raw string) error {
-	_, err := tx.ExecContext(ctx, `INSERT INTO backend_diagram_receipts(project_id,operation,idempotency_key,request_hash,receipt) VALUES(?,?,?,?,?)`, pid, op, key, digest, raw)
+
+// writeDiagramReceipt records that key answered the stored version
+// (kind "diagram" or "view", id, version); see diagramReceiptRef.
+func writeDiagramReceipt(ctx context.Context, tx *sql.Tx, pid, op, key, digest, kind, id string, version int64) error {
+	raw, err := diagramReceiptJSON(kind, id, version)
+	if err != nil {
+		return err
+	}
+	_, err = tx.ExecContext(ctx, `INSERT INTO backend_diagram_receipts(project_id,operation,idempotency_key,request_hash,receipt) VALUES(?,?,?,?,?)`, pid, op, key, digest, raw)
 	return err
 }
 
@@ -174,23 +233,13 @@ func (r *Repo) ForkDiagram(ctx context.Context, pid string, in DiagramForkInput)
 		return nil, invalid("architecture", "Architecture document has no dependency")
 	}
 	if doc.Interactions != nil {
-		a, _ := requestDigest(doc.Target)
-		b, _ := requestDigest(in.Target)
-		if a != b && doc.Interactions.Architecture != nil && in.Architecture == nil {
-			return nil, invalid("architecture", "New-target fork requires an explicit architecture pin")
-		}
-		if in.Architecture != nil {
-			doc.Interactions.Architecture = in.Architecture
+		if err := repinForkArchitecture(&doc.Interactions.Architecture, doc.Target, in); err != nil {
+			return nil, err
 		}
 	}
 	if doc.BusinessMap != nil {
-		a, _ := requestDigest(doc.Target)
-		b, _ := requestDigest(in.Target)
-		if a != b && doc.BusinessMap.Architecture != nil && in.Architecture == nil {
-			return nil, invalid("architecture", "New-target fork requires an explicit architecture pin")
-		}
-		if in.Architecture != nil {
-			doc.BusinessMap.Architecture = in.Architecture
+		if err := repinForkArchitecture(&doc.BusinessMap.Architecture, doc.Target, in); err != nil {
+			return nil, err
 		}
 	}
 	doc.Target = in.Target
@@ -220,6 +269,14 @@ func (r *Repo) mutateDiagram(ctx context.Context, m diagramMutation) (*DiagramVe
 		m.previous, err = diagramHead(ctx, r.db.R, m.pid, m.id)
 		if err != nil {
 			return nil, err
+		}
+		// Everything below validates against this head (immutability, ref
+		// and evidence inheritance, architecture retention). A stale writer
+		// whose document is valid only against the base it read got a 400/422
+		// there instead of the 409 that tells it to reread or fork (review
+		// 2026-10-06, F101). The writer re-checks under the lock.
+		if m.previous.Pin.Version != m.expected {
+			return nil, diagramConflict()
 		}
 		if err = validateDiagramSave(m.previous, m.document); err != nil {
 			return nil, err
@@ -268,32 +325,49 @@ func validateDiagramSave(previous *DiagramVersion, d DiagramDocument) error {
 	}
 	return nil
 }
+
+// diagramRowArrays are the payload arrays whose members are semantic rows
+// (diagramSemanticRows: architecture and business_map elements/links,
+// lifecycle states/transitions/rules, interaction participants/steps/
+// branches/order). Every kind stores them at $.document.payload.<array>.
+const diagramRowArrays = `'elements','links','states','transitions','rules','participants','steps','branches','order'`
+
+// rejectRetiredDiagramIDs refuses a save that reintroduces a row ID an older
+// version used and the head no longer has.
+//
+// Review 2026-10-06, F106: it decoded every stored version of the diagram
+// (strict decode, Validate, a re-marshal for the size check, two canonical
+// digests) inside the writer on every content-changing save, up to 256 MiB of
+// JSON. Only IDs the head does not already have can be a reuse, so a save
+// that adds none skips history entirely; otherwise SQLite matches the new IDs
+// against the row arrays of the stored versions by JSON path, without
+// decoding them in Go.
 func rejectRetiredDiagramIDs(ctx context.Context, tx *sql.Tx, pid, id string, current *DiagramVersion, d DiagramDocument) error {
 	existing := diagramSemanticRows(current.Document)
-	requested := diagramSemanticRows(d)
-	rows, err := tx.QueryContext(ctx, `SELECT document FROM backend_diagram_versions_documents WHERE project_id=? AND diagram_id=?`, pid, id)
+	fresh := []string{}
+	for rowID := range diagramSemanticRows(d) {
+		if _, active := existing[rowID]; !active {
+			fresh = append(fresh, rowID)
+		}
+	}
+	if len(fresh) == 0 {
+		return nil
+	}
+	wanted, err := json.Marshal(fresh)
 	if err != nil {
 		return err
 	}
-	defer func() { _ = rows.Close() }()
-	for rows.Next() {
-		var raw string
-		if err = rows.Scan(&raw); err != nil {
-			return err
-		}
-		old, err := decodeDiagramVersion(raw)
-		if err != nil {
-			return err
-		}
-		for oldID := range diagramSemanticRows(old.Document) {
-			if _, present := requested[oldID]; present {
-				if _, active := existing[oldID]; !active {
-					return invalid("id", "Retired semantic IDs cannot be reused")
-				}
-			}
-		}
+	var reused bool
+	err = tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM backend_diagram_versions_documents v, json_each(v.document,'$.document.payload') a, json_each(a.value) r
+WHERE v.project_id=? AND v.diagram_id=? AND a.type='array' AND a.key IN (`+diagramRowArrays+`)
+AND json_extract(r.value,'$.id') IN (SELECT value FROM json_each(?)))`, pid, id, string(wanted)).Scan(&reused)
+	if err != nil {
+		return err
 	}
-	return rows.Err()
+	if reused {
+		return invalid("id", "Retired semantic IDs cannot be reused")
+	}
+	return nil
 }
 
 func persistDiagramVersion(ctx context.Context, tx *sql.Tx, m diagramMutation, out *DiagramVersion) error {
@@ -337,7 +411,7 @@ func persistDiagramVersion(ctx context.Context, tx *sql.Tx, m diagramMutation, o
 	if err = advanceDiagramCatalog(ctx, tx, m.pid); err != nil {
 		return err
 	}
-	if err = writeDiagramReceipt(ctx, tx, m.pid, m.op, m.key, m.digest, raw); err != nil {
+	if err = writeDiagramReceipt(ctx, tx, m.pid, m.op, m.key, m.digest, "diagram", id, version); err != nil {
 		return err
 	}
 
@@ -378,7 +452,7 @@ func (r *Repo) writeDiagramMutation(ctx context.Context, tx *sql.Tx, m diagramMu
 			return nil, err
 		}
 		if current.Pin.ContentHash == hash {
-			return current, writeDiagramReceipt(ctx, tx, m.pid, m.op, m.key, m.digest, current.receiptJSON)
+			return current, writeDiagramReceipt(ctx, tx, m.pid, m.op, m.key, m.digest, "diagram", current.Pin.ID, current.Pin.Version)
 		}
 		if err = rejectRetiredDiagramIDs(ctx, tx, m.pid, m.id, current, m.document); err != nil {
 			return nil, err
@@ -394,4 +468,19 @@ func (r *Repo) writeDiagramMutation(ctx context.Context, tx *sql.Tx, m diagramMu
 	out = &DiagramVersion{Pin: DiagramPin{ID: id, Version: version, ContentHash: hash}, ProjectID: m.pid, Document: m.document, TargetHash: graph.Pins.TargetHash, Author: diagramActor(ctx), CreatedAt: time.Now().UTC().Format(time.RFC3339Nano), Gaps: m.gaps}
 	diagramProvenance(out, m.previous, m.op, m.reason)
 	return out, persistDiagramVersion(ctx, tx, m, out)
+}
+
+// repinForkArchitecture carries a dependent diagram's architecture pin into
+// a fork: a fork onto another target must name the architecture it now
+// depends on, since the old pin describes the old target.
+func repinForkArchitecture(architecture **DiagramPin, sourceTarget BackendReadTarget, in DiagramForkInput) error {
+	a, _ := requestDigest(sourceTarget)
+	b, _ := requestDigest(in.Target)
+	if a != b && *architecture != nil && in.Architecture == nil {
+		return invalid("architecture", "New-target fork requires an explicit architecture pin")
+	}
+	if in.Architecture != nil {
+		*architecture = in.Architecture
+	}
+	return nil
 }

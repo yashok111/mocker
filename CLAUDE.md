@@ -113,9 +113,12 @@ constant-time comparison, no cookies read), it is deliberately NOT in
 perimeter must not include it), and every tool that touches the domain goes
 through `admin.Server.CallAsMCP` — an in-process call into the same admin
 route table under an MCP identity, never straight into a repository, so
-there is one validation path. 63 tools; a tool with an empty `toolRoutes`
-row (`get_guide`, `get_server_config`) calls no handler. The allowlist and
-its one policy reversal (`POST /api/specs`, `A8`): `docs/agent/mcp.md`;
+there is one validation path. 263 tools; a tool with an empty `toolRoutes`
+row (`get_guide`, `get_server_config`, `describe_tool`) calls no handler.
+`tools/list` is a light summary (name, one distinct sentence, top-level
+argument names; ~112 KB) and `describe_tool {name}` serves one tool's full
+description and schema (`internal/mcp/tool_catalog.go`, review 2026-10-06
+F23). The allowlist and its one policy reversal (`POST /api/specs`, `A8`): `docs/agent/mcp.md`;
 client config: `README.md` ("MCP").
 
 A response is assembled by **four layers (§4), each on top of the previous one**: `Spec`
@@ -188,8 +191,9 @@ make plugin-test # @yashok111/mocker-test (packages/mocker-test): install, tsc, 
 
 All seven run in CI (`.github/workflows/ci.yml`: six jobs, the non-docker
 ones inside a memory- and CPU-capped systemd scope through
-`scripts/ci-cap.sh` — pass `CAP=` to make there so the Makefile's own cap
-does not nest). How the race suite was brought to ~1 minute, why the two
+`scripts/ci-cap.sh` — pass `CAP=` (and `TEST_CAP=` for `make test`) to make
+there so the Makefile's own cap does not nest). How the race suite was
+brought to ~1 minute, why the two
 smokes are the critical path and how to read a slow one: `docs/agent/ops.md`.
 
 The development cycle:
@@ -211,7 +215,7 @@ OVERLAY, never run bare, driven by `scripts/compose-tls.sh`; every curl at
 it needs `--noproxy '*'` on this box), `mocker setup` (`A16`) and the npm
 release recipe (`A17`) are in `docs/agent/ops.md`.
 
-**Configuration — through the environment only: 36 `MOCKER_*` variables,
+**Configuration — through the environment only: 40 `MOCKER_*` variables,
 all with defaults in `internal/config`; the full list with comments —
 `.env.example`, the rule each one enforces at startup —
 `docs/agent/config.md`.** Two that bite first: `MOCKER_ADMIN_HOST` may not
@@ -230,10 +234,10 @@ untracked files.
 **The linter is golangci-lint v2**, `.golangci.yml` shared with another
 backend of the owner's. Keep it at zero. Exceptions are only pinpoint
 `//nolint:<linter> // reason` at the site of the trigger, never a wider
-config: 39 today; the counting command, the census and the reason behind
+config: 76 today; the counting command, the census and the reason behind
 each — `docs/agent/ops.md`.
 
-**goleak is in every package with tests** (37 packages, three lines each,
+**goleak is in every package with tests** (55 packages, three lines each,
 the ignore list once in `internal/testleak`). A goroutine that outlives a
 package's tests fails it. Do not extend the ignore list: it holds only what
 the runtime parks for the whole process (`database/sql` opener/resetter,
@@ -285,7 +289,7 @@ make the English around it say that it is a Russian string in the product.
 
 ## The admin API contract — the main invariant
 
-`api/openapi.json` (OpenAPI 3.1, 70 operations — method+path, not `paths`
+`api/openapi.json` (OpenAPI 3.1, 260 operations — method+path, not `paths`
 keys) is **a build input, not documentation**: the frontend client is
 generated from it by orval into `web/src/api/generated/` (gitignored,
 edited only through `make ui-gen`), and
@@ -300,7 +304,7 @@ Routes live as one list in `Server.routes()`; `Handler()` only registers them.
 
 **Every route is called from a reachable screen or is declared agent-only,
 and that is a test, not a promise**: `web/src/api/coverage.test.ts`
-enumerates the committed contract, pins the count (70) and finds a caller
+enumerates the committed contract, pins the count (260) and finds a caller
 by AST (`coverageScanner.ts`, since `A22`: a call whose callee resolves to
 a binding imported from the generated client — a mention in a comment, an
 import never called, or a `get…QueryKey(` no longer counts; native
@@ -439,7 +443,9 @@ ceiling) is at the end of that file.
 
 ## Environment
 
-- The dev box the bars were tuned on is a 7.8 GB Linux VPS with swap already
+- The dev box the bars were tuned on was a 7.8 GB Linux VPS (15 GB since
+  2026-10; `make test` alone now peaks near 7 GB, hence its own
+  `TEST_CAP_MEM=8G` beside `CAP_MEM`) with swap already
   in use, and its kernel OOM killer has taken out the whole user session more
   than once. That is why `make test`, `make ui` and — since `P6c`, 2026-09-02
   — `make lint` go into a memory-capped systemd scope — see the `CAP` comment

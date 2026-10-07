@@ -13,9 +13,7 @@ import (
 
 func TestRelationalGuideTopicDiscovery(t *testing.T) {
 	t.Parallel()
-	response := doMCP(t, newTestEndpoint(t).Handler(),
-		`{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}`,
-		map[string]string{"Authorization": "Bearer " + testKey})
+	response := describedToolsList(t)
 	var envelope struct {
 		Result struct {
 			Tools []struct {
@@ -71,8 +69,11 @@ func TestCrossOwnerRelationalGuideSDKUsesAdvertisedPinnedSet(t *testing.T) {
 	if err := json.Unmarshal(raw, &capabilities); err != nil {
 		t.Fatal(err)
 	}
-	if len(capabilities.WorkflowVersions) != 6 {
-		t.Fatalf("backend discovery = %d workflows; want project/import/database", len(capabilities.WorkflowVersions))
+	// Eight since be06f56 (replay) and 41ca3c6 (verify) joined
+	// guide.BackendWorkflows. The count still guards an owner silently added
+	// to or dropped from discovery; the loop below checks every one of them.
+	if len(capabilities.WorkflowVersions) != 8 {
+		t.Fatalf("backend discovery = %d workflows; want project/import/database/inspect/sync/change/replay/verify", len(capabilities.WorkflowVersions))
 	}
 	for _, workflow := range capabilities.WorkflowVersions {
 		for _, required := range workflow.RequiredModelSchemaVersions {

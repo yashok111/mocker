@@ -96,7 +96,8 @@ func (r *Repo) FreezeChangePreview(ctx context.Context, pid, id string, in Previ
 	}
 	var base string
 	if err = r.db.R.QueryRowContext(ctx, `SELECT base_revision_id FROM backend_change_proposal_revisions_documents WHERE project_id=? AND proposal_id=? AND id=?`, pid, id, in.ProposalRevisionID).Scan(&base); err != nil {
-		return nil, err
+		// Review 2026-10-06, F117: an unknown proposal revision is the caller's 404.
+		return nil, footprintRow(err, changeRevisionNotFound())
 	}
 	pin := ProposalReadTarget{ProposalID: id, ProposalRevisionID: in.ProposalRevisionID}
 	ctx, release, err := r.previewLease(ctx, pid, pin, in, base)
@@ -238,7 +239,10 @@ func (r *Repo) ResolveFrozenChangePreview(ctx context.Context, pid string, f *Fr
 		return nil, err
 	}
 	lease := analysisLease(ctx)
-	evaluation.readBudget = &changeReadBudget{repo: r, pid: pid, reservation: lease.reservation, lease: lease, seen: map[string]bool{}, bytes: 0}
+	// The replay keeps tx open across evaluation, so owner reads go through it
+	// (review 2026-10-06, F3): a fresh reader per owner made pool-width
+	// concurrent analysis jobs each wait for a second connection.
+	evaluation.readBudget = &changeReadBudget{repo: r, pid: pid, reservation: lease.reservation, lease: lease, seen: map[string]bool{}, bytes: 0, tx: tx}
 	prepared := &preparedChangeProposal{input: in, proposal: ChangeProposal{ID: f.ChangeProposal.ProposalID, Version: f.ExpectedVersion}, draft: *draft, evaluation: evaluation, reservation: lease.reservation}
 	if err = r.evaluateChangeDraft(ctx, tx, pid, prepared); err != nil {
 		return nil, err

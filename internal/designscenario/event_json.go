@@ -84,7 +84,7 @@ func (k *EventOperationKafka) UnmarshalJSON(data []byte) error {
 		return err
 	}
 	if fields == nil {
-		return fmt.Errorf("Kafka operation binding must be an object")
+		return fmt.Errorf("Kafka operation binding must be an object") //nolint:staticcheck // ST1005: "Kafka" is a proper noun
 	}
 	for _, name := range []string{"groupId", "clientId"} {
 		if raw, present := fields[name]; present && (isJSONNull(raw) || bytes.Equal(bytes.TrimSpace(raw), []byte(`""`))) {
@@ -108,7 +108,7 @@ func (k *EventChannelKafka) UnmarshalJSON(data []byte) error {
 		return err
 	}
 	if fields == nil {
-		return fmt.Errorf("Kafka channel binding must be an object")
+		return fmt.Errorf("Kafka channel binding must be an object") //nolint:staticcheck // ST1005: "Kafka" is a proper noun
 	}
 	for _, name := range []string{"partitions", "replicas"} {
 		if raw, present := fields[name]; present && isJSONNull(raw) {

@@ -4,8 +4,9 @@ import (
 	"context"
 	"encoding/json/jsontext"
 	"encoding/json/v2"
-	bm "github.com/yashok111/mocker/internal/backendmodel"
 	"slices"
+
+	bm "github.com/yashok111/mocker/internal/backendmodel"
 )
 
 type DiagramVersionReader interface {
@@ -52,27 +53,8 @@ func DiagramClosure(ctx context.Context, r DiagramVersionReader, project string,
 		}
 		identities[key] = pin.ContentHash
 		state[pin] = 1
-		v, err := r.GetDiagram(ctx, project, pin)
+		v, err := detachedDiagram(ctx, r, project, pin, &total)
 		if err != nil {
-			return err
-		}
-		if v.Pin != pin || v.ProjectID != project {
-			return fault(422, "Closure pin ownership mismatch")
-		}
-		// Detach server receipt bytes and pointers; no caller mutation during traversal.
-		raw, err := json.Marshal(v)
-		if err != nil {
-			return err
-		}
-		total += len(raw)
-		if total > MaxBundleBytes {
-			return fault(413, "Diagram closure byte quota")
-		}
-		v = new(bm.DiagramVersion)
-		if err = json.Unmarshal(raw, v, json.RejectUnknownMembers(true)); err != nil {
-			return err
-		}
-		if err = validateDiagramVersion(v); err != nil {
 			return err
 		}
 		versions[pin] = v
@@ -97,6 +79,35 @@ func DiagramClosure(ctx context.Context, r DiagramVersionReader, project string,
 		}
 	}
 	return out, nil
+}
+
+// detachedDiagram reads one pinned version owned by the project, charges its
+// encoded size to *total and returns a validated private copy of it.
+func detachedDiagram(ctx context.Context, r DiagramVersionReader, project string, pin bm.DiagramPin, total *int) (*bm.DiagramVersion, error) {
+	v, err := r.GetDiagram(ctx, project, pin)
+	if err != nil {
+		return nil, err
+	}
+	if v.Pin != pin || v.ProjectID != project {
+		return nil, fault(422, "Closure pin ownership mismatch")
+	}
+	// Detach server receipt bytes and pointers; no caller mutation during traversal.
+	raw, err := json.Marshal(v)
+	if err != nil {
+		return nil, err
+	}
+	*total += len(raw)
+	if *total > MaxBundleBytes {
+		return nil, fault(413, "Diagram closure byte quota")
+	}
+	v = new(bm.DiagramVersion)
+	if err = json.Unmarshal(raw, v, json.RejectUnknownMembers(true)); err != nil {
+		return nil, err
+	}
+	if err = validateDiagramVersion(v); err != nil {
+		return nil, err
+	}
+	return v, nil
 }
 func diagramDependencies(v *bm.DiagramVersion) []bm.DiagramPin {
 	deps := []bm.DiagramPin{}
@@ -174,6 +185,30 @@ func validateDiagramVersion(v *bm.DiagramVersion) error {
 		return fault(422, "Diagram provenance hash mismatch")
 	}
 	p := v.Provenance
+	if err = validateProvenanceAction(v); err != nil {
+		return err
+	}
+	ids, err := diagramMemberIDs(v.Document)
+	if err != nil {
+		return err
+	}
+	if len(ids) != len(p.Elements) {
+		return fault(422, "Incomplete provenance membership")
+	}
+	seen := map[string]bool{}
+	for _, e := range p.Elements {
+		if !ids[e.ElementID] || seen[e.ElementID] {
+			return fault(422, "Invalid provenance member")
+		}
+		seen[e.ElementID] = true
+	}
+	return nil
+}
+
+// validateProvenanceAction: a create has no predecessor, a save follows the
+// previous version of the same diagram, a fork names another diagram and why.
+func validateProvenanceAction(v *bm.DiagramVersion) error {
+	p := v.Provenance
 	if p.Format != "backend-diagram-provenance-v1" || !slices.Contains([]string{"create", "save", "fork"}, p.Action) {
 		return fault(422, "Unsupported provenance")
 	}
@@ -190,20 +225,6 @@ func validateDiagramVersion(v *bm.DiagramVersion) error {
 		if p.Previous != nil || p.Fork == nil || p.Fork.Source.ID == v.Pin.ID || p.Fork.Reason == "" {
 			return fault(422, "Invalid fork provenance")
 		}
-	}
-	ids, err := diagramMemberIDs(v.Document)
-	if err != nil {
-		return err
-	}
-	if len(ids) != len(p.Elements) {
-		return fault(422, "Incomplete provenance membership")
-	}
-	seen := map[string]bool{}
-	for _, e := range p.Elements {
-		if !ids[e.ElementID] || seen[e.ElementID] {
-			return fault(422, "Invalid provenance member")
-		}
-		seen[e.ElementID] = true
 	}
 	return nil
 }

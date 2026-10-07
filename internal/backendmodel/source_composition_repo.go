@@ -5,9 +5,10 @@ import (
 	"database/sql"
 	"encoding/json/jsontext"
 	"encoding/json/v2"
-	"github.com/yashok111/mocker/internal/backendblob"
 	"slices"
 	"strings"
+
+	"github.com/yashok111/mocker/internal/backendblob"
 )
 
 func sourceNodePayload(n Node) SourceAssertionPayload {

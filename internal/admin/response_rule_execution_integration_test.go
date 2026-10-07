@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
 	"net/http/httptest"
 	"reflect"
 	"strings"
@@ -56,7 +57,7 @@ func assertExecutionHTTP(t *testing.T, s *Server, p *mockplane.Plane, id int64, 
 		t.Fatal(err)
 	}
 	w := httptest.NewRecorder()
-	p.ServeWorkspace(w, httptest.NewRequest("GET", "http://"+ws.Slug+".mock.local/orders", nil).WithContext(t.Context()), ws)
+	p.ServeWorkspace(w, httptest.NewRequest(http.MethodGet, "http://"+ws.Slug+".mock.local/orders", nil).WithContext(t.Context()), ws)
 	if w.Code != status || (body != "" && w.Body.String() != body) {
 		t.Fatalf("workspace %d: %d %s; want %d %s", id, w.Code, w.Body.String(), status, body)
 	}

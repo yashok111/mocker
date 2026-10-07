@@ -4,10 +4,11 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json/v2"
-	"github.com/yashok111/mocker/internal/backendblob"
 	"slices"
 	"strings"
 	"time"
+
+	"github.com/yashok111/mocker/internal/backendblob"
 )
 
 func lifecycleConflict(message string) error {

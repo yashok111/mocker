@@ -4,10 +4,11 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"github.com/yashok111/mocker/internal/backendblob"
-	p "github.com/yashok111/mocker/internal/ordersprotocol"
 	"sync"
 	"time"
+
+	"github.com/yashok111/mocker/internal/backendblob"
+	p "github.com/yashok111/mocker/internal/ordersprotocol"
 )
 
 func (s *Service) RecoverInterrupted(ctx context.Context) error {
@@ -131,22 +132,27 @@ func (s *Service) execute(app context.Context, actor string, run *Run) error {
 	s.active[run.ID] = cancel
 	s.mu.Unlock()
 	defer func() { s.mu.Lock(); delete(s.active, run.ID); s.mu.Unlock() }()
+	// A failed read here is this run's failure (nothing was dispatched yet),
+	// closed unverified below; returning it stopped the service (F192). A
+	// cancellation that already won keeps its report: finalize sees it.
 	current, err := s.Get(ctx, run.ProjectID, run.ID)
-	if err != nil {
-		return err
-	}
-	if current.Status != "running" {
+	if err == nil && current.Status != "running" {
 		return nil
 	}
 	report := initialReport(run.Input, run.Provenance)
-	target, err := s.target(run.Input.Profile)
+	var target Target
+	if err == nil {
+		target, err = s.target(run.Input.Profile)
+	}
 	if err == nil {
 		err = s.actor(ctx, actor)
 	}
 	if err == nil {
 		err = authorizeProfile(ctx, s.repo.db.R, run.ProjectID, actor, run.Input.Profile)
 	}
+	executed := false
 	if err == nil {
+		executed = true
 		report, err = (Engine{Transport: target.Transport}).Execute(ctx, run.Input, run.Provenance, Hooks{
 			BeforeMutation: func(c context.Context, e p.Endpoint, f p.Fence, h string, b []byte) error {
 				if err := s.actor(c, actor); err != nil {
@@ -166,15 +172,65 @@ func (s *Service) execute(app context.Context, actor string, run *Run) error {
 	}
 	if err != nil {
 		report.Status = "unverified"
-		report.Reason = "Replay evidence or authorization could not be verified"
+		// Engine.Execute and Check put the specific cause into the report
+		// (a rejected mutation, an incomplete journal, a changed identity).
+		// Overwriting it for every error (review 2026-10-06, F126) stored an
+		// immutable terminal report that blamed evidence or authorization
+		// whatever went wrong. The fixed text stays for failures before the
+		// engine ran (target, actor, authorization), whose raw errors are
+		// not meant for the report.
+		if !executed || report.Reason == "" {
+			report.Reason = "Replay evidence or authorization could not be verified"
+		}
 	}
-	if app.Err() != nil {
+	// Only a run the shutdown actually cut short is interrupted. A verdict the
+	// engine already returned (err == nil) is complete: rewriting it to
+	// interrupted (review 2026-10-06, F7/F129) lost a positive witness and,
+	// with steps on record, fenced the target until someone acknowledged it.
+	if app.Err() != nil && err != nil {
 		report.Status = "interrupted"
 		report.Reason = "Worker stopped; no automatic resume"
 	}
-	persist, release := context.WithTimeout(context.WithoutCancel(app), 5*time.Second)
-	defer release()
-	return s.repo.finalize(persist, run, report)
+	return s.finalize(app, run, report)
+}
+
+// finalize stores the terminal report under the rule the analysis worker uses
+// (review 2026-10-06, F192, the sibling of F4): a failure the worker can pin on
+// this run closes the run, and only a store that fails for a whole window stops
+// the service. Returning every finalize error stopped the server, and startup
+// recovery then overwrote the real receipts with an interrupted report.
+func (s *Service) finalize(app context.Context, run *Run, report Report) error {
+	if raw, err := marshalReplay(report); err == nil && len(raw) > p.ReportLimit {
+		// Deterministic: every attempt would answer the same conflict. Close
+		// the run unverified on its initial report; steps already dispatched
+		// keep the lease uncertain, so the target stays fenced until the
+		// author acknowledges it, and the run's evidence rows are kept.
+		bounded := initialReport(run.Input, run.Provenance)
+		bounded.Status = "unverified"
+		if report.Status == "interrupted" {
+			bounded.Status = "interrupted"
+		}
+		bounded.Reason = "Replay report exceeded the 4 MiB report limit; recorded evidence is kept"
+		report = bounded
+	}
+	backoff := 50 * time.Millisecond
+	for {
+		persist, release := context.WithTimeout(context.WithoutCancel(app), s.persistTimeout)
+		err := s.repo.finalize(persist, run, report)
+		release()
+		// A window that ends only on the deadline is a busy writer, not a
+		// failing store: wait for it while the service runs. During shutdown
+		// the run is left for startup recovery.
+		if err == nil || !errors.Is(err, context.DeadlineExceeded) || app.Err() != nil {
+			return err
+		}
+		select {
+		case <-app.Done():
+			return err
+		case <-time.After(backoff):
+		}
+		backoff = min(2*backoff, 2*time.Second)
+	}
 }
 func (r *Repo) finalize(ctx context.Context, run *Run, report Report) error {
 	raw, err := marshalReplay(report)

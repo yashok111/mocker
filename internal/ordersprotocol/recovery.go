@@ -18,8 +18,8 @@ func Reconcile(j Journal, f Fence, e Endpoint, requestHash string) (Receipt, err
 			if match != nil {
 				return Receipt{}, fmt.Errorf("duplicate receipt")
 			}
-			copy := r
-			match = &copy
+			found := r
+			match = &found
 		}
 	}
 	if match == nil {

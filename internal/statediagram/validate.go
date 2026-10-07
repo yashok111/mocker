@@ -27,32 +27,48 @@ func Validate(d Diagram, root map[string]any) []Diagnostic {
 		}
 	}
 	for _, tr := range d.Transitions {
-		source, ok := states[tr.From]
-		if !ok {
-			add("error", tr.ID, "Исходное состояние не найдено")
-		}
-		if _, ok := states[tr.To]; !ok {
-			add("error", tr.ID, "Целевое состояние не найдено")
-		}
-		if source.Terminal {
-			add("error", tr.ID, "У конечного состояния не может быть исходящих переходов")
-		}
-		if d.Entity != nil {
-			patch, _ := Object(tr.PatchJSON)
-			if value, present := patch[d.Entity.StateField]; present {
-				if target, ok := states[tr.To]; ok && value != effectiveValue(target) {
-					add("error", tr.ID, "Изменения поля состояния должны совпадать со значением целевого состояния")
-				}
-			}
-		}
-		if tr.Binding != nil {
-			if _, err := boundOperation(root, *tr.Binding); err != nil {
-				add("error", tr.ID, err.Error())
-			}
-		} else {
-			add("warning", tr.ID, "Переход не привязан к операции API")
+		validateTransition(d, tr, states, root, add)
+	}
+	reachable := reachableStates(d)
+	for _, s := range d.States {
+		if !reachable[s.ID] {
+			add("warning", s.ID, "Состояние недостижимо из начального")
 		}
 	}
+	return out
+}
+
+// validateTransition reports one transition's diagnostics in their fixed order.
+func validateTransition(d Diagram, tr Transition, states map[string]State, root map[string]any, add func(severity, id, message string)) {
+	source, ok := states[tr.From]
+	if !ok {
+		add("error", tr.ID, "Исходное состояние не найдено")
+	}
+	if _, ok := states[tr.To]; !ok {
+		add("error", tr.ID, "Целевое состояние не найдено")
+	}
+	if source.Terminal {
+		add("error", tr.ID, "У конечного состояния не может быть исходящих переходов")
+	}
+	if d.Entity != nil {
+		patch, _ := Object(tr.PatchJSON)
+		if value, present := patch[d.Entity.StateField]; present {
+			if target, ok := states[tr.To]; ok && value != effectiveValue(target) {
+				add("error", tr.ID, "Изменения поля состояния должны совпадать со значением целевого состояния")
+			}
+		}
+	}
+	if tr.Binding != nil {
+		if _, err := boundOperation(root, *tr.Binding); err != nil {
+			add("error", tr.ID, err.Error())
+		}
+	} else {
+		add("warning", tr.ID, "Переход не привязан к операции API")
+	}
+}
+
+// reachableStates is the fixed point of the transition relation from the initial state.
+func reachableStates(d Diagram) map[string]bool {
 	reachable := map[string]bool{d.InitialStateID: true}
 	for changed := true; changed; {
 		changed = false
@@ -63,12 +79,7 @@ func Validate(d Diagram, root map[string]any) []Diagnostic {
 			}
 		}
 	}
-	for _, s := range d.States {
-		if !reachable[s.ID] {
-			add("warning", s.ID, "Состояние недостижимо из начального")
-		}
-	}
-	return out
+	return reachable
 }
 func HasErrors(diagnostics []Diagnostic) bool {
 	for _, d := range diagnostics {

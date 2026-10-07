@@ -18,9 +18,28 @@ const (
 	MaxPageSize     = 100
 )
 
-// Features lists only the currently implemented workbench operations.
+// Features lists every implemented workbench capability: the features of
+// get_backend_capabilities and the capabilities of each project resource.
+// Review 2026-10-06, F90: projects carried only the original seven while the
+// capabilities endpoint appended the rest in the admin plane, so a client
+// reading project.capabilities concluded that annotations, relational import
+// or sync were unsupported. The list lives here, once, for both readers.
 func Features() []string {
-	return []string{"backend-projects", "backend-project-metadata", "backend-revisions", "backend-graph-query", "backend-source-import", "backend-source-reconcile", "backend-revision-compare"}
+	return []string{"backend-projects", "backend-project-metadata", "backend-revisions", "backend-graph-query", "backend-source-import", "backend-source-reconcile", "backend-revision-compare",
+		"backend-scenario-measurements", "backend-observed-impact", "backend-observed-sequences", "backend-observations", "backend-observation-correlation", "backend-replay", "backend-test-profiles", "backend-replay-bindings",
+		"backend-materialization", "backend-diagram-svg", "backend-portable", "backend-artifact-context-v3", "backend-namespaced-artifact-query",
+		"backend-architecture", "backend-interactions", "backend-lifecycle", "backend-business-map", "backend-diagrams", "backend-diagram-views",
+		"backend-relational-import", "backend-database-query", "backend-database-er",
+		"backend-db-proposals", "backend-db-typed-edits", "backend-runtime-flow-import",
+		"backend-flow-query", "backend-data-access-query", "backend-saved-views",
+		"backend-field-lineage-import", "backend-field-lineage-query", "backend-api-artifact-pins",
+		"backend-editor-projections", "backend-events-import", "backend-events-query",
+		"backend-annotations", "backend-source-sync", "backend-source-incremental-sync",
+		"backend-source-assertions", "backend-import-candidate", "backend-change-proposals",
+		"backend-change-typed-edits", "backend-representations", "backend-saved-views-v2",
+		"backend-analysis-diagnostics", "backend-finding-review", "backend-analysis-jobs", "backend-analysis-diff", "backend-analysis-impact", "backend-change-rebase", "backend-change-ready",
+		"backend-change-package", "backend-conformance", "backend-endpoint-review", "backend-change-implemented", "backend-change-archive", "backend-change-unarchive",
+	}
 }
 
 type Repository struct {

@@ -23,7 +23,7 @@ func branchDocument(t *testing.T, raw string) Document {
 func TestBranchTreeRoundtrip(t *testing.T) {
 	t.Parallel()
 	doc := branchDocument(t, branchFixture)
-	if got := validateDocument(doc); len(got) != 0 {
+	if got := validateForTest(t, doc); len(got) != 0 {
 		t.Fatalf("valid tree: %+v", got)
 	}
 	raw, err := jsonx.Marshal(doc)
@@ -47,7 +47,7 @@ func TestBranchTreeRejectsInvalidTrees(t *testing.T) {
 		{"siblings", `,"parentFragmentId":"root","parentBranchId":"yes"`, ``},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := validateDocument(branchDocument(t, strings.Replace(branchFixture, tc.old, tc.replacement, 1))); len(got) == 0 {
+			if got := validateForTest(t, branchDocument(t, strings.Replace(branchFixture, tc.old, tc.replacement, 1))); len(got) == 0 {
 				t.Fatal("accepted invalid tree")
 			}
 		})
@@ -96,8 +96,8 @@ func TestBranchMovePreservesMembership(t *testing.T) {
 func TestBranchCloneIsIndependent(t *testing.T) {
 	t.Parallel()
 	doc := branchDocument(t, branchFixture)
-	copy := cloneRunDocument(doc)
-	copy.Fragments[0].Branches[0].Label = "changed"
+	cloned := cloneRunDocument(doc)
+	cloned.Fragments[0].Branches[0].Label = "changed"
 	if doc.Fragments[0].Branches[0].Label != "ok" {
 		t.Fatal("clone shares branches")
 	}
@@ -109,7 +109,7 @@ func TestBranchLimitsAndEqualBounds(t *testing.T) {
 	for depth := 3; depth <= 17; depth++ {
 		parent := doc.Fragments[len(doc.Fragments)-1].ID
 		doc.Fragments = append(doc.Fragments, Fragment{ID: fmt.Sprint(depth), Kind: "opt", FromMessageID: "a", ToMessageID: "b", ParentFragmentID: parent})
-		diagnostics := validateDocument(doc)
+		diagnostics := validateForTest(t, doc)
 		if depth <= 16 && len(diagnostics) != 0 {
 			t.Fatalf("valid depth %d: %+v", depth, diagnostics)
 		}
@@ -127,7 +127,7 @@ func TestLegacyRejectsPresentNewFragmentFields(t *testing.T) {
 		err := jsonx.Unmarshal([]byte(raw), &doc)
 		if err == nil { // Must identify the new field, independent of missing messages.
 			found := false
-			for _, d := range validateDocument(doc) {
+			for _, d := range validateForTest(t, doc) {
 				if strings.Contains(d.Message, "formatVersion 2") {
 					found = true
 				}
@@ -154,7 +154,7 @@ func TestBranchCountLimits(t *testing.T) {
 		f.FromMessageID = f.Branches[0].FromMessageID
 		f.ToMessageID = f.Branches[99].ToMessageID
 		doc.Fragments = append(doc.Fragments, f)
-		got := validateDocument(doc)
+		got := validateForTest(t, doc)
 		if group < 10 && len(got) != 0 {
 			t.Fatalf("valid branch limit: %+v", got)
 		}
@@ -165,7 +165,7 @@ func TestBranchCountLimits(t *testing.T) {
 	for _, count := range []int{0, 1, 101} {
 		doc := branchDocument(t, branchFixture)
 		doc.Fragments[0].Branches = make([]FragmentBranch, count)
-		if len(validateDocument(doc)) == 0 {
+		if len(validateForTest(t, doc)) == 0 {
 			t.Fatalf("accepted %d branches", count)
 		}
 	}

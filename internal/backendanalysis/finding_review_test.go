@@ -9,13 +9,22 @@ import (
 	"testing"
 
 	"github.com/yashok111/mocker/internal/backendmodel"
+	"github.com/yashok111/mocker/internal/testkit"
 )
 
 func findingReport(t *testing.T, r *Repo, key, basis, status string) (*Job, *backendmodel.Finding) {
 	t.Helper()
+	return findingReportAt(t, r, key, basis, status, revisionID)
+}
+
+// findingReportAt is findingReport for a diagnostics job over revision.
+func findingReportAt(t *testing.T, r *Repo, key, basis, status, revision string) (*Job, *backendmodel.Finding) {
+	t.Helper()
 	p := testPrepared(t, key)
 	var in ImmutableInput
 	_ = json.Unmarshal(p.InputJSON, &in)
+	in.From = backendmodel.BackendReadTarget{RevisionID: revision}
+	in.To = &backendmodel.BackendReadTarget{RevisionID: revision}
 	in.Kind = "diagnostics"
 	in.RuleSetVersion = "diagnostics-v1"
 	p.InputJSON, _ = canonical(in)
@@ -88,6 +97,52 @@ func TestFindingReviewReceiptRecurrenceAndResolution(t *testing.T) {
 		t.Fatal("immutable report changed")
 	}
 }
+
+// Review 2026-10-06, F186: a resolution was checked by job status, absence,
+// scope and creation order only. A later diagnostics job over an OLDER
+// revision (where the issue did not exist yet) or over a revision of another
+// project resolved a finding that the head still has. The recheck's revision
+// must belong to the project and must not be older than the occurrence's; a
+// newer one is allowed, because fix-then-recheck creates a new revision.
+func TestFindingResolutionRecheckMustNotTargetOlderRevision(t *testing.T) {
+	r, db := testRepo(t)
+	const older = "01111111-1111-4111-8111-111111111111"
+	const newer = "21111111-1111-4111-8111-111111111111"
+	const otherProject = "44444444-4444-4444-8444-444444444444"
+	const foreign = "31111111-1111-4111-8111-111111111111"
+	err := db.Write(t.Context(), func(tx *sql.Tx) error {
+		for _, id := range []string{older, newer} {
+			if _, e := testkit.ExecBackendOwner(t.Context(), tx, `INSERT INTO backend_revisions VALUES (?,?,?)`, id, projectID, `{}`); e != nil {
+				return e
+			}
+		}
+		if _, e := tx.ExecContext(t.Context(), `INSERT INTO backend_projects VALUES (?,?,1,?,?,?)`, otherProject, "Other", foreign, "now", "now"); e != nil {
+			return e
+		}
+		_, e := testkit.ExecBackendOwner(t.Context(), tx, `INSERT INTO backend_revisions VALUES (?,?,?)`, foreign, otherProject, `{}`)
+		return e
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	model := backendmodel.NewRepo(db)
+	basis := strings.Repeat("b", 64)
+	_, f := findingReport(t, r, "occurrence", basis, "present")
+	in := backendmodel.FindingReviewInput{ExpectedVersion: 1, BasisHash: basis, Status: "resolved", Reason: "Rechecked", ResolutionAnalysis: &backendmodel.FindingAnalysisRef{ResultVersion: 1}}
+	for _, revision := range []string{older, foreign} {
+		recheck, _ := findingReportAt(t, r, "recheck-"+revision, basis, "absent", revision)
+		in.IdempotencyKey, in.ResolutionAnalysis.JobID = "review-"+revision, recheck.ID
+		_, e := model.ReviewFinding(t.Context(), projectID, f.Fingerprint, in)
+		requireStatus(t, e, 422)
+	}
+	recheck, _ := findingReportAt(t, r, "recheck-newer", basis, "absent", newer)
+	in.IdempotencyKey, in.ResolutionAnalysis.JobID = "review-newer", recheck.ID
+	resolved, e := model.ReviewFinding(t.Context(), projectID, f.Fingerprint, in)
+	if e != nil || resolved.Status != "resolved" {
+		t.Fatal(resolved, e)
+	}
+}
+
 func TestFindingReviewRaceRollbackAndImmutableHistory(t *testing.T) {
 	r, db := testRepo(t)
 	model := backendmodel.NewRepo(db)

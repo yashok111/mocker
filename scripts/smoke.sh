@@ -27,7 +27,8 @@ command -v jq >/dev/null || {
 	exit 1
 }
 
-BASE_URL="http://127.0.0.1:8080"
+# MOCKER_HOST_PORT is the host side of docker-compose.yml's port mapping.
+BASE_URL="http://127.0.0.1:${MOCKER_HOST_PORT:-8080}"
 WORKSPACE_HOST_BASE="mock.local"
 ADMIN_HOST="mocker.local"
 MISSING_HOST="nope.${WORKSPACE_HOST_BASE}"

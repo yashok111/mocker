@@ -124,7 +124,7 @@ func (r *scenarioRunService) start(ctx context.Context, scenarioID int64, input 
 	if err != nil {
 		return designscenario.RunReport{}, err
 	}
-	initial, err := designscenario.PrepareRun(revision, input.RunID, input.Name, source, input.Variables)
+	initial, err := designscenario.PrepareRun(ctx, revision, input.RunID, input.Name, source, input.Variables)
 	if err != nil {
 		return designscenario.RunReport{}, err
 	}

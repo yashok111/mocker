@@ -6,12 +6,13 @@ import (
 	"encoding/json/v2"
 	"errors"
 	"fmt"
-	"github.com/yashok111/mocker/internal/testkit"
 	"slices"
 	"strconv"
 	"strings"
 	"testing"
 	"uuid"
+
+	"github.com/yashok111/mocker/internal/testkit"
 
 	"github.com/yashok111/mocker/internal/apidesign"
 )
@@ -73,7 +74,7 @@ func TestAPIArtifactRetainedUnavailableAndExplicitRemove(t *testing.T) {
 
 func TestAPIArtifactGoCallBodyLimitBeforeDependencies(t *testing.T) {
 	s, base, _, api := apiPinFixture(t)
-	bindings := []APIPinBindingInput{}
+	bindings := make([]APIPinBindingInput, 0, 200)
 	for range 200 {
 		bindings = append(bindings, APIPinBindingInput{SourceNodeID: uuid.NewV7().String(), Selector: APIArtifactSelector{JSONPointer: "/components/schemas/" + strings.Repeat("x", 2000)}})
 	}
@@ -82,8 +83,13 @@ func TestAPIArtifactGoCallBodyLimitBeforeDependencies(t *testing.T) {
 	assertFault(t, err, "backend_api_pins_limit")
 }
 
+// The optional head is "unavailable" the way the real owner reports it: the
+// design row is gone (apidesign.Repo.ArtifactHead maps sql.ErrNoRows to
+// ErrNotFound). Since F94 (review 2026-10-06, c4375a5) any OTHER owner read
+// error is a storage fault the query must surface, so a bare errors.New here
+// would now pin the opposite of the business state this test is about.
 func (r noArtifactHead) ArtifactHead(context.Context, int64) (int64, error) {
-	return 0, errors.New("unavailable optional head")
+	return 0, fmt.Errorf("unavailable optional head: %w", apidesign.ErrNotFound)
 }
 
 func TestAPIArtifactQueryCursorOrphansAndOptionalHead(t *testing.T) {
@@ -104,7 +110,9 @@ func TestAPIArtifactQueryCursorOrphansAndOptionalHead(t *testing.T) {
 		_, err = s.Query(t.Context(), base.Project.ID, q)
 		assertFault(t, err, "backend_invalid")
 	}
-	if _, err = s.repo.db.W.ExecContext(t.Context(), `DELETE FROM backend_graph_records WHERE revision_id=? AND record_type='node' AND id=?`, pinned.Revision.ID, ids["request"]); err != nil {
+	// Store27 (48dce80, B6.3) seals graph payload membership; the orphaning
+	// delete goes through the Store26 fixture rebuild + production migration.
+	if _, err = testkit.EditLegacyBackendPayload(t.Context(), s.repo.db, `DELETE FROM backend_graph_records WHERE revision_id=? AND record_type='node' AND id=?`, pinned.Revision.ID, ids["request"]); err != nil {
 		t.Fatal(err)
 	}
 	orphan, err := s.Query(t.Context(), base.Project.ID, APIArtifactQueryInput{RevisionID: pinned.Revision.ID, SourceNodeID: ids["request"]})
@@ -117,8 +125,16 @@ func TestAPIArtifactMissingContextMustNotHidePins(t *testing.T) {
 	s, base, ids, api := apiPinFixture(t)
 	pinned, _ := applyPinTest(t, s, base.Project.ID, pinTestInput(base, ids, api), "pin")
 	// A historical corrupt fixture must not silently become an empty pin page.
-	s.repo.db.W.ExecContext(t.Context(), `DROP TRIGGER backend_revision_api_artifacts_immutable_delete`)
-	if _, err := s.repo.db.W.ExecContext(t.Context(), `DELETE FROM backend_revision_api_artifacts WHERE revision_id=?`, pinned.Revision.ID); err != nil {
+	// Store27 (48dce80, B6.3) guards the row with an immutable-owner trigger and
+	// a sealed manifest, so the corrupt shape is built as a Store26 fixture and
+	// published by the production migration.
+	if err := testkit.EditLegacyBackendFixture(t.Context(), s.repo.db, func(tx *sql.Tx) error {
+		if _, err := tx.ExecContext(t.Context(), `DROP TRIGGER backend_revision_api_artifacts_immutable_delete`); err != nil {
+			return err
+		}
+		_, err := tx.ExecContext(t.Context(), `DELETE FROM backend_revision_api_artifacts WHERE revision_id=?`, pinned.Revision.ID)
+		return err
+	}); err != nil {
 		t.Fatal(err)
 	}
 	_, err := s.Query(t.Context(), base.Project.ID, APIArtifactQueryInput{RevisionID: pinned.Revision.ID})
@@ -261,7 +277,7 @@ func TestAPIArtifactDiffSharedBudgetAllowsLaterUnchangedObject(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			s, base, ids, api := apiPinFixture(t)
 			owner := s.artifacts.(*apidesign.Repo)
-			artifacts := []*apidesign.Detail{api}
+			artifacts := slices.Grow([]*apidesign.Detail{api}, 2)
 			for range 2 {
 				other, err := owner.Create(t.Context(), apidesign.CreateInput{Name: "Another API", Document: artifactTestDocument, Source: "ui"})
 				if err != nil {
@@ -401,7 +417,7 @@ func TestAPIArtifactSnapshotBudgetAndRetainedUnavailableGroup(t *testing.T) {
 	revision.ID = uuid.NewV7().String()
 	revision.ArtifactPins = []ArtifactPin{}
 	context := APIArtifactContext{SourceContentHash: strings.Repeat("a", 64), SourceSemanticHash: base.Revision.SemanticHash, Bindings: []APIArtifactBinding{}}
-	commands := []APIPinCommand{}
+	commands := make([]APIPinCommand, 0, 20)
 	for i := range 20 {
 		id := strconv.Itoa(i + 1)
 		source := uuid.NewV7().String()

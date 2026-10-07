@@ -22,7 +22,7 @@ func TestBackendObservationUnknownField(t *testing.T) {
 }
 
 func TestBackendObservationRoster(t *testing.T) {
-	response := doMCP(t, newToolFixture(&recordingCaller{}).Handler(), `{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}`, map[string]string{"Authorization": "Bearer " + testKey})
+	response := describedToolsList(t)
 	var env struct {
 		Result struct {
 			Tools []struct {

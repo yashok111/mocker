@@ -84,46 +84,7 @@ func (f *flowRunner) fragment(fragment Fragment, path []LoopIteration) error {
 	start, end := f.positions[fragment.FromMessageID], f.positions[fragment.ToMessageID]
 	switch fragment.Kind {
 	case "alt":
-		choice := -1
-		for i, b := range fragment.Branches {
-			if b.Execution.Otherwise {
-				if choice < 0 {
-					choice = i
-				}
-				break
-			}
-			match, err := evaluateCondition(b.Execution.Condition, f.e.report.Variables)
-			if err != nil {
-				return err
-			}
-			if choice < 0 && match {
-				choice = i
-				break
-			}
-		}
-		for i, b := range fragment.Branches {
-			result := ControlFlowResult{FragmentID: fragment.ID, BranchID: b.ID, Outcome: "skipped", Iterations: path}
-			if i == choice {
-				result.Outcome = "taken"
-			} else {
-				result.Reason = "Условие ветки не выполнено."
-			}
-			if err := f.record(result); err != nil {
-				return err
-			}
-		}
-		for i, b := range fragment.Branches {
-			first, last := f.positions[b.FromMessageID], f.positions[b.ToMessageID]
-			if i == choice {
-				if err := f.scope(first, last, flowScope{fragment.ID, b.ID}, path); err != nil {
-					return err
-				}
-			} else {
-				if err := f.skip(first, last, "Ветка не выбрана.", path); err != nil {
-					return err
-				}
-			}
-		}
+		return f.altFragment(fragment, path)
 	case "opt":
 		match, err := evaluateCondition(fragment.Execution.Condition, f.e.report.Variables)
 		if err != nil {
@@ -142,29 +103,80 @@ func (f *flowRunner) fragment(fragment Fragment, path []LoopIteration) error {
 		}
 		return f.skip(start, end, "Условие opt не выполнено.", path)
 	case "loop":
-		for iteration := 1; iteration <= fragment.Execution.Iterations; iteration++ {
-			if err := f.ctx.Err(); err != nil {
+		return f.loopFragment(fragment, start, end, path)
+	}
+	return nil
+}
+
+// altFragment records a decision for every branch before running the chosen
+// one and skipping the rest, as coverage expects.
+func (f *flowRunner) altFragment(fragment Fragment, path []LoopIteration) error {
+	choice := -1
+	for i, b := range fragment.Branches {
+		if b.Execution.Otherwise {
+			if choice < 0 {
+				choice = i
+			}
+			break
+		}
+		match, err := evaluateCondition(b.Execution.Condition, f.e.report.Variables)
+		if err != nil {
+			return err
+		}
+		if choice < 0 && match {
+			choice = i
+			break
+		}
+	}
+	for i, b := range fragment.Branches {
+		result := ControlFlowResult{FragmentID: fragment.ID, BranchID: b.ID, Outcome: "skipped", Iterations: path}
+		if i == choice {
+			result.Outcome = "taken"
+		} else {
+			result.Reason = "Условие ветки не выполнено."
+		}
+		if err := f.record(result); err != nil {
+			return err
+		}
+	}
+	for i, b := range fragment.Branches {
+		first, last := f.positions[b.FromMessageID], f.positions[b.ToMessageID]
+		if i == choice {
+			if err := f.scope(first, last, flowScope{fragment.ID, b.ID}, path); err != nil {
 				return err
 			}
-			nextPath := append(append([]LoopIteration(nil), path...), LoopIteration{FragmentID: fragment.ID, Iteration: iteration})
-			if fragment.Execution.Condition != nil {
-				match, err := evaluateCondition(fragment.Execution.Condition, f.e.report.Variables)
-				if err != nil {
+		} else {
+			if err := f.skip(first, last, "Ветка не выбрана.", path); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func (f *flowRunner) loopFragment(fragment Fragment, start, end int, path []LoopIteration) error {
+	for iteration := 1; iteration <= fragment.Execution.Iterations; iteration++ {
+		if err := f.ctx.Err(); err != nil {
+			return err
+		}
+		nextPath := append(append([]LoopIteration(nil), path...), LoopIteration{FragmentID: fragment.ID, Iteration: iteration})
+		if fragment.Execution.Condition != nil {
+			match, err := evaluateCondition(fragment.Execution.Condition, f.e.report.Variables)
+			if err != nil {
+				return err
+			}
+			if !match {
+				if err := f.record(ControlFlowResult{FragmentID: fragment.ID, Outcome: "skipped", Iterations: nextPath, Reason: "Условие цикла не выполнено."}); err != nil {
 					return err
 				}
-				if !match {
-					if err := f.record(ControlFlowResult{FragmentID: fragment.ID, Outcome: "skipped", Iterations: nextPath, Reason: "Условие цикла не выполнено."}); err != nil {
-						return err
-					}
-					return f.skip(start, end, "Условие цикла не выполнено.", nextPath)
-				}
+				return f.skip(start, end, "Условие цикла не выполнено.", nextPath)
 			}
-			if err := f.record(ControlFlowResult{FragmentID: fragment.ID, Outcome: "taken", Iterations: nextPath}); err != nil {
-				return err
-			}
-			if err := f.scope(start, end, flowScope{fragment.ID, ""}, nextPath); err != nil {
-				return err
-			}
+		}
+		if err := f.record(ControlFlowResult{FragmentID: fragment.ID, Outcome: "taken", Iterations: nextPath}); err != nil {
+			return err
+		}
+		if err := f.scope(start, end, flowScope{fragment.ID, ""}, nextPath); err != nil {
+			return err
 		}
 	}
 	return nil

@@ -5,13 +5,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	ref "github.com/yashok111/mocker/internal/ordersreference"
 	"net/http"
 	"os"
 	"os/signal"
 	"strings"
 	"syscall"
 	"time"
+
+	ref "github.com/yashok111/mocker/internal/ordersreference"
 )
 
 // Populated by the manifest builder. An unmanifested binary refuses startup.
@@ -25,7 +26,7 @@ func main() {
 		os.Exit(1)
 	}
 }
-func run() error {
+func run() (err error) {
 	c, err := ref.ConfigFromEnv()
 	if err != nil {
 		return err
@@ -34,7 +35,9 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	defer s.Close()
+	// Close closes the fixture's SQLite database; a failure there is the
+	// last chance to hear about an unflushed write, so it joins the result.
+	defer func() { err = errors.Join(err, s.Close()) }()
 	if len(os.Args) == 2 && strings.HasPrefix(os.Args[1], "--measure-read=") {
 		return measureRead(s, strings.TrimPrefix(os.Args[1], "--measure-read="))
 	}

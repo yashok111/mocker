@@ -36,7 +36,7 @@ func (r *Repo) CreateTx(ctx context.Context, tx *sql.Tx, input CreateInput) (*De
 	if err := r.pinLinkedContracts(ctx, tx, &document); err != nil {
 		return nil, err
 	}
-	prepared, _, err := r.prepare(document, input.FormDrafts)
+	prepared, _, err := r.prepare(ctx, document, input.FormDrafts)
 	if err != nil {
 		return nil, err
 	}
@@ -107,7 +107,7 @@ func (r *Repo) saveTx(ctx context.Context, tx *sql.Tx, id, expectedVersion int64
 	if err = r.saveLinkedContracts(ctx, tx, &document, source); err != nil {
 		return nil, err
 	}
-	prepared, _, err := r.prepare(document, formDrafts)
+	prepared, _, err := r.prepare(ctx, document, formDrafts)
 	if err != nil {
 		return nil, err
 	}
@@ -155,7 +155,7 @@ func (r *Repo) Restore(ctx context.Context, id int64, input RestoreInput) (*Deta
 		if err != nil {
 			return err
 		}
-		prepared, _, err := r.prepare(revision.Document, revision.FormDrafts)
+		prepared, _, err := r.prepare(ctx, revision.Document, revision.FormDrafts)
 		if err != nil {
 			return err
 		}
@@ -278,15 +278,15 @@ func invalidAt(pointer, message string) error {
 
 // PrepareMaterialization validates an authored document without writing linked
 // owners. The orchestrator must enumerate and validate those links separately.
-func (r *Repo) PrepareMaterialization(document Document) (Document, error) {
-	copy, err := cloneDocument(document)
+func (r *Repo) PrepareMaterialization(ctx context.Context, document Document) (Document, error) {
+	cloned, err := cloneDocument(document)
 	if err != nil {
 		return Document{}, err
 	}
-	if _, _, err := r.prepare(copy, nil); err != nil {
+	if _, _, err := r.prepare(ctx, cloned, nil); err != nil {
 		return Document{}, err
 	}
-	return copy, nil
+	return cloned, nil
 }
 
 func (r *Repo) DraftTx(ctx context.Context, tx *sql.Tx, id int64) (Scenario, Revision, error) {

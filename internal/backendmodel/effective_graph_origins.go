@@ -15,22 +15,31 @@ func effectiveEvaluationOrigin(source *SourceGraphSnapshot, input ChangeEvaluati
 		return out
 	}
 	if source.SourceVector != nil && input.Selector.Source != nil {
+		// Proof that cannot be computed (a divergent claim with no exact
+		// selection, a selector the payload does not carry) used to leave a
+		// source origin with no claims and NO freshness, indistinguishable from
+		// a field that simply has no proof (review 2026-10-06, F119). It now
+		// says the proof is not current, with the reason.
+		unavailable := &AssertionFreshness{Status: "stale", Reasons: []string{"source_proof_unavailable"}}
 		claims, err := sourceSelectedClaims(source, input.RecordType, input.ID, *input.Selector.Source)
-		if err == nil {
-			for _, a := range claims {
-				out.SourceClaims = append(out.SourceClaims, sourceAssertionRef(a))
-
-			}
-			proof, err := sourcePropertyProof(source, input.RecordType, input.ID, *input.Selector.Source)
-			if err == nil {
-				out.EvidenceIDs = slices.Clone(proof.evidenceIDs)
-				status := "current"
-				if proof.boundary || proof.status == "stale" || proof.status == "unresolved" {
-					status = "stale"
-				}
-				out.Freshness = &AssertionFreshness{Status: status, Reasons: runtimeSortedKeys(proof.reasons)}
-			}
+		if err != nil {
+			out.Freshness = unavailable
+			return out
 		}
+		for _, a := range claims {
+			out.SourceClaims = append(out.SourceClaims, sourceAssertionRef(a))
+		}
+		proof, err := sourcePropertyProof(source, input.RecordType, input.ID, *input.Selector.Source)
+		if err != nil {
+			out.Freshness = unavailable
+			return out
+		}
+		out.EvidenceIDs = slices.Clone(proof.evidenceIDs)
+		status := "current"
+		if proof.boundary || proof.status == "stale" || proof.status == "unresolved" {
+			status = "stale"
+		}
+		out.Freshness = &AssertionFreshness{Status: status, Reasons: runtimeSortedKeys(proof.reasons)}
 	} else {
 		out = effectiveLegacyOriginSupport(source, input, out)
 	}
@@ -73,17 +82,14 @@ func effectiveSourceOrigins(source *SourceGraphSnapshot, state RevisionState) ([
 
 func effectiveLegacyOriginSupport(source *SourceGraphSnapshot, input ChangeEvaluationFieldOrigin, out EffectiveFieldOrigin) EffectiveFieldOrigin {
 
-	for _, n := range source.State.Nodes {
-		if input.RecordType == "node" && n.ID == input.ID {
-			out.EvidenceIDs = slices.Clone(n.EvidenceIDs)
-			out.Freshness = n.Freshness
-		}
+	// Indexed lookups; the scans ran per origin (review 2026-10-06, F118).
+	if n, ok := source.stateNode(input.ID); ok && input.RecordType == "node" {
+		out.EvidenceIDs = slices.Clone(n.EvidenceIDs)
+		out.Freshness = n.Freshness
 	}
-	for _, e := range source.State.Edges {
-		if input.RecordType == "edge" && e.ID == input.ID {
-			out.EvidenceIDs = slices.Clone(e.EvidenceIDs)
-			out.Freshness = e.Freshness
-		}
+	if e, ok := source.stateEdge(input.ID); ok && input.RecordType == "edge" {
+		out.EvidenceIDs = slices.Clone(e.EvidenceIDs)
+		out.Freshness = e.Freshness
 	}
 	for _, identity := range SourceIdentities(source, input.RecordType, input.ID) {
 		out.SourceClaims = append(out.SourceClaims, BaseAssertionRef{RepositoryID: identity.RepositoryID, ProviderNamespace: identity.ProviderNamespace, RecordType: identity.RecordType, ExternalKey: identity.ExternalKey, ExpectedID: identity.ID, AssertionHash: identity.AssertionHash})
@@ -97,15 +103,11 @@ func effectiveLegacyOriginSupport(source *SourceGraphSnapshot, input ChangeEvalu
 
 func effectiveLegacyPropertySupport(source *SourceGraphSnapshot, input ChangeEvaluationFieldOrigin, out EffectiveFieldOrigin) EffectiveFieldOrigin {
 	var payload SourceAssertionPayload
-	for _, n := range source.State.Nodes {
-		if input.RecordType == "node" && n.ID == input.ID {
-			payload = sourceNodePayload(n)
-		}
+	if n, ok := source.stateNode(input.ID); ok && input.RecordType == "node" {
+		payload = sourceNodePayload(n)
 	}
-	for _, e := range source.State.Edges {
-		if input.RecordType == "edge" && e.ID == input.ID {
-			payload = sourceEdgePayload(e)
-		}
+	if e, ok := source.stateEdge(input.ID); ok && input.RecordType == "edge" {
+		payload = sourceEdgePayload(e)
 	}
 	property := *input.Selector.Source
 	if property.Kind == "relational_facet" {
@@ -121,20 +123,15 @@ func effectiveLegacyPropertySupport(source *SourceGraphSnapshot, input ChangeEva
 		out.EvidenceIDs, out.Freshness = slices.Clone(facet.EvidenceIDs), facet.Freshness
 	}
 	out.EvidenceIDs = slices.DeleteFunc(out.EvidenceIDs, func(eid string) bool {
-		for _, e := range source.State.Evidence {
-			if e.ID != eid {
-				continue
-			}
-			if e.SubjectID != input.ID {
-				return true
-			}
-			if e.PropertyPath == nil || legacyFacetRootSupport(payload, property, *e.PropertyPath) {
-				return false
-			}
-			selected := sourcePropertyForPointer(payload, *e.PropertyPath)
-			return selected == nil || *selected != property
+		e, ok := source.stateEvidence(eid)
+		if !ok || e.SubjectID != input.ID {
+			return true
 		}
-		return true
+		if e.PropertyPath == nil || legacyFacetRootSupport(payload, property, *e.PropertyPath) {
+			return false
+		}
+		selected := sourcePropertyForPointer(payload, *e.PropertyPath)
+		return selected == nil || *selected != property
 	})
 	return out
 }

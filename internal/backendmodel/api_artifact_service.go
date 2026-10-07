@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json/v2"
 	"errors"
+	"maps"
 	"slices"
 	"strconv"
 	"strings"
@@ -97,6 +98,26 @@ func fatalArtifactError(ctx context.Context, err error) error {
 	}
 	return nil
 }
+
+// fatalArtifactReadError classifies an owner READ (snapshot, head, digest).
+// Only an absent owner revision and owner validation faults are business
+// states ("broken", "unavailable"); any other error is a storage fault and is
+// returned so it surfaces as a 5xx. A busy or I/O error used to become a 200
+// "broken" item or a blocking preview diagnostic, inviting the agent to remove
+// a healthy pin (review 2026-10-06, F94). In-memory selector resolution keeps
+// fatalArtifactError: its errors are all document facts.
+func fatalArtifactReadError(ctx context.Context, err error) error {
+	if fatal := fatalArtifactError(ctx, err); fatal != nil || err == nil || ownerDigestGone(err) {
+		return fatal
+	}
+	if _, ok := errors.AsType[*FaultError](err); ok {
+		return nil
+	}
+	if _, ok := errors.AsType[*apidesign.InvalidError](err); ok {
+		return nil
+	}
+	return err
+}
 func resolveAPIArtifact(ctx context.Context, snapshot *apidesign.ArtifactSnapshot, selector APIArtifactSelector) (*apidesign.ArtifactObject, error) {
 	return apidesign.ResolveArtifactObject(ctx, snapshot, apidesign.ArtifactSelector{ObjectKey: selector.ObjectKey, JSONPointer: selector.JSONPointer})
 }
@@ -135,21 +156,9 @@ func (s *APIArtifactService) projectAPIArtifactBindings(ctx context.Context, pid
 	if limit == 0 {
 		limit = 50
 	}
-	scope, err := requestDigest(struct {
-		Revision, Hash, Filter string
-		Limit                  int
-	}{in.RevisionID, state.Revision.SemanticHash, in.SourceNodeID, limit})
+	scope, err := apiArtifactPageScope(in, limit, state, effective)
 	if err != nil {
 		return nil, err
-	}
-	if effective != nil {
-		scope, err = requestDigest(struct {
-			Scope string
-			Pins  EffectiveGraphPins
-		}{scope, effective.Pins})
-		if err != nil {
-			return nil, err
-		}
 	}
 	_, after, err := decodeGraphPage(limit, in.Cursor, "api-artifacts", pid, scope, true)
 	if err != nil {
@@ -181,56 +190,102 @@ func (s *APIArtifactService) projectAPIArtifactBindings(ctx context.Context, pid
 	if len(groups) > MaxAPIArtifactPins {
 		return nil, apiPinsLimit()
 	}
-	keys := []string{}
-	for k := range groups {
-		keys = append(keys, k)
-	}
-	slices.Sort(keys)
 	heads := map[string]int64{}
-	for _, key := range keys {
-		indices := groups[key]
-		b := out.Items[indices[0]].Binding
-		snap, readErr := s.snapshot(ctx, b.Ref.ArtifactID, b.Ref.RevisionID)
-		if err := fatalArtifactError(ctx, readErr); err != nil {
+	for _, key := range slices.Sorted(maps.Keys(groups)) {
+		if err := s.resolveAPIArtifactGroup(ctx, out, groups[key], nodes, heads, effective); err != nil {
 			return nil, err
-		}
-		if _, seen := heads[b.Ref.ArtifactID]; !seen {
-			heads[b.Ref.ArtifactID] = 0
-			if effective == nil && s.artifacts != nil {
-				head, e := s.artifacts.ArtifactHead(ctx, apiArtifactID(b.Ref.ArtifactID))
-				if err := fatalArtifactError(ctx, e); err != nil {
-					return nil, err
-				}
-				if e == nil {
-					heads[b.Ref.ArtifactID] = head
-				}
-			}
-		}
-		for _, i := range indices {
-			item := &out.Items[i]
-			ref := item.Binding.Ref
-			if head := heads[ref.ArtifactID]; head > 0 {
-				item.Resolution.CurrentDraftRevisionID = strconv.FormatInt(head, 10)
-				item.Resolution.UpdateAvailable = item.Resolution.CurrentDraftRevisionID != ref.RevisionID
-			}
-			if !nodes[item.Binding.SourceNodeID] {
-				item.Resolution.Status = "orphaned"
-				item.Resolution.Diagnostics = append(item.Resolution.Diagnostics, apiArtifactDiagnostic("backend_api_source_orphaned", item.Binding, "Source node is absent from this revision"))
-				continue
-			}
-			broken := readErr != nil || snap.ContentHash != ref.ContentHash
-			if !broken {
-				object, e := resolveAPIArtifact(ctx, snap, ref.Selector)
-				if err := fatalArtifactError(ctx, e); err != nil {
-					return nil, err
-				}
-				broken = e != nil || object.ObjectHash != ref.ObjectHash || object.Pointer != ref.ResolvedPointer
-			}
-			if broken {
-				item.Resolution.Status = "broken"
-				item.Resolution.Diagnostics = append(item.Resolution.Diagnostics, apiArtifactDiagnostic("backend_api_artifact_unavailable", item.Binding, "Exact artifact or selected object is unavailable"))
-			}
 		}
 	}
 	return out, ctx.Err()
+}
+
+// apiArtifactPageScope is the digest a page cursor binds to; an effective
+// read also binds the effective pins.
+func apiArtifactPageScope(in APIArtifactQueryInput, limit int, state *RevisionState, effective *EffectiveGraphSnapshot) (string, error) {
+	scope, err := requestDigest(struct {
+		Revision, Hash, Filter string
+		Limit                  int
+	}{in.RevisionID, state.Revision.SemanticHash, in.SourceNodeID, limit})
+	if err != nil {
+		return "", err
+	}
+	if effective != nil {
+		return requestDigest(struct {
+			Scope string
+			Pins  EffectiveGraphPins
+		}{scope, effective.Pins})
+	}
+	return scope, nil
+}
+
+// resolveAPIArtifactGroup resolves every item pinned to one artifact
+// revision against one snapshot read. heads memoises each artifact's
+// current draft (0 when unknown) across groups.
+func (s *APIArtifactService) resolveAPIArtifactGroup(ctx context.Context, out *APIArtifactPage, indices []int, nodes map[string]bool, heads map[string]int64, effective *EffectiveGraphSnapshot) error {
+	b := out.Items[indices[0]].Binding
+	snap, readErr := s.snapshot(ctx, b.Ref.ArtifactID, b.Ref.RevisionID)
+	if err := fatalArtifactReadError(ctx, readErr); err != nil {
+		return err
+	}
+	if _, seen := heads[b.Ref.ArtifactID]; !seen {
+		head, err := s.artifactDraftHead(ctx, b.Ref.ArtifactID, effective)
+		if err != nil {
+			return err
+		}
+		heads[b.Ref.ArtifactID] = head
+	}
+	for _, i := range indices {
+		if err := resolveAPIArtifactItem(ctx, &out.Items[i], snap, readErr, nodes, heads); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// artifactDraftHead reads an artifact's current draft revision; an effective
+// read or an unavailable owner answers 0 (unknown).
+func (s *APIArtifactService) artifactDraftHead(ctx context.Context, artifactID string, effective *EffectiveGraphSnapshot) (int64, error) {
+	if effective != nil || s.artifacts == nil {
+		return 0, nil
+	}
+	head, e := s.artifacts.ArtifactHead(ctx, apiArtifactID(artifactID))
+	if err := fatalArtifactReadError(ctx, e); err != nil {
+		return 0, err
+	}
+	return knownArtifactHead(head, e), nil
+}
+
+// knownArtifactHead folds a non-fatal head read failure into 0 (unknown):
+// the page still lists the binding, without an update hint.
+func knownArtifactHead(head int64, readErr error) int64 {
+	if readErr != nil {
+		return 0
+	}
+	return head
+}
+
+func resolveAPIArtifactItem(ctx context.Context, item *APIArtifactItem, snap *apidesign.ArtifactSnapshot, readErr error, nodes map[string]bool, heads map[string]int64) error {
+	ref := item.Binding.Ref
+	if head := heads[ref.ArtifactID]; head > 0 {
+		item.Resolution.CurrentDraftRevisionID = strconv.FormatInt(head, 10)
+		item.Resolution.UpdateAvailable = item.Resolution.CurrentDraftRevisionID != ref.RevisionID
+	}
+	if !nodes[item.Binding.SourceNodeID] {
+		item.Resolution.Status = "orphaned"
+		item.Resolution.Diagnostics = append(item.Resolution.Diagnostics, apiArtifactDiagnostic("backend_api_source_orphaned", item.Binding, "Source node is absent from this revision"))
+		return nil
+	}
+	broken := readErr != nil || snap.ContentHash != ref.ContentHash
+	if !broken {
+		object, e := resolveAPIArtifact(ctx, snap, ref.Selector)
+		if err := fatalArtifactError(ctx, e); err != nil {
+			return err
+		}
+		broken = e != nil || object.ObjectHash != ref.ObjectHash || object.Pointer != ref.ResolvedPointer
+	}
+	if broken {
+		item.Resolution.Status = "broken"
+		item.Resolution.Diagnostics = append(item.Resolution.Diagnostics, apiArtifactDiagnostic("backend_api_artifact_unavailable", item.Binding, "Exact artifact or selected object is unavailable"))
+	}
+	return nil
 }

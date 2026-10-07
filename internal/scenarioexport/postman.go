@@ -151,7 +151,7 @@ func postmanFlows(prepared httpExport) []*postmanFlow {
 }
 
 func (s *Service) renderPostman(title string, prepared httpExport) ([]byte, error) {
-	variables := []any{}
+	variables := make([]any, 0, len(prepared.Variables)+len(prepared.Bases))
 	for _, name := range slices.Sorted(maps.Keys(prepared.Variables)) {
 		variables = append(variables, map[string]any{"key": name, "value": prepared.Variables[name], "type": "string"})
 	}
@@ -244,22 +244,22 @@ func (s *Service) postmanTestScript(request httpRequest, flow *postmanFlow) (str
 		if err != nil {
 			return "", err
 		}
-		out.WriteString("const flow = " + string(data) + ";\n" + postmanBindingState)
+		_, _ = out.WriteString("const flow = " + string(data) + ";\n" + postmanBindingState)
 	}
 	hasJSON := len(request.Execution.Assertions)+len(request.Execution.Extract) > 0
 	if hasJSON {
-		out.WriteString(postmanBindingRuntime(nil))
+		_, _ = out.WriteString(postmanBindingRuntime(nil))
 	}
 	// pm.test captures assertion errors instead of throwing them to the script.
 	// Stop the collection inside its callback, before that error is swallowed.
-	out.WriteString("pm.test('Scenario step', () => {\ntry {\n")
+	_, _ = out.WriteString("pm.test('Scenario step', () => {\ntry {\n")
 	if request.Execution.ExpectedStatus != nil {
-		fmt.Fprintf(&out, "pm.expect(pm.response.code).to.equal(%d);\n", *request.Execution.ExpectedStatus)
+		_, _ = fmt.Fprintf(&out, "pm.expect(pm.response.code).to.equal(%d);\n", *request.Execution.ExpectedStatus)
 	} else {
-		out.WriteString("pm.expect(pm.response.code).to.be.within(200, 299);\n")
+		_, _ = out.WriteString("pm.expect(pm.response.code).to.be.within(200, 299);\n")
 	}
 	if hasJSON {
-		out.WriteString("const response = postmanJSONRuntime.parse(pm.response.text());\n")
+		_, _ = out.WriteString("const response = postmanJSONRuntime.parse(pm.response.text());\n")
 	}
 	for _, assertion := range request.Execution.Assertions {
 		if err := s.CheckResponse([]string{assertion.Pointer, string(assertion.Equals)}); err != nil {
@@ -267,31 +267,31 @@ func (s *Service) postmanTestScript(request httpRequest, flow *postmanFlow) (str
 		}
 		pointer, _ := jsonx.Marshal(assertion.Pointer)
 		expected, _ := jsonx.Marshal(string(assertion.Equals))
-		fmt.Fprintf(&out, "pm.expect(postmanJSONRuntime.equal(postmanJSONRuntime.readPointer(response, %s), postmanJSONRuntime.parse(%s))).to.equal(true);\n", pointer, expected)
+		_, _ = fmt.Fprintf(&out, "pm.expect(postmanJSONRuntime.equal(postmanJSONRuntime.readPointer(response, %s), postmanJSONRuntime.parse(%s))).to.equal(true);\n", pointer, expected)
 	}
 	if len(request.Execution.Extract) > 0 {
 		// Match the runner's atomic variable update: a missing later pointer must
 		// not publish earlier extractions from the same response.
-		out.WriteString("const extracted = [];\n")
+		_, _ = out.WriteString("const extracted = [];\n")
 		for _, extraction := range request.Execution.Extract {
 			if err := s.CheckResponse([]string{extraction.Name, extraction.Pointer}); err != nil {
 				return "", err
 			}
 			name, _ := jsonx.Marshal(extraction.Name)
 			pointer, _ := jsonx.Marshal(extraction.Pointer)
-			fmt.Fprintf(&out, "{ const value = postmanJSONRuntime.readPointer(response, %s); extracted.push([%s, typeof value === 'string' ? value : postmanJSONRuntime.stringify(value)]); }\n", pointer, name)
+			_, _ = fmt.Fprintf(&out, "{ const value = postmanJSONRuntime.readPointer(response, %s); extracted.push([%s, typeof value === 'string' ? value : postmanJSONRuntime.stringify(value)]); }\n", pointer, name)
 		}
 	}
 	if flow != nil {
-		out.WriteString("completeBindingStep(flow);\n")
+		_, _ = out.WriteString("completeBindingStep(flow);\n")
 	}
 	if len(request.Execution.Extract) > 0 {
-		out.WriteString("for (const [name, value] of extracted) pm.collectionVariables.set(name, value);\n")
+		_, _ = out.WriteString("for (const [name, value] of extracted) pm.collectionVariables.set(name, value);\n")
 	}
-	out.WriteString("} catch (error) {\n")
+	_, _ = out.WriteString("} catch (error) {\n")
 	if flow != nil {
-		out.WriteString("pm.variables.unset(flow.key);\n")
+		_, _ = out.WriteString("pm.variables.unset(flow.key);\n")
 	}
-	out.WriteString("pm.execution.setNextRequest(null);\nthrow error;\n}\n});\n")
+	_, _ = out.WriteString("pm.execution.setNextRequest(null);\nthrow error;\n}\n});\n")
 	return out.buffer.String(), out.err
 }

@@ -75,7 +75,7 @@ func TestCURLRunsWithoutEvaluatingUserData(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, _ := io.ReadAll(r.Body)
 		requests <- request{r.Method, r.URL.EscapedPath(), r.URL.Query().Get("q"), r.Header.Get("X-Test"), string(body)}
-		w.WriteHeader(201)
+		w.WriteHeader(http.StatusCreated)
 	}))
 	defer server.Close()
 	rev := httpFixture(server.URL + "/v1")
@@ -355,13 +355,13 @@ func TestHTTPServerDefaultsAndServiceVariables(t *testing.T) {
 func TestPostmanDoesNotTreatParameterKeysAsJavaScriptPrototype(t *testing.T) {
 	rev := httpFixture("https://example.test")
 	rev.Document.Messages[0].Execution.Headers["__proto__"] = "literal-header"
-	a, err := New(validContract, 1<<20).Export(rev, Request{Format: Postman})
+	_, err := New(validContract, 1<<20).Export(rev, Request{Format: Postman})
 	if err != nil {
 		t.Fatal(err)
 	}
 	// A query named __proto__ must remain an own property after script decoding.
 	rev.Document.Messages[0].Execution.Query["__proto__"] = "literal-query"
-	a, err = New(validContract, 1<<20).Export(rev, Request{Format: Postman})
+	a, err := New(validContract, 1<<20).Export(rev, Request{Format: Postman})
 	if err != nil {
 		t.Fatal(err)
 	}

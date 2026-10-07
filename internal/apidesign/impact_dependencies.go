@@ -60,84 +60,8 @@ func (c *impactCollector) snapshot(root map[string]any, side string) (*impactSna
 	for _, d := range index.Diagnostics {
 		c.diagnostic(ImpactDiagnostic{Code: d.Code, Severity: "warning", Side: side, Pointer: d.Pointer, Message: d.Message}, true)
 	}
-	for _, group := range slices.Sorted(maps.Keys(impactObject(root["components"]))) {
-		for _, name := range slices.Sorted(maps.Keys(impactObject(impactObject(root["components"])[group]))) {
-			if !c.visit() {
-				break
-			}
-			kind := "contract_node"
-			if group == "schemas" {
-				kind = "schema"
-			}
-			pointer := "/components/" + escape(group) + "/" + escape(name)
-			s.nodes = append(s.nodes, impactNode{entity: impactEntity(kind, pointer, name, side, ImpactLocator{Pointer: pointer}), pointer: pointer})
-		}
-	}
-	for _, path := range slices.Sorted(maps.Keys(impactObject(root["webhooks"]))) {
-		if !c.visit() {
-			break
-		}
-		pointer := "/webhooks/" + escape(path)
-		s.nodes = append(s.nodes, impactNode{entity: impactEntity("contract_node", pointer, "Webhook "+path, side, ImpactLocator{Pointer: pointer}), pointer: pointer})
-	}
-	paths := impactObject(root["paths"])
-	for _, path := range slices.Sorted(maps.Keys(paths)) {
-		if !c.visit() {
-			break
-		}
-		if strings.HasPrefix(path, "x-") {
-			continue
-		}
-		at := "/paths/" + escape(path)
-		chain, diagnostics := schemamodel.PathItems(root, paths[path], at)
-		for _, d := range diagnostics {
-			if d.Code != "path_item_method_conflict" {
-				s.uncertainPaths[path] = true
-			}
-			c.diagnostic(ImpactDiagnostic{Code: d.Code, Severity: "warning", Side: side, Pointer: d.Pointer, Message: d.Message}, d.Code != "path_item_method_conflict")
-		}
-		for _, method := range schemamodel.PathItemOperations(chain) {
-			if !c.visit() {
-				break
-			}
-			value := impactObject(method.Value)
-			if value == nil {
-				c.diagnostic(ImpactDiagnostic{Code: "invalid_operation", Severity: "warning", Side: side, Pointer: method.Pointer, Message: "Операция должна быть объектом"}, true)
-				continue
-			}
-			op := &impactOperation{pointer: at + "/" + method.Method, sourcePointer: method.Pointer, method: strings.ToUpper(method.Method), path: path, value: value, sources: []impactSource{}}
-			op.key = impactText(value[OperationKey])
-			keyPointer := op.pointer + "/" + OperationKey
-			if op.pointer != method.Pointer {
-				op.key = impactText(impactObject(impactObject(paths[path])[PathOperationKeys])[method.Method])
-				keyPointer = at + "/" + PathOperationKeys + "/" + method.Method
-			}
-			op.keyPointer = keyPointer
-			if op.key != "" {
-				s.keyCounts[op.key]++
-			}
-			op.sources = append(op.sources, impactSource{pointer: keyPointer, direction: "unknown"})
-			for _, key := range slices.Sorted(maps.Keys(value)) {
-				if key == "parameters" || key == "security" || key == "servers" {
-					continue
-				}
-				direction := "unknown"
-				if key == "requestBody" {
-					direction = "request"
-				}
-				if key == "responses" {
-					direction = "response"
-				}
-				op.sources = append(op.sources, impactSource{pointer: method.Pointer + "/" + escape(key), direction: direction, sites: impactInheritanceSites(chain, method.Pointer)})
-			}
-			// Empty operations still have an address. This exact root source must not
-			// widen child changes into overridden inherited fields.
-			op.sources = append(op.sources, impactSource{pointer: method.Pointer, direction: "root", sites: impactInheritanceSites(chain, method.Pointer)})
-			c.operationSources(s, op, chain)
-			s.operations = append(s.operations, op)
-			s.addresses[op.method+" "+op.path] = op
-		}
-	}
+	c.definitionNodes(s)
+	c.pathOperations(s)
 	for _, op := range s.operations {
 		if op.key != "" && s.keyCounts[op.key] > 1 {
 			c.diagnostic(ImpactDiagnostic{Code: "duplicate_operation_key", Severity: "warning", Side: side, Pointer: op.pointer, Message: "Ключ операции повторяется; сопоставление по ключу отключено"}, true)
@@ -147,6 +71,98 @@ func (c *impactCollector) snapshot(root map[string]any, side string) (*impactSna
 	c.resources(s)
 	c.states(s)
 	return s, nil
+}
+
+// definitionNodes adds a node per component and per webhook. Running out of
+// visits ends the current group only, as each loop checks the budget itself.
+func (c *impactCollector) definitionNodes(s *impactSnapshot) {
+	components := impactObject(s.root["components"])
+	for _, group := range slices.Sorted(maps.Keys(components)) {
+		for _, name := range slices.Sorted(maps.Keys(impactObject(components[group]))) {
+			if !c.visit() {
+				break
+			}
+			kind := "contract_node"
+			if group == "schemas" {
+				kind = "schema"
+			}
+			pointer := "/components/" + escape(group) + "/" + escape(name)
+			s.nodes = append(s.nodes, impactNode{entity: impactEntity(kind, pointer, name, s.side, ImpactLocator{Pointer: pointer}), pointer: pointer})
+		}
+	}
+	for _, path := range slices.Sorted(maps.Keys(impactObject(s.root["webhooks"]))) {
+		if !c.visit() {
+			break
+		}
+		pointer := "/webhooks/" + escape(path)
+		s.nodes = append(s.nodes, impactNode{entity: impactEntity("contract_node", pointer, "Webhook "+path, s.side, ImpactLocator{Pointer: pointer}), pointer: pointer})
+	}
+}
+
+// pathOperations indexes every effective method under /paths by address.
+func (c *impactCollector) pathOperations(s *impactSnapshot) {
+	paths := impactObject(s.root["paths"])
+	for _, path := range slices.Sorted(maps.Keys(paths)) {
+		if !c.visit() {
+			break
+		}
+		if strings.HasPrefix(path, "x-") {
+			continue
+		}
+		at := "/paths/" + escape(path)
+		chain, diagnostics := schemamodel.PathItems(s.root, paths[path], at)
+		for _, d := range diagnostics {
+			if d.Code != "path_item_method_conflict" {
+				s.uncertainPaths[path] = true
+			}
+			c.diagnostic(ImpactDiagnostic{Code: d.Code, Severity: "warning", Side: s.side, Pointer: d.Pointer, Message: d.Message}, d.Code != "path_item_method_conflict")
+		}
+		for _, method := range schemamodel.PathItemOperations(chain) {
+			if !c.visit() {
+				break
+			}
+			op := c.pathOperation(s, paths, path, chain, method)
+			if op == nil {
+				continue
+			}
+			c.operationSources(s, op, chain)
+			s.operations = append(s.operations, op)
+			s.addresses[op.method+" "+op.path] = op
+		}
+	}
+}
+
+// pathOperation builds one method's operation with its key and own field
+// sources; nil (with a diagnostic) when the method is not an object.
+func (c *impactCollector) pathOperation(s *impactSnapshot, paths map[string]any, path string, chain []schemamodel.PathItemNode, method schemamodel.PathItemOperation) *impactOperation {
+	at := "/paths/" + escape(path)
+	value := impactObject(method.Value)
+	if value == nil {
+		c.diagnostic(ImpactDiagnostic{Code: "invalid_operation", Severity: "warning", Side: s.side, Pointer: method.Pointer, Message: "Операция должна быть объектом"}, true)
+		return nil
+	}
+	op := &impactOperation{pointer: at + "/" + method.Method, sourcePointer: method.Pointer, method: strings.ToUpper(method.Method), path: path, value: value, sources: []impactSource{}}
+	op.key = impactText(value[OperationKey])
+	keyPointer := op.pointer + "/" + OperationKey
+	if op.pointer != method.Pointer {
+		op.key = impactText(impactObject(impactObject(paths[path])[PathOperationKeys])[method.Method])
+		keyPointer = at + "/" + PathOperationKeys + "/" + method.Method
+	}
+	op.keyPointer = keyPointer
+	if op.key != "" {
+		s.keyCounts[op.key]++
+	}
+	op.sources = append(op.sources, impactSource{pointer: keyPointer, direction: "unknown"})
+	for _, key := range slices.Sorted(maps.Keys(value)) {
+		if impactSharedField(key) {
+			continue
+		}
+		op.sources = append(op.sources, impactSource{pointer: method.Pointer + "/" + escape(key), direction: impactFieldDirection(key), sites: impactInheritanceSites(chain, method.Pointer)})
+	}
+	// Empty operations still have an address. This exact root source must not
+	// widen child changes into overridden inherited fields.
+	op.sources = append(op.sources, impactSource{pointer: method.Pointer, direction: "root", sites: impactInheritanceSites(chain, method.Pointer)})
+	return op
 }
 func impactEntity(kind, key, label, side string, locator ImpactLocator) ImpactEntity {
 	e := ImpactEntity{ID: impactID(kind, key), Kind: kind, Label: label}
@@ -182,48 +198,12 @@ func (c *impactCollector) operationSources(s *impactSnapshot, op *impactOperatio
 	// An operation parameter wins over a same-name path parameter. More local
 	// Path Items win over referenced Path Items, matching the editor resolver.
 	parameters := map[string]bool{}
-	addParameters := func(value any, pointer string) {
-		list, _ := value.([]any)
-		for i, item := range list {
-			if !c.visit() {
-				return
-			}
-			at := pointer + "/" + strconv.Itoa(i)
-			resolved := impactResolveObject(s.root, impactObject(item))
-			name, in := impactText(resolved["name"]), impactText(resolved["in"])
-			identity := name + "\x00" + in
-			if name == "" || in == "" {
-				identity = at
-			}
-			if parameters[identity] {
-				continue
-			}
-			parameters[identity] = true
-			op.sources = append(op.sources, impactSource{pointer: at, direction: "request", sites: impactInheritanceSites(chain, at)})
-		}
-	}
-	addParameters(op.value["parameters"], op.sourcePointer+"/parameters")
+	c.addParameterSources(s, op, chain, parameters, op.value["parameters"], op.sourcePointer+"/parameters")
 	for _, node := range chain {
-		addParameters(node.Value["parameters"], node.Pointer+"/parameters")
+		c.addParameterSources(s, op, chain, parameters, node.Value["parameters"], node.Pointer+"/parameters")
 	}
 	for _, field := range []string{"security", "servers"} {
-		pointer := "/" + field
-		value, ok := op.value[field]
-		if ok {
-			pointer = op.sourcePointer + "/" + field
-		} else {
-			if field == "servers" {
-				for _, node := range chain {
-					if local, found := node.Value[field]; found {
-						value, ok, pointer = local, true, node.Pointer+"/"+field
-						break
-					}
-				}
-			}
-			if !ok {
-				value, ok = s.root[field]
-			}
-		}
+		value, pointer, ok := impactInheritedField(s, op, chain, field)
 		if !ok {
 			continue
 		}
@@ -232,28 +212,79 @@ func (c *impactCollector) operationSources(s *impactSnapshot, op *impactOperatio
 			direction = "request"
 		}
 		op.sources = append(op.sources, impactSource{pointer: pointer, direction: direction, sites: impactInheritanceSites(chain, pointer)})
-		if field == "security" {
-			requirements, _ := value.([]any)
-			for i, requirement := range requirements {
-				if !c.visit() {
-					return
-				}
-				for _, name := range slices.Sorted(maps.Keys(impactObject(requirement))) {
-					if !c.visit() {
-						return
-					}
-					target := "/components/securitySchemes/" + escape(name)
-					site := pointer + "/" + strconv.Itoa(i) + "/" + escape(name)
-					op.sources = append(op.sources, impactSource{pointer: target, direction: "request", sites: append([]ImpactReferenceSite{{Pointer: site, TargetPointer: target, Kind: "security"}}, impactInheritanceSites(chain, pointer)...)})
-					if _, found := impactLookup(s.root, target); !found {
-						c.diagnostic(ImpactDiagnostic{Code: "missing_security_scheme", Severity: "warning", Side: s.side, Pointer: site, Message: "Схема безопасности не найдена"}, true)
-					}
-				}
+		if field == "security" && !c.addSecuritySources(s, op, chain, value, pointer) {
+			return
+		}
+	}
+	c.addReferenceSources(op)
+}
+
+// addParameterSources adds one parameter list, skipping identities a more
+// local list already supplied. Running out of visits ends only this list.
+func (c *impactCollector) addParameterSources(s *impactSnapshot, op *impactOperation, chain []schemamodel.PathItemNode, parameters map[string]bool, value any, pointer string) {
+	list, _ := value.([]any)
+	for i, item := range list {
+		if !c.visit() {
+			return
+		}
+		at := pointer + "/" + strconv.Itoa(i)
+		resolved := impactResolveObject(s.root, impactObject(item))
+		name, in := impactText(resolved["name"]), impactText(resolved["in"])
+		identity := name + "\x00" + in
+		if name == "" || in == "" {
+			identity = at
+		}
+		if parameters[identity] {
+			continue
+		}
+		parameters[identity] = true
+		op.sources = append(op.sources, impactSource{pointer: at, direction: "request", sites: impactInheritanceSites(chain, at)})
+	}
+}
+
+// impactInheritedField finds the effective security or servers value: the
+// operation's own, then (servers only) the nearest Path Item's, then the root's.
+func impactInheritedField(s *impactSnapshot, op *impactOperation, chain []schemamodel.PathItemNode, field string) (any, string, bool) {
+	if value, ok := op.value[field]; ok {
+		return value, op.sourcePointer + "/" + field, true
+	}
+	if field == "servers" {
+		for _, node := range chain {
+			if local, found := node.Value[field]; found {
+				return local, node.Pointer + "/" + field, true
 			}
 		}
 	}
-	// A changed Path Item link affects only methods/common fields actually
-	// inherited through it. Fully overridden local methods do not depend on it.
+	value, ok := s.root[field]
+	return value, "/" + field, ok
+}
+
+// addSecuritySources adds each referenced security scheme; false means the
+// visit budget ran out.
+func (c *impactCollector) addSecuritySources(s *impactSnapshot, op *impactOperation, chain []schemamodel.PathItemNode, value any, pointer string) bool {
+	requirements, _ := value.([]any)
+	for i, requirement := range requirements {
+		if !c.visit() {
+			return false
+		}
+		for _, name := range slices.Sorted(maps.Keys(impactObject(requirement))) {
+			if !c.visit() {
+				return false
+			}
+			target := "/components/securitySchemes/" + escape(name)
+			site := pointer + "/" + strconv.Itoa(i) + "/" + escape(name)
+			op.sources = append(op.sources, impactSource{pointer: target, direction: "request", sites: append([]ImpactReferenceSite{{Pointer: site, TargetPointer: target, Kind: "security"}}, impactInheritanceSites(chain, pointer)...)})
+			if _, found := impactLookup(s.root, target); !found {
+				c.diagnostic(ImpactDiagnostic{Code: "missing_security_scheme", Severity: "warning", Side: s.side, Pointer: site, Message: "Схема безопасности не найдена"}, true)
+			}
+		}
+	}
+	return true
+}
+
+// A changed Path Item link affects only methods/common fields actually
+// inherited through it. Fully overridden local methods do not depend on it.
+func (c *impactCollector) addReferenceSources(op *impactOperation) {
 	referenceSources := map[string]bool{}
 	for _, source := range slices.Clone(op.sources) {
 		for i, site := range source.sites {
@@ -275,7 +306,6 @@ func (c *impactCollector) operationSources(s *impactSnapshot, op *impactOperatio
 			op.sources = append(op.sources, impactSource{pointer: site.Pointer, direction: direction, sites: slices.Clone(source.sites[i+1:])})
 		}
 	}
-
 }
 func impactResolveObject(root map[string]any, m map[string]any) map[string]any {
 	seen := map[string]bool{}
@@ -438,122 +468,161 @@ type impactPath struct {
 	sites   []ImpactReferenceSite
 }
 
+// impactWalk is propagate's breadth-first frontier: each pointer is kept with
+// the shortest reference-site chain that reached it.
+type impactWalk struct {
+	queue        []impactPath
+	bestDistance map[string]int
+}
+
+func (w *impactWalk) enqueue(pointer string, sites []ImpactReferenceSite) {
+	if distance, seen := w.bestDistance[pointer]; seen && distance <= len(sites) {
+		return
+	}
+	w.bestDistance[pointer] = len(sites)
+	w.queue = append(w.queue, impactPath{pointer: pointer, sites: sites})
+}
+
+// Each propagation step below returns false once the visit budget runs out,
+// which ends the whole walk.
 func (c *impactCollector) propagate(change ImpactChange, s *impactSnapshot) {
 	if (change.Kind == "added" && s.side == "before") || (change.Kind == "removed" && s.side == "after") {
 		return
 	}
-	queue := []impactPath{{pointer: change.Pointer, sites: []ImpactReferenceSite{}}}
-	bestDistance := map[string]int{change.Pointer: 0}
-	for head := 0; head < len(queue); head++ {
+	walk := &impactWalk{queue: []impactPath{{pointer: change.Pointer, sites: []ImpactReferenceSite{}}}, bestDistance: map[string]int{change.Pointer: 0}}
+	for head := 0; head < len(walk.queue); head++ {
 		if !c.visit() {
 			return
 		}
-		current := queue[head]
-		if len(current.sites) > bestDistance[current.pointer] {
+		current := walk.queue[head]
+		if len(current.sites) > walk.bestDistance[current.pointer] {
 			continue
 		}
-		for _, node := range s.nodes {
-			if !c.visit() {
-				return
-			}
-			if node.operationPointer != "" || !impactOverlap(node.pointer, current.pointer) {
-				continue
-			}
-			c.affect(node.entity, ImpactEvidence{ChangeID: change.ID, Side: s.side, Direction: "unknown", ReferenceSites: current.sites, Explanation: "Изменение затрагивает определение " + node.entity.Label})
-		}
-		for _, op := range s.operations {
-			for _, source := range op.sources {
-				if !c.visit() {
-					return
-				}
-				matches := impactOverlap(source.pointer, current.pointer)
-				direction := source.direction
-				if direction == "root" {
-					matches = impactAncestor(current.pointer, source.pointer)
-					direction = "unknown"
-				}
-				if !matches {
-					continue
-				}
-				sites := append(slices.Clone(current.sites), source.sites...)
-				locator := ImpactLocator{Pointer: op.pointer, OperationKey: op.key, Method: op.method, Path: op.path}
-				if s.keyCounts[op.key] > 1 {
-					locator.OperationKey = ""
-				}
-				if op.sourcePointer != op.pointer {
-					locator.SourcePointer = op.sourcePointer
-				}
-				entity := impactEntity("operation", "", op.method+" "+op.path, s.side, locator)
-				entity.ID = op.id
-				c.affect(entity, ImpactEvidence{ChangeID: change.ID, Side: s.side, Direction: direction, ReferenceSites: sites, Explanation: "Операция использует изменённую часть контракта"})
-				for _, node := range s.nodes {
-					if !c.visit() {
-						return
-					}
-					if node.operationPointer != op.pointer {
-						continue
-					}
-					kind := "resource_membership"
-					if node.entity.Kind == "state_transition" {
-						kind = "state_binding"
-					}
-					withUsage := append(slices.Clone(sites), ImpactReferenceSite{Pointer: node.pointer, TargetPointer: op.pointer, Kind: kind})
-					c.affect(node.entity, ImpactEvidence{ChangeID: change.ID, Side: s.side, Direction: direction, ReferenceSites: withUsage, Explanation: "Использует затронутую операцию " + op.method + " " + op.path})
-				}
-			}
-		}
-
-		for _, contract := range s.contracts {
-			op := contract.operation
-			for _, source := range op.sources {
-				if !c.visit() {
-					return
-				}
-				direction := source.direction
-				matches := impactOverlap(source.pointer, current.pointer)
-				if direction == "root" {
-					matches = impactAncestor(current.pointer, source.pointer)
-					direction = "unknown"
-				}
-				if !matches {
-					continue
-				}
-				sites := append(slices.Clone(current.sites), source.sites...)
-				c.affect(contract.entity, ImpactEvidence{ChangeID: change.ID, Side: s.side, Direction: direction, ReferenceSites: sites, Explanation: "Контрактный узел использует изменённую часть контракта; требуется проверка"})
-				// Preserve the changed method/subtree while crossing Path Item aliases.
-				// Enqueuing the entire path would resurrect overridden sibling methods.
-				mapped := current.pointer
-				if impactAncestor(op.sourcePointer, current.pointer) {
-					mapped = op.pointer + strings.TrimPrefix(current.pointer, op.sourcePointer)
-				} else if len(source.sites) > 0 {
-					mapped = op.pointer
-				}
-
-				if distance, seen := bestDistance[mapped]; !seen || len(sites) < distance {
-					bestDistance[mapped] = len(sites)
-					queue = append(queue, impactPath{pointer: mapped, sites: sites})
-				}
-			}
-		}
-		for _, ref := range s.refs {
-			if !c.visit() {
-				return
-			}
-			// Effective method/parameter sources already resolve Path Item inheritance.
-			// Following the whole Path Item here would resurrect overridden siblings.
-			if !ref.Supported || ref.ObjectKind == "path" || !impactOverlap(ref.TargetPointer, current.pointer) {
-				continue
-			}
-			pointer := impactParent(ref.Pointer)
-
-			sites := append(slices.Clone(current.sites), ImpactReferenceSite{Pointer: ref.Pointer, TargetPointer: ref.TargetPointer, Kind: ref.Kind})
-			if distance, seen := bestDistance[pointer]; seen && distance <= len(sites) {
-				continue
-			}
-			bestDistance[pointer] = len(sites)
-			queue = append(queue, impactPath{pointer: pointer, sites: sites})
+		if !c.propagateToDefinitions(change, s, current) ||
+			!c.propagateToOperations(change, s, current) ||
+			!c.propagateThroughContracts(change, s, current, walk) ||
+			!c.propagateThroughRefs(s, current, walk) {
+			return
 		}
 	}
+}
+
+func (c *impactCollector) propagateToDefinitions(change ImpactChange, s *impactSnapshot, current impactPath) bool {
+	for _, node := range s.nodes {
+		if !c.visit() {
+			return false
+		}
+		if node.operationPointer != "" || !impactOverlap(node.pointer, current.pointer) {
+			continue
+		}
+		c.affect(node.entity, ImpactEvidence{ChangeID: change.ID, Side: s.side, Direction: "unknown", ReferenceSites: current.sites, Explanation: "Изменение затрагивает определение " + node.entity.Label})
+	}
+	return true
+}
+
+// impactSourceMatch decides whether a changed pointer reaches a source. The
+// operation root source matches only changes inside it, never its ancestors.
+func impactSourceMatch(source impactSource, changed string) (direction string, matches bool) {
+	if source.direction == "root" {
+		return "unknown", impactAncestor(changed, source.pointer)
+	}
+	return source.direction, impactOverlap(source.pointer, changed)
+}
+
+func (c *impactCollector) propagateToOperations(change ImpactChange, s *impactSnapshot, current impactPath) bool {
+	for _, op := range s.operations {
+		for _, source := range op.sources {
+			if !c.visit() {
+				return false
+			}
+			direction, matches := impactSourceMatch(source, current.pointer)
+			if !matches {
+				continue
+			}
+			sites := append(slices.Clone(current.sites), source.sites...)
+			locator := ImpactLocator{Pointer: op.pointer, OperationKey: op.key, Method: op.method, Path: op.path}
+			if s.keyCounts[op.key] > 1 {
+				locator.OperationKey = ""
+			}
+			if op.sourcePointer != op.pointer {
+				locator.SourcePointer = op.sourcePointer
+			}
+			entity := impactEntity("operation", "", op.method+" "+op.path, s.side, locator)
+			entity.ID = op.id
+			c.affect(entity, ImpactEvidence{ChangeID: change.ID, Side: s.side, Direction: direction, ReferenceSites: sites, Explanation: "Операция использует изменённую часть контракта"})
+			if !c.propagateToOperationUsers(change, s, op, direction, sites) {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+// propagateToOperationUsers marks resources and state transitions bound to an
+// affected operation.
+func (c *impactCollector) propagateToOperationUsers(change ImpactChange, s *impactSnapshot, op *impactOperation, direction string, sites []ImpactReferenceSite) bool {
+	for _, node := range s.nodes {
+		if !c.visit() {
+			return false
+		}
+		if node.operationPointer != op.pointer {
+			continue
+		}
+		kind := "resource_membership"
+		if node.entity.Kind == "state_transition" {
+			kind = "state_binding"
+		}
+		withUsage := append(slices.Clone(sites), ImpactReferenceSite{Pointer: node.pointer, TargetPointer: op.pointer, Kind: kind})
+		c.affect(node.entity, ImpactEvidence{ChangeID: change.ID, Side: s.side, Direction: direction, ReferenceSites: withUsage, Explanation: "Использует затронутую операцию " + op.method + " " + op.path})
+	}
+	return true
+}
+
+func (c *impactCollector) propagateThroughContracts(change ImpactChange, s *impactSnapshot, current impactPath, walk *impactWalk) bool {
+	for _, contract := range s.contracts {
+		op := contract.operation
+		for _, source := range op.sources {
+			if !c.visit() {
+				return false
+			}
+			direction, matches := impactSourceMatch(source, current.pointer)
+			if !matches {
+				continue
+			}
+			sites := append(slices.Clone(current.sites), source.sites...)
+			c.affect(contract.entity, ImpactEvidence{ChangeID: change.ID, Side: s.side, Direction: direction, ReferenceSites: sites, Explanation: "Контрактный узел использует изменённую часть контракта; требуется проверка"})
+			walk.enqueue(impactAliasPointer(op, source, current.pointer), sites)
+		}
+	}
+	return true
+}
+
+// Preserve the changed method/subtree while crossing Path Item aliases.
+// Enqueuing the entire path would resurrect overridden sibling methods.
+func impactAliasPointer(op *impactOperation, source impactSource, changed string) string {
+	if impactAncestor(op.sourcePointer, changed) {
+		return op.pointer + strings.TrimPrefix(changed, op.sourcePointer)
+	}
+	if len(source.sites) > 0 {
+		return op.pointer
+	}
+	return changed
+}
+
+func (c *impactCollector) propagateThroughRefs(s *impactSnapshot, current impactPath, walk *impactWalk) bool {
+	for _, ref := range s.refs {
+		if !c.visit() {
+			return false
+		}
+		// Effective method/parameter sources already resolve Path Item inheritance.
+		// Following the whole Path Item here would resurrect overridden siblings.
+		if !ref.Supported || ref.ObjectKind == "path" || !impactOverlap(ref.TargetPointer, current.pointer) {
+			continue
+		}
+		sites := append(slices.Clone(current.sites), ImpactReferenceSite{Pointer: ref.Pointer, TargetPointer: ref.TargetPointer, Kind: ref.Kind})
+		walk.enqueue(impactParent(ref.Pointer), sites)
+	}
+	return true
 }
 
 func (c *impactCollector) hydrateLocators(s *impactSnapshot) {
@@ -628,47 +697,70 @@ func (c *impactCollector) contractPathSources(s *impactSnapshot, pointers []stri
 			label = "Webhook " + label
 		}
 		entity := impactEntity("contract_node", pointer, label, s.side, ImpactLocator{Pointer: pointer})
-		present := false
-		for _, node := range s.nodes {
-			if !c.visit() {
-				return
-			}
-			if node.entity.ID == entity.ID {
-				present = true
-				break
-			}
+		if !c.addContractNode(s, entity, pointer) {
+			return
 		}
-		if !present {
-			s.nodes = append(s.nodes, impactNode{entity: entity, pointer: pointer})
-		}
-		for _, method := range schemamodel.PathItemOperations(chain) {
-			if !c.visit() {
-				return
-			}
-			object := impactObject(method.Value)
-			if object == nil {
-				continue
-			}
-			op := &impactOperation{pointer: pointer + "/" + method.Method, sourcePointer: method.Pointer, value: object, sources: []impactSource{}}
-			for _, key := range slices.Sorted(maps.Keys(object)) {
-				if !c.visit() {
-					return
-				}
-				if key == "parameters" || key == "security" || key == "servers" {
-					continue
-				}
-				direction := "unknown"
-				if key == "requestBody" {
-					direction = "request"
-				}
-				if key == "responses" {
-					direction = "response"
-				}
-				op.sources = append(op.sources, impactSource{pointer: method.Pointer + "/" + escape(key), direction: direction, sites: impactInheritanceSites(chain, method.Pointer)})
-			}
-			op.sources = append(op.sources, impactSource{pointer: method.Pointer, direction: "root", sites: impactInheritanceSites(chain, method.Pointer)})
-			c.operationSources(s, op, chain)
-			s.contracts = append(s.contracts, impactContractMethod{operation: op, entity: entity})
+		if !c.addContractMethods(s, entity, pointer, chain) {
+			return
 		}
 	}
+}
+
+// addContractNode adds the Path Item's node once; false means the visit
+// budget ran out.
+func (c *impactCollector) addContractNode(s *impactSnapshot, entity ImpactEntity, pointer string) bool {
+	for _, node := range s.nodes {
+		if !c.visit() {
+			return false
+		}
+		if node.entity.ID == entity.ID {
+			return true
+		}
+	}
+	s.nodes = append(s.nodes, impactNode{entity: entity, pointer: pointer})
+	return true
+}
+
+// addContractMethods records each effective method of a contract Path Item
+// as a source set of the contract node; false means the visit budget ran out.
+func (c *impactCollector) addContractMethods(s *impactSnapshot, entity ImpactEntity, pointer string, chain []schemamodel.PathItemNode) bool {
+	for _, method := range schemamodel.PathItemOperations(chain) {
+		if !c.visit() {
+			return false
+		}
+		object := impactObject(method.Value)
+		if object == nil {
+			continue
+		}
+		op := &impactOperation{pointer: pointer + "/" + method.Method, sourcePointer: method.Pointer, value: object, sources: []impactSource{}}
+		for _, key := range slices.Sorted(maps.Keys(object)) {
+			if !c.visit() {
+				return false
+			}
+			if impactSharedField(key) {
+				continue
+			}
+			op.sources = append(op.sources, impactSource{pointer: method.Pointer + "/" + escape(key), direction: impactFieldDirection(key), sites: impactInheritanceSites(chain, method.Pointer)})
+		}
+		op.sources = append(op.sources, impactSource{pointer: method.Pointer, direction: "root", sites: impactInheritanceSites(chain, method.Pointer)})
+		c.operationSources(s, op, chain)
+		s.contracts = append(s.contracts, impactContractMethod{operation: op, entity: entity})
+	}
+	return true
+}
+
+// impactSharedField names the operation fields operationSources resolves
+// itself, because they may be inherited from the Path Item or the root.
+func impactSharedField(key string) bool {
+	return key == "parameters" || key == "security" || key == "servers"
+}
+
+func impactFieldDirection(key string) string {
+	switch key {
+	case "requestBody":
+		return "request"
+	case "responses":
+		return "response"
+	}
+	return "unknown"
 }

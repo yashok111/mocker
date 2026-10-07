@@ -9,6 +9,7 @@ import type {
 } from "@/api/generated/schemas";
 import { resolveBackendDiagramScope } from "@/api/generated/backend-projects/backend-projects";
 import { focusWorkspaceRegion } from "./BackendWorkspaceNavigation";
+import { observationRequestGate } from "./backendObservationReads";
 export type SavedObservedOverlay = {
   jobId: string;
   resultVersion: number;
@@ -46,12 +47,18 @@ export function BackendObservationSelect({
   const context = useObservationScope();
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  const generation = useRef(0);
+  // The same request gate BackendObservations uses: a new selection or an
+  // unmount invalidates an in-flight resolve, so a late reply never sets
+  // the scope. The gate object lives for the component's whole life, so
+  // the cleanup closes over it instead of reading the ref there (a bare
+  // counter in the ref tripped react-hooks/exhaustive-deps).
+  const gate = useRef(observationRequestGate());
   useEffect(() => {
-    generation.current++;
+    const requests = gate.current;
+    requests.begin();
     setBusy(false);
     return () => {
-      generation.current++;
+      requests.begin();
     };
   }, [projectId, input]);
   return (
@@ -59,19 +66,19 @@ export function BackendObservationSelect({
       <Button
         disabled={disabled || busy || !context}
         onClick={async () => {
-          const token = ++generation.current;
+          const token = gate.current.begin();
           setBusy(true);
           try {
             const r = await resolveBackendDiagramScope(projectId, structuredClone(input));
-            if (token !== generation.current) return;
+            if (!gate.current.current(token)) return;
             if (r.status !== 200 || r.data.targetHash !== diagram.targetHash || r.data.truncated)
               throw new Error("Точная область недоступна");
             context?.setScope(r.data);
             focusWorkspaceRegion('[data-testid="backend-observations"] h2');
           } catch {
-            if (token === generation.current) setError("Не удалось прочитать точную область");
+            if (gate.current.current(token)) setError("Не удалось прочитать точную область");
           } finally {
-            if (token === generation.current) setBusy(false);
+            if (gate.current.current(token)) setBusy(false);
           }
         }}
       >

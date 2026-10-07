@@ -54,9 +54,41 @@ func SuggestTests(ctx context.Context, revision Revision, coverage Coverage) (Te
 	if coverage.RevisionID != revision.ID {
 		return out, fmt.Errorf("%w: покрытие относится к другой ревизии", ErrInvalid)
 	}
-	if _, err := PrepareRun(revision, "suggestions", "", "ui", nil); err != nil {
+	if _, err := PrepareRun(ctx, revision, "suggestions", "", "ui", nil); err != nil {
 		return out, err
 	}
+	pending, ordered := uncoveredTestTargets(coverage)
+	if len(pending) == 0 {
+		return out, nil
+	}
+	s := newSuggestionSearch(ctx, revision, &out, pending, ordered)
+	// Start with a complete input and single-variable changes, so unrelated
+	// conditions cannot consume the entire Cartesian-product budget first.
+	if s.singleChanges() {
+		s.combinations(0)
+	}
+	if err := ctx.Err(); err != nil {
+		return out, err
+	}
+	out.Truncated = out.Truncated || s.limited
+	for _, target := range ordered {
+		if !pending[target] {
+			continue
+		}
+		code, reason := "no_input_found", "Не удалось подобрать начальные переменные. Проверьте порядок и совместимость условий. Переменную из настроек нельзя удалить переопределением запуска."
+		if s.dynamic {
+			code, reason = "response_dependent", "Подбор остановился на условии, зависящем от ответа HTTP. Настройте ответ мока или извлечение переменной и повторите проверку."
+		}
+		if out.Truncated {
+			code, reason = "search_limit", "Достигнут предел подбора. Набор для этой ветки не найден; это не означает, что ветка недостижима."
+		}
+		out.Unresolved = append(out.Unresolved, UnresolvedTestTarget{target, code, reason})
+	}
+	return out, nil
+}
+
+// uncoveredTestTargets lists the never-hit paths once each, in coverage order.
+func uncoveredTestTargets(coverage Coverage) (map[TestTarget]bool, []TestTarget) {
 	pending := map[TestTarget]bool{}
 	var ordered []TestTarget
 	for _, p := range coverage.Paths {
@@ -68,9 +100,27 @@ func SuggestTests(ctx context.Context, revision Revision, coverage Coverage) (Te
 			}
 		}
 	}
-	if len(pending) == 0 {
-		return out, nil
-	}
+	return pending, ordered
+}
+
+// suggestionSearch is the bounded candidate walk behind SuggestTests: one
+// mutable candidate, the signatures already tried and the targets still open.
+type suggestionSearch struct {
+	ctx              context.Context
+	revision         Revision
+	out              *TestSuggestions
+	pending          map[TestTarget]bool
+	ordered          []TestTarget
+	defaults         ExecutionValues
+	names            []string
+	choices          [][]suggestionValue
+	candidate        ExecutionValues
+	seen             map[string]bool
+	bytesUsed        int
+	dynamic, limited bool
+}
+
+func newSuggestionSearch(ctx context.Context, revision Revision, out *TestSuggestions, pending map[TestTarget]bool, ordered []TestTarget) *suggestionSearch {
 	defaults := ExecutionValues{}
 	if revision.Document.Execution != nil {
 		maps.Copy(defaults, revision.Document.Execution.Variables)
@@ -80,117 +130,111 @@ func SuggestTests(ctx context.Context, revision Revision, coverage Coverage) (Te
 	for i, name := range names {
 		setSuggestionValue(candidate, name, choices[i][0])
 	}
-	seen := map[string]bool{}
-	bytesUsed := 0
-	dynamic, limited := false, false
-	check := func() bool {
-		if ctx.Err() != nil || len(pending) == 0 {
-			return false
-		}
-		// Key only contains condition inputs; saved defaults remain unchanged.
-		signature := make([]int, len(names))
-		for i, name := range names {
-			value, exists := candidate[name]
-			signature[i] = slices.Index(choices[i], suggestionValue{value, exists})
-		}
-		raw, _ := jsonx.Marshal(signature)
-		key := string(raw)
-		if seen[key] {
-			return true
-		}
-		if out.CheckedCandidates >= maxSuggestionCandidates {
-			out.Truncated = true
-			return false
-		}
-		seen[key] = true
-		out.CheckedCandidates++
-		if validateRunVariables(candidate) != nil {
-			return true
-		}
-		trace, reason := predictTestFlow(ctx, revision.Document, candidate)
-		dynamic = dynamic || errors.Is(reason, errSuggestionResponse)
-		limited = limited || errors.Is(reason, errSuggestionLimit)
-		if reason != nil && !errors.Is(reason, errSuggestionResponse) {
-			return true
-		}
-		targets := []TestTarget{}
-		for _, target := range ordered {
-			if pending[target] && trace[target] {
-				targets = append(targets, target)
-			}
-		}
-		if len(targets) == 0 {
-			return true
-		}
-		variables := ExecutionValues{}
-		for name, value := range candidate {
-			if previous, ok := defaults[name]; !ok || previous != value {
-				variables[name] = value
-			}
-		}
-		c := SuggestedTest{ID: fmt.Sprintf("branch-test-%d", len(out.Cases)+1), Name: suggestedTestName(revision.Document, targets), Variables: variables, Targets: targets}
-		raw, _ = jsonx.Marshal(c)
-		if len(out.Cases) >= maxSuggestedTests || bytesUsed+len(raw) > maxSuggestionBytes {
-			out.Truncated = true
-			return false
-		}
-		bytesUsed += len(raw)
-		out.Cases = append(out.Cases, c)
-		for _, target := range targets {
-			delete(pending, target)
-		}
-		return len(pending) > 0
-	}
-	// Start with a complete input and single-variable changes, so unrelated
-	// conditions cannot consume the entire Cartesian-product budget first.
-	keepGoing := check()
-	for i, name := range names {
+	return &suggestionSearch{ctx: ctx, revision: revision, out: out, pending: pending, ordered: ordered, defaults: defaults, names: names, choices: choices, candidate: candidate, seen: map[string]bool{}}
+}
+
+// singleChanges tries the default candidate, then every single-variable change;
+// false means the search must stop.
+func (s *suggestionSearch) singleChanges() bool {
+	keepGoing := s.check()
+	for i, name := range s.names {
 		if !keepGoing {
 			break
 		}
-		for _, value := range choices[i][1:] {
-			setSuggestionValue(candidate, name, value)
-			if !check() {
+		for _, value := range s.choices[i][1:] {
+			setSuggestionValue(s.candidate, name, value)
+			if !s.check() {
 				keepGoing = false
 				break
 			}
 		}
-		setSuggestionValue(candidate, name, choices[i][0])
+		setSuggestionValue(s.candidate, name, s.choices[i][0])
 	}
-	var combinations func(int) bool
-	combinations = func(index int) bool {
-		if index == len(names) {
-			return check()
+	return keepGoing
+}
+
+func (s *suggestionSearch) combinations(index int) bool {
+	if index == len(s.names) {
+		return s.check()
+	}
+	for _, value := range s.choices[index] {
+		setSuggestionValue(s.candidate, s.names[index], value)
+		if !s.combinations(index + 1) {
+			return false
 		}
-		for _, value := range choices[index] {
-			setSuggestionValue(candidate, names[index], value)
-			if !combinations(index + 1) {
-				return false
-			}
-		}
+	}
+	return true
+}
+
+// check evaluates the current candidate once; false means the search must stop.
+func (s *suggestionSearch) check() bool {
+	if s.ctx.Err() != nil || len(s.pending) == 0 {
+		return false
+	}
+	key := s.signature()
+	if s.seen[key] {
 		return true
 	}
-	if keepGoing {
-		combinations(0)
+	if s.out.CheckedCandidates >= maxSuggestionCandidates {
+		s.out.Truncated = true
+		return false
 	}
-	if err := ctx.Err(); err != nil {
-		return out, err
+	s.seen[key] = true
+	s.out.CheckedCandidates++
+	if validateRunVariables(s.candidate) != nil {
+		return true
 	}
-	out.Truncated = out.Truncated || limited
-	for _, target := range ordered {
-		if !pending[target] {
-			continue
-		}
-		code, reason := "no_input_found", "Не удалось подобрать начальные переменные. Проверьте порядок и совместимость условий. Переменную из настроек нельзя удалить переопределением запуска."
-		if dynamic {
-			code, reason = "response_dependent", "Подбор остановился на условии, зависящем от ответа HTTP. Настройте ответ мока или извлечение переменной и повторите проверку."
-		}
-		if out.Truncated {
-			code, reason = "search_limit", "Достигнут предел подбора. Набор для этой ветки не найден; это не означает, что ветка недостижима."
-		}
-		out.Unresolved = append(out.Unresolved, UnresolvedTestTarget{target, code, reason})
+	trace, reason := predictTestFlow(s.ctx, s.revision.Document, s.candidate)
+	s.dynamic = s.dynamic || errors.Is(reason, errSuggestionResponse)
+	s.limited = s.limited || errors.Is(reason, errSuggestionLimit)
+	if reason != nil && !errors.Is(reason, errSuggestionResponse) {
+		return true
 	}
-	return out, nil
+	targets := []TestTarget{}
+	for _, target := range s.ordered {
+		if s.pending[target] && trace[target] {
+			targets = append(targets, target)
+		}
+	}
+	if len(targets) == 0 {
+		return true
+	}
+	return s.addCase(targets)
+}
+
+// signature keys a candidate by its condition inputs only; saved defaults
+// remain unchanged.
+func (s *suggestionSearch) signature() string {
+	signature := make([]int, len(s.names))
+	for i, name := range s.names {
+		value, exists := s.candidate[name]
+		signature[i] = slices.Index(s.choices[i], suggestionValue{value, exists})
+	}
+	raw, _ := jsonx.Marshal(signature)
+	return string(raw)
+}
+
+// addCase records the candidate as a suggested test for targets; false means
+// either every target is covered or a case/byte limit stopped the search.
+func (s *suggestionSearch) addCase(targets []TestTarget) bool {
+	variables := ExecutionValues{}
+	for name, value := range s.candidate {
+		if previous, ok := s.defaults[name]; !ok || previous != value {
+			variables[name] = value
+		}
+	}
+	c := SuggestedTest{ID: fmt.Sprintf("branch-test-%d", len(s.out.Cases)+1), Name: suggestedTestName(s.revision.Document, targets), Variables: variables, Targets: targets}
+	raw, _ := jsonx.Marshal(c)
+	if len(s.out.Cases) >= maxSuggestedTests || s.bytesUsed+len(raw) > maxSuggestionBytes {
+		s.out.Truncated = true
+		return false
+	}
+	s.bytesUsed += len(raw)
+	s.out.Cases = append(s.out.Cases, c)
+	for _, target := range targets {
+		delete(s.pending, target)
+	}
+	return len(s.pending) > 0
 }
 
 type suggestionValue struct {
@@ -338,72 +382,83 @@ func (p *testFlowPrediction) skip(start, end int) error {
 	return nil
 }
 func (p *testFlowPrediction) fragment(f Fragment) error {
-	start, end := p.positions[f.FromMessageID], p.positions[f.ToMessageID]
 	switch f.Kind {
 	case "alt":
-		choice := -1
-		for i, b := range f.Branches {
-			if b.Execution.Otherwise {
-				choice = i
-				break
+		return p.altFragment(f)
+	case "opt", "loop":
+		return p.repeatedFragment(f)
+	}
+	return nil
+}
+
+func (p *testFlowPrediction) altFragment(f Fragment) error {
+	choice := -1
+	for i, b := range f.Branches {
+		if b.Execution.Otherwise {
+			choice = i
+			break
+		}
+		match, err := p.condition(b.Execution.Condition)
+		if err != nil {
+			return err
+		}
+		if match {
+			choice = i
+			break
+		}
+	}
+	// The runner records decisions for all branches before visiting their bodies.
+	if p.decisions+len(f.Branches) > maxRunDecisions {
+		return errSuggestionLimit
+	}
+	p.decisions += len(f.Branches)
+	if choice >= 0 {
+		p.targets[TestTarget{f.ID, f.Branches[choice].ID, "taken"}] = true
+	}
+	for i, b := range f.Branches {
+		first, last := p.positions[b.FromMessageID], p.positions[b.ToMessageID]
+		if i == choice {
+			if err := p.scope(first, last, flowScope{f.ID, b.ID}); err != nil {
+				return err
 			}
-			match, err := p.condition(b.Execution.Condition)
+		} else if err := p.skip(first, last); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// repeatedFragment predicts opt (one pass) and loop (its iteration count).
+func (p *testFlowPrediction) repeatedFragment(f Fragment) error {
+	start, end := p.positions[f.FromMessageID], p.positions[f.ToMessageID]
+	iterations := 1
+	if f.Kind == "loop" {
+		iterations = f.Execution.Iterations
+	}
+	for range iterations {
+		if err := p.ctx.Err(); err != nil {
+			return err
+		}
+		match := true
+		if f.Execution.Condition != nil {
+			var err error
+			match, err = p.condition(f.Execution.Condition)
 			if err != nil {
 				return err
 			}
-			if match {
-				choice = i
-				break
-			}
 		}
-		// The runner records decisions for all branches before visiting their bodies.
-		if p.decisions+len(f.Branches) > maxRunDecisions {
-			return errSuggestionLimit
+		outcome := "taken"
+		if !match {
+			outcome = "skipped"
 		}
-		p.decisions += len(f.Branches)
-		if choice >= 0 {
-			p.targets[TestTarget{f.ID, f.Branches[choice].ID, "taken"}] = true
+		if err := p.record(f.ID, "", outcome); err != nil {
+			return err
 		}
-		for i, b := range f.Branches {
-			first, last := p.positions[b.FromMessageID], p.positions[b.ToMessageID]
-			if i == choice {
-				if err := p.scope(first, last, flowScope{f.ID, b.ID}); err != nil {
-					return err
-				}
-			} else if err := p.skip(first, last); err != nil {
-				return err
-			}
+		if !match {
+			return p.skip(start, end)
 		}
-	case "opt", "loop":
-		iterations := 1
-		if f.Kind == "loop" {
-			iterations = f.Execution.Iterations
-		}
-		for range iterations {
-			if err := p.ctx.Err(); err != nil {
-				return err
-			}
-			match := true
-			if f.Execution.Condition != nil {
-				var err error
-				match, err = p.condition(f.Execution.Condition)
-				if err != nil {
-					return err
-				}
-			}
-			outcome := "taken"
-			if !match {
-				outcome = "skipped"
-			}
-			if err := p.record(f.ID, "", outcome); err != nil {
-				return err
-			}
-			if !match {
-				return p.skip(start, end)
-			}
-			if err := p.scope(start, end, flowScope{f.ID, ""}); err != nil {
-				return err
-			}
+		if err := p.scope(start, end, flowScope{f.ID, ""}); err != nil {
+			return err
 		}
 	}
 	return nil
@@ -418,41 +473,13 @@ func suggestedTestName(document Document, targets []TestTarget) string {
 		if fragment.ID != target.FragmentID {
 			continue
 		}
-		label := strings.Join(strings.Fields(fragment.Label), " ")
-		if label == "" {
-			kind := "условие"
-			if fragment.Kind == "loop" {
-				kind = "цикл"
-			}
-			if fragment.Kind == "alt" {
-				kind = "выбор"
-			}
-			label = fmt.Sprintf("%s %d", kind, i+1)
-		}
+		label := suggestionFragmentLabel(i, fragment)
 		if fragment.Kind == "alt" {
 			for _, branch := range fragment.Branches {
-				if branch.ID != target.BranchID {
-					continue
+				if branch.ID == target.BranchID {
+					name = suggestionBranchName(branch, label)
+					break
 				}
-				name = strings.Join(strings.Fields(branch.Label), " ")
-				if name == "" || strings.EqualFold(name, "иначе") || strings.EqualFold(name, "else") || strings.EqualFold(name, "otherwise") {
-					if branch.Execution.Otherwise {
-						name = "Иначе: " + label
-					} else {
-						condition := branch.Execution.Condition
-						switch condition.Operator {
-						case "equals":
-							name = fmt.Sprintf("%s = «%s»", condition.Variable, *condition.Value)
-						case "not_equals":
-							name = fmt.Sprintf("%s ≠ «%s»", condition.Variable, *condition.Value)
-						case "exists":
-							name = "Есть переменная " + condition.Variable
-						case "not_exists":
-							name = "Нет переменной " + condition.Variable
-						}
-					}
-				}
-				break
 			}
 		} else {
 			action := "Выполнить"
@@ -474,4 +501,45 @@ func suggestedTestName(document Document, targets []TestTarget) string {
 		name = string(runes[:limit-1]) + "…"
 	}
 	return name + suffix
+}
+
+// suggestionFragmentLabel falls back to the fragment's kind and position when
+// the author left the label blank.
+func suggestionFragmentLabel(i int, fragment Fragment) string {
+	label := strings.Join(strings.Fields(fragment.Label), " ")
+	if label != "" {
+		return label
+	}
+	kind := "условие"
+	if fragment.Kind == "loop" {
+		kind = "цикл"
+	}
+	if fragment.Kind == "alt" {
+		kind = "выбор"
+	}
+	return fmt.Sprintf("%s %d", kind, i+1)
+}
+
+// suggestionBranchName keeps an authored branch label unless it is blank or a
+// generic "else", which says nothing about the condition being exercised.
+func suggestionBranchName(branch FragmentBranch, label string) string {
+	name := strings.Join(strings.Fields(branch.Label), " ")
+	if name != "" && !strings.EqualFold(name, "иначе") && !strings.EqualFold(name, "else") && !strings.EqualFold(name, "otherwise") {
+		return name
+	}
+	if branch.Execution.Otherwise {
+		return "Иначе: " + label
+	}
+	condition := branch.Execution.Condition
+	switch condition.Operator {
+	case "equals":
+		name = fmt.Sprintf("%s = «%s»", condition.Variable, *condition.Value)
+	case "not_equals":
+		name = fmt.Sprintf("%s ≠ «%s»", condition.Variable, *condition.Value)
+	case "exists":
+		name = "Есть переменная " + condition.Variable
+	case "not_exists":
+		name = "Нет переменной " + condition.Variable
+	}
+	return name
 }

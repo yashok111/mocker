@@ -72,7 +72,7 @@ func TestPortableRejectsForgedSemanticClosureAtomically(t *testing.T) {
 			tc.mutate(&model)
 			records, err := modelRecords(model, export.Manifest.OriginInstallationID)
 			check(t, err)
-			chunks, descriptors, err := splitRecords(records)
+			chunks, descriptors, err := splitRecords(t.Context(), records)
 			check(t, err)
 			manifest := export.Manifest
 			manifest.Chunks = descriptors
