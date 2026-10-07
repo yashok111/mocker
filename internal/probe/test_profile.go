@@ -30,41 +30,23 @@ type TestTarget struct {
 	IsolationID   string   `json:"isolationId"`
 }
 
+// Validate checks the definition in a fixed order — identity, credential
+// reference, origin, allowlist, then the origin against the allowlist — and
+// the first failure wins; the helpers below are those steps, in that order.
 func (t TestTarget) Validate() error {
 	if t.ID == "" || strings.TrimSpace(t.ID) != t.ID || t.Version < 1 || !p.ValidID(t.IsolationID) {
 		return errors.New("invalid target identity/version")
 	}
-	if t.CredentialRef == "" {
-		return errors.New("credential reference required")
+	if err := validateCredentialRef(t.CredentialRef); err != nil {
+		return err
 	}
-	for i, c := range t.CredentialRef {
-		if !(c == '_' || c >= 'A' && c <= 'Z' || c >= 'a' && c <= 'z' || i > 0 && c >= '0' && c <= '9') {
-			return errors.New("invalid credential reference")
-		}
+	u, err := parseTargetOrigin(t.Origin)
+	if err != nil {
+		return err
 	}
-	u, err := url.Parse(t.Origin)
-	if err != nil || u.Host == "" || u.Hostname() == "" || u.User != nil || u.Path != "" || u.RawPath != "" || u.RawQuery != "" || u.ForceQuery || u.Fragment != "" || strings.Contains(t.Origin, "#") || u.Opaque != "" || (u.Scheme != "http" && u.Scheme != "https") {
-		return errors.New("target must be an exact HTTP(S) origin")
-	}
-	if strings.HasSuffix(u.Host, ":") {
-		return errors.New("invalid target port")
-	}
-	if port := u.Port(); port != "" {
-		n, e := strconv.Atoi(port)
-		if e != nil || n < 1 || n > 65535 {
-			return errors.New("invalid target port")
-		}
-	}
-	if len(t.AllowedIPs) == 0 {
-		return errors.New("target requires explicit IP allowlist")
-	}
-	seen := map[netip.Addr]bool{}
-	for _, raw := range t.AllowedIPs {
-		ip, e := netip.ParseAddr(raw)
-		if e != nil || ip.Zone() != "" || (!ip.IsLoopback() && !ip.IsPrivate()) || seen[ip.Unmap()] {
-			return errors.New("allowlist requires unique private or loopback IP literals")
-		}
-		seen[ip.Unmap()] = true
+	seen, err := allowlistSet(t.AllowedIPs)
+	if err != nil {
+		return err
 	}
 	ip, e := netip.ParseAddr(u.Hostname())
 	if e == nil && (ip.Zone() != "" || !seen[ip.Unmap()]) {
@@ -74,6 +56,57 @@ func (t TestTarget) Validate() error {
 		return errors.New("HTTP requires a loopback literal origin")
 	}
 	return nil
+}
+
+// validateCredentialRef accepts an environment-variable-shaped name: the
+// reference is resolved by name at startup, so anything else is a typo.
+func validateCredentialRef(ref string) error {
+	if ref == "" {
+		return errors.New("credential reference required")
+	}
+	for i, c := range ref {
+		if c != '_' && (c < 'A' || c > 'Z') && (c < 'a' || c > 'z') && (i == 0 || c < '0' || c > '9') {
+			return errors.New("invalid credential reference")
+		}
+	}
+	return nil
+}
+
+// parseTargetOrigin admits a bare scheme://host[:port] and nothing more: any
+// path, query, fragment or userinfo would be silently dropped or reinterpreted
+// once a request path is appended to the origin.
+func parseTargetOrigin(origin string) (*url.URL, error) {
+	u, err := url.Parse(origin)
+	if err != nil || u.Host == "" || u.Hostname() == "" || u.User != nil || u.Path != "" || u.RawPath != "" || u.RawQuery != "" || u.ForceQuery || u.Fragment != "" || strings.Contains(origin, "#") || u.Opaque != "" || (u.Scheme != "http" && u.Scheme != "https") {
+		return nil, errors.New("target must be an exact HTTP(S) origin")
+	}
+	if strings.HasSuffix(u.Host, ":") {
+		return nil, errors.New("invalid target port")
+	}
+	if port := u.Port(); port != "" {
+		n, e := strconv.Atoi(port)
+		if e != nil || n < 1 || n > 65535 {
+			return nil, errors.New("invalid target port")
+		}
+	}
+	return u, nil
+}
+
+// allowlistSet returns the allowlist as a set of unmapped addresses, refusing
+// an empty list, a zoned or public address, and a duplicate.
+func allowlistSet(allowed []string) (map[netip.Addr]bool, error) {
+	if len(allowed) == 0 {
+		return nil, errors.New("target requires explicit IP allowlist")
+	}
+	seen := map[netip.Addr]bool{}
+	for _, raw := range allowed {
+		ip, e := netip.ParseAddr(raw)
+		if e != nil || ip.Zone() != "" || (!ip.IsLoopback() && !ip.IsPrivate()) || seen[ip.Unmap()] {
+			return nil, errors.New("allowlist requires unique private or loopback IP literals")
+		}
+		seen[ip.Unmap()] = true
+	}
+	return seen, nil
 }
 
 type testProfileClient struct {
@@ -216,7 +249,7 @@ func (c *testProfileClient) request[T any](ctx context.Context, endpoint p.Endpo
 	if err != nil {
 		return out, fmt.Errorf("replay transport failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }() // read-only: the body is fully read below
 	out.HTTPStatus = resp.StatusCode
 	body, err := io.ReadAll(io.LimitReader(resp.Body, int64(limit)+1))
 	if len(body) > limit {
@@ -228,9 +261,9 @@ func (c *testProfileClient) request[T any](ctx context.Context, endpoint p.Endpo
 		return out, errors.New("replay response incomplete")
 	}
 	out.Complete = true
-	success := resp.StatusCode == 200
+	success := resp.StatusCode == http.StatusOK
 	if endpoint == p.OrderEndpoint {
-		success = resp.StatusCode == 201 || resp.StatusCode == 503
+		success = resp.StatusCode == http.StatusCreated || resp.StatusCode == http.StatusServiceUnavailable
 	}
 	if success {
 		var payload T
@@ -245,7 +278,7 @@ func (c *testProfileClient) request[T any](ctx context.Context, endpoint p.Endpo
 		return out, errors.New("invalid replay error response")
 	}
 	expected := map[string]int{"invalid_request": 400, "unauthorized": 401, "forbidden": 403, "not_found": 404, "identity_mismatch": 409, "epoch_mismatch": 409, "idempotency_conflict": 409, "run_conflict": 409, "in_progress": 409, "journal_limit": 413, "internal_error": 500}
-	if resp.StatusCode != expected[problem.Code] && !(problem.Code == "invalid_request" && resp.StatusCode == 413) {
+	if resp.StatusCode != expected[problem.Code] && (problem.Code != "invalid_request" || resp.StatusCode != http.StatusRequestEntityTooLarge) {
 		return out, errors.New("replay error status mismatch")
 	}
 	out.ProtocolError = &problem
