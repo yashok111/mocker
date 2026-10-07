@@ -11,6 +11,14 @@ import (
 
 // occupyReaders holds every reader-pool connection but `spare` for the rest
 // of the test: the state max(4, NumCPU) concurrent requests leave behind.
+
+// readerWaitBudget bounds a call that must not need (another) reader. A
+// deadlock waits forever, so any finite bound still catches it; the bound only
+// has to exceed the call's honest cost under -race with the rest of the suite
+// running. The sibling backendportable tests timed out at 500 ms and 2 s in a
+// full make test (2026-10-07), so every reader-pool test uses this bound.
+const readerWaitBudget = 20 * time.Second
+
 func occupyReaders(t *testing.T, db *store.DB, spare int) {
 	t.Helper()
 	for range db.R.Stats().MaxOpenConnections - spare {
@@ -28,7 +36,7 @@ func occupyReaders(t *testing.T, db *store.DB, spare int) {
 func TestMaterializationPreviewNeedsOneReader(t *testing.T) {
 	s, pid, in := fixture(t)
 	occupyReaders(t, s.db, 1)
-	ctx, cancel := context.WithTimeout(t.Context(), 500*time.Millisecond)
+	ctx, cancel := context.WithTimeout(t.Context(), readerWaitBudget)
 	defer cancel()
 	if _, err := s.Preview(ctx, pid, in); err != nil {
 		t.Fatalf("preview needed a second reader: %v", err)
@@ -41,7 +49,7 @@ func TestMaterializationApplyNeedsNoReader(t *testing.T) {
 	s, pid, in := fixture(t)
 	request := applyInput(t, s, pid, in, "apply")
 	occupyReaders(t, s.db, 0)
-	ctx, cancel := context.WithTimeout(t.Context(), 500*time.Millisecond)
+	ctx, cancel := context.WithTimeout(t.Context(), readerWaitBudget)
 	defer cancel()
 	if _, err := s.Apply(ctx, pid, request); err != nil {
 		t.Fatalf("apply waited on a reader while holding the writer: %v", err)

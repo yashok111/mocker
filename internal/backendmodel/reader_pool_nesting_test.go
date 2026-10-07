@@ -11,6 +11,14 @@ import (
 
 // holdReaders takes every reader-pool connection but `spare` for the rest of
 // the test: the state pool-width concurrent requests leave behind.
+
+// readerWaitBudget bounds a call that must not need (another) reader. A
+// deadlock waits forever, so any finite bound still catches it; the bound only
+// has to exceed the call's honest cost under -race with the rest of the suite
+// running. The sibling backendportable tests timed out at 500 ms and 2 s in a
+// full make test (2026-10-07), so every reader-pool test uses this bound.
+const readerWaitBudget = 20 * time.Second
+
 func holdReaders(t *testing.T, db *store.DB, spare int) {
 	t.Helper()
 	for range db.R.Stats().MaxOpenConnections - spare {
@@ -42,7 +50,7 @@ func TestChangePreviewArtifactPinNeedsOneReader(t *testing.T) {
 		t.Fatalf("fixture preview: %v", err)
 	}
 	holdReaders(t, r.db, 1)
-	ctx, cancel := context.WithTimeout(t.Context(), time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), readerWaitBudget)
 	defer cancel()
 	if _, err = r.PreviewChangeProposal(ctx, base.Project.ID, d.Proposal.ID, in); err != nil {
 		t.Fatalf("preview needed a second reader: %v", err)
@@ -74,7 +82,7 @@ func TestFrozenPreviewArtifactPinNeedsOneReader(t *testing.T) {
 		t.Fatal(err)
 	}
 	holdReaders(t, r.db, 1)
-	ctx, cancel := context.WithTimeout(t.Context(), time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), readerWaitBudget)
 	defer cancel()
 	if _, err = r.ResolveFrozenChangePreview(ctx, base.Project.ID, frozen); err != nil {
 		t.Fatalf("frozen replay needed a second reader: %v", err)

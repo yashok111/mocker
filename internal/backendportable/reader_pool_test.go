@@ -10,6 +10,13 @@ import (
 	"github.com/yashok111/mocker/internal/store"
 )
 
+// readerWaitBudget bounds a call that must not need a reader. A deadlock
+// waits forever, so any finite bound still catches it; the bound only has to
+// exceed the call's honest cost. 500 ms and 2 s did not under -race with the
+// suite's other packages running (make test, 2026-10-07: both timed out on a
+// call that finishes alone in ~100 ms), so the bound is generous.
+const readerWaitBudget = 20 * time.Second
+
 // holdAllReaders takes every reader-pool connection for the rest of the test:
 // the state left by pool-width requests that each wait for the writer.
 func holdAllReaders(t *testing.T, db *store.DB) {
@@ -27,7 +34,7 @@ func holdAllReaders(t *testing.T, db *store.DB) {
 func TestPortableExportNeedsNoReader(t *testing.T) {
 	f := makeRoundtripFixture(t)
 	holdAllReaders(t, f.service.db)
-	ctx, cancel := context.WithTimeout(t.Context(), 500*time.Millisecond)
+	ctx, cancel := context.WithTimeout(t.Context(), readerWaitBudget)
 	defer cancel()
 	if _, err := f.service.Export(ctx, ExportInput{Selection: f.selection, IdempotencyKey: "export"}); err != nil {
 		t.Fatalf("export waited on a reader while holding the writer: %v", err)
@@ -44,7 +51,7 @@ func TestPortableMappedPreviewAndCommitNeedNoReader(t *testing.T) {
 	f := makeRoundtripFixture(t)
 	_, session := stageRoundtrip(t, f)
 	holdAllReaders(t, f.service.db)
-	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), readerWaitBudget)
 	defer cancel()
 	preview, err := f.service.Preview(ctx, session.ID, PreviewInput{ExpectedVersion: session.Version, ArtifactMappings: []bm.PortableArtifactMapping{{Origin: f.pin, Local: f.pin}}, IdempotencyKey: "mapped-preview"})
 	if err != nil {
