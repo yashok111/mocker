@@ -87,6 +87,11 @@ func canonicalArtifactContextV3(c ArtifactContextV3) (ArtifactContextV3, error) 
 	}
 	c.Groups = slices.Clone(c.Groups)
 	seen := map[ArtifactNamespace]bool{}
+	// ValidateArtifactVector dedupes API sources inside one group only; the
+	// contract is one binding per source UUID across the FULL vector, so a local
+	// and a foreign group binding the same source gave it two manual
+	// associations (review 2026-10-06, F97).
+	sources := map[string]bool{}
 	pins, bindings := 0, 0
 	for i, g := range c.Groups {
 		if err := g.Namespace.Validate(); err != nil {
@@ -109,6 +114,12 @@ func canonicalArtifactContextV3(c ArtifactContextV3) (ArtifactContextV3, error) 
 		}
 		if err := ValidateArtifactVector(g.Pins, g.APIBindings, g.EditorBindings); err != nil {
 			return c, err
+		}
+		for _, b := range g.APIBindings {
+			if sources[b.SourceNodeID] {
+				return c, invalid("apiBinding", "Duplicate API source binding across namespaces")
+			}
+			sources[b.SourceNodeID] = true
 		}
 		g.Pins = canonicalAPIPins(g.Pins)
 		g.APIBindings = slices.Clone(g.APIBindings)

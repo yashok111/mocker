@@ -70,6 +70,12 @@ func (s *Service) previewTx(ctx context.Context, tx *sql.Tx, pid string, input P
 			if t.ExpectedVersion != 0 || strings.TrimSpace(t.Name) == "" {
 				return nil, invalid("New target requires a name and expectedVersion=0")
 			}
+			// apidesign.CreateTx refuses a trimmed name over 200 runes, so such a
+			// preview was applicable and its Apply always failed (review
+			// 2026-10-06, F184).
+			if t.Kind == "api_design" && len([]rune(strings.TrimSpace(t.Name))) > 200 {
+				return nil, invalid("New API target name must have 1 to 200 characters")
+			}
 		} else {
 			pin, err := t.Pin.LocalPin(installation)
 			if err != nil {

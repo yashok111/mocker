@@ -6,6 +6,7 @@ import (
 	"encoding/json/v2"
 	"errors"
 	"github.com/yashok111/mocker/internal/backendblob"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -101,6 +102,10 @@ func (s *Service) Apply(ctx context.Context, pid string, in ApplyInput) (*Receip
 				continue
 			}
 			document := *t.Commands[0].Scenario
+			// The struct copy shares Contracts with preview.Input; rewriting it in
+			// place changed the stored Preview after candidateHash bound it
+			// (review 2026-10-06, F130).
+			document.Contracts = slices.Clone(document.Contracts)
 			for i := range document.Contracts {
 				c := &document.Contracts[i]
 				d := apis[c.Source.DesignID]

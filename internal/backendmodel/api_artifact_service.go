@@ -97,6 +97,26 @@ func fatalArtifactError(ctx context.Context, err error) error {
 	}
 	return nil
 }
+
+// fatalArtifactReadError classifies an owner READ (snapshot, head, digest).
+// Only an absent owner revision and owner validation faults are business
+// states ("broken", "unavailable"); any other error is a storage fault and is
+// returned so it surfaces as a 5xx. A busy or I/O error used to become a 200
+// "broken" item or a blocking preview diagnostic, inviting the agent to remove
+// a healthy pin (review 2026-10-06, F94). In-memory selector resolution keeps
+// fatalArtifactError: its errors are all document facts.
+func fatalArtifactReadError(ctx context.Context, err error) error {
+	if fatal := fatalArtifactError(ctx, err); fatal != nil || err == nil || ownerDigestGone(err) {
+		return fatal
+	}
+	if _, ok := errors.AsType[*FaultError](err); ok {
+		return nil
+	}
+	if _, ok := errors.AsType[*apidesign.InvalidError](err); ok {
+		return nil
+	}
+	return err
+}
 func resolveAPIArtifact(ctx context.Context, snapshot *apidesign.ArtifactSnapshot, selector APIArtifactSelector) (*apidesign.ArtifactObject, error) {
 	return apidesign.ResolveArtifactObject(ctx, snapshot, apidesign.ArtifactSelector{ObjectKey: selector.ObjectKey, JSONPointer: selector.JSONPointer})
 }
@@ -191,14 +211,14 @@ func (s *APIArtifactService) projectAPIArtifactBindings(ctx context.Context, pid
 		indices := groups[key]
 		b := out.Items[indices[0]].Binding
 		snap, readErr := s.snapshot(ctx, b.Ref.ArtifactID, b.Ref.RevisionID)
-		if err := fatalArtifactError(ctx, readErr); err != nil {
+		if err := fatalArtifactReadError(ctx, readErr); err != nil {
 			return nil, err
 		}
 		if _, seen := heads[b.Ref.ArtifactID]; !seen {
 			heads[b.Ref.ArtifactID] = 0
 			if effective == nil && s.artifacts != nil {
 				head, e := s.artifacts.ArtifactHead(ctx, apiArtifactID(b.Ref.ArtifactID))
-				if err := fatalArtifactError(ctx, e); err != nil {
+				if err := fatalArtifactReadError(ctx, e); err != nil {
 					return nil, err
 				}
 				if e == nil {

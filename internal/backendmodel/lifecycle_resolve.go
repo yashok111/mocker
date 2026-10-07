@@ -83,10 +83,17 @@ func resolveLifecycleGaps(ctx context.Context, resolver *diagramArtifactResolver
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		if ref.Kind == "namespaced_artifact" && ref.NamespacedLocator != nil && ref.NamespacedLocator.Namespace.Scope == "foreign" {
+		// A retained namespaced ref that left the target follows the same
+		// historical rule as any other missing ref (review 2026-10-06, F108).
+		if ref.Kind == "namespaced_artifact" && ref.NamespacedLocator != nil {
 			if _, err := namespacedDiagramGroup(g, ref); err != nil {
+				if retained() == nil {
+					return nil
+				}
 				return err
 			}
+		}
+		if ref.Kind == "namespaced_artifact" && ref.NamespacedLocator != nil && ref.NamespacedLocator.Namespace.Scope == "foreign" {
 			gaps = append(gaps, diagramGap(subject, "foreign_artifact_unresolved", "Foreign artifact role remains unverified"))
 			return nil
 		}

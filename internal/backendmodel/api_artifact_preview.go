@@ -80,6 +80,9 @@ func (s *APIArtifactService) prepare(ctx context.Context, pid string, in Preview
 	if !isArtifactSourceSchema(state.Revision.SchemaVersion) || len(state.Sources) == 0 || len(state.Revision.SourceSnapshotIDs) == 0 || len(p.Repositories) == 0 {
 		return nil, &FaultError{Status: 422, Code: "backend_api_pins_unsupported", Message: "API pins require an imported source4, source5 or source6 baseline"}
 	}
+	if state.ArtifactContextV3 != nil {
+		return nil, legacyPinsOnV3("backend_api_pins_unsupported")
+	}
 	frozen := state.APIArtifactContext
 	if state.ArtifactContext != nil && state.ArtifactContext.DocumentVersion == EditorArtifactDocumentVersion {
 		if err := tx.Rollback(); err != nil {
@@ -275,7 +278,7 @@ func (s *APIArtifactService) prepareV1APIPins(ctx context.Context, tx *sql.Tx, p
 				}
 				digest, e := s.artifacts.ArtifactDigestTx(ctx, tx, apiArtifactID(id), apiArtifactID(oldPin.RevisionID))
 				tx.Rollback()
-				if err := fatalArtifactError(ctx, e); err != nil {
+				if err := fatalArtifactReadError(ctx, e); err != nil {
 					return nil, err
 				}
 				if e != nil || digest != oldPin.ContentHash {
@@ -299,7 +302,7 @@ func (s *APIArtifactService) prepareV1APIPins(ctx context.Context, tx *sql.Tx, p
 		var oldErr, newErr error
 		if hadOld {
 			old, oldErr = s.snapshot(ctx, id, oldPin.RevisionID)
-			if err := fatalArtifactError(ctx, oldErr); err != nil {
+			if err := fatalArtifactReadError(ctx, oldErr); err != nil {
 				return nil, err
 			}
 			if oldErr == nil && old.ContentHash != oldPin.ContentHash {
@@ -337,7 +340,7 @@ func (s *APIArtifactService) prepareV1APIPins(ctx context.Context, tx *sql.Tx, p
 		} else {
 			newSnapshot, newErr = s.snapshot(ctx, id, c.RevisionID)
 		}
-		if err := fatalArtifactError(ctx, newErr); err != nil {
+		if err := fatalArtifactReadError(ctx, newErr); err != nil {
 			return nil, err
 		}
 		if newErr != nil {
