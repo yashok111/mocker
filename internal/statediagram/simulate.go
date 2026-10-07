@@ -29,7 +29,9 @@ type Simulation struct {
 
 // Simulate replays a bounded trace from an immutable proposal. No session or
 // entity store is involved, so retries and parallel callers cannot interact.
-func Simulate(d Diagram, root map[string]any, dataJSON string, transitions []string) (Simulation, error) {
+// ctx reaches each transition's guard evaluation, so a cancelled request stops
+// the replay.
+func Simulate(ctx context.Context, d Diagram, root map[string]any, dataJSON string, transitions []string) (Simulation, error) {
 	out := Simulation{StateID: d.InitialStateID, DataJSON: dataJSON, Steps: []Step{}, Diagnostics: Validate(d, root)}
 	if HasErrors(out.Diagnostics) {
 		return out, nil
@@ -56,7 +58,7 @@ func Simulate(d Diagram, root map[string]any, dataJSON string, transitions []str
 		tr, found := byID[id]
 		step := Step{TransitionID: id, From: out.StateID, To: out.StateID, DataJSON: out.DataJSON}
 
-		selection, selectErr := advance(context.Background(), out.StateID, tr, found, states, data, d.Entity)
+		selection, selectErr := advance(ctx, out.StateID, tr, found, states, data, d.Entity)
 		if selectErr != nil {
 			if conflict, ok := errors.AsType[*TransitionError](selectErr); ok {
 				step.Reason = conflict.Message

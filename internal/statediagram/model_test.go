@@ -12,14 +12,14 @@ func orderDiagram() Diagram {
 func TestSimulationPrecisionAndGuard(t *testing.T) {
 	t.Parallel()
 	d := orderDiagram()
-	got, err := Simulate(d, nil, `{"balance":9007199254740993}`, []string{"pay", "pay"})
+	got, err := Simulate(t.Context(), d, nil, `{"balance":9007199254740993}`, []string{"pay", "pay"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if got.StateID != "paid" || len(got.Steps) != 2 || !got.Steps[0].Accepted || got.Steps[1].Accepted || !strings.Contains(got.DataJSON, "9007199254740993") {
 		t.Fatalf("%+v", got)
 	}
-	blocked, err := Simulate(d, nil, `{"balance":9007199254740992}`, []string{"pay"})
+	blocked, err := Simulate(t.Context(), d, nil, `{"balance":9007199254740992}`, []string{"pay"})
 	if err != nil || blocked.StateID != "created" || blocked.Steps[0].Accepted {
 		t.Fatalf("%+v %v", blocked, err)
 	}
@@ -33,7 +33,7 @@ func TestMissingDiffersFromNullAndEscapedPointer(t *testing.T) {
 		data     string
 		accepted bool
 	}{{`{"a/b":{"~value":null}}`, true}, {`{"a/b":{}}`, false}} {
-		got, err := Simulate(d, nil, tt.data, []string{"pay"})
+		got, err := Simulate(t.Context(), d, nil, tt.data, []string{"pay"})
 		if err != nil || got.Steps[0].Accepted != tt.accepted {
 			t.Fatalf("%+v %v", got, err)
 		}
@@ -86,7 +86,7 @@ func TestStateGuardCompositeEqualityKeepsExactKindsAndNumbers(t *testing.T) {
 		{`{"payload":{"items":[null,"9007199254740993",true],"n":10e999999999999999999999998}}`, false},
 		{`{"payload":{"items":[null,9007199254740993,true]}}`, false},
 	} {
-		got, err := Simulate(d, nil, tt.data, []string{"pay"})
+		got, err := Simulate(t.Context(), d, nil, tt.data, []string{"pay"})
 		if err != nil || len(got.Steps) != 1 || got.Steps[0].Accepted != tt.accepted {
 			t.Fatalf("data=%s simulation=%+v err=%v", tt.data, got, err)
 		}
@@ -114,13 +114,13 @@ func TestInvalidModelsAndBoundedSimulation(t *testing.T) {
 		})
 	}
 	d := orderDiagram()
-	if _, err := Simulate(d, nil, "{}", make([]string, 101)); err == nil {
+	if _, err := Simulate(t.Context(), d, nil, "{}", make([]string, 101)); err == nil {
 		t.Fatal("step cap missing")
 	}
-	if _, err := Simulate(d, nil, "[]", nil); err == nil {
+	if _, err := Simulate(t.Context(), d, nil, "[]", nil); err == nil {
 		t.Fatal("non-object seed accepted")
 	}
-	result, err := Simulate(d, nil, "{}", nil)
+	result, err := Simulate(t.Context(), d, nil, "{}", nil)
 	if err != nil || result.Steps == nil {
 		t.Fatalf("empty trace %+v %v", result, err)
 	}
