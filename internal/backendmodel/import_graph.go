@@ -733,8 +733,12 @@ func (r *Repo) CommitImport(ctx context.Context, pid, sid string, in CommitImpor
 			return err
 		}
 		*result = ImportCommitResult{Project: *p, Revision: rev, SessionID: sid}
-		response, _ := json.Marshal(result)
-		return r.checkStaging(ctx, tx, pid, int64(len(response)))
+		// No staging check here: the commit closes the session, so it only
+		// frees staging, and the revision it wrote is bounded by the revision
+		// limits. The check used to run after every revision row was written
+		// and rolled a finished commit back once the project's lifetime sum
+		// crossed the cap (review 2026-10-06, F83/F172).
+		return nil
 	})
 	if err != nil {
 		return nil, err
