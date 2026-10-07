@@ -33,6 +33,7 @@ type diagnosticEvaluator struct {
 	out        map[string][]backendmodel.Edge
 	selected   map[ObjectAddress]bool
 	scopeKey   string
+	index      diagnosticIndex
 }
 
 func EvaluateDiagnostics(ctx context.Context, g *backendmodel.EffectiveGraphSnapshot, in DiagnosticInput) (*DiagnosticReport, error) {
@@ -124,6 +125,12 @@ func EvaluateDiagnostics(ctx context.Context, g *backendmodel.EffectiveGraphSnap
 		return 0
 	})
 	for _, edge := range edges {
+		// Scope first, as the node loop does: ticking an edge the rules then
+		// skip let out-of-scope edges exhaust the visit budget of a narrow
+		// service scope and mark it incomplete (review 2026-10-06, F147).
+		if !d.includes("edge", edge.ID, edge.Kind) {
+			continue
+		}
 		if !d.tick() {
 			break
 		}
@@ -149,7 +156,7 @@ func EvaluateDiagnostics(ctx context.Context, g *backendmodel.EffectiveGraphSnap
 }
 func (d *diagnosticEvaluator) includes(typ, id, kind string) bool {
 	a := ObjectAddress{RecordType: typ, ID: id}
-	return (d.selected == nil || d.selected[a]) && scopeObjectSelected(d.input.Scope, a, kind) && (d.input.Scope.Service == "" || objectInService(d.graph, a, d.input.Scope.Service))
+	return (d.selected == nil || d.selected[a]) && scopeObjectSelected(d.input.Scope, a, kind) && (d.input.Scope.Service == "" || d.objectInScopeService(a, d.input.Scope.Service))
 }
 func (d *diagnosticEvaluator) tick() bool {
 	d.visits++

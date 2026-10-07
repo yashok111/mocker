@@ -17,8 +17,8 @@ func sourceClaimComparisonSide(graph *SourceGraphSnapshot, a ProviderAssertion, 
 		}
 		out.Currentness.Fields = slices.DeleteFunc(slices.Clone(current.Fields), func(f TypedFieldCurrentness) bool { return f.Property != *property })
 	}
-	for _, selection := range graph.Selections {
-		if selection.RecordType == a.RecordType && selection.ID == a.RecordID && (property == nil || selection.Property == *property) {
+	for _, selection := range graph.recordSelections(a.RecordType, a.RecordID) {
+		if property == nil || selection.Property == *property {
 			out.Selections = append(out.Selections, selection)
 		}
 	}

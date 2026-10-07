@@ -57,16 +57,9 @@ func (d *diagnosticEvaluator) nodeRules(n backendmodel.Node) {
 		}
 	}
 	if n.Kind == "table" {
-		used := false
-		for _, e := range d.graph.State.Edges {
-			if !d.tick() {
-				return
-			}
-			if (e.To == n.ID || (d.nodes[e.To].ParentID != nil && *d.nodes[e.To].ParentID == n.ID)) && slices.Contains([]string{"reads", "writes", "deletes"}, e.Kind) {
-				used = true
-				break
-			}
-		}
+		// One indexed membership test instead of an edge rescan charged one
+		// visit per edge (review 2026-10-06, F138).
+		used := d.accessed(n.ID)
 		status, certainty := "absent", "confirmed"
 		if used && !d.inventoryComplete() {
 			status = "unknown"
@@ -150,7 +143,9 @@ func (d *diagnosticEvaluator) loopRule(loop backendmodel.Node) {
 	if loop.ParentID == nil {
 		return
 	}
-	for _, n := range d.graph.State.Nodes {
+	// Only the loop's siblings can qualify; the rule rescanned every node of
+	// the graph per loop step (review 2026-10-06, F138).
+	for _, n := range d.childrenOf(*loop.ParentID) {
 		if !d.tick() {
 			return
 		}
@@ -202,7 +197,8 @@ func (d *diagnosticEvaluator) emitRule(n backendmodel.Node, emit backendmodel.Ed
 	if tx.Status != "known" || n.ParentID == nil {
 		return
 	}
-	for _, commit := range d.graph.State.Nodes {
+	// Only the emit step's siblings can be its commit (review 2026-10-06, F138).
+	for _, commit := range d.childrenOf(*n.ParentID) {
 		if !d.tick() {
 			return
 		}

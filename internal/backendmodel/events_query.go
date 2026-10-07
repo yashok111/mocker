@@ -136,6 +136,7 @@ type eventsProjection struct {
 	evidence      map[string]Evidence
 	truncations   map[string]bool
 	dispatchCache map[string][]EventsDispatch
+	combinedCache map[string]EventsWitness
 	relatedCache  map[string][]EventsRelatedRoute
 	emitCache     map[string]*EventsEmitContext
 	items         []eventsOrderedItem

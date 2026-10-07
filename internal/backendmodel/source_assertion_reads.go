@@ -75,11 +75,9 @@ func sourceAssertionReadItem(graph *SourceGraphSnapshot, a ProviderAssertion) (S
 	item := SourceAssertionItem{Assertion: a, Currentness: sourceReadCurrentness(graph, a), Selections: []SourceAssertionResolution{}, Conflicts: []SourceAssertionConflict{}}
 	claims := []ProviderAssertion{}
 	current := map[string]SourceClaimCurrentness{}
-	for _, claim := range graph.Assertions {
-		if claim.RecordType == a.RecordType && claim.RecordID == a.RecordID {
-			claims = append(claims, claim)
-			current[sourceAssertionKey(claim)] = sourceReadCurrentness(graph, claim)
-		}
+	for _, claim := range graph.recordClaims(a.RecordType, a.RecordID) {
+		claims = append(claims, claim)
+		current[sourceAssertionKey(claim)] = sourceReadCurrentness(graph, claim)
 	}
 	slices.SortFunc(claims, func(a, b ProviderAssertion) int { return strings.Compare(sourceAssertionKey(a), sourceAssertionKey(b)) })
 	payloads := make([]SourceAssertionPayload, 0, len(claims))
@@ -99,8 +97,8 @@ func sourceAssertionReadItem(graph *SourceGraphSnapshot, a ProviderAssertion) (S
 		if conflict == nil {
 			continue
 		}
-		for _, selection := range graph.Selections {
-			if selection.RecordType == a.RecordType && selection.ID == a.RecordID && selection.Property == selector {
+		for _, selection := range graph.recordSelections(a.RecordType, a.RecordID) {
+			if selection.Property == selector {
 				item.Selections = append(item.Selections, selection)
 				conflict.ConflictHash = selection.ConflictHash
 			}
@@ -110,10 +108,10 @@ func sourceAssertionReadItem(graph *SourceGraphSnapshot, a ProviderAssertion) (S
 	return item, nil
 }
 func sourceReadCurrentness(graph *SourceGraphSnapshot, a ProviderAssertion) SourceClaimCurrentness {
-	for _, f := range graph.Currentness {
-		if f.RecordType == a.RecordType && f.RecordID == a.RecordID && f.RepositoryID == a.Owner.RepositoryID && f.ProviderNamespace == a.Owner.ProviderNamespace && f.AssertionHash == a.AssertionHash {
-			return f
-		}
+	// An indexed lookup: this runs per claim and per selector in the claim
+	// diff, where the scan made one diff job O(claims²) (review 2026-10-06, F53).
+	if f, ok := graph.claimCurrentness(a); ok {
+		return f
 	}
 	missing := sourceCurrentness(a)
 	missing.Dependency = AssertionFreshness{Status: "stale", Reasons: []string{"currentness_missing"}}
