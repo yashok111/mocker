@@ -231,8 +231,7 @@ func (r *Repo) Import(ctx context.Context, pid string, in ImportInput) (*Version
 	return out, e
 }
 func projectQuota(ctx context.Context, q reader, pid string) error {
-	var size int64
-	e := q.QueryRowContext(ctx, `SELECT COALESCE((SELECT sum(logical_bytes) FROM backend_observation_sets WHERE project_id=?),0)+COALESCE((SELECT sum(length(CAST(document AS BLOB))) FROM backend_observation_correlations_documents WHERE project_id=?),0)+COALESCE((SELECT sum(length(CAST(document AS BLOB))) FROM backend_observation_versions_documents WHERE project_id=?),0)`, pid, pid, pid).Scan(&size)
+	size, e := projectBytes(ctx, q, pid)
 	if e != nil {
 		return e
 	}
@@ -240,6 +239,23 @@ func projectQuota(ctx context.Context, q reader, pid string) error {
 		return fault(413, "project_quota")
 	}
 	return nil
+}
+
+// projectBytes is the project's logical observation bytes: set records plus
+// every stored correlation and version document.
+//
+// Review 2026-10-06, F164: the document sums went through the _documents
+// views, whose column is a subquery that reads the payload blob and CASTs it
+// to text per row, so every Import and Correlate read and copied every stored
+// document byte of the project inside the writer. backend_payload_blobs keeps
+// byte_length, CHECKed equal to length(payload), and it precedes payload in
+// the row, so the sum is an indexed join that never touches payload pages.
+func projectBytes(ctx context.Context, q reader, pid string) (int64, error) {
+	var size int64
+	e := q.QueryRowContext(ctx, `SELECT COALESCE((SELECT sum(logical_bytes) FROM backend_observation_sets WHERE project_id=?),0)
+ +COALESCE((SELECT sum(b.byte_length) FROM backend_observation_correlations r JOIN backend_payload_blobs b ON b.key=r.payload_key WHERE r.project_id=?),0)
+ +COALESCE((SELECT sum(b.byte_length) FROM backend_observation_versions r JOIN backend_payload_blobs b ON b.key=r.payload_key WHERE r.project_id=?),0)`, pid, pid, pid).Scan(&size)
+	return size, e
 }
 func readVersion(ctx context.Context, q reader, pid, sid string, v int64) (*Version, error) {
 	if !p.ValidID(pid) || !p.ValidID(sid) || v < 1 {

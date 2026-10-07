@@ -807,6 +807,41 @@ func TestRelationalMigrationCompletenessAndSourceOnly(t *testing.T) {
 		})
 	}
 }
+
+// Review 2026-10-06, F79/F80: the source_only history check now matches
+// external keys in SQL per ancestor instead of materialising every ancestor's
+// full graph. It must still find a key the repository owned in the base and
+// must not invent one it never owned.
+func TestRelationalSourceOnlyHistoryMatchedByKey(t *testing.T) {
+	const history = "Available model history requires an exact historical target instead of source-only"
+	for _, tc := range []struct {
+		key  string
+		want bool
+	}{{"column:orders:status", true}, {"column:orders:never_existed", false}} {
+		t.Run(tc.key, func(t *testing.T) {
+			r, _ := testRepo(t)
+			first, _ := commitRelationalFixture(t, r, "postgresql", "v1")
+			p := &first.Project
+			state, err := loadSourceState(t.Context(), r.db.R, p.ID, p.CurrentRevisionID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			s, err := r.BeginImport(t.Context(), p.ID, relationalReconcileInput(t, p, primarySource(*state).RepositoryID, "postgresql", "v1", "source-only"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			cs := relationalFixture(t, p, s, "postgresql", "v1")
+			mutateRelationalFacet(t, cs, "migration:001_initial", "migration", func(m map[string]jsontext.Value) {
+				m["changes"] = jsontext.Value(`[{"operation":"create","description":"claim transient","target":{"kind":"source_only","externalKey":"` + tc.key + `","expectedKind":"column","qualifiedName":"public.orders.transient","reason":"created and dropped before import"}}]`)
+			})
+			v, _ := stageRelational(t, r, p, s, cs, "source-only")
+			got := slices.ContainsFunc(v.Diagnostics, func(d ImportDiagnostic) bool { return d.Message == history })
+			if got != tc.want {
+				t.Fatalf("history diagnostic = %v, want %v: %+v", got, tc.want, v.Diagnostics)
+			}
+		})
+	}
+}
 func TestRelationalDeletionScopeGuards(t *testing.T) {
 	for _, mode := range []string{"partial", "unverified", "provider mismatch"} {
 		t.Run(mode, func(t *testing.T) {

@@ -142,22 +142,38 @@ func (r *Repo) importMutation(ctx context.Context, scope, key string, request, r
 		return err
 	})
 }
+
+// openSessionFilter restricts a staging sum to the sessions that still hold
+// staging. Review 2026-10-06, F83/F172: the sums used to join on project_id
+// alone, so every committed and aborted session (whose rows nothing deletes)
+// and every import receipt counted forever. A project that reconciled often
+// enough crossed MaxProjectStagingBytes for good: Begin, Batch, Preview,
+// Commit and even Abort answered 413, and the transient budgets of proposals,
+// change proposals, rebase and analysis jobs (which use this sum as their
+// baseline) shrank with every old import. A closed session's rows stay
+// readable as history; they are simply no longer staging.
+const openSessionFilter = `s.project_id=? AND s.state NOT IN ('committed','aborted')`
+
+// stagingBytes is the durable staging the project's OPEN import sessions hold.
+// Command receipts are not counted: they are idempotency records retained for
+// the project's life (recovery.md: receipts survive restart), so counting them
+// made the cap a lifetime one, and an open session's begin receipt is a copy
+// of the session document that is already counted here.
 func stagingBytes(ctx context.Context, tx *sql.Tx, pid string) (int64, error) {
 	var n int64
 	err := tx.QueryRowContext(ctx, `SELECT
- (SELECT COALESCE(SUM(length(CAST(document AS BLOB))),0) FROM backend_import_sessions WHERE project_id=?) +
- (SELECT COALESCE(SUM(length(CAST(r.document AS BLOB))),0) FROM backend_import_records r JOIN backend_import_sessions s ON s.id=r.session_id WHERE s.project_id=?) +
- (SELECT COALESCE(SUM(length(CAST(b.receipt AS BLOB))+length(b.batch_id)+256),0) FROM backend_import_batches b JOIN backend_import_sessions s ON s.id=b.session_id WHERE s.project_id=?) +
- (SELECT COALESCE(SUM(length(CAST(i.external_key AS BLOB))+length(i.id)+64),0) FROM backend_import_identities i JOIN backend_import_sessions s ON s.id=i.session_id WHERE s.project_id=?) +
- (SELECT COALESCE(SUM(length(CAST(response AS BLOB))),0) FROM backend_command_receipts WHERE scope LIKE ?)`, pid, pid, pid, pid, "import:"+pid+":%").Scan(&n)
+ (SELECT COALESCE(SUM(length(CAST(s.document AS BLOB))),0) FROM backend_import_sessions s WHERE `+openSessionFilter+`) +
+ (SELECT COALESCE(SUM(length(CAST(r.document AS BLOB))),0) FROM backend_import_records r JOIN backend_import_sessions s ON s.id=r.session_id WHERE `+openSessionFilter+`) +
+ (SELECT COALESCE(SUM(length(CAST(b.receipt AS BLOB))+length(b.batch_id)+256),0) FROM backend_import_batches b JOIN backend_import_sessions s ON s.id=b.session_id WHERE `+openSessionFilter+`) +
+ (SELECT COALESCE(SUM(length(CAST(i.external_key AS BLOB))+length(i.id)+64),0) FROM backend_import_identities i JOIN backend_import_sessions s ON s.id=i.session_id WHERE `+openSessionFilter+`)`, pid, pid, pid, pid).Scan(&n)
 	if err != nil {
 		return n, err
 	}
 	var extra int64
 	err = tx.QueryRowContext(ctx, `SELECT
-      (SELECT COALESCE(SUM(length(CAST(d.document AS BLOB))),0) FROM backend_import_decisions d JOIN backend_import_sessions s ON s.id=d.session_id WHERE s.project_id=?) +
-      (SELECT COALESCE(SUM(length(CAST(p.document AS BLOB))+length(CAST(p.details AS BLOB))),0) FROM backend_import_previews p JOIN backend_import_sessions s ON s.id=p.session_id WHERE s.project_id=?) +
-      (SELECT COALESCE(SUM(length(a.external_key)+length(a.source_key)+128),0) FROM backend_import_aliases a JOIN backend_import_sessions s ON s.id=a.session_id WHERE s.project_id=?)`, pid, pid, pid).Scan(&extra)
+      (SELECT COALESCE(SUM(length(CAST(d.document AS BLOB))),0) FROM backend_import_decisions d JOIN backend_import_sessions s ON s.id=d.session_id WHERE `+openSessionFilter+`) +
+      (SELECT COALESCE(SUM(length(CAST(p.document AS BLOB))+length(CAST(p.details AS BLOB))),0) FROM backend_import_previews p JOIN backend_import_sessions s ON s.id=p.session_id WHERE `+openSessionFilter+`) +
+      (SELECT COALESCE(SUM(length(a.external_key)+length(a.source_key)+128),0) FROM backend_import_aliases a JOIN backend_import_sessions s ON s.id=a.session_id WHERE `+openSessionFilter+`)`, pid, pid, pid).Scan(&extra)
 	if err != nil {
 		return 0, err
 	}
@@ -167,7 +183,7 @@ func stagingBytes(ctx context.Context, tx *sql.Tx, pid string) (int64, error) {
 	}
 	var sourceBytes int64
 	if exists != 0 {
-		err = tx.QueryRowContext(ctx, `SELECT COALESCE(SUM(length(CAST(d.document AS BLOB))+length(CAST(d.decision_key AS BLOB))+length(d.decision_id)+length(d.input_hash)+128),0) FROM backend_import_source_decisions d JOIN backend_import_sessions s ON s.id=d.session_id WHERE s.project_id=?`, pid).Scan(&sourceBytes)
+		err = tx.QueryRowContext(ctx, `SELECT COALESCE(SUM(length(CAST(d.document AS BLOB))+length(CAST(d.decision_key AS BLOB))+length(d.decision_id)+length(d.input_hash)+128),0) FROM backend_import_source_decisions d JOIN backend_import_sessions s ON s.id=d.session_id WHERE `+openSessionFilter, pid).Scan(&sourceBytes)
 	} else {
 		var version int
 		if err := tx.QueryRowContext(ctx, `PRAGMA user_version`).Scan(&version); err != nil {
@@ -254,7 +270,10 @@ func (r *Repo) BeginImport(ctx context.Context, pid string, in BeginImportInput)
 		if err != nil {
 			return err
 		}
-		return r.checkStaging(ctx, tx, pid, int64(len(b)))
+		// The row just inserted is already in the sum; reserving len(b) on top
+		// counted it twice (review 2026-10-06, F83). Its begin receipt is not
+		// staging (see stagingBytes).
+		return r.checkStaging(ctx, tx, pid, 0)
 	})
 	if err != nil {
 		return nil, err
@@ -347,6 +366,7 @@ func (r *Repo) PutImportBatch(ctx context.Context, pid, sid, bid string, in Impo
 			}
 		} else {
 			seen := map[string]bool{}
+			identities := newBatchIdentities(base)
 			result.Identities = []RecordIdentity{}
 			for _, c := range in.Commands {
 				typ, key, err := commandAddress(c)
@@ -361,7 +381,10 @@ func (r *Repo) PutImportBatch(ctx context.Context, pid, sid, bid string, in Impo
 				if err := validateCommand(c, s); err != nil {
 					return err
 				}
-				id, err := reserveIdentity(ctx, tx, s, c, typ, key, base)
+				if err := ctx.Err(); err != nil {
+					return err
+				}
+				id, err := reserveIdentity(ctx, tx, s, c, typ, key, identities)
 				if err != nil {
 					return err
 				}
@@ -370,6 +393,7 @@ func (r *Repo) PutImportBatch(ctx context.Context, pid, sid, bid string, in Impo
 					if _, err := tx.ExecContext(ctx, `DELETE FROM backend_import_decisions WHERE session_id=? AND record_type=? AND external_key=?`, sid, typ, key); err != nil {
 						return err
 					}
+					identities.unstage(typ, key)
 					_, err = tx.ExecContext(ctx, `DELETE FROM backend_import_records WHERE session_id=? AND record_type=? AND external_key=?`, sid, typ, key)
 				} else if c.Identity != nil || c.Deletion != nil {
 					b, err := json.Marshal(c)
@@ -380,6 +404,7 @@ func (r *Repo) PutImportBatch(ctx context.Context, pid, sid, bid string, in Impo
 					if err != nil {
 						return err
 					}
+					identities.stage(c, typ, key)
 				} else {
 					b, marshalErr := json.Marshal(c)
 					if marshalErr != nil {
@@ -458,11 +483,11 @@ func (r *Repo) AbortImport(ctx context.Context, pid, sid string, in AbortImportI
 		s.Version++
 		s.UpdatedAt = time.Now().UTC()
 		*result = *s
-		if err := saveSession(ctx, tx, s); err != nil {
-			return err
-		}
-		b, _ := json.Marshal(result)
-		return r.checkStaging(ctx, tx, pid, int64(len(b)))
+		// No staging check: Abort closes the session, so it only ever frees
+		// staging, and it is the documented way out of the open-session limit.
+		// It used to run checkStaging and was refused at the cap, leaving the
+		// session stuck (review 2026-10-06, F83/F172).
+		return saveSession(ctx, tx, s)
 	})
 	if err != nil {
 		return nil, err

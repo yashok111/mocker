@@ -154,7 +154,7 @@ func loadSourceBatchCommitments(ctx context.Context, q importReader, sid string)
 	return out, rows.Err()
 }
 
-func reserveComposedIdentity(ctx context.Context, tx *sql.Tx, s *ImportSession, base *SourceGraphSnapshot, typ, key string) (string, error) {
+func reserveComposedIdentity(ctx context.Context, tx *sql.Tx, s *ImportSession, pins composedPins, typ, key string) (string, error) {
 	var id string
 	err := tx.QueryRowContext(ctx, `SELECT id FROM backend_import_identities WHERE session_id=? AND record_type=? AND external_key=?`, s.ID, typ, key).Scan(&id)
 	if err == nil {
@@ -163,7 +163,7 @@ func reserveComposedIdentity(ctx context.Context, tx *sql.Tx, s *ImportSession, 
 	if !errors.Is(err, sql.ErrNoRows) {
 		return "", err
 	}
-	id = pinnedComposedIdentity(base, s, typ, key)
+	id = pins[typ+"\x00"+key]
 	// Registry reservations constrain reuse but never resolve an immutable base ref.
 	b, err := binding(ctx, tx, s, typ, key)
 	if err != nil {
@@ -187,23 +187,36 @@ func reserveComposedIdentity(ctx context.Context, tx *sql.Tx, s *ImportSession, 
 	return id, err
 }
 
-func pinnedComposedIdentity(base *SourceGraphSnapshot, s *ImportSession, typ, key string) string {
-	var id string
+// composedPins maps "type\x00externalKey" to the UUID the base pins for the
+// session's repository and provider namespace.
+type composedPins map[string]string
+
+// newComposedPins indexes the base once per batch. Review 2026-10-06, F194:
+// the pin used to be a scan of every base assertion and evidence row per
+// record command, so a 500-command batch over a 250k-row base did ~10^8
+// comparisons under the writer. The precedence is the scan's: the first
+// matching assertion, overridden for evidence by the first matching evidence
+// row.
+func newComposedPins(base *SourceGraphSnapshot, s *ImportSession) composedPins {
+	pins := composedPins{}
 	for _, a := range base.Assertions {
-		if a.RecordType == typ && a.ExternalKey == key && a.Owner.RepositoryID == s.RepositoryID && a.Owner.ProviderNamespace == s.Manifest.Provider.Namespace {
-			id = a.RecordID
-			break
+		if a.Owner.RepositoryID != s.RepositoryID || a.Owner.ProviderNamespace != s.Manifest.Provider.Namespace {
+			continue
+		}
+		address := a.RecordType + "\x00" + a.ExternalKey
+		if _, ok := pins[address]; !ok {
+			pins[address] = a.RecordID
 		}
 	}
-	if typ == "evidence" {
-		for _, e := range base.State.Evidence {
-			if e.ExternalKey == key && e.Ownership != nil && e.Ownership.RepositoryID == s.RepositoryID && e.Ownership.ProviderNamespace == s.Manifest.Provider.Namespace {
-				id = e.ID
-				break
-			}
+	evidence := map[string]bool{}
+	for _, e := range base.State.Evidence {
+		if e.Ownership == nil || e.Ownership.RepositoryID != s.RepositoryID || e.Ownership.ProviderNamespace != s.Manifest.Provider.Namespace || evidence[e.ExternalKey] {
+			continue
 		}
+		evidence[e.ExternalKey] = true
+		pins["evidence\x00"+e.ExternalKey] = e.ID
 	}
-	return id
+	return pins
 }
 
 func saveSourceDecision(ctx context.Context, tx *sql.Tx, s *ImportSession, c ImportCommand, base *SourceGraphSnapshot) (string, string, string, error) {
@@ -304,6 +317,10 @@ type composedBatch struct {
 	result     *BatchReceipt
 	seen       map[string]bool
 	identities map[string]bool
+	// decisions and pins are nil until the batch's first command that needs
+	// them, then reused for the rest of the batch.
+	decisions *batchIdentities
+	pins      composedPins
 }
 
 func putComposedCommands(
@@ -324,6 +341,9 @@ func putComposedCommands(
 	result.Identities = []RecordIdentity{}
 	result.DecisionIDs = []string{}
 	for _, command := range commands {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		if err := batch.put(ctx, command); err != nil {
 			return err
 		}
@@ -401,17 +421,30 @@ func (b *composedBatch) putRecord(ctx context.Context, c ImportCommand) error {
 		key,
 		string(doc),
 	)
+	if err == nil && table == "backend_import_decisions" && b.decisions != nil {
+		b.decisions.stage(c, typ, key)
+	}
 	return err
 }
 
 func (b *composedBatch) reserveIdentity(ctx context.Context, c ImportCommand, typ, key string) (string, error) {
 	if c.Identity == nil && c.Deletion == nil {
-		return reserveComposedIdentity(ctx, b.tx, b.session, b.base, typ, key)
+		if b.pins == nil {
+			b.pins = newComposedPins(b.base, b.session)
+		}
+		return reserveComposedIdentity(ctx, b.tx, b.session, b.pins, typ, key)
 	}
-	selected := selectedSourceIdentityState(b.base, b.session)
+	// The selected partition and the staged decisions are built once per
+	// batch; every map_identity/delete_assertion command used to rebuild the
+	// partition by a scan of every base assertion and evidence row (review
+	// 2026-10-06, F194).
+	if b.decisions == nil {
+		selected := selectedSourceIdentityState(b.base, b.session)
+		b.decisions = newBatchIdentities(&selected)
+	}
 	copySession := *b.session
 	copySession.Mode = "reconcile"
-	return reserveIdentity(ctx, b.tx, &copySession, c, typ, key, &selected)
+	return reserveIdentity(ctx, b.tx, &copySession, c, typ, key, b.decisions)
 }
 
 func (b *composedBatch) removeRecord(ctx context.Context, typ, key string) error {
@@ -431,6 +464,9 @@ func (b *composedBatch) removeRecord(ctx context.Context, typ, key string) error
 		typ,
 		key,
 	)
+	if err == nil && b.decisions != nil {
+		b.decisions.unstage(typ, key)
+	}
 	return err
 }
 

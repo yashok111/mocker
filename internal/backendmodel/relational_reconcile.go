@@ -392,29 +392,14 @@ func validateRelationalGraphRules(ctx context.Context, q importReader, s *Import
 	for _, e := range g.Evidence {
 		evidence[e.ID] = e
 	}
-	ancestors := map[string]bool{}
-	historical := map[string]*RevisionState{}
-	rid := ""
-	if s != nil {
-		rid = s.BaseRevisionID
-	}
-	for rid != "" {
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		if ancestors[rid] {
-			break
-		}
-		state, err := loadSourceState(ctx, q, s.ProjectID, rid)
-		if err != nil {
-			return err
-		}
-		ancestors[rid] = true
-		if state.Revision.ParentRevisionID == nil {
-			break
-		}
-		rid = *state.Revision.ParentRevisionID
-	}
+	// History is consulted lazily and by key. Review 2026-10-06, F79/F80: the
+	// ancestor chain was walked through loadSourceState on every preview and
+	// commit, and a historical pin or a source_only change then loaded every
+	// needed ancestor's full RevisionState (up to 256 MiB of nodes, edges and
+	// evidence each) and kept them all until return, inside the writer. Now
+	// the walk runs on first need, a pin reads its one node by primary key and
+	// source_only keys are matched in SQL (relationalHistory).
+	history := relationalHistory{ctx: ctx, q: q, s: s}
 	names := map[string]string{}
 	ordinals := map[string]string{}
 	dialects := map[string]string{}
@@ -437,7 +422,11 @@ func validateRelationalGraphRules(ctx context.Context, q importReader, s *Import
 		}
 		return ""
 	}
-	check := func(id, kind string, attrs map[string]jsontext.Value, edge bool, proofs []string) error {
+	// from is the edge's source node ("" for a node). It used to be found by a
+	// linear scan of g.Edges per facet, called once per edge: O(E^2), about
+	// 4e10 comparisons at MaxRevisionEdges, under the writer (review
+	// 2026-10-06, F79).
+	check := func(id, kind string, attrs map[string]jsontext.Value, edge bool, proofs []string, from string) error {
 		if !relationalSubject(kind, attrs, edge) {
 			return nil
 		}
@@ -469,24 +458,17 @@ func validateRelationalGraphRules(ctx context.Context, q importReader, s *Import
 				if s == nil {
 					continue
 				}
-				if !ancestors[ref.HistoricalRevisionID] {
+				isAncestor, err := history.ancestor(ref.HistoricalRevisionID)
+				if err != nil {
+					return err
+				}
+				if !isAncestor {
 					add(path+ref.Path, "Historical pin must be a base or ancestor revision")
 					continue
 				}
-				state := historical[ref.HistoricalRevisionID]
-				if state == nil {
-					var err error
-					state, err = loadRevisionState(ctx, q, s.ProjectID, ref.HistoricalRevisionID)
-					if err != nil {
-						return err
-					}
-					historical[ref.HistoricalRevisionID] = state
-				}
-				found := false
-				for _, n := range state.Nodes {
-					if n.ID == ref.ID && n.Ownership != nil && n.Ownership.RepositoryID == s.RepositoryID && relationalSubject(n.Kind, n.Attributes, false) {
-						found = true
-					}
+				found, err := history.relationalSubjectAt(ref.HistoricalRevisionID, ref.ID)
+				if err != nil {
+					return err
 				}
 				if !found {
 					add(path+ref.Path, "Historical pin must identify a relational subject in the same repository")
@@ -518,12 +500,7 @@ func validateRelationalGraphRules(ctx context.Context, q importReader, s *Import
 			subject := nodes[id]
 			store := datastore(id)
 			if edge {
-				for _, e := range g.Edges {
-					if e.ID == id {
-						store = datastore(e.From)
-						break
-					}
-				}
+				store = datastore(from)
 			}
 			dk := store + "\x00" + fk
 			if prior, ok := dialects[dk]; ok && prior != f.Dialect {
@@ -612,7 +589,7 @@ func validateRelationalGraphRules(ctx context.Context, q importReader, s *Import
 		if relationalSubject(n.Kind, n.Attributes, false) && n.Kind != "datastore" && n.ParentID == nil {
 			add("nodes/"+n.ID, "Relational subject requires structural parent")
 		}
-		if err := check(n.ID, n.Kind, n.Attributes, false, n.EvidenceIDs); err != nil {
+		if err := check(n.ID, n.Kind, n.Attributes, false, n.EvidenceIDs, ""); err != nil {
 			return err
 		}
 	}
@@ -620,7 +597,7 @@ func validateRelationalGraphRules(ctx context.Context, q importReader, s *Import
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		if err := check(e.ID, e.Kind, e.Attributes, true, e.EvidenceIDs); err != nil {
+		if err := check(e.ID, e.Kind, e.Attributes, true, e.EvidenceIDs, e.From); err != nil {
 			return err
 		}
 		if e.Kind != "references" {
@@ -687,6 +664,11 @@ func validateRelationalGraphRules(ctx context.Context, q importReader, s *Import
 		return false
 	}
 	migrationFacets := map[string]map[string]*relationalFacet{}
+	// Active external keys, counted once instead of a scan of g.Nodes per
+	// source_only change (review 2026-10-06, F79).
+	var activeKeys map[string]int
+	type sourceOnlyChange struct{ nodeID, key string }
+	var sourceOnly []sourceOnlyChange
 	for _, n := range g.Nodes {
 		if n.Kind != "migration" {
 			continue
@@ -697,6 +679,9 @@ func validateRelationalGraphRules(ctx context.Context, q importReader, s *Import
 		}
 		migrationFacets[n.ID] = map[string]*relationalFacet{}
 		for fk, raw := range fs {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
 			f, err := decodeRelationalFacetMode(n.Kind, raw, true, s != nil)
 			if err != nil {
 				continue
@@ -707,27 +692,31 @@ func validateRelationalGraphRules(ctx context.Context, q importReader, s *Import
 				if target.Kind != "source_only" || s == nil {
 					continue
 				}
-				for _, active := range g.Nodes {
-					if active.ExternalKey == target.ExternalKey {
-						add("nodes/"+n.ID, "Source-only target must be absent from the active candidate")
+				if activeKeys == nil {
+					activeKeys = make(map[string]int, len(g.Nodes))
+					for _, active := range g.Nodes {
+						activeKeys[active.ExternalKey]++
 					}
 				}
-				for ancestor := range ancestors {
-					state := historical[ancestor]
-					if state == nil {
-						var err error
-						state, err = loadRevisionState(ctx, q, s.ProjectID, ancestor)
-						if err != nil {
-							return err
-						}
-						historical[ancestor] = state
-					}
-					for _, old := range state.Nodes {
-						if old.ExternalKey == target.ExternalKey && old.Ownership != nil && old.Ownership.RepositoryID == s.RepositoryID {
-							add("nodes/"+n.ID, "Available model history requires an exact historical target instead of source-only")
-						}
-					}
+				for range activeKeys[target.ExternalKey] {
+					add("nodes/"+n.ID, "Source-only target must be absent from the active candidate")
 				}
+				sourceOnly = append(sourceOnly, sourceOnlyChange{nodeID: n.ID, key: target.ExternalKey})
+			}
+		}
+	}
+	if len(sourceOnly) > 0 {
+		keys := make([]string, 0, len(sourceOnly))
+		for _, c := range sourceOnly {
+			keys = append(keys, c.key)
+		}
+		owned, err := history.ownedKeysInAncestors(keys)
+		if err != nil {
+			return err
+		}
+		for _, c := range sourceOnly {
+			if owned[c.key] {
+				add("nodes/"+c.nodeID, "Available model history requires an exact historical target instead of source-only")
 			}
 		}
 	}

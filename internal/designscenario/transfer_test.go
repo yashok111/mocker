@@ -103,6 +103,45 @@ func TestTransferRelinksUniqueExactAPIWithoutWritingIt(t *testing.T) {
 	}
 }
 
+// Review 2026-10-06, F181: ImportTransfer indexes the API catalog on a reader
+// and catches up under the writer only on revisions committed after that
+// scan. A matching revision of another design committed in between must
+// still make the match ambiguous, exactly as one scan under the writer did.
+func TestTransferAPIIndexCatchesUpOnLaterRevisions(t *testing.T) {
+	repo := newTestRepo(t)
+	api, err := repo.designs.Create(t.Context(), apidesign.CreateInput{Name: "Orders", Document: apiDocument("orders"), Source: "ui"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	key, err := transferJSONKey([]byte(api.Draft.Document))
+	if err != nil {
+		t.Fatal(err)
+	}
+	needed := map[string]bool{key: true}
+	var index map[string]*ContractSource
+	var indexed int64
+	err = repo.db.Read(t.Context(), func(tx *sql.Tx) error {
+		index, indexed, err = repo.transferAPIIndex(t.Context(), tx, needed, 0, nil)
+		return err
+	})
+	if err != nil || index[key] == nil || index[key].DesignID != api.Design.ID || indexed < api.Draft.ID {
+		t.Fatalf("read-side index: %+v %d %v", index, indexed, err)
+	}
+	if _, err := repo.designs.Create(t.Context(), apidesign.CreateInput{Name: "Orders copy", Document: api.Draft.Document, Source: "ui"}); err != nil {
+		t.Fatal(err)
+	}
+	err = repo.db.Write(t.Context(), func(tx *sql.Tx) error {
+		index, _, err = repo.transferAPIIndex(t.Context(), tx, needed, indexed, index)
+		return err
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if found, ok := index[key]; !ok || found != nil {
+		t.Fatalf("later revision of another design did not make the match ambiguous: %+v", found)
+	}
+}
+
 func TestTransferRejectsVersionsLimitsAndDuplicateExportIDs(t *testing.T) {
 	repo := newTestRepo(t)
 	for _, bundle := range []TransferBundle{{Kind: "wrong", FormatVersion: 1}, {Kind: "mocker.scenarios", FormatVersion: 99}, {Kind: "mocker.scenarios", FormatVersion: 1}, {Kind: "mocker.scenarios", FormatVersion: 1, Scenarios: make([]TransferScenario, 21)}} {

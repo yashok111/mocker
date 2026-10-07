@@ -317,3 +317,34 @@ func TestDiagramHistoricalEvidenceGapSurvivesUnrelatedSave(t *testing.T) {
 		t.Fatalf("historical fork proof silently promoted to current: %+v", gaps)
 	}
 }
+
+// Review 2026-10-06, F106: retired row IDs are now found by a JSON-path query
+// over the stored versions instead of decoding, validating and re-hashing
+// every version inside the writer. A save that reintroduces an ID an older
+// version used must still be refused; a brand-new ID must still pass.
+func TestDiagramRetiredRowIDsStayRetired(t *testing.T) {
+	t.Parallel()
+	r, _ := testRepo(t)
+	p := createProject(t, r, "diagram-retired")
+	doc := diagramTestDocument(p.CurrentRevisionID)
+	v1, err := r.CreateDiagram(t.Context(), p.ID, DiagramCreateInput{Document: doc, IdempotencyKey: "create"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rename := func(id string) DiagramDocument {
+		d := diagramTestDocument(p.CurrentRevisionID)
+		d.Payload.PrimarySystemID, d.Payload.Elements[0].ID = id, id
+		return d
+	}
+	const second, third = "10000000-0000-4000-8000-000000000003", "10000000-0000-4000-8000-000000000004"
+	if _, err := r.SaveDiagram(t.Context(), p.ID, v1.Pin.ID, DiagramSaveInput{ExpectedVersion: 1, Document: rename(second), IdempotencyKey: "retire-first"}); err != nil {
+		t.Fatal(err)
+	}
+	_, err = r.SaveDiagram(t.Context(), p.ID, v1.Pin.ID, DiagramSaveInput{ExpectedVersion: 2, Document: rename(doc.Payload.Elements[0].ID), IdempotencyKey: "reuse-first"})
+	if err == nil || !strings.Contains(err.Error(), "Retired semantic IDs cannot be reused") {
+		t.Fatalf("retired row ID reused: %v", err)
+	}
+	if _, err := r.SaveDiagram(t.Context(), p.ID, v1.Pin.ID, DiagramSaveInput{ExpectedVersion: 2, Document: rename(third), IdempotencyKey: "fresh"}); err != nil {
+		t.Fatalf("fresh row ID refused: %v", err)
+	}
+}
