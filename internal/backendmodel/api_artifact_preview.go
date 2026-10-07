@@ -278,7 +278,7 @@ func (s *APIArtifactService) prepareV1APIPins(ctx context.Context, tx *sql.Tx, p
 				}
 				digest, e := s.artifacts.ArtifactDigestTx(ctx, tx, apiArtifactID(id), apiArtifactID(oldPin.RevisionID))
 				tx.Rollback()
-				if err := fatalArtifactError(ctx, e); err != nil {
+				if err := fatalArtifactReadError(ctx, e); err != nil {
 					return nil, err
 				}
 				if e != nil || digest != oldPin.ContentHash {
@@ -302,7 +302,7 @@ func (s *APIArtifactService) prepareV1APIPins(ctx context.Context, tx *sql.Tx, p
 		var oldErr, newErr error
 		if hadOld {
 			old, oldErr = s.snapshot(ctx, id, oldPin.RevisionID)
-			if err := fatalArtifactError(ctx, oldErr); err != nil {
+			if err := fatalArtifactReadError(ctx, oldErr); err != nil {
 				return nil, err
 			}
 			if oldErr == nil && old.ContentHash != oldPin.ContentHash {
@@ -340,7 +340,7 @@ func (s *APIArtifactService) prepareV1APIPins(ctx context.Context, tx *sql.Tx, p
 		} else {
 			newSnapshot, newErr = s.snapshot(ctx, id, c.RevisionID)
 		}
-		if err := fatalArtifactError(ctx, newErr); err != nil {
+		if err := fatalArtifactReadError(ctx, newErr); err != nil {
 			return nil, err
 		}
 		if newErr != nil {

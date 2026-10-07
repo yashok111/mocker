@@ -59,6 +59,32 @@ func (s *APIArtifactService) Apply(ctx context.Context, pid string, in ApplyAPIP
 	if err != nil || found {
 		return out, err
 	}
+	return s.applyAfterReceiptMiss(ctx, pid, in, scope, digest)
+}
+
+// applyAfterReceiptMiss runs after the pre-check found no receipt. An identical
+// retry that overlaps the first apply passes that pre-check, then sees the
+// first apply's commit as a version/base/hash conflict in prepare() and never
+// reaches the in-transaction receipt read. A 409 therefore re-reads the
+// receipt and replays it when the same request already landed
+// (review 2026-10-06, F98).
+func (s *APIArtifactService) applyAfterReceiptMiss(ctx context.Context, pid string, in ApplyAPIPinsInput, scope, digest string) (*APIPinsResult, error) {
+	out, err := s.applyAPIPins(ctx, pid, in, scope, digest)
+	if f, ok := errors.AsType[*FaultError](err); ok && f.Status == 409 && f.Code != "backend_idempotency_conflict" {
+		replay := new(APIPinsResult)
+		found, rerr := readAPIPinsReceipt(ctx, s.repo.db.R, scope, in.IdempotencyKey, digest, replay)
+		if rerr != nil {
+			return nil, rerr
+		}
+		if found {
+			return replay, nil
+		}
+	}
+	return out, err
+}
+
+func (s *APIArtifactService) applyAPIPins(ctx context.Context, pid string, in ApplyAPIPinsInput, scope, digest string) (*APIPinsResult, error) {
+	out := new(APIPinsResult)
 	prepared, err := s.prepare(ctx, pid, PreviewAPIPinsInput{in.BaseRevisionID, in.ExpectedVersion, in.Commands})
 	if err != nil {
 		return nil, err
@@ -70,112 +96,126 @@ func (s *APIArtifactService) Apply(ctx context.Context, pid string, in ApplyAPIP
 		return nil, apiPinsBlocked(prepared.preview.Diagnostics)
 	}
 	err = s.repo.db.Write(ctx, func(tx *sql.Tx) error {
-		found, err := readAPIPinsReceipt(ctx, tx, scope, in.IdempotencyKey, digest, out)
-		if err != nil || found {
-			return err
-		}
-		p, err := scanProject(tx.QueryRowContext(ctx, `SELECT `+projectColumns+` FROM backend_projects WHERE id=?`, pid))
-		if err != nil {
-			return err
-		}
-		if err := requireProjectVersion(p, in.ExpectedVersion); err != nil {
-			return err
-		}
-		if p.CurrentRevisionID != in.BaseRevisionID {
-			return importConflict("backend_api_pins_base_conflict", "Current source baseline changed", p.Version)
-		}
-		var document string
-		if err := tx.QueryRowContext(ctx, `SELECT document FROM backend_revisions_documents WHERE project_id=? AND id=?`, pid, in.BaseRevisionID).Scan(&document); err != nil {
-			return err
-		}
-		var revision Revision
-		if err := json.Unmarshal([]byte(document), &revision); err != nil {
-			return err
-		}
-		context, err := loadAPIArtifactContext(ctx, tx, in.BaseRevisionID)
-		if err != nil {
-			return err
-		}
-		baselineHash, err := apiPinsBaselineDigest(ctx, tx, pid, in.BaseRevisionID, revision, context, prepared)
-		if err != nil {
-			return err
-		}
-		if err := s.checkFullArtifactDigests(ctx, tx, prepared, p.Version, baselineHash, revision.SchemaVersion); err != nil {
-			return err
-		}
-		keys := []string{}
-		for key := range prepared.digests {
-			keys = append(keys, key)
-		}
-		slices.Sort(keys)
-		for _, key := range keys {
-			if err := ctx.Err(); err != nil {
-				return err
-			}
-			id, rid, _ := strings.Cut(key, "/")
-			if s.artifacts == nil {
-				return importConflict("backend_api_pins_hash_conflict", "Exact artifact digest changed", p.Version)
-			}
-			current, e := s.artifacts.ArtifactDigestTx(ctx, tx, apiArtifactID(id), apiArtifactID(rid))
-			if ctx.Err() != nil {
-				return ctx.Err()
-			}
-			if e != nil || current != prepared.digests[key] {
-				return importConflict("backend_api_pins_hash_conflict", "Exact artifact digest changed", p.Version)
-			}
-		}
-		now := time.Now().UTC()
-		revision.ID = uuid.NewV7().String()
-		revision.ParentRevisionID = new(in.BaseRevisionID)
-		revision.SemanticHash = prepared.preview.SemanticHash
-		revision.ArtifactPins = prepared.preview.Pins
-		revision.Author = "user"
-		revision.Summary = "Explicit API artifact pin commands"
-		revision.CreatedAt = now
-		encoded, err := json.Marshal(revision)
-		if err != nil {
-			return err
-		}
-		if _, err := backendblob.Exec(ctx, tx, `INSERT INTO backend_revisions(id,project_id,document) VALUES(?,?,?)`, revision.ID, pid, string(encoded)); err != nil {
-			return err
-		}
-		if _, err := backendblob.Exec(ctx, tx, `INSERT INTO backend_graph_records(project_id,revision_id,record_type,id,kind,name,parent_id,from_id,to_id,subject_id,payload_key) SELECT project_id,?,record_type,id,kind,name,parent_id,from_id,to_id,subject_id,payload_key FROM backend_graph_records WHERE project_id=? AND revision_id=?`, revision.ID, pid, in.BaseRevisionID); err != nil {
-			return err
-		}
-		for _, table := range []string{"backend_revision_sources", "backend_revision_decisions"} {
-			if _, err := backendblob.Exec(ctx, tx, `INSERT INTO `+table+`(revision_id,payload_key) SELECT ?,payload_key FROM `+table+` WHERE revision_id=?`, revision.ID, in.BaseRevisionID); err != nil {
-				return err
-			}
-		}
-		if revision.SchemaVersion == ComposedSchemaVersion {
-			if err := copySource6ArtifactContext(ctx, tx, pid, in.BaseRevisionID, revision.ID); err != nil {
-				return err
-			}
-		}
-		if err := savePreparedAPIPinsContext(ctx, tx, revision, prepared); err != nil {
-			return err
-		}
-		p.Version++
-		p.CurrentRevisionID = revision.ID
-		p.UpdatedAt = now
-		if _, err := tx.ExecContext(ctx, `UPDATE backend_projects SET version=?,current_revision_id=?,updated_at=? WHERE id=?`, p.Version, revision.ID, now.Format(time.RFC3339Nano), pid); err != nil {
-			return err
-		}
-		*out = APIPinsResult{Project: *p, Revision: revision}
-		response, err := json.Marshal(out)
-		if err != nil {
-			return err
-		}
-		if _, err := tx.ExecContext(ctx, `INSERT INTO backend_command_receipts(scope,key,request_hash,response) VALUES(?,?,?,?)`, scope, in.IdempotencyKey, digest, string(response)); err != nil {
-			return err
-		}
-		out.receiptJSON = string(response)
-		return nil
+		return s.applyAPIPinsTx(ctx, tx, pid, in, prepared, scope, digest, out)
 	})
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
+}
+
+// applyAPIPinsTx re-checks the receipt, CAS and exact owner digests inside the
+// writer, then persists. Split out of Apply when the retry replay was added
+// (review 2026-10-06, F98); the statements are unchanged.
+func (s *APIArtifactService) applyAPIPinsTx(ctx context.Context, tx *sql.Tx, pid string, in ApplyAPIPinsInput, prepared *preparedAPIPins, scope, digest string, out *APIPinsResult) error {
+	found, err := readAPIPinsReceipt(ctx, tx, scope, in.IdempotencyKey, digest, out)
+	if err != nil || found {
+		return err
+	}
+	p, err := scanProject(tx.QueryRowContext(ctx, `SELECT `+projectColumns+` FROM backend_projects WHERE id=?`, pid))
+	if err != nil {
+		return err
+	}
+	if err := requireProjectVersion(p, in.ExpectedVersion); err != nil {
+		return err
+	}
+	if p.CurrentRevisionID != in.BaseRevisionID {
+		return importConflict("backend_api_pins_base_conflict", "Current source baseline changed", p.Version)
+	}
+	var document string
+	if err := tx.QueryRowContext(ctx, `SELECT document FROM backend_revisions_documents WHERE project_id=? AND id=?`, pid, in.BaseRevisionID).Scan(&document); err != nil {
+		return err
+	}
+	var revision Revision
+	if err := json.Unmarshal([]byte(document), &revision); err != nil {
+		return err
+	}
+	context, err := loadAPIArtifactContext(ctx, tx, in.BaseRevisionID)
+	if err != nil {
+		return err
+	}
+	baselineHash, err := apiPinsBaselineDigest(ctx, tx, pid, in.BaseRevisionID, revision, context, prepared)
+	if err != nil {
+		return err
+	}
+	if err := s.checkFullArtifactDigests(ctx, tx, prepared, p.Version, baselineHash, revision.SchemaVersion); err != nil {
+		return err
+	}
+	keys := []string{}
+	for key := range prepared.digests {
+		keys = append(keys, key)
+	}
+	slices.Sort(keys)
+	for _, key := range keys {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		id, rid, _ := strings.Cut(key, "/")
+		if s.artifacts == nil {
+			return importConflict("backend_api_pins_hash_conflict", "Exact artifact digest changed", p.Version)
+		}
+		current, e := s.artifacts.ArtifactDigestTx(ctx, tx, apiArtifactID(id), apiArtifactID(rid))
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		if e != nil && !ownerDigestGone(e) {
+			return e
+		}
+		if e != nil || current != prepared.digests[key] {
+			return importConflict("backend_api_pins_hash_conflict", "Exact artifact digest changed", p.Version)
+		}
+	}
+	return persistAPIPins(ctx, tx, pid, in, prepared, scope, digest, out, p, revision)
+}
+
+func persistAPIPins(ctx context.Context, tx *sql.Tx, pid string, in ApplyAPIPinsInput, prepared *preparedAPIPins, scope, digest string, out *APIPinsResult, p *Project, revision Revision) error {
+	now := time.Now().UTC()
+	revision.ID = uuid.NewV7().String()
+	revision.ParentRevisionID = new(in.BaseRevisionID)
+	revision.SemanticHash = prepared.preview.SemanticHash
+	revision.ArtifactPins = prepared.preview.Pins
+	revision.Author = "user"
+	revision.Summary = "Explicit API artifact pin commands"
+	revision.CreatedAt = now
+	encoded, err := json.Marshal(revision)
+	if err != nil {
+		return err
+	}
+	if _, err := backendblob.Exec(ctx, tx, `INSERT INTO backend_revisions(id,project_id,document) VALUES(?,?,?)`, revision.ID, pid, string(encoded)); err != nil {
+		return err
+	}
+	if _, err := backendblob.Exec(ctx, tx, `INSERT INTO backend_graph_records(project_id,revision_id,record_type,id,kind,name,parent_id,from_id,to_id,subject_id,payload_key) SELECT project_id,?,record_type,id,kind,name,parent_id,from_id,to_id,subject_id,payload_key FROM backend_graph_records WHERE project_id=? AND revision_id=?`, revision.ID, pid, in.BaseRevisionID); err != nil {
+		return err
+	}
+	for _, table := range []string{"backend_revision_sources", "backend_revision_decisions"} {
+		if _, err := backendblob.Exec(ctx, tx, `INSERT INTO `+table+`(revision_id,payload_key) SELECT ?,payload_key FROM `+table+` WHERE revision_id=?`, revision.ID, in.BaseRevisionID); err != nil {
+			return err
+		}
+	}
+	if revision.SchemaVersion == ComposedSchemaVersion {
+		if err := copySource6ArtifactContext(ctx, tx, pid, in.BaseRevisionID, revision.ID); err != nil {
+			return err
+		}
+	}
+	if err := savePreparedAPIPinsContext(ctx, tx, revision, prepared); err != nil {
+		return err
+	}
+	p.Version++
+	p.CurrentRevisionID = revision.ID
+	p.UpdatedAt = now
+	if _, err := tx.ExecContext(ctx, `UPDATE backend_projects SET version=?,current_revision_id=?,updated_at=? WHERE id=?`, p.Version, revision.ID, now.Format(time.RFC3339Nano), pid); err != nil {
+		return err
+	}
+	*out = APIPinsResult{Project: *p, Revision: revision}
+	response, err := json.Marshal(out)
+	if err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, `INSERT INTO backend_command_receipts(scope,key,request_hash,response) VALUES(?,?,?,?)`, scope, in.IdempotencyKey, digest, string(response)); err != nil {
+		return err
+	}
+	out.receiptJSON = string(response)
+	return nil
 }
 
 func saveAPIArtifactContext(ctx context.Context, tx *sql.Tx, rid string, frozen APIArtifactContext) error {
