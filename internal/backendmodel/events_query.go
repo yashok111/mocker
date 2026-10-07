@@ -174,6 +174,10 @@ func projectEventsWithEffective(ctx context.Context, state *RevisionState, sourc
 	page.Limitations = append(page.Limitations, sourceProjectionLimitations(sourceGraph, source)...)
 	if sourceGraph != nil {
 		page.Policy = "events-source6-query-v1"
+		// Same as Flow and Lineage: this is the only place a composed events
+		// read fills coverage.source, because QueryEvents' RevisionCoverage
+		// override is never reached for one (review 2026-10-06, F111).
+		page.Coverage.Source = sourceVectorReadContext(sourceGraph)
 	}
 
 	if effective != nil {

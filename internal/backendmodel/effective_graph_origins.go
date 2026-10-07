@@ -15,22 +15,31 @@ func effectiveEvaluationOrigin(source *SourceGraphSnapshot, input ChangeEvaluati
 		return out
 	}
 	if source.SourceVector != nil && input.Selector.Source != nil {
+		// Proof that cannot be computed (a divergent claim with no exact
+		// selection, a selector the payload does not carry) used to leave a
+		// source origin with no claims and NO freshness, indistinguishable from
+		// a field that simply has no proof (review 2026-10-06, F119). It now
+		// says the proof is not current, with the reason.
+		unavailable := &AssertionFreshness{Status: "stale", Reasons: []string{"source_proof_unavailable"}}
 		claims, err := sourceSelectedClaims(source, input.RecordType, input.ID, *input.Selector.Source)
-		if err == nil {
-			for _, a := range claims {
-				out.SourceClaims = append(out.SourceClaims, sourceAssertionRef(a))
-
-			}
-			proof, err := sourcePropertyProof(source, input.RecordType, input.ID, *input.Selector.Source)
-			if err == nil {
-				out.EvidenceIDs = slices.Clone(proof.evidenceIDs)
-				status := "current"
-				if proof.boundary || proof.status == "stale" || proof.status == "unresolved" {
-					status = "stale"
-				}
-				out.Freshness = &AssertionFreshness{Status: status, Reasons: runtimeSortedKeys(proof.reasons)}
-			}
+		if err != nil {
+			out.Freshness = unavailable
+			return out
 		}
+		for _, a := range claims {
+			out.SourceClaims = append(out.SourceClaims, sourceAssertionRef(a))
+		}
+		proof, err := sourcePropertyProof(source, input.RecordType, input.ID, *input.Selector.Source)
+		if err != nil {
+			out.Freshness = unavailable
+			return out
+		}
+		out.EvidenceIDs = slices.Clone(proof.evidenceIDs)
+		status := "current"
+		if proof.boundary || proof.status == "stale" || proof.status == "unresolved" {
+			status = "stale"
+		}
+		out.Freshness = &AssertionFreshness{Status: status, Reasons: runtimeSortedKeys(proof.reasons)}
 	} else {
 		out = effectiveLegacyOriginSupport(source, input, out)
 	}

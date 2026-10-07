@@ -34,7 +34,7 @@ func loadLegacyEffectiveGraph(ctx context.Context, q importReader, pid string, t
 		if o.RecordType == "node" {
 			n, ok := nodes[o.SubjectID]
 			if !ok {
-				n = Node{ID: o.SubjectID, Kind: o.Kind, Name: o.Name, ParentID: o.ParentID, Attributes: map[string]jsontext.Value{}, EvidenceIDs: []string{}}
+				n = Node{ID: o.SubjectID, Kind: o.Kind, Name: o.Name, ParentID: o.ParentID, Attributes: legacyCreatedFacetContainer(o.Kind), EvidenceIDs: []string{}}
 			}
 			payload, err := changeWithFacet(sourceNodePayload(n), o.FacetKey, raw)
 			if err != nil {
@@ -45,7 +45,7 @@ func loadLegacyEffectiveGraph(ctx context.Context, q importReader, pid string, t
 		} else {
 			e, ok := edges[o.SubjectID]
 			if !ok {
-				e = Edge{ID: o.SubjectID, Kind: o.Kind, Attributes: map[string]jsontext.Value{}, EvidenceIDs: []string{}}
+				e = Edge{ID: o.SubjectID, Kind: o.Kind, Attributes: legacyCreatedFacetContainer(o.Kind), EvidenceIDs: []string{}}
 			}
 			e.From, e.To = o.FromID, o.ToID
 			payload, err := changeWithFacet(sourceEdgePayload(e), o.FacetKey, raw)
@@ -66,6 +66,13 @@ func loadLegacyEffectiveGraph(ctx context.Context, q importReader, pid string, t
 	}
 	slices.SortFunc(out.State.Nodes, func(a, b Node) int { return strings.Compare(a.ID, b.ID) })
 	slices.SortFunc(out.State.Edges, func(a, b Edge) int { return strings.Compare(a.ID, b.ID) })
+	// The index finishEffectivePins built inside loadSourceEffectiveGraph holds
+	// the BASELINE payloads; reusing it after the overlay merge hid every
+	// record the draft created from service filters and record proof
+	// (missing_effective_record) and resolved intent pointers against the
+	// baseline facet, so a changed property kept baseline proof (review
+	// 2026-10-06, F121). Drop it so the second finishEffectivePins rebuilds it.
+	out.readIndex = nil
 	out.Pins.ViewSchemaVersion = ProposalDocumentVersion
 	out.Pins.EffectiveSemanticHash = legacy.draft.SemanticHash
 	if err := finishEffectivePins(out, out.Source.SourceVector); err != nil {
@@ -92,4 +99,22 @@ func loadLegacyEffectiveGraph(ctx context.Context, q importReader, pid string, t
 		}
 	}
 	return out, nil
+}
+
+// legacyCreatedFacetContainer is the empty facet container a record the legacy
+// draft CREATES starts from, in the same shape the change-proposal evaluator
+// gives a created relational record. An empty attribute map has no "facets"
+// object, so changeWithFacet refused it with "Expected a strict JSON object"
+// and every legacy read of a draft that creates a constraint, index or table
+// failed outright (found while proving review 2026-10-06, F121).
+func legacyCreatedFacetContainer(kind string) map[string]jsontext.Value {
+	empty := mustChangeJSON(map[string]jsontext.Value{})
+	switch kind {
+	case "datastore":
+		return map[string]jsontext.Value{"relational": mustChangeJSON(map[string]any{"facets": empty})}
+	case "symbol":
+		return map[string]jsontext.Value{"databaseRoutine": mustChangeJSON(map[string]any{"facets": empty})}
+	default:
+		return map[string]jsontext.Value{"facets": empty}
+	}
 }

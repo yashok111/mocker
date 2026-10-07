@@ -20,6 +20,19 @@ func validateWorkspaceFilters(in GraphQueryInput) error {
 	return nil
 }
 
+// validateWorkspaceService refuses a serviceId that names no service in the
+// exact effective model. queryEffectiveGraph calls it once before iterating:
+// checked only inside workspaceMatches, a bad selector was refused only when a
+// record survived the kind/search/parent prefilters, so the same request
+// answered 400 or an empty 200 depending on the data (review 2026-10-06, F120).
+func validateWorkspaceService(g *EffectiveGraphSnapshot, serviceID string) error {
+	root, exists := g.indexedReads().payloads["node\x00"+serviceID]
+	if !exists || root.Kind != "service" {
+		return invalid("serviceId", "Expected a service in the exact model")
+	}
+	return nil
+}
+
 // Workspace filters run over the exact effective model, never the visible page.
 func workspaceMatches(ctx context.Context, g *EffectiveGraphSnapshot, in GraphQueryInput, typ, id string) (bool, error) {
 	if err := ctx.Err(); err != nil {
@@ -30,9 +43,8 @@ func workspaceMatches(ctx context.Context, g *EffectiveGraphSnapshot, in GraphQu
 	}
 	if in.ServiceID != "" {
 		nodes := g.indexedReads().payloads
-		root, exists := nodes["node\x00"+in.ServiceID]
-		if !exists || root.Kind != "service" {
-			return false, invalid("serviceId", "Expected a service in the exact model")
+		if err := validateWorkspaceService(g, in.ServiceID); err != nil {
+			return false, err
 		}
 		belongs := func(id string) bool {
 			seen := map[string]bool{}
