@@ -27,7 +27,7 @@ func fixture(t *testing.T) (*Service, string, PreviewInput) {
 	s := NewService(db, models, apis, designscenario.NewRepo(db, cfg, apis))
 	p, err := models.Create(t.Context(), bm.CreateInput{Name: "Materialize", IdempotencyKey: "create"})
 	must(t, err)
-	inventory := []bm.InventoryItem{}
+	inventory := make([]bm.InventoryItem, 0, 9)
 	for _, kind := range []string{"files", "endpoints", "datastores", "migrations", "producers", "consumers", "jobs", "contracts", "tests"} {
 		inventory = append(inventory, bm.InventoryItem{Category: kind, Status: "complete", Denominator: new(int64(0)), DiscoverySource: "fixture", Gaps: []string{}})
 	}
@@ -74,7 +74,7 @@ func applyInput(t *testing.T, s *Service, pid string, in PreviewInput, key strin
 }
 func counts(t *testing.T, s *Service) []int {
 	t.Helper()
-	out := []int{}
+	out := make([]int, 0, 8)
 	for _, table := range []string{"api_designs", "api_design_revisions", "design_scenarios", "design_scenario_revisions", "workspaces", "specs", "backend_materializations", "backend_materialization_receipts"} {
 		var n int
 		must(t, s.db.R.QueryRow("SELECT count(*) FROM "+table).Scan(&n))
