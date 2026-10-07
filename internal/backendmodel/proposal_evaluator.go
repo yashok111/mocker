@@ -72,51 +72,10 @@ func validateProposalSnapshot(base *graphCandidate, proposal Proposal, draft Pro
 	return evaluateProposalGraph(base, proposal, draft, nil)
 }
 func evaluateProposalGraph(base *graphCandidate, proposal Proposal, draft ProposalRevision, commands []ProposalCommand) (*ProposalCandidate, error) {
-	p := &databaseProjection{in: DatabaseQueryInput{DatastoreID: proposal.DatastoreID, FacetKey: proposal.FacetKey}, nodes: map[string]Node{}, children: map[string][]Node{}, facets: map[string]map[string]*relationalFacet{}, evidence: map[string]Evidence{}, stores: map[string]string{}, page: &DatabasePage{Limitations: []string{}, FacetStatus: "current"}, observed: map[string]bool{}, limitations: map[string]bool{}, uniqueResults: map[string]databaseUniqueness{}}
-	for _, n := range base.Nodes {
-		p.nodes[n.ID] = n
-		if n.ParentID != nil {
-			p.children[*n.ParentID] = append(p.children[*n.ParentID], n)
-		}
-	}
-	for _, n := range base.Nodes {
-		id, visited := n.ID, map[string]bool{}
-		for id != "" && !visited[id] {
-			visited[id] = true
-			parent := p.nodes[id]
-			if parent.Kind == "datastore" {
-				p.stores[n.ID] = id
-				break
-			}
-			if parent.ParentID == nil {
-				break
-			}
-			id = *parent.ParentID
-		}
-	}
-	for _, proof := range base.Evidence {
-		p.evidence[proof.ID] = proof
-	}
+	p := newProposalProjection(base, proposal)
 	sourceValues := map[string]map[string]jsontext.Value{}
 	decode := func(id, kind string, attrs map[string]jsontext.Value) error {
-		fs, _, err := relationalFacetObject(kind, attrs)
-		if err != nil {
-			return err
-		}
-		if fs[proposal.FacetKey] == nil {
-			return nil
-		}
-		f, err := decodeRelationalFacet(kind, fs[proposal.FacetKey], true)
-		if err != nil {
-			return err
-		}
-		p.facets[id] = map[string]*relationalFacet{proposal.FacetKey: f}
-		values, err := proposalFacetValues(fs[proposal.FacetKey])
-		if err != nil {
-			return err
-		}
-		sourceValues[id] = values
-		return nil
+		return decodeProposalSubject(p, proposal.FacetKey, sourceValues, id, kind, attrs)
 	}
 	for _, n := range base.Nodes {
 		if p.stores[n.ID] == proposal.DatastoreID && relationalSubject(n.Kind, n.Attributes, false) {
@@ -136,13 +95,8 @@ func evaluateProposalGraph(base *graphCandidate, proposal Proposal, draft Propos
 			return nil, err
 		}
 	}
-	// Detach cumulative overlay maps from the immutable input revision.
-	b, err := json.Marshal(draft.Overlays)
+	old, err := detachProposalOverlays(draft.Overlays)
 	if err != nil {
-		return nil, err
-	}
-	var old []ProposalOverlay
-	if err := json.Unmarshal(b, &old); err != nil {
 		return nil, err
 	}
 	for _, overlay := range old {
@@ -166,32 +120,118 @@ func evaluateProposalGraph(base *graphCandidate, proposal Proposal, draft Propos
 		return nil, proposalLimit("Effective proposal graph record limit exceeded")
 	}
 	if len(e.result.Diagnostics) == 0 {
-		hash, err := proposalEffectiveGraphHash(proposal, e.result.Overlays)
-		if err != nil {
+		if err := e.sealCandidate(draft, commands); err != nil {
 			return nil, err
 		}
-		e.result.GraphHash = new(hash)
-		digest, err := requestDigest(struct {
-			DocumentVersion  string              `json:"documentVersion"`
-			ProposalID       string              `json:"proposalId"`
-			Version          int64               `json:"version"`
-			DraftRevisionID  string              `json:"draftRevisionId"`
-			DraftHash        string              `json:"draftHash"`
-			BaseRevisionID   string              `json:"baseRevisionId"`
-			BaseSemanticHash string              `json:"baseSemanticHash"`
-			RepositoryID     string              `json:"repositoryId"`
-			DatastoreID      string              `json:"datastoreId"`
-			FacetKey         string              `json:"facetKey"`
-			Commands         []ProposalCommand   `json:"commands"`
-			Overlays         []ProposalOverlay   `json:"overlays"`
-			Criteria         []ProposalCriterion `json:"criteria"`
-		}{ProposalDocumentVersion, proposal.ID, proposal.Version, draft.ID, draft.SemanticHash, proposal.BaseRevisionID, proposal.BaseSemanticHash, proposal.RepositoryID, proposal.DatastoreID, proposal.FacetKey, commands, e.result.Overlays, e.result.Criteria})
-		if err != nil {
-			return nil, err
-		}
-		e.result.CandidateHash = new(digest)
 	}
 	return e.result, nil
+}
+
+// newProposalProjection indexes the base graph the way a database query
+// does: nodes, children, evidence and each node's owning datastore.
+func newProposalProjection(base *graphCandidate, proposal Proposal) *databaseProjection {
+	p := &databaseProjection{in: DatabaseQueryInput{DatastoreID: proposal.DatastoreID, FacetKey: proposal.FacetKey}, nodes: map[string]Node{}, children: map[string][]Node{}, facets: map[string]map[string]*relationalFacet{}, evidence: map[string]Evidence{}, stores: map[string]string{}, page: &DatabasePage{Limitations: []string{}, FacetStatus: "current"}, observed: map[string]bool{}, limitations: map[string]bool{}, uniqueResults: map[string]databaseUniqueness{}}
+	for _, n := range base.Nodes {
+		p.nodes[n.ID] = n
+		if n.ParentID != nil {
+			p.children[*n.ParentID] = append(p.children[*n.ParentID], n)
+		}
+	}
+	for _, n := range base.Nodes {
+		if store := proposalOwningDatastore(p.nodes, n.ID); store != "" {
+			p.stores[n.ID] = store
+		}
+	}
+	for _, proof := range base.Evidence {
+		p.evidence[proof.ID] = proof
+	}
+	return p
+}
+
+// proposalOwningDatastore walks a node's parent chain to its datastore, or ""
+// when the chain ends, breaks or cycles first.
+func proposalOwningDatastore(nodes map[string]Node, id string) string {
+	visited := map[string]bool{}
+	for id != "" && !visited[id] {
+		visited[id] = true
+		parent := nodes[id]
+		if parent.Kind == "datastore" {
+			return id
+		}
+		if parent.ParentID == nil {
+			break
+		}
+		id = *parent.ParentID
+	}
+	return ""
+}
+
+// decodeProposalSubject records a subject's selected facet and its source
+// values; a subject without that facet is left out, not an error.
+func decodeProposalSubject(p *databaseProjection, facetKey string, sourceValues map[string]map[string]jsontext.Value, id, kind string, attrs map[string]jsontext.Value) error {
+	fs, _, err := relationalFacetObject(kind, attrs)
+	if err != nil {
+		return err
+	}
+	if fs[facetKey] == nil {
+		return nil
+	}
+	f, err := decodeRelationalFacet(kind, fs[facetKey], true)
+	if err != nil {
+		return err
+	}
+	p.facets[id] = map[string]*relationalFacet{facetKey: f}
+	values, err := proposalFacetValues(fs[facetKey])
+	if err != nil {
+		return err
+	}
+	sourceValues[id] = values
+	return nil
+}
+
+// detachProposalOverlays deep-copies the draft's overlays so the cumulative
+// evaluation never writes through to the immutable input revision.
+func detachProposalOverlays(overlays []ProposalOverlay) ([]ProposalOverlay, error) {
+	b, err := json.Marshal(overlays)
+	if err != nil {
+		return nil, err
+	}
+	var old []ProposalOverlay
+	if err := json.Unmarshal(b, &old); err != nil {
+		return nil, err
+	}
+	return old, nil
+}
+
+// sealCandidate stamps a diagnostic-free candidate with its effective graph
+// hash and the digest of everything it was evaluated from.
+func (e *proposalEvaluation) sealCandidate(draft ProposalRevision, commands []ProposalCommand) error {
+	proposal := e.proposal
+	hash, err := proposalEffectiveGraphHash(proposal, e.result.Overlays)
+	if err != nil {
+		return err
+	}
+	e.result.GraphHash = new(hash)
+	digest, err := requestDigest(struct {
+		DocumentVersion  string              `json:"documentVersion"`
+		ProposalID       string              `json:"proposalId"`
+		Version          int64               `json:"version"`
+		DraftRevisionID  string              `json:"draftRevisionId"`
+		DraftHash        string              `json:"draftHash"`
+		BaseRevisionID   string              `json:"baseRevisionId"`
+		BaseSemanticHash string              `json:"baseSemanticHash"`
+		RepositoryID     string              `json:"repositoryId"`
+		DatastoreID      string              `json:"datastoreId"`
+		FacetKey         string              `json:"facetKey"`
+		Commands         []ProposalCommand   `json:"commands"`
+		Overlays         []ProposalOverlay   `json:"overlays"`
+		Criteria         []ProposalCriterion `json:"criteria"`
+	}{ProposalDocumentVersion, proposal.ID, proposal.Version, draft.ID, draft.SemanticHash, proposal.BaseRevisionID, proposal.BaseSemanticHash, proposal.RepositoryID, proposal.DatastoreID, proposal.FacetKey, commands, e.result.Overlays, e.result.Criteria})
+	if err != nil {
+		return err
+	}
+	e.result.CandidateHash = new(digest)
+	return nil
 }
 
 func proposalEffectiveGraphHash(p Proposal, overlays []ProposalOverlay) (string, error) {
@@ -296,107 +336,23 @@ func (e *proposalEvaluation) column(c ProposalCommand) {
 }
 
 func (e *proposalEvaluation) constraint(c ProposalCommand) {
-	table, constraintID, edgeID := c.TableID, c.ConstraintID, ""
-	generated := map[string]string{}
-	var co, ro ProposalOverlay
-	if c.Action == "create" {
-		if !e.selected(c, table, "table", "/tableId") {
-			return
-		}
-		constraintID = proposalDesignedID(e.proposal.ID, c.CommandID, "constraint")
-		edgeID = proposalDesignedID(e.proposal.ID, c.CommandID, "reference")
-		generated = map[string]string{"constraintId": constraintID, "edgeId": edgeID}
-		co = ProposalOverlay{SubjectID: constraintID, RecordType: "node", Kind: "constraint", FacetKey: e.proposal.FacetKey, Name: c.Name, ParentID: new(table), Values: map[string]jsontext.Value{}, PropertyOrigins: map[string]ProposalPropertyOrigin{}}
-		ro = ProposalOverlay{SubjectID: edgeID, RecordType: "edge", Kind: "references", FacetKey: e.proposal.FacetKey, Values: map[string]jsontext.Value{}, PropertyOrigins: map[string]ProposalPropertyOrigin{}}
-	} else {
-		if !e.selected(c, constraintID, "constraint", "/constraintId") {
-			return
-		}
-		if designed, ok := e.overlays[constraintID]; ok && designed.Base == nil {
-			var kind string
-			if json.Unmarshal(designed.Values["constraintKind"], &kind) != nil || kind != "foreign_key" {
-				e.diagnostic(c, "/constraintId", "Only designed foreign-key constraints can be updated", constraintID)
-				return
-			}
-			table = *designed.ParentID
-			co = designed
-			for id, o := range e.overlays {
-				if o.Kind == "references" && o.FromID == constraintID {
-					if edgeID != "" {
-						e.diagnostic(c, "/constraintId", "Designed FK has ambiguous reference edges", constraintID)
-						return
-					}
-					edgeID, ro = id, o
-				}
-			}
-			if edgeID == "" {
-				e.diagnostic(c, "/constraintId", "Designed FK reference edge is missing", constraintID)
-				return
-			}
-		} else {
-			if e.projection.selected(constraintID).ConstraintKind != "foreign_key" {
-				e.diagnostic(c, "/constraintId", "Only selected foreign-key constraints can be updated", constraintID)
-				return
-			}
-			table = *e.projection.nodes[constraintID].ParentID
-			for id, edge := range e.baseEdges {
-				if edge.From == constraintID && e.projection.selected(id) != nil {
-					if edgeID != "" {
-						e.diagnostic(c, "/constraintId", "Selected FK has ambiguous reference edges", constraintID)
-						return
-					}
-					edgeID = id
-				}
-			}
-			if edgeID == "" {
-				e.diagnostic(c, "/constraintId", "Selected FK reference edge is missing", constraintID)
-				return
-			}
-			co = e.overlay(constraintID, "constraint", "node")
-			co.ParentID = new(table)
-			ro = e.overlay(edgeID, "references", "edge")
-		}
+	fk, ok := e.fkSubjects(c)
+	if !ok {
+		return
 	}
+	table, constraintID, generated, co, ro := fk.table, fk.constraintID, fk.generated, fk.co, fk.ro
 	if !e.selected(c, c.TargetTableID, "table", "/targetTableId") {
 		return
 	}
-	source, target := []string{}, []string{}
-	for _, pair := range c.ColumnPairs {
-		if !e.selected(c, pair.FromColumnID, "column", "/columnPairs") || !e.selected(c, pair.ToColumnID, "column", "/columnPairs") {
-			return
-		}
-		if !relationalPairParents(e.projection.nodes, table, c.TargetTableID, pair) {
-			e.diagnostic(c, "/columnPairs", "Ordered pair columns must belong to the source and target table", pair.FromColumnID, pair.ToColumnID)
-			return
-		}
-		if slices.Contains(source, pair.FromColumnID) || slices.Contains(target, pair.ToColumnID) {
-			e.diagnostic(c, "/columnPairs", "Each side of an ordered FK must have unique columns", pair.FromColumnID, pair.ToColumnID)
-			return
-		}
-		source = append(source, pair.FromColumnID)
-		target = append(target, pair.ToColumnID)
-	}
-	if c.MatchType == "partial" || e.projection.selected(e.proposal.DatastoreID).Dialect == "sqlite" && c.MatchType != "simple" {
-		e.diagnostic(c, "/matchType", "Designed FK match mode is unsupported by this dialect", constraintID)
+	source, target, ok := e.fkPairs(c, table)
+	if !ok {
 		return
 	}
-	if *c.InitiallyDeferred && !*c.Deferrable {
-		e.diagnostic(c, "/initiallyDeferred", "Initially deferred requires deferrable", constraintID)
+	if !e.fkModeSupported(c, constraintID) {
 		return
 	}
-	if c.Action == "create" {
-		for _, n := range e.projection.children[table] {
-			if (n.Kind == "constraint" || n.Kind == "index") && e.projection.selected(n.ID) != nil && n.Name == c.Name {
-				e.diagnostic(c, "/name", "Selected constraint/index name is already in use", n.ID)
-				return
-			}
-		}
-		for _, o := range e.overlays {
-			if o.SubjectID != constraintID && o.Name == c.Name && o.ParentID != nil && *o.ParentID == table {
-				e.diagnostic(c, "/name", "Designed constraint name is already in use", o.SubjectID)
-				return
-			}
-		}
+	if c.Action == "create" && !e.fkNameFree(c, table, constraintID) {
+		return
 	}
 	unique, complete, _ := e.projection.unique(c.TargetTableID, target, true)
 	if !unique && complete {
@@ -431,6 +387,148 @@ func (e *proposalEvaluation) constraint(c ProposalCommand) {
 	} {
 		e.required(c, []string{constraintID, table, c.TargetTableID}, tc.kind, tc.description)
 	}
+}
+
+// proposalFKSubjects is the constraint node and reference edge one FK command
+// writes, as overlays, with the table that owns the constraint.
+type proposalFKSubjects struct {
+	table, constraintID string
+	generated           map[string]string
+	co, ro              ProposalOverlay
+}
+
+// fkSubjects resolves the constraint and reference edge an FK command
+// creates or updates; false means a diagnostic was already recorded.
+func (e *proposalEvaluation) fkSubjects(c ProposalCommand) (proposalFKSubjects, bool) {
+	if c.Action == "create" {
+		table := c.TableID
+		if !e.selected(c, table, "table", "/tableId") {
+			return proposalFKSubjects{}, false
+		}
+		constraintID := proposalDesignedID(e.proposal.ID, c.CommandID, "constraint")
+		edgeID := proposalDesignedID(e.proposal.ID, c.CommandID, "reference")
+		return proposalFKSubjects{
+			table:        table,
+			constraintID: constraintID,
+			generated:    map[string]string{"constraintId": constraintID, "edgeId": edgeID},
+			co:           ProposalOverlay{SubjectID: constraintID, RecordType: "node", Kind: "constraint", FacetKey: e.proposal.FacetKey, Name: c.Name, ParentID: new(table), Values: map[string]jsontext.Value{}, PropertyOrigins: map[string]ProposalPropertyOrigin{}},
+			ro:           ProposalOverlay{SubjectID: edgeID, RecordType: "edge", Kind: "references", FacetKey: e.proposal.FacetKey, Values: map[string]jsontext.Value{}, PropertyOrigins: map[string]ProposalPropertyOrigin{}},
+		}, true
+	}
+	constraintID := c.ConstraintID
+	if !e.selected(c, constraintID, "constraint", "/constraintId") {
+		return proposalFKSubjects{}, false
+	}
+	if designed, ok := e.overlays[constraintID]; ok && designed.Base == nil {
+		return e.designedFKSubjects(c, constraintID, designed)
+	}
+	return e.selectedFKSubjects(c, constraintID)
+}
+
+// designedFKSubjects finds the one reference edge of an FK this proposal
+// designed itself.
+func (e *proposalEvaluation) designedFKSubjects(c ProposalCommand, constraintID string, designed ProposalOverlay) (proposalFKSubjects, bool) {
+	var kind string
+	if json.Unmarshal(designed.Values["constraintKind"], &kind) != nil || kind != "foreign_key" {
+		e.diagnostic(c, "/constraintId", "Only designed foreign-key constraints can be updated", constraintID)
+		return proposalFKSubjects{}, false
+	}
+	fk := proposalFKSubjects{table: *designed.ParentID, constraintID: constraintID, generated: map[string]string{}, co: designed}
+	edgeID := ""
+	for id, o := range e.overlays {
+		if o.Kind == "references" && o.FromID == constraintID {
+			if edgeID != "" {
+				e.diagnostic(c, "/constraintId", "Designed FK has ambiguous reference edges", constraintID)
+				return proposalFKSubjects{}, false
+			}
+			edgeID, fk.ro = id, o
+		}
+	}
+	if edgeID == "" {
+		e.diagnostic(c, "/constraintId", "Designed FK reference edge is missing", constraintID)
+		return proposalFKSubjects{}, false
+	}
+	return fk, true
+}
+
+// selectedFKSubjects finds the one selected reference edge of an FK in the
+// base and opens overlays over both.
+func (e *proposalEvaluation) selectedFKSubjects(c ProposalCommand, constraintID string) (proposalFKSubjects, bool) {
+	if e.projection.selected(constraintID).ConstraintKind != "foreign_key" {
+		e.diagnostic(c, "/constraintId", "Only selected foreign-key constraints can be updated", constraintID)
+		return proposalFKSubjects{}, false
+	}
+	table := *e.projection.nodes[constraintID].ParentID
+	edgeID := ""
+	for id, edge := range e.baseEdges {
+		if edge.From == constraintID && e.projection.selected(id) != nil {
+			if edgeID != "" {
+				e.diagnostic(c, "/constraintId", "Selected FK has ambiguous reference edges", constraintID)
+				return proposalFKSubjects{}, false
+			}
+			edgeID = id
+		}
+	}
+	if edgeID == "" {
+		e.diagnostic(c, "/constraintId", "Selected FK reference edge is missing", constraintID)
+		return proposalFKSubjects{}, false
+	}
+	co := e.overlay(constraintID, "constraint", "node")
+	co.ParentID = new(table)
+	return proposalFKSubjects{table: table, constraintID: constraintID, generated: map[string]string{}, co: co, ro: e.overlay(edgeID, "references", "edge")}, true
+}
+
+// fkPairs validates the ordered column pairs and returns each side in order.
+func (e *proposalEvaluation) fkPairs(c ProposalCommand, table string) (source, target []string, ok bool) {
+	source, target = []string{}, []string{}
+	for _, pair := range c.ColumnPairs {
+		if !e.selected(c, pair.FromColumnID, "column", "/columnPairs") || !e.selected(c, pair.ToColumnID, "column", "/columnPairs") {
+			return nil, nil, false
+		}
+		if !relationalPairParents(e.projection.nodes, table, c.TargetTableID, pair) {
+			e.diagnostic(c, "/columnPairs", "Ordered pair columns must belong to the source and target table", pair.FromColumnID, pair.ToColumnID)
+			return nil, nil, false
+		}
+		if slices.Contains(source, pair.FromColumnID) || slices.Contains(target, pair.ToColumnID) {
+			e.diagnostic(c, "/columnPairs", "Each side of an ordered FK must have unique columns", pair.FromColumnID, pair.ToColumnID)
+			return nil, nil, false
+		}
+		source = append(source, pair.FromColumnID)
+		target = append(target, pair.ToColumnID)
+	}
+	return source, target, true
+}
+
+// fkModeSupported checks the match type against the dialect and the
+// deferral flags against each other.
+func (e *proposalEvaluation) fkModeSupported(c ProposalCommand, constraintID string) bool {
+	if c.MatchType == "partial" || e.projection.selected(e.proposal.DatastoreID).Dialect == "sqlite" && c.MatchType != "simple" {
+		e.diagnostic(c, "/matchType", "Designed FK match mode is unsupported by this dialect", constraintID)
+		return false
+	}
+	if *c.InitiallyDeferred && !*c.Deferrable {
+		e.diagnostic(c, "/initiallyDeferred", "Initially deferred requires deferrable", constraintID)
+		return false
+	}
+	return true
+}
+
+// fkNameFree requires a created FK's name to be unused on its table, by a
+// selected constraint or index and by another designed constraint.
+func (e *proposalEvaluation) fkNameFree(c ProposalCommand, table, constraintID string) bool {
+	for _, n := range e.projection.children[table] {
+		if (n.Kind == "constraint" || n.Kind == "index") && e.projection.selected(n.ID) != nil && n.Name == c.Name {
+			e.diagnostic(c, "/name", "Selected constraint/index name is already in use", n.ID)
+			return false
+		}
+	}
+	for _, o := range e.overlays {
+		if o.SubjectID != constraintID && o.Name == c.Name && o.ParentID != nil && *o.ParentID == table {
+			e.diagnostic(c, "/name", "Designed constraint name is already in use", o.SubjectID)
+			return false
+		}
+	}
+	return true
 }
 
 func (e *proposalEvaluation) criteria(c ProposalCommand) {
@@ -477,49 +575,56 @@ func (e *proposalEvaluation) validateFKs() {
 		if err := json.Unmarshal(o.Values["columnPairs"], &pairs); err != nil {
 			continue
 		}
-		c := ProposalCommand{CommandID: o.CommandID, Reason: o.Reason}
 		for _, actionKey := range []string{"updateAction", "deleteAction"} {
 			var action relationalScalar
 			if json.Unmarshal(o.Values[actionKey], &action) != nil || action.Status != "known" {
 				continue
 			}
 			for _, pair := range pairs {
-				f := e.projection.selected(pair.FromColumnID)
-				if f == nil {
-					continue
-				}
-				col, changed := e.overlays[pair.FromColumnID]
-				if o.CommandID == "" && !changed {
-					continue
-				}
-				property := "/" + actionKey
-				cause := c
-				if cause.CommandID == "" {
-					cause.CommandID, cause.Reason, property = col.CommandID, col.Reason, "/nullable"
-				}
-				n := f.Nullable
-				if changed {
-					var value relationalScalar
-					if json.Unmarshal(col.Values["nullable"], &value) == nil {
-						n = &value
-					}
-				}
-				if rawStringEquals(action.Value, "set_null") {
-					if scalarBool(n, false) {
-						e.diagnostic(cause, property, "SET NULL conflicts with final selected NOT NULL column", o.FromID, pair.FromColumnID)
-					} else if n == nil || n.Status != "known" {
-						e.result.Limitations = append(e.result.Limitations, "SET NULL feasibility is unknown for "+pair.FromColumnID)
-					}
-				}
-				if rawStringEquals(action.Value, "set_default") && (f.DefaultExpression == nil || f.DefaultExpression.Status != "known" || string(f.DefaultExpression.Value) == "null") {
-					e.result.Limitations = append(e.result.Limitations, "SET DEFAULT feasibility is unverified for "+pair.FromColumnID)
-				}
+				e.checkFKActionPair(o, actionKey, action, pair)
 			}
 		}
 	}
 	// Keep repeated feasibility warnings deterministic and bounded.
 	slices.Sort(e.result.Limitations)
 	e.result.Limitations = slices.Compact(e.result.Limitations)
+}
+
+// checkFKActionPair checks one SET NULL / SET DEFAULT action against the final
+// state of one source column. A source-only FK is checked only when the
+// proposal changed that column, and the diagnostic is then charged to the
+// column edit.
+func (e *proposalEvaluation) checkFKActionPair(o ProposalOverlay, actionKey string, action relationalScalar, pair DatabaseColumnPair) {
+	f := e.projection.selected(pair.FromColumnID)
+	if f == nil {
+		return
+	}
+	col, changed := e.overlays[pair.FromColumnID]
+	if o.CommandID == "" && !changed {
+		return
+	}
+	property := "/" + actionKey
+	cause := ProposalCommand{CommandID: o.CommandID, Reason: o.Reason}
+	if cause.CommandID == "" {
+		cause.CommandID, cause.Reason, property = col.CommandID, col.Reason, "/nullable"
+	}
+	n := f.Nullable
+	if changed {
+		var value relationalScalar
+		if json.Unmarshal(col.Values["nullable"], &value) == nil {
+			n = &value
+		}
+	}
+	if rawStringEquals(action.Value, "set_null") {
+		if scalarBool(n, false) {
+			e.diagnostic(cause, property, "SET NULL conflicts with final selected NOT NULL column", o.FromID, pair.FromColumnID)
+		} else if n == nil || n.Status != "known" {
+			e.result.Limitations = append(e.result.Limitations, "SET NULL feasibility is unknown for "+pair.FromColumnID)
+		}
+	}
+	if rawStringEquals(action.Value, "set_default") && (f.DefaultExpression == nil || f.DefaultExpression.Status != "known" || string(f.DefaultExpression.Value) == "null") {
+		e.result.Limitations = append(e.result.Limitations, "SET DEFAULT feasibility is unverified for "+pair.FromColumnID)
+	}
 }
 
 func (e *proposalEvaluation) newCount(recordType string) int {
