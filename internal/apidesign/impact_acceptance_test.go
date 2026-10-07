@@ -1,6 +1,7 @@
 package apidesign
 
 import (
+	"net/http"
 	"testing"
 
 	"github.com/yashok111/mocker/internal/jsonx"
@@ -33,7 +34,7 @@ func TestImpactAcceptanceCorpusFindsSharedInputConsumer(t *testing.T) {
 		t.Fatalf("ordinary corpus was truncated: %+v", report.Coverage)
 	}
 	for _, entity := range report.Affected {
-		if entity.Kind == "operation" && entity.Before != nil && entity.Before.Method == "POST" && entity.Before.Path == "/api/v1/rooms/{roomId}/requests/{requestId}/accept" {
+		if entity.Kind == "operation" && entity.Before != nil && entity.Before.Method == http.MethodPost && entity.Before.Path == "/api/v1/rooms/{roomId}/requests/{requestId}/accept" {
 			return
 		}
 	}

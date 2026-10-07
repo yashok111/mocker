@@ -28,7 +28,7 @@ func TestAnalyzeImpactReadsExactSnapshotsWithoutWrites(t *testing.T) {
 	}
 	counts := func() []int64 {
 		t.Helper()
-		out := []int64{}
+		out := make([]int64, 0, 5)
 		for _, query := range []string{"SELECT COUNT(*) FROM api_design_revisions", "SELECT COUNT(*) FROM workspaces", "SELECT COUNT(*) FROM checkpoints", "SELECT SUM(revision) FROM workspaces", "SELECT COUNT(*) FROM specs"} {
 			var n int64
 			if err := db.R.QueryRowContext(ctx, query).Scan(&n); err != nil {

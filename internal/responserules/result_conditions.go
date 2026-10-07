@@ -74,15 +74,15 @@ func decodeResultCondition(data []byte, level int, leaves *int) (ResultCondition
 	if err := decodeObject(data, required("source", &v.Source), required("op", &v.Op), optional("valueJSON", &v.ValueJSON), optional("valueFrom", &v.ValueFrom)); err != nil {
 		return v, err
 	}
-	return v, checkResultConditionLeaf(v)
+	return v, checkResultConditionLeaf(context.Background(), v)
 }
 
-func checkResultCondition(c ResultCondition) error {
+func checkResultCondition(ctx context.Context, c ResultCondition) error {
 	leaves := 0
-	return checkResultConditionTree(c, 1, &leaves)
+	return checkResultConditionTree(ctx, c, 1, &leaves)
 }
 
-func checkResultConditionTree(c ResultCondition, level int, leaves *int) error {
+func checkResultConditionTree(ctx context.Context, c ResultCondition, level int, leaves *int) error {
 	if level > MaxResultConditionDepth {
 		return invalid("", "условие результата превышает четыре уровня")
 	}
@@ -98,7 +98,7 @@ func checkResultConditionTree(c ResultCondition, level int, leaves *int) error {
 			return invalid("/"+name, "группа требует от двух до 16 условий")
 		}
 		for i, child := range children {
-			if err := checkResultConditionTree(child, level+1, leaves); err != nil {
+			if err := checkResultConditionTree(ctx, child, level+1, leaves); err != nil {
 				return at(fmt.Sprintf("/%s/%d", name, i), err)
 			}
 		}
@@ -108,21 +108,21 @@ func checkResultConditionTree(c ResultCondition, level int, leaves *int) error {
 	if *leaves > MaxResultConditionLeaves {
 		return invalid("", "допустимо не более 16 листовых условий")
 	}
-	return checkResultConditionLeaf(c)
+	return checkResultConditionLeaf(ctx, c)
 }
 
-func checkResultConditionLeaf(c ResultCondition) error {
+func checkResultConditionLeaf(ctx context.Context, c ResultCondition) error {
 	if c.Source.Source != "result" {
 		return invalid("/source/source", "условие требует источник result")
 	}
-	if err := checkValueRef(c.Source); err != nil {
+	if err := checkValueRef(ctx, c.Source); err != nil {
 		return at("/source", err)
 	}
 	if c.ValueFrom != nil {
 		if c.ValueFrom.Source != "result" {
 			return invalid("/valueFrom/source", "условие требует источник result")
 		}
-		if err := checkValueRef(*c.ValueFrom); err != nil {
+		if err := checkValueRef(ctx, *c.ValueFrom); err != nil {
 			return at("/valueFrom", err)
 		}
 	}
@@ -132,7 +132,7 @@ func checkResultConditionLeaf(c ResultCondition) error {
 			return invalid("/valueJSON", "сравнение требует ровно одно из valueJSON и valueFrom")
 		}
 		if c.ValueJSON != nil {
-			value, err := resultConditionScalar(context.Background(), *c.ValueJSON)
+			value, err := resultConditionScalar(ctx, *c.ValueJSON)
 			if err != nil {
 				return at("/valueJSON", err)
 			}
@@ -312,39 +312,9 @@ func evaluateResultConditionLeaf(ctx context.Context, c ResultCondition, results
 	if resultScalarKind(actual) == "" {
 		return false, nil, invalid("/source/pointer", fmt.Sprintf("JSON Pointer %q результата узла %q должен содержать скаляр или null", c.Source.Pointer, c.Source.NodeID))
 	}
-	var expected any
-	expectedPath := "/valueJSON"
-	if c.ValueFrom != nil {
-		expectedPath = "/valueFrom/pointer"
-		var found bool
-		expected, found, err = resultConditionOperand(ctx, *c.ValueFrom, results, "/valueFrom")
-		if err != nil {
-			return false, nil, err
-		}
-		if !found {
-			return false, nil, invalid(expectedPath, fmt.Sprintf("JSON Pointer %q результата узла %q отсутствует", c.ValueFrom.Pointer, c.ValueFrom.NodeID))
-		}
-		if resultScalarKind(expected) == "" {
-			return false, nil, invalid(expectedPath, fmt.Sprintf("JSON Pointer %q результата узла %q должен содержать скаляр или null", c.ValueFrom.Pointer, c.ValueFrom.NodeID))
-		}
-		trace.ValueFrom = new(*c.ValueFrom)
-		trace.ExpectedJSON, err = budget.jsonText(expected)
-	} else {
-		if c.ValueJSON == nil {
-			return false, nil, invalid(expectedPath, "сравнение требует valueJSON или valueFrom")
-		}
-		expected, err = resultConditionScalar(ctx, *c.ValueJSON)
-		trace.ExpectedJSON = new(*c.ValueJSON)
-		budget.remaining -= len(*c.ValueJSON)
-	}
-	if err != nil || budget.remaining < 0 {
-		if ctx.Err() != nil {
-			return false, nil, ctx.Err()
-		}
-		if err == nil {
-			err = invalid("", "результат превышает 512 КиБ")
-		}
-		return false, nil, at(expectedPath, err)
+	expected, expectedPath, err := resultConditionExpected(ctx, c, results, budget, trace)
+	if err != nil {
+		return false, nil, err
 	}
 	if resultOrdering(c.Op) {
 		if resultScalarKind(actual) != "number" {
@@ -360,25 +330,76 @@ func evaluateResultConditionLeaf(ctx context.Context, c ResultCondition, results
 	if actual != nil && expected != nil && resultScalarKind(actual) != resultScalarKind(expected) {
 		return false, nil, invalid(expectedPath, fmt.Sprintf("тип JSON Pointer %q результата узла %q не совпадает с типом правого значения", c.Source.Pointer, c.Source.NodeID))
 	}
-	matched := jsonx.EqualValue(actual, expected)
-	if c.Op == "not_equals" {
-		matched = !matched
-	} else if resultOrdering(c.Op) {
-		order := jsonx.CompareNumbers(actual.(jsonx.Number), expected.(jsonx.Number))
-		switch c.Op {
-		case "greater_than":
-			matched = order > 0
-		case "greater_or_equal":
-			matched = order >= 0
-		case "less_than":
-			matched = order < 0
-		case "less_or_equal":
-			matched = order <= 0
-		}
-	}
+	matched := compareResultScalars(c.Op, actual, expected)
 	if err := ctx.Err(); err != nil {
 		return false, nil, err
 	}
 	trace.Matched = matched
 	return matched, trace, nil
+}
+
+// resultConditionExpected resolves the right-hand operand from valueFrom or
+// valueJSON, records it in the trace and charges it to the budget. The error
+// already carries its pointer, except a cancellation, which passes through.
+func resultConditionExpected(ctx context.Context, c ResultCondition, results map[string]any, budget *resultPredicateBudget, trace *ResultConditionTrace) (any, string, error) {
+	var expected any
+	var err error
+	expectedPath := "/valueJSON"
+	if c.ValueFrom != nil {
+		expectedPath = "/valueFrom/pointer"
+		var found bool
+		expected, found, err = resultConditionOperand(ctx, *c.ValueFrom, results, "/valueFrom")
+		if err != nil {
+			return nil, expectedPath, err
+		}
+		if !found {
+			return nil, expectedPath, invalid(expectedPath, fmt.Sprintf("JSON Pointer %q результата узла %q отсутствует", c.ValueFrom.Pointer, c.ValueFrom.NodeID))
+		}
+		if resultScalarKind(expected) == "" {
+			return nil, expectedPath, invalid(expectedPath, fmt.Sprintf("JSON Pointer %q результата узла %q должен содержать скаляр или null", c.ValueFrom.Pointer, c.ValueFrom.NodeID))
+		}
+		trace.ValueFrom = new(*c.ValueFrom)
+		trace.ExpectedJSON, err = budget.jsonText(expected)
+	} else {
+		if c.ValueJSON == nil {
+			return nil, expectedPath, invalid(expectedPath, "сравнение требует valueJSON или valueFrom")
+		}
+		expected, err = resultConditionScalar(ctx, *c.ValueJSON)
+		trace.ExpectedJSON = new(*c.ValueJSON)
+		budget.remaining -= len(*c.ValueJSON)
+	}
+	if err != nil || budget.remaining < 0 {
+		if ctx.Err() != nil {
+			return nil, expectedPath, ctx.Err()
+		}
+		if err == nil {
+			err = invalid("", "результат превышает 512 КиБ")
+		}
+		return nil, expectedPath, at(expectedPath, err)
+	}
+	return expected, expectedPath, nil
+}
+
+// compareResultScalars applies a comparison op to two scalars whose kinds
+// the caller has already reconciled; ordering ops see two numbers.
+func compareResultScalars(op string, actual, expected any) bool {
+	matched := jsonx.EqualValue(actual, expected)
+	if op == "not_equals" {
+		return !matched
+	}
+	if !resultOrdering(op) {
+		return matched
+	}
+	order := jsonx.CompareNumbers(actual.(jsonx.Number), expected.(jsonx.Number))
+	switch op {
+	case "greater_than":
+		matched = order > 0
+	case "greater_or_equal":
+		matched = order >= 0
+	case "less_than":
+		matched = order < 0
+	case "less_or_equal":
+		matched = order <= 0
+	}
+	return matched
 }

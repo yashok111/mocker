@@ -26,46 +26,59 @@ func (r *Repo) projectRuleEntitiesTx(ctx context.Context, tx *sql.Tx, workspaceI
 	if err != nil {
 		return stateDiagramExecutionError(err)
 	}
-	families := []string{}
-	for _, rule := range execution.Rules {
-		for _, node := range rule.Nodes {
-			if node.Entity == nil {
-				continue
-			}
-			for family := node.Entity.Family; family != ""; family = router.ParentFamily(family) {
-				if !slices.Contains(families, family) {
-					families = append(families, family)
-				}
-			}
-		}
+	err = resources.EnsureRuleFamiliesTx(ctx, tx, r.specs, workspaceID, specID, []byte(document), ruleEntityFamilies(execution, states))
+	if field, ok := errors.AsType[*resources.RuleFamilyError](err); ok {
+		return ruleFamilyFieldError(states, field)
 	}
-	for _, diagram := range states.Diagrams {
-		if diagram.Entity == nil {
-			continue // The execution compiler reports the missing binding.
-		}
-		for family := diagram.Entity.Family; family != ""; family = router.ParentFamily(family) {
+	if err != nil {
+		return err
+	}
+	return checkStateFieldsTx(ctx, tx, workspaceID, states)
+}
+
+// ruleEntityFamilies lists every family an executable rule or state diagram
+// addresses, ancestors included, in first-use order.
+func ruleEntityFamilies(execution responserules.Envelope, states statediagram.Envelope) []string {
+	families := []string{}
+	addFamily := func(start string) {
+		for family := start; family != ""; family = router.ParentFamily(family) {
 			if !slices.Contains(families, family) {
 				families = append(families, family)
 			}
 		}
 	}
-	err = resources.EnsureRuleFamiliesTx(ctx, tx, r.specs, workspaceID, specID, []byte(document), families)
-	if field, ok := errors.AsType[*resources.RuleFamilyError](err); ok {
-		for i, diagram := range states.Diagrams {
-			if diagram.Entity == nil {
-				continue
-			}
-			for family := diagram.Entity.Family; family != ""; family = router.ParentFamily(family) {
-				if field.Family == family {
-					return invalidField(fmt.Sprintf("/%s/diagrams/%d/entity/family", statediagram.ExecutionExtension, i), field.Error())
-				}
+	for _, rule := range execution.Rules {
+		for _, node := range rule.Nodes {
+			if node.Entity != nil {
+				addFamily(node.Entity.Family)
 			}
 		}
-		return invalidField("/"+responserules.ExecutionExtension, field.Error())
 	}
-	if err != nil {
-		return err
+	for _, diagram := range states.Diagrams {
+		if diagram.Entity != nil { // The execution compiler reports a missing binding.
+			addFamily(diagram.Entity.Family)
+		}
 	}
+	return families
+}
+
+// ruleFamilyFieldError points a rejected family at the first state diagram
+// that reaches it, else at the response-rule execution copy.
+func ruleFamilyFieldError(states statediagram.Envelope, field *resources.RuleFamilyError) error {
+	for i, diagram := range states.Diagrams {
+		if diagram.Entity == nil {
+			continue
+		}
+		for family := diagram.Entity.Family; family != ""; family = router.ParentFamily(family) {
+			if field.Family == family {
+				return invalidField(fmt.Sprintf("/%s/diagrams/%d/entity/family", statediagram.ExecutionExtension, i), field.Error())
+			}
+		}
+	}
+	return invalidField("/"+responserules.ExecutionExtension, field.Error())
+}
+
+func checkStateFieldsTx(ctx context.Context, tx *sql.Tx, workspaceID int64, states statediagram.Envelope) error {
 	for i, diagram := range states.Diagrams {
 		if diagram.Entity == nil {
 			continue

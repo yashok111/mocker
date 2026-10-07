@@ -36,14 +36,35 @@ func BuildCoverage(revision Revision, reports []RunReport) Coverage {
 			coverage.Messages = append(coverage.Messages, MessageCoverage{MessageID: m.ID})
 		}
 	}
-	type pathKey struct{ fragment, branch, outcome string }
-	pathIndex := map[pathKey]int{}
+	pathIndex := coverage.addFragmentPaths(revision.Document.Fragments)
+	selected := coverageSample(revision, reports)
+	coverage.RunCount = len(selected)
+	for _, r := range selected {
+		for _, s := range r.Steps {
+			if i, ok := messageIndex[s.MessageID]; ok {
+				coverage.Messages[i].count(s.Status)
+			}
+		}
+		for _, decision := range r.ControlFlow {
+			if i, ok := pathIndex[coveragePathKey{decision.FragmentID, decision.BranchID, decision.Outcome}]; ok {
+				coverage.Paths[i].Hits++
+			}
+		}
+	}
+	return coverage
+}
+
+type coveragePathKey struct{ fragment, branch, outcome string }
+
+// addFragmentPaths lists every decision outcome a fragment can record and
+// returns where each landed in Paths.
+func (coverage *Coverage) addFragmentPaths(fragments []Fragment) map[coveragePathKey]int {
+	pathIndex := map[coveragePathKey]int{}
 	addPath := func(fragment, branch, outcome string) {
-		key := pathKey{fragment, branch, outcome}
-		pathIndex[key] = len(coverage.Paths)
+		pathIndex[coveragePathKey{fragment, branch, outcome}] = len(coverage.Paths)
 		coverage.Paths = append(coverage.Paths, PathCoverage{FragmentID: fragment, BranchID: branch, Outcome: outcome})
 	}
-	for _, f := range revision.Document.Fragments {
+	for _, f := range fragments {
 		switch f.Kind {
 		case "alt":
 			for _, b := range f.Branches {
@@ -59,6 +80,11 @@ func BuildCoverage(revision Revision, reports []RunReport) Coverage {
 			}
 		}
 	}
+	return pathIndex
+}
+
+// coverageSample keeps the newest terminal runs of this exact revision.
+func coverageSample(revision Revision, reports []RunReport) []RunReport {
 	selected := make([]RunReport, 0, min(len(reports), CoverageSampleLimit))
 	for _, r := range reports {
 		if r.ScenarioID == revision.ScenarioID && r.RevisionID == revision.ID && (r.Status == "passed" || r.Status == "failed" || r.Status == "cancelled") {
@@ -77,28 +103,18 @@ func BuildCoverage(revision Revision, reports []RunReport) Coverage {
 	if len(selected) > CoverageSampleLimit {
 		selected = selected[:CoverageSampleLimit]
 	}
-	coverage.RunCount = len(selected)
-	for _, r := range selected {
-		for _, s := range r.Steps {
-			if i, ok := messageIndex[s.MessageID]; ok {
-				row := &coverage.Messages[i]
-				switch s.Status {
-				case "passed":
-					row.Attempted++
-					row.Passed++
-				case "failed", "cancelled", "running":
-					row.Attempted++
-					row.Failed++
-				case "skipped":
-					row.Skipped++
-				}
-			}
-		}
-		for _, decision := range r.ControlFlow {
-			if i, ok := pathIndex[pathKey{decision.FragmentID, decision.BranchID, decision.Outcome}]; ok {
-				coverage.Paths[i].Hits++
-			}
-		}
+	return selected
+}
+
+func (row *MessageCoverage) count(status string) {
+	switch status {
+	case "passed":
+		row.Attempted++
+		row.Passed++
+	case "failed", "cancelled", "running":
+		row.Attempted++
+		row.Failed++
+	case "skipped":
+		row.Skipped++
 	}
-	return coverage
 }

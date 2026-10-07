@@ -179,7 +179,7 @@ func (c *executionCompiler) addTransition(d Diagram, tr Transition, at string, s
 }
 func (c *executionCompiler) transitionAdmission(entity EntityBinding, tr Transition, at string) (Admission, error) {
 	switch tr.Binding.Method {
-	case "post", "put", "patch", "delete":
+	case "post", "put", "patch", "delete": //nolint:usestdlibvars // lowercase OpenAPI path-item keys; http.MethodPost is "POST"
 	default:
 		return Admission{}, executionInvalid(at+"/binding", "Для исполнения доступны POST, PUT, PATCH и DELETE")
 	}
@@ -226,7 +226,7 @@ func boundOperation(root map[string]any, b Binding) (map[string]any, error) {
 	paths, _ := root["paths"].(map[string]any)
 	item, ok := paths[b.Path]
 	if !ok {
-		return nil, fmt.Errorf("Связанная операция API не найдена: %s %s", b.Method, b.Path)
+		return nil, fmt.Errorf("Связанная операция API не найдена: %s %s", b.Method, b.Path) //nolint:staticcheck // ST1005: operator-facing Russian sentence, shown verbatim
 	}
 	pointer := "/paths/" + strings.ReplaceAll(strings.ReplaceAll(b.Path, "~", "~0"), "/", "~1")
 	nodes, diagnostics := schemamodel.PathItems(root, item, pointer)
@@ -240,7 +240,7 @@ func boundOperation(root map[string]any, b Binding) (map[string]any, error) {
 			}
 		}
 	}
-	return nil, fmt.Errorf("Связанная операция API не найдена: %s %s", b.Method, b.Path)
+	return nil, fmt.Errorf("Связанная операция API не найдена: %s %s", b.Method, b.Path) //nolint:staticcheck // ST1005: operator-facing Russian sentence, shown verbatim
 }
 func admitResponse(resolver *openapi.Resolver, operation map[string]any, status int) error {
 	responses, _ := operation["responses"].(map[string]any)
@@ -252,16 +252,16 @@ func admitResponse(resolver *openapi.Resolver, operation map[string]any, status 
 		}
 	}
 	if !found {
-		return fmt.Errorf("Статус ответа %d не описан в операции API", status)
+		return fmt.Errorf("Статус ответа %d не описан в операции API", status) //nolint:staticcheck // ST1005: operator-facing Russian sentence, shown verbatim
 	}
 	resolved, err := resolver.ResolveNode(response)
 	if err != nil {
-		return fmt.Errorf("Ответ %d: %w", status, err)
+		return fmt.Errorf("Ответ %d: %w", status, err) //nolint:staticcheck // ST1005: operator-facing Russian sentence, shown verbatim
 	}
 	object, _ := resolved.(map[string]any)
 	content, _ := object["content"].(map[string]any)
 	if media, ok := content["application/json"].(map[string]any); !ok || media == nil {
-		return fmt.Errorf("Ответ %d должен предлагать application/json", status)
+		return fmt.Errorf("Ответ %d должен предлагать application/json", status) //nolint:staticcheck // ST1005: operator-facing Russian sentence, shown verbatim
 	}
 	return nil
 }

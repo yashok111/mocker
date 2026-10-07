@@ -56,34 +56,54 @@ func analyzeEventMap(ctx context.Context, document Document) (EventMapAnalysis, 
 		return b.finalize()
 	}
 	m := document.EventModel
-	// Sequence participants also include brokers and HTTP-only actors. Only
-	// explicit event-contract owners belong to this contract topology.
+	// Each phase reads the indexes the earlier ones filled, so the order is fixed.
+	for _, phase := range []func(*EventModel) error{b.participantNodes, b.serverNodes, b.channelNodes, b.messageNodes, b.schemaNodes, b.boundOperations, b.httpContracts, b.contractOperations} {
+		if err := phase(m); err != nil {
+			return b.out, err
+		}
+	}
+	b.topologyDiagnostics()
+	return b.finalize()
+}
+
+// participantNodes adds only explicit event-contract owners: sequence
+// participants also include brokers and HTTP-only actors, which do not
+// belong to this contract topology.
+func (b *eventMapBuilder) participantNodes(m *EventModel) error {
 	owners := make(map[string]bool, len(m.Contracts))
 	for _, contract := range m.Contracts {
-		if err := ctx.Err(); err != nil {
-			return b.out, err
+		if err := b.ctx.Err(); err != nil {
+			return err
 		}
 		owners[contract.ParticipantID] = true
 	}
-	for i, p := range document.Participants {
-		if err := ctx.Err(); err != nil {
-			return b.out, err
+	for i, p := range b.doc.Participants {
+		if err := b.ctx.Err(); err != nil {
+			return err
 		}
 		if !owners[p.ID] {
 			continue
 		}
 		b.node(EventMapNode{ID: eventMapID("participant", p.ID), Kind: "participant", Label: cmp.Or(p.Name, p.ID), Locator: EventMapLocator{Pointer: fmt.Sprintf("/participants/%d", i), EntityID: p.ID, ParticipantID: p.ID}})
 	}
+	return nil
+}
+
+func (b *eventMapBuilder) serverNodes(m *EventModel) error {
 	for i, s := range m.Servers {
-		if err := ctx.Err(); err != nil {
-			return b.out, err
+		if err := b.ctx.Err(); err != nil {
+			return err
 		}
 		b.servers[s.ID] = s
 		b.node(EventMapNode{ID: eventMapID("server", s.ID), Kind: "server", Label: cmp.Or(s.Name, s.Host, s.ID), Locator: EventMapLocator{Pointer: fmt.Sprintf("/eventModel/servers/%d", i), EntityID: s.ID}})
 	}
+	return nil
+}
+
+func (b *eventMapBuilder) channelNodes(m *EventModel) error {
 	for i, ch := range m.Channels {
-		if err := ctx.Err(); err != nil {
-			return b.out, err
+		if err := b.ctx.Err(); err != nil {
+			return err
 		}
 		b.channels[ch.ID] = ch
 		p := fmt.Sprintf("/eventModel/channels/%d", i)
@@ -101,9 +121,13 @@ func analyzeEventMap(ctx context.Context, document Document) (EventMapAnalysis, 
 			b.edge("channel_message", eventMapID("channel", ch.ID), eventMapID("message", id), "Сообщение", EventMapLocator{Pointer: fmt.Sprintf("%s/messageIds/%d", p, j), EntityID: ch.ID})
 		}
 	}
+	return nil
+}
+
+func (b *eventMapBuilder) messageNodes(m *EventModel) error {
 	for i, msg := range m.Messages {
-		if err := ctx.Err(); err != nil {
-			return b.out, err
+		if err := b.ctx.Err(); err != nil {
+			return err
 		}
 		b.messages[msg.ID] = msg
 		p := fmt.Sprintf("/eventModel/messages/%d", i)
@@ -117,9 +141,13 @@ func analyzeEventMap(ctx context.Context, document Document) (EventMapAnalysis, 
 			}
 		}
 	}
+	return nil
+}
+
+func (b *eventMapBuilder) schemaNodes(m *EventModel) error {
 	for i, schema := range m.Schemas {
-		if err := ctx.Err(); err != nil {
-			return b.out, err
+		if err := b.ctx.Err(); err != nil {
+			return err
 		}
 		b.schemas[schema.ID] = true
 		b.node(EventMapNode{ID: eventMapID("schema", schema.ID), Kind: "schema", Label: cmp.Or(schema.Name, schema.ID), Locator: EventMapLocator{Pointer: fmt.Sprintf("/eventModel/schemas/%d", i), EntityID: schema.ID}})
@@ -127,31 +155,31 @@ func analyzeEventMap(ctx context.Context, document Document) (EventMapAnalysis, 
 			b.diagnostic("event_schema_incomplete", "warning", fmt.Sprintf("/eventModel/schemas/%d/schemaJSON", i), "JSON-схема не заполнена или некорректна.", eventMapID("schema", schema.ID), true)
 		}
 	}
-	for _, step := range document.Messages {
+	return nil
+}
+
+// boundOperations marks which operations a scenario step binds.
+func (b *eventMapBuilder) boundOperations(*EventModel) error {
+	for _, step := range b.doc.Messages {
 		for _, binding := range step.EventBindings {
 			b.bound[eventMapID(binding.ContractID, binding.OperationID)] = true
 		}
 	}
-	for i, contract := range document.Contracts {
-		if err := ctx.Err(); err != nil {
-			return b.out, err
+	return nil
+}
+
+// httpContracts indexes the embedded HTTP contracts' operations and state
+// diagrams, which API and state links resolve against.
+func (b *eventMapBuilder) httpContracts(*EventModel) error {
+	for i, contract := range b.doc.Contracts {
+		if err := b.ctx.Err(); err != nil {
+			return err
 		}
 		entry := eventMapHTTPContract{contract: contract, index: i, operations: map[string][]ContractOperation{}, states: map[string]eventMapStateDiagram{}}
 		value, err := decodeJSONValue(contract.Document)
 		entry.root = object(value)
 		if err == nil && entry.root != nil {
-			for _, op := range ContractOperations(entry.root) {
-				if op.Key != "" {
-					entry.operations[op.Key] = append(entry.operations[op.Key], op)
-				}
-			}
-			env, stateErr := statediagram.Decode(entry.root)
-			entry.badState = stateErr != nil
-			if stateErr == nil {
-				for di, d := range env.Diagrams {
-					entry.states[d.ID] = eventMapStateDiagram{diagram: d, index: di}
-				}
-			}
+			entry.indexRoot()
 		}
 		if _, exists := b.http[contract.ID]; exists {
 			b.httpAmbiguous[contract.ID] = true
@@ -159,24 +187,43 @@ func analyzeEventMap(ctx context.Context, document Document) (EventMapAnalysis, 
 		}
 		b.http[contract.ID] = entry
 	}
+	return nil
+}
+
+func (b *eventMapBuilder) contractOperations(m *EventModel) error {
 	seenContracts := map[string]bool{}
 	for i, contract := range m.Contracts {
-		if err := ctx.Err(); err != nil {
-			return b.out, err
+		if err := b.ctx.Err(); err != nil {
+			return err
 		}
 		if seenContracts[contract.ID] {
 			b.diagnostic("event_contract_duplicate", "warning", fmt.Sprintf("/eventModel/contracts/%d/id", i), "ID событийного контракта повторяется.", "", true)
 		}
 		seenContracts[contract.ID] = true
 		for j, op := range contract.Operations {
-			if err := ctx.Err(); err != nil {
-				return b.out, err
+			if err := b.ctx.Err(); err != nil {
+				return err
 			}
 			b.operation(contract, i, op, j)
 		}
 	}
-	b.topologyDiagnostics()
-	return b.finalize()
+	return nil
+}
+
+// indexRoot collects the operations by key and the state diagrams by id.
+func (e *eventMapHTTPContract) indexRoot() {
+	for _, op := range ContractOperations(e.root) {
+		if op.Key != "" {
+			e.operations[op.Key] = append(e.operations[op.Key], op)
+		}
+	}
+	env, stateErr := statediagram.Decode(e.root)
+	e.badState = stateErr != nil
+	if stateErr == nil {
+		for di, d := range env.Diagrams {
+			e.states[d.ID] = eventMapStateDiagram{diagram: d, index: di}
+		}
+	}
 }
 
 func (b *eventMapBuilder) node(n EventMapNode) {
@@ -201,6 +248,33 @@ func (b *eventMapBuilder) operation(contract EventContract, ci int, op EventOper
 	p := fmt.Sprintf("/eventModel/contracts/%d/operations/%d", ci, oi)
 	id := eventMapID("operation", contract.ID, op.ID)
 	loc := EventMapLocator{Pointer: p, EntityID: op.ID, ContractID: contract.ID, OperationID: op.ID, ParticipantID: contract.ParticipantID}
+	b.operationNode(contract, op, p, id, loc)
+	routed := b.operationChannel(op, p, id, loc)
+	if !b.bound[eventMapID(contract.ID, op.ID)] {
+		b.diagnostic("event_operation_unbound", "info", p, "Операция не привязана к стрелке сценария.", id, false)
+	}
+	if op.Action == "receive" && (op.Kafka == nil || op.Kafka.GroupID == "") {
+		b.diagnostic("event_group_unspecified", "warning", p+"/kafka/groupId", "Группа потребителя не указана.", id, false)
+	}
+	if op.FailureRoutes != nil && !b.failureRoutes(contract, op, p, id, routed) {
+		return
+	}
+	for k, link := range op.APILinks {
+		if b.ctx.Err() != nil {
+			return
+		}
+		b.apiLink(id, p, k, link)
+	}
+	for k, link := range op.StateLinks {
+		if b.ctx.Err() != nil {
+			return
+		}
+		b.stateLink(id, p, k, link)
+	}
+}
+
+// operationNode adds the operation and its ownership edge.
+func (b *eventMapBuilder) operationNode(contract EventContract, op EventOperation, p, id string, loc EventMapLocator) {
 	n := EventMapNode{ID: id, Kind: "operation", Label: cmp.Or(op.Name, op.ID), Locator: loc}
 	if message, ok := b.messages[op.MessageID]; ok {
 		n.Label += " · " + cmp.Or(message.Name, message.ID)
@@ -215,6 +289,11 @@ func (b *eventMapBuilder) operation(contract EventContract, ci int, op EventOper
 		b.diagnostic("event_participant_missing", "warning", p, "Владелец событийной операции не найден.", id, true)
 	}
 	b.edge("ownership", eventMapID("participant", contract.ParticipantID), id, "Контракт", loc)
+}
+
+// operationChannel draws the send/receive edge; true means the operation's
+// channel exists and carries its message, so failure routes may be drawn too.
+func (b *eventMapBuilder) operationChannel(op EventOperation, p, id string, loc EventMapLocator) bool {
 	channel, channelOK := b.channels[op.ChannelID]
 	if !channelOK {
 		b.diagnostic("event_operation_channel_missing", "warning", p+"/channelId", "Топик операции не найден.", id, true)
@@ -234,55 +313,42 @@ func (b *eventMapBuilder) operation(contract EventContract, ci int, op EventOper
 			b.edge("receive", eventMapID("channel", op.ChannelID), id, "Получает · "+op.MessageID, loc)
 		}
 	}
-	if !b.bound[eventMapID(contract.ID, op.ID)] {
-		b.diagnostic("event_operation_unbound", "info", p, "Операция не привязана к стрелке сценария.", id, false)
+	return messageOK
+}
+
+// failureRoutes checks and draws the retry/dead-letter routes; false means
+// the context was cancelled and the operation must stop.
+func (b *eventMapBuilder) failureRoutes(contract EventContract, op EventOperation, p, id string, routed bool) bool {
+	if op.Action != "receive" {
+		b.diagnostic("event_route_invalid_action", "warning", p+"/failureRoutes", "Маршруты ошибок доступны только для receive.", id, true)
 	}
-	if op.Action == "receive" && (op.Kafka == nil || op.Kafka.GroupID == "") {
-		b.diagnostic("event_group_unspecified", "warning", p+"/kafka/groupId", "Группа потребителя не указана.", id, false)
+	if op.FailureRoutes.RetryChannelID != "" && op.FailureRoutes.RetryChannelID == op.FailureRoutes.DeadLetterChannelID {
+		b.diagnostic("event_route_duplicate_target", "warning", p+"/failureRoutes", "Повтор и dead-letter должны вести в разные топики.", id, true)
 	}
-	if op.FailureRoutes != nil {
-		if op.Action != "receive" {
-			b.diagnostic("event_route_invalid_action", "warning", p+"/failureRoutes", "Маршруты ошибок доступны только для receive.", id, true)
-		}
-		if op.FailureRoutes.RetryChannelID != "" && op.FailureRoutes.RetryChannelID == op.FailureRoutes.DeadLetterChannelID {
-			b.diagnostic("event_route_duplicate_target", "warning", p+"/failureRoutes", "Повтор и dead-letter должны вести в разные топики.", id, true)
-		}
-		for _, route := range []struct{ kind, id, field string }{{"retry", op.FailureRoutes.RetryChannelID, "retryChannelId"}, {"dead_letter", op.FailureRoutes.DeadLetterChannelID, "deadLetterChannelId"}} {
-			if b.ctx.Err() != nil {
-				return
-			}
-			if route.id == "" {
-				continue
-			}
-			rp := p + "/failureRoutes/" + route.field
-			if route.id == op.ChannelID {
-				b.diagnostic("event_route_self_target", "warning", rp, "Маршрут не может вести в исходный топик.", id, true)
-				continue
-			}
-			if _, ok := b.channels[route.id]; !ok {
-				b.diagnostic("event_route_target_missing", "warning", rp, "Целевой топик не найден.", id, true)
-				continue
-			}
-			if op.Action == "receive" && channelOK && messageOK {
-				b.edge(route.kind, id, eventMapID("channel", route.id), map[string]string{"retry": "Повтор", "dead_letter": "Dead-letter"}[route.kind], EventMapLocator{Pointer: rp, EntityID: op.ID, ContractID: contract.ID, OperationID: op.ID})
-			}
-			if !b.sameServers(op.ChannelID, route.id) {
-				b.diagnostic("event_route_cross_server", "warning", rp, "Маршрут пересекает Kafka-серверы; доставка не проверена.", id, false)
-			}
-		}
-	}
-	for k, link := range op.APILinks {
+	for _, route := range []struct{ kind, id, field string }{{"retry", op.FailureRoutes.RetryChannelID, "retryChannelId"}, {"dead_letter", op.FailureRoutes.DeadLetterChannelID, "deadLetterChannelId"}} {
 		if b.ctx.Err() != nil {
-			return
+			return false
 		}
-		b.apiLink(id, p, k, link)
-	}
-	for k, link := range op.StateLinks {
-		if b.ctx.Err() != nil {
-			return
+		if route.id == "" {
+			continue
 		}
-		b.stateLink(id, p, k, link)
+		rp := p + "/failureRoutes/" + route.field
+		if route.id == op.ChannelID {
+			b.diagnostic("event_route_self_target", "warning", rp, "Маршрут не может вести в исходный топик.", id, true)
+			continue
+		}
+		if _, ok := b.channels[route.id]; !ok {
+			b.diagnostic("event_route_target_missing", "warning", rp, "Целевой топик не найден.", id, true)
+			continue
+		}
+		if op.Action == "receive" && routed {
+			b.edge(route.kind, id, eventMapID("channel", route.id), map[string]string{"retry": "Повтор", "dead_letter": "Dead-letter"}[route.kind], EventMapLocator{Pointer: rp, EntityID: op.ID, ContractID: contract.ID, OperationID: op.ID})
+		}
+		if !b.sameServers(op.ChannelID, route.id) {
+			b.diagnostic("event_route_cross_server", "warning", rp, "Маршрут пересекает Kafka-серверы; доставка не проверена.", id, false)
+		}
 	}
+	return true
 }
 
 func (b *eventMapBuilder) sameServers(a, c string) bool {
@@ -377,82 +443,21 @@ func (b *eventMapBuilder) stateLink(source, p string, k int, link EventStateLink
 	b.edge("state_link", source, id, "Состояние", EventMapLocator{Pointer: pointer, HTTPContractID: link.ContractID, DiagramID: link.DiagramID, TransitionID: link.TransitionID, Mode: loc.Mode, PinnedRevisionID: loc.PinnedRevisionID})
 }
 
+// eventRouteSite is one failure route between two channels, kept with the
+// pointer and element its diagnostics name.
+type eventRouteSite struct{ from, to, pointer, element string }
+
 func (b *eventMapBuilder) topologyDiagnostics() {
-	producers := map[string]bool{}
-	consumers := map[string]bool{}
-	channelSenders := map[string]bool{}
-	routes := map[string][]string{}
-	type routeSite struct{ from, to, pointer, element string }
-	routeSites := []routeSite{}
-	for _, contract := range b.doc.EventModel.Contracts {
-		for _, op := range contract.Operations {
-			ch, ok := b.channels[op.ChannelID]
-			if !ok || !slices.Contains(ch.MessageIDs, op.MessageID) {
-				continue
-			}
-			key := eventMapID(op.ChannelID, op.MessageID)
-			if op.Action == "send" {
-				producers[key] = true
-				channelSenders[op.ChannelID] = true
-			} else if op.Action == "receive" {
-				consumers[key] = true
-			}
-		}
-	}
-	for ci, contract := range b.doc.EventModel.Contracts {
-		for oi, op := range contract.Operations {
-			if b.ctx.Err() != nil {
-				return
-			}
-			if op.FailureRoutes == nil {
-				continue
-			}
-			ch, ok := b.channels[op.ChannelID]
-			if op.Action != "receive" || !ok || !slices.Contains(ch.MessageIDs, op.MessageID) {
-				continue
-			}
-			for _, route := range []struct{ id, field string }{{op.FailureRoutes.RetryChannelID, "retryChannelId"}, {op.FailureRoutes.DeadLetterChannelID, "deadLetterChannelId"}} {
-				if route.id == "" {
-					continue
-				}
-				if route.id == op.ChannelID {
-					continue
-				}
-				if _, exists := b.channels[route.id]; !exists {
-					continue
-				}
-				p := fmt.Sprintf("/eventModel/contracts/%d/operations/%d/failureRoutes/%s", ci, oi, route.field)
-				id := eventMapID("operation", contract.ID, op.ID)
-				if !channelSenders[route.id] {
-					b.diagnostic("event_route_sender_missing", "warning", p, "Для целевого топика не указан производитель.", id, false)
-				}
-				routes[op.ChannelID] = append(routes[op.ChannelID], route.id)
-				routeSites = append(routeSites, routeSite{op.ChannelID, route.id, p, id})
-			}
-		}
+	producers, consumers, channelSenders := b.channelTraffic()
+	routes, routeSites, ok := b.failureRouteSites(channelSenders)
+	if !ok {
+		return
 	}
 	for _, site := range routeSites {
 		if b.ctx.Err() != nil {
 			return
 		}
-		seen := map[string]bool{}
-		var reaches func(string) bool
-		reaches = func(id string) bool {
-			if id == site.from {
-				return true
-			}
-			if seen[id] || b.ctx.Err() != nil {
-				return false
-			}
-			seen[id] = true
-			for _, next := range routes[id] {
-				if reaches(next) {
-					return true
-				}
-			}
-			return false
-		}
-		if reaches(site.to) {
+		if b.routeReaches(routes, site.to, site.from, map[string]bool{}) {
 			b.diagnostic("event_route_cycle", "warning", site.pointer, "Маршрут повторов образует цикл; завершение доставки не проверено.", site.element, false)
 		}
 	}
@@ -471,6 +476,82 @@ func (b *eventMapBuilder) topologyDiagnostics() {
 			}
 		}
 	}
+}
+
+// channelTraffic indexes which channel/message pairs have a sender and a
+// receiver, counting only operations whose message belongs to their channel.
+func (b *eventMapBuilder) channelTraffic() (producers, consumers, channelSenders map[string]bool) {
+	producers, consumers, channelSenders = map[string]bool{}, map[string]bool{}, map[string]bool{}
+	for _, contract := range b.doc.EventModel.Contracts {
+		for _, op := range contract.Operations {
+			ch, ok := b.channels[op.ChannelID]
+			if !ok || !slices.Contains(ch.MessageIDs, op.MessageID) {
+				continue
+			}
+			key := eventMapID(op.ChannelID, op.MessageID)
+			switch op.Action {
+			case "send":
+				producers[key] = true
+				channelSenders[op.ChannelID] = true
+			case "receive":
+				consumers[key] = true
+			}
+		}
+	}
+	return producers, consumers, channelSenders
+}
+
+// failureRouteSites collects the valid failure routes as a channel graph and
+// flags targets nobody publishes to; false means the context was cancelled.
+func (b *eventMapBuilder) failureRouteSites(channelSenders map[string]bool) (map[string][]string, []eventRouteSite, bool) {
+	routes := map[string][]string{}
+	routeSites := []eventRouteSite{}
+	for ci, contract := range b.doc.EventModel.Contracts {
+		for oi, op := range contract.Operations {
+			if b.ctx.Err() != nil {
+				return nil, nil, false
+			}
+			if op.FailureRoutes == nil {
+				continue
+			}
+			ch, ok := b.channels[op.ChannelID]
+			if op.Action != "receive" || !ok || !slices.Contains(ch.MessageIDs, op.MessageID) {
+				continue
+			}
+			for _, route := range []struct{ id, field string }{{op.FailureRoutes.RetryChannelID, "retryChannelId"}, {op.FailureRoutes.DeadLetterChannelID, "deadLetterChannelId"}} {
+				if route.id == "" || route.id == op.ChannelID {
+					continue
+				}
+				if _, exists := b.channels[route.id]; !exists {
+					continue
+				}
+				p := fmt.Sprintf("/eventModel/contracts/%d/operations/%d/failureRoutes/%s", ci, oi, route.field)
+				id := eventMapID("operation", contract.ID, op.ID)
+				if !channelSenders[route.id] {
+					b.diagnostic("event_route_sender_missing", "warning", p, "Для целевого топика не указан производитель.", id, false)
+				}
+				routes[op.ChannelID] = append(routes[op.ChannelID], route.id)
+				routeSites = append(routeSites, eventRouteSite{op.ChannelID, route.id, p, id})
+			}
+		}
+	}
+	return routes, routeSites, true
+}
+
+func (b *eventMapBuilder) routeReaches(routes map[string][]string, id, target string, seen map[string]bool) bool {
+	if id == target {
+		return true
+	}
+	if seen[id] || b.ctx.Err() != nil {
+		return false
+	}
+	seen[id] = true
+	for _, next := range routes[id] {
+		if b.routeReaches(routes, next, target, seen) {
+			return true
+		}
+	}
+	return false
 }
 
 func (b *eventMapBuilder) finalize() (EventMapAnalysis, error) {

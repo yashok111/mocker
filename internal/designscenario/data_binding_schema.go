@@ -262,15 +262,24 @@ func indexBindingOperations(root map[string]any) map[string]bindingOperation {
 	return out
 }
 
+// bindingSchemas serves the synchronous validation and run paths, which carry
+// no context: the build is bounded by the document's size caps, so it runs
+// to completion rather than borrowing a context.Background it cannot cancel.
 func bindingSchemas(document Document) []bindingSchema {
-	out, _ := bindingSchemasContext(context.Background(), document)
+	out, _ := collectBindingSchemas(document, func() error { return nil })
 	return out
 }
 
 func bindingSchemasContext(ctx context.Context, document Document) ([]bindingSchema, error) {
+	return collectBindingSchemas(document, ctx.Err)
+}
+
+// collectBindingSchemas takes the cancellation probe as a function so the
+// context-free and context-bound callers share one walk.
+func collectBindingSchemas(document Document, cancelled func() error) ([]bindingSchema, error) {
 	roots := map[string]map[string]any{}
 	for _, contract := range document.Contracts {
-		if err := ctx.Err(); err != nil {
+		if err := cancelled(); err != nil {
 			return nil, err
 		}
 		value, _ := decodeJSONValue(contract.Document)
@@ -280,7 +289,7 @@ func bindingSchemasContext(ctx context.Context, document Document) ([]bindingSch
 	cache := map[bindingSchemaKey]bindingSchema{}
 	out := make([]bindingSchema, len(document.Messages))
 	for i, message := range document.Messages {
-		if err := ctx.Err(); err != nil {
+		if err := cancelled(); err != nil {
 			return nil, err
 		}
 		if message.Kind != "request" || message.Operation == nil {
@@ -379,45 +388,13 @@ func jsonContentSchema(owner map[string]any) any {
 
 func schemaCatalog(s bindingSchema, messageID string, remaining int) (DataFlowMessage, bool, bool) {
 	out := DataFlowMessage{MessageID: messageID, ResponseFields: []DataFlowField{}, RequestFields: []DataFlowField{}}
-	limit := min(maxDataFlowFields, remaining)
-	count := 0
-	truncated, unknown := false, s.uncertain
-	var walk func(any, string, string, bool, int, *[]DataFlowField)
-	walk = func(raw any, kind, pointer string, required bool, depth int, fields *[]DataFlowField) {
-		if count >= limit || depth > maxDataFlowDepth || len(pointer) > 2000 {
-			truncated = true
-			return
-		}
-		node, ok := s.resolve(raw)
-		t := schemaType(node)
-		if !ok || t == "unknown" {
-			unknown = true
-		}
-		*fields = append(*fields, DataFlowField{Kind: kind, Pointer: pointer, Type: t, Required: required})
-		count++
-		if t != "object" {
-			return
-		}
-		requiredNames := map[string]bool{}
-		names, _ := node["required"].([]any)
-		for _, name := range names {
-			requiredNames[stringValue(name)] = true
-		}
-		properties := object(node["properties"])
-		for _, name := range slices.Sorted(maps.Keys(properties)) {
-			if count >= limit {
-				truncated = true
-				break
-			}
-			walk(properties[name], kind, pointer+"/"+escapePointer(name), required && requiredNames[name], depth+1, fields)
-		}
-	}
+	w := &catalogWalker{s: s, limit: min(maxDataFlowFields, remaining), unknown: s.uncertain}
 	// Use one catalog for all successful responses; disagreements remain unknown.
 	seen := map[string]int{}
 	present := map[string]int{}
 	for _, response := range s.responses {
 		fields := []DataFlowField{}
-		walk(response, "response", "", true, 0, &fields)
+		w.walk(response, "response", "", true, 0, &fields)
 		for _, field := range fields {
 			present[field.Pointer]++
 			if index, ok := seen[field.Pointer]; ok {
@@ -426,7 +403,7 @@ func schemaCatalog(s bindingSchema, messageID string, remaining int) (DataFlowMe
 			}
 			field.Type = s.responseType(field.Pointer)
 			if field.Type == "unknown" {
-				unknown = true
+				w.unknown = true
 			}
 			seen[field.Pointer] = len(out.ResponseFields)
 			out.ResponseFields = append(out.ResponseFields, field)
@@ -438,23 +415,61 @@ func schemaCatalog(s bindingSchema, messageID string, remaining int) (DataFlowMe
 		}
 	}
 	for _, key := range slices.Sorted(maps.Keys(s.parameters)) {
-		if count >= limit {
-			truncated = true
+		if w.count >= w.limit {
+			w.truncated = true
 			break
 		}
 		kind, name, _ := strings.Cut(key, ":")
 		t := s.typeAt(s.parameters[key], "")
 		if t == "unknown" {
-			unknown = true
+			w.unknown = true
 		}
 		out.RequestFields = append(out.RequestFields, DataFlowField{Kind: kind, Name: name, Type: t, Required: s.parameterRequired[key]})
-		count++
+		w.count++
 	}
 	if s.body != nil {
-		walk(s.body, "body", "", s.bodyRequired, 0, &out.RequestFields)
+		w.walk(s.body, "body", "", s.bodyRequired, 0, &out.RequestFields)
 	}
 	slices.SortFunc(out.ResponseFields, func(a, b DataFlowField) int { return strings.Compare(a.Pointer, b.Pointer) })
-	return out, truncated, unknown
+	return out, w.truncated, w.unknown
+}
+
+// catalogWalker lists a schema's fields depth-first under one shared field
+// budget, recording whether it had to stop early or met an unresolved node.
+type catalogWalker struct {
+	s                  bindingSchema
+	limit, count       int
+	truncated, unknown bool
+}
+
+func (w *catalogWalker) walk(raw any, kind, pointer string, required bool, depth int, fields *[]DataFlowField) {
+	if w.count >= w.limit || depth > maxDataFlowDepth || len(pointer) > 2000 {
+		w.truncated = true
+		return
+	}
+	node, ok := w.s.resolve(raw)
+	t := schemaType(node)
+	if !ok || t == "unknown" {
+		w.unknown = true
+	}
+	*fields = append(*fields, DataFlowField{Kind: kind, Pointer: pointer, Type: t, Required: required})
+	w.count++
+	if t != "object" {
+		return
+	}
+	requiredNames := map[string]bool{}
+	names, _ := node["required"].([]any)
+	for _, name := range names {
+		requiredNames[stringValue(name)] = true
+	}
+	properties := object(node["properties"])
+	for _, name := range slices.Sorted(maps.Keys(properties)) {
+		if w.count >= w.limit {
+			w.truncated = true
+			break
+		}
+		w.walk(properties[name], kind, pointer+"/"+escapePointer(name), required && requiredNames[name], depth+1, fields)
+	}
 }
 func compatibleBindingTypes(source, target string) bool {
 	return source == "unknown" || target == "unknown" || source == target || (source == "integer" && target == "number")

@@ -47,6 +47,50 @@ type diagramMessage struct {
 // colors, IDs or style. The conservative text width leaves room for fallback fonts.
 func renderDocumentationDiagram(doc designscenario.Document, limit int64) (documentationDiagram, error) {
 	// Bound layout allocations before creating maps, events or escaped strings.
+	if err := chargeDocumentationDiagram(doc, limit); err != nil {
+		return documentationDiagram{}, err
+	}
+	intervals, issues := sequenceIntervals(doc)
+	if len(issues) != 0 {
+		return documentationDiagram{}, fmt.Errorf("invalid diagram fragments: %s", issues[0].Message)
+	}
+	frames, before, after := documentationDiagramEvents(doc, intervals)
+	layout := newDiagramLayout(doc, frames)
+	messages := make([]diagramMessage, 0, len(doc.Messages))
+	for i, m := range doc.Messages {
+		for _, event := range before[i] {
+			layout.apply(event)
+		}
+		row, err := layout.message(m)
+		if err != nil {
+			return documentationDiagram{}, err
+		}
+		messages = append(messages, row)
+		for _, event := range after[i] {
+			layout.apply(event)
+		}
+	}
+	height := layout.y + 24
+	out := diagramWriter{out: boundedBuffer{limit: limit}}
+	out.write(`<defs><marker id="doc-diagram-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 Z" fill="#334155"/></marker><marker id="doc-diagram-event" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10" fill="none" stroke="#334155" stroke-width="1.5"/></marker></defs>`)
+	out.write(`<rect width="%d" height="%d" fill="white"/>`, layout.width, height)
+	out.participants(doc.Participants, layout.margin, layout.participantHeight, height)
+	out.frames(frames)
+	for _, row := range messages {
+		out.message(row)
+		if out.err != nil {
+			return documentationDiagram{}, out.err
+		}
+	}
+	if out.err != nil {
+		return documentationDiagram{}, out.err
+	}
+	return documentationDiagram{Markup: out.out.String(), Width: layout.width, Height: height}, nil
+}
+
+// chargeDocumentationDiagram takes a fixed cost plus every authored string
+// from the budget, so an oversized document fails before any layout work.
+func chargeDocumentationDiagram(doc designscenario.Document, limit int64) error {
 	budget := jsonBudget{remaining: limit}
 	charge := func(values ...string) error {
 		if err := budget.take(64); err != nil {
@@ -61,158 +105,102 @@ func renderDocumentationDiagram(doc designscenario.Document, limit int64) (docum
 	}
 	for _, p := range doc.Participants {
 		if err := charge(p.Name, p.Description); err != nil {
-			return documentationDiagram{}, err
+			return err
 		}
 	}
 	for _, m := range doc.Messages {
 		if err := charge(m.Label, m.Description); err != nil {
-			return documentationDiagram{}, err
+			return err
 		}
 	}
 	for _, f := range doc.Fragments {
 		if err := charge(f.Label); err != nil {
-			return documentationDiagram{}, err
+			return err
 		}
 		for _, b := range f.Branches {
 			if err := charge(b.Label); err != nil {
-				return documentationDiagram{}, err
+				return err
 			}
 		}
 	}
-	intervals, issues := sequenceIntervals(doc)
-	if len(issues) != 0 {
-		return documentationDiagram{}, fmt.Errorf("invalid diagram fragments: %s", issues[0].Message)
-	}
-	frames, before, after := documentationDiagramEvents(doc, intervals)
+	return nil
+}
+
+// diagramLayout is the running vertical cursor plus the fixed horizontal
+// geometry that frames and messages are placed against.
+type diagramLayout struct {
+	margin, width, participantHeight, y int
+	centers                             map[string]int
+}
+
+func newDiagramLayout(doc designscenario.Document, frames []*diagramFrame) *diagramLayout {
 	depth := 0
 	for _, frame := range frames {
 		depth = max(depth, frame.depth+1)
 	}
-	margin := 40 + depth*18
-	width := max(640, 2*margin+len(doc.Participants)*260+120)
-	centers := make(map[string]int, len(doc.Participants))
-	participantHeight := 44
+	l := &diagramLayout{margin: 40 + depth*18, participantHeight: 44, centers: make(map[string]int, len(doc.Participants))}
+	l.width = max(640, 2*l.margin+len(doc.Participants)*260+120)
 	for i, p := range doc.Participants {
-		centers[p.ID] = margin + 110 + i*260
+		l.centers[p.ID] = l.margin + 110 + i*260
 		h := 24 + diagramTextHeight(p.Name, 196)
 		if p.Description != "" {
 			h += 12 + diagramTextHeight(p.Description, 196)
 		}
-		participantHeight = max(participantHeight, h)
+		l.participantHeight = max(l.participantHeight, h)
 	}
-	y := participantHeight + 52
-	apply := func(event diagramEvent) {
-		frame := event.frame
-		if event.end {
-			y += 12
-			frame.height = y - frame.y
-			y += 12
-			return
-		}
-		if !event.branch {
-			frame.x = 16 + frame.depth*18
-			frame.y, frame.width = y, width-2*frame.x
-		}
-		if event.separator {
-			frame.separators = append(frame.separators, y)
-			y += 10
-		}
-		label := diagramText{event.label, frame.x + 12, y + 18, frame.width - 24}
-		frame.labels = append(frame.labels, label)
-		y += diagramTextHeight(label.value, label.width) + 18
+	l.y = l.participantHeight + 52
+	return l
+}
+
+func (l *diagramLayout) apply(event diagramEvent) {
+	frame := event.frame
+	if event.end {
+		l.y += 12
+		frame.height = l.y - frame.y
+		l.y += 12
+		return
 	}
-	messages := make([]diagramMessage, 0, len(doc.Messages))
-	for i, m := range doc.Messages {
-		for _, event := range before[i] {
-			apply(event)
-		}
-		from, hasFrom := centers[m.FromID]
-		to, hasTo := centers[m.ToID]
-		if !hasFrom || !hasTo {
-			return documentationDiagram{}, fmt.Errorf("invalid diagram message participant")
-		}
-		x, textWidth := min(from, to)+12, max(from, to)-min(from, to)-24
-		if from == to {
-			x, textWidth = from+18, 200
-		}
-		if m.Kind == "note" {
-			x, textWidth = min(from, to)-100, max(from, to)-min(from, to)+200
-		}
-		row := diagramMessage{message: m, from: from, to: to, label: diagramText{m.Label, x, y + 20, textWidth}}
-		y += diagramTextHeight(m.Label, textWidth) + 16
-		row.arrowY = y
-		if m.Kind != "note" {
-			y += 12
-		}
-		if from == to && m.Kind != "note" {
-			y += 28
-		}
-		if m.Description != "" {
-			row.description = diagramText{m.Description, x, y + 20, textWidth}
-			y += diagramTextHeight(m.Description, textWidth) + 24
-		}
-		y += 20
-		messages = append(messages, row)
-		for _, event := range after[i] {
-			apply(event)
-		}
+	if !event.branch {
+		frame.x = 16 + frame.depth*18
+		frame.y, frame.width = l.y, l.width-2*frame.x
 	}
-	height := y + 24
-	out := diagramWriter{out: boundedBuffer{limit: limit}}
-	out.write(`<defs><marker id="doc-diagram-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 Z" fill="#334155"/></marker><marker id="doc-diagram-event" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10" fill="none" stroke="#334155" stroke-width="1.5"/></marker></defs>`)
-	out.write(`<rect width="%d" height="%d" fill="white"/>`, width, height)
-	for i, p := range doc.Participants {
-		center := margin + 110 + i*260
-		out.write(`<line x1="%d" y1="%d" x2="%d" y2="%d" stroke="#94a3b8" stroke-dasharray="5 5"/>`, center, participantHeight+20, center, height-16)
-		out.write(`<rect x="%d" y="20" width="220" height="%d" rx="5" fill="#f1f5f9" stroke="#475569"/>`, center-110, participantHeight)
-		out.text(diagramText{p.Name, center - 98, 42, 196})
-		if p.Description != "" {
-			out.text(diagramText{p.Description, center - 98, 54 + diagramTextHeight(p.Name, 196), 196})
-		}
+	if event.separator {
+		frame.separators = append(frame.separators, l.y)
+		l.y += 10
 	}
-	for _, frame := range frames {
-		out.write(`<rect class="doc-diagram-frame" x="%d" y="%d" width="%d" height="%d" fill="none" stroke="#64748b" stroke-width="1.5"/>`, frame.x, frame.y, frame.width, frame.height)
-		for _, separator := range frame.separators {
-			out.write(`<line x1="%d" y1="%d" x2="%d" y2="%d" stroke="#64748b" stroke-dasharray="6 4"/>`, frame.x, separator, frame.x+frame.width, separator)
-		}
-		for _, label := range frame.labels {
-			out.box(label, "#e2e8f0")
-			out.text(label)
-		}
+	label := diagramText{event.label, frame.x + 12, l.y + 18, frame.width - 24}
+	frame.labels = append(frame.labels, label)
+	l.y += diagramTextHeight(label.value, label.width) + 18
+}
+
+func (l *diagramLayout) message(m designscenario.Message) (diagramMessage, error) {
+	from, hasFrom := l.centers[m.FromID]
+	to, hasTo := l.centers[m.ToID]
+	if !hasFrom || !hasTo {
+		return diagramMessage{}, fmt.Errorf("invalid diagram message participant")
 	}
-	for _, row := range messages {
-		fill := "white"
-		if row.message.Kind == "note" {
-			fill = "#fef3c7"
-		}
-		out.box(row.label, fill)
-		out.text(row.label)
-		if row.message.Kind != "note" {
-			marker, dash, kind := "doc-diagram-arrow", "", "request"
-			if row.message.Kind == "response" {
-				kind, dash = "response", ` stroke-dasharray="6 4"`
-			}
-			if row.message.Kind == "event" {
-				kind, marker = "event", "doc-diagram-event"
-			}
-			path := fmt.Sprintf("M %d %d L %d %d", row.from, row.arrowY, row.to, row.arrowY)
-			if row.from == row.to {
-				path = fmt.Sprintf("M %d %d H %d V %d H %d", row.from, row.arrowY, row.from+90, row.arrowY+28, row.to)
-			}
-			out.write(`<path data-kind="%s" d="%s" fill="none" stroke="#334155" stroke-width="1.5"%s marker-end="url(#%s)"/>`, kind, path, dash, marker)
-		}
-		if row.description.value != "" {
-			out.box(row.description, "#fef3c7")
-			out.text(row.description)
-		}
-		if out.err != nil {
-			return documentationDiagram{}, out.err
-		}
+	x, textWidth := min(from, to)+12, max(from, to)-min(from, to)-24
+	if from == to {
+		x, textWidth = from+18, 200
 	}
-	if out.err != nil {
-		return documentationDiagram{}, out.err
+	if m.Kind == "note" {
+		x, textWidth = min(from, to)-100, max(from, to)-min(from, to)+200
 	}
-	return documentationDiagram{Markup: out.out.String(), Width: width, Height: height}, nil
+	row := diagramMessage{message: m, from: from, to: to, label: diagramText{m.Label, x, l.y + 20, textWidth}}
+	l.y += diagramTextHeight(m.Label, textWidth) + 16
+	row.arrowY = l.y
+	if m.Kind != "note" {
+		l.y += 12
+	}
+	if from == to && m.Kind != "note" {
+		l.y += 28
+	}
+	if m.Description != "" {
+		row.description = diagramText{m.Description, x, l.y + 20, textWidth}
+		l.y += diagramTextHeight(m.Description, textWidth) + 24
+	}
+	l.y += 20
+	return row, nil
 }
 
 // Events share the legacy interval ordering and v2 explicit parent/branch tree
@@ -359,4 +347,56 @@ func (w *diagramWriter) text(text diagramText) {
 		w.write(`</text>`)
 		y += diagramLineHeight
 	})
+}
+
+func (w *diagramWriter) participants(participants []designscenario.Participant, margin, participantHeight, height int) {
+	for i, p := range participants {
+		center := margin + 110 + i*260
+		w.write(`<line x1="%d" y1="%d" x2="%d" y2="%d" stroke="#94a3b8" stroke-dasharray="5 5"/>`, center, participantHeight+20, center, height-16)
+		w.write(`<rect x="%d" y="20" width="220" height="%d" rx="5" fill="#f1f5f9" stroke="#475569"/>`, center-110, participantHeight)
+		w.text(diagramText{p.Name, center - 98, 42, 196})
+		if p.Description != "" {
+			w.text(diagramText{p.Description, center - 98, 54 + diagramTextHeight(p.Name, 196), 196})
+		}
+	}
+}
+
+func (w *diagramWriter) frames(frames []*diagramFrame) {
+	for _, frame := range frames {
+		w.write(`<rect class="doc-diagram-frame" x="%d" y="%d" width="%d" height="%d" fill="none" stroke="#64748b" stroke-width="1.5"/>`, frame.x, frame.y, frame.width, frame.height)
+		for _, separator := range frame.separators {
+			w.write(`<line x1="%d" y1="%d" x2="%d" y2="%d" stroke="#64748b" stroke-dasharray="6 4"/>`, frame.x, separator, frame.x+frame.width, separator)
+		}
+		for _, label := range frame.labels {
+			w.box(label, "#e2e8f0")
+			w.text(label)
+		}
+	}
+}
+
+func (w *diagramWriter) message(row diagramMessage) {
+	fill := "white"
+	if row.message.Kind == "note" {
+		fill = "#fef3c7"
+	}
+	w.box(row.label, fill)
+	w.text(row.label)
+	if row.message.Kind != "note" {
+		marker, dash, kind := "doc-diagram-arrow", "", "request"
+		if row.message.Kind == "response" {
+			kind, dash = "response", ` stroke-dasharray="6 4"`
+		}
+		if row.message.Kind == "event" {
+			kind, marker = "event", "doc-diagram-event"
+		}
+		path := fmt.Sprintf("M %d %d L %d %d", row.from, row.arrowY, row.to, row.arrowY)
+		if row.from == row.to {
+			path = fmt.Sprintf("M %d %d H %d V %d H %d", row.from, row.arrowY, row.from+90, row.arrowY+28, row.to)
+		}
+		w.write(`<path data-kind="%s" d="%s" fill="none" stroke="#334155" stroke-width="1.5"%s marker-end="url(#%s)"/>`, kind, path, dash, marker)
+	}
+	if row.description.value != "" {
+		w.box(row.description, "#fef3c7")
+		w.text(row.description)
+	}
 }

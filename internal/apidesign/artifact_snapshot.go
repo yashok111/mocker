@@ -144,72 +144,12 @@ func ResolveArtifactObject(ctx context.Context, snapshot *ArtifactSnapshot, sele
 	var value any
 	out := &ArtifactObject{}
 	if selector.JSONPointer != "" {
-		admitted, err := schemamodel.IsSchemaPosition(ctx, root, selector.JSONPointer)
-		if err != nil {
-			if ctx.Err() != nil {
-				return nil, ctx.Err()
-			}
-			return nil, invalidField("/selector/jsonPointer", err.Error())
-		}
-		if !admitted {
-			return nil, invalidField("/selector/jsonPointer", "Указатель не является позицией схемы")
-		}
-		value, _, err = schemamodel.ResolveAuthoredPointer(root, selector.JSONPointer)
-		if err != nil {
-			return nil, err
-		}
-		out.Pointer = selector.JSONPointer
-		out.ConsumerPointer = out.Pointer
-		out.Label = out.Pointer
+		value, err = resolveArtifactSchema(ctx, root, selector.JSONPointer, out)
 	} else {
-		if len(selector.ObjectKey) > 200 || strings.TrimSpace(selector.ObjectKey) == "" {
-			return nil, invalidField("/selector/objectKey", "Некорректный ключ операции")
-		}
-		identity, err := withOperationKeys(snapshot.Document, "", snapshot.DesignID)
-		if err != nil {
-			return nil, err
-		}
-		projected, err := impactDocument(identity)
-		if err != nil {
-			return nil, err
-		}
-		operations, err := authoredOperations(projected)
-		if err != nil {
-			return nil, err
-		}
-		for _, op := range operations {
-			if err := ctx.Err(); err != nil {
-				return nil, err
-			}
-			key, _ := op.key()
-			if key != selector.ObjectKey {
-				continue
-			}
-			itemPointer, method, _ := strings.CutLast(op.pointer, "/")
-			item, _, err := schemamodel.ResolveAuthoredPointer(root, itemPointer)
-			if err != nil {
-				return nil, err
-			}
-			nodes, diagnostics := schemamodel.PathItems(root, item, itemPointer)
-			for _, diagnostic := range diagnostics {
-				if diagnostic.Code != "path_item_method_conflict" {
-					return nil, invalidField(diagnostic.Pointer, diagnostic.Message)
-				}
-			}
-			for _, resolved := range schemamodel.PathItemOperations(nodes) {
-				if resolved.Method == method {
-					value = resolved.Value
-					out.Pointer = resolved.Pointer
-					out.ConsumerPointer = op.pointer
-					out.Label = strings.ToUpper(method) + " " + unescapeArtifactPath(itemPointer)
-					break
-				}
-			}
-			break
-		}
-		if value == nil {
-			return nil, invalidField("/selector/objectKey", "Операция не найдена")
-		}
+		value, err = resolveArtifactOperation(ctx, snapshot, root, selector.ObjectKey, out)
+	}
+	if err != nil {
+		return nil, err
 	}
 	raw, err := jsonx.Marshal(value)
 	if err != nil {
@@ -226,6 +166,92 @@ func ResolveArtifactObject(ctx context.Context, snapshot *ArtifactSnapshot, sele
 	}
 	out.ObjectHash = fmt.Sprintf("%x", sha256.Sum256(canonical))
 	return out, nil
+}
+
+// resolveArtifactSchema selects a schema position by JSON Pointer.
+func resolveArtifactSchema(ctx context.Context, root map[string]any, pointer string, out *ArtifactObject) (any, error) {
+	admitted, err := schemamodel.IsSchemaPosition(ctx, root, pointer)
+	if err != nil {
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+		return nil, invalidField("/selector/jsonPointer", err.Error())
+	}
+	if !admitted {
+		return nil, invalidField("/selector/jsonPointer", "Указатель не является позицией схемы")
+	}
+	value, _, err := schemamodel.ResolveAuthoredPointer(root, pointer)
+	if err != nil {
+		return nil, err
+	}
+	out.Pointer = pointer
+	out.ConsumerPointer = out.Pointer
+	out.Label = out.Pointer
+	return value, nil
+}
+
+// resolveArtifactOperation selects the effective operation an operation key
+// names, following Path Item references like the runtime does.
+func resolveArtifactOperation(ctx context.Context, snapshot *ArtifactSnapshot, root map[string]any, objectKey string, out *ArtifactObject) (any, error) {
+	if len(objectKey) > 200 || strings.TrimSpace(objectKey) == "" {
+		return nil, invalidField("/selector/objectKey", "Некорректный ключ операции")
+	}
+	identity, err := withOperationKeys(snapshot.Document, "", snapshot.DesignID)
+	if err != nil {
+		return nil, err
+	}
+	projected, err := impactDocument(identity)
+	if err != nil {
+		return nil, err
+	}
+	operations, err := authoredOperations(projected)
+	if err != nil {
+		return nil, err
+	}
+	var value any
+	for _, op := range operations {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		key, _ := op.key()
+		if key != objectKey {
+			continue
+		}
+		value, err = resolveArtifactMethod(root, op.pointer, out)
+		if err != nil {
+			return nil, err
+		}
+		break
+	}
+	if value == nil {
+		return nil, invalidField("/selector/objectKey", "Операция не найдена")
+	}
+	return value, nil
+}
+
+// resolveArtifactMethod resolves one authored operation pointer through its
+// Path Item chain; nil when the method is not effective there.
+func resolveArtifactMethod(root map[string]any, operationPointer string, out *ArtifactObject) (any, error) {
+	itemPointer, method, _ := strings.CutLast(operationPointer, "/")
+	item, _, err := schemamodel.ResolveAuthoredPointer(root, itemPointer)
+	if err != nil {
+		return nil, err
+	}
+	nodes, diagnostics := schemamodel.PathItems(root, item, itemPointer)
+	for _, diagnostic := range diagnostics {
+		if diagnostic.Code != "path_item_method_conflict" {
+			return nil, invalidField(diagnostic.Pointer, diagnostic.Message)
+		}
+	}
+	for _, resolved := range schemamodel.PathItemOperations(nodes) {
+		if resolved.Method == method {
+			out.Pointer = resolved.Pointer
+			out.ConsumerPointer = operationPointer
+			out.Label = strings.ToUpper(method) + " " + unescapeArtifactPath(itemPointer)
+			return resolved.Value, nil
+		}
+	}
+	return nil, nil
 }
 func unescapeArtifactPath(pointer string) string {
 	return strings.ReplaceAll(strings.ReplaceAll(strings.TrimPrefix(pointer, "/paths/"), "~1", "/"), "~0", "~")

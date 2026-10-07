@@ -3,6 +3,7 @@ package apidesign
 import (
 	"errors"
 	"fmt"
+	"net/http"
 	"strings"
 	"testing"
 
@@ -129,7 +130,7 @@ func TestReferencedPathItemInheritsParametersWithoutDroppingSiblings(t *testing.
 		if strings.Join(operation.Schemas, ",") != "ID" {
 			t.Fatalf("inherited parameter dependency lost: %+v", operation)
 		}
-		if (operation.Method == "GET") != (operation.SourcePointer == "") {
+		if (operation.Method == http.MethodGet) != (operation.SourcePointer == "") {
 			t.Fatalf("wrong navigation source: %+v", operation)
 		}
 	}

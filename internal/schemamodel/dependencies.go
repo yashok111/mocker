@@ -142,82 +142,110 @@ func (w *dependencyWalker) walk(value any, pointer, kind, resource string, depth
 			resource = resolveURI(resource, id)
 		}
 	}
-	if kind != "root" && kind != "components" && kind != "discriminator" {
+	if kind == "discriminator" {
+		w.discriminatorReferences(m, pointer, resource)
+		return nil
+	}
+	if kind != "root" && kind != "components" {
 		w.reference(m, "$ref", pointer+"/$ref", kind, resource)
 	}
 	if kind == "schema" {
 		w.reference(m, "$dynamicRef", pointer+"/$dynamicRef", kind, resource)
 	}
-	if kind == "discriminator" {
-		mapping := object(m["mapping"])
-		for _, key := range slices.Sorted(maps.Keys(mapping)) {
-			w.reference(mapping, key, pointer+"/mapping/"+escape(key), kind, resource)
-		}
-		return nil
-	}
 	for _, key := range slices.Sorted(maps.Keys(m)) {
 		if w.index.Truncated {
 			break
 		}
-		rule := childRules[kind][key]
-		if kind == "path" && isMethod(key) {
-			rule = childRule{kind: "operation"}
-		}
-		if kind == "callback" && key != "$ref" && !strings.HasPrefix(key, "x-") {
-			rule = childRule{kind: "path"}
-		}
+		rule := effectiveChildRule(kind, key)
 		if rule.kind == "" {
 			continue
 		}
-		at := pointer + "/" + escape(key)
-		switch rule.mode {
-		case "map":
-			child := object(m[key])
-			if child == nil {
-				w.diagnostic("invalid_contract_node", at, "Ожидается объект именованных элементов")
-				continue
-			}
-			for _, name := range slices.Sorted(maps.Keys(child)) {
-				if strings.HasPrefix(name, "x-") && ((kind == "root" && key == "paths") || (kind == "operation" && key == "responses")) {
-					continue
-				}
-				if kind == "schema" && key == "dependencies" {
-					if _, propertyDependency := child[name].([]any); propertyDependency {
-						continue
-					}
-				}
-				if err := w.walk(child[name], at+"/"+escape(name), rule.kind, resource, depth+1); err != nil {
+		if err := w.walkChild(m, key, kind, rule, pointer+"/"+escape(key), resource, depth); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// A discriminator has no $ref of its own: only its mapping values are references.
+func (w *dependencyWalker) discriminatorReferences(m map[string]any, pointer, resource string) {
+	mapping := object(m["mapping"])
+	for _, key := range slices.Sorted(maps.Keys(mapping)) {
+		w.reference(mapping, key, pointer+"/mapping/"+escape(key), "discriminator", resource)
+	}
+}
+
+// effectiveChildRule extends the static table with the two key shapes it
+// cannot list: HTTP methods under a Path Item and expressions under a callback.
+func effectiveChildRule(kind, key string) childRule {
+	rule := childRules[kind][key]
+	if kind == "path" && isMethod(key) {
+		rule = childRule{kind: "operation"}
+	}
+	if kind == "callback" && key != "$ref" && !strings.HasPrefix(key, "x-") {
+		rule = childRule{kind: "path"}
+	}
+	return rule
+}
+
+func (w *dependencyWalker) walkChild(m map[string]any, key, kind string, rule childRule, at, resource string, depth int) error {
+	switch rule.mode {
+	case "map":
+		return w.walkNamedChildren(m[key], key, kind, rule, at, resource, depth)
+	case "array", "items":
+		values, ok := m[key].([]any)
+		if ok {
+			for i, v := range values {
+				if err := w.walk(v, at+"/"+strconv.Itoa(i), rule.kind, resource, depth+1); err != nil {
 					return err
 				}
 				if w.index.Truncated {
 					break
 				}
 			}
-		case "array", "items":
-			values, ok := m[key].([]any)
-			if ok {
-				for i, v := range values {
-					if err := w.walk(v, at+"/"+strconv.Itoa(i), rule.kind, resource, depth+1); err != nil {
-						return err
-					}
-					if w.index.Truncated {
-						break
-					}
-				}
-			} else if rule.mode == "array" {
-				w.diagnostic("invalid_contract_node", at, "Ожидается массив структурных элементов")
-			} else if rule.mode == "items" {
-				if err := w.walk(m[key], at, rule.kind, resource, depth+1); err != nil {
-					return err
-				}
-			}
-		default:
-			if err := w.walk(m[key], at, rule.kind, resource, depth+1); err != nil {
-				return err
-			}
+		} else if rule.mode == "array" {
+			w.diagnostic("invalid_contract_node", at, "Ожидается массив структурных элементов")
+		} else if rule.mode == "items" {
+			return w.walk(m[key], at, rule.kind, resource, depth+1)
+		}
+		return nil
+	default:
+		return w.walk(m[key], at, rule.kind, resource, depth+1)
+	}
+}
+
+func (w *dependencyWalker) walkNamedChildren(value any, key, kind string, rule childRule, at, resource string, depth int) error {
+	child := object(value)
+	if child == nil {
+		w.diagnostic("invalid_contract_node", at, "Ожидается объект именованных элементов")
+		return nil
+	}
+	for _, name := range slices.Sorted(maps.Keys(child)) {
+		if skipNamedDependencyChild(kind, key, child[name], name) {
+			continue
+		}
+		if err := w.walk(child[name], at+"/"+escape(name), rule.kind, resource, depth+1); err != nil {
+			return err
+		}
+		if w.index.Truncated {
+			break
 		}
 	}
 	return nil
+}
+
+// skipNamedDependencyChild drops extension keys where the map holds only
+// structural entries, and the property-list form of schema dependencies.
+func skipNamedDependencyChild(kind, key string, value any, name string) bool {
+	if strings.HasPrefix(name, "x-") && ((kind == "root" && key == "paths") || (kind == "operation" && key == "responses")) {
+		return true
+	}
+	if kind == "schema" && key == "dependencies" {
+		if _, propertyDependency := value.([]any); propertyDependency {
+			return true
+		}
+	}
+	return false
 }
 
 func dependencyValidPointer(pointer string) bool {

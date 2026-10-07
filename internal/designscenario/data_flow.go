@@ -61,125 +61,154 @@ func analyzeDataFlow(document Document) DataFlowAnalysis {
 		out.Diagnostics = diagnostics
 		return out
 	}
-	schemas := bindingSchemas(document)
-	positions := map[string]int{}
+	a := dataFlowAnalyzer{document: document, out: &out, schemas: bindingSchemas(document), positions: map[string]int{}}
 	for i, m := range document.Messages {
-		positions[m.ID] = i
+		a.positions[m.ID] = i
 	}
-	scopes := bindingScopes(document, positions)
-	ambiguous := document.FormatVersion == 1 && ambiguousBindingFragments(document, positions)
-	outputBytes, fieldCount := 0, 0
-	limited := false
-	limit := func() {
-		if !limited {
-			limited = true
-			out.Diagnostics = append(out.Diagnostics, Diagnostic{Pointer: "/messages", Message: "data-flow analysis output limit exceeded", Severity: "error"})
-		}
-	}
-	fits := func(value any) bool {
-		encoded, _ := jsonx.Marshal(value)
-		if outputBytes+len(encoded) > 4<<20 {
-			limit()
-			return false
-		}
-		outputBytes += len(encoded)
-		return true
-	}
-	add := func(pointer, message, severity string) {
-		diagnostic := Diagnostic{Pointer: pointer, Message: message, Severity: severity}
-		if len(out.Diagnostics) >= 2000 {
-			limit()
-			return
-		}
-		if fits(diagnostic) {
-			out.Diagnostics = append(out.Diagnostics, diagnostic)
-		}
-	}
+	a.scopes = bindingScopes(document, a.positions)
+	a.ambiguous = document.FormatVersion == 1 && ambiguousBindingFragments(document, a.positions)
 	for i, m := range document.Messages {
-		if limited {
+		if a.limited {
 			break
 		}
 		if m.Kind == "request" && m.Operation != nil {
-			fields, truncated, unknown := schemaCatalog(schemas[i], m.ID, 20000-fieldCount)
-			fieldCount += len(fields.ResponseFields) + len(fields.RequestFields)
-			if fits(fields) {
-				out.Messages = append(out.Messages, fields)
-			}
-			if truncated {
-				add(fmt.Sprintf("/messages/%d/operation", i), "field catalog truncated (maximum depth 20, 2000 fields per message and 20000 total)", "warning")
-			}
-			if unknown {
-				add(fmt.Sprintf("/messages/%d/operation", i), "тип не удалось определить: unsupported or unresolved schema", "warning")
-			}
+			a.catalog(i, m)
 		}
 		if m.Execution == nil {
 			continue
 		}
 		for j, b := range m.Execution.Bindings {
-			entry := DataFlowBinding{MessageID: m.ID, Binding: b}
-			if fits(entry) {
-				out.Bindings = append(out.Bindings, entry)
-			}
-			pointer := fmt.Sprintf("/messages/%d/execution/bindings/%d", i, j)
-			if m.Kind != "request" || m.Operation == nil {
-				add(pointer, "binding recipient must be an HTTP request with an operation", "error")
-			}
-			source, exists := positions[b.SourceMessageID]
-			if !exists {
-				add(pointer+"/sourceMessageId", "source message does not exist", "error")
-				continue
-			}
-			from := document.Messages[source]
-			if from.Kind != "request" || from.Operation == nil || (from.Execution != nil && !from.Execution.Enabled) {
-				add(pointer+"/sourceMessageId", "source must be an enabled HTTP request with an operation", "error")
-			}
-			if source >= i {
-				add(pointer+"/sourceMessageId", "source must precede the recipient", "error")
-			}
-			for scope := range scopes[source] {
-				if !scopes[i][scope] {
-					add(pointer+"/sourceMessageId", "source is outside the recipient control-flow scope", "error")
-					break
-				}
-			}
-			if ambiguous {
-				add(pointer+"/sourceMessageId", "ambiguous formatVersion 1 fragments", "error")
-			}
-			if !schemas[source].available {
-				add(pointer+"/sourceMessageId", "source operation is missing from the pinned contract; "+OperationKeyDescription, "error")
-			}
-			if !schemas[i].available {
-				add(pointer+"/target", "recipient operation is missing from the pinned contract; "+OperationKeyDescription, "error")
-			}
-			st, tt := schemas[source].responseType(b.SourcePointer), schemas[i].targetType(b.Target)
-			if st == "unknown" || tt == "unknown" {
-				add(pointer, "тип не удалось определить: compatibility will be checked during execution", "warning")
-			}
-			projected, err := ProjectBindingType(st, b.Transforms)
-			if err != nil {
-				add(pointer+"/transforms", err.Error(), "error")
-				continue
-			}
-			st = projected
-			if b.Target.Kind != "body" {
-				if st == "object" || st == "array" || st == "null" {
-					add(pointer+"/sourcePointer", "text targets require a non-null scalar source", "error")
-				}
-				if b.Prefix != "" && tt != "unknown" && tt != "string" {
-					add(pointer+"/prefix", "prefix requires a string target", "error")
-				}
-				// A string HTTP parameter can receive any scalar's textual representation.
-				if tt == "string" {
-					continue
-				}
-			}
-			if !compatibleBindingTypes(st, tt) {
-				add(pointer+"/target", bindingTypeError(st, tt), "error")
-			}
+			a.binding(i, j, m, b)
 		}
 	}
 	sortDataFlowDiagnostics(out.Diagnostics)
 	return out
+}
+
+// dataFlowAnalyzer carries the output budget shared by every message: once
+// either limit trips, one error diagnostic is added and the walk stops.
+type dataFlowAnalyzer struct {
+	document                Document
+	out                     *DataFlowAnalysis
+	schemas                 []bindingSchema
+	positions               map[string]int
+	scopes                  []map[flowScope]bool
+	ambiguous, limited      bool
+	outputBytes, fieldCount int
+}
+
+func (a *dataFlowAnalyzer) limit() {
+	if !a.limited {
+		a.limited = true
+		a.out.Diagnostics = append(a.out.Diagnostics, Diagnostic{Pointer: "/messages", Message: "data-flow analysis output limit exceeded", Severity: "error"})
+	}
+}
+
+func (a *dataFlowAnalyzer) fits(value any) bool {
+	encoded, _ := jsonx.Marshal(value)
+	if a.outputBytes+len(encoded) > 4<<20 {
+		a.limit()
+		return false
+	}
+	a.outputBytes += len(encoded)
+	return true
+}
+
+func (a *dataFlowAnalyzer) add(pointer, message, severity string) {
+	diagnostic := Diagnostic{Pointer: pointer, Message: message, Severity: severity}
+	if len(a.out.Diagnostics) >= 2000 {
+		a.limit()
+		return
+	}
+	if a.fits(diagnostic) {
+		a.out.Diagnostics = append(a.out.Diagnostics, diagnostic)
+	}
+}
+
+func (a *dataFlowAnalyzer) catalog(i int, m Message) {
+	fields, truncated, unknown := schemaCatalog(a.schemas[i], m.ID, 20000-a.fieldCount)
+	a.fieldCount += len(fields.ResponseFields) + len(fields.RequestFields)
+	if a.fits(fields) {
+		a.out.Messages = append(a.out.Messages, fields)
+	}
+	if truncated {
+		a.add(fmt.Sprintf("/messages/%d/operation", i), "field catalog truncated (maximum depth 20, 2000 fields per message and 20000 total)", "warning")
+	}
+	if unknown {
+		a.add(fmt.Sprintf("/messages/%d/operation", i), "тип не удалось определить: unsupported or unresolved schema", "warning")
+	}
+}
+
+func (a *dataFlowAnalyzer) binding(i, j int, m Message, b DataBinding) {
+	entry := DataFlowBinding{MessageID: m.ID, Binding: b}
+	if a.fits(entry) {
+		a.out.Bindings = append(a.out.Bindings, entry)
+	}
+	pointer := fmt.Sprintf("/messages/%d/execution/bindings/%d", i, j)
+	if m.Kind != "request" || m.Operation == nil {
+		a.add(pointer, "binding recipient must be an HTTP request with an operation", "error")
+	}
+	source, exists := a.positions[b.SourceMessageID]
+	if !exists {
+		a.add(pointer+"/sourceMessageId", "source message does not exist", "error")
+		return
+	}
+	a.bindingSource(pointer, i, source)
+	if !a.schemas[i].available {
+		a.add(pointer+"/target", "recipient operation is missing from the pinned contract; "+OperationKeyDescription, "error")
+	}
+	a.bindingTypes(pointer, b, a.schemas[source].responseType(b.SourcePointer), a.schemas[i].targetType(b.Target))
+}
+
+// bindingSource checks that the source message can feed recipient i.
+func (a *dataFlowAnalyzer) bindingSource(pointer string, i, source int) {
+	from := a.document.Messages[source]
+	if from.Kind != "request" || from.Operation == nil || (from.Execution != nil && !from.Execution.Enabled) {
+		a.add(pointer+"/sourceMessageId", "source must be an enabled HTTP request with an operation", "error")
+	}
+	if source >= i {
+		a.add(pointer+"/sourceMessageId", "source must precede the recipient", "error")
+	}
+	for scope := range a.scopes[source] {
+		if !a.scopes[i][scope] {
+			a.add(pointer+"/sourceMessageId", "source is outside the recipient control-flow scope", "error")
+			break
+		}
+	}
+	if a.ambiguous {
+		a.add(pointer+"/sourceMessageId", "ambiguous formatVersion 1 fragments", "error")
+	}
+	if !a.schemas[source].available {
+		a.add(pointer+"/sourceMessageId", "source operation is missing from the pinned contract; "+OperationKeyDescription, "error")
+	}
+}
+
+// bindingTypes compares the (transformed) source type st with the target type tt.
+func (a *dataFlowAnalyzer) bindingTypes(pointer string, b DataBinding, st, tt string) {
+	if st == "unknown" || tt == "unknown" {
+		a.add(pointer, "тип не удалось определить: compatibility will be checked during execution", "warning")
+	}
+	projected, err := ProjectBindingType(st, b.Transforms)
+	if err != nil {
+		a.add(pointer+"/transforms", err.Error(), "error")
+		return
+	}
+	st = projected
+	if b.Target.Kind != "body" {
+		if st == "object" || st == "array" || st == "null" {
+			a.add(pointer+"/sourcePointer", "text targets require a non-null scalar source", "error")
+		}
+		if b.Prefix != "" && tt != "unknown" && tt != "string" {
+			a.add(pointer+"/prefix", "prefix requires a string target", "error")
+		}
+		// A string HTTP parameter can receive any scalar's textual representation.
+		if tt == "string" {
+			return
+		}
+	}
+	if !compatibleBindingTypes(st, tt) {
+		a.add(pointer+"/target", bindingTypeError(st, tt), "error")
+	}
 }
 func sortDataFlowDiagnostics(diagnostics []Diagnostic) {
 	slices.SortFunc(diagnostics, func(a, b Diagnostic) int {

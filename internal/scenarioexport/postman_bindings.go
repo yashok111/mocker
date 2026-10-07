@@ -26,7 +26,8 @@ func postmanBindingRuntime(bindings []designscenario.DataBinding) string {
 		ranges := make([][4]int32, 0, len(unicode.CaseRanges))
 		for _, span := range unicode.CaseRanges {
 			ranges = append(ranges, [4]int32{
-				int32(span.Lo), int32(span.Hi), span.Delta[unicode.UpperCase], span.Delta[unicode.LowerCase],
+				int32(span.Lo), int32(span.Hi), //nolint:gosec // G115: Unicode case ranges end at U+10FFFF, far inside int32
+				span.Delta[unicode.UpperCase], span.Delta[unicode.LowerCase],
 			})
 		}
 		encoded, _ := jsonx.Marshal(ranges) // Fixed integer arrays cannot fail JSON encoding.

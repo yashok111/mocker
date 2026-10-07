@@ -75,48 +75,13 @@ func (r *Repo) applyCommand(ctx context.Context, tx *sql.Tx, document *Document,
 	case "upsert_fragment", "remove_fragment":
 		return applyFragmentCommand(document, command)
 	case "set_fragment_execution":
-		for i := range document.Fragments {
-			if document.Fragments[i].ID == command.ID {
-				document.Fragments[i].Execution = command.FragmentExecution
-				return nil
-			}
-		}
-		return invalidAt("/id", "fragment does not exist")
+		return setFragmentExecution(document, command)
 	case "set_branch_execution":
-		for i := range document.Fragments {
-			if document.Fragments[i].ID == command.ID {
-				for j := range document.Fragments[i].Branches {
-					if document.Fragments[i].Branches[j].ID == command.BranchID {
-						document.Fragments[i].Branches[j].Execution = command.BranchExecution
-						return nil
-					}
-				}
-				return invalidAt("/branchId", "branch does not exist")
-			}
-		}
-		return invalidAt("/id", "fragment does not exist")
+		return setBranchExecution(document, command)
 	case "set_event_model":
-		if command.EventModel == nil {
-			return invalidAt("/eventModel", "eventModel is required")
-		}
-		if document.FormatVersion == 1 {
-			candidate := *document
-			candidate.FormatVersion = 2
-			if diagnostics := ValidateFragments(candidate); len(diagnostics) != 0 {
-				return &InvalidError{Diagnostics: diagnostics}
-			}
-		}
-		document.FormatVersion = 3
-		document.EventModel = command.EventModel
+		return setEventModel(document, command)
 	case "bind_operation":
-		message := findMessage(document.Messages, command.MessageID)
-		if message == nil {
-			return invalidAt("/messageId", "message does not exist")
-		}
-		if findContract(document.Contracts, command.ContractID) == nil {
-			return invalidAt("/contractId", "contract does not exist")
-		}
-		message.Operation = &OperationBinding{ContractID: command.ContractID, OperationKey: command.OperationKey}
+		return bindOperation(document, command)
 	case "create_operation":
 		return createOperation(document, command)
 	case "create_contract":
@@ -126,16 +91,76 @@ func (r *Repo) applyCommand(ctx context.Context, tx *sql.Tx, document *Document,
 	case "refresh_contract":
 		return r.refreshContract(ctx, tx, document, command)
 	case "detach_contract":
-		contract := findContract(document.Contracts, command.ContractID)
-		if contract == nil {
-			return invalidAt("/contractId", "contract does not exist")
-		}
-		contract.Mode = "copy"
+		return detachContract(document, command)
 	case "materialize_contract":
 		return r.materializeContract(ctx, tx, document, command, source, ownerID)
 	default:
 		return invalidAt("/type", "unknown command")
 	}
+	return nil
+}
+
+func setFragmentExecution(document *Document, command Command) error {
+	for i := range document.Fragments {
+		if document.Fragments[i].ID == command.ID {
+			document.Fragments[i].Execution = command.FragmentExecution
+			return nil
+		}
+	}
+	return invalidAt("/id", "fragment does not exist")
+}
+
+func setBranchExecution(document *Document, command Command) error {
+	for i := range document.Fragments {
+		if document.Fragments[i].ID == command.ID {
+			for j := range document.Fragments[i].Branches {
+				if document.Fragments[i].Branches[j].ID == command.BranchID {
+					document.Fragments[i].Branches[j].Execution = command.BranchExecution
+					return nil
+				}
+			}
+			return invalidAt("/branchId", "branch does not exist")
+		}
+	}
+	return invalidAt("/id", "fragment does not exist")
+}
+
+// setEventModel upgrades the document to formatVersion 3, which is refused
+// when a version-1 document's fragments would not survive the version-2 rules.
+func setEventModel(document *Document, command Command) error {
+	if command.EventModel == nil {
+		return invalidAt("/eventModel", "eventModel is required")
+	}
+	if document.FormatVersion == 1 {
+		candidate := *document
+		candidate.FormatVersion = 2
+		if diagnostics := ValidateFragments(candidate); len(diagnostics) != 0 {
+			return &InvalidError{Diagnostics: diagnostics}
+		}
+	}
+	document.FormatVersion = 3
+	document.EventModel = command.EventModel
+	return nil
+}
+
+func bindOperation(document *Document, command Command) error {
+	message := findMessage(document.Messages, command.MessageID)
+	if message == nil {
+		return invalidAt("/messageId", "message does not exist")
+	}
+	if findContract(document.Contracts, command.ContractID) == nil {
+		return invalidAt("/contractId", "contract does not exist")
+	}
+	message.Operation = &OperationBinding{ContractID: command.ContractID, OperationKey: command.OperationKey}
+	return nil
+}
+
+func detachContract(document *Document, command Command) error {
+	contract := findContract(document.Contracts, command.ContractID)
+	if contract == nil {
+		return invalidAt("/contractId", "contract does not exist")
+	}
+	contract.Mode = "copy"
 	return nil
 }
 

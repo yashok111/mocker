@@ -81,79 +81,126 @@ func (s *Service) eventContractDiagnostics(c *eventValidationCache, contract des
 	return ds, err
 }
 
+// asyncAPIScope is the part of the event model one contract reaches through
+// its operations; only these objects are checked and rendered.
+type asyncAPIScope struct {
+	channels map[string]designscenario.EventChannel
+	messages map[string]designscenario.EventMessage
+	servers  map[string]designscenario.EventServer
+	schemas  map[string]any
+}
+
 func (s *Service) prepareAsyncAPI(c *eventValidationCache, contract designscenario.EventContract) ([]Diagnostic, []byte, error) {
 	if err := c.ctx.Err(); err != nil {
 		return nil, nil, err
 	}
 	ds := &eventDiagnostics{}
-	add := func(code, severity, message, kind, id, pointer string) {
-		ds.add(diagnostic(code, severity, message, kind, id, pointer))
-	}
 	if strings.TrimSpace(contract.Name) == "" || strings.TrimSpace(contract.Version) == "" || len(contract.Operations) == 0 {
-		add("event_contract_empty", "error", "Заполните название, версию и операции событийного контракта", "event-contract", contract.ID, "/eventModel/contracts")
+		ds.addNew("event_contract_empty", "error", "Заполните название, версию и операции событийного контракта", "event-contract", contract.ID, "/eventModel/contracts")
 	}
 	if c.model == nil {
 		return ds.list, nil, nil
 	}
-	channels := map[string]designscenario.EventChannel{}
-	messages := map[string]designscenario.EventMessage{}
-	servers := map[string]designscenario.EventServer{}
+	scope, err := c.contractScope(contract, ds)
+	if err != nil {
+		return nil, nil, err
+	}
+	checkChannelServerCoverage(contract.ID, scope.channels, ds)
+	c.checkContractChannels(scope.channels, ds)
+	checkContractServers(scope.servers, ds)
+	scope.schemas = c.collectMessageSchemas(scope.messages, ds)
+	for _, d := range eventFormDiagnostics(c.rev.FormDrafts, contract.ID, scope.channels, scope.messages, scope.schemas, scope.servers) {
+		ds.add(d)
+	}
+	c.addOmittedSemantics(contract.ID, ds)
+	if ds.hasErrors() {
+		return ds.list, nil, nil
+	}
+	return s.renderCheckedAsyncAPI(c, contract, scope, ds)
+}
+
+// contractScope walks the contract's operations in order, collecting the
+// channels, messages and servers they reach and diagnosing each operation.
+func (c *eventValidationCache) contractScope(contract designscenario.EventContract, ds *eventDiagnostics) (asyncAPIScope, error) {
+	scope := asyncAPIScope{
+		channels: map[string]designscenario.EventChannel{},
+		messages: map[string]designscenario.EventMessage{},
+		servers:  map[string]designscenario.EventServer{},
+	}
+	bound := c.boundOperations(contract.ID)
+	for _, op := range contract.Operations {
+		if err := c.ctx.Err(); err != nil {
+			return asyncAPIScope{}, err
+		}
+		if !bound[op.ID] {
+			ds.addNew("event_operation_unbound", "info", "Операция "+op.Name+" входит в контракт без привязки к стрелке", "event-contract", contract.ID, "/eventModel/contracts")
+		}
+		channel, ok := c.channels[op.ChannelID]
+		if !ok {
+			ds.addNew("event_channel_missing", "error", "Канал операции отсутствует", "event-contract", contract.ID, "/eventModel/contracts")
+			continue
+		}
+		scope.channels[channel.ID] = channel
+		if !slices.Contains(channel.MessageIDs, op.MessageID) {
+			ds.addNew("event_message_missing", "error", "Сообщение операции отсутствует в канале", "event-contract", contract.ID, "/eventModel/contracts")
+		}
+		c.collectChannelMembers(channel, scope, ds)
+		checkEventOperation(contract.ID, op, ds)
+	}
+	return scope, nil
+}
+
+func (c *eventValidationCache) boundOperations(contractID string) map[string]bool {
 	bound := map[string]bool{}
 	for _, step := range c.rev.Document.Messages {
 		for _, binding := range step.EventBindings {
-			if binding.ContractID == contract.ID {
+			if binding.ContractID == contractID {
 				bound[binding.OperationID] = true
 			}
 		}
 	}
-	for _, op := range contract.Operations {
-		if err := c.ctx.Err(); err != nil {
-			return nil, nil, err
-		}
-		if !bound[op.ID] {
-			add("event_operation_unbound", "info", "Операция "+op.Name+" входит в контракт без привязки к стрелке", "event-contract", contract.ID, "/eventModel/contracts")
-		}
-		channel, ok := c.channels[op.ChannelID]
-		if !ok {
-			add("event_channel_missing", "error", "Канал операции отсутствует", "event-contract", contract.ID, "/eventModel/contracts")
+	return bound
+}
+
+func (c *eventValidationCache) collectChannelMembers(channel designscenario.EventChannel, scope asyncAPIScope, ds *eventDiagnostics) {
+	for _, id := range channel.MessageIDs {
+		m, found := c.messages[id]
+		if !found {
+			ds.addNew("event_message_missing", "error", "Тип сообщения канала отсутствует", "event-channel", channel.ID, "/eventModel/channels")
 			continue
 		}
-		channels[channel.ID] = channel
-		if !slices.Contains(channel.MessageIDs, op.MessageID) {
-			add("event_message_missing", "error", "Сообщение операции отсутствует в канале", "event-contract", contract.ID, "/eventModel/contracts")
-		}
-		for _, id := range channel.MessageIDs {
-			m, found := c.messages[id]
-			if !found {
-				add("event_message_missing", "error", "Тип сообщения канала отсутствует", "event-channel", channel.ID, "/eventModel/channels")
-				continue
-			}
-			messages[id] = m
-		}
-		for _, id := range channel.ServerIDs {
-			server, found := c.servers[id]
-			if !found {
-				add("event_servers_incomplete", "error", "Сервер канала отсутствует", "event-channel", channel.ID, "/eventModel/channels")
-				continue
-			}
-			servers[id] = server
-		}
-		if op.Action != "send" && op.Action != "receive" {
-			add("event_operation_invalid", "error", "Действие операции должно быть send или receive", "event-contract", contract.ID, "/eventModel/contracts")
-		}
-		if op.Action == "receive" && (op.Kafka == nil || op.Kafka.GroupID == "") {
-			add("event_group_unspecified", "warning", "Группа потребителя Kafka не указана", "event-contract", contract.ID, "/eventModel/contracts")
-		}
-		if op.Kafka != nil && (op.Kafka.GroupID != "" || op.Kafka.ClientID != "") && op.Action != "receive" {
-			add("event_binding_invalid", "error", "groupId и clientId доступны только для receive", "event-contract", contract.ID, "/eventModel/contracts")
-		}
-		if op.Kafka != nil && (!validKafkaMetadata(op.Kafka.GroupID) || !validKafkaMetadata(op.Kafka.ClientID)) {
-			add("event_binding_invalid", "error", "groupId/clientId содержат недопустимое значение", "event-contract", contract.ID, "/eventModel/contracts")
-		}
+		scope.messages[id] = m
 	}
+	for _, id := range channel.ServerIDs {
+		server, found := c.servers[id]
+		if !found {
+			ds.addNew("event_servers_incomplete", "error", "Сервер канала отсутствует", "event-channel", channel.ID, "/eventModel/channels")
+			continue
+		}
+		scope.servers[id] = server
+	}
+}
+
+func checkEventOperation(contractID string, op designscenario.EventOperation, ds *eventDiagnostics) {
+	if op.Action != "send" && op.Action != "receive" {
+		ds.addNew("event_operation_invalid", "error", "Действие операции должно быть send или receive", "event-contract", contractID, "/eventModel/contracts")
+	}
+	if op.Action == "receive" && (op.Kafka == nil || op.Kafka.GroupID == "") {
+		ds.addNew("event_group_unspecified", "warning", "Группа потребителя Kafka не указана", "event-contract", contractID, "/eventModel/contracts")
+	}
+	if op.Kafka != nil && (op.Kafka.GroupID != "" || op.Kafka.ClientID != "") && op.Action != "receive" {
+		ds.addNew("event_binding_invalid", "error", "groupId и clientId доступны только для receive", "event-contract", contractID, "/eventModel/contracts")
+	}
+	if op.Kafka != nil && (!validKafkaMetadata(op.Kafka.GroupID) || !validKafkaMetadata(op.Kafka.ClientID)) {
+		ds.addNew("event_binding_invalid", "error", "groupId/clientId содержат недопустимое значение", "event-contract", contractID, "/eventModel/contracts")
+	}
+}
+
+// checkChannelServerCoverage decides whether servers are described for all,
+// none (a warning) or only some (an error) of the contract's channels.
+func checkChannelServerCoverage(contractID string, channels map[string]designscenario.EventChannel, ds *eventDiagnostics) {
 	known, unknown := 0, 0
-	for _, id := range slices.Sorted(maps.Keys(channels)) {
-		ch := channels[id]
+	for _, ch := range channels {
 		if len(ch.ServerIDs) == 0 {
 			unknown++
 		} else {
@@ -161,43 +208,54 @@ func (s *Service) prepareAsyncAPI(c *eventValidationCache, contract designscenar
 		}
 	}
 	if known > 0 && unknown > 0 {
-		add("event_servers_incomplete", "error", "Укажите серверы для всех каналов контракта", "event-contract", contract.ID, "/eventModel/channels")
+		ds.addNew("event_servers_incomplete", "error", "Укажите серверы для всех каналов контракта", "event-contract", contractID, "/eventModel/channels")
 	}
 	if known == 0 && unknown > 0 {
-		add("event_servers_unspecified", "warning", "Серверы Kafka не описаны", "event-contract", contract.ID, "/eventModel/channels")
+		ds.addNew("event_servers_unspecified", "warning", "Серверы Kafka не описаны", "event-contract", contractID, "/eventModel/channels")
 	}
+}
+
+func (c *eventValidationCache) checkContractChannels(channels map[string]designscenario.EventChannel, ds *eventDiagnostics) {
 	for _, id := range slices.Sorted(maps.Keys(channels)) {
 		channel := channels[id]
 		if channel.Address == "" || !kafkaTopic.MatchString(channel.Address) || channel.Address == "." || channel.Address == ".." {
-			add("event_channel_invalid", "error", "Укажите допустимое имя Kafka topic", "event-channel", channel.ID, "/eventModel/channels")
+			ds.addNew("event_channel_invalid", "error", "Укажите допустимое имя Kafka topic", "event-channel", channel.ID, "/eventModel/channels")
 		}
 		if channel.Kafka != nil && ((channel.Kafka.Partitions != nil && *channel.Kafka.Partitions <= 0) || (channel.Kafka.Replicas != nil && *channel.Kafka.Replicas <= 0)) {
-			add("event_binding_invalid", "error", "Partitions и replicas должны быть положительными", "event-channel", channel.ID, "/eventModel/channels")
+			ds.addNew("event_binding_invalid", "error", "Partitions и replicas должны быть положительными", "event-channel", channel.ID, "/eventModel/channels")
 		}
 		if len(channel.MessageIDs) > 1 {
 			c.checkDiscriminator(channel, ds)
 		}
 	}
+}
+
+func checkContractServers(servers map[string]designscenario.EventServer, ds *eventDiagnostics) {
 	for _, id := range slices.Sorted(maps.Keys(servers)) {
 		server := servers[id]
 		if !validKafkaHost(server.Host) {
-			add("event_servers_incomplete", "error", "Укажите один допустимый Kafka host с необязательным портом", "event-server", server.ID, "/eventModel/servers")
+			ds.addNew("event_servers_incomplete", "error", "Укажите один допустимый Kafka host с необязательным портом", "event-server", server.ID, "/eventModel/servers")
 		}
 		if server.Protocol != "kafka" && server.Protocol != "kafka-secure" {
-			add("event_binding_invalid", "error", "Недопустимый Kafka protocol", "event-server", server.ID, "/eventModel/servers")
+			ds.addNew("event_binding_invalid", "error", "Недопустимый Kafka protocol", "event-server", server.ID, "/eventModel/servers")
 		}
 		if !slices.Contains([]string{"unspecified", "none", "plain", "scramSha256", "scramSha512"}, server.Auth) {
-			add("event_binding_invalid", "error", "Недопустимый способ Kafka auth", "event-server", server.ID, "/eventModel/servers")
+			ds.addNew("event_binding_invalid", "error", "Недопустимый способ Kafka auth", "event-server", server.ID, "/eventModel/servers")
 		}
 		if server.Auth == "unspecified" {
-			add("event_auth_unspecified", "warning", "Способ аутентификации Kafka не указан", "event-server", server.ID, "/eventModel/servers")
+			ds.addNew("event_auth_unspecified", "warning", "Способ аутентификации Kafka не указан", "event-server", server.ID, "/eventModel/servers")
 		}
 	}
+}
+
+// collectMessageSchemas gathers every schema the reached messages reference,
+// transitively, and returns them keyed by schema ID.
+func (c *eventValidationCache) collectMessageSchemas(messages map[string]designscenario.EventMessage, ds *eventDiagnostics) map[string]any {
 	usedSchemas := map[string]any{}
 	for _, id := range slices.Sorted(maps.Keys(messages)) {
 		m := messages[id]
 		if m.PayloadSchemaID == "" {
-			add("event_payload_missing", "error", "Укажите схему payload", "event-message", m.ID, "/eventModel/messages")
+			ds.addNew("event_payload_missing", "error", "Укажите схему payload", "event-message", m.ID, "/eventModel/messages")
 			continue
 		}
 		for _, id := range []string{m.PayloadSchemaID, m.HeadersSchemaID, m.KeySchemaID} {
@@ -207,25 +265,29 @@ func (s *Service) prepareAsyncAPI(c *eventValidationCache, contract designscenar
 		}
 		if m.HeadersSchemaID != "" {
 			if v, ok := c.resolvedRoot(m.HeadersSchemaID, map[string]bool{}).(map[string]any); !ok || v["type"] != "object" {
-				add("event_schema_invalid", "error", "Схема headers должна иметь type object", "event-schema", m.HeadersSchemaID, "/eventModel/schemas")
+				ds.addNew("event_schema_invalid", "error", "Схема headers должна иметь type object", "event-schema", m.HeadersSchemaID, "/eventModel/schemas")
 			}
 		}
 	}
-	for _, d := range eventFormDiagnostics(c.rev.FormDrafts, contract.ID, channels, messages, usedSchemas, servers) {
-		ds.add(d)
-	}
+	return usedSchemas
+}
+
+// addOmittedSemantics notes the diagram content AsyncAPI cannot carry.
+func (c *eventValidationCache) addOmittedSemantics(contractID string, ds *eventDiagnostics) {
 	for _, step := range c.rev.Document.Messages {
 		if step.Kind == "event" && len(step.EventBindings) == 0 {
-			add("event_steps_descriptive", "info", "Описательная стрелка события не входит в AsyncAPI", "message", step.ID, "/messages")
+			ds.addNew("event_steps_descriptive", "info", "Описательная стрелка события не входит в AsyncAPI", "message", step.ID, "/messages")
 		}
 	}
 	if len(c.rev.Document.Fragments) > 0 {
-		add("event_sequence_semantics_omitted", "info", "Условия alt/opt/loop остаются в диаграмме", "event-contract", contract.ID, "/fragments")
+		ds.addNew("event_sequence_semantics_omitted", "info", "Условия alt/opt/loop остаются в диаграмме", "event-contract", contractID, "/fragments")
 	}
-	if ds.hasErrors() {
-		return ds.list, nil, nil
-	}
-	doc := c.renderAsyncAPIDocument(contract, channels, messages, servers, usedSchemas)
+}
+
+// renderCheckedAsyncAPI renders an error-free contract, bounds its size, then
+// validates the examples and, only if those pass, the official grammar.
+func (s *Service) renderCheckedAsyncAPI(c *eventValidationCache, contract designscenario.EventContract, scope asyncAPIScope, ds *eventDiagnostics) ([]Diagnostic, []byte, error) {
+	doc := c.renderAsyncAPIDocument(contract, scope.channels, scope.messages, scope.servers, scope.schemas)
 	raw, err := jsonx.Marshal(doc)
 	if err != nil {
 		return nil, nil, err
@@ -233,7 +295,7 @@ func (s *Service) prepareAsyncAPI(c *eventValidationCache, contract designscenar
 	if s.maxBytes <= 0 || int64(len(raw)) > s.maxBytes {
 		return nil, nil, ErrTooLarge
 	}
-	if err := c.validateExamples(doc, messages, ds); err != nil {
+	if err := c.validateExamples(doc, scope.messages, ds); err != nil {
 		return nil, nil, err
 	}
 	if !ds.hasErrors() {
@@ -242,7 +304,7 @@ func (s *Service) prepareAsyncAPI(c *eventValidationCache, contract designscenar
 			return nil, nil, err
 		}
 		if err := grammar.Validate(doc); err != nil {
-			add("event_schema_invalid", "error", "AsyncAPI grammar: "+err.Error(), "event-contract", contract.ID, "/")
+			ds.addNew("event_schema_invalid", "error", "AsyncAPI grammar: "+err.Error(), "event-contract", contract.ID, "/")
 		}
 	}
 	if err := c.ctx.Err(); err != nil {
@@ -258,6 +320,24 @@ func (c *eventValidationCache) renderAsyncAPIDocument(contract designscenario.Ev
 	if contract.Description != "" {
 		doc["info"].(map[string]any)["description"] = contract.Description
 	}
+	renderAsyncAPIServers(doc, servers)
+	for _, id := range slices.Sorted(maps.Keys(channels)) {
+		ch := channels[id]
+		doc["channels"].(map[string]any)[ch.ID] = renderAsyncAPIChannel(ch)
+	}
+	for _, id := range slices.Sorted(maps.Keys(messages)) {
+		m := messages[id]
+		doc["components"].(map[string]any)["messages"].(map[string]any)[m.ID] = renderAsyncAPIMessage(m)
+	}
+	for _, op := range contract.Operations {
+		doc["operations"].(map[string]any)[op.ID] = renderAsyncAPIOperation(op)
+	}
+	return doc
+}
+
+// renderAsyncAPIServers adds the servers map and, for servers that declare an
+// auth method, the matching security schemes.
+func renderAsyncAPIServers(doc map[string]any, servers map[string]designscenario.EventServer) {
 	if len(servers) > 0 {
 		doc["servers"] = map[string]any{}
 	}
@@ -280,130 +360,98 @@ func (c *eventValidationCache) renderAsyncAPIDocument(contract designscenario.Ev
 	if len(security) > 0 {
 		doc["components"].(map[string]any)["securitySchemes"] = security
 	}
-	for _, id := range slices.Sorted(maps.Keys(channels)) {
-		ch := channels[id]
-		item := map[string]any{"address": ch.Address, "messages": map[string]any{}}
-		if ch.Name != "" {
-			item["title"] = ch.Name
-		}
-		if ch.Description != "" {
-			item["description"] = ch.Description
-		}
-		if len(ch.ServerIDs) > 0 {
-			refs := make([]any, 0, len(ch.ServerIDs))
-			for _, id := range ch.ServerIDs {
-				refs = append(refs, ref("#/servers/"+id))
-			}
-			item["servers"] = refs
-		}
-		for _, id := range ch.MessageIDs {
-			item["messages"].(map[string]any)[id] = ref("#/components/messages/" + id)
-		}
-		if ch.Kafka != nil {
-			binding := map[string]any{"bindingVersion": "0.5.0"}
-			if ch.Kafka.Partitions != nil {
-				binding["partitions"] = *ch.Kafka.Partitions
-			}
-			if ch.Kafka.Replicas != nil {
-				binding["replicas"] = *ch.Kafka.Replicas
-			}
-			item["bindings"] = map[string]any{"kafka": binding}
-		}
-		doc["channels"].(map[string]any)[ch.ID] = item
+}
+
+func renderAsyncAPIChannel(ch designscenario.EventChannel) map[string]any {
+	item := map[string]any{"address": ch.Address, "messages": map[string]any{}}
+	if ch.Name != "" {
+		item["title"] = ch.Name
 	}
-	for _, id := range slices.Sorted(maps.Keys(messages)) {
-		m := messages[id]
-		item := map[string]any{"name": m.ID, "title": m.Name, "contentType": "application/json", "payload": ref("#/components/schemas/" + m.PayloadSchemaID)}
-		if m.Description != "" {
-			item["description"] = m.Description
-		}
-		if m.HeadersSchemaID != "" {
-			item["headers"] = ref("#/components/schemas/" + m.HeadersSchemaID)
-		}
-		if m.KeySchemaID != "" {
-			item["bindings"] = map[string]any{"kafka": map[string]any{"key": map[string]any{"allOf": []any{ref("#/components/schemas/" + m.KeySchemaID)}}, "bindingVersion": "0.5.0"}}
-		}
-		if len(m.Examples) > 0 {
-			examples := make([]any, 0, len(m.Examples))
-			for _, example := range m.Examples {
-				payload, _ := decodeJSON([]byte(example.PayloadJSON))
-				e := map[string]any{"name": example.Name, "payload": payload}
-				if example.HeadersJSON != "" {
-					headers, _ := decodeJSON([]byte(example.HeadersJSON))
-					e["headers"] = headers
-				}
-				examples = append(examples, e)
-			}
-			item["examples"] = examples
-		}
-		doc["components"].(map[string]any)["messages"].(map[string]any)[m.ID] = item
+	if ch.Description != "" {
+		item["description"] = ch.Description
 	}
-	for _, op := range contract.Operations {
-		item := map[string]any{"action": op.Action, "channel": ref("#/channels/" + op.ChannelID), "messages": []any{ref("#/channels/" + op.ChannelID + "/messages/" + op.MessageID)}}
-		if op.Name != "" {
-			item["title"] = op.Name
+	if len(ch.ServerIDs) > 0 {
+		refs := make([]any, 0, len(ch.ServerIDs))
+		for _, id := range ch.ServerIDs {
+			refs = append(refs, ref("#/servers/"+id))
 		}
-		if op.Description != "" {
-			item["description"] = op.Description
-		}
-		if op.Kafka != nil && (op.Kafka.GroupID != "" || op.Kafka.ClientID != "") {
-			binding := map[string]any{"bindingVersion": "0.5.0"}
-			if op.Kafka.GroupID != "" {
-				binding["groupId"] = map[string]any{"type": "string", "const": op.Kafka.GroupID}
-			}
-			if op.Kafka.ClientID != "" {
-				binding["clientId"] = map[string]any{"type": "string", "const": op.Kafka.ClientID}
-			}
-			item["bindings"] = map[string]any{"kafka": binding}
-		}
-		doc["operations"].(map[string]any)[op.ID] = item
+		item["servers"] = refs
 	}
-	return doc
+	for _, id := range ch.MessageIDs {
+		item["messages"].(map[string]any)[id] = ref("#/components/messages/" + id)
+	}
+	if ch.Kafka != nil {
+		binding := map[string]any{"bindingVersion": "0.5.0"}
+		if ch.Kafka.Partitions != nil {
+			binding["partitions"] = *ch.Kafka.Partitions
+		}
+		if ch.Kafka.Replicas != nil {
+			binding["replicas"] = *ch.Kafka.Replicas
+		}
+		item["bindings"] = map[string]any{"kafka": binding}
+	}
+	return item
+}
+
+func renderAsyncAPIMessage(m designscenario.EventMessage) map[string]any {
+	item := map[string]any{"name": m.ID, "title": m.Name, "contentType": "application/json", "payload": ref("#/components/schemas/" + m.PayloadSchemaID)}
+	if m.Description != "" {
+		item["description"] = m.Description
+	}
+	if m.HeadersSchemaID != "" {
+		item["headers"] = ref("#/components/schemas/" + m.HeadersSchemaID)
+	}
+	if m.KeySchemaID != "" {
+		item["bindings"] = map[string]any{"kafka": map[string]any{"key": map[string]any{"allOf": []any{ref("#/components/schemas/" + m.KeySchemaID)}}, "bindingVersion": "0.5.0"}}
+	}
+	if len(m.Examples) > 0 {
+		examples := make([]any, 0, len(m.Examples))
+		for _, example := range m.Examples {
+			payload, _ := decodeJSON([]byte(example.PayloadJSON))
+			e := map[string]any{"name": example.Name, "payload": payload}
+			if example.HeadersJSON != "" {
+				headers, _ := decodeJSON([]byte(example.HeadersJSON))
+				e["headers"] = headers
+			}
+			examples = append(examples, e)
+		}
+		item["examples"] = examples
+	}
+	return item
+}
+
+func renderAsyncAPIOperation(op designscenario.EventOperation) map[string]any {
+	item := map[string]any{"action": op.Action, "channel": ref("#/channels/" + op.ChannelID), "messages": []any{ref("#/channels/" + op.ChannelID + "/messages/" + op.MessageID)}}
+	if op.Name != "" {
+		item["title"] = op.Name
+	}
+	if op.Description != "" {
+		item["description"] = op.Description
+	}
+	if op.Kafka != nil && (op.Kafka.GroupID != "" || op.Kafka.ClientID != "") {
+		binding := map[string]any{"bindingVersion": "0.5.0"}
+		if op.Kafka.GroupID != "" {
+			binding["groupId"] = map[string]any{"type": "string", "const": op.Kafka.GroupID}
+		}
+		if op.Kafka.ClientID != "" {
+			binding["clientId"] = map[string]any{"type": "string", "const": op.Kafka.ClientID}
+		}
+		item["bindings"] = map[string]any{"kafka": binding}
+	}
+	return item
 }
 
 func (c *eventValidationCache) validateExamples(doc map[string]any, messages map[string]designscenario.EventMessage, ds *eventDiagnostics) error {
-	compiler := jsonschema.NewCompiler()
-	compiler.DefaultDraft(jsonschema.Draft7)
-	compiler.UseLoader(offlineLoader{})
-	const uri = "https://mocker.invalid/asyncapi.json"
-	if err := compiler.AddResource(uri, doc); err != nil {
+	compiled, err := c.compileContractSchemas(doc, ds)
+	if err != nil {
 		return err
-	}
-	allSchemas := doc["components"].(map[string]any)["schemas"].(map[string]any)
-	compiled := map[string]*jsonschema.Schema{}
-	for _, id := range slices.Sorted(maps.Keys(allSchemas)) {
-		if err := c.ctx.Err(); err != nil {
-			return err
-		}
-		schema, err := compiler.Compile(uri + "#/components/schemas/" + id)
-		if err != nil {
-			ds.add(diagnostic("event_schema_invalid", "error", "Схема не компилируется: "+err.Error(), "event-schema", id, c.schemaPointer(id)))
-		} else {
-			compiled[id] = schema
-		}
 	}
 	for _, id := range slices.Sorted(maps.Keys(messages)) {
 		m := messages[id]
 		if err := c.ctx.Err(); err != nil {
 			return err
 		}
-		for _, example := range m.Examples {
-			if example.HeadersJSON == "" {
-				continue
-			}
-			if len(example.HeadersJSON) > 256<<10 {
-				ds.add(diagnostic("event_example_invalid", "error", "Headers примера превышают 256 KiB", "event-message", m.ID, "/eventModel/messages"))
-				continue
-			}
-			value, err := decodeJSON([]byte(example.HeadersJSON))
-			if err != nil {
-				ds.add(diagnostic("event_example_invalid", "error", "Headers примера содержат неверный JSON", "event-message", m.ID, "/eventModel/messages"))
-				continue
-			}
-			if _, ok := value.(map[string]any); !ok || !validJSONShape(value, 0, new(int)) {
-				ds.add(diagnostic("event_example_invalid", "error", "Headers примера должны быть JSON-объектом в пределах лимитов", "event-message", m.ID, "/eventModel/messages"))
-			}
-		}
+		checkExampleHeadersShape(m, ds)
 		for _, pair := range []struct {
 			id   string
 			kind string
@@ -416,40 +464,92 @@ func (c *eventValidationCache) validateExamples(doc map[string]any, messages map
 				continue
 			}
 			for i, example := range m.Examples {
-				pointer := fmt.Sprintf("%s/examples/%d/%sJSON", c.messagePointers[m.ID], i, pair.kind)
-				raw := example.PayloadJSON
-				if pair.kind == "headers" {
-					raw = example.HeadersJSON
-					if raw == "" {
-						continue
-					}
-				}
-				if len(raw) > 256<<10 {
-					ds.add(diagnostic("event_example_invalid", "error", "Пример превышает 256 KiB", "event-message", m.ID, pointer))
-					continue
-				}
-				value, err := decodeJSON([]byte(raw))
-				if err != nil {
-					ds.add(diagnostic("event_example_invalid", "error", "Пример содержит неверный JSON", "event-message", m.ID, pointer))
-					continue
-				}
-				if !validJSONShape(value, 0, new(int)) {
-					ds.add(diagnostic("event_example_invalid", "error", "Пример превышает лимит глубины или узлов", "event-message", m.ID, pointer))
-					continue
-				}
-				if pair.kind == "headers" {
-					if _, ok := value.(map[string]any); !ok {
-						ds.add(diagnostic("event_example_invalid", "error", "Headers примера должны быть JSON-объектом", "event-message", m.ID, pointer))
-						continue
-					}
-				}
-				if err := schema.Validate(value); err != nil {
-					ds.add(diagnostic("event_example_invalid", "error", "Пример не соответствует схеме "+pair.id+": "+err.Error(), "event-message", m.ID, pointer))
-				}
+				c.checkExampleAgainstSchema(m, i, example, pair.kind, pair.id, schema, ds)
 			}
 		}
 	}
 	return nil
+}
+
+// compileContractSchemas compiles every rendered component schema once; a
+// schema that does not compile is diagnosed and left out of the result.
+func (c *eventValidationCache) compileContractSchemas(doc map[string]any, ds *eventDiagnostics) (map[string]*jsonschema.Schema, error) {
+	compiler := jsonschema.NewCompiler()
+	compiler.DefaultDraft(jsonschema.Draft7)
+	compiler.UseLoader(offlineLoader{})
+	const uri = "https://mocker.invalid/asyncapi.json"
+	if err := compiler.AddResource(uri, doc); err != nil {
+		return nil, err
+	}
+	allSchemas := doc["components"].(map[string]any)["schemas"].(map[string]any)
+	compiled := map[string]*jsonschema.Schema{}
+	for _, id := range slices.Sorted(maps.Keys(allSchemas)) {
+		if err := c.ctx.Err(); err != nil {
+			return nil, err
+		}
+		schema, err := compiler.Compile(uri + "#/components/schemas/" + id)
+		if err != nil {
+			ds.add(diagnostic("event_schema_invalid", "error", "Схема не компилируется: "+err.Error(), "event-schema", id, c.schemaPointer(id)))
+		} else {
+			compiled[id] = schema
+		}
+	}
+	return compiled, nil
+}
+
+// checkExampleHeadersShape checks example headers even when the message has
+// no headers schema to validate them against.
+func checkExampleHeadersShape(m designscenario.EventMessage, ds *eventDiagnostics) {
+	for _, example := range m.Examples {
+		if example.HeadersJSON == "" {
+			continue
+		}
+		if len(example.HeadersJSON) > 256<<10 {
+			ds.add(diagnostic("event_example_invalid", "error", "Headers примера превышают 256 KiB", "event-message", m.ID, "/eventModel/messages"))
+			continue
+		}
+		value, err := decodeJSON([]byte(example.HeadersJSON))
+		if err != nil {
+			ds.add(diagnostic("event_example_invalid", "error", "Headers примера содержат неверный JSON", "event-message", m.ID, "/eventModel/messages"))
+			continue
+		}
+		if _, ok := value.(map[string]any); !ok || !validJSONShape(value, 0, new(int)) {
+			ds.add(diagnostic("event_example_invalid", "error", "Headers примера должны быть JSON-объектом в пределах лимитов", "event-message", m.ID, "/eventModel/messages"))
+		}
+	}
+}
+
+func (c *eventValidationCache) checkExampleAgainstSchema(m designscenario.EventMessage, i int, example designscenario.EventExample, kind, schemaID string, schema *jsonschema.Schema, ds *eventDiagnostics) {
+	pointer := fmt.Sprintf("%s/examples/%d/%sJSON", c.messagePointers[m.ID], i, kind)
+	raw := example.PayloadJSON
+	if kind == "headers" {
+		raw = example.HeadersJSON
+		if raw == "" {
+			return
+		}
+	}
+	if len(raw) > 256<<10 {
+		ds.add(diagnostic("event_example_invalid", "error", "Пример превышает 256 KiB", "event-message", m.ID, pointer))
+		return
+	}
+	value, err := decodeJSON([]byte(raw))
+	if err != nil {
+		ds.add(diagnostic("event_example_invalid", "error", "Пример содержит неверный JSON", "event-message", m.ID, pointer))
+		return
+	}
+	if !validJSONShape(value, 0, new(int)) {
+		ds.add(diagnostic("event_example_invalid", "error", "Пример превышает лимит глубины или узлов", "event-message", m.ID, pointer))
+		return
+	}
+	if kind == "headers" {
+		if _, ok := value.(map[string]any); !ok {
+			ds.add(diagnostic("event_example_invalid", "error", "Headers примера должны быть JSON-объектом", "event-message", m.ID, pointer))
+			return
+		}
+	}
+	if err := schema.Validate(value); err != nil {
+		ds.add(diagnostic("event_example_invalid", "error", "Пример не соответствует схеме "+schemaID+": "+err.Error(), "event-message", m.ID, pointer))
+	}
 }
 
 func validJSONShape(value any, depth int, nodes *int) bool {
@@ -493,7 +593,7 @@ func validKafkaHost(host string) bool {
 		return false
 	}
 	for _, r := range parts[0] {
-		if !(unicode.IsLetter(r) || unicode.IsDigit(r) || r == '.' || r == '-' || r == '_') {
+		if !unicode.IsLetter(r) && !unicode.IsDigit(r) && !strings.ContainsRune(".-_", r) {
 			return false
 		}
 	}
@@ -532,6 +632,9 @@ func (d *eventDiagnostics) add(value Diagnostic) {
 	} else {
 		d.list[99] = truncated
 	}
+}
+func (d *eventDiagnostics) addNew(code, severity, message, kind, id, pointer string) {
+	d.add(diagnostic(code, severity, message, kind, id, pointer))
 }
 func (d *eventDiagnostics) hasErrors() bool {
 	return slices.ContainsFunc(d.list, func(v Diagnostic) bool { return v.Severity == "error" })

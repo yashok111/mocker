@@ -143,27 +143,7 @@ func checkDataBindings(pointer string, bindings []DataBinding, add func(string, 
 		if !validExecutionPointer(b.SourcePointer) {
 			add(p+"/sourcePointer", "invalid JSON Pointer")
 		}
-		switch b.Target.Kind {
-		case "path", "query", "header":
-			if b.Target.Name == "" || utf8.RuneCountInString(b.Target.Name) > 256 {
-				add(p+"/target/name", "invalid target name")
-			}
-			if b.Target.Pointer != "" {
-				add(p+"/target/pointer", "pointer is only allowed for body targets")
-			}
-		case "body":
-			if b.Target.Name != "" {
-				add(p+"/target/name", "name is not allowed for body targets")
-			}
-			if !validExecutionPointer(b.Target.Pointer) {
-				add(p+"/target/pointer", "invalid JSON Pointer")
-			}
-			if b.Prefix != "" {
-				add(p+"/prefix", "prefix is only allowed for text targets")
-			}
-		default:
-			add(p+"/target/kind", "invalid target kind")
-		}
+		checkDataBindingTarget(p, b, add)
 		if utf8.RuneCountInString(b.Prefix) > maxText {
 			add(p+"/prefix", "prefix is too long")
 		}
@@ -181,6 +161,32 @@ func checkDataBindings(pointer string, bindings []DataBinding, add func(string, 
 				break
 			}
 		}
+	}
+}
+
+// checkDataBindingTarget admits a name for text targets and a pointer (and no
+// prefix) for body targets.
+func checkDataBindingTarget(p string, b DataBinding, add func(string, string)) {
+	switch b.Target.Kind {
+	case "path", "query", "header":
+		if b.Target.Name == "" || utf8.RuneCountInString(b.Target.Name) > 256 {
+			add(p+"/target/name", "invalid target name")
+		}
+		if b.Target.Pointer != "" {
+			add(p+"/target/pointer", "pointer is only allowed for body targets")
+		}
+	case "body":
+		if b.Target.Name != "" {
+			add(p+"/target/name", "name is not allowed for body targets")
+		}
+		if !validExecutionPointer(b.Target.Pointer) {
+			add(p+"/target/pointer", "invalid JSON Pointer")
+		}
+		if b.Prefix != "" {
+			add(p+"/prefix", "prefix is only allowed for text targets")
+		}
+	default:
+		add(p+"/target/kind", "invalid target kind")
 	}
 }
 func bindingTargetsOverlap(a, b DataBindingTarget) bool {

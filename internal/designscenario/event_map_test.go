@@ -103,7 +103,7 @@ func TestAnalyzeEventMapResolvesEmbeddedAliasesAndTransitions(t *testing.T) {
 		case "api_operation:http:order-key":
 			foundAPI = n.Locator.Pointer == "/contracts/0/document/components/pathItems/shared/get" && n.Locator.Path == "/orders" && n.Locator.PinnedRevisionID == 11
 		case "state_transition:http:order:created":
-			foundState = n.Locator.Pointer == "/contracts/0/document/x-mocker-state-diagrams/diagrams/0/transitions/0" && n.Locator.Method == "get"
+			foundState = n.Locator.Pointer == "/contracts/0/document/x-mocker-state-diagrams/diagrams/0/transitions/0" && n.Locator.Method == "get" //nolint:usestdlibvars // lowercase OpenAPI path-item key; http.MethodGet is "GET"
 		}
 	}
 	if !foundAPI || !foundState {
@@ -127,7 +127,7 @@ func TestAnalyzeEventMapCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	_, err := AnalyzeEventMap(ctx, Document{})
-	if err != context.Canceled {
+	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("cancellation: %v", err)
 	}
 }
@@ -208,8 +208,8 @@ func TestAnalyzeEventMapCycleWarnsAndStableIDs(t *testing.T) {
 		t.Fatal(err)
 	}
 	ids := func(a EventMapAnalysis) ([]string, []string) {
-		nodes := []string{}
-		edges := []string{}
+		nodes := make([]string, 0, len(a.Nodes))
+		edges := make([]string, 0, len(a.Edges))
 		for _, n := range a.Nodes {
 			nodes = append(nodes, n.ID)
 		}

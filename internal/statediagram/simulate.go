@@ -45,7 +45,7 @@ func Simulate(d Diagram, root map[string]any, dataJSON string, transitions []str
 	current, err := currentState(d.InitialStateID, d.Entity, values, data)
 	if err != nil {
 		out.Diagnostics = append(out.Diagnostics, Diagnostic{Severity: "error", ElementID: d.ID, Message: err.Error()})
-		return out, nil
+		return out, nil //nolint:nilerr // the error is reported as a diagnostic of the simulation, not as a failed call
 	}
 	out.StateID = current
 	byID := map[string]Transition{}

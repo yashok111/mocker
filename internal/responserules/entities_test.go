@@ -1,6 +1,7 @@
 package responserules
 
 import (
+	"errors"
 	"strings"
 	"testing"
 
@@ -243,7 +244,7 @@ func TestEntityFixtureStrictWire(t *testing.T) {
 func TestEntityRuntimeErrorNamesArrayPointer(t *testing.T) {
 	r := entityRuleWire(t, `{"id":"a","type":"entity_read","name":"Get","x":0,"y":0,"entity":{"family":"/orders","operation":"get","key":{"source":"query","name":"missing"}}},{"id":"yes","type":"response","name":"Yes","x":0,"y":0,"response":{"status":200,"mediaType":"application/json","headers":[]}},{"id":"no","type":"response","name":"No","x":0,"y":0,"response":{"status":404,"mediaType":"application/json","headers":[]}}`, `{"id":"e1","from":"a","port":"found","to":"yes"},{"id":"e2","from":"a","port":"missing","to":"no"}`)
 	_, err := newProgram(r).EvaluateWithEntities(t.Context(), EvaluationInput{}, EvaluationOptions{Entities: &fixtureEntities{}})
-	field, ok := err.(*FieldError)
+	field, ok := errors.AsType[*FieldError](err)
 	if !ok || field.Pointer != "/nodes/1/entity/key" {
 		t.Fatalf("%v", err)
 	}
