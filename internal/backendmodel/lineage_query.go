@@ -214,32 +214,58 @@ func projectLineageWithEffective(ctx context.Context, state *RevisionState, sour
 		schema = effective.Pins.StructuralSchemaVersion
 		hash = effective.Pins.EffectiveSemanticHash
 	}
-	if err := ctx.Err(); err != nil {
+	if err := checkLineageRequest(ctx, state, sourceGraph, effective, &in, schema); err != nil {
 		return nil, err
 	}
-	if err := in.validate(); err != nil {
-		return nil, err
-	}
-	if state == nil || state.Revision.ID != in.RevisionID {
-		return nil, notFound()
-	}
-	source := primarySource(*state)
-	if effective == nil && sourceGraph == nil && (!isLineageSchema(schema) || source == nil || !sourceProfilesMatch(schema, source.Provider.Profiles)) {
-		return nil, &FaultError{Status: 422, Code: "backend_unsupported_scope", Message: "Lineage reads require a pinned source4 or source5 revision"}
-	}
-	rawSeed, err := json.Marshal(in.Seed)
+	page, scope, err := newLineagePage(state, sourceGraph, effective, in, schema, hash)
 	if err != nil {
 		return nil, err
 	}
-	refValidator := validateLineageRef
-	if schema == EventsSchemaVersion {
-		refValidator = validateEventsLineageRef
+	_, after, err := decodeGraphPage(in.Limit, in.Cursor, "lineage", page.ProjectID, scope, false)
+	if err != nil {
+		return nil, err
 	}
-	if effective != nil || sourceGraph != nil {
-		refValidator = validateRepresentationLineageRef
+	limitations := lineageBaseLimitations(state)
+	truncations := map[string]bool{}
+	idx, err := buildLineageIndex(ctx, state, sourceGraph, in, schema, page, limitations, truncations)
+	if err != nil {
+		return nil, err
 	}
-	if err := refValidator(rawSeed, true); err != nil {
-		return nil, invalid("seed", err.Error())
+	walk := &lineageWalk{
+		ctx: ctx, in: in, page: page, idx: idx, effective: effective, sourceGraph: sourceGraph, truncations: truncations,
+		proofReader: lineageProofReader{effective: effective, source: sourceGraph, ctx: ctx, nodes: idx.nodes, evidence: idx.evidence, contains: idx.contains, edges: idx.edges, handles: idx.handles, schema: schema},
+		visited:     map[LineageValueRef]bool{in.Seed: true},
+		emitted:     map[string]bool{},
+		queue:       []lineageReach{{value: in.Seed, status: "explicit", reasons: map[string]bool{}}},
+	}
+	if err := walk.run(); err != nil {
+		return nil, err
+	}
+	return finishLineagePage(page, len(walk.visited), truncations, limitations, after, scope, in.Limit)
+}
+
+// checkLineageRequest rejects a request this revision cannot answer and
+// fills the depth and page-size defaults into in.
+func checkLineageRequest(ctx context.Context, state *RevisionState, sourceGraph *SourceGraphSnapshot, effective *EffectiveGraphSnapshot, in *LineageQueryInput, schema string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if err := in.validate(); err != nil {
+		return err
+	}
+	if state == nil || state.Revision.ID != in.RevisionID {
+		return notFound()
+	}
+	source := primarySource(*state)
+	if effective == nil && sourceGraph == nil && (!isLineageSchema(schema) || source == nil || !sourceProfilesMatch(schema, source.Provider.Profiles)) {
+		return &FaultError{Status: 422, Code: "backend_unsupported_scope", Message: "Lineage reads require a pinned source4 or source5 revision"}
+	}
+	rawSeed, err := json.Marshal(in.Seed)
+	if err != nil {
+		return err
+	}
+	if err := lineageRefValidator(schema, sourceGraph, effective)(rawSeed, true); err != nil {
+		return invalid("seed", err.Error())
 	}
 	if in.MaxDepth == 0 {
 		in.MaxDepth = 8
@@ -247,6 +273,24 @@ func projectLineageWithEffective(ctx context.Context, state *RevisionState, sour
 	if in.Limit == 0 {
 		in.Limit = 50
 	}
+	return nil
+}
+
+// lineageRefValidator picks the seed grammar: a representation read accepts
+// every profile's refs, a pinned revision only its own schema's.
+func lineageRefValidator(schema string, sourceGraph *SourceGraphSnapshot, effective *EffectiveGraphSnapshot) func(jsontext.Value, bool) error {
+	if effective != nil || sourceGraph != nil {
+		return validateRepresentationLineageRef
+	}
+	if schema == EventsSchemaVersion {
+		return validateEventsLineageRef
+	}
+	return validateLineageRef
+}
+
+// newLineagePage builds the empty page and the cursor scope digest, which
+// binds every input that changes the bounded result.
+func newLineagePage(state *RevisionState, sourceGraph *SourceGraphSnapshot, effective *EffectiveGraphSnapshot, in LineageQueryInput, schema, hash string) (*LineagePage, string, error) {
 	page := &LineagePage{ProjectID: state.Revision.ProjectID, RevisionID: in.RevisionID, SemanticHash: hash, Policy: lineagePolicyForSchema(schema), Seed: in.Seed, Direction: in.Direction, Items: []LineageItem{}, TruncationReasons: []string{}, Limitations: []string{}, Coverage: RevisionCoverage{Coverage: state.Revision.Coverage, Snapshots: slices.Clone(state.Sources), Inventory: slices.Clone(state.Inventory), ReconciliationGaps: []string{}}}
 	if sourceGraph != nil {
 		page.Coverage.Source = sourceVectorReadContext(sourceGraph)
@@ -259,7 +303,7 @@ func projectLineageWithEffective(ctx context.Context, state *RevisionState, sour
 		Depth, Limit                    int
 	}{page.ProjectID, page.RevisionID, page.SemanticHash, page.Policy, in.Seed, in.Direction, in.MaxDepth, in.Limit})
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	if effective != nil {
 		page.Target = new(effective.Target)
@@ -273,30 +317,16 @@ func projectLineageWithEffective(ctx context.Context, state *RevisionState, sour
 			Pins  EffectiveGraphPins
 		}{scope, effective.Pins})
 		if err != nil {
-			return nil, err
+			return nil, "", err
 		}
 	}
-	_, after, err := decodeGraphPage(in.Limit, in.Cursor, "lineage", page.ProjectID, scope, false)
-	if err != nil {
-		return nil, err
-	}
-	nodes := map[string]Node{}
-	evidence := map[string]Evidence{}
-	index := map[LineageValueRef][]lineageIndexedMapping{}
-	contains := map[string][]Edge{}
-	edges := map[string]Edge{}
-	handles := map[string][]Edge{}
-	for _, e := range state.Edges {
-		if err := ctx.Err(); err != nil {
-			return nil, err
-		}
-		if e.Kind == "handles" {
-			handles[e.From] = append(handles[e.From], e)
-		}
-		edges[e.ID] = e
-	}
+	return page, scope, nil
+}
+
+// lineageBaseLimitations collects every limitation the revision itself
+// declares, before the walk adds its own.
+func lineageBaseLimitations(state *RevisionState) map[string]bool {
 	limitations := map[string]bool{}
-	truncations := map[string]bool{}
 	for _, gap := range state.Revision.Coverage.Gaps {
 		limitations[gap] = true
 	}
@@ -314,33 +344,74 @@ func projectLineageWithEffective(ctx context.Context, state *RevisionState, sour
 		}
 	}
 	limitations["Imported mappings describe possible structural dependencies; witnesses do not prove execution or branch feasibility"] = true
+	return limitations
+}
+
+// lineageIndex is the revision's graph keyed the ways the walk and its proof
+// reader look records up.
+type lineageIndex struct {
+	nodes    map[string]Node
+	evidence map[string]Evidence
+	index    map[LineageValueRef][]lineageIndexedMapping
+	contains map[string][]Edge
+	edges    map[string]Edge
+	handles  map[string][]Edge
+}
+
+func buildLineageIndex(ctx context.Context, state *RevisionState, sourceGraph *SourceGraphSnapshot, in LineageQueryInput, schema string, page *LineagePage, limitations, truncations map[string]bool) (*lineageIndex, error) {
+	idx := &lineageIndex{nodes: map[string]Node{}, evidence: map[string]Evidence{}, index: map[LineageValueRef][]lineageIndexedMapping{}, contains: map[string][]Edge{}, edges: map[string]Edge{}, handles: map[string][]Edge{}}
+	for _, e := range state.Edges {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		if e.Kind == "handles" {
+			idx.handles[e.From] = append(idx.handles[e.From], e)
+		}
+		idx.edges[e.ID] = e
+	}
 	for _, n := range state.Nodes {
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		nodes[n.ID] = n
+		idx.nodes[n.ID] = n
 		if n.Freshness != nil && n.Freshness.Status == "stale" {
 			page.Coverage.StaleCounts.Nodes++
 		}
 	}
-	if err := validateLineageValueTargetForSchema(in.Seed, nodes, edges, schema); err != nil {
+	if err := validateLineageValueTargetForSchema(in.Seed, idx.nodes, idx.edges, schema); err != nil {
 		return nil, err
 	}
-	for _, e := range state.Evidence {
+	if err := idx.indexEvidenceAndContainment(ctx, state, page, limitations); err != nil {
+		return nil, err
+	}
+	if err := idx.indexMappings(ctx, state, sourceGraph, in, schema, truncations); err != nil {
+		return nil, err
+	}
+	for _, mappings := range idx.index {
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		evidence[e.ID] = e
+		slices.SortFunc(mappings, func(a, b lineageIndexedMapping) int { return strings.Compare(a.node.ID, b.node.ID) })
+	}
+	return idx, nil
+}
+
+func (idx *lineageIndex) indexEvidenceAndContainment(ctx context.Context, state *RevisionState, page *LineagePage, limitations map[string]bool) error {
+	for _, e := range state.Evidence {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		idx.evidence[e.ID] = e
 		if e.Freshness != nil && e.Freshness.Status == "stale" {
 			page.Coverage.StaleCounts.Evidence++
 		}
 	}
 	for _, e := range state.Edges {
 		if err := ctx.Err(); err != nil {
-			return nil, err
+			return err
 		}
 		if e.Kind == "contains" {
-			contains[e.To] = append(contains[e.To], e)
+			idx.contains[e.To] = append(idx.contains[e.To], e)
 		}
 		if e.Freshness != nil && e.Freshness.Status == "stale" {
 			page.Coverage.StaleCounts.Edges++
@@ -349,10 +420,17 @@ func projectLineageWithEffective(ctx context.Context, state *RevisionState, sour
 			limitations["Unknown table column access "+e.ID+" cannot be expanded into field references"] = true
 		}
 	}
+	return nil
+}
+
+// indexMappings keys every field mapping by the values the walk reaches it
+// from. Events and source6 reads bound the index itself; the others are
+// bounded only by the walk.
+func (idx *lineageIndex) indexMappings(ctx context.Context, state *RevisionState, sourceGraph *SourceGraphSnapshot, in LineageQueryInput, schema string, truncations map[string]bool) error {
 	indexedMappings, indexedIncidences := 0, 0
 	for _, n := range state.Nodes {
 		if err := ctx.Err(); err != nil {
-			return nil, err
+			return err
 		}
 		if n.Kind != "field_mapping" {
 			continue
@@ -364,7 +442,7 @@ func projectLineageWithEffective(ctx context.Context, state *RevisionState, sour
 			}
 			refs, err := relationalArray(n.Attributes["sources"], MaxLineageSources)
 			if err != nil {
-				return nil, err
+				return err
 			}
 			if indexedIncidences+len(refs)+1 > lineageMaxReferenceIncidences {
 				truncations["reference_limit"] = true
@@ -375,7 +453,7 @@ func projectLineageWithEffective(ctx context.Context, state *RevisionState, sour
 		}
 		attrs, err := decodeLineageMappingForSchema(n.Attributes, schema)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		m := lineageIndexedMapping{n, attrs}
 		refs := attrs.Sources
@@ -384,124 +462,185 @@ func projectLineageWithEffective(ctx context.Context, state *RevisionState, sour
 		}
 		for _, ref := range refs {
 			if err := ctx.Err(); err != nil {
-				return nil, err
+				return err
 			}
-			index[ref] = append(index[ref], m)
+			idx.index[ref] = append(idx.index[ref], m)
 		}
 	}
-	for _, mappings := range index {
-		if err := ctx.Err(); err != nil {
-			return nil, err
+	return nil
+}
+
+// lineageWalk is the breadth-first expansion from the seed, with the
+// budgets that stop it.
+type lineageWalk struct {
+	ctx         context.Context
+	in          LineageQueryInput
+	page        *LineagePage
+	idx         *lineageIndex
+	effective   *EffectiveGraphSnapshot
+	sourceGraph *SourceGraphSnapshot
+	proofReader lineageProofReader
+	truncations map[string]bool
+	visited     map[LineageValueRef]bool
+	emitted     map[string]bool
+	queue       []lineageReach
+	incidences  int
+	stop        bool
+}
+
+func (t *lineageWalk) run() error {
+	for head := 0; head < len(t.queue) && !t.stop; head++ {
+		if err := t.ctx.Err(); err != nil {
+			return err
 		}
-		slices.SortFunc(mappings, func(a, b lineageIndexedMapping) int { return strings.Compare(a.node.ID, b.node.ID) })
-	}
-	proofReader := lineageProofReader{effective: effective, source: sourceGraph, ctx: ctx, nodes: nodes, evidence: evidence, contains: contains, edges: edges, handles: handles, schema: schema}
-	visited := map[LineageValueRef]bool{in.Seed: true}
-	emitted := map[string]bool{}
-	queue := []lineageReach{{value: in.Seed, status: "explicit", reasons: map[string]bool{}}}
-	incidences := 0
-	stop := false
-	for head := 0; head < len(queue) && !stop; head++ {
-		if err := ctx.Err(); err != nil {
-			return nil, err
-		}
-		w := queue[head]
-		for _, m := range index[w.value] {
-			if err := ctx.Err(); err != nil {
-				return nil, err
+		w := t.queue[head]
+		for _, m := range t.idx.index[w.value] {
+			if err := t.ctx.Err(); err != nil {
+				return err
 			}
-			if emitted[m.node.ID] {
+			if t.emitted[m.node.ID] {
 				continue
 			}
-			if page.ExaminedMappingCount == lineageMaxExaminedMappings {
-				truncations["mapping_limit"] = true
-				stop = true
+			if !t.admit(m) {
 				break
 			}
-			page.ExaminedMappingCount++
-			count := len(m.attrs.Sources) + 1
-			if incidences+count > lineageMaxReferenceIncidences {
-				truncations["reference_limit"] = true
-				stop = true
-				break
+			if err := t.expand(w, m); err != nil {
+				return err
 			}
-			incidences += count
-			proof, err := proofReader.mapping(m)
-			if err != nil {
-				return nil, err
-			}
-			proof.status = runtimeWorseStatus(w.status, proof.status)
-			for reason := range w.reasons {
-				proof.reasons[reason] = true
-			}
-			depth := len(w.witness) + 1
-			item := LineageItem{Mapping: m.node, Via: w.value, Depth: depth, WitnessMappingIDs: append(slices.Clone(w.witness), m.node.ID), Status: proof.status, Expansion: "expanded", ExpandedValues: []LineageValueRef{}, Reasons: []string{}}
-			if effective != nil {
-				item.Mapping = effectiveNodeRecord(effective, item.Mapping)
-			} else if sourceGraph != nil {
-				item.Mapping.Source = sourceRecordReadContext(sourceGraph, "node", item.Mapping.ID)
-				mappingProof, err := sourceRecordProof(sourceGraph, "node", item.Mapping.ID, nil)
-				if err != nil {
-					return nil, err
-				}
-				item.Mapping.EvidenceIDs = slices.Clone(mappingProof.evidenceIDs)
-			}
-			emitted[m.node.ID] = true
-			next := []LineageValueRef{m.attrs.Destination}
-			if in.Direction == "reverse" {
-				next = slices.Clone(m.attrs.Sources)
-			}
-			if !proof.boundary && depth == in.MaxDepth {
-				for _, ref := range next {
-					if visited[ref] {
-						continue
-					}
-					for _, further := range index[ref] {
-						if !emitted[further.node.ID] {
-							proof.add("depth_limit", true)
-							truncations["depth_limit"] = true
-							break
-						}
-					}
-				}
-			}
-			if !proof.boundary {
-				additional := 0
-				for _, ref := range next {
-					if !visited[ref] {
-						additional++
-					}
-				}
-				if len(visited)+additional > lineageMaxVisitedValues {
-					proof.add("value_limit", true)
-					truncations["value_limit"] = true
-					stop = true
-				}
-			}
-			if proof.boundary {
-				item.Expansion = "boundary"
-			} else {
-				item.ExpandedValues = slices.Clone(next)
-				for _, ref := range next {
-					if err := ctx.Err(); err != nil {
-						return nil, err
-					}
-					if visited[ref] {
-						continue
-					}
-					visited[ref] = true
-					queue = append(queue, lineageReach{ref, item.WitnessMappingIDs, item.Status, maps.Clone(proof.reasons)})
-				}
-			}
-			item.Reasons = runtimeSortedKeys(proof.reasons)
-			item.RequiresReview = proof.boundary || item.Status != "explicit" || len(item.Reasons) > 0
-			page.Items = append(page.Items, item)
-			if stop {
+			if t.stop {
 				break
 			}
 		}
 	}
-	page.VisitedValueCount = len(visited)
+	return nil
+}
+
+// admit charges one mapping against the examined and incidence budgets;
+// false stops the walk, the exhausted budget recorded as a truncation.
+func (t *lineageWalk) admit(m lineageIndexedMapping) bool {
+	if t.page.ExaminedMappingCount == lineageMaxExaminedMappings {
+		t.truncations["mapping_limit"] = true
+		t.stop = true
+		return false
+	}
+	t.page.ExaminedMappingCount++
+	count := len(m.attrs.Sources) + 1
+	if t.incidences+count > lineageMaxReferenceIncidences {
+		t.truncations["reference_limit"] = true
+		t.stop = true
+		return false
+	}
+	t.incidences += count
+	return true
+}
+
+// expand emits mapping m reached through w and queues the values it leads to.
+func (t *lineageWalk) expand(w lineageReach, m lineageIndexedMapping) error {
+	proof, err := t.proofReader.mapping(m)
+	if err != nil {
+		return err
+	}
+	proof.status = runtimeWorseStatus(w.status, proof.status)
+	for reason := range w.reasons {
+		proof.reasons[reason] = true
+	}
+	depth := len(w.witness) + 1
+	item := LineageItem{Mapping: m.node, Via: w.value, Depth: depth, WitnessMappingIDs: append(slices.Clone(w.witness), m.node.ID), Status: proof.status, Expansion: "expanded", ExpandedValues: []LineageValueRef{}, Reasons: []string{}}
+	if err := t.readMapping(&item); err != nil {
+		return err
+	}
+	t.emitted[m.node.ID] = true
+	next := []LineageValueRef{m.attrs.Destination}
+	if t.in.Direction == "reverse" {
+		next = slices.Clone(m.attrs.Sources)
+	}
+	t.applyLimits(&proof, next, depth)
+	if proof.boundary {
+		item.Expansion = "boundary"
+	} else {
+		item.ExpandedValues = slices.Clone(next)
+		if err := t.enqueue(next, item, proof); err != nil {
+			return err
+		}
+	}
+	item.Reasons = runtimeSortedKeys(proof.reasons)
+	item.RequiresReview = proof.boundary || item.Status != "explicit" || len(item.Reasons) > 0
+	t.page.Items = append(t.page.Items, item)
+	return nil
+}
+
+// readMapping replaces the mapping record with the representation the read
+// is pinned to: the effective overlay, or the source6 claim and its proof.
+func (t *lineageWalk) readMapping(item *LineageItem) error {
+	if t.effective != nil {
+		item.Mapping = effectiveNodeRecord(t.effective, item.Mapping)
+	} else if t.sourceGraph != nil {
+		item.Mapping.Source = sourceRecordReadContext(t.sourceGraph, "node", item.Mapping.ID)
+		mappingProof, err := sourceRecordProof(t.sourceGraph, "node", item.Mapping.ID, nil)
+		if err != nil {
+			return err
+		}
+		item.Mapping.EvidenceIDs = slices.Clone(mappingProof.evidenceIDs)
+	}
+	return nil
+}
+
+// applyLimits turns the mapping into a boundary when the depth or the
+// visited-value budget would be exceeded by expanding it.
+func (t *lineageWalk) applyLimits(proof *lineageProof, next []LineageValueRef, depth int) {
+	if !proof.boundary && depth == t.in.MaxDepth && t.reachesUnemitted(next) {
+		proof.add("depth_limit", true)
+		t.truncations["depth_limit"] = true
+	}
+	if !proof.boundary {
+		additional := 0
+		for _, ref := range next {
+			if !t.visited[ref] {
+				additional++
+			}
+		}
+		if len(t.visited)+additional > lineageMaxVisitedValues {
+			proof.add("value_limit", true)
+			t.truncations["value_limit"] = true
+			t.stop = true
+		}
+	}
+}
+
+// reachesUnemitted reports whether an unvisited next value leads to a
+// mapping not yet emitted, i.e. whether stopping here hides something.
+func (t *lineageWalk) reachesUnemitted(next []LineageValueRef) bool {
+	for _, ref := range next {
+		if t.visited[ref] {
+			continue
+		}
+		for _, further := range t.idx.index[ref] {
+			if !t.emitted[further.node.ID] {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func (t *lineageWalk) enqueue(next []LineageValueRef, item LineageItem, proof lineageProof) error {
+	for _, ref := range next {
+		if err := t.ctx.Err(); err != nil {
+			return err
+		}
+		if t.visited[ref] {
+			continue
+		}
+		t.visited[ref] = true
+		t.queue = append(t.queue, lineageReach{ref, item.WitnessMappingIDs, item.Status, maps.Clone(proof.reasons)})
+	}
+	return nil
+}
+
+// finishLineagePage records the walk's outcome, orders the bounded result
+// and cuts the requested page out of it.
+func finishLineagePage(page *LineagePage, visited int, truncations, limitations map[string]bool, after, scope string, limit int) (*LineagePage, error) {
+	page.VisitedValueCount = visited
 	page.TruncationReasons = runtimeSortedKeys(truncations)
 	page.Truncated = len(truncations) > 0
 	if len(page.Items) == 0 {
@@ -519,7 +658,7 @@ func projectLineageWithEffective(ctx context.Context, state *RevisionState, sour
 		}
 		start = at + 1
 	}
-	end := min(start+in.Limit, len(page.Items))
+	end := min(start+limit, len(page.Items))
 	if end < len(page.Items) {
 		page.NextCursor = encodeGraphPage("lineage", page.ProjectID, scope, lineageItemKey(page.Items[end-1]))
 	}

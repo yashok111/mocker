@@ -140,24 +140,53 @@ func readProposalReceipt(ctx context.Context, q importReader, scope, key, digest
 	return true, nil
 }
 
-func (r *Repo) CreateProposal(ctx context.Context, pid string, in CreateProposalInput) (*ProposalDetail, error) {
+// checkCreateProposalInput normalizes the name in place and refuses
+// malformed identifiers before any read.
+func checkCreateProposalInput(pid string, in *CreateProposalInput) error {
 	if !ValidID(pid) {
-		return nil, notFound()
+		return notFound()
 	}
 	name, err := normalizeName(in.Name)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	in.Name = name
 	if err := validateKey(in.IdempotencyKey); err != nil {
-		return nil, err
+		return err
 	}
 	if !externalKey(in.FacetKey) {
-		return nil, invalid("facetKey", "Use a valid relational facet key")
+		return invalid("facetKey", "Use a valid relational facet key")
 	}
 	if !ValidID(in.BaseRevisionID) || !ValidID(in.RepositoryID) || !ValidID(in.DatastoreID) {
-		return nil, notFound()
+		return notFound()
 	}
+	return nil
+}
+
+// emptyProposalSemanticHash hashes the draft's semantic content. Identity and
+// time of the result revision are outside the semantic domain.
+func emptyProposalSemanticHash(p Proposal, rev ProposalRevision) (string, error) {
+	return requestDigest(struct {
+		DocumentVersion   string              `json:"documentVersion"`
+		ProposalID        string              `json:"proposalId"`
+		BaseRevisionID    string              `json:"baseRevisionId"`
+		BaseSemanticHash  string              `json:"baseSemanticHash"`
+		RepositoryID      string              `json:"repositoryId"`
+		DatastoreID       string              `json:"datastoreId"`
+		FacetKey          string              `json:"facetKey"`
+		SourceSnapshotIDs []string            `json:"sourceSnapshotIds"`
+		ArtifactPins      []ArtifactPin       `json:"artifactPins"`
+		Commands          []ProposalCommand   `json:"commands"`
+		Overlays          []ProposalOverlay   `json:"overlays"`
+		Criteria          []ProposalCriterion `json:"criteria"`
+	}{ProposalDocumentVersion, p.ID, p.BaseRevisionID, p.BaseSemanticHash, p.RepositoryID, p.DatastoreID, p.FacetKey, rev.SourceSnapshotIDs, rev.ArtifactPins, rev.Commands, rev.Overlays, rev.Criteria})
+}
+
+func (r *Repo) CreateProposal(ctx context.Context, pid string, in CreateProposalInput) (*ProposalDetail, error) {
+	if err := checkCreateProposalInput(pid, &in); err != nil {
+		return nil, err
+	}
+	name := in.Name
 	digest, err := requestDigest(in)
 	if err != nil {
 		return nil, err
@@ -176,22 +205,7 @@ func (r *Repo) CreateProposal(ctx context.Context, pid string, in CreateProposal
 		now := time.Now().UTC()
 		p := Proposal{ID: uuid.NewV7().String(), ProjectID: pid, Version: 1, Name: name, Status: "draft", BaseRevisionID: in.BaseRevisionID, BaseSemanticHash: state.Revision.SemanticHash, RepositoryID: in.RepositoryID, DatastoreID: in.DatastoreID, FacetKey: in.FacetKey, DraftRevisionID: uuid.NewV7().String(), CreatedAt: now, UpdatedAt: now}
 		rev := ProposalRevision{ID: p.DraftRevisionID, ProposalID: p.ID, DocumentVersion: ProposalDocumentVersion, BaseRevisionID: p.BaseRevisionID, BaseSemanticHash: p.BaseSemanticHash, SourceSnapshotIDs: slices.Clone(state.Revision.SourceSnapshotIDs), ArtifactPins: slices.Clone(state.Revision.ArtifactPins), Commands: []ProposalCommand{}, Overlays: []ProposalOverlay{}, Criteria: []ProposalCriterion{}, Author: "user", Summary: "Empty database proposal", CreatedAt: now}
-		// Identity and time of the result revision are outside the semantic domain.
-		semantic := struct {
-			DocumentVersion   string              `json:"documentVersion"`
-			ProposalID        string              `json:"proposalId"`
-			BaseRevisionID    string              `json:"baseRevisionId"`
-			BaseSemanticHash  string              `json:"baseSemanticHash"`
-			RepositoryID      string              `json:"repositoryId"`
-			DatastoreID       string              `json:"datastoreId"`
-			FacetKey          string              `json:"facetKey"`
-			SourceSnapshotIDs []string            `json:"sourceSnapshotIds"`
-			ArtifactPins      []ArtifactPin       `json:"artifactPins"`
-			Commands          []ProposalCommand   `json:"commands"`
-			Overlays          []ProposalOverlay   `json:"overlays"`
-			Criteria          []ProposalCriterion `json:"criteria"`
-		}{ProposalDocumentVersion, p.ID, p.BaseRevisionID, p.BaseSemanticHash, p.RepositoryID, p.DatastoreID, p.FacetKey, rev.SourceSnapshotIDs, rev.ArtifactPins, rev.Commands, rev.Overlays, rev.Criteria}
-		rev.SemanticHash, err = requestDigest(semantic)
+		rev.SemanticHash, err = emptyProposalSemanticHash(p, rev)
 		if err != nil {
 			return err
 		}

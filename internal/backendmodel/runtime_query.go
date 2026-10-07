@@ -165,7 +165,6 @@ func (in FlowQueryInput) validate() error {
 			return err
 		}
 	}
-	has := func(key, value string) bool { return in.present[key] || value != "" }
 	if !slices.Contains([]string{"entrypoints", "steps", "transitions", "accesses"}, in.View) {
 		return invalid("view", "Select entrypoints, steps, transitions or accesses")
 	}
@@ -175,6 +174,15 @@ func (in FlowQueryInput) validate() error {
 	if !utf8.ValidString(in.Search) || len(in.Search) > 1024 || strings.ContainsRune(in.Search, 0) {
 		return invalid("search", "Invalid search string")
 	}
+	return in.validateSelectors()
+}
+
+// has reports a selector as given when it was present in the body, even
+// empty, so an explicit "" still counts against a view that rejects it.
+func (in FlowQueryInput) has(key, value string) bool { return in.present[key] || value != "" }
+
+func (in FlowQueryInput) validateSelectors() error {
+	has := in.has
 	if in.View != "entrypoints" && has("search", in.Search) || in.View != "accesses" && (has("entrypointId", in.EntrypointID) || has("dataNodeId", in.DataNodeID) || has("accessKind", in.AccessKind)) || in.View != "steps" && in.View != "transitions" && has("flowId", in.FlowID) {
 		return invalid("selectors", "Selectors are not valid for this view")
 	}
@@ -184,15 +192,21 @@ func (in FlowQueryInput) validate() error {
 		}
 	}
 	if in.View == "accesses" {
-		if has("entrypointId", in.EntrypointID) == has("dataNodeId", in.DataNodeID) {
-			return invalid("selectors", "Select exactly one entrypointId or dataNodeId")
-		}
-		if has("entrypointId", in.EntrypointID) && !ValidID(in.EntrypointID) || has("dataNodeId", in.DataNodeID) && !ValidID(in.DataNodeID) {
-			return invalid("selectors", "Use a canonical UUID selector")
-		}
-		if has("accessKind", in.AccessKind) && !slices.Contains([]string{"reads", "writes", "deletes"}, in.AccessKind) {
-			return invalid("accessKind", "Select reads, writes or deletes")
-		}
+		return in.validateAccessSelectors()
+	}
+	return nil
+}
+
+func (in FlowQueryInput) validateAccessSelectors() error {
+	has := in.has
+	if has("entrypointId", in.EntrypointID) == has("dataNodeId", in.DataNodeID) {
+		return invalid("selectors", "Select exactly one entrypointId or dataNodeId")
+	}
+	if has("entrypointId", in.EntrypointID) && !ValidID(in.EntrypointID) || has("dataNodeId", in.DataNodeID) && !ValidID(in.DataNodeID) {
+		return invalid("selectors", "Use a canonical UUID selector")
+	}
+	if has("accessKind", in.AccessKind) && !slices.Contains([]string{"reads", "writes", "deletes"}, in.AccessKind) {
+		return invalid("accessKind", "Select reads, writes or deletes")
 	}
 	return nil
 }
@@ -228,6 +242,50 @@ func projectRuntimeFlowWithEffective(ctx context.Context, state *RevisionState, 
 		schema = effective.Pins.StructuralSchemaVersion
 		hash = effective.Pins.EffectiveSemanticHash
 	}
+	source, err := checkRuntimeFlowRequest(ctx, state, sourceGraph, effective, in, schema)
+	if err != nil {
+		return nil, err
+	}
+	page := &FlowPage{ProjectID: state.Revision.ProjectID, RevisionID: state.Revision.ID, SemanticHash: hash, View: in.View, Coverage: RevisionCoverage{Coverage: state.Revision.Coverage, Snapshots: slices.Clone(state.Sources), Inventory: slices.Clone(state.Inventory), ReconciliationGaps: []string{}}, Limitations: []string{}, TruncationReasons: []string{}}
+	if sourceGraph != nil {
+		page.Coverage.Source = sourceVectorReadContext(sourceGraph)
+	}
+	p := &runtimeFlowProjection{effective: effective, schema: schema, source: sourceGraph, state: state, in: in, page: page, nodes: map[string]Node{}, edges: map[string]Edge{}, out: map[string][]Edge{}, children: map[string][]Node{}, evidence: map[string]Evidence{}, limitations: map[string]bool{}, truncations: map[string]bool{}, accesses: map[string]FlowAccessItem{}, selectedAccess: map[string]string{}, discoveredAccess: map[string]bool{}}
+	if err := p.indexNodes(ctx); err != nil {
+		return nil, err
+	}
+	if err := p.indexEdges(ctx); err != nil {
+		return nil, err
+	}
+	p.collectLimitations(source)
+	scope, err := p.pageScope()
+	if err != nil {
+		return nil, err
+	}
+	limit, after, err := decodeGraphPage(in.Limit, in.Cursor, "flow", page.ProjectID, scope, in.View != "accesses")
+	if err != nil {
+		return nil, err
+	}
+	switch in.View {
+	case "entrypoints":
+		err = p.entrypointPage(ctx, limit, after, scope)
+	case "steps", "transitions":
+		err = p.flowPage(limit, after, scope)
+	case "accesses":
+		err = p.accessPage(ctx, limit, after, scope)
+	}
+	if err != nil {
+		return nil, err
+	}
+	page.Limitations = runtimeSortedKeys(p.limitations)
+	page.TruncationReasons = runtimeSortedKeys(p.truncations)
+	page.Truncated = len(page.TruncationReasons) != 0
+	return page, nil
+}
+
+// checkRuntimeFlowRequest rejects a request this revision cannot answer and
+// returns the revision's primary source, whose limitations the page carries.
+func checkRuntimeFlowRequest(ctx context.Context, state *RevisionState, sourceGraph *SourceGraphSnapshot, effective *EffectiveGraphSnapshot, in FlowQueryInput, schema string) (*SourceSnapshot, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -241,47 +299,52 @@ func projectRuntimeFlowWithEffective(ctx context.Context, state *RevisionState, 
 	if effective == nil && sourceGraph == nil && (!isRuntimeSchema(schema) || source == nil || !sourceProfilesMatch(schema, source.Provider.Profiles)) {
 		return nil, &FaultError{Status: 422, Code: "backend_unsupported_scope", Message: "Flow reads require a pinned runtime-flow source revision"}
 	}
-	page := &FlowPage{ProjectID: state.Revision.ProjectID, RevisionID: state.Revision.ID, SemanticHash: hash, View: in.View, Coverage: RevisionCoverage{Coverage: state.Revision.Coverage, Snapshots: slices.Clone(state.Sources), Inventory: slices.Clone(state.Inventory), ReconciliationGaps: []string{}}, Limitations: []string{}, TruncationReasons: []string{}}
-	if sourceGraph != nil {
-		page.Coverage.Source = sourceVectorReadContext(sourceGraph)
-	}
-	p := &runtimeFlowProjection{effective: effective, schema: schema, source: sourceGraph, state: state, in: in, page: page, nodes: map[string]Node{}, edges: map[string]Edge{}, out: map[string][]Edge{}, children: map[string][]Node{}, evidence: map[string]Evidence{}, limitations: map[string]bool{}, truncations: map[string]bool{}, accesses: map[string]FlowAccessItem{}, selectedAccess: map[string]string{}, discoveredAccess: map[string]bool{}}
-	for _, n := range state.Nodes {
+	return source, nil
+}
+
+func (p *runtimeFlowProjection) indexNodes(ctx context.Context) error {
+	for _, n := range p.state.Nodes {
 		if err := ctx.Err(); err != nil {
-			return nil, err
+			return err
 		}
-		if effective != nil {
-			n = effectiveNodeRecord(effective, n)
-		} else if sourceGraph != nil {
-			n.Source = sourceRecordReadContext(sourceGraph, "node", n.ID)
+		if p.effective != nil {
+			n = effectiveNodeRecord(p.effective, n)
+		} else if p.source != nil {
+			n.Source = sourceRecordReadContext(p.source, "node", n.ID)
 		}
 		p.nodes[n.ID] = n
 		if n.ParentID != nil {
 			p.children[*n.ParentID] = append(p.children[*n.ParentID], n)
 		}
 		if n.Freshness != nil && n.Freshness.Status == "stale" {
-			page.Coverage.StaleCounts.Nodes++
+			p.page.Coverage.StaleCounts.Nodes++
 		}
 	}
-	for _, e := range state.Edges {
+	return nil
+}
+
+// indexEdges indexes edges and evidence, then fixes the ID order every
+// adjacency list is walked in.
+func (p *runtimeFlowProjection) indexEdges(ctx context.Context) error {
+	for _, e := range p.state.Edges {
 		if err := ctx.Err(); err != nil {
-			return nil, err
+			return err
 		}
-		if effective != nil {
-			e = effectiveEdgeRecord(effective, e)
-		} else if sourceGraph != nil {
-			e.Source = sourceRecordReadContext(sourceGraph, "edge", e.ID)
+		if p.effective != nil {
+			e = effectiveEdgeRecord(p.effective, e)
+		} else if p.source != nil {
+			e.Source = sourceRecordReadContext(p.source, "edge", e.ID)
 		}
 		p.edges[e.ID] = e
 		p.out[e.From] = append(p.out[e.From], e)
 		if e.Freshness != nil && e.Freshness.Status == "stale" {
-			page.Coverage.StaleCounts.Edges++
+			p.page.Coverage.StaleCounts.Edges++
 		}
 	}
-	for _, e := range state.Evidence {
+	for _, e := range p.state.Evidence {
 		p.evidence[e.ID] = e
 		if e.Freshness != nil && e.Freshness.Status == "stale" {
-			page.Coverage.StaleCounts.Evidence++
+			p.page.Coverage.StaleCounts.Evidence++
 		}
 	}
 	for _, edges := range p.out {
@@ -290,168 +353,189 @@ func projectRuntimeFlowWithEffective(ctx context.Context, state *RevisionState, 
 	for _, children := range p.children {
 		slices.SortFunc(children, func(a, b Node) int { return strings.Compare(a.ID, b.ID) })
 	}
-	for _, gap := range state.Revision.Coverage.Gaps {
+	return nil
+}
+
+func (p *runtimeFlowProjection) collectLimitations(source *SourceSnapshot) {
+	for _, gap := range p.state.Revision.Coverage.Gaps {
 		p.limitations[gap] = true
 	}
-	if sourceGraph == nil {
+	if p.source == nil {
 		for _, limitation := range source.Provider.Limitations {
 			p.limitations[limitation] = true
 		}
 	} else {
-		for _, part := range sourceGraph.SourceVector.Partitions {
+		for _, part := range p.source.SourceVector.Partitions {
 			for _, limitation := range part.Provider.Limitations {
 				p.limitations[limitation] = true
 			}
 		}
 	}
 	p.limitations["Source reachability does not verify runtime execution, branch feasibility or transaction atomicity"] = true
-	// The page size is intentionally excluded: continuation recomputes the same
-	// bounded projection, then selects a different-sized window over that result.
+}
+
+// pageScope is the cursor scope digest. The page size is intentionally
+// excluded: continuation recomputes the same bounded projection, then
+// selects a different-sized window over that result.
+func (p *runtimeFlowProjection) pageScope() (string, error) {
+	page, in := p.page, p.in
 	scope, err := requestDigest(struct {
 		ProjectID, RevisionID, SemanticHash, Policy, View, Search, FlowID, EntrypointID, DataNodeID, AccessKind string
-	}{page.ProjectID, page.RevisionID, page.SemanticHash, runtimePolicyForSchema(schema), in.View, strings.ToLower(in.Search), in.FlowID, in.EntrypointID, in.DataNodeID, in.AccessKind})
+	}{page.ProjectID, page.RevisionID, page.SemanticHash, runtimePolicyForSchema(p.schema), in.View, strings.ToLower(in.Search), in.FlowID, in.EntrypointID, in.DataNodeID, in.AccessKind})
 	if err != nil {
-		return nil, err
+		return "", err
 	}
-	if effective != nil {
-		page.Target = new(effective.Target)
-		page.Pins = new(effective.Pins)
+	if p.effective != nil {
+		page.Target = new(p.effective.Target)
+		page.Pins = new(p.effective.Pins)
 		scope, err = requestDigest(struct {
 			Scope string
 			Pins  EffectiveGraphPins
-		}{scope, effective.Pins})
+		}{scope, p.effective.Pins})
 		if err != nil {
-			return nil, err
+			return "", err
 		}
 	}
-	limit, after, err := decodeGraphPage(in.Limit, in.Cursor, "flow", page.ProjectID, scope, in.View != "accesses")
-	if err != nil {
-		return nil, err
+	return scope, nil
+}
+
+// entrypointPage cuts the cursor window BEFORE building items: entrypoint()
+// merges each item's limitations into the page-wide list, and building every
+// match made page 1 report the gaps of operations shown only on later pages
+// (review 2026-10-06, F116). The window is the same one the old
+// build-then-trim produced, because Operation.ID is the node ID.
+func (p *runtimeFlowProjection) entrypointPage(ctx context.Context, limit int, after, scope string) error {
+	page := p.page
+	window := []Node{}
+	for _, id := range slices.Sorted(maps.Keys(p.nodes)) {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		n := p.nodes[id]
+		if id <= after || !sourceRuntimeEntrypoint(p.schema, n.Kind) || !strings.Contains(strings.ToLower(n.Name+" "+runtimeAttributeString(n.Attributes, "method")+" "+runtimeAttributeString(n.Attributes, "path")), strings.ToLower(p.in.Search)) {
+			continue
+		}
+		window = append(window, n)
 	}
-	if in.View == "accesses" && after != "" {
+	if len(window) > limit {
+		page.NextCursor = encodeGraphPage("flow", page.ProjectID, scope, window[limit-1].ID)
+		window = window[:limit]
+	}
+	page.EntryPointItems = make([]FlowEntrypointItem, 0, len(window))
+	for _, n := range window {
+		page.EntryPointItems = append(page.EntryPointItems, p.entrypoint(n))
+	}
+	return nil
+}
+
+func (p *runtimeFlowProjection) flowPage(limit int, after, scope string) error {
+	flow, ok := p.nodes[p.in.FlowID]
+	if !ok {
+		return notFound()
+	}
+	if flow.Kind != "flow" {
+		return invalid("flowId", "Selector must identify a flow")
+	}
+	p.observeNode(flow)
+	if p.in.View == "steps" {
+		p.stepPage(flow, limit, after, scope)
+	} else {
+		p.transitionPage(flow, limit, after, scope)
+	}
+	return nil
+}
+
+func (p *runtimeFlowProjection) stepPage(flow Node, limit int, after, scope string) {
+	page := p.page
+	page.StepItems = []Node{}
+	for _, n := range p.children[flow.ID] {
+		if n.Kind == "flow_step" {
+			page.StepItems = append(page.StepItems, n)
+		}
+	}
+	page.StepItems = slices.DeleteFunc(page.StepItems, func(n Node) bool { return n.ID <= after })
+	if len(page.StepItems) > limit {
+		page.NextCursor = encodeGraphPage("flow", page.ProjectID, scope, page.StepItems[limit-1].ID)
+		page.StepItems = page.StepItems[:limit]
+	}
+	// Observe only the returned window (review 2026-10-06, F116).
+	for _, n := range page.StepItems {
+		p.observeNode(n)
+	}
+}
+
+func (p *runtimeFlowProjection) transitionPage(flow Node, limit int, after, scope string) {
+	page := p.page
+	page.TransitionItems = []Edge{}
+	silent := []Node{}
+	// Every effective read and every composed schema carries emits:
+	// a full change proposal over a source5 baseline reads with
+	// schema "6" and no native source graph, and the older gate
+	// dropped its emits edges (review 2026-10-06, F110).
+	emits := p.effective != nil || p.schema == EventsSchemaVersion || p.schema == ComposedSchemaVersion || p.source != nil
+	for _, n := range p.children[flow.ID] {
+		if n.Kind != "flow_step" {
+			continue
+		}
+		before := len(page.TransitionItems)
+		for _, e := range p.out[n.ID] {
+			if slices.Contains([]string{"next", "branch", "error", "returns", "calls", "begins", "commits", "rolls_back"}, e.Kind) || emits && e.Kind == "emits" {
+				page.TransitionItems = append(page.TransitionItems, e)
+			}
+		}
+		if len(page.TransitionItems) == before {
+			silent = append(silent, n)
+		}
+	}
+	slices.SortFunc(page.TransitionItems, func(a, b Edge) int { return strings.Compare(a.ID, b.ID) })
+	page.TransitionItems = slices.DeleteFunc(page.TransitionItems, func(e Edge) bool { return e.ID <= after })
+	if len(page.TransitionItems) > limit {
+		page.NextCursor = encodeGraphPage("flow", page.ProjectID, scope, page.TransitionItems[limit-1].ID)
+		page.TransitionItems = page.TransitionItems[:limit]
+	}
+	// Observe the window's edges and the steps they leave, not every
+	// step of the flow (review 2026-10-06, F116). A step that leaves no
+	// transition is on no page, so its limitations ride on the last one
+	// instead of vanishing from the view.
+	observed := map[string]bool{}
+	for _, e := range page.TransitionItems {
+		if step, ok := p.nodes[e.From]; ok && !observed[step.ID] {
+			observed[step.ID] = true
+			p.observeNode(step)
+		}
+		p.observeEdge(e)
+	}
+	if page.NextCursor == "" {
+		for _, n := range silent {
+			p.observeNode(n)
+		}
+	}
+}
+
+func (p *runtimeFlowProjection) accessPage(ctx context.Context, limit int, after, scope string) error {
+	page := p.page
+	if after != "" {
 		entry, access, ok := strings.Cut(after, "/")
 		if !ok || entry != "" && !ValidID(entry) || !ValidID(access) {
-			return nil, invalid("cursor", "Invalid access ordering key")
+			return invalid("cursor", "Invalid access ordering key")
 		}
 	}
-	switch in.View {
-	case "entrypoints":
-		// Cut the cursor window BEFORE building items: entrypoint() merges
-		// each item's limitations into the page-wide list, and building every
-		// match made page 1 report the gaps of operations shown only on later
-		// pages (review 2026-10-06, F116). The window is the same one the old
-		// build-then-trim produced, because Operation.ID is the node ID.
-		window := []Node{}
-		for _, id := range slices.Sorted(maps.Keys(p.nodes)) {
-			if err := ctx.Err(); err != nil {
-				return nil, err
-			}
-			n := p.nodes[id]
-			if id <= after || !sourceRuntimeEntrypoint(p.schema, n.Kind) || !strings.Contains(strings.ToLower(n.Name+" "+runtimeAttributeString(n.Attributes, "method")+" "+runtimeAttributeString(n.Attributes, "path")), strings.ToLower(in.Search)) {
-				continue
-			}
-			window = append(window, n)
-		}
-		if len(window) > limit {
-			page.NextCursor = encodeGraphPage("flow", page.ProjectID, scope, window[limit-1].ID)
-			window = window[:limit]
-		}
-		page.EntryPointItems = make([]FlowEntrypointItem, 0, len(window))
-		for _, n := range window {
-			page.EntryPointItems = append(page.EntryPointItems, p.entrypoint(n))
-		}
-	case "steps", "transitions":
-		flow, ok := p.nodes[in.FlowID]
-		if !ok {
-			return nil, notFound()
-		}
-		if flow.Kind != "flow" {
-			return nil, invalid("flowId", "Selector must identify a flow")
-		}
-		p.observeNode(flow)
-		if in.View == "steps" {
-			page.StepItems = []Node{}
-			for _, n := range p.children[flow.ID] {
-				if n.Kind == "flow_step" {
-					page.StepItems = append(page.StepItems, n)
-				}
-			}
-			page.StepItems = slices.DeleteFunc(page.StepItems, func(n Node) bool { return n.ID <= after })
-			if len(page.StepItems) > limit {
-				page.NextCursor = encodeGraphPage("flow", page.ProjectID, scope, page.StepItems[limit-1].ID)
-				page.StepItems = page.StepItems[:limit]
-			}
-			// Observe only the returned window (review 2026-10-06, F116).
-			for _, n := range page.StepItems {
-				p.observeNode(n)
-			}
-		} else {
-			page.TransitionItems = []Edge{}
-			silent := []Node{}
-			for _, n := range p.children[flow.ID] {
-				if n.Kind != "flow_step" {
-					continue
-				}
-				before := len(page.TransitionItems)
-				// Every effective read and every composed schema carries emits:
-				// a full change proposal over a source5 baseline reads with
-				// schema "6" and no native source graph, and the older gate
-				// dropped its emits edges (review 2026-10-06, F110).
-				emits := effective != nil || schema == EventsSchemaVersion || schema == ComposedSchemaVersion || sourceGraph != nil
-				for _, e := range p.out[n.ID] {
-					if slices.Contains([]string{"next", "branch", "error", "returns", "calls", "begins", "commits", "rolls_back"}, e.Kind) || emits && e.Kind == "emits" {
-						page.TransitionItems = append(page.TransitionItems, e)
-					}
-				}
-				if len(page.TransitionItems) == before {
-					silent = append(silent, n)
-				}
-			}
-			slices.SortFunc(page.TransitionItems, func(a, b Edge) int { return strings.Compare(a.ID, b.ID) })
-			page.TransitionItems = slices.DeleteFunc(page.TransitionItems, func(e Edge) bool { return e.ID <= after })
-			if len(page.TransitionItems) > limit {
-				page.NextCursor = encodeGraphPage("flow", page.ProjectID, scope, page.TransitionItems[limit-1].ID)
-				page.TransitionItems = page.TransitionItems[:limit]
-			}
-			// Observe the window's edges and the steps they leave, not every
-			// step of the flow (review 2026-10-06, F116). A step that leaves no
-			// transition is on no page, so its limitations ride on the last one
-			// instead of vanishing from the view.
-			observed := map[string]bool{}
-			for _, e := range page.TransitionItems {
-				if step, ok := p.nodes[e.From]; ok && !observed[step.ID] {
-					observed[step.ID] = true
-					p.observeNode(step)
-				}
-				p.observeEdge(e)
-			}
-			if page.NextCursor == "" {
-				for _, n := range silent {
-					p.observeNode(n)
-				}
-			}
-		}
-	case "accesses":
-		if err := p.selectAccesses(); err != nil {
-			return nil, err
-		}
-		if err := p.traverse(ctx); err != nil {
-			return nil, err
-		}
-		page.AccessItems = []FlowAccessItem{}
-		for _, key := range slices.Sorted(maps.Keys(p.accesses)) {
-			page.AccessItems = append(page.AccessItems, p.accesses[key])
-		}
-		page.AccessItems = slices.DeleteFunc(page.AccessItems, func(i FlowAccessItem) bool { return runtimeAccessKey(i) <= after })
-		if len(page.AccessItems) > limit {
-			page.NextCursor = encodeGraphPage("flow", page.ProjectID, scope, runtimeAccessKey(page.AccessItems[limit-1]))
-			page.AccessItems = page.AccessItems[:limit]
-		}
+	if err := p.selectAccesses(); err != nil {
+		return err
 	}
-	page.Limitations = runtimeSortedKeys(p.limitations)
-	page.TruncationReasons = runtimeSortedKeys(p.truncations)
-	page.Truncated = len(page.TruncationReasons) != 0
-	return page, nil
+	if err := p.traverse(ctx); err != nil {
+		return err
+	}
+	page.AccessItems = []FlowAccessItem{}
+	for _, key := range slices.Sorted(maps.Keys(p.accesses)) {
+		page.AccessItems = append(page.AccessItems, p.accesses[key])
+	}
+	page.AccessItems = slices.DeleteFunc(page.AccessItems, func(i FlowAccessItem) bool { return runtimeAccessKey(i) <= after })
+	if len(page.AccessItems) > limit {
+		page.NextCursor = encodeGraphPage("flow", page.ProjectID, scope, runtimeAccessKey(page.AccessItems[limit-1]))
+		page.AccessItems = page.AccessItems[:limit]
+	}
+	return nil
 }
 
 func runtimeSortedKeys(values map[string]bool) []string {
@@ -645,33 +729,42 @@ func (p *runtimeFlowProjection) selectAccesses() error {
 		if !runtimeAccessKind(e.Kind) || p.in.AccessKind != "" && e.Kind != p.in.AccessKind {
 			continue
 		}
-		relation := "direct"
-		if data.ID != "" {
-			target, ok := p.nodes[e.To]
-			if !ok {
-				continue
-			}
-			switch data.Kind {
-			case "column":
-				if target.ID != data.ID {
-					if data.ParentID == nil || target.ID != *data.ParentID || runtimeAttributeString(e.Attributes, "columnScope") != "unknown" {
-						continue
-					}
-					relation = "possible"
-				}
-			case "table":
-				if target.ID != data.ID && (target.Kind != "column" || target.ParentID == nil || *target.ParentID != data.ID) {
-					continue
-				}
-			case "view":
-				if target.ID != data.ID {
-					continue
-				}
-			}
+		if relation, ok := p.accessRelation(e, data); ok {
+			p.selectedAccess[e.ID] = relation
 		}
-		p.selectedAccess[e.ID] = relation
 	}
 	return nil
+}
+
+// accessRelation decides whether access edge e touches the selected data
+// node (none selected: every access is direct). A table access with unknown
+// column scope only possibly touches a selected column.
+func (p *runtimeFlowProjection) accessRelation(e Edge, data Node) (string, bool) {
+	if data.ID == "" {
+		return "direct", true
+	}
+	target, ok := p.nodes[e.To]
+	if !ok {
+		return "", false
+	}
+	switch data.Kind {
+	case "column":
+		if target.ID != data.ID {
+			if data.ParentID == nil || target.ID != *data.ParentID || runtimeAttributeString(e.Attributes, "columnScope") != "unknown" {
+				return "", false
+			}
+			return "possible", true
+		}
+	case "table":
+		if target.ID != data.ID && (target.Kind != "column" || target.ParentID == nil || *target.ParentID != data.ID) {
+			return "", false
+		}
+	case "view":
+		if target.ID != data.ID {
+			return "", false
+		}
+	}
+	return "direct", true
 }
 
 type runtimeReachState struct {
@@ -711,29 +804,14 @@ func (p *runtimeFlowProjection) relevant(n Node, e Edge) bool {
 }
 
 func (p *runtimeFlowProjection) traverse(ctx context.Context) error {
-	queue := []runtimeWitness{}
-	seen := map[runtimeReachState]runtimeWitness{}
-	for _, id := range slices.Sorted(maps.Keys(p.nodes)) {
-		n := p.nodes[id]
-		if !sourceRuntimeEntrypoint(p.readSchema(), n.Kind) || p.in.EntrypointID != "" && id != p.in.EntrypointID {
-			continue
-		}
-		w := runtimeWitness{runtimeReachState: runtimeReachState{entrypointID: id, nodeID: id}, nodes: []string{id}, edges: []string{}}
-		if len(seen) == runtimeMaxStates {
-			p.truncations["state_limit"] = true
-			break
-		}
-		seen[w.runtimeReachState] = w
-		queue = append(queue, w)
-	}
-	examined := 0
-	stop := false
-	for head := 0; head < len(queue) && !stop; head++ {
+	t := &runtimeTraversal{p: p, queue: []runtimeWitness{}, seen: map[runtimeReachState]runtimeWitness{}}
+	t.seedEntrypoints()
+	for head := 0; head < len(t.queue) && !t.stop; head++ {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		w := queue[head]
-		if best := seen[w.runtimeReachState]; runtimeCompareWitness(w, best) > 0 {
+		w := t.queue[head]
+		if best := t.seen[w.runtimeReachState]; runtimeCompareWitness(w, best) > 0 {
 			continue
 		}
 		n := p.nodes[w.nodeID]
@@ -741,85 +819,154 @@ func (p *runtimeFlowProjection) traverse(ctx context.Context) error {
 		if sourceRuntimeEntrypoint(p.readSchema(), n.Kind) {
 			p.entrypoint(n)
 		}
-		for _, e := range p.out[n.ID] {
-			if !p.relevant(n, e) {
-				continue
-			}
-			if examined == runtimeMaxExaminedEdges {
-				p.truncations["edge_limit"] = true
-				stop = true
-				break
-			}
-			examined++
-			p.observeEdge(e)
-			target, ok := p.nodes[e.To]
-			if !ok || target.Kind == "unresolved_target" || e.Kind == "calls" && target.Kind == "external_system" {
-				p.limitations["Unknown source reachability boundary "+e.ID] = true
-				if ok {
-					p.observeNode(target)
-				}
-				if !runtimeAccessKind(e.Kind) {
-					continue
-				}
-			}
-			hops := w.callHops
-			if e.Kind == "calls" && ok && target.Kind != "unresolved_target" {
-				hops++
-			}
-			if hops > runtimeMaxCallHops {
-				p.truncations["call_hops"] = true
-			}
-			if len(w.edges) == runtimeMaxWitnessEdges {
-				p.truncations["witness_length"] = true
-			}
-			if hops > runtimeMaxCallHops || len(w.edges) == runtimeMaxWitnessEdges {
-				continue
-			}
-			next := runtimeWitness{runtimeReachState: runtimeReachState{entrypointID: w.entrypointID, nodeID: e.To, callHops: hops}, nodes: append(slices.Clone(w.nodes), e.To), edges: append(slices.Clone(w.edges), e.ID)}
-			best, exists := seen[next.runtimeReachState]
-			if !exists && len(seen) == runtimeMaxStates {
-				p.truncations["state_limit"] = true
-				continue
-			}
-			if !exists || runtimeCompareWitness(next, best) < 0 {
-				seen[next.runtimeReachState] = next
-				if !runtimeAccessKind(e.Kind) {
-					queue = append(queue, next)
-				}
-			}
-			if _, selected := p.selectedAccess[e.ID]; runtimeAccessKind(e.Kind) && selected {
-				p.discoveredAccess[e.ID] = true
-				key := w.entrypointID + "/" + e.ID
-				if previous, found := p.accesses[key]; found {
-					old := runtimeWitness{nodes: previous.PathNodeIDs, edges: previous.PathEdgeIDs}
-					if runtimeCompareWitness(next, old) >= 0 {
-						continue
-					}
-				} else if len(p.accesses) == runtimeMaxAccessPairs {
-					p.truncations["result_limit"] = true
-					stop = true
-					break
-				}
-				p.accesses[key] = p.access(e, &next, p.selectedAccess[e.ID])
-			}
+		t.expand(w, n)
+	}
+	return p.unattachedAccesses(ctx)
+}
+
+// runtimeTraversal is the breadth-first witness search from the selected
+// entrypoints, with the budgets that bound it.
+type runtimeTraversal struct {
+	p        *runtimeFlowProjection
+	queue    []runtimeWitness
+	seen     map[runtimeReachState]runtimeWitness
+	examined int
+	stop     bool
+}
+
+func (t *runtimeTraversal) seedEntrypoints() {
+	p := t.p
+	for _, id := range slices.Sorted(maps.Keys(p.nodes)) {
+		n := p.nodes[id]
+		if !sourceRuntimeEntrypoint(p.readSchema(), n.Kind) || p.in.EntrypointID != "" && id != p.in.EntrypointID {
+			continue
+		}
+		w := runtimeWitness{runtimeReachState: runtimeReachState{entrypointID: id, nodeID: id}, nodes: []string{id}, edges: []string{}}
+		if len(t.seen) == runtimeMaxStates {
+			p.truncations["state_limit"] = true
+			break
+		}
+		t.seen[w.runtimeReachState] = w
+		t.queue = append(t.queue, w)
+	}
+}
+
+func (t *runtimeTraversal) expand(w runtimeWitness, n Node) {
+	p := t.p
+	for _, e := range p.out[n.ID] {
+		if !p.relevant(n, e) {
+			continue
+		}
+		if t.examined == runtimeMaxExaminedEdges {
+			p.truncations["edge_limit"] = true
+			t.stop = true
+			break
+		}
+		t.examined++
+		t.follow(w, e)
+		if t.stop {
+			break
 		}
 	}
-	// Reverse inspection preserves imported access records even if no caller was
-	// found. With truncation this is discovery absence, never proven absence.
-	if p.in.DataNodeID != "" {
-		for _, id := range slices.Sorted(maps.Keys(p.selectedAccess)) {
-			if err := ctx.Err(); err != nil {
-				return err
-			}
-			if p.discoveredAccess[id] {
-				continue
-			}
-			if len(p.accesses) == runtimeMaxAccessPairs {
-				p.truncations["result_limit"] = true
-				break
-			}
-			p.accesses["/"+id] = p.access(p.edges[id], nil, p.selectedAccess[id])
+}
+
+// follow extends witness w along e: it queues the extended witness when it
+// is the best one for its state, and records e when it is a selected access.
+func (t *runtimeTraversal) follow(w runtimeWitness, e Edge) {
+	p := t.p
+	p.observeEdge(e)
+	target, ok := p.nodes[e.To]
+	if p.boundaryEdge(e, target, ok) && !runtimeAccessKind(e.Kind) {
+		return
+	}
+	hops, within := p.witnessBudget(w, e, target, ok)
+	if !within {
+		return
+	}
+	next := runtimeWitness{runtimeReachState: runtimeReachState{entrypointID: w.entrypointID, nodeID: e.To, callHops: hops}, nodes: append(slices.Clone(w.nodes), e.To), edges: append(slices.Clone(w.edges), e.ID)}
+	best, exists := t.seen[next.runtimeReachState]
+	if !exists && len(t.seen) == runtimeMaxStates {
+		p.truncations["state_limit"] = true
+		return
+	}
+	if !exists || runtimeCompareWitness(next, best) < 0 {
+		t.seen[next.runtimeReachState] = next
+		if !runtimeAccessKind(e.Kind) {
+			t.queue = append(t.queue, next)
 		}
+	}
+	if _, selected := p.selectedAccess[e.ID]; runtimeAccessKind(e.Kind) && selected {
+		t.recordAccess(w, e, next)
+	}
+}
+
+// boundaryEdge reports an edge whose target the pinned scope cannot follow,
+// recording it as an unknown reachability boundary.
+func (p *runtimeFlowProjection) boundaryEdge(e Edge, target Node, ok bool) bool {
+	if !ok || target.Kind == "unresolved_target" || e.Kind == "calls" && target.Kind == "external_system" {
+		p.limitations["Unknown source reachability boundary "+e.ID] = true
+		if ok {
+			p.observeNode(target)
+		}
+		return true
+	}
+	return false
+}
+
+// witnessBudget returns the call-hop count after e and whether the extended
+// witness stays within the hop and length budgets, recording each it breaks.
+func (p *runtimeFlowProjection) witnessBudget(w runtimeWitness, e Edge, target Node, ok bool) (int, bool) {
+	hops := w.callHops
+	if e.Kind == "calls" && ok && target.Kind != "unresolved_target" {
+		hops++
+	}
+	if hops > runtimeMaxCallHops {
+		p.truncations["call_hops"] = true
+	}
+	if len(w.edges) == runtimeMaxWitnessEdges {
+		p.truncations["witness_length"] = true
+	}
+	return hops, hops <= runtimeMaxCallHops && len(w.edges) != runtimeMaxWitnessEdges
+}
+
+// recordAccess keeps the best witness per entrypoint/access pair; a new pair
+// past the result budget stops the traversal.
+func (t *runtimeTraversal) recordAccess(w runtimeWitness, e Edge, next runtimeWitness) {
+	p := t.p
+	p.discoveredAccess[e.ID] = true
+	key := w.entrypointID + "/" + e.ID
+	if previous, found := p.accesses[key]; found {
+		old := runtimeWitness{nodes: previous.PathNodeIDs, edges: previous.PathEdgeIDs}
+		if runtimeCompareWitness(next, old) >= 0 {
+			return
+		}
+	} else if len(p.accesses) == runtimeMaxAccessPairs {
+		p.truncations["result_limit"] = true
+		t.stop = true
+		return
+	}
+	p.accesses[key] = p.access(e, &next, p.selectedAccess[e.ID])
+}
+
+// unattachedAccesses is the reverse inspection: it preserves imported access
+// records even if no caller was found. With truncation this is discovery
+// absence, never proven absence.
+func (p *runtimeFlowProjection) unattachedAccesses(ctx context.Context) error {
+	if p.in.DataNodeID == "" {
+		return nil
+	}
+	for _, id := range slices.Sorted(maps.Keys(p.selectedAccess)) {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if p.discoveredAccess[id] {
+			continue
+		}
+		if len(p.accesses) == runtimeMaxAccessPairs {
+			p.truncations["result_limit"] = true
+			break
+		}
+		p.accesses["/"+id] = p.access(p.edges[id], nil, p.selectedAccess[id])
 	}
 	return nil
 }
@@ -896,35 +1043,8 @@ func (p *runtimeFlowProjection) access(e Edge, w *runtimeWitness, relation strin
 	if reason := runtimeAttributeString(e.Attributes, "scopeReason"); reason != "" {
 		limitations[reason] = true
 	}
-	// Facet proof belongs to the selected source descriptor; other facets cannot
-	// provide an explicit/stale conclusion for this access.
 	if target, ok := p.nodes[e.To]; ok {
-		var facets map[string]jsontext.Value
-		if json.Unmarshal(target.Attributes["facets"], &facets) == nil {
-			var facet struct {
-				AnalysisStatus string              `json:"analysisStatus"`
-				Gaps           []string            `json:"gaps"`
-				EvidenceIDs    []string            `json:"evidenceIds"`
-				Freshness      *AssertionFreshness `json:"freshness"`
-			}
-			if raw, found := facets[i.FacetKey]; found && json.Unmarshal(raw, &facet) == nil {
-				if p.source == nil {
-					i.Status = runtimeWorseStatus(i.Status, p.recordStatus(facet.EvidenceIDs, facet.Freshness, limitations))
-				}
-				for _, id := range p.sourceRecordEvidence("node", target.ID, &LineageValueRef{Kind: "column", NodeID: target.ID, FacetKey: i.FacetKey}, facet.EvidenceIDs) {
-					evidence[id] = true
-				}
-				for _, gap := range facet.Gaps {
-					limitations[target.ID+": "+gap] = true
-				}
-				if facet.AnalysisStatus != "complete" {
-					limitations[fmt.Sprintf("%s: selected facet analysisStatus=%s", target.ID, facet.AnalysisStatus)] = true
-				}
-			} else {
-				i.Status = runtimeWorseStatus(i.Status, "unresolved")
-				limitations["Selected target facet is unavailable"] = true
-			}
-		}
+		p.accessFacetProof(&i, target, limitations, evidence)
 	}
 	i.EvidenceIDs = runtimeSortedKeys(evidence)
 	i.Limitations = runtimeSortedKeys(limitations)
@@ -932,6 +1052,39 @@ func (p *runtimeFlowProjection) access(e Edge, w *runtimeWitness, relation strin
 		p.limitations[key] = true
 	}
 	return i
+}
+
+// accessFacetProof folds the selected target facet into the access. Facet
+// proof belongs to the selected source descriptor; other facets cannot
+// provide an explicit/stale conclusion for this access.
+func (p *runtimeFlowProjection) accessFacetProof(i *FlowAccessItem, target Node, limitations, evidence map[string]bool) {
+	var facets map[string]jsontext.Value
+	if json.Unmarshal(target.Attributes["facets"], &facets) != nil {
+		return
+	}
+	var facet struct {
+		AnalysisStatus string              `json:"analysisStatus"`
+		Gaps           []string            `json:"gaps"`
+		EvidenceIDs    []string            `json:"evidenceIds"`
+		Freshness      *AssertionFreshness `json:"freshness"`
+	}
+	if raw, found := facets[i.FacetKey]; !found || json.Unmarshal(raw, &facet) != nil {
+		i.Status = runtimeWorseStatus(i.Status, "unresolved")
+		limitations["Selected target facet is unavailable"] = true
+		return
+	}
+	if p.source == nil {
+		i.Status = runtimeWorseStatus(i.Status, p.recordStatus(facet.EvidenceIDs, facet.Freshness, limitations))
+	}
+	for _, id := range p.sourceRecordEvidence("node", target.ID, &LineageValueRef{Kind: "column", NodeID: target.ID, FacetKey: i.FacetKey}, facet.EvidenceIDs) {
+		evidence[id] = true
+	}
+	for _, gap := range facet.Gaps {
+		limitations[target.ID+": "+gap] = true
+	}
+	if facet.AnalysisStatus != "complete" {
+		limitations[fmt.Sprintf("%s: selected facet analysisStatus=%s", target.ID, facet.AnalysisStatus)] = true
+	}
 }
 
 func runtimePolicyForSchema(schema string) string {
