@@ -12,21 +12,25 @@ import (
 	"github.com/yashok111/mocker/internal/jsonx"
 )
 
+// backendChangeProposalFamily follows each change-proposal tool's own
+// summary sentence; see backendAnalysisFamily for why the two are separate.
+const backendChangeProposalFamily = "Uses an isolated proposal-graph-v1 full graph proposal with an immutable source5/6 baseline and exact draft. Its sixteen typed command families are separate from legacy database proposalCommands. Preview is a pure read; mutations require version CAS and immutable idempotency receipts. Restore creates a new draft and preserves consumed command/object IDs. No source, DDL or broker execution."
+
 func addBackendChangeProposalTools(s *sdk.Server, lb *loopback) {
 	const base = "/api/backend-projects/{id}/change-proposals"
 	for _, spec := range []struct {
-		name, route, contract string
-		read                  bool
+		name, route, contract, summary string
+		read                           bool
 	}{
-		{"list_backend_change_proposals", "GET " + base, "", true},
-		{"create_backend_change_proposal", "POST " + base, "CreateBackendChangeProposalRequest", false},
-		{"get_backend_change_proposal", "GET " + base + "/{pid}", "", true},
-		{"preview_backend_change_proposal_commands", "POST " + base + "/{pid}/preview", "PreviewBackendChangeProposalCommandsRequest", true},
-		{"apply_backend_change_proposal_commands", "POST " + base + "/{pid}/commands", "ApplyBackendChangeProposalCommandsRequest", false},
-		{"preview_backend_change_proposal_rebase", "POST " + base + "/{pid}/rebase-preview", "PreviewBackendChangeProposalRebaseRequest", true},
-		{"apply_backend_change_proposal_rebase", "POST " + base + "/{pid}/rebase", "ApplyBackendChangeProposalRebaseRequest", false},
-		{"apply_backend_change_proposal_lifecycle", "POST " + base + "/{pid}/lifecycle", "ApplyBackendChangeProposalLifecycleRequest", false},
-		{"restore_backend_change_proposal", "POST " + base + "/{pid}/restore", "RestoreBackendChangeProposalRequest", false},
+		{"list_backend_change_proposals", "GET " + base, "", "Lists one page of the project's full graph change proposals, optionally filtered by base revision and status.", true},
+		{"create_backend_change_proposal", "POST " + base, "CreateBackendChangeProposalRequest", "Creates a full graph change proposal whose first draft starts on an exact base source revision.", false},
+		{"get_backend_change_proposal", "GET " + base + "/{pid}", "", "Reads one change proposal at an exact revision (the current draft when proposalRevisionId is omitted) with a page of its history.", true},
+		{"preview_backend_change_proposal_commands", "POST " + base + "/{pid}/preview", "PreviewBackendChangeProposalCommandsRequest", "Previews typed graph commands against a proposal draft, returning diagnostics, changes and candidateHash without saving.", true},
+		{"apply_backend_change_proposal_commands", "POST " + base + "/{pid}/commands", "ApplyBackendChangeProposalCommandsRequest", "Applies previewed graph commands to a proposal draft, saving a new immutable draft revision.", false},
+		{"preview_backend_change_proposal_rebase", "POST " + base + "/{pid}/rebase-preview", "PreviewBackendChangeProposalRebaseRequest", "Previews rebasing a proposal draft onto a newer base revision, returning conflicts, diagnostics and candidateHash without saving.", true},
+		{"apply_backend_change_proposal_rebase", "POST " + base + "/{pid}/rebase", "ApplyBackendChangeProposalRebaseRequest", "Applies a previewed rebase, saving a new draft on the selected base revision.", false},
+		{"apply_backend_change_proposal_lifecycle", "POST " + base + "/{pid}/lifecycle", "ApplyBackendChangeProposalLifecycleRequest", "Moves a change proposal through its lifecycle with one action: ready, implemented, archive or unarchive.", false},
+		{"restore_backend_change_proposal", "POST " + base + "/{pid}/restore", "RestoreBackendChangeProposalRequest", "Restores an earlier immutable revision of a proposal as a new draft on the same base.", false},
 	} {
 		var schema map[string]any
 		if spec.contract != "" {
@@ -53,7 +57,7 @@ func addBackendChangeProposalTools(s *sdk.Server, lb *loopback) {
 			}
 			schema = designScenarioSchemaObject(required, fields)
 		}
-		addBackendImportTool(s, lb, &sdk.Tool{Name: spec.name, Description: "Uses an isolated proposal-graph-v1 full graph proposal with an immutable source5/6 baseline and exact draft. Its sixteen typed command families are separate from legacy database proposalCommands. Preview is a pure read; mutations require version CAS and immutable idempotency receipts. Restore creates a new draft and preserves consumed command/object IDs. No source, DDL or broker execution.", InputSchema: schema, Annotations: &sdk.ToolAnnotations{ReadOnlyHint: spec.read, IdempotentHint: true}}, spec.route)
+		addBackendImportTool(s, lb, &sdk.Tool{Name: spec.name, Description: spec.summary + " " + backendChangeProposalFamily, InputSchema: schema, Annotations: &sdk.ToolAnnotations{ReadOnlyHint: spec.read, IdempotentHint: true}}, spec.route)
 	}
 	id := map[string]any{"type": "string", "format": "uuid"}
 	schema := designScenarioSchemaObject([]string{"projectId", "revisionId"}, map[string]any{"projectId": id, "revisionId": id, "id": id, "repositoryId": id, "providerNamespace": map[string]any{"type": "string", "minLength": 1, "maxLength": 200}, "recordType": map[string]any{"type": "string", "enum": []string{"node", "edge"}}, "limit": map[string]any{"type": "integer", "minimum": 1, "maximum": 500}, "cursor": map[string]any{"type": "string", "maxLength": 1024}})
