@@ -295,8 +295,19 @@ func (c *incrementalClosure) seedNewSubjects() error {
 		if c.selectedKeys[address] != "" {
 			continue
 		}
-		if len(existing) > 0 {
-			return semantic("changeManifest", "Foreign identity is not a new-subject seed")
+		// A reserved UUID already held only by foreign claims is what an
+		// accepted claim_identity produces (reserveSourceClaimIdentity
+		// forbids the selected partition from owning it), so it is a new
+		// selected claim sharing the identity, exactly as on the
+		// whole-source path. Refusing it as "not a new-subject seed" made
+		// the documented UUID-sharing step fail at preview after the batch
+		// was accepted (review 2026-10-06, F195). The foreign claims are
+		// visited too: the shared record's effective value can now change,
+		// so their dependants belong to the read scope.
+		for _, foreignClaim := range existing {
+			if err := c.push(incrementalVisit{claim: foreignClaim}); err != nil {
+				return err
+			}
 		}
 		claim := sourceClaimKey(typ, id, c.input.session.RepositoryID, c.input.session.Manifest.Provider.Namespace)
 		if _, duplicate := c.claims[claim]; duplicate {
@@ -308,6 +319,7 @@ func (c *incrementalClosure) seedNewSubjects() error {
 		}
 		a := ProviderAssertion{RecordType: typ, RecordID: id, ExternalKey: key, Payload: payload, Owner: AssertionOwnership{RepositoryID: c.input.session.RepositoryID, ProviderNamespace: c.input.session.Manifest.Provider.Namespace}}
 		c.claims[claim] = a
+		c.subjects[subject] = append(c.subjects[subject], claim)
 		c.selectedKeys[address] = claim
 		newlyAllocated[claim] = true
 		if err := c.push(incrementalVisit{claim: claim}); err != nil {

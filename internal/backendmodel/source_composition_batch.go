@@ -174,7 +174,13 @@ func reserveComposedIdentity(ctx context.Context, tx *sql.Tx, s *ImportSession, 
 			return "", identityConflict("Pinned key conflicts with durable binding")
 		}
 		if id == "" {
-			if b.State != "reserved" {
+			// A composed commit retires every evidence binding no claim
+			// lists any more, and map_identity accepts only node or edge,
+			// so a retired evidence key had no way back: the next upload of
+			// the same key failed the whole batch (review 2026-10-06,
+			// F196). Evidence carries no identity of its own beyond its
+			// key, so it rebinds to its old id.
+			if b.State != "reserved" && (typ != "evidence" || b.State != "retired") {
 				return "", identityConflict("Retired or deleted key cannot be silently reused")
 			}
 			id = b.ID

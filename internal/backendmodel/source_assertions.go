@@ -16,7 +16,6 @@ type sourceAssertionMerger struct {
 	candidate   *composedCandidate
 	current     map[string]SourceClaimCurrentness
 	requested   map[string]SourceAssertionResolution
-	used        map[string]bool
 	diagnostics []ImportDiagnostic
 }
 
@@ -25,7 +24,7 @@ func mergeSourceAssertions(base *SourceGraphSnapshot, c *composedCandidate, deci
 }
 
 func mergeSourceAssertionsMode(base *SourceGraphSnapshot, c *composedCandidate, decisions []SourceDecision, tentative bool) ([]ImportDiagnostic, error) {
-	m := sourceAssertionMerger{tentative: tentative, base: base, candidate: c, current: map[string]SourceClaimCurrentness{}, requested: map[string]SourceAssertionResolution{}, used: map[string]bool{}, diagnostics: []ImportDiagnostic{}}
+	m := sourceAssertionMerger{tentative: tentative, base: base, candidate: c, current: map[string]SourceClaimCurrentness{}, requested: map[string]SourceAssertionResolution{}, diagnostics: []ImportDiagnostic{}}
 	groups := map[string][]ProviderAssertion{}
 	for _, current := range c.Source.Currentness {
 		m.current[sourceClaimKey(current.RecordType, current.RecordID, current.RepositoryID, current.ProviderNamespace)] = current
@@ -49,11 +48,14 @@ func mergeSourceAssertionsMode(base *SourceGraphSnapshot, c *composedCandidate, 
 			return nil, err
 		}
 	}
-	for key := range m.requested {
-		if !m.tentative && !m.used[key] {
-			return nil, semantic("resolution", "Resolution targets no current divergent property")
-		}
-	}
+	// An active resolution whose conflict no longer exists — the agent
+	// re-staged its claim so the values agree, or removed a record — is
+	// ignored, not fatal. It used to fail every following preview with 422,
+	// and no command can withdraw a decision (only another resolve of the
+	// same address supersedes it), so the session was stuck until abort
+	// (review 2026-10-06, F52). Ignoring hides nothing: a real conflict at
+	// any address still surfaces as backend_assertion_conflict, and an
+	// unused decision publishes no selection.
 	return m.diagnostics, nil
 }
 
@@ -148,7 +150,6 @@ func (m *sourceAssertionMerger) resolution(conflict SourceAssertionConflict, cla
 	address := conflict.RecordType + "\x00" + conflict.ID + "\x00" + sourcePropertyKey(conflict.Property)
 	resolution, ok := m.requested[address]
 	if ok {
-		m.used[address] = true
 		if !m.tentative && resolution.ConflictHash != conflict.ConflictHash {
 			return nil, SourcePropertyValue{}, nil
 		}

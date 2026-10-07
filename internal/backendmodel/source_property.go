@@ -263,11 +263,25 @@ func ApplySourceProperty(p SourceAssertionPayload, s TypedSourcePropertySelector
 				delete(object, path[0])
 			}
 		} else {
+			// An absent value prunes, it never builds: creating the
+			// missing intermediates on the way to a deleted leaf left
+			// `facets:{K:{}}` behind when the selected contender had no
+			// facet K, and deleting every group of an existing facet left
+			// a metadata-only shell — both fail structure validation as
+			// backend_graph_invalid, so a legitimate offered contender
+			// could not be committed (review 2026-10-06, F51).
+			if _, ok := object[path[0]]; !ok && !v.Present {
+				return json.Marshal(object)
+			}
 			next, err := replace(object[path[0]], path[1:])
 			if err != nil {
 				return nil, err
 			}
-			object[path[0]] = next
+			if !v.Present && s.Kind == "relational_facet" && len(path) == 2 && !sourceFacetHasGroup(p.Kind, next) {
+				delete(object, path[0])
+			} else {
+				object[path[0]] = next
+			}
 		}
 		return json.Marshal(object)
 	}
@@ -278,6 +292,22 @@ func ApplySourceProperty(p SourceAssertionPayload, s TypedSourcePropertySelector
 	var result SourceAssertionPayload
 	err = json.Unmarshal(raw, &result)
 	return result, err
+}
+
+// sourceFacetHasGroup reports whether a facet object still carries any
+// semantic group of its kind; what remains otherwise is per-facet metadata
+// (evidence, snapshot) that describes nothing (F51).
+func sourceFacetHasGroup(kind string, raw jsontext.Value) bool {
+	var object map[string]jsontext.Value
+	if json.Unmarshal(raw, &object) != nil {
+		return true
+	}
+	for _, group := range sourceFacetGroups(kind) {
+		if _, ok := object[group]; ok {
+			return true
+		}
+	}
+	return false
 }
 
 func sourceSelectors(payloads []SourceAssertionPayload) ([]TypedSourcePropertySelector, error) {
