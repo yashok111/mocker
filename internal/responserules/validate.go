@@ -178,6 +178,34 @@ func ports(kind string) []string {
 		return nil
 	}
 }
+
+// graphEdge reports one edge's endpoint and port problems and, when both
+// endpoints exist, adds it to the adjacency lists the later passes walk.
+func (v *validator) graphEdge(i int, e Edge, portCounts []map[string]int, out [][]int, indegree []int) {
+	r := v.rule
+	from, fromOK := v.nodeOrder[e.From]
+	to, toOK := v.nodeOrder[e.To]
+	if !fromOK || !toOK {
+		v.edge(i, "dangling_edge", "Ребро ссылается на отсутствующий узел.", "")
+	}
+	if fromOK {
+		portCounts[from][e.Port]++
+		if !slices.Contains(nodePorts(r.Nodes[from]), e.Port) {
+			v.edge(i, "invalid_port", "Порт не разрешён для этого типа узла.", "/port")
+		}
+		if portCounts[from][e.Port] > 1 {
+			v.edge(i, "duplicate_exit", "У порта уже есть выходящее ребро.", "/port")
+		}
+	}
+	if toOK && r.Nodes[to].Type == "start" {
+		v.edge(i, "invalid_port", "В начальный узел нельзя направлять рёбра.", "/to")
+	}
+	if fromOK && toOK {
+		out[from] = append(out[from], to)
+		indegree[to]++
+	}
+}
+
 func (v *validator) graph() error {
 	r := v.rule
 	starts := []int{}
@@ -201,27 +229,7 @@ func (v *validator) graph() error {
 		if err := v.ctx.Err(); err != nil {
 			return err
 		}
-		from, fromOK := v.nodeOrder[e.From]
-		to, toOK := v.nodeOrder[e.To]
-		if !fromOK || !toOK {
-			v.edge(i, "dangling_edge", "Ребро ссылается на отсутствующий узел.", "")
-		}
-		if fromOK {
-			portCounts[from][e.Port]++
-			if !slices.Contains(nodePorts(r.Nodes[from]), e.Port) {
-				v.edge(i, "invalid_port", "Порт не разрешён для этого типа узла.", "/port")
-			}
-			if portCounts[from][e.Port] > 1 {
-				v.edge(i, "duplicate_exit", "У порта уже есть выходящее ребро.", "/port")
-			}
-		}
-		if toOK && r.Nodes[to].Type == "start" {
-			v.edge(i, "invalid_port", "В начальный узел нельзя направлять рёбра.", "/to")
-		}
-		if fromOK && toOK {
-			out[from] = append(out[from], to)
-			indegree[to]++
-		}
+		v.graphEdge(i, e, portCounts, out, indegree)
 	}
 	for i, n := range r.Nodes {
 		for _, port := range nodePorts(n) {

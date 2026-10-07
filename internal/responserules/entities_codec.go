@@ -136,6 +136,27 @@ func checkEntityFamily(family string) bool {
 	}
 	return strings.Count(family, "{}") <= 3
 }
+
+// checkEntityOperationShape decides which of operation, key and data each
+// entity node kind requires or forbids.
+func checkEntityOperationShape(kind string, e EntityOperation) error {
+	switch kind {
+	case "entity_read":
+		if e.Operation != "get" && e.Operation != "list" || e.Data != nil || e.Operation == "get" && e.Key == nil || e.Operation == "list" && e.Key != nil {
+			return invalid("/entity", "get требует key; list не принимает key или data")
+		}
+	case "entity_create":
+		if e.Operation != "" || e.Key != nil || e.Data == nil {
+			return invalid("/entity", "create требует только data")
+		}
+	case "entity_update":
+		if e.Operation != "" || e.Key == nil || e.Data == nil {
+			return invalid("/entity", "update требует key и data")
+		}
+	}
+	return nil
+}
+
 func checkEntityOperation(ctx context.Context, kind string, e EntityOperation) error {
 	if !checkEntityFamily(e.Family) {
 		return invalid("/entity/family", "укажите каноническое семейство ресурса")
@@ -150,19 +171,8 @@ func checkEntityOperation(ctx context.Context, kind string, e EntityOperation) e
 			}
 		}
 	}
-	switch kind {
-	case "entity_read":
-		if e.Operation != "get" && e.Operation != "list" || e.Data != nil || e.Operation == "get" && e.Key == nil || e.Operation == "list" && e.Key != nil {
-			return invalid("/entity", "get требует key; list не принимает key или data")
-		}
-	case "entity_create":
-		if e.Operation != "" || e.Key != nil || e.Data == nil {
-			return invalid("/entity", "create требует только data")
-		}
-	case "entity_update":
-		if e.Operation != "" || e.Key == nil || e.Data == nil {
-			return invalid("/entity", "update требует key и data")
-		}
+	if err := checkEntityOperationShape(kind, e); err != nil {
+		return err
 	}
 	if e.Key != nil {
 		if err := checkValueRef(ctx, *e.Key); err != nil {

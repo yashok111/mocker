@@ -96,23 +96,38 @@ func apply(r *Rule, c Command) error {
 		}
 		r.Edges = slices.Delete(r.Edges, i, i+1)
 	case "move_nodes":
-		seen := map[string]bool{}
-		for i, p := range c.Positions {
-			prefix := fmt.Sprintf("/positions/%d", i)
-			if seen[p.NodeID] {
-				return invalid(prefix+"/nodeId", "повторяющийся ID")
-			}
-			seen[p.NodeID] = true
-			j := nodeIndex(r, p.NodeID)
-			if j < 0 {
-				return invalid(prefix+"/nodeId", "узел не найден")
-			}
-			if !coordinate(p.X) || !coordinate(p.Y) {
-				return invalid(prefix, "недопустимые координаты")
-			}
-			r.Nodes[j].X = p.X
-			r.Nodes[j].Y = p.Y
+		return moveNodes(r, c.Positions)
+	case "add_example", "update_example", "remove_example":
+		return applyExampleCommand(r, c)
+	}
+	return nil
+}
+
+// moveNodes moves nodes one position at a time; an error after the first
+// leaves the earlier moves applied, which ApplyCommands' private copy absorbs.
+func moveNodes(r *Rule, positions []Position) error {
+	seen := map[string]bool{}
+	for i, p := range positions {
+		prefix := fmt.Sprintf("/positions/%d", i)
+		if seen[p.NodeID] {
+			return invalid(prefix+"/nodeId", "повторяющийся ID")
 		}
+		seen[p.NodeID] = true
+		j := nodeIndex(r, p.NodeID)
+		if j < 0 {
+			return invalid(prefix+"/nodeId", "узел не найден")
+		}
+		if !coordinate(p.X) || !coordinate(p.Y) {
+			return invalid(prefix, "недопустимые координаты")
+		}
+		r.Nodes[j].X = p.X
+		r.Nodes[j].Y = p.Y
+	}
+	return nil
+}
+
+func applyExampleCommand(r *Rule, c Command) error {
+	switch c.Type {
 	case "add_example":
 		if exampleIndex(r, c.Example.ID) >= 0 {
 			return invalid("/example/id", "пример уже существует")

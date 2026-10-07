@@ -140,6 +140,30 @@ func LiveInput(ctx context.Context, query url.Values, header http.Header, body [
 func (p *Program) Evaluate(ctx context.Context, input overrides.Input) (Simulation, error) {
 	return p.EvaluateWithEntities(ctx, EvaluationInput{Request: input}, EvaluationOptions{})
 }
+
+// conditionPort evaluates a condition node into its "true" or "false" exit
+// and records the outcome on the step.
+func (p *Program) conditionPort(ctx context.Context, n Node, input EvaluationInput, results map[string]any, step *Step) (string, error) {
+	var matched bool
+	if n.ResultCondition != nil {
+		var err error
+		matched, step.ResultCondition, err = evaluateResultCondition(ctx, *n.ResultCondition, results)
+		if err != nil {
+			if ctx.Err() != nil {
+				return "", ctx.Err()
+			}
+			return "", at(fmt.Sprintf("/nodes/%d/resultCondition", p.nodeOrder[n.ID]), err)
+		}
+	} else {
+		matched = n.Condition.Match(input.Request)
+	}
+	step.Matched = &matched
+	if matched {
+		return "true", nil
+	}
+	return "false", nil
+}
+
 func (p *Program) EvaluateWithEntities(ctx context.Context, input EvaluationInput, options EvaluationOptions) (Simulation, error) {
 	if err := ctx.Err(); err != nil {
 		return Simulation{}, err
@@ -164,23 +188,10 @@ func (p *Program) EvaluateWithEntities(ctx context.Context, input EvaluationInpu
 		port := "next"
 		switch n.Type {
 		case "condition":
-			var matched bool
-			if n.ResultCondition != nil {
-				var err error
-				matched, step.ResultCondition, err = evaluateResultCondition(ctx, *n.ResultCondition, results)
-				if err != nil {
-					if ctx.Err() != nil {
-						return Simulation{}, ctx.Err()
-					}
-					return Simulation{}, at(fmt.Sprintf("/nodes/%d/resultCondition", p.nodeOrder[n.ID]), err)
-				}
-			} else {
-				matched = n.Condition.Match(input.Request)
-			}
-			step.Matched = &matched
-			port = "false"
-			if matched {
-				port = "true"
+			var err error
+			port, err = p.conditionPort(ctx, n, input, results, &step)
+			if err != nil {
+				return Simulation{}, err
 			}
 		case "delay":
 			delay := *n.DelayMs

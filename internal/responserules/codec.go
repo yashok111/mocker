@@ -411,8 +411,26 @@ func checkStructure(ctx context.Context, r Rule) error {
 	if r.Edges == nil || len(r.Edges) > MaxEdges {
 		return invalid("/edges", "ожидается массив до 200 рёбер")
 	}
+	if err := checkNodes(ctx, r.Nodes); err != nil {
+		return err
+	}
+	if err := checkEdges(r.Edges); err != nil {
+		return err
+	}
+	data, err := jsonx.Marshal(r)
+	if err != nil {
+		return err
+	}
+	if len(data) > MaxGraphBytes {
+		return invalid("", "правило превышает 512 КиБ")
+	}
+	return nil
+}
+
+// checkNodes checks each node on its own, plus ID uniqueness across nodes.
+func checkNodes(ctx context.Context, nodes []Node) error {
 	ids := map[string]bool{}
-	for i, n := range r.Nodes {
+	for i, n := range nodes {
 		prefix := fmt.Sprintf("/nodes/%d", i)
 		if !ValidID(n.ID) || ids[n.ID] {
 			return invalid(prefix+"/id", "недопустимый или повторяющийся ID")
@@ -428,8 +446,14 @@ func checkStructure(ctx context.Context, r Rule) error {
 			return at(prefix, err)
 		}
 	}
-	ids = map[string]bool{}
-	for i, e := range r.Edges {
+	return nil
+}
+
+// checkEdges checks edge IDs and bounds; whether the endpoints exist is the
+// graph validator's question, not the structural one.
+func checkEdges(edges []Edge) error {
+	ids := map[string]bool{}
+	for i, e := range edges {
 		prefix := fmt.Sprintf("/edges/%d", i)
 		if !ValidID(e.ID) || ids[e.ID] {
 			return invalid(prefix+"/id", "недопустимый или повторяющийся ID")
@@ -442,59 +466,69 @@ func checkStructure(ctx context.Context, r Rule) error {
 			return invalid(prefix+"/port", "слишком длинный порт")
 		}
 	}
-	data, err := jsonx.Marshal(r)
-	if err != nil {
-		return err
-	}
-	if len(data) > MaxGraphBytes {
-		return invalid("", "правило превышает 512 КиБ")
-	}
 	return nil
 }
+
+// nodePayloads counts the optional payloads a node carries; every node type
+// admits at most one, so the per-type checks reduce to "this one, alone".
+func nodePayloads(n Node) int {
+	count := 0
+	for _, present := range []bool{n.Condition != nil, n.ResultCondition != nil, n.DelayMs != nil, n.Response != nil, n.Entity != nil} {
+		if present {
+			count++
+		}
+	}
+	return count
+}
+
 func checkNode(ctx context.Context, n Node) error {
-	condition, delay, response := n.Condition != nil, n.DelayMs != nil, n.Response != nil
-	resultCondition := n.ResultCondition != nil
-	entity := n.Entity != nil
+	payloads := nodePayloads(n)
 	switch n.Type {
 	case "start", "fallback":
-		if condition || resultCondition || delay || response || entity {
+		if payloads != 0 {
 			return invalid("", "лишние поля узла")
 		}
 	case "condition":
-		if condition == resultCondition || delay || response || entity {
+		if payloads != 1 || n.Condition == nil && n.ResultCondition == nil {
 			return invalid("/condition", "требуется ровно одно из condition и resultCondition")
 		}
-		if resultCondition {
-			if err := checkResultCondition(ctx, *n.ResultCondition); err != nil {
-				return at("/resultCondition", err)
-			}
-			return nil
-		}
-		c := n.Condition
-		if !textBound(c.In, 256) || !textBound(c.Op, 256) || !textBound(c.Name, 256) || !textBound(c.Value, 4096) {
-			return invalid("/condition", "превышена длина условия")
-		}
-		if c.Op == "exists" && c.Value != "" {
-			return invalid("/condition/value", "exists не принимает value")
-		}
+		return checkConditionNode(ctx, n)
 	case "delay":
-		if !delay || condition || resultCondition || response || entity {
+		if payloads != 1 || n.DelayMs == nil {
 			return invalid("/delayMs", "требуется только delayMs")
 		}
 	case "response":
-		if !response || condition || resultCondition || delay || entity {
+		if payloads != 1 || n.Response == nil {
 			return invalid("/response", "требуется только response")
 		}
 		if err := checkResponse(ctx, *n.Response); err != nil {
 			return at("/response", err)
 		}
 	case "entity_read", "entity_create", "entity_update":
-		if !entity || condition || resultCondition || delay || response {
+		if payloads != 1 || n.Entity == nil {
 			return invalid("/entity", "требуется только entity")
 		}
 		return checkEntityOperation(ctx, n.Type, *n.Entity)
 	default:
 		return invalid("/type", "неизвестный тип узла")
+	}
+	return nil
+}
+
+// checkConditionNode checks whichever of the two condition forms is present.
+func checkConditionNode(ctx context.Context, n Node) error {
+	if n.ResultCondition != nil {
+		if err := checkResultCondition(ctx, *n.ResultCondition); err != nil {
+			return at("/resultCondition", err)
+		}
+		return nil
+	}
+	c := n.Condition
+	if !textBound(c.In, 256) || !textBound(c.Op, 256) || !textBound(c.Name, 256) || !textBound(c.Value, 4096) {
+		return invalid("/condition", "превышена длина условия")
+	}
+	if c.Op == "exists" && c.Value != "" {
+		return invalid("/condition/value", "exists не принимает value")
 	}
 	return nil
 }
