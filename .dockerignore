@@ -54,3 +54,12 @@ mocker
 .DS_Store
 .idea/
 .vscode/
+
+# Local QA recordings and planning workspaces are not build inputs.
+/docs/*
+!/docs/USER-GUIDE.md
+/screenshots/
+/.playwright-mcp/
+/.superpowers/
+/.worktrees/
+/packages/*/node_modules/

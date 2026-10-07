@@ -19,7 +19,7 @@ func backendAnalysisQuery(r *http.Request, mode string) (url.Values, error) {
 	}
 	allowed := []string{}
 	if mode == "list" {
-		allowed = []string{"status", "kind", "cursor", "limit"}
+		allowed = []string{"status", "kind", "cursor", "limit", "order"}
 	}
 	if mode == "results" {
 		allowed = []string{"resultVersion", "section", "cursor", "service", "kind", "certainty", "direction", "depth", "limit"}
@@ -65,7 +65,7 @@ func backendAnalysisOptionalSelector(q url.Values, key string, values []string) 
 func backendAnalysisSelectionQuery(q url.Values, mode string) bool {
 	switch mode {
 	case "list":
-		return backendAnalysisOptionalSelector(q, "status", []string{"queued", "running", "completed", "failed", "cancelled", "interrupted"}) && backendAnalysisOptionalSelector(q, "kind", backendanalysis.Kinds())
+		return backendAnalysisOptionalSelector(q, "order", []string{"asc", "desc"}) && backendAnalysisOptionalSelector(q, "status", []string{"queued", "running", "completed", "failed", "cancelled", "interrupted"}) && backendAnalysisOptionalSelector(q, "kind", backendanalysis.Kinds())
 	case "results":
 		return q.Has("resultVersion") && slices.Contains([]string{"changes", "findings", "witnesses", "checks", "gaps"}, q.Get("section")) && backendAnalysisOptionalSelector(q, "certainty", []string{"confirmed", "possible", "unknown"}) && backendAnalysisOptionalSelector(q, "direction", []string{"upstream", "downstream", "both"})
 	default:
@@ -128,7 +128,7 @@ func (s *Server) handleListBackendAnalysis(w http.ResponseWriter, r *http.Reques
 		s.backendError(w, err)
 		return
 	}
-	out, err := s.backendAnalysisRepo.List(r.Context(), r.PathValue("id"), backendanalysis.ListQuery{Status: q.Get("status"), Kind: q.Get("kind"), Cursor: q.Get("cursor"), Limit: int(analysisQueryNumber(q, "limit"))})
+	out, err := s.backendAnalysisRepo.List(r.Context(), r.PathValue("id"), backendanalysis.ListQuery{Order: q.Get("order"), Status: q.Get("status"), Kind: q.Get("kind"), Cursor: q.Get("cursor"), Limit: int(analysisQueryNumber(q, "limit"))})
 	if err != nil {
 		s.backendError(w, err)
 		return

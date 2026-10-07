@@ -176,7 +176,7 @@ func backendImportArgumentsError(name string, in map[string]jsonx.RawMessage) er
 // right after the project.
 func backendImportPathParams(name, route, selectedRoute string, selectedProposal *backendmodel.ProposalReadTarget, in map[string]jsonx.RawMessage) ([]any, error) {
 	var params []any
-	for _, key := range []string{"projectId", "observationSetId", "replayRunId", "replayItemId", "importId", "proposalId", "jobId", "viewId", "diagramId", "revisionId", "nodeId", "batchId", "fingerprint"} {
+	for _, key := range []string{"projectId", "materializationId", "observationSetId", "replayRunId", "replayItemId", "importId", "proposalId", "jobId", "viewId", "diagramId", "revisionId", "nodeId", "batchId", "fingerprint"} {
 		raw, ok := in[key]
 		if !ok || backendImportKeyStaysInBody(name, key) {
 			continue
@@ -239,7 +239,7 @@ func backendImportPathValue(name, key string, raw jsonx.RawMessage) (string, err
 // the path identifiers, integers re-encoded from their exact JSON digits.
 func backendImportQuery(in map[string]jsonx.RawMessage) (url.Values, error) {
 	q := url.Values{}
-	for _, key := range []string{"jobId", "hash", "limit", "cursor", "subjectId", "evidenceId", "previewVersion", "recordType", "baseRevisionId", "status", "proposalRevisionId", "kind", "version", "importVersion", "candidateHash", "id", "repositoryId", "providerNamespace", "resultVersion", "section", "service", "certainty", "direction", "depth"} {
+	for _, key := range []string{"targetHash", "order", "jobId", "hash", "limit", "cursor", "subjectId", "evidenceId", "previewVersion", "recordType", "baseRevisionId", "status", "proposalRevisionId", "kind", "version", "importVersion", "candidateHash", "id", "repositoryId", "providerNamespace", "resultVersion", "section", "service", "certainty", "direction", "depth"} {
 		raw, ok := in[key]
 		if !ok {
 			continue

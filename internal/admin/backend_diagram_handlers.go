@@ -7,6 +7,7 @@ import (
 	"errors"
 	"net/http"
 	"net/url"
+	"slices"
 	"strconv"
 
 	"github.com/yashok111/mocker/internal/backendmodel"
@@ -302,39 +303,61 @@ func (s *Server) handleGetBackendDiagramView(w http.ResponseWriter, r *http.Requ
 }
 
 func diagramQueryFields(q url.Values, mode string, in *backendmodel.DiagramListInput) error {
-	var err error
-	for k, values := range q {
+	for key, values := range q {
 		if len(values) != 1 {
 			return diagramAdmissionError()
 		}
-		switch k {
-		case "hash":
-			if mode != "diagram" || !backendSHA256(values[0]) {
-				return diagramAdmissionError()
-			}
-		case "kind":
-			if mode != "list" || (values[0] != "architecture" && values[0] != "interactions" && values[0] != "lifecycle" && values[0] != "business_map") {
-				return diagramAdmissionError()
-			}
-			in.Kind = values[0]
-		case "limit":
-			if mode != "list" {
-				return diagramAdmissionError()
-			}
-			in.Limit, err = strconv.Atoi(values[0])
-			if err != nil || in.Limit < 1 || in.Limit > 500 {
-				return diagramAdmissionError()
-			}
-		case "cursor":
-			if mode != "list" || len(values[0]) > 4096 {
-				return diagramAdmissionError()
-			}
-			in.Cursor = values[0]
-		default:
-			return diagramAdmissionError()
+		if err := diagramQueryField(key, values[0], mode, in); err != nil {
+			return err
 		}
 	}
-
+	return nil
+}
+func diagramQueryField(key, value, mode string, in *backendmodel.DiagramListInput) error {
+	if key == "hash" {
+		if mode != "diagram" || !backendSHA256(value) {
+			return diagramAdmissionError()
+		}
+		return nil
+	}
+	if mode != "list" {
+		return diagramAdmissionError()
+	}
+	switch key {
+	case "subjectId":
+		if !backendmodel.ValidID(value) {
+			return diagramAdmissionError()
+		}
+		in.SubjectID = value
+	case "targetHash":
+		if !backendSHA256(value) {
+			return diagramAdmissionError()
+		}
+		in.TargetHash = value
+	case "order":
+		if !slices.Contains([]string{"asc", "desc"}, value) {
+			return diagramAdmissionError()
+		}
+		in.Order = value
+	case "kind":
+		if !slices.Contains([]string{"architecture", "interactions", "lifecycle", "business_map"}, value) {
+			return diagramAdmissionError()
+		}
+		in.Kind = value
+	case "limit":
+		limit, err := strconv.Atoi(value)
+		if err != nil || limit < 1 || limit > 500 {
+			return diagramAdmissionError()
+		}
+		in.Limit = limit
+	case "cursor":
+		if len(value) > 4096 {
+			return diagramAdmissionError()
+		}
+		in.Cursor = value
+	default:
+		return diagramAdmissionError()
+	}
 	return nil
 }
 

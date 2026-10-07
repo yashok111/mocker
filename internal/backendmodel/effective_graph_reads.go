@@ -69,7 +69,7 @@ func loadSourceEffectiveGraph(ctx context.Context, q importReader, pid, rid stri
 		return nil, err
 	}
 	out := &EffectiveGraphSnapshot{Target: BackendReadTarget{RevisionID: rid}, State: state, Source: source, Origins: []EffectiveFieldOrigin{}, Criteria: []ChangeCriterion{}, BaselineEvidence: []EffectiveEvidenceBasis{}, EdgeNames: map[string]string{}, Identities: []EffectiveIdentity{}}
-	out.Pins = EffectiveGraphPins{BaseRevisionID: rid, BaseSemanticHash: state.Revision.SemanticHash, EffectiveSemanticHash: state.Revision.SemanticHash, StructuralSchemaVersion: state.Revision.SchemaVersion, ViewSchemaVersion: state.Revision.SchemaVersion, SourceSnapshotIDs: slices.Clone(state.Revision.SourceSnapshotIDs), ArtifactPins: slices.Clone(state.Revision.ArtifactPins), ArtifactContext: revisionArtifactContext(&state), ArtifactContextV3: state.ArtifactContextV3}
+	out.Pins = sourceEffectivePins(&state, rid)
 	if source.State.Revision.SchemaVersion == ComposedSchemaVersion {
 		out.Origins, err = effectiveSourceOrigins(source, state)
 		if err != nil {
@@ -89,6 +89,11 @@ func loadSourceEffectiveGraph(ctx context.Context, q importReader, pid, rid stri
 	}
 	return out, nil
 }
+
+func sourceEffectivePins(state *RevisionState, rid string) EffectiveGraphPins {
+	return EffectiveGraphPins{BaseRevisionID: rid, BaseSemanticHash: state.Revision.SemanticHash, EffectiveSemanticHash: state.Revision.SemanticHash, StructuralSchemaVersion: state.Revision.SchemaVersion, ViewSchemaVersion: state.Revision.SchemaVersion, SourceSnapshotIDs: slices.Clone(state.Revision.SourceSnapshotIDs), ArtifactPins: slices.Clone(state.Revision.ArtifactPins), ArtifactContext: revisionArtifactContext(state), ArtifactContextV3: state.ArtifactContextV3}
+}
+
 func finishEffectivePins(out *EffectiveGraphSnapshot, vector *SourceVector) error {
 	var err error
 	out.Pins.SourceVectorHash, err = requestDigest(vector)

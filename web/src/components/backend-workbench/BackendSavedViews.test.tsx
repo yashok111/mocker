@@ -894,7 +894,8 @@ it("resolves every Open-latest intent freshly and gates a cached alias until ser
   expect(adopted).toEqual([1]);
   await userEvent.click(screen.getByRole("button", { name: "Open latest intent" }));
   await waitFor(() => expect(latestReads).toBe(2));
-  expect(screen.queryByTestId("backend-project-page")).not.toBeInTheDocument();
+  expect(screen.queryByRole("heading", { name: "Pinned project" })).not.toBeInTheDocument();
+  expect(screen.getByLabelText("Загружаем точный вид")).toBeInTheDocument();
   expect(adopted).toEqual([1]);
   await act(async () => finish(json(200, { ...saved, version: 2 })));
   await screen.findByRole("heading", { name: "Pinned project" });

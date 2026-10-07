@@ -62,6 +62,7 @@ export function AppShell({ user, children }: { user: UserView; children: ReactNo
   const queryClient = useQueryClient();
   const location = useLocation();
   const mobile = useMediaQuery("(max-width: 48em)", false, { getInitialValueInEffect: false });
+  const backendMap = /^\/backend-projects\/[^/]+\/?$/.test(location.pathname);
   const canvas =
     /^\/design-canvas\/?$/.test(location.pathname) ||
     /^\/design-scenarios\/[^/]+\/?$/.test(location.pathname);
@@ -103,7 +104,11 @@ export function AppShell({ user, children }: { user: UserView; children: ReactNo
     { to: "/guide", label: "Руководство", icon: IconBook2, testId: "nav-guide" },
   ] as const;
   const navigation = (
-    <nav aria-label="Основная навигация" className={classes.navigation}>
+    <nav
+      aria-label="Основная навигация"
+      className={classes.navigation}
+      data-compact={backendMap || undefined}
+    >
       <div className={classes.globalLinks}>
         <Text className={classes.navCaption}>Пространство</Text>
         {globalLinks.map(({ to, label, icon: Icon, testId }) => {
@@ -118,6 +123,8 @@ export function AppShell({ user, children }: { user: UserView; children: ReactNo
               data-active={active || undefined}
               aria-current={active ? "page" : undefined}
               data-testid={testId}
+              title={label}
+              aria-label={label}
               onClick={() => {
                 closeNavigation();
                 void navigate({ to });
@@ -146,9 +153,9 @@ export function AppShell({ user, children }: { user: UserView; children: ReactNo
   return (
     <NavigationContext.Provider value={{ target: navigationTarget, close: closeNavigation }}>
       <MantineAppShell
-        header={{ height: 64 }}
+        header={{ height: backendMap ? 56 : 64 }}
         navbar={{
-          width: 224,
+          width: backendMap ? 56 : 224,
           breakpoint: "sm",
           collapsed: { mobile: true, desktop: navigationInDrawer },
         }}
@@ -216,7 +223,8 @@ export function AppShell({ user, children }: { user: UserView; children: ReactNo
           <div
             className={classes.mainContent}
             data-designer={designer || undefined}
-            data-canvas={canvas || undefined}
+            data-canvas={canvas || backendMap || undefined}
+            data-backend-map={backendMap || undefined}
           >
             {children}
           </div>

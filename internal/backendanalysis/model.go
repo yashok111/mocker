@@ -180,6 +180,7 @@ type ResultPage struct {
 	NextCursor string         `json:"nextCursor"`
 }
 type ListQuery struct {
+	Order  string `json:"order,omitempty"`
 	Status string `json:"status"`
 	Kind   string `json:"kind"`
 	Cursor string `json:"cursor"`

@@ -36,6 +36,26 @@ it("overlays manual coordinates and reroutes incident edges without changing the
   expect(result.edges[0]).toMatchObject({ id: "edge", source: "a", target: "b" });
   expect(result.edges[0]?.points[0]).toEqual({ x: 270, y: 160 });
 });
+it("translates a saved self reference and its label without cutting through its table", () => {
+  const loop = {
+    id: "self",
+    source: "a",
+    target: "a",
+    points: [
+      { x: 40, y: 0 },
+      { x: 40, y: -60 },
+      { x: 200, y: -60 },
+      { x: 200, y: 0 },
+    ],
+    label: { x: 70, y: -90, width: 100, height: 24, text: "parent_id → id" },
+  };
+  const result = overlaySavedPositions({ nodes: layout.nodes, edges: [loop] }, [
+    { nodeId: "a", x: 300, y: 150 },
+  ]);
+  expect(result.edges[0]?.points).toEqual(loop.points.map((p) => ({ x: p.x + 300, y: p.y + 150 })));
+  expect(result.edges[0]?.label).toEqual({ ...loop.label, x: 370, y: 60 });
+  expect(loop.points[0]).toEqual({ x: 40, y: 0 });
+});
 it("keeps off-page coordinates when accepting ELK, and rejects silent eviction or invalid moves", () => {
   const positions = [
     { nodeId: "a", x: 1, y: 2 },

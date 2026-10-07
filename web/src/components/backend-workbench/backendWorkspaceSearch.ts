@@ -2,6 +2,43 @@ import { parseBackendSourcePin, type BackendSourcePin } from "./backendFlowReads
 import type { BackendDiagramPin, BackendDiagramViewState } from "@/api/generated/schemas";
 
 export type BackendWorkspaceSearch = BackendSourcePin & {
+  wbView?: "structure" | "scenarios" | "data";
+  wbMode?:
+    | "overview"
+    | "architecture"
+    | "children"
+    | "collections"
+    | "objects"
+    | "neighborhood"
+    | "diagram"
+    | "flow"
+    | "lineage"
+    | "unmapped"
+    | "comparison";
+  wbScope?: string;
+  wbSelection?: string;
+  wbLineageSeed?: string;
+  wbMemberCursor?: string;
+  wbFlowPart?: "logic" | "accesses" | "reverse" | "entrypoints";
+  wbAccessKind?: "reads" | "writes" | "deletes";
+  wbReverseAccessKind?: "reads" | "writes" | "deletes";
+  wbExpandGroups?: boolean;
+  wbTarget?: string;
+  wbGroup?: string;
+  wbKind?: string;
+  wbQuery?: string;
+  wbCursor?: string;
+  wbPanel?: "changes" | "checks" | "sources" | "views" | "observations" | "replay";
+  wbResult?: string;
+  wbObservation?: string;
+  wbResultRevision?: string;
+  wbResultKind?: string;
+  wbResultVersion?: number;
+  wbList?: boolean;
+  wbCatalog?: string;
+  wbFilter?: string;
+  wbCalls?: string[];
+
   diagramId?: string;
   diagramVersion?: number;
   diagramHash?: string;
@@ -9,6 +46,7 @@ export type BackendWorkspaceSearch = BackendSourcePin & {
   diagramViewVersion?: number;
   diagramLevel?: "context" | "containers" | "components";
   diagramRoot?: string;
+  diagramFocus?: string;
   diagramSelection?: string;
 };
 const uuid = /^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/;
@@ -26,10 +64,67 @@ export function parseBackendWorkspaceSearch(
 ): BackendWorkspaceSearch {
   const pin: BackendWorkspaceSearch = parseBackendSourcePin(search);
   for (const field of [
+    "wbScope",
+    "wbCatalog",
+    "wbFilter",
+    "wbSelection",
+    "wbLineageSeed",
+    "wbMemberCursor",
+    "wbTarget",
+    "wbGroup",
+    "wbKind",
+    "wbQuery",
+    "wbCursor",
+    "wbResult",
+    "wbObservation",
+    "wbResultKind",
+    "wbResultRevision",
+  ] as const)
+    if (search[field] !== undefined)
+      pin[field] =
+        typeof search[field] === "string" && search[field].length <= 4096
+          ? search[field]
+          : "invalid";
+  const enums = {
+    wbFlowPart: ["logic", "accesses", "reverse", "entrypoints"],
+    wbAccessKind: ["reads", "writes", "deletes"],
+    wbReverseAccessKind: ["reads", "writes", "deletes"],
+    wbView: ["structure", "scenarios", "data"],
+    wbMode: [
+      "overview",
+      "architecture",
+      "children",
+      "collections",
+      "objects",
+      "neighborhood",
+      "diagram",
+      "flow",
+      "lineage",
+      "unmapped",
+      "comparison",
+    ],
+    wbPanel: ["changes", "checks", "sources", "views", "observations", "replay"],
+  } as const;
+  for (const field of Object.keys(enums) as (keyof typeof enums)[]) {
+    const value = search[field];
+    if (typeof value === "string" && (enums[field] as readonly string[]).includes(value))
+      Object.assign(pin, { [field]: value });
+  }
+  if (search.wbResultVersion !== undefined) pin.wbResultVersion = version(search.wbResultVersion);
+  if (search.wbExpandGroups === true || search.wbExpandGroups === "true") pin.wbExpandGroups = true;
+  if (search.wbList === true || search.wbList === "true") pin.wbList = true;
+  if (
+    Array.isArray(search.wbCalls) &&
+    search.wbCalls.every((id) => typeof id === "string" && uuid.test(id))
+  )
+    pin.wbCalls = [...new Set(search.wbCalls)];
+
+  for (const field of [
     "diagramId",
     "diagramHash",
     "diagramViewId",
     "diagramRoot",
+    "diagramFocus",
     "diagramSelection",
   ] as const) {
     if (search[field] !== undefined)
@@ -72,6 +167,8 @@ export function workspacePinError(pin: BackendWorkspaceSearch): string | undefin
   if (view && (pin.diagramLevel || pin.diagramRoot || pin.diagramSelection))
     return "Уровень и выбор сохранённого вида берутся из его точной версии.";
   if (pin.diagramRoot !== undefined && !uuid.test(pin.diagramRoot)) return "Корень C4 недоступен.";
+  if (pin.diagramFocus !== undefined && !uuid.test(pin.diagramFocus))
+    return "Компонент недоступен.";
   if (pin.diagramSelection && !/^(element|link):[0-9a-f-]{36}$/.test(pin.diagramSelection))
     return "Неверный C4 selection.";
   return undefined;

@@ -14,7 +14,19 @@ func backendChangeProposalQuery(r *http.Request, detail bool) (url.Values, int, 
 	if r.ContentLength != 0 || r.TransferEncoding != nil {
 		return nil, 0, backendQueryError()
 	}
-	query, limit, err := backendProposalQueryStatuses(r, detail, []string{"draft", "ready", "implemented", "archived"})
+	original, err := url.ParseQuery(r.URL.RawQuery)
+	if err != nil {
+		return nil, 0, backendQueryError()
+	}
+	if values, ok := original["order"]; ok && (detail || len(values) != 1 || (values[0] != "asc" && values[0] != "desc")) {
+		return nil, 0, backendQueryError()
+	}
+	order := original.Get("order")
+	original.Del("order")
+	clone := r.Clone(r.Context())
+	clone.URL = r.URL.Clone()
+	clone.URL.RawQuery = original.Encode()
+	query, limit, err := backendProposalQueryStatuses(clone, detail, []string{"draft", "ready", "implemented", "archived"})
 	if err != nil {
 		return nil, 0, err
 	}
@@ -25,6 +37,9 @@ func backendChangeProposalQuery(r *http.Request, detail bool) (url.Values, int, 
 		if _, err := backendPositiveDecimal(query.Get("limit")); err != nil {
 			return nil, 0, err
 		}
+	}
+	if order != "" {
+		query.Set("order", order)
 	}
 	return query, limit, nil
 }
@@ -73,7 +88,7 @@ func (s *Server) handleListBackendChangeProposals(w http.ResponseWriter, r *http
 		s.backendError(w, err)
 		return
 	}
-	out, err := s.backendRepo.ListChangeProposals(r.Context(), r.PathValue("id"), backendmodel.ChangeProposalListInput{BaseRevisionID: q.Get("baseRevisionId"), Status: q.Get("status"), Limit: limit, Cursor: q.Get("cursor")})
+	out, err := s.backendRepo.ListChangeProposals(r.Context(), r.PathValue("id"), backendmodel.ChangeProposalListInput{BaseRevisionID: q.Get("baseRevisionId"), Status: q.Get("status"), Order: q.Get("order"), Limit: limit, Cursor: q.Get("cursor")})
 	if err != nil {
 		s.backendError(w, err)
 		return

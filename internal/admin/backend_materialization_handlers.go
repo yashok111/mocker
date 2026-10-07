@@ -3,6 +3,7 @@ package admin
 import (
 	"errors"
 	"net/http"
+	"strconv"
 
 	"github.com/yashok111/mocker/internal/apidesign"
 	"github.com/yashok111/mocker/internal/backendmaterialize"
@@ -88,6 +89,50 @@ func (s *Server) handleApplyBackendMaterialization(w http.ResponseWriter, r *htt
 		return
 	}
 	out, err := s.backendMaterialization.Apply(ctx, r.PathValue("id"), in)
+	if err != nil {
+		s.materializationError(w, err)
+		return
+	}
+	httpx.JSON(w, http.StatusOK, out)
+}
+
+func (s *Server) handleListBackendMaterializations(w http.ResponseWriter, r *http.Request) {
+	ctx, ok := s.diagramContext(w, r.Context(), r)
+	if !ok {
+		return
+	}
+	q := r.URL.Query()
+	limit := 20
+	for k, values := range q {
+		if (k != "limit" && k != "cursor") || len(values) != 1 {
+			s.diagramError(w, diagramAdmissionError())
+			return
+		}
+	}
+	if q.Has("limit") {
+		v, err := strconv.Atoi(q.Get("limit"))
+		if err != nil || v < 1 || v > 100 {
+			s.diagramError(w, diagramAdmissionError())
+			return
+		}
+		limit = v
+	}
+	out, err := s.backendMaterialization.ListResults(ctx, r.PathValue("id"), limit, q.Get("cursor"))
+	if err != nil {
+		s.materializationError(w, err)
+		return
+	}
+	httpx.JSON(w, http.StatusOK, out)
+}
+func (s *Server) handleGetBackendMaterialization(w http.ResponseWriter, r *http.Request) {
+	ctx, ok := s.diagramContext(w, r.Context(), r)
+	if !ok {
+		return
+	}
+	if !s.backendNoQuery(w, r) {
+		return
+	}
+	out, err := s.backendMaterialization.ReadResult(ctx, r.PathValue("id"), r.PathValue("mid"))
 	if err != nil {
 		s.materializationError(w, err)
 		return

@@ -52,6 +52,10 @@ import (
 var noRoute = []string{}
 
 var toolRoutes = map[string][]string{
+	"list_backend_import_summaries":       {"GET /api/backend-projects/{id}/import-summaries"},
+	"query_backend_explore":               {"POST /api/backend-projects/{id}/explore/query"},
+	"list_backend_materializations":       {"GET /api/backend-projects/{id}/materializations"},
+	"get_backend_materialization":         {"GET /api/backend-projects/{id}/materializations/{mid}"},
 	"import_backend_observations":         {"POST /api/backend-projects/{id}/observations"},
 	"list_backend_observations":           {"GET /api/backend-projects/{id}/observations"},
 	"get_backend_observation_version":     {"GET /api/backend-projects/{id}/observations/{sid}/versions/{v}"},

@@ -387,6 +387,9 @@ func changeProposalDetail(ctx context.Context, q importReader, p ChangeProposal,
 	return out, rows.Err()
 }
 func (r *Repo) ListChangeProposals(ctx context.Context, pid string, in ChangeProposalListInput) (*ChangeProposalPage, error) {
+	if in.Order != "" && in.Order != "asc" && in.Order != "desc" {
+		return nil, invalid("order", "Use asc or desc")
+	}
 	if _, err := r.Get(ctx, pid); err != nil {
 		return nil, err
 	}
@@ -406,9 +409,9 @@ func (r *Repo) ListChangeProposals(ctx context.Context, pid string, in ChangePro
 		return nil, err
 	}
 	scope, err := requestDigest(struct {
-		Base, Status string
-		Version      string
-	}{Base: in.BaseRevisionID, Status: in.Status, Version: version})
+		Base, Status, Order string
+		Version             string
+	}{Base: in.BaseRevisionID, Status: in.Status, Order: in.Order, Version: version})
 	if err != nil {
 		return nil, err
 	}
@@ -416,7 +419,14 @@ func (r *Repo) ListChangeProposals(ctx context.Context, pid string, in ChangePro
 	if err != nil {
 		return nil, err
 	}
-	rows, err := tx.QueryContext(ctx, `SELECT `+changeProposalColumns+` FROM backend_change_proposals WHERE project_id=? AND id>? AND (?='' OR status=?) AND (?='' OR current_draft_revision_id IN (SELECT id FROM backend_change_proposal_revisions_documents WHERE base_revision_id=?)) ORDER BY id LIMIT ?`, pid, after, in.Status, in.Status, in.BaseRevisionID, in.BaseRevisionID, limit+1)
+	comparison, ordering := ">", "ASC"
+	if in.Order == "desc" {
+		comparison, ordering = "<", "DESC"
+		if after == "" {
+			after = "~"
+		}
+	}
+	rows, err := tx.QueryContext(ctx, `SELECT `+changeProposalColumns+` FROM backend_change_proposals WHERE project_id=? AND id`+comparison+`? AND (?='' OR status=?) AND (?='' OR current_draft_revision_id IN (SELECT id FROM backend_change_proposal_revisions_documents WHERE base_revision_id=?)) ORDER BY id `+ordering+` LIMIT ?`, pid, after, in.Status, in.Status, in.BaseRevisionID, in.BaseRevisionID, limit+1)
 	if err != nil {
 		return nil, err
 	}

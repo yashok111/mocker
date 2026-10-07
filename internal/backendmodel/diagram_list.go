@@ -3,19 +3,26 @@ package backendmodel
 import (
 	"context"
 	"database/sql"
+	"encoding/json/v2"
 	"errors"
+	"strings"
 )
 
 type DiagramListInput struct {
-	Kind   string `json:"kind,omitempty"`
-	Limit  int    `json:"limit"`
-	Cursor string `json:"cursor,omitempty"`
+	SubjectID  string `json:"subjectId,omitempty"`
+	TargetHash string `json:"targetHash,omitempty"`
+	Order      string `json:"order,omitempty"`
+	Kind       string `json:"kind,omitempty"`
+	Limit      int    `json:"limit"`
+	Cursor     string `json:"cursor,omitempty"`
 }
 type DiagramSummary struct {
-	ID         string     `json:"id"`
-	Kind       string     `json:"kind"`
-	Pin        DiagramPin `json:"pin"`
-	TargetHash string     `json:"targetHash"`
+	Name       string            `json:"name"`
+	Target     BackendReadTarget `json:"target"`
+	ID         string            `json:"id"`
+	Kind       string            `json:"kind"`
+	Pin        DiagramPin        `json:"pin"`
+	TargetHash string            `json:"targetHash"`
 }
 type DiagramViewSummary struct {
 	ID      string `json:"id"`
@@ -34,12 +41,28 @@ type DiagramViewListPage struct {
 	CatalogVersion int64                `json:"catalogVersion"`
 }
 
-func diagramListScope(ctx context.Context, q importReader, pid, kind string, in DiagramListInput) (string, int64, error) {
+func validateDiagramListInput(in DiagramListInput) error {
+	if in.SubjectID != "" && !ValidID(in.SubjectID) {
+		return invalid("subjectId", "Expected exact record ID")
+	}
+	if in.TargetHash != "" && (len(in.TargetHash) != 64 || strings.Trim(in.TargetHash, "0123456789abcdef") != "") {
+		return invalid("targetHash", "Expected exact target hash")
+	}
+	if in.Order != "" && in.Order != "asc" && in.Order != "desc" {
+		return invalid("order", "Use asc or desc")
+	}
 	if in.Kind != "" && in.Kind != "architecture" && in.Kind != "interactions" && in.Kind != "lifecycle" && in.Kind != "business_map" {
-		return "", 0, diagramUnsupported()
+		return diagramUnsupported()
 	}
 	if in.Limit < 1 || in.Limit > 500 {
-		return "", 0, invalid("limit", "Use 1–500")
+		return invalid("limit", "Use 1–500")
+	}
+	return nil
+}
+
+func diagramListScope(ctx context.Context, q importReader, pid, kind string, in DiagramListInput) (string, int64, error) {
+	if err := validateDiagramListInput(in); err != nil {
+		return "", 0, err
 	}
 	var owner string
 	if err := q.QueryRowContext(ctx, `SELECT id FROM backend_projects WHERE id=?`, pid).Scan(&owner); errors.Is(err, sql.ErrNoRows) {
@@ -90,31 +113,52 @@ func (r *Repo) ListDiagrams(ctx context.Context, pid string, in DiagramListInput
 	if err != nil {
 		return nil, err
 	}
-	rows, err := tx.QueryContext(ctx, `SELECT d.id,d.kind,v.version,v.content_hash,v.target_hash FROM backend_diagrams d JOIN backend_diagram_versions_documents v ON v.project_id=d.project_id AND v.diagram_id=d.id AND v.version=d.version WHERE d.project_id=? AND (?='' OR d.kind=?) ORDER BY d.kind,d.id`, pid, in.Kind, in.Kind)
+
+	from := ` FROM backend_diagrams d JOIN backend_diagram_versions_documents v ON v.project_id=d.project_id AND v.diagram_id=d.id AND v.version=d.version WHERE d.project_id=? AND (?='' OR d.kind=?) AND (?='' OR v.target_hash=?) AND (?='' OR EXISTS (SELECT 1 FROM json_tree(v.document,'$.document.payload') ref WHERE CASE WHEN ref.type='object' THEN json_extract(ref.value,'$.kind')='record' AND json_extract(ref.value,'$.id')=? ELSE 0 END))`
+	args := []any{pid, in.Kind, in.Kind, in.TargetHash, in.TargetHash, in.SubjectID, in.SubjectID}
+	var total int
+	if err = tx.QueryRowContext(ctx, `SELECT count(*)`+from, args...).Scan(&total); err != nil {
+		return nil, err
+	}
+	offset, err := diagramOffset(in.Cursor, scope, total)
+	if err != nil {
+		return nil, err
+	}
+	order := "d.kind,d.id"
+	if in.Order == "desc" {
+		order = "d.id DESC"
+	}
+	rows, err := tx.QueryContext(ctx, `SELECT d.id,d.kind,v.version,v.content_hash,v.target_hash,d.target_json,
+ coalesce((SELECT json_extract(value,'$.label') FROM json_each(v.document,'$.document.payload.elements') WHERE json_extract(value,'$.role')='software_system' LIMIT 1),(SELECT json_extract(value,'$.label') FROM json_each(v.document,'$.document.payload.elements') WHERE json_extract(value,'$.role')='command' LIMIT 1),(SELECT name FROM backend_graph_records_documents WHERE project_id=d.project_id AND revision_id=json_extract(d.target_json,'$.revisionId') AND record_type='node' AND id=json_extract(v.document,'$.document.payload.entity.id') LIMIT 1),json_extract(v.document,'$.document.payload.steps[0].label'),json_extract(v.document,'$.document.payload.elements[0].label'),json_extract(v.document,'$.document.payload.participants[0].label'),json_extract(v.document,'$.document.payload.states[0].label'),d.kind)
+`+from+` ORDER BY `+order+` LIMIT ? OFFSET ?`, append(args, in.Limit, offset)...)
+
 	if err != nil {
 		return nil, err
 	}
 	defer func() { _ = rows.Close() }()
-	all := []DiagramSummary{}
+	items := []DiagramSummary{}
 	for rows.Next() {
 		var item DiagramSummary
-		if err = rows.Scan(&item.ID, &item.Kind, &item.Pin.Version, &item.Pin.ContentHash, &item.TargetHash); err != nil {
+		var target string
+		if err = rows.Scan(&item.ID, &item.Kind, &item.Pin.Version, &item.Pin.ContentHash, &item.TargetHash, &target, &item.Name); err != nil {
+			return nil, err
+		}
+		if err = json.Unmarshal([]byte(target), &item.Target); err != nil {
 			return nil, err
 		}
 		item.Pin.ID = item.ID
-		all = append(all, item)
+		items = append(items, item)
 	}
 	if err = rows.Err(); err != nil {
 		return nil, err
 	}
-	offset, err := diagramOffset(in.Cursor, scope, len(all))
-	if err != nil {
-		return nil, err
-	}
-	end := min(offset+in.Limit, len(all))
-	return &DiagramListPage{Items: all[offset:end], NextCursor: diagramNext(scope, end, len(all)), CatalogVersion: catalog}, nil
+	return &DiagramListPage{Items: items, NextCursor: diagramNext(scope, min(offset+in.Limit, total), total), CatalogVersion: catalog}, nil
 }
+
 func (r *Repo) ListDiagramViews(ctx context.Context, pid string, in DiagramListInput) (*DiagramViewListPage, error) {
+	if in.SubjectID != "" || in.TargetHash != "" {
+		return nil, invalid("filter", "Record filters apply to mappings, not saved views")
+	}
 	if in.Limit == 0 {
 		in.Limit = 100
 	}
@@ -127,7 +171,11 @@ func (r *Repo) ListDiagramViews(ctx context.Context, pid string, in DiagramListI
 	if err != nil {
 		return nil, err
 	}
-	rows, err := tx.QueryContext(ctx, `SELECT id,kind,version,name FROM backend_diagram_views WHERE project_id=? AND (?='' OR kind=?) ORDER BY kind,id`, pid, in.Kind, in.Kind)
+	order := "kind,id"
+	if in.Order == "desc" {
+		order = "id DESC"
+	}
+	rows, err := tx.QueryContext(ctx, `SELECT id,kind,version,name FROM backend_diagram_views WHERE project_id=? AND (?='' OR kind=?) ORDER BY `+order, pid, in.Kind, in.Kind)
 	if err != nil {
 		return nil, err
 	}

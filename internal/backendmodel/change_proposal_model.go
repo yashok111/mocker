@@ -238,7 +238,13 @@ type RestoreChangeProposalInput struct {
 	RestoreRevisionID  string `json:"restoreRevisionId"`
 	IdempotencyKey     string `json:"idempotencyKey"`
 }
-type ChangeProposalListInput = ProposalListInput
+type ChangeProposalListInput struct {
+	BaseRevisionID string `json:"baseRevisionId,omitempty"`
+	Status         string `json:"status,omitempty"`
+	Limit          int    `json:"limit,omitzero"`
+	Cursor         string `json:"cursor,omitempty"`
+	Order          string `json:"order,omitempty"`
+}
 type GetChangeProposalInput = GetProposalInput
 
 func decodeChangeOperation(b []byte, fields []string, out any) error {

@@ -33,6 +33,18 @@ export function overlaySavedPositions(
       if (!byId.has(edge.source) && !byId.has(edge.target)) return edge;
       const source = rendered.get(edge.source)!,
         target = rendered.get(edge.target)!;
+      if (edge.source === edge.target) {
+        const previous = layout.nodes.find((node) => node.id === edge.source)!;
+        const dx = source.x - previous.x,
+          dy = source.y - previous.y;
+        return {
+          ...edge,
+          points: edge.points.map((point) => ({ x: point.x + dx, y: point.y + dy })),
+          ...(edge.label
+            ? { label: { ...edge.label, x: edge.label.x + dx, y: edge.label.y + dy } }
+            : {}),
+        };
+      }
       const start = { x: source.x + source.width, y: source.y + source.height / 2 },
         end = { x: target.x, y: target.y + target.height / 2 };
       const middle = (start.x + end.x) / 2;

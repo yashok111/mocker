@@ -519,3 +519,23 @@
     font-size: 25px;
   }
 }
+
+.mainContent[data-backend-map] {
+  height: calc(100dvh - 56px);
+  max-width: none;
+  padding: 0;
+  overflow: hidden;
+}
+.navigation[data-compact] {
+  padding: 18px 7px;
+}
+.navigation[data-compact] .globalLink {
+  padding: 10px;
+  justify-content: center;
+}
+.navigation[data-compact] .globalLink span,
+.navigation[data-compact] .globalLink svg:last-child:not(:first-child),
+.navigation[data-compact] .navCaption,
+.navigation[data-compact] .railFooter {
+  display: none;
+}

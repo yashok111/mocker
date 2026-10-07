@@ -113,6 +113,10 @@ function loadRoutes(): RouteInfo[] {
 // withdrawal, in this comment.
 // B4.1 sync setup/upload/abort now have reachable UI callers; their exemptions are withdrawn.
 const EXEMPT: Record<string, string> = {
+  "POST /api/backend-projects":
+    "create_backend_project is agent-only in the read-only Backend Workbench redesign.",
+  "GET /api/backend-projects/capabilities":
+    "get_backend_capabilities supports MCP admission; viewers do not need authoring limits.",
   "GET /api/designs/{id}/response-rules":
     "list_response_rules reads saved rules for MCP; the UI reads the shared API document buffer.",
   "GET /api/designs/{id}/response-rules/{rid}":

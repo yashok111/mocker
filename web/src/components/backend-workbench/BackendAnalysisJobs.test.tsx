@@ -19,7 +19,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status });
-it("mounts source analysis from the actual project route without opening proposal editor", async () => {
+it("opens saved source checks from the actual project route without analysis authoring", async () => {
   const project = {
     id: changeTestID,
     name: "Project analysis",
@@ -80,13 +80,12 @@ it("mounts source analysis from the actual project route without opening proposa
       </MantineProvider>
     </QueryClientProvider>,
   );
-  await userEvent.setup().click(await screen.findByRole("button", { name: "Задания анализа" }));
-  expect(await screen.findByRole("button", { name: "Анализировать источник" })).toBeInTheDocument();
-  expect(screen.queryByRole("button", { name: "Добавить команду" })).toBeNull();
-  const before = screen.getByLabelText("Источник до анализа");
-  expect(await within(before).findByRole("option", { name: /older source/ })).toBeInTheDocument();
-  await userEvent.setup().selectOptions(before, changeNextID);
-  expect(before).toHaveValue(changeNextID);
+  await userEvent.setup().click(await screen.findByRole("button", { name: "Проверки" }));
+  await waitFor(() => expect(router.state.location.search).toMatchObject({ wbPanel: "checks" }));
+  expect(await screen.findByRole("heading", { name: "Проверки" })).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Анализировать источник" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Добавить команду" })).not.toBeInTheDocument();
+  expect(screen.queryByLabelText("Источник до анализа")).not.toBeInTheDocument();
 });
 it("real start, list, get, results, cancel and retry preserve selected immutable publication", async () => {
   let detail = analysisTestDetail();

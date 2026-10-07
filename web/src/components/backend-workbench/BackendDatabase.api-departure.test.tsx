@@ -574,47 +574,14 @@ it.each([
     expect(screen.queryByLabelText(/Причина связи API/)).not.toBeInTheDocument();
   },
 );
-it("keeps the real project Flow instance's unknown claim when a duplicate graph instance mounts and unmounts", async () => {
-  const writes = server();
-  const confirm = vi.fn(() => true);
-  vi.stubGlobal("confirm", confirm);
+it("does not mount competing API authoring inspectors in the read-only project route", async () => {
+  const { workspaceHTTP, projectId, revisionId } = await import("./explorer/testFixtures");
+  const requests = workspaceHTTP();
   renderInRouter(
-    <BackendProjectPage
-      projectId="project"
-      sourcePin={{
-        revisionId: "0197aaf9-5555-7000-8000-000000000002",
-        recordId: "field",
-        recordType: "node",
-      }}
-    />,
+    <BackendProjectPage projectId={projectId} sourcePin={{ revisionId, wbPanel: "changes" }} />,
   );
-  const inner = await screen.findByRole("region", { name: "Инспектор Flow" });
-  await startEdit(inner);
-  await userEvent.click(screen.getByRole("button", { name: "Предпросмотр связей API" }));
-  await userEvent.click(await screen.findByRole("button", { name: "Применить связи API" }));
-  await screen.findByTestId("api-pin-unknown-outcome");
-  await userEvent.click(screen.getByRole("button", { name: "Открыть объект GET /orders" }));
-  const graph = await screen.findByRole("region", { name: "Инспектор объекта" });
-  const second = (await within(graph).findAllByTestId("backend-api-artifacts")).find((panel) =>
-    within(panel).queryByRole("button", { name: "Изменить связь API" }),
-  );
-  expect(second).toBeDefined();
-  await userEvent.click(within(second!).getByRole("button", { name: "Изменить связь API" }));
-  expect(within(second!).queryByLabelText(/Причина связи API/)).not.toBeInTheDocument();
-  expect(await within(second!).findByRole("alert")).toHaveTextContent(
-    "Завершите изменение связи API в другом инспекторе",
-  );
-  await userEvent.click(within(graph).getByRole("button", { name: "Закрыть инспектор" }));
-  expect(inner).toBeInTheDocument();
-  expect(within(inner).getByTestId("api-pin-unknown-outcome")).toBeInTheDocument();
-  confirm.mockClear().mockReturnValue(false);
-  await userEvent.click(within(inner).getByRole("button", { name: "Закрыть инспектор Flow" }));
-  expect(confirm).toHaveBeenCalledTimes(1);
-  expect(inner).toBeInTheDocument();
-  await userEvent.click(
-    within(inner).getByRole("button", { name: "Повторить точную попытку API" }),
-  );
-  await waitFor(() => expect(writes).toHaveLength(2));
-  expect(writes[1]).toBe(writes[0]);
-  expect(await screen.findByText("Версия проекта 5")).toBeInTheDocument();
+  expect(await screen.findByRole("heading", { name: "Изменения" })).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Изменить связь API" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Применить связи API" })).not.toBeInTheDocument();
+  expect(requests.mock.calls.some(([, init]) => init?.method === "POST")).toBe(false);
 });

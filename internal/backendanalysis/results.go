@@ -425,6 +425,9 @@ func matches(raw []byte, in ResultQuery) bool {
 	return (in.Service == "" || in.Service == record.Service) && (in.Kind == "" || in.Kind == record.Kind) && (in.Certainty == "" || in.Certainty == record.Certainty) && (in.Direction == "" || in.Direction == record.Direction) && (in.Depth == 0 && !in.DepthSet || record.Depth <= in.Depth)
 }
 func (r *Repo) List(ctx context.Context, pid string, in ListQuery) (*JobPage, error) {
+	if in.Order != "" && in.Order != "asc" && in.Order != "desc" {
+		return nil, malformed("Invalid list order")
+	}
 	if in.Limit < 0 || in.Limit > 500 {
 		return nil, malformed("Invalid list limit")
 	}
@@ -453,7 +456,11 @@ func (r *Repo) List(ctx context.Context, pid string, in ListQuery) (*JobPage, er
 	// so a job that completed, was cancelled or was retained away between
 	// pages shifted every later row and an offset skipped one. Resuming
 	// strictly after the last (created_at, id) returned cannot skip or repeat.
-	rows, err := tx.QueryContext(ctx, `SELECT id,created_at FROM backend_analysis_jobs WHERE project_id=? AND (?='' OR status=?) AND (?='' OR kind=?) AND (?=0 OR created_at>? OR (created_at=? AND id>?)) ORDER BY created_at,id LIMIT ?`, pid, in.Status, in.Status, in.Kind, in.Kind, len(after.ID), after.CreatedAt, after.CreatedAt, after.ID, in.Limit+1)
+	ordering, comparison := "ASC", ">"
+	if in.Order == "desc" {
+		ordering, comparison = "DESC", "<"
+	}
+	rows, err := tx.QueryContext(ctx, `SELECT id,created_at FROM backend_analysis_jobs WHERE project_id=? AND (?='' OR status=?) AND (?='' OR kind=?) AND (?=0 OR created_at`+comparison+`? OR (created_at=? AND id`+comparison+`?)) ORDER BY created_at `+ordering+`,id `+ordering+` LIMIT ?`, pid, in.Status, in.Status, in.Kind, in.Kind, len(after.ID), after.CreatedAt, after.CreatedAt, after.ID, in.Limit+1)
 	if err != nil {
 		return nil, err
 	}

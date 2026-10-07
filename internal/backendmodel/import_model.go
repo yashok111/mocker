@@ -16,7 +16,7 @@ const (
 	MaxRevisionEdges        = 200000
 	MaxRevisionEvidence     = 250000
 	MaxRevisionBytes        = 256 << 20
-	MaxProjectStagingBytes  = 512 << 20
+	MaxProjectStagingBytes  = 1 << 30
 	MaxOpenImportSessions   = 5
 	DefaultGraphPageSize    = 100
 	MaxGraphPageSize        = 500

@@ -159,7 +159,7 @@ func (r *Repo) QueryDiagram(ctx context.Context, pid string, in DiagramQueryInpu
 	if v.Document.Kind == "interactions" {
 		return ProjectInteractions(ctx, v, in)
 	}
-	graph, err := r.ResolveEffectiveGraph(ctx, pid, v.Document.Target)
+	graph, err := r.readArchitectureGraph(ctx, pid, v.Document.Target)
 	if err != nil {
 		return nil, err
 	}
