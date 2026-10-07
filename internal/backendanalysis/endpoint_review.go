@@ -164,18 +164,41 @@ func analyzeEndpointReview(ctx context.Context, in *ImmutableInput, p *EndpointR
 		}
 		r.covered[change.Object] = true
 		r.add("changes", change.Object, change.Kind, "confirmed", 0, EndpointChangeDetail{b43ResultVersion, "endpoint_change", change})
-		check := ruleFor(change)
-		for _, side := range []string{"before", "after"} {
-			g := before
-			if side == "after" {
-				g = after
-			}
-			if side == "before" && change.Operation == "added" || side == "after" && change.Operation == "removed" {
+		// One rule per changed path, deduplicated by rule, exactly like
+		// diff/impact's addChangeRule: a single ruleFor over the joined paths
+		// took the first match, so a nativeType+nullable change hid the
+		// not-null data check (review 2026-10-06, F140).
+		paths := change.Paths
+		if len(paths) == 0 {
+			paths = []string{""}
+		}
+		seen := map[string]bool{}
+		for _, path := range paths {
+			part := change
+			part.Paths = []string{path}
+			check := ruleFor(part)
+			if seen[check.RuleID] {
 				continue
 			}
-			check.Evidence = append(check.Evidence, proofReference(side, g, recordProof(g, change.Object)))
+			seen[check.RuleID] = true
+			for _, side := range []string{"before", "after"} {
+				g := before
+				if side == "after" {
+					g = after
+				}
+				if side == "before" && change.Operation == "added" || side == "after" && change.Operation == "removed" {
+					continue
+				}
+				check.Evidence = append(check.Evidence, proofReference(side, g, recordProof(g, change.Object)))
+			}
+			// An unknown rule (e.g. native-type-change) makes the verdict
+			// unknown, as recordRule does; it was left "potential"
+			// (review 2026-10-06, F146).
+			if check.Status == "unknown" {
+				r.unknown = true
+			}
+			r.add("checks", change.Object, change.Kind, check.Certainty, 0, EndpointCheckDetail{b43ResultVersion, "endpoint_check", check, false, "analysis_rule", nil})
 		}
-		r.add("checks", change.Object, change.Kind, check.Certainty, 0, EndpointCheckDetail{b43ResultVersion, "endpoint_check", check, false, "analysis_rule", nil})
 	}
 	if intent != nil && intentBase != nil {
 		if err = r.addEndpointIntent(ctx, intentBase, intent, after); err != nil {
@@ -200,10 +223,33 @@ func (r *reportBuilder) addEndpointIntent(ctx context.Context, intentBase, inten
 	if err != nil {
 		return err
 	}
-	for _, change := range outside {
-		if r.endpointObjects[change.Object] {
-			r.add("changes", change.Object, change.Kind, "confirmed", 0, OutsideIntentChangeDetail{b43ResultVersion, "outside_intent_change", change})
+	// Endpoint review has no identity map, so an object the proposal creates
+	// keeps its draft UUID and can never correspond to the implementation's
+	// new UUID. An added source object of the same record type and kind as an
+	// unmatched created draft object may be that creation: it is an unverified
+	// correspondence (a gap), not an outside-intent change
+	// (review 2026-10-06, F145).
+	type createdKind struct{ recordType, kind string }
+	unmatched := map[createdKind]bool{}
+	for _, n := range intent.State.Nodes {
+		if _, retained := mapping[n.ID]; !retained {
+			unmatched[createdKind{"node", n.Kind}] = true
 		}
+	}
+	for _, e := range intent.State.Edges {
+		if mapping[e.ID] == "" {
+			unmatched[createdKind{"edge", e.Kind}] = true
+		}
+	}
+	for _, change := range outside {
+		if !r.endpointObjects[change.Object] {
+			continue
+		}
+		if change.Operation == "added" && unmatched[createdKind{change.Object.RecordType, change.Kind}] {
+			r.gap("unverified_created_correspondence", change.Object)
+			continue
+		}
+		r.add("changes", change.Object, change.Kind, "confirmed", 0, OutsideIntentChangeDetail{b43ResultVersion, "outside_intent_change", change})
 	}
 	for _, criterion := range intent.Criteria {
 		relevant := criterion.ID != "" && r.endpointObjects[ObjectAddress{RecordType: criterion.RecordType, ID: criterion.ID}]
@@ -213,7 +259,11 @@ func (r *reportBuilder) addEndpointIntent(ctx context.Context, intentBase, inten
 		for _, id := range criterion.TargetIDs {
 			relevant = relevant || r.endpointObjects[ObjectAddress{RecordType: "node", ID: id}]
 		}
-		if !relevant && len(criterion.TargetIDs) != 0 {
+		// Only a criterion with neither an object nor targets is global. An
+		// object/field/edge criterion carries an ID, not TargetIDs, so testing
+		// TargetIDs alone added every unrelated criterion as a required
+		// endpoint check (review 2026-10-06, F139).
+		if !relevant && (criterion.ID != "" || len(criterion.TargetIDs) != 0) {
 			continue
 		}
 		check := RuleResult{RuleID: "criterion/" + criterion.Kind, Version: "1", Prerequisites: []string{"exact_saved_intent_criterion"}, Object: ObjectAddress{RecordType: criterion.RecordType, ID: criterion.ID}, Status: "check_required", Severity: "review", Certainty: "unknown", Message: criterion.Description, Evidence: []ProofReference{}}

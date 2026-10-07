@@ -78,6 +78,12 @@ func (r *reportBuilder) addObservedImpact(ctx context.Context) error {
 			records[observationIdentity(row.Context)+"/"+row.Record.ID] = row
 		}
 		seen := map[string]bool{}
+		graph := r.before
+		if side == "after" {
+			graph = r.after
+		}
+		kinds := observedKinds(graph)
+		services := map[string]bool{}
 		for _, set := range r.input.ImpactObservations.Sets {
 			if set.Pin.Side != side {
 				continue
@@ -101,11 +107,17 @@ func (r *reportBuilder) addObservedImpact(ctx context.Context) error {
 					certainty = "confirmed"
 				}
 				ref := *row.Selected
-				object := ObjectAddress{RecordType: ref.RecordType, ID: ref.ID}
-				if !scopeObjectSelected(r.input.Scope, object, "") {
-					continue
+				object, kind := observedObject(kinds, ref)
+				observedService := set.Version.Context.Source.ServiceID
+				if _, ok := services[observedService]; !ok {
+					services[observedService] = observedInService(graph, r.input.Scope.Service, observedService)
 				}
-				if service := r.input.Scope.Service; service != "" && service != set.Version.Context.Source.ServiceID {
+				// Filter by the object's real kind and match the service by id or
+				// name like inService; a filtered row is a visible scope gap. With
+				// kind "" any scope.kind dropped every observed witness silently,
+				// and a service name never matched (review 2026-10-06, F154).
+				if !scopeObjectSelected(r.input.Scope, object, kind) || !services[observedService] {
+					r.gap("scope_omitted_observation", object)
 					continue
 				}
 				r.add("witnesses", object, "observed_evidence", certainty, 0, ObservedImpact{Pin: set.Pin, RecordID: row.RecordID, ExecutionID: rec.Record.ExecutionID, Ref: ref, Certainty: certainty, Method: row.Method, Limitations: []string{"Observed object evidence does not confirm inferred structural paths or unexecuted branches", "Before-source evidence is not after-proposal measured confirmation"}})
@@ -113,4 +125,43 @@ func (r *reportBuilder) addObservedImpact(ctx context.Context) error {
 		}
 	}
 	return nil
+}
+
+// observedKinds indexes one side's node and edge kinds once, so resolving each
+// observation row's object kind stays linear in rows plus graph size.
+func observedKinds(g *bm.EffectiveGraphSnapshot) map[ObjectAddress]string {
+	out := map[ObjectAddress]string{}
+	if g == nil {
+		return out
+	}
+	for _, n := range g.State.Nodes {
+		out[ObjectAddress{RecordType: "node", ID: n.ID}] = n.Kind
+	}
+	for _, e := range g.State.Edges {
+		out[ObjectAddress{RecordType: "edge", ID: e.ID}] = e.Kind
+	}
+	return out
+}
+
+// observedObject addresses an observation's selected ref. An artifact or
+// namespaced artifact ref has no recordType/id (validateDiagramRef requires
+// them empty), so it is addressed as artifact_object by the digest of the
+// exact ref instead of the empty object {"",""} every artifact witness used to
+// share (review 2026-10-06, F188). A record's kind comes from the side's graph.
+func observedObject(kinds map[ObjectAddress]string, ref bm.DiagramRef) (ObjectAddress, string) {
+	if ref.Kind != "record" {
+		raw, _ := canonical(ref)
+		return ObjectAddress{RecordType: "artifact_object", ID: digest(raw)}, "artifact_object"
+	}
+	object := ObjectAddress{RecordType: ref.RecordType, ID: ref.ID}
+	return object, kinds[object]
+}
+
+// observedInService matches the observation's source service against
+// scope.service by id or by the service node's name, as inService does.
+func observedInService(g *bm.EffectiveGraphSnapshot, service, observed string) bool {
+	if service == "" || service == observed {
+		return true
+	}
+	return g != nil && inService(g, observed, service)
 }

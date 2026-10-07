@@ -72,6 +72,9 @@ nonempty before/after pins, exact source-compatible correlation and matching
 side target. After-side desired proposals are unsupported; before-side source
 observations may coexist with desired after intent. Read witnesses with kind=observed_evidence separately
 from structural witnesses: an observed object does not promote inferred paths.
+scope.kind and scope.service (id or name) filter observed evidence too; a
+filtered row leaves gap scope_omitted_observation. An artifact ref is addressed
+as recordType=artifact_object with the digest of the exact ref; read its ref.
 
 Benchmark tools: `scripts/backend-workbench-benchmark.py` defaults to NOT RUN;
 only `--run` performs long measurements. See the product benchmark guide. Local

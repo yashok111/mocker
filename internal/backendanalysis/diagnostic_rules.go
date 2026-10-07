@@ -67,11 +67,11 @@ func (d *diagnosticEvaluator) nodeRules(n backendmodel.Node) {
 				break
 			}
 		}
+		// A found access already proves use; the complete inventory is needed
+		// only to claim the table unused. Downgrading a used table on a partial
+		// import produced a false "No access found" finding, a gap and a review
+		// event for every used table (review 2026-10-06, F136).
 		status, certainty := "absent", "confirmed"
-		if used && !d.inventoryComplete() {
-			status = "unknown"
-			certainty = "unknown"
-		}
 		if !used {
 			status = "present"
 			if !current || !d.inventoryComplete() {

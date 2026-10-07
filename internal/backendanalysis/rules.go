@@ -65,7 +65,7 @@ func ruleFor(c DiffChange) RuleResult {
 		r.RuleID = "index-removal-performance-check"
 		r.Status = "check_required"
 		r.Message = "Measure affected queries; index removal does not establish a slowdown"
-	case strings.Contains(paths, "/unique") || c.Kind == "constraint" && containsString(c.After, "constraintKind", "unique"):
+	case uniqueTightened(c, paths):
 		r.RuleID = "unique-data-check"
 		r.Status = "check_required"
 		r.Message = "Check existing data for duplicate keys"
@@ -151,6 +151,21 @@ func declaredChecks(g *backendmodel.EffectiveGraphSnapshot) []RuleResult {
 		out = append(out, r)
 	}
 	return out
+}
+
+// uniqueTightened reports a change that can introduce duplicate keys: a unique
+// flag that is now known true, or a unique constraint that was added or whose
+// columns changed. Like the nullable rule it checks the direction; relaxing
+// uniqueness or editing an unrelated constraint field asked for a duplicate
+// check and set verdict "potential" (review 2026-10-06, F143).
+func uniqueTightened(c DiffChange, paths string) bool {
+	if strings.Contains(paths, "/unique") && containsKnown(c.After, "unique", []byte("true")) {
+		return true
+	}
+	if c.Kind != "constraint" || !containsString(c.After, "constraintKind", "unique") {
+		return false
+	}
+	return c.Operation == "added" || strings.Contains(paths, "/constraintKind") || strings.Contains(paths, "/columnIds") || strings.Contains(paths, "/columnKeys")
 }
 
 func foreignKeyChange(c DiffChange, paths string) bool {

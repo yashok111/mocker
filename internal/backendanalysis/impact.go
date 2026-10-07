@@ -533,6 +533,17 @@ func (idx *graphIndex) direction(direction string) {
 	reverse := map[ObjectAddress][]transition{}
 	for _, edges := range idx.adj {
 		for _, edge := range edges {
+			// An edge-seed transition (edge address -> its endpoint, added by
+			// addEdge so a changed or removed edge seeds traversal) is not a
+			// dependency and has no reverse. Reversing it left an upstream edge
+			// seed with no transitions and made every incident edge an
+			// "affected" object with an empty kind (review 2026-10-06, F151).
+			if edgeSeedTransition(edge) {
+				if direction == "upstream" {
+					reverse[edge.from] = append(reverse[edge.from], edge)
+				}
+				continue
+			}
 			next := edge
 			next.from, next.to = edge.to, edge.from
 			next.source, next.destination = edge.destination, edge.source
@@ -559,6 +570,13 @@ func (idx *graphIndex) direction(direction string) {
 		})
 		idx.adj[key] = edges
 	}
+}
+
+// edgeSeedTransition is addEdge's edge -> endpoint transition: keyed by the edge
+// address with the edge's own ID. Relational transitions keyed by a references
+// edge use "<id>/<facet>" and stay ordinary dependencies.
+func edgeSeedTransition(t transition) bool {
+	return t.from.RecordType == "edge" && t.id == t.from.ID
 }
 
 func edgeBoundary(e backendmodel.Edge, nodes map[string]backendmodel.Node) string {
