@@ -351,6 +351,29 @@ func (r *Repo) finishChangeRebase(ctx context.Context, tx importReader, pid, id 
 	}
 	return &preparedChangeRebase{proposal: *p, draft: *draft, evaluation: result, candidate: candidate, reservation: reservation}, nil
 }
+
+// requireRebaseCandidate admits only a conflict-free, diagnostic-free
+// candidate whose hash is the one the caller previewed.
+func requireRebaseCandidate(candidate *ChangeProposalRebaseCandidate, previewed string) error {
+	// Unresolved B/O/N conflicts leave CandidateHash nil with possibly no
+	// diagnostic at all; answering changeInvalid then said "unresolved
+	// validation diagnostics" with an empty list (review 2026-10-06, F42).
+	if conflicts := candidate.Conflicts; candidate.CandidateHash == nil && len(conflicts) > 0 {
+		ids := make([]string, len(conflicts))
+		for i, c := range conflicts {
+			ids[i] = c.ID
+		}
+		return &FaultError{Status: 409, Code: "backend_change_rebase_conflict", Message: "Rebase has unresolved conflicts; preview again with a resolution for each conflictId", Details: map[string]any{"conflictIds": ids, "diagnostics": candidate.Diagnostics}}
+	}
+	if candidate.CandidateHash == nil {
+		return changeInvalid(candidate.Diagnostics)
+	}
+	if previewed != *candidate.CandidateHash {
+		return &FaultError{Status: 409, Code: "backend_change_preview_conflict", Message: "Rebase candidate differs from exact preview"}
+	}
+	return nil
+}
+
 func (r *Repo) applyChangeRebaseTx(ctx context.Context, tx *sql.Tx, pid, id, scope, digest string, in ApplyChangeProposalRebaseInput, prepared *preparedChangeRebase, prepareErr error, out *ChangeProposalApplyResult) error {
 	if found, err := readChangeReceipt(ctx, tx, scope, in.IdempotencyKey, digest, out); err != nil || found {
 		return err
@@ -368,21 +391,8 @@ func (r *Repo) applyChangeRebaseTx(ctx context.Context, tx *sql.Tx, pid, id, sco
 	if err = checkChangeCommandHistory(ctx, tx, id, in.RepairCommands); err != nil {
 		return err
 	}
-	// Unresolved B/O/N conflicts leave CandidateHash nil with possibly no
-	// diagnostic at all; answering changeInvalid then said "unresolved
-	// validation diagnostics" with an empty list (review 2026-10-06, F42).
-	if conflicts := prepared.candidate.Conflicts; prepared.candidate.CandidateHash == nil && len(conflicts) > 0 {
-		ids := make([]string, len(conflicts))
-		for i, c := range conflicts {
-			ids[i] = c.ID
-		}
-		return &FaultError{Status: 409, Code: "backend_change_rebase_conflict", Message: "Rebase has unresolved conflicts; preview again with a resolution for each conflictId", Details: map[string]any{"conflictIds": ids, "diagnostics": prepared.candidate.Diagnostics}}
-	}
-	if prepared.candidate.CandidateHash == nil {
-		return changeInvalid(prepared.candidate.Diagnostics)
-	}
-	if in.CandidateHash != *prepared.candidate.CandidateHash {
-		return &FaultError{Status: 409, Code: "backend_change_preview_conflict", Message: "Rebase candidate differs from exact preview"}
+	if err = requireRebaseCandidate(prepared.candidate, in.CandidateHash); err != nil {
+		return err
 	}
 	var hash string
 	if err = tx.QueryRowContext(ctx, `SELECT json_extract(document,'$.semanticHash') FROM backend_revisions_documents WHERE project_id=? AND id=?`, pid, in.NewBaseRevisionID).Scan(&hash); err != nil {

@@ -10,40 +10,18 @@ func PortableTargetPins(model PortableModel, target BackendReadTarget) (Effectiv
 	var full *ChangeProposalRevision
 	var legacy *ProposalRevision
 	if target.ChangeProposal != nil {
-		for i := range model.Proposals {
-			p := &model.Proposals[i]
-			if p.Full == nil || p.Full.ID != target.ChangeProposal.ProposalID {
-				continue
-			}
-			for j := range p.FullRevisions {
-				v := &p.FullRevisions[j]
-				if v.ID == target.ChangeProposal.ProposalRevisionID {
-					full = v
-					rid = v.BaseRevisionID
-				}
-			}
-		}
+		full = portableFullRevision(model, target.ChangeProposal.ProposalID, target.ChangeProposal.ProposalRevisionID)
 		if full == nil {
 			return EffectiveGraphPins{}, invalid("target", "Full proposal pin missing from portable closure")
 		}
+		rid = full.BaseRevisionID
 	}
 	if target.Proposal != nil {
-		for i := range model.Proposals {
-			p := &model.Proposals[i]
-			if p.Legacy == nil || p.Legacy.ID != target.Proposal.ProposalID {
-				continue
-			}
-			for j := range p.LegacyRevisions {
-				v := &p.LegacyRevisions[j]
-				if v.ID == target.Proposal.ProposalRevisionID {
-					legacy = v
-					rid = v.BaseRevisionID
-				}
-			}
-		}
+		legacy = portableLegacyRevision(model, target.Proposal.ProposalID, target.Proposal.ProposalRevisionID)
 		if legacy == nil {
 			return EffectiveGraphPins{}, invalid("target", "Legacy proposal pin missing from portable closure")
 		}
+		rid = legacy.BaseRevisionID
 	}
 	var source *PortableSource
 	for i := range model.Sources {
@@ -65,17 +43,7 @@ func PortableTargetPins(model PortableModel, target BackendReadTarget) (Effectiv
 		if full.BaseSemanticHash != source.Revision.SemanticHash {
 			return EffectiveGraphPins{}, invalid("target", "Proposal base hash differs")
 		}
-		out.Pins.BaseSemanticHash = full.BaseSemanticHash
-		out.Pins.EffectiveSemanticHash = full.SemanticHash
-		out.Pins.StructuralSchemaVersion = ComposedSchemaVersion
-		out.Pins.ViewSchemaVersion = ChangeProposalDocumentVersion
-		out.Pins.SourceSnapshotIDs = full.SourceSnapshotIDs
-		out.Pins.ArtifactPins = full.ArtifactPins
-		out.Pins.ArtifactContext = &full.ArtifactContext
-		out.Pins.ArtifactContextV3 = full.ArtifactContextV3
-		if full.ArtifactContextV3 != nil {
-			out.Pins.ArtifactContext = nil
-		}
+		pinFullProposal(&out.Pins, full)
 		vector = &full.SourceVector
 	}
 	if legacy != nil {
@@ -89,4 +57,54 @@ func PortableTargetPins(model PortableModel, target BackendReadTarget) (Effectiv
 		return EffectiveGraphPins{}, err
 	}
 	return out.Pins, nil
+}
+
+// portableFullRevision finds a change proposal revision inside the closure;
+// the last match wins, as a closure never carries two.
+func portableFullRevision(model PortableModel, proposalID, revisionID string) *ChangeProposalRevision {
+	var full *ChangeProposalRevision
+	for i := range model.Proposals {
+		p := &model.Proposals[i]
+		if p.Full == nil || p.Full.ID != proposalID {
+			continue
+		}
+		for j := range p.FullRevisions {
+			if p.FullRevisions[j].ID == revisionID {
+				full = &p.FullRevisions[j]
+			}
+		}
+	}
+	return full
+}
+
+func portableLegacyRevision(model PortableModel, proposalID, revisionID string) *ProposalRevision {
+	var legacy *ProposalRevision
+	for i := range model.Proposals {
+		p := &model.Proposals[i]
+		if p.Legacy == nil || p.Legacy.ID != proposalID {
+			continue
+		}
+		for j := range p.LegacyRevisions {
+			if p.LegacyRevisions[j].ID == revisionID {
+				legacy = &p.LegacyRevisions[j]
+			}
+		}
+	}
+	return legacy
+}
+
+// pinFullProposal moves the pins from the source revision to the change
+// proposal revision layered on it.
+func pinFullProposal(pins *EffectiveGraphPins, full *ChangeProposalRevision) {
+	pins.BaseSemanticHash = full.BaseSemanticHash
+	pins.EffectiveSemanticHash = full.SemanticHash
+	pins.StructuralSchemaVersion = ComposedSchemaVersion
+	pins.ViewSchemaVersion = ChangeProposalDocumentVersion
+	pins.SourceSnapshotIDs = full.SourceSnapshotIDs
+	pins.ArtifactPins = full.ArtifactPins
+	pins.ArtifactContext = &full.ArtifactContext
+	pins.ArtifactContextV3 = full.ArtifactContextV3
+	if full.ArtifactContextV3 != nil {
+		pins.ArtifactContext = nil
+	}
 }

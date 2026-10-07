@@ -3,7 +3,6 @@ package backendmodel
 import (
 	"context"
 	"database/sql"
-	"strconv"
 
 	"github.com/yashok111/mocker/internal/apidesign"
 	"github.com/yashok111/mocker/internal/config"
@@ -23,7 +22,7 @@ type txAPIReader struct {
 }
 
 func (r txAPIReader) ArtifactSnapshot(ctx context.Context, id, revision int64) (*apidesign.ArtifactSnapshot, error) {
-	return r.Repo.ArtifactSnapshotTx(ctx, r.tx, id, revision)
+	return r.ArtifactSnapshotTx(ctx, r.tx, id, revision)
 }
 
 type txScenarioReader struct {
@@ -35,7 +34,7 @@ func (r txScenarioReader) ArtifactSnapshot(ctx context.Context, id, revision int
 	return r.ArtifactSnapshotTx(ctx, r.tx, id, revision)
 }
 func (r txScenarioReader) ArtifactInspectionSnapshot(ctx context.Context, id, revision int64) (*designscenario.ArtifactInspectionSnapshot, error) {
-	return r.Repo.ArtifactInspectionSnapshotTx(ctx, r.tx, id, revision)
+	return r.ArtifactInspectionSnapshotTx(ctx, r.tx, id, revision)
 }
 
 // ownerReaders builds the owner adapters with the materialization input cap.
@@ -136,4 +135,3 @@ func resolvePortableContext(c *ArtifactContextV3, installation string, request *
 	}
 	return nil
 }
-func portableDecimal(v string) int64 { n, _ := strconv.ParseInt(v, 10, 64); return n }

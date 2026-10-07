@@ -41,17 +41,59 @@ func (c *ProposalCommand) UnmarshalJSON(b []byte) error {
 	if err != nil {
 		return invalid("commands", "Expected a strict typed proposal command")
 	}
-	var typ, action string
-	if json.Unmarshal(m["type"], &typ) != nil {
-		return invalid("type", "Command type is required")
+	typ, action, required, err := proposalCommandShape(m)
+	if err != nil {
+		return err
 	}
-	required := []string{"type", "commandId", "reason"}
+	if err := relationalFields(m, required, nil); err != nil {
+		return invalid("commands", err.Error())
+	}
+	if err := proposalCommandScalars(m); err != nil {
+		return err
+	}
+	if typ == "alter_constraint" {
+		if err := proposalColumnPairs(m["columnPairs"]); err != nil {
+			return err
+		}
+	}
+	if typ == "set_criteria" {
+		if err := proposalCriteria(m["criteria"]); err != nil {
+			return err
+		}
+	}
+	type command ProposalCommand
+	var decoded command
+	if err := json.Unmarshal(b, &decoded, json.RejectUnknownMembers(true)); err != nil {
+		return invalid("commands", err.Error())
+	}
+	if validateKey(decoded.CommandID) != nil {
+		return invalid("commandId", "Use 1–128 printable ASCII characters without spaces")
+	}
+	if !proposalText(decoded.Reason) {
+		return invalid("reason", "Reason must be nonblank UTF-8, at most 4096 bytes")
+	}
+	if typ == "alter_constraint" {
+		if err := proposalFKOptions(action, ProposalCommand(decoded)); err != nil {
+			return err
+		}
+	}
+	*c = ProposalCommand(decoded)
+	return nil
+}
+
+// proposalCommandShape reads the command's type (and an FK command's
+// action) and returns the members that type requires.
+func proposalCommandShape(m map[string]jsontext.Value) (typ, action string, required []string, err error) {
+	if json.Unmarshal(m["type"], &typ) != nil {
+		return "", "", nil, invalid("type", "Command type is required")
+	}
+	required = []string{"type", "commandId", "reason"}
 	switch typ {
 	case "alter_column":
 		required = append(required, "columnId", "nullable")
 	case "alter_constraint":
 		if json.Unmarshal(m["action"], &action) != nil {
-			return invalid("action", "FK action is required")
+			return "", "", nil, invalid("action", "FK action is required")
 		}
 		required = append(required, "action", "targetTableId", "columnPairs", "updateAction", "deleteAction", "matchType", "deferrable", "initiallyDeferred")
 		switch action {
@@ -60,16 +102,19 @@ func (c *ProposalCommand) UnmarshalJSON(b []byte) error {
 		case "update":
 			required = append(required, "constraintId")
 		default:
-			return &FaultError{Status: 422, Code: "backend_unsupported_scope", Message: "Only create/update FK commands are supported"}
+			return "", "", nil, &FaultError{Status: 422, Code: "backend_unsupported_scope", Message: "Only create/update FK commands are supported"}
 		}
 	case "set_criteria":
 		required = append(required, "criteria")
 	default:
-		return &FaultError{Status: 422, Code: "backend_unsupported_scope", Message: "Unsupported database proposal command"}
+		return "", "", nil, &FaultError{Status: 422, Code: "backend_unsupported_scope", Message: "Unsupported database proposal command"}
 	}
-	if err := relationalFields(m, required, nil); err != nil {
-		return invalid("commands", err.Error())
-	}
+	return typ, action, required, nil
+}
+
+// proposalCommandScalars checks each member's JSON type before the strict
+// decode, so a wrong type names its member instead of the whole command.
+func proposalCommandScalars(m map[string]jsontext.Value) error {
 	for k, raw := range m {
 		raw = bytes.TrimSpace(raw)
 		switch k {
@@ -87,98 +132,101 @@ func (c *ProposalCommand) UnmarshalJSON(b []byte) error {
 			}
 		}
 	}
-	if typ == "alter_constraint" {
-		var pairs []jsontext.Value
-		if err := json.Unmarshal(m["columnPairs"], &pairs); err != nil {
+	return nil
+}
+
+func proposalColumnPairs(raw jsontext.Value) error {
+	var pairs []jsontext.Value
+	if err := json.Unmarshal(raw, &pairs); err != nil {
+		return invalid("columnPairs", err.Error())
+	}
+	if len(pairs) == 0 {
+		return invalid("columnPairs", "Use nonempty ordered column pairs")
+	}
+	if len(pairs) > MaxRelationalOrderedColumns {
+		return proposalLimit("At most 64 ordered column pairs are supported")
+	}
+	for _, pair := range pairs {
+		fields, err := relationalObject(pair)
+		if err != nil {
+			return invalid("columnPairs", "Expected a strict column pair object")
+		}
+		if err := relationalFields(fields, []string{"fromColumnId", "toColumnId"}, nil); err != nil {
 			return invalid("columnPairs", err.Error())
 		}
-		if len(pairs) == 0 {
-			return invalid("columnPairs", "Use nonempty ordered column pairs")
-		}
-		if len(pairs) > MaxRelationalOrderedColumns {
-			return proposalLimit("At most 64 ordered column pairs are supported")
-		}
-		for _, pair := range pairs {
-			fields, err := relationalObject(pair)
-			if err != nil {
-				return invalid("columnPairs", "Expected a strict column pair object")
-			}
-			if err := relationalFields(fields, []string{"fromColumnId", "toColumnId"}, nil); err != nil {
+		for _, raw := range fields {
+			if err := relationalText(raw, false, false); err != nil {
 				return invalid("columnPairs", err.Error())
 			}
-			for _, raw := range fields {
-				if err := relationalText(raw, false, false); err != nil {
-					return invalid("columnPairs", err.Error())
-				}
-			}
 		}
 	}
-	if typ == "set_criteria" {
-		var criteria []jsontext.Value
-		if err := json.Unmarshal(m["criteria"], &criteria); err != nil {
+	return nil
+}
+
+func proposalCriteria(raw jsontext.Value) error {
+	var criteria []jsontext.Value
+	if err := json.Unmarshal(raw, &criteria); err != nil {
+		return invalid("criteria", err.Error())
+	}
+	if len(criteria) > MaxProposalCriteria {
+		return proposalLimit("At most 100 supplemental criteria are supported")
+	}
+	keys := map[string]bool{}
+	for _, raw := range criteria {
+		if err := proposalCriterion(raw, keys); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// proposalCriterion validates one supplemental criterion and claims its
+// key in keys, which must stay unique across the command.
+func proposalCriterion(raw jsontext.Value, keys map[string]bool) error {
+	fields, err := relationalObject(raw)
+	if err != nil {
+		return invalid("criteria", "Expected a strict recommendation object")
+	}
+	if err := relationalFields(fields, []string{"key", "kind", "targetIds", "description"}, nil); err != nil {
+		return invalid("criteria", err.Error())
+	}
+	for _, k := range []string{"key", "kind", "description"} {
+		if err := relationalText(fields[k], false, false); err != nil {
 			return invalid("criteria", err.Error())
 		}
-		if len(criteria) > MaxProposalCriteria {
-			return proposalLimit("At most 100 supplemental criteria are supported")
-		}
-		keys := map[string]bool{}
-		for _, raw := range criteria {
-			fields, err := relationalObject(raw)
-			if err != nil {
-				return invalid("criteria", "Expected a strict recommendation object")
-			}
-			if err := relationalFields(fields, []string{"key", "kind", "targetIds", "description"}, nil); err != nil {
-				return invalid("criteria", err.Error())
-			}
-			for _, k := range []string{"key", "kind", "description"} {
-				if err := relationalText(fields[k], false, false); err != nil {
-					return invalid("criteria", err.Error())
-				}
-			}
-			var criterion ProposalCriterionInput
-			if err := json.Unmarshal(raw, &criterion, json.RejectUnknownMembers(true)); err != nil {
-				return invalid("criteria", err.Error())
-			}
-			if validateKey(criterion.Key) != nil || keys[criterion.Key] {
-				return invalid("criteria", "Recommendation keys must be unique printable ASCII without spaces")
-			}
-			keys[criterion.Key] = true
-			if !slices.Contains([]string{"existing_data", "writers", "referential_integrity", "target_uniqueness", "migration_plan"}, criterion.Kind) {
-				return invalid("criteria", "Unsupported recommendation kind")
-			}
-			if !proposalText(criterion.Description) {
-				return invalid("criteria", "Description must be nonblank UTF-8, at most 4096 bytes")
-			}
-			if _, err := relationalStrings(fields["targetIds"], MaxRevisionNodes, true); err != nil || len(criterion.TargetIDs) == 0 {
-				return invalid("targetIds", "Select nonempty unique canonical target UUIDs")
-			}
+	}
+	var criterion ProposalCriterionInput
+	if err := json.Unmarshal(raw, &criterion, json.RejectUnknownMembers(true)); err != nil {
+		return invalid("criteria", err.Error())
+	}
+	if validateKey(criterion.Key) != nil || keys[criterion.Key] {
+		return invalid("criteria", "Recommendation keys must be unique printable ASCII without spaces")
+	}
+	keys[criterion.Key] = true
+	if !slices.Contains([]string{"existing_data", "writers", "referential_integrity", "target_uniqueness", "migration_plan"}, criterion.Kind) {
+		return invalid("criteria", "Unsupported recommendation kind")
+	}
+	if !proposalText(criterion.Description) {
+		return invalid("criteria", "Description must be nonblank UTF-8, at most 4096 bytes")
+	}
+	if _, err := relationalStrings(fields["targetIds"], MaxRevisionNodes, true); err != nil || len(criterion.TargetIDs) == 0 {
+		return invalid("targetIds", "Select nonempty unique canonical target UUIDs")
+	}
+	return nil
+}
+
+func proposalFKOptions(action string, decoded ProposalCommand) error {
+	if action == "create" && (!nonblank(decoded.Name) || !utf8.ValidString(decoded.Name)) {
+		return invalid("name", "Constraint name must be nonblank UTF-8")
+	}
+	for _, value := range []string{decoded.UpdateAction, decoded.DeleteAction} {
+		if !slices.Contains([]string{"no_action", "restrict", "cascade", "set_null", "set_default"}, value) {
+			return invalid("action", "Unsupported FK action")
 		}
 	}
-	type command ProposalCommand
-	var decoded command
-	if err := json.Unmarshal(b, &decoded, json.RejectUnknownMembers(true)); err != nil {
-		return invalid("commands", err.Error())
+	if !slices.Contains([]string{"simple", "full", "partial"}, decoded.MatchType) {
+		return invalid("matchType", "Unsupported FK match mode")
 	}
-	if validateKey(decoded.CommandID) != nil {
-		return invalid("commandId", "Use 1–128 printable ASCII characters without spaces")
-	}
-	if !proposalText(decoded.Reason) {
-		return invalid("reason", "Reason must be nonblank UTF-8, at most 4096 bytes")
-	}
-	if typ == "alter_constraint" {
-		if action == "create" && (!nonblank(decoded.Name) || !utf8.ValidString(decoded.Name)) {
-			return invalid("name", "Constraint name must be nonblank UTF-8")
-		}
-		for _, value := range []string{decoded.UpdateAction, decoded.DeleteAction} {
-			if !slices.Contains([]string{"no_action", "restrict", "cascade", "set_null", "set_default"}, value) {
-				return invalid("action", "Unsupported FK action")
-			}
-		}
-		if !slices.Contains([]string{"simple", "full", "partial"}, decoded.MatchType) {
-			return invalid("matchType", "Unsupported FK match mode")
-		}
-	}
-	*c = ProposalCommand(decoded)
 	return nil
 }
 

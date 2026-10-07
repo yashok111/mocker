@@ -27,6 +27,41 @@ func rehashPortableSource(ctx context.Context, tx *sql.Tx, s *PortableSource, ha
 	if err != nil {
 		return err
 	}
+	if err := rehashSourceAssertions(graph, hashes); err != nil {
+		return err
+	}
+	retargetAssertionHashes(graph, hashes)
+	graph.Identities = sourceIdentities(graph.Assertions)
+	if err := rehashSourceSelections(graph, hashes); err != nil {
+		return err
+	}
+	s.Assertions, s.Currentness, s.Selections = graph.Assertions, graph.Currentness, graph.Selections
+	content, anchor, err := portableSourceAnchors(s, graph)
+	if err != nil {
+		return err
+	}
+	c, err := portableContextV3(s)
+	if err != nil {
+		return err
+	}
+	c.SourceContentHash, c.SourceSemanticHash = content, anchor
+	s.ArtifactContext, err = EncodeArtifactContextV3(c)
+	if err != nil {
+		return err
+	}
+	s.SourceContentHash = content
+	s.Revision.ArtifactPins = []ArtifactPin{}
+	s.Revision.SemanticHash, err = ArtifactContextV3SemanticHash(c)
+	if err != nil {
+		return err
+	}
+	hashes[previousSemantic] = s.Revision.SemanticHash
+	return ValidatePortableSource(ctx, s)
+}
+
+// rehashSourceAssertions recomputes each assertion's intrinsic hash over
+// the remapped IDs and the legacy proof bases its evidence cites.
+func rehashSourceAssertions(graph *SourceGraphSnapshot, hashes map[string]string) error {
 	for i := range graph.Assertions {
 		a := &graph.Assertions[i]
 		old := a.AssertionHash
@@ -45,6 +80,12 @@ func rehashPortableSource(ctx context.Context, tx *sql.Tx, s *PortableSource, ha
 		a.AssertionHash = hash
 		hashes[old] = hash
 	}
+	return nil
+}
+
+// retargetAssertionHashes points every reference to an assertion hash at
+// its rehashed value.
+func retargetAssertionHashes(graph *SourceGraphSnapshot, hashes map[string]string) {
 	replace := func(value *string) {
 		if next, ok := hashes[*value]; ok {
 			*value = next
@@ -61,7 +102,11 @@ func rehashPortableSource(ctx context.Context, tx *sql.Tx, s *PortableSource, ha
 	for i := range graph.Selections {
 		replace(&graph.Selections[i].Select.AssertionHash)
 	}
-	graph.Identities = sourceIdentities(graph.Assertions)
+}
+
+// rehashSourceSelections recomputes each selection's conflict hash; a
+// selection whose claims no longer diverge after remapping is invalid.
+func rehashSourceSelections(graph *SourceGraphSnapshot, hashes map[string]string) error {
 	current := map[string]SourceClaimCurrentness{}
 	for _, f := range graph.Currentness {
 		current[sourceClaimKey(f.RecordType, f.RecordID, f.RepositoryID, f.ProviderNamespace)] = f
@@ -85,55 +130,47 @@ func rehashPortableSource(ctx context.Context, tx *sql.Tx, s *PortableSource, ha
 		hashes[r.ConflictHash] = conflict.ConflictHash
 		r.ConflictHash = conflict.ConflictHash
 	}
-	s.Assertions, s.Currentness, s.Selections = graph.Assertions, graph.Currentness, graph.Selections
-	var content, anchor string
+	return nil
+}
+
+// portableSourceAnchors returns the source content hash and the semantic
+// anchor that artifact context binds to, by schema generation.
+func portableSourceAnchors(s *PortableSource, graph *SourceGraphSnapshot) (content, anchor string, err error) {
 	if s.Revision.SchemaVersion == ComposedSchemaVersion {
 		raw, err := source6ContextJSON(graph)
 		if err != nil {
-			return err
+			return "", "", err
 		}
 		content = hashBytes(raw)
 		anchor, err = sourceDomainHash("backend-source6-semantic-v1", struct {
 			Schema  string `json:"schema"`
 			Content string `json:"sourceContentHash"`
 		}{ComposedSchemaVersion, content})
-		if err != nil {
-			return err
-		}
-	} else {
-		content, err = APIArtifactSourceContentHash(graph.State, s.Coverage)
-		if err != nil {
-			return err
-		}
-		anchor, err = sourceDomainHash("backend-portable-source-anchor-v1", struct{ Schema, Content string }{s.Revision.SchemaVersion, content})
-		if err != nil {
-			return err
-		}
+		return content, anchor, err
 	}
+	content, err = APIArtifactSourceContentHash(graph.State, s.Coverage)
+	if err != nil {
+		return "", "", err
+	}
+	anchor, err = sourceDomainHash("backend-portable-source-anchor-v1", struct{ Schema, Content string }{s.Revision.SchemaVersion, content})
+	return content, anchor, err
+}
+
+// portableContextV3 is the source's artifact context in the namespaced
+// form a remap must produce, or an empty one when it has none.
+func portableContextV3(s *PortableSource) (ArtifactContextV3, error) {
 	c := ArtifactContextV3{DocumentVersion: ArtifactContextV3Version, Groups: []ArtifactNamespaceGroup{}}
-	if len(s.ArtifactContext) > 0 {
-		decoded, err := DecodeVersionedArtifactContext(s.ArtifactContext, s.Revision.ArtifactPins)
-		if err != nil {
-			return err
-		}
-		if decoded.V3 == nil {
-			return invalid("context", "Portable remap must produce a namespaced context")
-		}
-		c = *decoded.V3
+	if len(s.ArtifactContext) == 0 {
+		return c, nil
 	}
-	c.SourceContentHash, c.SourceSemanticHash = content, anchor
-	s.ArtifactContext, err = EncodeArtifactContextV3(c)
+	decoded, err := DecodeVersionedArtifactContext(s.ArtifactContext, s.Revision.ArtifactPins)
 	if err != nil {
-		return err
+		return c, err
 	}
-	s.SourceContentHash = content
-	s.Revision.ArtifactPins = []ArtifactPin{}
-	s.Revision.SemanticHash, err = ArtifactContextV3SemanticHash(c)
-	if err != nil {
-		return err
+	if decoded.V3 == nil {
+		return c, invalid("context", "Portable remap must produce a namespaced context")
 	}
-	hashes[previousSemantic] = s.Revision.SemanticHash
-	return ValidatePortableSource(ctx, s)
+	return *decoded.V3, nil
 }
 
 func insertPortableSourceTx(ctx context.Context, tx *sql.Tx, s *PortableSource) error {

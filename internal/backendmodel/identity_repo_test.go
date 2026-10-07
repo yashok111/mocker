@@ -275,22 +275,7 @@ func TestReconcileCommitRollbackAllPublications(t *testing.T) {
 				t.Fatal(err)
 			}
 			before := immutableBytes(t, r)
-			var registryBefore string
-			rows, err := r.db.R.QueryContext(t.Context(), `SELECT project_id,repository_id,provider_namespace,record_type,external_key,id,state,revision_id FROM backend_identity_bindings ORDER BY record_type,external_key`)
-			if err != nil {
-				t.Fatal(err)
-			}
-			all := [][]string{}
-			for rows.Next() {
-				values := make([]string, 8)
-				if err := rows.Scan(&values[0], &values[1], &values[2], &values[3], &values[4], &values[5], &values[6], &values[7]); err != nil {
-					t.Fatal(err)
-				}
-				all = append(all, values)
-			}
-			rows.Close()
-			raw, _ := json.Marshal(all)
-			registryBefore = string(raw)
+			registryBefore := identityRegistrySnapshot(t, r)
 			trigger := "CREATE TRIGGER fail_reconcile AFTER INSERT ON " + table + " BEGIN SELECT RAISE(ABORT,'forced rollback'); END"
 			if table == "backend_identity_bindings" {
 				trigger = "CREATE TRIGGER fail_reconcile AFTER UPDATE ON backend_identity_bindings BEGIN SELECT RAISE(ABORT,'forced rollback'); END"
@@ -315,21 +300,7 @@ func TestReconcileCommitRollbackAllPublications(t *testing.T) {
 			if err != nil || status.Session.State != "ready" || status.Session.Version != v.Version {
 				t.Fatalf("session advanced %+v %v", status, err)
 			}
-			rows, err = r.db.R.QueryContext(t.Context(), `SELECT project_id,repository_id,provider_namespace,record_type,external_key,id,state,revision_id FROM backend_identity_bindings ORDER BY record_type,external_key`)
-			if err != nil {
-				t.Fatal(err)
-			}
-			all = [][]string{}
-			for rows.Next() {
-				values := make([]string, 8)
-				if err := rows.Scan(&values[0], &values[1], &values[2], &values[3], &values[4], &values[5], &values[6], &values[7]); err != nil {
-					t.Fatal(err)
-				}
-				all = append(all, values)
-			}
-			rows.Close()
-			raw, _ = json.Marshal(all)
-			if string(raw) != registryBefore {
+			if identityRegistrySnapshot(t, r) != registryBefore {
 				t.Fatal("registry escaped rollback")
 			}
 			if _, err := r.db.W.ExecContext(t.Context(), "DROP TRIGGER fail_reconcile"); err != nil {
@@ -340,4 +311,33 @@ func TestReconcileCommitRollbackAllPublications(t *testing.T) {
 			}
 		})
 	}
+}
+
+// identityRegistrySnapshot renders every identity binding row as one string,
+// so a rollback test can compare the registry before and after a forced
+// failure. A cursor error fails the test: a truncated read would otherwise
+// compare two short snapshots as equal.
+func identityRegistrySnapshot(t *testing.T, r *Repo) string {
+	t.Helper()
+	rows, err := r.db.R.QueryContext(t.Context(), `SELECT project_id,repository_id,provider_namespace,record_type,external_key,id,state,revision_id FROM backend_identity_bindings ORDER BY record_type,external_key`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = rows.Close() }()
+	all := [][]string{}
+	for rows.Next() {
+		values := make([]string, 8)
+		if err := rows.Scan(&values[0], &values[1], &values[2], &values[3], &values[4], &values[5], &values[6], &values[7]); err != nil {
+			t.Fatal(err)
+		}
+		all = append(all, values)
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
+	}
+	raw, err := json.Marshal(all)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(raw)
 }

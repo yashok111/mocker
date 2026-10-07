@@ -73,9 +73,10 @@ func detachSourcePage(page *SourceAssertionsPage) (*SourceAssertionsPage, error)
 }
 func sourceAssertionReadItem(graph *SourceGraphSnapshot, a ProviderAssertion) (SourceAssertionItem, error) {
 	item := SourceAssertionItem{Assertion: a, Currentness: sourceReadCurrentness(graph, a), Selections: []SourceAssertionResolution{}, Conflicts: []SourceAssertionConflict{}}
-	claims := []ProviderAssertion{}
+	recorded := graph.recordClaims(a.RecordType, a.RecordID)
+	claims := make([]ProviderAssertion, 0, len(recorded))
 	current := map[string]SourceClaimCurrentness{}
-	for _, claim := range graph.recordClaims(a.RecordType, a.RecordID) {
+	for _, claim := range recorded {
 		claims = append(claims, claim)
 		current[sourceAssertionKey(claim)] = sourceReadCurrentness(graph, claim)
 	}

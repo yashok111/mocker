@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json/jsontext"
 	"encoding/json/v2"
+	"errors"
 	"fmt"
 	"reflect"
 	"slices"
@@ -114,11 +115,11 @@ func TestRuntimeQueryVariantsAndExactWitness(t *testing.T) {
 		t.Fatalf("unreachable step became endpoint access: %+v", access)
 	}
 	a := access.AccessItems[0]
-	wantEdges := []string{}
+	wantEdges := make([]string, 0, 7)
 	for _, id := range []int{100, 101, 102, 110, 111, 112, 113} {
 		wantEdges = append(wantEdges, runtimeQueryID(id))
 	}
-	wantNodes := []string{}
+	wantNodes := make([]string, 0, 8)
 	for _, id := range []int{1, 2, 3, 4, 5, 6, 8, 11} {
 		wantNodes = append(wantNodes, runtimeQueryID(id))
 	}
@@ -316,7 +317,7 @@ func TestRuntimeTraversalDepthSensitiveCombinedBudget(t *testing.T) {
 	runtimeQueryAddEdge(t, s, 6001, "reads", query, target, map[string]any{"accessMode": "read", "datastoreId": runtimeQueryID(2003), "facetKey": "sql", "columnScope": "listed"})
 	// 101 edges are longer than the short route's 96 call/structure edges.
 	prev = 4
-	shallowEdges := []string{runtimeQueryID(100), runtimeQueryID(101), runtimeQueryID(102)}
+	shallowEdges := slices.Grow([]string{runtimeQueryID(100), runtimeQueryID(101), runtimeQueryID(102)}, 105)
 	for i := range 100 {
 		id := 3000 + i
 		add(id, "flow_step", 3, nil)
@@ -562,7 +563,7 @@ func TestRuntimeQueryCancellationAndUnsupportedSource(t *testing.T) {
 	s := runtimeQueryFixture(t)
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
-	if _, err := projectRuntimeFlow(ctx, s, FlowQueryInput{RevisionID: s.Revision.ID, View: "entrypoints"}); err != context.Canceled {
+	if _, err := projectRuntimeFlow(ctx, s, FlowQueryInput{RevisionID: s.Revision.ID, View: "entrypoints"}); !errors.Is(err, context.Canceled) {
 		t.Fatalf("canceled projection %v", err)
 	}
 	for _, version := range []string{"1", "2", "4"} {

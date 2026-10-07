@@ -65,46 +65,17 @@ func (r *Repo) prepareChangeProposal(ctx context.Context, pid, id string, in Pre
 	if err := r.validateAnalysisChangePreparation(ctx, pid, id, in); err != nil {
 		return nil, err
 	}
-	tx, err := r.db.R.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
+	inputBytes, err := r.measureChangeInput(ctx, pid, id, in)
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = tx.Rollback() }()
-	p, err := loadChangeProposal(ctx, tx, pid, id)
-	if err != nil {
-		return nil, err
-	}
-	if err = requireChangeDraft(p, in.ExpectedVersion, in.ProposalRevisionID); err != nil {
-		return nil, err
-	}
-	var baseRevisionID string
-	var draftBytes int64
-	if err = tx.QueryRowContext(ctx, `SELECT base_revision_id,length(CAST(document AS BLOB)) FROM backend_change_proposal_revisions_documents WHERE project_id=? AND proposal_id=? AND id=?`, pid, id, in.ProposalRevisionID).Scan(&baseRevisionID, &draftBytes); err != nil {
-		return nil, err
-	}
-	if err = checkChangeCommandHistory(ctx, tx, id, in.Commands); err != nil {
-		return nil, err
-	}
-	inputBytes, err := changeSourceInputBytes(ctx, tx, pid, baseRevisionID)
-	if err != nil {
-		return nil, err
-	}
-	ledgerBytes, err := changeIdentityInputBytes(ctx, tx, pid, id)
-	if err != nil {
-		return nil, err
-	}
-	historicalBytes, err := changeHistoricalIdentityBytes(ctx, tx, pid, id, in.ProposalRevisionID)
-	if err != nil {
-		return nil, err
-	}
-	inputBytes += draftBytes + ledgerBytes + historicalBytes
 	// The reservation is admitted under the single writer. Waiting there with
 	// this reader open closed a reader/writer cycle with any writer holder that
 	// needs a reader once the pool was full of such waiters (review 2026-10-06,
-	// F3), so the reader is released first and the loads below run on a fresh
-	// snapshot that re-checks the same proposal version: every mutation of the
-	// proposal bumps it, so the sizes measured above still describe what is read.
-	_ = tx.Rollback()
+	// F3), so the reader is released first (measureChangeInput returns before
+	// this) and the loads below run on a fresh snapshot that re-checks the same
+	// proposal version: every mutation of the proposal bumps it, so the sizes
+	// measured above still describe what is read.
 	reservation, err := r.reserveChangeInput(ctx, pid, inputBytes)
 	if err != nil {
 		return nil, err
@@ -115,10 +86,80 @@ func (r *Repo) prepareChangeProposal(ctx context.Context, pid, id string, in Pre
 			reservation.Release()
 		}
 	}()
-	if tx, err = r.db.R.BeginTx(ctx, &sql.TxOptions{ReadOnly: true}); err != nil {
+	prepared, err := r.loadChangePreparation(ctx, pid, id, in, inputBytes, reservation)
+	if err != nil {
 		return nil, err
 	}
-	if p, err = loadChangeProposal(ctx, tx, pid, id); err != nil {
+	// loadChangePreparation released its reader before evaluation. Evaluation
+	// reads owner artifacts through fresh reader connections and admits each
+	// into the read budget under the single writer; holding this snapshot
+	// across both let pool-width concurrent previews each wait for a second
+	// reader, and closed a reader/writer cycle with any writer holder that
+	// needs a reader (review 2026-10-06, F3). What evaluation still reads
+	// (source ancestry, historical revisions, analyzed files of the exact owned
+	// snapshot) is immutable, so it reads the pool directly; the proposal
+	// version is re-checked under the writer at apply.
+	if err = r.evaluateChangeDraft(ctx, r.db.R, pid, prepared); err != nil {
+		return nil, err
+	}
+	if analysisLease(ctx) == nil {
+		if err = r.admitPreparedChange(ctx, pid, prepared); err != nil {
+			return nil, err
+		}
+	}
+	retained = true
+	return prepared, nil
+}
+
+// measureChangeInput sizes everything a preview will read (source, draft,
+// identity ledger, historical identities) on its own read snapshot, after
+// checking the draft is still the expected one and no command is replayed.
+func (r *Repo) measureChangeInput(ctx context.Context, pid, id string, in PreviewChangeProposalInput) (int64, error) {
+	tx, err := r.db.R.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
+	if err != nil {
+		return 0, err
+	}
+	defer func() { _ = tx.Rollback() }()
+	p, err := loadChangeProposal(ctx, tx, pid, id)
+	if err != nil {
+		return 0, err
+	}
+	if err = requireChangeDraft(p, in.ExpectedVersion, in.ProposalRevisionID); err != nil {
+		return 0, err
+	}
+	var baseRevisionID string
+	var draftBytes int64
+	if err = tx.QueryRowContext(ctx, `SELECT base_revision_id,length(CAST(document AS BLOB)) FROM backend_change_proposal_revisions_documents WHERE project_id=? AND proposal_id=? AND id=?`, pid, id, in.ProposalRevisionID).Scan(&baseRevisionID, &draftBytes); err != nil {
+		return 0, err
+	}
+	if err = checkChangeCommandHistory(ctx, tx, id, in.Commands); err != nil {
+		return 0, err
+	}
+	inputBytes, err := changeSourceInputBytes(ctx, tx, pid, baseRevisionID)
+	if err != nil {
+		return 0, err
+	}
+	ledgerBytes, err := changeIdentityInputBytes(ctx, tx, pid, id)
+	if err != nil {
+		return 0, err
+	}
+	historicalBytes, err := changeHistoricalIdentityBytes(ctx, tx, pid, id, in.ProposalRevisionID)
+	if err != nil {
+		return 0, err
+	}
+	return inputBytes + draftBytes + ledgerBytes + historicalBytes, nil
+}
+
+// loadChangePreparation re-checks the draft on a fresh read snapshot and
+// loads what evaluation starts from; the snapshot is released on return.
+func (r *Repo) loadChangePreparation(ctx context.Context, pid, id string, in PreviewChangeProposalInput, inputBytes int64, reservation *store.TransientReservation) (*preparedChangeProposal, error) {
+	tx, err := r.db.R.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = tx.Rollback() }()
+	p, err := loadChangeProposal(ctx, tx, pid, id)
+	if err != nil {
 		return nil, err
 	}
 	if err = requireChangeDraft(p, in.ExpectedVersion, in.ProposalRevisionID); err != nil {
@@ -132,7 +173,6 @@ func (r *Repo) prepareChangeProposal(ctx context.Context, pid, id string, in Pre
 	if err != nil {
 		return nil, err
 	}
-
 	used, err := loadChangeReservedIdentities(ctx, tx, pid, id)
 	if err != nil {
 		return nil, err
@@ -142,27 +182,7 @@ func (r *Repo) prepareChangeProposal(ctx context.Context, pid, id string, in Pre
 		return nil, err
 	}
 	evaluation.readBudget = &changeReadBudget{repo: r, pid: pid, reservation: reservation, bytes: inputBytes, seen: map[string]bool{"source:" + draft.BaseRevisionID: true}, lease: analysisLease(ctx)}
-	prepared := &preparedChangeProposal{proposal: *p, draft: *draft, evaluation: evaluation, reservation: reservation, input: in}
-	// Release the reader before evaluation. Evaluation reads owner artifacts
-	// through fresh reader connections and admits each into the read budget
-	// under the single writer; holding this snapshot across both let
-	// pool-width concurrent previews each wait for a second reader, and closed
-	// a reader/writer cycle with any writer holder that needs a reader (review
-	// 2026-10-06, F3). What evaluation still reads (source ancestry, historical
-	// revisions, analyzed files of the exact owned snapshot) is immutable, so
-	// it reads the pool directly; the proposal version is re-checked under the
-	// writer at apply.
-	_ = tx.Rollback()
-	if err = r.evaluateChangeDraft(ctx, r.db.R, pid, prepared); err != nil {
-		return nil, err
-	}
-	if analysisLease(ctx) == nil {
-		if err = r.admitPreparedChange(ctx, pid, prepared); err != nil {
-			return nil, err
-		}
-	}
-	retained = true
-	return prepared, nil
+	return &preparedChangeProposal{proposal: *p, draft: *draft, evaluation: evaluation, reservation: reservation, input: in}, nil
 }
 
 // admitPreparedChange resizes the transient reservation to the measured

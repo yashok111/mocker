@@ -12,7 +12,7 @@ import (
 )
 
 func firstImportFixture(p *Project) BeginImportInput {
-	items := []InventoryItem{}
+	items := make([]InventoryItem, 0, 9)
 	for _, category := range []string{"files", "endpoints", "datastores", "migrations", "producers", "consumers", "jobs", "contracts", "tests"} {
 		items = append(items, InventoryItem{Category: category, Status: "complete", Denominator: new(int64(0)), DiscoverySource: "fixture", Gaps: []string{}})
 	}

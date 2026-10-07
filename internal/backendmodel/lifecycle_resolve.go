@@ -34,8 +34,6 @@ func resolveLifecycleGaps(ctx context.Context, resolver *diagramArtifactResolver
 	if p == nil {
 		return nil, nil
 	}
-	g := resolver.graph
-	gaps := []DiagramGap{}
 	var old *LifecyclePayload
 	if previous != nil {
 		old = previous.Document.Lifecycle
@@ -51,116 +49,61 @@ func resolveLifecycleGaps(ctx context.Context, resolver *diagramArtifactResolver
 	if err != nil {
 		return nil, err
 	}
-	gaps = append(gaps, extra...)
-	byID := map[string]Node{}
-	for _, n := range g.State.Nodes {
-		byID[n.ID] = n
+	c := newLifecycleRefChecker(ctx, resolver, p, old, meta)
+	c.gaps = append(c.gaps, extra...)
+	if err = c.checkPayload(); err != nil {
+		return nil, err
 	}
-	edgeKinds := map[string]string{}
-	for _, e := range g.State.Edges {
-		edgeKinds[e.ID] = e.Kind
+	proofGaps, err := lifecycleProofGaps(resolver.graph, meta, d, old, previous)
+	if err != nil {
+		return nil, err
 	}
-	historical := lifecycleRoleRefs(old)
+	return append(c.gaps, proofGaps...), nil
+}
+
+// lifecycleRefChecker validates every lifecycle reference against its
+// semantic role and collects the gaps the payload leaves open.
+type lifecycleRefChecker struct {
+	ctx        context.Context
+	resolver   *diagramArtifactResolver
+	g          *EffectiveGraphSnapshot
+	p          *LifecyclePayload
+	meta       string
+	historical map[string][]DiagramRef
+	byID       map[string]Node
+	edgeKinds  map[string]string
+	gaps       []DiagramGap
+}
+
+func newLifecycleRefChecker(ctx context.Context, resolver *diagramArtifactResolver, p, old *LifecyclePayload, meta string) *lifecycleRefChecker {
+	c := &lifecycleRefChecker{ctx: ctx, resolver: resolver, g: resolver.graph, p: p, meta: meta, byID: map[string]Node{}, edgeKinds: map[string]string{}, gaps: []DiagramGap{}}
+	for _, n := range c.g.State.Nodes {
+		c.byID[n.ID] = n
+	}
+	for _, e := range c.g.State.Edges {
+		c.edgeKinds[e.ID] = e.Kind
+	}
+	c.historical = lifecycleRoleRefs(old)
 	currentEntity, _ := requestDigest(p.Entity)
 	if old != nil {
 		oldEntity, _ := requestDigest(old.Entity)
 		if currentEntity != oldEntity {
-			delete(historical, "field:")
+			delete(c.historical, "field:")
 		}
 	}
-	check := func(ref DiagramRef, role, subject string) error {
-		retained := func() error {
-			hash, _ := requestDigest(ref)
-			for _, oldRef := range historical[role+":"+subject] {
-				oldHash, _ := requestDigest(oldRef)
-				if hash == oldHash {
-					return nil
-				}
-			}
-			return invalid("refs", "Historical lifecycle reference cannot change semantic role or entity association")
-		}
+	return c
+}
 
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		// A retained namespaced ref that left the target follows the same
-		// historical rule as any other missing ref (review 2026-10-06, F108).
-		if ref.Kind == "namespaced_artifact" && ref.NamespacedLocator != nil {
-			if _, err := namespacedDiagramGroup(g, ref); err != nil {
-				if retained() == nil {
-					return nil
-				}
-				return err
-			}
-		}
-		if ref.Kind == "namespaced_artifact" && ref.NamespacedLocator != nil && ref.NamespacedLocator.Namespace.Scope == "foreign" {
-			// Entity and field refs have no row: their gap belongs to the
-			// lifecycle scope, not to an empty subject (review 2026-10-06,
-			// F104). subject itself stays "" for the historical-role key.
-			gapSubject := subject
-			if gapSubject == "" {
-				gapSubject = meta
-			}
-			gaps = append(gaps, diagramGap(gapSubject, "foreign_artifact_unresolved", "Foreign artifact role remains unverified"))
-			return nil
-		}
-		if ref.Kind == "artifact" || ref.Kind == "namespaced_artifact" {
-			locator := ref.Locator
-			if ref.NamespacedLocator != nil {
-				locator = &ref.NamespacedLocator.Locator
-			}
-			exists, err := resolver.resolve(ref)
-			if err != nil {
-				return err
-			}
-			if !exists {
-				return retained()
-			}
-
-			// Owner projections currently expose operations/events, not entity fields.
-			if role == "entity" || role == "field" {
-				return lifecycleSemanticRefError(role)
-			}
-			if role == "trigger" && locator.View == "api_operations" && locator.Owner.OperationKey != "" {
-				return nil
-			}
-			if role == "trigger" && locator.View == "event_model" && locator.Owner.OperationID != "" {
-				return nil
-			}
-			if role == "event" && locator.View == "event_model" && locator.Owner.MessageID != "" {
-				return nil
-			}
-			return lifecycleSemanticRefError(role)
-		}
-		if ref.RecordType == "edge" {
-			kind, ok := edgeKinds[ref.ID]
-			if !ok {
-				return retained()
-			}
-			if role == "write" && slices.Contains([]string{"writes", "deletes"}, kind) || role == "event" && kind == "emits" {
-				return nil
-			}
-			return lifecycleSemanticRefError(role)
-		}
-		n, ok := byID[ref.ID]
-		if !ok {
-			return retained()
-		} // Only server-authorized inherited absence reaches here.
-		allowed := map[string][]string{"entity": {"domain_entity", "dto", "api_schema", "table", "view"}, "field": {"representation_field", "column", "api_field", "event_field"}, "trigger": {"http_operation", "handler", "symbol", "consumer", "job"}, "write": {"query", "flow_step", "column", "table"}, "event": {"message", "channel"}}
-		if !slices.Contains(allowed[role], n.Kind) {
-			return lifecycleSemanticRefError(role)
-		}
-		if role == "field" && p.Entity.Kind == "record" && (n.ParentID == nil || *n.ParentID != p.Entity.ID) {
-			return invalid("stateFields", "Field does not belong to selected entity")
-		}
-		return nil
-	}
-	if err = check(p.Entity, "entity", ""); err != nil {
-		return nil, err
+// checkPayload checks entity, fields, transitions and rules in that fixed
+// order, since the first failing reference decides the error.
+func (c *lifecycleRefChecker) checkPayload() error {
+	p := c.p
+	if err := c.check(p.Entity, "entity", ""); err != nil {
+		return err
 	}
 	for _, ref := range p.StateFields {
-		if err = check(ref, "field", ""); err != nil {
-			return nil, err
+		if err := c.check(ref, "field", ""); err != nil {
+			return err
 		}
 	}
 	states := map[string]LifecycleState{}
@@ -168,37 +111,148 @@ func resolveLifecycleGaps(ctx context.Context, resolver *diagramArtifactResolver
 		states[s.ID] = s
 	}
 	for _, tr := range p.Transitions {
-		// A fixed role order: ranging over a map literal made a transition
-		// with two invalid roles fail with the trigger message on one call
-		// and the write message on the next (review 2026-10-06, F105).
-		for _, role := range []struct {
-			name string
-			refs []DiagramRef
-		}{{"trigger", tr.Triggers}, {"write", tr.Writes}, {"event", tr.Events}} {
-			for _, ref := range role.refs {
-				if err = check(ref, role.name, tr.ID); err != nil {
-					return nil, err
-				}
-			}
-		}
-		if states[tr.From].Terminal {
-			gaps = append(gaps, diagramGap(tr.ID, "terminal_outgoing", "Declared terminal state has an explicit outgoing transition"))
-		}
-		if tr.Guard.Kind == "opaque" {
-			gaps = append(gaps, diagramGap(tr.ID, "opaque_guard", "Guard is opaque; runtime outcome is unverified"))
-		}
-		if len(tr.Triggers) == 0 {
-			gaps = append(gaps, diagramGap(tr.ID, "unresolved_trigger", "No exact operation binding is established"))
+		if err := c.checkTransition(tr, states); err != nil {
+			return err
 		}
 	}
 	for _, r := range p.Rules {
-		if err = check(r.Trigger, "trigger", r.ID); err != nil {
-			return nil, err
+		if err := c.check(r.Trigger, "trigger", r.ID); err != nil {
+			return err
 		}
 	}
 	if p.Coverage == "partial" {
-		gaps = append(gaps, diagramGap(meta, "partial_lifecycle", "Partial coverage cannot prove missing transitions forbidden or unreachable"))
+		c.gaps = append(c.gaps, diagramGap(c.meta, "partial_lifecycle", "Partial coverage cannot prove missing transitions forbidden or unreachable"))
 	}
+	return nil
+}
+
+func (c *lifecycleRefChecker) checkTransition(tr LifecycleTransition, states map[string]LifecycleState) error {
+	// A fixed role order: ranging over a map literal made a transition
+	// with two invalid roles fail with the trigger message on one call
+	// and the write message on the next (review 2026-10-06, F105).
+	for _, role := range []struct {
+		name string
+		refs []DiagramRef
+	}{{"trigger", tr.Triggers}, {"write", tr.Writes}, {"event", tr.Events}} {
+		for _, ref := range role.refs {
+			if err := c.check(ref, role.name, tr.ID); err != nil {
+				return err
+			}
+		}
+	}
+	if states[tr.From].Terminal {
+		c.gaps = append(c.gaps, diagramGap(tr.ID, "terminal_outgoing", "Declared terminal state has an explicit outgoing transition"))
+	}
+	if tr.Guard.Kind == "opaque" {
+		c.gaps = append(c.gaps, diagramGap(tr.ID, "opaque_guard", "Guard is opaque; runtime outcome is unverified"))
+	}
+	if len(tr.Triggers) == 0 {
+		c.gaps = append(c.gaps, diagramGap(tr.ID, "unresolved_trigger", "No exact operation binding is established"))
+	}
+	return nil
+}
+
+// retained admits a reference that left the target only when the immutable
+// predecessor held it in the same role for the same subject.
+func (c *lifecycleRefChecker) retained(ref DiagramRef, role, subject string) error {
+	hash, _ := requestDigest(ref)
+	for _, oldRef := range c.historical[role+":"+subject] {
+		oldHash, _ := requestDigest(oldRef)
+		if hash == oldHash {
+			return nil
+		}
+	}
+	return invalid("refs", "Historical lifecycle reference cannot change semantic role or entity association")
+}
+
+func (c *lifecycleRefChecker) check(ref DiagramRef, role, subject string) error {
+	if err := c.ctx.Err(); err != nil {
+		return err
+	}
+	namespaced := ref.Kind == "namespaced_artifact" && ref.NamespacedLocator != nil
+	// A retained namespaced ref that left the target follows the same
+	// historical rule as any other missing ref (review 2026-10-06, F108).
+	if namespaced {
+		if _, err := namespacedDiagramGroup(c.g, ref); err != nil {
+			if c.retained(ref, role, subject) == nil {
+				return nil
+			}
+			return err
+		}
+	}
+	if namespaced && ref.NamespacedLocator.Namespace.Scope == "foreign" {
+		// Entity and field refs have no row: their gap belongs to the
+		// lifecycle scope, not to an empty subject (review 2026-10-06,
+		// F104). subject itself stays "" for the historical-role key.
+		gapSubject := subject
+		if gapSubject == "" {
+			gapSubject = c.meta
+		}
+		c.gaps = append(c.gaps, diagramGap(gapSubject, "foreign_artifact_unresolved", "Foreign artifact role remains unverified"))
+		return nil
+	}
+	if ref.Kind == "artifact" || ref.Kind == "namespaced_artifact" {
+		return c.checkArtifact(ref, role, subject)
+	}
+	if ref.RecordType == "edge" {
+		kind, ok := c.edgeKinds[ref.ID]
+		if !ok {
+			return c.retained(ref, role, subject)
+		}
+		if role == "write" && slices.Contains([]string{"writes", "deletes"}, kind) || role == "event" && kind == "emits" {
+			return nil
+		}
+		return lifecycleSemanticRefError(role)
+	}
+	return c.checkNode(ref, role, subject)
+}
+
+func (c *lifecycleRefChecker) checkArtifact(ref DiagramRef, role, subject string) error {
+	locator := ref.Locator
+	if ref.NamespacedLocator != nil {
+		locator = &ref.NamespacedLocator.Locator
+	}
+	exists, err := c.resolver.resolve(ref)
+	if err != nil {
+		return err
+	}
+	if !exists {
+		return c.retained(ref, role, subject)
+	}
+	// Owner projections currently expose operations/events, not entity fields.
+	if role == "entity" || role == "field" {
+		return lifecycleSemanticRefError(role)
+	}
+	if role == "trigger" && locator.View == "api_operations" && locator.Owner.OperationKey != "" {
+		return nil
+	}
+	if role == "trigger" && locator.View == "event_model" && locator.Owner.OperationID != "" {
+		return nil
+	}
+	if role == "event" && locator.View == "event_model" && locator.Owner.MessageID != "" {
+		return nil
+	}
+	return lifecycleSemanticRefError(role)
+}
+
+func (c *lifecycleRefChecker) checkNode(ref DiagramRef, role, subject string) error {
+	n, ok := c.byID[ref.ID]
+	if !ok {
+		return c.retained(ref, role, subject)
+	} // Only server-authorized inherited absence reaches here.
+	allowed := map[string][]string{"entity": {"domain_entity", "dto", "api_schema", "table", "view"}, "field": {"representation_field", "column", "api_field", "event_field"}, "trigger": {"http_operation", "handler", "symbol", "consumer", "job"}, "write": {"query", "flow_step", "column", "table"}, "event": {"message", "channel"}}
+	if !slices.Contains(allowed[role], n.Kind) {
+		return lifecycleSemanticRefError(role)
+	}
+	if role == "field" && c.p.Entity.Kind == "record" && (n.ParentID == nil || *n.ParentID != c.p.Entity.ID) {
+		return invalid("stateFields", "Field does not belong to selected entity")
+	}
+	return nil
+}
+
+// lifecycleProofGaps checks the coverage proof against the evidence the
+// pinned graph and its baselines still hold.
+func lifecycleProofGaps(g *EffectiveGraphSnapshot, meta string, d DiagramDocument, old *LifecyclePayload, previous *DiagramVersion) ([]DiagramGap, error) {
 	evidence := map[DiagramEvidenceRef]bool{}
 	for _, e := range g.State.Evidence {
 		evidence[DiagramEvidenceRef{g.Pins.BaseRevisionID, e.ID, e.SubjectID}] = true
@@ -214,12 +268,7 @@ func resolveLifecycleGaps(ctx context.Context, resolver *diagramArtifactResolver
 		b, _ := requestDigest(d.Target)
 		moved = a != b
 	}
-	proofGaps, err := diagramEvidenceGaps(meta, p.CoverageOrigin.Evidence, oldProof, evidence, previous, moved)
-	if err != nil {
-		return nil, err
-	}
-	gaps = append(gaps, proofGaps...)
-	return gaps, nil
+	return diagramEvidenceGaps(meta, d.Lifecycle.CoverageOrigin.Evidence, oldProof, evidence, previous, moved)
 }
 func lifecycleSemanticRefError(role string) error {
 	return &FaultError{Status: 422, Code: "backend_unsupported_scope", Message: "Unsupported lifecycle " + role + " reference kind"}

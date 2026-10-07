@@ -233,87 +233,117 @@ func (r *Repo) SaveSavedView(ctx context.Context, pid, vid string, in SaveSavedV
 	if err != nil {
 		return nil, err
 	}
-	if selectedSavedViewVersion(in.DocumentVersion) != current.DocumentVersion {
-		return nil, invalid("documentVersion", "Save tag must match immutable saved view version")
-	}
-	if current.State.kind() != in.State.kind() {
-		return nil, invalid("state.kind", "Saved view kind is immutable")
-	}
-	if current.Target.Proposal != nil && current.State.Database.Scope != in.State.Database.Scope {
-		return nil, invalid("state.scope", "Proposal scope is immutable")
+	if err := checkSavedViewImmutables(current, in); err != nil {
+		return nil, err
 	}
 	pins, err := resolveSavedVersionReferences(ctx, r.db.R, pid, current.DocumentVersion, current.Target, in.State)
 	if err != nil {
 		return nil, err
 	}
+	save := savedViewSave{pid: pid, vid: vid, scope: scope, digest: digest, in: in, pins: *pins, out: out}
 	err = r.db.Write(ctx, func(tx *sql.Tx) error {
 		if found, err := readSavedReceipt(ctx, tx, scope, in.IdempotencyKey, digest, out); err != nil || found {
 			return err
 		}
-		current, err := loadSavedView(ctx, tx, pid, vid, 0)
-		if err != nil {
-			return err
-		}
-		if current.Version != in.ExpectedVersion {
-			return &FaultError{Status: 409, Code: "backend_version_conflict", Message: "Saved view changed; reload or save as new", CurrentVersion: current.Version}
-		}
-		if current.Version == math.MaxInt64 {
-			return &FaultError{Status: 409, Code: "backend_version_exhausted", Message: "Saved view version cannot be incremented", CurrentVersion: current.Version}
-		}
-		// An identical save answers the current version, as diagram and
-		// diagram-view saves do. It used to append a byte-identical version,
-		// consume MaxSavedViewVersions and invalidate every other client's
-		// expectedVersion (review 2026-10-06, F185). The receipt still lands,
-		// inside the byte quota that already counts saved-view receipts.
-		same, err := sameSavedViewContent(current, name, in.State, *pins)
-		if err != nil {
-			return err
-		}
-		if same {
-			usage, err := savedViewRetainedBytes(ctx, tx, pid)
-			if err != nil {
-				return err
-			}
-			if usage+int64(len(current.receiptJSON)) > MaxSavedViewBytes {
-				return savedViewQuota()
-			}
-			if _, err = tx.ExecContext(ctx, `INSERT INTO backend_command_receipts(scope,key,request_hash,response) VALUES(?,?,?,?)`, scope, in.IdempotencyKey, digest, current.receiptJSON); err != nil {
-				return err
-			}
-			*out = *current
-			return nil
-		}
-		*out = *current
-		out.receiptJSON = ""
-		out.Version++
-		out.Name = name
-		out.State = in.State
-		out.Pins = *pins
-		out.UpdatedAt = time.Now().UTC()
-		raw, err := json.Marshal(out)
-		if err != nil {
-			return err
-		}
-		if err := checkSavedViewQuota(ctx, tx, pid, vid, int64(2*len(raw))); err != nil {
-			return err
-		}
-		result, err := tx.ExecContext(ctx, `UPDATE backend_saved_views SET version=?,name=?,updated_at=? WHERE project_id=? AND id=? AND version=?`, out.Version, name, out.UpdatedAt.Format(time.RFC3339Nano), pid, vid, in.ExpectedVersion)
-		if err != nil {
-			return err
-		}
-		n, err := result.RowsAffected()
-		if err != nil {
-			return err
-		}
-		if n != 1 {
-			return &FaultError{Status: 409, Code: "backend_version_conflict", Message: "Saved view changed", CurrentVersion: current.Version}
-		}
-		return writeSavedDocument(ctx, tx, out, scope, in.IdempotencyKey, digest)
+		return save.write(ctx, tx)
 	})
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
+}
+
+// checkSavedViewImmutables rejects a save that would change what a saved
+// view is: its document version, its kind, or a proposal view's scope.
+func checkSavedViewImmutables(current *SavedView, in SaveSavedViewInput) error {
+	if selectedSavedViewVersion(in.DocumentVersion) != current.DocumentVersion {
+		return invalid("documentVersion", "Save tag must match immutable saved view version")
+	}
+	if current.State.kind() != in.State.kind() {
+		return invalid("state.kind", "Saved view kind is immutable")
+	}
+	if current.Target.Proposal != nil && current.State.Database.Scope != in.State.Database.Scope {
+		return invalid("state.scope", "Proposal scope is immutable")
+	}
+	return nil
+}
+
+// savedViewSave is one SaveSavedView request, carried into its write
+// transaction once the read-side checks have passed.
+type savedViewSave struct {
+	pid, vid, scope, digest string
+	in                      SaveSavedViewInput
+	pins                    SavedViewPins
+	out                     *SavedView
+}
+
+func (v savedViewSave) write(ctx context.Context, tx *sql.Tx) error {
+	in, out := v.in, v.out
+	current, err := loadSavedView(ctx, tx, v.pid, v.vid, 0)
+	if err != nil {
+		return err
+	}
+	if current.Version != in.ExpectedVersion {
+		return &FaultError{Status: 409, Code: "backend_version_conflict", Message: "Saved view changed; reload or save as new", CurrentVersion: current.Version}
+	}
+	if current.Version == math.MaxInt64 {
+		return &FaultError{Status: 409, Code: "backend_version_exhausted", Message: "Saved view version cannot be incremented", CurrentVersion: current.Version}
+	}
+	// An identical save answers the current version, as diagram and
+	// diagram-view saves do. It used to append a byte-identical version,
+	// consume MaxSavedViewVersions and invalidate every other client's
+	// expectedVersion (review 2026-10-06, F185). The receipt still lands,
+	// inside the byte quota that already counts saved-view receipts.
+	same, err := sameSavedViewContent(current, in.Name, in.State, v.pins)
+	if err != nil {
+		return err
+	}
+	if same {
+		return v.answerUnchanged(ctx, tx, current)
+	}
+	*out = *current
+	out.receiptJSON = ""
+	out.Version++
+	out.Name = in.Name
+	out.State = in.State
+	out.Pins = v.pins
+	out.UpdatedAt = time.Now().UTC()
+	raw, err := json.Marshal(out)
+	if err != nil {
+		return err
+	}
+	if err := checkSavedViewQuota(ctx, tx, v.pid, v.vid, int64(2*len(raw))); err != nil {
+		return err
+	}
+	result, err := tx.ExecContext(ctx, `UPDATE backend_saved_views SET version=?,name=?,updated_at=? WHERE project_id=? AND id=? AND version=?`, out.Version, in.Name, out.UpdatedAt.Format(time.RFC3339Nano), v.pid, v.vid, in.ExpectedVersion)
+	if err != nil {
+		return err
+	}
+	n, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n != 1 {
+		return &FaultError{Status: 409, Code: "backend_version_conflict", Message: "Saved view changed", CurrentVersion: current.Version}
+	}
+	return writeSavedDocument(ctx, tx, out, v.scope, in.IdempotencyKey, v.digest)
+}
+
+// answerUnchanged records the receipt for an identical save and answers
+// the current version without appending one.
+func (v savedViewSave) answerUnchanged(ctx context.Context, tx *sql.Tx, current *SavedView) error {
+	usage, err := savedViewRetainedBytes(ctx, tx, v.pid)
+	if err != nil {
+		return err
+	}
+	if usage+int64(len(current.receiptJSON)) > MaxSavedViewBytes {
+		return savedViewQuota()
+	}
+	if _, err = tx.ExecContext(ctx, `INSERT INTO backend_command_receipts(scope,key,request_hash,response) VALUES(?,?,?,?)`, v.scope, v.in.IdempotencyKey, v.digest, current.receiptJSON); err != nil {
+		return err
+	}
+	*v.out = *current
+	return nil
 }
 func (r *Repo) ListSavedViews(ctx context.Context, pid string, in SavedViewListInput) (*SavedViewPage, error) {
 	if _, err := r.Get(ctx, pid); err != nil {
@@ -344,7 +374,7 @@ func (r *Repo) ListSavedViews(ctx context.Context, pid string, in SavedViewListI
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	out := &SavedViewPage{Items: []SavedViewSummary{}}
 	for rows.Next() {
 		var v SavedViewSummary

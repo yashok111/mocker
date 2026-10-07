@@ -305,164 +305,209 @@ func (r *Repo) PutImportBatch(ctx context.Context, pid, sid, bid string, in Impo
 	}
 	result := new(BatchReceipt)
 	err = r.db.Write(ctx, func(tx *sql.Tx) error {
-		s, err := loadSession(ctx, tx, pid, sid)
-		if err != nil {
-			return err
-		}
-		var prior, response string
-		if s.Mode == "composed" {
-			for _, command := range in.Commands {
-				if err := validateComposedWireMembers(command); err != nil {
-					return err
-				}
-			}
-		}
-		err = tx.QueryRowContext(ctx, `SELECT request_hash,receipt FROM backend_import_batches WHERE session_id=? AND batch_id=?`, sid, bid).Scan(&prior, &response)
-		if err == nil {
-			if prior != requestHash {
-				return importConflict("backend_import_batch_conflict", "Batch ID was already used with a different request", s.Version)
-			}
-			return json.Unmarshal([]byte(response), result)
-		}
-		if !errors.Is(err, sql.ErrNoRows) {
-			return err
-		}
-		if len(in.Commands) == 0 {
-			return semantic("commands", "Batch needs at least one command")
-		}
-		if len(in.Commands) > MaxImportCommands {
-			return limitFault("Import command limit exceeded")
-		}
-		payload, err := canonicalJSON(in.Commands)
-		if err != nil {
-			return semantic("commands", err.Error())
-		}
-		requestBytes, err := canonicalJSON(in)
-		if err != nil {
-			return semantic("commands", err.Error())
-		}
-		if len(requestBytes) > MaxImportBatchBytes {
-			return limitFault("Import batch byte limit exceeded")
-		}
-		if !validHash(in.PayloadHash) || hashBytes(payload) != in.PayloadHash {
-			return semantic("payloadHash", "Payload hash does not match canonical commands")
-		}
-		if err := requireSessionVersion(s, in.ExpectedImportVersion); err != nil {
-			return err
-		}
-		if err := requireCollectible(s); err != nil {
-			return err
-		}
-		var base *RevisionState
-		if s.Mode == "reconcile" {
-			base, err = loadRevisionState(ctx, tx, pid, s.BaseRevisionID)
-			if err != nil {
-				return err
-			}
-		}
-		if s.Mode == "composed" {
-			if err := putComposedCommands(ctx, tx, s, in.Commands, result); err != nil {
-				return err
-			}
-		} else {
-			seen := map[string]bool{}
-			identities := newBatchIdentities(base)
-			result.Identities = []RecordIdentity{}
-			for _, c := range in.Commands {
-				typ, key, err := commandAddress(c)
-				if err != nil {
-					return err
-				}
-				address := typ + "\x00" + key
-				if seen[address] {
-					return semantic("commands", "Duplicate addressed command in one batch")
-				}
-				seen[address] = true
-				if err := validateCommand(c, s); err != nil {
-					return err
-				}
-				if err := ctx.Err(); err != nil {
-					return err
-				}
-				id, err := reserveIdentity(ctx, tx, s, c, typ, key, identities)
-				if err != nil {
-					return err
-				}
-				if id != "" { // "" = remove of an unknown key (F87)
-					result.Identities = append(result.Identities, RecordIdentity{RecordType: typ, ExternalKey: key, ID: id})
-				}
-				if c.Op == "remove" {
-					if _, err := tx.ExecContext(ctx, `DELETE FROM backend_import_decisions WHERE session_id=? AND record_type=? AND external_key=?`, sid, typ, key); err != nil {
-						return err
-					}
-					identities.unstage(typ, key)
-					_, err = tx.ExecContext(ctx, `DELETE FROM backend_import_records WHERE session_id=? AND record_type=? AND external_key=?`, sid, typ, key)
-				} else if c.Identity != nil || c.Deletion != nil {
-					b, err := json.Marshal(c)
-					if err != nil {
-						return err
-					}
-					_, err = tx.ExecContext(ctx, `INSERT INTO backend_import_decisions(session_id,record_type,external_key,document) VALUES(?,?,?,?) ON CONFLICT(session_id,record_type,external_key) DO UPDATE SET document=excluded.document`, sid, typ, key, string(b))
-					if err != nil {
-						return err
-					}
-					identities.stage(c, typ, key)
-				} else {
-					b, marshalErr := json.Marshal(c)
-					if marshalErr != nil {
-						return marshalErr
-					}
-					_, err = tx.ExecContext(ctx, `INSERT INTO backend_import_records(session_id,record_type,external_key,document) VALUES(?,?,?,?) ON CONFLICT(session_id,record_type,external_key) DO UPDATE SET document=excluded.document`, sid, typ, key, string(b))
-				}
-				if err != nil {
-					return err
-				}
-			}
-		}
-		s.Version++
-		s.AcceptedBatchCount++
-		s.State = "collecting"
-		s.CandidateHash = nil
-		if _, err := tx.ExecContext(ctx, `DELETE FROM backend_import_previews WHERE session_id=?`, sid); err != nil {
-			return err
-		}
-		s.UpdatedAt = time.Now().UTC()
-		if err := saveSession(ctx, tx, s); err != nil {
-			return err
-		}
-		result.BatchSummary = BatchSummary{BatchID: bid, PayloadHash: in.PayloadHash, AcceptedVersion: s.Version}
-		receipt, err := json.Marshal(result)
-		if err != nil {
-			return err
-		}
-		_, err = tx.ExecContext(ctx, `INSERT INTO backend_import_batches(session_id,batch_id,payload_hash,request_hash,accepted_version,receipt) VALUES(?,?,?,?,?,?)`, sid, bid, in.PayloadHash, requestHash, s.Version, string(receipt))
-		if err != nil {
-			return err
-		}
-		var nodes, edges, evidence int
-		err = tx.QueryRowContext(ctx, `SELECT COALESCE(SUM(record_type='node'),0),COALESCE(SUM(record_type='edge'),0),COALESCE(SUM(record_type='evidence'),0) FROM backend_import_records WHERE session_id=?`, sid).Scan(&nodes, &edges, &evidence)
-		if err != nil {
-			return err
-		}
-		if nodes > MaxRevisionNodes || edges > MaxRevisionEdges || evidence > MaxRevisionEvidence {
-			return limitFault("Revision record limit exceeded")
-		}
-		var total int64
-		err = tx.QueryRowContext(ctx, `SELECT COALESCE(SUM(length(CAST(document AS BLOB))),0) FROM backend_import_records WHERE session_id=?`, sid).Scan(&total)
-		if err != nil {
-			return err
-		}
-		manifestBytes, _ := canonicalJSON(s.Manifest)
-		inventoryBytes, _ := canonicalJSON(s.Inventory)
-		if total+int64(len(manifestBytes)+len(inventoryBytes)) > MaxRevisionBytes {
-			return limitFault("Revision semantic byte limit exceeded")
-		}
-		return r.checkStaging(ctx, tx, pid, 0)
+		return r.putImportBatchTx(ctx, tx, pid, sid, bid, in, requestHash, result)
 	})
 	if err != nil {
 		return nil, err
 	}
 	return result, nil
+}
+
+func (r *Repo) putImportBatchTx(ctx context.Context, tx *sql.Tx, pid, sid, bid string, in ImportBatchInput, requestHash string, result *BatchReceipt) error {
+	s, err := loadSession(ctx, tx, pid, sid)
+	if err != nil {
+		return err
+	}
+	var prior, response string
+	if s.Mode == "composed" {
+		for _, command := range in.Commands {
+			if err := validateComposedWireMembers(command); err != nil {
+				return err
+			}
+		}
+	}
+	err = tx.QueryRowContext(ctx, `SELECT request_hash,receipt FROM backend_import_batches WHERE session_id=? AND batch_id=?`, sid, bid).Scan(&prior, &response)
+	if err == nil {
+		if prior != requestHash {
+			return importConflict("backend_import_batch_conflict", "Batch ID was already used with a different request", s.Version)
+		}
+		return json.Unmarshal([]byte(response), result)
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return err
+	}
+	if err := validateImportBatchPayload(in); err != nil {
+		return err
+	}
+	if err := requireSessionVersion(s, in.ExpectedImportVersion); err != nil {
+		return err
+	}
+	if err := requireCollectible(s); err != nil {
+		return err
+	}
+	var base *RevisionState
+	if s.Mode == "reconcile" {
+		base, err = loadRevisionState(ctx, tx, pid, s.BaseRevisionID)
+		if err != nil {
+			return err
+		}
+	}
+	if s.Mode == "composed" {
+		if err := putComposedCommands(ctx, tx, s, in.Commands, result); err != nil {
+			return err
+		}
+	} else if err := stageImportCommands(ctx, tx, s, sid, in.Commands, base, result); err != nil {
+		return err
+	}
+	if err := recordImportBatch(ctx, tx, s, sid, bid, in.PayloadHash, requestHash, result); err != nil {
+		return err
+	}
+	if err := checkImportSessionLimits(ctx, tx, s, sid); err != nil {
+		return err
+	}
+	return r.checkStaging(ctx, tx, pid, 0)
+}
+
+// validateImportBatchPayload bounds a new batch and binds it to the payload
+// hash the client computed over the canonical commands.
+func validateImportBatchPayload(in ImportBatchInput) error {
+	if len(in.Commands) == 0 {
+		return semantic("commands", "Batch needs at least one command")
+	}
+	if len(in.Commands) > MaxImportCommands {
+		return limitFault("Import command limit exceeded")
+	}
+	payload, err := canonicalJSON(in.Commands)
+	if err != nil {
+		return semantic("commands", err.Error())
+	}
+	requestBytes, err := canonicalJSON(in)
+	if err != nil {
+		return semantic("commands", err.Error())
+	}
+	if len(requestBytes) > MaxImportBatchBytes {
+		return limitFault("Import batch byte limit exceeded")
+	}
+	if !validHash(in.PayloadHash) || hashBytes(payload) != in.PayloadHash {
+		return semantic("payloadHash", "Payload hash does not match canonical commands")
+	}
+	return nil
+}
+
+// stageImportCommands reserves an identity for every addressed command of a
+// non-composed batch and stages it as a record or a decision.
+func stageImportCommands(ctx context.Context, tx *sql.Tx, s *ImportSession, sid string, commands []ImportCommand, base *RevisionState, result *BatchReceipt) error {
+	seen := map[string]bool{}
+	identities := newBatchIdentities(base)
+	result.Identities = []RecordIdentity{}
+	for _, c := range commands {
+		typ, key, err := commandAddress(c)
+		if err != nil {
+			return err
+		}
+		address := typ + "\x00" + key
+		if seen[address] {
+			return semantic("commands", "Duplicate addressed command in one batch")
+		}
+		seen[address] = true
+		if err := validateCommand(c, s); err != nil {
+			return err
+		}
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		id, err := reserveIdentity(ctx, tx, s, c, typ, key, identities)
+		if err != nil {
+			return err
+		}
+		if id != "" { // "" = remove of an unknown key (F87)
+			result.Identities = append(result.Identities, RecordIdentity{RecordType: typ, ExternalKey: key, ID: id})
+		}
+		if err := writeImportCommand(ctx, tx, sid, c, typ, key, identities); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// writeImportCommand applies one command to the staging tables: a remove
+// drops both the record and any decision, an identity or deletion decision
+// is staged apart from records.
+func writeImportCommand(ctx context.Context, tx *sql.Tx, sid string, c ImportCommand, typ, key string, identities *batchIdentities) error {
+	switch {
+	case c.Op == "remove":
+		if _, err := tx.ExecContext(ctx, `DELETE FROM backend_import_decisions WHERE session_id=? AND record_type=? AND external_key=?`, sid, typ, key); err != nil {
+			return err
+		}
+		identities.unstage(typ, key)
+		_, err := tx.ExecContext(ctx, `DELETE FROM backend_import_records WHERE session_id=? AND record_type=? AND external_key=?`, sid, typ, key)
+		return err
+	case c.Identity != nil || c.Deletion != nil:
+		b, err := json.Marshal(c)
+		if err != nil {
+			return err
+		}
+		_, err = tx.ExecContext(ctx, `INSERT INTO backend_import_decisions(session_id,record_type,external_key,document) VALUES(?,?,?,?) ON CONFLICT(session_id,record_type,external_key) DO UPDATE SET document=excluded.document`, sid, typ, key, string(b))
+		if err != nil {
+			return err
+		}
+		identities.stage(c, typ, key)
+		return nil
+	default:
+		b, err := json.Marshal(c)
+		if err != nil {
+			return err
+		}
+		_, err = tx.ExecContext(ctx, `INSERT INTO backend_import_records(session_id,record_type,external_key,document) VALUES(?,?,?,?) ON CONFLICT(session_id,record_type,external_key) DO UPDATE SET document=excluded.document`, sid, typ, key, string(b))
+		return err
+	}
+}
+
+// recordImportBatch advances the session past the accepted batch, drops its
+// stale previews and stores the receipt a replay of the batch returns.
+func recordImportBatch(ctx context.Context, tx *sql.Tx, s *ImportSession, sid, bid, payloadHash, requestHash string, result *BatchReceipt) error {
+	s.Version++
+	s.AcceptedBatchCount++
+	s.State = "collecting"
+	s.CandidateHash = nil
+	if _, err := tx.ExecContext(ctx, `DELETE FROM backend_import_previews WHERE session_id=?`, sid); err != nil {
+		return err
+	}
+	s.UpdatedAt = time.Now().UTC()
+	if err := saveSession(ctx, tx, s); err != nil {
+		return err
+	}
+	result.BatchSummary = BatchSummary{BatchID: bid, PayloadHash: payloadHash, AcceptedVersion: s.Version}
+	receipt, err := json.Marshal(result)
+	if err != nil {
+		return err
+	}
+	_, err = tx.ExecContext(ctx, `INSERT INTO backend_import_batches(session_id,batch_id,payload_hash,request_hash,accepted_version,receipt) VALUES(?,?,?,?,?,?)`, sid, bid, payloadHash, requestHash, s.Version, string(receipt))
+	return err
+}
+
+// checkImportSessionLimits enforces the revision record and byte limits on
+// everything the session has staged so far.
+func checkImportSessionLimits(ctx context.Context, tx *sql.Tx, s *ImportSession, sid string) error {
+	var nodes, edges, evidence int
+	err := tx.QueryRowContext(ctx, `SELECT COALESCE(SUM(record_type='node'),0),COALESCE(SUM(record_type='edge'),0),COALESCE(SUM(record_type='evidence'),0) FROM backend_import_records WHERE session_id=?`, sid).Scan(&nodes, &edges, &evidence)
+	if err != nil {
+		return err
+	}
+	if nodes > MaxRevisionNodes || edges > MaxRevisionEdges || evidence > MaxRevisionEvidence {
+		return limitFault("Revision record limit exceeded")
+	}
+	var total int64
+	err = tx.QueryRowContext(ctx, `SELECT COALESCE(SUM(length(CAST(document AS BLOB))),0) FROM backend_import_records WHERE session_id=?`, sid).Scan(&total)
+	if err != nil {
+		return err
+	}
+	manifestBytes, _ := canonicalJSON(s.Manifest)
+	inventoryBytes, _ := canonicalJSON(s.Inventory)
+	if total+int64(len(manifestBytes)+len(inventoryBytes)) > MaxRevisionBytes {
+		return limitFault("Revision semantic byte limit exceeded")
+	}
+	return nil
 }
 func (r *Repo) AbortImport(ctx context.Context, pid, sid string, in AbortImportInput) (*ImportSession, error) {
 	result := new(ImportSession)

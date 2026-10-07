@@ -3,6 +3,7 @@ package backendmodel
 import (
 	"encoding/json/jsontext"
 	"maps"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -31,7 +32,7 @@ func runtimeStepAttrs(t *testing.T, kind string) map[string]jsontext.Value {
 }
 
 func TestRuntimeAttributesShapes(t *testing.T) {
-	valid := []struct {
+	valid := slices.Grow([]struct {
 		kind  string
 		edge  bool
 		attrs map[string]jsontext.Value
@@ -49,7 +50,7 @@ func TestRuntimeAttributesShapes(t *testing.T) {
 		{"begins", true, runtimeAttrs(t, map[string]any{})},
 		{"commits", true, runtimeAttrs(t, map[string]any{})},
 		{"rolls_back", true, runtimeAttrs(t, map[string]any{})},
-	}
+	}, 16)
 	for _, kind := range []string{"input", "authorization", "validation", "condition", "call", "query", "transform", "transaction_begin", "transaction_commit", "transaction_rollback", "return", "raise", "loop", "parallel", "join", "opaque"} {
 		valid = append(valid, struct {
 			kind  string

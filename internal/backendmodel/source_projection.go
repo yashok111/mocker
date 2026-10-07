@@ -117,8 +117,9 @@ func mergeSourceProof(p *lineageProof, other lineageProof) {
 }
 func sourceRecordProof(graph *SourceGraphSnapshot, typ, id string, ref *LineageValueRef) (lineageProof, error) {
 	p := lineageProof{status: "explicit", reasons: map[string]bool{}}
-	payloads := []SourceAssertionPayload{}
-	for _, a := range graph.recordClaims(typ, id) {
+	recorded := graph.recordClaims(typ, id)
+	payloads := make([]SourceAssertionPayload, 0, len(recorded))
+	for _, a := range recorded {
 		payloads = append(payloads, a.Payload)
 	}
 	if len(payloads) == 0 {
@@ -202,19 +203,7 @@ func sourceSnapshotForCandidate(candidate *graphCandidate) (*SourceGraphSnapshot
 func sourceReadContext(graph *SourceGraphSnapshot, typ, id, evidenceID string) *SourceReadContext {
 	out := &SourceReadContext{SourceVector: graph.SourceVector, SourceContentHash: graph.SourceContentHash, Identities: []QualifiedSourceIdentity{}, AssertionRefs: []BaseAssertionRef{}, Selections: []SourceAssertionResolution{}, Currentness: []SourceClaimCurrentness{}, LegacyProofBases: []LegacyProofBasis{}}
 	if typ != "" && id != "" && evidenceID == "" {
-		// One record's context, asked once per projected record: indexed
-		// lookups instead of five snapshot scans per record (review
-		// 2026-10-06, F53). Same rows, same order as the scan below.
-		claims := graph.recordClaims(typ, id)
-		for _, a := range claims {
-			out.AssertionRefs = append(out.AssertionRefs, sourceAssertionRef(a))
-			out.Currentness = append(out.Currentness, sourceReadCurrentness(graph, a))
-		}
-		if len(claims) != 0 {
-			out.Identities = append(out.Identities, graph.recordIdentities(typ, id)...)
-			out.Selections = append(out.Selections, graph.recordSelections(typ, id)...)
-		}
-		out.LegacyProofBases = append(out.LegacyProofBases, graph.recordLegacyBases(id)...)
+		fillRecordReadContext(out, graph, typ, id)
 		return out
 	}
 	selectedIDs := map[string]bool{}
@@ -242,6 +231,22 @@ func sourceReadContext(graph *SourceGraphSnapshot, typ, id, evidenceID string) *
 		}
 	}
 	return out
+}
+
+// fillRecordReadContext is one record's context, asked once per projected
+// record: indexed lookups instead of five snapshot scans per record (review
+// 2026-10-06, F53). Same rows, same order as the scan in sourceReadContext.
+func fillRecordReadContext(out *SourceReadContext, graph *SourceGraphSnapshot, typ, id string) {
+	claims := graph.recordClaims(typ, id)
+	for _, a := range claims {
+		out.AssertionRefs = append(out.AssertionRefs, sourceAssertionRef(a))
+		out.Currentness = append(out.Currentness, sourceReadCurrentness(graph, a))
+	}
+	if len(claims) != 0 {
+		out.Identities = append(out.Identities, graph.recordIdentities(typ, id)...)
+		out.Selections = append(out.Selections, graph.recordSelections(typ, id)...)
+	}
+	out.LegacyProofBases = append(out.LegacyProofBases, graph.recordLegacyBases(id)...)
 }
 
 func sourceFreshnessProof(p *lineageProof, fresh AssertionFreshness) {

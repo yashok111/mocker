@@ -51,7 +51,7 @@ func (r *Repo) List(ctx context.Context, in ListInput) (*ProjectPage, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	page := &ProjectPage{Items: []Project{}}
 	for rows.Next() {
 		p, err := scanProject(rows)
@@ -79,7 +79,7 @@ func (r *Repo) Revisions(ctx context.Context, projectID string, in ListInput) (*
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	page := &RevisionPage{Items: []Revision{}}
 	for rows.Next() {
 		var doc string

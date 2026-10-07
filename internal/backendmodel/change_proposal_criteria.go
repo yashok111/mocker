@@ -227,15 +227,7 @@ func validateChangeArtifactPin(pin ArtifactPin) error {
 func (r TestAttachmentRef) Validate() error {
 	switch r.Kind {
 	case "source":
-		if !ValidID(r.RevisionID) || !ValidID(r.RepositoryID) || !ValidID(r.SnapshotID) || !validHash(r.ContentHash) || r.Artifact != nil || r.NamespacedArtifact != nil {
-			return invalid("attachment", "Expected an exact source locator")
-		}
-		if !validPath(r.File) || r.StartLine < 1 || r.EndLine < r.StartLine {
-			return invalid("attachment", "Expected normalized relative file and positive ordered line bounds")
-		}
-		if r.Symbol != "" && !validAPIText(r.Symbol, 1, 4096) {
-			return invalid("symbol", "Symbol exceeds bounds")
-		}
+		return r.validateSource()
 	case "artifact_v3":
 		if r.NamespacedArtifact == nil || r.NamespacedArtifact.Pin.Kind != "design_scenario" || r.Artifact != nil || r.JSONPointer != "" {
 			return invalid("attachment", "Exact namespaced scenario root required")
@@ -248,6 +240,20 @@ func (r TestAttachmentRef) Validate() error {
 		return validateChangeArtifactPin(*r.Artifact)
 	default:
 		return invalid("attachment/kind", "Unknown attachment kind")
+	}
+}
+
+// validateSource checks a source attachment: an exact snapshot file and
+// ordered positive line bounds, never an artifact.
+func (r TestAttachmentRef) validateSource() error {
+	if !ValidID(r.RevisionID) || !ValidID(r.RepositoryID) || !ValidID(r.SnapshotID) || !validHash(r.ContentHash) || r.Artifact != nil || r.NamespacedArtifact != nil {
+		return invalid("attachment", "Expected an exact source locator")
+	}
+	if !validPath(r.File) || r.StartLine < 1 || r.EndLine < r.StartLine {
+		return invalid("attachment", "Expected normalized relative file and positive ordered line bounds")
+	}
+	if r.Symbol != "" && !validAPIText(r.Symbol, 1, 4096) {
+		return invalid("symbol", "Symbol exceeds bounds")
 	}
 	return nil
 }

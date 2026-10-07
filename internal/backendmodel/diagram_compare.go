@@ -111,68 +111,20 @@ func diagramComparisonRows(ctx context.Context, v *DiagramVersion, g *EffectiveG
 	if v.Document.Lifecycle != nil {
 		return lifecycleComparisonRows(v.Document.Lifecycle, metadataID)
 	}
-	rows := map[string]map[string]jsontext.Value{}
-	add := func(id string, value any) error {
-		raw, err := canonicalJSON(value)
-		if err != nil {
-			return err
-		}
-		fields := map[string]jsontext.Value{}
-		if err = json.Unmarshal(raw, &fields); err != nil {
-			return err
-		}
-		rows[id] = fields
-		return nil
-	}
 	if v.Document.BusinessMap != nil {
-		for id, value := range businessMapRows(v.Document.BusinessMap) {
-			if err := add(id, value); err != nil {
-				return nil, err
-			}
-		}
-		if !ValidID(metadataID) {
-			return nil, invalid("comparison", "Exact free metadata identity required")
-		}
-		dependency, err := canonicalJSON(v.Document.BusinessMap.Architecture)
-		if err != nil {
-			return nil, err
-		}
-		rows[metadataID] = map[string]jsontext.Value{"architecture": dependency}
-		return rows, nil
+		return businessMapComparisonRows(v.Document.BusinessMap, metadataID)
 	}
 	if v.Document.Interactions != nil {
-		for id, value := range interactionRows(v.Document.Interactions) {
-			if err := add(id, value); err != nil {
-				return nil, err
-			}
-		}
-
-		id := metadataID
-		if !ValidID(id) {
-			return nil, invalid("comparison", "Exact metadata identity required")
-		}
-		if rows[id] == nil {
-			rows[id] = map[string]jsontext.Value{}
-		}
-		scope, err := canonicalJSON(v.Document.Interactions.ScopeRefs)
-		if err != nil {
-			return nil, err
-		}
-		dependency, err := canonicalJSON(v.Document.Interactions.Architecture)
-		if err != nil {
-			return nil, err
-		}
-		rows[id]["scopeRefs"] = scope
-		rows[id]["architecture"] = dependency
-		return rows, nil
+		return interactionComparisonRows(v.Document.Interactions, metadataID)
 	}
+	rows := map[string]map[string]jsontext.Value{}
 	for _, e := range v.Document.Payload.Elements {
-		if err := add(e.ID, e); err != nil {
+		if err := addComparisonRow(rows, e.ID, e); err != nil {
 			return nil, err
 		}
 	}
 	for _, e := range v.Document.Payload.Links {
-		if err := add(e.ID, e); err != nil {
+		if err := addComparisonRow(rows, e.ID, e); err != nil {
 			return nil, err
 		}
 	}
@@ -182,16 +134,85 @@ func diagramComparisonRows(ctx context.Context, v *DiagramVersion, g *EffectiveG
 	if err != nil {
 		return nil, err
 	}
+	if err := addComparisonMembers(rows, p); err != nil {
+		return nil, err
+	}
+	return rows, nil
+}
+
+// addComparisonRow stores value as a row of canonical top-level fields, so
+// a comparison reports which field changed rather than that the row did.
+func addComparisonRow(rows map[string]map[string]jsontext.Value, id string, value any) error {
+	raw, err := canonicalJSON(value)
+	if err != nil {
+		return err
+	}
+	fields := map[string]jsontext.Value{}
+	if err = json.Unmarshal(raw, &fields); err != nil {
+		return err
+	}
+	rows[id] = fields
+	return nil
+}
+
+func businessMapComparisonRows(m *BusinessMapPayload, metadataID string) (map[string]map[string]jsontext.Value, error) {
+	rows := map[string]map[string]jsontext.Value{}
+	for id, value := range businessMapRows(m) {
+		if err := addComparisonRow(rows, id, value); err != nil {
+			return nil, err
+		}
+	}
+	if !ValidID(metadataID) {
+		return nil, invalid("comparison", "Exact free metadata identity required")
+	}
+	dependency, err := canonicalJSON(m.Architecture)
+	if err != nil {
+		return nil, err
+	}
+	rows[metadataID] = map[string]jsontext.Value{"architecture": dependency}
+	return rows, nil
+}
+
+func interactionComparisonRows(d *InteractionPayload, metadataID string) (map[string]map[string]jsontext.Value, error) {
+	rows := map[string]map[string]jsontext.Value{}
+	for id, value := range interactionRows(d) {
+		if err := addComparisonRow(rows, id, value); err != nil {
+			return nil, err
+		}
+	}
+	id := metadataID
+	if !ValidID(id) {
+		return nil, invalid("comparison", "Exact metadata identity required")
+	}
+	if rows[id] == nil {
+		rows[id] = map[string]jsontext.Value{}
+	}
+	scope, err := canonicalJSON(d.ScopeRefs)
+	if err != nil {
+		return nil, err
+	}
+	dependency, err := canonicalJSON(d.Architecture)
+	if err != nil {
+		return nil, err
+	}
+	rows[id]["scopeRefs"] = scope
+	rows[id]["architecture"] = dependency
+	return rows, nil
+}
+
+// addComparisonMembers adds every group's membership as a "members" field.
+// Include hidden internal groups too. Evidence revision/target hashes are
+// navigation context, not semantic membership changes on an unchanged edge.
+func addComparisonMembers(rows map[string]map[string]jsontext.Value, p *architectureProjection) error {
 	for id := range p.members {
-		// Include hidden internal groups too. Evidence revision/target hashes are
-		// navigation context, not semantic membership changes on an unchanged edge.
-		refs := []DiagramRef{}
-		for _, member := range p.sortedMembers(id) {
+		members := p.sortedMembers(id)
+		refs := make([]DiagramRef, 0, len(members))
+		for _, member := range members {
 			refs = append(refs, member.Ref)
 		}
 		raw, err := canonicalJSON(refs)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		if fields, exists := rows[id]; exists {
 			fields["members"] = raw
@@ -199,7 +220,7 @@ func diagramComparisonRows(ctx context.Context, v *DiagramVersion, g *EffectiveG
 		}
 		rows[id] = map[string]jsontext.Value{"members": raw}
 	}
-	return rows, nil
+	return nil
 }
 func diagramDifferences(a, b map[string]map[string]jsontext.Value) []DiagramDifference {
 	ids := map[string]bool{}

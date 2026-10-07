@@ -239,44 +239,7 @@ func savedViewWire(b []byte, typ reflect.Type, path string) error {
 	}
 	switch typ.Kind() {
 	case reflect.Struct:
-		m, err := relationalObject(b)
-		if err != nil {
-			return invalid(path, "Expected a strict object")
-		}
-		if typ == reflect.TypeFor[BackendReadTarget]() {
-			var target BackendReadTarget
-			return json.Unmarshal(b, &target)
-		}
-
-		allowed := map[string]bool{}
-		for i := range typ.NumField() {
-			f := typ.Field(i)
-			tag := f.Tag.Get("json")
-			if tag == "" || tag == "-" {
-				continue
-			}
-			name, options, _ := strings.Cut(tag, ",")
-			allowed[name] = true
-			raw, exists := m[name]
-			optional := strings.Contains(options, "omit")
-			if !exists {
-				if !optional {
-					return invalid(path+"."+name, "Required member is absent")
-				}
-				continue
-			}
-			if optional && f.Type.Kind() == reflect.String && bytes.Equal(raw, []byte(`""`)) {
-				return invalid(path+"."+name, "Optional members must be omitted when empty")
-			}
-			if err := savedViewWire(raw, f.Type, path+"."+name); err != nil {
-				return err
-			}
-		}
-		for key := range m {
-			if !allowed[key] {
-				return invalid(path+"."+key, "Unknown member")
-			}
-		}
+		return savedViewWireStruct(b, typ, path)
 	case reflect.Slice:
 		var values []jsontext.Value
 		if err := json.Unmarshal(b, &values); err != nil {
@@ -286,6 +249,49 @@ func savedViewWire(b []byte, typ reflect.Type, path string) error {
 			if err := savedViewWire(v, typ.Elem(), path); err != nil {
 				return err
 			}
+		}
+	}
+	return nil
+}
+
+// savedViewWireStruct checks one strict object: every non-omittable member
+// present, no empty optional string, no unknown member, recursively.
+func savedViewWireStruct(b []byte, typ reflect.Type, path string) error {
+	m, err := relationalObject(b)
+	if err != nil {
+		return invalid(path, "Expected a strict object")
+	}
+	if typ == reflect.TypeFor[BackendReadTarget]() {
+		var target BackendReadTarget
+		return json.Unmarshal(b, &target)
+	}
+	allowed := map[string]bool{}
+	for i := range typ.NumField() {
+		f := typ.Field(i)
+		tag := f.Tag.Get("json")
+		if tag == "" || tag == "-" {
+			continue
+		}
+		name, options, _ := strings.Cut(tag, ",")
+		allowed[name] = true
+		raw, exists := m[name]
+		optional := strings.Contains(options, "omit")
+		if !exists {
+			if !optional {
+				return invalid(path+"."+name, "Required member is absent")
+			}
+			continue
+		}
+		if optional && f.Type.Kind() == reflect.String && bytes.Equal(raw, []byte(`""`)) {
+			return invalid(path+"."+name, "Optional members must be omitted when empty")
+		}
+		if err := savedViewWire(raw, f.Type, path+"."+name); err != nil {
+			return err
+		}
+	}
+	for key := range m {
+		if !allowed[key] {
+			return invalid(path+"."+key, "Unknown member")
 		}
 	}
 	return nil

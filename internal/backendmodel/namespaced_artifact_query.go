@@ -45,36 +45,16 @@ func (s *ArtifactService) QueryNamespaced(ctx context.Context, pid string, in Na
 	if graph.Pins.ArtifactContextV3 == nil {
 		return nil, invalid("context", "Namespaced reader requires context-v3")
 	}
-	var group *ArtifactNamespaceGroup
-	for _, g := range graph.Pins.ArtifactContextV3.Groups {
-		if g.Namespace == in.Namespace {
-			group = &g
-			break
-		}
-	}
-	if group == nil {
+	group, pin, ok := namespacedGroupPin(graph.Pins.ArtifactContextV3.Groups, in.Namespace, in.Artifact)
+	if !ok {
 		return nil, notFound()
 	}
-	at := slices.IndexFunc(group.Pins, func(p ArtifactPin) bool { return p.Kind == in.Artifact.Kind && p.ID == in.Artifact.ID })
-	if at < 0 {
-		return nil, notFound()
-	}
-	pin := NamespacedArtifactPin{Namespace: group.Namespace, Pin: group.Pins[at]}
 	query := ArtifactQueryInput{RevisionID: graph.State.Revision.ID, Artifact: in.Artifact, View: in.View, EmbeddedContractID: in.EmbeddedContractID, Limit: in.Limit, Cursor: in.Cursor}
 	if err := query.Validate(); err != nil {
 		return nil, err
 	}
 	out := &NamespacedArtifactProjection{TargetHash: in.TargetHash, Pin: pin, Status: "foreign_unresolved", Reason: "Imported foreign reference requires an explicit exact local mapping", APIBindings: []APIArtifactBinding{}, EditorBindings: []EditorBinding{}}
-	for _, b := range group.APIBindings {
-		if b.Ref.Kind == pin.Pin.Kind && b.Ref.ArtifactID == pin.Pin.ID {
-			out.APIBindings = append(out.APIBindings, b)
-		}
-	}
-	for _, b := range group.EditorBindings {
-		if b.ArtifactKind == pin.Pin.Kind && b.ArtifactID == pin.Pin.ID {
-			out.EditorBindings = append(out.EditorBindings, b)
-		}
-	}
+	collectNamespacedBindings(out, group, pin.Pin)
 	if group.Namespace.Scope == "foreign" {
 		return out, nil
 	}
@@ -104,4 +84,38 @@ func (in *NamespacedArtifactQueryInput) UnmarshalJSON(raw []byte) error {
 	}
 	*in = NamespacedArtifactQueryInput(value)
 	return nil
+}
+
+// namespacedGroupPin finds the namespace group and the exact artifact pin
+// inside it; either missing reads as not found.
+func namespacedGroupPin(groups []ArtifactNamespaceGroup, ns ArtifactNamespace, artifact ArtifactKey) (*ArtifactNamespaceGroup, NamespacedArtifactPin, bool) {
+	var group *ArtifactNamespaceGroup
+	for _, g := range groups {
+		if g.Namespace == ns {
+			group = &g
+			break
+		}
+	}
+	if group == nil {
+		return nil, NamespacedArtifactPin{}, false
+	}
+	at := slices.IndexFunc(group.Pins, func(p ArtifactPin) bool { return p.Kind == artifact.Kind && p.ID == artifact.ID })
+	if at < 0 {
+		return nil, NamespacedArtifactPin{}, false
+	}
+	return group, NamespacedArtifactPin{Namespace: group.Namespace, Pin: group.Pins[at]}, true
+}
+
+// collectNamespacedBindings copies the group's bindings that belong to pin.
+func collectNamespacedBindings(out *NamespacedArtifactProjection, group *ArtifactNamespaceGroup, pin ArtifactPin) {
+	for _, b := range group.APIBindings {
+		if b.Ref.Kind == pin.Kind && b.Ref.ArtifactID == pin.ID {
+			out.APIBindings = append(out.APIBindings, b)
+		}
+	}
+	for _, b := range group.EditorBindings {
+		if b.ArtifactKind == pin.Kind && b.ArtifactID == pin.ID {
+			out.EditorBindings = append(out.EditorBindings, b)
+		}
+	}
 }

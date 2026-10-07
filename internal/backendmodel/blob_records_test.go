@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"fmt"
+	"io"
 	"testing"
 
 	"github.com/yashok111/mocker/internal/backendblob"
@@ -27,22 +28,7 @@ func TestBlobMigrationPreservesLegacyRawArtifactCAS(t *testing.T) {
 		h := sha256.New()
 		for _, table := range []string{"backend_graph_records", "backend_revision_sources", "backend_revision_decisions", "backend_revision_assertions", "backend_revision_assertion_resolutions", "backend_revision_legacy_proof_bases"} {
 			fmt.Fprintf(h, "%s\x00", table)
-			rows, err := tx.Query("SELECT document FROM "+table+" WHERE revision_id=? ORDER BY document", base.Revision.ID)
-			if err != nil {
-				return err
-			}
-			for rows.Next() {
-				var raw []byte
-				if err = rows.Scan(&raw); err != nil {
-					rows.Close()
-					return err
-				}
-				fmt.Fprintf(h, "%d\x00", len(raw))
-				h.Write(raw)
-			}
-			err = rows.Err()
-			rows.Close()
-			if err != nil {
+			if err := hashLegacyTableDocuments(h, tx, table, base.Revision.ID); err != nil {
 				return err
 			}
 			h.Write([]byte{0})
@@ -60,6 +46,25 @@ func TestBlobMigrationPreservesLegacyRawArtifactCAS(t *testing.T) {
 	if err = r.db.Read(t.Context(), func(tx *sql.Tx) error { return backendblob.Verify(t.Context(), tx) }); err != nil {
 		t.Fatal(err)
 	}
+}
+
+// hashLegacyTableDocuments feeds one table's raw documents into the frozen
+// Store26 digest: a length prefix and the bytes, in raw ORDER BY order.
+func hashLegacyTableDocuments(h io.Writer, tx *sql.Tx, table, revisionID string) error {
+	rows, err := tx.Query("SELECT document FROM "+table+" WHERE revision_id=? ORDER BY document", revisionID)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = rows.Close() }()
+	for rows.Next() {
+		var raw []byte
+		if err = rows.Scan(&raw); err != nil {
+			return err
+		}
+		fmt.Fprintf(h, "%d\x00", len(raw))
+		_, _ = h.Write(raw)
+	}
+	return rows.Err()
 }
 
 func TestBlobEditorArtifactCopyHasCanonicalMembership(t *testing.T) {
