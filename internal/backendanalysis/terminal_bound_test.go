@@ -65,17 +65,14 @@ func TestAnalysisRecoveryClosesJobWithOversizedStoredScope(t *testing.T) {
 	}
 }
 
-// oversizedEngine completes with a manifest no store can accept: the shape of a
-// diagnostics run whose unknown-check gaps outgrew 64 KiB.
+// oversizedEngine completes with a manifest no store can accept. Gaps, coverage
+// and diagram scope are summarized to fit since F135/F189/F190 (manifest_fit.go),
+// so the stand-in for "a result the store refuses" is a scope admitted before
+// the 16 KiB admission bound: the manifest carries it whole and it cannot fit.
 type oversizedEngine struct{}
 
 func (oversizedEngine) Analyze(context.Context, *ImmutableInput, func(PreparedSnapshot) error) (*TerminalSnapshot, error) {
-	gaps := make([]Diagnostic, 400)
-	for i := range gaps {
-		code := fmt.Sprintf("unused_table:%036d", i)
-		gaps[i] = Diagnostic{ID: code, Code: code, Message: strings.Repeat("x", 200)}
-	}
-	return &TerminalSnapshot{Status: "completed", Snapshot: PreparedSnapshot{Manifest: ResultManifest{Verdict: "unknown", Gaps: gaps}}}, nil
+	return &TerminalSnapshot{Status: "completed", Snapshot: PreparedSnapshot{Manifest: ResultManifest{Verdict: "unknown", Scope: oversizedScope()}}}, nil
 }
 
 func TestAnalysisUnpersistableResultFailsJobNotService(t *testing.T) {
