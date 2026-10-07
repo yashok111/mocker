@@ -208,52 +208,6 @@ func TestOpenAPIContract_declaresResetDataSchemas(t *testing.T) {
 	}
 }
 
-// TestMigrations_stillExactlyFifteenFiles is clause 32's other new assertion,
-// updated by P3h: P3b through P3g added no `0003_` migration (D2 R3 — every
-// column those slices read or wrote existed since P0) and nothing anywhere
-// else in this tree counted that before. P3h is the first slice since
-// `0002_edit_version.sql` that genuinely needs a new column — entities has
-// no base-scope key to widen — so `0003_base_scope.sql` is the first legitimate
-// third file, and the pinned count moves from 2 to 3 for exactly that reason.
-// A fourth file here means a later slice took a wrong turn, or that this test
-// itself needs updating on purpose again — either way, a silent pass is the
-// wrong outcome. P6a (decisions.md mocker-p6a-sse D20) is that update on
-// purpose: `0004_traffic_autoincrement.sql` rebuilds `traffic` with
-// AUTOINCREMENT so a cleared table never reissues an id a stream or poll
-// cursor still points past — the first rebuild migration in this tree, and
-// the count moves from 3 to 4 for exactly that reason — and P6b
-// (mocker-p6b-sse-mock D2) to 5, `0005_custom_endpoints_stream.sql`, the
-// kind/stream columns and their CHECK, the second rebuild — and A6
-// (decisions.md mocker-a6-assets D1) to 6, `0006_assets.sql`, the first
-// table this tree has added since P0 — and A15 (the 2026-09-03 audit) to
-// 7, `0007_fk_indexes.sql`, seven plain CREATE INDEX over the foreign-key
-// columns that had none (EXPLAIN showed `DELETE FROM resources` scanning
-// three tables whole), ADD-only, no rebuild. The sequence-design canvas adds
-// `0011_design_scenarios.sql`, its aggregate and immutable revision tables;
-// `0012_design_scenario_runs.sql` adds persisted execution reports.
-// `0016_backend_proposals.sql` adds isolated immutable database proposal drafts.
-// `0018_backend_api_artifacts.sql` adds frozen API associations to source revisions.
-// `0021_backend_analysis_jobs.sql` adds durable analysis and rebase storage.
-// `0027_backend_payload_blobs.sql` (B6.3, 48dce80) moves every immutable
-// backend owner's JSON behind content-addressed blobs — the count moves from
-// 26 to 27 for exactly that reason, and the test's name with it (it was
-// TestMigrations_stillExactlyTwentySixFiles, red since that commit).
-func TestMigrations_stillExactlyTwentySevenFiles(t *testing.T) {
-	entries, err := os.ReadDir(filepath.FromSlash("../../internal/store/migrations"))
-	if err != nil {
-		t.Fatalf("read migrations dir: %v", err)
-	}
-	var sqlFiles []string
-	for _, e := range entries {
-		if !e.IsDir() && strings.HasSuffix(e.Name(), ".sql") {
-			sqlFiles = append(sqlFiles, e.Name())
-		}
-	}
-	if len(sqlFiles) != 27 {
-		t.Errorf("internal/store/migrations/ holds %d .sql files (%v), want exactly 27", len(sqlFiles), sqlFiles)
-	}
-}
-
 // --- clause 33(a), the api/openapi.json half (decisions.md
 // mocker-p3b-resources D10/D14.2) ------------------------------------------
 

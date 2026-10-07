@@ -50,13 +50,6 @@ const thisFile = path.resolve(__dirname, "coverage.test.ts");
 
 const HTTP_METHODS = ["get", "post", "put", "delete", "patch"] as const;
 
-// The contract's operation count, pinned as a LITERAL on purpose: it is a
-// trip-wire, and a number derived from the file it is meant to police would
-// agree with anything that file said. Every test below that wants to name it
-// reads it from here, which is the one thing the old title did not do — it
-// said "64" while the assertion said 70, for four slices running.
-const ROUTE_COUNT = 260;
-
 interface RouteInfo {
   method: string;
   urlPath: string;
@@ -274,47 +267,15 @@ describe("web/src API coverage", () => {
     sources?.dispose();
   });
 
-  it(`still describes exactly ${ROUTE_COUNT} routes in api/openapi.json`, () => {
-    // A route silently dropped from the contract would otherwise shrink the
-    // population this test checks and pass by covering less, not more.
-    // 34 before P2b; +6 for DESIGN §4's Scenario layer (§C of the P2b
-    // context: list, create, detail, delete, activate, deactivate); +4 for
-    // P2c's history/undo layer (§C of the P2c context: list checkpoints,
-    // create checkpoint, rollback, reset-overrides); +2 for P2d (rename a
-    // scenario, delete a checkpoint); +1 for P2f's preview route; +1 for
-    // A1's PUT .../endpoints/{eid} (editing a custom endpoint); +3 for P3a's
-    // resources surface (D10: list a spec's resource suggestions, list a
-    // workspace's resource families, one decision route for confirm/decline);
-    // +1 for P3b's POST .../reset-data (reseed or clear a workspace's stored
-    // entity rows); +1 for P3f's POST /api/specs/{id}/rederive (decisions.md
-    // §D4: re-run derivation over an already-imported spec); +1 for P4a's
-    // GET /api/workspaces/{id}/drift (decisions.md §D4: the three signals a
-    // spec re-import leaves behind, read-only, agent-only), 53 -> 54; +1 for
-    // A4's GET /api/workspaces/{id}/resources/{family}/entities (decisions.md
-    // mocker-a4-mcp-reach D4: a confirmed family's entity rows, paginated and
-    // scope-filtered, read-only, agent-only), 54 -> 55; +2 for P6a's
-    // GET /api/workspaces/{id}/traffic/stream (decisions.md mocker-p6a-sse
-    // D3: the traffic feed over SSE, consumed through EventSource — see
-    // NATIVE_TRANSPORTS) and GET /api/stream/stats (D15: process-wide
-    // streaming health, agent-only), 55 -> 57; +1 for P6b's
-    // POST /api/workspaces/{id}/endpoints/preview (decisions.md
-    // mocker-p6b-sse-mock D13: a stream draft's first frames, agent-only),
-    // 57 -> 58; +9 for server-backed design scenarios (list, create, detail,
-    // save, commands, revision, diff, restore and validate), 82 -> 91 after
-    // the intervening API Designer routes; +1 for execute-step and +4 for
-    // persisted scenario runs (start, list, detail, cancel), 91 -> 96.
-    // Saved scenario export options and artifacts add two read routes, 96 -> 98.
-    // ZIP archive generation for REST/MCP adds one read-only POST, 98 -> 99.
-    // Saved/candidate data-flow analysis adds GET and POST operations, 111 -> 113.
-    // B1.1 adds POST /api/backend-projects/{id}/database/query for the
-    // revision-pinned relational inspector, 154 -> 155.
-    // B1.2 adds five proposal operations and three pinned node/evidence/coverage
-    // read aliases, 155 -> 163.
-    // B2.1 adds one pinned read-only Flow POST operation, 163 -> 164.
-    // B2.2 adds four saved-view operations, 164 -> 168.
-    // This count is OPERATIONS (method + path), not `paths` keys — a
-    // 48-to-51 edit that instead counted paths would silently undercount.
-    expect(routes).toHaveLength(ROUTE_COUNT);
+  it("reads a non-empty route population from api/openapi.json", () => {
+    // Every check below runs over `routes`; an empty population would pass
+    // them all vacuously. A route silently dropped from the contract is
+    // caught on the Go side: internal/admin/openapi_contract_test.go matches
+    // the contract against Server.routes() in both directions. The exact
+    // operation count that used to be pinned here (34, ..., 260) moved with
+    // every slice and caught nothing that two-way match does not.
+    // Operations are method + path, not `paths` keys.
+    expect(routes.length).toBeGreaterThan(0);
   });
 
   it("every route declares an operationId", () => {

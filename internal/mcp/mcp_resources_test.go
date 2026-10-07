@@ -305,7 +305,7 @@ func TestResourceTools_wholeLifecycleThroughRealStore(t *testing.T) {
 }
 
 // TestToolsList_hasCurrentSurfaceAndIrreversibilityWarning is the other
-// half of clause 34: the published surface holds toolCount tools, and
+// half of clause 34: the published surface holds one tool per toolRoutes row, and
 // reset_resource_data's PUBLISHED full description — what describe_tool
 // serves since review 2026-10-06, F23 split tools/list into a one-sentence
 // summary — carries the irreversibility warning D7 requires (the light
@@ -326,8 +326,8 @@ func TestToolsList_hasCurrentSurfaceAndIrreversibilityWarning(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &env); err != nil {
 		t.Fatalf("decode tools/list: %v; body=%s", err, rec.Body.String())
 	}
-	if len(env.Result.Tools) != toolCount {
-		t.Errorf("tools/list returned %d tools, want %d", len(env.Result.Tools), toolCount)
+	if len(env.Result.Tools) != len(toolRoutes) {
+		t.Errorf("tools/list returned %d tools, want %d", len(env.Result.Tools), len(toolRoutes))
 	}
 	var found bool
 	for _, tool := range env.Result.Tools {

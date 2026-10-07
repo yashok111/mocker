@@ -165,7 +165,7 @@ func TestRuntimeUpgradePreservesOldDocumentsAndReceipts(t *testing.T) {
 	version, err := reopened.SchemaVersion(t.Context())
 	// Reopening must not migrate past the head (was the literal 22, stale since
 	// 0023..0027; see storeSchemaHead).
-	if err != nil || version != storeSchemaHead {
+	if err != nil || version != storeSchemaHead(t) {
 		t.Fatalf("unexpected migration %d %v", version, err)
 	}
 	after := proposalSourceBytes(t, r)

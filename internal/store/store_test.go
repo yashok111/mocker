@@ -3,6 +3,7 @@ package store_test
 import (
 	"os"
 	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -10,15 +11,22 @@ import (
 	"github.com/yashok111/mocker/internal/testkit"
 )
 
-func TestMigrate_reachesSchemaVersion28(t *testing.T) {
+// A fresh store migrates to the newest embedded migration. The head is read
+// from the migration files, not written here: a literal went stale with every
+// migration and guarded nothing the files do not already say.
+func TestMigrate_reachesLatestSchemaVersion(t *testing.T) {
 	db := testkit.NewDB(t)
 
 	v, err := db.SchemaVersion(t.Context())
 	if err != nil {
 		t.Fatalf("schema version: %v", err)
 	}
-	if v != 28 {
-		t.Fatalf("schema version = %d, want 28", v)
+	latest, err := store.LatestSchemaVersion()
+	if err != nil || latest < 1 {
+		t.Fatalf("latest schema version = %d, %v", latest, err)
+	}
+	if v != latest {
+		t.Fatalf("schema version = %d, want the latest migration %d", v, latest)
 	}
 }
 
@@ -27,10 +35,16 @@ func TestMigrate_reachesSchemaVersion28(t *testing.T) {
 // versions and let this binary serve a schema it does not understand.
 func TestMigrate_refusesDatabaseFromNewerBinary(t *testing.T) {
 	db := testkit.NewDB(t)
-	if _, err := db.W.ExecContext(t.Context(), "PRAGMA user_version=28"); err != nil {
+	// One past the head this binary embeds, derived: the literal 28 this
+	// started as became the head itself the day 0028 landed.
+	latest, err := store.LatestSchemaVersion()
+	if err != nil {
 		t.Fatal(err)
 	}
-	err := db.Migrate(t.Context(), nil)
+	if _, err := db.W.ExecContext(t.Context(), "PRAGMA user_version="+strconv.Itoa(latest+1)); err != nil {
+		t.Fatal(err)
+	}
+	err = db.Migrate(t.Context(), nil)
 	if err == nil || !strings.Contains(err.Error(), "newer than this binary") {
 		t.Fatalf("Migrate on a newer schema = %v", err)
 	}

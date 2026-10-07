@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/json/v2"
 	"fmt"
+	"maps"
 	"slices"
 	"strings"
 	"testing"
@@ -69,11 +70,19 @@ func TestCrossOwnerRelationalGuideSDKUsesAdvertisedPinnedSet(t *testing.T) {
 	if err := json.Unmarshal(raw, &capabilities); err != nil {
 		t.Fatal(err)
 	}
-	// Eight since be06f56 (replay) and 41ca3c6 (verify) joined
-	// guide.BackendWorkflows. The count still guards an owner silently added
-	// to or dropped from discovery; the loop below checks every one of them.
-	if len(capabilities.WorkflowVersions) != 8 {
-		t.Fatalf("backend discovery = %d workflows; want project/import/database/inspect/sync/change/replay/verify", len(capabilities.WorkflowVersions))
+	// Discovery advertises exactly the guide's backend owners. Compared by
+	// ID against guide.BackendWorkflows rather than a literal count, which
+	// stayed at six while replay and verify joined and failed every run.
+	want := map[string]bool{}
+	for _, w := range guide.BackendWorkflows() {
+		want[w.WorkflowID] = true
+	}
+	got := map[string]bool{}
+	for _, w := range capabilities.WorkflowVersions {
+		got[w.WorkflowID] = true
+	}
+	if len(want) == 0 || !maps.Equal(got, want) {
+		t.Fatalf("backend discovery owners = %v; want guide.BackendWorkflows %v", got, want)
 	}
 	for _, workflow := range capabilities.WorkflowVersions {
 		for _, required := range workflow.RequiredModelSchemaVersions {

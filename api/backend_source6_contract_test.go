@@ -108,8 +108,9 @@ func TestBackendSource6ChangeManifestSchema(t *testing.T) {
 }
 
 func source6ContractBeginBody() string {
-	items := []string{}
-	for _, category := range strings.Fields("files endpoints datastores migrations producers consumers jobs contracts tests") {
+	categories := strings.Fields("files endpoints datastores migrations producers consumers jobs contracts tests")
+	items := make([]string, 0, len(categories))
+	for _, category := range categories {
 		items = append(items, fmt.Sprintf(`{"category":%q,"status":"complete","knownCount":0,"denominator":0,"discoverySource":"Static fixture","gaps":[],"reason":""}`, category))
 	}
 	return `{"expectedVersion":9007199254740993,"baseRevisionId":"` + source6ContractID + `","idempotencyKey":"source6",` +

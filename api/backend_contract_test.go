@@ -2,9 +2,10 @@ package api
 
 import (
 	"bytes"
-	"github.com/santhosh-tekuri/jsonschema/v6"
 	"strings"
 	"testing"
+
+	"github.com/santhosh-tekuri/jsonschema/v6"
 
 	"github.com/yashok111/mocker/internal/jsonx"
 )

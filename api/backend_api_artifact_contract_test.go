@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/santhosh-tekuri/jsonschema/v6"
+
 	"github.com/yashok111/mocker/internal/jsonx"
 )
 
@@ -17,21 +18,15 @@ func TestBackendAPIArtifactContractExactIDsAndOperations(t *testing.T) {
 	if err := json.Unmarshal(backendContract, &doc); err != nil {
 		t.Fatal(err)
 	}
-	count := 0
-	for _, ops := range doc.Paths {
-		for method := range ops {
-			if strings.Contains(" get post put patch delete ", " "+method+" ") {
-				count++
-			}
+	// The three API-artifact operations this test is about, by name. The
+	// whole-file operation count that used to sit here moved with every new
+	// route (222, then 260) and said nothing about these three; the route
+	// table and the contract are matched both ways by admin's
+	// openapi_contract_test.go.
+	for _, path := range []string{"query", "preview", "commands"} {
+		if _, ok := doc.Paths["/api/backend-projects/{id}/api-artifacts/"+path]["post"]; !ok {
+			t.Fatalf("contract has no POST /api/backend-projects/{id}/api-artifacts/%s", path)
 		}
-	}
-	// 222 was the count at 13ab8d5 (B4.4 interactions). Later slices added
-	// routes without moving this pin: f30edb2 (lifecycle) 223, a6f1139
-	// (findings) 225, 5579099 (B5.2 materialization/portable) 237, 41ca3c6
-	// (B6.1 observations/correlations) 260 — the same number
-	// web/src/api/coverage.test.ts's ROUTE_COUNT pins for the same file.
-	if count != 260 {
-		t.Fatalf("operation count=%d want 260", count)
 	}
 	schema, err := BackendSchema("APIArtifactID")
 	if err != nil {

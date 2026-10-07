@@ -47,7 +47,7 @@ func TestBlobMigrationBytes(t *testing.T) {
 		t.Fatal(err)
 	}
 	var version int
-	if err := db.W.QueryRow("PRAGMA user_version").Scan(&version); err != nil || version != 28 {
+	if err := db.W.QueryRow("PRAGMA user_version").Scan(&version); err != nil || version != latestMigration(t) {
 		t.Fatalf("version %d %v", version, err)
 	}
 	for _, q := range []struct{ sql, want string }{{`SELECT document FROM backend_graph_records_documents`, ` {"id":"n","n":9007199254740993} `}, {`SELECT response FROM backend_command_receipts`, ` { "receipt": 9007199254740993 } `}, {`SELECT document FROM backend_revisions_documents`, `{ "schemaVersion":"6", "semanticHash":"unchanged", "n":9007199254740993 }`}} {

@@ -304,7 +304,7 @@ Routes live as one list in `Server.routes()`; `Handler()` only registers them.
 
 **Every route is called from a reachable screen or is declared agent-only,
 and that is a test, not a promise**: `web/src/api/coverage.test.ts`
-enumerates the committed contract, pins the count (260) and finds a caller
+enumerates the committed contract and finds a caller
 by AST (`coverageScanner.ts`, since `A22`: a call whose callee resolves to
 a binding imported from the generated client — a mention in a comment, an
 import never called, or a `get…QueryKey(` no longer counts; native

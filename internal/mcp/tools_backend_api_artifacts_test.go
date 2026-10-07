@@ -120,7 +120,7 @@ func TestBackendAPIArtifactToolsPublishSchemasAndHints(t *testing.T) {
 		t.Fatal(err)
 	}
 	expected := map[string]bool{"query_backend_api_artifacts": true, "preview_backend_api_pins": true, "apply_backend_api_pins": false, "get_api_artifact_snapshot": true}
-	if len(env.Result.Tools) != toolCount {
+	if len(env.Result.Tools) != len(toolRoutes) {
 		t.Fatal("surface count", len(env.Result.Tools))
 	}
 	for _, tool := range env.Result.Tools {

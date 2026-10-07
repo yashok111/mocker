@@ -79,7 +79,7 @@ FIELD of the initialize result, not a capability, so DESIGN §14.2's "only
 is recorded), and `get_guide {topic}` (tool 55, `internal/mcp/tools_guide.go`)
 returns one of the five files, `overview` with SKILL.md's frontmatter
 stripped. It is the first tool whose `toolRoutes` row is EMPTY — it calls
-no handler — which `TestToolRoutesPopulation` counts and
+no handler — which `TestRegisteredToolsMatchToolRoutes` matches by name and
 `TestToolRoutesAgreeWithAdminAllowlist` has nothing to check for. No
 migration, no variable, no contract change.
 
@@ -116,4 +116,20 @@ caps strip through the endpoints route's session context, replacing the
 calling no route. The validator's constants (`STREAM_CAPS`: frames,
 delays, rules) stay constants on the strip because they are not
 configuration. No route, no migration, no variable.
+
+**Count pins dropped (2026-10-07, the owner's call).** The literal tool count
+(`toolCount`, 63 then 263), the contract's operation count (`ROUTE_COUNT` in
+`coverage.test.ts`, 70 then 260), the migration-file count, the store schema
+head and the per-group checkpoint counts were deliberate trip-wires
+(`refactor-review-2026-09-07.md` calls them "never to be derived"). They
+moved with every slice and, in the Backend Workbench, drifted for weeks while
+red. The owner reversed that decision in his own words, quoted as data:
+«зачем нам такие глупые тесты которые завязаны на точное число миграций
+которое потсоянно меняется?». Each was replaced by the invariant it stood in
+for: registered tools equal `toolRoutes` by name in both directions
+(`TestRegisteredToolsMatchToolRoutes`); the contract equals the route table
+both ways (`openapi_contract_test.go`, unchanged); migrations number 1..N
+without a gap, enforced by `store.parseMigrations` at every open; the schema
+head is `store.LatestSchemaVersion()`; every route decides its checkpoint
+policy, writes never claim `cpRead` and reads always do.
 

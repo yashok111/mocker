@@ -525,42 +525,43 @@ func containsStr(list []string, want string) bool {
 	return false
 }
 
-// ---- property: the surface count does not move ----
-
-// TestToolSurfaceStaysAt48 pins D13's own counted number: A3 added NO tool,
-// this test's own name and count moved once when P3b (D7 of
-// mocker-p3b-resources) added its four resource tools, 38 -> 42, once more
-// when P3f (D8.3 of mocker-p3f-rederive) added rederive_suggestions,
-// 42 -> 43, once more when P4a (D7 of mocker-p4a-triage) added
-// get_workspace_drift, 43 -> 44, and once more when A4 (D1, D9 of
-// mocker-a4-mcp-reach) added probe_workspace and list_resource_entities —
-// D6's list_traffic widening adds no tool of its own — 44 -> 46, and once
-// more when P6a (D16 of mocker-p6a-sse) added get_stream_stats, 46 -> 47,
-// and once more when P6b (D13 of mocker-p6b-sse-mock) added
-// preview_endpoint, 47 -> 48, and once more when P6c (D9 of
-// mocker-p6c-live-conns) added list_stream_connections,
-// close_stream_connection and push_stream_frame, 48 -> 51. mcp_test.go's
-// own tools/list test only logs the count (t.Logf, "not a check" per D13's
-// own text). Later groups grew the surface to 74; the persisted sequence
-// designer adds ten, persisted runs four and scenario exports three state diagrams eight and schema model twelve, plus control-flow/coverage three, data bindings four, test suggestions and ten resource-map tools reached 174 tools. Saved views,
-// lineage, four exact API artifact tools and four generic editor artifact tools, five proxy tools, two scenario transfer tools and the source events query bring the surface to 225.
-// The literal had drifted to 227 while the surface reached 262; describe_tool
-// (review 2026-10-06, F23) made it 263, and the pin now reads toolCount,
-// the one number TestToolRoutesPopulation already holds against toolRoutes.
-func TestToolSurfaceStaysAt203(t *testing.T) {
+// TestRegisteredToolsMatchToolRoutes holds the published surface against
+// toolRoutes in both directions: a tool registered without a row (the one way
+// a tool can reach a route routes.go does not describe) and a row with no
+// tool both fail here, by name. A literal tool count was pinned here before;
+// it drifted (227 against a real 262) and caught nothing this set match does
+// not, so it was dropped on 2026-10-07.
+func TestRegisteredToolsMatchToolRoutes(t *testing.T) {
 	t.Parallel()
 	h := newTestEndpoint(t).Handler()
 	rec := doMCP(t, h, `{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}`,
 		map[string]string{"Authorization": "Bearer " + testKey})
 	var env struct {
 		Result struct {
-			Tools []json.RawMessage `json:"tools"`
+			Tools []struct {
+				Name string `json:"name"`
+			} `json:"tools"`
 		} `json:"result"`
 	}
 	if err := json.Unmarshal(rec.Body.Bytes(), &env); err != nil {
 		t.Fatalf("decode tools/list: %v; body=%s", err, rec.Body.String())
 	}
-	if len(env.Result.Tools) != toolCount {
-		t.Errorf("tools/list returned %d tools, want toolCount (%d, describe_tool included)", len(env.Result.Tools), toolCount)
+	if len(env.Result.Tools) == 0 {
+		t.Fatal("tools/list returned no tools")
+	}
+	registered := make(map[string]bool, len(env.Result.Tools))
+	for _, tool := range env.Result.Tools {
+		if registered[tool.Name] {
+			t.Errorf("tool %q is registered twice", tool.Name)
+		}
+		registered[tool.Name] = true
+		if _, ok := toolRoutes[tool.Name]; !ok {
+			t.Errorf("tool %q is registered but has no toolRoutes row; add one (and its route to the admin allowlist)", tool.Name)
+		}
+	}
+	for name := range toolRoutes {
+		if !registered[name] {
+			t.Errorf("toolRoutes row %q names no registered tool", name)
+		}
 	}
 }

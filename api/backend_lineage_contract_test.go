@@ -2,10 +2,12 @@ package api
 
 import (
 	"bytes"
-	"github.com/santhosh-tekuri/jsonschema/v6"
-	"github.com/yashok111/mocker/internal/jsonx"
 	"strings"
 	"testing"
+
+	"github.com/santhosh-tekuri/jsonschema/v6"
+
+	"github.com/yashok111/mocker/internal/jsonx"
 )
 
 func lineageSchemaValidator(t *testing.T, name string) func(string) error {

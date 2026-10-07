@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"testing"
+	"testing/fstest"
 )
 
 // MigrateThrough is Migrate stopped at version: it applies, in order, every
@@ -78,4 +79,25 @@ func OpenInlinePayloadSchema(t testing.TB) *DB {
 		t.Fatal(err)
 	}
 	return db
+}
+
+// The numbering invariant that replaced the old exact-file-count pin: a gap,
+// a duplicate or a malformed name refuses to load, so a lost or renumbered
+// migration fails every store open instead of being skipped.
+func TestParseMigrations_requiresContiguousNumbers(t *testing.T) {
+	sql := &fstest.MapFile{Data: []byte("SELECT 1;")}
+	for name, files := range map[string]fstest.MapFS{
+		"gap":       {"migrations/0001_a.sql": sql, "migrations/0003_c.sql": sql},
+		"no first":  {"migrations/0002_b.sql": sql},
+		"duplicate": {"migrations/0001_a.sql": sql, "migrations/0001_b.sql": sql},
+		"no name":   {"migrations/0001.sql": sql},
+	} {
+		if _, err := parseMigrations(files); err == nil {
+			t.Errorf("%s: parseMigrations accepted %v", name, files)
+		}
+	}
+	ms, err := parseMigrations(fstest.MapFS{"migrations/0002_b.sql": sql, "migrations/0001_a.sql": sql})
+	if err != nil || len(ms) != 2 || ms[0].version != 1 || ms[1].version != 2 {
+		t.Fatalf("contiguous set: %v, %v", ms, err)
+	}
 }

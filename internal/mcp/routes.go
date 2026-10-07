@@ -391,35 +391,6 @@ var toolRoutes = map[string][]string{
 	"fork_workspace":   {"POST /api/workspaces/{id}/fork"},
 }
 
-// toolCount is what toolRoutes is expected to hold: the nine tools that
-// shipped with the MCP endpoint, plus the twenty-nine slice A2 adds, plus
-// the four slice P3b adds (D7), plus the one slice P3f adds (D8.3), plus
-// the one slice P4a adds (D7), plus the two slice A4 adds (D1, D9:
-// probe_workspace and list_resource_entities — D6's list_traffic widening
-// adds no tool of its own), plus the one slice P6a adds (D16:
-// get_stream_stats), plus the one slice P6b adds (D13: preview_endpoint),
-// plus the three slice P6c adds (D9: list_stream_connections,
-// close_stream_connection, push_stream_frame), plus the three slice A6 adds
-// (D8: upload_asset, list_assets, delete_asset), plus the one slice A7 adds
-// (get_guide, the guide over internal/guide — no route at all), plus the
-// one slice A8 adds (import_spec), plus the one slice A9 adds
-// (get_server_config — no route at all), plus the two slice A11 adds
-// (set_resource_entity, delete_resource_entity), plus the three slice P4b
-// adds (export_workspace, import_workspace, fork_workspace), plus the one
-// slice P7a adds (export_openapi)
-// — 63 legacy tools plus eleven versioned API designer tools, plus the ten
-// original persisted design-scenario tools, four server-run tools and three
-// scenario-export tools, eight state-diagram tools, twelve schema-model tools,
-// three control-flow/coverage tools, four data-binding tools, test suggestions,
-// ten resource-map tools, API impact analysis and three event-map tools.
-// Pinned in routes_test.go so a tool
-// added without an entry here is caught by a test rather than by a 404 in
-// production.
-// B1.2 adds five isolated database proposal operations. B24 adds four exact
-// API artifact snapshot/query/preview/apply operations. describe_tool
-// (review 2026-10-06, F23) adds one with no route.
-const toolCount = 263
-
 // toolPath resolves ONE call a tool makes into the (method, path) pair
 // loopback.do/call take.
 //

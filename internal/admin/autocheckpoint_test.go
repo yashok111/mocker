@@ -389,12 +389,12 @@ func checkpointLabelsFromTable() map[string]string {
 // exact omission this test exists to catch.
 //
 // Since the policy moved onto the row (2026-09-07) the "added without
-// deciding" case is caught TWICE over — the compiler cannot make a caller
+// deciding" case is caught TWICE over: the compiler cannot make a caller
 // supply a field, but the zero value is not a group, so the assertion below
-// fires on it. What the per-group counts still buy is the OTHER defect: a
-// route that quietly MIGRATES between groups, or a group that grows past
-// what §4 states, changes a count here even though every route still has
-// an opinion.
+// fires on it. Per-group and total counts used to be pinned here as well;
+// they moved with every new route and guarded nothing the structural checks
+// below do not (a route changing group shows in route_table.go's diff), so
+// they were dropped on 2026-10-07.
 //
 // Built from a zero *Server exactly like openapi_contract_test.go's own
 // route-table walk does: routes() never touches its receiver, so the
@@ -403,76 +403,18 @@ func checkpointLabelsFromTable() map[string]string {
 func TestAutoCheckpointPolicy_pinsEveryMutatingRoute(t *testing.T) {
 	t.Parallel()
 
-	// §4's own counts, group by group. cpGroupRead is the population
-	// excluded by construction — a GET writes nothing — and is counted here
-	// only so a read that acquired a mutating policy (or a mutating route
-	// that acquired cpRead) shows up as two counts moving at once.
-	//
-	// The reason each group holds what it holds is at the ROWS, in
-	// route_table.go, not here: this test counts, the table argues.
-	want := map[checkpointGroup]int{
-		// The nine labelled routes: §4's eight plus A1's PUT editor
-		// (mocker-a-mcp gate document, D4 item 4).
-		cpGroupLabelled: 9,
-		// §4's group of six. P3a's resource-decisions joined it rather
-		// than starting a fifth group of its own (D10, D13 clause 41).
-		cpGroupRevisionOnly: 6,
-		// §4's group of two: create and delete of the workspace itself.
-		cpGroupNoLayerYet: 2,
-		// §4's group, grown one slice at a time and never by a route
-		// changing its mind: P3b's reset-data (D3 R12), P3f's rederive
-		// (D7.3), P6b's endpoint preview (D13), P6c's close and push
-		// (D9), A6's two asset writes (D3), A11's two entity writes,
-		// P4b's import and fork, then design-scenario validation, execution and archive, plus state-diagram validation and simulation — twenty-six.
-		//
-		// 53 → 65 after 13ab8d5, every one a NEW row (a route-table diff
-		// against 13ab8d5 shows only additions, no row changing group):
-		// f30edb2 lifecycle build; 5579099 (B5.2) materialization preview,
-		// portable export/selection, four portable import steps and the
-		// namespaced artifact query; 41ca3c6 (B6.1) observation adapt;
-		// be06f56 (B5.3) replay compare; and diagrams/resolve-scope, a POST
-		// read moved here from cpRead by review 2026-10-06, F30.
-		cpGroupNeverTouchesLayer: 65, // Includes full proposal preview alongside POST reads, artifact previews and non-model writes.
-		// Rows in another aggregate: runtime scenarios, checkpoints, API
-		// designs, four persisted design-scenario writes, run start/cancel, and four state-diagram writes.
-		//
-		// 58 → 69, all new rows: B5.2 materialization apply and portable
-		// import commit, B6.1 observation create and correlation, B5.3's
-		// six replay writes, and a6f1139's finding review PUT.
-		cpGroupAnotherLayer: 69, // Includes full proposal create/apply/restore alongside existing model and artifact writes.
-		// Every GET in the table.
-		//
-		// 94 → 109, all new GETs: findings, the SVG view export, four
-		// observation reads, eight replay reads and the portable export
-		// chunk read.
-		cpGroupRead: 109, // Includes annotations, full proposal history and exact source/full/candidate reads.
-	}
-
 	byPattern := checkpointPolicyByPattern(t)
+	if len(byPattern) == 0 {
+		t.Fatal("routes() registers no patterns; every check below would pass vacuously")
+	}
 	const eventsQuery = "POST /api/backend-projects/{id}/events/query"
 	if policy, ok := byPattern[eventsQuery]; !ok || policy != cpNeverTouchesLayer {
 		t.Fatalf("source events POST read has policy %+v; want cpNeverTouchesLayer", policy)
 	}
-	got := make(map[checkpointGroup]int, len(want))
-	for _, policy := range byPattern {
-		got[policy.group]++
-	}
-	for group, n := range want {
-		if got[group] != n {
-			t.Errorf("group %q holds %d routes, want %d (§4's own count)", group, got[group], n)
+	for pattern, policy := range byPattern {
+		if policy.group == cpGroupUndecided {
+			t.Errorf("route %q carries the zero-value checkpoint policy; every row must decide", pattern)
 		}
-	}
-	if n := got[cpGroupUndecided]; n != 0 {
-		t.Errorf("%d route(s) carry the zero-value checkpoint policy; every row must decide", n)
-	}
-	if total, table := len(want), len(byPattern); sum(got) != table {
-		t.Errorf("the %d counted groups cover %d of %d rows — a group is missing from want", total, sum(got), table)
-	}
-
-	// 222 at 13ab8d5; 260 since 41ca3c6 — the same count api/openapi.json
-	// and web/src/api/coverage.test.ts's ROUTE_COUNT pin.
-	if len(byPattern) != 260 {
-		t.Fatalf("routes() registers %d patterns, want 260", len(byPattern))
 	}
 
 	// A label is the ONE thing [Server.routeMux] reads off the policy, so a
@@ -487,31 +429,6 @@ func TestAutoCheckpointPolicy_pinsEveryMutatingRoute(t *testing.T) {
 		}
 	}
 
-	// §4's own arithmetic, kept because the numbers are its argument and not
-	// this test's: 8 labelled + 5 + 2 + 9 + 4 excluded = 28, plus A1's
-	// PUT .../endpoints/{eid} (mocker-a-mcp gate document, D4 item 4) labelled
-	// as a ninth: 9 + 5 + 2 + 9 + 4 = 29. P3a adds one more mutating route,
-	// POST .../resource-decisions, into the revision-only group rather than
-	// as a labelled tenth (D10, D13 clause 41): 9 + 6 + 2 + 9 + 4 = 30. P3b
-	// (decisions.md mocker-p3b-resources, D3 R12) adds ONE more mutating
-	// route, POST .../reset-data, into the never-touches-a-layer group
-	// rather than a labelled tenth or a fifth exclusion group of its own:
-	// 9 + 6 + 2 + 10 + 4 = 31. P3f (decisions.md mocker-p3f-rederive, D7.3)
-	// adds ONE more mutating route, POST /api/specs/{id}/rederive, into the
-	// never-touches-a-layer group: 9 + 6 + 2 + 11 + 4 = 32. P6b (decisions.md
-	// mocker-p6b-sse-mock D13) adds ONE more, POST .../endpoints/preview,
-	// into the same group: 9 + 6 + 2 + 12 + 4 = 33. P6c (decisions.md
-	// mocker-p6c-live-conns D9) adds TWO more into the same group — DELETE
-	// .../connections/{cid} and POST .../connections/{cid}/frames, a cancel
-	// and a RAM inbox, no row either — 9 + 6 + 2 + 14 + 4 = 35; A6's PUT and
-	// DELETE on assets join the never-touches-the-layer group (bytes are
-	// not configuration), plus A11's two entity writes, plus P4b's import and
-	// fork — 41. A mismatch here means the route table changed shape in a way
-	// this test's data has not caught up with yet — a signal to look, not to
-	// bump the number blindly. Persisted design scenarios add five mutating
-	// routes: create, full save, commands, restore and side-effect-free
-	// validation and HTTP-step execution; persisted run start/cancel add two
-	// more; read-only scenario archives also use POST, bringing the total to 58.
 	var mutating []string
 	for _, rt := range (&Server{}).routes() {
 		method, _, ok := strings.Cut(rt.pattern, " ")
@@ -523,20 +440,9 @@ func TestAutoCheckpointPolicy_pinsEveryMutatingRoute(t *testing.T) {
 			mutating = append(mutating, rt.pattern)
 		}
 	}
-	// Saved-view create/save append presentation versions in their own aggregate.
-	// Generic artifacts add three POSTs: two reads/previews and one pin apply.
-	// B4.1 adds four full-proposal POSTs: 114 write-shaped
-	// routes and 87 GETs cover the full 201-row table.
-	// 128 at 13ab8d5 (222 rows, 94 GETs); the 38 rows added since are 15
-	// GETs and 23 write-shaped routes (the group comments above list them),
-	// so 151 of today's 260 rows, 109 being GETs.
-	if len(mutating) != 151 {
-		t.Fatalf("routes() registers %d mutating patterns, want 151", len(mutating))
-	}
-
-	// The two halves the group counts alone cannot state: a mutating route
-	// must not claim cpRead (which would read as "excluded by construction"
-	// for a verb that writes), and a read must not carry anything else.
+	// A mutating route must not claim cpRead (which would read as "excluded
+	// by construction" for a verb that writes), and a read must not carry
+	// anything else.
 	isMutating := make(map[string]bool, len(mutating))
 	for _, pattern := range mutating {
 		isMutating[pattern] = true
@@ -552,14 +458,4 @@ func TestAutoCheckpointPolicy_pinsEveryMutatingRoute(t *testing.T) {
 			t.Errorf("read route %q carries %q; a GET writes nothing and must say cpRead", pattern, policy.group)
 		}
 	}
-}
-
-// sum adds the counts of a group histogram — a one-liner, named only so the
-// coverage assertion above reads as one sentence.
-func sum(counts map[checkpointGroup]int) int {
-	total := 0
-	for _, n := range counts {
-		total += n
-	}
-	return total
 }

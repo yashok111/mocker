@@ -46,7 +46,7 @@ func TestBackendObservationRoster(t *testing.T) {
 			delete(expected, tool.Name)
 		}
 	}
-	if len(expected) != 0 || len(env.Result.Tools) != toolCount {
-		t.Fatal("registration mismatch", len(env.Result.Tools), toolCount, expected)
+	if len(expected) != 0 || len(env.Result.Tools) != len(toolRoutes) {
+		t.Fatal("registration mismatch", len(env.Result.Tools), len(toolRoutes), expected)
 	}
 }

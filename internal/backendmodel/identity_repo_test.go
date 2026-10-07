@@ -15,11 +15,18 @@ import (
 	"github.com/yashok111/mocker/internal/testkit"
 )
 
-// storeSchemaHead is the newest embedded migration. Tests that reopen a store
-// and assert that no further migration ran pin it here, in one place: three
-// copies of the literal 22 went stale when 0023..0026 and then 0027 (48dce80,
-// B6.3 immutable payload blobs) landed without them.
-const storeSchemaHead = 27
+// storeSchemaHead is the newest embedded migration, read from the migration
+// files. Tests that reopen a store and assert that no further migration ran
+// compare against it: literals (22, then 27) went stale with every migration
+// that landed after them.
+func storeSchemaHead(t testing.TB) int {
+	t.Helper()
+	v, err := store.LatestSchemaVersion()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return v
+}
 
 // rowQuerier is satisfied by *sql.DB and *sql.Tx, so a fixture can capture
 // bytes from inside a rewind transaction before the upgrade runs.

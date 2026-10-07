@@ -73,17 +73,21 @@ func (h *b41SDKExamples) negotiate(t *testing.T) {
 			Workflows           []guide.Workflow `json:"workflowVersions"`
 		}
 		h.call(t, "get_backend_capabilities", nil, nil, &capabilities)
-		// Eight owners since be06f56 (B5.3, mocker-backend-replay v1) and
-		// 41ca3c6 (B6.1, mocker-backend-verify; v4 since 6006fa8) joined
-		// guide.BackendWorkflows; the count stayed at six and every SDK example
-		// that negotiates through here failed. The versions map below still
-		// pins each owner exactly, and len(versions)==0 after the loop proves
-		// none is missing, so the count plus the map keep rejecting an extra,
-		// a missing or a re-versioned owner.
-		if !slices.Equal(capabilities.ModelSchemaVersions, []string{"1", "2", "3", "4", "5", "6"}) || !slices.Contains(capabilities.ProviderProfiles, "composed-source-v1") || len(capabilities.Workflows) != 8 {
+		// The advertised owners and versions are exactly the guide's own
+		// (guide.BackendWorkflows): an extra, missing or re-versioned owner
+		// fails below, and len(versions)==0 after the loop proves none is
+		// missing. A literal owner count and version map stood here before and
+		// went stale with every new owner or guide version.
+		if !slices.Equal(capabilities.ModelSchemaVersions, []string{"1", "2", "3", "4", "5", "6"}) || !slices.Contains(capabilities.ProviderProfiles, "composed-source-v1") || len(capabilities.Workflows) == 0 {
 			t.Fatalf("incomplete source6 discovery: %+v", capabilities)
 		}
-		versions := map[string]string{"mocker-backend-project": "2", "mocker-backend-import": "8", "mocker-backend-database": "7", "mocker-backend-inspect": "13", "mocker-backend-sync": "2", "mocker-backend-change": "5", "mocker-backend-replay": "1", "mocker-backend-verify": "4"}
+		versions := map[string]string{}
+		for _, w := range guide.BackendWorkflows() {
+			versions[w.WorkflowID] = w.WorkflowVersion
+		}
+		if len(capabilities.Workflows) != len(versions) {
+			t.Fatalf("discovery advertises %d owners, the guide declares %d", len(capabilities.Workflows), len(versions))
+		}
 		selectedSet := ""
 		for _, owner := range capabilities.Workflows {
 			if versions[owner.WorkflowID] != owner.WorkflowVersion || owner.GuideSetID == "" || owner.ManifestHash != owner.GuideSetID || selectedSet != "" && selectedSet != owner.GuideSetID {

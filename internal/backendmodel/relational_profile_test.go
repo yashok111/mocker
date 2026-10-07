@@ -45,7 +45,7 @@ func TestRelationalProfileEmptyStoreReopen(t *testing.T) {
 	var schema int
 	// Reopening must not migrate past the head (the literal 22 here was written
 	// at 0022 and went stale with 0023..0027; see storeSchemaHead).
-	if err := reopened.R.QueryRowContext(t.Context(), `PRAGMA user_version`).Scan(&schema); err != nil || schema != storeSchemaHead {
+	if err := reopened.R.QueryRowContext(t.Context(), `PRAGMA user_version`).Scan(&schema); err != nil || schema != storeSchemaHead(t) {
 		t.Fatalf("schema head compatibility: %d, %v", schema, err)
 	}
 	in := relationalInput(firstImportFixture(p), false)

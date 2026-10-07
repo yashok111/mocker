@@ -259,8 +259,29 @@ func (db *DB) applyMigration(ctx context.Context, m migration) error {
 
 // loadMigrations reads and orders the embedded files, whose names are
 // NNNN_description.sql.
+// LatestSchemaVersion is the migration number this binary migrates a store to:
+// the highest embedded migration. Tests that reopen or upgrade a store compare
+// against it instead of a literal, which every new migration made stale.
+func LatestSchemaVersion() (int, error) {
+	ms, err := loadMigrations()
+	if err != nil || len(ms) == 0 {
+		return 0, err
+	}
+	return ms[len(ms)-1].version, nil
+}
+
 func loadMigrations() ([]migration, error) {
-	entries, err := fs.Glob(migrationFS, "migrations/*.sql")
+	return parseMigrations(migrationFS)
+}
+
+// parseMigrations reads NNNN_description.sql files and requires their numbers
+// to run 1, 2, ... N without a gap. A gap is a migration that was renumbered,
+// lost in a merge or never committed; Migrate would silently skip past it and
+// stamp a user_version whose schema it never built. This replaced a test that
+// pinned the exact number of migration files, which caught nothing a gap does
+// not and broke on every new migration.
+func parseMigrations(fsys fs.FS) ([]migration, error) {
+	entries, err := fs.Glob(fsys, "migrations/*.sql")
 	if err != nil {
 		return nil, err
 	}
@@ -281,12 +302,17 @@ func loadMigrations() ([]migration, error) {
 		}
 		seen[version] = base
 
-		body, err := migrationFS.ReadFile(name)
+		body, err := fs.ReadFile(fsys, name)
 		if err != nil {
 			return nil, err
 		}
 		out = append(out, migration{version: version, name: rest, sql: string(body)})
 	}
 	slices.SortFunc(out, func(a, b migration) int { return cmp.Compare(a.version, b.version) })
+	for i, m := range out {
+		if m.version != i+1 {
+			return nil, fmt.Errorf("migration %04d_%s: want version %04d, the numbers must run without a gap", m.version, m.name, i+1)
+		}
+	}
 	return out, nil
 }

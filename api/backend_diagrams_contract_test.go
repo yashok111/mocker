@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/santhosh-tekuri/jsonschema/v6"
+
 	"github.com/yashok111/mocker/internal/jsonx"
 )
 
@@ -66,20 +67,26 @@ func TestBackendDiagramClosedCanonicalContract(t *testing.T) {
 	if err = json.Unmarshal(backendContract, &contract); err != nil {
 		t.Fatal(err)
 	}
+	// Diagram versions are immutable, so the diagram surface is closed to
+	// PUT, PATCH and DELETE: every change is a POST that appends a version.
+	// That is the invariant; the exact operation count pinned here before
+	// (13, then 15) moved with every deliberate diagram route.
 	count := 0
 	for path, methods := range contract.Paths {
-		if strings.Contains(path, "/diagrams") || strings.Contains(path, "/diagram-views") {
-			for method := range methods {
-				if method == "get" || method == "post" {
-					count++
-				}
+		if !strings.Contains(path, "/diagrams") && !strings.Contains(path, "/diagram-views") {
+			continue
+		}
+		for method := range methods {
+			switch method {
+			case "get", "post":
+				count++
+			case "parameters":
+			default:
+				t.Errorf("diagram path %s declares %s; diagram versions are append-only", path, method)
 			}
 		}
 	}
-	// 13 at f30edb2 (lifecycle build); 5579099 (B5.2) added
-	// GET .../diagram-views/{vid}/versions/{v}/svg and 41ca3c6 (B6.1) added
-	// POST .../diagrams/resolve-scope, both deliberate diagram routes.
-	if count != 15 {
-		t.Fatalf("diagram REST operation count=%d, want 15", count)
+	if count == 0 {
+		t.Fatal("contract declares no diagram operations")
 	}
 }

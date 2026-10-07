@@ -2,8 +2,6 @@ package mcp
 
 import (
 	"slices"
-	"sort"
-	"strings"
 	"testing"
 
 	"github.com/yashok111/mocker/internal/admin"
@@ -81,24 +79,6 @@ func TestMCPAllowedRoutesIsACopy(t *testing.T) {
 	second := admin.MCPAllowedRoutes()
 	if slices.Contains(second, "POST /api/auth/login") {
 		t.Error("mutating the returned slice changed the allowlist itself; MCPAllowedRoutes must return a copy")
-	}
-}
-
-// TestToolRoutesPopulation pins the tool count so a tool added without a
-// toolRoutes entry — the one way a tool can reach a route this file does not
-// describe — fails here rather than at run time.
-func TestToolRoutesPopulation(t *testing.T) {
-	t.Parallel()
-
-	if len(toolRoutes) != toolCount {
-		names := make([]string, 0, len(toolRoutes))
-		for tool := range toolRoutes {
-			names = append(names, tool)
-		}
-		sort.Strings(names)
-		t.Errorf("toolRoutes holds %d tools, want %d: %s\n"+
-			"a new tool needs a row here AND its route in admin.mcpAllowedRoutes; bump toolCount only together with both",
-			len(toolRoutes), toolCount, strings.Join(names, ", "))
 	}
 }
 
