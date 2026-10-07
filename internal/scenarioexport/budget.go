@@ -65,90 +65,102 @@ func (b *jsonBudget) value(v reflect.Value) error {
 	case reflect.Int, reflect.Int64:
 		return b.take(int64(len(strconv.FormatInt(v.Int(), 10))))
 	case reflect.Map:
-		if v.Type().Key().Kind() != reflect.String {
-			return fmt.Errorf("unsupported export JSON map %s", v.Type())
-		}
-		if v.IsNil() {
-			return b.take(4)
-		}
-		if err := b.take(2); err != nil {
-			return err
-		}
-		iterator := v.MapRange()
-		first := true
-		for iterator.Next() {
-			if !first {
-				if err := b.take(1); err != nil {
-					return err
-				}
-			}
-			first = false
-			if err := b.text(iterator.Key().String()); err != nil {
-				return err
-			}
-			if err := b.take(1); err != nil {
-				return err
-			}
-			if err := b.value(iterator.Value()); err != nil {
-				return err
-			}
-		}
-		return nil
+		return b.mapValue(v)
 	case reflect.Slice:
-		if v.IsNil() {
-			return b.take(4)
-		}
-		if err := b.take(2); err != nil {
-			return err
-		}
-		for i := 0; i < v.Len(); i++ {
-			if i > 0 {
-				if err := b.take(1); err != nil {
-					return err
-				}
-			}
-			if err := b.value(v.Index(i)); err != nil {
-				return err
-			}
-		}
-		return nil
+		return b.sliceValue(v)
 	case reflect.Struct:
-		if err := b.take(2); err != nil {
-			return err
-		}
-		first := true
-		for i := 0; i < v.NumField(); i++ {
-			field := v.Type().Field(i)
-			tag := field.Tag.Get("json")
-			name, options, _ := strings.Cut(tag, ",")
-			if name == "-" || field.PkgPath != "" {
-				continue
-			}
-			if name == "" || field.Anonymous || (options != "" && options != "omitempty") {
-				return fmt.Errorf("unsupported export JSON field %s", field.Name)
-			}
-			val := v.Field(i)
-			if options == "omitempty" && (val.IsZero() || ((val.Kind() == reflect.Slice || val.Kind() == reflect.String) && val.Len() == 0)) {
-				continue
-			}
-			if !first {
-				if err := b.take(1); err != nil {
-					return err
-				}
-			}
-			first = false
-			if err := b.text(name); err != nil {
-				return err
-			}
-			if err := b.take(1); err != nil {
-				return err
-			}
-			if err := b.value(val); err != nil {
-				return err
-			}
-		}
-		return nil
+		return b.structValue(v)
 	default:
 		return fmt.Errorf("unsupported export JSON type %s", v.Type())
 	}
+}
+
+// member charges one object member: the comma before every member but the
+// first, the quoted name, the colon and the value.
+func (b *jsonBudget) member(first bool, name string, value reflect.Value) error {
+	if !first {
+		if err := b.take(1); err != nil {
+			return err
+		}
+	}
+	if err := b.text(name); err != nil {
+		return err
+	}
+	if err := b.take(1); err != nil {
+		return err
+	}
+	return b.value(value)
+}
+
+func (b *jsonBudget) mapValue(v reflect.Value) error {
+	if v.Type().Key().Kind() != reflect.String {
+		return fmt.Errorf("unsupported export JSON map %s", v.Type())
+	}
+	if v.IsNil() {
+		return b.take(4)
+	}
+	if err := b.take(2); err != nil {
+		return err
+	}
+	iterator := v.MapRange()
+	first := true
+	for iterator.Next() {
+		if err := b.member(first, iterator.Key().String(), iterator.Value()); err != nil {
+			return err
+		}
+		first = false
+	}
+	return nil
+}
+
+func (b *jsonBudget) sliceValue(v reflect.Value) error {
+	if v.IsNil() {
+		return b.take(4)
+	}
+	if err := b.take(2); err != nil {
+		return err
+	}
+	for i := 0; i < v.Len(); i++ {
+		if i > 0 {
+			if err := b.take(1); err != nil {
+				return err
+			}
+		}
+		if err := b.value(v.Index(i)); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (b *jsonBudget) structValue(v reflect.Value) error {
+	if err := b.take(2); err != nil {
+		return err
+	}
+	first := true
+	for i := 0; i < v.NumField(); i++ {
+		field := v.Type().Field(i)
+		tag := field.Tag.Get("json")
+		name, options, _ := strings.Cut(tag, ",")
+		if name == "-" || field.PkgPath != "" {
+			continue
+		}
+		if name == "" || field.Anonymous || (options != "" && options != "omitempty") {
+			return fmt.Errorf("unsupported export JSON field %s", field.Name)
+		}
+		val := v.Field(i)
+		if options == "omitempty" && omittedEmpty(val) {
+			continue
+		}
+		if err := b.member(first, name, val); err != nil {
+			return err
+		}
+		first = false
+	}
+	return nil
+}
+
+// omittedEmpty mirrors encoding/json's omitempty for the DTO vocabulary.
+func omittedEmpty(val reflect.Value) bool {
+	return val.IsZero() || ((val.Kind() == reflect.Slice || val.Kind() == reflect.String) && val.Len() == 0)
 }

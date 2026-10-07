@@ -1,6 +1,7 @@
 package scenarioexport
 
 import (
+	"context"
 	"fmt"
 	"maps"
 	"slices"
@@ -27,117 +28,140 @@ func (c *eventValidationCache) parseSchema(id string) eventParsedSchema {
 	if parsed, ok := c.parsed[id]; ok {
 		return parsed
 	}
+	parsed := c.parseSchemaUncached(id)
+	c.parsed[id] = parsed
+	return parsed
+}
+
+func (c *eventValidationCache) parseSchemaUncached(id string) eventParsedSchema {
 	item, ok := c.schemas[id]
 	parsed := eventParsedSchema{}
 	sourcePointer := c.schemaPointer(id)
-	if !ok {
-		parsed.issues = append(parsed.issues, diagnostic("event_schema_invalid", "error", "Схема отсутствует", "event-schema", id, sourcePointer))
-		c.parsed[id] = parsed
+	invalid := func(message string) eventParsedSchema {
+		parsed.issues = append(parsed.issues, diagnostic("event_schema_invalid", "error", message, "event-schema", id, sourcePointer))
 		return parsed
 	}
+	if !ok {
+		return invalid("Схема отсутствует")
+	}
 	if len(item.SchemaJSON) > 256<<10 {
-		parsed.issues = append(parsed.issues, diagnostic("event_schema_invalid", "error", "Схема превышает 256 KiB", "event-schema", id, sourcePointer))
-		c.parsed[id] = parsed
-		return parsed
+		return invalid("Схема превышает 256 KiB")
 	}
 	v, err := decodeJSON([]byte(item.SchemaJSON))
 	if err != nil {
-		parsed.issues = append(parsed.issues, diagnostic("event_schema_invalid", "error", "Неверный JSON схемы: "+err.Error(), "event-schema", id, sourcePointer))
-		c.parsed[id] = parsed
-		return parsed
+		return invalid("Неверный JSON схемы: " + err.Error())
 	}
 	if _, ok := v.(map[string]any); !ok {
 		if _, yes := v.(bool); !yes {
-			parsed.issues = append(parsed.issues, diagnostic("event_schema_invalid", "error", "Корень схемы должен быть объектом или boolean", "event-schema", id, sourcePointer))
+			invalid("Корень схемы должен быть объектом или boolean")
 		}
 	}
 	parsed.value = v
 	if !validJSONShape(v, 0, new(int)) {
-		parsed.issues = append(parsed.issues, diagnostic("event_schema_invalid", "error", "Превышен лимит глубины или узлов схемы", "event-schema", id, sourcePointer))
-		c.parsed[id] = parsed
-		return parsed
+		return invalid("Превышен лимит глубины или узлов схемы")
 	}
-	nodes := 0
-	var walk func(any, int, string)
-	walk = func(value any, depth int, pointer string) {
-		if c.ctx.Err() != nil {
-			return
-		}
-		nodes++
-		if nodes > 10000 || depth > 64 {
-			if nodes == 10001 || depth == 65 {
-				parsed.issues = append(parsed.issues, diagnostic("event_schema_invalid", "error", "Превышен лимит глубины или узлов схемы", "event-schema", id, sourcePointer))
-			}
-			return
-		}
-		obj, ok := value.(map[string]any)
-		if !ok {
-			return
-		}
-		for _, key := range slices.Sorted(maps.Keys(obj)) {
-			if !draft07Keywords[key] {
-				parsed.issues = append(parsed.issues, diagnostic("event_schema_invalid", "error", "Неподдерживаемое ключевое слово схемы: "+pointer+"/"+escapePointer(key), "event-schema", id, sourcePointer))
-			}
-		}
-		if dialect, ok := obj["$schema"]; ok && dialect != "http://json-schema.org/draft-07/schema#" && dialect != "https://json-schema.org/draft-07/schema#" && dialect != "http://json-schema.org/draft-07/schema" && dialect != "https://json-schema.org/draft-07/schema" {
-			parsed.issues = append(parsed.issues, diagnostic("event_schema_invalid", "error", "Допустим только JSON Schema Draft 07", "event-schema", id, sourcePointer))
-		}
-		if _, ok := obj["$id"]; ok {
-			parsed.issues = append(parsed.issues, diagnostic("event_ref_unsupported", "error", "$id с изменением базы ссылок не поддерживается", "event-schema", id, sourcePointer))
-		}
-		if raw, ok := obj["$ref"]; ok {
-			ref, yes := raw.(string)
-			parts := strings.Split(strings.TrimPrefix(ref, "#/components/schemas/"), "/")
-			if !yes || !strings.HasPrefix(ref, "#/components/schemas/") || parts[0] == "" || strings.Contains(parts[0], "~") {
-				parsed.issues = append(parsed.issues, diagnostic("event_ref_unsupported", "error", "Разрешены только ссылки на components.schemas", "event-schema", id, sourcePointer))
-			} else {
-				parsed.refs = append(parsed.refs, ref)
-			}
-		}
-		for _, key := range []string{"properties", "patternProperties", "definitions"} {
-			if children, ok := obj[key].(map[string]any); ok {
-				for _, name := range slices.Sorted(maps.Keys(children)) {
-					child := children[name]
-					walk(child, depth+1, pointer+"/"+key+"/"+escapePointer(name))
-				}
-			}
-		}
-		if children, ok := obj["dependencies"].(map[string]any); ok {
-			for _, name := range slices.Sorted(maps.Keys(children)) {
-				child := children[name]
-				if _, isArray := child.([]any); !isArray {
-					walk(child, depth+1, pointer+"/dependencies/"+escapePointer(name))
-				}
-			}
-		}
-		for _, key := range []string{"additionalItems", "items", "contains", "additionalProperties", "propertyNames", "if", "then", "else", "not"} {
-			if child, ok := obj[key]; ok {
-				if arr, yes := child.([]any); yes {
-					for i, v := range arr {
-						walk(v, depth+1, fmt.Sprintf("%s/%s/%d", pointer, key, i))
-					}
-				} else {
-					walk(child, depth+1, pointer+"/"+key)
-				}
-			}
-		}
-		for _, key := range []string{"allOf", "anyOf", "oneOf"} {
-			if arr, ok := obj[key].([]any); ok {
-				for i, child := range arr {
-					walk(child, depth+1, fmt.Sprintf("%s/%s/%d", pointer, key, i))
-				}
-			}
-		}
-	}
-	walk(v, 0, "")
+	walker := schemaWalker{ctx: c.ctx, parsed: &parsed, id: id, sourcePointer: sourcePointer}
+	walker.walk(v, 0, "")
 	if v == true || isEmptyObject(v) {
 		parsed.issues = append(parsed.issues, diagnostic("event_schema_unconstrained", "warning", "Схема не ограничивает содержимое события", "event-schema", id, sourcePointer))
 	}
 	if v == false {
-		parsed.issues = append(parsed.issues, diagnostic("event_schema_invalid", "error", "Схема false не допускает сообщений", "event-schema", id, sourcePointer))
+		invalid("Схема false не допускает сообщений")
 	}
-	c.parsed[id] = parsed
 	return parsed
+}
+
+// schemaWalker checks one authored schema against the Draft 07 subset the
+// export supports and records its components.schemas references.
+type schemaWalker struct {
+	ctx               context.Context
+	parsed            *eventParsedSchema
+	id, sourcePointer string
+	nodes             int
+}
+
+func (w *schemaWalker) issue(code, message string) {
+	w.parsed.issues = append(w.parsed.issues, diagnostic(code, "error", message, "event-schema", w.id, w.sourcePointer))
+}
+
+func (w *schemaWalker) walk(value any, depth int, pointer string) {
+	if w.ctx.Err() != nil {
+		return
+	}
+	w.nodes++
+	if w.nodes > 10000 || depth > 64 {
+		if w.nodes == 10001 || depth == 65 {
+			w.issue("event_schema_invalid", "Превышен лимит глубины или узлов схемы")
+		}
+		return
+	}
+	obj, ok := value.(map[string]any)
+	if !ok {
+		return
+	}
+	w.checkKeywords(obj, pointer)
+	w.walkChildren(obj, depth, pointer)
+}
+
+func (w *schemaWalker) checkKeywords(obj map[string]any, pointer string) {
+	for _, key := range slices.Sorted(maps.Keys(obj)) {
+		if !draft07Keywords[key] {
+			w.issue("event_schema_invalid", "Неподдерживаемое ключевое слово схемы: "+pointer+"/"+escapePointer(key))
+		}
+	}
+	if dialect, ok := obj["$schema"]; ok && dialect != "http://json-schema.org/draft-07/schema#" && dialect != "https://json-schema.org/draft-07/schema#" && dialect != "http://json-schema.org/draft-07/schema" && dialect != "https://json-schema.org/draft-07/schema" {
+		w.issue("event_schema_invalid", "Допустим только JSON Schema Draft 07")
+	}
+	if _, ok := obj["$id"]; ok {
+		w.issue("event_ref_unsupported", "$id с изменением базы ссылок не поддерживается")
+	}
+	if raw, ok := obj["$ref"]; ok {
+		ref, yes := raw.(string)
+		parts := strings.Split(strings.TrimPrefix(ref, "#/components/schemas/"), "/")
+		if !yes || !strings.HasPrefix(ref, "#/components/schemas/") || parts[0] == "" || strings.Contains(parts[0], "~") {
+			w.issue("event_ref_unsupported", "Разрешены только ссылки на components.schemas")
+		} else {
+			w.parsed.refs = append(w.parsed.refs, ref)
+		}
+	}
+}
+
+// walkChildren visits subschemas in a fixed keyword order so diagnostics and
+// references come out in the same order on every run.
+func (w *schemaWalker) walkChildren(obj map[string]any, depth int, pointer string) {
+	for _, key := range []string{"properties", "patternProperties", "definitions"} {
+		if children, ok := obj[key].(map[string]any); ok {
+			for _, name := range slices.Sorted(maps.Keys(children)) {
+				w.walk(children[name], depth+1, pointer+"/"+key+"/"+escapePointer(name))
+			}
+		}
+	}
+	if children, ok := obj["dependencies"].(map[string]any); ok {
+		for _, name := range slices.Sorted(maps.Keys(children)) {
+			child := children[name]
+			if _, isArray := child.([]any); !isArray {
+				w.walk(child, depth+1, pointer+"/dependencies/"+escapePointer(name))
+			}
+		}
+	}
+	for _, key := range []string{"additionalItems", "items", "contains", "additionalProperties", "propertyNames", "if", "then", "else", "not"} {
+		if child, ok := obj[key]; ok {
+			if arr, yes := child.([]any); yes {
+				for i, v := range arr {
+					w.walk(v, depth+1, fmt.Sprintf("%s/%s/%d", pointer, key, i))
+				}
+			} else {
+				w.walk(child, depth+1, pointer+"/"+key)
+			}
+		}
+	}
+	for _, key := range []string{"allOf", "anyOf", "oneOf"} {
+		if arr, ok := obj[key].([]any); ok {
+			for i, child := range arr {
+				w.walk(child, depth+1, fmt.Sprintf("%s/%s/%d", pointer, key, i))
+			}
+		}
+	}
 }
 
 func isEmptyObject(v any) bool { obj, ok := v.(map[string]any); return ok && len(obj) == 0 }
