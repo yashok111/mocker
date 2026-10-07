@@ -1,6 +1,7 @@
 package backendmodel
 
 import (
+	"database/sql"
 	"encoding/json/v2"
 	"errors"
 	"github.com/yashok111/mocker/internal/testkit"
@@ -76,10 +77,16 @@ func TestArtifactDiscriminatorLoadAndQualifiedQuery(t *testing.T) {
 	}
 	base.Revision.ArtifactPins = p.Pins
 	raw, _ := json.Marshal(base.Revision)
-	if _, err = s.repo.db.W.ExecContext(t.Context(), `UPDATE backend_revisions SET document=? WHERE id=?`, string(raw), base.Revision.ID); err != nil {
-		t.Fatal(err)
-	}
-	if _, err = testkit.ExecBackendOwner(t.Context(), s.repo.db.W, `INSERT INTO backend_revision_api_artifacts(revision_id,source_content_hash,source_semantic_hash,document) VALUES(?,?,?,?)`, base.Revision.ID, c.SourceContentHash, c.SourceSemanticHash, string(doc)); err != nil {
+	// Store27 (48dce80, B6.3) seals the committed revision's payload, so the
+	// pinned revision document and its context are seeded together in the
+	// Store26 fixture shape and published by the production migration.
+	if err = testkit.EditLegacyBackendFixture(t.Context(), s.repo.db, func(tx *sql.Tx) error {
+		if _, err := tx.ExecContext(t.Context(), `UPDATE backend_revisions SET document=? WHERE id=?`, string(raw), base.Revision.ID); err != nil {
+			return err
+		}
+		_, err := tx.ExecContext(t.Context(), `INSERT INTO backend_revision_api_artifacts(revision_id,source_content_hash,source_semantic_hash,document) VALUES(?,?,?,?)`, base.Revision.ID, c.SourceContentHash, c.SourceSemanticHash, string(doc))
+		return err
+	}); err != nil {
 		t.Fatal(err)
 	}
 	state, err := loadRevisionState(t.Context(), s.repo.db.R, base.Project.ID, base.Revision.ID)
@@ -98,17 +105,30 @@ func TestArtifactDiscriminatorLoadAndQualifiedQuery(t *testing.T) {
 	if err != nil || !page.BindingsComplete || len(page.EditorBindings) != 2 || page.Resolution.Status != "unavailable" {
 		t.Fatalf("broken roster: %+v %v", page, err)
 	}
-	if _, err := s.repo.db.W.ExecContext(t.Context(), `DROP TRIGGER backend_revision_api_artifacts_immutable_update`); err != nil {
-		t.Fatal(err)
-	}
 	for _, bad := range []string{strings.Replace(string(doc), EditorArtifactDocumentVersion, "future-v3", 1), strings.Replace(string(doc), `"documentVersion":"`+EditorArtifactDocumentVersion+`"`, `"documentVersion":null`, 1), strings.Replace(string(doc), c.SourceContentHash, strings.Repeat("a", 64), 1)} {
-		if _, err := s.repo.db.W.ExecContext(t.Context(), `UPDATE backend_revision_api_artifacts SET document=? WHERE revision_id=?`, bad, base.Revision.ID); err != nil {
+		if err := editLegacyArtifactContext(t, s.repo, base.Revision.ID, bad); err != nil {
 			t.Fatal(err)
 		}
 		if _, err := loadRevisionState(t.Context(), s.repo.db.R, base.Project.ID, base.Revision.ID); err == nil {
 			t.Fatal("invalid discriminator or row anchor accepted")
 		}
 	}
+}
+
+// editLegacyArtifactContext replaces a revision's stored artifact context with
+// corrupt bytes. Store27 (48dce80, B6.3) keeps the payload in an immutable blob
+// with a sealed manifest, so the only route to "historical corrupt bytes" is the
+// Store26 fixture shape (its immutable trigger dropped there) followed by the
+// production migration, which copies the bytes without decoding them.
+func editLegacyArtifactContext(t *testing.T, r *Repo, revisionID, document string) error {
+	t.Helper()
+	return testkit.EditLegacyBackendFixture(t.Context(), r.db, func(tx *sql.Tx) error {
+		if _, err := tx.ExecContext(t.Context(), `DROP TRIGGER backend_revision_api_artifacts_immutable_update`); err != nil {
+			return err
+		}
+		_, err := tx.ExecContext(t.Context(), `UPDATE backend_revision_api_artifacts SET document=? WHERE revision_id=?`, document, revisionID)
+		return err
+	})
 }
 
 func TestArtifactPersistentMixedVersionRejected(t *testing.T) {
@@ -119,11 +139,8 @@ func TestArtifactPersistentMixedVersionRejected(t *testing.T) {
 	if err := s.repo.db.R.QueryRowContext(t.Context(), `SELECT document FROM backend_revision_api_artifacts_documents WHERE revision_id=?`, pinned.Revision.ID).Scan(&original); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.repo.db.W.ExecContext(t.Context(), `DROP TRIGGER backend_revision_api_artifacts_immutable_update`); err != nil {
-		t.Fatal(err)
-	}
 	mixed := strings.TrimSuffix(original, "}") + `,"editorBindings":[]}`
-	if _, err := s.repo.db.W.ExecContext(t.Context(), `UPDATE backend_revision_api_artifacts SET document=? WHERE revision_id=?`, mixed, pinned.Revision.ID); err != nil {
+	if err := editLegacyArtifactContext(t, s.repo, pinned.Revision.ID, mixed); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := loadRevisionState(t.Context(), s.repo.db.R, base.Project.ID, pinned.Revision.ID); err == nil {

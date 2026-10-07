@@ -64,8 +64,10 @@ func TestRelationalProfileActualB04Store(t *testing.T) {
 			t.Fatal(err)
 		}
 		var schema int
-		if err := db.R.QueryRowContext(t.Context(), `PRAGMA user_version`).Scan(&schema); err != nil || schema != 19 {
-			t.Fatalf("store19 compatibility: %d, %v", schema, err)
+		// The B0.4 capture must migrate to the head and no further (the literal
+		// 19 here went stale with 0020..0027; see storeSchemaHead).
+		if err := db.R.QueryRowContext(t.Context(), `PRAGMA user_version`).Scan(&schema); err != nil || schema != storeSchemaHead {
+			t.Fatalf("store head compatibility: %d, %v", schema, err)
 		}
 		return db
 	}

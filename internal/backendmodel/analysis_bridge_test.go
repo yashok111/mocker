@@ -300,10 +300,13 @@ func TestAnalysisLeaseOrdinaryPreparationRejectsBeforeOtherGraphDecode(t *testin
 		t.Fatal(err)
 	}
 	defer lease.Release()
-	err = r.db.Write(t.Context(), func(tx *sql.Tx) error {
-		_, err := testkit.ExecBackendOwner(t.Context(), tx, `INSERT INTO backend_graph_records(project_id,revision_id,record_type,id,document) VALUES(?,?,'node',?,'{"attributes":[]}')`, base.Project.ID, next.Revision.ID, uuid.NewV7().String())
-		return err
-	})
+	// The poison record keeps an undecodable attributes array. Store27
+	// (48dce80, B6.3) seals the committed revision's graph manifest and checks
+	// the projection against the payload's id/kind/name, so the record carries
+	// exactly those identity fields (kind/name empty = the column defaults) and
+	// is seeded in the Store26 fixture shape, published by the production migration.
+	poison := uuid.NewV7().String()
+	_, err = testkit.EditLegacyBackendPayload(t.Context(), r.db, `INSERT INTO backend_graph_records(project_id,revision_id,record_type,id,document) VALUES(?,?,'node',?,json_object('id',?,'kind','','name','','attributes',json('[]')))`, base.Project.ID, next.Revision.ID, poison, poison)
 	if err != nil {
 		t.Fatal(err)
 	}
