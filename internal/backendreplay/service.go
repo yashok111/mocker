@@ -10,6 +10,7 @@ import (
 	"slices"
 	"strconv"
 	"sync"
+	"time"
 
 	"github.com/yashok111/mocker/internal/backendmodel"
 	p "github.com/yashok111/mocker/internal/ordersprotocol"
@@ -25,13 +26,15 @@ type Service struct {
 	done, ready                          chan struct{}
 	active                               map[string]context.CancelFunc
 	runErr                               error
+	// Each terminal write attempt's window; tests shorten it.
+	persistTimeout time.Duration
 	// ArtifactReader supplies exact owner reads when admitting a saved package.
 	ArtifactReader func(context.Context) *backendmodel.EditorArtifactRequest
 	ActorAllowed   ActorAllowed
 }
 
 func NewService(repo *Repo, graphs *backendmodel.Repo, targets []Target) *Service {
-	s := &Service{repo: repo, graphs: graphs, targets: map[string]Target{}, done: make(chan struct{}), ready: make(chan struct{}), active: map[string]context.CancelFunc{}}
+	s := &Service{repo: repo, graphs: graphs, targets: map[string]Target{}, done: make(chan struct{}), ready: make(chan struct{}), active: map[string]context.CancelFunc{}, persistTimeout: 5 * time.Second}
 	for _, t := range targets {
 		s.targets[t.ID] = t
 	}

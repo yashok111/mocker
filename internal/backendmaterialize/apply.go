@@ -65,7 +65,7 @@ func (s *Service) Apply(ctx context.Context, pid string, in ApplyInput) (*Receip
 		if preview.CandidateHash != in.CandidateHash {
 			return conflict("Candidate changed; preview again")
 		}
-		installation, err := s.models.InstallationID(ctx)
+		installation, err := s.models.InstallationIDTx(ctx, tx)
 		if err != nil {
 			return err
 		}

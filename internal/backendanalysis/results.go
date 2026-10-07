@@ -86,11 +86,30 @@ func prepareSnapshot(s PreparedSnapshot) (PreparedSnapshot, error) {
 		s.Manifest.Sections = append(s.Manifest.Sections, m)
 	}
 	s.Manifest.RuntimeVerified = false
+	if err := sealManifest(&s, content); err != nil {
+		return s, err
+	}
+	if int64(len(s.ManifestJSON)) > maxManifestBytes {
+		// Only an oversized manifest is summarized, so every manifest that was
+		// storable before keeps its bytes and semantic hash (F135/F189/F190).
+		s.Manifest = fitManifest(s.Manifest)
+		if err := sealManifest(&s, content); err != nil {
+			return s, err
+		}
+	}
+	if int64(len(s.ManifestJSON)) > maxManifestBytes {
+		return s, fault(413, "manifest_limit", "Manifest exceeds reserved terminal headroom")
+	}
+	return s, nil
+}
+
+// sealManifest computes the semantic hash and the stored bytes of a manifest.
+func sealManifest(s *PreparedSnapshot, content map[string][]jsontext.Value) error {
+	s.Manifest.SemanticResultHash = ""
 	semantic := s.Manifest
 	semantic.JobID = ""
 	semantic.ResultVersion = 0
 	semantic.HighWaterSequence = 0
-	semantic.SemanticResultHash = ""
 	semantic.Sections = slices.Clone(s.Manifest.Sections)
 	for i := range semantic.Sections {
 		semantic.Sections[i].Bytes = 0
@@ -100,14 +119,11 @@ func prepareSnapshot(s PreparedSnapshot) (PreparedSnapshot, error) {
 		Content  map[string][]jsontext.Value `json:"content"`
 	}{semantic, content})
 	if err != nil {
-		return s, err
+		return err
 	}
 	s.Manifest.SemanticResultHash = digest(raw)
 	s.ManifestJSON, err = canonical(s.Manifest)
-	if int64(len(s.ManifestJSON)) > maxManifestBytes {
-		return s, fault(413, "manifest_limit", "Manifest exceeds reserved terminal headroom")
-	}
-	return s, err
+	return err
 }
 func (r *Repo) Publish(ctx context.Context, pid, id, token string, s PreparedSnapshot) (*ResultManifest, error) {
 	s.Manifest.JobID = id

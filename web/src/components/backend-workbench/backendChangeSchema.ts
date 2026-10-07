@@ -2353,7 +2353,7 @@ export const backendChangeSchemas: Record<string, ChangeSchema> = {
       resultBytes: {
         type: "integer",
         format: "int64",
-        minimum: 1,
+        minimum: 131072,
         maximum: 33554432,
       },
     },

@@ -24,7 +24,7 @@ func (s *Service) Export(ctx context.Context, in ExportInput) (*ExportResult, er
 		if err != nil {
 			return nil, "", err
 		}
-		installation, err := s.models.InstallationID(ctx)
+		installation, err := s.models.InstallationIDTx(ctx, tx)
 		if err != nil {
 			return nil, "", err
 		}

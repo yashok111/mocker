@@ -1,12 +1,14 @@
 package backendanalysis
 
 import (
+	"cmp"
 	"context"
 	"database/sql"
 	"encoding/json/v2"
 	"errors"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/yashok111/mocker/internal/backendmodel"
 )
@@ -234,7 +236,11 @@ func (s *Service) worker(ctx context.Context) {
 	for ctx.Err() == nil {
 		claim, err := s.repo.Claim(ctx, opaqueID())
 		if err == nil && claim != nil {
-			if err = s.execute(ctx, claim); err != nil {
+			// A failure during shutdown is not the service's failure: the job is
+			// closed as interrupted or left for startup recovery, and a clean
+			// stop must not exit non-zero (review 2026-10-06, F193; the replay
+			// worker had this guard already).
+			if err = s.execute(ctx, claim); err != nil && ctx.Err() == nil {
 				s.mu.Lock()
 				if s.runErr == nil {
 					s.runErr = err
@@ -263,11 +269,8 @@ func (s *Service) execute(app context.Context, claim *ClaimedJob) error {
 	defer func() { s.mu.Lock(); delete(s.active, claim.Job.ID); s.mu.Unlock() }()
 	// Cancellation may win between Claim and registration. Reading after
 	// registration closes that gap; later cancellation finds the registered cancel.
-	current, readErr := s.repo.Get(ctx, claim.Job.ProjectID, claim.Job.ID)
-	if readErr != nil {
-		return readErr
-	}
-	if current.Status != "running" {
+	current, err := s.repo.Get(ctx, claim.Job.ProjectID, claim.Job.ID)
+	if err == nil && current.Status != "running" {
 		return nil
 	}
 	version := int64(0)
@@ -277,21 +280,25 @@ func (s *Service) execute(app context.Context, claim *ClaimedJob) error {
 		p.Manifest.ResultVersion = version + 1
 		return p
 	}
-	terminal, err := s.engine.Analyze(ctx, &claim.Input, func(p PreparedSnapshot) error {
-		p = bind(p)
-		e := retryPublication(ctx, func() error {
-			_, err := s.repo.Publish(ctx, claim.Job.ProjectID, claim.Job.ID, claim.Token, p)
-			return err
+	var terminal *TerminalSnapshot
+	// A failed read here (shutdown cancelling the job context right after Claim,
+	// or a reader wait outliving the job timeout) is this job's failure, closed
+	// below like an engine error. Returning it stopped the service over one
+	// job (review 2026-10-06, F193). A cancellation that already won surfaces
+	// as lost_claim at the terminal write.
+	if err == nil {
+		terminal, err = s.engine.Analyze(ctx, &claim.Input, func(p PreparedSnapshot) error {
+			p = bind(p)
+			e := retryPublication(ctx, func() error {
+				_, err := s.repo.Publish(ctx, claim.Job.ProjectID, claim.Job.ID, claim.Token, p)
+				return err
+			})
+			if e == nil {
+				version++
+			}
+			return e
 		})
-		if e == nil {
-			version++
-		}
-		return e
-	})
-	// Persist shutdown with an independent bounded context before Run joins and the
-	// application closes the DB. A losing cancellation keeps its original receipt.
-	persist, release := context.WithTimeout(context.WithoutCancel(app), s.persistTimeout)
-	defer release()
+	}
 	if err != nil || terminal == nil {
 		status := "failed"
 		if app.Err() != nil {
@@ -301,17 +308,25 @@ func (s *Service) execute(app context.Context, claim *ClaimedJob) error {
 		if errors.Is(err, context.DeadlineExceeded) {
 			code = "deadline_exceeded"
 		}
-		_, prefix, e := s.repo.acceptedPrefix(persist, claim.Job.ProjectID, claim.Job.ID, code)
+		prefix, e := s.prefix(app, claim, code)
 		if e != nil {
 			return e
 		}
-		terminal = &TerminalSnapshot{Status: status, Snapshot: prefix, Diagnostic: &Diagnostic{ID: code, Code: code, Message: "Analysis did not complete"}}
+		diagnostic := &Diagnostic{ID: code, Code: code, Message: "Analysis did not complete"}
+		if f, ok := errors.AsType[*backendmodel.FaultError](err); ok && app.Err() == nil {
+			// The engine's typed reason is the caller's next step: a stale-input
+			// conflict asks for a new analysis, an overload for a retry. Storing
+			// only "failed" lost it (review 2026-10-06, F150). Raw errors keep the
+			// generic text: they can carry internals a client should not read.
+			diagnostic = &Diagnostic{ID: f.Code, Code: f.Code, Message: truncateRunes(f.Message, 1024)}
+		}
+		terminal = &TerminalSnapshot{Status: status, Snapshot: prefix, Diagnostic: diagnostic}
 	} else {
 		terminal.Snapshot = bind(terminal.Snapshot)
 	}
 	finalize := func(t TerminalSnapshot) error {
-		return retryPublication(persist, func() error {
-			_, e := s.repo.Finalize(persist, claim.Job.ProjectID, claim.Job.ID, claim.Token, t)
+		return s.persist(app, func(c context.Context) error {
+			_, e := s.repo.Finalize(c, claim.Job.ProjectID, claim.Job.ID, claim.Token, t)
 			return e
 		})
 	}
@@ -327,7 +342,7 @@ func (s *Service) execute(app context.Context, claim *ClaimedJob) error {
 		// verdict about this job (the store itself failing) still stops the
 		// service.
 		cause := f.Code
-		_, prefix, e := s.repo.acceptedPrefix(persist, claim.Job.ProjectID, claim.Job.ID, "result_unpersistable")
+		prefix, e := s.prefix(app, claim, "result_unpersistable")
 		if e != nil {
 			return e
 		}
@@ -339,12 +354,69 @@ func (s *Service) execute(app context.Context, claim *ClaimedJob) error {
 	return err
 }
 
+// truncateRunes keeps a stored diagnostic inside Finalize's 4096-byte bound.
+func truncateRunes(s string, maxBytes int) string {
+	if len(s) <= maxBytes {
+		return s
+	}
+	cut := maxBytes
+	for cut > 0 && !utf8.RuneStart(s[cut]) {
+		cut--
+	}
+	return s[:cut]
+}
+
+func (s *Service) prefix(app context.Context, claim *ClaimedJob, code string) (PreparedSnapshot, error) {
+	var prefix PreparedSnapshot
+	err := s.persist(app, func(c context.Context) error {
+		var e error
+		_, prefix, e = s.repo.acceptedPrefix(c, claim.Job.ProjectID, claim.Job.ID, code)
+		return e
+	})
+	return prefix, err
+}
+
+// persist runs one terminal storage step. Each attempt gets an independent
+// persistTimeout window, so a shutdown still persists before Run joins and the
+// application closes the DB; a losing cancellation keeps its original receipt.
+//
+// A window that ends only because the single writer (or a reader) stayed busy
+// is a wait, not a storage failure: a long portable import or export holds the
+// writer past 5 s, and returning that deadline cancelled the service and
+// stopped the server (review 2026-10-06, F4). Such a window is retried with
+// backoff while the service runs -- the claim holds until a cancellation wins,
+// which Finalize reports as lost_claim. Any other error that outlasts a whole
+// window (the store refusing every write) is still returned, and the worker
+// stops the service on it, as TestAnalysisWorkerPersistenceFailureRefusesContinuedRun
+// pins. During shutdown nothing is retried: the job is left for startup recovery.
+func (s *Service) persist(app context.Context, op func(context.Context) error) error {
+	backoff := 50 * time.Millisecond
+	for {
+		ctx, release := context.WithTimeout(context.WithoutCancel(app), s.persistTimeout)
+		err := retryPublication(ctx, func() error { return op(ctx) })
+		release()
+		// A FaultError is never a deadline, so it returns here unretried.
+		if err == nil || !errors.Is(err, context.DeadlineExceeded) || app.Err() != nil {
+			return err
+		}
+		select {
+		case <-app.Done():
+			return err
+		case <-time.After(backoff):
+		}
+		backoff = min(2*backoff, 2*time.Second)
+	}
+}
+
 // A retry reuses the same immutable prefix and version, including after an
-// ambiguous commit. It never repeats model admission or graph evaluation.
+// ambiguous commit. It never repeats model admission or graph evaluation. When
+// the window closes it reports the last attempt's own error, so a store that
+// refuses the write is told apart from a writer that was merely busy (F4).
 func retryPublication(ctx context.Context, publish func() error) error {
+	var last error
 	for {
 		if err := ctx.Err(); err != nil {
-			return err
+			return cmp.Or(last, err)
 		}
 		err := publish()
 		if err == nil {
@@ -354,9 +426,10 @@ func retryPublication(ctx context.Context, publish func() error) error {
 		if errors.As(err, &f) {
 			return err
 		}
+		last = err
 		select {
 		case <-ctx.Done():
-			return ctx.Err()
+			return last
 		case <-time.After(50 * time.Millisecond):
 		}
 	}

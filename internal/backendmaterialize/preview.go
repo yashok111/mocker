@@ -34,7 +34,7 @@ func (s *Service) previewTx(ctx context.Context, tx *sql.Tx, pid string, input P
 	if g.Pins.TargetHash != in.TargetHash {
 		return nil, conflict("Exact proposal/source target hash differs")
 	}
-	installation, err := s.models.InstallationID(ctx)
+	installation, err := s.models.InstallationIDTx(ctx, tx)
 	if err != nil {
 		return nil, err
 	}
