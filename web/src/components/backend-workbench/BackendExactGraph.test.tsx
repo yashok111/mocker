@@ -168,16 +168,15 @@ it("clears node-only search when selecting the edge inventory", async () => {
   await userEvent.type(screen.getByRole("textbox", { name: "Название объекта" }), "abc");
   await userEvent.selectOptions(screen.getByRole("combobox", { name: "Записи графа" }), "edges");
   await userEvent.click(screen.getByRole("button", { name: "Найти объекты" }));
-  await waitFor(() =>
-    expect(fetcher.mock.calls.filter(([url]) => String(url).endsWith("/graph/query")).length).toBe(
-      2,
-    ),
-  );
-  const body = JSON.parse(
-    String(
-      fetcher.mock.calls.filter(([url]) => String(url).endsWith("/graph/query")).at(-1)?.[1]?.body,
-    ),
-  );
+  // 6006fa8 added the «Сервис модели» filter, fed by its own graph read
+  // (kind "service"); only the inventory reads are counted here.
+  const inventoryReads = () =>
+    fetcher.mock.calls.filter(
+      ([url, init]) =>
+        String(url).endsWith("/graph/query") && JSON.parse(String(init?.body)).kind !== "service",
+    );
+  await waitFor(() => expect(inventoryReads().length).toBe(2));
+  const body = JSON.parse(String(inventoryReads().at(-1)?.[1]?.body));
   expect(body.recordType).toBe("edges");
   expect(Object.hasOwn(body, "search")).toBe(false);
   expect(screen.queryByRole("textbox", { name: "Название объекта" })).not.toBeInTheDocument();

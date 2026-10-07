@@ -1,6 +1,8 @@
 import { MantineProvider } from "@mantine/core";
 import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
 import { it, expect, vi } from "vitest";
+import { QueryClientProvider } from "@tanstack/react-query";
+import { makeQueryClient } from "@/test/render";
 import { BackendObservations } from "./BackendObservations";
 const state = vi.hoisted(() => ({
   scope: {
@@ -46,10 +48,15 @@ it("isolates an in-flight correlation when an exact diagram scope changes", asyn
         finish = resolve;
       }),
   );
+  // BackendObservations mounts BackendScenarioMeasurements (6006fa8), whose
+  // job and result reads are React Query hooks, so the panel needs a client.
+  const client = makeQueryClient();
   const tree = () => (
-    <MantineProvider env="test">
-      <BackendObservations projectId="project" />
-    </MantineProvider>
+    <QueryClientProvider client={client}>
+      <MantineProvider env="test">
+        <BackendObservations projectId="project" />
+      </MantineProvider>
+    </QueryClientProvider>
   );
   const view = render(tree());
   fireEvent.click(screen.getByRole("button", { name: "Обновить версии" }));
@@ -57,7 +64,9 @@ it("isolates an in-flight correlation when an exact diagram scope changes", asyn
     expect(screen.getByRole("button", { name: "Обновить версии" })).not.toBeDisabled(),
   );
   fireEvent.click(screen.getByRole("combobox", { name: "Точная версия наблюдений" }));
-  fireEvent.click(await screen.findByRole("option"));
+  // The measurement panel's NativeSelects add plain <option>s to the page,
+  // so the observation version is picked by its own label.
+  fireEvent.click(await screen.findByRole("option", { name: /ObservationFixture: v1/ }));
   await waitFor(() =>
     expect(
       screen.getByRole("button", { name: "Подготовить точное сопоставление" }),

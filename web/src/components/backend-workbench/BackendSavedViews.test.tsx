@@ -3,6 +3,7 @@ import { screen, waitFor, act } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { renderWithProviders } from "@/test/render";
 import { json } from "@/test/http";
+import { isReplayList } from "@/test/backendExact";
 import { useBackendSavedViewSession } from "./useBackendSavedViewSession";
 import { BackendSavedViews } from "./BackendSavedViews";
 import type { BackendSavedView, BackendSavedViewResponse } from "@/api/generated/schemas";
@@ -185,7 +186,9 @@ it.each([404, 503])(
   async (status) => {
     const requests: string[] = [];
     vi.stubGlobal("fetch", async (url: string) => {
-      requests.push(url);
+      // The replay panel's project-scoped lists (be06f56) load beside any
+      // pin and are not a source read; they are left out of the whitelist.
+      if (!isReplayList(url)) requests.push(url);
       return json(status, { error: "Unavailable" });
     });
     const { BackendProjectPage } = await import("./BackendProjectPage");
@@ -453,6 +456,9 @@ it("cancels saved A before B resolves and rejects a late foreign version without
   let oldSignal: AbortSignal | null | undefined;
   const calls: string[] = [];
   vi.stubGlobal("fetch", async (url: string, init?: RequestInit) => {
+    // The replay panel's project-scoped lists (be06f56) load beside any pin
+    // and are not model reads; everything else must be the saved-view read.
+    if (isReplayList(url)) return json(200, []);
     calls.push(url);
     if (url.includes(saved.id)) {
       oldSignal = init?.signal;
@@ -864,6 +870,7 @@ it("resolves every Open-latest intent freshly and gates a cached alias until ser
         semanticHash: "a".repeat(64),
       });
     if (init?.method === "POST") throw new Error("No schema1 workspace reads expected");
+    if (isReplayList(url)) return json(200, []);
     return json(200, { items: [], nextCursor: "" });
   });
   function LatestHarness() {

@@ -89,8 +89,11 @@ export function BackendProjectsPage() {
           Новый бэкенд-проект
         </Button>
       </Group>
-      <details><summary>Импортировать portable-пакет в новый проект</summary><BackendPortable /></details>
-{projects.isPending && <Loader aria-label="Загружаем бэкенд-проекты" />}
+      <details>
+        <summary>Импортировать portable-пакет в новый проект</summary>
+        <BackendPortable />
+      </details>
+      {projects.isPending && <Loader aria-label="Загружаем бэкенд-проекты" />}
       {capabilities.isError && (
         <Alert color="red" role="alert">
           Не удалось загрузить ограничения сервера. Создание временно недоступно.

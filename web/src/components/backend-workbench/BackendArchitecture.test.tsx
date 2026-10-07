@@ -143,6 +143,11 @@ it("uses explicit historical view pin, drills down by keyboard and saves against
         nextCursor: "",
         catalogVersion: 9,
       });
+    // Selecting an element mounts the scoped diagnostics (a6f1139), which list
+    // revisions and analysis jobs; the project-shaped fallback below has no
+    // `items` and crashed BackendAnalysisJobs, unmounting the whole screen.
+    if (url.includes("/revisions?") || url.includes("/analyses?"))
+      return json(200, { items: [], nextCursor: "" });
     return json(200, { id, currentRevisionId: rid, name: "Orders" });
   });
   const navigate = vi.fn();

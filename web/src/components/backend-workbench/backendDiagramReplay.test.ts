@@ -108,14 +108,20 @@ describe("diagram replay preparation", () => {
         prepareDiagramReplay(fixture("architecture"), input, bad, nodes, template),
       ).toThrow();
   });
- it("keeps unsupported artifact refs visible and preserves historical pins",()=>{
- const d=fixture("architecture"); if(d.document.kind!=="architecture")throw Error();
- const artifact={kind:"artifact",rowId:"artifact-row",locator:{}} as never;
- d.document.payload.elements[0]!.refs.push(artifact);
- const out=prepareDiagramReplay(d,input,{...scope,sourceRefs:[endpoint,artifact]},nodes,template);
- d.pin={...pin,version:3};
- expect(out.package.excludedIds).toContain("artifact-row");
- expect(out.package.diagramBindings?.[0]?.diagram.version).toBe(2);
- });
-
+  it("keeps unsupported artifact refs visible and preserves historical pins", () => {
+    const d = fixture("architecture");
+    if (d.document.kind !== "architecture") throw Error();
+    const artifact = { kind: "artifact", rowId: "artifact-row", locator: {} } as never;
+    d.document.payload.elements[0]!.refs.push(artifact);
+    const out = prepareDiagramReplay(
+      d,
+      input,
+      { ...scope, sourceRefs: [endpoint, artifact] },
+      nodes,
+      template,
+    );
+    d.pin = { ...pin, version: 3 };
+    expect(out.package.excludedIds).toContain("artifact-row");
+    expect(out.package.diagramBindings?.[0]?.diagram.version).toBe(2);
+  });
 });
