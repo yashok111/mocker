@@ -10,6 +10,12 @@ import (
 	"github.com/yashok111/mocker/internal/specs"
 )
 
+// scenarioExporter adapts the API-design validator to scenarioexport's
+// ValidateContract, which takes no context, so the validation it runs cannot
+// see the request's; threading one needs both callee signatures to change
+// (scenarioexport.ValidateContract and apidesign.Repo.Validate).
+//
+//nolint:contextcheck // the adapter's callee signatures carry no context; see above
 func (s *Server) scenarioExporter() *scenarioexport.Service {
 	return scenarioexport.New(func(document string) ([]designscenario.Diagnostic, error) {
 		diagnostics, err := s.designsRepo.Validate(document)

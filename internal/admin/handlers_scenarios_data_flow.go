@@ -38,7 +38,7 @@ func (s *Server) handleGetDesignScenarioDataFlow(w http.ResponseWriter, r *http.
 		s.designScenarioError(w, err)
 		return
 	}
-	httpx.JSON(w, http.StatusOK, designscenario.AnalyzeDataFlow(revision.Document))
+	httpx.JSON(w, http.StatusOK, designscenario.AnalyzeDataFlow(revision.Document)) //nolint:contextcheck // designscenario.AnalyzeDataFlow takes no context; threading one changes its signature
 }
 
 func (s *Server) handleAnalyzeDesignScenarioDataFlow(w http.ResponseWriter, r *http.Request) {
@@ -60,5 +60,5 @@ func (s *Server) handleAnalyzeDesignScenarioDataFlow(w http.ResponseWriter, r *h
 		httpx.Err(w, 400, httpx.CodeBadRequest, "Укажите document")
 		return
 	}
-	httpx.JSON(w, http.StatusOK, designscenario.AnalyzeDataFlow(*body.Document))
+	httpx.JSON(w, http.StatusOK, designscenario.AnalyzeDataFlow(*body.Document)) //nolint:contextcheck // designscenario.AnalyzeDataFlow takes no context; threading one changes its signature
 }

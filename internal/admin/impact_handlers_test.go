@@ -130,7 +130,7 @@ func TestImpactHTTPUnknownScenarioJoinMakesCompleteFalse(t *testing.T) {
 func TestImpactHTTPRequiresSession(t *testing.T) {
 	t.Parallel()
 	s := loopbackTestServer(t, nil)
-	r := httptest.NewRequest("POST", "http://mocker.local/api/designs/1/impact", strings.NewReader(`{"fromRevisionId":1,"document":"{}"}`))
+	r := httptest.NewRequest(http.MethodPost, "http://mocker.local/api/designs/1/impact", strings.NewReader(`{"fromRevisionId":1,"document":"{}"}`))
 	r.Header.Set("Content-Type", "application/json")
 	r.Header.Set("Origin", "http://mocker.local")
 	w := httptest.NewRecorder()

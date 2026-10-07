@@ -1,7 +1,6 @@
 package admin
 
 import (
-	"context"
 	"net/http"
 	"net/url"
 	"slices"
@@ -102,12 +101,11 @@ func (s *Server) handleStartBackendAnalysis(w http.ResponseWriter, r *http.Reque
 	if !s.backendAnalysisBody(w, r, &in) {
 		return
 	}
-	out, err := s.backendAnalysis.Start(func() context.Context {
-		if s.backendArtifacts != nil {
-			return s.backendArtifacts.DiagramContext(r.Context())
-		}
-		return r.Context()
-	}(), r.PathValue("id"), in)
+	ctx := r.Context()
+	if s.backendArtifacts != nil {
+		ctx = s.backendArtifacts.DiagramContext(ctx)
+	}
+	out, err := s.backendAnalysis.Start(ctx, r.PathValue("id"), in)
 	if err != nil {
 		s.backendError(w, err)
 		return

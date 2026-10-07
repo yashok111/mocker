@@ -191,19 +191,7 @@ func (s *Server) evaluateResponseRule(w http.ResponseWriter, r *http.Request, si
 	var request responserules.Request
 	var exampleID string
 	if simulate {
-		requestRaw, hasRequest := body["request"]
-		exampleRaw, hasExample := body["exampleId"]
-		if hasRequest == hasExample {
-			s.responseRuleInvalid(w, "/request", "Требуется ровно одно из request и exampleId")
-			return
-		}
-		if hasRequest {
-			if err := jsonx.Unmarshal(requestRaw, &request); err != nil {
-				httpx.Err(w, 400, "simulation_invalid", err.Error())
-				return
-			}
-		} else if err := jsonx.Unmarshal(exampleRaw, &exampleID); err != nil || !responserules.ValidID(exampleID) {
-			s.responseRuleInvalid(w, "/exampleId", "Ожидается корректный ID примера")
+		if request, exampleID, ok = s.responseRuleSimulationInput(w, body); !ok {
 			return
 		}
 	}
@@ -257,6 +245,30 @@ func (s *Server) evaluateResponseRule(w http.ResponseWriter, r *http.Request, si
 		return
 	}
 	httpx.JSON(w, 200, result)
+}
+
+// responseRuleSimulationInput reads the simulation's subject: exactly one of
+// an inline request or the ID of a stored example, which the caller resolves
+// once the rule itself is resolved. It writes the refusal itself.
+func (s *Server) responseRuleSimulationInput(w http.ResponseWriter, body map[string]jsonx.RawMessage) (responserules.Request, string, bool) {
+	var request responserules.Request
+	var exampleID string
+	requestRaw, hasRequest := body["request"]
+	exampleRaw, hasExample := body["exampleId"]
+	if hasRequest == hasExample {
+		s.responseRuleInvalid(w, "/request", "Требуется ровно одно из request и exampleId")
+		return request, "", false
+	}
+	if hasRequest {
+		if err := jsonx.Unmarshal(requestRaw, &request); err != nil {
+			httpx.Err(w, 400, "simulation_invalid", err.Error())
+			return request, "", false
+		}
+	} else if err := jsonx.Unmarshal(exampleRaw, &exampleID); err != nil || !responserules.ValidID(exampleID) {
+		s.responseRuleInvalid(w, "/exampleId", "Ожидается корректный ID примера")
+		return request, "", false
+	}
+	return request, exampleID, true
 }
 
 func (s *Server) responseRuleDecodeError(w http.ResponseWriter, prefix string, err error) {
