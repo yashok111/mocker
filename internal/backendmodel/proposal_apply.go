@@ -207,6 +207,12 @@ func (r *Repo) prepareProposal(ctx context.Context, pid, proposalID string, in P
 		return nil, err
 	}
 	estimate := min(int64(MaxRevisionBytes), 4*inputBytes+8*int64(len(commandJSON))+65536)
+	// Release the reader before queueing on the single writer. Holding it there
+	// closed a cycle with any writer holder that needs a reader, once the pool
+	// was full of such waiters (review 2026-10-06, F3). Everything still to read
+	// is the immutable base revision, re-read below on a fresh snapshot and
+	// pinned by its semantic hash.
+	_ = tx.Rollback()
 	var reservation *store.TransientReservation
 	retained := false
 	defer func() {
@@ -228,7 +234,7 @@ func (r *Repo) prepareProposal(ctx context.Context, pid, proposalID string, in P
 	}); err != nil {
 		return nil, err
 	}
-	state, err := loadRevisionState(ctx, tx, pid, p.BaseRevisionID)
+	state, err := r.readRevisionState(ctx, pid, p.BaseRevisionID)
 	if err != nil {
 		return nil, err
 	}
@@ -266,6 +272,16 @@ func (r *Repo) prepareProposal(ctx context.Context, pid, proposalID string, in P
 	}
 	retained = true
 	return &preparedProposal{proposal: p, draft: draft, candidate: candidate, reservedBytes: reserved, reservation: reservation}, nil
+}
+
+// readRevisionState reads one immutable revision on its own short snapshot.
+func (r *Repo) readRevisionState(ctx context.Context, pid, revisionID string) (*RevisionState, error) {
+	tx, err := r.db.R.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = tx.Rollback() }()
+	return loadRevisionState(ctx, tx, pid, revisionID)
 }
 
 func (r *Repo) checkProposalStaging(ctx context.Context, tx *sql.Tx, pid string, bytes int64) error {

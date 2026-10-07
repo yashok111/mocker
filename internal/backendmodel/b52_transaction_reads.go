@@ -10,6 +10,15 @@ func (r *Repo) InstallationID(ctx context.Context) (string, error) {
 	return installationID(ctx, r.db.R)
 }
 
+// InstallationIDTx reads it on the caller's transaction. A caller that already
+// holds a reader or the single writer must use it: InstallationID takes a
+// second reader-pool connection, so pool-width concurrent previews each waited
+// for one, and a writer holder waited on readers whose holders waited for the
+// writer (review 2026-10-06, F3/F183).
+func (r *Repo) InstallationIDTx(ctx context.Context, tx *sql.Tx) (string, error) {
+	return installationID(ctx, tx)
+}
+
 func installationID(ctx context.Context, q importReader) (string, error) {
 	var id string
 	if err := q.QueryRowContext(ctx, `SELECT installation_id FROM backend_installation_identity WHERE singleton=1`).Scan(&id); err != nil {

@@ -17,6 +17,8 @@ type preparedChangeProposal struct {
 	evaluation  *changeEvaluation
 	candidate   *ChangeProposalCandidate
 	reservation *store.TransientReservation
+	// revisionBytes is the encoded desired revision, sized for admit.
+	revisionBytes int64
 }
 
 func loadChangeIdentities(ctx context.Context, q importReader, id string) (map[string]ChangeObjectIdentity, error) {
@@ -95,6 +97,13 @@ func (r *Repo) prepareChangeProposal(ctx context.Context, pid, id string, in Pre
 		return nil, err
 	}
 	inputBytes += draftBytes + ledgerBytes + historicalBytes
+	// The reservation is admitted under the single writer. Waiting there with
+	// this reader open closed a reader/writer cycle with any writer holder that
+	// needs a reader once the pool was full of such waiters (review 2026-10-06,
+	// F3), so the reader is released first and the loads below run on a fresh
+	// snapshot that re-checks the same proposal version: every mutation of the
+	// proposal bumps it, so the sizes measured above still describe what is read.
+	_ = tx.Rollback()
 	reservation, err := r.reserveChangeInput(ctx, pid, inputBytes)
 	if err != nil {
 		return nil, err
@@ -105,6 +114,15 @@ func (r *Repo) prepareChangeProposal(ctx context.Context, pid, id string, in Pre
 			reservation.Release()
 		}
 	}()
+	if tx, err = r.db.R.BeginTx(ctx, &sql.TxOptions{ReadOnly: true}); err != nil {
+		return nil, err
+	}
+	if p, err = loadChangeProposal(ctx, tx, pid, id); err != nil {
+		return nil, err
+	}
+	if err = requireChangeDraft(p, in.ExpectedVersion, in.ProposalRevisionID); err != nil {
+		return nil, err
+	}
 	draft, err := loadChangeProposalRevision(ctx, tx, pid, id, in.ProposalRevisionID)
 	if err != nil {
 		return nil, err
@@ -124,11 +142,41 @@ func (r *Repo) prepareChangeProposal(ctx context.Context, pid, id string, in Pre
 	}
 	evaluation.readBudget = &changeReadBudget{repo: r, pid: pid, reservation: reservation, bytes: inputBytes, seen: map[string]bool{"source:" + draft.BaseRevisionID: true}, lease: analysisLease(ctx)}
 	prepared := &preparedChangeProposal{proposal: *p, draft: *draft, evaluation: evaluation, reservation: reservation, input: in}
-	if err = r.evaluateChangeDraft(ctx, tx, pid, prepared); err != nil {
+	// Release the reader before evaluation. Evaluation reads owner artifacts
+	// through fresh reader connections and admits each into the read budget
+	// under the single writer; holding this snapshot across both let
+	// pool-width concurrent previews each wait for a second reader, and closed
+	// a reader/writer cycle with any writer holder that needs a reader (review
+	// 2026-10-06, F3). What evaluation still reads (source ancestry, historical
+	// revisions, analyzed files of the exact owned snapshot) is immutable, so
+	// it reads the pool directly; the proposal version is re-checked under the
+	// writer at apply.
+	_ = tx.Rollback()
+	if err = r.evaluateChangeDraft(ctx, r.db.R, pid, prepared); err != nil {
 		return nil, err
+	}
+	if analysisLease(ctx) == nil {
+		if err = r.admitPreparedChange(ctx, pid, prepared); err != nil {
+			return nil, err
+		}
 	}
 	retained = true
 	return prepared, nil
+}
+
+// admitPreparedChange resizes the transient reservation to the measured
+// candidate against the project's staged bytes, under the writer.
+func (r *Repo) admitPreparedChange(ctx context.Context, pid string, prepared *preparedChangeProposal) error {
+	return r.db.Write(ctx, func(writer *sql.Tx) error {
+		staged, err := stagingBytes(ctx, writer, pid)
+		if err != nil {
+			return err
+		}
+		if !prepared.reservation.Resize(4*prepared.evaluation.readBudget.bytes+2*prepared.revisionBytes+MaxChangeProposalCommandBytes, MaxProjectStagingBytes-staged) {
+			return limitFault("Prepared proposal exceeds transient memory budget")
+		}
+		return nil
+	})
 }
 func loadChangeSourceForDraft(ctx context.Context, tx importReader, pid string, draft *ChangeProposalRevision) (*SourceGraphSnapshot, error) {
 	source, err := loadComposedBase(ctx, tx, pid, draft.BaseRevisionID)
@@ -154,7 +202,7 @@ func loadChangeSourceForDraft(ctx context.Context, tx importReader, pid string, 
 func (r *Repo) evaluateChangeDraft(ctx context.Context, tx importReader, pid string, prepared *preparedChangeProposal) error {
 	var err error
 	p, draft, evaluation := &prepared.proposal, &prepared.draft, prepared.evaluation
-	in, reservation := prepared.input, prepared.reservation
+	in := prepared.input
 	for _, c := range in.Commands {
 		if err = ctx.Err(); err != nil {
 			return err
@@ -204,21 +252,10 @@ func (r *Repo) evaluateChangeDraft(ctx context.Context, tx importReader, pid str
 		if err = lease.reconcilePrepared(ctx, int64(len(raw))); err != nil {
 			return err
 		}
-		prepared.candidate = candidate
-		return nil
 	}
-	if err = r.db.Write(ctx, func(writer *sql.Tx) error {
-		staged, err := stagingBytes(ctx, writer, pid)
-		if err != nil {
-			return err
-		}
-		if !reservation.Resize(4*evaluation.readBudget.bytes+2*int64(len(raw))+MaxChangeProposalCommandBytes, MaxProjectStagingBytes-staged) {
-			return limitFault("Prepared proposal exceeds transient memory budget")
-		}
-		return nil
-	}); err != nil {
-		return err
-	}
+	// Without a lease the caller admits the measured size under the writer
+	// after releasing its reader (admitPreparedChange).
+	prepared.revisionBytes = int64(len(raw))
 	prepared.candidate = candidate
 	return nil
 }

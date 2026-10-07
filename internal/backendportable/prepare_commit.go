@@ -47,7 +47,7 @@ func (s *Service) Preview(ctx context.Context, id string, in PreviewInput) (*Pre
 		if err := normalizePortableClosure(ctx, model, manifest.Selection); err != nil {
 			return nil, "", err
 		}
-		installation, err := s.models.InstallationID(ctx)
+		installation, err := s.models.InstallationIDTx(ctx, tx)
 		if err != nil {
 			return nil, "", err
 		}
