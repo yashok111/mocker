@@ -2,6 +2,7 @@ package mcp
 
 import (
 	"fmt"
+	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
@@ -41,7 +42,7 @@ func TestScenarioBranchesPersistedRESTAndMCP(t *testing.T) {
 		t.Fatal(msg)
 	}
 	handler := srv.Handler()
-	login := httptest.NewRequest("POST", "http://mocker.local/api/auth/login", strings.NewReader(fmt.Sprintf(`{"name":"Analyst","password":%q}`, testauth.Password)))
+	login := httptest.NewRequest(http.MethodPost, "http://mocker.local/api/auth/login", strings.NewReader(fmt.Sprintf(`{"name":"Analyst","password":%q}`, testauth.Password)))
 	login.Header.Set("Content-Type", "application/json")
 	login.Header.Set("Origin", "http://mocker.local")
 	auth := httptest.NewRecorder()
@@ -49,7 +50,7 @@ func TestScenarioBranchesPersistedRESTAndMCP(t *testing.T) {
 	if auth.Code != 200 {
 		t.Fatal(auth.Body.String())
 	}
-	request := httptest.NewRequest("GET", fmt.Sprintf("http://mocker.local/api/design-scenarios/%d/revisions/%d/exports/mermaid", created.Scenario.ID, created.Draft.ID), nil)
+	request := httptest.NewRequest(http.MethodGet, fmt.Sprintf("http://mocker.local/api/design-scenarios/%d/revisions/%d/exports/mermaid", created.Scenario.ID, created.Draft.ID), nil)
 	request.AddCookie(auth.Result().Cookies()[0])
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, request)

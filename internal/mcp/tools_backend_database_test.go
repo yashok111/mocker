@@ -59,8 +59,9 @@ func TestBackendImportSDKSelectedProfileUnions(t *testing.T) {
 		"projectId": backendTestID, "expectedVersion": int64(1), "baseRevisionId": backendTestID, "idempotencyKey": "profile",
 		"manifest": map[string]any{"repositoryName": "orders", "provider": map[string]any{"name": "collector", "version": "1", "namespace": "orders", "method": "agent", "profiles": []string{backendmodel.GraphProfile, backendmodel.RelationalProfile}, "limitations": []string{}}, "snapshot": map[string]any{"dirty": false, "consistency": "verified", "capturedAt": "2026-09-30T10:00:00Z", "files": []any{}}},
 	}
-	inventory := []any{}
-	for _, category := range strings.Fields("files endpoints datastores migrations producers consumers jobs contracts tests") {
+	categories := strings.Fields("files endpoints datastores migrations producers consumers jobs contracts tests")
+	inventory := make([]any, 0, len(categories))
+	for _, category := range categories {
 		inventory = append(inventory, map[string]any{"category": category, "status": "complete", "knownCount": 0, "denominator": nil, "discoverySource": "collector", "gaps": []string{}, "reason": ""})
 	}
 	base["inventory"] = inventory

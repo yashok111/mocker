@@ -62,8 +62,9 @@ func TestBackendImportToolsRejectUnknownAndWrongSelectors(t *testing.T) {
 
 func TestBeginBackendImportToolExactInventory(t *testing.T) {
 	const manifest = `"manifest":{"repositoryName":"orders","provider":{"name":"collector","version":"1","namespace":"test","method":"ast","profiles":["foundation-graph-v1"],"limitations":[]},"snapshot":{"dirty":false,"consistency":"verified","capturedAt":"2026-09-30T10:00:00Z","files":[]}}`
-	items := []string{}
-	for _, category := range strings.Fields("files endpoints datastores migrations producers consumers jobs contracts tests") {
+	categories := strings.Fields("files endpoints datastores migrations producers consumers jobs contracts tests")
+	items := make([]string, 0, len(categories))
+	for _, category := range categories {
 		items = append(items, `{"category":"`+category+`","status":"unsupported","knownCount":9007199254740993,"denominator":9007199254740994,"discoverySource":"collector","gaps":[],"reason":"unsupported"}`)
 	}
 	args := `{"projectId":"` + backendTestID + `","baseRevisionId":"` + backendTestID + `","expectedVersion":9007199254740993,"idempotencyKey":"begin",` + manifest + `,"inventory":[` + strings.Join(items, ",") + `]}`

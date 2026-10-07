@@ -72,9 +72,10 @@ func TestBackendSavedViewGuideDatabaseSDKExample(t *testing.T) {
 			}
 			var project backendmodel.Project
 			call("create_backend_project", map[string]any{"name": "Saved " + dialect, "idempotencyKey": "saved-project"}, &project)
-			files := []backendmodel.ManifestFile{}
+			fixtureNames := []string{"schema.sql", "models.go", "migrations/001_initial.sql", "migrations/002_unsupported.sql"}
+			files := make([]backendmodel.ManifestFile, 0, len(fixtureNames))
 			root := filepath.Join("../backendmodel/testdata/relational/orders", dialect, "v1")
-			for _, name := range []string{"schema.sql", "models.go", "migrations/001_initial.sql", "migrations/002_unsupported.sql"} {
+			for _, name := range fixtureNames {
 				raw, err := os.ReadFile(filepath.Join(root, name))
 				if err != nil {
 					t.Fatal(err)

@@ -59,9 +59,10 @@ func TestBackendFlowRealMockerEndpointSourceFixture(t *testing.T) {
 	if !bytes.Contains(files["internal/admin/route_table.go"], []byte(route)) || !bytes.Contains(files["internal/admin/backend_flow_handlers.go"], []byte(native)) {
 		t.Fatal("expected independently selected route and repository call changed")
 	}
-	manifestFiles := []backendmodel.ManifestFile{}
+	sourcePaths := []string{"internal/admin/backend_flow_handlers.go", "internal/admin/route_table.go"}
+	manifestFiles := make([]backendmodel.ManifestFile, 0, len(sourcePaths))
 	hashes := map[string]string{}
-	for _, path := range []string{"internal/admin/backend_flow_handlers.go", "internal/admin/route_table.go"} {
+	for _, path := range sourcePaths {
 		sum := sha256.Sum256(files[path])
 		hashes[path] = hex.EncodeToString(sum[:])
 		manifestFiles = append(manifestFiles, backendmodel.ManifestFile{Path: path, ContentHash: hashes[path], FileType: "go", AnalysisStatus: "analyzed"})
@@ -79,9 +80,10 @@ func TestBackendFlowRealMockerEndpointSourceFixture(t *testing.T) {
 	}
 	for _, category := range strings.Fields("files endpoints datastores migrations producers consumers jobs contracts tests") {
 		n := int64(0)
-		if category == "files" {
+		switch category {
+		case "files":
 			n = 2
-		} else if category == "endpoints" {
+		case "endpoints":
 			n = 1
 		}
 		in.Inventory = append(in.Inventory, backendmodel.InventoryItem{Category: category, Status: "partial", KnownCount: n, DiscoverySource: "Selected endpoint source files", Gaps: []string{"Other product files were not inspected"}})

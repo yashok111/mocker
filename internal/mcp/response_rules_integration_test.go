@@ -99,7 +99,8 @@ func TestResponseRuleMCPIntegrationLifecycle(t *testing.T) {
 	}
 	edges := []responserules.Edge{{ID: "e1", From: "start", Port: "next", To: "auth"}, {ID: "e2", From: "auth", Port: "true", To: "slow"}, {ID: "e3", From: "auth", Port: "false", To: "missing"}, {ID: "e4", From: "slow", Port: "next", To: "allowed"}}
 	name := "Header rule"
-	commands := []responserules.Command{{Type: "set_rule", Name: &name, Binding: &responserules.Binding{Method: "GET", Path: "/orders"}}}
+	commands := make([]responserules.Command, 0, 1+len(nodes)+len(edges))
+	commands = append(commands, responserules.Command{Type: "set_rule", Name: &name, Binding: &responserules.Binding{Method: "GET", Path: "/orders"}})
 	for i := range nodes {
 		commands = append(commands, responserules.Command{Type: "add_node", Node: &nodes[i]})
 	}

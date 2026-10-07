@@ -34,8 +34,9 @@ func TestBackendLineageSDKStrictVariantsAndExactPins(t *testing.T) {
 
 func TestBackendLineageReconcileMCPProfileSchema(t *testing.T) {
 	manifest := `"manifest":{"repositoryName":"orders","provider":{"name":"collector","version":"1","namespace":"test","method":"ast","profiles":["foundation-graph-v1","relational-graph-v1","runtime-flow-v1","field-lineage-v1"],"limitations":[]},"snapshot":{"dirty":false,"consistency":"verified","capturedAt":"2026-09-30T10:00:00Z","files":[]}}`
-	items := []string{}
-	for _, category := range strings.Fields("files endpoints datastores migrations producers consumers jobs contracts tests") {
+	categories := strings.Fields("files endpoints datastores migrations producers consumers jobs contracts tests")
+	items := make([]string, 0, len(categories))
+	for _, category := range categories {
 		items = append(items, `{"category":"`+category+`","status":"unsupported","knownCount":0,"denominator":null,"discoverySource":"collector","gaps":[],"reason":"outside profile"}`)
 	}
 	args := `{"projectId":"` + backendTestID + `","baseRevisionId":"` + backendTestID + `","expectedVersion":1,"idempotencyKey":"reconcile","profile":"field-lineage-v1","mode":"reconcile","repositoryId":"` + backendTestID + `","graphScope":{"profile":"field-lineage-v1","status":"partial","gaps":["bounded analysis"]},` + manifest + `,"inventory":[` + strings.Join(items, ",") + `]`

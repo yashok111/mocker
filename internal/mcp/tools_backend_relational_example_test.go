@@ -69,7 +69,7 @@ func TestBackendRelationalRealSDKFixtureExample(t *testing.T) {
 				if msg != "" {
 					t.Fatalf("%s: %s", name, msg)
 				}
-				captures = append(captures, map[string]jsontext.Value{"tool": encode(name), "arguments": encode(input), "response": jsontext.Value(raw)})
+				captures = append(captures, map[string]jsontext.Value{"tool": encode(name), "arguments": encode(input), "response": raw})
 				if name := responseContracts[name]; name != "" {
 					if name == "BackendNode" && input["proposal"] != nil {
 						name = "BackendProposalNodeRead"
@@ -170,8 +170,10 @@ func TestBackendRelationalRealSDKFixtureExample(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				replacements := []string{"@repositoryId@", s.RepositoryID, "@snapshotId@", s.SnapshotID, "@v1RevisionId@", revision}
-				for _, key := range []string{"column:orders:legacy_note", "index:orders:legacy_note_idx"} {
+				objectKeys := []string{"column:orders:legacy_note", "index:orders:legacy_note_idx"}
+				replacements := make([]string, 0, 6+2*len(objectKeys))
+				replacements = append(replacements, "@repositoryId@", s.RepositoryID, "@snapshotId@", s.SnapshotID, "@v1RevisionId@", revision)
+				for _, key := range objectKeys {
 					replacements = append(replacements, "@v1Object:"+key+"@", ids[key])
 				}
 				raw = []byte(strings.NewReplacer(replacements...).Replace(string(raw)))

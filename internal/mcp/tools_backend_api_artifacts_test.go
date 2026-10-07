@@ -6,6 +6,7 @@ import (
 	"encoding/json/jsontext"
 	"encoding/json/v2"
 	"fmt"
+	"net/http"
 	"net/http/httptest"
 	"os"
 	"slices"
@@ -243,7 +244,7 @@ func TestBackendAPIArtifactToolsPublicParity(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	status, rest, err := server.CallAsMCP(t.Context(), httptest.NewRequest("POST", "http://mocker.local/mcp", nil), "POST", "/api/backend-projects/"+project.ID+"/api-artifacts/preview", body)
+	status, rest, err := server.CallAsMCP(t.Context(), httptest.NewRequest(http.MethodPost, "http://mocker.local/mcp", nil), "POST", "/api/backend-projects/"+project.ID+"/api-artifacts/preview", body)
 	if err != nil || status != 200 {
 		t.Fatal(status, string(rest), err)
 	}
