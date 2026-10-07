@@ -65,7 +65,12 @@ func (s *ArtifactService) prepareArtifacts(ctx context.Context, pid string, in P
 		return nil, err
 	}
 	request := NewEditorArtifactRequest(ctx, s.api, s.scenarios)
-	builder := artifactPreviewBuilder{out: out, request: request, nodes: nodes}
+	builder := artifactPreviewBuilder{out: out, request: request, nodes: nodes, inputAPI: map[string]ArtifactKey{}}
+	for _, c := range in.Commands {
+		for _, b := range c.APIBindings {
+			builder.inputAPI[b.SourceNodeID] = c.Artifact
+		}
+	}
 	keys := slices.Collect(maps.Keys(commands))
 	slices.SortFunc(keys, func(a, b ArtifactKey) int {
 		if n := strings.Compare(a.Kind, b.Kind); n != 0 {
@@ -219,6 +224,8 @@ type artifactPreviewBuilder struct {
 	request *EditorArtifactRequest
 	nodes   map[string]Node
 	changes int
+	// inputAPI maps each source this request binds to the command binding it.
+	inputAPI map[string]ArtifactKey
 }
 
 func (b *artifactPreviewBuilder) diagnostic(code string, key ArtifactKey, selector *EditorSelector, ids []string, message string, block bool) {
@@ -477,10 +484,24 @@ func (b *artifactPreviewBuilder) applyCommand(ctx context.Context, c ArtifactPin
 			return e
 		}
 		if err != nil {
-			b.diagnostic("backend_artifact_target_unavailable", key, nil, nil, "Selected immutable artifact is unavailable or unverified", true)
+			// The group keeps its old bindings, except a source another command
+			// of this request rebinds: keeping both made the vector admission
+			// fail with 400 "Duplicate API source binding" instead of this
+			// blocking diagnostic, which now names those sources
+			// (review 2026-10-06, F62).
+			var claimed []string
+			kept := []APIArtifactBinding{}
+			for _, binding := range previousAPI {
+				if owner, ok := b.inputAPI[binding.SourceNodeID]; ok && owner != key {
+					claimed = append(claimed, binding.SourceNodeID)
+					continue
+				}
+				kept = append(kept, binding)
+			}
+			b.diagnostic("backend_artifact_target_unavailable", key, nil, claimed, "Selected immutable artifact is unavailable or unverified", true)
 			if hadOld {
 				out.Pins = append(out.Pins, oldPin)
-				out.APIBindings = append(out.APIBindings, previousAPI...)
+				out.APIBindings = append(out.APIBindings, kept...)
 				out.EditorBindings = append(out.EditorBindings, previousEditor...)
 			}
 			return nil

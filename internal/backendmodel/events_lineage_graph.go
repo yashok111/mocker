@@ -6,7 +6,14 @@ import "slices"
 // UUID and endpoint. A producer address and consumer address remain distinct.
 func validateLineageValueTargetForSchema(ref LineageValueRef, nodes map[string]Node, edges map[string]Edge, schema string) error {
 	if ref.Kind == "representation_field" {
-		if schema == ComposedSchemaVersion && nodes[ref.NodeID].Kind == "representation_field" && ref == (LineageValueRef{Kind: ref.Kind, NodeID: ref.NodeID}) {
+		exact := schema == ComposedSchemaVersion && ref == (LineageValueRef{Kind: ref.Kind, NodeID: ref.NodeID})
+		// A well-formed seed whose node is absent from this revision is 404, as
+		// for every other seed kind; folding it into 400 told the caller the
+		// request was malformed (review 2026-10-06, F93).
+		if _, ok := nodes[ref.NodeID]; exact && !ok {
+			return notFound()
+		}
+		if exact && nodes[ref.NodeID].Kind == "representation_field" {
 			return nil
 		}
 		return invalid("seed", "Representation references require an exact source6 field")

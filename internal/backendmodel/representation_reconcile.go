@@ -36,7 +36,11 @@ func validateRepresentationLineageMapping(n Node, a LineageMappingAttributes, no
 		if err := validateLineageValueTargetForSchema(ref, nodes, edges, ComposedSchemaVersion); err != nil {
 			return err
 		}
-		if runtimeString(edges[ref.RouteID].Attributes["deliveryStatus"]) != "declared" && (a.AnalysisStatus == "complete" || a.Transform.Kind != "unknown_transform") {
+		// A retained stale mapping keeps the exemption every events validator
+		// gives it; without it a stale DTO mapping over a route that stopped
+		// being declared blocked the whole import (review 2026-10-06, F96).
+		stale := n.Freshness != nil && n.Freshness.Status == "stale"
+		if !stale && runtimeString(edges[ref.RouteID].Attributes["deliveryStatus"]) != "declared" && (a.AnalysisStatus == "complete" || a.Transform.Kind != "unknown_transform") {
 			return semantic("sources", "An unknown event route requires a partial unknown transform")
 		}
 	}

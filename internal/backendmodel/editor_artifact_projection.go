@@ -343,7 +343,10 @@ func (r *EditorArtifactRequest) appendProjectionItems(state *RevisionState, c Ar
 					if r.ctx.Err() != nil {
 						return r.ctx.Err()
 					}
-					item.Diagnostics = append(item.Diagnostics, editorProjectionDiagnostic("embedded_contract_unavailable", "Exact embedded scope could not be resolved"))
+					// Cache the diagnostic with the nil entry: appending it to this
+					// item only left every later row of the same contract clean
+					// (review 2026-10-06, F63).
+					embeddedDiagnostics[row.embeddedID] = append(embeddedDiagnostics[row.embeddedID], editorProjectionDiagnostic("embedded_contract_unavailable", "Exact embedded scope could not be resolved"))
 				}
 				embeddedCache[row.embeddedID] = info
 			}
