@@ -39,7 +39,9 @@ func BackendStorage(ctx context.Context, path, project string, rebuild bool) (er
 	if err != nil {
 		return err
 	}
-	defer conn.Close()
+	// The pool is private and closed right after, so a failed return of the
+	// pinned connection is reported with the result instead of dropped.
+	defer func() { err = errors.Join(err, conn.Close()) }()
 	// This is a private maintenance connection; FK mode never escapes a pool.
 	if _, err = conn.ExecContext(ctx, "PRAGMA foreign_keys=OFF"); err != nil {
 		return err
@@ -48,7 +50,13 @@ func BackendStorage(ctx context.Context, path, project string, rebuild bool) (er
 	if err != nil {
 		return fmt.Errorf("exclusive maintenance ownership unavailable (stop application): %w", err)
 	}
-	defer tx.Rollback()
+	// The verify path ends in an explicit Rollback and the rebuild path in a
+	// Commit, so only an early return reaches here with a live transaction.
+	defer func() {
+		if rollbackErr := tx.Rollback(); rollbackErr != nil && !errors.Is(rollbackErr, sql.ErrTxDone) {
+			err = errors.Join(err, fmt.Errorf("rollback backend storage maintenance: %w", rollbackErr))
+		}
+	}()
 	var version int
 	if err = tx.QueryRowContext(ctx, "PRAGMA user_version").Scan(&version); err != nil {
 		return err

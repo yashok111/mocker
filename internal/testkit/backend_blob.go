@@ -22,7 +22,7 @@ func ExecBackendOwner(ctx context.Context, q any, query string, args ...any) (sq
 		if err != nil {
 			return nil, err
 		}
-		defer tx.Rollback()
+		defer func() { _ = tx.Rollback() }() // a no-op once committed
 		result, err := ExecBackendOwner(ctx, tx, query, args...)
 		if err != nil {
 			return nil, err
@@ -68,7 +68,9 @@ func EditLegacyBackendFixture(ctx context.Context, db *store.DB, edit func(*sql.
 	if err != nil {
 		return err
 	}
-	defer conn.Close()
+	// The explicit Close below reports its error; this one only covers the early
+	// returns and is a no-op (ErrConnDone) after it.
+	defer func() { _ = conn.Close() }()
 	if _, err = conn.ExecContext(ctx, "PRAGMA foreign_keys=OFF"); err != nil {
 		return err
 	}
@@ -83,57 +85,8 @@ func EditLegacyBackendFixture(ctx context.Context, db *store.DB, edit func(*sql.
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
-	owners := backendblob.Registry()
-	for _, o := range owners {
-		ddl := strings.Replace(o.OldDDL, "CREATE TABLE "+o.Table+" (", "CREATE TABLE "+o.Table+"_fixture26 (", 1)
-		ddl = strings.Replace(ddl, `CREATE TABLE "`+o.Table+`" (`, "CREATE TABLE "+o.Table+"_fixture26 (", 1)
-		if _, err = tx.ExecContext(ctx, ddl); err != nil {
-			return err
-		}
-		cols := make([]string, len(o.Columns))
-		for i, c := range o.Columns {
-			cols[i] = c.Name
-		}
-		if _, err = tx.ExecContext(ctx, "INSERT INTO "+o.Table+"_fixture26("+strings.Join(cols, ",")+") SELECT "+strings.Join(cols, ",")+" FROM "+o.Table+"_documents"); err != nil {
-			return err
-		}
-	}
-	for _, o := range owners {
-		for _, obj := range o.Objects {
-			if obj.Kind == "trigger" {
-				if _, err = tx.ExecContext(ctx, "DROP TRIGGER IF EXISTS "+obj.Name); err != nil {
-					return err
-				}
-			}
-		}
-		if _, err = tx.ExecContext(ctx, "DROP VIEW "+o.Table+"_documents"); err != nil {
-			return err
-		}
-	}
-	for _, o := range owners {
-		if _, err = tx.ExecContext(ctx, "DROP TABLE "+o.Table); err != nil {
-			return err
-		}
-	}
-	for _, o := range owners {
-		if _, err = tx.ExecContext(ctx, "ALTER TABLE "+o.Table+"_fixture26 RENAME TO "+o.Table); err != nil {
-			return err
-		}
-	}
-	for _, o := range owners {
-		for _, obj := range o.OldObjects {
-			if _, err = tx.ExecContext(ctx, obj.SQL); err != nil {
-				return err
-			}
-		}
-	}
-	for _, table := range []string{"backend_payload_members", "backend_payload_manifests", "backend_payload_pending", "backend_payload_blobs"} {
-		if _, err = tx.ExecContext(ctx, "DROP TABLE "+table); err != nil {
-			return err
-		}
-	}
-	if _, err = tx.ExecContext(ctx, "PRAGMA user_version=26"); err != nil {
+	defer func() { _ = tx.Rollback() }() // a no-op once committed
+	if err = rebuildStore26Shape(ctx, tx); err != nil {
 		return err
 	}
 	if err = edit(tx); err != nil {
@@ -152,6 +105,65 @@ func EditLegacyBackendFixture(ctx context.Context, db *store.DB, edit func(*sql.
 	// The deferred restoration handles failures above; after returning the pinned
 	// connection, Migrate owns its own settings restoration.
 	return db.Migrate(ctx, nil)
+}
+
+// rebuildStore26Shape swaps every Store27 document view back to the Store26
+// TEXT table it replaced, inside tx, so the fixture edit sees the old schema.
+// It is split out of EditLegacyBackendFixture only so the connection and
+// transaction lifecycle there reads as one sequence.
+func rebuildStore26Shape(ctx context.Context, tx *sql.Tx) error {
+	owners := backendblob.Registry()
+	for _, o := range owners {
+		ddl := strings.Replace(o.OldDDL, "CREATE TABLE "+o.Table+" (", "CREATE TABLE "+o.Table+"_fixture26 (", 1)
+		ddl = strings.Replace(ddl, `CREATE TABLE "`+o.Table+`" (`, "CREATE TABLE "+o.Table+"_fixture26 (", 1)
+		if _, err := tx.ExecContext(ctx, ddl); err != nil {
+			return err
+		}
+		cols := make([]string, len(o.Columns))
+		for i, c := range o.Columns {
+			cols[i] = c.Name
+		}
+		//nolint:gosec // table and column names come from backendblob.Registry, never from input
+		if _, err := tx.ExecContext(ctx, "INSERT INTO "+o.Table+"_fixture26("+strings.Join(cols, ",")+") SELECT "+strings.Join(cols, ",")+" FROM "+o.Table+"_documents"); err != nil {
+			return err
+		}
+	}
+	for _, o := range owners {
+		for _, obj := range o.Objects {
+			if obj.Kind == "trigger" {
+				if _, err := tx.ExecContext(ctx, "DROP TRIGGER IF EXISTS "+obj.Name); err != nil {
+					return err
+				}
+			}
+		}
+		if _, err := tx.ExecContext(ctx, "DROP VIEW "+o.Table+"_documents"); err != nil {
+			return err
+		}
+	}
+	for _, o := range owners {
+		if _, err := tx.ExecContext(ctx, "DROP TABLE "+o.Table); err != nil {
+			return err
+		}
+	}
+	for _, o := range owners {
+		if _, err := tx.ExecContext(ctx, "ALTER TABLE "+o.Table+"_fixture26 RENAME TO "+o.Table); err != nil {
+			return err
+		}
+	}
+	for _, o := range owners {
+		for _, obj := range o.OldObjects {
+			if _, err := tx.ExecContext(ctx, obj.SQL); err != nil {
+				return err
+			}
+		}
+	}
+	for _, table := range []string{"backend_payload_members", "backend_payload_manifests", "backend_payload_pending", "backend_payload_blobs"} {
+		if _, err := tx.ExecContext(ctx, "DROP TABLE "+table); err != nil {
+			return err
+		}
+	}
+	_, err := tx.ExecContext(ctx, "PRAGMA user_version=26")
+	return err
 }
 
 // EditLegacyBackendPayload keeps a valid legacy fixture edit inside the upgrade
