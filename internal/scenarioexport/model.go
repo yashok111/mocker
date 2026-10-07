@@ -2,6 +2,7 @@
 package scenarioexport
 
 import (
+	"context"
 	"errors"
 
 	"github.com/yashok111/mocker/internal/designscenario"
@@ -81,7 +82,9 @@ func (e *BlockedError) Error() string {
 	return "Дополните данные для выбранного результата"
 }
 
-type ValidateContract func(string) ([]designscenario.Diagnostic, error)
+// ValidateContract checks one contract document. It takes the export's
+// context so a cancelled request stops the API-design validation it runs.
+type ValidateContract func(ctx context.Context, document string) ([]designscenario.Diagnostic, error)
 
 type Service struct {
 	validate ValidateContract

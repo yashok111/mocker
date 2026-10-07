@@ -50,7 +50,7 @@ func TestPrepareB24ScenarioEnvelopeGoldens(t *testing.T) {
 		if err := jsonx.Unmarshal([]byte(row.FormDraftsJSON), &drafts); err != nil {
 			t.Fatal(err)
 		}
-		prepared, _, err := r.prepare(document, drafts)
+		prepared, _, err := r.prepare(t.Context(), document, drafts)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -385,11 +385,11 @@ func TestArtifactSnapshotAggregateUTF8Bound(t *testing.T) {
 func TestArtifactSnapshotLegacyDraftsAndUnsafeIdentity(t *testing.T) {
 	r := newTestRepo(t)
 	document := validDocument("Legacy")
-	prepared, _, err := r.prepare(document, nil)
+	prepared, _, err := r.prepare(t.Context(), document, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	empty, _, err := r.prepare(document, map[string]string{})
+	empty, _, err := r.prepare(t.Context(), document, map[string]string{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -421,7 +421,7 @@ func TestPrepareOrdinaryRawMessageBytes(t *testing.T) {
 	r := newTestRepo(t)
 	document := validDocument("Golden")
 	document.Contracts = []Contract{{ID: "copy", Name: "Raw", Document: jsonx.RawMessage(`{"paths":{},"x-retained":{"n":9007199254740993,"html":"<>&","nested":[{"z":null,"a":false}]}}`)}}
-	prepared, _, err := r.prepare(document, map[string]string{"z": "last", "a": "<unsafe>"})
+	prepared, _, err := r.prepare(t.Context(), document, map[string]string{"z": "last", "a": "<unsafe>"})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -28,7 +28,7 @@ func suggestionCondition(variable, operator, value string) *ExecutionCondition {
 func checkSuggestedRuns(t *testing.T, r Revision, got TestSuggestions) {
 	t.Helper()
 	for _, c := range got.Cases {
-		initial, err := PrepareRun(r, c.ID, c.Name, "mcp", c.Variables)
+		initial, err := PrepareRun(t.Context(), r, c.ID, c.Name, "mcp", c.Variables)
 		if err != nil {
 			t.Fatal(err)
 		}

@@ -161,7 +161,7 @@ func (c *impactUsageCollector) visitFields(draft designUsageDraft, contracts map
 	if c.pair.Before == "" || c.pair.Proposed == "" {
 		return false, nil
 	}
-	before, err := bindingSchemasContext(c.ctx, draft.Document)
+	before, err := bindingSchemas(c.ctx, draft.Document)
 	if err != nil {
 		return false, err
 	}
@@ -169,7 +169,7 @@ func (c *impactUsageCollector) visitFields(draft designUsageDraft, contracts map
 	if err != nil {
 		return false, err
 	}
-	after, err := bindingSchemasContext(c.ctx, c.proposedDocument(draft.Document))
+	after, err := bindingSchemas(c.ctx, c.proposedDocument(draft.Document))
 	if err != nil {
 		return false, err
 	}

@@ -189,7 +189,7 @@ func (p *Plane) serveGenerated(w http.ResponseWriter, r *http.Request, ws *works
 		}
 	}
 	if ruleResult != nil && ruleResult.Response != nil {
-		p.writeResponseRule(w, r, ws, route, *ruleResult.Response) //nolint:contextcheck // responserules.CheckResponse (inside) takes no context; threading one changes its signature
+		p.writeResponseRule(w, r, ws, route, *ruleResult.Response)
 		return
 	}
 

@@ -19,7 +19,10 @@ func TestBindingTargetTypesResolvePinnedAliasesReferencesAndBodyPointers(t *test
 		{ID: "missing", Target: DataBindingTarget{Kind: "path", Name: "id"}},
 	}
 	before, _ := jsonx.Marshal(rev.Document)
-	types := BindingTargetTypes(rev.Document)
+	types, err := BindingTargetTypes(t.Context(), rev.Document)
+	if err != nil {
+		t.Fatal(err)
+	}
 	want := map[string]string{"query": "number", "header": "string", "body": "object", "nested": "integer", "noncanonical": "unknown", "missing": "unknown"}
 	if len(types) != 1 || !maps.Equal(types["profile"], want) {
 		t.Fatalf("target types: %+v", types)
@@ -36,7 +39,10 @@ func TestBindingTargetTypesDoNotShareBindingsBetweenMessagesOfSameOperation(t *t
 	rev.Document.Messages[0].Operation = rev.Document.Messages[1].Operation
 	rev.Document.Messages[0].Execution.Bindings = []DataBinding{{ID: "value", Target: DataBindingTarget{Kind: "query", Name: "flag"}}}
 	rev.Document.Messages[1].Execution.Bindings = []DataBinding{{ID: "value", Target: DataBindingTarget{Kind: "query", Name: "name"}}}
-	types := BindingTargetTypes(rev.Document)
+	types, err := BindingTargetTypes(t.Context(), rev.Document)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if types["login"]["value"] != "boolean" || types["profile"]["value"] != "string" {
 		t.Fatalf("binding types mixed between repeated operation: %+v", types)
 	}

@@ -26,10 +26,10 @@ var (
 
 // PrepareRun validates all executable bindings before any request is dispatched.
 // The report owns its document and variables; overrides never modify the revision.
-func PrepareRun(revision Revision, runID, name, source string, variables ExecutionValues) (RunReport, error) {
+func PrepareRun(ctx context.Context, revision Revision, runID, name, source string, variables ExecutionValues) (RunReport, error) {
 	invalid := func(message string) (RunReport, error) { return RunReport{}, fmt.Errorf("%w: %s", ErrInvalid, message) }
-	if err := validateRunRevision(revision, runID, name, source); err != nil {
-		return invalid(err.Error())
+	if err := validateRunRevision(ctx, revision, runID, name, source); err != nil {
+		return RunReport{}, runRevisionError(ctx, err)
 	}
 	document, err := cloneDocument(revision.Document)
 	if err != nil {
@@ -87,7 +87,16 @@ func PrepareRun(revision Revision, runID, name, source string, variables Executi
 	return report, nil
 }
 
-func validateRunRevision(revision Revision, runID, name, source string) error {
+// runRevisionError wraps a revision's rejection as ErrInvalid, except a
+// cancelled request's own error: that is not an invalid revision.
+func runRevisionError(ctx context.Context, err error) error {
+	if ctxErr := ctx.Err(); ctxErr != nil && errors.Is(err, ctxErr) {
+		return err
+	}
+	return fmt.Errorf("%w: %s", ErrInvalid, err.Error())
+}
+
+func validateRunRevision(ctx context.Context, revision Revision, runID, name, source string) error {
 	if !runIDPattern.MatchString(runID) || utf8.RuneCountInString(name) > 200 || (source != "ui" && source != "mcp") || revision.ID <= 0 || revision.ScenarioID <= 0 {
 		return errors.New("укажите допустимые ID, название и источник запуска")
 	}
@@ -104,7 +113,11 @@ func validateRunRevision(revision Revision, runID, name, source string) error {
 		return errors.New("сначала завершите редактирование форм сценария")
 	}
 	if hasDataBindings(revision.Document) {
-		for _, diagnostic := range AnalyzeDataFlow(revision.Document).Diagnostics {
+		analysis, err := AnalyzeDataFlow(ctx, revision.Document)
+		if err != nil {
+			return err
+		}
+		for _, diagnostic := range analysis.Diagnostics {
 			if diagnostic.Severity == "error" {
 				return fmt.Errorf("%s: %s", diagnostic.Pointer, diagnostic.Message)
 			}
@@ -256,7 +269,7 @@ func (e *runEngine) executeStep(ctx context.Context, index int, message Message,
 	if config == nil {
 		config = &StepExecution{Enabled: true, PathParams: ExecutionValues{}, Query: ExecutionValues{}, Headers: ExecutionValues{}}
 	}
-	request, results, err := e.resolveBindingRequest(index, message, config)
+	request, results, err := e.resolveBindingRequest(ctx, index, message, config)
 	if err != nil {
 		return err
 	}

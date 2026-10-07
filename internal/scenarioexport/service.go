@@ -32,14 +32,14 @@ func (s *Service) OptionsContext(ctx context.Context, rev designscenario.Revisio
 		if err := s.CheckResponse(options); err != nil {
 			return nil, err
 		}
-		ds, err := s.contractDiagnostics(rev, contract)
+		ds, err := s.contractDiagnostics(ctx, rev, contract)
 		if err != nil {
 			return nil, err
 		}
 		options = append(options, makeOption(OpenAPIJSON, contract.ID, ds), makeOption(OpenAPIYAML, contract.ID, ds))
 	}
 	for _, format := range []Format{Postman, CURL} {
-		_, ds, err := s.prepareHTTP(rev, format)
+		_, ds, err := s.prepareHTTP(ctx, rev, format)
 		if err != nil {
 			return nil, err
 		}
@@ -118,11 +118,11 @@ func (s *Service) exportBody(ctx context.Context, rev designscenario.Revision, r
 	case Markdown, HTML:
 		return s.exportDocumentation(ctx, rev, req)
 	case Postman, CURL:
-		return s.exportHTTP(rev, req)
+		return s.exportHTTP(ctx, rev, req)
 	case PlantUML, Mermaid:
 		return s.exportSequence(rev, req)
 	case OpenAPIJSON, OpenAPIYAML:
-		return s.exportOpenAPI(rev, req)
+		return s.exportOpenAPI(ctx, rev, req)
 	default:
 		return exportBody{}, ErrUnsupportedFormat
 	}
@@ -181,11 +181,11 @@ func (s *Service) exportDocumentation(ctx context.Context, rev designscenario.Re
 	return body, nil
 }
 
-func (s *Service) exportHTTP(rev designscenario.Revision, req Request) (exportBody, error) {
+func (s *Service) exportHTTP(ctx context.Context, rev designscenario.Revision, req Request) (exportBody, error) {
 	if req.ContractID != "" {
 		return exportBody{}, ErrInvalidRequest
 	}
-	prepared, diagnostics, err := s.prepareHTTP(rev, req.Format)
+	prepared, diagnostics, err := s.prepareHTTP(ctx, rev, req.Format)
 	if err != nil {
 		return exportBody{}, err
 	}
@@ -224,7 +224,7 @@ func (s *Service) exportSequence(rev designscenario.Revision, req Request) (expo
 	return body, nil
 }
 
-func (s *Service) exportOpenAPI(rev designscenario.Revision, req Request) (exportBody, error) {
+func (s *Service) exportOpenAPI(ctx context.Context, rev designscenario.Revision, req Request) (exportBody, error) {
 	if rev.Document.EventModel != nil && slices.ContainsFunc(rev.Document.EventModel.Contracts, func(c designscenario.EventContract) bool { return c.ID == req.ContractID }) {
 		return exportBody{}, ErrInvalidRequest
 	}
@@ -233,7 +233,7 @@ func (s *Service) exportOpenAPI(rev designscenario.Revision, req Request) (expor
 		return exportBody{}, ErrContractNotFound
 	}
 	contract := rev.Document.Contracts[index]
-	diagnostics, err := s.contractDiagnostics(rev, contract)
+	diagnostics, err := s.contractDiagnostics(ctx, rev, contract)
 	if err != nil {
 		return exportBody{}, err
 	}

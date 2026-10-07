@@ -2,6 +2,7 @@ package scenarioexport
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"maps"
 	"net/url"
@@ -55,8 +56,11 @@ func (p *httpPlanner) add(code, severity, message string) {
 	p.ds = append(p.ds, Diagnostic{Code: code, Severity: severity, Message: message})
 }
 
-func (s *Service) prepareHTTP(rev designscenario.Revision, format Format) (httpExport, []Diagnostic, error) {
-	p := newHTTPPlanner(s, rev, format)
+func (s *Service) prepareHTTP(ctx context.Context, rev designscenario.Revision, format Format) (httpExport, []Diagnostic, error) {
+	p, err := newHTTPPlanner(ctx, s, rev, format)
+	if err != nil {
+		return httpExport{}, nil, err
+	}
 	for i, m := range rev.Document.Messages {
 		if err := s.CheckResponse(p.ds); err != nil {
 			return p.out, nil, err
@@ -77,7 +81,7 @@ func (s *Service) prepareHTTP(rev designscenario.Revision, format Format) (httpE
 	return p.out, p.ds, nil
 }
 
-func newHTTPPlanner(s *Service, rev designscenario.Revision, format Format) *httpPlanner {
+func newHTTPPlanner(ctx context.Context, s *Service, rev designscenario.Revision, format Format) (*httpPlanner, error) {
 	p := &httpPlanner{
 		s: s, rev: rev, format: format, ds: []Diagnostic{},
 		out:     httpExport{Requests: []httpRequest{}, Bases: []httpBase{}, Variables: designscenario.ExecutionValues{}},
@@ -91,7 +95,11 @@ func newHTTPPlanner(s *Service, rev designscenario.Revision, format Format) *htt
 	}
 	if format == Postman {
 		var bindingDiagnostics []Diagnostic
-		p.bindingTypes, bindingDiagnostics = postmanBindingPreflight(rev.Document)
+		var err error
+		p.bindingTypes, bindingDiagnostics, err = postmanBindingPreflight(ctx, rev.Document)
+		if err != nil {
+			return nil, err
+		}
 		p.ds = append(p.ds, bindingDiagnostics...)
 	}
 	p.available = map[string]bool{}
@@ -110,7 +118,7 @@ func newHTTPPlanner(s *Service, rev designscenario.Revision, format Format) *htt
 			}
 		}
 	}
-	return p
+	return p, nil
 }
 
 // planMessage decides whether a step becomes a request, and diagnoses why not.

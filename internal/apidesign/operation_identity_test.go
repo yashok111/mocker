@@ -53,7 +53,7 @@ func TestOperationIdentitySurvivesRenameAndUnannotatedSave(t *testing.T) {
 func TestDuplicateOperationIdentityRejectsAPIWithoutPartialRows(t *testing.T) {
 	r, _ := testRepo(t)
 	document := `{"openapi":"3.1.0","info":{"title":"A","version":"1"},"paths":{"/a":{"get":{"x-mocker-canvas-operation-id":"same","responses":{"200":{"description":"OK"}}}},"/b":{"post":{"x-mocker-canvas-operation-id":"same","responses":{"200":{"description":"OK"}}}}}}`
-	diagnostics, validationErr := r.Validate(document)
+	diagnostics, validationErr := r.Validate(t.Context(), document)
 	if validationErr != nil || len(diagnostics) == 0 {
 		t.Fatalf("validation accepted ambiguous operation identities: %v, %v", diagnostics, validationErr)
 	}

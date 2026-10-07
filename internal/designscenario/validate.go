@@ -26,13 +26,16 @@ var (
 	operationMethods = []string{"get", "put", "post", "delete", "options", "head", "patch", "trace"}
 )
 
-func (r *Repo) Validate(_ context.Context, document Document) ([]Diagnostic, error) {
-	diagnostics, err := r.validate(document, map[string]string{})
+func (r *Repo) Validate(ctx context.Context, document Document) ([]Diagnostic, error) {
+	diagnostics, err := r.validate(ctx, document, map[string]string{})
 	return diagnostics, err
 }
 
-func (r *Repo) validate(document Document, formDrafts map[string]string) ([]Diagnostic, error) {
-	diagnostics := validateDocument(document)
+func (r *Repo) validate(ctx context.Context, document Document, formDrafts map[string]string) ([]Diagnostic, error) {
+	diagnostics, err := validateDocument(ctx, document)
+	if err != nil {
+		return nil, err
+	}
 	diagnostics = append(diagnostics, validateDrafts(formDrafts)...)
 	for _, diagnostic := range diagnostics {
 		if diagnostic.Severity == "error" {
@@ -46,7 +49,9 @@ type documentValidator struct {
 	diagnostics []Diagnostic
 }
 
-func validateDocument(document Document) []Diagnostic {
+// validateDocument's only error is ctx's: the data-flow analysis inside is
+// the one step long enough to stop for a cancelled request.
+func validateDocument(ctx context.Context, document Document) ([]Diagnostic, error) {
 	validator := documentValidator{diagnostics: append(executionDiagnostics(document), validateControlFlow(document, false)...)}
 	validator.validateMetadata(document)
 	participants := validator.validateParticipants(document.Participants)
@@ -59,12 +64,16 @@ func validateDocument(document Document) []Diagnostic {
 	}
 	validator.validateEventModel(document, participants)
 	if hasDataBindings(document) {
-		for _, diagnostic := range analyzeDataFlow(document).Diagnostics {
+		analysis, err := analyzeDataFlow(ctx, document)
+		if err != nil {
+			return nil, err
+		}
+		for _, diagnostic := range analysis.Diagnostics {
 			diagnostic.Severity = "warning"
 			validator.diagnostics = append(validator.diagnostics, diagnostic)
 		}
 	}
-	return validator.diagnostics
+	return validator.diagnostics, nil
 }
 
 func (v *documentValidator) errorAt(pointer, message string) {

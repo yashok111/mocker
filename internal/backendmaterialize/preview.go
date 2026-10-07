@@ -51,8 +51,7 @@ func (s *Service) previewTx(ctx context.Context, tx *sql.Tx, pid string, input P
 	}
 	for i := range out.Input.Targets {
 		if t := &out.Input.Targets[i]; t.Kind == "design_scenario" {
-			//nolint:contextcheck // designscenario.PrepareMaterialization takes no context; threading one is a signature change in that package, and the call is bounded in-memory validation
-			if err = s.prepareScenarioTarget(t, out.Input.Targets); err != nil {
+			if err = s.prepareScenarioTarget(ctx, t, out.Input.Targets); err != nil {
 				return nil, err
 			}
 		}
@@ -233,7 +232,7 @@ func (s *Service) copyAPIDocument(ctx context.Context, tx *sql.Tx, installation 
 
 // prepareScenarioTarget admits only the supported sequential profile, with
 // every contract linked to a planned API target's exact pin and document.
-func (s *Service) prepareScenarioTarget(t *Target, targets []Target) error {
+func (s *Service) prepareScenarioTarget(ctx context.Context, t *Target, targets []Target) error {
 	c := &t.Commands[0]
 	if c.Type != "replace_scenario" || c.Scenario == nil || c.CopyFrom != nil || c.Selector != nil || c.Destination != "" || c.APIDocument != "" {
 		return invalid("Scenario requires an explicit typed document")
@@ -251,7 +250,7 @@ func (s *Service) prepareScenarioTarget(t *Target, targets []Target) error {
 			return err
 		}
 	}
-	document, err := s.scenarios.PrepareMaterialization(*c.Scenario)
+	document, err := s.scenarios.PrepareMaterialization(ctx, *c.Scenario)
 	if err != nil {
 		return err
 	}

@@ -36,7 +36,7 @@ func TestDataFlowRepeatedOperationPreservesResponseSelection(t *testing.T) {
 	for _, tt := range cases {
 		r.Document.Messages = append(r.Document.Messages, Message{ID: tt.name, Kind: "request", Operation: &OperationBinding{ContractID: tt.contract, OperationKey: "orders"}, Execution: &StepExecution{ExpectedStatus: tt.status}})
 	}
-	analysis := AnalyzeDataFlow(r.Document)
+	analysis := analyzeForTest(t, r.Document)
 	if len(analysis.Messages) != len(cases) {
 		t.Fatalf("messages: %d", len(analysis.Messages))
 	}
@@ -50,7 +50,7 @@ func TestDataFlowRepeatedOperationPreservesResponseSelection(t *testing.T) {
 	}
 	// A separate analysis must observe a changed snapshot, rather than a global cache.
 	r.Document.Contracts[0].Document = other.Document
-	analysis = AnalyzeDataFlow(r.Document)
+	analysis = analyzeForTest(t, r.Document)
 	if got := analysis.Messages[1].ResponseFields[0].Type; got != "boolean" {
 		t.Fatalf("stale schema cache: %s", got)
 	}
@@ -61,7 +61,7 @@ func TestDataFlowOperationIndexKeepsDeterministicFirstMatch(t *testing.T) {
 	r := runRevision()
 	r.Document.Contracts[0].Document = jsonx.RawMessage(`{"components":{"pathItems":{"First":{"parameters":[{"in":"query","name":"inherited","schema":{"type":"string"}}],"get":{"x-mocker-canvas-operation-id":"duplicate","responses":{"200":{"content":{"application/json":{"schema":{"type":"integer"}}}}}},"post":{"x-mocker-canvas-operation-id":"duplicate","responses":{"200":{"content":{"application/json":{"schema":{"type":"boolean"}}}}}}}}},"paths":{"/z":{"get":{"x-mocker-canvas-operation-id":"duplicate","responses":{"200":{"content":{"application/json":{"schema":{"type":"string"}}}}}}},"/a":{"$ref":"#/components/pathItems/First"}}}`)
 	r.Document.Messages = []Message{{ID: "first", Kind: "request", Operation: &OperationBinding{ContractID: "api", OperationKey: "duplicate"}}, {ID: "second", Kind: "request", Operation: &OperationBinding{ContractID: "api", OperationKey: "duplicate"}}}
-	analysis := AnalyzeDataFlow(r.Document)
+	analysis := analyzeForTest(t, r.Document)
 	for _, m := range analysis.Messages {
 		if len(m.ResponseFields) != 1 || m.ResponseFields[0].Type != "integer" || len(m.RequestFields) != 1 || m.RequestFields[0].Name != "inherited" {
 			t.Fatalf("wrong indexed operation: %#v", m)

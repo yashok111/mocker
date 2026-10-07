@@ -29,7 +29,7 @@ func TestPostmanBindingPreflightAcceptsEarlierSourceWithoutMutatingRevision(t *t
 	if _, err := svc.Export(rev, Request{Format: Postman}); err != nil {
 		t.Fatal(err)
 	}
-	prepared, diagnostics, err := svc.prepareHTTP(rev, Postman)
+	prepared, diagnostics, err := svc.prepareHTTP(t.Context(), rev, Postman)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -97,7 +97,7 @@ func TestPostmanBindingPreflightSuppliesRequiredInputsAndIgnoresOverwrittenTempl
 		designscenario.DataBinding{ID: "body", SourceMessageID: "producer", SourcePointer: "/payload", Target: designscenario.DataBindingTarget{Kind: "body"}},
 	)
 	before, _ := jsonx.Marshal(rev)
-	prepared, diagnostics, err := New(validContract, 1<<20).prepareHTTP(rev, Postman)
+	prepared, diagnostics, err := New(validContract, 1<<20).prepareHTTP(t.Context(), rev, Postman)
 	if err != nil {
 		t.Fatal(err)
 	}

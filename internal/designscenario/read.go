@@ -54,11 +54,15 @@ func (r *Repo) detailTx(ctx context.Context, tx *sql.Tx, id int64) (*Detail, err
 	if err != nil {
 		return nil, err
 	}
+	diagnostics, err := validateDocument(ctx, draft.Document)
+	if err != nil {
+		return nil, err
+	}
 	result := &Detail{
 		Scenario:        scenario,
 		Draft:           draft,
 		Revisions:       []RevisionSummary{},
-		Diagnostics:     validateDocument(draft.Document),
+		Diagnostics:     diagnostics,
 		ContractUpdates: []ContractUpdate{},
 	}
 	result.Revisions, err = readRevisionHistory(ctx, tx, id)

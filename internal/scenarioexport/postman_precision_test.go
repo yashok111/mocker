@@ -125,7 +125,7 @@ func TestPostmanExactJSONHandlesDeepNesting(t *testing.T) {
 	// saving this assertion in a revision adds enclosing JSON object levels.
 	value := strings.Repeat("[", 10000) + "9007199254740993" + strings.Repeat("]", 10000)
 	svc := New(validContract, 1<<20)
-	prepared, _, err := svc.prepareHTTP(httpFixture("https://example.test"), Postman)
+	prepared, _, err := svc.prepareHTTP(t.Context(), httpFixture("https://example.test"), Postman)
 	if err != nil {
 		t.Fatal(err)
 	}

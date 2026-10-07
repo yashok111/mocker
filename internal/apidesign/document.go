@@ -97,9 +97,7 @@ func (r *Repo) prepare(ctx context.Context, raw string) (*preparedDocument, erro
 	if err != nil {
 		return nil, err
 	}
-	// specs.PrepareImport takes no context (it compiles the executable copies
-	// under its own context.Background); internal/specs is outside this change.
-	runtime, err := r.specs.PrepareImport(specs.ImportInput{Document: canonical, Source: "upload"}) //nolint:contextcheck // specs.PrepareImport has no context parameter
+	runtime, err := r.specs.PrepareImportContext(ctx, specs.ImportInput{Document: canonical, Source: "upload"})
 	if err != nil {
 		if errors.Is(err, specs.ErrTooLarge) {
 			return nil, err
@@ -468,13 +466,9 @@ func escape(value string) string {
 	return strings.ReplaceAll(strings.ReplaceAll(value, "~", "~0"), "/", "~1")
 }
 
-// Validate is the context-free entry the admin handlers call; in-package
-// callers that hold a request context use validateContext.
-func (r *Repo) Validate(document string) ([]Diagnostic, error) {
-	return r.validateContext(context.Background(), document)
-}
-
-func (r *Repo) validateContext(ctx context.Context, document string) ([]Diagnostic, error) {
+// Validate reports a document's diagnostics without saving it. ctx bounds the
+// execution-graph compilation inside, so a cancelled request stops it.
+func (r *Repo) Validate(ctx context.Context, document string) ([]Diagnostic, error) {
 	_, err := r.prepare(ctx, document)
 	if invalid, ok := errors.AsType[*InvalidError](err); ok {
 		return invalid.Diagnostics, nil
